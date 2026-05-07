@@ -1,0 +1,10 @@
+.venv
+__pycache__
+*.pyc
+.env
+.git
+.DS_Store
+scripts/__pycache__
+*.sqlite
+*.db
+node_modules

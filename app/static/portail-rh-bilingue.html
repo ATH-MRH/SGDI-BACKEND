@@ -1,0 +1,2609 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Portail RH - Demandes du Personnel</title>
+<style>
+  :root {
+    --primary: #1e40af;
+    --primary-dark: #1e3a8a;
+    --primary-light: #dbeafe;
+    --accent: #0ea5e9;
+    --success: #16a34a;
+    --warning: #f59e0b;
+    --danger: #dc2626;
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.05);
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  /* ============ AUTH ============ */
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background:
+      radial-gradient(ellipse at top, rgba(30, 64, 175, 0.15), transparent 60%),
+      linear-gradient(180deg, #eef2ff 0%, #f1f5f9 100%);
+  }
+
+  .auth-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 460px;
+    overflow: hidden;
+  }
+
+  .language-switcher {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 999px;
+    align-items: center;
+    position: relative;
+    z-index: 5;
+  }
+
+  .auth-header .language-switcher {
+    margin-bottom: 16px;
+  }
+
+  .language-switcher button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    opacity: 0.82;
+  }
+
+  .language-switcher button.active {
+    background: white;
+    color: var(--primary);
+    opacity: 1;
+    box-shadow: var(--shadow);
+  }
+
+  .auth-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 28px 28px 24px;
+    text-align: center;
+  }
+
+  .auth-logo {
+    width: 60px;
+    height: 60px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 16px;
+    margin: 0 auto 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    backdrop-filter: blur(10px);
+  }
+
+  .auth-header h1 {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+
+  .auth-header p {
+    margin: 6px 0 0;
+    opacity: 0.9;
+    font-size: 0.92rem;
+  }
+
+  .auth-body {
+    padding: 28px;
+  }
+
+  .auth-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    padding: 4px;
+    border-radius: 10px;
+    margin-bottom: 22px;
+  }
+
+  .auth-tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+
+  .auth-tab.active {
+    background: white;
+    color: var(--primary);
+    box-shadow: var(--shadow);
+  }
+
+  .auth-form { display: none; }
+  .auth-form.active { display: block; }
+
+  .auth-footer {
+    text-align: center;
+    margin-top: 18px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .password-strength {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .password-strength-bar {
+    height: 100%;
+    width: 0;
+    transition: all 0.25s;
+  }
+  .ps-weak { background: var(--danger); }
+  .ps-medium { background: var(--warning); }
+  .ps-strong { background: var(--success); }
+
+  .strength-text { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+  /* ============ APP ============ */
+  header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 20px 0;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .container {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  .header-content {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    position: relative;
+  }
+
+  .header-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 0;
+    grid-column: 2;
+    text-align: center;
+  }
+
+  .verification-light {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    border: 2px solid rgba(255,255,255,0.5);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.12);
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+
+  .verification-light.on {
+    background: #22c55e;
+    border-color: rgba(255,255,255,0.92);
+    box-shadow: 0 0 0 4px rgba(34,197,94,0.22), 0 0 16px rgba(34,197,94,0.9);
+  }
+
+  .header-employee-photo {
+    width: 92px;
+    height: 108px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.18);
+    border: 2px solid rgba(255,255,255,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-weight: 800;
+    color: white;
+    flex: 0 0 auto;
+  }
+
+  .header-employee-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  @keyframes portalCodeBlink {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 3px rgba(34,197,94,0.22), 0 0 18px rgba(34,197,94,0.85); }
+    50% { opacity: 0.38; box-shadow: 0 0 0 1px rgba(34,197,94,0.1), 0 0 4px rgba(34,197,94,0.25); }
+  }
+
+  @keyframes portalCodeBlinkRed {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 3px rgba(239,68,68,0.24), 0 0 18px rgba(239,68,68,0.9); }
+    50% { opacity: 0.38; box-shadow: 0 0 0 1px rgba(239,68,68,0.1), 0 0 4px rgba(239,68,68,0.25); }
+  }
+
+  .header-code-badge {
+    min-width: 92px;
+    text-align: center;
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: #16a34a;
+    color: white;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    border: 2px solid rgba(255,255,255,0.88);
+    animation: portalCodeBlink 1s infinite;
+  }
+
+  .header-code-badge.suspended {
+    background: #dc2626;
+    animation-name: portalCodeBlinkRed;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    grid-column: 3;
+  }
+
+  .header-title h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .header-title p {
+    margin: 4px 0 0;
+    opacity: 0.9;
+    font-size: 0.9rem;
+  }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.15);
+    padding: 6px 6px 6px 14px;
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+  }
+
+  .user-chip .avatar {
+    width: 42px;
+    height: 42px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.75);
+  }
+
+  .user-chip .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .user-chip .info { font-size: 0.9rem; line-height: 1.2; }
+  .user-chip .name { font-weight: 700; }
+  .user-chip .role { opacity: 0.92; font-size: 0.8rem; font-weight: 600; }
+
+  .btn {
+    border: none;
+    background: var(--primary);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn-secondary { background: rgba(255,255,255,0.2); }
+  .btn-secondary:hover { background: rgba(255,255,255,0.3); }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-success { background: var(--success); }
+  .btn-success:hover { background: #15803d; }
+  .btn-danger { background: var(--danger); }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-ghost { background: transparent; color: var(--primary); padding: 8px 12px; }
+  .btn-ghost:hover { background: var(--primary-light); }
+  .btn-block { width: 100%; justify-content: center; padding: 14px 18px; font-size: 1rem; }
+
+  main { padding: 28px 0 60px; }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 22px;
+    margin-bottom: 18px;
+  }
+
+  .card h2 {
+    margin: 0 0 16px;
+    font-size: 1.1rem;
+    color: var(--primary-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card h2::before {
+    content: "";
+    width: 4px;
+    height: 22px;
+    background: var(--primary);
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+
+  label { font-size: 0.875rem; font-weight: 500; color: var(--text); }
+  label .req { color: var(--danger); }
+
+  input, select, textarea {
+    font: inherit;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+  input:disabled, select:disabled { background: #f8fafc; color: var(--text-muted); cursor: not-allowed; }
+  textarea { resize: vertical; min-height: 90px; }
+
+  .input-group { position: relative; }
+  .input-group .toggle-pwd {
+    position: absolute;
+    right: 8px; top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+  }
+
+  .request-types {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .type-card {
+    border: 2px solid var(--border);
+    background: white;
+    border-radius: var(--radius);
+    padding: 18px 14px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+  }
+  .type-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .type-card.active { border-color: var(--primary); background: var(--primary-light); }
+  .type-card .icon {
+    font-size: 1.2rem;
+    width: 44px; height: 44px;
+    background: var(--primary-light); color: var(--primary);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+  }
+  .type-card.active .icon { background: var(--primary); color: white; }
+  .type-card .label { font-weight: 600; font-size: 0.95rem; }
+  .type-card .sub { font-size: 0.78rem; color: var(--text-muted); }
+
+  .request-form { display: none; animation: fadeIn 0.25s; }
+  .request-form.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-en-attente { background: #fef3c7; color: #92400e; }
+  .badge-traitee { background: #dcfce7; color: #166534; }
+  .badge-rejetee { background: #fee2e2; color: #991b1b; }
+
+  .history-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .history-table th, .history-table td {
+    text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border);
+  }
+  .history-table th {
+    background: var(--bg); font-weight: 600; color: var(--text-muted);
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .history-table tr:hover td { background: #f8fafc; }
+
+  .empty-state {
+    text-align: center; padding: 30px 20px; color: var(--text-muted);
+  }
+
+  .toast {
+    position: fixed; bottom: 30px; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--success); color: white;
+    padding: 14px 22px; border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    opacity: 0; transition: all 0.3s;
+    z-index: 1000; font-weight: 500;
+    max-width: 90%;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.error { background: var(--danger); }
+
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: white; border-radius: 14px;
+    max-width: 640px; width: 100%; max-height: 90vh;
+    overflow-y: auto; box-shadow: var(--shadow-lg);
+    animation: slideUp 0.25s;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .modal-header {
+    padding: 18px 22px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-header h3 { margin: 0; }
+  .modal-body { padding: 22px; }
+  .modal-footer {
+    padding: 14px 22px; border-top: 1px solid var(--border);
+    display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+  }
+
+  .receipt {
+    background: #fefce8;
+    border: 1px dashed var(--warning);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .receipt-row {
+    display: flex; justify-content: space-between;
+    padding: 5px 0; border-bottom: 1px dashed rgba(0,0,0,0.08);
+  }
+  .receipt-row:last-child { border-bottom: none; }
+  .receipt-row .key { color: var(--text-muted); font-weight: 500; }
+  .receipt-row .val { font-weight: 600; text-align: right; max-width: 60%; }
+
+  .tabs {
+    display: flex; gap: 4px; border-bottom: 2px solid var(--border);
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .tab {
+    padding: 10px 18px; cursor: pointer; border: none; background: transparent;
+    font: inherit; font-weight: 500; color: var(--text-muted);
+    border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.15s;
+  }
+  .tab:hover { color: var(--primary); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .info-banner {
+    background: var(--primary-light);
+    border-left: 4px solid var(--primary);
+    padding: 12px 16px; border-radius: 6px;
+    margin-bottom: 16px; font-size: 0.9rem;
+  }
+  .alert {
+    background: #fef2f2; border-left: 4px solid var(--danger);
+    color: #991b1b; padding: 10px 14px;
+    border-radius: 6px; font-size: 0.88rem; margin-bottom: 14px;
+    display: none;
+  }
+  .alert.show { display: block; }
+
+  .checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .checkbox-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px; background: var(--bg);
+    border-radius: 6px; cursor: pointer;
+  }
+  .checkbox-item input { width: auto; }
+
+  .hidden { display: none !important; }
+
+  body.lang-ar {
+    direction: rtl;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  }
+
+  body.lang-ar .history-table th,
+  body.lang-ar .history-table td {
+    text-align: right;
+  }
+
+  body.lang-ar .info-banner,
+  body.lang-ar .alert {
+    border-left: 0;
+    border-right: 4px solid var(--primary);
+  }
+
+  body.lang-ar .alert { border-right-color: var(--danger); }
+
+  body.lang-ar .card h2::before { order: 2; }
+  body.lang-ar .input-group .toggle-pwd { right: auto; left: 8px; }
+  body.lang-ar .receipt-row .val { text-align: left; }
+  body.lang-ar .toast { left: auto; right: 50%; transform: translateX(50%) translateY(100px); }
+  body.lang-ar .toast.show { transform: translateX(50%) translateY(0); }
+
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr; }
+    .header-content { grid-template-columns: 1fr; }
+    .header-left, .header-actions { grid-column: 1; justify-content: center; }
+    .header-title h1 { font-size: 1.45rem; }
+    .header-employee-photo { width: 84px; height: 98px; }
+    .request-types { grid-template-columns: repeat(2, 1fr); }
+    .history-table th:nth-child(3), .history-table td:nth-child(3) { display: none; }
+    .user-chip .info { display: none; }
+  }
+
+  @media print {
+    body { background: white; }
+    header, .header-actions, .btn, .tabs, .request-types, .card:not(.print-card) { display: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================ -->
+<!-- =============== AUTH SCREENS ================ -->
+<!-- ============================================ -->
+<div class="auth-wrap" id="authView">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="language-switcher" aria-label="Choix de langue">
+        <button type="button" class="active" data-lang-btn="fr" onclick="setLanguage('fr')">FR</button>
+        <button type="button" data-lang-btn="ar" onclick="setLanguage('ar')">AR</button>
+      </div>
+      <div class="auth-logo">RH</div>
+      <h1>Portail RH</h1>
+      <p>Espace dédié au personnel</p>
+    </div>
+    <div class="auth-body">
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-auth="login" onclick="switchAuth('login')">Se connecter</button>
+        <button class="auth-tab" data-auth="register" onclick="switchAuth('register')">Créer un compte</button>
+      </div>
+
+      <div class="alert" id="authAlert"></div>
+
+      <!-- ===== LOGIN FORM ===== -->
+      <form class="auth-form active" id="form-login" onsubmit="event.preventDefault(); doLogin();">
+        <div class="field" style="margin-bottom:12px;">
+          <label>Code ou Email</label>
+          <input type="text" id="login-id" autocomplete="username" placeholder="A01 ou nom@entreprise.com" required />
+        </div>
+        <div class="field" style="margin-bottom:14px;">
+          <label>Mot de passe</label>
+          <div class="input-group">
+            <input type="password" id="login-pwd" autocomplete="current-password" placeholder="••••••••" required />
+            <button type="button" class="toggle-pwd" onclick="togglePwd('login-pwd', this)">Afficher</button>
+          </div>
+        </div>
+        <label class="checkbox-item" style="margin-bottom:16px; background:transparent; padding:0;">
+          <input type="checkbox" id="login-remember" /> Rester connecté
+        </label>
+        <button type="submit" class="btn btn-block">Se connecter</button>
+        <div class="auth-footer">
+          Pas encore de compte ? <a href="#" onclick="event.preventDefault(); switchAuth('register');" style="color:var(--primary);">Créer un compte</a>
+        </div>
+      </form>
+
+      <!-- ===== REGISTER FORM ===== -->
+      <form class="auth-form" id="form-register" onsubmit="event.preventDefault(); doRegister();">
+        <div class="grid">
+          <div class="field">
+            <label>Nom <span class="req">*</span></label>
+            <input type="text" id="reg-nom" required placeholder="BENALI" />
+          </div>
+          <div class="field">
+            <label>Prénom <span class="req">*</span></label>
+            <input type="text" id="reg-prenom" required placeholder="Karim" />
+          </div>
+          <div class="field full">
+            <label>Code <span class="req">*</span></label>
+            <input type="text" id="reg-code" required placeholder="A01" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>Téléphone <span class="req">*</span></label>
+            <input type="tel" id="reg-telephone" required placeholder="0X XX XX XX XX" />
+          </div>
+          <div class="field">
+            <label>Date de naissance <span class="req">*</span></label>
+            <input type="date" id="reg-dateNaissance" required autocomplete="bday" />
+          </div>
+          <div class="field full">
+            <label>Mot de passe <span class="req">*</span></label>
+            <div class="input-group">
+              <input type="password" id="reg-pwd" required placeholder="Minimum 8 caractères" autocomplete="new-password" oninput="checkStrength()" />
+              <button type="button" class="toggle-pwd" onclick="togglePwd('reg-pwd', this)">Afficher</button>
+            </div>
+            <div class="password-strength"><div class="password-strength-bar" id="pwdBar"></div></div>
+            <div class="strength-text" id="pwdText">Utilisez 8+ caractères avec lettres, chiffres et symboles</div>
+          </div>
+          <div class="field full">
+            <label>Confirmer le mot de passe <span class="req">*</span></label>
+            <input type="password" id="reg-pwd2" required placeholder="Retapez votre mot de passe" autocomplete="new-password" />
+          </div>
+          <div class="field full">
+            <label class="checkbox-item" style="background:transparent; padding:0;">
+              <input type="checkbox" id="reg-cgu" required />
+              <span style="font-size:0.85rem;">J'accepte que mes informations soient utilisées pour le traitement de mes demandes RH</span>
+            </label>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-block" style="margin-top:14px;">Créer mon compte</button>
+        <div class="auth-footer">
+          Déjà un compte ? <a href="#" onclick="event.preventDefault(); switchAuth('login');" style="color:var(--primary);">Se connecter</a>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ================ APP SCREENS ================ -->
+<!-- ============================================ -->
+<div id="appView" class="hidden">
+
+  <header>
+    <div class="container header-content">
+      <div class="header-left">
+        <span class="verification-light" id="accountVerifiedLight" title="Compte en attente de validation PostgreSQL"></span>
+        <div class="header-title">
+          <h1>PORTAIL RH</h1>
+          <p>Soumettez vos demandes en ligne.</p>
+        </div>
+        <div class="header-employee-photo" id="headerEmployeePhoto">--</div>
+      </div>
+      <div class="header-actions">
+        <div class="language-switcher" aria-label="Choix de langue">
+          <button type="button" class="active" data-lang-btn="fr" onclick="setLanguage('fr')">FR</button>
+          <button type="button" data-lang-btn="ar" onclick="setLanguage('ar')">AR</button>
+        </div>
+        <div class="user-chip">
+          <div class="info">
+            <div class="name" id="userName">--</div>
+            <div class="role" id="userSite">--</div>
+          </div>
+          <button class="btn btn-secondary" onclick="logout()" title="Déconnexion">Déconnexion</button>
+        </div>
+        <div class="header-code-badge" id="headerEmployeeCode">--</div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+
+      <div class="tabs">
+        <button class="tab active" data-tab="nouvelle" onclick="switchTab('nouvelle')">Nouvelle demande</button>
+        <button class="tab" data-tab="pointage" onclick="switchTab('pointage')">Pointage</button>
+        <button class="tab" data-tab="historique" onclick="switchTab('historique')">Mes demandes (<span id="countBadge">0</span>)</button>
+        <button class="tab" data-tab="reception" onclick="switchTab('reception')">Boîte de réception (<span id="inboxBadge">0</span>)</button>
+        <button class="tab" data-tab="profil" onclick="switchTab('profil')">Mon profil</button>
+      </div>
+
+      <!-- ============ NOUVELLE DEMANDE ============ -->
+      <div class="tab-content active" id="tab-nouvelle">
+
+        <div class="card">
+          <h2>Type de demande</h2>
+          <div class="request-types" id="typeCards">
+            <button type="button" class="type-card" data-type="attestation">
+              <div class="icon">A</div>
+              <div class="label">Attestation de travail</div>
+              <div class="sub">Justificatif d'emploi</div>
+            </button>
+            <button type="button" class="type-card" data-type="fichePaie">
+              <div class="icon">F</div>
+              <div class="label">Fiche de paie</div>
+              <div class="sub">Bulletin de salaire</div>
+            </button>
+            <button type="button" class="type-card" data-type="reclamation">
+              <div class="icon">R</div>
+              <div class="label">Réclamation salaire</div>
+              <div class="sub">Anomalie de paie</div>
+            </button>
+            <button type="button" class="type-card" data-type="conges">
+              <div class="icon">C</div>
+              <div class="label">Congés / Absences</div>
+              <div class="sub">Demandes RH diverses</div>
+            </button>
+            <button type="button" class="type-card" data-type="pointage">
+              <div class="icon">P</div>
+              <div class="label">Pointage</div>
+              <div class="sub">Correction de pointage</div>
+            </button>
+          </div>
+        </div>
+
+        <div id="formContainer">
+
+          <div class="card request-form" id="form-attestation">
+            <h2>Détails - Attestation de travail</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Motif <span class="req">*</span></label>
+                <select id="att-motif">
+                  <option value="">— Sélectionner —</option>
+                  <option>Démarche bancaire</option>
+                  <option>Demande de visa</option>
+                  <option>Location / Contrat de bail</option>
+                  <option>Démarche administrative</option>
+                  <option>Demande de prêt</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Langue souhaitée <span class="req">*</span></label>
+                <select id="att-langue">
+                  <option>Français</option>
+                  <option>Arabe</option>
+                  <option>Bilingue (FR + AR)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Nombre d'exemplaires</label>
+                <input type="number" id="att-exemplaires" min="1" max="10" value="1" />
+              </div>
+              <div class="field">
+                <label>Destinataire (organisme)</label>
+                <input type="text" id="att-destinataire" placeholder="Banque, Ambassade..." />
+              </div>
+              <div class="field full">
+                <label>Précisions complémentaires</label>
+                <textarea id="att-precisions" placeholder="Mentions à inclure, dates, etc."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-fichePaie">
+            <h2>Détails - Fiche de paie</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Année <span class="req">*</span></label>
+                <select id="fp-annee"></select>
+              </div>
+              <div class="field">
+                <label>Format souhaité</label>
+                <select id="fp-format">
+                  <option>PDF par email</option>
+                  <option>Copie papier (à retirer)</option>
+                  <option>Les deux</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label>Mois concernés <span class="req">*</span></label>
+                <div class="checkbox-group" id="fp-mois">
+                  <label class="checkbox-item"><input type="checkbox" value="Janvier"> Janvier</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Février"> Février</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Mars"> Mars</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Avril"> Avril</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Mai"> Mai</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Juin"> Juin</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Juillet"> Juillet</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Août"> Août</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Septembre"> Septembre</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Octobre"> Octobre</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Novembre"> Novembre</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Décembre"> Décembre</label>
+                </div>
+              </div>
+              <div class="field full">
+                <label>Commentaire</label>
+                <textarea id="fp-commentaire" placeholder="Précisions éventuelles"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-reclamation">
+            <h2>Détails - Réclamation salaire</h2>
+            <div class="info-banner">
+              Décrivez précisément l'anomalie. Vous pourrez fournir un justificatif au service RH.
+            </div>
+            <div class="grid">
+              <div class="field">
+                <label>Mois concerné <span class="req">*</span></label>
+                <input type="month" id="rec-mois" />
+              </div>
+              <div class="field">
+                <label>Type d'anomalie <span class="req">*</span></label>
+                <select id="rec-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Salaire non perçu</option>
+                  <option>Montant inférieur à la fiche</option>
+                  <option>Heures supplémentaires non payées</option>
+                  <option>Prime manquante</option>
+                  <option>Retenue injustifiée</option>
+                  <option>Erreur de calcul</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Montant attendu (DA)</label>
+                <input type="number" id="rec-attendu" step="0.01" placeholder="0.00" />
+              </div>
+              <div class="field">
+                <label>Montant reçu (DA)</label>
+                <input type="number" id="rec-recu" step="0.01" placeholder="0.00" />
+              </div>
+              <div class="field full">
+                <label>Description du problème <span class="req">*</span></label>
+                <textarea id="rec-description" placeholder="Expliquez en détail..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-conges">
+            <h2>Détails - Congés / Absences</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Type de demande <span class="req">*</span></label>
+                <select id="cg-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Congé annuel</option>
+                  <option>Congé maladie</option>
+                  <option>Congé maternité / paternité</option>
+                  <option>Congé exceptionnel (mariage, décès...)</option>
+                  <option>Congé sans solde</option>
+                  <option>Autorisation d'absence</option>
+                  <option>Justification d'absence</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Nombre de jours</label>
+                <input type="number" id="cg-jours" min="0" step="0.5" placeholder="Ex: 5" />
+              </div>
+              <div class="field">
+                <label>Date de début <span class="req">*</span></label>
+                <input type="date" id="cg-debut" />
+              </div>
+              <div class="field">
+                <label>Date de fin <span class="req">*</span></label>
+                <input type="date" id="cg-fin" />
+              </div>
+              <div class="field full">
+                <label>Motif / Justificatif</label>
+                <textarea id="cg-motif" placeholder="Précisez le motif..."></textarea>
+              </div>
+              <div class="field full">
+                <label>Personne contactée en cas d'urgence</label>
+                <input type="text" id="cg-remplacant" placeholder="Nom du collègue / responsable" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-pointage">
+            <h2>Détails - Correction de pointage</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Date concernée <span class="req">*</span></label>
+                <input type="date" id="pt-date" />
+              </div>
+              <div class="field">
+                <label>Type de problème <span class="req">*</span></label>
+                <select id="pt-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Oubli de badge entrée</option>
+                  <option>Oubli de badge sortie</option>
+                  <option>Badge non fonctionnel</option>
+                  <option>Erreur système</option>
+                  <option>Mission externe (pas de pointage)</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Heure d'arrivée réelle</label>
+                <input type="time" id="pt-arrivee" />
+              </div>
+              <div class="field">
+                <label>Heure de départ réelle</label>
+                <input type="time" id="pt-depart" />
+              </div>
+              <div class="field full">
+                <label>Description / Témoins <span class="req">*</span></label>
+                <textarea id="pt-description" placeholder="Décrivez la situation..."></textarea>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <button class="btn btn-success btn-block" id="submitBtn" onclick="submitRequest()" style="display:none;">
+          Soumettre la demande
+        </button>
+
+      </div>
+
+      <!-- ============ POINTAGE ============ -->
+      <div class="tab-content" id="tab-pointage">
+        <div class="card">
+          <h2>Pointage du personnel</h2>
+          <div class="info-banner">Le pointage est enregistré dans PostgreSQL avec la date, l'heure du téléphone et la position GPS automatique. Autorisez la localisation pour pointer.</div>
+          <div class="grid" style="align-items:end;">
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="pointage-date" readonly />
+            </div>
+            <div class="field">
+              <label>Heure</label>
+              <input type="time" id="pointage-heure" readonly />
+            </div>
+            <div class="field full">
+              <label>Observation</label>
+              <textarea id="pointage-note" placeholder="Observation éventuelle"></textarea>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+            <button type="button" class="btn" onclick="submitPortalPointage('arrivee')">Pointer arrivée</button>
+            <button type="button" class="btn btn-outline" onclick="submitPortalPointage('depart')">Pointer départ</button>
+            <button type="button" class="btn btn-secondary" onclick="renderPointage()">Actualiser</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Historique pointage</h2>
+          <div id="pointageHistory" class="info-banner">Chargement...</div>
+        </div>
+      </div>
+
+      <!-- ============ HISTORIQUE ============ -->
+      <div class="tab-content" id="tab-historique">
+        <div class="card">
+          <h2>Mes demandes</h2>
+          <div style="margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="text" id="searchHistory" placeholder="Rechercher..." style="flex:1; min-width:200px;" oninput="renderHistory()" />
+            <select id="filterType" style="width:auto;" onchange="renderHistory()">
+              <option value="">Tous les types</option>
+              <option value="attestation">Attestation</option>
+              <option value="fichePaie">Fiche de paie</option>
+              <option value="reclamation">Réclamation</option>
+              <option value="conges">Congés</option>
+              <option value="pointage">Pointage</option>
+            </select>
+            <button class="btn btn-outline" onclick="exportHistory()">Exporter (CSV)</button>
+          </div>
+          <div id="historyList"></div>
+        </div>
+      </div>
+
+      <!-- ============ BOITE DE RECEPTION ============ -->
+      <div class="tab-content" id="tab-reception">
+        <div class="card">
+          <h2>Boîte de réception</h2>
+          <div class="info-banner">
+            Les réponses DRH, statuts de traitement et documents demandés apparaissent ici depuis la base PostgreSQL.
+          </div>
+          <div style="margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-outline" onclick="renderInbox(true)">Actualiser</button>
+            <span id="inboxStatus" style="color:var(--text-muted); font-size:0.9rem;"></span>
+          </div>
+          <div id="inboxList"></div>
+        </div>
+      </div>
+
+      <!-- ============ PROFIL ============ -->
+      <div class="tab-content" id="tab-profil">
+        <div class="card">
+          <h2>Informations personnelles</h2>
+          <div class="info-banner">
+            Le matricule ne peut pas être modifié. Pour toute correction, contactez le service RH.
+          </div>
+          <div class="grid">
+            <div class="field">
+              <label>Nom</label>
+              <input type="text" id="prof-nom" />
+            </div>
+            <div class="field">
+              <label>Prénom</label>
+              <input type="text" id="prof-prenom" />
+            </div>
+            <div class="field">
+              <label>Matricule</label>
+              <input type="text" id="prof-matricule" disabled />
+            </div>
+            <div class="field">
+              <label>Site</label>
+              <select id="prof-site">
+                <option>Siège</option>
+                <option>Site Alger</option>
+                <option>Site Oran</option>
+                <option>Site Constantine</option>
+                <option>Site Annaba</option>
+                <option>Site Hassi Messaoud</option>
+                <option>Site Bejaia</option>
+                <option>Site Setif</option>
+                <option>Autre</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Poste</label>
+              <input type="text" id="prof-poste" />
+            </div>
+            <div class="field">
+              <label>Département</label>
+              <input type="text" id="prof-departement" />
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="email" id="prof-email" />
+            </div>
+            <div class="field">
+              <label>Téléphone</label>
+              <input type="tel" id="prof-telephone" />
+            </div>
+          </div>
+          <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn" onclick="saveProfile()">Enregistrer les modifications</button>
+            <button class="btn btn-outline" onclick="openChangePassword()">Changer le mot de passe</button>
+          </div>
+        </div>
+
+        <div class="card" style="border-top:3px solid var(--danger);">
+          <h2 style="color:var(--danger);">Zone de danger</h2>
+          <p style="color:var(--text-muted); font-size:0.9rem;">
+            Supprimer mon compte effacera définitivement mon profil et l'historique de mes demandes locales.
+          </p>
+          <button class="btn btn-danger" onclick="deleteAccount()">Supprimer mon compte</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============= MODALS ============= -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 style="color: var(--success);">Demande enregistrée</h3>
+      <button class="btn btn-ghost" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-outline" onclick="printReceipt()">Imprimer</button>
+      <button class="btn" onclick="downloadReceipt()">Télécharger (.txt)</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Détail de la demande</h3>
+      <button class="btn btn-ghost" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeDetail()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pwdModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Changer le mot de passe</h3>
+      <button class="btn btn-ghost" onclick="closePwdModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert" id="pwdAlert"></div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Mot de passe actuel</label>
+        <input type="password" id="cp-old" />
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Nouveau mot de passe</label>
+        <input type="password" id="cp-new" />
+      </div>
+      <div class="field">
+        <label>Confirmer le nouveau mot de passe</label>
+        <input type="password" id="cp-new2" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePwdModal()">Annuler</button>
+      <button class="btn" onclick="changePassword()">Mettre à jour</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ================================================== */
+  /* ================ CONSTANTES & STATE ================ */
+  /* ================================================== */
+  const USERS_KEY = 'rh_users_db';
+  const SESSION_KEY = 'rh_session';
+  const SESSION_LOCAL_KEY = 'rh_session_local';
+  const REQUESTS_PREFIX = 'rh_requests_';
+
+  let currentUser = null;
+  let selectedType = null;
+  let lastReceipt = null;
+
+  const TYPE_LABELS = {
+    attestation: 'Attestation de travail',
+    fichePaie: 'Fiche de paie',
+    reclamation: 'Réclamation salaire',
+    conges: 'Congés / Absences',
+    pointage: 'Correction de pointage'
+  };
+
+  const LANG_KEY = 'rh_lang';
+  let currentLang = localStorage.getItem(LANG_KEY) || 'fr';
+
+  const AR = {
+    'Portail RH': 'بوابة الموارد البشرية',
+    'Espace dédié au personnel': 'فضاء مخصص للموظفين',
+    'Se connecter': 'تسجيل الدخول',
+    'Créer un compte': 'إنشاء حساب',
+    'Code ou Email': 'الرمز أو البريد الإلكتروني',
+    'EMP-12345 ou nom@entreprise.com': 'EMP-12345 أو nom@entreprise.com',
+    'Mot de passe': 'كلمة المرور',
+    'Afficher': 'إظهار',
+    'Masquer': 'إخفاء',
+    'Faible': 'ضعيفة',
+    'Moyen': 'متوسطة',
+    'Fort': 'قوية',
+    'Rester connecté': 'البقاء متصلا',
+    'Pas encore de compte ?': 'ليس لديك حساب بعد؟',
+    'Nom': 'اللقب',
+    'Prénom': 'الاسم',
+    'Code': 'الرمز',
+    'Email professionnel': 'البريد الإلكتروني المهني',
+    'Téléphone': 'الهاتف',
+    'Site / Établissement': 'الموقع / المؤسسة',
+    '— Sélectionner —': '— اختر —',
+    'Siège': 'المقر',
+    'Site Alger': 'موقع الجزائر',
+    'Site Oran': 'موقع وهران',
+    'Site Constantine': 'موقع قسنطينة',
+    'Site Annaba': 'موقع عنابة',
+    'Site Hassi Messaoud': 'موقع حاسي مسعود',
+    'Site Bejaia': 'موقع بجاية',
+    'Site Setif': 'موقع سطيف',
+    'Autre': 'أخرى',
+    'Poste / Fonction': 'المنصب / الوظيفة',
+    'Département': 'القسم',
+    'Minimum 8 caractères': '8 أحرف على الأقل',
+    'Utilisez 8+ caractères avec lettres, chiffres et symboles': 'استعمل 8 أحرف أو أكثر مع حروف وأرقام ورموز',
+    'Confirmer le mot de passe': 'تأكيد كلمة المرور',
+    'Retapez votre mot de passe': 'أعد كتابة كلمة المرور',
+    "J'accepte que mes informations soient utilisées pour le traitement de mes demandes RH": 'أوافق على استعمال معلوماتي لمعالجة طلباتي لدى الموارد البشرية',
+    'Créer mon compte': 'إنشاء حسابي',
+    'Déjà un compte ?': 'لديك حساب؟',
+    'Portail RH - Demandes du Personnel': 'بوابة الموارد البشرية - طلبات الموظفين',
+    'Soumettez vos demandes en ligne': 'أرسل طلباتك عبر الإنترنت',
+    'Déconnexion': 'تسجيل الخروج',
+    'Nouvelle demande': 'طلب جديد',
+    'Mes demandes': 'طلباتي',
+    'Boîte de réception': 'صندوق الوارد',
+    'Mon profil': 'ملفي الشخصي',
+    'Les réponses DRH, statuts de traitement et documents demandés apparaissent ici depuis la base PostgreSQL.': 'تظهر هنا ردود الموارد البشرية وحالات المعالجة والوثائق المطلوبة من قاعدة PostgreSQL.',
+    'Actualiser': 'تحديث',
+    'Aucun message pour le moment.': 'لا توجد رسائل حاليا.',
+    'Réponse DRH': 'رد الموارد البشرية',
+    'Documents demandés': 'الوثائق المطلوبة',
+    'Actualisation...': 'جار التحديث...',
+    'Connexion PostgreSQL indisponible': 'الاتصال بقاعدة PostgreSQL غير متاح',
+    'Nouveau': 'جديد',
+    'En cours': 'قيد المعالجة',
+    'En attente': 'قيد الانتظار',
+    'Traitée': 'تمت المعالجة',
+    'Rejetée': 'مرفوضة',
+    'Reçu': 'تم الاستلام',
+    'Type de demande': 'نوع الطلب',
+    'Attestation de travail': 'شهادة عمل',
+    "Justificatif d'emploi": 'إثبات عمل',
+    'Fiche de paie': 'قسيمة الراتب',
+    'Bulletin de salaire': 'كشف الراتب',
+    'Réclamation salaire': 'شكوى الراتب',
+    'Anomalie de paie': 'خلل في الراتب',
+    'Congés / Absences': 'العطل / الغيابات',
+    'Demandes RH diverses': 'طلبات موارد بشرية متنوعة',
+    'Pointage': 'الحضور',
+    'Correction de pointage': 'تصحيح الحضور',
+    'Détails - Attestation de travail': 'التفاصيل - شهادة عمل',
+    'Motif': 'السبب',
+    'Démarche bancaire': 'إجراء بنكي',
+    'Demande de visa': 'طلب تأشيرة',
+    'Location / Contrat de bail': 'كراء / عقد إيجار',
+    'Démarche administrative': 'إجراء إداري',
+    'Demande de prêt': 'طلب قرض',
+    'Langue souhaitée': 'اللغة المطلوبة',
+    'Français': 'الفرنسية',
+    'Arabe': 'العربية',
+    'Bilingue (FR + AR)': 'ثنائي اللغة (فرنسي + عربي)',
+    "Nombre d'exemplaires": 'عدد النسخ',
+    'Destinataire (organisme)': 'الجهة المستقبلة',
+    'Banque, Ambassade...': 'بنك، سفارة...',
+    'Précisions complémentaires': 'توضيحات إضافية',
+    'Mentions à inclure, dates, etc.': 'ملاحظات يجب إدراجها، تواريخ، إلخ.',
+    'Détails - Fiche de paie': 'التفاصيل - قسيمة الراتب',
+    'Année': 'السنة',
+    'Format souhaité': 'الصيغة المطلوبة',
+    'PDF par email': 'PDF عبر البريد الإلكتروني',
+    'Copie papier (à retirer)': 'نسخة ورقية للاستلام',
+    'Les deux': 'كلاهما',
+    'Mois concernés': 'الأشهر المعنية',
+    'Janvier': 'جانفي',
+    'Février': 'فيفري',
+    'Mars': 'مارس',
+    'Avril': 'أفريل',
+    'Mai': 'ماي',
+    'Juin': 'جوان',
+    'Juillet': 'جويلية',
+    'Août': 'أوت',
+    'Septembre': 'سبتمبر',
+    'Octobre': 'أكتوبر',
+    'Novembre': 'نوفمبر',
+    'Décembre': 'ديسمبر',
+    'Commentaire': 'تعليق',
+    'Précisions éventuelles': 'توضيحات محتملة',
+    'Détails - Réclamation salaire': 'التفاصيل - شكوى الراتب',
+    "Décrivez précisément l'anomalie. Vous pourrez fournir un justificatif au service RH.": 'صف الخلل بدقة. يمكنك تقديم وثيقة إثبات لمصلحة الموارد البشرية.',
+    'Mois concerné': 'الشهر المعني',
+    "Type d'anomalie": 'نوع الخلل',
+    'Salaire non perçu': 'راتب غير مستلم',
+    'Montant inférieur à la fiche': 'مبلغ أقل من القسيمة',
+    'Heures supplémentaires non payées': 'ساعات إضافية غير مدفوعة',
+    'Prime manquante': 'منحة ناقصة',
+    'Retenue injustifiée': 'اقتطاع غير مبرر',
+    'Erreur de calcul': 'خطأ في الحساب',
+    'Montant attendu (DA)': 'المبلغ المتوقع (دج)',
+    'Montant reçu (DA)': 'المبلغ المستلم (دج)',
+    'Description du problème': 'وصف المشكلة',
+    'Expliquez en détail...': 'اشرح بالتفصيل...',
+    'Détails - Congés / Absences': 'التفاصيل - العطل / الغيابات',
+    'Type de demande': 'نوع الطلب',
+    'Congé annuel': 'عطلة سنوية',
+    'Congé maladie': 'عطلة مرضية',
+    'Congé maternité / paternité': 'عطلة أمومة / أبوة',
+    'Congé exceptionnel (mariage, décès...)': 'عطلة استثنائية (زواج، وفاة...)',
+    'Congé sans solde': 'عطلة بدون أجر',
+    "Autorisation d'absence": 'ترخيص غياب',
+    "Justification d'absence": 'تبرير غياب',
+    'Nombre de jours': 'عدد الأيام',
+    'Ex: 5': 'مثال: 5',
+    'Date de début': 'تاريخ البداية',
+    'Date de fin': 'تاريخ النهاية',
+    'Motif / Justificatif': 'السبب / التبرير',
+    'Précisez le motif...': 'حدد السبب...',
+    "Personne contactée en cas d'urgence": 'شخص يتم الاتصال به عند الضرورة',
+    'Nom du collègue / responsable': 'اسم الزميل / المسؤول',
+    'Détails - Correction de pointage': 'التفاصيل - تصحيح الحضور',
+    'Date concernée': 'التاريخ المعني',
+    'Type de problème': 'نوع المشكلة',
+    'Oubli de badge entrée': 'نسيان تسجيل الدخول',
+    'Oubli de badge sortie': 'نسيان تسجيل الخروج',
+    'Badge non fonctionnel': 'البطاقة لا تعمل',
+    'Erreur système': 'خطأ في النظام',
+    'Mission externe (pas de pointage)': 'مهمة خارجية (بدون حضور)',
+    "Heure d'arrivée réelle": 'وقت الوصول الفعلي',
+    'Heure de départ réelle': 'وقت المغادرة الفعلي',
+    'Description / Témoins': 'الوصف / الشهود',
+    'Décrivez la situation...': 'صف الوضعية...',
+    'Soumettre la demande': 'إرسال الطلب',
+    'Rechercher...': 'بحث...',
+    'Tous les types': 'كل الأنواع',
+    'Attestation': 'شهادة',
+    'Réclamation': 'شكوى',
+    'Congés': 'عطل',
+    'Exporter (CSV)': 'تصدير (CSV)',
+    'Informations personnelles': 'المعلومات الشخصية',
+    'Le matricule ne peut pas être modifié. Pour toute correction, contactez le service RH.': 'لا يمكن تعديل الرقم الوظيفي. لأي تصحيح، يرجى الاتصال بمصلحة الموارد البشرية.',
+    'Site': 'الموقع',
+    'Poste': 'المنصب',
+    'Email': 'البريد الإلكتروني',
+    'Enregistrer les modifications': 'حفظ التعديلات',
+    'Changer le mot de passe': 'تغيير كلمة المرور',
+    'Zone de danger': 'منطقة حساسة',
+    "Supprimer mon compte effacera définitivement mon profil et l'historique de mes demandes locales.": 'حذف حسابي سيحذف نهائيا ملفي وسجل طلباتي المحلية.',
+    'Supprimer mon compte': 'حذف حسابي',
+    'Demande enregistrée': 'تم تسجيل الطلب',
+    'Fermer': 'إغلاق',
+    'Imprimer': 'طباعة',
+    'Télécharger (.txt)': 'تحميل (.txt)',
+    'Détail de la demande': 'تفاصيل الطلب',
+    'Mot de passe actuel': 'كلمة المرور الحالية',
+    'Nouveau mot de passe': 'كلمة المرور الجديدة',
+    'Confirmer le nouveau mot de passe': 'تأكيد كلمة المرور الجديدة',
+    'Annuler': 'إلغاء',
+    'Mettre à jour': 'تحديث',
+    'Référence': 'المرجع',
+    'Type': 'النوع',
+    'Demandeur': 'صاحب الطلب',
+    'Matricule': 'الرقم الوظيفي',
+    'Date': 'التاريخ',
+    'Statut': 'الحالة',
+    'En attente': 'قيد الانتظار',
+    'Traitée': 'تمت المعالجة',
+    'Rejetée': 'مرفوضة',
+    'Détails': 'التفاصيل',
+    'Conservez la référence': 'احتفظ بالمرجع',
+    'Aucune demande pour le moment.': 'لا توجد طلبات حاليا.',
+    'Créez votre première demande dans l’onglet « Nouvelle demande ».': 'أنشئ أول طلب من تبويب «طلب جديد».',
+    'Aucun résultat.': 'لا توجد نتائج.',
+    'Voir': 'عرض',
+    'Suppr.': 'حذف',
+    'Réf.': 'المرجع',
+    'Veuillez remplir tous les champs obligatoires': 'يرجى ملء كل الحقول الإجبارية',
+    "Vous devez accepter l'utilisation de vos données pour continuer": 'يجب قبول استعمال بياناتك للمتابعة',
+    'Le mot de passe doit contenir au moins 8 caractères': 'يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل',
+    'Les mots de passe ne correspondent pas': 'كلمتا المرور غير متطابقتين',
+    'Email invalide': 'البريد الإلكتروني غير صالح',
+    'Ce code est déjà enregistré. Connectez-vous ou contactez la DRH.': 'هذا الرمز مسجل مسبقا. سجل الدخول أو اتصل بمديرية الموارد البشرية.',
+    'Cet email est déjà utilisé': 'هذا البريد الإلكتروني مستعمل مسبقا',
+    'Compte créé avec succès. Bienvenue !': 'تم إنشاء الحساب بنجاح. مرحبا بك!',
+    'Veuillez renseigner votre identifiant et votre mot de passe': 'يرجى إدخال المعرف وكلمة المرور',
+    'Identifiant ou mot de passe incorrect': 'المعرف أو كلمة المرور غير صحيحة',
+    'Mot de passe mis à jour': 'تم تحديث كلمة المرور',
+    'Champs obligatoires manquants': 'حقول إجبارية ناقصة',
+    'Profil mis à jour': 'تم تحديث الملف الشخصي',
+    'Compte supprimé': 'تم حذف الحساب',
+    'Sélectionnez un type de demande': 'اختر نوع الطلب',
+    'Sélectionnez au moins un mois': 'اختر شهرا واحدا على الأقل',
+    'Récépissé téléchargé': 'تم تحميل الوصل',
+    'Demande supprimée': 'تم حذف الطلب',
+    'Aucune demande à exporter': 'لا توجد طلبات للتصدير',
+    'Export CSV téléchargé': 'تم تحميل ملف CSV',
+    'Tous les champs sont requis': 'كل الحقول مطلوبة',
+    'Le nouveau mot de passe doit contenir au moins 8 caractères': 'يجب أن تحتوي كلمة المرور الجديدة على 8 أحرف على الأقل',
+    'Les nouveaux mots de passe ne correspondent pas': 'كلمتا المرور الجديدتان غير متطابقتين',
+    'Mot de passe actuel incorrect': 'كلمة المرور الحالية غير صحيحة'
+  };
+
+  const FR_BY_AR = Object.fromEntries(Object.entries(AR).map(([fr, ar]) => [ar, fr]));
+
+  function toFrenchSource(text) {
+    const raw = String(text ?? '');
+    const leading = raw.match(/^\s*/)[0];
+    const trailing = raw.match(/\s*$/)[0];
+    const clean = raw.replace(/\s+/g, ' ').trim();
+    return leading + (FR_BY_AR[clean] || clean) + trailing;
+  }
+
+  const TYPE_LABELS_AR = {
+    attestation: 'شهادة عمل',
+    fichePaie: 'قسيمة الراتب',
+    reclamation: 'شكوى الراتب',
+    conges: 'العطل / الغيابات',
+    pointage: 'تصحيح الحضور'
+  };
+
+  function tr(text) {
+    const clean = String(text ?? '').replace(/\s+/g, ' ').trim();
+    return currentLang === 'ar' ? (AR[clean] || text) : text;
+  }
+
+  function getTypeLabel(type) {
+    return currentLang === 'ar' ? TYPE_LABELS_AR[type] : TYPE_LABELS[type];
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = currentLang === 'ar' ? 'ar' : 'fr';
+    document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+    document.body.classList.toggle('lang-ar', currentLang === 'ar');
+    document.title = currentLang === 'ar'
+      ? 'بوابة الموارد البشرية - طلبات الموظفين'
+      : 'Portail RH - Demandes du Personnel';
+
+    document.querySelectorAll('[data-lang-btn]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.langBtn === currentLang);
+    });
+
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const parent = node.parentElement;
+        if (!parent || ['SCRIPT', 'STYLE', 'OPTION'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+        return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach(node => {
+      if (!node._frText) node._frText = toFrenchSource(node.nodeValue);
+      else node._frText = toFrenchSource(node._frText);
+      const leading = node._frText.match(/^\s*/)[0];
+      const trailing = node._frText.match(/\s*$/)[0];
+      const core = node._frText.trim();
+      node.nodeValue = currentLang === 'ar' ? leading + tr(core) + trailing : node._frText;
+    });
+
+    document.querySelectorAll('body *').forEach(el => {
+      if (['SCRIPT', 'STYLE'].includes(el.tagName)) return;
+      if (el.placeholder !== undefined) {
+        if (!el.dataset.frPlaceholder) el.dataset.frPlaceholder = toFrenchSource(el.placeholder);
+        else el.dataset.frPlaceholder = toFrenchSource(el.dataset.frPlaceholder);
+        el.placeholder = currentLang === 'ar' ? tr(el.dataset.frPlaceholder) : el.dataset.frPlaceholder;
+      }
+      if (el.title) {
+        if (!el.dataset.frTitle) el.dataset.frTitle = toFrenchSource(el.title);
+        else el.dataset.frTitle = toFrenchSource(el.dataset.frTitle);
+        el.title = currentLang === 'ar' ? tr(el.dataset.frTitle) : el.dataset.frTitle;
+      }
+    });
+
+    document.querySelectorAll('option').forEach(opt => {
+      if (!opt.dataset.frText) opt.dataset.frText = toFrenchSource(opt.textContent);
+      else opt.dataset.frText = toFrenchSource(opt.dataset.frText);
+      if (!opt.hasAttribute('value')) opt.value = opt.dataset.frText;
+      opt.textContent = currentLang === 'ar' ? tr(opt.dataset.frText) : opt.dataset.frText;
+    });
+
+    const historyTab = document.querySelector('.tab[data-tab="historique"]');
+    const count = document.getElementById('countBadge')?.textContent || '0';
+    if (historyTab) {
+      historyTab.innerHTML = `${tr('Mes demandes')} (<span id="countBadge">${count}</span>)`;
+    }
+    const inboxTab = document.querySelector('.tab[data-tab="reception"]');
+    const inboxCount = document.getElementById('inboxBadge')?.textContent || '0';
+    if (inboxTab) {
+      inboxTab.innerHTML = `${tr('Boîte de réception')} (<span id="inboxBadge">${inboxCount}</span>)`;
+    }
+    if (currentUser) updateUserChip();
+  }
+
+  function setLanguage(lang) {
+    currentLang = lang;
+    localStorage.setItem(LANG_KEY, lang);
+    renderHistory();
+    applyLanguage();
+  }
+
+  /* ================================================== */
+  /* ================ HACHAGE MOT DE PASSE ============== */
+  /* ================================================== */
+  async function hashPassword(password, salt) {
+    if (!window.crypto || !crypto.subtle) {
+      return fallbackHashPassword(password, salt);
+    }
+    const data = new TextEncoder().encode(password + ':' + salt);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function fallbackHashPassword(password, salt) {
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    const str = password + ':' + salt;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      h1 ^= c;
+      h1 = Math.imul(h1, 0x01000193) >>> 0;
+      h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+    }
+    return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);
+  }
+
+  function generateSalt() {
+    if (window.crypto && crypto.getRandomValues) {
+      const arr = new Uint8Array(16);
+      crypto.getRandomValues(arr);
+      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    return String(Date.now()) + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
+  }
+
+  /* ================================================== */
+  /* ================ GESTION USERS ===================== */
+  /* ================================================== */
+  function loadUsers() { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); }
+  function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+
+  function findUser(identifier) {
+    const users = loadUsers();
+    const lower = identifier.toLowerCase().trim();
+    if (users[lower]) return { key: lower, ...users[lower] };
+    for (const [k, u] of Object.entries(users)) {
+      if (u.profile.email && u.profile.email.toLowerCase() === lower) {
+        return { key: k, ...u };
+      }
+    }
+    return null;
+  }
+
+  /* ================================================== */
+  /* ================ AUTH UI =========================== */
+  /* ================================================== */
+  function switchAuth(name) {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t.dataset.auth === name));
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    document.getElementById('form-' + name).classList.add('active');
+    hideAlert();
+    applyLanguage();
+  }
+
+  function showAlert(msg) {
+    const a = document.getElementById('authAlert');
+    a.textContent = tr(msg);
+    a.classList.add('show');
+  }
+
+  function hideAlert() {
+    document.getElementById('authAlert').classList.remove('show');
+  }
+
+  function togglePwd(id, btn) {
+    const el = document.getElementById(id);
+    if (el.type === 'password') {
+      el.type = 'text';
+      btn.textContent = tr('Masquer');
+    } else {
+      el.type = 'password';
+      btn.textContent = tr('Afficher');
+    }
+  }
+
+  function checkStrength() {
+    const p = document.getElementById('reg-pwd').value;
+    let score = 0;
+    if (p.length >= 8) score++;
+    if (p.length >= 12) score++;
+    if (/[a-z]/.test(p) && /[A-Z]/.test(p)) score++;
+    if (/[0-9]/.test(p)) score++;
+    if (/[^a-zA-Z0-9]/.test(p)) score++;
+
+    const bar = document.getElementById('pwdBar');
+    const text = document.getElementById('pwdText');
+    bar.className = 'password-strength-bar';
+    if (p.length === 0) {
+      bar.style.width = '0';
+      text.textContent = tr('Utilisez 8+ caractères avec lettres, chiffres et symboles');
+    } else if (score <= 2) {
+      bar.style.width = '33%';
+      bar.classList.add('ps-weak');
+      text.textContent = tr('Faible');
+    } else if (score <= 3) {
+      bar.style.width = '66%';
+      bar.classList.add('ps-medium');
+      text.textContent = tr('Moyen');
+    } else {
+      bar.style.width = '100%';
+      bar.classList.add('ps-strong');
+      text.textContent = tr('Fort');
+    }
+  }
+
+  /* ================================================== */
+  /* ================ INSCRIPTION ======================= */
+  /* ================================================== */
+  async function validateEmployeeRegistration(data) {
+    let res;
+    try {
+      res = await fetch(location.origin + '/api/portal/validate-employee', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nom: data.nom,
+          prenom: data.prenom,
+          code: data.code,
+          dateNaissance: data.dateNaissance
+        })
+      });
+    } catch (err) {
+      throw new Error('Connexion PostgreSQL obligatoire: serveur indisponible');
+    }
+    if (!res.ok) {
+      let detail = 'Identité non reconnue dans la base de données';
+      try {
+        const payload = await res.json();
+        detail = payload.detail || detail;
+      } catch (err) {}
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
+  async function doRegister() {
+    try {
+      hideAlert();
+      const data = {
+        nom: val('reg-nom'),
+        prenom: val('reg-prenom'),
+        code: val('reg-code'),
+        email: '',
+        telephone: val('reg-telephone'),
+        dateNaissance: val('reg-dateNaissance')
+      };
+      const pwd = document.getElementById('reg-pwd').value;
+      const pwd2 = document.getElementById('reg-pwd2').value;
+      const cgu = document.getElementById('reg-cgu').checked;
+
+      if (!data.nom || !data.prenom || !data.code || !data.telephone || !data.dateNaissance) {
+        showAlert('Veuillez remplir tous les champs obligatoires');
+        return;
+      }
+      if (!cgu) {
+        showAlert('Vous devez accepter l\'utilisation de vos données pour continuer');
+        return;
+      }
+      if (pwd.length < 8) {
+        showAlert('Le mot de passe doit contenir au moins 8 caractères');
+        return;
+      }
+      if (pwd !== pwd2) {
+        showAlert('Les mots de passe ne correspondent pas');
+        return;
+      }
+      const verification = await validateEmployeeRegistration(data);
+      const employee = verification.employee || {};
+      data.matricule = employee.matricule || employee.code || data.code;
+      data.code = data.matricule;
+      data.nom = employee.nom || data.nom;
+      data.prenom = employee.prenom || data.prenom;
+      data.telephone = employee.telephone || data.telephone;
+      data.dateNaissance = employee.dateNaissance || data.dateNaissance;
+      data.photo = employee.photo || '';
+      data.statut = employee.statut || '';
+      data.societe = employee.societe || '';
+      data.site = toFrenchSource(employee.site || '');
+      data.poste = employee.poste || '';
+      data.departement = employee.departement || '';
+      data.verified = true;
+      data.verifiedAt = new Date().toISOString();
+
+      const users = loadUsers();
+      const key = data.code.toLowerCase();
+      if (users[key]) {
+        showAlert('Ce code est déjà enregistré. Connectez-vous ou contactez la DRH.');
+        return;
+      }
+      const salt = generateSalt();
+      const hash = await hashPassword(pwd, salt);
+      users[key] = {
+        profile: data,
+        auth: { hash, salt },
+        createdAt: new Date().toISOString()
+      };
+      saveUsers(users);
+
+      toast('Compte créé avec succès. Bienvenue !');
+      // Auto-login
+      setSession(key, false);
+      enterApp(key);
+    } catch (err) {
+      console.error(err);
+      showAlert(err.message || 'Création impossible. Vérifiez les informations ou contactez la DRH.');
+    }
+  }
+
+  /* ================================================== */
+  /* ================ CONNEXION ========================= */
+  /* ================================================== */
+  async function doLogin() {
+    hideAlert();
+    const id = val('login-id');
+    const pwd = document.getElementById('login-pwd').value;
+    const remember = document.getElementById('login-remember').checked;
+
+    if (!id || !pwd) {
+      showAlert('Veuillez renseigner votre identifiant et votre mot de passe');
+      return;
+    }
+
+    const user = findUser(id);
+    if (!user) {
+      showAlert('Identifiant ou mot de passe incorrect');
+      return;
+    }
+
+    const hash = await hashPassword(pwd, user.auth.salt);
+    if (hash !== user.auth.hash) {
+      showAlert('Identifiant ou mot de passe incorrect');
+      return;
+    }
+
+    setSession(user.key, remember);
+    enterApp(user.key);
+    toast('Bienvenue ' + user.profile.prenom + ' !');
+  }
+
+  function setSession(key, persistent) {
+    const session = { matricule: key, since: Date.now() };
+    if (persistent) {
+      localStorage.setItem(SESSION_LOCAL_KEY, JSON.stringify(session));
+      sessionStorage.removeItem(SESSION_KEY);
+    } else {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.removeItem(SESSION_LOCAL_KEY);
+    }
+  }
+
+  function getSession() {
+    const s = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_LOCAL_KEY);
+    return s ? JSON.parse(s) : null;
+  }
+
+  function clearSession() {
+    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_LOCAL_KEY);
+  }
+
+  function logout() {
+    if (!confirm('Voulez-vous vraiment vous déconnecter ?')) return;
+    clearSession();
+    currentUser = null;
+    document.getElementById('appView').classList.add('hidden');
+    document.getElementById('authView').classList.remove('hidden');
+    // Nettoyer formulaires d'auth
+    document.getElementById('form-login').reset();
+    document.getElementById('form-register').reset();
+    switchAuth('login');
+  }
+
+  /* ================================================== */
+  /* ================ CHANGER MOT DE PASSE ============== */
+  /* ================================================== */
+  function openChangePassword() {
+    document.getElementById('cp-old').value = '';
+    document.getElementById('cp-new').value = '';
+    document.getElementById('cp-new2').value = '';
+    document.getElementById('pwdAlert').classList.remove('show');
+    document.getElementById('pwdModal').classList.add('show');
+  }
+  function closePwdModal() {
+    document.getElementById('pwdModal').classList.remove('show');
+  }
+  async function changePassword() {
+    const old = document.getElementById('cp-old').value;
+    const n1 = document.getElementById('cp-new').value;
+    const n2 = document.getElementById('cp-new2').value;
+    const a = document.getElementById('pwdAlert');
+    const showA = (msg) => { a.textContent = tr(msg); a.classList.add('show'); };
+
+    if (!old || !n1 || !n2) return showA('Tous les champs sont requis');
+    if (n1.length < 8) return showA('Le nouveau mot de passe doit contenir au moins 8 caractères');
+    if (n1 !== n2) return showA('Les nouveaux mots de passe ne correspondent pas');
+
+    const users = loadUsers();
+    const u = users[currentUser.key];
+    const hashOld = await hashPassword(old, u.auth.salt);
+    if (hashOld !== u.auth.hash) return showA('Mot de passe actuel incorrect');
+
+    const newSalt = generateSalt();
+    const newHash = await hashPassword(n1, newSalt);
+    u.auth = { hash: newHash, salt: newSalt };
+    saveUsers(users);
+    closePwdModal();
+    toast('Mot de passe mis à jour');
+  }
+
+  /* ================================================== */
+  /* ================ PROFIL ============================ */
+  /* ================================================== */
+  function loadProfileForm() {
+    const p = currentUser.profile;
+    document.getElementById('prof-nom').value = p.nom || '';
+    document.getElementById('prof-prenom').value = p.prenom || '';
+    document.getElementById('prof-matricule').value = p.matricule || '';
+    document.getElementById('prof-site').value = toFrenchSource(p.site || '');
+    document.getElementById('prof-poste').value = p.poste || '';
+    document.getElementById('prof-departement').value = p.departement || '';
+    document.getElementById('prof-email').value = p.email || '';
+    document.getElementById('prof-telephone').value = p.telephone || '';
+  }
+
+  function saveProfile() {
+    const updated = {
+      nom: val('prof-nom'),
+      prenom: val('prof-prenom'),
+      matricule: currentUser.profile.matricule,
+      site: toFrenchSource(val('prof-site')),
+      poste: val('prof-poste'),
+      departement: val('prof-departement'),
+      email: val('prof-email').toLowerCase(),
+      telephone: val('prof-telephone')
+    };
+    if (!updated.nom || !updated.prenom || !updated.email || !updated.telephone || !updated.site) {
+      toast('Champs obligatoires manquants', true);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updated.email)) {
+      toast('Email invalide', true);
+      return;
+    }
+    const users = loadUsers();
+    users[currentUser.key].profile = updated;
+    saveUsers(users);
+    currentUser.profile = updated;
+    updateUserChip();
+    toast('Profil mis à jour');
+  }
+
+  function deleteAccount() {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer votre compte ? Toutes vos demandes seront perdues.')) return;
+    if (!confirm('Cette action est IRRÉVERSIBLE. Confirmer la suppression définitive ?')) return;
+    const users = loadUsers();
+    delete users[currentUser.key];
+    saveUsers(users);
+    localStorage.removeItem(REQUESTS_PREFIX + currentUser.key);
+    clearSession();
+    currentUser = null;
+    document.getElementById('appView').classList.add('hidden');
+    document.getElementById('authView').classList.remove('hidden');
+    switchAuth('login');
+    toast('Compte supprimé');
+  }
+
+  /* ================================================== */
+  /* ================ ENTRÉE DANS L'APP ================= */
+  /* ================================================== */
+  async function refreshCurrentUserFromPostgres() {
+    if (!currentUser?.profile?.nom || !currentUser?.profile?.prenom || !(currentUser.profile.code || currentUser.profile.matricule) || !currentUser.profile.dateNaissance) return;
+    try {
+      const verification = await validateEmployeeRegistration({
+        nom: currentUser.profile.nom,
+        prenom: currentUser.profile.prenom,
+        code: currentUser.profile.code || currentUser.profile.matricule,
+        dateNaissance: currentUser.profile.dateNaissance
+      });
+      const employee = verification.employee || {};
+      const users = loadUsers();
+      const stored = users[currentUser.key];
+      if (!stored) return;
+      stored.profile = {
+        ...stored.profile,
+        nom: employee.nom || stored.profile.nom,
+        prenom: employee.prenom || stored.profile.prenom,
+        code: employee.code || employee.matricule || stored.profile.code,
+        matricule: employee.matricule || employee.code || stored.profile.matricule,
+        photo: employee.photo || stored.profile.photo || '',
+        statut: employee.statut || stored.profile.statut || '',
+        verified: true,
+        verifiedAt: new Date().toISOString()
+      };
+      users[currentUser.key] = stored;
+      saveUsers(users);
+      currentUser.profile = stored.profile;
+      updateUserChip();
+    } catch (err) {
+      console.warn('Actualisation identité PostgreSQL indisponible', err);
+    }
+  }
+
+  function enterApp(key) {
+    const users = loadUsers();
+    const u = users[key];
+    if (!u) { logout(); return; }
+    const normalizedSite = toFrenchSource(u.profile.site || '');
+    if (normalizedSite !== u.profile.site) {
+      u.profile.site = normalizedSite;
+      users[key] = u;
+      saveUsers(users);
+    }
+    currentUser = { key, ...u };
+
+    document.getElementById('authView').classList.add('hidden');
+    document.getElementById('appView').classList.remove('hidden');
+
+    // Init UI
+    initAppUI();
+    updateUserChip();
+    refreshCurrentUserFromPostgres();
+    loadProfileForm();
+    renderHistory();
+    renderInbox(false, true);
+  }
+
+  function updateUserChip() {
+    const p = currentUser.profile;
+    const initials = (p.prenom?.[0] || '') + (p.nom?.[0] || '');
+    const verifiedLight = document.getElementById('accountVerifiedLight');
+    const headerPhoto = document.getElementById('headerEmployeePhoto');
+    const headerCode = document.getElementById('headerEmployeeCode');
+    const code = p.matricule || p.code || currentUser.key || '--';
+    const suspended = String(p.statut || '').toLowerCase().includes('suspend');
+    if (p.photo) {
+      if (headerPhoto) headerPhoto.innerHTML = `<img src="${escapeHtml(p.photo)}" alt="Photo ${escapeHtml(p.prenom || '')} ${escapeHtml(p.nom || '')}">`;
+    } else {
+      if (headerPhoto) headerPhoto.textContent = initials.toUpperCase() || '--';
+    }
+    document.getElementById('userName').textContent = `${p.prenom || ''} ${p.nom || ''}`.trim() || '--';
+    document.getElementById('userSite').textContent = suspended ? 'Situation : suspendu' : 'Compte employé';
+    if (headerCode) {
+      headerCode.textContent = code;
+      headerCode.classList.toggle('suspended', suspended);
+      headerCode.title = suspended ? 'Employé suspendu' : 'Code employé validé';
+    }
+    if (verifiedLight) {
+      verifiedLight.classList.toggle('on', p.verified === true);
+      verifiedLight.title = p.verified === true ? 'Compte validé par PostgreSQL' : 'Compte non validé par PostgreSQL';
+    }
+  }
+
+  /* ================================================== */
+  /* ================ APP - INIT ======================== */
+  /* ================================================== */
+  function initAppUI() {
+    // Années pour fiche de paie
+    const annee = new Date().getFullYear();
+    const sel = document.getElementById('fp-annee');
+    if (!sel.options.length) {
+      for (let y = annee; y >= annee - 5; y--) {
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y;
+        sel.appendChild(opt);
+      }
+    }
+    document.querySelectorAll('.type-card').forEach(c => {
+      c.onclick = () => selectType(c.dataset.type);
+    });
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'historique') renderHistory();
+    if (name === 'reception') renderInbox();
+    if (name === 'pointage') renderPointage();
+    if (name === 'profil') loadProfileForm();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function selectType(type) {
+    selectedType = type;
+    document.querySelectorAll('.type-card').forEach(c => c.classList.toggle('active', c.dataset.type === type));
+    document.querySelectorAll('.request-form').forEach(f => f.classList.remove('active'));
+    document.getElementById('form-' + type).classList.add('active');
+    document.getElementById('submitBtn').style.display = 'flex';
+    setTimeout(() => {
+      document.getElementById('form-' + type).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+
+  /* ================================================== */
+  /* ================ DEMANDES ========================== */
+  /* ================================================== */
+  function getDetails(type) {
+    switch (type) {
+      case 'attestation':
+        return {
+          'Motif': val('att-motif'),
+          'Langue': val('att-langue'),
+          'Exemplaires': val('att-exemplaires'),
+          'Destinataire': val('att-destinataire'),
+          'Précisions': val('att-precisions')
+        };
+      case 'fichePaie':
+        const mois = Array.from(document.querySelectorAll('#fp-mois input:checked')).map(c => c.value);
+        return {
+          'Année': val('fp-annee'),
+          'Mois': mois.join(', '),
+          'Format': val('fp-format'),
+          'Commentaire': val('fp-commentaire')
+        };
+      case 'reclamation':
+        return {
+          'Mois concerné': val('rec-mois'),
+          'Type d\'anomalie': val('rec-type'),
+          'Montant attendu': val('rec-attendu') ? val('rec-attendu') + ' DA' : '',
+          'Montant reçu': val('rec-recu') ? val('rec-recu') + ' DA' : '',
+          'Description': val('rec-description')
+        };
+      case 'conges':
+        return {
+          'Type': val('cg-type'),
+          'Date début': val('cg-debut'),
+          'Date fin': val('cg-fin'),
+          'Nombre de jours': val('cg-jours'),
+          'Motif': val('cg-motif'),
+          'Contact d\'urgence': val('cg-remplacant')
+        };
+      case 'pointage':
+        return {
+          'Date': val('pt-date'),
+          'Type de problème': val('pt-type'),
+          'Heure arrivée réelle': val('pt-arrivee'),
+          'Heure départ réelle': val('pt-depart'),
+          'Description': val('pt-description')
+        };
+    }
+  }
+
+  function validate() {
+    if (!selectedType) { toast('Sélectionnez un type de demande', true); return false; }
+    const checks = {
+      attestation: [['att-motif', 'Motif']],
+      fichePaie: [],
+      reclamation: [['rec-mois','Mois'],['rec-type','Type d\'anomalie'],['rec-description','Description']],
+      conges: [['cg-type','Type'],['cg-debut','Date de début'],['cg-fin','Date de fin']],
+      pointage: [['pt-date','Date'],['pt-type','Type de problème'],['pt-description','Description']]
+    };
+    for (const [id, label] of (checks[selectedType] || [])) {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) { toast('Champ requis: ' + label, true); el.focus(); return false; }
+    }
+    if (selectedType === 'fichePaie') {
+      if (document.querySelectorAll('#fp-mois input:checked').length === 0) {
+        toast('Sélectionnez au moins un mois', true); return false;
+      }
+    }
+    return true;
+  }
+
+  async function sendRequestToSgdi(record) {
+    const apiRoot = location.origin + '/api/portal/demandes';
+    const res = await fetch(apiRoot, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record)
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(txt || 'Erreur envoi SGDI');
+    }
+    return res.json();
+  }
+
+  async function submitRequest() {
+    if (!validate()) return;
+    const details = getDetails(selectedType);
+    const now = new Date();
+    const ref = generateRef(selectedType);
+
+    const record = {
+      ref,
+      type: selectedType,
+      typeLabel: getTypeLabel(selectedType),
+      employee: { ...currentUser.profile },
+      details,
+      status: 'en-attente',
+      createdAt: now.toISOString(),
+      createdAtFormatted: now.toLocaleString('fr-FR')
+    };
+
+    const all = loadRequests();
+    all.unshift(record);
+    saveRequests(all);
+    try {
+      await sendRequestToSgdi(record);
+      record.sentToSgdi = true;
+      saveRequests(all);
+      toast('Demande envoyée à la DRH');
+    } catch (err) {
+      console.error(err);
+      record.sentToSgdi = false;
+      record.syncError = String(err.message || err);
+      saveRequests(all);
+      toast('Demande sauvegardée sur le téléphone, mais non reçue par la DRH. Redémarrez le serveur puis réessayez.', true);
+    }
+    lastReceipt = record;
+    showConfirm(record);
+    updateCount();
+    renderInbox(false, true);
+    applyLanguage();
+  }
+
+  function loadRequests() {
+    return JSON.parse(localStorage.getItem(REQUESTS_PREFIX + currentUser.key) || '[]');
+  }
+  function saveRequests(list) {
+    localStorage.setItem(REQUESTS_PREFIX + currentUser.key, JSON.stringify(list));
+  }
+
+  /* ================================================== */
+  /* ================ POINTAGE ========================== */
+  /* ================================================== */
+  function updatePointageClock() {
+    const now = new Date();
+    const d = document.getElementById('pointage-date');
+    const h = document.getElementById('pointage-heure');
+    if (d) d.value = now.toISOString().slice(0, 10);
+    if (h) h.value = now.toTimeString().slice(0, 5);
+  }
+
+  function getPortalPosition() {
+    return new Promise(resolve => {
+      if (!window.isSecureContext) return resolve({ error: 'insecure_context' });
+      if (!navigator.geolocation) return resolve({ error: 'geolocation_unavailable' });
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy
+        }),
+        err => resolve({ error: err && err.code === 1 ? 'permission_denied' : 'position_unavailable' }),
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+      );
+    });
+  }
+
+  async function sendPortalPointage(record) {
+    const res = await fetch(location.origin + '/api/portal/pointages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record)
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(txt || 'Erreur pointage PostgreSQL');
+    }
+    return res.json();
+  }
+
+  async function loadPortalPointages() {
+    const code = currentUser?.profile?.matricule || currentUser?.profile?.code || currentUser?.key || '';
+    if (!code) return [];
+    const res = await fetch(location.origin + '/api/portal/pointages/' + encodeURIComponent(code));
+    if (!res.ok) throw new Error('Historique pointage indisponible');
+    const payload = await res.json();
+    return Array.isArray(payload.data) ? payload.data : [];
+  }
+
+  async function renderPointage() {
+    updatePointageClock();
+    const zone = document.getElementById('pointageHistory');
+    if (!zone) return;
+    zone.textContent = 'Chargement...';
+    try {
+      const rows = await loadPortalPointages();
+      if (!rows.length) {
+        zone.innerHTML = 'Aucun pointage enregistré.';
+        return;
+      }
+      zone.innerHTML = `<div style="overflow:auto;"><table class="history-table"><thead><tr><th>Date</th><th>Heure</th><th>Action</th><th>Site</th><th>Position</th></tr></thead><tbody>${rows.slice(0, 20).map(p => {
+        const gps = p.position && p.position.lat ? `${Number(p.position.lat).toFixed(5)}, ${Number(p.position.lng).toFixed(5)}` : '—';
+        const action = p.action === 'depart' ? 'Départ' : 'Arrivée';
+        return `<tr><td>${escapeHtml(p.date || '')}</td><td>${escapeHtml(p.heure || '')}</td><td><span class="badge badge-traite">${action}</span></td><td>${escapeHtml(p.site || '—')}</td><td>${escapeHtml(gps)}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+    } catch (err) {
+      console.error(err);
+      zone.innerHTML = '<span style="color:var(--danger);">Connexion PostgreSQL indisponible pour le pointage.</span>';
+    }
+  }
+
+  async function submitPortalPointage(action) {
+    updatePointageClock();
+    const now = new Date();
+    const ref = `PTG-${now.toISOString().slice(0,10).replaceAll('-', '')}-${Math.floor(Math.random() * 9000 + 1000)}`;
+    const record = {
+      ref,
+      action,
+      employee: { ...currentUser.profile },
+      date: document.getElementById('pointage-date').value,
+      heure: document.getElementById('pointage-heure').value,
+      note: val('pointage-note'),
+      createdAt: now.toISOString(),
+      position: await getPortalPosition()
+    };
+    if (record.position && record.position.error === 'insecure_context') {
+      toast('GPS impossible sur iPhone avec une adresse HTTP. Ouvrez le portail avec une adresse HTTPS.', true);
+      return;
+    }
+    if (record.position && record.position.error === 'permission_denied') {
+      toast('Localisation refusée par le téléphone. Autorisez la position pour Safari.', true);
+      return;
+    }
+    if (!record.position || !record.position.lat || !record.position.lng) {
+      toast('Position GPS obligatoire pour pointer. Autorisez la localisation du téléphone.', true);
+      return;
+    }
+    try {
+      await sendPortalPointage(record);
+      document.getElementById('pointage-note').value = '';
+      toast(action === 'depart' ? 'Pointage départ enregistré' : 'Pointage arrivée enregistré');
+      renderPointage();
+    } catch (err) {
+      console.error(err);
+      toast('Pointage refusé: connexion PostgreSQL indisponible', true);
+    }
+  }
+
+  function generateRef(type) {
+    const prefix = { attestation: 'ATT', fichePaie: 'FP', reclamation: 'REC', conges: 'CG', pointage: 'PT' }[type];
+    const d = new Date();
+    const yymmdd = String(d.getFullYear()).slice(2) + pad(d.getMonth()+1) + pad(d.getDate());
+    const rand = Math.floor(Math.random() * 9000 + 1000);
+    return `${prefix}-${yymmdd}-${rand}`;
+  }
+
+  function showConfirm(record) {
+    const body = document.getElementById('modalBody');
+    let html = `
+      <div class="receipt">
+        <div style="text-align:center; font-size:1.1rem; font-weight:700; margin-bottom:10px;">
+          ${tr('Référence')}: ${record.ref}
+        </div>
+        <div class="receipt-row"><span class="key">${tr('Type')}</span><span class="val">${getTypeLabel(record.type)}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Demandeur')}</span><span class="val">${record.employee.prenom} ${record.employee.nom}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Matricule')}</span><span class="val">${record.employee.matricule}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Site')}</span><span class="val">${record.employee.site}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Date')}</span><span class="val">${record.createdAtFormatted}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Statut')}</span><span class="val"><span class="badge badge-en-attente">${tr('En attente')}</span></span></div>
+      </div>
+      <div style="margin-top:14px;"><strong>${tr('Détails')} :</strong>
+        <div style="margin-top:8px; font-size:0.9rem;">`;
+    for (const [k, v] of Object.entries(record.details)) {
+      if (v) html += `<div class="receipt-row"><span class="key">${k}</span><span class="val">${escapeHtml(v)}</span></div>`;
+    }
+    html += `</div></div>
+      <div class="info-banner" style="margin-top:14px;">
+        ${tr('Conservez la référence')} <strong>${record.ref}</strong>.
+      </div>`;
+    body.innerHTML = html;
+    document.getElementById('confirmModal').classList.add('show');
+  }
+
+  function closeModal() {
+    document.getElementById('confirmModal').classList.remove('show');
+    resetForm();
+  }
+  function printReceipt() { window.print(); }
+
+  function downloadReceipt() {
+    if (!lastReceipt) return;
+    const r = lastReceipt;
+    let txt = '═══════════════════════════════════════════════\n';
+    txt += '   RÉCÉPISSÉ - DEMANDE RH\n';
+    txt += '═══════════════════════════════════════════════\n\n';
+    txt += `Référence       : ${r.ref}\n`;
+    txt += `Type            : ${getTypeLabel(r.type)}\n`;
+    txt += `Date soumission : ${r.createdAtFormatted}\n`;
+    txt += `Statut          : En attente\n\n`;
+    txt += '— EMPLOYÉ —\n';
+    txt += `Nom             : ${r.employee.nom}\n`;
+    txt += `Prénom          : ${r.employee.prenom}\n`;
+    txt += `Matricule       : ${r.employee.matricule}\n`;
+    txt += `Site            : ${r.employee.site}\n`;
+    if (r.employee.poste) txt += `Poste           : ${r.employee.poste}\n`;
+    if (r.employee.departement) txt += `Département     : ${r.employee.departement}\n`;
+    txt += `Email           : ${r.employee.email}\n`;
+    txt += `Téléphone       : ${r.employee.telephone}\n\n`;
+    txt += '— DÉTAILS —\n';
+    for (const [k, v] of Object.entries(r.details)) {
+      if (v) txt += `${k.padEnd(16)}: ${v}\n`;
+    }
+    txt += '\n═══════════════════════════════════════════════\n';
+
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `Demande_${r.ref}.txt`; a.click();
+    URL.revokeObjectURL(url);
+    toast('Récépissé téléchargé');
+  }
+
+  function resetForm() {
+    document.querySelectorAll('.request-form').forEach(f => {
+      f.classList.remove('active');
+      f.querySelectorAll('input:not([type=checkbox]), textarea, select').forEach(el => {
+        if (el.id === 'att-exemplaires') el.value = 1;
+        else if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        else el.value = '';
+      });
+      f.querySelectorAll('input[type=checkbox]').forEach(el => el.checked = false);
+    });
+    document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
+    selectedType = null;
+    document.getElementById('submitBtn').style.display = 'none';
+  }
+
+  /* ================================================== */
+  /* ================ HISTORIQUE ======================== */
+  /* ================================================== */
+  function updateCount() {
+    document.getElementById('countBadge').textContent = loadRequests().length;
+  }
+  let inboxCache = [];
+  async function fetchInboxFromSgdi() {
+    const matricule = currentUser?.profile?.matricule || currentUser?.key || '';
+    if (!matricule) return [];
+    const res = await fetch(location.origin + '/api/portal/demandes/' + encodeURIComponent(matricule));
+    if (!res.ok) throw new Error(await res.text().catch(() => 'Boîte de réception indisponible'));
+    const out = await res.json();
+    return Array.isArray(out.data) ? out.data : [];
+  }
+  function updateInboxBadge() {
+    const pending = inboxCache.filter(d => ['nouveau','en_cours'].includes(d.statut || 'nouveau')).length;
+    const el = document.getElementById('inboxBadge');
+    if (el) el.textContent = pending;
+  }
+  function statusLabel(statut) {
+    const s = statut || 'nouveau';
+    if (s === 'nouveau') return 'Nouveau';
+    if (s === 'en_cours') return 'En cours';
+    if (s === 'traite') return 'Traitée';
+    if (s === 'rejete') return 'Rejetée';
+    return s;
+  }
+  function statusBadgeClass(statut) {
+    const s = statut || 'nouveau';
+    if (s === 'traite') return 'badge-traitee';
+    if (s === 'rejete') return 'badge-rejetee';
+    return 'badge-en-attente';
+  }
+  function renderInboxRows() {
+    const list = document.getElementById('inboxList');
+    if (!list) return;
+    updateInboxBadge();
+    if (!inboxCache.length) {
+      list.innerHTML = `<div class="empty-state">${tr('Aucun message pour le moment.')}</div>`;
+      applyLanguage();
+      return;
+    }
+    list.innerHTML = inboxCache.map(d => {
+      const docs = Array.isArray(d.documentsDemandes) ? d.documentsDemandes : [];
+      const pieces = Array.isArray(d.pieces) ? d.pieces : [];
+      const hist = Array.isArray(d.historique) ? d.historique : [];
+      return `<div class="card" style="box-shadow:none; border:1px solid var(--border); margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <strong>${escapeHtml(d.objet || d.type || 'Demande RH')}</strong>
+            <div style="color:var(--text-muted); font-size:0.88rem;">${escapeHtml(d.ref || d.id || '')} · ${escapeHtml(d.date || (d.createdAt || '').slice(0,10))}</div>
+          </div>
+          <span class="badge ${statusBadgeClass(d.statut)}">${tr(statusLabel(d.statut))}</span>
+        </div>
+        ${d.reponse ? `<div class="info-banner" style="margin-top:12px;"><strong>${tr('Réponse DRH')} :</strong><br>${escapeHtml(d.reponse)}</div>` : ''}
+        ${pieces.length ? `<div style="margin-top:12px;"><strong>Documents reçus</strong><div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">${pieces.map((p,i) => `<a class="btn btn-outline" href="${p.data}" download="${escapeHtml(p.name || ('document-' + (i+1)))}">Télécharger ${escapeHtml(p.name || ('document ' + (i+1)))}</a>`).join('')}</div></div>` : ''}
+        ${docs.length ? `<div style="margin-top:12px;"><strong>${tr('Documents demandés')}</strong>${docs.map(x => `<div class="receipt-row"><span class="key">${escapeHtml(x.nom || 'Document')}</span><span class="val">${x.recu ? tr('Reçu') : tr('En attente')}</span></div>`).join('')}</div>` : ''}
+        ${hist.length ? `<div style="margin-top:12px; font-size:0.88rem; color:var(--text-muted);">${hist.slice(-3).map(h => `${escapeHtml((h.date || '').slice(0,16))} - ${escapeHtml(h.action || '')}${h.note ? ' : ' + escapeHtml(h.note) : ''}`).join('<br>')}</div>` : ''}
+      </div>`;
+    }).join('');
+    applyLanguage();
+  }
+  async function renderInbox(showToast, silent) {
+    const status = document.getElementById('inboxStatus');
+    if (status) status.textContent = tr('Actualisation...');
+    try {
+      inboxCache = await fetchInboxFromSgdi();
+      renderInboxRows();
+      if (status) status.textContent = inboxCache.length + ' message(s)';
+      if (showToast) toast('Boîte de réception actualisée');
+    } catch (err) {
+      console.error(err);
+      if (status) status.textContent = tr('Connexion PostgreSQL indisponible');
+      if (!silent) {
+        const list = document.getElementById('inboxList');
+        if (list) list.innerHTML = `<div class="empty-state">${tr('Connexion PostgreSQL indisponible')}</div>`;
+        toast('Connexion PostgreSQL indisponible', true);
+      }
+    }
+  }
+
+  function renderHistory() {
+    const all = loadRequests();
+    const search = (document.getElementById('searchHistory')?.value || '').toLowerCase();
+    const filter = document.getElementById('filterType')?.value || '';
+    const filtered = all.filter(r => {
+      if (filter && r.type !== filter) return false;
+      if (!search) return true;
+      const blob = (r.ref + ' ' + getTypeLabel(r.type) + ' ' + JSON.stringify(r.details)).toLowerCase();
+      return blob.includes(search);
+    });
+    const list = document.getElementById('historyList');
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state">
+        ${all.length === 0 ? `${tr('Aucune demande pour le moment.')}<br>${tr('Créez votre première demande dans l’onglet « Nouvelle demande ».')}` : tr('Aucun résultat.')}
+      </div>`;
+      updateCount();
+      applyLanguage();
+      return;
+    }
+    let html = `<div style="overflow-x:auto;"><table class="history-table">
+      <thead><tr><th>${tr('Réf.')}</th><th>${tr('Type')}</th><th>${tr('Date')}</th><th>${tr('Statut')}</th><th></th></tr></thead><tbody>`;
+    for (const r of filtered) {
+      html += `<tr>
+        <td><strong>${r.ref}</strong></td>
+        <td>${getTypeLabel(r.type)}</td>
+        <td>${r.createdAtFormatted}</td>
+        <td><span class="badge badge-${r.status}">${r.status === 'en-attente' ? tr('En attente') : r.status === 'traitee' ? tr('Traitée') : tr('Rejetée')}</span></td>
+        <td style="text-align:right;">
+          <button class="btn btn-ghost" onclick="showDetail('${r.ref}')">${tr('Voir')}</button>
+          <button class="btn btn-ghost" onclick="deleteRecord('${r.ref}')" style="color:var(--danger);">${tr('Suppr.')}</button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    list.innerHTML = html;
+    updateCount();
+    applyLanguage();
+  }
+
+  function showDetail(ref) {
+    const r = loadRequests().find(x => x.ref === ref);
+    if (!r) return;
+    let html = `
+      <div class="receipt">
+        <div class="receipt-row"><span class="key">${tr('Référence')}</span><span class="val">${r.ref}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Type')}</span><span class="val">${getTypeLabel(r.type)}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Date')}</span><span class="val">${r.createdAtFormatted}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Statut')}</span><span class="val"><span class="badge badge-${r.status}">${r.status === 'en-attente' ? tr('En attente') : r.status === 'traitee' ? tr('Traitée') : tr('Rejetée')}</span></span></div>
+      </div>
+      <h4 style="margin:14px 0 6px;">${tr('Détails')}</h4><div style="font-size:0.9rem;">`;
+    for (const [k, v] of Object.entries(r.details)) {
+      if (v) html += `<div class="receipt-row"><span class="key">${k}</span><span class="val">${escapeHtml(v)}</span></div>`;
+    }
+    html += '</div>';
+    document.getElementById('detailBody').innerHTML = html;
+    document.getElementById('detailModal').classList.add('show');
+    applyLanguage();
+  }
+  function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
+
+  function deleteRecord(ref) {
+    if (!confirm('Supprimer cette demande de votre historique local ?')) return;
+    saveRequests(loadRequests().filter(r => r.ref !== ref));
+    renderHistory();
+    toast('Demande supprimée');
+  }
+
+  function exportHistory() {
+    const all = loadRequests();
+    if (all.length === 0) { toast('Aucune demande à exporter', true); return; }
+    const headers = ['Référence','Type','Date','Statut','Nom','Prénom','Matricule','Site','Email','Téléphone','Détails'];
+    const lines = [headers.join(';')];
+    for (const r of all) {
+      const det = Object.entries(r.details).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(' | ');
+      const row = [
+        r.ref, getTypeLabel(r.type), r.createdAtFormatted, r.status,
+        r.employee.nom, r.employee.prenom, r.employee.matricule, r.employee.site,
+        r.employee.email, r.employee.telephone, det
+      ].map(s => '"' + String(s).replace(/"/g, '""') + '"').join(';');
+      lines.push(row);
+    }
+    const csv = '﻿' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `demandes_${currentUser.profile.matricule}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Export CSV téléchargé');
+  }
+
+  /* ================================================== */
+  /* ================ UTILITAIRES ======================= */
+  /* ================================================== */
+  function val(id) { return (document.getElementById(id)?.value || '').trim(); }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+  }
+  function toast(msg, isError) {
+    const t = document.getElementById('toast');
+    t.textContent = tr(msg);
+    t.classList.toggle('error', !!isError);
+    t.classList.add('show');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  /* ================================================== */
+  /* ================ DÉMARRAGE ========================= */
+  /* ================================================== */
+  function boot() {
+    applyLanguage();
+    const session = getSession();
+    if (session) {
+      const users = loadUsers();
+      if (users[session.matricule]) {
+        enterApp(session.matricule);
+        applyLanguage();
+        return;
+      } else {
+        clearSession();
+      }
+    }
+    // Sinon, afficher écran d'auth
+    document.getElementById('authView').classList.remove('hidden');
+    document.getElementById('appView').classList.add('hidden');
+    applyLanguage();
+  }
+
+  boot();
+</script>
+</body>
+</html>
