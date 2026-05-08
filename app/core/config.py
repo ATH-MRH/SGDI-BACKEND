@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     allow_public_registration: bool = False
 
-    database_url: str = "postgresql://sgdi:change-me@localhost:5432/sgdi"
+    database_url: str = "postgresql://sgdi:Solution01@coolify-db:5432/sgdi"
 
     jwt_secret: str = "dev-secret-change-me"
     jwt_algorithm: str = "HS256"
