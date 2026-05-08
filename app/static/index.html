@@ -710,24 +710,30 @@ async function sgdiApi(path,options){
 function sgdiSetApiRoot(url){window.__SGDI_API_ROOT__=String(url||"").replace(/\/+$/,"");window.__SGDI_BACKEND_ENABLED__=true}
 let sgdiSaveQueue=Promise.resolve();
 function sgdiBackendSave(){
-  if(!sgdiBackendShouldUse()||!db||!sgdiAuthToken())return false;
+  if(!sgdiBackendShouldUse()||!db)return false;
+  const token=sgdiAuthToken();
+  if(!token){
+    console.error("Sauvegarde PostgreSQL impossible: token backend absent");
+    if(typeof toast==="function"&&session)toast("Session PostgreSQL expirée : reconnectez-vous","error");
+    uiSaveState("Sauvegarde refusée","error");
+    return false;
+  }
   const payload=JSON.stringify({data:db});
+  const url=sgdiApiUrl("/api/irongs/db",false);
   sgdiSaveQueue=sgdiSaveQueue.catch(()=>{}).then(async()=>{
-    const res=await fetch(sgdiApiUrl("/api/irongs/db",false),{
-      method:"PUT",
-      headers:sgdiAuthHeaders(),
-      body:payload
-    });
+    const res=await fetch(url,{method:"PUT",headers:sgdiAuthHeaders(),body:payload,cache:"no-store"});
     const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
     if(!res.ok||out.ok===false){
       const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
       throw new Error(out.error||detail||out.message||("Erreur API "+res.status));
     }
     window.__SGDI_BACKEND_ENABLED__=true;
+    sgdiPostgresReady=true;
     sgdiDirty=false;
     uiSaveState("Sauvegardé dans PostgreSQL","success");
     return out.data===undefined?out:out.data;
   }).catch(e=>{
+    sgdiDirty=true;
     console.error("Sauvegarde PostgreSQL échouée:",e);
     if(typeof toast==="function")toast("Sauvegarde PostgreSQL échouée : "+(e.message||e),"error");
     uiSaveState("Sauvegarde échouée","error");
@@ -1009,8 +1015,7 @@ function saveDB(){
       return false;
     }
     if(!sgdiBackendSave()){uiSaveState("Sauvegarde échouée","error");return false}
-    sgdiDirty=false;
-    uiSaveState("Sauvegardé dans PostgreSQL","success");
+    uiSaveState("Envoi PostgreSQL en cours...","");
     setTimeout(()=>refreshRealtimeFeed(),0);
     return true;
   }catch(err){
@@ -1377,7 +1382,7 @@ async function confirmAdminLoginAccess(p){
     const authUser=r?.user||r;
     session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||"H5",nom:authUser.full_name||authUser.nom||"Administrateur",agentId:null,societe:null,transverse:"admin"};
     saveSession(session);
-    db=defaultDB();
+    db=emptyDB();
     hydrateDB(db);
     await sgdiPullState({render:false,silent:true,force:true}).catch(()=>{});
     await sgdiLoadAuthState();
