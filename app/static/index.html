@@ -9880,6 +9880,7 @@ function renderDRHStatsAffectation(view){
 
 /* ============ ADMIN MODULE (transverse, admin only) ============ */
 const ADMIN_MODULES=["dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","effectif","agents","fiches","sites","incidents","conges","materiel","facturation","commercial","drh","paie","rapports","parametres"];
+function adminModuleRoute(module){return({dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives",contrats:"contrats/situation",effectif:"effectif",agents:"agents",fiches:"fiches",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",materiel:"materiel/dashboard",facturation:"facturation/dashboard",commercial:"commercial/dashboard",drh:"drh/dashboard",paie:"paie",rapports:"rapports",parametres:"parametres"}[module]||module)}
 const ADMIN_ROLES=["rh","dispatch","agent","admin"];
 const ADMIN_ACCESS_ROLES=["AG1","AG2","AG3","CAD1","CAD2","CAD3","SUP1","SUP2","SUP3","ADM1","ADM2"];
 function adminAccessBaseRole(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"agent";if(r.startsWith("CAD"))return"rh";if(r.startsWith("SUP"))return"dispatch";if(r.startsWith("ADM"))return"admin";return String(role||"").toLowerCase()}
@@ -10196,7 +10197,7 @@ function renderAdminDroits(view){
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-slate-50"><tr><th class="text-left p-3">Module</th>${accessRoles.map(r=>`<th class="p-3" style="color:${colors[String(r).replace(/[0-9]/g,"")]||"#043970"}">${r}</th>`).join("")}</tr></thead>
-        <tbody>${ADMIN_MODULES.map(m=>{return`<tr class="border-t"><td class="p-3 font-semibold">${m}</td>${accessRoles.map(r=>{const key=m+":"+r;const def=canAccessOriginal(m,r);const override=droits[key];const enabled=override===undefined?def:override;return`<td class="p-3 text-center"><input type="checkbox" ${enabled?"checked":""} onchange="adminToggleDroit('${m}','${r}',this.checked)" style="width:18px;height:18px;cursor:pointer"/></td>`}).join("")}</tr>`}).join("")}</tbody>
+        <tbody>${ADMIN_MODULES.map(m=>{const route=adminModuleRoute(m);return`<tr class="border-t"><td class="p-3 font-semibold"><button type="button" class="text-left font-semibold text-sky-700 hover:underline" onclick="navigate('${route}')">${m}</button></td>${accessRoles.map(r=>{const key=m+":"+r;const def=canAccessOriginal(m,r);const override=droits[key];const enabled=override===undefined?def:override;return`<td class="p-3 text-center"><input type="checkbox" ${enabled?"checked":""} onchange="adminToggleDroit('${m}','${r}',this.checked)" style="width:18px;height:18px;cursor:pointer"/></td>`}).join("")}</tr>`}).join("")}</tbody>
       </table>
     </div>
     <div class="mt-4 flex gap-2"><button class="btn btn-ghost" onclick="adminResetDroits()">🔄 Réinitialiser aux valeurs par défaut</button></div>`;
