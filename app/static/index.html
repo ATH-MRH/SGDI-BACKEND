@@ -3486,7 +3486,7 @@ async function validateCandidatSectionAction(id,key){
   const data=collectCandidatFormData();if(!data)return;
   if(!c){c={id,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
   if(!candidatPreviousSectionsValid(c,key)){toast("Validez d'abord la section précédente","error");return}
-  if(candidatCurrentSectionKey(c)!==key){toast("Cette section n'est pas encore ouverte","error");return}
+  if(!candidatSectionAvailable(c,key)){toast("Cette section n'est pas encore ouverte","error");return}
   if(!validateCandidatSection(key,data))return;
   Object.assign(c,data);delete c.isNew;
   const locks=candidatSectionValidations(c);
