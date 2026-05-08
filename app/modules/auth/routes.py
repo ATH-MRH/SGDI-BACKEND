@@ -8,12 +8,14 @@ from app.modules.auth.models import AccessRule, User
 from app.modules.auth.schemas import (
     AccessRuleIn,
     AccessRuleOut,
+    AdminSystemLoginIn,
     LoginIn,
     TokenOut,
     UserCreate,
     UserOut,
     UserUpdate,
 )
+from app.core.security import create_access_token
 from app.modules.auth.service import authenticate, create_user, update_user
 
 
@@ -116,6 +118,17 @@ def patch_access_rule(
     db.commit()
     db.refresh(rule)
     return rule
+
+
+@router.post("/admin-system-login", response_model=TokenOut)
+def admin_system_login(payload: AdminSystemLoginIn, db: Session = Depends(get_db)):
+    if payload.password != settings.admin_system_password:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mot de passe administration système incorrect")
+    user = db.query(User).filter(User.username == "admin", User.role == "admin", User.is_active.is_(True)).one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte admin introuvable ou inactif")
+    token = create_access_token(str(user.id), {"role": user.role, "username": user.username})
+    return {"access_token": token, "token_type": "bearer", "user": user}
 
 
 @router.post("/login", response_model=TokenOut)

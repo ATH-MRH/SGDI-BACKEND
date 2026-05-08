@@ -53,6 +53,10 @@ class LoginIn(BaseModel):
     password: str
 
 
+class AdminSystemLoginIn(BaseModel):
+    password: str
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"

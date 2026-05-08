@@ -885,6 +885,12 @@ window.SGDI_API={
       if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
       return r;
     },
+    adminSystemLogin:async(password)=>{
+      const r=await sgdiApi("/auth/admin-system-login",{method:"POST",body:{password},legacy:false});
+      const token=r?.token||r?.access_token;
+      if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
+      return r;
+    },
     register:(payload)=>sgdiApi("/auth/register",{method:"POST",body:payload,legacy:false}),
     createUser:(payload)=>sgdiApi("/auth/users",{method:"POST",body:payload,legacy:false}),
     listUsers:()=>sgdiApi("/auth/users",{method:"GET",legacy:false}),
@@ -1367,11 +1373,18 @@ async function confirmAdminLoginAccess(p){
   if(p!==adminSystemPassword()){toast("Mot de passe ADMINISTRATION SYSTEME incorrect","error");return}
   try{
     closeModal();
-    await login("admin","admin");
-    if(!isAdmin()){toast("Le compte admin n'est pas disponible avec admin/admin","error");return}
-    session={...session,societe:null,transverse:"admin"};
+    const r=await SGDI.auth.adminSystemLogin(p);
+    const authUser=r?.user||r;
+    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||"H5",nom:authUser.full_name||authUser.nom||"Administrateur",agentId:null,societe:null,transverse:"admin"};
+    saveSession(session);
+    db=defaultDB();
+    hydrateDB(db);
+    await sgdiPullState({render:false,silent:true,force:true}).catch(()=>{});
+    await sgdiLoadAuthState();
+    session={...session,transverse:"admin",societe:null};
     sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");
     saveSession(session);
+    sgdiPostgresReady=true;
     location.hash="#/admin/dashboard";
     route();
   }catch(e){

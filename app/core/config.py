@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_prefix: str = "/api"
     allow_public_registration: bool = False
+    admin_system_password: str = "Hytera@01"
 
     database_url: str = "postgresql://sgdi:change-me@localhost:5432/sgdi"
 
