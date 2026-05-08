@@ -1378,7 +1378,7 @@ async function confirmAdminLoginAccess(p){
     toast("Accès admin impossible : "+(e.message||e),"error");
   }
 }
-function loginAdminDirect(){if(session){openAdminSystemAccess();return}openAdminLoginAccess()}
+function loginAdminDirect(){if(isAdmin()){openAdminSystemAccess();return}session=null;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);openAdminLoginAccess()}
 function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&session.role==="admin"}
 function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
