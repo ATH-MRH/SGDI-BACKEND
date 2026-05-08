@@ -77,6 +77,11 @@ def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = 
     return service.update_row(db, Candidate, candidate_id, payload)
 
 
+@router.delete("/candidates/{candidate_id}")
+def delete_candidate(candidate_id: int, db: Session = Depends(get_db)):
+    return service.delete_row(db, Candidate, candidate_id)
+
+
 @router.post("/candidates/{candidate_id}/recruit", response_model=EmployeeOut)
 def recruit(candidate_id: int, db: Session = Depends(get_db)):
     return service.recruit_candidate(db, candidate_id)
