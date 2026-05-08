@@ -9892,7 +9892,7 @@ function ensureNiveauxAcces(){
   (db.users||[]).forEach(u=>{if(legacy[u.niveau])u.niveau=legacy[u.niveau]});
   return db.niveauxAcces.sort((a,b)=>(Number(a.weight)||0)-(Number(b.weight)||0));
 }
-function adminTabs(active){return`<div class="flex gap-2 mb-4 flex-wrap">${ADMIN_TABS.map(([k,l])=>`<a href="#/admin/${k}" class="btn ${active===k?"btn-primary":"btn-ghost"} text-sm">${l}</a>`).join("")}</div>`}
+function adminTabs(active){return ""}
 function logActivity(action,details){if(!db.activityLog)db.activityLog=[];db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:action,details:details||""});if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);recordOperationFeed(action+(details?" · "+details:""),"Activité système");saveDB()}
 function renderAdmin(view,sub,arg){
   if(!isAdmin()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée aux administrateurs.</p></div>`;return}
