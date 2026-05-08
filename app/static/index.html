@@ -875,6 +875,7 @@ window.SGDI_API={
       return r;
     },
     register:(payload)=>sgdiApi("/auth/register",{method:"POST",body:payload,legacy:false}),
+    createUser:(payload)=>sgdiApi("/auth/users",{method:"POST",body:payload,legacy:false}),
     sendOtp:(email,purpose)=>sgdiApi("/auth/otp/send",{method:"POST",body:{email,purpose},legacy:false}),
     verifyOtp:(email,purpose,otp)=>sgdiApi("/auth/otp/verify",{method:"POST",body:{email,purpose,otp},legacy:false}),
     confirmEmail:(email,otp)=>sgdiApi("/auth/email/confirm",{method:"POST",body:{email,otp},legacy:false}),
@@ -9955,7 +9956,7 @@ function syncUserAccessLevelWithRole(role){
   if([...sel.options].some(o=>o.value===wanted))sel.value=wanted;
   previewUserAccessLevel(sel.value);
 }
-function confirmAdminUser(originalUsername){
+async function confirmAdminUser(originalUsername){
   const f=document.querySelector(".modal-bg form");if(!f){toast("Formulaire introuvable","error");return}
   const fd=new FormData(f);
   const username=fd.get("username");const password=fd.get("password");
@@ -9964,6 +9965,12 @@ function confirmAdminUser(originalUsername){
   if(!originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
     if(!password){toast("Mot de passe requis","error");return}
+    try{
+      await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,password});
+    }catch(e){
+      toast("Création PostgreSQL refusée : "+(e.message||e),"error");
+      return;
+    }
     data.password=password;db.users.push(data);
     logActivity("Création utilisateur",username);
   }else{

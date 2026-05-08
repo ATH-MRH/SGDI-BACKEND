@@ -6,7 +6,7 @@ class UserCreate(BaseModel):
     email: EmailStr | None = None
     full_name: str = Field(min_length=2, max_length=150)
     role: str = "admin"
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=4)
 
 
 class UserOut(BaseModel):
