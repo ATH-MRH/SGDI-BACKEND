@@ -1092,7 +1092,7 @@ function ensureContratsPersonnel(){
 function emptyDB(){
   return{
     users:[],agents:[],sites:[],candidats:[],incidents:[],conges:[],contrats:[],materiel:[],
-    echanges:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],demandesPersonnel:[],
+    echanges:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],demandesPersonnel:[],missions:[],
     devis:[],factures:[],paiements:[],avances:[],avoirs:[],caisse:[],
     prospects:[],clients:[],opportunites:[],visites:[],catalogue:[],
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
@@ -1173,7 +1173,7 @@ function purgeRemovedSocieteData(d){
     if(d[key].length!==before)changed=true;
   };
   const stockIds=new Set((d.stockArticles||[]).filter(x=>isRemovedSociete(x&&x.societe)).map(x=>x.id));
-  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","demandesPersonnel"].forEach(filterSoc);
+  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","demandesPersonnel","missions"].forEach(filterSoc);
   if(Array.isArray(d.stockMouvements)){
     const before=d.stockMouvements.length;
     d.stockMouvements=d.stockMouvements.filter(x=>!isRemovedSociete(x&&x.societe)&&!stockIds.has(x&&x.articleId));
@@ -2182,6 +2182,7 @@ function renderSidebar(){
           {label:"Création de site",icon:"➕",route:"sites/nouveau"},
           {label:"Sites actifs",icon:"📍",route:"sites/actifs"}
         ]},
+        {type:"link",label:"MISSIONS",icon:"🧭",route:"ops/missions",count:(db.missions||[]).filter(m=>!currentStructureSocieteFilter()||m.societe===currentStructureSocieteFilter()).length},
         {type:"group",label:"MAIN COURANTE",children:[
           {label:"Évènements site",icon:"🚨",route:"incidents/site",count:(db.incidents||[]).filter(i=>i.type==="Evenement site"&&i.statut!=="clos").length},
           {label:"Évènements autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
@@ -10607,6 +10608,7 @@ function adminClearLog(){if(!confirm("Vider tout le journal d'activité ?"))retu
 /* ---- OPS ---- */
 function renderOPS(view,sub,arg){
   if(!canAccess("ops")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
+  if(sub==="missions"){renderOpsMissions(view,arg);return}
   const soc=currentStructureSocieteFilter();
   const ag=(db.agents||[]).filter(a=>!soc||a.societe===soc);
   const sites=(db.sites||[]).filter(s=>siteMatchesSociete(s,soc));
@@ -10695,6 +10697,94 @@ function renderOPS(view,sub,arg){
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">📍</div><div><div class="font-bold text-amber-700">Sites</div><div class="text-xs text-slate-500">Création · Sites actifs</div></div></div></a>
   </div>`;
 }
+
+function nextMissionNumero(){
+  const y=new Date().getFullYear();
+  const re=new RegExp("^MIS\\/OPS\\/"+y+"\\/(\\d+)$");
+  const nums=(db.missions||[]).map(m=>String(m.numero||"").match(re)).filter(Boolean).map(m=>parseInt(m[1],10)||0);
+  const next=(nums.length?Math.max(...nums):0)+1;
+  return "MIS/OPS/"+y+"/"+String(next).padStart(4,"0");
+}
+function missionDureeLabel(m){
+  if(!m)return"";
+  if(m.duree)return m.duree;
+  if(!m.dateDebut||!m.dateFin)return"";
+  const a=new Date(m.dateDebut+"T00:00:00"),b=new Date(m.dateFin+"T00:00:00");
+  if(isNaN(a)||isNaN(b))return"";
+  const days=Math.max(1,Math.round((b-a)/86400000)+1);
+  return days+" jour"+(days>1?"s":"");
+}
+function renderOpsMissions(view,arg){
+  if(!db.missions)db.missions=[];
+  const soc=currentStructureSocieteFilter();
+  const editing=arg?(db.missions||[]).find(m=>m.id===arg):null;
+  const missions=(db.missions||[]).filter(m=>!soc||m.societe===soc).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  const m=editing||{date:today(),nature:"",duree:"",dateDebut:"",dateFin:"",objet:"",consignes:"",societe:soc||session?.societe||"",numero:nextMissionNumero()};
+  view.innerHTML=`<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+    <div><h1 class="text-2xl font-black uppercase">MISSIONS OPS</h1><div class="text-xs text-slate-500">Création, suivi et consignes des missions opérationnelles · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div>
+    <button class="btn btn-secondary" onclick="navigate('ops/missions')">＋ Nouvelle mission</button>
+  </div>
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+    <div class="card p-5 xl:col-span-1">
+      <h3 class="font-black mb-4">${editing?"Modifier la mission":"Nouvelle mission"}</h3>
+      <form onsubmit="event.preventDefault();saveOpsMission('${editing?editing.id:""}')">
+        <label class="label">N° mission</label>
+        <input class="input mb-3 font-mono font-bold" name="numero" value="${escapeHTML(m.numero||nextMissionNumero())}" readonly style="background:#f8fafc;color:#043970"/>
+        <label class="label">Date</label>
+        <input class="input mb-3" type="date" name="date" value="${escapeHTML(m.date||today())}"/>
+        <label class="label">Nature de la mission</label>
+        <select class="select mb-3" name="nature">
+          ${["Mission de surveillance","Renfort opérationnel","Contrôle site","Accompagnement","Intervention urgente","Mission client","Autre"].map(x=>`<option ${m.nature===x?"selected":""}>${x}</option>`).join("")}
+        </select>
+        <label class="label">Durée de la mission</label>
+        <input class="input mb-3" name="duree" value="${escapeHTML(m.duree||"")}" placeholder="Ex : 1 jour, 3 heures, jusqu'à fin mission"/>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="label">Date début mission</label><input class="input mb-3" type="date" name="dateDebut" value="${escapeHTML(m.dateDebut||"")}"/></div>
+          <div><label class="label">Date fin mission</label><input class="input mb-3" type="date" name="dateFin" value="${escapeHTML(m.dateFin||"")}"/></div>
+        </div>
+        <label class="label">Objet de la mission</label>
+        <textarea class="input mb-3" name="objet" rows="3" placeholder="Objet précis de la mission...">${escapeHTML(m.objet||"")}</textarea>
+        <label class="label">Consignes et instructions</label>
+        <textarea class="input mb-4" name="consignes" rows="5" placeholder="Consignes, instructions particulières, contacts, documents à prévoir...">${escapeHTML(m.consignes||"")}</textarea>
+        <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="navigate('ops/missions')">Annuler</button><button class="btn btn-primary">Valider</button></div>
+      </form>
+    </div>
+    <div class="card p-5 xl:col-span-2 overflow-hidden">
+      <div class="flex items-center justify-between mb-3"><h3 class="font-black">Liste des missions</h3><span class="pill">${missions.length} mission${missions.length>1?"s":""}</span></div>
+      <table><thead><tr><th>N°</th><th>Date</th><th>Nature</th><th>Durée</th><th>Début</th><th>Fin</th><th>Objet</th><th>Actions</th></tr></thead><tbody>
+        ${missions.length?missions.map(x=>`<tr><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}</td><td>${formatDate(x.date)}</td><td>${escapeHTML(x.nature||"")}</td><td>${escapeHTML(missionDureeLabel(x)||"")}</td><td>${formatDate(x.dateDebut)}</td><td>${formatDate(x.dateFin)}</td><td class="text-xs">${escapeHTML(x.objet||"")}</td><td><div class="flex gap-1"><button class="btn btn-secondary text-xs" onclick="navigate('ops/missions/${x.id}')">Modifier</button><button class="btn btn-danger text-xs" onclick="deleteOpsMission('${x.id}')">Supprimer</button></div></td></tr>`).join(""):`<tr><td colspan="8" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
+      </tbody></table>
+    </div>
+  </div>`;
+}
+function saveOpsMission(id){
+  if(!db.missions)db.missions=[];
+  const form=document.querySelector("#view form");if(!form)return;
+  const fd=new FormData(form);
+  let m=id?db.missions.find(x=>x.id===id):null;
+  if(!m){m={id:uid("mission"),createdAt:new Date().toISOString(),societe:currentStructureSocieteFilter()||session?.societe||""};db.missions.unshift(m)}
+  m.numero=fd.get("numero")||m.numero||nextMissionNumero();
+  m.date=fd.get("date")||today();
+  m.nature=fd.get("nature")||"";
+  m.duree=(fd.get("duree")||"").trim();
+  m.dateDebut=fd.get("dateDebut")||"";
+  m.dateFin=fd.get("dateFin")||"";
+  m.objet=(fd.get("objet")||"").trim();
+  m.consignes=(fd.get("consignes")||"").trim();
+  m.societe=m.societe||currentStructureSocieteFilter()||session?.societe||"";
+  m.updatedAt=new Date().toISOString();
+  saveDB();
+  toast("Mission enregistrée","success");
+  navigate("ops/missions");
+}
+function deleteOpsMission(id){
+  if(!confirm("Supprimer cette mission ?"))return;
+  db.missions=(db.missions||[]).filter(m=>m.id!==id);
+  saveDB();
+  toast("Mission supprimée","success");
+  renderView();
+}
+
 
 /* ---- POINTAGE ---- */
 const POINTAGE_CODES={
