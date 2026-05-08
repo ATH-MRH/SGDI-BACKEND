@@ -2101,7 +2101,7 @@ function renderSidebar(){
     const mod=session.transverse;
     const transFlat={
       facturation:{label:"FINANCES",color:"#043970",children:[
-        {label:"Tableau de bord",icon:"📊",route:"facturation/dashboard"},
+        {label:"TABLEAU DE BORD FINANCES",icon:"📊",route:"facturation/dashboard"},
         {label:"Devis",icon:"📝",route:"facturation/devis",count:(db.devis||[]).length},
         {label:"Factures",icon:"🧾",route:"facturation/factures",count:(db.factures||[]).length},
         {label:"Paiements",icon:"💳",route:"facturation/paiements"},
@@ -2115,7 +2115,7 @@ function renderSidebar(){
         {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
       ]},
       commercial:{label:"COMMERCIAL",color:"#8b5cf6",children:[
-        {label:"Tableau de bord",icon:"📊",route:"commercial/dashboard"},
+        {label:"TABLEAU DE BORD COMMERCIAL",icon:"📊",route:"commercial/dashboard"},
         {label:"Prospects",icon:"🎯",route:"commercial/prospects",count:(db.prospects||[]).length},
         {label:"Clients",icon:"🤝",route:"commercial/clients",count:(db.clients||[]).length},
         {label:"Opportunités",icon:"💼",route:"commercial/opportunites",count:(db.opportunites||[]).filter(o=>!["gagnee","perdue"].includes(o.etape)).length},
@@ -2126,7 +2126,7 @@ function renderSidebar(){
         {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
       ]},
       materiel:{label:"MATÉRIEL & ÉQUIPEMENT",color:"#043970",children:[
-        {label:"Tableau de bord",icon:"🏠",route:"materiel/dashboard"},
+        {label:"TABLEAU DE BORD MATERIEL",icon:"🏠",route:"materiel/dashboard"},
         {label:"Articles",icon:"📦",route:"materiel/articles",count:(db.stockArticles||[]).length},
         {label:"MAGASIN",icon:"🏬",route:"materiel/magasins",count:(db.magasins||[]).length,title:true},
         {label:"Fournisseurs",icon:"🤝",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
@@ -2137,7 +2137,7 @@ function renderSidebar(){
         {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
       ]},
       pointage:{label:"POINTAGE",color:"#043970",children:[
-        {label:"Saisie pointage",icon:"📝",route:"pointage/saisie"},
+        {label:"TABLEAU DE BORD POINTAGE",icon:"📝",route:"pointage/saisie"},
         {label:"Récap par agent",icon:"👤",route:"pointage/recap"},
         {label:"Récap par société",icon:"🏢",route:"pointage/societe"},
         {label:"Statistiques",icon:"📈",route:"pointage/stats"},
@@ -2166,7 +2166,7 @@ function renderSidebar(){
     if(mod==="ops"){
       const _ag=db.agents;
       const opsGroups=[
-        {type:"link",label:"Tableau de bord OPS",icon:"📊",route:"ops/dashboard"},
+        {type:"link",label:"TABLEAU DE BORD OPS",icon:"📊",route:"ops/dashboard"},
         {type:"group",label:"🕒 POINTAGE",children:[
           {label:"Feuille de présence quotidienne",icon:"📅",route:"pointage/quotidien"},
           {label:"Saisie pointage",icon:"📝",route:"pointage/saisie"},
@@ -2194,7 +2194,7 @@ function renderSidebar(){
           {label:"Sortant",icon:"➡",route:"effectif/sortant",count:_ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length}
         ]}
       ];
-      const head=`<div class="px-3 pt-2 pb-3"><div class="card p-3 text-center" style="background:#1e40af15;border:1px solid #1e40af55"><div class="font-black sidebar-module-title" style="color:#1e40af;font-size:25px!important;line-height:1.1">🎯 OPS</div><div class="text-[10px] text-slate-500 mt-1">Opérations · Toutes sociétés</div></div></div>`;
+      const head="";
       const openGroup=sessionStorage.getItem("navOpenGroup")||"";
       const html=opsGroups.map(g=>{
         if(g.type==="link"){const a=path===g.route?"active":"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span>${g.label}</div>`}
@@ -2266,7 +2266,7 @@ function renderSidebar(){
       return;
     }
     const g=transFlat[mod];
-    const head=`<div class="px-3 pt-2 pb-3"><div class="card p-3 text-center" style="background:${g.color}15;border:1px solid ${g.color}55"><div class="font-black" style="color:${g.color}">${g.label}</div><div class="text-[10px] text-slate-500 mt-1">Toutes sociétés confondues</div></div></div>`;
+    const head="";
     const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${c.label}${badge}</div>`}).join("");
     const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
     document.getElementById("sidebar-nav").innerHTML=head+items+back;
