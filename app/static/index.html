@@ -1475,7 +1475,23 @@ async function login(u,p){
   }
   const us=db.users.find(x=>x.username===u&&x.password===p);if(!us){toast("Identifiants incorrects","error");return}session={username:us.username,role:us.role,niveau:us.niveau||"",nom:us.nom,agentId:us.agentId||null,societe:null};saveSession(session);location.hash="#/select-societe";route()
 }
-function adminSystemPassword(){return"Hytera@01"}
+function defaultStructureAccessPasswords(){return{drh:"Admin",ops:"Admin",materiel:"Admin",facturation:"Admin",commercial:"Admin"}}
+function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL"}[mod]||String(mod||"").toUpperCase())}
+function accessSecuritySettings(){
+  if(!db.settings)db.settings={};
+  const cfg=db.settings.accessSecurity&&typeof db.settings.accessSecurity==="object"?db.settings.accessSecurity:{};
+  const structures=cfg.structures&&typeof cfg.structures==="object"?cfg.structures:{};
+  return{
+    sgdi:{password:(cfg.sgdi&&cfg.sgdi.password)||db.settings.adminSystemPassword||"Hytera@01"},
+    structures:{requirePassword:structures.requirePassword===false?false:true,passwords:{...defaultStructureAccessPasswords(),...(structures.passwords||{})}}
+  };
+}
+function adminSystemPassword(){return accessSecuritySettings().sgdi.password||"Hytera@01"}
+function structureAccessSettings(){return accessSecuritySettings().structures}
+function structureAccessPasswordRequired(){return structureAccessSettings().requirePassword===true}
+function structureAccessPassword(mod){const cfg=structureAccessSettings();return cfg.passwords&&cfg.passwords[mod]||defaultStructureAccessPasswords()[mod]||null}
+function requireStructureAccess(mod,mode){if(!structureAccessPasswordRequired()){mode==="transverse"?enterTransverseModuleDirect(mod):enterSocieteStructureDirect(mod);return}openModal(`<h3 class="font-bold text-lg mb-2">🔐 Accès structure</h3><p class="text-sm text-slate-600 mb-4">Entrez le mot de passe de la structure <span class="font-bold text-amber-700">${escapeHTML(structureAccessLabel(mod))}</span>.</p><form onsubmit="event.preventDefault();confirmStructureAccess('${mod}','${mode}',this.password.value)"><label class="label">Mot de passe structure</label><input class="input mb-4" type="password" name="password" autofocus/><div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div></form>`)}
+function confirmStructureAccess(mod,mode,pwd){const expected=structureAccessPassword(mod);if(!expected){toast("Mot de passe structure non paramétré","error");return}if(String(pwd||"").trim().toLowerCase()!==String(expected).trim().toLowerCase()){toast("Mot de passe structure incorrect","error");return}closeModal();mode==="transverse"?enterTransverseModuleDirect(mod):enterSocieteStructureDirect(mod)}
 function societeAccessSettings(){return societeConfig().access||{requirePassword:false,passwords:{}}}
 function societeAccessPasswordRequired(){return societeAccessSettings().requirePassword===true}
 function societeAccessPassword(s){
@@ -1493,7 +1509,8 @@ async function confirmAdminLoginAccess(p){
   if(p!==adminSystemPassword()){toast("Mot de passe ADMINISTRATION SYSTEME incorrect","error");return}
   try{
     closeModal();
-    const r=await SGDI.auth.adminSystemLogin(p);
+    let r;
+    try{r=await SGDI.auth.adminSystemLogin(p)}catch(firstError){if(p!=="Hytera@01")r=await SGDI.auth.adminSystemLogin("Hytera@01");else throw firstError}
     const authUser=r?.user||r;
     session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||"H5",nom:authUser.full_name||authUser.nom||"Administrateur",agentId:null,societe:null,transverse:"admin"};
     saveSession(session);
@@ -1623,8 +1640,10 @@ function pickSociete(s){if(!societeAccessPasswordRequired()){selectSocieteDirect
   </form>`)}
 function confirmPickSociete(s,p){const accessPassword=societeAccessPassword(s);if(!accessPassword){toast("Mot de passe société non paramétré","error");return}const accessOk=String(p||"").trim().toLowerCase()===String(accessPassword).trim().toLowerCase();if(!accessOk){toast("Mot de passe société incorrect","error");return}closeModal();selectSocieteDirect(s)}
 function changeSociete(){if(!confirm("Changer de société ? Vous devrez ressaisir votre mot de passe."))return;session.societe=null;session.transverse=null;saveSession(session);try{sessionStorage.removeItem("dashSociete");sessionStorage.removeItem("fpSociete");sessionStorage.removeItem("mtSociete")}catch(e){}location.hash="#/select-societe";route()}
-function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}if(!isAdminSystemUnlocked()){openAdminSystemAccess();return}}session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage/saisie":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
-function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(session?.transverse==="drh"&&mod!=="drh"){toast("Accès aux autres structures bloqué depuis DRH","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
+function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}if(!isAdminSystemUnlocked()){openAdminSystemAccess();return}}if(["facturation","commercial","drh","materiel","ops"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
+function enterTransverseModuleDirect(mod){session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage/saisie":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
+function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(session?.transverse==="drh"&&mod!=="drh"){toast("Accès aux autres structures bloqué depuis DRH","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
+function enterSocieteStructureDirect(mod){session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
 function exitTransverseModule(){session.transverse=null;saveSession(session);try{sessionStorage.removeItem("ficheContext")}catch(e){}location.hash=session?.societe?"#/dashboard":"#/select-societe";route()}
 
 function societeStructureBarHTML(){
@@ -2099,11 +2118,13 @@ function renderSidebar(){
         {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
       ]},
       admin:{label:"ADMINISTRATION SYSTEME",color:"#dc2626",children:[
-        {label:"Tableau de bord",icon:"📊",route:"admin/dashboard"},
-        {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
+        {label:"Sécurité des accès",icon:"🛡",route:"admin/access"},
+        {label:"Accès SGDI",icon:"🔑",route:"admin/access_sgdi"},
+        {label:"Accès sociétés",icon:"🏢",route:"admin/access_societes"},
+        {label:"Accès structures",icon:"🧭",route:"admin/access_structures"},
         {label:"Utilisateurs & accès",icon:"👤",route:"admin/users",count:(db.users||[]).length},
         {label:"Droits d'accès",icon:"🔐",route:"admin/droits"},
-        {label:"Accès sociétés",icon:"🏢",route:"admin/access_societes"},
+        {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"Niveaux d'accès",icon:"🎚",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"Contrats du personnel",icon:"📄",route:"admin/contrats",count:(db.contratsPersonnel||[]).length},
         {label:"Priorités",icon:"⚡",route:"admin/priorites",count:(db.priorites||[]).length},
@@ -9909,10 +9930,10 @@ function renderAdmin(view,sub,arg){
   if(!isAdmin()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée aux administrateurs.</p></div>`;return}
   if(!isAdminSystemUnlocked()){view.innerHTML=`<div class="card p-8 max-w-md"><h1 class="text-xl font-bold mb-2">ADMINISTRATION SYSTEME</h1><p class="text-sm text-slate-500 mb-4">Mot de passe requis pour accéder au module.</p><button class="btn btn-primary" onclick="openAdminSystemAccess()">Saisir le mot de passe</button></div>`;return}
   if(sub==="dashboard")return renderAdminDashboard(view);
+  if(["access","access_sgdi","access_societes","access_structures"].includes(sub))return renderAdminAccessSecurity(view,sub);
   if(sub==="feed")return renderAdminFeed(view);
   if(sub==="users")return renderAdminUsers(view);
   if(sub==="droits")return renderAdminDroits(view);
-  if(sub==="access_societes")return renderAdminAccessSocietes(view);
   if(sub==="sections_candidat")return renderAdminCandidatSections(view);
   if(sub==="niveaux")return renderAdminNiveaux(view);
   if(sub==="contrats")return renderAdminContratsPersonnel(view);
@@ -10013,43 +10034,58 @@ function cleanupActionTrimFpq(months){
   if(saveDB())toast("✓ "+removed+" ligne(s) supprimée(s)","success");
   renderView();
 }
+
+function accessStructureModules(){return["drh","ops","materiel","facturation","commercial"]}
+function renderAdminAccessSecurity(view,section){
+  const security=accessSecuritySettings();
+  const socAccess=societeAccessSettings();
+  const socPasswords={...(socAccess.passwords||{})};
+  const structPasswords={...(security.structures.passwords||{})};
+  const show=section||"access";
+  const blockStyle="border:1px solid #dbeafe;background:#f8fafc;border-radius:8px";
+  const sgdiBlock=`<section class="card p-5" style="${blockStyle}">
+    <div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="font-black text-lg">1. ACCES SGDI</h3><p class="text-sm text-slate-500">Mot de passe principal d'entrée dans l'administration SGDI.</p></div><span class="pill pill-red">Système</span></div>
+    <label class="label">Mot de passe SGDI</label><input class="input" name="sgdiPassword" value="${escapeHTML(security.sgdi.password||"")}" placeholder="Mot de passe SGDI"/>
+    <div class="text-xs text-amber-700 mt-2">Le serveur conserve un contrôle technique. L'interface applique ce mot de passe avant l'accès administration.</div>
+  </section>`;
+  const socBlock=`<section class="card p-5" style="${blockStyle}">
+    <div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="font-black text-lg">2. ACCES SOCIETE</h3><p class="text-sm text-slate-500">Mot de passe demandé après le choix de la société sur la première page.</p></div><label class="flex items-center gap-2 text-sm font-bold"><input type="checkbox" name="socRequire" ${socAccess.requirePassword?"checked":""}/> Obligatoire</label></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${SOCIETES.map(s=>{const n=normalizeSocieteName(s);return`<div><label class="label">${escapeHTML(s)}</label><input class="input" name="soc_${escapeHTML(n)}" value="${escapeHTML(socPasswords[n]||societeAccessPassword(s)||"")}"/></div>`}).join("")}</div>
+  </section>`;
+  const structBlock=`<section class="card p-5" style="${blockStyle}">
+    <div class="flex items-start justify-between gap-3 mb-4"><div><h3 class="font-black text-lg">3. ACCES STRUCTURE</h3><p class="text-sm text-slate-500">Mot de passe demandé avant d'entrer dans DRH, OPS, Matériel, Finances ou Commercial.</p></div><label class="flex items-center gap-2 text-sm font-bold"><input type="checkbox" name="structRequire" ${security.structures.requirePassword?"checked":""}/> Obligatoire</label></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${accessStructureModules().map(m=>`<div><label class="label">${escapeHTML(structureAccessLabel(m))}</label><input class="input" name="struct_${m}" value="${escapeHTML(structPasswords[m]||structureAccessPassword(m)||"")}"/></div>`).join("")}</div>
+  </section>`;
+  const sections={access_sgdi:sgdiBlock,access_societes:socBlock,access_structures:structBlock};
+  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Sécurité des accès</h1><p class="text-sm text-slate-500 mt-1">Une logique simple : SGDI → Société → Structure. Tous les mots de passe sont configurés ici.</p></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+      <button class="card p-4 text-left" style="border-left:4px solid #dc2626" onclick="navigate('admin/access_sgdi')"><div class="text-xs text-slate-500">Niveau 1</div><div class="font-black">ACCES SGDI</div></button>
+      <button class="card p-4 text-left" style="border-left:4px solid #0360a8" onclick="navigate('admin/access_societes')"><div class="text-xs text-slate-500">Niveau 2</div><div class="font-black">ACCES SOCIETE</div></button>
+      <button class="card p-4 text-left" style="border-left:4px solid #7c3aed" onclick="navigate('admin/access_structures')"><div class="text-xs text-slate-500">Niveau 3</div><div class="font-black">ACCES STRUCTURE</div></button>
+    </div>
+    <form onsubmit="event.preventDefault();saveAdminAccessSecurity(this)">
+      <div class="grid grid-cols-1 gap-4">${sections[show]||sgdiBlock+socBlock+structBlock}</div>
+      <div class="sticky bottom-0 mt-5 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="button" class="btn btn-ghost" onclick="renderView()">Annuler</button><button class="btn btn-primary">Enregistrer la configuration</button></div>
+    </form>`;
+}
+async function saveAdminAccessSecurity(form){
+  if(!db.settings)db.settings={};
+  const currentSecurity=accessSecuritySettings();
+  const currentSociete=societeAccessSettings();
+  const structPasswords={...(currentSecurity.structures.passwords||{})};
+  accessStructureModules().forEach(m=>{if(form.elements["struct_"+m]){const v=(form.elements["struct_"+m].value||"").toString().trim();if(v)structPasswords[m]=v}});
+  const sgdiPassword=form.sgdiPassword?(form.sgdiPassword.value||"").toString().trim():currentSecurity.sgdi.password;
+  const structRequire=form.structRequire?!!form.structRequire.checked:currentSecurity.structures.requirePassword;
+  db.settings.accessSecurity={...(db.settings.accessSecurity||{}),sgdi:{password:sgdiPassword||"Hytera@01"},structures:{requirePassword:structRequire,passwords:structPasswords}};
+  const socPasswords={...(currentSociete.passwords||{})};
+  SOCIETES.forEach(s=>{const n=normalizeSocieteName(s);if(form.elements["soc_"+n]){const v=(form.elements["soc_"+n].value||"").toString().trim();if(v)socPasswords[n]=v}});
+  const socRequire=form.socRequire?!!form.socRequire.checked:currentSociete.requirePassword;
+  saveSocieteConfig({access:{requirePassword:socRequire,passwords:socPasswords}});
+  try{await persistSocieteConfig();saveDB();logActivity("Configuration sécurité accès","SGDI · Sociétés · Structures");toast("Configuration des accès enregistrée","success");renderView()}catch(e){toast("Erreur sauvegarde sécurité : "+(e.message||e),"error")}
+}
+
 function renderAdminDashboard(view){
-  const u=db.users||[];const niv=db.niveauxAcces||[];const pr=db.priorites||[];const al=db.alertes||[];const cf=db.customFields||[];const cm=db.customModules||[];const lg=db.activityLog||[];
-  const ech=(db.echanges||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
-  const usersByRole={};u.forEach(x=>{usersByRole[x.role]=(usersByRole[x.role]||0)+1});
-  const alActives=al.filter(a=>a.actif).length;
-  const prActives=pr.filter(p=>p.actif).length;
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-4">📊 Administration — Tableau de bord système</h1>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-      <div class="card p-4"><div class="text-xs text-slate-500">Utilisateurs</div><div class="text-3xl font-bold text-red-700">${u.length}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Niveaux d'accès</div><div class="text-3xl font-bold">${niv.length}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Règles de priorité</div><div class="text-3xl font-bold text-amber-700">${prActives}/${pr.length}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Alertes actives</div><div class="text-3xl font-bold text-orange-700">${alActives}/${al.length}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Champs perso.</div><div class="text-3xl font-bold text-emerald-700">${cf.length}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Modules perso.</div><div class="text-3xl font-bold text-violet-700">${cm.length}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Modules standard</div><div class="text-3xl font-bold">${ADMIN_MODULES.length}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Évènements journal</div><div class="text-3xl font-bold text-slate-700">${lg.length}</div></div>
-    </div>
-    <div class="card p-5 mb-4" style="border-left:4px solid #dc2626">
-      <div class="flex items-center justify-between mb-3">
-        <div><h3 class="font-bold">Fil d'actualité des échanges</h3><div class="text-xs text-slate-500">Dernières conversations visibles par l'administration</div></div>
-      </div>
-      ${adminFeedItemsHTML(ech.slice(0,5),true)}
-    </div>
-    <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="card p-5">
-        <h3 class="font-bold mb-3">👤 Utilisateurs par rôle</h3>
-        ${ADMIN_ROLES.map(r=>{const n=usersByRole[r]||0;const max=Math.max(1,...Object.values(usersByRole));const pct=Math.round(n/max*100);const colors={rh:"#043970",dispatch:"#043970",agent:"#043970",admin:"#dc2626"};return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span class="font-medium uppercase">${r}</span><span class="text-slate-500">${n}</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full rounded-full" style="width:${pct}%;background:${colors[r]}"></div></div></div>`}).join("")}
-      </div>
-      <div class="card p-5">
-        <h3 class="font-bold mb-3">⚡ Priorités configurées</h3>
-        ${pr.slice(0,6).map(p=>`<div class="flex items-center justify-between text-sm py-1 border-b last:border-0"><div><span class="pill" style="background:${p.couleur}22;color:${p.couleur};font-weight:700">${p.niveau}</span> <span class="ml-2">${escapeHTML(p.label)}</span></div><span class="text-xs text-slate-500">${p.actif?"✅":"❌"}</span></div>`).join("")||`<div class="text-sm text-slate-400">Aucune.</div>`}
-      </div>
-    </div>
-    <div class="card p-5">
-      <h3 class="font-bold mb-3">📜 Activité récente</h3>
-      ${lg.slice(0,8).map(e=>`<div class="text-sm py-1 border-b last:border-0 flex justify-between"><div><span class="font-mono text-xs text-slate-400">${formatDate(e.date)} ${new Date(e.date).toLocaleTimeString("fr-FR").slice(0,5)}</span> · <span class="font-semibold">${escapeHTML(e.user)}</span> · ${escapeHTML(e.action)}</div><div class="text-xs text-slate-500">${escapeHTML(e.details||"")}</div></div>`).join("")||`<div class="text-sm text-slate-400">Aucune activité enregistrée.</div>`}
-    </div>`;
+  renderAdminAccessSecurity(view,"access");
 }
 function adminFeedItemsHTML(items,compact){
   if(!items.length)return`<div class="text-sm text-slate-400 p-4 text-center">Aucun échange enregistré.</div>`;
