@@ -1531,7 +1531,7 @@ async function confirmAdminLoginAccess(p){
 }
 function loginAdminDirect(){if(isAdmin()){openAdminSystemAccess();return}session=null;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);openAdminLoginAccess()}
 function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
-function isAdmin(){return session&&session.role==="admin"}
+function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
 function currentAccessLevelCode(){const u=currentUserRecord();return String(session?.niveau||u?.niveau||"").trim()}
 function isCadreCat01(){return currentAccessLevelCode().toUpperCase().replace(/[\s-]+/g,"_")==="CADRE_CAT_01"}
@@ -1575,9 +1575,12 @@ function canAccess(key){
   if(droits&&Object.keys(droits).length){
     const direct=droits[key+":"+r];
     if(direct!==undefined)return !!direct;
+    const baseDirect=droits[key+":"+adminAccessBaseRole(r)];
+    if(baseDirect!==undefined)return !!baseDirect;
   }
   const map=defaultAccessMap();
-  return (map[key]||["admin"]).includes(r);
+  const base=adminAccessBaseRole(r);
+  return (map[key]||["admin"]).includes(base);
 }
 function mySoc(){return session?.societe||""}
 function isDrhModuleContext(){const h=(location.hash||"").slice(2);return session?.transverse==="drh"||h.startsWith("drh")}
@@ -9904,7 +9907,10 @@ const ADMIN_MODULES=["DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","COMMERCIAL"
 function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","COMMERCIAL":"commercial/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives",contrats:"contrats/situation",effectif:"effectif",agents:"agents",fiches:"fiches",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",materiel:"materiel/dashboard",facturation:"facturation/dashboard",commercial:"commercial/dashboard",drh:"drh/dashboard",paie:"paie",rapports:"rapports",parametres:"parametres"}[module]||module)}
 const ADMIN_ROLES=["rh","dispatch","agent","admin"];
 const ADMIN_ACCESS_ROLES=["AG1","AG2","AG3","CAD1","CAD2","CAD3","SUP1","SUP2","SUP3","ADM1","ADM2"];
+const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 function adminAccessBaseRole(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"agent";if(r.startsWith("CAD"))return"rh";if(r.startsWith("SUP"))return"dispatch";if(r.startsWith("ADM"))return"admin";return String(role||"").toLowerCase()}
+function normalizeAdminUserRole(role){const r=String(role||"").trim();if(ADMIN_USER_ROLES.includes(r))return r;const b=adminAccessBaseRole(r);return b==="admin"?"ADM2":b==="rh"?"CAD1":b==="dispatch"?"SUP1":"AG1"}
+function adminRoleColor(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"#0f766e";if(r.startsWith("CAD"))return"#043970";if(r.startsWith("SUP"))return"#7c3aed";if(r.startsWith("ADM")||r==="ADMIN")return"#dc2626";return"#64748b"}
 const ADMIN_ENTITIES=[["agents","Agents"],["sites","Sites"],["candidats","Candidats"],["materiel","Matériel"],["clients","Clients"],["prospects","Prospects"],["devis","Devis"],["factures","Factures"]];
 function defaultNiveauxAcces(){
   return[
@@ -10142,10 +10148,10 @@ function renderAdminUsers(view){
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-slate-50"><tr><th class="text-left p-3">Identifiant</th><th class="text-left p-3">Nom complet</th><th class="text-left p-3">Rôle</th><th class="text-left p-3">Niveau</th><th class="text-left p-3">Sociétés autorisées</th><th class="text-left p-3">Statut</th><th class="p-3">Actions</th></tr></thead>
-        <tbody>${u.map(x=>{const colors={rh:"#043970",dispatch:"#043970",agent:"#043970",admin:"#dc2626"};const niv=(db.niveauxAcces||[]).find(n=>n.code===x.niveau);return`<tr class="border-t">
+        <tbody>${u.map(x=>{const roleColor=adminRoleColor(x.role);const niv=(db.niveauxAcces||[]).find(n=>n.code===x.niveau);return`<tr class="border-t">
           <td class="p-3 font-mono">${escapeHTML(x.username)}</td>
           <td class="p-3 font-semibold">${escapeHTML(x.nom||"")}</td>
-          <td class="p-3"><span class="pill" style="background:${colors[x.role]||"#64748b"}22;color:${colors[x.role]||"#64748b"};font-weight:700">${x.role}</span></td>
+          <td class="p-3"><span class="pill" style="background:${roleColor}22;color:${roleColor};font-weight:700">${escapeHTML(x.role||"")}</span></td>
           <td class="p-3">${niv?`<span class="pill" style="background:${niv.color}22;color:${niv.color};font-weight:600">${niv.label}</span>`:`<span class="text-slate-400">—</span>`}</td>
           <td class="p-3 text-xs">${x.societesAutorisees&&x.societesAutorisees.length?escapeHTML(x.societesAutorisees.join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
           <td class="p-3">${x.actif===false?'<span class="pill pill-red">Désactivé</span>':'<span class="pill pill-green">Actif</span>'}</td>
@@ -10156,17 +10162,18 @@ function renderAdminUsers(view){
 }
 function openAdminUserModal(username){
   const isNew=!username;
-  const u=isNew?{username:"",password:"",nom:"",role:"rh",niveau:"H3",societesAutorisees:[],actif:true}:db.users.find(x=>x.username===username);
+  const u=isNew?{username:"",password:"",nom:"",role:"AG1",niveau:"H1",societesAutorisees:[],actif:true}:db.users.find(x=>x.username===username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
-  const selectedNiveau=u.niveau||(u.role==="admin"?"H5":"H3");
+  const selectedRole=normalizeAdminUserRole(u.role);
+  const selectedNiveau=u.niveau||(selectedRole.startsWith("ADM")?"H5":selectedRole.startsWith("CAD")?"H3":selectedRole.startsWith("SUP")?"H2":"H1");
   openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"➕ Nouvel utilisateur":"✏ Modifier "+escapeHTML(u.username)}</h3>
     <form onsubmit="event.preventDefault();confirmAdminUser('${u.username||''}')">
       <div class="grid grid-2 gap-3">
         <div><label class="label">Identifiant *</label><input class="input" name="username"  value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
-        <div><label class="label">Rôle *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value)">${ADMIN_ROLES.map(r=>`<option value="${r}" ${u.role===r?"selected":""}>${r}</option>`).join("")}</select><div class="text-[11px] text-slate-500 mt-1">Le rôle définit le module principal autorisé.</div></div>
+        <div><label class="label">Rôle *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r}</option>`).join("")}</select><div class="text-[11px] text-slate-500 mt-1">Le rôle définit le niveau opérationnel autorisé.</div></div>
         <div><label class="label">Niveau d'habilitation *</label><select class="input" name="niveau"  onchange="previewUserAccessLevel(this.value)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
       </div>
@@ -10185,7 +10192,8 @@ function previewUserAccessLevel(code){
 function syncUserAccessLevelWithRole(role){
   const sel=document.querySelector('.modal-bg [name="niveau"]');
   if(!sel)return;
-  const wanted=role==="admin"?"H5":role==="rh"?"H3":role==="dispatch"?"H2":"H1";
+  const r=String(role||"").toUpperCase();
+  const wanted=r.startsWith("ADM")||r==="ADMIN"?"H5":r.startsWith("CAD")||r==="RH"?"H3":r.startsWith("SUP")||r==="DISPATCH"?"H2":"H1";
   if([...sel.options].some(o=>o.value===wanted))sel.value=wanted;
   previewUserAccessLevel(sel.value);
 }
