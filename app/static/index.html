@@ -1478,8 +1478,8 @@ async function login(u,p){
   }
   const us=db.users.find(x=>x.username===u&&x.password===p);if(!us){toast("Identifiants incorrects","error");return}session={username:us.username,role:us.role,niveau:us.niveau||"",nom:us.nom,agentId:us.agentId||null,societe:null};saveSession(session);location.hash="#/select-societe";route()
 }
-function defaultStructureAccessPasswords(){return{drh:"Admin",ops:"Admin",materiel:"Admin",facturation:"Admin",commercial:"Admin"}}
-function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL"}[mod]||String(mod||"").toUpperCase())}
+function defaultStructureAccessPasswords(){return{drh:"Admin",ops:"Admin",materiel:"Admin",facturation:"Admin",commercial:"Admin",pointage:"Admin"}}
+function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE"}[mod]||String(mod||"").toUpperCase())}
 function accessSecuritySettings(){
   if(!db.settings)db.settings={};
   const cfg=db.settings.accessSecurity&&typeof db.settings.accessSecurity==="object"?db.settings.accessSecurity:{};
@@ -1619,12 +1619,14 @@ function globalSocieteBandHTML(){
   </div>`;
 }
 function globalSocieteBandPick(s){
-  if(session?.transverse){
-    if(!isCadreCat01()){setCurrentStructureSocieteFilter(s||"");toast(s?("Filtre société : "+s):"Toutes les sociétés","success");return}
+  if(session?.societe){
     if(!s){changeSociete();return}
+    if(mySoc()===s){toast("Société active : "+s,"success");return}
     pickSociete(s);return;
   }
-  if(isDrhModuleContext()){setDrhSociete(s||"");return}
+  if(session?.transverse||isDrhModuleContext()){
+    pickSocieteFilter(s||"");return;
+  }
   if(!s){changeSociete();return}
   if(mySoc()===s){toast("Société active : "+s,"success");return}
   pickSociete(s);
@@ -1645,8 +1647,10 @@ function pickSociete(s){if(!societeAccessPasswordRequired()){selectSocieteDirect
     <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div>
   </form>`)}
 function confirmPickSociete(s,p){const accessPassword=societeAccessPassword(s);if(!accessPassword){toast("Mot de passe société non paramétré","error");return}const accessOk=String(p||"").trim().toLowerCase()===String(accessPassword).trim().toLowerCase();if(!accessOk){toast("Mot de passe société incorrect","error");return}closeModal();selectSocieteDirect(s)}
+function pickSocieteFilter(s){if(!s){setCurrentStructureSocieteFilter("");toast("Filtre société : Toutes les sociétés","success");return}if(!societeAccessPasswordRequired()){setCurrentStructureSocieteFilter(s);toast("Filtre société : "+s,"success");return}openModal(`<h3 class="font-bold text-lg mb-2">🔐 Confirmer accès société</h3><p class="text-sm text-slate-600 mb-4">Entrez le mot de passe de la société pour basculer vers : <span class="font-bold text-amber-700">${escapeHTML(s)}</span>.</p><form onsubmit="event.preventDefault();confirmPickSocieteFilter('${String(s).replace(/'/g,"\\'")}',this.password.value)"><label class="label">Mot de passe société</label><input class="input mb-4" type="password" name="password" autofocus/><div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div></form>`)}
+function confirmPickSocieteFilter(s,p){const accessPassword=societeAccessPassword(s);if(!accessPassword){toast("Mot de passe société non paramétré","error");return}const accessOk=String(p||"").trim().toLowerCase()===String(accessPassword).trim().toLowerCase();if(!accessOk){toast("Mot de passe société incorrect","error");return}closeModal();setCurrentStructureSocieteFilter(s);toast("Filtre société : "+s,"success")}
 function changeSociete(){if(!confirm("Changer de société ? Vous devrez ressaisir votre mot de passe."))return;session.societe=null;session.transverse=null;saveSession(session);try{sessionStorage.removeItem("dashSociete");sessionStorage.removeItem("fpSociete");sessionStorage.removeItem("mtSociete")}catch(e){}location.hash="#/select-societe";route()}
-function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}if(!isAdminSystemUnlocked()){openAdminSystemAccess();return}}if(["facturation","commercial","drh","materiel","ops"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
+function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}if(!isAdminSystemUnlocked()){openAdminSystemAccess();return}}if(["facturation","commercial","drh","materiel","ops","pointage"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
 function enterTransverseModuleDirect(mod){session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage/saisie":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
 function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(session?.transverse==="drh"&&mod!=="drh"){toast("Accès aux autres structures bloqué depuis DRH","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
 function enterSocieteStructureDirect(mod){session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
@@ -10044,7 +10048,7 @@ function cleanupActionTrimFpq(months){
   renderView();
 }
 
-function accessStructureModules(){return["drh","ops","materiel","facturation","commercial"]}
+function accessStructureModules(){return["drh","ops","materiel","facturation","commercial","pointage"]}
 function renderAdminAccessSecurity(view,section){
   const security=accessSecuritySettings();
   const socAccess=societeAccessSettings();
