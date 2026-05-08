@@ -54,6 +54,13 @@ def update_row(db: Session, model: Type, row_id: int, payload: Any):
     return row
 
 
+
+def delete_row(db: Session, model: Type, row_id: int):
+    row = get_or_404(db, model, row_id)
+    db.delete(row)
+    db.commit()
+    return {"deleted": True, "id": row_id}
+
 def dashboard(db: Session):
     articles = db.scalar(select(func.count(StockArticle.id)).where(StockArticle.active == 1)) or 0
     stores = db.scalar(select(func.count(Store.id))) or 0
@@ -154,6 +161,17 @@ def return_equipment(db: Session, equipment_id: int, payload: ReturnEquipmentIn)
     db.refresh(equipment)
     return equipment
 
+
+
+def delete_movement(db: Session, movement_id: int):
+    movement = get_or_404(db, StockMovement, movement_id)
+    article = db.get(StockArticle, movement.article_id)
+    if article:
+        sign = 1 if movement.movement_type in ENTRY_TYPES else -1 if movement.movement_type in EXIT_TYPES else 0
+        article.quantity = (article.quantity or 0) - sign * (movement.quantity or 0)
+    db.delete(movement)
+    db.commit()
+    return {"deleted": True, "id": movement_id}
 
 def employee_equipment(db: Session, employee_id: int):
     return list_rows(db, EmployeeEquipment, {"employee_id": employee_id})

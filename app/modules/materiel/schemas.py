@@ -28,6 +28,7 @@ class StoreOut(StoreBase):
 
 class SupplierBase(BaseModel):
     name: str
+    society: str | None = None
     contact_name: str | None = None
     rc: str | None = None
     nif: str | None = None

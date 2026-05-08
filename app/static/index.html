@@ -709,6 +709,13 @@ async function sgdiApi(path,options){
 }
 function sgdiSetApiRoot(url){window.__SGDI_API_ROOT__=String(url||"").replace(/\/+$/,"");window.__SGDI_BACKEND_ENABLED__=true}
 let sgdiSaveQueue=Promise.resolve();
+const SQL_OWNED_COLLECTIONS=new Set(["candidats","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs"]);
+function sgdiLegacySnapshot(){
+  const source=db&&typeof db==="object"?db:{};
+  const snap={...source};
+  SQL_OWNED_COLLECTIONS.forEach(k=>{if(Array.isArray(snap[k]))snap[k]=[]});
+  return snap;
+}
 function sgdiBackendSave(){
   if(!sgdiBackendShouldUse()||!db)return false;
   const token=sgdiAuthToken();
@@ -718,7 +725,7 @@ function sgdiBackendSave(){
     uiSaveState("Sauvegarde refusée","error");
     return false;
   }
-  const payload=JSON.stringify({data:db});
+  const payload=JSON.stringify({data:sgdiLegacySnapshot()});
   const url=sgdiApiUrl("/api/irongs/db",false);
   sgdiSaveQueue=sgdiSaveQueue.catch(()=>{}).then(async()=>{
     const res=await fetch(url,{method:"PUT",headers:sgdiAuthHeaders(),body:payload,cache:"no-store"});
@@ -755,6 +762,7 @@ async function sgdiPullState(options){
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
       await sgdiLoadAuthState();
       await syncCandidatesFromPostgres();
+      await syncSqlModulesFromPostgres();
       const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
       if(typeof normalizePostesInDB==="function")normalizePostesInDB();
       if(purged)sgdiBackendSave();
@@ -920,10 +928,11 @@ window.SGDI_API={
     deleteCandidate:(id)=>sgdiApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
     leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:()=>sgdiApi("/drh/contracts",{legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false})
   },
-  sites:{list:()=>sgdiApi("/sites",{legacy:false}),situation:()=>sgdiApi("/sites/situation-generale",{legacy:false})},
-  pointage:{daily:(date)=>sgdiApi("/pointage/daily?date="+encodeURIComponent(date||today()),{legacy:false}),generate:(date)=>sgdiApi("/pointage/daily/generate",{method:"POST",body:{date:date||today()},legacy:false})},
-  events:{list:()=>sgdiApi("/events",{legacy:false})},
-  stock:{stores:()=>sgdiApi("/stock/stores",{legacy:false}),suppliers:()=>sgdiApi("/stock/suppliers",{legacy:false}),articles:()=>sgdiApi("/stock/articles",{legacy:false}),movements:()=>sgdiApi("/stock/movements",{legacy:false})},
+  sites:{list:()=>sgdiApi("/ops/sites",{legacy:false}),create:(payload)=>sgdiApi("/ops/sites",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),delete:(id)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),situation:()=>sgdiApi("/ops/sites/situation-generale",{legacy:false})},
+  pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false})},
+  events:{list:()=>sgdiApi("/ops/events",{legacy:false})},
+  stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),articles:()=>sgdiApi("/materiel/articles",{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
+  commercial:{clients:()=>sgdiApi("/commercial/clients",{legacy:false}),createClient:(payload)=>sgdiApi("/commercial/clients",{method:"POST",body:payload,legacy:false}),updateClient:(id,payload)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteClient:(id)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   finance:{entries:()=>sgdiApi("/finance/entries",{legacy:false}),payroll:()=>sgdiApi("/finance/payroll",{legacy:false})},
   sync:{pull:sgdiPullState,push:()=>sgdiBackendSave()}
 };
@@ -1009,6 +1018,39 @@ async function persistCandidateToPostgres(c){
 async function deleteCandidateFromPostgres(c){
   if(c&&c.backendId&&sgdiAuthToken())await SGDI.rh.deleteCandidate(c.backendId);
 }
+
+function sqlInt(v){const n=parseInt(v,10);return Number.isFinite(n)?n:null}
+function sqlNum(v){const n=parseFloat(String(v??"").replace(/\s/g,"").replace(",","."));return Number.isFinite(n)?n:0}
+function sqlDate(v){return v?String(v).slice(0,10):null}
+function sqlRelationId(list,id){const row=(list||[]).find(x=>String(x.id)===String(id)||String(x.backendId)===String(id));return row&&row.backendId?row.backendId:sqlInt(id)}
+function siteApiPayload(site){
+  const effectifs=site.effectifs||{};
+  const data={...site};
+  return {name:String(site.nom||site.name||"Site").trim()||"Site",indicatif:site.indicatif||null,client_name:site.client||site.client_name||null,address:site.adresse||site.address||null,commune:site.commune||null,wilaya:site.wilaya||null,site_type:site.type||site.site_type||null,rotation_system:site.rotationSystem||site.rotation_system||null,contractual_staff:parseInt(effectifs.totalContractuel??site.contractual_staff)||0,day_staff:parseInt(effectifs.jour??site.day_staff)||0,night_staff:parseInt(effectifs.nuit??site.night_staff)||0,weekend_staff:parseInt(effectifs.weekend??site.weekend_staff)||0,holiday_staff:parseInt(effectifs.feries??site.holiday_staff)||0,groups_count:parseInt(effectifs.groupes??site.groups_count)||0,active:site.actif===false||site.active===0?0:1,equipment_plan:data};
+}
+function siteFromApi(row){const data=row&&row.equipment_plan&&typeof row.equipment_plan==="object"?row.equipment_plan:{};return {...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",indicatif:data.indicatif||row.indicatif||"",client:data.client||row.client_name||"",adresse:data.adresse||row.address||"",commune:data.commune||row.commune||"",wilaya:data.wilaya||row.wilaya||"",type:data.type||row.site_type||"",rotationSystem:data.rotationSystem||row.rotation_system||"",actif:row.active!==0,effectifs:{...(data.effectifs||{}),totalContractuel:data.effectifs?.totalContractuel??row.contractual_staff??0,jour:data.effectifs?.jour??row.day_staff??0,nuit:data.effectifs?.nuit??row.night_staff??0,weekend:data.effectifs?.weekend??row.weekend_staff??0,feries:data.effectifs?.feries??row.holiday_staff??0,groupes:data.effectifs?.groupes??row.groups_count??0}}}
+async function persistSiteToPostgres(site){if(!site||!sgdiAuthToken())return null;const saved=site.backendId?await SGDI.sites.update(site.backendId,siteApiPayload(site)):await SGDI.sites.create(siteApiPayload(site));Object.assign(site,siteFromApi(saved),{id:site.id||String(saved.id),backendId:saved.id});return site}
+async function syncSitesFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.sites.list();if((!rows||!rows.length)&&(db.sites||[]).length){for(const s of db.sites){await persistSiteToPostgres(s)}rows=await SGDI.sites.list()}db.sites=(rows||[]).map(siteFromApi)}catch(e){console.warn("Sites PostgreSQL indisponibles",e)}}
+function storeApiPayload(m){return{name:String(m.nom||m.name||"Magasin").trim()||"Magasin",code:m.code||null,society:m.societe||m.society||null,address:m.adresse||m.address||null,manager_name:m.responsable||m.manager_name||null,phone:m.telephone||m.phone||null,email:m.email||null,icon_path:m.iconImage||m.icon_path||null,notes:m.notes||null}}
+function storeFromApi(row){return{id:String(row.id),backendId:row.id,nom:row.name||"",code:row.code||"",societe:row.society||"",adresse:row.address||"",responsable:row.manager_name||"",telephone:row.phone||"",email:row.email||"",iconImage:row.icon_path||"",icon:"🏬",color:"#8b5cf6",notes:row.notes||""}}
+async function persistStoreToPostgres(m){if(!m||!sgdiAuthToken())return null;const saved=m.backendId?await SGDI.stock.updateStore(m.backendId,storeApiPayload(m)):await SGDI.stock.createStore(storeApiPayload(m));Object.assign(m,storeFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
+function supplierApiPayload(f){return{name:String(f.raisonSociale||f.name||"Fournisseur").trim()||"Fournisseur",society:f.societe||f.society||null,contact_name:f.contact||f.contact_name||null,rc:f.rc||null,nif:f.nif||null,nis:f.nis||null,ai:f.ai||null,phone:f.telephone||f.phone||null,email:f.email||null,address:f.adresse||f.address||null,products:f.produits||f.products||null,payment_terms:f.delaiPaiement||f.payment_terms||null,rating:parseInt(f.note??f.rating)||0,notes:f.commentaires||f.notes||null}}
+function supplierFromApi(row){return{id:String(row.id),backendId:row.id,raisonSociale:row.name||"",societe:row.society||"",contact:row.contact_name||"",rc:row.rc||"",nif:row.nif||"",nis:row.nis||"",ai:row.ai||"",telephone:row.phone||"",email:row.email||"",adresse:row.address||"",produits:row.products||"",delaiPaiement:row.payment_terms||"",note:row.rating||0,commentaires:row.notes||""}}
+async function persistSupplierToPostgres(f){if(!f||!sgdiAuthToken())return null;const saved=f.backendId?await SGDI.stock.updateSupplier(f.backendId,supplierApiPayload(f)):await SGDI.stock.createSupplier(supplierApiPayload(f));Object.assign(f,supplierFromApi(saved),{id:f.id||String(saved.id),backendId:saved.id});return f}
+function articleApiPayload(a){return{code:String(a.code||"").trim()||("ART-"+Date.now()),designation:String(a.designation||a.sousCategorie||a.code||"Article").trim()||"Article",category:a.categorie||a.category||null,sub_category:a.sousCategorie||a.sub_category||null,society:a.societe||a.society||null,store_id:sqlRelationId(db.magasins,a.magasinId),supplier_id:sqlRelationId(db.fournisseurs,a.fournisseurId),unit:a.unite||"Pièce",quantity:sqlNum(a.stockInitial||a.quantiteGlobaleRecue||a.quantity),unit_price:sqlNum(a.prixUnitaire||a.unit_price),min_quantity:sqlNum(a.stockMin||a.seuilAlerte||a.min_quantity),barcode:a.codeBarre||a.barcode||null,brand:a.marque||a.brand||null,model:a.modele||a.model||null,attributes:{...(a.attributs||{}),raw:a,stockVariantes:a.stockVariantes||[],stockReceptionsGlobales:a.stockReceptionsGlobales||[]},active:a.actif===false||a.active===0?0:1}}
+function articleFromApi(row){const attrs=row.attributes||{};const raw=attrs.raw&&typeof attrs.raw==="object"?attrs.raw:{};const store=(db.magasins||[]).find(m=>String(m.backendId)===String(row.store_id));const supplier=(db.fournisseurs||[]).find(f=>String(f.backendId)===String(row.supplier_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,code:row.code||raw.code||"",designation:row.designation||raw.designation||"",categorie:row.category||raw.categorie||"",sousCategorie:row.sub_category||raw.sousCategorie||"",societe:row.society||raw.societe||"",magasinId:store?.id||raw.magasinId||"",fournisseurId:supplier?.id||raw.fournisseurId||"",unite:row.unit||raw.unite||"Pièce",stockInitial:row.quantity??raw.stockInitial??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,stockMin:row.min_quantity??raw.stockMin??"",codeBarre:row.barcode||raw.codeBarre||"",marque:row.brand||raw.marque||"",modele:row.model||raw.modele||"",attributs:attrs,stockVariantes:attrs.stockVariantes||raw.stockVariantes||[],stockReceptionsGlobales:attrs.stockReceptionsGlobales||raw.stockReceptionsGlobales||[],actif:row.active!==0}}
+async function persistArticleToPostgres(a){if(!a||!sgdiAuthToken())return null;const saved=a.backendId?await SGDI.stock.updateArticle(a.backendId,articleApiPayload(a)):await SGDI.stock.createArticle(articleApiPayload(a));Object.assign(a,articleFromApi(saved),{id:a.id||String(saved.id),backendId:saved.id});return a}
+function movementTypeToApi(t){return({retour:"retour_employe",dotation_pret:"dotation_pret_mission",reforme:"reformer"}[t])||t||"entree"}
+function movementFromApiType(t){return({retour_employe:"retour",dotation_pret_mission:"dotation_pret",reformer:"reforme"}[t])||t}
+function movementApiPayload(m){const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));return{article_id:article?.backendId||sqlInt(m.articleId),movement_date:sqlDate(m.date)||today(),movement_type:movementTypeToApi(m.type),quantity:sqlNum(m.quantite),unit_price:sqlNum(m.prixUnitaire),store_id:sqlRelationId(db.magasins,m.magasinId||article?.magasinId),supplier_id:sqlRelationId(db.fournisseurs,m.fournisseurId),employee_id:sqlRelationId(db.agents,m.beneficiaireAgentId||m.retourAgentId||m.agentId),recipient:m.beneficiaireNom||m.retourAgentNom||null,reason:m.motif||null,renewal_reason:m.motifRenouvellement||null,voucher_number:m.numeroBon||null,notes:m.notes||null,size_breakdown:{repartitionTailles:m.repartitionTailles||{},raw:m}}}
+function movementFromApi(row){const raw=row.size_breakdown?.raw&&typeof row.size_breakdown.raw==="object"?row.size_breakdown.raw:{};const article=(db.stockArticles||[]).find(a=>String(a.backendId)===String(row.article_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,articleId:article?.id||raw.articleId||String(row.article_id),type:movementFromApiType(row.movement_type),date:String(row.movement_date||"").slice(0,10),quantite:row.quantity??raw.quantite??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,motif:row.reason||raw.motif||"",numeroBon:row.voucher_number||raw.numeroBon||"",notes:row.notes||raw.notes||"",repartitionTailles:row.size_breakdown?.repartitionTailles||raw.repartitionTailles||{},createdAt:row.created_at||raw.createdAt||""}}
+async function persistMovementToPostgres(m){if(!m||!sgdiAuthToken())return null;const payload=movementApiPayload(m);if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour le mouvement");const saved=await SGDI.stock.createMovement(payload);Object.assign(m,movementFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
+async function syncMaterielFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let stores=await SGDI.stock.stores();if((!stores||!stores.length)&&(db.magasins||[]).length){for(const m of db.magasins){await persistStoreToPostgres(m)}stores=await SGDI.stock.stores()}db.magasins=(stores||[]).map(storeFromApi);let suppliers=await SGDI.stock.suppliers();if((!suppliers||!suppliers.length)&&(db.fournisseurs||[]).length){for(const f of db.fournisseurs){await persistSupplierToPostgres(f)}suppliers=await SGDI.stock.suppliers()}db.fournisseurs=(suppliers||[]).map(supplierFromApi);let articles=await SGDI.stock.articles();if((!articles||!articles.length)&&(db.stockArticles||[]).length){for(const a of db.stockArticles){await persistArticleToPostgres(a)}articles=await SGDI.stock.articles()}db.stockArticles=(articles||[]).map(articleFromApi);let mvts=await SGDI.stock.movements();if((!mvts||!mvts.length)&&(db.stockMouvements||[]).length){for(const m of db.stockMouvements){await persistMovementToPostgres(m).catch(e=>console.warn("Mouvement non migré",m,e))}mvts=await SGDI.stock.movements()}db.stockMouvements=(mvts||[]).map(movementFromApi)}catch(e){console.warn("Matériel PostgreSQL indisponible",e)}}
+function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()||"Client",legal_name:c.raisonSociale||c.legal_name||null,society:c.societe||c.society||null,structure:c.structure||null,status:c.statut||c.status||"actif",contact_name:c.contact||c.contact_name||null,contact_position:c.fonction||c.contact_position||null,phone:c.tel||c.phone||null,email:c.email||null,address:c.adresse||c.address||null,nif:c.nif||null,rc:c.rc||null,services:c.prestationsServices||c.services||null,contract_start:sqlDate(c.dateDebutContrat),contract_duration:c.dureeContrat||null,contract_end:sqlDate(c.dateFinContrat),notes:c.notes||null,data:{...c}}}
+function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||""}}
+async function persistClientToPostgres(c){if(!c||!sgdiAuthToken())return null;const saved=c.backendId?await SGDI.commercial.updateClient(c.backendId,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
+async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e)}}
+async function syncSqlModulesFromPostgres(){await syncSitesFromPostgres();await syncMaterielFromPostgres();await syncClientsFromPostgres()}
 
 function ensureContratsPersonnel(){
   if(!db)return;
@@ -4884,7 +4926,7 @@ function renderSiteForm(view,id){
   </form></div>`;
   setTimeout(updateSiteEffectifTotalContractuel,0);
 }
-function saveSite(id){const f=document.getElementById("site-form");const fd=new FormData(f);let s=db.sites.find(x=>x.id===id);if(!s){s={id,actif:true,dateCreation:today(),rotation:ROTATION_DEFAUT.map(r=>({...r}))};db.sites.push(s)}s.nom=fd.get("nom");s.indicatif=fd.get("indicatif");s.adresse=fd.get("adresse");s.commune=fd.get("commune");s.wilaya=fd.get("wilaya");s.type=fd.get("type");s.contact={nom:fd.get("contact_nom"),fonction:fd.get("contact_fonction"),telephone:fd.get("contact_tel"),email:fd.get("contact_email")};s.client=fd.get("client")||s.contact.nom;s.postes={};const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit"),rotations=fd.getAll("poste_rotationSystem");let totalContractuel=0,totalJour=0,totalNuit=0;noms.forEach((nom,i)=>{nom=(nom||"").trim();if(!nom)return;const jour=+jours[i]||0,nuit=+nuits[i]||0,rotationSystem=rotations[i]||"";const total=sitePosteTotalCalc(jour,nuit,rotationSystem);totalContractuel+=total;totalJour+=jour;totalNuit+=nuit;s.postes[nom]={total,jour,nuit,rotationSystem}});s.effectifs={totalContractuel,groupes:+fd.get("eff_groupes")||0,jour:totalJour,nuit:totalNuit,weekend:+fd.get("eff_weekend")||0,feries:+fd.get("eff_feries")||0};const cats=fd.getAll("site_mat_categorie"),desigs=fd.getAll("site_mat_designation"),qtes=fd.getAll("site_mat_quantite"),etats=fd.getAll("site_mat_etat");s.equipements=[];cats.forEach((categorie,i)=>{categorie=(categorie||"").trim();const designation=(desigs[i]||"").trim();const quantite=+qtes[i]||0;const etat=(etats[i]||"").trim();if(!categorie&&!designation&&!quantite&&!etat)return;s.equipements.push({categorie,designation,quantite,etat})});s.heureReleveJour=fd.get("heureReleveJour")||"";s.heureReleveNuit=fd.get("heureReleveNuit")||"";s.horairesReleves="";s.groupesAffectation={};for(const [k,v] of fd.entries()){if(k.startsWith("grp_")&&v)s.groupesAffectation[k.slice(4)]=v}s.rotationSystem=fd.get("rotationSystem")||"24/48";s.rotation=siteRotationFromSystem(s.rotationSystem);saveDB();toast("Site enregistré","success");navigate("sites/actifs")}
+async function saveSite(id){const f=document.getElementById("site-form");const fd=new FormData(f);let s=db.sites.find(x=>x.id===id);if(!s){s={id,actif:true,dateCreation:today(),rotation:ROTATION_DEFAUT.map(r=>({...r}))};db.sites.push(s)}s.nom=fd.get("nom");s.indicatif=fd.get("indicatif");s.adresse=fd.get("adresse");s.commune=fd.get("commune");s.wilaya=fd.get("wilaya");s.type=fd.get("type");s.contact={nom:fd.get("contact_nom"),fonction:fd.get("contact_fonction"),telephone:fd.get("contact_tel"),email:fd.get("contact_email")};s.client=fd.get("client")||s.contact.nom;s.postes={};const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit"),rotations=fd.getAll("poste_rotationSystem");let totalContractuel=0,totalJour=0,totalNuit=0;noms.forEach((nom,i)=>{nom=(nom||"").trim();if(!nom)return;const jour=+jours[i]||0,nuit=+nuits[i]||0,rotationSystem=rotations[i]||"";const total=sitePosteTotalCalc(jour,nuit,rotationSystem);totalContractuel+=total;totalJour+=jour;totalNuit+=nuit;s.postes[nom]={total,jour,nuit,rotationSystem}});s.effectifs={totalContractuel,groupes:+fd.get("eff_groupes")||0,jour:totalJour,nuit:totalNuit,weekend:+fd.get("eff_weekend")||0,feries:+fd.get("eff_feries")||0};const cats=fd.getAll("site_mat_categorie"),desigs=fd.getAll("site_mat_designation"),qtes=fd.getAll("site_mat_quantite"),etats=fd.getAll("site_mat_etat");s.equipements=[];cats.forEach((categorie,i)=>{categorie=(categorie||"").trim();const designation=(desigs[i]||"").trim();const quantite=+qtes[i]||0;const etat=(etats[i]||"").trim();if(!categorie&&!designation&&!quantite&&!etat)return;s.equipements.push({categorie,designation,quantite,etat})});s.heureReleveJour=fd.get("heureReleveJour")||"";s.heureReleveNuit=fd.get("heureReleveNuit")||"";s.horairesReleves="";s.groupesAffectation={};for(const [k,v] of fd.entries()){if(k.startsWith("grp_")&&v)s.groupesAffectation[k.slice(4)]=v}s.rotationSystem=fd.get("rotationSystem")||"24/48";s.rotation=siteRotationFromSystem(s.rotationSystem);try{await persistSiteToPostgres(s)}catch(e){toast("Site non sauvegardé PostgreSQL : "+(e.message||e),"error");return}saveDB();toast("Site enregistré dans PostgreSQL","success");navigate("sites/actifs")}
 
 /* ---- MAIN COURANTE / EVENEMENTS ---- */
 function incidentNorm(i){
@@ -6543,7 +6585,7 @@ function renderMatSimpleMagasinForm(view,id){
   </div>`;
   setTimeout(()=>{const f=document.getElementById("magasin-form-simple");if(f)f.addEventListener("submit",e=>{e.preventDefault();matSimpleSaveMagasin(m.id,isNew)});},0);
 }
-function matSimpleSaveMagasin(id,isNew){
+async function matSimpleSaveMagasin(id,isNew){
   try{
     const f=document.getElementById("magasin-form-simple");
     if(!f){toast("Formulaire introuvable","error");return}
@@ -6554,7 +6596,7 @@ function matSimpleSaveMagasin(id,isNew){
     if(!db.magasins)db.magasins=[];
     if(isNew){obj.color="#8b5cf6";obj.createdAt=new Date().toISOString();db.magasins.push(obj)}
     else{const idx=db.magasins.findIndex(x=>x.id===id);if(idx<0){toast("Magasin introuvable","error");return}db.magasins[idx]={...db.magasins[idx],...obj}}
-    if(saveDB()){toast(isNew?"Magasin créé":"Magasin mis à jour","success");if(typeof logActivity==="function")logActivity(isNew?"Création magasin":"Modification magasin",nom);navigate("materiel/magasins")}
+    try{await persistStoreToPostgres(obj)}catch(e){toast("Magasin non sauvegardé PostgreSQL : "+(e.message||e),"error");return}if(saveDB()){toast(isNew?"Magasin créé dans PostgreSQL":"Magasin mis à jour dans PostgreSQL","success");if(typeof logActivity==="function")logActivity(isNew?"Création magasin":"Modification magasin",nom);navigate("materiel/magasins")}
   }catch(err){console.error(err);toast("Erreur: "+(err.message||err),"error")}
 }
 function selectMagasinIcon(icon){
@@ -6582,13 +6624,14 @@ function removeMagasinIcon(showToast=true){
     toast("Image retirée","success");
   }
 }
-function matSimpleDeleteMagasin(id){
+async function matSimpleDeleteMagasin(id){
   const m=(db.magasins||[]).find(x=>x.id===id);if(!m)return;
   const linked=(db.stockArticles||[]).filter(a=>a.magasinId===id).length;
   if(linked>0){if(!confirm(`Le magasin « ${m.nom} » contient ${linked} article(s).\nLes articles ne seront PAS supprimés mais perdront le rattachement.\nContinuer ?`))return}
   else if(!confirm(`Supprimer le magasin « ${m.nom} » ?`))return;
   // Détacher articles
   (db.stockArticles||[]).forEach(a=>{if(a.magasinId===id)a.magasinId=""});
+  if(m.backendId){try{await SGDI.stock.deleteStore(m.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.magasins=(db.magasins||[]).filter(x=>x.id!==id);
   saveDB();toast("Magasin supprimé","success");
   if(typeof logActivity==="function")logActivity("Suppression magasin",m.nom);
@@ -6765,7 +6808,7 @@ function updateFournisseurProduitsValue(){
   const hidden=document.getElementById("fourn-produits-value");
   if(hidden)hidden.value=lines.join("\n");
 }
-function matSimpleSaveFournisseur(id,isNew){
+async function matSimpleSaveFournisseur(id,isNew){
   try{
     const fr=document.getElementById("fournisseur-form-simple");
     if(!fr){toast("Formulaire introuvable","error");return}
@@ -6777,15 +6820,16 @@ function matSimpleSaveFournisseur(id,isNew){
     if(!db.fournisseurs)db.fournisseurs=[];
     if(isNew){obj.createdAt=new Date().toISOString();db.fournisseurs.push(obj)}
     else{const idx=db.fournisseurs.findIndex(x=>x.id===id);if(idx<0){toast("Fournisseur introuvable","error");return}db.fournisseurs[idx]={...db.fournisseurs[idx],...obj}}
-    if(saveDB()){toast(isNew?"Fournisseur créé":"Fournisseur mis à jour","success");if(typeof logActivity==="function")logActivity(isNew?"Création fournisseur":"Modification fournisseur",raisonSociale);navigate("materiel/fournisseurs")}
+    try{await persistSupplierToPostgres(obj)}catch(e){toast("Fournisseur non sauvegardé PostgreSQL : "+(e.message||e),"error");return}if(saveDB()){toast(isNew?"Fournisseur créé dans PostgreSQL":"Fournisseur mis à jour dans PostgreSQL","success");if(typeof logActivity==="function")logActivity(isNew?"Création fournisseur":"Modification fournisseur",raisonSociale);navigate("materiel/fournisseurs")}
   }catch(err){console.error(err);toast("Erreur: "+(err.message||err),"error")}
 }
-function matSimpleDeleteFournisseur(id){
+async function matSimpleDeleteFournisseur(id){
   const f=(db.fournisseurs||[]).find(x=>x.id===id);if(!f)return;
   const linked=(db.stockMouvements||[]).filter(m=>m.fournisseurId===id).length;
   if(linked>0){if(!confirm(`Le fournisseur « ${f.raisonSociale} » est lié à ${linked} mouvement(s) d'entrée.\nLes mouvements ne seront PAS supprimés mais perdront le lien.\nContinuer ?`))return}
   else if(!confirm(`Supprimer le fournisseur « ${f.raisonSociale} » ?`))return;
   (db.stockMouvements||[]).forEach(m=>{if(m.fournisseurId===id)m.fournisseurId=""});
+  if(f.backendId){try{await SGDI.stock.deleteSupplier(f.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.fournisseurs=(db.fournisseurs||[]).filter(x=>x.id!==id);
   saveDB();toast("Fournisseur supprimé","success");
   if(typeof logActivity==="function")logActivity("Suppression fournisseur",f.raisonSociale);
@@ -8242,7 +8286,7 @@ function stockAddAttrRow(k,v){
   row.innerHTML=`<input class="input" placeholder="Nom (ex: Taille)" value="${k?escapeHTML(k):""}" data-attr-key/><input class="input" placeholder="Valeur (ex: XL)" value="${v?escapeHTML(String(v)):""}" data-attr-val/><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('.stk-attr-row').remove()">✕</button>`;
   list.appendChild(row);
 }
-function stockSaveArticle(id,isNew){
+async function stockSaveArticle(id,isNew){
   try{
     const f=document.getElementById("stock-article-form");
     if(!f){toast("Formulaire introuvable","error");return}
@@ -8282,8 +8326,9 @@ function stockSaveArticle(id,isNew){
     a.attributs=attrs;
     if(!a.code)a.code=stockNextCode(a.societe,a.categorie);
     a.derniereMaj=today();
+    try{await persistArticleToPostgres(a)}catch(e){toast("Article non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
     saveDB();
-    toast(isCreating?"✓ Article ajouté au catalogue":"✓ Article modifié","success");
+    toast(isCreating?"✓ Article ajouté dans PostgreSQL":"✓ Article modifié dans PostgreSQL","success");
     if(typeof logActivity==="function")logActivity(isCreating?"Article stock créé":"Article stock modifié",a.code+" · "+a.designation);
     navigate("materiel/article/"+a.id);
   }catch(err){
@@ -8291,10 +8336,11 @@ function stockSaveArticle(id,isNew){
     toast("Erreur d'enregistrement: "+err.message,"error");
   }
 }
-function stockDeleteArticle(id){
+async function stockDeleteArticle(id){
   const a=(db.stockArticles||[]).find(x=>x.id===id);if(!a)return;
   const mvts=stockGetMouvements(id);
   if(!confirm(`Supprimer l'article "${a.designation}" ?\n\n${mvts.length>0?`⚠️ ${mvts.length} mouvement(s) seront aussi supprimés.\n`:""}Cette action est irréversible.`))return;
+  if(a.backendId){try{await SGDI.stock.deleteArticle(a.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.stockArticles=(db.stockArticles||[]).filter(x=>x.id!==id);
   db.stockMouvements=(db.stockMouvements||[]).filter(m=>m.articleId!==id);
   saveDB();
@@ -8538,7 +8584,7 @@ function stockMvtRefreshTaillePointure(){
   const a=(db.stockArticles||[]).find(x=>x.id===articleId);
   box.outerHTML=stockMvtTaillePointureHTML(a);
 }
-function stockSaveMvt(initialType){
+async function stockSaveMvt(initialType){
   try{
   const f=document.getElementById("stock-mvt-form");
   if(!f){toast("Formulaire introuvable","error");return}
@@ -8615,6 +8661,7 @@ function stockSaveMvt(initialType){
     userId:session?.username||"",
     createdAt:new Date().toISOString()
   };
+  try{await persistMovementToPostgres(m)}catch(e){toast("Mouvement non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
   db.stockMouvements=db.stockMouvements||[];
   db.stockMouvements.push(m);
   a.derniereMaj=today();
@@ -8676,11 +8723,12 @@ function stockSaveMvt(initialType){
     toast("Erreur d'enregistrement: "+err.message,"error");
   }
 }
-function stockDeleteMvt(id){
+async function stockDeleteMvt(id){
   const m=(db.stockMouvements||[]).find(x=>x.id===id);if(!m)return;
   const a=(db.stockArticles||[]).find(x=>x.id===m.articleId);
   const hasCaisse=m.caisseId&&(db.caisse||[]).some(c=>c.id===m.caisseId);
   if(!confirm(`Supprimer ce mouvement ?\n${stockMvtTypeLabel(m.type)} de ${m.quantite} ${a?(a.unite||""):""} (${formatDate(m.date)})${hasCaisse?"\n\n⚠️ L'écriture caisse associée sera également supprimée.":""}`))return;
+  if(m.backendId){try{await SGDI.stock.deleteMovement(m.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.stockMouvements=(db.stockMouvements||[]).filter(x=>x.id!==id);
   if(hasCaisse){db.caisse=(db.caisse||[]).filter(c=>c.id!==m.caisseId)}
   saveDB();toast("Mouvement supprimé"+(hasCaisse?" · caisse mise à jour":""),"success");renderSidebar();renderView();
@@ -9449,15 +9497,15 @@ function openClientModal(id){
     </form>`);
   const ps=document.querySelector('.modal-bg [name="prestationsServices"]');if(ps&&c?.prestationsServices)ps.value=c.prestationsServices;
 }
-function confirmClient(id){
+async function confirmClient(id){
   const fd=new FormData(document.querySelector(".modal-bg form"));
   db.clients=db.clients||[];
   const dateDebutContrat=fd.get("dateDebutContrat")||"",dureeContrat=fd.get("dureeContrat")||"",dateFinContrat=fd.get("dateFinContrat")||contractEndDate(dateDebutContrat,dureeContrat);
   let c=id?db.clients.find(x=>x.id===id):null;const isEdit=!!c;if(!c){c={id:uid("cl"),createdBy:session.username,createdAt:new Date().toISOString()};db.clients.push(c)}
   Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",rc:fd.get("rc")||"",contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:fd.get("prestationsServices")||"",dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",updatedAt:new Date().toISOString()});
-  saveDB();closeModal();toast(isEdit?"Client modifié":"Client créé","success");renderView();
+  try{await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé PostgreSQL : "+(e.message||e),"error");return}saveDB();closeModal();toast(isEdit?"Client modifié dans PostgreSQL":"Client créé dans PostgreSQL","success");renderView();
 }
-function deleteClient(id){if(!confirm("Supprimer ?"))return;db.clients=db.clients.filter(c=>c.id!==id);saveDB();renderView()}
+async function deleteClient(id){if(!confirm("Supprimer ?"))return;const c=(db.clients||[]).find(x=>x.id===id);if(c&&c.backendId){try{await SGDI.commercial.deleteClient(c.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}db.clients=db.clients.filter(c=>c.id!==id);saveDB();renderView()}
 function renderCommOpportunites(view){
   const list=bySoc(db.opportunites||[]).slice().sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">💼 Opportunités</h1><p class="text-slate-500 text-sm">${list.length} opportunités</p></div><button class="btn btn-primary" onclick="openOpportuniteModal()">➕ Nouvelle opportunité</button></div>

@@ -55,6 +55,11 @@ def update_site(site_id: int, payload: SiteUpdate, db: Session = Depends(get_db)
     return service.update_row(db, Site, site_id, payload)
 
 
+@router.delete("/sites/{site_id}")
+def delete_site(site_id: int, db: Session = Depends(get_db)):
+    return service.delete_row(db, Site, site_id)
+
+
 @router.post("/site-posts", response_model=SitePostOut)
 def create_site_post(payload: SitePostCreate, db: Session = Depends(get_db)):
     return service.create_row(db, SitePost, payload)

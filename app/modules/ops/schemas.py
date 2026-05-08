@@ -32,6 +32,9 @@ class SiteUpdate(BaseModel):
     indicatif: str | None = None
     client_name: str | None = None
     address: str | None = None
+    commune: str | None = None
+    wilaya: str | None = None
+    site_type: str | None = None
     rotation_system: str | None = None
     contractual_staff: int | None = None
     day_staff: int | None = None

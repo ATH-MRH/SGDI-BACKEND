@@ -43,6 +43,13 @@ def update_row(db: Session, model: Type, row_id: int, payload: Any):
     return row
 
 
+
+def delete_row(db: Session, model: Type, row_id: int):
+    row = get_or_404(db, model, row_id)
+    db.delete(row)
+    db.commit()
+    return {"deleted": True, "id": row_id}
+
 def compute_post_total(day_count: int, night_count: int, rotation_system: str | None) -> int:
     if rotation_system == "1/1":
         return day_count

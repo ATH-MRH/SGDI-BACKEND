@@ -38,14 +38,34 @@ def create_store(payload: StoreCreate, db: Session = Depends(get_db)):
     return service.create_row(db, Store, payload)
 
 
+@router.put("/stores/{store_id}", response_model=StoreOut)
+def update_store(store_id: int, payload: StoreCreate, db: Session = Depends(get_db)):
+    return service.update_row(db, Store, store_id, payload)
+
+
+@router.delete("/stores/{store_id}")
+def delete_store(store_id: int, db: Session = Depends(get_db)):
+    return service.delete_row(db, Store, store_id)
+
+
 @router.get("/suppliers", response_model=list[SupplierOut])
-def suppliers(db: Session = Depends(get_db)):
-    return service.list_rows(db, Supplier)
+def suppliers(society: str | None = None, db: Session = Depends(get_db)):
+    return service.list_rows(db, Supplier, {"society": society})
 
 
 @router.post("/suppliers", response_model=SupplierOut)
 def create_supplier(payload: SupplierCreate, db: Session = Depends(get_db)):
     return service.create_row(db, Supplier, payload)
+
+
+@router.put("/suppliers/{supplier_id}", response_model=SupplierOut)
+def update_supplier(supplier_id: int, payload: SupplierCreate, db: Session = Depends(get_db)):
+    return service.update_row(db, Supplier, supplier_id, payload)
+
+
+@router.delete("/suppliers/{supplier_id}")
+def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
+    return service.delete_row(db, Supplier, supplier_id)
 
 
 @router.get("/articles", response_model=list[ArticleOut])
@@ -63,6 +83,11 @@ def update_article(article_id: int, payload: ArticleCreate, db: Session = Depend
     return service.update_row(db, StockArticle, article_id, payload)
 
 
+@router.delete("/articles/{article_id}")
+def delete_article(article_id: int, db: Session = Depends(get_db)):
+    return service.delete_row(db, StockArticle, article_id)
+
+
 @router.get("/inventory")
 def inventory(store_id: int | None = None, category: str | None = None, db: Session = Depends(get_db)):
     return service.inventory(db, store_id, category)
@@ -76,6 +101,11 @@ def movements(article_id: int | None = None, employee_id: int | None = None, db:
 @router.post("/movements", response_model=MovementOut)
 def create_movement(payload: MovementCreate, db: Session = Depends(get_db)):
     return service.create_movement(db, payload)
+
+
+@router.delete("/movements/{movement_id}")
+def delete_movement(movement_id: int, db: Session = Depends(get_db)):
+    return service.delete_movement(db, movement_id)
 
 
 @router.post("/dotations", response_model=EquipmentOut)

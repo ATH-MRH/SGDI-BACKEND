@@ -15,6 +15,7 @@ from app.db.session import SessionLocal, engine, safe_database_url
 from app.modules.auth.models import User
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
+from app.modules.commercial import models as _commercial_models  # noqa: F401
 from app.modules.irongs import models as _irongs_models  # noqa: F401
 from app.modules.materiel import models as _materiel_models  # noqa: F401
 from app.modules.ops import models as _ops_models  # noqa: F401
@@ -30,6 +31,16 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 app = FastAPI(title=settings.app_name, debug=settings.app_debug)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+def ensure_schema_upgrades() -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as connection:
+        if "suppliers" in tables:
+            columns = {col["name"] for col in inspector.get_columns("suppliers")}
+            if "society" not in columns:
+                connection.execute(text("ALTER TABLE suppliers ADD COLUMN society VARCHAR(150)"))
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,6 +55,7 @@ def on_startup() -> None:
     logger.info("Démarrage %s en mode %s", settings.app_name, settings.app_env)
     logger.info("Base de données: %s", safe_database_url())
     Base.metadata.create_all(bind=engine)
+    ensure_schema_upgrades()
     logger.info("Tables PostgreSQL vérifiées/créées")
     with SessionLocal() as db:
         admin = db.query(User).filter(User.username == "admin").one_or_none()

@@ -26,6 +26,7 @@ class Supplier(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(180), index=True)
+    society: Mapped[str | None] = mapped_column(String(150), index=True)
     contact_name: Mapped[str | None] = mapped_column(String(150))
     rc: Mapped[str | None] = mapped_column(String(80))
     nif: Mapped[str | None] = mapped_column(String(80))
