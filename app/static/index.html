@@ -3039,32 +3039,32 @@ function renderRecrutement(view,mode){
     }
   }
   if(mode==="reserve"&&cs.length>0){
+    const reserveSociete=currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
+    const reserveStats=reserveSociete?cs.filter(c=>c.societe===reserveSociete):cs;
     const t=today();
-    const bySoc={};SOCIETES.forEach(s=>bySoc[s]=cs.filter(c=>c.societe===s).length);
-    const byPoste={};cs.forEach(c=>{const p=c.posteSouhaite||"—";byPoste[p]=(byPoste[p]||0)+1});
+    const byPoste={};reserveStats.forEach(c=>{const p=c.posteSouhaite||"—";byPoste[p]=(byPoste[p]||0)+1});
     const topPostes=Object.entries(byPoste).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    const favorables=cs.filter(c=>c.avisDecision==="Favorable").length;
-    const reserves=cs.filter(c=>c.avisDecision==="Favorable avec réserves").length;
-    const defavorables=cs.filter(c=>c.avisDecision==="Défavorable").length;
-    const sansAvis=cs.filter(c=>!c.avisDecision).length;
-    const ages=cs.map(c=>c.dateNaissance?Math.floor(daysBetween(c.dateNaissance,t)/365.25):null).filter(x=>x!==null);
+    const favorables=reserveStats.filter(c=>c.avisDecision==="Favorable").length;
+    const reserves=reserveStats.filter(c=>c.avisDecision==="Favorable avec réserves").length;
+    const defavorables=reserveStats.filter(c=>c.avisDecision==="Défavorable").length;
+    const sansAvis=reserveStats.filter(c=>!c.avisDecision).length;
+    const ages=reserveStats.map(c=>c.dateNaissance?Math.floor(daysBetween(c.dateNaissance,t)/365.25):null).filter(x=>x!==null);
     const ageMoy=ages.length?Math.round(ages.reduce((s,x)=>s+x,0)/ages.length):0;
-    const attentes=cs.map(c=>daysBetween(c.createdAt||t,t)).filter(x=>x>=0);
+    const attentes=reserveStats.map(c=>daysBetween(c.createdAt||t,t)).filter(x=>x>=0);
     const attenteMoy=attentes.length?Math.round(attentes.reduce((s,x)=>s+x,0)/attentes.length):0;
     const attenteMax=attentes.length?Math.max(...attentes):0;
-    const salaires=cs.map(c=>parseFloat(c.salairePrevu)||0).filter(x=>x>0);
+    const salaires=reserveStats.map(c=>parseFloat(c.salairePrevu)||0).filter(x=>x>0);
     const salaireMoy=salaires.length?Math.round(salaires.reduce((s,x)=>s+x,0)/salaires.length):0;
-    const habiletes=cs.filter(c=>c.habilitations?.serviceNational==="oui").length;
-    const exServices=cs.filter(c=>c.exServices==="Oui").length;
+    const habiletes=reserveStats.filter(c=>c.habilitations?.serviceNational==="oui").length;
+    const exServices=reserveStats.filter(c=>c.exServices==="Oui").length;
     statsHTML=`<div class="grid grid-4 mb-4">
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Total réserve</div><div class="text-3xl font-bold mt-1">${cs.length}</div><div class="text-xs text-slate-400 mt-1">candidats validés</div></div>
+      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Total réserve</div><div class="text-3xl font-bold mt-1">${reserveStats.length}</div><div class="text-xs text-slate-400 mt-1">${reserveSociete?escapeHTML(reserveSociete):"Toutes sociétés"}</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Avis favorable</div><div class="text-3xl font-bold mt-1 text-emerald-600">${favorables}</div><div class="text-xs text-slate-400 mt-1">${reserves} avec réserves • ${defavorables} défav. • ${sansAvis} sans avis</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Attente moyenne</div><div class="text-3xl font-bold mt-1">${attenteMoy} j</div><div class="text-xs text-slate-400 mt-1">max : ${attenteMax} j</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Salaire prévu moyen</div><div class="text-3xl font-bold mt-1">${salaireMoy?money(salaireMoy):"—"}</div><div class="text-xs text-slate-400 mt-1">âge moyen : ${ageMoy||"—"} ans</div></div>
     </div>
-    <div class="grid grid-2 gap-4 mb-6">
-      <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Répartition par société</h3>${SOCIETES.map(s=>{const n=bySoc[s]||0;const pct=cs.length?Math.round(n/cs.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${s}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-indigo-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}</div>
-      <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun.</div>`:topPostes.map(([p,n])=>{const pct=Math.round(n/cs.length*100);return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${cs.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${cs.length}</div></div></div>
+    <div class="grid grid-1 gap-4 mb-6">
+      <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${mode==="nouvelle"?`<button class="btn btn-primary" onclick="navigate('recrutement/nouveau')">➕ Nouvelle candidature</button>`:""}</div>
