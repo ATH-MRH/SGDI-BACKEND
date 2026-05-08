@@ -1361,8 +1361,24 @@ function societeAccessPassword(s){
 }
 function isAdminSystemUnlocked(){return sessionStorage.getItem(ADMIN_SYSTEM_UNLOCK_KEY)==="1"}
 function openAdminSystemAccess(){openModal(`<h3 class="font-bold text-lg mb-2">ADMINISTRATION SYSTEME</h3><p class="text-sm text-slate-600 mb-4">Entrez le mot de passe d'accès au module.</p><form onsubmit="event.preventDefault();confirmAdminSystemAccess(this.password.value)"><label class="label">Mot de passe</label><input class="input mb-4" type="password" name="password"  autofocus/><div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div></form>`)}
+function openAdminLoginAccess(){openModal(`<h3 class="font-bold text-lg mb-2">ACCES ADMIN</h3><p class="text-sm text-slate-600 mb-4">Entrez le mot de passe d'accès administration système.</p><form onsubmit="event.preventDefault();confirmAdminLoginAccess(this.password.value)"><label class="label">Mot de passe</label><input class="input mb-4" type="password" name="password" autofocus/><div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div></form>`)}
 function confirmAdminSystemAccess(p){if(p!==adminSystemPassword()){toast("Mot de passe ADMINISTRATION SYSTEME incorrect","error");return}if(!isAdmin()){toast("Compte admin requis","error");return}session={...session,societe:null,transverse:"admin"};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);closeModal();location.hash="#/admin/dashboard";route()}
-function loginAdminDirect(){openAdminSystemAccess()}
+async function confirmAdminLoginAccess(p){
+  if(p!==adminSystemPassword()){toast("Mot de passe ADMINISTRATION SYSTEME incorrect","error");return}
+  try{
+    closeModal();
+    await login("admin","admin");
+    if(!isAdmin()){toast("Le compte admin n'est pas disponible avec admin/admin","error");return}
+    session={...session,societe:null,transverse:"admin"};
+    sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");
+    saveSession(session);
+    location.hash="#/admin/dashboard";
+    route();
+  }catch(e){
+    toast("Accès admin impossible : "+(e.message||e),"error");
+  }
+}
+function loginAdminDirect(){if(session){openAdminSystemAccess();return}openAdminLoginAccess()}
 function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&session.role==="admin"}
 function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
