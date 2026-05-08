@@ -9869,7 +9869,6 @@ function renderDRHStatsAffectation(view){
 }
 
 /* ============ ADMIN MODULE (transverse, admin only) ============ */
-const ADMIN_TABS=[["dashboard","📊 Tableau de bord"],["feed","🗞 Fil d'actualité"],["users","👤 Utilisateurs"],["droits","🔐 Droits d'accès"],["access_societes","🏢 Accès sociétés"],["sections_candidat","✅ Sections candidat"],["niveaux","🎚 Niveaux d'accès"],["contrats","📄 Contrats personnel"],["priorites","⚡ Priorités"],["alertes","🔔 Alertes"],["champs","➕ Champs perso."],["modules","🧩 Modules perso."],["log","📜 Journal"],["storage","🧹 Stockage"]];
 const ADMIN_MODULES=["dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","effectif","agents","fiches","sites","incidents","conges","materiel","facturation","commercial","drh","paie","rapports","parametres"];
 const ADMIN_ROLES=["rh","dispatch","agent","admin"];
 const ADMIN_ENTITIES=[["agents","Agents"],["sites","Sites"],["candidats","Candidats"],["materiel","Matériel"],["clients","Clients"],["prospects","Prospects"],["devis","Devis"],["factures","Factures"]];
@@ -9892,7 +9891,6 @@ function ensureNiveauxAcces(){
   (db.users||[]).forEach(u=>{if(legacy[u.niveau])u.niveau=legacy[u.niveau]});
   return db.niveauxAcces.sort((a,b)=>(Number(a.weight)||0)-(Number(b.weight)||0));
 }
-function adminTabs(active){return ""}
 function logActivity(action,details){if(!db.activityLog)db.activityLog=[];db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:action,details:details||""});if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);recordOperationFeed(action+(details?" · "+details:""),"Activité système");saveDB()}
 function renderAdmin(view,sub,arg){
   if(!isAdmin()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée aux administrateurs.</p></div>`;return}
@@ -9925,7 +9923,6 @@ function renderAdminStorage(view){
   const fpqCount=(db.feuillePresence||[]).length;
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🧹 Stockage PostgreSQL</h1>
     <p class="text-slate-500 text-sm mb-3">Les données métier sont sauvegardées dans PostgreSQL via l'API backend. Le navigateur ne sert pas de source de données.</p>
-    ${adminTabs("storage")}
     <div class="card p-5 mb-4">
       <div class="flex justify-between mb-2">
         <h3 class="font-bold text-lg">📊 Taille estimée du snapshot</h3>
@@ -10074,7 +10071,6 @@ function renderAdminFeed(view){
     return hay.includes(q);
   });
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">Administration — Fil d'actualité</h1>
-    ${adminTabs("feed")}
     <div class="card p-4 mb-4">
       <div class="grid grid-3">
         <div><label class="label">Recherche</label><input class="input" value="${escapeHTML(q)}" placeholder="Message, sujet, utilisateur..." oninput="sessionStorage.setItem('adminFeedSearch',this.value);renderView()"/></div>
@@ -10088,7 +10084,6 @@ function renderAdminUsers(view){
   ensureNiveauxAcces();
   const u=db.users||[];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">👤 Utilisateurs & accès</h1>
-    ${adminTabs("users")}
     <div class="card p-4 mb-4" style="background:#f8fafc;border-left:4px solid #043970">
       <div class="flex items-center justify-between gap-3 flex-wrap">
         <div><div class="font-bold">Niveaux d'habilitation</div><div class="text-xs text-slate-500">Chaque utilisateur reçoit un niveau H1 à H5. Le niveau complète le rôle et les sociétés autorisées.</div></div>
@@ -10184,7 +10179,6 @@ function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
   const colors={rh:"#043970",dispatch:"#043970",agent:"#043970",admin:"#dc2626"};
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🔐 Droits d'accès — Matrice rôle × module</h1>
-    ${adminTabs("droits")}
     <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">ℹ️ Cochez/décochez les cases pour autoriser ou refuser l'accès d'un rôle à un module. Les droits par défaut sont appliqués si aucune règle personnalisée n'est définie.</div>
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
@@ -10201,7 +10195,6 @@ function renderAdminAccessSocietes(view){
   const access=societeAccessSettings();
   const passwords={...(access.passwords||{})};
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🏢 Accès sociétés</h1>
-    ${adminTabs("access_societes")}
     <form class="card p-5 max-w-4xl" onsubmit="event.preventDefault();saveAdminSocieteAccess(this)">
       <div class="flex items-start justify-between gap-4 mb-5 flex-wrap">
         <div>
@@ -10249,7 +10242,6 @@ function renderAdminCandidatSections(view){
   const validated=(db.candidats||[]).filter(c=>candidatAllSectionsValid(c)).length;
   const inReserve=(db.candidats||[]).filter(c=>candidatIsReserve(c)).length;
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">✅ Validation des sections candidat</h1>
-    ${adminTabs("sections_candidat")}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500">Sections de la fiche</div><div class="text-3xl font-black text-emerald-700">${CANDIDAT_SECTIONS.length}</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500">Fiches toutes sections validées</div><div class="text-3xl font-black text-sky-700">${validated}</div></div>
@@ -10283,7 +10275,6 @@ function saveAdminCandidatSectionSettings(){
 function renderAdminNiveaux(view){
   const niv=ensureNiveauxAcces();
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🎚 Niveaux d'accès</h1>
-    ${adminTabs("niveaux")}
     <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminNiveauModal('')">➕ Nouveau niveau</button></div>
     <div class="grid grid-2 gap-3">${niv.sort((a,b)=>a.weight-b.weight).map(n=>`<div class="card p-4" style="border-left:4px solid ${n.color}">
       <div class="flex justify-between items-start">
@@ -10321,7 +10312,6 @@ function renderAdminContratsPersonnel(view){
   ensureContratsPersonnel();
   const list=db.contratsPersonnel||[];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📄 Contrats du personnel</h1>
-    ${adminTabs("contrats")}
     <div class="card p-3 mb-3 bg-amber-50 border border-amber-200 text-sm text-amber-800">Les modèles sont liés aux postes. En contractualisation, le contrat du poste choisi est intégré automatiquement.</div>
     <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminContratPersonnelModal('')">➕ Nouveau contrat</button></div>
     <div class="card overflow-hidden"><table><thead><tr><th>Poste</th><th>Titre</th><th>Type</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(c=>`<tr data-searchable><td class="font-semibold">${escapeHTML(c.poste||"—")}</td><td>${escapeHTML(c.titre||"")}</td><td><span class="pill pill-gray">${escapeHTML(c.typeContrat||"")}</span></td><td>${c.actif!==false?`<span class="pill pill-green">Actif</span>`:`<span class="pill pill-red">Inactif</span>`}</td><td class="text-right"><button class="btn btn-ghost text-xs" onclick="openAdminContratPersonnelModal('${c.id}')">Modifier</button><button class="btn btn-ghost text-xs text-red-600" onclick="adminDeleteContratPersonnel('${c.id}')">Supprimer</button></td></tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 p-6">Aucun contrat.</td></tr>`}</tbody></table></div>`;
@@ -10352,7 +10342,6 @@ function adminDeleteContratPersonnel(id){if(!confirm("Supprimer ce modèle de co
 function renderAdminPriorites(view){
   const pr=db.priorites||[];const niveaux=["haute","moyenne","basse"];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">⚡ Priorités</h1>
-    ${adminTabs("priorites")}
     <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminPrioriteModal('')">➕ Nouvelle priorité</button></div>
     <div class="card p-0 overflow-x-auto"><table class="w-full text-sm">
       <thead class="bg-slate-50"><tr><th class="text-left p-3">Libellé</th><th class="text-left p-3">Module</th><th class="text-left p-3">Niveau</th><th class="text-center p-3">Actif</th><th class="p-3">Actions</th></tr></thead>
@@ -10392,7 +10381,6 @@ function adminDeletePriorite(id){if(!confirm("Supprimer cette priorité ?"))retu
 function renderAdminAlertes(view){
   const al=db.alertes||[];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🔔 Configuration des alertes</h1>
-    ${adminTabs("alertes")}
     <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminAlerteModal('')">➕ Nouvelle alerte</button></div>
     <div class="card p-0 overflow-x-auto"><table class="w-full text-sm">
       <thead class="bg-slate-50"><tr><th class="text-left p-3">Libellé</th><th class="text-left p-3">Type</th><th class="p-3">Seuil (j)</th><th class="text-left p-3">Canal</th><th class="text-left p-3">Destinataires</th><th class="text-center p-3">Actif</th><th class="p-3">Actions</th></tr></thead>
@@ -10435,7 +10423,6 @@ function adminDeleteAlerte(id){if(!confirm("Supprimer cette alerte ?"))return;co
 function renderAdminChamps(view){
   const cf=db.customFields||[];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">➕ Champs personnalisés</h1>
-    ${adminTabs("champs")}
     <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">ℹ️ Les champs personnalisés sont stockés dans la propriété <code>custom</code> de chaque enregistrement. Ils peuvent être affichés et édités via les formulaires personnalisables.</div>
     <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminChampModal('')">➕ Nouveau champ</button></div>
     <div class="card p-0 overflow-x-auto"><table class="w-full text-sm">
@@ -10477,7 +10464,6 @@ function adminDeleteChamp(id){if(!confirm("Supprimer ce champ ?"))return;const c
 function renderAdminModules(view){
   const cm=db.customModules||[];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🧩 Modules personnalisés</h1>
-    ${adminTabs("modules")}
     <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">ℹ️ Définissez de nouveaux modules métier (ex. Formations, Sanctions, Visites médicales). Les enregistrements sont stockés dans <code>db.customRecords[code]</code>.</div>
     <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminModuleModal('')">➕ Nouveau module</button></div>
     <div class="grid grid-2 gap-3">${cm.map(m=>`<div class="card p-4" style="border-left:4px solid ${m.couleur||"#043970"}">
@@ -10520,7 +10506,6 @@ function adminDeleteModule(id){if(!confirm("Supprimer ce module ?"))return;const
 function renderAdminLog(view){
   const lg=db.activityLog||[];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📜 Journal d'activité</h1>
-    ${adminTabs("log")}
     <div class="flex justify-end mb-3"><button class="btn btn-ghost" onclick="adminClearLog()">🗑 Vider le journal</button></div>
     <div class="card p-0 overflow-x-auto"><table class="w-full text-sm">
       <thead class="bg-slate-50"><tr><th class="text-left p-3">Date</th><th class="text-left p-3">Heure</th><th class="text-left p-3">Utilisateur</th><th class="text-left p-3">Action</th><th class="text-left p-3">Détails</th></tr></thead>
