@@ -571,14 +571,24 @@ function societeExists(name){
   const n=normalizeSocieteName(name);
   return SOCIETES.some(s=>normalizeSocieteName(s)===n);
 }
+function defaultSocieteAccessPasswords(){
+  return {
+    "IRON GLOBAL SECURITE":"admin",
+    "IRON GLOBAL SOLUTION":"Admin",
+    "SWORD CORPORATION":"Admin",
+    "SWORD CONSTRUCTION":"Admin"
+  };
+}
 function purgeRemovedSocietesFromStorage(){}
 function societeConfig(){
   const remote=(db&&db.societesConfig&&typeof db.societesConfig==="object")?db.societesConfig:{};
+  const remoteAccess=(remote.access&&typeof remote.access==="object")?remote.access:{};
+  const defaultPasswords=defaultSocieteAccessPasswords();
   return {
     custom:ALLOWED_SOCIETES.slice(),
     descriptions:{...(remote.descriptions||{})},
     images:{...(remote.images||{})},
-    access:{requirePassword:false,passwords:{},...(remote.access||{}),passwords:{...((remote.access&&remote.access.passwords)||{})}},
+    access:{...remoteAccess,requirePassword:remoteAccess.requirePassword===false?false:true,passwords:{...defaultPasswords,...(remoteAccess.passwords||{})}},
     removed:REMOVED_SOCIETES.slice()
   };
 }
@@ -1473,8 +1483,7 @@ function societeAccessPassword(s){
   const n=normalizeSocieteName(s);
   const custom=cfg.passwords&&cfg.passwords[n];
   if(custom)return custom;
-  if(["SWORD CORPORATION","SWORD CONSTRUCTION","IRON GLOBAL SOLUTION"].includes(n))return"Admin";
-  return isAdmin()&&n==="IRON GLOBAL SECURITE"?"admin":null;
+  return defaultSocieteAccessPasswords()[n]||null;
 }
 function isAdminSystemUnlocked(){return sessionStorage.getItem(ADMIN_SYSTEM_UNLOCK_KEY)==="1"}
 function openAdminSystemAccess(){openModal(`<h3 class="font-bold text-lg mb-2">ADMINISTRATION SYSTEME</h3><p class="text-sm text-slate-600 mb-4">Entrez le mot de passe d'accès au module.</p><form onsubmit="event.preventDefault();confirmAdminSystemAccess(this.password.value)"><label class="label">Mot de passe</label><input class="input mb-4" type="password" name="password"  autofocus/><div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div></form>`)}
@@ -1606,13 +1615,13 @@ function myConges(){const ids=new Set(myAgents().map(a=>a.id));return db.conges.
 function myIncidents(){const aids=new Set(myAgents().map(a=>a.id));const sids=new Set(mySites().map(st=>st.id));return db.incidents.filter(i=>(i.agentId&&aids.has(i.agentId))||(i.siteId&&sids.has(i.siteId)))}
 function selectSocieteDirect(s){session.societe=s;session.transverse=null;saveSession(session);try{sessionStorage.setItem("dashSociete",s);sessionStorage.setItem("fpSociete",s);sessionStorage.setItem("mtSociete",s)}catch(e){}toast("Société active : "+s,"success");location.hash="#/dashboard";route()}
 function pickSociete(s){if(!societeAccessPasswordRequired()){selectSocieteDirect(s);return}openModal(`<h3 class="font-bold text-lg mb-2">🔐 Confirmer accès</h3>
-  <p class="text-sm text-slate-600 mb-4">Veuillez ressaisir votre mot de passe pour accéder à <span class="font-bold text-amber-700">${escapeHTML(s)}</span>.</p>
+  <p class="text-sm text-slate-600 mb-4">Entrez le mot de passe de la société pour accéder à sa base de données : <span class="font-bold text-amber-700">${escapeHTML(s)}</span>.</p>
   <form onsubmit="event.preventDefault();confirmPickSociete('${s.replace(/'/g,"\\'")}',this.password.value)">
     <label class="label">Mot de passe</label>
     <input class="input mb-4" type="password" name="password" />
     <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div>
   </form>`)}
-function confirmPickSociete(s,p){const accessPassword=societeAccessPassword(s);const accessOk=accessPassword&&String(p||"").trim().toLowerCase()===String(accessPassword).trim().toLowerCase();const us=db.users.find(x=>x.username===session.username);if(!accessOk&&(!us||us.password!==p)){toast("Mot de passe incorrect","error");return}closeModal();selectSocieteDirect(s)}
+function confirmPickSociete(s,p){const accessPassword=societeAccessPassword(s);if(!accessPassword){toast("Mot de passe société non paramétré","error");return}const accessOk=String(p||"").trim().toLowerCase()===String(accessPassword).trim().toLowerCase();if(!accessOk){toast("Mot de passe société incorrect","error");return}closeModal();selectSocieteDirect(s)}
 function changeSociete(){if(!confirm("Changer de société ? Vous devrez ressaisir votre mot de passe."))return;session.societe=null;session.transverse=null;saveSession(session);try{sessionStorage.removeItem("dashSociete");sessionStorage.removeItem("fpSociete");sessionStorage.removeItem("mtSociete")}catch(e){}location.hash="#/select-societe";route()}
 function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}if(!isAdminSystemUnlocked()){openAdminSystemAccess();return}}session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage/saisie":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
 function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(session?.transverse==="drh"&&mod!=="drh"){toast("Accès aux autres structures bloqué depuis DRH","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
@@ -2094,6 +2103,7 @@ function renderSidebar(){
         {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"Utilisateurs & accès",icon:"👤",route:"admin/users",count:(db.users||[]).length},
         {label:"Droits d'accès",icon:"🔐",route:"admin/droits"},
+        {label:"Accès sociétés",icon:"🏢",route:"admin/access_societes"},
         {label:"Niveaux d'accès",icon:"🎚",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"Contrats du personnel",icon:"📄",route:"admin/contrats",count:(db.contratsPersonnel||[]).length},
         {label:"Priorités",icon:"⚡",route:"admin/priorites",count:(db.priorites||[]).length},
@@ -10199,7 +10209,7 @@ function renderAdminAccessSocietes(view){
       <div class="flex items-start justify-between gap-4 mb-5 flex-wrap">
         <div>
           <h3 class="font-bold mb-1">Contrôle d'accès par société</h3>
-          <p class="text-sm text-slate-500">Quand l'option est désactivée, un clic sur une société ouvre directement son espace sans mot de passe.</p>
+          <p class="text-sm text-slate-500">Ces mots de passe protègent l'accès à la base de données de chaque société depuis la première page.</p>
         </div>
         <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 cursor-pointer">
           <input type="checkbox" name="requirePassword" ${access.requirePassword?"checked":""} style="width:18px;height:18px"/>
