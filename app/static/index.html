@@ -10009,8 +10009,7 @@ function renderAdminDashboard(view){
   const usersByRole={};u.forEach(x=>{usersByRole[x.role]=(usersByRole[x.role]||0)+1});
   const alActives=al.filter(a=>a.actif).length;
   const prActives=pr.filter(p=>p.actif).length;
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📊 Administration — Tableau de bord système</h1>
-    ${adminTabs("dashboard")}
+  view.innerHTML=`<h1 class="text-2xl font-bold mb-4">📊 Administration — Tableau de bord système</h1>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500">Utilisateurs</div><div class="text-3xl font-bold text-red-700">${u.length}</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500">Niveaux d'accès</div><div class="text-3xl font-bold">${niv.length}</div></div>
@@ -10024,7 +10023,6 @@ function renderAdminDashboard(view){
     <div class="card p-5 mb-4" style="border-left:4px solid #dc2626">
       <div class="flex items-center justify-between mb-3">
         <div><h3 class="font-bold">Fil d'actualité des échanges</h3><div class="text-xs text-slate-500">Dernières conversations visibles par l'administration</div></div>
-        <a class="btn btn-primary text-xs" href="#/admin/feed">Ouvrir le fil</a>
       </div>
       ${adminFeedItemsHTML(ech.slice(0,5),true)}
     </div>
