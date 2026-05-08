@@ -13,6 +13,7 @@ from app.db.base import Base
 from app.core.security import hash_password
 from app.db.session import SessionLocal, engine, safe_database_url
 from app.modules.auth.models import User
+from app.modules.irongs.models import SgdiRecord
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
 from app.modules.commercial import models as _commercial_models  # noqa: F401
@@ -39,6 +40,41 @@ def ensure_schema_upgrades() -> None:
             columns = {col["name"] for col in inspector.get_columns("suppliers")}
             if "society" not in columns:
                 connection.execute(text("ALTER TABLE suppliers ADD COLUMN society VARCHAR(150)"))
+        if "irongs_collections" in tables and "sgdi_records" in tables:
+            existing = connection.execute(text("SELECT COUNT(*) FROM sgdi_records")).scalar() or 0
+            if existing == 0:
+                rows = connection.execute(text("SELECT name, data FROM irongs_collections")).mappings().all()
+                for pos, row in enumerate(rows):
+                    collection = row["name"]
+                    data = row["data"]
+                    if isinstance(data, list):
+                        for idx, item in enumerate(data):
+                            item_id = str(item.get("id") if isinstance(item, dict) else f"idx-{idx:06d}")
+                            if isinstance(item, dict) and not item.get("id"):
+                                item = dict(item)
+                                item["id"] = item_id
+                            connection.execute(
+                                SgdiRecord.__table__.insert().values(
+                                    collection=collection,
+                                    item_id=item_id,
+                                    position=idx,
+                                    kind="item",
+                                    data=item,
+                                    label=str(item.get("nom") or item.get("name") or item.get("code") or "") if isinstance(item, dict) else str(item),
+                                )
+                            )
+                    else:
+                        connection.execute(
+                            SgdiRecord.__table__.insert().values(
+                                collection=collection,
+                                item_id="__object__",
+                                position=pos,
+                                kind="object",
+                                data=data,
+                                label=collection,
+                            )
+                        )
+            connection.execute(text("DROP TABLE IF EXISTS irongs_collections"))
 
 
 app.add_middleware(
