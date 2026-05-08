@@ -48,11 +48,23 @@ def ensure_schema_upgrades() -> None:
                     collection = row["name"]
                     data = row["data"]
                     if isinstance(data, list):
+                        used_ids: set[str] = set()
                         for idx, item in enumerate(data):
-                            item_id = str(item.get("id") if isinstance(item, dict) else f"idx-{idx:06d}")
-                            if isinstance(item, dict) and not item.get("id"):
+                            if isinstance(item, dict):
                                 item = dict(item)
+                                raw_id = item.get("id")
+                                if raw_id in (None, "", "None", "none", "null", "undefined"):
+                                    raw_id = f"idx-{idx:06d}"
+                                item_id = str(raw_id)
+                                if item_id in used_ids:
+                                    item_id = f"{item_id}-{idx:06d}"
+                                used_ids.add(item_id)
                                 item["id"] = item_id
+                            else:
+                                item_id = f"idx-{idx:06d}"
+                                if item_id in used_ids:
+                                    item_id = f"{item_id}-{idx:06d}"
+                                used_ids.add(item_id)
                             connection.execute(
                                 SgdiRecord.__table__.insert().values(
                                     collection=collection,

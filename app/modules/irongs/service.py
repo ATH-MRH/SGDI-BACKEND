@@ -12,19 +12,38 @@ logger = logging.getLogger("sgdi.records")
 OBJECT_ITEM_ID = "__object__"
 
 
-def _ensure_id(item: dict[str, Any], collection: str) -> dict[str, Any]:
-    if item.get("id"):
+def _invalid_item_id(value: Any) -> bool:
+    return value in (None, "", "None", "none", "null", "undefined")
+
+
+def _ensure_id(item: dict[str, Any], collection: str, fallback: str | None = None) -> dict[str, Any]:
+    if not _invalid_item_id(item.get("id")):
+        item["id"] = str(item["id"])
         return item
     prefix = "".join(part[0] for part in collection.split("_"))[:3] or "row"
-    item["id"] = f"{prefix}_{abs(hash(str(item))) % 10_000_000}"
+    item["id"] = fallback or f"{prefix}_{abs(hash(str(item))) % 10_000_000}"
     return item
 
 
-def _row_item_id(collection: str, item: Any, position: int) -> str:
+def _unique_item_id(base: str, used: set[str], position: int) -> str:
+    candidate = base if not _invalid_item_id(base) else f"idx-{position:06d}"
+    candidate = str(candidate)
+    if candidate not in used:
+        used.add(candidate)
+        return candidate
+    candidate = f"{candidate}-{position:06d}"
+    while candidate in used:
+        candidate = f"{candidate}-x"
+    used.add(candidate)
+    return candidate
+
+
+def _row_item_id(collection: str, item: Any, position: int, used: set[str] | None = None) -> str:
+    used = used if used is not None else set()
     if isinstance(item, dict):
-        item = _ensure_id(dict(item), collection)
-        return str(item["id"])
-    return f"idx-{position:06d}"
+        item = _ensure_id(dict(item), collection, f"idx-{position:06d}")
+        return _unique_item_id(str(item["id"]), used, position)
+    return _unique_item_id(f"idx-{position:06d}", used, position)
 
 
 def _collection_rows(db: Session, name: str) -> list[SgdiRecord]:
@@ -72,11 +91,15 @@ def _replace_collection_no_commit(db: Session, name: str, data: list[Any] | dict
     db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
     clean_data = deepcopy(data)
     if isinstance(clean_data, list):
+        used_ids: set[str] = set()
         for idx, item in enumerate(clean_data):
             stored = deepcopy(item)
             if isinstance(stored, dict):
-                stored = _ensure_id(stored, name)
-            db.add(SgdiRecord(collection=name, item_id=_row_item_id(name, stored, idx), position=idx, kind="item", data=stored, label=str(stored.get("nom") or stored.get("name") or stored.get("code") or "") if isinstance(stored, dict) else str(stored)))
+                stored = _ensure_id(stored, name, f"idx-{idx:06d}")
+            item_id = _row_item_id(name, stored, idx, used_ids)
+            if isinstance(stored, dict):
+                stored["id"] = item_id
+            db.add(SgdiRecord(collection=name, item_id=item_id, position=idx, kind="item", data=stored, label=str(stored.get("nom") or stored.get("name") or stored.get("code") or "") if isinstance(stored, dict) else str(stored)))
     else:
         db.add(SgdiRecord(collection=name, item_id=OBJECT_ITEM_ID, position=0, kind="object", data=clean_data, label=name))
 
