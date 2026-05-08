@@ -1728,8 +1728,8 @@ function render(){
   const headerBtn=isTrans?`<button class="btn btn-secondary text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button>`:`<button class="btn btn-secondary text-xs" onclick="changeSociete()">🔄 Changer de société</button>`;
   app.innerHTML=`<div class="flex h-screen">
     <aside class="sidebar w-72 flex flex-col shrink-0">
-      <div class="px-5 py-5 border-b border-slate-200">
-        <div class="text-4xl font-black tracking-tight" style="font-size:25px!important;line-height:1.1"><span class="text-amber-600" style="font-size:25px!important">SGD</span><span class="text-slate-950" style="font-size:25px!important">I</span></div>
+      <div class="px-5 py-5 border-b border-slate-800" style="text-align:center!important">
+        <div class="font-black tracking-tight" style="font-size:25px!important;line-height:1.1;color:#4169e1!important;text-align:center!important">SGDI</div>
       </div>
       <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
       <div class="px-4 py-3 border-t border-slate-200 text-xs text-slate-500">
@@ -2212,7 +2212,7 @@ function renderSidebar(){
     if(mod==="drh"){
       const _ag=db.agents;const _ca=db.candidats;const _co=db.conges;
       const drhGroups=[
-        {type:"link",label:"Tableau de bord DRH",icon:"📊",route:"drh/dashboard"},
+        {type:"link",label:"TABLEAU DE BORD DRH",icon:"📊",route:"drh/dashboard"},
         {type:"group",label:"RECRUTEMENT",children:[
           {label:"Nouvelle candidature",icon:"📝",route:"recrutement",count:_ca.filter(c=>c.statut==="nouvelle").length},
           {label:"Candidats en réserve",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
@@ -2246,7 +2246,7 @@ function renderSidebar(){
           {label:"Par affectation",icon:"📍",route:"drh/stats_affectation"}
         ]}
       ];
-      const head=`<div class="px-3 pt-2 pb-3"><div class="card p-3 text-center" style="background:#04397015;border:1px solid #04397055"><div class="text-2xl font-black" style="color:#043970;font-size:30px!important;line-height:1.1">DRH</div><div class="text-[10px] text-slate-500 mt-1">Toutes sociétés confondues</div></div></div>`;
+      const head="";
       const openGroup=sessionStorage.getItem("navOpenGroup")||"";
       const drhOrangeTitles=new Set(["RECRUTEMENT","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
       const html=drhGroups.map(g=>{
