@@ -708,24 +708,34 @@ async function sgdiApi(path,options){
   return out.data===undefined?out:out.data;
 }
 function sgdiSetApiRoot(url){window.__SGDI_API_ROOT__=String(url||"").replace(/\/+$/,"");window.__SGDI_BACKEND_ENABLED__=true}
+let sgdiSaveQueue=Promise.resolve();
 function sgdiBackendSave(){
   if(!sgdiBackendShouldUse()||!db||!sgdiAuthToken())return false;
-  try{
-    const xhr=new XMLHttpRequest();
-    xhr.open("PUT",sgdiApiUrl("/api/irongs/db",false),false);
-    xhr.setRequestHeader("content-type","application/json");
-    xhr.setRequestHeader("authorization","Bearer "+sgdiAuthToken());
-    xhr.send(JSON.stringify({data:db}));
-    if(xhr.status>=200&&xhr.status<300){window.__SGDI_BACKEND_ENABLED__=true;return true}
-    console.error("Sauvegarde PostgreSQL échouée:",xhr.status,xhr.responseText);
-    if(typeof toast==="function")toast("Sauvegarde PostgreSQL échouée ("+xhr.status+")","error");
-    return false;
-  }catch(e){
+  const payload=JSON.stringify({data:db});
+  sgdiSaveQueue=sgdiSaveQueue.catch(()=>{}).then(async()=>{
+    const res=await fetch(sgdiApiUrl("/api/irongs/db",false),{
+      method:"PUT",
+      headers:sgdiAuthHeaders(),
+      body:payload
+    });
+    const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
+    if(!res.ok||out.ok===false){
+      const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
+      throw new Error(out.error||detail||out.message||("Erreur API "+res.status));
+    }
+    window.__SGDI_BACKEND_ENABLED__=true;
+    sgdiDirty=false;
+    uiSaveState("Sauvegardé dans PostgreSQL","success");
+    return out.data===undefined?out:out.data;
+  }).catch(e=>{
     console.error("Sauvegarde PostgreSQL échouée:",e);
-    if(typeof toast==="function")toast("Sauvegarde PostgreSQL échouée","error");
-    return false;
-  }
+    if(typeof toast==="function")toast("Sauvegarde PostgreSQL échouée : "+(e.message||e),"error");
+    uiSaveState("Sauvegarde échouée","error");
+    return null;
+  });
+  return true;
 }
+function sgdiFlushSaveQueue(){return sgdiSaveQueue}
 async function sgdiPullState(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
@@ -737,6 +747,7 @@ async function sgdiPullState(options){
       hydrateDB(remote);
       sgdiPostgresReady=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
+      await sgdiLoadAuthState();
       const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
       if(typeof normalizePostesInDB==="function")normalizePostesInDB();
       if(purged)sgdiBackendSave();
@@ -876,6 +887,11 @@ window.SGDI_API={
     },
     register:(payload)=>sgdiApi("/auth/register",{method:"POST",body:payload,legacy:false}),
     createUser:(payload)=>sgdiApi("/auth/users",{method:"POST",body:payload,legacy:false}),
+    listUsers:()=>sgdiApi("/auth/users",{method:"GET",legacy:false}),
+    updateUser:(username,payload)=>sgdiApi("/auth/users/"+encodeURIComponent(username),{method:"PATCH",body:payload,legacy:false}),
+    deleteUser:(username)=>sgdiApi("/auth/users/"+encodeURIComponent(username),{method:"DELETE",legacy:false}),
+    accessRules:()=>sgdiApi("/auth/access-rules",{method:"GET",legacy:false}),
+    saveAccessRules:(rules)=>sgdiApi("/auth/access-rules",{method:"PUT",body:rules,legacy:false}),
     sendOtp:(email,purpose)=>sgdiApi("/auth/otp/send",{method:"POST",body:{email,purpose},legacy:false}),
     verifyOtp:(email,purpose,otp)=>sgdiApi("/auth/otp/verify",{method:"POST",body:{email,purpose,otp},legacy:false}),
     confirmEmail:(email,otp)=>sgdiApi("/auth/email/confirm",{method:"POST",body:{email,otp},legacy:false}),
@@ -893,6 +909,30 @@ window.SGDI_API={
   sync:{pull:sgdiPullState,push:()=>sgdiBackendSave()}
 };
 window.SGDI=window.SGDI_API;
+async function sgdiLoadAuthState(){
+  if(!sgdiAuthToken()||!db)return;
+  try{
+    const users=await SGDI.auth.listUsers();
+    db.users=(users||[]).map(u=>({
+      username:u.username,
+      nom:u.full_name||u.username,
+      role:u.role||"agent",
+      niveau:u.role==="admin"?"H5":"H3",
+      actif:u.is_active!==false,
+      societesAutorisees:[]
+    }));
+  }catch(e){
+    console.warn("Utilisateurs PostgreSQL indisponibles",e);
+  }
+  try{
+    const rules=await SGDI.auth.accessRules();
+    const droits={};
+    (rules||[]).forEach(r=>{droits[(r.module_key||r.moduleKey)+":"+r.role]=!!r.allowed});
+    db.droitsAcces=droits;
+  }catch(e){
+    console.warn("Droits PostgreSQL indisponibles",e);
+  }
+}
 
 function ensureContratsPersonnel(){
   if(!db)return;
@@ -1360,7 +1400,18 @@ function incidentMatchesSociete(incident,soc){
   if(incident.siteId&&(db.sites||[]).some(s=>s.id===incident.siteId&&siteMatchesSociete(s,soc)))return true;
   return false;
 }
-function canAccess(key){if(!session)return false;const r=session.role;const map={dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],admin:["admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],parametres:["admin"],portail:["rh","dispatch","agent","admin"],demandes_personnel:["rh","admin"]};return(map[key]||["admin"]).includes(r)}
+function defaultAccessMap(){return {dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],admin:["admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],parametres:["admin"],portail:["rh","dispatch","agent","admin"],demandes_personnel:["rh","admin"]}}
+function canAccess(key){
+  if(!session)return false;
+  const r=session.role;
+  const droits=(db&&db.droitsAcces&&typeof db.droitsAcces==="object")?db.droitsAcces:null;
+  if(droits&&Object.keys(droits).length){
+    const direct=droits[key+":"+r];
+    if(direct!==undefined)return !!direct;
+  }
+  const map=defaultAccessMap();
+  return (map[key]||["admin"]).includes(r);
+}
 function mySoc(){return session?.societe||""}
 function isDrhModuleContext(){const h=(location.hash||"").slice(2);return session?.transverse==="drh"||h.startsWith("drh")}
 function globalSocieteBandHTML(){
@@ -9975,6 +10026,14 @@ async function confirmAdminUser(originalUsername){
     logActivity("Création utilisateur",username);
   }else{
     const idx=db.users.findIndex(x=>x.username===originalUsername);if(idx<0){toast("Utilisateur introuvable","error");return}
+    try{
+      const payload={full_name:data.nom||username,role:data.role,is_active:data.actif};
+      if(password)payload.password=password;
+      await SGDI.auth.updateUser(originalUsername,payload);
+    }catch(e){
+      toast("Modification PostgreSQL refusée : "+(e.message||e),"error");
+      return;
+    }
     if(password)data.password=password;else data.password=db.users[idx].password;
     db.users[idx]=Object.assign({},db.users[idx],data);
     logActivity("Modification utilisateur",username);
@@ -9982,7 +10041,7 @@ async function confirmAdminUser(originalUsername){
   if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom};saveSession(session)}
   saveDB();closeModal();toast("Utilisateur enregistré","success");render();
 }
-function adminDeleteUser(username){if(!confirm("Supprimer l'utilisateur "+username+" ?"))return;db.users=db.users.filter(x=>x.username!==username);logActivity("Suppression utilisateur",username);saveDB();toast("Utilisateur supprimé","success");render()}
+async function adminDeleteUser(username){if(!confirm("Supprimer l'utilisateur "+username+" ?"))return;try{await SGDI.auth.deleteUser(username)}catch(e){toast("Suppression PostgreSQL refusée : "+(e.message||e),"error");return}db.users=db.users.filter(x=>x.username!==username);logActivity("Suppression utilisateur",username);saveDB();toast("Utilisateur supprimé","success");render()}
 function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
   const colors={rh:"#043970",dispatch:"#043970",agent:"#043970",admin:"#dc2626"};
@@ -9997,9 +10056,9 @@ function renderAdminDroits(view){
     </div>
     <div class="mt-4 flex gap-2"><button class="btn btn-ghost" onclick="adminResetDroits()">🔄 Réinitialiser aux valeurs par défaut</button></div>`;
 }
-function canAccessOriginal(key,role){const map={dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],contrats:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],admin:["admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],parametres:["admin"]};return(map[key]||["admin"]).includes(role)}
-function adminToggleDroit(m,r,enabled){if(!db.droitsAcces)db.droitsAcces={};db.droitsAcces[m+":"+r]=enabled;saveDB();logActivity("Modification droits",m+":"+r+"="+enabled);toast("Droit mis à jour","success")}
-function adminResetDroits(){if(!confirm("Réinitialiser tous les droits aux valeurs par défaut ?"))return;db.droitsAcces={};saveDB();logActivity("Reset droits d'accès","");toast("Droits réinitialisés","success");render()}
+function canAccessOriginal(key,role){const map=defaultAccessMap();return(map[key]||["admin"]).includes(role)}
+async function adminToggleDroit(m,r,enabled){if(!db.droitsAcces)db.droitsAcces={};db.droitsAcces[m+":"+r]=enabled;try{await SGDI.auth.saveAccessRules(Object.entries(db.droitsAcces).map(([k,v])=>{const parts=k.split(":");return{module_key:parts[0],role:parts[1],allowed:!!v}}))}catch(e){toast("Droit PostgreSQL refusé : "+(e.message||e),"error");return}logActivity("Modification droits",m+":"+r+"="+enabled);toast("Droit mis à jour","success")}
+async function adminResetDroits(){if(!confirm("Réinitialiser tous les droits aux valeurs par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Droits réinitialisés","success");render()}
 function renderAdminAccessSocietes(view){
   const access=societeAccessSettings();
   const passwords={...(access.passwords||{})};

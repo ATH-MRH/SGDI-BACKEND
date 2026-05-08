@@ -57,12 +57,8 @@ def on_startup() -> None:
                 is_active=True,
             )
             db.add(admin)
-        else:
-            admin.password_hash = hash_password("admin")
-            admin.role = "admin"
-            admin.is_active = True
         db.commit()
-    logger.info("Compte administrateur vérifié: admin/admin")
+    logger.info("Compte administrateur vérifié")
 
 
 @app.get("/health")

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password, verify_password
 from app.modules.auth.models import User
-from app.modules.auth.schemas import UserCreate
+from app.modules.auth.schemas import UserCreate, UserUpdate
 
 
 def get_user_by_login(db: Session, login: str) -> User | None:
@@ -22,7 +22,7 @@ def create_user(db: Session, payload: UserCreate) -> User:
     user = User(
         username=payload.username,
         email=str(payload.email) if payload.email else None,
-        full_name=payload.full_name,
+        full_name=payload.full_name or payload.username,
         role=payload.role,
         password_hash=hash_password(payload.password),
         is_active=True,
@@ -39,3 +39,19 @@ def authenticate(db: Session, username: str, password: str) -> tuple[str, User]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants incorrects")
     token = create_access_token(str(user.id), {"role": user.role, "username": user.username})
     return token, user
+
+
+def update_user(db: Session, user: User, payload: UserUpdate) -> User:
+    if payload.email is not None:
+        user.email = str(payload.email) if payload.email else None
+    if payload.full_name is not None:
+        user.full_name = payload.full_name or user.username
+    if payload.role is not None:
+        user.role = payload.role
+    if payload.password:
+        user.password_hash = hash_password(payload.password)
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+    db.commit()
+    db.refresh(user)
+    return user
