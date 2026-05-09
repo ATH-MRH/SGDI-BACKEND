@@ -2473,7 +2473,7 @@ function renderSidebar(){
           {label:"Création de site",icon:"➕",route:"sites/nouveau"},
           {label:"Sites actifs",icon:"📍",route:"sites/actifs",count:(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc)).length}
         ]},
-        {type:"link",label:"MISSIONS",icon:"🧭",route:"ops/missions",count:(db.missions||[]).filter(m=>!currentStructureSocieteFilter()||m.societe===currentStructureSocieteFilter()).length},
+        {type:"link",label:"MISSIONS",icon:"🧭",route:"ops/missions"},
         {type:"group",label:"SUPERVISION SITE",icon:"🛡",children:[
           {label:"Programmer une Inspection",icon:"🗓",route:"ops/supervision/programmer"},
           {label:"Inspections programmées",icon:"📋",route:"ops/supervision/programmees",count:(db.siteInspections||[]).filter(i=>i.type==="programmee"&&(!currentStructureSocieteFilter()||i.societe===currentStructureSocieteFilter())).length},
