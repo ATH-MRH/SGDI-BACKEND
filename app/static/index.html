@@ -2422,7 +2422,7 @@ function renderSidebar(){
         {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
       ]},
       pointage:{label:"POINTAGE",color:"#043970",children:[
-        {label:"TABLEAU DE BORD POINTAGE",icon:"📝",route:"pointage/saisie"},
+        {label:"TABLEAU DE BORD POINTAGE",icon:"📊",route:"pointage"},
         {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
         {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
         {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
@@ -2459,7 +2459,7 @@ function renderSidebar(){
       const opsIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,soc));
       const opsGroups=[
         {type:"link",label:"TABLEAU DE BORD OPS",icon:"📊",route:"ops/dashboard"},
-        {type:"group",label:"POINTAGE",icon:"🕒",children:[
+        {type:"group",label:"POINTAGE",icon:"🕒",route:"pointage",children:[
           {label:"Feuille de présence quotidienne",icon:"📅",route:"pointage/quotidien"},
           {label:"Saisie pointage",icon:"📝",route:"pointage/saisie"},
           {label:"Récap par agent",icon:"👤",route:"pointage/recap"},
@@ -2474,7 +2474,7 @@ function renderSidebar(){
           {label:"Sites actifs",icon:"📍",route:"sites/actifs",count:(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc)).length}
         ]},
         {type:"link",label:"MISSIONS",icon:"🧭",route:"ops/missions"},
-        {type:"group",label:"SUPERVISION SITE",icon:"🛡",children:[
+        {type:"group",label:"SUPERVISION SITE",icon:"🛡",route:"ops/supervision",children:[
           {label:"Programmer une Inspection",icon:"🗓",route:"ops/supervision/programmer"},
           {label:"Inspections programmées",icon:"📋",route:"ops/supervision/programmees",count:(db.siteInspections||[]).filter(i=>i.type==="programmee"&&(!currentStructureSocieteFilter()||i.societe===currentStructureSocieteFilter())).length},
           {label:"Inspections inopinées",icon:"⚡",route:"ops/supervision/inopinees",count:(db.siteInspections||[]).filter(i=>i.type==="inopinee"&&(!currentStructureSocieteFilter()||i.societe===currentStructureSocieteFilter())).length}
@@ -3114,7 +3114,7 @@ function renderView(){
       case"commercial":renderCommercial(view,sub||"dashboard",arg);break;
       case"drh":renderDRH(view,sub||"dashboard",arg);break;
       case"admin":renderAdmin(view,sub||"dashboard",arg);break;
-      case"pointage":renderPointage(view,sub||"saisie",arg);break;
+      case"pointage":renderPointage(view,sub||"dashboard",arg);break;
       case"ops":renderOPS(view,sub||"dashboard",arg);break;
       case"paie":renderPaie(view);break;
       case"rapports":renderRapports(view);break;
@@ -11374,7 +11374,7 @@ function adminClearLog(){if(!confirm("Vider tout le journal d'activité ?"))retu
 function renderOPS(view,sub,arg){
   if(!canAccess("ops")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub==="missions"){renderOpsMissions(view,arg);return}
-  if(sub==="supervision"){renderOpsSupervision(view,arg||"programmer");return}
+  if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
   const soc=currentStructureSocieteFilter();
   const ag=(db.agents||[]).filter(a=>!soc||a.societe===soc);
   const sites=(db.sites||[]).filter(s=>siteMatchesSociete(s,soc));
@@ -11486,9 +11486,21 @@ function renderOpsMissions(view,arg){
   const editing=arg?(db.missions||[]).find(m=>m.id===arg):null;
   const missions=(db.missions||[]).filter(m=>!soc||m.societe===soc).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   const m=editing||{date:today(),nature:"",duree:"",dateDebut:"",dateFin:"",objet:"",consignes:"",societe:soc||session?.societe||"",numero:nextMissionNumero()};
+  const activeMissions=missions.filter(x=>(!x.dateFin||x.dateFin>=today())&&(!x.dateDebut||x.dateDebut<=today()));
+  const plannedMissions=missions.filter(x=>x.dateDebut&&x.dateDebut>today());
+  const urgentMissions=missions.filter(x=>/urgent|intervention/i.test([x.nature,x.objet,x.consignes].join(" ")));
+  const byNature=[...new Set(missions.map(x=>x.nature).filter(Boolean))].slice(0,4);
+  const missionKpi=(label,n,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('ops/missions')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Cliquer pour afficher"}</div></button>`;
   view.innerHTML=`<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
     <div><h1 class="text-2xl font-black uppercase">MISSIONS OPS</h1><div class="text-xs text-slate-500">Création, suivi et consignes des missions opérationnelles · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div>
     <button class="btn btn-secondary" onclick="navigate('ops/missions')">＋ Nouvelle mission</button>
+  </div>
+  <div class="grid grid-5 gap-3 mb-5">
+    ${missionKpi("Total missions",missions.length,"#043970","Toutes les missions")}
+    ${missionKpi("En cours",activeMissions.length,"#16a34a","Actives aujourd'hui")}
+    ${missionKpi("Planifiées",plannedMissions.length,"#f59e0b","À venir")}
+    ${missionKpi("Urgentes",urgentMissions.length,"#dc2626","Intervention / urgent")}
+    ${missionKpi("Natures",byNature.length,"#7c3aed","Types de mission")}
   </div>
   <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
     <div class="card p-5 xl:col-span-1">
@@ -11607,6 +11619,24 @@ function inspectionSupervisorSpaceHTML(supervisors,inspections){
   const data=(active.length?active:supervisors.slice(0,6));
   return`<div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-5">${data.map(a=>{const st=inspectionSupervisorStats(a.id,inspections);return`<div class="card p-4"><div class="flex items-start justify-between gap-3"><div><div class="font-black">${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">Espace superviseur · historique & statistiques</div></div><span class="pill">${st.total}</span></div><div class="grid grid-cols-4 gap-2 mt-3"><div class="text-center rounded bg-blue-50 p-2"><div class="text-[10px] font-black text-blue-700">Prog.</div><div class="font-black text-blue-700">${st.programmed}</div></div><div class="text-center rounded bg-purple-50 p-2"><div class="text-[10px] font-black text-purple-700">Inop.</div><div class="font-black text-purple-700">${st.unexpected}</div></div><div class="text-center rounded bg-emerald-50 p-2"><div class="text-[10px] font-black text-emerald-700">Finies</div><div class="font-black text-emerald-700">${st.finished}</div></div><div class="text-center rounded bg-red-50 p-2"><div class="text-[10px] font-black text-red-700">Alertes</div><div class="font-black text-red-700">${st.alerts}</div></div></div><div class="mt-3 text-xs">${st.history.length?st.history.map(i=>`<div class="flex justify-between border-t py-1"><span>${formatDate(i.date)} · ${escapeHTML((i.siteIds||[]).map(inspectionSiteName).join(', '))}</span><b>${i.type==='inopinee'?'Inopinée':'Programmée'}</b></div>`).join(""):`<div class="text-slate-500">Aucun historique pour le moment.</div>`}</div></div>`}).join("")}</div>`;
 }
+function renderOpsSupervisionDashboard(view,soc,sites,supervisors,inspections){
+  const programmed=inspections.filter(i=>i.type==="programmee");
+  const unexpected=inspections.filter(i=>i.type==="inopinee");
+  const todayIns=inspections.filter(i=>i.date===today());
+  const finished=inspections.filter(i=>(i.siteIds||[]).length&&(i.siteIds||[]).every(id=>(i.scans||{})[id]?.entree&&(i.scans||{})[id]?.sortie));
+  const alerts=inspections.filter(i=>i.type==="inopinee"||(i.type==="programmee"&&i.date<=today()&&(i.siteIds||[]).some(id=>!(i.scans||{})[id]?.entree)));
+  const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Cliquer pour ouvrir"}</div></button>`;
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE - TABLEAU DE BORD</h1><p class="text-sm text-slate-500">Inspections programmées, inopinées, passages QR et alertes superviseurs · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div><button class="btn btn-primary" onclick="navigate('ops/supervision/programmer')">Programmer une inspection</button></div>${inspectionTabs("dashboard")}
+    <div class="grid grid-5 gap-3 mb-5">
+      ${kpi("Programmées",programmed.length,"ops/supervision/programmees","#043970","Planifiées")}
+      ${kpi("Aujourd'hui",todayIns.length,"ops/supervision/programmees","#f59e0b","Passages attendus")}
+      ${kpi("Inopinées",unexpected.length,"ops/supervision/inopinees","#7c3aed","Non programmées")}
+      ${kpi("Terminées",finished.length,"ops/supervision/programmees","#16a34a","Entrée + sortie")}
+      ${kpi("Alertes",alerts.length,alerts.length?"ops/supervision/inopinees":"ops/supervision/programmees",alerts.length?"#dc2626":"#16a34a","Passage non respecté")}
+    </div>
+    <div class="grid grid-2 gap-4"><div class="card p-4"><h3 class="font-black mb-3">Dernières alertes</h3>${alerts.slice(0,6).map(i=>`<button class="w-full text-left p-3 rounded border mb-2 bg-red-50" onclick="navigate('${i.type==='inopinee'?'ops/supervision/inopinees':'ops/supervision/programmees'}')"><div class="font-bold text-red-700">${i.type==='inopinee'?'Inspection inopinée':'Passage non respecté'}</div><div class="text-xs text-slate-600">${formatDate(i.date)} · ${escapeHTML(inspectionSupervisorName(i.supervisorId))} · ${(i.siteIds||[]).map(inspectionSiteName).join(', ')}</div></button>`).join("")||`<div class="p-8 text-center text-emerald-700 font-semibold">Aucune alerte supervision.</div>`}</div><div class="card p-4"><h3 class="font-black mb-3">Sites et superviseurs</h3><div class="grid grid-cols-2 gap-2"><button class="card p-3 text-left" onclick="navigate('sites')"><div class="text-xs text-slate-500">Sites actifs</div><div class="text-2xl font-black">${sites.length}</div></button><button class="card p-3 text-left" onclick="navigate('ops/supervision/programmer')"><div class="text-xs text-slate-500">Superviseurs</div><div class="text-2xl font-black">${supervisors.length}</div></button></div><div class="mt-3">${inspectionSupervisorSpaceHTML(supervisors,inspections)}</div></div></div>`;
+}
+
 function renderOpsSupervision(view,tab){
   if(!db.siteInspections)db.siteInspections=[];
   const soc=currentStructureSocieteFilter();
@@ -11615,6 +11645,7 @@ function renderOpsSupervision(view,tab){
   const chauffeurs=inspectionDriverOptions(supervisors).filter(a=>!soc||a.societe===soc);
   const vehicules=inspectionVehicleOptions();
   const inspections=(db.siteInspections||[]).filter(i=>!soc||i.societe===soc);
+  if(tab==="dashboard")return renderOpsSupervisionDashboard(view,soc,sites,supervisors,inspections);
   if(tab==="programmees")return renderProgrammedInspections(view,soc,inspections,supervisors);
   if(tab==="inopinees")return renderUnexpectedInspections(view,soc,sites,supervisors,inspections);
   const ym=inspectionProgramMonth();
@@ -12199,12 +12230,40 @@ function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valid
 function ptClearRow(agentId,ym){const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.updatedAt=new Date().toISOString();saveDB()}renderView()}
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
 function ptCellHTML(agentId,ym,day,code){const c=POINTAGE_CODES[code];const bg=c?c.bg:"";const fg=c?c.color:"#64748b";const txt=code||"·";return`<td class="text-center align-middle" style="border:1px solid #e2e8f0;padding:0;width:28px;min-width:28px;max-width:28px;background:${bg}"><button onclick="ptCycleCell('${agentId}','${ym}',${day})" oncontextmenu="event.preventDefault();ptSetCellPrompt('${agentId}','${ym}',${day})" title="Clic = cycle · Clic droit = saisir code" style="width:100%;height:28px;border:0;background:transparent;color:${fg};font-weight:800;font-family:ui-monospace,monospace;cursor:pointer">${txt}</button></td>`}
+function renderPointageDashboard(){
+  const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);const todayDate=today();
+  const allAg=(db.agents||[]).filter(a=>!["sortant","demissionne","licencie","archive"].includes(a.statut));
+  const ag=soc?allAg.filter(a=>a.societe===soc):allAg;
+  const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
+  const valid=sheets.filter(s=>s.valide).length;
+  const tot={P:0,A:0,M:0,S:0,C:0,R:0};
+  sheets.forEach(sh=>Object.values(sh.days||{}).forEach(v=>{if(tot[v]!==undefined)tot[v]++}));
+  const expected=ag.length*days;const filled=sheets.reduce((n,sh)=>n+Object.keys(sh.days||{}).length,0);
+  const coverage=expected?Math.round(filled*100/expected):0;
+  const fpq=(db.feuillePresence||[]).filter(f=>f.date===todayDate&&(!soc||f.societe===soc));
+  const fpqDone=fpq.filter(f=>fpqPresenceCode(f.heureArrivee)).length;
+  const fpqRate=fpq.length?Math.round(fpqDone*100/fpq.length):0;
+  const unclosed=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(Boolean))].filter(d=>!fpqIsCloture(d));
+  const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Cliquer pour ouvrir"}</div></button>`;
+  const codeCards=Object.entries(POINTAGE_CODES).map(([k,v])=>`<button type="button" onclick="navigate('pointage/stats')" class="card p-3 text-center" style="background:${v.bg};border:1px solid ${v.color}33"><div class="text-[10px] uppercase font-black" style="color:${v.color}">${v.label}</div><div class="text-2xl font-black" style="color:${v.color}">${tot[k]||0}</div></button>`).join("");
+  return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">POINTAGE - TABLEAU DE BORD</h1><p class="text-sm text-slate-500">Synthèse mensuelle et feuille de présence quotidienne · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div><div class="flex gap-2"><button class="btn btn-primary" onclick="navigate('pointage/quotidien')">Feuille quotidienne</button><button class="btn btn-secondary" onclick="navigate('pointage/saisie')">Saisie mensuelle</button></div></div>
+    <div class="grid grid-5 gap-3 mb-5">
+      ${kpi("Agents suivis",ag.length,"pointage/saisie","#043970","Effectif filtré")}
+      ${kpi("Couverture",coverage+"%","pointage/stats",coverage>=80?"#16a34a":"#dc2626","Mois en cours")}
+      ${kpi("Pointages validés",valid,"pointage/saisie","#7c3aed","Lignes verrouillées")}
+      ${kpi("Présence du jour",fpqRate+"%","pointage/quotidien",fpqRate>=80?"#16a34a":"#f59e0b",fpqDone+"/"+(fpq.length||0)+" lignes")}
+      ${kpi("Feuilles non clôturées",unclosed.length,"pointage/quotidien",unclosed.length?"#dc2626":"#16a34a","À contrôler")}
+    </div>
+    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><h3 class="font-black mb-3">Répartition des codes</h3><div class="grid grid-cols-3 gap-2">${codeCards}</div></div><div class="card p-4"><h3 class="font-black mb-3">Accès rapides</h3><div class="grid gap-2"><button class="btn btn-secondary justify-start" onclick="navigate('pointage/quotidien')">📅 Feuille de présence quotidienne</button><button class="btn btn-secondary justify-start" onclick="navigate('pointage/saisie')">📝 Saisie pointage mensuel</button><button class="btn btn-secondary justify-start" onclick="navigate('pointage/recap')">👤 Récap par agent</button><button class="btn btn-secondary justify-start" onclick="navigate('pointage/societe')">🏢 Récap par société</button><button class="btn btn-secondary justify-start" onclick="navigate('pointage/legende')">🎨 Légende & codes</button></div></div></div>`;
+}
+
 function renderPointage(view,sub,arg){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   const tabsHTML=POINTAGE_TABS.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${l}</button>`).join("");
-  const head=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
+  const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
-  if(sub==="quotidien")body=renderPointageQuotidien();
+  if(sub==="dashboard")body=renderPointageDashboard();
+  else if(sub==="quotidien")body=renderPointageQuotidien();
   else if(sub==="saisie")body=renderPointageSaisie();
   else if(sub==="recap")body=renderPointageRecap(arg);
   else if(sub==="societe")body=renderPointageSociete();
