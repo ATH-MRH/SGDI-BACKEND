@@ -2434,6 +2434,11 @@ function sidebarOpenGroup(){try{return sessionStorage.getItem(sidebarGroupStorag
 function sidebarRouteActive(path,route){return path===route||path.startsWith(route+"/")}
 function renderSidebar(){
   const path=(location.hash||"#/dashboard").slice(2);
+  const nav=document.getElementById("sidebar-nav");
+  if(session&&session.societe&&!session.transverse){
+    if(nav)nav.innerHTML="";
+    return;
+  }
   const _ag=myAgents();const _ca=myCandidats();const _co=myConges();
   const _dotationCount=typeof agentsEnInstanceDotation==="function"?agentsEnInstanceDotation().length:0;
   const _reversementCount=typeof agentsEnInstanceReversement==="function"?agentsEnInstanceReversement().length:0;
@@ -2578,7 +2583,10 @@ function renderSidebar(){
       return;
     }
     if(mod==="drh"){
-      const _ag=db.agents;const _ca=db.candidats;const _co=db.conges;
+      const drhSoc=session?.societe||currentStructureSocieteFilter()||"";
+      const _ag=(db.agents||[]).filter(a=>!drhSoc||a.societe===drhSoc);
+      const _ca=(db.candidats||[]).filter(c=>!drhSoc||c.societe===drhSoc);
+      const _co=(db.conges||[]).filter(c=>!drhSoc||_ag.some(a=>a.id===c.agentId));
       const drhGroups=[
         {type:"link",label:"TABLEAU DE BORD DRH",icon:"📊",route:"drh/dashboard"},
         {type:"group",label:"RECRUTEMENT",children:[
@@ -10535,7 +10543,10 @@ function drhMatchSoc(row,selected){
 }
 function setDrhSociete(s){try{sessionStorage.setItem("drhSociete",s||"")}catch(e){}render()}
 function renderDRHDashboard(view){
-  const selSoc=(typeof sessionStorage!=="undefined"&&sessionStorage.getItem("drhSociete"))||"";
+  const restrictedSocieties=Array.isArray(currentUserRecord()?.societesAutorisees)?currentUserRecord().societesAutorisees:[];
+  const sessionSoc=session?.societe||"";
+  const storedSoc=(typeof sessionStorage!=="undefined"&&sessionStorage.getItem("drhSociete"))||"";
+  const selSoc=sessionSoc||(restrictedSocieties.length===1?restrictedSocieties[0]:storedSoc);
   const allAg=db.agents||[];const allCa=db.candidats||[];const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];const allMa=db.materiel||[];
   const ag=selSoc?allAg.filter(a=>drhMatchSoc(a,selSoc)):allAg;
   const ca=selSoc?allCa.filter(c=>drhMatchSoc(c,selSoc)):allCa;
