@@ -3246,7 +3246,7 @@ function renderCandidatForm(view,id){
       </div>
     </form>
   </div>`;
-  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'))},0);
+  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'))},0);
 }
 
 function renderCandidatEtape1(c){
@@ -3409,7 +3409,7 @@ async function saveCandidat(id,showToast){
 async function saveCandidatDraft(id){
   const data=collectCandidatFormData();if(!data)return false;
   let c=db.candidats.find(x=>x.id===id);
-  if(!c){c={id,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
+  if(!c)return false;
   Object.assign(c,data);
   delete c.isNew;
   if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
@@ -3507,6 +3507,7 @@ async function activerCandidat(id){
   }catch(e){toast("Activation PostgreSQL refusée : "+(e.message||e),"error")}
 }
 function scheduleCandidatDraftSave(id){
+  if(!db.candidats.find(x=>x.id===id))return;
   sgdiDirty=true;
   clearTimeout(candidatDraftTimer);
   candidatDraftTimer=setTimeout(()=>saveCandidatDraft(id),700);
