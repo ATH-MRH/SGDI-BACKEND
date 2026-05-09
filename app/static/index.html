@@ -1719,7 +1719,7 @@ function globalSocieteBandHTML(){
   const allBtn=`<button type="button" onclick="globalSocieteBandPick('')" class="societe-band-btn flex items-center gap-2 px-3 py-2 rounded-lg transition" style="background:${allActive?"#043970":"#fff"};color:${allActive?"#fff":"#334155"};border:1px solid ${allActive?"#043970":"#dbeafe"};min-height:42px">
     <span style="font-size:20px">🌐</span>
     <span class="font-black uppercase truncate" style="font-size:10px!important;max-width:132px">Toutes</span>
-    <span class="pill ${allActive?"pill-amber":"pill-gray"}" style="font-size:10px!important">${total}</span>
+    <span class="pill ${allActive?"pill-amber":"pill-gray"}" style="font-size:10px!important;${allActive?"background:#facc15!important;color:#043970!important;border-color:#facc15!important;font-weight:950":""}">${total}</span>
   </button>`;
   const btn=s=>{
     const img=imgs[s]||defaultSocieteLogo(s);
@@ -1728,7 +1728,7 @@ function globalSocieteBandHTML(){
     return`<button type="button" onclick="globalSocieteBandPick('${String(s).replace(/'/g,"\\'")}')" class="societe-band-btn flex items-center gap-2 px-3 py-2 rounded-lg transition" style="background:${isActive?"#043970":"#fff"};color:${isActive?"#fff":"#334155"};border:1px solid ${isActive?"#043970":"#dbeafe"};min-height:42px">
       ${visual}
       <span class="font-black uppercase truncate" style="font-size:10px!important;max-width:132px">${escapeHTML(s)}</span>
-      <span class="pill ${isActive?"pill-amber":"pill-gray"}" style="font-size:10px!important">${countFor(s)}</span>
+      <span class="pill ${isActive?"pill-amber":"pill-gray"}" style="font-size:10px!important;${isActive?"background:#facc15!important;color:#043970!important;border-color:#facc15!important;font-weight:950":""}">${countFor(s)}</span>
     </button>`;
   };
   return`<div class="no-print px-4 py-2" style="background:#f8fafc;border-bottom:1px solid #dbeafe">
