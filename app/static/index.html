@@ -807,7 +807,7 @@ async function sgdiApi(path,options){
   const legacy=opts.legacy!==false;
   const body=opts.body&&typeof opts.body!=="string"?JSON.stringify(opts.body):opts.body;
   const url=sgdiApiUrl(path,legacy);
-  const res=await fetch(url,{...opts,body,headers:sgdiAuthHeaders(opts.headers)});
+  const res=await fetch(url,{cache:"no-store",...opts,body,headers:sgdiAuthHeaders(opts.headers)});
   const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
   if(!res.ok||out.ok===false){
     const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
@@ -818,6 +818,20 @@ async function sgdiApi(path,options){
   return out.data===undefined?out:out.data;
 }
 function sgdiSetApiRoot(url){window.__SGDI_API_ROOT__=String(url||"").replace(/\/+$/,"");window.__SGDI_BACKEND_ENABLED__=true}
+function sgdiServerOnlyFailure(message){
+  sgdiPostgresReady=false;
+  sgdiDirty=true;
+  const msg=message||"Sauvegarde PostgreSQL obligatoire échouée. L'application est bloquée pour empêcher une sauvegarde locale.";
+  console.error(msg);
+  if(typeof toast==="function")toast(msg,"error");
+  if(session&&typeof renderPostgresRequired==="function")setTimeout(()=>renderPostgresRequired(msg),50);
+}
+function sgdiRequireServerWrite(){
+  if(!session)throw new Error("Session SGDI absente");
+  if(!sgdiAuthToken())throw new Error("Session PostgreSQL expirée : reconnectez-vous");
+  if(!sgdiPostgresReady)throw new Error("PostgreSQL non chargé : sauvegarde refusée");
+  return true;
+}
 let sgdiSaveQueue=Promise.resolve();
 const SQL_OWNED_COLLECTIONS=new Set(["candidats","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs"]);
 function sgdiLegacySnapshot(){
@@ -831,8 +845,7 @@ function sgdiBackendSave(){
   sanitizeCandidatesInDB();
   const token=sgdiAuthToken();
   if(!token){
-    console.error("Sauvegarde PostgreSQL impossible: token backend absent");
-    if(typeof toast==="function"&&session)toast("Session PostgreSQL expirée : reconnectez-vous","error");
+    sgdiServerOnlyFailure("Session PostgreSQL expirée : reconnectez-vous");
     uiSaveState("Sauvegarde refusée","error");
     return false;
   }
@@ -851,9 +864,8 @@ function sgdiBackendSave(){
     uiSaveState("Sauvegardé dans PostgreSQL","success");
     return out.data===undefined?out:out.data;
   }).catch(e=>{
-    sgdiDirty=true;
-    console.error("Sauvegarde PostgreSQL échouée:",e);
-    if(typeof toast==="function")toast("Sauvegarde PostgreSQL échouée : "+(e.message||e),"error");
+    const msg="Sauvegarde PostgreSQL échouée : "+(e.message||e);
+    sgdiServerOnlyFailure(msg);
     uiSaveState("Sauvegarde échouée","error");
     return null;
   });
@@ -1050,7 +1062,7 @@ window.SGDI_API={
   stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),articles:()=>sgdiApi("/materiel/articles",{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   commercial:{clients:()=>sgdiApi("/commercial/clients",{legacy:false}),createClient:(payload)=>sgdiApi("/commercial/clients",{method:"POST",body:payload,legacy:false}),updateClient:(id,payload)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteClient:(id)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   finance:{entries:()=>sgdiApi("/finance/entries",{legacy:false}),payroll:()=>sgdiApi("/finance/payroll",{legacy:false})},
-  sync:{pull:sgdiPullState,push:()=>sgdiBackendSave()}
+  sync:{pull:sgdiPullState,push:()=>sgdiBackendSave(),repair:()=>{const r=sgdiAutoRepairDB();if(r.length)sgdiBackendSave();return r}}
 };
 window.SGDI=window.SGDI_API;
 async function sgdiLoadAuthState(){
@@ -1159,10 +1171,12 @@ async function syncCandidatesFromPostgres(){
     db.candidats=[...byId.values()].filter(candidateHasMinimumData);
   }catch(e){
     console.warn("Candidats PostgreSQL indisponibles",e);
+    throw e;
   }
 }
 async function persistCandidateToPostgres(c,options){
-  if(!c||!sgdiAuthToken())return null;
+  if(!c)return null;
+  sgdiRequireServerWrite();
   const opt=options||{};
   const backendId=sqlBackendId(c.backendId);
   if(isTempCandidateId(c.id))return null;
@@ -1193,27 +1207,27 @@ function siteApiPayload(site){
   return {name:String(site.nom||site.name||"Site").trim()||"Site",indicatif:site.indicatif||null,client_name:site.client||site.client_name||null,address:site.adresse||site.address||null,commune:site.commune||null,wilaya:site.wilaya||null,site_type:site.type||site.site_type||null,rotation_system:site.rotationSystem||site.rotation_system||null,contractual_staff:parseInt(effectifs.totalContractuel??site.contractual_staff)||0,day_staff:parseInt(effectifs.jour??site.day_staff)||0,night_staff:parseInt(effectifs.nuit??site.night_staff)||0,weekend_staff:parseInt(effectifs.weekend??site.weekend_staff)||0,holiday_staff:parseInt(effectifs.feries??site.holiday_staff)||0,groups_count:parseInt(effectifs.groupes??site.groups_count)||0,active:site.actif===false||site.active===0?0:1,equipment_plan:data};
 }
 function siteFromApi(row){const data=row&&row.equipment_plan&&typeof row.equipment_plan==="object"?row.equipment_plan:{};return {...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",indicatif:data.indicatif||row.indicatif||"",client:data.client||row.client_name||"",adresse:data.adresse||row.address||"",commune:data.commune||row.commune||"",wilaya:data.wilaya||row.wilaya||"",type:data.type||row.site_type||"",rotationSystem:data.rotationSystem||row.rotation_system||"",actif:row.active!==0,effectifs:{...(data.effectifs||{}),totalContractuel:data.effectifs?.totalContractuel??row.contractual_staff??0,jour:data.effectifs?.jour??row.day_staff??0,nuit:data.effectifs?.nuit??row.night_staff??0,weekend:data.effectifs?.weekend??row.weekend_staff??0,feries:data.effectifs?.feries??row.holiday_staff??0,groupes:data.effectifs?.groupes??row.groups_count??0}}}
-async function persistSiteToPostgres(site){if(!site||!sgdiAuthToken())return null;const saved=site.backendId?await SGDI.sites.update(site.backendId,siteApiPayload(site)):await SGDI.sites.create(siteApiPayload(site));Object.assign(site,siteFromApi(saved),{id:site.id||String(saved.id),backendId:saved.id});return site}
-async function syncSitesFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.sites.list();if((!rows||!rows.length)&&(db.sites||[]).length){for(const s of db.sites){await persistSiteToPostgres(s)}rows=await SGDI.sites.list()}db.sites=(rows||[]).map(siteFromApi)}catch(e){console.warn("Sites PostgreSQL indisponibles",e)}}
+async function persistSiteToPostgres(site){if(!site)return null;sgdiRequireServerWrite();const saved=site.backendId?await SGDI.sites.update(site.backendId,siteApiPayload(site)):await SGDI.sites.create(siteApiPayload(site));Object.assign(site,siteFromApi(saved),{id:site.id||String(saved.id),backendId:saved.id});return site}
+async function syncSitesFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.sites.list();if((!rows||!rows.length)&&(db.sites||[]).length){for(const s of db.sites){await persistSiteToPostgres(s)}rows=await SGDI.sites.list()}db.sites=(rows||[]).map(siteFromApi)}catch(e){console.warn("Sites PostgreSQL indisponibles",e);throw e}}
 function storeApiPayload(m){return{name:String(m.nom||m.name||"Magasin").trim()||"Magasin",code:m.code||null,society:m.societe||m.society||null,address:m.adresse||m.address||null,manager_name:m.responsable||m.manager_name||null,phone:m.telephone||m.phone||null,email:m.email||null,icon_path:m.iconImage||m.icon_path||null,notes:m.notes||null}}
 function storeFromApi(row){return{id:String(row.id),backendId:row.id,nom:row.name||"",code:row.code||"",societe:row.society||"",adresse:row.address||"",responsable:row.manager_name||"",telephone:row.phone||"",email:row.email||"",iconImage:row.icon_path||"",icon:"🏬",color:"#8b5cf6",notes:row.notes||""}}
-async function persistStoreToPostgres(m){if(!m||!sgdiAuthToken())return null;const saved=m.backendId?await SGDI.stock.updateStore(m.backendId,storeApiPayload(m)):await SGDI.stock.createStore(storeApiPayload(m));Object.assign(m,storeFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
+async function persistStoreToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const saved=m.backendId?await SGDI.stock.updateStore(m.backendId,storeApiPayload(m)):await SGDI.stock.createStore(storeApiPayload(m));Object.assign(m,storeFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
 function supplierApiPayload(f){return{name:String(f.raisonSociale||f.name||"Fournisseur").trim()||"Fournisseur",society:f.societe||f.society||null,contact_name:f.contact||f.contact_name||null,rc:f.rc||null,nif:f.nif||null,nis:f.nis||null,ai:f.ai||null,phone:f.telephone||f.phone||null,email:f.email||null,address:f.adresse||f.address||null,products:f.produits||f.products||null,payment_terms:f.delaiPaiement||f.payment_terms||null,rating:parseInt(f.note??f.rating)||0,notes:f.commentaires||f.notes||null}}
 function supplierFromApi(row){return{id:String(row.id),backendId:row.id,raisonSociale:row.name||"",societe:row.society||"",contact:row.contact_name||"",rc:row.rc||"",nif:row.nif||"",nis:row.nis||"",ai:row.ai||"",telephone:row.phone||"",email:row.email||"",adresse:row.address||"",produits:row.products||"",delaiPaiement:row.payment_terms||"",note:row.rating||0,commentaires:row.notes||""}}
-async function persistSupplierToPostgres(f){if(!f||!sgdiAuthToken())return null;const saved=f.backendId?await SGDI.stock.updateSupplier(f.backendId,supplierApiPayload(f)):await SGDI.stock.createSupplier(supplierApiPayload(f));Object.assign(f,supplierFromApi(saved),{id:f.id||String(saved.id),backendId:saved.id});return f}
+async function persistSupplierToPostgres(f){if(!f)return null;sgdiRequireServerWrite();const saved=f.backendId?await SGDI.stock.updateSupplier(f.backendId,supplierApiPayload(f)):await SGDI.stock.createSupplier(supplierApiPayload(f));Object.assign(f,supplierFromApi(saved),{id:f.id||String(saved.id),backendId:saved.id});return f}
 function articleApiPayload(a){return{code:String(a.code||"").trim()||("ART-"+Date.now()),designation:String(a.designation||a.sousCategorie||a.code||"Article").trim()||"Article",category:a.categorie||a.category||null,sub_category:a.sousCategorie||a.sub_category||null,society:a.societe||a.society||null,store_id:sqlRelationId(db.magasins,a.magasinId),supplier_id:sqlRelationId(db.fournisseurs,a.fournisseurId),unit:a.unite||"Pièce",quantity:sqlNum(a.stockInitial||a.quantiteGlobaleRecue||a.quantity),unit_price:sqlNum(a.prixUnitaire||a.unit_price),min_quantity:sqlNum(a.stockMin||a.seuilAlerte||a.min_quantity),barcode:a.codeBarre||a.barcode||null,brand:a.marque||a.brand||null,model:a.modele||a.model||null,attributes:{...(a.attributs||{}),raw:a,stockVariantes:a.stockVariantes||[],stockReceptionsGlobales:a.stockReceptionsGlobales||[]},active:a.actif===false||a.active===0?0:1}}
 function articleFromApi(row){const attrs=row.attributes||{};const raw=attrs.raw&&typeof attrs.raw==="object"?attrs.raw:{};const store=(db.magasins||[]).find(m=>String(m.backendId)===String(row.store_id));const supplier=(db.fournisseurs||[]).find(f=>String(f.backendId)===String(row.supplier_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,code:row.code||raw.code||"",designation:row.designation||raw.designation||"",categorie:row.category||raw.categorie||"",sousCategorie:row.sub_category||raw.sousCategorie||"",societe:row.society||raw.societe||"",magasinId:store?.id||raw.magasinId||"",fournisseurId:supplier?.id||raw.fournisseurId||"",unite:row.unit||raw.unite||"Pièce",stockInitial:row.quantity??raw.stockInitial??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,stockMin:row.min_quantity??raw.stockMin??"",codeBarre:row.barcode||raw.codeBarre||"",marque:row.brand||raw.marque||"",modele:row.model||raw.modele||"",attributs:attrs,stockVariantes:attrs.stockVariantes||raw.stockVariantes||[],stockReceptionsGlobales:attrs.stockReceptionsGlobales||raw.stockReceptionsGlobales||[],actif:row.active!==0}}
-async function persistArticleToPostgres(a){if(!a||!sgdiAuthToken())return null;const saved=a.backendId?await SGDI.stock.updateArticle(a.backendId,articleApiPayload(a)):await SGDI.stock.createArticle(articleApiPayload(a));Object.assign(a,articleFromApi(saved),{id:a.id||String(saved.id),backendId:saved.id});return a}
+async function persistArticleToPostgres(a){if(!a)return null;sgdiRequireServerWrite();const saved=a.backendId?await SGDI.stock.updateArticle(a.backendId,articleApiPayload(a)):await SGDI.stock.createArticle(articleApiPayload(a));Object.assign(a,articleFromApi(saved),{id:a.id||String(saved.id),backendId:saved.id});return a}
 function movementTypeToApi(t){return({retour:"retour_employe",dotation_pret:"dotation_pret_mission",reforme:"reformer"}[t])||t||"entree"}
 function movementFromApiType(t){return({retour_employe:"retour",dotation_pret_mission:"dotation_pret",reformer:"reforme"}[t])||t}
 function movementApiPayload(m){const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));return{article_id:article?.backendId||sqlInt(m.articleId),movement_date:sqlDate(m.date)||today(),movement_type:movementTypeToApi(m.type),quantity:sqlNum(m.quantite),unit_price:sqlNum(m.prixUnitaire),store_id:sqlRelationId(db.magasins,m.magasinId||article?.magasinId),supplier_id:sqlRelationId(db.fournisseurs,m.fournisseurId),employee_id:sqlRelationId(db.agents,m.beneficiaireAgentId||m.retourAgentId||m.agentId),recipient:m.beneficiaireNom||m.retourAgentNom||null,reason:m.motif||null,renewal_reason:m.motifRenouvellement||null,voucher_number:m.numeroBon||null,notes:m.notes||null,size_breakdown:{repartitionTailles:m.repartitionTailles||{},raw:m}}}
 function movementFromApi(row){const raw=row.size_breakdown?.raw&&typeof row.size_breakdown.raw==="object"?row.size_breakdown.raw:{};const article=(db.stockArticles||[]).find(a=>String(a.backendId)===String(row.article_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,articleId:article?.id||raw.articleId||String(row.article_id),type:movementFromApiType(row.movement_type),date:String(row.movement_date||"").slice(0,10),quantite:row.quantity??raw.quantite??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,motif:row.reason||raw.motif||"",numeroBon:row.voucher_number||raw.numeroBon||"",notes:row.notes||raw.notes||"",repartitionTailles:row.size_breakdown?.repartitionTailles||raw.repartitionTailles||{},createdAt:row.created_at||raw.createdAt||""}}
-async function persistMovementToPostgres(m){if(!m||!sgdiAuthToken())return null;const payload=movementApiPayload(m);if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour le mouvement");const saved=await SGDI.stock.createMovement(payload);Object.assign(m,movementFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
-async function syncMaterielFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let stores=await SGDI.stock.stores();if((!stores||!stores.length)&&(db.magasins||[]).length){for(const m of db.magasins){await persistStoreToPostgres(m)}stores=await SGDI.stock.stores()}db.magasins=(stores||[]).map(storeFromApi);let suppliers=await SGDI.stock.suppliers();if((!suppliers||!suppliers.length)&&(db.fournisseurs||[]).length){for(const f of db.fournisseurs){await persistSupplierToPostgres(f)}suppliers=await SGDI.stock.suppliers()}db.fournisseurs=(suppliers||[]).map(supplierFromApi);let articles=await SGDI.stock.articles();if((!articles||!articles.length)&&(db.stockArticles||[]).length){for(const a of db.stockArticles){await persistArticleToPostgres(a)}articles=await SGDI.stock.articles()}db.stockArticles=(articles||[]).map(articleFromApi);let mvts=await SGDI.stock.movements();if((!mvts||!mvts.length)&&(db.stockMouvements||[]).length){for(const m of db.stockMouvements){await persistMovementToPostgres(m).catch(e=>console.warn("Mouvement non migré",m,e))}mvts=await SGDI.stock.movements()}db.stockMouvements=(mvts||[]).map(movementFromApi)}catch(e){console.warn("Matériel PostgreSQL indisponible",e)}}
+async function persistMovementToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=movementApiPayload(m);if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour le mouvement");const saved=await SGDI.stock.createMovement(payload);Object.assign(m,movementFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
+async function syncMaterielFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let stores=await SGDI.stock.stores();if((!stores||!stores.length)&&(db.magasins||[]).length){for(const m of db.magasins){await persistStoreToPostgres(m)}stores=await SGDI.stock.stores()}db.magasins=(stores||[]).map(storeFromApi);let suppliers=await SGDI.stock.suppliers();if((!suppliers||!suppliers.length)&&(db.fournisseurs||[]).length){for(const f of db.fournisseurs){await persistSupplierToPostgres(f)}suppliers=await SGDI.stock.suppliers()}db.fournisseurs=(suppliers||[]).map(supplierFromApi);let articles=await SGDI.stock.articles();if((!articles||!articles.length)&&(db.stockArticles||[]).length){for(const a of db.stockArticles){await persistArticleToPostgres(a)}articles=await SGDI.stock.articles()}db.stockArticles=(articles||[]).map(articleFromApi);let mvts=await SGDI.stock.movements();if((!mvts||!mvts.length)&&(db.stockMouvements||[]).length){for(const m of db.stockMouvements){await persistMovementToPostgres(m).catch(e=>console.warn("Mouvement non migré",m,e))}mvts=await SGDI.stock.movements()}db.stockMouvements=(mvts||[]).map(movementFromApi)}catch(e){console.warn("Matériel PostgreSQL indisponible",e);throw e}}
 function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()||"Client",legal_name:c.raisonSociale||c.legal_name||null,society:c.societe||c.society||null,structure:c.structure||null,status:c.statut||c.status||"actif",contact_name:c.contact||c.contact_name||null,contact_position:c.fonction||c.contact_position||null,phone:c.tel||c.phone||null,email:c.email||null,address:c.adresse||c.address||null,nif:c.nif||null,rc:c.rc||null,services:c.prestationsServices||c.services||null,contract_start:sqlDate(c.dateDebutContrat),contract_duration:c.dureeContrat||null,contract_end:sqlDate(c.dateFinContrat),notes:c.notes||null,data:{...c}}}
 function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||""}}
-async function persistClientToPostgres(c){if(!c||!sgdiAuthToken())return null;const saved=c.backendId?await SGDI.commercial.updateClient(c.backendId,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
-async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e)}}
+async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWrite();const saved=c.backendId?await SGDI.commercial.updateClient(c.backendId,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
+async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
 async function syncSqlModulesFromPostgres(){await syncSitesFromPostgres();await syncMaterielFromPostgres();await syncClientsFromPostgres()}
 
 function ensureContratsPersonnel(){
@@ -1234,6 +1248,47 @@ function emptyDB(){
     settings:{unlockCode:"IRONGS-2026",unlockLog:[]}
   };
 }
+function sgdiAutoRepairDB(options){
+  const opt=options||{};
+  const report=[];
+  if(!db||typeof db!=="object"||Array.isArray(db)){db=emptyDB();report.push("Base SGDI reconstruite")}
+  const base=emptyDB();
+  Object.keys(base).forEach(k=>{
+    if(Array.isArray(base[k])){
+      if(!Array.isArray(db[k])){db[k]=[];report.push("Collection recréée: "+k)}
+    }else if(!db[k]||typeof db[k]!=="object"||Array.isArray(db[k])){
+      db[k]=JSON.parse(JSON.stringify(base[k]));report.push("Objet recréé: "+k);
+    }
+  });
+  const fixListIds=(key,prefix)=>{
+    const used=new Set();
+    (db[key]||[]).forEach((item,idx)=>{
+      if(!item||typeof item!=="object")return;
+      let id=String(item.id||"").trim();
+      if(!id||id==="None"||id==="undefined"||id==="null"||used.has(id)){
+        id=`${prefix}_${Date.now()}_${idx}`;
+        item.id=id;
+        report.push("ID corrigé: "+key);
+      }
+      used.add(id);
+    });
+  };
+  [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"]].forEach(([k,p])=>fixListIds(k,p));
+  db.societesConfig={custom:ALLOWED_SOCIETES.slice(),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
+  if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"IRONGS-2026",unlockLog:[]};
+  if(!db.settings.unlockCode)db.settings.unlockCode="IRONGS-2026";
+  if(!Array.isArray(db.settings.unlockLog))db.settings.unlockLog=[];
+  if(typeof ensureNiveauxAcces==="function")ensureNiveauxAcces();
+  if(typeof sanitizeCandidatesInDB==="function")sanitizeCandidatesInDB();
+  if(typeof migrateStructureDemandes==="function")migrateStructureDemandes();
+  if(report.length){
+    db.activityLog=db.activityLog||[];
+    db.activityLog.unshift({id:"repair_"+Date.now(),date:new Date().toISOString(),user:session?.username||"system",action:"Auto-correction SGDI",details:report.slice(0,12).join(" · ")});
+    if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);
+    if(!opt.silent)console.info("Auto-correction SGDI",report);
+  }
+  return report;
+}
 function hydrateDB(source){
   const base=emptyDB();
   const incoming=(source&&typeof source==="object"&&!Array.isArray(source))?source:{};
@@ -1243,9 +1298,8 @@ function hydrateDB(source){
   });
   if(!db.settings||typeof db.settings!=="object")db.settings=base.settings;
   if(!db.societesConfig||typeof db.societesConfig!=="object")db.societesConfig=base.societesConfig;
-  if(typeof ensureNiveauxAcces==="function")ensureNiveauxAcces();
-  sanitizeCandidatesInDB();
-  if(typeof migrateStructureDemandes==="function")migrateStructureDemandes();
+  const repaired=sgdiAutoRepairDB({silent:true});
+  if(repaired.length&&sgdiAuthToken())setTimeout(()=>{if(sgdiPostgresReady)sgdiBackendSave()},200);
   return db;
 }
 function loadDB(){return emptyDB()}
@@ -1282,12 +1336,7 @@ function saveDB(){
     sanitizeCandidatesInDB();
     uiSaveState("Sauvegarde PostgreSQL...","");
     recordSaveOperation();
-    if(!sgdiAuthToken()){
-      console.error("Sauvegarde refusée: aucune session backend active.");
-      if(typeof toast==="function"&&session)toast("Connectez-vous pour sauvegarder dans PostgreSQL","error");
-      uiSaveState("Sauvegarde refusée","error");
-      return false;
-    }
+    try{sgdiRequireServerWrite()}catch(e){sgdiServerOnlyFailure(e.message||String(e));uiSaveState("Sauvegarde refusée","error");return false}
     if(!sgdiBackendSave()){uiSaveState("Sauvegarde échouée","error");return false}
     uiSaveState("Envoi PostgreSQL en cours...","");
     setTimeout(()=>refreshRealtimeFeed(),0);
@@ -1648,7 +1697,7 @@ async function login(u,p){
       toast("Connexion PostgreSQL obligatoire : "+(e.message||"identifiants incorrects"),"error");return
     }
   }
-  const us=db.users.find(x=>x.username===u&&x.password===p);if(!us){toast("Identifiants incorrects","error");return}session={username:us.username,role:us.role,niveau:us.niveau||"",nom:us.nom,agentId:us.agentId||null,societe:null};saveSession(session);location.hash="#/select-societe";route()
+  toast("Connexion PostgreSQL obligatoire : aucun mode local autorisé","error");return
 }
 function defaultStructureAccessPasswords(){return{drh:"Admin",ops:"Admin",materiel:"Admin",facturation:"Admin",commercial:"Admin",pointage:"Admin"}}
 function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE"}[mod]||String(mod||"").toUpperCase())}
@@ -10622,6 +10671,11 @@ function renderAdminStorage(view){
     <div class="card p-5 mb-4">
       <h3 class="font-bold mb-3">🧹 Actions de nettoyage</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="card p-4" style="background:#fefce8;border:1px solid #fde68a">
+          <div class="font-bold mb-1">Correction automatique</div>
+          <div class="text-xs text-slate-600 mb-2">Vérifie les collections, les identifiants invalides et les paramètres obligatoires.</div>
+          <button class="btn btn-warn text-sm" onclick="cleanupActionAutoRepairDB()">Lancer la correction</button>
+        </div>
         <div class="card p-4" style="background:#043970;border:1px solid #043970">
           <div class="font-bold mb-1">📜 Journal d'activité</div>
           <div class="text-xs text-slate-600 mb-2">${logCount} entrée(s) · garder uniquement les 200 plus récentes</div>
@@ -10647,6 +10701,12 @@ function renderAdminStorage(view){
         <div class="text-xs text-sky-700"><b>💡 Conseil :</b> Les photos sont désormais automatiquement compressées (≤ 800px, JPEG 72%) à l'upload. Ceci ne s'applique qu'aux nouvelles photos.</div>
       </div>
     </div>`;
+}
+function cleanupActionAutoRepairDB(){
+  const report=sgdiAutoRepairDB();
+  if(!report.length){toast("Aucune correction nécessaire","success");return}
+  if(saveDB())toast("Correction automatique terminée : "+report.length+" point(s) corrigé(s)","success");
+  renderView();
 }
 function cleanupActionTrimLog(){
   if(!confirm("Garder uniquement les 200 dernières entrées du journal d'activité ?"))return;

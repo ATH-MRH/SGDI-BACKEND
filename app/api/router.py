@@ -7,6 +7,7 @@ from app.modules.materiel.routes import router as materiel_router
 from app.modules.commercial.routes import router as commercial_router
 from app.modules.irongs.routes import router as irongs_router
 from app.modules.portal.routes import router as portal_router
+from app.modules.finance_routes import router as finance_router
 
 
 api_router = APIRouter()
@@ -17,3 +18,4 @@ api_router.include_router(materiel_router, prefix="/materiel", tags=["Matériel 
 api_router.include_router(commercial_router, prefix="/commercial", tags=["Commercial"])
 api_router.include_router(irongs_router, prefix="/irongs", tags=["IRONGS BASE"])
 api_router.include_router(portal_router, prefix="/portal", tags=["Portail RH"])
+api_router.include_router(finance_router, prefix="/finance", tags=["Finances"])
