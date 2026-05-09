@@ -2004,7 +2004,7 @@ function render(){
         <div class="sidebar-module-title font-black tracking-tight" data-no-lang="1" style="line-height:1.1;color:#fff!important;text-align:center!important">SGDI</div>
       </div>
       <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
-      <div class="px-4 py-3 border-t border-slate-200 text-xs text-slate-500">
+      <div class="px-4 py-3 text-xs text-slate-500" style="background:${socColor}11;border-top:2px solid ${socColor}">
         <div class="flex items-center gap-2 mb-2">
           <div class="avatar" style="width:28px;height:28px;font-size:11px">${(session.nom||"?").slice(0,1)}</div>
           <div class="leading-tight"><div class="text-slate-900 font-semibold">${escapeHTML(session.nom)}</div><div class="text-[10px] uppercase tracking-wider text-slate-500">${session.role}</div></div>
