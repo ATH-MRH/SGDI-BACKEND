@@ -149,6 +149,11 @@ def frontend() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/sw.js", include_in_schema=False)
+def service_worker() -> FileResponse:
+    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript", headers={"Cache-Control": "no-store", "Service-Worker-Allowed": "/"})
+
+
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon() -> FileResponse:
     return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
