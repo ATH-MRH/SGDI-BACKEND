@@ -2362,7 +2362,7 @@ function navDemandesPersonnelLabel(item){
   const label=escapeHTML(item&&item.label||"");
   return item&&item.route==="demandes_personnel/dashboard"&&Number(item.count||0)>0?`<span class="dp-reception-text">${label}</span>`:label;
 }
-function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE",icon:"📨",children:[{label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
+function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",children:[{label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
 function sidebarGroupStorageKey(){return "navOpenGroup:"+(session?.transverse||"global")}
 function sidebarOpenGroup(){try{return sessionStorage.getItem(sidebarGroupStorageKey())||""}catch(e){return""}}
 function sidebarRouteActive(path,route){return path===route||path.startsWith(route+"/")}
@@ -2380,7 +2380,7 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD FINANCES",icon:"📊",route:"facturation/dashboard"},
         {label:"Devis",icon:"📝",route:"facturation/devis",count:(db.devis||[]).length},
         {label:"Factures",icon:"🧾",route:"facturation/factures",count:(db.factures||[]).length},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
         {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
         {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Paiements",icon:"💳",route:"facturation/paiements"},
@@ -2395,7 +2395,7 @@ function renderSidebar(){
       ]},
       commercial:{label:"COMMERCIAL",color:"#8b5cf6",children:[
         {label:"TABLEAU DE BORD COMMERCIAL",icon:"📊",route:"commercial/dashboard"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
         {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
         {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Prospects",icon:"🎯",route:"commercial/prospects",count:(db.prospects||[]).length},
@@ -2409,7 +2409,7 @@ function renderSidebar(){
       ]},
       materiel:{label:"MATÉRIEL & ÉQUIPEMENT",color:"#043970",children:[
         {label:"TABLEAU DE BORD MATERIEL",icon:"🏠",route:"materiel/dashboard"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
         {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
         {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Articles",icon:"📦",route:"materiel/articles",count:(db.stockArticles||[]).length},
@@ -2423,7 +2423,7 @@ function renderSidebar(){
       ]},
       pointage:{label:"POINTAGE",color:"#043970",children:[
         {label:"TABLEAU DE BORD POINTAGE",icon:"📝",route:"pointage/saisie"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
         {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
         {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Récap par agent",icon:"👤",route:"pointage/recap"},
@@ -2441,7 +2441,7 @@ function renderSidebar(){
         {label:"Droits d'accès",icon:"🔐",route:"admin/droits"},
         {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"Historique messages",icon:"💬",route:"admin/messages",count:(db.echanges||[]).filter(e=>e.type==="message"||e.attachments?.length).length},
-        {label:"Demande structure",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount()},
+        {label:"Demande structure",icon:"📨",route:"demandes_structure",count:structureOpenCount()},
         {label:"Niveaux d'accès",icon:"🎚",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"Contrats du personnel",icon:"📄",route:"admin/contrats",count:(db.contratsPersonnel||[]).length},
         {label:"Priorités",icon:"⚡",route:"admin/priorites",count:(db.priorites||[]).length},
@@ -2469,7 +2469,7 @@ function renderSidebar(){
         ]},
         {type:"link",label:"FICHES DE POSITION",icon:"🪪",route:"fiches"},
         structureDemandSidebarGroup(),
-        {type:"group",label:"SITES",icon:"📍",children:[
+        {type:"group",label:"SITES",icon:"📍",route:"sites",children:[
           {label:"Création de site",icon:"➕",route:"sites/nouveau"},
           {label:"Sites actifs",icon:"📍",route:"sites/actifs",count:(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc)).length}
         ]},
@@ -2500,7 +2500,9 @@ function renderSidebar(){
         const key=g.label;const hasActive=g.children.some(c=>sidebarRouteActive(path,c.route));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
+        const headerClick=g.route?`navigate('${g.route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
+        const arrowClick=`event.stopPropagation();toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
         return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${escapeHTML(c.label)}</span>${badge}</div>`}).join("");
       }).join("");
@@ -2558,7 +2560,9 @@ function renderSidebar(){
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
         const groupClick=g.label==="EFFECTIFS"?`navigate('effectif/recap');toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
-        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${groupClick}"><span><span class="arrow">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
+        const headerClick=g.route?`navigate('${g.route}')`:groupClick;
+        const arrowClick=`event.stopPropagation();${groupClick}`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
         return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
       }).join("");
@@ -2637,7 +2641,9 @@ function renderSidebar(){
     const key=g.label;const hasActive=vis.some(c=>path===c.route||path.startsWith(c.route+"/"));const isCol=openGroup?openGroup!==key:!hasActive;
     const totalCount=vis.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
     const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
+    const headerClick=g.route?`navigate('${g.route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
+    const arrowClick=`event.stopPropagation();toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
+    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
     if(isCol)return header;
     return header+vis.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
   }).join("");
@@ -3102,7 +3108,7 @@ function renderView(){
       case"conges":renderConges(view);break;
       case"portail":renderPortailPersonnel(view);break;
       case"demandes_personnel":renderDemandesPersonnel(view,sub||"dashboard",arg);break;
-      case"demandes_structure":renderDemandesStructure(view,sub||"reception",arg);break;
+      case"demandes_structure":renderDemandesStructure(view,sub||"dashboard",arg);break;
       case"materiel":renderMateriel(view,sub||"inventaire",arg);break;
       case"facturation":renderFacturation(view,sub||"dashboard",arg);break;
       case"commercial":renderCommercial(view,sub||"dashboard",arg);break;
@@ -5274,7 +5280,7 @@ function printFiche(id){
 function renderSites(view){
   const soc=currentStructureSocieteFilter();
   const sites=db.sites.filter(s=>s.actif&&siteMatchesSociete(s,soc));
-  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-bold uppercase">📍 SITES ACTIFS</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
+  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
   ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
   <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
   ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;const hideManque=session?.transverse==="materiel";const hideAffecte=session?.transverse==="materiel";const hideGroupes=session?.transverse==="materiel";return`<div class="card p-5 mb-4 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold">${escapeHTML(s.nom)} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${s.id}">Modifier</a><span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid ${hideManque&&hideAffecte?"grid-3":hideManque||hideAffecte?"grid-4":"grid-5"} mb-4 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif total contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div>${hideAffecte?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif affecté</div><div class="text-lg font-bold">${agents.length}</div></div>`}<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div>${hideManque?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Manquant</div><div class="text-lg font-bold ${manque>0?"text-red-700":"text-emerald-700"}">${manque}</div></div>`}</div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${hideGroupes?"":`<div class="mt-4"><h4 class="text-sm font-bold mb-2">Employés affectés par groupe</h4>${renderSiteAgentsByGroup(s,agents)}</div>`}</div>`}).join("")}`;
@@ -6089,7 +6095,35 @@ function structureDemandCardHTML(d){
     <div class="mt-3 flex gap-2 flex-wrap">${structureDemandReceived(d)?suspensionDemandActionsHTML(d)+convocationDemandActionsHTML(d):""}<button class="btn btn-secondary text-xs" onclick="openTraiterStructureDemand('${d.id}')">Répondre</button></div>
   </div>`;
 }
+function renderDemandesStructureDashboard(view){
+  ensureDemandesStructure();
+  migrateStructureDemandes();
+  const rows=(db.demandesStructure||[]).map(normalizeStructureDemand);
+  const received=rows.filter(structureDemandReceived);
+  const sent=rows.filter(structureDemandSent);
+  const nouveau=received.filter(d=>(d.statut||"nouveau")==="nouveau");
+  const enCours=received.filter(d=>(d.statut||"")==="en_cours");
+  const traite=received.filter(d=>(d.statut||"")==="traite");
+  const rejete=received.filter(d=>(d.statut||"")==="rejete");
+  const urgentes=received.filter(d=>["haute","urgent","critique"].includes(String(d.urgence||"").toLowerCase()));
+  const recent=received.slice().sort((a,b)=>String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||""))).slice(0,6);
+  const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Cliquer pour ouvrir"}</div></button>`;
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">DEMANDE STRUCTURE</h1><p class="text-sm text-slate-500">Tableau de bord des demandes internes entre structures · ${escapeHTML((session?.transverse||currentStructureKey()||"").toUpperCase())}</p></div><div class="flex gap-2"><button class="btn btn-primary" onclick="navigate('demandes_structure/reception')">Réception</button><button class="btn btn-secondary" onclick="navigate('demandes_structure/envoi')">Envoi</button></div></div>
+    <div class="grid grid-5 gap-3 mb-5">
+      ${kpi("Réception",received.length,"demandes_structure/reception","#043970","Demandes reçues")}
+      ${kpi("Nouvelles",nouveau.length,"demandes_structure/reception","#dc2626","À traiter")}
+      ${kpi("En cours",enCours.length,"demandes_structure/reception","#f59e0b","Suivi actif")}
+      ${kpi("Traitées",traite.length,"demandes_structure/reception","#16a34a","Clôturées")}
+      ${kpi("Envoi",sent.length,"demandes_structure/envoi","#7c3aed","Demandes émises")}
+    </div>
+    <div class="grid grid-2 gap-4">
+      <div class="card p-4"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Dernières demandes reçues</h3><span class="pill ${urgentes.length?'pill-red':'pill-gray'}">${urgentes.length} urgente(s)</span></div>${recent.length?recent.map(structureDemandCardHTML).join(""):`<div class="p-8 text-center text-slate-500">Aucune demande structure reçue.</div>`}</div>
+      <div class="card p-4"><h3 class="font-black mb-3">Accès rapides</h3><div class="grid gap-2"><button class="btn btn-secondary justify-start" onclick="navigate('demandes_structure/reception')">📥 Ouvrir la réception</button><button class="btn btn-secondary justify-start" onclick="navigate('demandes_structure/envoi')">📤 Voir les envois</button><button class="btn btn-secondary justify-start" onclick="sessionStorage.setItem('ds_q','suspension');navigate('demandes_structure/reception')">⏸ Demandes suspension</button><button class="btn btn-secondary justify-start" onclick="sessionStorage.setItem('ds_q','convocation');navigate('demandes_structure/reception')">📨 Demandes convocation</button></div><div class="mt-4 p-3 rounded bg-slate-50 text-sm text-slate-600">Les demandes du Portail RH restent dans Réception demandes personnel. Cette rubrique concerne uniquement les échanges entre structures.</div></div>
+    </div>`;
+}
+
 function renderDemandesStructure(view,sub,arg){
+  if((sub||"dashboard")==="dashboard"){renderDemandesStructureDashboard(view);return}
   ensureDemandesStructure();
   migrateStructureDemandes();
   db.demandesStructure.forEach(normalizeStructureDemand);
