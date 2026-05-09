@@ -11067,8 +11067,13 @@ function syncUserAccessLevelWithRole(role){
 async function confirmAdminUser(originalUsername){
   const f=document.querySelector(".modal-bg form");if(!f){toast("Formulaire introuvable","error");return}
   const fd=new FormData(f);
-  const username=fd.get("username");const password=fd.get("password");
-  const data={username,nom:fd.get("nom"),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s)};
+  const username=String(fd.get("username")||"").trim();const password=String(fd.get("password")||"");
+  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s)};
+  const usernameInput=f.querySelector('[name="username"]');
+  const nomInput=f.querySelector('[name="nom"]');
+  [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
+  if(username.length<3){if(usernameInput)usernameInput.style.background="#fee2e2";toast("Identifiant obligatoire : minimum 3 caractères","error");return}
+  if(!data.nom){if(nomInput)nomInput.style.background="#fee2e2";toast("Nom complet obligatoire","error");return}
   if(!ensureNiveauxAcces().some(n=>n.code===data.niveau)){toast("Niveau d'accès obligatoire","error");return}
   if(!originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
@@ -11076,7 +11081,8 @@ async function confirmAdminUser(originalUsername){
     try{
       await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,password});
     }catch(e){
-      toast("Création PostgreSQL refusée : "+(e.message||e),"error");
+      const msg=String(e.message||e||"");
+      toast("Création PostgreSQL refusée : "+(/at least 3 characters/i.test(msg)?"l'identifiant doit contenir au moins 3 caractères":msg),"error");
       return;
     }
     data.password=password;db.users.push(data);
