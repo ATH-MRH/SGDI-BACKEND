@@ -3869,7 +3869,7 @@ function renderContrats(view,mode){
     </div>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:`<div class="card overflow-hidden"><table>
       <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Vérifs.</th><th></th></tr></thead>
-      <tbody>${list.map(c=>{const v=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"].filter(k=>c["verif"+k]).length;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML(c.prenom.slice(0,1))}</div>${escapeHTML(c.nom+" "+c.prenom)}</div></td><td>${safe(c.posteSouhaite)}</td><td><span class="pill pill-indigo">${safe(c.societe)}</span></td><td><span class="pill ${v===9?"pill-green":"pill-amber"}">${v}/9</span></td><td class="text-right"><a class="btn btn-primary text-xs" href="#/contrats/nouveau/${c.id}">Contractualiser →</a></td></tr>`}).join("")}</tbody></table></div>`}`;
+      <tbody>${list.map(c=>{const v=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"].filter(k=>c["verif"+k]).length;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML(c.prenom.slice(0,1))}</div>${escapeHTML(c.nom+" "+c.prenom)}</div></td><td>${safe(c.posteSouhaite)}</td><td><span class="pill pill-indigo">${safe(c.societe)}</span></td><td><span class="pill ${v===9?"pill-green":"pill-amber"}">${v}/9</span></td><td class="text-right">${candidateBlackListMatch(c)?`<span class="pill" style="background:#111827;color:#fff">⛔ BLACKLIST</span>`:`<a class="btn btn-primary text-xs" href="#/contrats/nouveau/${c.id}">Contractualiser →</a>`}</td></tr>`}).join("")}</tbody></table></div>`}`;
     return;
   }
   const agents=db.agents.filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
@@ -4074,6 +4074,8 @@ function fillContratPersonnelText(tpl,agent){
 
 function renderContractualisation(view,id){
   const c=db.candidats.find(x=>x.id===id);if(!c){toast("Candidat introuvable","error");return navigate("contrats/a_contractualiser")}
+  const blockedAgent=candidateBlackListMatch(c);
+  if(blockedAgent){view.innerHTML=`<div class="max-w-3xl mx-auto card p-8 text-center" style="border:2px solid #111827"><div style="font-size:42px">⛔</div><h1 class="text-2xl font-black mb-2">CONTRACTUALISATION BLOQUÉE</h1><p class="text-sm text-slate-600 mb-4">Ce candidat correspond à une personne inscrite sur la BLACKLIST : <b>${escapeHTML((blockedAgent.nom||"")+" "+(blockedAgent.prenom||""))}</b> · ${escapeHTML(blockedAgent.matricule||"")}. Il ne peut plus signer de contrat.</p><div class="p-3 rounded bg-red-50 text-red-800 text-sm mb-4"><b>Motif :</b> ${escapeHTML(blockedAgent.blacklistMotif||"Non précisé")}</div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div>`;return}
   ensureContratsPersonnel();
   const autoContrat=contratPersonnelByPoste(c.posteContrat||c.posteSouhaite);
   const selectedSociete=c.societe||mySoc()||"";
@@ -4121,6 +4123,7 @@ function updateVerifBanner(){const f=document.getElementById("contract-form");if
 
 function embaucherCandidat(id){
   const c=db.candidats.find(x=>x.id===id);if(!c){toast("Introuvable","error");return}
+  const blockedAgent=candidateBlackListMatch(c);if(blockedAgent){toast("Contrat impossible : personne inscrite sur BLACKLIST","error");return}
   const f=document.getElementById("contract-form");
   const keys=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"];
   const missing=keys.filter(k=>!f.querySelector(`[name="verif${k}"]`)?.checked);
@@ -4436,8 +4439,103 @@ function renderAffectationsHistorique(a,locked,canEditAffectations){
   const cur=a.affectationCourante;const hist=a.affectationsHistorique||[];const all=[];
   hist.forEach((h,i)=>all.push({...h,label:`Affectation ${i+1}`,active:false}));
   if(cur&&cur.siteId)all.push({...cur,label:`Affectation ${all.length+1} (en cours)`,active:true});
-  return`<table class="mb-3"><thead><tr><th></th><th>Site</th><th>Poste</th><th>Du</th><th>Au</th><th>Motif</th></tr></thead><tbody>${all.length===0?`<tr><td colspan="6" class="text-center text-slate-500 p-3">Aucune.</td></tr>`:all.map(h=>`<tr><td class="font-semibold">${h.label}${h.active?' <span class="pill pill-green">Actuelle</span>':""}</td><td>${safe(h.siteName)}</td><td>${safe(h.poste)}</td><td class="text-xs">${formatDate(h.dateDebut)}</td><td class="text-xs">${h.dateFin?formatDate(h.dateFin):"—"}</td><td class="text-xs">${safe(h.motifChangement)}</td></tr>`).join("")}</tbody></table>${canEditAffectations?`<button type="button" class="btn btn-secondary text-xs" onclick="openReaffectation('${a.id}')">＋ Nouvelle affectation</button>`:`<div class="text-xs text-slate-500">Visualisation uniquement. Les nouvelles affectations sont réservées au module OPS.</div>`}`;
+  return`<table class="mb-3"><thead><tr><th></th><th>Site</th><th>Poste</th><th>Du</th><th>Au</th><th>Motif</th></tr></thead><tbody>${all.length===0?`<tr><td colspan="6" class="text-center text-slate-500 p-3">Aucune.</td></tr>`:all.map(h=>`<tr><td class="font-semibold">${h.label}${h.active?' <span class="pill pill-green">Actuelle</span>':""}</td><td>${safe(h.siteName)}</td><td>${safe(h.poste)}</td><td class="text-xs">${formatDate(h.dateDebut)}</td><td class="text-xs">${h.dateFin?formatDate(h.dateFin):"—"}</td><td class="text-xs">${safe(h.motifChangement)}</td></tr>`).join("")}</tbody></table>${canEditAffectations?`<div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary text-xs" onclick="openReaffectation('${a.id}')">＋ Nouvelle affectation</button>${!locked?`<button type="button" class="btn btn-danger text-xs" onclick="openOpsSuspensionModal('${a.id}')">⏸ Suspendre</button><button type="button" class="btn btn-danger text-xs" style="background:#111827;border-color:#000;color:#fff" onclick="openBlackListModal('${a.id}')">⛔ Blacklist</button><button type="button" class="btn btn-secondary text-xs" onclick="openOpsConvocationModal('${a.id}')">✉ Convoquer</button>`:""}</div>`:`<div class="text-xs text-slate-500">Visualisation uniquement. Les nouvelles affectations sont réservées au module OPS.</div>`}`;
 }
+
+const OPS_SUSPENSION_PIECES=["Compte rendu","Rapport d'incident","Convocation administrative","Autres"];
+function opsSuspensionUsers(){return (db.users||[]).filter(u=>u&&u.username&&u.actif!==false&&u.username!==session?.username)}
+function opsSuspensionRecipientsHTML(){
+  const users=opsSuspensionUsers();
+  if(!users.length)return `<div class="p-3 rounded bg-slate-50 text-sm text-slate-500">Aucun utilisateur SGDI disponible. La demande sera tout de même enregistrée en réception DRH.</div>`;
+  return `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${users.map(u=>{const role=String(u.role||u.niveau||"").toLowerCase();const checked=/rh|admin|adm|drh/.test(role);return `<label class="flex items-center gap-2 p-2 rounded border border-slate-200 text-sm"><input type="checkbox" name="dest" value="${escapeHTML(u.username)}" ${checked?"checked":""}/> <span><b>${escapeHTML(u.nom||u.username)}</b><br><span class="text-xs text-slate-500">${escapeHTML(u.role||u.niveau||"")}</span></span></label>`}).join("")}</div>`;
+}
+function opsSuspensionDeadlineFrom(createdAt){const d=new Date(createdAt||Date.now());d.setHours(d.getHours()+3);return d.toISOString()}
+function opsSuspensionDocumentHTML(a,draft,ref){
+  const agentName=((a.nom||"")+" "+(a.prenom||"")).trim();
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(ref)}</title><style>body{font-family:Arial;margin:24px;color:#111827}.head{border-bottom:3px solid #043970;padding-bottom:12px;margin-bottom:18px}.brand{font-weight:900;color:#043970;font-size:20px}h1{text-align:center;font-size:20px;text-transform:uppercase}.grid{display:grid;grid-template-columns:180px 1fr;gap:8px;margin:18px 0}.k{font-weight:700;color:#475569}.box{border:1px solid #cbd5e1;padding:12px;min-height:70px}.warn{background:#fee2e2;border:1px solid #fecaca;padding:10px;color:#991b1b;font-weight:700}.sign{margin-top:40px;display:flex;justify-content:space-between}.sign div{width:42%;border-top:1px solid #111827;text-align:center;padding-top:8px}</style></head><body><div class="head"><div class="brand">SGDI - OPS</div><div>Référence : ${escapeHTML(ref)} · Date : ${formatDate(today())}</div></div><h1>Demande de suspension</h1><div class="grid"><div class="k">Employé</div><div>${escapeHTML(agentName)} (${escapeHTML(a.matricule||"—")})</div><div class="k">Société</div><div>${escapeHTML(a.societe||"—")}</div><div class="k">Affectation</div><div>${escapeHTML(a.affectationCourante?.siteName||"Sans affectation")}</div><div class="k">Date début</div><div>${formatDate(draft.dateDebut)}</div><div class="k">Date limite</div><div>${formatDate(draft.dateFin)}</div><div class="k">Pièce jointe</div><div>${escapeHTML(draft.pieceType)}</div></div><div class="warn">La suspension ne doit pas dépasser 15 jours à compter de la date de début.</div><h3>Motif de la suspension</h3><div class="box">${escapeHTML(draft.motif)}</div><div class="sign"><div>Émetteur OPS</div><div>Validation DRH</div></div></body></html>`;
+}
+function opsSuspensionPreviewHTML(a,draft,ref){
+  return `<div class="space-y-3"><div class="p-3 rounded bg-red-50 border border-red-100"><div class="text-xs text-red-700 font-black uppercase">Demande de suspension</div><div class="font-black text-lg">${escapeHTML((a.nom||"")+" "+(a.prenom||""))} · ${escapeHTML(a.matricule||"—")}</div><div class="text-sm text-red-800">Délai maximum : ${formatDate(draft.dateDebut)} au ${formatDate(draft.dateFin)} inclus.</div></div><div class="grid grid-cols-2 gap-2 text-sm"><div class="p-2 bg-slate-50 rounded"><b>Société</b><br>${escapeHTML(a.societe||"—")}</div><div class="p-2 bg-slate-50 rounded"><b>Affectation</b><br>${escapeHTML(a.affectationCourante?.siteName||"Sans affectation")}</div><div class="p-2 bg-slate-50 rounded"><b>Pièce</b><br>${escapeHTML(draft.pieceType)}</div><div class="p-2 bg-slate-50 rounded"><b>Validation DRH attendue</b><br>03 heures</div></div><div><div class="label">Motif</div><div class="p-3 rounded border border-slate-200 whitespace-pre-wrap text-sm">${escapeHTML(draft.motif)}</div></div></div>`;
+}
+function openOpsSuspensionModal(agentId,draft){
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Agent introuvable","error");return}
+  const d=draft||{motif:"",dateDebut:today(),pieceType:"Compte rendu"};
+  openModal(`<h3 class="font-bold text-lg mb-3">Suspendre un employé</h3><form onsubmit="event.preventDefault();previewOpsSuspension('${agentId}',this)">
+    <div class="p-3 rounded bg-red-50 text-sm text-red-800 mb-3"><b>Règle :</b> la suspension ne doit pas dépasser 15 jours à compter de la date de début. La DRH doit valider sous 03 heures.</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="md:col-span-2"><label class="label">Motif de la suspension *</label><textarea class="textarea" name="motif" rows="4" required>${escapeHTML(d.motif||"")}</textarea></div>
+      <div><label class="label">Date de la suspension *</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(d.dateDebut||today())}" required/></div>
+      <div><label class="label">Pièce jointe *</label><select class="select" name="pieceType">${OPS_SUSPENSION_PIECES.map(x=>`<option ${d.pieceType===x?"selected":""}>${escapeHTML(x)}</option>`).join("")}</select></div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider</button></div>
+  </form>`);
+}
+function previewOpsSuspension(agentId,form){
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
+  const fd=new FormData(form);const motif=String(fd.get("motif")||"").trim();const dateDebut=String(fd.get("dateDebut")||"").trim();const pieceType=String(fd.get("pieceType")||"").trim();
+  if(!motif||!dateDebut||!pieceType){toast("Renseignez tous les champs obligatoires","error");return}
+  const draft={motif,dateDebut,pieceType,dateFin:addDays(dateDebut,15)};
+  window._opsSuspensionDraft={agentId,draft};
+  const ref="SUSP-OPS-"+new Date().toISOString().slice(0,10).replaceAll("-","")+"-"+Math.floor(Math.random()*9000+1000);
+  window._opsSuspensionDraft.ref=ref;
+  openModal(`<h3 class="font-bold text-lg mb-3">Aperçu de la demande</h3>${opsSuspensionPreviewHTML(a,draft,ref)}<div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsSuspensionModal('${agentId}',window._opsSuspensionDraft.draft)">Modifier</button><button type="button" class="btn btn-primary" onclick="openOpsSuspensionRecipients()">Envoyer</button></div>`);
+}
+function openOpsSuspensionPreviewAgain(){
+  const pack=window._opsSuspensionDraft;if(!pack)return;
+  const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
+  openModal(`<h3 class="font-bold text-lg mb-3">Aperçu de la demande</h3>${opsSuspensionPreviewHTML(a,pack.draft,pack.ref)}<div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsSuspensionModal('${pack.agentId}',window._opsSuspensionDraft.draft)">Modifier</button><button type="button" class="btn btn-primary" onclick="openOpsSuspensionRecipients()">Envoyer</button></div>`);
+}
+function openOpsSuspensionRecipients(){
+  const pack=window._opsSuspensionDraft;if(!pack)return;
+  const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
+  openModal(`<h3 class="font-bold text-lg mb-3">Envoyer la demande de suspension</h3>${opsSuspensionPreviewHTML(a,pack.draft,pack.ref)}<form onsubmit="event.preventDefault();sendOpsSuspensionRequest(this)"><div class="mt-4"><label class="label">Destinataires membres SGDI</label>${opsSuspensionRecipientsHTML()}</div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsSuspensionPreviewAgain()">Retour</button><button class="btn btn-primary">Envoyer</button></div></form>`);
+}
+function sendOpsSuspensionRequest(form){
+  const pack=window._opsSuspensionDraft;if(!pack)return;
+  const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
+  ensureDemandesPersonnel();
+  const ref=pack.ref||("SUSP-OPS-"+Date.now());
+  const html=opsSuspensionDocumentHTML(a,pack.draft,ref);
+  const htmlData="data:text/html;charset=utf-8,"+encodeURIComponent(html);
+  const createdAt=new Date().toISOString();
+  const d={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Demande suspension",typeLabel:"Demande suspension",categorie:"Suspension disciplinaire",urgence:"haute",objet:"Demande de suspension - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:pack.draft.motif,statut:"nouveau",source:"ops-suspension",deadlineAt:opsSuspensionDeadlineFrom(createdAt),pieces:[{name:ref+".html",type:"text/html",data:htmlData}],documentsDemandes:[],payloadOriginal:{suspension:pack.draft,reference:ref},historique:[{date:createdAt,user:session?.username||"OPS",action:"Demande suspension créée",note:"Validation DRH attendue sous 03 heures"}]};
+  db.demandesPersonnel.push(d);
+  a.suspensionsDemandes=a.suspensionsDemandes||[];a.suspensionsDemandes.push({id:d.id,ref,statut:"en_attente_drh",...pack.draft,createdAt,createdBy:session?.username||"OPS"});
+  const recipients=[...form.querySelectorAll('input[name="dest"]:checked')].map(x=>x.value).filter(Boolean);
+  db.echanges=db.echanges||[];
+  recipients.forEach(to=>db.echanges.push({id:uid("ech"),date:createdAt,from:session?.username||"ops",to,sujet:"Demande suspension "+(a.matricule||""),importance:"Élevée",message:"Demande de suspension à valider sous 03 heures pour "+d.agentName+". Réf: "+ref,attachments:[{name:ref+".html",type:"text/html",data:htmlData}],receivedBy:[],luPar:[session?.username||""],type:"message"}));
+  saveDB();closeModal();delete window._opsSuspensionDraft;toast("Demande de suspension envoyée à la DRH","success");renderSidebar();renderView();
+}
+function suspensionDemandStatusHTML(d){
+  if(d.source!=="ops-suspension")return"";
+  const late=d.deadlineAt&&Date.now()>new Date(d.deadlineAt).getTime()&&!['traite','rejete','annule'].includes(d.statut||'');
+  return `<div class="mt-3 p-3 rounded ${late?'bg-red-50 text-red-800':'bg-amber-50 text-amber-800'} text-sm"><b>Validation DRH sous 03 heures</b><br>Échéance : ${d.deadlineAt?new Date(d.deadlineAt).toLocaleString('fr-FR'):'—'} ${late?'<span class="pill pill-red">Délai dépassé</span>':''}</div>`;
+}
+function suspensionDemandActionsHTML(d){
+  if(d.source!=="ops-suspension")return"";
+  if(['traite','rejete','annule'].includes(d.statut||''))return `<span class="pill ${d.statut==='traite'?'pill-green':'pill-red'}">Suspension ${d.statut==='traite'?'validée':'rejetée'}</span>`;
+  return `<button class="btn btn-primary text-xs" onclick="validateOpsSuspensionDemand('${d.id}')">Valider suspension</button><button class="btn btn-ghost text-xs text-red-600" onclick="rejectOpsSuspensionDemand('${d.id}')">Rejeter</button>`;
+}
+function validateOpsSuspensionDemand(id){
+  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  const a=(db.agents||[]).find(x=>x.id===d.agentId);if(!a){toast("Employé introuvable","error");return}
+  const susp=d.payloadOriginal?.suspension||{};
+  a.statut="suspendu";
+  a.gestionEvents=a.gestionEvents||[];
+  a.gestionEvents.push({type:"Suspension",du:susp.dateDebut||today(),au:susp.dateFin||addDays(susp.dateDebut||today(),15),motif:susp.motif||d.message||"",statut:"en_cours",pieceType:susp.pieceType||"",createdAt:today(),createdBy:session?.username||"DRH",sourceDemandId:d.id});
+  (a.suspensionsDemandes||[]).filter(x=>x.id===d.id||x.ref===d.ref).forEach(x=>{x.statut="validee_drh";x.validatedAt=new Date().toISOString();x.validatedBy=session?.username||"DRH"});
+  d.statut="traite";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse="Votre suspension a été validée par la DRH. Période maximale : "+formatDate(susp.dateDebut||today())+" au "+formatDate(susp.dateFin||addDays(susp.dateDebut||today(),15))+". Motif : "+(susp.motif||d.message||"");
+  d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Suspension validée",note:"Document transmis au portail RH"});
+  saveDB();toast("Suspension validée et transmise au portail RH","success");renderSidebar();renderView();
+}
+function rejectOpsSuspensionDemand(id){
+  const motif=prompt("Motif du rejet DRH :")||"Demande rejetée par la DRH";
+  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  d.statut="rejete";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse=motif;d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Suspension rejetée",note:motif});
+  const a=(db.agents||[]).find(x=>x.id===d.agentId);(a?.suspensionsDemandes||[]).filter(x=>x.id===d.id||x.ref===d.ref).forEach(x=>{x.statut="rejetee_drh";x.rejectedAt=new Date().toISOString();x.rejectedBy=session?.username||"DRH";x.rejetMotif=motif});
+  saveDB();toast("Demande de suspension rejetée","success");renderSidebar();renderView();
+}
+
 function renderSanctions(a,locked,canEditSanctions){const s=a.sanctions||[];const canEdit=!!canEditSanctions&&!locked;return`<table class="mb-3"><thead><tr><th>Infraction</th><th>Site</th><th>Indicatif</th><th>Faute</th><th>Sanction</th><th>Mise à pied</th><th>Début</th><th>Reprise</th><th></th></tr></thead><tbody>${s.length===0?`<tr><td colspan="9" class="text-center text-slate-500 p-3">Aucune.</td></tr>`:s.map((x,i)=>`<tr><td class="text-xs">${formatDate(x.dateInfraction||x.date)}</td><td class="text-xs">${safe(x.site)}</td><td class="text-xs font-mono">${safe(x.indicatif)}</td><td class="text-xs">${escapeHTML((x.faute||"").slice(0,60))}</td><td><span class="pill ${x.type==="Licenciement"?"pill-red":x.type==="Blâme"||x.type==="Avertissement écrit"?"pill-amber":"pill-gray"}">${safe(x.type)}</span></td><td class="text-xs text-center">${x.joursMiseAPied?x.joursMiseAPied+" j":"—"}</td><td class="text-xs">${x.dateDebut?formatDate(x.dateDebut):"—"}</td><td class="text-xs">${x.dateReprise?formatDate(x.dateReprise):"—"}</td><td>${canEdit?`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="deleteSanction('${a.id}',${i})">✕</button>`:""}</td></tr>`).join("")}</tbody></table>${canEdit?`<button type="button" class="btn btn-secondary text-xs" onclick="openSanctionModal('${a.id}')">＋ Ajouter sanction</button>`:`<div class="text-xs text-slate-500">Visualisation uniquement. La création et la modification des sanctions disciplinaires sont réservées à la DRH.</div>`}`}
 
 function renderAgentPointageSituation(a){
@@ -4704,6 +4802,87 @@ function confirmSanction(agentId){
 }
 function deleteSanction(agentId,idx){if(!confirm("Supprimer ?"))return;const a=db.agents.find(x=>x.id===agentId);a.sanctions.splice(idx,1);saveDB();renderView()}
 
+
+
+function opsConvocationDocumentHTML(a,d,ref){
+  const agentName=((a.nom||"")+" "+(a.prenom||"")).trim();
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(ref)}</title><style>body{font-family:Arial;margin:28px;color:#111827}.head{border-bottom:3px solid #043970;padding-bottom:12px;margin-bottom:22px}.brand{font-weight:900;color:#043970;font-size:20px}h1{text-align:center;text-transform:uppercase;font-size:21px}.meta{display:grid;grid-template-columns:160px 1fr;gap:8px;margin:22px 0}.k{font-weight:800;color:#475569}.box{border:1px solid #cbd5e1;padding:14px;margin:14px 0;min-height:80px}.sign{margin-top:45px;text-align:right}.sign span{display:inline-block;width:220px;border-top:1px solid #111827;text-align:center;padding-top:8px}</style></head><body><div class="head"><div class="brand">SGDI - DRH</div><div>Référence : ${escapeHTML(ref)} · Date : ${formatDate(today())}</div></div><h1>Convocation officielle</h1><div class="meta"><div class="k">Destinataire</div><div>${escapeHTML(agentName)} (${escapeHTML(a.matricule||"—")})</div><div class="k">Société</div><div>${escapeHTML(a.societe||"—")}</div><div class="k">Site</div><div>${escapeHTML(a.affectationCourante?.siteName||"—")}</div><div class="k">Date convocation</div><div>${formatDate(d.dateConvocation)}</div><div class="k">Heure</div><div>${escapeHTML(d.heure||"—")}</div><div class="k">Lieu</div><div>${escapeHTML(d.lieu||"DRH")}</div></div><p>Vous êtes convoqué(e) officiellement par la Direction des Ressources Humaines pour le motif indiqué ci-dessous.</p><h3>Objet / motif</h3><div class="box">${escapeHTML(d.motif)}</div><p>La présence de l'intéressé(e) est obligatoire à la date et l'heure indiquées.</p><div class="sign"><span>Signature DRH</span></div></body></html>`;
+}
+function openOpsConvocationModal(agentId){
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Agent introuvable","error");return}
+  openModal(`<h3 class="font-bold text-lg mb-3">Demander une convocation DRH</h3><form onsubmit="event.preventDefault();sendOpsConvocationRequest('${agentId}',this)">
+    <div class="p-3 rounded bg-blue-50 text-sm text-blue-800 mb-3">La DRH recevra une demande et pourra envoyer la convocation officielle dans le portail RH de l'employé.</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="md:col-span-2"><label class="label">Motif / objet de la convocation *</label><textarea class="textarea" name="motif" rows="4" required></textarea></div>
+      <div><label class="label">Date souhaitée</label><input class="input" type="date" name="dateConvocation" value="${today()}"/></div>
+      <div><label class="label">Heure souhaitée</label><input class="input" type="time" name="heure" value="09:00"/></div>
+      <div class="md:col-span-2"><label class="label">Lieu</label><input class="input" name="lieu" value="DRH"/></div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Envoyer à la DRH</button></div>
+  </form>`);
+}
+function sendOpsConvocationRequest(agentId,form){
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
+  const fd=new FormData(form);const motif=String(fd.get("motif")||"").trim();if(!motif){toast("Motif obligatoire","error");return}
+  ensureDemandesPersonnel();
+  const createdAt=new Date().toISOString();const ref="CONV-OPS-"+createdAt.slice(0,10).replaceAll("-","")+"-"+Math.floor(Math.random()*9000+1000);
+  const details={motif,dateConvocation:String(fd.get("dateConvocation")||today()),heure:String(fd.get("heure")||""),lieu:String(fd.get("lieu")||"DRH")};
+  const d={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Demande convocation",typeLabel:"Demande convocation",categorie:"Convocation officielle",urgence:"haute",objet:"Demande de convocation - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:motif,statut:"nouveau",source:"ops-convocation",pieces:[],documentsDemandes:[],payloadOriginal:{convocation:details,reference:ref},historique:[{date:createdAt,user:session?.username||"OPS",action:"Demande convocation créée",note:"Transmission DRH"}]};
+  db.demandesPersonnel.push(d);
+  db.echanges=db.echanges||[];
+  (db.users||[]).filter(u=>u.username&&u.username!==session?.username&&/(rh|drh|admin|adm)/i.test(String(u.role||u.niveau||""))).forEach(u=>db.echanges.push({id:uid("ech"),date:createdAt,from:session?.username||"ops",to:u.username,sujet:"Demande convocation "+(a.matricule||""),importance:"Élevée",message:"Demande de convocation officielle pour "+d.agentName+". Réf: "+ref,attachments:[],receivedBy:[],luPar:[session?.username||""],type:"message"}));
+  saveDB();closeModal();toast("Demande de convocation envoyée à la DRH","success");renderSidebar();renderView();
+}
+function convocationDemandActionsHTML(d){
+  if(d.source!=="ops-convocation")return"";
+  if(['traite','rejete','annule'].includes(d.statut||''))return `<span class="pill ${d.statut==='traite'?'pill-green':'pill-red'}">Convocation ${d.statut==='traite'?'envoyée':'rejetée'}</span>`;
+  return `<button class="btn btn-primary text-xs" onclick="sendOfficialConvocationDemand('${d.id}')">Envoyer convocation</button><button class="btn btn-ghost text-xs text-red-600" onclick="rejectConvocationDemand('${d.id}')">Rejeter</button>`;
+}
+function sendOfficialConvocationDemand(id){
+  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  const a=(db.agents||[]).find(x=>x.id===d.agentId);if(!a){toast("Employé introuvable","error");return}
+  const conv=d.payloadOriginal?.convocation||{};const ref=d.ref||("CONV-DRH-"+Date.now());
+  const html=opsConvocationDocumentHTML(a,conv,ref);const htmlData="data:text/html;charset=utf-8,"+encodeURIComponent(html);
+  d.statut="traite";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse="Convocation officielle envoyée via le portail RH. Date : "+formatDate(conv.dateConvocation)+" à "+(conv.heure||"—")+". Lieu : "+(conv.lieu||"DRH");
+  d.pieces=d.pieces||[];d.pieces.push({name:ref+".html",type:"text/html",data:htmlData});
+  d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Convocation officielle envoyée",note:"Document transmis au portail RH"});
+  saveDB();toast("Convocation officielle envoyée au portail RH","success");renderSidebar();renderView();
+}
+function rejectConvocationDemand(id){
+  const motif=prompt("Motif du rejet DRH :")||"Demande de convocation rejetée par la DRH";
+  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  d.statut="rejete";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse=motif;d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Convocation rejetée",note:motif});
+  saveDB();toast("Demande de convocation rejetée","success");renderSidebar();renderView();
+}
+
+function agentBlackListContractBlocked(a){return !!(a&&(a.blacklist||a.blacklistContractBlocked||a.contractBlocked))}
+function normalizedPersonKey(n,p,d){return [n,p,d].map(x=>String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim()).join("|")}
+function candidateBlackListMatch(c){
+  if(!c)return null;
+  const nin=String(c.nin||"").trim();
+  const tel=String(c.telephone||c.phone||"").replace(/\D/g,"");
+  const key=normalizedPersonKey(c.nom||c.last_name,c.prenom||c.first_name,c.dateNaissance||c.birth_date);
+  return (db.agents||[]).find(a=>{
+    if(!agentBlackListContractBlocked(a))return false;
+    if(nin&&String(a.nin||"").trim()===nin)return true;
+    const atel=String(a.telephone||"").replace(/\D/g,"");
+    if(tel&&atel&&tel===atel)return true;
+    return key&&key===normalizedPersonKey(a.nom,a.prenom,a.dateNaissance);
+  })||null;
+}
+function sendBlackListAlertToDRH(a){
+  if(!a)return;
+  ensureDemandesPersonnel();
+  const createdAt=new Date().toISOString();
+  const ref="BL-OPS-"+createdAt.slice(0,10).replaceAll("-","")+"-"+Math.floor(Math.random()*9000+1000);
+  const msg="Agent inscrit sur la BLACKLIST. Il ne pourra plus signer de contrat ni être contractualisé sans levée administrative. Motif : "+(a.blacklistMotif||"Non précisé");
+  const alert={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Alerte blacklist",typeLabel:"Alerte blacklist",categorie:"Black list",urgence:"haute",objet:"BLACKLIST - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:msg,statut:"nouveau",source:"ops-blacklist",pieces:[],documentsDemandes:[],payloadOriginal:{blacklist:{motif:a.blacklistMotif||"",reference:a.blacklistReference||"",date:a.blacklistAt||createdAt,contractBlocked:true}},historique:[{date:createdAt,user:session?.username||"OPS",action:"Alerte blacklist créée",note:"Transmission DRH"}]};
+  db.demandesPersonnel.push(alert);
+  db.echanges=db.echanges||[];
+  const recipients=(db.users||[]).filter(u=>u.username&&u.username!==session?.username&&/(rh|drh|admin|adm)/i.test(String(u.role||u.niveau||"")));
+  recipients.forEach(u=>db.echanges.push({id:uid("ech"),date:createdAt,from:session?.username||"ops",to:u.username,sujet:"Alerte BLACKLIST "+(a.matricule||""),importance:"Très élevée",message:msg,attachments:[],receivedBy:[],luPar:[session?.username||""],type:"message"}));
+}
+
 /* ---- BLACK LIST ---- */
 function openBlackListModal(agentId){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
@@ -4735,8 +4914,11 @@ function confirmBlackList(agentId){
   a.blacklistBy=session?session.username:"system";
   a.blacklistMotif=fd.get("motif")||"";
   a.blacklistReference=fd.get("reference")||"";
+  a.blacklistContractBlocked=true;
+  a.contractBlocked=true;
   a.blacklistHistory=a.blacklistHistory||[];
-  a.blacklistHistory.push({action:"inscription",date:a.blacklistAt,by:a.blacklistBy,motif:a.blacklistMotif,reference:a.blacklistReference});
+  a.blacklistHistory.push({action:"inscription",date:a.blacklistAt,by:a.blacklistBy,motif:a.blacklistMotif,reference:a.blacklistReference,contractBlocked:true});
+  sendBlackListAlertToDRH(a);
   saveDB();
   if(typeof logActivity==="function")logActivity("Inscription Black List",a.nom+" "+a.prenom+" · "+a.matricule+" · Motif: "+a.blacklistMotif);
   closeModal();toast("⛔ Agent inscrit sur la black list","success");renderView();
@@ -4747,7 +4929,7 @@ function removeBlackList(agentId){
   const motif=prompt("Motif du retrait (obligatoire) :","");if(motif===null||!motif.trim()){toast("Motif requis","error");return}
   a.blacklistHistory=a.blacklistHistory||[];
   a.blacklistHistory.push({action:"retrait",date:new Date().toISOString(),by:session?session.username:"system",motif:motif.trim()});
-  a.blacklist=false;a.blacklistAt=null;a.blacklistBy=null;a.blacklistMotif="";a.blacklistReference="";
+  a.blacklist=false;a.blacklistAt=null;a.blacklistBy=null;a.blacklistMotif="";a.blacklistReference="";a.blacklistContractBlocked=false;a.contractBlocked=false;
   saveDB();
   if(typeof logActivity==="function")logActivity("Retrait Black List",a.nom+" "+a.prenom+" · Motif: "+motif.trim());
   closeModal();toast("Agent retiré de la black list","success");renderView();
@@ -5309,6 +5491,7 @@ function demandePersonnelCurrentAgent(){
 function demandePersonnelSociete(d){const a=(db.agents||[]).find(x=>x.id===d.agentId);return d.societe||a?.societe||mySoc()||""}
 function demandePersonnelIsAlert(d){
   if(!d||["traite","rejete","annule"].includes(d.statut))return false;
+  if(d.source==="ops-suspension"&&d.deadlineAt&&Date.now()>new Date(d.deadlineAt).getTime())return true;
   if(d.urgence==="haute")return true;
   const age=(Date.now()-new Date(d.createdAt||d.date||Date.now()).getTime())/3600000;
   return age>=48||((d.documentsDemandes||[]).some(x=>!x.recu));
@@ -5488,10 +5671,11 @@ function demandePersonnelCardHTML(d,personnel){
       <div class="flex gap-2 items-center">${demandePersonnelStatusPill(d.statut)}${alert?`<span class="pill pill-red">Alerte</span>`:""}</div>
     </div>
     <div class="text-sm text-slate-700 mt-2">${escapeHTML(d.message||"")}</div>
+    ${suspensionDemandStatusHTML(d)}
     ${d.reponse?`<div class="mt-3 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse DRH :</b> ${escapeHTML(d.reponse)}</div>`:""}
     ${docs.length?`<div class="mt-3 text-sm"><b>Documents demandés :</b>${docs.map((x,i)=>`<div class="flex items-center justify-between gap-2 py-1 border-b border-slate-100"><span>${escapeHTML(x.nom||"Document")} ${x.recu?`<span class="pill pill-green">reçu</span>`:`<span class="pill pill-red">à envoyer</span>`}</span>${personnel&&!x.recu?`<button class="btn btn-secondary text-xs" onclick="openUploadDocumentDemande('${d.id}',${i})">Envoyer</button>`:""}</div>`).join("")}</div>`:""}
     ${(d.pieces||[]).length?`<div class="mt-3 flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">Pièce ${i+1}</a>`).join("")}</div>`:""}
-    ${!personnel?`<div class="mt-3 flex gap-2 flex-wrap"><button class="btn btn-secondary text-xs" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter</button><button class="btn btn-ghost text-xs" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander document</button></div>`:""}
+    ${!personnel?`<div class="mt-3 flex gap-2 flex-wrap">${suspensionDemandActionsHTML(d)}${convocationDemandActionsHTML(d)}<button class="btn btn-secondary text-xs" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter</button><button class="btn btn-ghost text-xs" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander document</button></div>`:""}
   </div>`;
 }
 function demandePersonnelTypeLabel(d){return d.typeLabel||d.type||d.categorie||"Demande"}
@@ -5516,11 +5700,12 @@ function demandePersonnelDetailHTML(d){
       <div class="p-3 bg-slate-50 rounded"><div class="text-xs text-slate-500">Site</div><b>${escapeHTML(d.site||"—")}</b></div>
     </div>
     <div class="mb-4"><h3 class="font-bold text-sm mb-2">Message / contenu</h3><div class="p-3 rounded bg-blue-50 text-sm whitespace-pre-wrap">${escapeHTML(d.message||"Aucun message.")}</div></div>
+    ${suspensionDemandStatusHTML(d)}
     ${Object.keys(details).length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Détails du portail</h3>${Object.entries(details).filter(([,v])=>v).map(([k,v])=>`<div class="flex justify-between gap-3 py-1 border-b border-slate-100 text-sm"><span class="text-slate-500">${escapeHTML(k)}</span><b class="text-right">${escapeHTML(String(v))}</b></div>`).join("")}</div>`:""}
     ${d.reponse?`<div class="mb-4 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse DRH :</b><br>${escapeHTML(d.reponse)}</div>`:""}
     ${docs.length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Documents demandés</h3>${docs.map(x=>`<div class="flex justify-between py-1 border-b text-sm"><span>${escapeHTML(x.nom||"Document")}</span>${x.recu?`<span class="pill pill-green">Reçu</span>`:`<span class="pill pill-red">En attente</span>`}</div>`).join("")}</div>`:""}
     ${(d.pieces||[]).length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Pièces jointes</h3><div class="flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">Télécharger ${i+1}</a>`).join("")}</div></div>`:""}
-    <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter</button><button class="btn btn-ghost text-sm" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander document</button></div>
+    <div class="flex gap-2 flex-wrap">${suspensionDemandActionsHTML(d)}${convocationDemandActionsHTML(d)}<button class="btn btn-secondary text-sm" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter</button><button class="btn btn-ghost text-sm" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander document</button></div>
   </div>`;
 }
 function demandePersonnelResponseTemplates(d){
