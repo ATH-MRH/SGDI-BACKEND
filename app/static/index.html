@@ -2188,7 +2188,7 @@ function navDemandesPersonnelLabel(item){
   const label=escapeHTML(item&&item.label||"");
   return item&&item.route==="demandes_personnel/dashboard"&&Number(item.count||0)>0?`<span class="dp-reception-text">${label}</span>`:label;
 }
-function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE",children:[{label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
+function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE / طلبات الهيكل",children:[{label:"Réception / الاستقبال",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi / الإرسال",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
 function renderSidebar(){
   const path=(location.hash||"#/dashboard").slice(2);
   const _ag=myAgents();const _ca=myCandidats();const _co=myConges();
@@ -2203,9 +2203,9 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD FINANCES",icon:"📊",route:"facturation/dashboard"},
         {label:"Devis",icon:"📝",route:"facturation/devis",count:(db.devis||[]).length},
         {label:"Factures",icon:"🧾",route:"facturation/factures",count:(db.factures||[]).length},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
+        {label:"DEMANDE STRUCTURE / طلبات الهيكل",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception / الاستقبال",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi / الإرسال",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Paiements",icon:"💳",route:"facturation/paiements"},
         {label:"Avances clients",icon:"💰",route:"facturation/avances"},
         {label:"Avoirs",icon:"↩️",route:"facturation/avoirs"},
@@ -2218,9 +2218,9 @@ function renderSidebar(){
       ]},
       commercial:{label:"COMMERCIAL",color:"#8b5cf6",children:[
         {label:"TABLEAU DE BORD COMMERCIAL",icon:"📊",route:"commercial/dashboard"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
+        {label:"DEMANDE STRUCTURE / طلبات الهيكل",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception / الاستقبال",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi / الإرسال",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Prospects",icon:"🎯",route:"commercial/prospects",count:(db.prospects||[]).length},
         {label:"Clients",icon:"🤝",route:"commercial/clients",count:(db.clients||[]).length},
         {label:"Opportunités",icon:"💼",route:"commercial/opportunites",count:(db.opportunites||[]).filter(o=>!["gagnee","perdue"].includes(o.etape)).length},
@@ -2232,9 +2232,9 @@ function renderSidebar(){
       ]},
       materiel:{label:"MATÉRIEL & ÉQUIPEMENT",color:"#043970",children:[
         {label:"TABLEAU DE BORD MATERIEL",icon:"🏠",route:"materiel/dashboard"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
+        {label:"DEMANDE STRUCTURE / طلبات الهيكل",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception / الاستقبال",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi / الإرسال",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Articles",icon:"📦",route:"materiel/articles",count:(db.stockArticles||[]).length},
         {label:"MAGASIN",icon:"🏬",route:"materiel/magasins",count:(db.magasins||[]).length,title:true},
         {label:"Fournisseurs",icon:"🤝",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
@@ -2246,9 +2246,9 @@ function renderSidebar(){
       ]},
       pointage:{label:"POINTAGE",color:"#043970",children:[
         {label:"TABLEAU DE BORD POINTAGE",icon:"📝",route:"pointage/saisie"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
+        {label:"DEMANDE STRUCTURE / طلبات الهيكل",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception / الاستقبال",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi / الإرسال",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Récap par agent",icon:"👤",route:"pointage/recap"},
         {label:"Récap par société",icon:"🏢",route:"pointage/societe"},
         {label:"Statistiques",icon:"📈",route:"pointage/stats"},
@@ -2264,7 +2264,7 @@ function renderSidebar(){
         {label:"Droits d'accès",icon:"🔐",route:"admin/droits"},
         {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"Historique messages",icon:"💬",route:"admin/messages",count:(db.echanges||[]).filter(e=>e.type==="message"||e.attachments?.length).length},
-        {label:"Demande structure",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount()},
+        {label:"Demande structure / طلب الهيكل",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount()},
         {label:"Niveaux d'accès",icon:"🎚",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"Contrats du personnel",icon:"📄",route:"admin/contrats",count:(db.contratsPersonnel||[]).length},
         {label:"Priorités",icon:"⚡",route:"admin/priorites",count:(db.priorites||[]).length},
@@ -2369,7 +2369,7 @@ function renderSidebar(){
       ];
       const head="";
       const openGroup=sessionStorage.getItem("navOpenGroup")||"";
-      const drhOrangeTitles=new Set(["RECRUTEMENT","DEMANDE STRUCTURE","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
+      const drhOrangeTitles=new Set(["RECRUTEMENT","DEMANDE STRUCTURE / طلبات الهيكل","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
       const html=drhGroups.map(g=>{
         const isOrange=drhOrangeTitles.has(g.label);
         const titleStyle=isOrange?`style="color:#043970;font-size:13px;font-weight:900"`:"";
@@ -5519,7 +5519,7 @@ function normalizeStructureDemand(d){
   if(!d)return d;
   if(!d.fromStructure)d.fromStructure=String(d.source||"").startsWith("ops-")?"ops":(session?.transverse||"structure");
   if(!d.toStructure)d.toStructure="drh";
-  d.typeLabel=d.typeLabel||d.type||"Demande structure";
+  d.typeLabel=d.typeLabel||d.type||"Demande structure / طلب الهيكل";
   return d;
 }
 function migrateStructureDemandes(){
@@ -5896,13 +5896,13 @@ function structureDemandStatusPill(st){return demandePersonnelStatusPill(st)}
 function structureDemandCardHTML(d){
   const alert=demandePersonnelIsAlert(d);
   return `<div class="card p-4 mb-3" style="border-left:4px solid ${alert?"#dc2626":d.statut==="traite"?"#16a34a":"#0360a8"}">
-    <div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="font-black">${escapeHTML(d.objet||d.typeLabel||d.type||"Demande structure")}</div><div class="text-xs text-slate-500">${escapeHTML(d.ref||d.id||"")} · ${formatDate(d.createdAt||d.date)} · ${escapeHTML((d.fromStructure||"OPS").toUpperCase())} → ${escapeHTML((d.toStructure||"DRH").toUpperCase())}</div></div><div>${structureDemandStatusPill(d.statut)}</div></div>
-    <div class="grid grid-cols-2 gap-2 text-sm mt-3"><div class="p-2 bg-slate-50 rounded"><b>Employé</b><br>${escapeHTML(d.agentName||"—")} ${d.matricule?"· "+escapeHTML(d.matricule):""}</div><div class="p-2 bg-slate-50 rounded"><b>Société / Site</b><br>${escapeHTML(d.societe||"—")} · ${escapeHTML(d.site||"—")}</div></div>
+    <div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="font-black">${escapeHTML(d.objet||d.typeLabel||d.type||"Demande structure / طلب الهيكل")}</div><div class="text-xs text-slate-500">${escapeHTML(d.ref||d.id||"")} · ${formatDate(d.createdAt||d.date)} · ${escapeHTML((d.fromStructure||"OPS").toUpperCase())} → ${escapeHTML((d.toStructure||"DRH").toUpperCase())}</div></div><div>${structureDemandStatusPill(d.statut)}</div></div>
+    <div class="grid grid-cols-2 gap-2 text-sm mt-3"><div class="p-2 bg-slate-50 rounded"><b>Employé / الموظف</b><br>${escapeHTML(d.agentName||"—")} ${d.matricule?"· "+escapeHTML(d.matricule):""}</div><div class="p-2 bg-slate-50 rounded"><b>Société / Site / الشركة / الموقع</b><br>${escapeHTML(d.societe||"—")} · ${escapeHTML(d.site||"—")}</div></div>
     <div class="text-sm text-slate-700 mt-3 whitespace-pre-wrap">${escapeHTML(d.message||"")}</div>
     ${suspensionDemandStatusHTML(d)}
-    ${d.reponse?`<div class="mt-3 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse :</b> ${escapeHTML(d.reponse)}</div>`:""}
-    ${(d.pieces||[]).length?`<div class="mt-3 flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">Pièce ${i+1}</a>`).join("")}</div>`:""}
-    <div class="mt-3 flex gap-2 flex-wrap">${structureDemandReceived(d)?suspensionDemandActionsHTML(d)+convocationDemandActionsHTML(d):""}<button class="btn btn-secondary text-xs" onclick="openTraiterStructureDemand('${d.id}')">Répondre</button></div>
+    ${d.reponse?`<div class="mt-3 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse / الرد :</b> ${escapeHTML(d.reponse)}</div>`:""}
+    ${(d.pieces||[]).length?`<div class="mt-3 flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">Pièce / مرفق ${i+1}</a>`).join("")}</div>`:""}
+    <div class="mt-3 flex gap-2 flex-wrap">${structureDemandReceived(d)?suspensionDemandActionsHTML(d)+convocationDemandActionsHTML(d):""}<button class="btn btn-secondary text-xs" onclick="openTraiterStructureDemand('${d.id}')">Répondre / الرد</button></div>
   </div>`;
 }
 function renderDemandesStructure(view,sub,arg){
@@ -5914,13 +5914,13 @@ function renderDemandesStructure(view,sub,arg){
   let list=(db.demandesStructure||[]).filter(mode==="envoi"?structureDemandSent:structureDemandReceived);
   if(q)list=list.filter(d=>[d.ref,d.agentName,d.matricule,d.objet,d.message,d.type,d.typeLabel,d.societe,d.site].join(" ").toLowerCase().includes(q));
   list.sort((a,b)=>String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||"")));
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-bold">DEMANDE STRUCTURE</h1><p class="text-sm text-slate-500">Boîte interne entre structures SGDI · ${mode==="envoi"?"Envoi":"Réception"}</p></div><div class="flex gap-2"><button class="btn ${mode==='reception'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/reception')">Réception</button><button class="btn ${mode==='envoi'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/envoi')">Envoi</button></div></div><div class="card p-4 mb-4"><input class="input" placeholder="Recherche demande structure..." value="${escapeHTML(q)}" oninput="sessionStorage.setItem('ds_q',this.value);renderView()"/></div>${list.length?list.map(structureDemandCardHTML).join(""):`<div class="card p-10 text-center text-slate-500">Aucune demande structure.</div>`}`;
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-bold">DEMANDE STRUCTURE / طلبات الهيكل</h1><p class="text-sm text-slate-500">Boîte interne entre structures SGDI / صندوق داخلي بين الهياكل · ${mode==="envoi"?"Envoi / الإرسال":"Réception / الاستقبال"}</p></div><div class="flex gap-2"><button class="btn ${mode==='reception'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/reception')">Réception / الاستقبال</button><button class="btn ${mode==='envoi'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/envoi')">Envoi / الإرسال</button></div></div><div class="card p-4 mb-4"><input class="input" placeholder="Recherche demande structure / بحث طلب الهيكل..." value="${escapeHTML(q)}" oninput="sessionStorage.setItem('ds_q',this.value);renderView()"/></div>${list.length?list.map(structureDemandCardHTML).join(""):`<div class="card p-10 text-center text-slate-500">Aucune demande structure / لا يوجد أي طلب هيكل.</div>`}`;
 }
 function openTraiterStructureDemand(id){
   const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;
-  openModal(`<h3 class="font-bold text-lg mb-3">Répondre à la demande structure</h3><form onsubmit="event.preventDefault();saveTraiterStructureDemand('${id}',this)"><label class="label">Statut</label><select class="select mb-3" name="statut"><option value="en_cours" ${d.statut==='en_cours'?'selected':''}>En cours</option><option value="traite" ${d.statut==='traite'?'selected':''}>Traité</option><option value="rejete" ${d.statut==='rejete'?'selected':''}>Rejeté</option></select><label class="label">Réponse</label><textarea class="textarea mb-3" name="reponse" rows="4">${escapeHTML(d.reponse||"")}</textarea><div class="flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
+  openModal(`<h3 class="font-bold text-lg mb-3">Répondre à la demande structure / الرد على طلب الهيكل</h3><form onsubmit="event.preventDefault();saveTraiterStructureDemand('${id}',this)"><label class="label">Statut / الحالة</label><select class="select mb-3" name="statut"><option value="en_cours" ${d.statut==='en_cours'?'selected':''}>En cours / قيد المعالجة</option><option value="traite" ${d.statut==='traite'?'selected':''}>Traité / تمت المعالجة</option><option value="rejete" ${d.statut==='rejete'?'selected':''}>Rejeté / مرفوض</option></select><label class="label">Réponse / الرد</label><textarea class="textarea mb-3" name="reponse" rows="4">${escapeHTML(d.reponse||"")}</textarea><div class="flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler / إلغاء</button><button class="btn btn-primary">Enregistrer / حفظ</button></div></form>`);
 }
-function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;d.statut=form.statut.value;d.reponse=form.reponse.value||"";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse structure",note:d.statut});saveDB();closeModal();toast("Demande structure mise à jour","success");renderSidebar();renderView()}
+function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;d.statut=form.statut.value;d.reponse=form.reponse.value||"";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse structure / رد الهيكل",note:d.statut});saveDB();closeModal();toast("Demande structure mise à jour / تم تحديث طلب الهيكل","success");renderSidebar();renderView()}
 
 /* ---- CONGES ---- */
 function renderConges(view){
