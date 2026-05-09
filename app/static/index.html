@@ -10851,7 +10851,7 @@ function renderOpsSupervision(view,tab){
   if(!db.siteInspections)db.siteInspections=[];
   const soc=currentStructureSocieteFilter();
   const sites=(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc));
-  const supervisors=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&!["sortant","demissionne","licencie","archive"].includes(a.statut));
+  const supervisors=(db.agents||[]).filter(a=>{const poste=[a.fonction,a.poste,a.affectationCourante?.poste].filter(Boolean).join(" ");return(!soc||a.societe===soc)&&!["sortant","demissionne","licencie","archive"].includes(a.statut)&&/superviseur|controleur|contrôleur|inspecteur/i.test(poste)});
   const chauffeurs=inspectionDriverOptions(supervisors).filter(a=>!soc||a.societe===soc);
   const vehicules=inspectionVehicleOptions();
   const inspections=(db.siteInspections||[]).filter(i=>!soc||i.societe===soc);
