@@ -888,8 +888,12 @@ async function sgdiPullState(options){
       sgdiPostgresReady=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
       await sgdiLoadAuthState();
-      await syncCandidatesFromPostgres();
-      await syncSqlModulesFromPostgres();
+      const syncResults=await Promise.allSettled([syncCandidatesFromPostgres(),syncSqlModulesFromPostgres()]);
+      const syncErrors=syncResults.filter(r=>r.status==="rejected").map(r=>r.reason?.message||String(r.reason));
+      if(syncErrors.length){
+        console.warn("Synchronisation PostgreSQL partielle",syncErrors);
+        if(!opt.silent&&typeof toast==="function")toast("Chargement partiel PostgreSQL : "+syncErrors.join(" · "),"warning");
+      }
       const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
       if(typeof normalizePostesInDB==="function")normalizePostesInDB();
       const pruned=pruneEmptyCandidates();
@@ -1231,7 +1235,12 @@ function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()|
 function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||""}}
 async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWrite();const saved=c.backendId?await SGDI.commercial.updateClient(c.backendId,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
-async function syncSqlModulesFromPostgres(){await syncSitesFromPostgres();await syncMaterielFromPostgres();await syncClientsFromPostgres()}
+async function syncSqlModulesFromPostgres(){
+  const tasks=[syncSitesFromPostgres(),syncMaterielFromPostgres(),syncClientsFromPostgres()];
+  const results=await Promise.allSettled(tasks);
+  const errors=results.filter(r=>r.status==="rejected").map(r=>r.reason?.message||String(r.reason));
+  if(errors.length)throw new Error(errors.join(" · "));
+}
 
 function ensureContratsPersonnel(){
   if(!db)return;
