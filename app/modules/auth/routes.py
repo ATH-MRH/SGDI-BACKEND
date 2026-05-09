@@ -23,8 +23,13 @@ from app.modules.auth.service import authenticate, create_user, update_user
 router = APIRouter()
 
 
+def is_admin_role(role: str | None) -> bool:
+    value = (role or "").strip().upper()
+    return value in {"ADMIN", "ADM", "ADM1", "ADM2"}
+
+
 def require_admin(user: User) -> None:
-    if user.role != "admin":
+    if not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès administrateur requis")
 
 
@@ -92,7 +97,7 @@ def delete_user(username: str, db: Session = Depends(get_db), user: User = Depen
 
 @router.get("/access-rules", response_model=list[AccessRuleOut])
 def list_access_rules(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if user.role != "admin":
+    if not is_admin_role(user.role):
         rules = db.query(AccessRule).filter(AccessRule.role == user.role).order_by(AccessRule.module_key).all()
     else:
         rules = db.query(AccessRule).order_by(AccessRule.module_key, AccessRule.role).all()
