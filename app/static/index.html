@@ -322,7 +322,11 @@
   .dialogue-users{background:#e5e7eb;border-right:1px solid #cbd5e1;overflow:auto;padding:8px}
   .dialogue-user{width:100%;border:1px solid transparent;background:transparent;color:#0f172a;border-radius:9px;padding:8px 7px;margin-bottom:6px;text-align:left;cursor:pointer;font-size:11px;line-height:1.15}
   .dialogue-user.active{background:#111827;color:#fff;border-color:#111827}
+  .dialogue-user.has-unread{border-color:#dc2626;background:#fee2e2}
+  .dialogue-user.active.has-unread{background:#111827;color:#fff;box-shadow:0 0 0 2px rgba(220,38,38,.35)}
   .dialogue-user .dot{float:right;background:#dc2626;color:#fff;border-radius:999px;min-width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900}
+  .dialogue-red-light{width:9px;height:9px;border-radius:999px;background:#dc2626;display:inline-block;margin-left:7px;box-shadow:0 0 0 4px rgba(220,38,38,.18);animation:dialoguePulse 1s infinite}
+  @keyframes dialoguePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.42;transform:scale(.72)}}
   .dialogue-chat{display:flex;flex-direction:column;min-width:0;min-height:0;background:#f8fafc}
   .dialogue-chat-head{padding:9px 11px;border-bottom:1px solid #cbd5e1;background:#fff;font-size:12px;font-weight:900;color:#0f172a}
   .dialogue-thread{flex:1;overflow:auto;padding:10px;background:#f8fafc}
@@ -330,6 +334,8 @@
   .chat-bubble.mine{margin-left:auto;background:#043970;color:#fff;border-bottom-right-radius:4px}
   .chat-bubble.theirs{margin-right:auto;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-bottom-left-radius:4px}
   .chat-meta{font-size:9.5px;opacity:.72;margin-top:4px;white-space:nowrap}
+  .chat-status{font-size:10px;opacity:.88;margin-top:3px;text-align:right;font-weight:700}
+  .chat-status.read{color:#38bdf8}.chat-status.received{color:#bbf7d0}.chat-status.sent{color:#e5e7eb}
   .dialogue-composer{border-top:1px solid #cbd5e1;background:#fff;padding:8px;display:flex;gap:6px;align-items:flex-end}
   .dialogue-composer textarea{min-height:38px;max-height:88px;resize:vertical;font-size:12px;padding:8px}
   .dialogue-send{border:none;background:#111827;color:#fff;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}
@@ -2543,6 +2549,57 @@ function dialogueToggle(open){
   if(next)dialogueMarkRead();
   render();
 }
+function dialogueIncomingUnreadItems(){
+  if(!session)return[];
+  const u=session.username;
+  return (db.echanges||[]).filter(m=>m.from!==u&&(m.to===u||m.to==="all"||isAdmin())&&(!m.luPar||!m.luPar.includes(u)));
+}
+function dialoguePlaySound(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;
+    const ctx=new Ctx();
+    const o=ctx.createOscillator();const g=ctx.createGain();
+    o.type="sine";o.frequency.value=880;g.gain.value=.001;
+    o.connect(g);g.connect(ctx.destination);
+    const t=ctx.currentTime;
+    g.gain.exponentialRampToValueAtTime(.08,t+.02);
+    g.gain.exponentialRampToValueAtTime(.001,t+.18);
+    o.start(t);o.stop(t+.2);
+  }catch(e){}
+}
+function dialogueCheckNewMessages(){
+  if(!session||!db)return;
+  const ids=dialogueIncomingUnreadItems().map(m=>m.id).sort();
+  const key="dialogueUnreadIds:"+session.username;
+  const prev=(sessionStorage.getItem(key)||"").split(",").filter(Boolean);
+  const hasBaseline=sessionStorage.getItem(key)!==null;
+  const fresh=ids.filter(id=>!prev.includes(id));
+  sessionStorage.setItem(key,ids.join(","));
+  if(hasBaseline&&fresh.length){dialoguePlaySound();if(typeof toast==="function")toast("Nouveau message reçu","info")}
+}
+function dialogueMarkReceived(){
+  if(!session||!db||!db.echanges)return;
+  const u=session.username;let changed=false;
+  dialogueVisibleItems().forEach(m=>{
+    if(m.from===u)return;
+    if(!m.receivedBy)m.receivedBy=[];
+    if(!m.receivedBy.includes(u)){m.receivedBy.push(u);changed=true}
+  });
+  if(changed)saveDB();
+}
+function dialogueMessageStatus(m){
+  if(!session||!m||m.from!==session.username)return"";
+  if(m.to==="all"){
+    const readers=(m.luPar||[]).filter(x=>x!==session.username).length;
+    const receivers=(m.receivedBy||[]).filter(x=>x!==session.username).length;
+    if(readers)return '<div class="chat-status read">✓✓ Lu par '+readers+'</div>';
+    if(receivers)return '<div class="chat-status received">✓✓ Reçu par '+receivers+'</div>';
+    return '<div class="chat-status sent">✓ Envoyé</div>';
+  }
+  if((m.luPar||[]).includes(m.to))return '<div class="chat-status read">✓✓ Lu</div>';
+  if((m.receivedBy||[]).includes(m.to))return '<div class="chat-status received">✓✓ Reçu</div>';
+  return '<div class="chat-status sent">✓ Envoyé</div>';
+}
 function dialogueVisibleItems(){
   const all=(db.echanges||[]).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
   if(isAdmin())return all;
@@ -2561,7 +2618,7 @@ function dialogueSelectedPeer(){
   if(saved&&peers.some(p=>p.key===saved))return saved;
   return peers[0]?.key||"all";
 }
-function dialogueSetPeer(peer){sessionStorage.setItem("dialoguePeer",peer||"all");dialogueMarkRead(peer);render()}
+function dialogueSetPeer(peer){sessionStorage.setItem("dialoguePeer",peer||"all");dialogueMarkRead(peer);dialogueCheckNewMessages();render()}
 function dialogueConversationUsers(){
   const users=(db.users||[]).filter(u=>u.username!==session?.username);
   const map=new Map();
@@ -2586,8 +2643,9 @@ function dialogueMarkRead(peer){
   const u=session.username;
   const target=peer||sessionStorage.getItem("dialoguePeer")||dialogueSelectedPeer();
   const items=target?dialogueThreadItems(target):dialogueVisibleItems();
-  items.forEach(m=>{if(!m.luPar)m.luPar=[];if(!m.luPar.includes(u))m.luPar.push(u)});
-  saveDB();
+  let changed=false;
+  items.forEach(m=>{if(!m.luPar)m.luPar=[];if(!m.luPar.includes(u)){m.luPar.push(u);changed=true}});
+  if(changed)saveDB();
 }
 function dialogueUsersOptions(selected){
   const users=(db.users||[]).filter(u=>u.username!==session.username);
@@ -2603,14 +2661,17 @@ function importanceBadge(v,extraClass){
 function dialogueBoxHTML(){
   if(!session)return"";
   const open=dialogueIsOpen();
-  const peers=dialogueConversationUsers();
+  dialogueMarkReceived();
+  dialogueCheckNewMessages();
   const selected=dialogueSelectedPeer();
+  if(open)dialogueMarkRead(selected);
+  const peers=dialogueConversationUsers();
   const peer=peers.find(p=>p.key===selected)||peers[0]||{key:"all",label:"Général",sub:"Tous"};
-  const unread=dialogueVisibleItems().filter(m=>!m.luPar||!m.luPar.includes(session.username)).length;
-  const usersHTML=peers.map(p=>'<button class="dialogue-user '+(p.key===selected?'active':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
+  const unread=dialogueIncomingUnreadItems().length;
+  const usersHTML=peers.map(p=>'<button class="dialogue-user '+(p.key===selected?'active ':'')+(p.unread?'has-unread':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
   return '<button class="dialogue-fab no-print '+(open?'hidden':'')+'" onclick="dialogueToggle(true)">Boîte dialogue'+(unread?'<span class="badge">'+unread+'</span>':'')+'</button>'+
   '<aside class="dialogue-panel no-print '+(open?'':'closed')+'" aria-label="Boîte de dialogue interne">'+
-    '<div class="dialogue-head"><div class="dialogue-title">BOÎTE DE DIALOGUE</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Messages entre utilisateurs SGDI</div><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Réduire</button></div></div>'+
+    '<div class="dialogue-head"><div class="dialogue-title">BOÎTE DE DIALOGUE'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Messages entre utilisateurs SGDI</div><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Réduire</button></div></div>'+
     '<div class="dialogue-layout"><div class="dialogue-users">'+(usersHTML||'<div class="text-xs text-slate-500">Aucun utilisateur</div>')+'</div><div class="dialogue-chat">'+
       '<div class="dialogue-chat-head">'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div>'+
       '<div class="dialogue-thread" id="dialogue-body">'+feedRowsHTML(selected)+'</div>'+dialogueComposerHTML(selected)+
@@ -2623,7 +2684,7 @@ function feedRowsHTML(peer){
   return items.map(m=>{
     const mine=m.from===session.username;
     const from=(db.users||[]).find(u=>u.username===m.from);
-    return '<div class="chat-bubble '+(mine?'mine':'theirs')+'">'+(m.sujet?'<div class="font-bold mb-1">'+escapeHTML(m.sujet)+'</div>':'')+'<div>'+escapeHTML(m.message||'')+'</div><div class="chat-meta">'+escapeHTML(mine?'Moi':(from?from.nom:m.from||'—'))+' · '+new Date(m.date).toLocaleString('fr-FR')+'</div></div>';
+    return '<div class="chat-bubble '+(mine?'mine':'theirs')+'">'+(m.sujet?'<div class="font-bold mb-1">'+escapeHTML(m.sujet)+'</div>':'')+'<div>'+escapeHTML(m.message||'')+'</div><div class="chat-meta">'+escapeHTML(mine?'Moi':(from?from.nom:m.from||'—'))+' · '+new Date(m.date).toLocaleString('fr-FR')+'</div>'+dialogueMessageStatus(m)+'</div>';
   }).join('');
 }
 function dialogueComposerHTML(peer){
@@ -2645,7 +2706,7 @@ function dialogueSend(form){
   const to=(fd.get("to")||dialogueSelectedPeer()||"admin").toString();
   if(!msg){toast("Message obligatoire","error");return}
   if(!db.echanges)db.echanges=[];
-  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session.username,to,sujet:"",importance:"Normal",message:msg,obligation:"",droit:"",conduite:"",luPar:[session.username],type:"message"});
+  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session.username,to,sujet:"",importance:"Normal",message:msg,obligation:"",droit:"",conduite:"",receivedBy:[],luPar:[session.username],type:"message"});
   if(db.echanges.length>800)db.echanges=db.echanges.slice(-800);
   saveDB();
   sessionStorage.setItem("dialogueOpen","1");
