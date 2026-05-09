@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
@@ -103,6 +104,8 @@ def ensure_schema_upgrades() -> None:
             connection.execute(text("DROP TABLE IF EXISTS irongs_collections"))
 
 
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -160,12 +163,12 @@ def database_health() -> dict:
 
 @app.get("/", include_in_schema=False)
 def frontend() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache, max-age=0"})
 
 
 @app.get("/sw.js", include_in_schema=False)
 def service_worker() -> FileResponse:
-    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript", headers={"Cache-Control": "no-store", "Service-Worker-Allowed": "/"})
+    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript", headers={"Cache-Control": "no-cache, max-age=0", "Service-Worker-Allowed": "/"})
 
 
 @app.get("/favicon.ico", include_in_schema=False)
