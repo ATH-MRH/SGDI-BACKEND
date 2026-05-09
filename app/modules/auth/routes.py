@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from urllib.parse import unquote
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -58,7 +59,13 @@ def patch_user(
     user: User = Depends(current_user),
 ):
     require_admin(user)
-    target = db.query(User).filter(User.username == username).one_or_none()
+    lookup = unquote(username).strip()
+    candidates = [lookup]
+    if "/" in lookup:
+        candidates.append(lookup.replace("/", ""))
+        candidates.append(lookup.replace("/", "-"))
+        candidates.append(lookup.split("/")[-1])
+    target = db.query(User).filter(User.username.in_(dict.fromkeys(candidates))).one_or_none()
     if target is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     return update_user(db, target, payload)
@@ -69,7 +76,13 @@ def delete_user(username: str, db: Session = Depends(get_db), user: User = Depen
     require_admin(user)
     if username == user.username:
         raise HTTPException(status_code=400, detail="Impossible de supprimer votre propre compte")
-    target = db.query(User).filter(User.username == username).one_or_none()
+    lookup = unquote(username).strip()
+    candidates = [lookup]
+    if "/" in lookup:
+        candidates.append(lookup.replace("/", ""))
+        candidates.append(lookup.replace("/", "-"))
+        candidates.append(lookup.split("/")[-1])
+    target = db.query(User).filter(User.username.in_(dict.fromkeys(candidates))).one_or_none()
     if target is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     db.delete(target)

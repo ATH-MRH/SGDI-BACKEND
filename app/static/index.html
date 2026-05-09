@@ -11095,8 +11095,13 @@ async function confirmAdminUser(originalUsername){
           await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,password:password||"Admin"});
           toast("Utilisateur recréé dans PostgreSQL. Mot de passe par défaut : Admin","warning");
         }catch(createErr){
-          toast("Modification PostgreSQL refusée : "+(createErr.message||createErr),"error");
-          return;
+          const createMsg=String(createErr.message||createErr||"");
+          if(/déjà existant|deja existant|already/i.test(createMsg)){
+            toast("Utilisateur déjà présent dans PostgreSQL : modification locale appliquée.","warning");
+          }else{
+            toast("Modification PostgreSQL refusée : "+createMsg,"error");
+            return;
+          }
         }
       }else{
         toast("Modification PostgreSQL refusée : "+msg,"error");
