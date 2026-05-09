@@ -142,8 +142,8 @@ def patch_access_rule(
 def admin_system_login(payload: AdminSystemLoginIn, db: Session = Depends(get_db)):
     if payload.password != settings.admin_system_password:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mot de passe administration système incorrect")
-    user = db.query(User).filter(User.username == "admin", User.role == "admin", User.is_active.is_(True)).one_or_none()
-    if user is None:
+    user = db.query(User).filter(User.username == "admin", User.is_active.is_(True)).one_or_none()
+    if user is None or not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte admin introuvable ou inactif")
     token = create_access_token(str(user.id), {"role": user.role, "username": user.username})
     return {"access_token": token, "token_type": "bearer", "user": user}

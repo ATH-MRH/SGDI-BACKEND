@@ -1772,9 +1772,8 @@ async function confirmAdminLoginAccess(p){
     saveSession(session);
     db=emptyDB();
     hydrateDB(db);
-    await sgdiPullState({render:false,silent:true,force:true}).catch(()=>{});
+    await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>{});
     await sgdiLoadAuthState();
-    await syncCandidatesFromPostgres();
     session={...session,transverse:"admin",societe:null};
     sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");
     saveSession(session);
