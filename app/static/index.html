@@ -1083,7 +1083,7 @@ function rememberUserPermissions(username,societes,niveau,structures){
   if(!username)return;
   const cache=userPermissionCache();
   const prev=cache[username]||{};
-  cache[username]={societesAutorisees:Array.isArray(societes)?societes:[],structuresAutorisees:Array.isArray(structures)?structures:(Array.isArray(prev.structuresAutorisees)?prev.structuresAutorisees:[]),niveau:niveau||""};
+  cache[username]={societesAutorisees:Array.isArray(societes)?societes:[],structuresAutorisees:normalizeStructureList(Array.isArray(structures)?structures:(Array.isArray(prev.structuresAutorisees)?prev.structuresAutorisees:[])),niveau:niveau||""};
 }
 async function sgdiLoadAuthState(){
   if(!sgdiAuthToken()||!db)return;
@@ -1096,9 +1096,9 @@ async function sgdiLoadAuthState(){
       const cached=cache[u.username]||{};
       const prev=previous[u.username]||{};
       const pgSoc=Array.isArray(u.authorized_societies)?u.authorized_societies:[];
-      const pgStruct=Array.isArray(u.authorized_structures)?u.authorized_structures:[];
+      const pgStruct=normalizeStructureList(u.authorized_structures);
       const savedSoc=Array.isArray(cached.societesAutorisees)?cached.societesAutorisees:(Array.isArray(prev.societesAutorisees)?prev.societesAutorisees:[]);
-      const savedStruct=Array.isArray(cached.structuresAutorisees)?cached.structuresAutorisees:(Array.isArray(prev.structuresAutorisees)?prev.structuresAutorisees:[]);
+      const savedStruct=normalizeStructureList(Array.isArray(cached.structuresAutorisees)?cached.structuresAutorisees:(Array.isArray(prev.structuresAutorisees)?prev.structuresAutorisees:[]));
       const socs=pgSoc.length?pgSoc:savedSoc;
       const structs=pgStruct.length?pgStruct:savedStruct;
       const niveau=u.access_level||u.niveau||cached.niveau||prev.niveau||(String(u.role||"").toUpperCase().startsWith("ADM")||u.role==="admin"?"H5":"H3");
@@ -1748,7 +1748,7 @@ async function login(u,p){
       const us=await window.SGDI_API.auth.login(u,p);
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
-      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,structuresAutorisees:Array.isArray(authUser.authorized_structures)?authUser.authorized_structures:[]};
+      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
       saveSession(session);
       const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
       if(!loaded){
@@ -1759,7 +1759,7 @@ async function login(u,p){
         toast("Connexion refusée : PostgreSQL n'a pas chargé les données","error");return;
       }
       const localUser=(db.users||[]).find(x=>x.username===session.username);
-      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,structuresAutorisees:Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[])};saveSession(session)}
+      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
       location.hash="#/select-societe";route();return;
     }catch(e){
       sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
@@ -1957,8 +1957,11 @@ function structureTopbarItems(){
     {key:"facturation",icon:"💼",label:"Finances",roles:["rh","admin"]},
     {key:"commercial",icon:"🤝",label:"Commercial",roles:["rh","admin"]}
   ];
+  const baseItems=session?.transverse==="drh"?items.filter(i=>i.key==="drh"):items;
+  const allowed=currentAllowedStructures();
+  if(allowed.length)return baseItems.filter(i=>allowed.includes(i.key));
   const role=adminAccessBaseRole(session?.role||"agent");
-  return (session?.transverse==="drh"?items.filter(i=>i.key==="drh"):items).filter(i=>i.roles.includes(role)&&canAccessStructureKey(i.key));
+  return baseItems.filter(i=>i.roles.includes(role));
 }
 function topbarStructureTabsHTML(){
   if(!session)return"";
@@ -10751,10 +10754,23 @@ const ADMIN_ROLES=["rh","dispatch","agent","admin"];
 const ADMIN_ACCESS_ROLES=["AG1","AG2","AG3","CAD1","CAD2","CAD3","SUP1","SUP2","SUP3","ADM1","ADM2"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"commercial",label:"COMMERCIAL"},{key:"pointage",label:"POINTAGE"},{key:"admin",label:"ADMINISTRATION SYSTEME"}];
-function adminStructureLabel(key){const x=ADMIN_STRUCTURES.find(s=>s.key===key);return x?x.label:String(key||"").toUpperCase()}
-function userAllowedStructures(user){return Array.isArray(user&&user.structuresAutorisees)?user.structuresAutorisees:[]}
+function normalizeStructureKey(value){
+  const raw=String(value||"").trim();
+  const v=raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[_\s-]+/g," ");
+  if(["drh","rh","ressources humaines"].includes(v))return"drh";
+  if(["ops","operations","operation"].includes(v))return"ops";
+  if(v.includes("materiel")||v.includes("equip"))return"materiel";
+  if(v.includes("finance")||v.includes("compta")||v.includes("facturation"))return"facturation";
+  if(v.includes("commercial"))return"commercial";
+  if(v.includes("pointage"))return"pointage";
+  if(v.includes("admin"))return"admin";
+  return ADMIN_STRUCTURES.some(s=>s.key===raw)?raw:"";
+}
+function normalizeStructureList(list){const out=[];(Array.isArray(list)?list:[]).forEach(x=>{const k=normalizeStructureKey(x);if(k&&!out.includes(k))out.push(k)});return out}
+function adminStructureLabel(key){const k=normalizeStructureKey(key);const x=ADMIN_STRUCTURES.find(s=>s.key===k);return x?x.label:String(key||"").toUpperCase()}
+function userAllowedStructures(user){return normalizeStructureList(user&&user.structuresAutorisees)}
 function currentAllowedStructures(){return userAllowedStructures(currentUserRecord()||session)}
-function canAccessStructureKey(key){if(isAdmin())return true;const allowed=currentAllowedStructures();return !allowed.length||allowed.includes(key)}
+function canAccessStructureKey(key){if(isAdmin())return true;const allowed=currentAllowedStructures();return !allowed.length||allowed.includes(normalizeStructureKey(key))}
 function adminAccessBaseRole(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"agent";if(r.startsWith("CAD"))return"rh";if(r.startsWith("SUP"))return"dispatch";if(r.startsWith("ADM"))return"admin";return String(role||"").toLowerCase()}
 function normalizeAdminUserRole(role){const r=String(role||"").trim();if(ADMIN_USER_ROLES.includes(r))return r;const b=adminAccessBaseRole(r);return b==="admin"?"ADM2":b==="rh"?"CAD1":b==="dispatch"?"SUP1":"AG1"}
 function adminRoleColor(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"#0f766e";if(r.startsWith("CAD"))return"#043970";if(r.startsWith("SUP"))return"#7c3aed";if(r.startsWith("ADM")||r==="ADMIN")return"#dc2626";return"#64748b"}
@@ -11131,7 +11147,7 @@ function openAdminUserModal(username){
       <label class="label mt-3">Périmètre sociétés autorisées (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${SOCIETES.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/>${escapeHTML(s)}</label>`).join("")}</div>
       <label class="label mt-3">Structures autorisées (vide = toutes)</label>
-      <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${u.structuresAutorisees&&u.structuresAutorisees.includes(st.key)?"checked":""}/>${escapeHTML(st.label)}</label>`).join("")}</div>
+      <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""}/>${escapeHTML(st.label)}</label>`).join("")}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
   setTimeout(()=>previewUserAccessLevel(selectedNiveau),0);
