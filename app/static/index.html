@@ -96,10 +96,11 @@
   .nav-group,.nav-link,.sub-link{justify-content:flex-start!important;text-align:left!important}
   .nav-group{gap:6px!important}
   .nav-group>span:first-child,.nav-link,.sub-link{min-width:0!important;flex:1 1 auto!important}
-  .nav-group>span:first-child{justify-content:flex-start!important;text-align:left!important}
-  .nav-group .arrow{flex:0 0 auto!important}
+  .nav-group>span:first-child{display:grid!important;grid-template-columns:18px 18px minmax(0,1fr) auto!important;align-items:center!important;column-gap:6px!important;width:100%;justify-content:flex-start!important;text-align:left!important}
+  .nav-group .arrow{grid-column:1;flex:0 0 auto!important}
+  .nav-link,.sub-link{display:grid!important;grid-template-columns:18px minmax(0,1fr) auto!important;align-items:center!important;column-gap:7px!important}
   .nav-link .ico,.sub-link>span:first-child,.nav-group .arrow,.nav-group .ico{width:18px!important;min-width:18px!important;max-width:18px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;flex:0 0 18px!important}
-  .nav-link,.sub-link,.nav-group>span:first-child{display:flex!important;align-items:center!important}
+  .nav-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:normal;line-height:1.15;text-align:left!important}
   .nav-link{padding-left:8px!important}
   .sub-link{padding-left:10px!important}
   .sidebar-module-title{color:#facc15!important;font-size:24px!important;font-weight:900!important;line-height:1.05!important}
@@ -110,13 +111,13 @@
   .nav-group:hover *{color:#facc15!important}
   .nav-group .arrow{font-size:10px!important;transition:transform .2s ease;color:#71717a!important}
   .nav-group.collapsed .arrow{transform:rotate(-90deg)}
-  .nav-link{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:7px;color:#d4d4d8!important;font-size:12px!important;font-weight:650;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
+  .nav-link{padding:8px 9px;border-radius:7px;color:#d4d4d8!important;font-size:12px!important;font-weight:650;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
   .nav-link:hover{background:#18181b!important;color:#facc15!important}
   .nav-link:hover *{color:#facc15!important}
   .nav-link.active{background:#27272a!important;color:#facc15!important;font-weight:850;box-shadow:none!important}
   .nav-link .ico,.nav-group .ico{width:18px!important;min-width:18px!important;max-width:18px!important;text-align:center;font-size:14px!important;color:#facc15!important;opacity:.95}
   .nav-link .nav-count{margin-left:auto;background:#facc15!important;color:#111113!important;font-size:10px!important;font-weight:900;min-width:20px;height:19px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;box-shadow:none!important}
-  .sub-link{display:flex;align-items:center;gap:7px;padding:7px 8px 7px 8px;font-size:11.5px!important;color:#a1a1aa!important;border-radius:7px;cursor:pointer;transition:background .12s,color .12s,box-shadow .12s;font-weight:600}
+  .sub-link{padding:7px 8px 7px 8px;font-size:11.5px!important;color:#a1a1aa!important;border-radius:7px;cursor:pointer;transition:background .12s,color .12s,box-shadow .12s;font-weight:600}
   .sub-link:hover{color:#facc15!important;background:#18181b!important}
   .sub-link:hover *{color:#facc15!important}
   .sub-link.active{color:#facc15!important;background:#27272a!important;font-weight:850;box-shadow:none!important}
@@ -2495,14 +2496,14 @@ function renderSidebar(){
       const head="";
       const openGroup=sidebarOpenGroup();
       const html=opsGroups.map(g=>{
-        if(g.type==="link"){const a=sidebarRouteActive(path,g.route)?"active":"";const badge=typeof g.count==="number"?`<span class="nav-count">${g.count}</span>`:"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span>${escapeHTML(g.label)}${badge}</div>`}
+        if(g.type==="link"){const a=sidebarRouteActive(path,g.route)?"active":"";const badge=typeof g.count==="number"?`<span class="nav-count">${g.count}</span>`:"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span><span class="nav-label">${escapeHTML(g.label)}</span>${badge}</div>`}
         const key=g.label;const hasActive=g.children.some(c=>sidebarRouteActive(path,c.route));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-        const groupIcon=g.icon?`<span class="ico">${g.icon}</span>`:"";
-        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span style="display:flex;align-items:center;gap:6px"><span class="arrow">▾</span>${groupIcon}<span>${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
+        const groupIcon=g.icon?`<span class="ico">${g.icon}</span>`:`<span class="ico" aria-hidden="true"></span>`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span>${groupIcon}<span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
-        return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${escapeHTML(c.label)}${badge}</div>`}).join("");
+        return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${escapeHTML(c.label)}</span>${badge}</div>`}).join("");
       }).join("");
       const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-800">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
@@ -2553,14 +2554,14 @@ function renderSidebar(){
       const html=drhGroups.map(g=>{
         const isOrange=drhOrangeTitles.has(g.label);
         const titleStyle=isOrange?`style="color:#043970;font-size:13px;font-weight:900"`:"";
-        if(g.type==="link"){const a=path===g.route?"active":"";return`<div class="nav-link ${a}" ${titleStyle} onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span>${g.label}</div>`}
+        if(g.type==="link"){const a=path===g.route?"active":"";return`<div class="nav-link ${a}" ${titleStyle} onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span><span class="nav-label">${g.label}</span></div>`}
         const key=g.label;const hasActive=g.children.some(c=>path===c.route||path.startsWith(c.route+"/"));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
         const groupClick=g.label==="EFFECTIFS"?`navigate('effectif/recap');toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
-        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${groupClick}"><span style="display:flex;align-items:center;gap:6px"><span class="arrow">▾</span>${g.label}${groupBadge}</span></div>`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${groupClick}"><span><span class="arrow">▾</span><span class="ico" aria-hidden="true"></span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
-        return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${navDemandesPersonnelLabel(c)}${badge}</div>`}).join("");
+        return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
       }).join("");
       const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
@@ -2569,7 +2570,7 @@ function renderSidebar(){
     }
     const g=transFlat[mod];
     const head="";
-    const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${c.label}${badge}</div>`}).join("");
+    const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${c.label}</span>${badge}</div>`}).join("");
     const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
     document.getElementById("sidebar-nav").innerHTML=head+items+back;
     setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
@@ -2631,15 +2632,15 @@ function renderSidebar(){
   }
   const openGroup=sidebarOpenGroup();
   const html=groups.map(g=>{
-    if(g.type==="link"){if(!canAccess(g.route))return"";const a=path===g.route?"active":"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span>${g.label}</div>`}
+    if(g.type==="link"){if(!canAccess(g.route))return"";const a=path===g.route?"active":"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span><span class="nav-label">${g.label}</span></div>`}
     const vis=g.children.filter(c=>{const b=c.route.split("/")[0];return canAccess(b)||canAccess(c.route.replace("/","_"))});
     if(!vis.length)return"";
     const key=g.label;const hasActive=vis.some(c=>path===c.route||path.startsWith(c.route+"/"));const isCol=openGroup?openGroup!==key:!hasActive;
     const totalCount=vis.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
     const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span style="display:flex;align-items:center;gap:6px"><span class="arrow">▾</span>${g.label}${groupBadge}</span></div>`;
+    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span><span class="ico" aria-hidden="true"></span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
     if(isCol)return header;
-    return header+vis.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${navDemandesPersonnelLabel(c)}${badge}</div>`}).join("");
+    return header+vis.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
   }).join("");
   document.getElementById("sidebar-nav").innerHTML=html+`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}</div>`;
   setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
