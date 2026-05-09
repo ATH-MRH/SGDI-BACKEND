@@ -96,13 +96,13 @@
   .nav-group,.nav-link,.sub-link{justify-content:flex-start!important;text-align:left!important}
   .nav-group{gap:6px!important}
   .nav-group>span:first-child,.nav-link,.sub-link{min-width:0!important;flex:1 1 auto!important}
-  .nav-group>span:first-child{display:grid!important;grid-template-columns:18px 18px minmax(0,1fr) auto!important;align-items:center!important;column-gap:6px!important;width:100%;justify-content:flex-start!important;text-align:left!important}
+  .nav-group>span:first-child{display:grid!important;grid-template-columns:18px minmax(0,1fr) auto!important;align-items:center!important;column-gap:6px!important;width:100%;justify-content:flex-start!important;text-align:left!important}
   .nav-group .arrow{grid-column:1;flex:0 0 auto!important}
   .nav-link,.sub-link{display:grid!important;grid-template-columns:18px minmax(0,1fr) auto!important;align-items:center!important;column-gap:7px!important}
   .nav-link .ico,.sub-link>span:first-child,.nav-group .arrow,.nav-group .ico{width:18px!important;min-width:18px!important;max-width:18px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;flex:0 0 18px!important}
   .nav-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:normal;line-height:1.15;text-align:left!important}
   .nav-link{padding-left:8px!important}
-  .sub-link{padding-left:10px!important}
+  .sub-link{padding-left:8px!important}
   .sidebar-module-title{color:#facc15!important;font-size:24px!important;font-weight:900!important;line-height:1.05!important}
   .nav-group{padding:8px 9px;font-size:11px!important;letter-spacing:.04em!important;color:#a1a1aa!important;text-transform:uppercase;font-weight:800;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;border-radius:7px;margin-top:7px;background:transparent!important}
   .nav-group,.nav-link,.sub-link{position:relative;border-bottom:0!important}
@@ -2500,8 +2500,7 @@ function renderSidebar(){
         const key=g.label;const hasActive=g.children.some(c=>sidebarRouteActive(path,c.route));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-        const groupIcon=g.icon?`<span class="ico">${g.icon}</span>`:`<span class="ico" aria-hidden="true"></span>`;
-        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span>${groupIcon}<span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
         return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${escapeHTML(c.label)}</span>${badge}</div>`}).join("");
       }).join("");
@@ -2559,7 +2558,7 @@ function renderSidebar(){
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
         const groupClick=g.label==="EFFECTIFS"?`navigate('effectif/recap');toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
-        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${groupClick}"><span><span class="arrow">▾</span><span class="ico" aria-hidden="true"></span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${groupClick}"><span><span class="arrow">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
         return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
       }).join("");
@@ -2638,7 +2637,7 @@ function renderSidebar(){
     const key=g.label;const hasActive=vis.some(c=>path===c.route||path.startsWith(c.route+"/"));const isCol=openGroup?openGroup!==key:!hasActive;
     const totalCount=vis.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
     const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span><span class="ico" aria-hidden="true"></span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
+    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span><span class="arrow">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
     if(isCol)return header;
     return header+vis.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
   }).join("");
