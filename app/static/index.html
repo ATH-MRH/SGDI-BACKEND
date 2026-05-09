@@ -1320,8 +1320,11 @@ function validateCandidatBirthField(el){
 }
 function clearRequiredFieldError(el){
   if(!el)return;
-  const empty=el.hasAttribute("required")&&!String(el.value||"").trim();
-  if(!empty&&el.checkValidity())el.classList.remove("input-error");
+  const empty=!String(el.value||"").trim();
+  if(!empty&&el.checkValidity()){
+    el.classList.remove("input-error");
+    el.removeAttribute("aria-invalid");
+  }
 }
 function markRequiredFields(form){
   form=form||document.getElementById("candidat-form");
@@ -1347,7 +1350,7 @@ function markRequiredFields(form){
 function bindRequiredFieldCleanup(form){
   form=form||document.getElementById("candidat-form");
   if(!form)return;
-  form.querySelectorAll("input[required],select[required],textarea[required]").forEach(el=>{
+  form.querySelectorAll("input,select,textarea").forEach(el=>{
     if(el.dataset.requiredCleanupBound==="1")return;
     const fn=()=>{if(el.name==="dateNaissance")validateCandidatBirthField(el);clearRequiredFieldError(el)};
     el.addEventListener("input",fn);
@@ -3414,8 +3417,24 @@ function candidatRequiredFieldsForSection(key){
     contact:[["adresse","Adresse"],["commune","Commune"],["wilaya","Wilaya"],["contactUrgenceLien","Lien contact urgence"],["contactUrgenceNom","Nom contact urgence"],["contactUrgenceTel","Téléphone urgence"]]
   }[key]||[];
 }
+function markCandidatSectionMissingFields(key,data){
+  const form=document.getElementById("candidat-form");
+  if(!form)return [];
+  const missing=[];
+  candidatRequiredFieldsForSection(key).forEach(([field,label])=>{
+    const value=String(data?.[field]??"").trim();
+    const controls=[...form.querySelectorAll("[name=\""+CSS.escape(field)+"\"]")];
+    controls.forEach(el=>{
+      if(el.disabled)return;
+      el.classList.toggle("input-error",!value);
+      if(!value)el.setAttribute("aria-invalid","true");else el.removeAttribute("aria-invalid");
+    });
+    if(!value)missing.push(label);
+  });
+  return missing;
+}
 function candidatSectionRequiredValid(key,data){
-  const missing=candidatRequiredFieldsForSection(key).filter(([field])=>!String(data?.[field]??"").trim()).map(([,label])=>label);
+  const missing=markCandidatSectionMissingFields(key,data);
   if(missing.length){toast("Champs obligatoires manquants : "+missing.slice(0,6).join(", ")+(missing.length>6?"...":""),"error");return false}
   return true;
 }
