@@ -1812,19 +1812,19 @@ const SGDI_LANG_PAIRS=[
   ["Statut","الحالة"],["Réponse","الرد"],["Employé","الموظف"],["Société / Site","الشركة / الموقع"],["Pièce","مرفق"],["Pièces jointes","المرفقات"],["Date","التاريخ"],["De","من"],["Vers","إلى"],["Objet","الموضوع"],["Message","الرسالة"],["Action","الإجراء"],["Actions","الإجراءات"],["Total","المجموع"],["Nouvelles","الجديدة"],["En cours","قيد المعالجة"],["Traité","تمت المعالجة"],["Traitées","تمت معالجتها"],["Rejeté","مرفوض"],["Rejetées","مرفوضة"],["Tous statuts","كل الحالات"],["Tous types","كل الأنواع"],["Recherche globale","بحث شامل"],["Réinitialiser","إعادة تعيين"],
   ["Présent","حاضر"],["Absent","غائب"],["Suspendu","موقوف"],["Repos","راحة"],["Pointage","الحضور"],["Feuille de présence quotidienne","ورقة الحضور اليومية"],["Saisie pointage","إدخال الحضور"],["Récap par agent","ملخص حسب الموظف"],["Récap par société","ملخص حسب الشركة"],["Statistiques","إحصائيات"],["Légende & codes","الرموز والدلالات"]
 ];
-function sgdiLangMode(){try{return localStorage.getItem('sgdiLangMode')||'both'}catch(e){return 'both'}}
-function sgdiSetLangMode(mode){try{localStorage.setItem('sgdiLangMode',mode||'both')}catch(e){}applyLanguagePreference();}
-function sgdiLangText(fr,ar){const m=sgdiLangMode();if(m==='fr')return fr;if(m==='ar')return ar;return fr+' / '+ar}
-function sgdiLanguageSelectorHTML(){const m=sgdiLangMode();const btn=(v,l)=>`<button type="button" data-no-lang="1" class="btn ${m===v?'btn-primary':'btn-secondary'} text-[10px] px-2 py-1" onclick="sgdiSetLangMode('${v}')">${l}</button>`;return `<div data-no-lang="1" class="sgdi-lang-choice flex items-center gap-1 mb-2"><span class="text-[10px] text-slate-400">AR/FR</span>${btn('both','AR/FR')}${btn('fr','FR')}${btn('ar','AR')}</div>`}
+function sgdiLangMode(){try{const m=localStorage.getItem('sgdiLangMode')||'fr';return m==='ar'?'ar':'fr'}catch(e){return 'fr'}}
+function sgdiSetLangMode(mode){try{localStorage.setItem('sgdiLangMode',mode==='ar'?'ar':'fr')}catch(e){}applyLanguagePreference();}
+function sgdiLangText(fr,ar){return sgdiLangMode()==='ar'?ar:fr}
+function sgdiLanguageSelectorHTML(){const m=sgdiLangMode();const btn=(v,l)=>`<button type="button" data-no-lang="1" class="btn ${m===v?'btn-primary':'btn-secondary'} text-[10px] px-2 py-1" onclick="sgdiSetLangMode('${v}')">${l}</button>`;return `<div data-no-lang="1" class="sgdi-lang-choice flex items-center gap-1 mb-2"><span class="text-[10px] text-slate-400">Langue</span>${btn('fr','FR')}${btn('ar','AR')}</div>`}
 function sgdiTranslateText(raw){
   if(!raw||!raw.trim())return raw;
   const mode=sgdiLangMode();
   let out=raw;
   [...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length).forEach(([fr,ar])=>{
     const both=fr+' / '+ar;
-    const target=mode==='fr'?fr:(mode==='ar'?ar:both);
+    const target=mode==='ar'?ar:fr;
     out=out.split(both).join(target).split(fr).join(target);
-    if(mode!=='both')out=out.split(ar).join(target);
+    out=out.split(ar).join(target);
   });
   return out;
 }
@@ -1833,6 +1833,7 @@ function applyLanguagePreference(root){
   const scope=root||document.getElementById('app');
   if(!scope)return;
   document.documentElement.lang=mode==='ar'?'ar':'fr';
+  document.documentElement.dir=mode==='ar'?'rtl':'ltr';
   const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT,{acceptNode(node){
     const p=node.parentElement;if(!p)return NodeFilter.FILTER_REJECT;
     if(p.closest('[data-no-lang],script,style,textarea'))return NodeFilter.FILTER_REJECT;
@@ -1844,7 +1845,7 @@ function applyLanguagePreference(root){
   scope.querySelectorAll('input[placeholder],textarea[placeholder],button[title],select[title]').forEach(el=>{
     ['placeholder','title'].forEach(a=>{const v=el.getAttribute(a);if(v){const t=sgdiTranslateText(v);if(t!==v)el.setAttribute(a,t)}});
   });
-  scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===(mode==='both'?'AR/FR':mode.toUpperCase()));b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
+  scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===mode.toUpperCase());b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
 }
 
 /* ---- SHELL ---- */
