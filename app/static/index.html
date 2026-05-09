@@ -4594,7 +4594,12 @@ function renderAgentPointageSituation(a){
 function gestionIcon(t){return{"Congé":"🏖","Maladie":"🤒","Absence":"❌","Suspension":"⏸"}[t]||""}
 function gestionPillClass(t){return{"Congé":"pill-blue","Maladie":"pill-amber","Absence":"pill-gray","Suspension":"pill-red"}[t]||"pill-gray"}
 function gestionCount(a,type){return((a.gestionEvents||[]).filter(e=>e.type===type)).length}
-function gestionButton(a,type,label){const n=gestionCount(a,type);return`<button type="button" class="btn btn-secondary justify-center relative" onclick="openGestionModal('${a.id}','${type}')">${label}${n>0?`<span class="gestion-badge">${n}</span>`:""}</button>`}
+function gestionButton(a,type,label){
+  const n=gestionCount(a,type);
+  const action=(type==="Suspension"&&isOpsFicheContext())?`openOpsSuspensionModal('${a.id}')`:`openGestionModal('${a.id}','${type}')`;
+  const title=(type==="Suspension"&&isOpsFicheContext())?"Demande de suspension à envoyer à la DRH":"";
+  return`<button type="button" class="btn btn-secondary justify-center relative" title="${title}" onclick="${action}">${label}${n>0?`<span class="gestion-badge">${n}</span>`:""}</button>`
+}
 function renderGestionHistorique(a){
   const evs=(a.gestionEvents||[]).slice().sort((x,y)=>(y.du||"").localeCompare(x.du||""));
   return`<h4 class="text-sm font-semibold text-slate-700 mb-2">Historique des événements de gestion</h4>
