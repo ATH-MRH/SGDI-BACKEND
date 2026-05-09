@@ -43,7 +43,10 @@ def ensure_schema_upgrades() -> None:
                 connection.execute(text("ALTER TABLE users ADD COLUMN access_level VARCHAR(40)"))
             if "authorized_societies" not in columns:
                 connection.execute(text("ALTER TABLE users ADD COLUMN authorized_societies JSON"))
+            if "authorized_structures" not in columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN authorized_structures JSON"))
             connection.execute(text("UPDATE users SET authorized_societies = '[]' WHERE authorized_societies IS NULL"))
+            connection.execute(text("UPDATE users SET authorized_structures = '[]' WHERE authorized_structures IS NULL"))
         if "suppliers" in tables:
             columns = {col["name"] for col in inspector.get_columns("suppliers")}
             if "society" not in columns:
@@ -139,6 +142,7 @@ def on_startup() -> None:
                 role="admin",
                 access_level="H5",
                 authorized_societies=[],
+                authorized_structures=[],
                 password_hash=hash_password("admin"),
                 is_active=True,
             )

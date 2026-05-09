@@ -27,6 +27,7 @@ def create_user(db: Session, payload: UserCreate) -> User:
         role=payload.role,
         access_level=payload.access_level,
         authorized_societies=payload.authorized_societies or [],
+        authorized_structures=payload.authorized_structures or [],
         password_hash=hash_password(payload.password),
         is_active=True,
     )
@@ -63,6 +64,8 @@ def update_user(db: Session, user: User, payload: UserUpdate) -> User:
         user.access_level = payload.access_level
     if payload.authorized_societies is not None:
         user.authorized_societies = payload.authorized_societies or []
+    if payload.authorized_structures is not None:
+        user.authorized_structures = payload.authorized_structures or []
     if payload.password:
         user.password_hash = hash_password(payload.password)
     if payload.is_active is not None:

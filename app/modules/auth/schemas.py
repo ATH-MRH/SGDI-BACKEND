@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     role: str = "admin"
     access_level: str | None = Field(default=None, max_length=40)
     authorized_societies: list[str] = Field(default_factory=list)
+    authorized_structures: list[str] = Field(default_factory=list)
     password: str = Field(min_length=4)
 
     @model_validator(mode="after")
@@ -23,6 +24,7 @@ class UserUpdate(BaseModel):
     role: str | None = None
     access_level: str | None = Field(default=None, max_length=40)
     authorized_societies: list[str] | None = None
+    authorized_structures: list[str] | None = None
     password: str | None = Field(default=None, min_length=4)
     is_active: bool | None = None
 
@@ -49,6 +51,7 @@ class UserOut(BaseModel):
     role: str
     access_level: str | None = None
     authorized_societies: list[str] | None = Field(default_factory=list)
+    authorized_structures: list[str] | None = Field(default_factory=list)
     is_active: bool
 
     model_config = {"from_attributes": True}
