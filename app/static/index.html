@@ -1074,18 +1074,40 @@ window.SGDI_API={
   sync:{pull:sgdiPullState,push:()=>sgdiBackendSave(),repair:()=>{const r=sgdiAutoRepairDB();if(r.length)sgdiBackendSave();return r}}
 };
 window.SGDI=window.SGDI_API;
+function userPermissionCache(){
+  if(!db.settings||typeof db.settings!=="object")db.settings={};
+  if(!db.settings.userSocietePermissions||typeof db.settings.userSocietePermissions!=="object")db.settings.userSocietePermissions={};
+  return db.settings.userSocietePermissions;
+}
+function rememberUserPermissions(username,societes,niveau){
+  if(!username)return;
+  const cache=userPermissionCache();
+  cache[username]={societesAutorisees:Array.isArray(societes)?societes:[],niveau:niveau||""};
+}
 async function sgdiLoadAuthState(){
   if(!sgdiAuthToken()||!db)return;
   try{
     const users=await SGDI.auth.listUsers();
-    db.users=(users||[]).map(u=>({
-      username:u.username,
-      nom:u.full_name||u.username,
-      role:u.role||"agent",
-      niveau:u.access_level||u.niveau||(String(u.role||"").toUpperCase().startsWith("ADM")||u.role==="admin"?"H5":"H3"),
-      actif:u.is_active!==false,
-      societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:[]
-    }));
+    const cache=userPermissionCache();
+    const previous={};
+    (db.users||[]).forEach(u=>{if(u&&u.username)previous[u.username]=u});
+    db.users=(users||[]).map(u=>{
+      const cached=cache[u.username]||{};
+      const prev=previous[u.username]||{};
+      const pgSoc=Array.isArray(u.authorized_societies)?u.authorized_societies:[];
+      const savedSoc=Array.isArray(cached.societesAutorisees)?cached.societesAutorisees:(Array.isArray(prev.societesAutorisees)?prev.societesAutorisees:[]);
+      const socs=pgSoc.length?pgSoc:savedSoc;
+      const niveau=u.access_level||u.niveau||cached.niveau||prev.niveau||(String(u.role||"").toUpperCase().startsWith("ADM")||u.role==="admin"?"H5":"H3");
+      rememberUserPermissions(u.username,socs,niveau);
+      return {
+        username:u.username,
+        nom:u.full_name||u.username,
+        role:u.role||"agent",
+        niveau,
+        actif:u.is_active!==false,
+        societesAutorisees:socs
+      };
+    });
   }catch(e){
     console.warn("Utilisateurs PostgreSQL indisponibles",e);
   }
@@ -11128,6 +11150,7 @@ async function confirmAdminUser(originalUsername){
     db.users[idx]=Object.assign({},db.users[idx],data);
     logActivity("Modification utilisateur",username);
   }
+  rememberUserPermissions(username,data.societesAutorisees,data.niveau);
   if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom};saveSession(session)}
   saveDB();closeModal();toast("Utilisateur enregistré","success");render();
 }
