@@ -10812,43 +10812,73 @@ function inspectionTabs(active){
   const tabs=[["programmer","Programmer une Inspection"],["programmees","Inspections programmées"],["inopinees","Inspections inopinées"]];
   return`<div class="flex gap-2 flex-wrap mb-5">${tabs.map(t=>`<button class="btn ${active===t[0]?"btn-primary":"btn-secondary"}" onclick="navigate('ops/supervision/${t[0]}')">${t[1]}</button>`).join("")}</div>`;
 }
+
+function inspectionProgramMonth(){return sessionStorage.getItem("inspectionProgramMonth")||today().slice(0,7)}
+function setInspectionProgramMonth(v){sessionStorage.setItem("inspectionProgramMonth",v||today().slice(0,7));renderView()}
+function inspectionMonthDates(ym){
+  const parts=String(ym||today().slice(0,7)).split("-").map(Number);const y=parts[0]||new Date().getFullYear(),m=parts[1]||new Date().getMonth()+1;
+  const n=new Date(y,m,0).getDate();return Array.from({length:n},(_,i)=>ym+"-"+String(i+1).padStart(2,"0"));
+}
+function inspectionCalendarHTML(ym){
+  const dates=inspectionMonthDates(ym);const first=new Date(dates[0]+"T00:00:00").getDay();const offset=(first+6)%7;
+  const blanks=Array.from({length:offset},()=>`<div></div>`).join("");
+  return`<div class="rounded-lg border bg-white p-3"><div class="grid grid-cols-7 gap-1 text-center text-[10px] font-black text-slate-500 mb-2"><div>LUN</div><div>MAR</div><div>MER</div><div>JEU</div><div>VEN</div><div>SAM</div><div>DIM</div></div><div class="grid grid-cols-7 gap-1">${blanks}${dates.map(d=>{const day=d.slice(8);const weekend=[5,6].includes(new Date(d+"T00:00:00").getDay());return`<label class="flex items-center justify-center rounded-md border text-xs font-bold cursor-pointer" style="min-height:36px;background:${weekend?'#f8fafc':'#fff'}"><input type="checkbox" name="inspectionDates" value="${d}" class="mr-1"/>${day}</label>`}).join("")}</div></div>`;
+}
+function inspectionSupervisorStats(supervisorId,inspections){
+  const list=(inspections||[]).filter(i=>i.supervisorId===supervisorId);
+  const programmed=list.filter(i=>i.type==="programmee");const unexpected=list.filter(i=>i.type==="inopinee");
+  const finished=list.filter(i=>(i.siteIds||[]).length&&(i.siteIds||[]).every(id=>(i.scans||{})[id]?.entree&&(i.scans||{})[id]?.sortie));
+  const alerts=list.filter(i=>i.type==="inopinee"||(i.type==="programmee"&&i.date<=today()&&(i.siteIds||[]).some(id=>!(i.scans||{})[id]?.entree)));
+  return{total:list.length,programmed:programmed.length,unexpected:unexpected.length,finished:finished.length,alerts:alerts.length,history:list.sort((a,b)=>String(b.date||b.createdAt||"").localeCompare(String(a.date||a.createdAt||""))).slice(0,5)};
+}
+function inspectionSupervisorSpaceHTML(supervisors,inspections){
+  const active=supervisors.filter(a=>(inspections||[]).some(i=>i.supervisorId===a.id));
+  const data=(active.length?active:supervisors.slice(0,6));
+  return`<div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-5">${data.map(a=>{const st=inspectionSupervisorStats(a.id,inspections);return`<div class="card p-4"><div class="flex items-start justify-between gap-3"><div><div class="font-black">${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">Espace superviseur · historique & statistiques</div></div><span class="pill">${st.total}</span></div><div class="grid grid-cols-4 gap-2 mt-3"><div class="text-center rounded bg-blue-50 p-2"><div class="text-[10px] font-black text-blue-700">Prog.</div><div class="font-black text-blue-700">${st.programmed}</div></div><div class="text-center rounded bg-purple-50 p-2"><div class="text-[10px] font-black text-purple-700">Inop.</div><div class="font-black text-purple-700">${st.unexpected}</div></div><div class="text-center rounded bg-emerald-50 p-2"><div class="text-[10px] font-black text-emerald-700">Finies</div><div class="font-black text-emerald-700">${st.finished}</div></div><div class="text-center rounded bg-red-50 p-2"><div class="text-[10px] font-black text-red-700">Alertes</div><div class="font-black text-red-700">${st.alerts}</div></div></div><div class="mt-3 text-xs">${st.history.length?st.history.map(i=>`<div class="flex justify-between border-t py-1"><span>${formatDate(i.date)} · ${escapeHTML((i.siteIds||[]).map(inspectionSiteName).join(', '))}</span><b>${i.type==='inopinee'?'Inopinée':'Programmée'}</b></div>`).join(""):`<div class="text-slate-500">Aucun historique pour le moment.</div>`}</div></div>`}).join("")}</div>`;
+}
 function renderOpsSupervision(view,tab){
   if(!db.siteInspections)db.siteInspections=[];
   const soc=currentStructureSocieteFilter();
   const sites=(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc));
   const supervisors=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&!["sortant","demissionne","licencie","archive"].includes(a.statut));
   const inspections=(db.siteInspections||[]).filter(i=>!soc||i.societe===soc);
-  if(tab==="programmees")return renderProgrammedInspections(view,soc,inspections);
+  if(tab==="programmees")return renderProgrammedInspections(view,soc,inspections,supervisors);
   if(tab==="inopinees")return renderUnexpectedInspections(view,soc,sites,supervisors,inspections);
-  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Programmation des inspections, passages QR et alertes de conformité · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${inspectionTabs("programmer")}
+  const ym=inspectionProgramMonth();
+  const monthLabel=new Date(ym+"-01T00:00:00").toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Programmation des inspections, calendrier, passages QR et statistiques par superviseur · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${inspectionTabs("programmer")}
   <div class="card p-5">
     <h3 class="font-black mb-4">Programmer une Inspection</h3>
     <form onsubmit="event.preventDefault();saveProgrammedInspection()">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div><label class="label">Date inspection</label><input class="input" type="date" name="date" value="${today()}"/></div>
+        <div><label class="label">Choisir le mois</label><input class="input" type="month" name="month" value="${escapeHTML(ym)}" onchange="setInspectionProgramMonth(this.value)"/></div>
         <div><label class="label">Nom du Superviseur</label><select class="select" name="supervisorId"><option value="">— Choisir superviseur —</option>${supervisors.map(a=>`<option value="${a.id}">${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</option>`).join("")}</select></div>
         <div><label class="label">Véhicule désigné</label><input class="input" name="vehicule" placeholder="Immatriculation / véhicule"/></div>
       </div>
+      <div class="mt-4"><div class="flex items-center justify-between mb-2"><label class="label mb-0">Calendrier - ${escapeHTML(monthLabel)}</label><span class="text-xs text-slate-500">Cochez une ou plusieurs dates</span></div>${inspectionCalendarHTML(ym)}</div>
       <label class="label mt-4">Sites concernés par l'inspection</label>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">${sites.map(st=>`<label class="p-3 rounded-lg border bg-white flex items-center gap-2 text-sm"><input type="checkbox" name="siteIds" value="${st.id}"/> <span>${escapeHTML((st.societe?st.societe+" · ":"")+(st.nom||st.intitule||"Site"))}</span></label>`).join("")||`<div class="text-sm text-slate-500">Aucun site actif.</div>`}</div>
       <label class="label">Moyens mobilisés</label><textarea class="input mb-4" name="moyens" rows="3" placeholder="Équipe, matériel, documents, véhicule, téléphone, etc."></textarea>
       <div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="navigate('ops/dashboard')">Annuler</button><button class="btn btn-primary">Valider</button></div>
     </form>
-  </div>`;
+  </div>
+  <div class="mt-5"><h3 class="font-black mb-2">Espaces superviseurs</h3>${inspectionSupervisorSpaceHTML(supervisors,inspections)}</div>`;
 }
 function saveProgrammedInspection(){
   const form=document.querySelector("#view form");if(!form)return;
-  const fd=new FormData(form);const siteIds=fd.getAll("siteIds").filter(Boolean);
+  const fd=new FormData(form);const siteIds=fd.getAll("siteIds").filter(Boolean);const dates=fd.getAll("inspectionDates").filter(Boolean);
   if(!fd.get("supervisorId")){toast("Nom du superviseur obligatoire","error");return}
+  if(!dates.length){toast("Cochez au moins une date dans le calendrier","error");return}
   if(!siteIds.length){toast("Sélectionnez au moins un site","error");return}
   if(!db.siteInspections)db.siteInspections=[];
-  db.siteInspections.unshift({id:uid("insp"),type:"programmee",date:fd.get("date")||today(),supervisorId:fd.get("supervisorId")||"",siteIds,vehicule:(fd.get("vehicule")||"").trim(),moyens:(fd.get("moyens")||"").trim(),scans:{},societe:currentStructureSocieteFilter()||session?.societe||"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
-  saveDB();toast("Inspection programmée enregistrée","success");navigate("ops/supervision/programmees");
+  dates.sort().reverse().forEach(date=>db.siteInspections.unshift({id:uid("insp"),type:"programmee",date,supervisorId:fd.get("supervisorId")||"",siteIds,vehicule:(fd.get("vehicule")||"").trim(),moyens:(fd.get("moyens")||"").trim(),scans:{},societe:currentStructureSocieteFilter()||session?.societe||"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));
+  saveDB();toast(dates.length+" inspection(s) programmée(s)","success");navigate("ops/supervision/programmees");
 }
-function renderProgrammedInspections(view,soc,inspections){
+function renderProgrammedInspections(view,soc,inspections,supervisors){
   const list=inspections.filter(i=>i.type==="programmee").sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
-  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Inspections programmées · passages QR entrée/sortie · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${inspectionTabs("programmees")}
-  <div class="card p-5 overflow-hidden"><table><thead><tr><th>Date</th><th>Superviseur</th><th>Sites</th><th>Véhicule</th><th>Moyens</th><th>Passages QR</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${list.length?list.map(i=>`<tr><td>${formatDate(i.date)}</td><td>${escapeHTML(inspectionSupervisorName(i.supervisorId))}</td><td class="text-xs">${(i.siteIds||[]).map(id=>escapeHTML(inspectionSiteName(id))).join("<br>")}</td><td>${escapeHTML(i.vehicule||"")}</td><td class="text-xs">${escapeHTML(i.moyens||"")}</td><td class="text-xs">${inspectionScansHTML(i)}</td><td>${inspectionStatusHTML(i)}</td><td><button class="btn btn-secondary text-xs" onclick="openInspectionScan('${i.id}')">Scanner QR</button></td></tr>`).join(""):`<tr><td colspan="8" class="text-center text-slate-500 p-4">Aucune inspection programmée.</td></tr>`}</tbody></table></div>`;
+  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Inspections programmées · historique superviseurs · passages QR entrée/sortie · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${inspectionTabs("programmees")}
+  <div class="card p-5 overflow-hidden"><table><thead><tr><th>Date</th><th>Superviseur</th><th>Sites</th><th>Véhicule</th><th>Moyens</th><th>Passages QR</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${list.length?list.map(i=>`<tr><td>${formatDate(i.date)}</td><td>${escapeHTML(inspectionSupervisorName(i.supervisorId))}</td><td class="text-xs">${(i.siteIds||[]).map(id=>escapeHTML(inspectionSiteName(id))).join("<br>")}</td><td>${escapeHTML(i.vehicule||"")}</td><td class="text-xs">${escapeHTML(i.moyens||"")}</td><td class="text-xs">${inspectionScansHTML(i)}</td><td>${inspectionStatusHTML(i)}</td><td><button class="btn btn-secondary text-xs" onclick="openInspectionScan('${i.id}')">Scanner QR</button></td></tr>`).join(""):`<tr><td colspan="8" class="text-center text-slate-500 p-4">Aucune inspection programmée.</td></tr>`}</tbody></table></div>
+  <div class="mt-5"><h3 class="font-black mb-2">Espaces superviseurs</h3>${inspectionSupervisorSpaceHTML(supervisors||[],inspections)}</div>`;
 }
 function inspectionScansHTML(i){return(i.siteIds||[]).map(id=>{const sc=(i.scans||{})[id]||{};return`<div class="mb-1"><b>${escapeHTML(inspectionSiteName(id))}</b><br>Entrée: ${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"}<br>Sortie: ${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}${inspectionElapsed(sc)?`<br>Temps: <b>${inspectionElapsed(sc)}</b>`:""}</div>`}).join("")}
 function openInspectionScan(id){
