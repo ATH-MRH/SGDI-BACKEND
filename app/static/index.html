@@ -373,6 +373,47 @@
   .mat-form-band{background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin-bottom:14px}
   .mat-form-band-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:900;color:#0f172a;margin-bottom:12px}
   @media(max-width:900px){.mat-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mat-panel-grid{grid-template-columns:1fr}}
+  @media (min-width:768px) and (max-width:1180px){
+    .sidebar{width:136px!important;min-width:136px!important;max-width:136px!important;flex-basis:136px!important}
+    .sidebar,.sidebar *{font-size:10.5px!important}
+    .sidebar nav{padding:7px 5px!important}
+    .sidebar .px-5{padding-left:10px!important;padding-right:10px!important}
+    .sidebar .py-5{padding-top:12px!important;padding-bottom:12px!important}
+    .sidebar [data-no-lang="1"]{font-size:21px!important}
+    .nav-group{padding:7px 6px!important;font-size:9.8px!important}
+    .nav-link{padding:7px 6px!important;gap:5px!important;font-size:10.2px!important}
+    .sub-link{padding:6px 6px!important;gap:5px!important;font-size:10px!important}
+    .nav-link .ico,.sub-link>span:first-child,.nav-group .arrow{width:15px!important;min-width:15px!important;max-width:15px!important;font-size:12px!important}
+    .nav-count{min-width:17px!important;height:17px!important;font-size:9px!important;padding:0 4px!important}
+    .sgdi-topbar{align-items:flex-start!important;flex-wrap:wrap!important;padding:7px 10px!important;gap:7px!important}
+    .sgdi-topbar-left{order:1;min-width:190px!important;max-width:260px!important}
+    .topbar-structure-tabs{order:3;flex:1 1 100%!important;justify-content:flex-start!important;gap:5px!important;overflow-x:auto;flex-wrap:nowrap!important;padding-bottom:2px}
+    .topbar-structure-btn{height:30px!important;padding:0 8px!important;font-size:10px!important;gap:4px!important;flex:0 0 auto}
+    .sgdi-topbar-actions{order:2;margin-left:auto;gap:5px!important;flex-wrap:wrap!important;justify-content:flex-end!important}
+    .topbar-dialogue-btn{height:30px!important;padding:0 9px!important;font-size:10px!important}
+    .sgdi-lang-choice{margin-bottom:0!important}
+    .sgdi-lang-choice span{display:none!important}
+    .sgdi-lang-choice .btn{height:30px!important;padding:0 8px!important}
+    .sgdi-topbar-actions>.btn{height:30px!important;padding:0 9px!important;font-size:10px!important}
+    .societe-band-btn{min-height:34px!important;padding:6px 8px!important;gap:5px!important}
+    .societe-band-btn span[style*="font-size:20px"]{font-size:16px!important}
+    .societe-band-btn img{width:22px!important;height:22px!important}
+    #view{padding:14px!important}
+    .card{border-radius:10px!important}
+    table{font-size:12px!important}
+    th{font-size:9.5px!important;padding:8px!important}
+    td{font-size:12px!important;padding:8px!important}
+    .modal{max-width:calc(100vw - 24px)!important;max-height:calc(100vh - 24px)!important}
+    .dialogue-modal-backdrop{padding:14px!important}
+    .dialogue-panel{width:calc(100vw - 28px)!important;height:calc(100vh - 28px)!important;max-width:860px!important}
+    .dialogue-layout{grid-template-columns:170px 1fr!important}
+    .dialogue-users{padding:7px!important}
+    .dialogue-user{font-size:10.5px!important;padding:8px 6px!important}
+    .dash-kpi-grid,.mat-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .dash-module-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+    .grid-cols-4{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .grid-cols-5{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  }
   .instruction-form .input,.instruction-form .select{background:#fff;color:#0f172a;border-color:#cbd5e1}
   .instruction-form .label{color:#475569}
 
@@ -1914,8 +1955,8 @@ function render(){
       </div>
     </aside>
     <main class="flex-1 flex flex-col overflow-hidden">
-      <div class="flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
-        <div class="flex items-center gap-3 shrink-0">
+      <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
+        <div class="sgdi-topbar-left flex items-center gap-3 shrink-0">
           <button type="button" class="btn btn-ghost text-xs" onclick="goBackSmart()" title="Retour" style="min-width:36px;height:36px;padding:0;font-size:18px">←</button>
           <div>
             <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
@@ -1923,7 +1964,7 @@ function render(){
           </div>
         </div>
         ${topbarStructureTabsHTML()}
-        <div class="flex items-center gap-2 shrink-0">${dialogueTopbarButtonHTML()}${sgdiLanguageSelectorHTML()}${headerBtn}</div>
+        <div class="sgdi-topbar-actions flex items-center gap-2 shrink-0">${dialogueTopbarButtonHTML()}${sgdiLanguageSelectorHTML()}${headerBtn}</div>
       </div>
       ${globalSocieteBandHTML()}
       ${(()=>{const h=(location.hash||"").slice(2);const onMateriel=h.startsWith("materiel")&&!h.startsWith("materiel/magasin");if(onMateriel&&typeof materielSocieteStripHTML==="function")return materielSocieteStripHTML();return""})()}
