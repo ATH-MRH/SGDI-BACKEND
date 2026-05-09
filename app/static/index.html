@@ -318,6 +318,21 @@
   .dialogue-meta{font-size:10.5px;color:#64748b;display:flex;justify-content:space-between;gap:8px;margin-bottom:5px;padding-left:18px}
   .dialogue-text{font-size:12.5px;color:#334155;line-height:1.45;white-space:pre-wrap}
   .dialogue-action{background:#e2e8f0;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700}
+  .dialogue-layout{display:grid;grid-template-columns:118px 1fr;min-height:0;flex:1}
+  .dialogue-users{background:#e5e7eb;border-right:1px solid #cbd5e1;overflow:auto;padding:8px}
+  .dialogue-user{width:100%;border:1px solid transparent;background:transparent;color:#0f172a;border-radius:9px;padding:8px 7px;margin-bottom:6px;text-align:left;cursor:pointer;font-size:11px;line-height:1.15}
+  .dialogue-user.active{background:#111827;color:#fff;border-color:#111827}
+  .dialogue-user .dot{float:right;background:#dc2626;color:#fff;border-radius:999px;min-width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900}
+  .dialogue-chat{display:flex;flex-direction:column;min-width:0;min-height:0;background:#f8fafc}
+  .dialogue-chat-head{padding:9px 11px;border-bottom:1px solid #cbd5e1;background:#fff;font-size:12px;font-weight:900;color:#0f172a}
+  .dialogue-thread{flex:1;overflow:auto;padding:10px;background:#f8fafc}
+  .chat-bubble{max-width:86%;border-radius:12px;padding:8px 10px;margin:0 0 8px;font-size:12.5px;line-height:1.35;box-shadow:0 5px 12px rgba(15,23,42,.08);white-space:pre-wrap}
+  .chat-bubble.mine{margin-left:auto;background:#043970;color:#fff;border-bottom-right-radius:4px}
+  .chat-bubble.theirs{margin-right:auto;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-bottom-left-radius:4px}
+  .chat-meta{font-size:9.5px;opacity:.72;margin-top:4px;white-space:nowrap}
+  .dialogue-composer{border-top:1px solid #cbd5e1;background:#fff;padding:8px;display:flex;gap:6px;align-items:flex-end}
+  .dialogue-composer textarea{min-height:38px;max-height:88px;resize:vertical;font-size:12px;padding:8px}
+  .dialogue-send{border:none;background:#111827;color:#fff;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}
   .instruction-form{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:10px;margin-top:8px}
 
   /* ----- MATERIEL PRO UI ----- */
@@ -2529,119 +2544,119 @@ function dialogueToggle(open){
   render();
 }
 function dialogueVisibleItems(){
-  const all=(db.echanges||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const all=(db.echanges||[]).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
   if(isAdmin())return all;
   const u=session?session.username:"";
   return all.filter(m=>m.from===u||m.to===u||m.to==="all");
 }
-function dialogueMarkRead(){
+function dialoguePeerKey(m){
+  if(!session||!m)return"admin";
+  const u=session.username;
+  if(m.to==="all")return"all";
+  return m.from===u?(m.to||"admin"):(m.from||"admin");
+}
+function dialogueSelectedPeer(){
+  const saved=sessionStorage.getItem("dialoguePeer")||"";
+  const peers=dialogueConversationUsers();
+  if(saved&&peers.some(p=>p.key===saved))return saved;
+  return peers[0]?.key||"all";
+}
+function dialogueSetPeer(peer){sessionStorage.setItem("dialoguePeer",peer||"all");dialogueMarkRead(peer);render()}
+function dialogueConversationUsers(){
+  const users=(db.users||[]).filter(u=>u.username!==session?.username);
+  const map=new Map();
+  map.set("all",{key:"all",label:"Général",sub:"Tous les utilisateurs",unread:0});
+  users.forEach(u=>map.set(u.username,{key:u.username,label:u.nom||u.username,sub:(u.role||"").toUpperCase(),unread:0}));
+  dialogueVisibleItems().forEach(m=>{
+    const key=dialoguePeerKey(m);
+    if(!map.has(key))map.set(key,{key,label:key==="admin"?"Administrateur":key,sub:"Conversation",unread:0});
+    if(!m.luPar||!m.luPar.includes(session.username))map.get(key).unread++;
+  });
+  return [...map.values()].sort((a,b)=>((b.unread||0)-(a.unread||0))||String(a.label).localeCompare(String(b.label)));
+}
+function dialogueThreadItems(peer){
+  const u=session?.username||"";
+  return dialogueVisibleItems().filter(m=>{
+    if(peer==="all")return m.to==="all";
+    return (m.from===u&&m.to===peer)||(m.from===peer&&m.to===u)||(isAdmin()&&(m.from===peer||m.to===peer)&&m.to!=="all");
+  }).sort((a,b)=>new Date(a.date)-new Date(b.date));
+}
+function dialogueMarkRead(peer){
   if(!session||!db||!db.echanges)return;
   const u=session.username;
-  dialogueVisibleItems().forEach(m=>{if(!m.luPar)m.luPar=[];if(!m.luPar.includes(u))m.luPar.push(u)});
+  const target=peer||sessionStorage.getItem("dialoguePeer")||dialogueSelectedPeer();
+  const items=target?dialogueThreadItems(target):dialogueVisibleItems();
+  items.forEach(m=>{if(!m.luPar)m.luPar=[];if(!m.luPar.includes(u))m.luPar.push(u)});
   saveDB();
 }
 function dialogueUsersOptions(selected){
   const users=(db.users||[]).filter(u=>u.username!==session.username);
-  const opts=isAdmin()?users.map(u=>`<option value="${escapeHTML(u.username)}" ${selected===u.username?"selected":""}>${escapeHTML(u.nom||u.username)} · ${escapeHTML(u.role)}</option>`).join(""):`<option value="admin">Administrateur</option>`;
-  return `<select class="select" name="to">${isAdmin()?`<option value="all" ${selected==="all"?"selected":""}>Fil général</option>`:""}${opts}</select>`;
+  const opts=users.map(u=>'<option value="'+escapeHTML(u.username)+'" '+(selected===u.username?'selected':'')+'>'+escapeHTML(u.nom||u.username)+' · '+escapeHTML(u.role||'')+'</option>').join('');
+  return '<select class="select" name="to"><option value="all" '+(selected==='all'?'selected':'')+'>Général</option>'+opts+'</select>';
 }
 function importanceBadge(v,extraClass){
   const imp=v||"Normal";
-  if(imp==="Très élevée")return`<span class="pill pill-red ${extraClass||""}" style="background:#7f1d1d;color:#fff">Très élevée</span>`;
-  if(imp==="Élevée")return`<span class="pill pill-red ${extraClass||""}">Élevée</span>`;
-  return`<span class="pill pill-gray ${extraClass||""}">Normal</span>`;
+  if(imp==="Très élevée")return'<span class="pill pill-red '+(extraClass||'')+'" style="background:#7f1d1d;color:#fff">Très élevée</span>';
+  if(imp==="Élevée")return'<span class="pill pill-red '+(extraClass||'')+'">Élevée</span>';
+  return'<span class="pill pill-gray '+(extraClass||'')+'">Normal</span>';
 }
 function dialogueBoxHTML(){
   if(!session)return"";
   const open=dialogueIsOpen();
-  const instr=sessionStorage.getItem("instructionFor")||"";
-  const addOpen=sessionStorage.getItem("addFeedOpen")==="1";
-  const items=dialogueVisibleItems();
-  const unread=items.filter(m=>!m.luPar||!m.luPar.includes(session.username)).length;
-  const rows=items.length?items.map(m=>{
-    const mine=m.from===session.username;
-    const userFrom=(db.users||[]).find(u=>u.username===m.from);
-    const userTo=(db.users||[]).find(u=>u.username===m.to);
-    const toLabel=m.to==="all"?"Fil général":(userTo?userTo.nom:m.to);
-    const cls=mine?"mine":(m.from==="admin"||m.to==="admin"?"admin-note":"");
-    return `<div class="dialogue-msg ${cls}">
-      <div class="dialogue-meta"><span>${escapeHTML(userFrom?userFrom.nom:m.from)} → ${escapeHTML(toLabel||"Administrateur")}</span><span>${new Date(m.date).toLocaleString("fr-FR")}</span></div>
-      ${m.sujet?`<div class="text-xs font-bold mb-1 pl-5 text-slate-800">${escapeHTML(m.sujet)} ${importanceBadge(m.importance,"ml-1")}</div>`:""}
-      <div class="dialogue-text">${escapeHTML(m.message)}</div>
-      <div class="mt-2 flex gap-2">
-        <button class="dialogue-action" onclick="openFeedDetail('${m.id}')">Voir</button>
-        <button class="dialogue-action" onclick="openInstruction('${m.id}')">Instruction</button>
-      </div>
-      ${instr===m.id?instructionFormHTML(m):""}
-    </div>`;
-  }).join(""):`<div class="card p-4 text-center text-sm text-slate-500">Aucun échange pour le moment.</div>`;
-  return `<button class="dialogue-fab no-print ${open?"hidden":""}" onclick="dialogueToggle(true)">Fil d'actualité${unread?`<span class="badge">${unread}</span>`:""}</button>
-  <aside class="dialogue-panel no-print ${open?"":"closed"}" aria-label="Fil d'actualité">
-    <div class="dialogue-head">
-      <div class="dialogue-title">EVENEMENT - EN TEMPS REEL</div>
-      <div class="dialogue-head-row">
-        <div class="dialogue-subtitle">${isAdmin()?"Vue admin : toute l'actualité des échanges":"Actualité de vos échanges avec l'administration"}</div>
-        <div class="flex gap-1"><button class="btn btn-primary dialogue-slim-btn" onclick="openAddFeed()">Ajouter fil</button><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Réduire</button></div>
-      </div>
-    </div>
-    <div class="dialogue-body" id="dialogue-body">${addOpen?addFeedFormHTML():""}${rows}</div>
-  </aside>`;
+  const peers=dialogueConversationUsers();
+  const selected=dialogueSelectedPeer();
+  const peer=peers.find(p=>p.key===selected)||peers[0]||{key:"all",label:"Général",sub:"Tous"};
+  const unread=dialogueVisibleItems().filter(m=>!m.luPar||!m.luPar.includes(session.username)).length;
+  const usersHTML=peers.map(p=>'<button class="dialogue-user '+(p.key===selected?'active':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
+  return '<button class="dialogue-fab no-print '+(open?'hidden':'')+'" onclick="dialogueToggle(true)">Boîte dialogue'+(unread?'<span class="badge">'+unread+'</span>':'')+'</button>'+
+  '<aside class="dialogue-panel no-print '+(open?'':'closed')+'" aria-label="Boîte de dialogue interne">'+
+    '<div class="dialogue-head"><div class="dialogue-title">BOÎTE DE DIALOGUE</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Messages entre utilisateurs SGDI</div><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Réduire</button></div></div>'+
+    '<div class="dialogue-layout"><div class="dialogue-users">'+(usersHTML||'<div class="text-xs text-slate-500">Aucun utilisateur</div>')+'</div><div class="dialogue-chat">'+
+      '<div class="dialogue-chat-head">'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div>'+
+      '<div class="dialogue-thread" id="dialogue-body">'+feedRowsHTML(selected)+'</div>'+dialogueComposerHTML(selected)+
+    '</div></div></aside>';
 }
-function feedRowsHTML(){
-  const instr=sessionStorage.getItem("instructionFor")||"";
-  const addOpen=sessionStorage.getItem("addFeedOpen")==="1";
-  const items=dialogueVisibleItems();
-  const rows=items.length?items.map(m=>{
+function feedRowsHTML(peer){
+  const selected=peer||dialogueSelectedPeer();
+  const items=dialogueThreadItems(selected);
+  if(!items.length)return '<div class="text-center text-xs text-slate-500 mt-8">Aucun message. Lancez la conversation.</div>';
+  return items.map(m=>{
     const mine=m.from===session.username;
-    const userFrom=(db.users||[]).find(u=>u.username===m.from);
-    const userTo=(db.users||[]).find(u=>u.username===m.to);
-    const toLabel=m.to==="all"?"Fil général":(userTo?userTo.nom:m.to);
-    const cls=mine?"mine":(m.from==="admin"||m.to==="admin"?"admin-note":"");
-    return `<div class="dialogue-msg ${cls}">
-      <div class="dialogue-meta"><span>${escapeHTML(userFrom?userFrom.nom:m.from)} → ${escapeHTML(toLabel||"Administrateur")}</span><span>${new Date(m.date).toLocaleString("fr-FR")}</span></div>
-      ${m.sujet?`<div class="text-xs font-bold mb-1 pl-5 text-slate-800">${escapeHTML(m.sujet)} ${importanceBadge(m.importance,"ml-1")}</div>`:""}
-      <div class="dialogue-text">${escapeHTML(m.message)}</div>
-      <div class="mt-2 flex gap-2"><button class="dialogue-action" onclick="openFeedDetail('${m.id}')">Voir</button><button class="dialogue-action" onclick="openInstruction('${m.id}')">Instruction</button></div>
-      ${instr===m.id?instructionFormHTML(m):""}
-    </div>`;
-  }).join(""):`<div class="card p-4 text-center text-sm text-slate-500">Aucun échange pour le moment.</div>`;
-  return (addOpen?addFeedFormHTML():"")+rows;
+    const from=(db.users||[]).find(u=>u.username===m.from);
+    return '<div class="chat-bubble '+(mine?'mine':'theirs')+'">'+(m.sujet?'<div class="font-bold mb-1">'+escapeHTML(m.sujet)+'</div>':'')+'<div>'+escapeHTML(m.message||'')+'</div><div class="chat-meta">'+escapeHTML(mine?'Moi':(from?from.nom:m.from||'—'))+' · '+new Date(m.date).toLocaleString('fr-FR')+'</div></div>';
+  }).join('');
+}
+function dialogueComposerHTML(peer){
+  const selected=peer||dialogueSelectedPeer();
+  return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)"><input type="hidden" name="to" value="'+escapeHTML(selected)+'"/><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button></form>';
 }
 function refreshRealtimeFeed(){
   const body=document.getElementById("dialogue-body");
   if(!body||!db||!session)return;
+  const peer=dialogueSelectedPeer();
   const wasBottom=body.scrollTop+body.clientHeight>=body.scrollHeight-40;
-  body.innerHTML=feedRowsHTML();
+  body.innerHTML=feedRowsHTML(peer);
   stripCryptogrammes(body);
   if(wasBottom)body.scrollTop=body.scrollHeight;
 }
 function dialogueSend(form){
   const fd=new FormData(form);
   const msg=(fd.get("message")||"").toString().trim();
+  const to=(fd.get("to")||dialogueSelectedPeer()||"admin").toString();
   if(!msg){toast("Message obligatoire","error");return}
   if(!db.echanges)db.echanges=[];
-  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session.username,to:fd.get("to")||"admin",sujet:(fd.get("sujet")||"").toString().trim(),importance:fd.get("importance")||"Normal",message:msg,obligation:(fd.get("obligation")||"Prendre connaissance de l'événement.").toString().trim(),droit:(fd.get("droit")||"Droit de réponse et de clarification.").toString().trim(),conduite:(fd.get("conduite")||"Analyser, traiter puis archiver l'événement.").toString().trim(),luPar:[session.username],type:"evenement"});
-  if(db.echanges.length>500)db.echanges=db.echanges.slice(-500);
+  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session.username,to,sujet:"",importance:"Normal",message:msg,obligation:"",droit:"",conduite:"",luPar:[session.username],type:"message"});
+  if(db.echanges.length>800)db.echanges=db.echanges.slice(-800);
   saveDB();
   sessionStorage.setItem("dialogueOpen","1");
-  sessionStorage.removeItem("addFeedOpen");
-  toast("Publication ajoutée au fil d'actualité","success");
+  sessionStorage.setItem("dialoguePeer",to);
+  form.reset();
   render();
   setTimeout(()=>{const b=document.getElementById("dialogue-body");if(b)b.scrollTop=b.scrollHeight},50);
 }
-function openAddFeed(){sessionStorage.setItem("addFeedOpen","1");sessionStorage.setItem("dialogueOpen","1");render()}
-function closeAddFeed(){sessionStorage.removeItem("addFeedOpen");render()}
-function addFeedFormHTML(){
-  return `<form class="instruction-form mb-3" onsubmit="event.preventDefault();dialogueSend(this)">
-    <div class="grid grid-1" style="gap:7px">
-      <div><label class="label">Destinataire</label>${dialogueUsersOptions(isAdmin()?"all":"admin")}</div>
-      <div><label class="label">Sujet</label><input class="input" name="sujet" placeholder="Sujet de l'événement"/></div>
-      <div><label class="label">Niveau d'importance</label><select class="select" name="importance"><option>Normal</option><option>Élevée</option><option>Très élevée</option></select></div>
-      <div><label class="label">Message</label><textarea class="input" name="message" rows="3" placeholder="Décrire l'événement..." ></textarea></div>
-    </div>
-    <div class="flex gap-2 justify-end mt-2"><button type="button" class="dialogue-action" onclick="closeAddFeed()">Annuler</button><button class="dialogue-action" style="background:#14532d;border-color:#166534">Publier</button></div>
-  </form>`;
-}
+function openAddFeed(){sessionStorage.setItem("dialogueOpen","1");render()}
+function closeAddFeed(){render()}
+function addFeedFormHTML(){return dialogueComposerHTML(dialogueSelectedPeer())}
 function openFeedDetail(id){
   const m=(db.echanges||[]).find(x=>x.id===id);
   if(!m){toast("Evénement introuvable","error");return}
