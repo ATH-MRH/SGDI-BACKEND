@@ -1592,6 +1592,8 @@ async function confirmAdminLoginAccess(p){
 function loginAdminDirect(){if(isAdmin()){openAdminSystemAccess();return}session=null;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);openAdminLoginAccess()}
 function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
+function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
+function isAdm1(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM1","ADMI1","ADMIN1"].includes(normalizeAccessCode(v)))}
 function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
 function currentAccessLevelCode(){const u=currentUserRecord();return String(session?.niveau||u?.niveau||"").trim()}
 function isCadreCat01(){return currentAccessLevelCode().toUpperCase().replace(/[\s-]+/g,"_")==="CADRE_CAT_01"}
@@ -3194,11 +3196,8 @@ function candidatSectionAvailable(c,key){
   if(!cur)return true;
   return candidatSectionIndex(key)<=candidatSectionIndex(cur);
 }
-function candidatSectionUnlockRoles(){
-  const roles=db.settings&&Array.isArray(db.settings.candidatSectionUnlockRoles)?db.settings.candidatSectionUnlockRoles:null;
-  return roles&&roles.length?roles:["admin"];
-}
-function candidatCanUnlockSections(){return !!(session&&candidatSectionUnlockRoles().includes(session.role))}
+function candidatSectionUnlockRoles(){return ["ADM1"]}
+function candidatCanUnlockSections(){return !!(session&&isAdm1())}
 function candidatSectionLocked(c,key){return candidatSectionIsValidated(c,key)&&!candidatCanUnlockSections()}
 function candidatSectionOpen(c,key,bannerClass,title){
   if(!candidatSectionAvailable(c,key))return "";
@@ -3234,7 +3233,7 @@ function applyCandidatSectionLocks(){
     if(!sec.querySelector(".section-lock-note")){
       const note=document.createElement("div");
       note.className="section-lock-note text-xs text-emerald-700 mt-2";
-      note.textContent="Section verrouillée après validation.";
+      note.textContent="Section verrouillée après validation. Modification réservée au niveau ADM1.";
       sec.appendChild(note);
     }
   });
@@ -10402,7 +10401,6 @@ async function saveAdminSocieteAccess(form){
 }
 function renderAdminCandidatSections(view){
   if(!db.settings)db.settings={};
-  const roles=candidatSectionUnlockRoles();
   const validated=(db.candidats||[]).filter(c=>candidatAllSectionsValid(c)).length;
   const inReserve=(db.candidats||[]).filter(c=>candidatIsReserve(c)).length;
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">✅ Validation des sections candidat</h1>
@@ -10412,13 +10410,10 @@ function renderAdminCandidatSections(view){
       <div class="card p-4"><div class="text-xs text-slate-500">Fiches de position validées</div><div class="text-3xl font-black text-amber-700">${inReserve}</div></div>
     </div>
     <div class="card p-5 mb-4">
-      <h3 class="font-bold mb-3">Administrateurs habilités au déverrouillage</h3>
-      <p class="text-sm text-slate-500 mb-4">Une section validée est bloquée. Seuls les rôles cochés ici peuvent déverrouiller une section depuis la fiche candidat.</p>
-      <div class="grid grid-2 gap-3 mb-4">${ADMIN_ROLES.map(r=>`<label class="flex items-center justify-between p-3 rounded-md border border-slate-200 text-sm">
-        <span class="font-semibold uppercase">${escapeHTML(r)}</span>
-        <input type="checkbox" name="unlock_role_${r}" ${roles.includes(r)?"checked":""} style="width:18px;height:18px"/>
-      </label>`).join("")}</div>
-      <button class="btn btn-primary" onclick="saveAdminCandidatSectionSettings()">💾 Enregistrer l'habilitation</button>
+      <h3 class="font-bold mb-3">Déverrouillage strict</h3>
+      <p class="text-sm text-slate-500 mb-4">Une section validée est définitivement bloquée pour tous les utilisateurs. Seul le niveau ADM1 peut la déverrouiller ou la modifier.</p>
+      <div class="p-3 rounded-md border border-emerald-200 bg-emerald-50 text-sm text-emerald-800 font-bold">Niveau autorisé : ADM1</div>
+      <button class="btn btn-primary mt-4" onclick="saveAdminCandidatSectionSettings()">Appliquer la règle ADM1</button>
     </div>
     <div class="card p-5">
       <h3 class="font-bold mb-3">Ordre obligatoire des validations</h3>
@@ -10431,10 +10426,8 @@ function renderAdminCandidatSections(view){
 }
 function saveAdminCandidatSectionSettings(){
   if(!db.settings)db.settings={};
-  const roles=ADMIN_ROLES.filter(r=>document.querySelector(`[name="unlock_role_${r}"]`)?.checked);
-  if(!roles.includes("admin"))roles.push("admin");
-  db.settings.candidatSectionUnlockRoles=roles;
-  saveDB();logActivity("Habilitation sections candidat",roles.join(", "));toast("Habilitation enregistrée","success");renderView();
+  db.settings.candidatSectionUnlockRoles=["ADM1"];
+  saveDB();logActivity("Habilitation sections candidat","ADM1 uniquement");toast("Règle appliquée : seul ADM1 peut déverrouiller","success");renderView();
 }
 function renderAdminNiveaux(view){
   const niv=ensureNiveauxAcces();
