@@ -56,7 +56,7 @@ def list_users(db: Session = Depends(get_db), user: User = Depends(current_user)
     return db.query(User).order_by(User.username).all()
 
 
-@router.patch("/users/{username}", response_model=UserOut)
+@router.patch("/users/{username:path}", response_model=UserOut)
 def patch_user(
     username: str,
     payload: UserUpdate,
@@ -76,7 +76,7 @@ def patch_user(
     return update_user(db, target, payload)
 
 
-@router.delete("/users/{username}")
+@router.delete("/users/{username:path}")
 def delete_user(username: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
     if username == user.username:
