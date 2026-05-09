@@ -994,7 +994,11 @@ async function sgdiLoadAuthState(){
 
 function candidateHasMinimumData(c){
   if(!c||typeof c!=="object")return false;
-  return [c.nom,c.prenom,c.last_name,c.first_name,c.telephone,c.phone,c.email,c.nin,c.dateNaissance,c.birth_date].some(v=>String(v||"").trim().length>0);
+  const nom=String(c.nom||c.last_name||"").trim();
+  const prenom=String(c.prenom||c.first_name||"").trim();
+  const nin=String(c.nin||"").trim();
+  const contact=String(c.telephone||c.phone||c.email||"").trim();
+  return (nom.length>=2&&prenom.length>=2)||(nin.length>=6)||(contact.length>=5&&(nom.length>=2||prenom.length>=2));
 }
 function pruneEmptyCandidates(){
   if(!db||!Array.isArray(db.candidats))return 0;
@@ -1052,7 +1056,10 @@ async function syncCandidatesFromPostgres(){
 async function persistCandidateToPostgres(c){
   if(!c||!sgdiAuthToken())return null;
   const backendId=sqlBackendId(c.backendId);
-  if(!backendId&&!candidateHasMinimumData(c))return null;
+  if(!candidateHasMinimumData(c)){
+    if(backendId)await deleteCandidateFromPostgres(c);
+    return null;
+  }
   const payload=candidateApiPayload(c);
   const saved=backendId?await SGDI.rh.updateCandidate(backendId,payload):await SGDI.rh.createCandidate(payload);
   const mapped=candidateFromApi(saved);
@@ -3399,11 +3406,26 @@ function validateCandidatIdentification(data){
   if(data.nin&&!/^\d{10}$/.test(String(data.nin||""))){toast("Le NIN doit contenir exactement 10 chiffres","error");return false}
   return true;
 }
+function candidatRequiredFieldsForSection(key){
+  return {
+    identification:[["nom","Nom"],["prenom","Prénom"],["dateNaissance","Date de naissance"],["lieuNaissance","Lieu de naissance"],["sexe","Sexe"],["nomPere","Nom du père"],["nomMere","Nom de la mère"],["nin","NIN"],["situation","Situation familiale"],["source","Source"]],
+    poste:[["posteSouhaite","Poste souhaité"],["telephone","Téléphone"]],
+    avis:[["avisDecision","Décision"],["avisDate","Date de l'avis"],["avisRecruteur","Recruteur"],["avisCommentaire","Commentaire"]],
+    contact:[["adresse","Adresse"],["commune","Commune"],["wilaya","Wilaya"],["contactUrgenceLien","Lien contact urgence"],["contactUrgenceNom","Nom contact urgence"],["contactUrgenceTel","Téléphone urgence"]]
+  }[key]||[];
+}
+function candidatSectionRequiredValid(key,data){
+  const missing=candidatRequiredFieldsForSection(key).filter(([field])=>!String(data?.[field]??"").trim()).map(([,label])=>label);
+  if(missing.length){toast("Champs obligatoires manquants : "+missing.slice(0,6).join(", ")+(missing.length>6?"...":""),"error");return false}
+  return true;
+}
 async function saveCandidat(id,showToast){
   markRequiredFields(document.getElementById("candidat-form"));
   const data=collectCandidatFormData();if(!data){toast("Formulaire introuvable","error");return}
+  if(!candidatSectionRequiredValid("identification",data))return;
   if(!validateCandidatIdentification(data))return;
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return}
+  if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
   let c=db.candidats.find(x=>x.id===id);if(!c){c={id,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
   Object.assign(c,data);delete c.isNew;
   if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
@@ -3467,7 +3489,8 @@ async function confirmArchiveCandidat(id){
   const commentaire=String(new FormData(f).get("commentaireArchive")||"").trim();
   const data=collectCandidatFormData()||{};
   let c=db.candidats.find(x=>x.id===id);
-  if(!c){c={id,createdAt:today()};db.candidats.push(c)}
+  if(!c){toast("Enregistrez d'abord le candidat avant de l'archiver","error");return}
+  if(!motif){toast("Choisissez un motif d'archivage","error");return}
   const source=candidatIsReserve(c)||data.statut==="reserve"||data.fichePositionValidee===true?"reserve":"nouvelle";
   Object.assign(c,data);
   c.statut="archive";
@@ -3537,7 +3560,8 @@ function bindCandidatDraftAutosave(id){
   });
 }
 function validateCandidatSection(key,data){
-  if(key==="identification")return validateCandidatIdentification(data);
+  if(!candidatSectionRequiredValid(key,data))return false;
+  if(key==="identification"&&!validateCandidatIdentification(data))return false;
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return false}
   return true;
 }
@@ -3545,10 +3569,12 @@ async function validateCandidatSectionAction(id,key){
   let c=db.candidats.find(x=>x.id===id);
   markRequiredFields(document.getElementById("candidat-form"));
   const data=collectCandidatFormData();if(!data)return;
-  if(!c){c={id,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
-  if(!candidatPreviousSectionsValid(c,key)){toast("Validez d'abord la section précédente","error");return}
-  if(!candidatSectionAvailable(c,key)){toast("Cette section n'est pas encore ouverte","error");return}
+  const validationTarget=c||{id,statut:"nouvelle",createdAt:today(),sectionValidations:{}};
+  if(!candidatPreviousSectionsValid(validationTarget,key)){toast("Validez d'abord la section précédente","error");return}
+  if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");return}
   if(!validateCandidatSection(key,data))return;
+  if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
+  if(!c){c=validationTarget;db.candidats.push(c)}
   Object.assign(c,data);delete c.isNew;
   const locks=candidatSectionValidations(c);
   locks[key]={by:session?session.username:"system",at:new Date().toISOString()};
@@ -11619,9 +11645,9 @@ try{
   window.addEventListener("beforeunload",()=>{
     if(candidatDraftTimer){
       clearTimeout(candidatDraftTimer);
-      const id=document.querySelector('#candidat-form [name="id"]')?.value;
-      if(id)saveCandidatDraft(id);
-    }else if(sgdiDirty&&db&&sgdiAuthToken()){
+      candidatDraftTimer=null;
+    }
+    if(sgdiDirty&&db&&sgdiAuthToken()){
       sgdiBackendSave();
     }
   });
