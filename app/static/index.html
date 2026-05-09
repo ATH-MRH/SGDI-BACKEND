@@ -336,9 +336,9 @@
   .chat-meta{font-size:9.5px;opacity:.72;margin-top:4px;white-space:nowrap}
   .chat-status{font-size:10px;opacity:.88;margin-top:3px;text-align:right;font-weight:700}
   .chat-status.read{color:#38bdf8}.chat-status.received{color:#bbf7d0}.chat-status.sent{color:#e5e7eb}
-  .dialogue-composer{border-top:1px solid #cbd5e1;background:#fff;padding:8px;display:flex;gap:6px;align-items:flex-end}
+  .dialogue-composer{border-top:1px solid #cbd5e1;background:#fff;padding:8px;display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:end}
   .dialogue-composer textarea{min-height:38px;max-height:88px;resize:vertical;font-size:12px;padding:8px}
-  .dialogue-send{border:none;background:#111827;color:#fff;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}
+  .dialogue-attach{border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}.dialogue-send{border:none;background:#111827;color:#fff;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}.chat-attachment{display:inline-flex;align-items:center;gap:5px;margin-top:7px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-size:11px;font-weight:800;text-decoration:none}.chat-bubble.theirs .chat-attachment{background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a}.dialogue-file-name{grid-column:1/4;font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .instruction-form{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:10px;margin-top:8px}
 
   /* ----- MATERIEL PRO UI ----- */
@@ -2587,6 +2587,27 @@ function dialogueMarkReceived(){
   });
   if(changed)saveDB();
 }
+function dialogueAttachmentHTML(m){
+  const files=Array.isArray(m.attachments)?m.attachments:[];
+  if(!files.length)return "";
+  return files.map((f,i)=>'<a class="chat-attachment" href="'+escapeHTML(f.data||'#')+'" download="'+escapeHTML(f.name||('piece-'+(i+1)))+'">📎 '+escapeHTML(f.name||('Pièce '+(i+1)))+'</a>').join('');
+}
+function dialogueReadAttachment(file){
+  return new Promise((resolve,reject)=>{
+    if(!file)return resolve(null);
+    if(file.size>3*1024*1024)return reject(new Error('Pièce jointe > 3 Mo'));
+    const r=new FileReader();
+    r.onload=e=>resolve({name:file.name,type:file.type||'application/octet-stream',size:file.size,data:e.target.result});
+    r.onerror=()=>reject(new Error('Lecture pièce jointe impossible'));
+    r.readAsDataURL(file);
+  });
+}
+function dialogueFileChanged(input){
+  const f=input&&input.files&&input.files[0];
+  const form=input?input.closest('form'):null;
+  const n=form?form.querySelector('[data-dialogue-file-name]'):null;
+  if(n)n.textContent=f?'Pièce jointe : '+f.name:'Aucune pièce jointe';
+}
 function dialogueMessageStatus(m){
   if(!session||!m||m.from!==session.username)return"";
   if(m.to==="all"){
@@ -2684,12 +2705,12 @@ function feedRowsHTML(peer){
   return items.map(m=>{
     const mine=m.from===session.username;
     const from=(db.users||[]).find(u=>u.username===m.from);
-    return '<div class="chat-bubble '+(mine?'mine':'theirs')+'">'+(m.sujet?'<div class="font-bold mb-1">'+escapeHTML(m.sujet)+'</div>':'')+'<div>'+escapeHTML(m.message||'')+'</div><div class="chat-meta">'+escapeHTML(mine?'Moi':(from?from.nom:m.from||'—'))+' · '+new Date(m.date).toLocaleString('fr-FR')+'</div>'+dialogueMessageStatus(m)+'</div>';
+    return '<div class="chat-bubble '+(mine?'mine':'theirs')+'">'+(m.sujet?'<div class="font-bold mb-1">'+escapeHTML(m.sujet)+'</div>':'')+'<div>'+escapeHTML(m.message||'')+'</div><div class="chat-meta">'+escapeHTML(mine?'Moi':(from?from.nom:m.from||'—'))+' · '+new Date(m.date).toLocaleString('fr-FR')+'</div>'+dialogueAttachmentHTML(m)+dialogueMessageStatus(m)+'</div>';
   }).join('');
 }
 function dialogueComposerHTML(peer){
   const selected=peer||dialogueSelectedPeer();
-  return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)"><input type="hidden" name="to" value="'+escapeHTML(selected)+'"/><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button></form>';
+  return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)"><input type="hidden" name="to" value="'+escapeHTML(selected)+'"/><input type="file" name="attachment" class="hidden" onchange="dialogueFileChanged(this)"/><button type="button" class="dialogue-attach" title="Ajouter pièce jointe" onclick="this.form.attachment.click()">📎</button><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button><div class="dialogue-file-name" data-dialogue-file-name>Aucune pièce jointe</div></form>';
 }
 function refreshRealtimeFeed(){
   const body=document.getElementById("dialogue-body");
@@ -2700,13 +2721,16 @@ function refreshRealtimeFeed(){
   stripCryptogrammes(body);
   if(wasBottom)body.scrollTop=body.scrollHeight;
 }
-function dialogueSend(form){
+async function dialogueSend(form){
   const fd=new FormData(form);
   const msg=(fd.get("message")||"").toString().trim();
   const to=(fd.get("to")||dialogueSelectedPeer()||"admin").toString();
-  if(!msg){toast("Message obligatoire","error");return}
+  const attachmentFile=form.attachment&&form.attachment.files?form.attachment.files[0]:null;
+  let attachment=null;
+  try{attachment=await dialogueReadAttachment(attachmentFile)}catch(e){toast(e.message||String(e),"error");return}
+  if(!msg&&!attachment){toast("Message ou pièce jointe obligatoire","error");return}
   if(!db.echanges)db.echanges=[];
-  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session.username,to,sujet:"",importance:"Normal",message:msg,obligation:"",droit:"",conduite:"",receivedBy:[],luPar:[session.username],type:"message"});
+  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session.username,to,sujet:"",importance:"Normal",message:msg,attachments:attachment?[attachment]:[],obligation:"",droit:"",conduite:"",receivedBy:[],luPar:[session.username],type:"message"});
   if(db.echanges.length>800)db.echanges=db.echanges.slice(-800);
   saveDB();
   sessionStorage.setItem("dialogueOpen","1");
