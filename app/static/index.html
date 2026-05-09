@@ -832,10 +832,11 @@ let demandesPersonnelRefreshing=false;
 let demandesPersonnelKnownIds=null;
 let demandesPersonnelLastOpenCount=0;
 function demandePersonnelOpenCount(){
-  return (db&&Array.isArray(db.demandesPersonnel)?db.demandesPersonnel:[]).filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
+  const list=(db&&Array.isArray(db.demandesPersonnel)&&typeof incomingPortalDemandesPersonnel==="function")?incomingPortalDemandesPersonnel():(db&&Array.isArray(db.demandesPersonnel)?db.demandesPersonnel:[]);
+  return list.filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
 }
 function initDemandesPersonnelWatcher(){
-  const list=db&&Array.isArray(db.demandesPersonnel)?db.demandesPersonnel:[];
+  const list=(db&&Array.isArray(db.demandesPersonnel)&&typeof incomingPortalDemandesPersonnel==="function")?incomingPortalDemandesPersonnel():(db&&Array.isArray(db.demandesPersonnel)?db.demandesPersonnel:[]);
   demandesPersonnelKnownIds=new Set(list.map(d=>String(d.id||d.ref||"")).filter(Boolean));
   demandesPersonnelLastOpenCount=demandePersonnelOpenCount();
 }
@@ -884,6 +885,8 @@ async function refreshDemandesPersonnelFromPostgres(options){
     const after=JSON.stringify(data);
     if(before!==after){
       db.demandesPersonnel=data;
+      const movedStructure=typeof migrateStructureDemandes==="function"?migrateStructureDemandes():0;
+      if(movedStructure&&typeof sgdiBackendSave==="function")sgdiBackendSave();
       demandesPersonnelKnownIds=new Set(data.map(d=>String(d.id||d.ref||"")).filter(Boolean));
       demandesPersonnelLastOpenCount=demandePersonnelOpenCount();
       renderSidebar();
@@ -1161,7 +1164,7 @@ function ensureContratsPersonnel(){
 function emptyDB(){
   return{
     users:[],agents:[],sites:[],candidats:[],incidents:[],conges:[],contrats:[],materiel:[],
-    echanges:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],demandesPersonnel:[],missions:[],siteInspections:[],
+    echanges:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],demandesPersonnel:[],demandesStructure:[],missions:[],siteInspections:[],
     devis:[],factures:[],paiements:[],avances:[],avoirs:[],caisse:[],
     prospects:[],clients:[],opportunites:[],visites:[],catalogue:[],
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
@@ -1182,6 +1185,7 @@ function hydrateDB(source){
   if(!db.societesConfig||typeof db.societesConfig!=="object")db.societesConfig=base.societesConfig;
   if(typeof ensureNiveauxAcces==="function")ensureNiveauxAcces();
   sanitizeCandidatesInDB();
+  if(typeof migrateStructureDemandes==="function")migrateStructureDemandes();
   return db;
 }
 function loadDB(){return emptyDB()}
@@ -1214,6 +1218,7 @@ function recordSaveOperation(){
 function saveDB(){
   try{
     sgdiDirty=true;
+    if(typeof migrateStructureDemandes==="function")migrateStructureDemandes();
     sanitizeCandidatesInDB();
     uiSaveState("Sauvegarde PostgreSQL...","");
     recordSaveOperation();
@@ -1244,7 +1249,7 @@ function purgeRemovedSocieteData(d){
     if(d[key].length!==before)changed=true;
   };
   const stockIds=new Set((d.stockArticles||[]).filter(x=>isRemovedSociete(x&&x.societe)).map(x=>x.id));
-  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","demandesPersonnel","missions","siteInspections"].forEach(filterSoc);
+  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","demandesPersonnel","demandesStructure","missions","siteInspections"].forEach(filterSoc);
   if(Array.isArray(d.stockMouvements)){
     const before=d.stockMouvements.length;
     d.stockMouvements=d.stockMouvements.filter(x=>!isRemovedSociete(x&&x.societe)&&!stockIds.has(x&&x.articleId));
@@ -1679,7 +1684,7 @@ function incidentMatchesSociete(incident,soc){
   if(incident.siteId&&(db.sites||[]).some(s=>s.id===incident.siteId&&siteMatchesSociete(s,soc)))return true;
   return false;
 }
-function defaultAccessMap(){return {"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],admin:["admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],parametres:["admin"],portail:["rh","dispatch","agent","admin"],demandes_personnel:["rh","admin"]}}
+function defaultAccessMap(){return {"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],admin:["admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],parametres:["admin"],portail:["rh","dispatch","agent","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"]}}
 function canAccess(key){
   if(!session)return false;
   const r=session.role;
@@ -1795,13 +1800,13 @@ function render(){
     const h=(location.hash||"").slice(2);
     const root=h.split("/")[0];
     const allowedByMod={
-      facturation:["facturation","incidents"],
-      commercial:["commercial","incidents"],
-      materiel:["materiel","fiches","agents","effectif","sites","incidents"],
-      admin:["admin","incidents"],
-      pointage:["pointage","incidents"],
-      ops:["ops","pointage","fiches","agents","sites","effectif","incidents"],
-      drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","portail"]
+      facturation:["facturation","incidents","demandes_structure"],
+      commercial:["commercial","incidents","demandes_structure"],
+      materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure"],
+      admin:["admin","incidents","demandes_structure"],
+      pointage:["pointage","incidents","demandes_structure"],
+      ops:["ops","pointage","fiches","agents","sites","effectif","incidents","demandes_structure"],
+      drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail"]
     };
     const allowed=allowedByMod[session.transverse]||[session.transverse];
     if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":(session.transverse==="pointage"?"pointage/saisie":(session.transverse==="ops"?"ops/dashboard":session.transverse+"/dashboard"));location.hash="#/"+target;return}
@@ -2183,6 +2188,7 @@ function navDemandesPersonnelLabel(item){
   const label=escapeHTML(item&&item.label||"");
   return item&&item.route==="demandes_personnel/dashboard"&&Number(item.count||0)>0?`<span class="dp-reception-text">${label}</span>`:label;
 }
+function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE",children:[{label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
 function renderSidebar(){
   const path=(location.hash||"#/dashboard").slice(2);
   const _ag=myAgents();const _ca=myCandidats();const _co=myConges();
@@ -2197,6 +2203,9 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD FINANCES",icon:"📊",route:"facturation/dashboard"},
         {label:"Devis",icon:"📝",route:"facturation/devis",count:(db.devis||[]).length},
         {label:"Factures",icon:"🧾",route:"facturation/factures",count:(db.factures||[]).length},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Paiements",icon:"💳",route:"facturation/paiements"},
         {label:"Avances clients",icon:"💰",route:"facturation/avances"},
         {label:"Avoirs",icon:"↩️",route:"facturation/avoirs"},
@@ -2209,6 +2218,9 @@ function renderSidebar(){
       ]},
       commercial:{label:"COMMERCIAL",color:"#8b5cf6",children:[
         {label:"TABLEAU DE BORD COMMERCIAL",icon:"📊",route:"commercial/dashboard"},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Prospects",icon:"🎯",route:"commercial/prospects",count:(db.prospects||[]).length},
         {label:"Clients",icon:"🤝",route:"commercial/clients",count:(db.clients||[]).length},
         {label:"Opportunités",icon:"💼",route:"commercial/opportunites",count:(db.opportunites||[]).filter(o=>!["gagnee","perdue"].includes(o.etape)).length},
@@ -2220,6 +2232,9 @@ function renderSidebar(){
       ]},
       materiel:{label:"MATÉRIEL & ÉQUIPEMENT",color:"#043970",children:[
         {label:"TABLEAU DE BORD MATERIEL",icon:"🏠",route:"materiel/dashboard"},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Articles",icon:"📦",route:"materiel/articles",count:(db.stockArticles||[]).length},
         {label:"MAGASIN",icon:"🏬",route:"materiel/magasins",count:(db.magasins||[]).length,title:true},
         {label:"Fournisseurs",icon:"🤝",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
@@ -2231,6 +2246,9 @@ function renderSidebar(){
       ]},
       pointage:{label:"POINTAGE",color:"#043970",children:[
         {label:"TABLEAU DE BORD POINTAGE",icon:"📝",route:"pointage/saisie"},
+        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount(),title:true},
+        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
+        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Récap par agent",icon:"👤",route:"pointage/recap"},
         {label:"Récap par société",icon:"🏢",route:"pointage/societe"},
         {label:"Statistiques",icon:"📈",route:"pointage/stats"},
@@ -2246,6 +2264,7 @@ function renderSidebar(){
         {label:"Droits d'accès",icon:"🔐",route:"admin/droits"},
         {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"Historique messages",icon:"💬",route:"admin/messages",count:(db.echanges||[]).filter(e=>e.type==="message"||e.attachments?.length).length},
+        {label:"Demande structure",icon:"📨",route:"demandes_structure/reception",count:structureOpenCount()},
         {label:"Niveaux d'accès",icon:"🎚",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"Contrats du personnel",icon:"📄",route:"admin/contrats",count:(db.contratsPersonnel||[]).length},
         {label:"Priorités",icon:"⚡",route:"admin/priorites",count:(db.priorites||[]).length},
@@ -2270,6 +2289,7 @@ function renderSidebar(){
           {label:"Légende & codes",icon:"🎨",route:"pointage/legende"}
         ]},
         {type:"link",label:"🪪 FICHES DE POSITION",icon:"🪪",route:"fiches"},
+        structureDemandSidebarGroup(),
         {type:"group",label:"📍 SITES",children:[
           {label:"Création de site",icon:"➕",route:"sites/nouveau"},
           {label:"Sites actifs",icon:"📍",route:"sites/actifs"}
@@ -2318,9 +2338,10 @@ function renderSidebar(){
           {label:"Candidats en réserve",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
           {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
         ]},
+        structureDemandSidebarGroup(),
         {type:"group",label:"DEMANDES PERSONNEL",children:[
-          {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:(db.demandesPersonnel||[]).filter(d=>["nouveau","en_cours"].includes(d.statut)).length},
-          {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:(db.demandesPersonnel||[]).filter(d=>demandePersonnelIsAlert(d)).length},
+          {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:incomingPortalDemandesPersonnel().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+          {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:incomingPortalDemandesPersonnel().filter(d=>demandePersonnelIsAlert(d)).length},
           {label:"Portail mobile",icon:"📱",route:"portail"}
         ]},
         {type:"group",label:"CONTRAT",children:[
@@ -2348,7 +2369,7 @@ function renderSidebar(){
       ];
       const head="";
       const openGroup=sessionStorage.getItem("navOpenGroup")||"";
-      const drhOrangeTitles=new Set(["RECRUTEMENT","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
+      const drhOrangeTitles=new Set(["RECRUTEMENT","DEMANDE STRUCTURE","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
       const html=drhGroups.map(g=>{
         const isOrange=drhOrangeTitles.has(g.label);
         const titleStyle=isOrange?`style="color:#043970;font-size:13px;font-weight:900"`:"";
@@ -2382,9 +2403,10 @@ function renderSidebar(){
       {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
     ]},
     {type:"group",label:"DEMANDES PERSONNEL",children:[
-      {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:(db.demandesPersonnel||[]).filter(d=>["nouveau","en_cours"].includes(d.statut)).length},
-      {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:(db.demandesPersonnel||[]).filter(d=>demandePersonnelIsAlert(d)).length}
+      {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:incomingPortalDemandesPersonnel().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+      {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:incomingPortalDemandesPersonnel().filter(d=>demandePersonnelIsAlert(d)).length}
     ]},
+    structureDemandSidebarGroup(),
     {type:"group",label:"CONTRAT",children:[
       {label:"Nouveau contrat",icon:"➕",route:"contrats/a_contractualiser"},
       {label:"Avenant",icon:"✎",route:"contrats/avenants",count:(db.avenants||[]).length},
@@ -2897,6 +2919,7 @@ function renderView(){
       case"conges":renderConges(view);break;
       case"portail":renderPortailPersonnel(view);break;
       case"demandes_personnel":renderDemandesPersonnel(view,sub||"dashboard",arg);break;
+      case"demandes_structure":renderDemandesStructure(view,sub||"reception",arg);break;
       case"materiel":renderMateriel(view,sub||"inventaire",arg);break;
       case"facturation":renderFacturation(view,sub||"dashboard",arg);break;
       case"commercial":renderCommercial(view,sub||"dashboard",arg);break;
@@ -4279,7 +4302,7 @@ function inRange(c){const d=today();return c.du<=d&&(!c.au||c.au>=d)}
 function agentDemandesPersonnel(a){
   const code=String(a?.matricule||"").trim().toLowerCase();
   const agentId=String(a?.id||"").trim();
-  return (db.demandesPersonnel||[]).filter(d=>{
+  return portalDemandesPersonnel().filter(d=>{
     const dm=String(d.matricule||d.employee?.matricule||"").trim().toLowerCase();
     const did=String(d.agentId||"").trim();
     return (agentId&&did===agentId)||(code&&dm===code);
@@ -4493,13 +4516,13 @@ function openOpsSuspensionRecipients(){
 function sendOpsSuspensionRequest(form){
   const pack=window._opsSuspensionDraft;if(!pack)return;
   const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
-  ensureDemandesPersonnel();
+  ensureDemandesStructure();
   const ref=pack.ref||("SUSP-OPS-"+Date.now());
   const html=opsSuspensionDocumentHTML(a,pack.draft,ref);
   const htmlData="data:text/html;charset=utf-8,"+encodeURIComponent(html);
   const createdAt=new Date().toISOString();
-  const d={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Demande suspension",typeLabel:"Demande suspension",categorie:"Suspension disciplinaire",urgence:"haute",objet:"Demande de suspension - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:pack.draft.motif,statut:"nouveau",source:"ops-suspension",deadlineAt:opsSuspensionDeadlineFrom(createdAt),pieces:[{name:ref+".html",type:"text/html",data:htmlData}],documentsDemandes:[],payloadOriginal:{suspension:pack.draft,reference:ref},historique:[{date:createdAt,user:session?.username||"OPS",action:"Demande suspension créée",note:"Validation DRH attendue sous 03 heures"}]};
-  db.demandesPersonnel.push(d);
+  const d={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Demande suspension",typeLabel:"Demande suspension",categorie:"Suspension disciplinaire",urgence:"haute",objet:"Demande de suspension - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:pack.draft.motif,statut:"nouveau",source:"ops-suspension",fromStructure:"ops",toStructure:"drh",deadlineAt:opsSuspensionDeadlineFrom(createdAt),pieces:[{name:ref+".html",type:"text/html",data:htmlData}],documentsDemandes:[],payloadOriginal:{suspension:pack.draft,reference:ref},historique:[{date:createdAt,user:session?.username||"OPS",action:"Demande suspension créée",note:"Validation DRH attendue sous 03 heures"}]};
+  db.demandesStructure.push(d);
   a.suspensionsDemandes=a.suspensionsDemandes||[];a.suspensionsDemandes.push({id:d.id,ref,statut:"en_attente_drh",...pack.draft,createdAt,createdBy:session?.username||"OPS"});
   const recipients=[...form.querySelectorAll('input[name="dest"]:checked')].map(x=>x.value).filter(Boolean);
   db.echanges=db.echanges||[];
@@ -4517,7 +4540,7 @@ function suspensionDemandActionsHTML(d){
   return `<button class="btn btn-primary text-xs" onclick="validateOpsSuspensionDemand('${d.id}')">Valider suspension</button><button class="btn btn-ghost text-xs text-red-600" onclick="rejectOpsSuspensionDemand('${d.id}')">Rejeter</button>`;
 }
 function validateOpsSuspensionDemand(id){
-  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   const a=(db.agents||[]).find(x=>x.id===d.agentId);if(!a){toast("Employé introuvable","error");return}
   const susp=d.payloadOriginal?.suspension||{};
   a.statut="suspendu";
@@ -4526,11 +4549,12 @@ function validateOpsSuspensionDemand(id){
   (a.suspensionsDemandes||[]).filter(x=>x.id===d.id||x.ref===d.ref).forEach(x=>{x.statut="validee_drh";x.validatedAt=new Date().toISOString();x.validatedBy=session?.username||"DRH"});
   d.statut="traite";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse="Votre suspension a été validée par la DRH. Période maximale : "+formatDate(susp.dateDebut||today())+" au "+formatDate(susp.dateFin||addDays(susp.dateDebut||today(),15))+". Motif : "+(susp.motif||d.message||"");
   d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Suspension validée",note:"Document transmis au portail RH"});
+  ensureDemandesPersonnel().push({...d,id:uid("dp"),source:"drh-suspension-portail",statut:"traite",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
   saveDB();toast("Suspension validée et transmise au portail RH","success");renderSidebar();renderView();
 }
 function rejectOpsSuspensionDemand(id){
   const motif=prompt("Motif du rejet DRH :")||"Demande rejetée par la DRH";
-  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   d.statut="rejete";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse=motif;d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Suspension rejetée",note:motif});
   const a=(db.agents||[]).find(x=>x.id===d.agentId);(a?.suspensionsDemandes||[]).filter(x=>x.id===d.id||x.ref===d.ref).forEach(x=>{x.statut="rejetee_drh";x.rejectedAt=new Date().toISOString();x.rejectedBy=session?.username||"DRH";x.rejetMotif=motif});
   saveDB();toast("Demande de suspension rejetée","success");renderSidebar();renderView();
@@ -4829,11 +4853,11 @@ function openOpsConvocationModal(agentId){
 function sendOpsConvocationRequest(agentId,form){
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(form);const motif=String(fd.get("motif")||"").trim();if(!motif){toast("Motif obligatoire","error");return}
-  ensureDemandesPersonnel();
+  ensureDemandesStructure();
   const createdAt=new Date().toISOString();const ref="CONV-OPS-"+createdAt.slice(0,10).replaceAll("-","")+"-"+Math.floor(Math.random()*9000+1000);
   const details={motif,dateConvocation:String(fd.get("dateConvocation")||today()),heure:String(fd.get("heure")||""),lieu:String(fd.get("lieu")||"DRH")};
-  const d={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Demande convocation",typeLabel:"Demande convocation",categorie:"Convocation officielle",urgence:"haute",objet:"Demande de convocation - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:motif,statut:"nouveau",source:"ops-convocation",pieces:[],documentsDemandes:[],payloadOriginal:{convocation:details,reference:ref},historique:[{date:createdAt,user:session?.username||"OPS",action:"Demande convocation créée",note:"Transmission DRH"}]};
-  db.demandesPersonnel.push(d);
+  const d={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Demande convocation",typeLabel:"Demande convocation",categorie:"Convocation officielle",urgence:"haute",objet:"Demande de convocation - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:motif,statut:"nouveau",source:"ops-convocation",fromStructure:"ops",toStructure:"drh",pieces:[],documentsDemandes:[],payloadOriginal:{convocation:details,reference:ref},historique:[{date:createdAt,user:session?.username||"OPS",action:"Demande convocation créée",note:"Transmission DRH"}]};
+  db.demandesStructure.push(d);
   db.echanges=db.echanges||[];
   (db.users||[]).filter(u=>u.username&&u.username!==session?.username&&/(rh|drh|admin|adm)/i.test(String(u.role||u.niveau||""))).forEach(u=>db.echanges.push({id:uid("ech"),date:createdAt,from:session?.username||"ops",to:u.username,sujet:"Demande convocation "+(a.matricule||""),importance:"Élevée",message:"Demande de convocation officielle pour "+d.agentName+". Réf: "+ref,attachments:[],receivedBy:[],luPar:[session?.username||""],type:"message"}));
   saveDB();closeModal();toast("Demande de convocation envoyée à la DRH","success");renderSidebar();renderView();
@@ -4844,18 +4868,19 @@ function convocationDemandActionsHTML(d){
   return `<button class="btn btn-primary text-xs" onclick="sendOfficialConvocationDemand('${d.id}')">Envoyer convocation</button><button class="btn btn-ghost text-xs text-red-600" onclick="rejectConvocationDemand('${d.id}')">Rejeter</button>`;
 }
 function sendOfficialConvocationDemand(id){
-  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   const a=(db.agents||[]).find(x=>x.id===d.agentId);if(!a){toast("Employé introuvable","error");return}
   const conv=d.payloadOriginal?.convocation||{};const ref=d.ref||("CONV-DRH-"+Date.now());
   const html=opsConvocationDocumentHTML(a,conv,ref);const htmlData="data:text/html;charset=utf-8,"+encodeURIComponent(html);
   d.statut="traite";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse="Convocation officielle envoyée via le portail RH. Date : "+formatDate(conv.dateConvocation)+" à "+(conv.heure||"—")+". Lieu : "+(conv.lieu||"DRH");
   d.pieces=d.pieces||[];d.pieces.push({name:ref+".html",type:"text/html",data:htmlData});
   d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Convocation officielle envoyée",note:"Document transmis au portail RH"});
+  ensureDemandesPersonnel().push({...d,id:uid("dp"),source:"drh-convocation-portail",statut:"traite",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
   saveDB();toast("Convocation officielle envoyée au portail RH","success");renderSidebar();renderView();
 }
 function rejectConvocationDemand(id){
   const motif=prompt("Motif du rejet DRH :")||"Demande de convocation rejetée par la DRH";
-  const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
+  const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   d.statut="rejete";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse=motif;d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Convocation rejetée",note:motif});
   saveDB();toast("Demande de convocation rejetée","success");renderSidebar();renderView();
 }
@@ -4877,12 +4902,12 @@ function candidateBlackListMatch(c){
 }
 function sendBlackListAlertToDRH(a){
   if(!a)return;
-  ensureDemandesPersonnel();
+  ensureDemandesStructure();
   const createdAt=new Date().toISOString();
   const ref="BL-OPS-"+createdAt.slice(0,10).replaceAll("-","")+"-"+Math.floor(Math.random()*9000+1000);
   const msg="Agent inscrit sur la BLACKLIST. Il ne pourra plus signer de contrat ni être contractualisé sans levée administrative. Motif : "+(a.blacklistMotif||"Non précisé");
-  const alert={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Alerte blacklist",typeLabel:"Alerte blacklist",categorie:"Black list",urgence:"haute",objet:"BLACKLIST - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:msg,statut:"nouveau",source:"ops-blacklist",pieces:[],documentsDemandes:[],payloadOriginal:{blacklist:{motif:a.blacklistMotif||"",reference:a.blacklistReference||"",date:a.blacklistAt||createdAt,contractBlocked:true}},historique:[{date:createdAt,user:session?.username||"OPS",action:"Alerte blacklist créée",note:"Transmission DRH"}]};
-  db.demandesPersonnel.push(alert);
+  const alert={id:uid("dp"),ref,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||"OPS",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",site:a.affectationCourante?.siteName||"",type:"Alerte blacklist",typeLabel:"Alerte blacklist",categorie:"Black list",urgence:"haute",objet:"BLACKLIST - "+((a.nom||"")+" "+(a.prenom||"")).trim(),message:msg,statut:"nouveau",source:"ops-blacklist",fromStructure:"ops",toStructure:"drh",pieces:[],documentsDemandes:[],payloadOriginal:{blacklist:{motif:a.blacklistMotif||"",reference:a.blacklistReference||"",date:a.blacklistAt||createdAt,contractBlocked:true}},historique:[{date:createdAt,user:session?.username||"OPS",action:"Alerte blacklist créée",note:"Transmission DRH"}]};
+  db.demandesStructure.push(alert);
   db.echanges=db.echanges||[];
   const recipients=(db.users||[]).filter(u=>u.username&&u.username!==session?.username&&/(rh|drh|admin|adm)/i.test(String(u.role||u.niveau||"")));
   recipients.forEach(u=>db.echanges.push({id:uid("ech"),date:createdAt,from:session?.username||"ops",to:u.username,sujet:"Alerte BLACKLIST "+(a.matricule||""),importance:"Très élevée",message:msg,attachments:[],receivedBy:[],luPar:[session?.username||""],type:"message"}));
@@ -5488,6 +5513,31 @@ function incidentComment(id){
 
 /* ---- PORTAIL RH PERSONNEL : demandes, réclamations, documents ---- */
 function ensureDemandesPersonnel(){if(!db.demandesPersonnel)db.demandesPersonnel=[];return db.demandesPersonnel}
+function ensureDemandesStructure(){if(!db.demandesStructure)db.demandesStructure=[];return db.demandesStructure}
+function isStructureDemand(d){return String(d?.source||"").startsWith("ops-")||String(d?.source||"").startsWith("structure-")||!!d?.fromStructure||!!d?.toStructure}
+function normalizeStructureDemand(d){
+  if(!d)return d;
+  if(!d.fromStructure)d.fromStructure=String(d.source||"").startsWith("ops-")?"ops":(session?.transverse||"structure");
+  if(!d.toStructure)d.toStructure="drh";
+  d.typeLabel=d.typeLabel||d.type||"Demande structure";
+  return d;
+}
+function migrateStructureDemandes(){
+  if(!db||!Array.isArray(db.demandesPersonnel))return 0;
+  ensureDemandesStructure();
+  const moved=db.demandesPersonnel.filter(isStructureDemand).map(normalizeStructureDemand);
+  if(!moved.length)return 0;
+  const seen=new Set(db.demandesStructure.map(d=>String(d.id||d.ref||"")));
+  moved.forEach(d=>{const k=String(d.id||d.ref||"");if(!k||!seen.has(k)){db.demandesStructure.push(d);if(k)seen.add(k)}});
+  db.demandesPersonnel=db.demandesPersonnel.filter(d=>!isStructureDemand(d));
+  return moved.length;
+}
+function portalDemandesPersonnel(){return (db.demandesPersonnel||[]).filter(d=>!isStructureDemand(d))}
+function incomingPortalDemandesPersonnel(){return portalDemandesPersonnel().filter(d=>!String(d?.source||"").startsWith("drh-"))}
+function currentStructureKey(){return session?.transverse||"drh"}
+function structureDemandReceived(d){const m=currentStructureKey();const to=String(d.toStructure||"").toLowerCase();return to===m||to==="all"||(m==="admin")||(m==="drh"&&(!to||to==="drh"))}
+function structureDemandSent(d){return (String(d.fromStructure||"").toLowerCase())===currentStructureKey()||d.createdBy===session?.username}
+function structureOpenCount(){return ensureDemandesStructure().map(normalizeStructureDemand).filter(d=>structureDemandReceived(d)&&["nouveau","en_cours"].includes(d.statut||"nouveau")).length}
 function demandePersonnelCurrentAgent(){
   if(session?.agentId)return (db.agents||[]).find(a=>a.id===session.agentId)||null;
   const name=(session?.nom||"").toLowerCase().trim();
@@ -5551,7 +5601,7 @@ function groupDemandesPersonnelByEmployee(list){
 }
 function openPortailEmployeHistory(key){
   const soc=isDrhModuleContext()?((sessionStorage.getItem("drhSociete")||"")):(sessionStorage.getItem("portalSociete")||"");
-  let rows=(db.demandesPersonnel||[]).filter(d=>demandePersonnelEmployeeKey(d)===key);
+  let rows=portalDemandesPersonnel().filter(d=>demandePersonnelEmployeeKey(d)===key);
   if(soc)rows=rows.filter(d=>demandePersonnelSociete(d)===soc);
   rows.sort((x,y)=>String(y.createdAt||y.date||"").localeCompare(String(x.createdAt||x.date||"")));
   const first=rows[0]||{};
@@ -5575,7 +5625,7 @@ function renderPortailPersonnel(view){
     const q=(sessionStorage.getItem("portal_q")||"").toLowerCase();
     const statut=sessionStorage.getItem("portal_statut")||"";
     const type=sessionStorage.getItem("portal_type")||"";
-    let all=(db.demandesPersonnel||[]).slice();
+    let all=incomingPortalDemandesPersonnel().slice();
     if(soc)all=all.filter(d=>demandePersonnelSociete(d)===soc);
     const base=all.slice();
     if(statut)all=all.filter(d=>(d.statut||"nouveau")===statut);
@@ -5623,7 +5673,7 @@ function renderPortailPersonnel(view){
     return;
   }
   const a=demandePersonnelCurrentAgent();
-  const mine=(db.demandesPersonnel||[]).filter(d=>session?.agentId?d.agentId===session.agentId:d.createdBy===session?.username).sort((x,y)=>String(y.createdAt).localeCompare(String(x.createdAt)));
+  const mine=portalDemandesPersonnel().filter(d=>session?.agentId?d.agentId===session.agentId:d.createdBy===session?.username).sort((x,y)=>String(y.createdAt).localeCompare(String(x.createdAt)));
   const docsDemandes=mine.filter(d=>(d.documentsDemandes||[]).some(x=>!x.recu));
   view.innerHTML=`<div class="max-w-4xl mx-auto">
     <div class="card p-5 mb-4" style="background:linear-gradient(135deg,#043970,#0360a8);color:white">
@@ -5735,7 +5785,7 @@ function renderDemandesPersonnel(view,sub,arg){
   ensureDemandesPersonnel();
   refreshDemandesPersonnelFromPostgres({silent:true});
   const soc=isDrhModuleContext()?((sessionStorage.getItem("drhSociete")||"")):mySoc();
-  const all=(db.demandesPersonnel||[]).filter(d=>!soc||demandePersonnelSociete(d)===soc);
+  const all=incomingPortalDemandesPersonnel().filter(d=>!soc||demandePersonnelSociete(d)===soc);
   const q=(sessionStorage.getItem("dp_q")||"").toLowerCase();
   const statut=sessionStorage.getItem("dp_statut")||"";
   const type=sessionStorage.getItem("dp_type")||"";
@@ -5840,6 +5890,37 @@ async function saveUploadDocumentDemande(id,index,form){
     saveDB();closeModal();toast("Document envoyé","success");renderView();
   }catch(e){toast(e.message||String(e),"error")}
 }
+
+
+function structureDemandStatusPill(st){return demandePersonnelStatusPill(st)}
+function structureDemandCardHTML(d){
+  const alert=demandePersonnelIsAlert(d);
+  return `<div class="card p-4 mb-3" style="border-left:4px solid ${alert?"#dc2626":d.statut==="traite"?"#16a34a":"#0360a8"}">
+    <div class="flex items-start justify-between gap-3 flex-wrap"><div><div class="font-black">${escapeHTML(d.objet||d.typeLabel||d.type||"Demande structure")}</div><div class="text-xs text-slate-500">${escapeHTML(d.ref||d.id||"")} · ${formatDate(d.createdAt||d.date)} · ${escapeHTML((d.fromStructure||"OPS").toUpperCase())} → ${escapeHTML((d.toStructure||"DRH").toUpperCase())}</div></div><div>${structureDemandStatusPill(d.statut)}</div></div>
+    <div class="grid grid-cols-2 gap-2 text-sm mt-3"><div class="p-2 bg-slate-50 rounded"><b>Employé</b><br>${escapeHTML(d.agentName||"—")} ${d.matricule?"· "+escapeHTML(d.matricule):""}</div><div class="p-2 bg-slate-50 rounded"><b>Société / Site</b><br>${escapeHTML(d.societe||"—")} · ${escapeHTML(d.site||"—")}</div></div>
+    <div class="text-sm text-slate-700 mt-3 whitespace-pre-wrap">${escapeHTML(d.message||"")}</div>
+    ${suspensionDemandStatusHTML(d)}
+    ${d.reponse?`<div class="mt-3 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse :</b> ${escapeHTML(d.reponse)}</div>`:""}
+    ${(d.pieces||[]).length?`<div class="mt-3 flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">Pièce ${i+1}</a>`).join("")}</div>`:""}
+    <div class="mt-3 flex gap-2 flex-wrap">${structureDemandReceived(d)?suspensionDemandActionsHTML(d)+convocationDemandActionsHTML(d):""}<button class="btn btn-secondary text-xs" onclick="openTraiterStructureDemand('${d.id}')">Répondre</button></div>
+  </div>`;
+}
+function renderDemandesStructure(view,sub,arg){
+  ensureDemandesStructure();
+  migrateStructureDemandes();
+  db.demandesStructure.forEach(normalizeStructureDemand);
+  const mode=sub||"reception";
+  const q=(sessionStorage.getItem("ds_q")||"").toLowerCase();
+  let list=(db.demandesStructure||[]).filter(mode==="envoi"?structureDemandSent:structureDemandReceived);
+  if(q)list=list.filter(d=>[d.ref,d.agentName,d.matricule,d.objet,d.message,d.type,d.typeLabel,d.societe,d.site].join(" ").toLowerCase().includes(q));
+  list.sort((a,b)=>String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||"")));
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-bold">DEMANDE STRUCTURE</h1><p class="text-sm text-slate-500">Boîte interne entre structures SGDI · ${mode==="envoi"?"Envoi":"Réception"}</p></div><div class="flex gap-2"><button class="btn ${mode==='reception'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/reception')">Réception</button><button class="btn ${mode==='envoi'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/envoi')">Envoi</button></div></div><div class="card p-4 mb-4"><input class="input" placeholder="Recherche demande structure..." value="${escapeHTML(q)}" oninput="sessionStorage.setItem('ds_q',this.value);renderView()"/></div>${list.length?list.map(structureDemandCardHTML).join(""):`<div class="card p-10 text-center text-slate-500">Aucune demande structure.</div>`}`;
+}
+function openTraiterStructureDemand(id){
+  const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;
+  openModal(`<h3 class="font-bold text-lg mb-3">Répondre à la demande structure</h3><form onsubmit="event.preventDefault();saveTraiterStructureDemand('${id}',this)"><label class="label">Statut</label><select class="select mb-3" name="statut"><option value="en_cours" ${d.statut==='en_cours'?'selected':''}>En cours</option><option value="traite" ${d.statut==='traite'?'selected':''}>Traité</option><option value="rejete" ${d.statut==='rejete'?'selected':''}>Rejeté</option></select><label class="label">Réponse</label><textarea class="textarea mb-3" name="reponse" rows="4">${escapeHTML(d.reponse||"")}</textarea><div class="flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
+}
+function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;d.statut=form.statut.value;d.reponse=form.reponse.value||"";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse structure",note:d.statut});saveDB();closeModal();toast("Demande structure mise à jour","success");renderSidebar();renderView()}
 
 /* ---- CONGES ---- */
 function renderConges(view){
@@ -10152,7 +10233,7 @@ function renderDRHDashboard(view){
   const totalSalaires=ag.filter(a=>a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire)||0),0);
   const sites=si.length;
   const incidentsOuverts=inc.filter(i=>i.statut!=="cloture").length;
-  const demandesPersonnel=(db.demandesPersonnel||[]).filter(d=>(!selSoc||demandePersonnelSociete(d)===selSoc)&&["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
+  const demandesPersonnel=incomingPortalDemandesPersonnel().filter(d=>(!selSoc||demandePersonnelSociete(d)===selSoc)&&["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
   const contratsExpires=ag.filter(a=>a.dateFinContrat&&daysBetween(today(),a.dateFinContrat)<0);
   const contratsFin30=ag.filter(a=>{if(!a.dateFinContrat)return false;const d=daysBetween(today(),a.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
