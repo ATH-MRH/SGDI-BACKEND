@@ -11154,7 +11154,24 @@ async function confirmAdminUser(originalUsername){
   if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom};saveSession(session)}
   saveDB();closeModal();toast("Utilisateur enregistré","success");render();
 }
-async function adminDeleteUser(username){if(!confirm("Supprimer l'utilisateur "+username+" ?"))return;try{await SGDI.auth.deleteUser(username)}catch(e){toast("Suppression PostgreSQL refusée : "+(e.message||e),"error");return}db.users=db.users.filter(x=>x.username!==username);logActivity("Suppression utilisateur",username);saveDB();toast("Utilisateur supprimé","success");render()}
+async function adminDeleteUser(username){
+  if(!confirm("Supprimer l'utilisateur "+username+" ?"))return;
+  let pgDeleted=true;
+  try{await SGDI.auth.deleteUser(username)}catch(e){
+    const msg=String(e.message||e||"");
+    if(/not found|introuvable|404/i.test(msg)){
+      pgDeleted=false;
+    }else{
+      toast("Suppression PostgreSQL refusée : "+msg,"error");return;
+    }
+  }
+  db.users=db.users.filter(x=>x.username!==username);
+  try{const cache=userPermissionCache();delete cache[username]}catch(e){}
+  logActivity("Suppression utilisateur",username);
+  saveDB();
+  toast(pgDeleted?"Utilisateur supprimé":"Utilisateur supprimé localement, déjà absent de PostgreSQL","success");
+  render();
+}
 function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
   const colors={AG:"#0f766e",CAD:"#043970",SUP:"#7c3aed",ADM:"#dc2626"};
