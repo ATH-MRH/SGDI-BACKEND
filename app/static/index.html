@@ -11089,8 +11089,19 @@ async function confirmAdminUser(originalUsername){
       if(password)payload.password=password;
       await SGDI.auth.updateUser(originalUsername,payload);
     }catch(e){
-      toast("Modification PostgreSQL refusée : "+(e.message||e),"error");
-      return;
+      const msg=String(e.message||e||"");
+      if(/not found|introuvable|404/i.test(msg)){
+        try{
+          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,password:password||"Admin"});
+          toast("Utilisateur recréé dans PostgreSQL. Mot de passe par défaut : Admin","warning");
+        }catch(createErr){
+          toast("Modification PostgreSQL refusée : "+(createErr.message||createErr),"error");
+          return;
+        }
+      }else{
+        toast("Modification PostgreSQL refusée : "+msg,"error");
+        return;
+      }
     }
     if(password)data.password=password;else data.password=db.users[idx].password;
     db.users[idx]=Object.assign({},db.users[idx],data);
