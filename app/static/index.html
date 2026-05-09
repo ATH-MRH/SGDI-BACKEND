@@ -303,13 +303,15 @@
   @media(max-width:1180px){.dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-layout{grid-template-columns:1fr}.dash-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:720px){.dash-kpi-grid,.dash-module-grid{grid-template-columns:1fr}.dash-hero h1{font-size:22px}}
 
-  /* ----- RIGHT DIALOGUE BOX ----- */
+  /* ----- CENTER DIALOGUE BOX ----- */
   .dialogue-fab{display:none!important}
   .dialogue-fab.hidden{display:none}
   .dialogue-fab .badge{background:#dc2626;color:#fff;border-radius:999px;padding:2px 7px;margin-left:8px;font-size:11px}
-  .dialogue-panel{width:310px;max-width:310px;height:100vh;background:#f1f5f9;border-left:1px solid #cbd5e1;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;flex-shrink:0;color:#0f172a}
+  .dialogue-modal-backdrop{position:fixed;inset:0;z-index:80;background:rgba(1,17,47,.58);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:22px}
+  .dialogue-modal-backdrop.closed{display:none}
+  .dialogue-panel{width:min(920px,calc(100vw - 44px));max-width:920px;height:min(720px,calc(100vh - 44px));background:#f1f5f9;border:1px solid #cbd5e1;border-radius:14px;box-shadow:0 24px 80px rgba(1,17,47,.38);display:flex;flex-direction:column;flex-shrink:0;color:#0f172a;overflow:hidden}
   .dialogue-panel.closed{display:none}
-  .dialogue-head{padding:12px 14px;border-bottom:1px solid #cbd5e1;display:flex;flex-direction:column;gap:8px;background:#e2e8f0;color:#0f172a}
+  .dialogue-head{padding:12px 14px;border-bottom:1px solid #cbd5e1;display:flex;flex-direction:column;gap:8px;background:#e2e8f0;color:#0f172a;flex-shrink:0}
   .dialogue-title{font-size:13px;font-weight:900;letter-spacing:.02em;white-space:nowrap;line-height:1.15}
   .dialogue-head-row{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
   .dialogue-subtitle{font-size:10px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
@@ -325,9 +327,9 @@
   .dialogue-meta{font-size:10.5px;color:#64748b;display:flex;justify-content:space-between;gap:8px;margin-bottom:5px;padding-left:18px}
   .dialogue-text{font-size:12.5px;color:#334155;line-height:1.45;white-space:pre-wrap}
   .dialogue-action{background:#e2e8f0;color:#0f172a;border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700}
-  .dialogue-layout{display:grid;grid-template-columns:118px 1fr;min-height:0;flex:1}
-  .dialogue-users{background:#e5e7eb;border-right:1px solid #cbd5e1;overflow:auto;padding:8px}
-  .dialogue-user{width:100%;border:1px solid transparent;background:transparent;color:#0f172a;border-radius:9px;padding:8px 7px;margin-bottom:6px;text-align:left;cursor:pointer;font-size:11px;line-height:1.15}
+  .dialogue-layout{display:grid;grid-template-columns:210px 1fr;min-height:0;flex:1}
+  .dialogue-users{background:#e5e7eb;border-right:1px solid #cbd5e1;overflow:auto;padding:10px}
+  .dialogue-user{width:100%;border:1px solid transparent;background:transparent;color:#0f172a;border-radius:9px;padding:9px 8px;margin-bottom:6px;text-align:left;cursor:pointer;font-size:11.5px;line-height:1.18}
   .dialogue-user.active{background:#111827;color:#fff;border-color:#111827}
   .dialogue-user.has-unread{border-color:#dc2626;background:#fee2e2}
   .dialogue-user.active.has-unread{background:#111827;color:#fff;box-shadow:0 0 0 2px rgba(220,38,38,.35)}
@@ -336,8 +338,8 @@
   @keyframes dialoguePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.42;transform:scale(.72)}}
   .dialogue-chat{display:flex;flex-direction:column;min-width:0;min-height:0;background:#f8fafc}
   .dialogue-chat-head{padding:9px 11px;border-bottom:1px solid #cbd5e1;background:#fff;font-size:12px;font-weight:900;color:#0f172a}
-  .dialogue-thread{flex:1;overflow:auto;padding:10px;background:#f8fafc}
-  .chat-bubble{max-width:86%;border-radius:12px;padding:8px 10px;margin:0 0 8px;font-size:12.5px;line-height:1.35;box-shadow:0 5px 12px rgba(15,23,42,.08);white-space:pre-wrap}
+  .dialogue-thread{flex:1;overflow:auto;padding:14px;background:#f8fafc}
+  .chat-bubble{max-width:78%;border-radius:12px;padding:9px 11px;margin:0 0 9px;font-size:12.5px;line-height:1.35;box-shadow:0 5px 12px rgba(15,23,42,.08);white-space:pre-wrap}
   .chat-bubble.mine{margin-left:auto;background:#043970;color:#fff;border-bottom-right-radius:4px}
   .chat-bubble.theirs{margin-right:auto;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-bottom-left-radius:4px}
   .chat-meta{font-size:9.5px;opacity:.72;margin-top:4px;white-space:nowrap}
@@ -2814,12 +2816,13 @@ function dialogueBoxHTML(){
   const peer=peers.find(p=>p.key===selected)||peers[0]||{key:"all",label:"Général",sub:"Tous"};
   const unread=dialogueIncomingUnreadItems().length;
   const usersHTML=peers.map(p=>'<button class="dialogue-user '+(p.key===selected?'active ':'')+(p.unread?'has-unread':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
-  return '<aside class="dialogue-panel no-print '+(open?'':'closed')+'" aria-label="Boîte de dialogue interne">'+
-    '<div class="dialogue-head"><div class="dialogue-title">BOÎTE DE DIALOGUE'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Messages entre utilisateurs SGDI</div><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Réduire</button></div></div>'+
-    '<div class="dialogue-layout"><div class="dialogue-users">'+(usersHTML||'<div class="text-xs text-slate-500">Aucun utilisateur</div>')+'</div><div class="dialogue-chat">'+
-      '<div class="dialogue-chat-head">'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div>'+
-      '<div class="dialogue-thread" id="dialogue-body">'+feedRowsHTML(selected)+'</div>'+dialogueComposerHTML(selected)+
-    '</div></div></aside>';
+  return '<div class="dialogue-modal-backdrop no-print '+(open?'':'closed')+'" onclick="if(event.target===this)dialogueToggle(false)">'+
+    '<aside class="dialogue-panel" aria-label="Boîte de dialogue interne">'+
+      '<div class="dialogue-head"><div class="dialogue-title">BOÎTE DE DIALOGUE'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Messages entre utilisateurs SGDI</div><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Fermer</button></div></div>'+
+      '<div class="dialogue-layout"><div class="dialogue-users">'+(usersHTML||'<div class="text-xs text-slate-500">Aucun utilisateur</div>')+'</div><div class="dialogue-chat">'+
+        '<div class="dialogue-chat-head">'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div>'+
+        '<div class="dialogue-thread" id="dialogue-body">'+feedRowsHTML(selected)+'</div>'+dialogueComposerHTML(selected)+
+      '</div></div></aside></div>';
 }
 function feedRowsHTML(peer){
   const selected=peer||dialogueSelectedPeer();
