@@ -1128,7 +1128,6 @@ async function sgdiLoadAuthState(){
 
 function candidateHasMinimumData(c){
   if(!c||typeof c!=="object")return false;
-  if(isTempCandidateId(c.id))return false;
   const nom=String(c.nom||c.last_name||"").trim();
   const prenom=String(c.prenom||c.first_name||"").trim();
   return nom.length>=2&&prenom.length>=2;
