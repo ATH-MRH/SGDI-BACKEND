@@ -23,6 +23,44 @@ def get_or_404(db: Session, model: Type, row_id: int):
     return row
 
 
+
+
+def _candidate_text(value: Any) -> str:
+    return str(value or "").strip()
+
+def _candidate_values(payload: Any, existing: Candidate | None = None, partial: bool = False) -> dict[str, Any]:
+    values = payload.model_dump(exclude_unset=True)
+    data = values.get("data")
+    if isinstance(data, dict):
+        raw_id = str(data.get("id") or "").strip()
+        if raw_id.startswith("tmp_cd_"):
+            raise HTTPException(status_code=422, detail="Candidature temporaire refusée. Enregistrez uniquement une fiche complète.")
+        data.pop("isNew", None)
+    first_name = _candidate_text(values.get("first_name", existing.first_name if existing else ""))
+    last_name = _candidate_text(values.get("last_name", existing.last_name if existing else ""))
+    if len(first_name) < 2 or len(last_name) < 2:
+        raise HTTPException(status_code=422, detail="Nom et prénom obligatoires pour créer une candidature.")
+    if not partial or "first_name" in values:
+        values["first_name"] = first_name
+    if not partial or "last_name" in values:
+        values["last_name"] = last_name
+    return values
+
+def create_candidate(db: Session, payload: Any):
+    row = Candidate(**_candidate_values(payload))
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+def update_candidate(db: Session, candidate_id: int, payload: Any):
+    row = get_or_404(db, Candidate, candidate_id)
+    for key, value in _candidate_values(payload, existing=row, partial=True).items():
+        setattr(row, key, value)
+    db.commit()
+    db.refresh(row)
+    return row
+
 def create_row(db: Session, model: Type, payload: Any):
     row = model(**payload.model_dump(exclude_unset=True))
     db.add(row)

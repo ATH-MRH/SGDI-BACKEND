@@ -768,6 +768,7 @@ function sgdiLegacySnapshot(){
 }
 function sgdiBackendSave(){
   if(!sgdiBackendShouldUse()||!db)return false;
+  sanitizeCandidatesInDB();
   const token=sgdiAuthToken();
   if(!token){
     console.error("Sauvegarde PostgreSQL impossible: token backend absent");
@@ -808,6 +809,7 @@ async function sgdiPullState(options){
     if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
       window.__SGDI_BACKEND_ENABLED__=true;
       hydrateDB(remote);
+      sanitizeCandidatesInDB();
       sgdiPostgresReady=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
       await sgdiLoadAuthState();
@@ -1023,16 +1025,36 @@ function candidateHasMinimumData(c){
 function isTempCandidateId(id){return String(id||"").startsWith("tmp_cd_")}
 function newTempCandidateId(){return "tmp_cd_"+uid("cd")}
 function pruneEmptyCandidates(){
+  return sanitizeCandidatesInDB();
+}
+function sanitizeCandidatesInDB(){
   if(!db||!Array.isArray(db.candidats))return 0;
   const before=db.candidats.length;
-  db.candidats=db.candidats.filter(candidateHasMinimumData);
+  const seen=new Set();
+  db.candidats=db.candidats.filter(c=>{
+    if(!candidateHasMinimumData(c))return false;
+    const backendId=sqlBackendId(c.backendId);
+    const localId=String(c.id||"").trim();
+    if(isTempCandidateId(localId))return false;
+    const key=backendId?"pg:"+backendId:"id:"+localId;
+    if(!localId&&!backendId)return false;
+    if(seen.has(key))return false;
+    seen.add(key);
+    delete c.isNew;
+    return true;
+  });
   return before-db.candidats.length;
 }
 function candidateApiPayload(c){
+  const firstName=String(c.prenom||c.first_name||"").trim();
+  const lastName=String(c.nom||c.last_name||"").trim();
+  if(firstName.length<2||lastName.length<2)throw new Error("Nom et prénom obligatoires avant création PostgreSQL");
   const data={...c};
+  if(isTempCandidateId(data.id))delete data.id;
+  delete data.isNew;
   return {
-    first_name:String(c.prenom||c.first_name||"").trim()||" ",
-    last_name:String(c.nom||c.last_name||"").trim()||" ",
+    first_name:firstName,
+    last_name:lastName,
     phone:c.telephone||c.phone||null,
     email:c.email||null,
     desired_position:c.posteSouhaite||c.poste||c.desired_position||null,
@@ -1068,7 +1090,8 @@ async function syncCandidatesFromPostgres(){
     const mappedRows=(rows||[]).map(candidateFromApi);
     mappedRows.filter(c=>!candidateHasMinimumData(c)&&sqlBackendId(c.backendId)).forEach(c=>deleteCandidateFromPostgres(c).catch(e=>console.warn("Candidat vide non supprimé",e)));
     const fromPg=mappedRows.filter(candidateHasMinimumData);
-    const byId=new Map((db.candidats||[]).map(c=>[String(c.backendId||c.id),c]));
+    sanitizeCandidatesInDB();
+    const byId=new Map((db.candidats||[]).filter(candidateHasMinimumData).map(c=>[String(c.backendId||c.id),c]));
     fromPg.forEach(c=>byId.set(String(c.backendId||c.id),{...(byId.get(String(c.backendId||c.id))||{}),...c}));
     db.candidats=[...byId.values()].filter(candidateHasMinimumData);
   }catch(e){
@@ -1158,6 +1181,7 @@ function hydrateDB(source){
   if(!db.settings||typeof db.settings!=="object")db.settings=base.settings;
   if(!db.societesConfig||typeof db.societesConfig!=="object")db.societesConfig=base.societesConfig;
   if(typeof ensureNiveauxAcces==="function")ensureNiveauxAcces();
+  sanitizeCandidatesInDB();
   return db;
 }
 function loadDB(){return emptyDB()}
@@ -1190,6 +1214,7 @@ function recordSaveOperation(){
 function saveDB(){
   try{
     sgdiDirty=true;
+    sanitizeCandidatesInDB();
     uiSaveState("Sauvegarde PostgreSQL...","");
     recordSaveOperation();
     if(!sgdiAuthToken()){
@@ -1762,6 +1787,7 @@ function societeStructureBarHTML(){
 
 /* ---- SHELL ---- */
 function render(){
+  sanitizeCandidatesInDB();
   if(!session){renderLogin();return}
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
   // En mode transverse, restreindre aux routes du module sélectionné
@@ -2842,6 +2868,7 @@ async function retryPostgresLoad(){
 }
 
 function renderView(){
+  sanitizeCandidatesInDB();
   uiProgressStart();
   const path=(location.hash||"#/dashboard").slice(2);
   const view=document.getElementById("view");
@@ -3569,7 +3596,7 @@ async function saveCandidat(id,showToast){
   return c;
 }
 async function saveCandidatDraft(id){
-  const data=collectCandidatFormData();if(!data)return false;
+  const data=collectCandidatFormData();if(!data||!candidateHasMinimumData(data))return false;
   let c=db.candidats.find(x=>x.id===id);
   if(!c)return false;
   Object.assign(c,data);
@@ -3635,6 +3662,7 @@ async function confirmArchiveCandidat(id){
   }catch(e){toast("Archivage PostgreSQL refusé : "+(e.message||e),"error")}
 }
 async function deleteCandidat(id){
+  if(isTempCandidateId(id)){navigate("recrutement");return}
   const c=(db.candidats||[]).find(x=>x.id===id);
   const label=c?String((c.nom||"")+" "+(c.prenom||"")).trim():"ce candidat";
   if(!confirm("Supprimer définitivement "+(label||"ce candidat")+" ?"))return;

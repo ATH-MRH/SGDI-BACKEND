@@ -69,12 +69,12 @@ def candidates(status: str | None = None, society: str | None = None, db: Sessio
 
 @router.post("/candidates", response_model=CandidateOut)
 def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db)):
-    return service.create_row(db, Candidate, payload)
+    return service.create_candidate(db, payload)
 
 
 @router.put("/candidates/{candidate_id}", response_model=CandidateOut)
 def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db)):
-    return service.update_row(db, Candidate, candidate_id, payload)
+    return service.update_candidate(db, candidate_id, payload)
 
 
 @router.delete("/candidates/{candidate_id}")
