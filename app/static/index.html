@@ -3085,7 +3085,12 @@ async function retryPostgresLoad(){
   renderPostgresRequired("Rechargement depuis PostgreSQL...");
   const ok=await sgdiPullState({silent:true,render:false,force:true}).catch(()=>null);
   if(ok){route();return}
-  renderPostgresRequired("PostgreSQL indisponible ou session expirée. Aucune donnée locale ne sera utilisée.");
+  sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+  session=null;
+  saveSession(null);
+  sgdiPostgresReady=false;
+  renderLogin();
+  if(typeof toast==="function")toast("Session expirée ou PostgreSQL indisponible : reconnectez-vous.","error");
 }
 
 function renderView(){
@@ -12462,8 +12467,13 @@ async function bootApp(){
     document.getElementById("app").innerHTML=`<div class="min-h-screen flex items-center justify-center text-slate-500">Chargement PostgreSQL...</div>`;
     const loaded=await sgdiPullState({silent:true,render:false,force:true}).catch(()=>null);
     if(!loaded){
+      sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+      session=null;
+      saveSession(null);
       sgdiPostgresReady=false;
-      renderPostgresRequired("PostgreSQL indisponible ou session expirée. Aucune donnée locale ne sera utilisée.");
+      location.hash="#/login";
+      renderLogin();
+      if(typeof toast==="function")toast("Session expirée ou PostgreSQL indisponible : reconnectez-vous.","error");
       return;
     }
   }
