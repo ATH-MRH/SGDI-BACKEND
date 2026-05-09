@@ -430,6 +430,7 @@
   .search-box{position:sticky;top:0;z-index:30;background:var(--surface);padding:10px 20px;border-bottom:1px solid var(--border)}
 
   /* ----- GRIDS ----- */
+  .grid-7{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
   .grid-6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
   .grid-5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
   .grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -2479,7 +2480,7 @@ function renderSidebar(){
           {label:"Inspections programmées",icon:"📋",route:"ops/supervision/programmees",count:(db.siteInspections||[]).filter(i=>i.type==="programmee"&&(!currentStructureSocieteFilter()||i.societe===currentStructureSocieteFilter())).length},
           {label:"Inspections inopinées",icon:"⚡",route:"ops/supervision/inopinees",count:(db.siteInspections||[]).filter(i=>i.type==="inopinee"&&(!currentStructureSocieteFilter()||i.societe===currentStructureSocieteFilter())).length}
         ]},
-        {type:"group",label:"MAIN COURANTE",icon:"📌",children:[
+        {type:"group",label:"MAIN COURANTE",icon:"📌",route:"incidents",children:[
           {label:"Évènements site",icon:"🚨",route:"incidents/site",count:opsIncidents.filter(i=>i.type==="Evenement site").length},
           {label:"Évènements autres",icon:"📌",route:"incidents/autres",count:opsIncidents.filter(i=>i.type==="Autre").length}
         ]},
@@ -2534,7 +2535,7 @@ function renderSidebar(){
         {type:"link",label:"FICHE DE POSITION",icon:"🪪",route:"fiches"},
         {type:"link",label:"BADGE",icon:"🏷",route:"fiches/badge"},
         {type:"link",label:"EFFECTIFS",icon:"👮",route:"effectif/recap"},
-        {type:"group",label:"MAIN COURANTE",children:[
+        {type:"group",label:"MAIN COURANTE",route:"incidents",children:[
           {label:"Évènements autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
         ]},
         {type:"group",label:"CONGÉS",children:[{label:"Situation des congés",icon:"🗓",route:"conges"}]},
@@ -2612,7 +2613,7 @@ function renderSidebar(){
       {label:"Création de site",icon:"➕",route:"sites/nouveau"},
       {label:"Sites actifs",icon:"📍",route:"sites/actifs"}
     ]},
-    {type:"group",label:"MAIN COURANTE / EVENTS",children:[
+    {type:"group",label:"MAIN COURANTE / EVENTS",route:"incidents",children:[
       {label:"Évènements autres",icon:"📌",route:"incidents/autres"}
     ]},
     {type:"group",label:"CONGÉS",children:[{label:"Situation des congés",icon:"🗓",route:"conges"}]},
@@ -3104,7 +3105,7 @@ function renderView(){
       case"fiches":renderFiches(view,sub||"toutes");break;
       case"badge":if(sub==="verify"&&arg)renderBadgeVerify(view,arg);else renderFiches(view,"badge");break;
       case"sites":if(sub==="nouveau"&&!arg)renderSiteForm(view,null);else if(sub==="actifs")renderSites(view);else if(sub)renderSiteForm(view,sub);else renderSites(view);break;
-      case"incidents":renderIncidents(view,sub||"site");break;
+      case"incidents":renderIncidents(view,sub||"dashboard");break;
       case"conges":renderConges(view);break;
       case"portail":renderPortailPersonnel(view);break;
       case"demandes_personnel":renderDemandesPersonnel(view,sub||"dashboard",arg);break;
@@ -5597,7 +5598,42 @@ function incidentPillClass(v){
   if(["clos","resolu","résolu"].includes((v||"").toLowerCase()))return"pill-green";
   return"pill-gray";
 }
+function renderMainCouranteDashboard(view){
+  const incidents=(db.incidents||[]).map(incidentNorm);
+  const soc=currentStructureSocieteFilter&&currentStructureSocieteFilter();
+  const scoped=incidents.filter(i=>{
+    if(!soc)return true;
+    if(i.societe&&i.societe===soc)return true;
+    const site=(db.sites||[]).find(s=>s.id===i.siteId);
+    return site?siteMatchesSociete(site,soc):true;
+  });
+  const isClosed=i=>["clos","resolu","résolu"].includes((i.statut||"").toLowerCase());
+  const isCritical=i=>["critique","majeur","urgent"].includes((i.gravite||"").toLowerCase())&&!isClosed(i);
+  const siteEvents=scoped.filter(i=>i.type==="Evenement site");
+  const otherEvents=scoped.filter(i=>i.type==="Autre");
+  const openEvents=scoped.filter(i=>!isClosed(i));
+  const criticalEvents=scoped.filter(isCritical);
+  const closedEvents=scoped.filter(isClosed);
+  const todayEvents=scoped.filter(i=>(i.date||"")===today());
+  const recent=openEvents.slice().sort((a,b)=>String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||""))).slice(0,6);
+  const kpis=[
+    {label:"Total main courante",value:scoped.length,route:"incidents/site",tone:"#043970"},
+    {label:"Évènements site",value:siteEvents.length,route:"incidents/site",tone:"#0369a1"},
+    {label:"Évènements autres",value:otherEvents.length,route:"incidents/autres",tone:"#7c2d12"},
+    {label:"Ouverts",value:openEvents.length,route:"incidents/site",tone:"#b45309"},
+    {label:"Critiques",value:criticalEvents.length,route:"incidents/site",tone:"#b91c1c"},
+    {label:"Clôturés",value:closedEvents.length,route:"incidents/site",tone:"#047857"},
+    {label:"Aujourd'hui",value:todayEvents.length,route:"incidents/site",tone:"#1d4ed8"}
+  ];
+  view.innerHTML=`<div class="flex justify-between items-start mb-4"><div><h1 class="text-2xl font-black">MAIN COURANTE - TABLEAU DE BORD</h1><div class="text-sm text-slate-500">Synthèse des évènements, incidents, alertes et clôtures.</div></div><button class="btn btn-primary" onclick="openIncidentModal('site')">Nouvel évènement</button></div>
+  <div class="grid grid-7 gap-3 mb-4">${kpis.map(k=>`<button class="card p-4 text-left kpi-clickable" onclick="navigate('${k.route}')"><div class="text-xs text-slate-500 uppercase font-bold">${k.label}</div><div class="text-3xl font-black" style="color:${k.tone}">${k.value}</div></button>`).join("")}</div>
+  <div class="grid grid-2 gap-4 mb-4">
+    <div class="card p-4"><div class="font-black mb-3">Accès rapides</div><div class="flex flex-wrap gap-2"><button class="btn btn-secondary" onclick="navigate('incidents/site')">Évènements site</button><button class="btn btn-secondary" onclick="navigate('incidents/autres')">Évènements autres</button><button class="btn btn-primary" onclick="openIncidentModal('site')">Créer évènement site</button><button class="btn btn-primary" onclick="openIncidentModal('autres')">Créer évènement autre</button></div></div>
+    <div class="card p-4"><div class="font-black mb-3">Alertes ouvertes</div>${recent.length?recent.map(i=>`<button class="w-full text-left p-2 rounded-lg bg-slate-50 mb-2" onclick="viewIncident('${i.id}')"><div class="text-xs font-bold">${escapeHTML(i.sujet||i.categorie||"Évènement")}</div><div class="text-[10px] text-slate-500">${formatDate(i.date||i.createdAt||"")} · ${escapeHTML(i.statut||"ouvert")} · ${escapeHTML(i.gravite||"")}</div></button>`).join(""):`<div class="text-sm text-emerald-700 font-semibold">Aucune alerte ouverte.</div>`}</div>
+  </div>`;
+}
 function renderIncidents(view,mode){
+  if(mode==="dashboard")return renderMainCouranteDashboard(view);
   const type=mode==="autres"?"Autre":"Evenement site";
   const list=(db.incidents||[]).map(incidentNorm).filter(i=>i.type===type).sort((a,b)=>(b.date+b.heure).localeCompare(a.date+a.heure));
   const ouverts=list.filter(i=>!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
