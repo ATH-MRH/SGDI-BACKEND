@@ -1079,9 +1079,9 @@ async function sgdiLoadAuthState(){
       username:u.username,
       nom:u.full_name||u.username,
       role:u.role||"agent",
-      niveau:u.role==="admin"?"H5":"H3",
+      niveau:u.access_level||u.niveau||(String(u.role||"").toUpperCase().startsWith("ADM")||u.role==="admin"?"H5":"H3"),
       actif:u.is_active!==false,
-      societesAutorisees:[]
+      societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:[]
     }));
   }catch(e){
     console.warn("Utilisateurs PostgreSQL indisponibles",e);
@@ -11074,7 +11074,7 @@ async function confirmAdminUser(originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
     if(!password){toast("Mot de passe requis","error");return}
     try{
-      await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,password});
+      await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,password});
     }catch(e){
       toast("Création PostgreSQL refusée : "+(e.message||e),"error");
       return;
@@ -11084,14 +11084,14 @@ async function confirmAdminUser(originalUsername){
   }else{
     const idx=db.users.findIndex(x=>x.username===originalUsername);if(idx<0){toast("Utilisateur introuvable","error");return}
     try{
-      const payload={full_name:data.nom||username,role:data.role,is_active:data.actif};
+      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,is_active:data.actif};
       if(password)payload.password=password;
       await SGDI.auth.updateUser(originalUsername,payload);
     }catch(e){
       const msg=String(e.message||e||"");
       if(/not found|introuvable|404/i.test(msg)){
         try{
-          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,password:password||"Admin"});
+          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,password:password||"Admin"});
           toast("Utilisateur recréé dans PostgreSQL. Mot de passe par défaut : Admin","warning");
         }catch(createErr){
           const createMsg=String(createErr.message||createErr||"");

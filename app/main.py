@@ -37,6 +37,13 @@ def ensure_schema_upgrades() -> None:
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     with engine.begin() as connection:
+        if "users" in tables:
+            columns = {col["name"] for col in inspector.get_columns("users")}
+            if "access_level" not in columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN access_level VARCHAR(40)"))
+            if "authorized_societies" not in columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN authorized_societies JSON"))
+            connection.execute(text("UPDATE users SET authorized_societies = '[]' WHERE authorized_societies IS NULL"))
         if "suppliers" in tables:
             columns = {col["name"] for col in inspector.get_columns("suppliers")}
             if "society" not in columns:
@@ -130,6 +137,8 @@ def on_startup() -> None:
                 email=None,
                 full_name="Administrateur",
                 role="admin",
+                access_level="H5",
+                authorized_societies=[],
                 password_hash=hash_password("admin"),
                 is_active=True,
             )
