@@ -297,7 +297,7 @@
   @media(max-width:720px){.dash-kpi-grid,.dash-module-grid{grid-template-columns:1fr}.dash-hero h1{font-size:22px}}
 
   /* ----- RIGHT DIALOGUE BOX ----- */
-  .dialogue-fab{position:fixed;right:18px;top:92px;z-index:42;border:none;background:#111827;color:#fff;border-radius:999px;padding:10px 14px;font-size:12px;font-weight:800;box-shadow:var(--shadow-lg);cursor:pointer}
+  .dialogue-fab{position:fixed;right:18px;top:92px;z-index:42;border:none;background:#facc15;color:#01112f;border-radius:999px;padding:10px 14px;font-size:12px;font-weight:800;box-shadow:var(--shadow-lg);cursor:pointer}
   .dialogue-fab.hidden{display:none}
   .dialogue-fab .badge{background:#dc2626;color:#fff;border-radius:999px;padding:2px 7px;margin-left:8px;font-size:11px}
   .dialogue-panel{width:310px;max-width:310px;height:100vh;background:#f1f5f9;border-left:1px solid #cbd5e1;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;flex-shrink:0;color:#0f172a}
@@ -1784,7 +1784,6 @@ function societeStructureBarHTML(){
   if(!visible.length)return"";
   return`<div class="societe-structure-bar no-print">
     <div class="societe-structure-inner">
-      <button type="button" class="societe-active-pill" onclick="navigate('dashboard')" title="Retour tableau de bord société">🏢 Société active&nbsp;: ${escapeHTML(session.societe)}</button>
       ${visible.map(i=>`<button type="button" class="structure-tab ${session.transverse===i.key?"active":""}" onclick="enterSocieteStructure('${i.key}')">${i.icon} ${i.label}</button>`).join("")}
     </div>
   </div>`;
