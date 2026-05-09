@@ -153,6 +153,147 @@ def close_daily_presence(db: Session, presence_date: date):
     db.commit()
     return {"closed": len(rows), "date": presence_date}
 
+
+def rotation_for_date(rotation_system: str | None, group_code: str | None, work_date: date, base_date: date | None = None) -> dict[str, Any]:
+    system = rotation_system or "24/48"
+    groups = ["A", "B", "C", "D"]
+    group = (group_code or "A").upper()[:1]
+    idx = groups.index(group) if group in groups else 0
+    start = base_date or date(work_date.year, 1, 1)
+    diff = max(0, (work_date - start).days)
+    weekday = work_date.weekday()
+    is_weekend = weekday in (4, 5)  # vendredi/samedi
+    if system == "1/1":
+        on = idx == 0 and not is_weekend
+        return {"on": on, "period": "jour" if on else "recuperation", "faction": "jour" if on else "repos", "recovery": 0 if on else 1}
+    if system == "1/3":
+        if idx == 0:
+            on = not is_weekend
+            return {"on": on, "period": "jour" if on else "recuperation", "faction": "jour" if on else "repos", "recovery": 0 if on else 1}
+        night_idx = (idx - 1) % 3
+        on = diff % 3 == night_idx
+        return {"on": on, "period": "nuit" if on else "recuperation", "faction": "nuit" if on else "repos", "recovery": 0 if on else 1}
+    if system == "1/2":
+        on = diff % 2 == idx % 2
+        period = "jour" if idx < 2 else "nuit"
+        return {"on": on, "period": period if on else "recuperation", "faction": period if on else "repos", "recovery": 0 if on else 1}
+    cycle = ["jour", "nuit", "recuperation", "recuperation"]
+    period = cycle[(diff + idx) % len(cycle)]
+    on = period in ("jour", "nuit")
+    return {"on": on, "period": period, "faction": period if on else "repos", "recovery": 0 if on else 1}
+
+
+def generate_rotation_daily_presence(db: Session, payload: Any):
+    presence_date = payload.presence_date or date.today()
+    stmt = select(Assignment).where(
+        Assignment.active == 1,
+        Assignment.start_date <= presence_date,
+        (Assignment.end_date.is_(None)) | (Assignment.end_date >= presence_date),
+    )
+    if payload.site_id:
+        stmt = stmt.where(Assignment.site_id == payload.site_id)
+    assignments = db.execute(stmt).scalars().all()
+    created = updated = skipped = 0
+    standby: list[dict[str, Any]] = []
+    active_site_ids: set[int] = set()
+    for assignment in assignments:
+        employee = db.get(Employee, assignment.employee_id)
+        site = db.get(Site, assignment.site_id)
+        if not employee or not site or site.active != 1:
+            skipped += 1
+            continue
+        site_society = site.equipment_plan.get("societe") if isinstance(site.equipment_plan, dict) else None
+        if payload.society and employee.society != payload.society and site_society != payload.society:
+            skipped += 1
+            continue
+        active_site_ids.add(site.id)
+        rot = rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
+        existing = db.execute(select(DailyPresence).where(DailyPresence.presence_date == presence_date, DailyPresence.employee_id == assignment.employee_id).order_by(DailyPresence.id.desc())).scalars().first()
+        if not rot["on"]:
+            standby.append({
+                "employee_id": employee.id,
+                "code": employee.code,
+                "name": f"{employee.last_name} {employee.first_name}",
+                "phone": employee.phone,
+                "society": employee.society,
+                "site_id": site.id,
+                "site_name": site.name,
+                "group_code": assignment.group_code,
+                "rotation_system": site.rotation_system,
+                "reason": "Récupération / astreinte disponible",
+            })
+            continue
+        if existing and existing.closed_at:
+            skipped += 1
+            continue
+        if existing and not payload.overwrite_generated and existing.generated:
+            skipped += 1
+            continue
+        row = existing or DailyPresence(presence_date=presence_date, employee_id=assignment.employee_id)
+        row.site_id = assignment.site_id
+        row.group_code = assignment.group_code
+        row.status = row.status or "present"
+        row.generated = 1
+        row.rotation_system = site.rotation_system
+        row.rotation_group = assignment.group_code
+        row.rotation_period = rot["period"]
+        row.faction = rot["faction"]
+        row.recovery = 0
+        row.standby = 0
+        row.data = {"generated_by": "rotation", "position": assignment.position, "site_name": site.name}
+        if existing:
+            updated += 1
+        else:
+            db.add(row)
+            created += 1
+    db.commit()
+    return {"date": presence_date, "created": created, "updated": updated, "skipped": skipped, "sites": len(active_site_ids), "standby": standby}
+
+
+def standby_personnel(db: Session, presence_date: date, society: str | None = None, site_id: int | None = None):
+    stmt = select(Assignment).where(
+        Assignment.active == 1,
+        Assignment.start_date <= presence_date,
+        (Assignment.end_date.is_(None)) | (Assignment.end_date >= presence_date),
+    )
+    if site_id:
+        stmt = stmt.where(Assignment.site_id == site_id)
+    rows = []
+    assignments = db.execute(stmt).scalars().all()
+    used = {
+        row.employee_id
+        for row in db.execute(select(DailyPresence).where(DailyPresence.presence_date == presence_date)).scalars().all()
+        if row.employee_id
+    }
+    for assignment in assignments:
+        if assignment.employee_id in used:
+            continue
+        employee = db.get(Employee, assignment.employee_id)
+        site = db.get(Site, assignment.site_id)
+        if not employee or not site or site.active != 1:
+            continue
+        site_society = site.equipment_plan.get("societe") if isinstance(site.equipment_plan, dict) else None
+        if society and employee.society != society and site_society != society:
+            continue
+        rot = rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
+        if rot["on"]:
+            continue
+        rows.append({
+            "employee_id": employee.id,
+            "code": employee.code,
+            "name": f"{employee.last_name} {employee.first_name}",
+            "phone": employee.phone,
+            "society": employee.society,
+            "site_id": site.id,
+            "site_name": site.name,
+            "group_code": assignment.group_code,
+            "rotation_system": site.rotation_system,
+            "period": rot["period"],
+            "reason": "Récupération / astreinte disponible",
+        })
+    return rows
+
+
 def close_event(db: Session, event_id: int, action_taken: str | None = None):
     event = get_or_404(db, Event, event_id)
     event.status = "clos"

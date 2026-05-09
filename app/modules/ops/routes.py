@@ -12,6 +12,8 @@ from app.modules.ops.schemas import (
     AssignmentOut,
     DailyPresenceCreate,
     DailyPresenceOut,
+    DailyPresenceUpdate,
+    RotationGenerateRequest,
     EventCreate,
     EventOut,
     SiteCreate,
@@ -85,6 +87,16 @@ def generate_daily(presence_date: date | None = None, db: Session = Depends(get_
     return service.generate_daily_presence(db, presence_date or date.today())
 
 
+@router.post("/pointage/daily/generate-rotation")
+def generate_daily_rotation(payload: RotationGenerateRequest, db: Session = Depends(get_db)):
+    return service.generate_rotation_daily_presence(db, payload)
+
+
+@router.get("/pointage/standby")
+def pointage_standby(presence_date: date | None = None, society: str | None = None, site_id: int | None = None, db: Session = Depends(get_db)):
+    return service.standby_personnel(db, presence_date or date.today(), society, site_id)
+
+
 @router.post("/pointage/daily/close")
 def close_daily(presence_date: date | None = None, db: Session = Depends(get_db)):
     return service.close_daily_presence(db, presence_date or date.today())
@@ -98,6 +110,11 @@ def daily_presence(presence_date: date | None = None, site_id: int | None = None
 @router.post("/pointage/daily", response_model=DailyPresenceOut)
 def create_daily_presence(payload: DailyPresenceCreate, db: Session = Depends(get_db)):
     return service.create_row(db, DailyPresence, payload)
+
+
+@router.patch("/pointage/daily/{presence_id}", response_model=DailyPresenceOut)
+def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, db: Session = Depends(get_db)):
+    return service.update_row(db, DailyPresence, presence_id, payload)
 
 
 @router.get("/events", response_model=list[EventOut])

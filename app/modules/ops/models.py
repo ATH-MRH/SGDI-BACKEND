@@ -69,6 +69,13 @@ class DailyPresence(Base, TimestampMixin):
     generated: Mapped[int] = mapped_column(Integer, default=0)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime)
     notes: Mapped[str | None] = mapped_column(Text)
+    rotation_system: Mapped[str | None] = mapped_column(String(40))
+    rotation_group: Mapped[str | None] = mapped_column(String(20), index=True)
+    rotation_period: Mapped[str | None] = mapped_column(String(20), index=True)
+    faction: Mapped[str | None] = mapped_column(String(40), index=True)
+    recovery: Mapped[int] = mapped_column(Integer, default=0)
+    standby: Mapped[int] = mapped_column(Integer, default=0)
+    data: Mapped[dict | None] = mapped_column(JSON)
 
 
 class Event(Base, TimestampMixin):

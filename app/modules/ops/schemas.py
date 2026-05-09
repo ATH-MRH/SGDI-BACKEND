@@ -94,6 +94,37 @@ class DailyPresenceCreate(BaseModel):
     relief_time: str | None = None
     status: str = "present"
     notes: str | None = None
+    rotation_system: str | None = None
+    rotation_group: str | None = None
+    rotation_period: str | None = None
+    faction: str | None = None
+    recovery: int = 0
+    standby: int = 0
+    data: dict[str, Any] | None = None
+
+
+class DailyPresenceUpdate(BaseModel):
+    site_id: int | None = None
+    group_code: str | None = None
+    arrival_time: str | None = None
+    departure_time: str | None = None
+    relief_time: str | None = None
+    status: str | None = None
+    notes: str | None = None
+    rotation_system: str | None = None
+    rotation_group: str | None = None
+    rotation_period: str | None = None
+    faction: str | None = None
+    recovery: int | None = None
+    standby: int | None = None
+    data: dict[str, Any] | None = None
+
+
+class RotationGenerateRequest(BaseModel):
+    presence_date: date | None = None
+    society: str | None = None
+    site_id: int | None = None
+    overwrite_generated: bool = True
 
 
 class DailyPresenceOut(DailyPresenceCreate):

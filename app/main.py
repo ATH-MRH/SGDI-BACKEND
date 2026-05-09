@@ -40,6 +40,20 @@ def ensure_schema_upgrades() -> None:
             columns = {col["name"] for col in inspector.get_columns("suppliers")}
             if "society" not in columns:
                 connection.execute(text("ALTER TABLE suppliers ADD COLUMN society VARCHAR(150)"))
+        if "daily_presence" in tables:
+            columns = {col["name"] for col in inspector.get_columns("daily_presence")}
+            daily_presence_columns = {
+                "rotation_system": "VARCHAR(40)",
+                "rotation_group": "VARCHAR(20)",
+                "rotation_period": "VARCHAR(20)",
+                "faction": "VARCHAR(40)",
+                "recovery": "INTEGER DEFAULT 0",
+                "standby": "INTEGER DEFAULT 0",
+                "data": "JSON",
+            }
+            for name, sql_type in daily_presence_columns.items():
+                if name not in columns:
+                    connection.execute(text(f"ALTER TABLE daily_presence ADD COLUMN {name} {sql_type}"))
         if "irongs_collections" in tables and "sgdi_records" in tables:
             existing = connection.execute(text("SELECT COUNT(*) FROM sgdi_records")).scalar() or 0
             if existing == 0:

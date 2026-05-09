@@ -1058,7 +1058,7 @@ window.SGDI_API={
     leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:()=>sgdiApi("/drh/contracts",{legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false})
   },
   sites:{list:()=>sgdiApi("/ops/sites",{legacy:false}),create:(payload)=>sgdiApi("/ops/sites",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),delete:(id)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),situation:()=>sgdiApi("/ops/sites/situation-generale",{legacy:false})},
-  pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false})},
+  pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false}),generateRotation:(payload)=>sgdiApi("/ops/pointage/daily/generate-rotation",{method:"POST",body:payload,legacy:false}),standby:(date,soc,siteId)=>sgdiApi("/ops/pointage/standby?presence_date="+encodeURIComponent(date||today())+(soc?"&society="+encodeURIComponent(soc):"")+(siteId?"&site_id="+encodeURIComponent(siteId):""),{legacy:false}),updateDaily:(id,payload)=>sgdiApi("/ops/pointage/daily/"+encodeURIComponent(id),{method:"PATCH",body:payload,legacy:false})},
   events:{list:()=>sgdiApi("/ops/events",{legacy:false})},
   stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),articles:()=>sgdiApi("/materiel/articles",{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   commercial:{clients:()=>sgdiApi("/commercial/clients",{legacy:false}),createClient:(payload)=>sgdiApi("/commercial/clients",{method:"POST",body:payload,legacy:false}),updateClient:(id,payload)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteClient:(id)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
@@ -11652,11 +11652,11 @@ function saveUnexpectedInspectionScan(){
 
 /* ---- POINTAGE ---- */
 const POINTAGE_CODES={
-  P:{label:"Présent",color:"#043970",bg:"#043970"},
+  P:{label:"Présent",color:"#166534",bg:"#dcfce7"},
   A:{label:"Absent",color:"#ef4444",bg:"#fee2e2"},
-  M:{label:"Maladie",color:"#043970",bg:"#043970"},
+  M:{label:"Maladie",color:"#92400e",bg:"#fef3c7"},
   S:{label:"Suspendu",color:"#7c3aed",bg:"#ede9fe"},
-  C:{label:"Congé",color:"#043970",bg:"#043970"},
+  C:{label:"Congé",color:"#1e40af",bg:"#dbeafe"},
   R:{label:"Récupération",color:"#64748b",bg:"#e2e8f0"},
   AB:{label:"Abandon de poste",color:"#991b1b",bg:"#fee2e2"}
 };
@@ -11725,10 +11725,12 @@ function fpqCurrentDate(){return sessionStorage.getItem("fpqDate")||today()}
 function fpqCurrentSoc(){return sessionStorage.getItem("fpqSociete")||""}
 function fpqCurrentSite(){return sessionStorage.getItem("fpqSite")||""}
 function fpqCurrentStatus(){return sessionStorage.getItem("fpqStatus")||""}
+function fpqCurrentFaction(){return sessionStorage.getItem("fpqFaction")||""}
 function setFpqDate(v){sessionStorage.setItem("fpqDate",v||"");renderView()}
 function setFpqSociete(v){sessionStorage.setItem("fpqSociete",v||"");renderView()}
 function setFpqSite(v){sessionStorage.setItem("fpqSite",v||"");renderView()}
 function setFpqStatus(v){sessionStorage.setItem("fpqStatus",v||"");renderView()}
+function setFpqFaction(v){sessionStorage.setItem("fpqFaction",v||"");renderView()}
 function fpqStatusMatch(f,status){
   const c=fpqPresenceCode(f?.heureArrivee);
   if(!status)return true;
@@ -11946,6 +11948,29 @@ function fpqAgentGroup(site,agent,agents){
   const gi=idx%n;
   return {index:gi,name:groupNames[gi]||String(gi+1)};
 }
+
+function fpqRecoveryStandby(date,soc,siteId){
+  const used=new Set((db.feuillePresence||[]).filter(f=>f.date===date&&f.agentId).map(f=>f.agentId));
+  const rows=[];
+  (db.sites||[]).filter(site=>site.actif!==false&&(!soc||site.societe===soc)&&(!siteId||site.id===siteId)).forEach(site=>{
+    const agentsSite=(db.agents||[]).filter(a=>a.statut==="actif"&&a.affectationCourante?.siteId===site.id);
+    agentsSite.forEach(a=>{
+      if(used.has(a.id))return;
+      const grp=fpqAgentGroup(site,a,agentsSite);
+      const rot=fpqRotationForSite(site,date,grp.index);
+      if(rot.on)return;
+      rows.push({agent:a,site,group:grp.name,rot,phone:a.telephone||a.phone||"",reason:rot.regle||"Récupération"});
+    });
+  });
+  return rows.sort((x,y)=>(x.agent.matricule||x.agent.nom||"").localeCompare(y.agent.matricule||y.agent.nom||""));
+}
+function fpqStandbyPanelHTML(date,soc,siteId){
+  const rows=fpqRecoveryStandby(date,soc,siteId);
+  const preview=rows.slice(0,8).map(r=>`<tr><td class="font-mono font-bold text-xs">${escapeHTML(r.agent.matricule||"—")}</td><td class="text-xs font-semibold">${escapeHTML((r.agent.nom||"")+" "+(r.agent.prenom||""))}</td><td class="text-xs">${escapeHTML(r.site.nom||r.site.intitule||"Site")}</td><td class="text-xs font-bold">Groupe ${escapeHTML(r.group)}</td><td class="text-xs">${escapeHTML(r.phone||"—")}</td><td><button class="btn btn-secondary text-xs" onclick="fpqQuickCallInfo('${r.agent.id}','${date}')">Contacter</button></td></tr>`).join("");
+  return `<div class="card p-4 mb-4" style="background:#f8fafc;border:1px solid #cbd5e1"><div class="flex items-center justify-between gap-3 flex-wrap"><div><div class="text-xs uppercase tracking-wider font-black text-slate-500">Astreinte / récupération disponible</div><div class="font-black text-lg">${rows.length} employé(s) récupérable(s) pour remplacement</div></div><span class="pill" style="background:#01112f;color:#facc15">Rotation calculée</span></div>${rows.length?`<div class="overflow-x-auto mt-3"><table class="w-full text-sm"><thead><tr><th>Code</th><th>Employé</th><th>Site</th><th>Groupe</th><th>Téléphone</th><th>Action</th></tr></thead><tbody>${preview}</tbody></table>${rows.length>8?`<div class="text-xs text-slate-500 mt-2">+ ${rows.length-8} autre(s) disponible(s)</div>`:""}</div>`:`<div class="text-sm text-slate-500 mt-2">Aucun personnel en récupération disponible avec ce filtre.</div>`}</div>`;
+}
+function fpqQuickCallInfo(agentId,date){const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;toast("Astreinte : "+((a.nom||"")+" "+(a.prenom||"")).trim()+" · Tél: "+(a.telephone||a.phone||"non renseigné"),"info");}
+
 function fpqSiteProgrammedSlots(site,date,agentsSite){
   const eff=siteEffectifsNorm(site);
   const grouped={jour:[],nuit:[]};
@@ -12007,6 +12032,7 @@ function fpqGenerateAuto(date,soc,siteId){
     if(!a)db.feuillePresence.push(f);
     added++;
   });
+  if(window.SGDI?.pointage?.generateRotation){const backendSiteId=siteId?((db.sites||[]).find(s=>s.id===siteId)?.backendId||null):null;SGDI.pointage.generateRotation({presence_date:date,society:soc||null,site_id:backendSiteId,overwrite_generated:true}).catch(e=>console.warn("Génération SQL rotation indisponible",e))}
   saveDB();
   if(typeof logActivity==="function")logActivity("Génération feuille quotidienne",formatDate(date)+" · "+added+" ligne(s) · sites actifs: "+sites.length+" · filtre: "+(soc||"toutes")+" / "+(siteId||"tous sites"));
   toast(`Feuille générée : ${added} ligne(s) ajoutée(s)${replaced?` · ${replaced} ancienne(s) remplacée(s)`:''}${existing?` · ${existing} déjà validée(s)/conservée(s)`:''}`,"success");
@@ -12030,7 +12056,10 @@ function fpqFonctionAbbr(label){
 }
 function fpqApsAgentsForPrise(date,currentId){
   const used=new Set((db.feuillePresence||[]).filter(f=>f.date===date&&f.agentId&&f.agentId!==currentId).map(f=>f.agentId));
-  return (db.agents||[]).filter(a=>a.statut==="actif"&&!used.has(a.id)&&fpqFonctionAbbr(a.affectationCourante?.poste||a.fonction||"")==="APS").sort((x,y)=>(x.matricule||x.nom||"").localeCompare(y.matricule||y.nom||""));
+  const standby=fpqRecoveryStandby(date,fpqCurrentSoc(),fpqCurrentSite()).map(r=>r.agent).filter(a=>!used.has(a.id));
+  const aps=(db.agents||[]).filter(a=>a.statut==="actif"&&!used.has(a.id)&&fpqFonctionAbbr(a.affectationCourante?.poste||a.fonction||"")==="APS");
+  const seen=new Set();
+  return [...standby,...aps].filter(a=>{if(seen.has(a.id))return false;seen.add(a.id);return true}).sort((x,y)=>(x.matricule||x.nom||"").localeCompare(y.matricule||y.nom||""));
 }
 function fpqAssignVacantAgent(rowId,agentId){
   const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f||!agentId)return;
@@ -12041,13 +12070,13 @@ function fpqAssignVacantAgent(rowId,agentId){
   saveDB();toast("APS affecté à la prise","success");renderView();
 }
 function renderPointageQuotidien(){
-  const date=fpqCurrentDate();const soc=fpqCurrentSoc();const sit=fpqCurrentSite();const fpqStatus=fpqCurrentStatus();
+  const date=fpqCurrentDate();const soc=fpqCurrentSoc();const sit=fpqCurrentSite();const fpqStatus=fpqCurrentStatus();const fpqFaction=fpqCurrentFaction();
   const allFpq=(db.feuillePresence||[]).filter(f=>f.date===date);
   allFpq.forEach(f=>{
     const a=(db.agents||[]).find(x=>x.id===f.agentId);
     if(!f.siteManual&&!f.valide&&a&&a.affectationCourante?.siteId&&(f.siteId!==a.affectationCourante.siteId||!f.siteName||!f.poste||!f.societe))fpqSyncAffectation(f,a);
   });
-  const baseFpq=allFpq.filter(f=>(!soc||f.societe===soc)&&(!sit||f.siteId===sit));
+  const baseFpq=allFpq.filter(f=>(!soc||f.societe===soc)&&(!sit||f.siteId===sit)&&(!fpqFaction||f.rotationPeriode===fpqFaction||f.faction===fpqFaction));
   const filteredFpq=baseFpq.filter(f=>fpqStatusMatch(f,fpqStatus));
   const sites=db.sites||[];
   const sitesAvail=soc?sites.filter(s=>s.societe===soc):sites;
@@ -12066,6 +12095,7 @@ function renderPointageQuotidien(){
       <div><label class="label">Date</label><input type="date" class="input" value="${date}" onchange="setFpqDate(this.value)"/></div>
       <div><label class="label">Société</label><select class="select" onchange="setFpqSociete(this.value);setFpqSite('')"><option value="" ${!soc?"selected":""}>🏢 Toutes les sociétés</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${s}</option>`).join("")}</select></div>
       <div><label class="label">Site</label><select class="select" onchange="setFpqSite(this.value)"><option value="" ${!sit?"selected":""}>📍 Tous les sites</option>${sitesAvail.map(s=>`<option value="${s.id}" ${sit===s.id?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site "+s.id)}</option>`).join("")}</select></div>
+      <div><label class="label">Faction</label><select class="select" onchange="setFpqFaction(this.value)"><option value="" ${!fpqFaction?"selected":""}>Toutes</option><option value="jour" ${fpqFaction==="jour"?"selected":""}>Jour</option><option value="nuit" ${fpqFaction==="nuit"?"selected":""}>Nuit</option></select></div>
       <div class="flex-1"></div>
       <button class="btn btn-primary text-xs ${isCloture?"fpq-locked":""}" ${lk} onclick="fpqGenerateAuto('${date}','${soc.replace(/'/g,"\\'")}','${sit.replace(/'/g,"\\'")}')">Générer feuille de présence</button>
       <button class="btn btn-secondary text-xs ${isCloture?"fpq-locked":""}" ${lk} onclick="fpqAddAgentModal('${date}')">➕ Ajouter agent</button>
@@ -12078,7 +12108,8 @@ function renderPointageQuotidien(){
     </div>
     <div class="mt-3 text-sm font-semibold text-slate-700 flex items-center gap-2 flex-wrap">📅 <span class="capitalize">${dateLabel}</span> ${soc?` · 🏢 ${escapeHTML(soc)}`:""} ${sit?` · 📍 ${escapeHTML((sites.find(x=>x.id===sit)||{}).nom||"")}`:""} ${statusPill}</div>
   </div>`;
-  if(!baseFpq.length)return filterBar+`<div class="card p-8 text-center"><div class="text-5xl mb-3">📋</div><div class="font-bold text-slate-700 mb-2">Aucune ligne de présence pour cette date</div><div class="text-sm text-slate-500 mb-4">Ajoutez des agents avec les boutons ci-dessus, ou copiez la feuille de la veille.</div><div class="flex gap-2 justify-center"><button class="btn btn-secondary" onclick="fpqAddAgentModal('${date}')">➕ Ajouter un agent</button><button class="btn btn-primary" onclick="fpqAddAllAgents('${date}','${soc.replace(/'/g,"\\'")}')">👥 Ajouter tous les actifs</button></div></div>`;
+  const standbyPanel=fpqStandbyPanelHTML(date,soc,sit);
+  if(!baseFpq.length)return filterBar+standbyPanel+`<div class="card p-8 text-center"><div class="text-5xl mb-3">📋</div><div class="font-bold text-slate-700 mb-2">Aucune ligne de présence pour cette date</div><div class="text-sm text-slate-500 mb-4">Ajoutez des agents avec les boutons ci-dessus, ou copiez la feuille de la veille.</div><div class="flex gap-2 justify-center"><button class="btn btn-secondary" onclick="fpqAddAgentModal('${date}')">➕ Ajouter un agent</button><button class="btn btn-primary" onclick="fpqAddAllAgents('${date}','${soc.replace(/'/g,"\\'")}')">👥 Ajouter tous les actifs</button></div></div>`;
   filteredFpq.sort((x,y)=>{const sx=(x.siteName||"").localeCompare(y.siteName||"");if(sx)return sx;const ox=fpqLineOrder(x),oy=fpqLineOrder(y);if(ox!==oy)return ox-oy;return String(x.id||"").localeCompare(String(y.id||""))});
   const totalPresent=baseFpq.filter(f=>fpqPresenceCode(f.heureArrivee)==="P").length;
   const totalArr=baseFpq.filter(f=>fpqPresenceCode(f.heureArrivee)).length;
@@ -12121,7 +12152,7 @@ function renderPointageQuotidien(){
       <td class="px-2 py-1 text-center"><div class="flex gap-1 justify-center items-center"><button class="btn btn-secondary text-xs ${rowLockCls}" ${rowDis||(!a?"disabled":"")} onclick="fpqOpenMouvement('${date}','${f.agentId}')">Mouvement</button><input class="input text-xs ${rowLockCls}" style="min-width:180px" ${rowRo} placeholder="Observations…" value="${escapeHTML(f.observations||"")}" onchange="fpqSetRowField('${f.id}','observations',this.value)"/>${f.valide?`<button class="btn btn-ghost text-xs" title="Déverrouiller" onclick="fpqDevaliderLigne('${date}','${f.agentId}')">🔓</button>`:`<button class="btn btn-primary text-xs ${lockCls}" ${isCloture||!a?"disabled":""} onclick="fpqValiderLigne('${date}','${f.agentId}')">Valider</button>`}<button class="btn btn-ghost text-xs text-red-600 ${rowLockCls}" ${rowDis} title="${rowLocked?"Ligne verrouillée":"Retirer"}" onclick="fpqDeleteRow('${f.id}')">✕</button></div>${validInfo}</td>
     </tr>`;
   }).join("");
-  return filterBar+summary+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Feuille de présence — <span class="capitalize">${dateLabel}</span> · ${filteredFpq.length} ligne${filteredFpq.length>1?"s":""}</div>
+  return filterBar+standbyPanel+summary+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Feuille de présence — <span class="capitalize">${dateLabel}</span> · ${filteredFpq.length} ligne${filteredFpq.length>1?"s":""}</div>
     <div style="overflow-x:auto"><table class="w-full text-sm" style="border-collapse:collapse">
       <thead><tr style="background:#f1f5f9"><th class="px-2 py-2 text-[11px] font-bold text-center" style="border-bottom:2px solid #cbd5e1;width:30px">#</th><th class="px-2 py-2 text-[11px] font-bold text-left" style="border-bottom:2px solid #cbd5e1">📍 Site</th><th class="px-2 py-2 text-[11px] font-bold text-left" style="border-bottom:2px solid #cbd5e1">👤 Nom Prénom</th><th class="px-2 py-2 text-[11px] font-bold text-left" style="border-bottom:2px solid #cbd5e1;background:#043970">🟢 Heure d'arrivée</th><th class="px-2 py-2 text-[11px] font-bold text-left" style="border-bottom:2px solid #cbd5e1;background:#043970">🔄 Heure de relève</th><th class="px-2 py-2 text-[11px] font-bold text-center" style="border-bottom:2px solid #cbd5e1;width:360px">Action</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -12181,11 +12212,11 @@ function renderPointageSaisie(){
     return`<tr ${isValide?'style="background:#043970"':""}>
       <td class="px-2 py-1 text-xs whitespace-nowrap" style="border:1px solid #e2e8f0;background:${isValide?"#dcfce7":"#f8fafc"};position:sticky;left:0;z-index:1"><div class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))} <span class="font-mono text-[10px] px-1.5 py-0.5 rounded" style="background:#04397015;color:#043970;font-weight:700">${escapeHTML(a.matricule||"—")}</span> ${lockBadge}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.societe||"")}</div></td>
       ${cells}
-      <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#043970;color:#043970">${nP}</td>
+      <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534">${nP}</td>
       <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b">${nA}</td>
-      <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#043970;color:#043970">${nM}</td>
+      <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e">${nM}</td>
       <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6">${nS}</td>
-      <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#043970;color:#043970">${nC}</td>
+      <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af">${nC}</td>
       <td class="px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155">${nR}</td>
       <td class="px-1 text-center" style="border:1px solid #e2e8f0;white-space:nowrap">
         ${isValide?"":`<button class="btn btn-ghost text-[10px]" title="Tout Présent" onclick="ptFillRow('${a.id}','${ym}','P')">P✓</button><button class="btn btn-ghost text-[10px]" title="Tout effacer" onclick="ptClearRow('${a.id}','${ym}')">✕</button>`}
@@ -12197,7 +12228,7 @@ function renderPointageSaisie(){
   return filterBar+`<div class="card p-3 mb-3" style="background:linear-gradient(90deg,#043970,#fff)"><div class="flex items-center justify-between flex-wrap gap-2"><div class="text-sm"><span class="font-bold text-emerald-700">${totValide}</span> / <span class="font-bold">${ag.length}</span> pointages validés pour cette période</div><div class="text-[11px] text-slate-500">Statut de validation</div></div></div>
   <div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Tableau de pointage — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${ag.length} agent${ag.length>1?"s":""}</div>
     <div style="overflow-x:auto;max-width:100%"><table class="w-full text-xs" style="border-collapse:collapse">
-      <thead><tr style="background:#f1f5f9"><th class="text-left px-2 py-2 text-[11px] font-bold" style="border:1px solid #e2e8f0;position:sticky;left:0;background:#f1f5f9;z-index:2;min-width:220px">Agent</th>${dayHeaders}<th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#043970;color:#043970;width:32px">P</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:32px">A</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#043970;color:#043970;width:32px">M</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:32px">S</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#043970;color:#043970;width:32px">C</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:32px">R</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;width:130px">Actions</th></tr></thead>
+      <thead><tr style="background:#f1f5f9"><th class="text-left px-2 py-2 text-[11px] font-bold" style="border:1px solid #e2e8f0;position:sticky;left:0;background:#f1f5f9;z-index:2;min-width:220px">Agent</th>${dayHeaders}<th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:32px">P</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:32px">A</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:32px">M</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:32px">S</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:32px">C</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:32px">R</th><th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;width:130px">Actions</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div></div>`;
 }
