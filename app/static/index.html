@@ -1139,21 +1139,7 @@ function pruneEmptyCandidates(){
 }
 function sanitizeCandidatesInDB(){
   if(!db||!Array.isArray(db.candidats))return 0;
-  const before=db.candidats.length;
-  const seen=new Set();
-  db.candidats=db.candidats.filter(c=>{
-    if(!candidateHasMinimumData(c))return false;
-    const backendId=sqlBackendId(c.backendId);
-    const localId=String(c.id||"").trim();
-    if(isTempCandidateId(localId))return false;
-    const key=backendId?"pg:"+backendId:"id:"+localId;
-    if(!localId&&!backendId)return false;
-    if(seen.has(key))return false;
-    seen.add(key);
-    delete c.isNew;
-    return true;
-  });
-  return before-db.candidats.length;
+  return cleanupDuplicateCandidates(false);
 }
 function candidateApiPayload(c){
   const firstName=String(c.prenom||c.first_name||"").trim();
@@ -1201,9 +1187,21 @@ async function syncCandidatesFromPostgres(){
     mappedRows.filter(c=>!candidateHasMinimumData(c)&&sqlBackendId(c.backendId)).forEach(c=>deleteCandidateFromPostgres(c).catch(e=>console.warn("Candidat vide non supprimé",e)));
     const fromPg=mappedRows.filter(candidateHasMinimumData);
     sanitizeCandidatesInDB();
-    const byId=new Map((db.candidats||[]).filter(candidateHasMinimumData).map(c=>[String(c.backendId||c.id),c]));
-    fromPg.forEach(c=>byId.set(String(c.backendId||c.id),{...(byId.get(String(c.backendId||c.id))||{}),...c}));
-    db.candidats=[...byId.values()].filter(candidateHasMinimumData);
+    const byKey=new Map();
+    (db.candidats||[]).filter(candidateHasMinimumData).forEach(c=>{const k=candidateDedupeKey(c)||String(c.backendId||c.id);if(!byKey.has(k)||candidateCompletenessScore(c)>candidateCompletenessScore(byKey.get(k)))byKey.set(k,c)});
+    fromPg.forEach(c=>{
+      const k=candidateDedupeKey(c)||String(c.backendId||c.id);
+      const prev=byKey.get(k);
+      if(prev&&prev.backendId&&c.backendId&&String(prev.backendId)!==String(c.backendId)){
+        const keep=candidateCompletenessScore(prev)>=candidateCompletenessScore(c)?prev:c;
+        const drop=keep===prev?c:prev;
+        if(sqlBackendId(drop.backendId))deleteCandidateFromPostgres(drop).catch(e=>console.warn("Doublon candidat non supprimé",e));
+        byKey.set(k,{...prev,...keep});
+      }else{
+        byKey.set(k,{...(prev||{}),...c});
+      }
+    });
+    db.candidats=[...byKey.values()].filter(candidateHasMinimumData);
   }catch(e){
     console.warn("Candidats PostgreSQL indisponibles",e);
     throw e;
@@ -3492,6 +3490,7 @@ function resetArchiveCandidateFilters(){
   renderView();
 }
 function renderRecrutement(view,mode){
+  cleanupDuplicateCandidates(true);
   const title=mode==="archive"?"Candidats archivés":mode==="reserve"?"Candidats en réserve":"Nouvelles candidatures";
   let cs=db.candidats.filter(c=>mode==="archive"?candidatIsArchived(c):!candidatIsArchived(c)).filter(c=>mode==="archive"?true:mode==="reserve"?candidatIsReserve(c):!candidatIsReserve(c));
   const st=mode==="archive"?"Dossiers archivés depuis les nouvelles candidatures et les candidats en réserve.":mode==="reserve"?"Candidats validés, en attente de recrutement.":"Candidats à présélectionner pour la fiche de renseignement.";
@@ -3602,6 +3601,48 @@ const CANDIDAT_ARCHIVE_MOTIFS=[
   "Autre"
 ];
 const CANDIDAT_ETAPE1_KEYS=["identification","mensurations","militaire","poste","avis"];
+const candidatValidationLocks=new Set();
+const candidatTempRealIds={};
+function candidatValidationLockKey(id,key){return String(id||"")+":"+String(key||"")}
+function setCandidatSectionButtonsDisabled(id,key,disabled){
+  document.querySelectorAll('[data-section-action="1"]').forEach(b=>{
+    const call=String(b.getAttribute("onclick")||"");
+    if(call.includes("validateCandidatSectionAction")&&call.includes("'"+String(id)+"'")&&call.includes("'"+String(key)+"'")){
+      b.disabled=!!disabled;
+    }
+  });
+}
+function candidateDedupeKey(c){
+  if(!candidateHasMinimumData(c))return"";
+  const norm=v=>String(v||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+  return [norm(c.nom||c.last_name),norm(c.prenom||c.first_name),norm(c.societe||c.society),norm(c.dateNaissance),norm(c.nin),norm(c.telephone||c.phone),norm(c.posteSouhaite||c.desired_position)].join("|");
+}
+function candidateCompletenessScore(c){return ["nin","telephone","phone","dateNaissance","posteSouhaite","desired_position","avisDecision","avisCommentaire","source"].reduce((n,k)=>n+(String(c&&c[k]||"").trim()?1:0),0)+(c&&c.backendId?2:0)}
+function cleanupDuplicateCandidates(deleteRemote){
+  if(!db||!Array.isArray(db.candidats))return 0;
+  const before=db.candidats.length;
+  const byKey=new Map();
+  const dropped=[];
+  (db.candidats||[]).forEach(c=>{
+    if(!candidateHasMinimumData(c)){dropped.push(c);return}
+    const backendId=sqlBackendId(c.backendId);
+    const localId=String(c.id||"").trim();
+    if(isTempCandidateId(localId)||(!localId&&!backendId)){dropped.push(c);return}
+    const key=candidateDedupeKey(c)||(backendId?"pg:"+backendId:"id:"+localId);
+    const prev=byKey.get(key);
+    if(!prev||candidateCompletenessScore(c)>candidateCompletenessScore(prev)){
+      if(prev)dropped.push(prev);
+      byKey.set(key,c);
+    }else{
+      dropped.push(c);
+    }
+  });
+  db.candidats=[...byKey.values()].map(c=>{delete c.isNew;return c});
+  if(deleteRemote&&dropped.length&&sgdiAuthToken()){
+    dropped.filter(c=>sqlBackendId(c&&c.backendId)).forEach(c=>deleteCandidateFromPostgres(c).catch(e=>console.warn("Doublon candidat non supprimé",e)));
+  }
+  return before-db.candidats.length;
+}
 function candidatSectionValidations(c){if(!c.sectionValidations||typeof c.sectionValidations!=="object")c.sectionValidations={};return c.sectionValidations}
 function candidatSectionIsValidated(c,key){return !!(c&&candidatSectionValidations(c)[key])}
 function candidatSectionIndex(key){return CANDIDAT_SECTIONS.findIndex(s=>s.key===key)}
@@ -3867,9 +3908,9 @@ async function saveCandidat(id,showToast){
   if(!validateCandidatIdentification(data))return;
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return}
   if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
-  const creating=!db.candidats.find(x=>x.id===id);
-  const realId=isTempCandidateId(id)?uid("cd"):id;
-  let c=db.candidats.find(x=>x.id===realId);
+  const realId=isTempCandidateId(id)?(candidatTempRealIds[id]||(candidatTempRealIds[id]=uid("cd"))):id;
+  const creating=!db.candidats.find(x=>x.id===realId)&&!db.candidats.find(x=>x.id===id);
+  let c=db.candidats.find(x=>x.id===realId)||db.candidats.find(x=>x.id===id);
   if(!c){c={id:realId,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
   Object.assign(c,data,{id:realId});delete c.isNew;
   if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
@@ -4011,16 +4052,20 @@ function validateCandidatSection(key,data){
   return true;
 }
 async function validateCandidatSectionAction(id,key){
-  const realId=isTempCandidateId(id)?uid("cd"):id;
+  const lockKey=candidatValidationLockKey(id,key);
+  if(candidatValidationLocks.has(lockKey)){toast("Validation déjà en cours, veuillez patienter","warning");return}
+  candidatValidationLocks.add(lockKey);
+  setCandidatSectionButtonsDisabled(id,key,true);
+  const realId=isTempCandidateId(id)?(candidatTempRealIds[id]||(candidatTempRealIds[id]=uid("cd"))):id;
   let c=db.candidats.find(x=>x.id===realId)||db.candidats.find(x=>x.id===id);
   markRequiredFields(document.getElementById("candidat-form"));
-  const data=collectCandidatFormData();if(!data)return;
+  const data=collectCandidatFormData();if(!data){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   const creating=!c;
   const validationTarget=c||{id:realId,statut:"nouvelle",createdAt:today(),sectionValidations:{}};
-  if(!candidatPreviousSectionsValid(validationTarget,key)){toast("Validez d'abord la section précédente","error");return}
-  if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");return}
-  if(!validateCandidatSection(key,data))return;
-  if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
+  if(!candidatPreviousSectionsValid(validationTarget,key)){toast("Validez d'abord la section précédente","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
+  if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
+  if(!validateCandidatSection(key,data)){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
+  if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!c){c=validationTarget;db.candidats.push(c)}
   Object.assign(c,data,{id:realId});delete c.isNew;
   const locks=candidatSectionValidations(c);
@@ -4036,7 +4081,8 @@ async function validateCandidatSectionAction(id,key){
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
     if((location.hash||"").endsWith("/nouveau"))navigate("recrutement/"+c.id);else renderView();
-  }catch(e){toast("Validation PostgreSQL refusée : "+(e.message||e),"error")}
+  }catch(e){toast("Validation PostgreSQL refusée : "+(e.message||e),"error");setCandidatSectionButtonsDisabled(id,key,false)}
+  finally{candidatValidationLocks.delete(lockKey)}
 }
 function unlockCandidatSection(id,key){
   if(!candidatCanUnlockSections()){toast("Déverrouillage réservé à l'administrateur habilité","error");return}
