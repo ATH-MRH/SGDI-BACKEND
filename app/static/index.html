@@ -77,10 +77,10 @@
   ::selection{background:var(--primary-ring);color:var(--text)}
 
   /* ----- SIDEBAR ----- */
-  .sidebar{background:#0b0b0d!important;border-right:1px solid #262626!important;width:180px!important;min-width:180px!important;max-width:180px!important;flex:0 0 180px!important;color:#f5f5f4!important;box-shadow:inset -1px 0 0 rgba(250,204,21,.12)}
+  .sidebar{background:#011f55!important;border-right:1px solid #262626!important;width:180px!important;min-width:180px!important;max-width:180px!important;flex:0 0 180px!important;color:#f5f5f4!important;box-shadow:inset -1px 0 0 rgba(250,204,21,.12)}
   .sidebar,.sidebar *{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif!important;font-size:12px!important;letter-spacing:0!important}
-  .sidebar nav{padding:10px 8px!important;background:#0b0b0d!important;scrollbar-color:#3f3f46 #111113}
-  .sidebar nav::-webkit-scrollbar{width:8px}.sidebar nav::-webkit-scrollbar-track{background:#111113}.sidebar nav::-webkit-scrollbar-thumb{background:#3f3f46;border-radius:999px}
+  .sidebar nav{padding:10px 8px!important;background:#011f55!important;scrollbar-color:#3f3f46 #011f55}
+  .sidebar nav::-webkit-scrollbar{width:8px}.sidebar nav::-webkit-scrollbar-track{background:#011f55}.sidebar nav::-webkit-scrollbar-thumb{background:#3f3f46;border-radius:999px}
   .sidebar .card{background:#121214!important;border:1px solid #27272a!important;box-shadow:none!important;color:#f5f5f4!important;border-radius:8px!important}
   .sidebar .card *{color:#f5f5f4!important}.sidebar .text-slate-500,.sidebar .text-slate-400{color:#a1a1aa!important}
   .sidebar{text-align:left!important}
@@ -115,7 +115,7 @@
   .sub-link span:first-child{color:#facc15!important;opacity:.9}
   .sub-link .nav-count{margin-left:auto;background:#facc15!important;color:#111113!important;font-size:10px!important;font-weight:900;min-width:20px;height:19px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;box-shadow:none!important}
   .sub-link.active .nav-count{background:#fde047!important;color:#111113!important}
-  .gestion-badge{position:absolute;top:-8px;right:-8px;background:#facc15;color:#111113;font-size:10px!important;font-weight:900;min-width:23px;height:23px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;border:2px solid #0b0b0d;box-shadow:0 0 0 1px rgba(250,204,21,.35)}
+  .gestion-badge{position:absolute;top:-8px;right:-8px;background:#facc15;color:#111113;font-size:10px!important;font-weight:900;min-width:23px;height:23px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;border:2px solid #011f55;box-shadow:0 0 0 1px rgba(250,204,21,.35)}
   .societe-structure-bar{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 4px 12px rgba(15,23,42,.05);z-index:20}
   .societe-structure-inner{min-height:58px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:8px 16px}
   .societe-active-pill{display:inline-flex;align-items:center;gap:8px;background:#0f172a;color:#fff;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
@@ -1790,6 +1790,63 @@ function societeStructureBarHTML(){
   </div>`;
 }
 
+
+/* ---- LANGUES / اللغات ---- */
+const SGDI_LANG_PAIRS=[
+  ["Tableau de bord","لوحة القيادة"],["TABLEAU DE BORD","لوحة القيادة"],["Tableau de bord DRH","لوحة قيادة الموارد البشرية"],["TABLEAU DE BORD DRH","لوحة قيادة الموارد البشرية"],["TABLEAU DE BORD OPS","لوحة قيادة العمليات"],["TABLEAU DE BORD FINANCES","لوحة قيادة المالية"],["TABLEAU DE BORD COMMERCIAL","لوحة قيادة التجاري"],["TABLEAU DE BORD MATERIEL","لوحة قيادة العتاد"],["TABLEAU DE BORD POINTAGE","لوحة قيادة الحضور"],
+  ["DRH","الموارد البشرية"],["OPS","العمليات"],["MATERIEL/EQUIP","العتاد والتجهيز"],["MATÉRIEL & ÉQUIPEMENT","العتاد والتجهيز"],["FINANCES/COMPTA","المالية والمحاسبة"],["COMMERCIAL","التجاري"],["ADMINISTRATION SYSTEME","إدارة النظام"],
+  ["DEMANDE STRUCTURE","طلبات الهيكل"],["Demande structure","طلب الهيكل"],["Réception","الاستقبال"],["Envoi","الإرسال"],["Boîte interne entre structures SGDI","صندوق داخلي بين هياكل SGDI"],["Recherche demande structure","بحث طلب الهيكل"],["Aucune demande structure.","لا يوجد أي طلب هيكل."],["Répondre à la demande structure","الرد على طلب الهيكل"],["Réponse structure","رد الهيكل"],["Demande structure mise à jour","تم تحديث طلب الهيكل"],
+  ["DEMANDES PERSONNEL","طلبات الموظفين"],["Réception demandes","استقبال الطلبات"],["Réception demandes & réclamations","استقبال الطلبات والشكاوى"],["Demandes","الطلبات"],["Réclamations","الشكاوى"],["Portail mobile","البوابة المحمولة"],["Portail personnel","بوابة الموظف"],["Portail RH personnel","بوابة الموارد البشرية للموظف"],["Historique portail mobile","سجل البوابة المحمولة"],
+  ["RECRUTEMENT","التوظيف"],["Nouvelle candidature","ترشح جديد"],["Candidats en réserve","المرشحون في الاحتياط"],["Candidats archivés","المرشحون المؤرشفون"],["Candidat","مرشح"],["Candidats","مرشحون"],["Identification du candidat","تعريف المرشح"],["Coordonnées","بيانات الاتصال"],["Contact d'urgence","اتصال الطوارئ"],
+  ["CONTRAT","العقد"],["Contrats","العقود"],["Nouveau contrat","عقد جديد"],["Avenant","ملحق عقد"],["Situation contrat","وضعية العقد"],["Contrats du personnel","عقود الموظفين"],["Date début contrat","تاريخ بداية العقد"],["Date fin contrat","تاريخ نهاية العقد"],
+  ["FICHE DE POSITION","بطاقة الوضعية"],["Fiches de position","بطاقات الوضعية"],["Fiche de position","بطاقة الوضعية"],["BADGE","الشارة"],["Documents","الوثائق"],["Photo","الصورة"],["Nom Prénom","الاسم واللقب"],["Nom","الاسم"],["Prénom","اللقب"],["Code","الرمز"],["Matricule","الرقم المهني"],["Téléphone","الهاتف"],["Age","العمر"],["Recrutement","التوظيف"],["Affectation","التعيين"],
+  ["EFFECTIFS","التعداد"],["EFFECTIF","التعداد"],["Effectif opérationnel","التعداد العملي"],["Employé en attente d'affectation","موظف في انتظار التعيين"],["Employé en instance de dotation","موظف في انتظار التجهيز"],["En congé","في عطلة"],["En maladie","في مرض"],["En absence","في غياب"],["Suspendu","موقوف"],["Sortant","خارج الخدمة"],["Opérationnels","عمليون"],["Effectif total","إجمالي التعداد"],
+  ["SITES","المواقع"],["SITES / CLIENT","المواقع / الزبون"],["Création de site","إنشاء موقع"],["Sites actifs","المواقع النشطة"],["Site","الموقع"],["Client","الزبون"],["Société","الشركة"],["Société active","الشركة النشطة"],["Toutes sociétés confondues","كل الشركات"],
+  ["MAIN COURANTE","السجل اليومي"],["MAIN COURANTE / EVENTS","السجل اليومي / الأحداث"],["Évènements autres","أحداث أخرى"],["Évènements site","أحداث الموقع"],["Incidents","الحوادث"],["Alerte","تنبيه"],["Alertes","التنبيهات"],
+  ["CONGÉS","العطل"],["Situation des congés","وضعية العطل"],["Demande de congé","طلب عطلة"],["Maladie","مرض"],["Absence","غياب"],["Congé","عطلة"],["Récupération","استرجاع"],
+  ["PAIE","الأجور"],["Paie","الأجور"],["Salaire","الأجر"],["Salaire net","الأجر الصافي"],["Fiche de paye","كشف الراتب"],
+  ["RAPPORTS","التقارير"],["Rapports","التقارير"],["STATISTIQUES RH","إحصائيات الموارد البشرية"],["Vue d'ensemble","نظرة عامة"],["Par société","حسب الشركة"],["Par thème","حسب الموضوع"],["Par fonction","حسب الوظيفة"],["Par catégorie","حسب الفئة"],["Par salaire","حسب الأجر"],["Par affectation","حسب التعيين"],
+  ["MISSIONS","المهام"],["SUPERVISION SITE","مراقبة الموقع"],["Programmer une Inspection","برمجة تفتيش"],["Inspections programmées","التفتيشات المبرمجة"],["Inspections inopinées","التفتيشات المفاجئة"],
+  ["Articles","المواد"],["MAGASIN","المخزن"],["Fournisseurs","الموردون"],["Stockage PostgreSQL","تخزين PostgreSQL"],["Utilisateurs & accès","المستخدمون والصلاحيات"],["Droits d'accès","حقوق الوصول"],["Niveaux d'accès","مستويات الصلاحية"],["Journal d'activité","سجل النشاط"],["Historique messages","سجل الرسائل"],["Paramètres","الإعدادات"],["Code de déverrouillage","رمز فتح القفل"],["Journal déverrouillages","سجل فتح القفل"],
+  ["Créer","إنشاء"],["Modifier","تعديل"],["Supprimer","حذف"],["Valider","تأكيد"],["Annuler","إلغاء"],["Enregistrer","حفظ"],["Envoyer","إرسال"],["Répondre","رد"],["Traiter","معالجة"],["Fermer","إغلاق"],["Ouvrir","فتح"],["Retour société","العودة إلى الشركة"],["Retour à la sélection","العودة إلى الاختيار"],["Changer de société","تغيير الشركة"],["Se déconnecter","تسجيل الخروج"],["Choix langue","اختيار اللغة"],
+  ["Statut","الحالة"],["Réponse","الرد"],["Employé","الموظف"],["Société / Site","الشركة / الموقع"],["Pièce","مرفق"],["Pièces jointes","المرفقات"],["Date","التاريخ"],["De","من"],["Vers","إلى"],["Objet","الموضوع"],["Message","الرسالة"],["Action","الإجراء"],["Actions","الإجراءات"],["Total","المجموع"],["Nouvelles","الجديدة"],["En cours","قيد المعالجة"],["Traité","تمت المعالجة"],["Traitées","تمت معالجتها"],["Rejeté","مرفوض"],["Rejetées","مرفوضة"],["Tous statuts","كل الحالات"],["Tous types","كل الأنواع"],["Recherche globale","بحث شامل"],["Réinitialiser","إعادة تعيين"],
+  ["Présent","حاضر"],["Absent","غائب"],["Suspendu","موقوف"],["Repos","راحة"],["Pointage","الحضور"],["Feuille de présence quotidienne","ورقة الحضور اليومية"],["Saisie pointage","إدخال الحضور"],["Récap par agent","ملخص حسب الموظف"],["Récap par société","ملخص حسب الشركة"],["Statistiques","إحصائيات"],["Légende & codes","الرموز والدلالات"]
+];
+function sgdiLangMode(){try{return localStorage.getItem('sgdiLangMode')||'both'}catch(e){return 'both'}}
+function sgdiSetLangMode(mode){try{localStorage.setItem('sgdiLangMode',mode||'both')}catch(e){}applyLanguagePreference();}
+function sgdiLangText(fr,ar){const m=sgdiLangMode();if(m==='fr')return fr;if(m==='ar')return ar;return fr+' / '+ar}
+function sgdiLanguageSelectorHTML(){const m=sgdiLangMode();const btn=(v,l)=>`<button type="button" data-no-lang="1" class="btn ${m===v?'btn-primary':'btn-secondary'} text-[10px] px-2 py-1" onclick="sgdiSetLangMode('${v}')">${l}</button>`;return `<div data-no-lang="1" class="sgdi-lang-choice flex items-center gap-1 mb-2"><span class="text-[10px] text-slate-400">AR/FR</span>${btn('both','AR/FR')}${btn('fr','FR')}${btn('ar','AR')}</div>`}
+function sgdiTranslateText(raw){
+  if(!raw||!raw.trim())return raw;
+  const mode=sgdiLangMode();
+  let out=raw;
+  [...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length).forEach(([fr,ar])=>{
+    const both=fr+' / '+ar;
+    const target=mode==='fr'?fr:(mode==='ar'?ar:both);
+    out=out.split(both).join(target).split(fr).join(target);
+    if(mode!=='both')out=out.split(ar).join(target);
+  });
+  return out;
+}
+function applyLanguagePreference(root){
+  const mode=sgdiLangMode();
+  const scope=root||document.getElementById('app');
+  if(!scope)return;
+  document.documentElement.lang=mode==='ar'?'ar':'fr';
+  const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT,{acceptNode(node){
+    const p=node.parentElement;if(!p)return NodeFilter.FILTER_REJECT;
+    if(p.closest('[data-no-lang],script,style,textarea'))return NodeFilter.FILTER_REJECT;
+    if(!node.nodeValue||!node.nodeValue.trim())return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;
+  }});
+  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(n=>{const v=sgdiTranslateText(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
+  scope.querySelectorAll('input[placeholder],textarea[placeholder],button[title],select[title]').forEach(el=>{
+    ['placeholder','title'].forEach(a=>{const v=el.getAttribute(a);if(v){const t=sgdiTranslateText(v);if(t!==v)el.setAttribute(a,t)}});
+  });
+  scope.querySelectorAll('.sgdi-lang-choice button').forEach(b=>{b.classList.toggle('btn-primary',b.textContent===(mode==='both'?'AR/FR':mode.toUpperCase()));b.classList.toggle('btn-secondary',!b.classList.contains('btn-primary'))});
+}
+
 /* ---- SHELL ---- */
 function render(){
   sanitizeCandidatesInDB();
@@ -1847,7 +1904,7 @@ function render(){
             <div class="font-bold" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
           </div>
         </div>
-        ${headerBtn}
+        <div class="flex items-center gap-2">${sgdiLanguageSelectorHTML()}${headerBtn}</div>
       </div>
       ${societeStructureBarHTML()}
       ${globalSocieteBandHTML()}
@@ -1859,6 +1916,7 @@ function render(){
   renderSidebar();
   renderSidebar();
   renderView();
+  setTimeout(()=>applyLanguagePreference(),0);
 }
 /* =============================================================
    HOMEPAGE — Sélecteur société + modules transverses
@@ -2325,8 +2383,9 @@ function renderSidebar(){
         if(isCol)return header;
         return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${c.label}${badge}</div>`}).join("");
       }).join("");
-      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
+      setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
       return;
     }
     if(mod==="drh"){
@@ -2382,15 +2441,17 @@ function renderSidebar(){
         if(isCol)return header;
         return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${navDemandesPersonnelLabel(c)}${badge}</div>`}).join("");
       }).join("");
-      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
+      setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
       return;
     }
     const g=transFlat[mod];
     const head="";
     const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${c.label}${badge}</div>`}).join("");
-    const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+    const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
     document.getElementById("sidebar-nav").innerHTML=head+items+back;
+    setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
     return;
   }
   const groups=[
@@ -2459,7 +2520,8 @@ function renderSidebar(){
     if(isCol)return header;
     return header+vis.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${navDemandesPersonnelLabel(c)}${badge}</div>`}).join("");
   }).join("");
-  document.getElementById("sidebar-nav").innerHTML=html;
+  document.getElementById("sidebar-nav").innerHTML=html+`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}</div>`;
+  setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
 }
 function toggleNavGroup(key){const nav=document.getElementById("sidebar-nav");const y=nav?nav.scrollTop:0;const current=sessionStorage.getItem("navOpenGroup")||"";if(current===key)sessionStorage.removeItem("navOpenGroup");else sessionStorage.setItem("navOpenGroup",key);renderSidebar();stripCryptogrammes();const next=document.getElementById("sidebar-nav");if(next)next.scrollTop=y}
 
@@ -2937,6 +2999,7 @@ function renderView(){
   stripCryptogrammes();
   uiEnhanceView();
   uiProgressDone();
+  setTimeout(()=>applyLanguagePreference(view),0);
 }
 window.addEventListener("hashchange",()=>{uiProgressStart();render()});
 function fpqAutoRefreshRelieveAlert(){
