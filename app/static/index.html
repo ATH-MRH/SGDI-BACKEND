@@ -1468,6 +1468,20 @@ function nextMatricule(existing,societe){
   const fallback=prefixes[prefixes.length-1]||"Z";
   return fallback+"100";
 }
+function isOkbaFunction(poste){
+  return /superviseur|inspection|inspecteur|controleur|contrôleur|operateur|opérateur/i.test(String(poste||""));
+}
+function nextOkbaCode(existing,currentId){
+  const used=new Set((existing||[]).filter(a=>!currentId||a.id!==currentId).map(a=>String(a.matricule||"").trim().toUpperCase()).filter(Boolean));
+  for(let i=1;i<=100;i++){const code="OKBA-"+i;if(!used.has(code.toUpperCase()))return code}
+  return "OKBA-100";
+}
+function applyOkbaCodeIfNeeded(agent,poste){
+  if(!agent||!isOkbaFunction(poste))return false;
+  if(/^OKBA-\d{1,3}$/i.test(String(agent.matricule||"")))return false;
+  agent.matricule=nextOkbaCode(db.agents||[],agent.id);
+  return true;
+}
 
 /* ---- AUTH ---- */
 async function login(u,p){
@@ -3927,7 +3941,7 @@ function embaucherCandidat(id){
   const dateFinContrat=fd.get("dateFinContrat")||contractEndDate(dateRecrutement,dureeContrat);
   const posteContrat=fd.get("posteContrat")||c.posteSouhaite||"";
   const contratModele=(db.contratsPersonnel||[]).find(x=>x.id===fd.get("contratPersonnelId"))||contratPersonnelByPoste(posteContrat);
-  const matricule=nextMatricule(db.agents,c.societe);
+  const matricule=isOkbaFunction(posteContrat)?nextOkbaCode(db.agents):nextMatricule(db.agents,c.societe);
   const agent={
     id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,sexe:c.sexe,situation:c.situation,telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
     salairePrevu:parseMoneyInput(c.salairePrevu)||0,avisDecision:c.avisDecision||"",avisDate:c.avisDate||"",avisRecruteur:c.avisRecruteur||"",avisCommentaire:c.avisCommentaire||"",
@@ -4404,7 +4418,7 @@ function applyAgentExcelRow(agentId,rows){
     const site=(db.sites||[]).find(s=>excelNormKey(s.nom||s.intitule||"")===excelNormKey(siteName)||excelNormKey(s.indicatif||"")===excelNormKey(siteName));
     a.affectationCourante=a.affectationCourante||{};
     if(siteName){a.affectationCourante.siteId=site?.id||a.affectationCourante.siteId||"";a.affectationCourante.siteName=site?(site.nom||site.intitule||""):String(siteName).trim()}
-    if(poste)a.affectationCourante.poste=String(poste).trim();
+    if(poste){a.affectationCourante.poste=String(poste).trim();a.fonction=String(poste).trim();applyOkbaCodeIfNeeded(a,poste)}
     const groupe=excelCell(row,["groupe","designation groupe","désignation groupe"]);if(groupe)a.affectationCourante.groupe=String(groupe).replace(/groupe/i,"").trim().toUpperCase();
     const dateDebut=excelDateValue(excelCell(row,["date prise service","date debut affectation","date début affectation"]));if(dateDebut)a.affectationCourante.dateDebut=dateDebut;
   }
@@ -4421,7 +4435,7 @@ function saveAgent(id){
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
   a.habilitations=a.habilitations||{};
   ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
-  a.salaireNet=parseMoneyInput(a.salaireNet)||0;a.updatedAt=today();saveDB();toast("Fiche enregistrée","success");
+  applyOkbaCodeIfNeeded(a,a.fonction||a.poste||a.affectationCourante?.poste);a.salaireNet=parseMoneyInput(a.salaireNet)||0;a.updatedAt=today();saveDB();toast("Fiche enregistrée","success");
 }
 function openReaffectation(agentId){
   if(!isOpsFicheContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
@@ -4442,7 +4456,7 @@ function confirmReaffectation(agentId){
   const siteId=fd.get("siteId");const site=db.sites.find(s=>s.id===siteId);
   if(a.affectationCourante&&a.affectationCourante.siteId){a.affectationsHistorique=a.affectationsHistorique||[];a.affectationsHistorique.push({...a.affectationCourante,dateFin:fd.get("dateDebut"),motifChangement:fd.get("motifChangement")||""})}
   const groupe=fd.get("groupe")||"";
-  a.affectationCourante={siteId,siteName:site?.nom,clientName:site?.client,poste:a.affectationCourante?.poste||a.fonction||"",horaire:"Mixte",groupe,dateDebut:fd.get("dateDebut")};
+  a.affectationCourante={siteId,siteName:site?.nom,clientName:site?.client,poste:a.affectationCourante?.poste||a.fonction||"",horaire:"Mixte",groupe,dateDebut:fd.get("dateDebut")};applyOkbaCodeIfNeeded(a,a.affectationCourante.poste||a.fonction);
   if(site){site.groupesAffectation=site.groupesAffectation||{};site.groupesAffectation[agentId]=groupe}
   saveDB();closeModal();toast("Affectation enregistrée","success");renderView();
 }
