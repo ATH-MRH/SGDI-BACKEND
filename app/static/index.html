@@ -336,9 +336,9 @@
   .chat-meta{font-size:9.5px;opacity:.72;margin-top:4px;white-space:nowrap}
   .chat-status{font-size:10px;opacity:.88;margin-top:3px;text-align:right;font-weight:700}
   .chat-status.read{color:#38bdf8}.chat-status.received{color:#bbf7d0}.chat-status.sent{color:#e5e7eb}
-  .dialogue-composer{border-top:1px solid #cbd5e1;background:#fff;padding:8px;display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:end}
+  .dialogue-composer{border-top:1px solid #cbd5e1;background:#fff;padding:8px;display:grid;grid-template-columns:1fr auto;gap:6px;align-items:end}
   .dialogue-composer textarea{min-height:38px;max-height:88px;resize:vertical;font-size:12px;padding:8px}
-  .dialogue-attach{border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}.dialogue-send{border:none;background:#111827;color:#fff;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}.chat-attachment{display:inline-flex;align-items:center;gap:5px;margin-top:7px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-size:11px;font-weight:800;text-decoration:none}.chat-bubble.theirs .chat-attachment{background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a}.dialogue-file-name{grid-column:1/4;font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dialogue-attach{border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:9px;height:32px;padding:0 9px;font-size:11px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:5px;justify-content:center}.dialogue-send{border:none;background:#111827;color:#fff;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}.chat-attachment{display:inline-flex;align-items:center;gap:5px;margin-top:7px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-size:11px;font-weight:800;text-decoration:none}.chat-bubble.theirs .chat-attachment{background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a}.dialogue-file-name{grid-column:1/3;font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .instruction-form{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:10px;margin-top:8px}
 
   /* ----- MATERIEL PRO UI ----- */
@@ -2711,7 +2711,7 @@ function feedRowsHTML(peer){
 }
 function dialogueComposerHTML(peer){
   const selected=peer||dialogueSelectedPeer();
-  return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)"><input type="hidden" name="to" value="'+escapeHTML(selected)+'"/><input type="file" name="attachment" class="hidden" onchange="dialogueFileChanged(this)"/><button type="button" class="dialogue-attach" title="Ajouter pièce jointe" onclick="this.form.attachment.click()">📎</button><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button><div class="dialogue-file-name" data-dialogue-file-name>Aucune pièce jointe</div></form>';
+  return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)"><input type="hidden" name="to" value="'+escapeHTML(selected)+'"/><input type="file" name="attachment" class="hidden" onchange="dialogueFileChanged(this)"/><div style="grid-column:1/3"><button type="button" class="dialogue-attach" title="Ajouter pièce jointe" onclick="this.form.attachment.click()"><span aria-hidden="true">📎</span><span>Ajouter pièce jointe</span></button></div><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button><div class="dialogue-file-name" data-dialogue-file-name>Aucune pièce jointe</div></form>';
 }
 function refreshRealtimeFeed(){
   const body=document.getElementById("dialogue-body");
