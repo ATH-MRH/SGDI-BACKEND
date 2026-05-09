@@ -794,7 +794,8 @@ async function sgdiPullState(options){
       await syncSqlModulesFromPostgres();
       const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
       if(typeof normalizePostesInDB==="function")normalizePostesInDB();
-      if(purged)sgdiBackendSave();
+      const pruned=pruneEmptyCandidates();
+      if(purged||pruned)sgdiBackendSave();
       if(opt.render&&typeof render==="function")render();
       if(!opt.silent&&typeof toast==="function")toast("Données chargées depuis le backend","success");
       return db;
@@ -991,6 +992,16 @@ async function sgdiLoadAuthState(){
   }
 }
 
+function candidateHasMinimumData(c){
+  if(!c||typeof c!=="object")return false;
+  return [c.nom,c.prenom,c.last_name,c.first_name,c.telephone,c.phone,c.email,c.nin,c.dateNaissance,c.birth_date].some(v=>String(v||"").trim().length>0);
+}
+function pruneEmptyCandidates(){
+  if(!db||!Array.isArray(db.candidats))return 0;
+  const before=db.candidats.length;
+  db.candidats=db.candidats.filter(candidateHasMinimumData);
+  return before-db.candidats.length;
+}
 function candidateApiPayload(c){
   const data={...c};
   return {
@@ -1028,18 +1039,21 @@ async function syncCandidatesFromPostgres(){
   if(!sgdiAuthToken()||!db)return;
   try{
     const rows=await SGDI.rh.candidates();
-    const fromPg=(rows||[]).map(candidateFromApi);
+    const mappedRows=(rows||[]).map(candidateFromApi);
+    mappedRows.filter(c=>!candidateHasMinimumData(c)&&sqlBackendId(c.backendId)).forEach(c=>deleteCandidateFromPostgres(c).catch(e=>console.warn("Candidat vide non supprimé",e)));
+    const fromPg=mappedRows.filter(candidateHasMinimumData);
     const byId=new Map((db.candidats||[]).map(c=>[String(c.backendId||c.id),c]));
     fromPg.forEach(c=>byId.set(String(c.backendId||c.id),{...(byId.get(String(c.backendId||c.id))||{}),...c}));
-    db.candidats=[...byId.values()];
+    db.candidats=[...byId.values()].filter(candidateHasMinimumData);
   }catch(e){
     console.warn("Candidats PostgreSQL indisponibles",e);
   }
 }
 async function persistCandidateToPostgres(c){
   if(!c||!sgdiAuthToken())return null;
-  const payload=candidateApiPayload(c);
   const backendId=sqlBackendId(c.backendId);
+  if(!backendId&&!candidateHasMinimumData(c))return null;
+  const payload=candidateApiPayload(c);
   const saved=backendId?await SGDI.rh.updateCandidate(backendId,payload):await SGDI.rh.createCandidate(payload);
   const mapped=candidateFromApi(saved);
   Object.assign(c,mapped,{id:c.id||mapped.id,backendId:saved.id});
