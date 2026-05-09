@@ -1822,6 +1822,7 @@ function logout(){session=null;sgdiPostgresReady=false;saveSession(null);session
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
 function isAdm1(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM1","ADMI1","ADMIN1"].includes(normalizeAccessCode(v)))}
+function isAdm2(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM2","ADMI2","ADMIN2"].includes(normalizeAccessCode(v)))}
 function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
 function currentAccessLevelCode(){const u=currentUserRecord();return String(session?.niveau||u?.niveau||"").trim()}
 function isCadreCat01(){return currentAccessLevelCode().toUpperCase().replace(/[\s-]+/g,"_")==="CADRE_CAT_01"}
@@ -2100,6 +2101,7 @@ function render(){
    HOMEPAGE — Sélecteur société + modules transverses
    ============================================================= */
 function openCreateSocieteModal(){
+  if(!isAdm2()){toast("Création société réservée à l'administrateur ADM2","error");return}
   openModal(`<h3 class="font-bold text-lg mb-4">Créer une nouvelle société</h3>
     <form onsubmit="event.preventDefault();confirmCreateSociete()">
       <div class="mb-3">
@@ -2221,6 +2223,7 @@ async function confirmEditSociete(original){
   renderSocieteSelector();
 }
 async function confirmCreateSociete(){
+  if(!isAdm2()){toast("Création société réservée à l'administrateur ADM2","error");return}
   const f=document.querySelector(".modal-bg form");if(!f)return;
   const fd=new FormData(f);
   const name=normalizeSocieteName(fd.get("nom"));
@@ -2290,7 +2293,7 @@ function renderSocieteSelector(){
               ${SOCIETES.map(s=>`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join("")}
             </select>
             <button type="button" class="btn btn-primary" onclick="const s=document.getElementById('societe-main-select')?.value;if(s)pickSociete(s);else toast('Choisissez une société','error')">Accéder</button>
-            <button type="button" class="btn btn-secondary" onclick="openCreateSocieteModal()">Créer société</button>
+            ${isAdm2()?`<button type="button" class="btn btn-secondary" onclick="openCreateSocieteModal()">Créer société</button>`:""}
           </div>
           <div class="flex justify-between items-center mt-3 text-xs" style="color:#cbd5e1">
             <span>${SOCIETES.length} sociétés actives disponibles</span>
