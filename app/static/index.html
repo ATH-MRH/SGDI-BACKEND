@@ -122,6 +122,13 @@
   .structure-tab{display:inline-flex;align-items:center;gap:7px;border:1px solid #cbd5e1;background:#f8fafc;color:#334155;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800;white-space:nowrap;transition:all .15s}
   .structure-tab:hover{background:#eef2ff;color:#043970;border-color:#04397066}
   .structure-tab.active{background:#043970;color:#fff;border-color:#043970}
+  .topbar-structure-tabs{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;min-width:0;flex:1}
+  .topbar-structure-btn{height:34px;display:inline-flex;align-items:center;gap:6px;border:1px solid #cbd5e1;background:#fff;color:#facc15;border-radius:999px;padding:0 10px;font-size:11px!important;font-weight:900;white-space:nowrap;cursor:pointer;transition:all .15s}
+  .topbar-structure-btn:hover{background:#e0f2fe;color:#facc15;border-color:#7dd3fc}
+  .topbar-structure-btn.active{background:#043970;color:#fff;border-color:#043970}
+  .topbar-dialogue-btn{height:34px;border:0;background:#facc15;color:#01112f;border-radius:999px;padding:0 12px;font-size:11px!important;font-weight:950;display:inline-flex;align-items:center;gap:7px;box-shadow:0 6px 14px rgba(15,23,42,.14);cursor:pointer;white-space:nowrap}
+  .topbar-dialogue-btn:hover{background:#fde047;color:#01112f}
+  .topbar-dialogue-btn .badge{background:#dc2626;color:#fff;border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:950}
   .societe-band-btn:hover{background:#dff3ff!important;color:#0360a8!important;border-color:#7dd3fc!important}
   .societe-band-btn:hover *{color:#0360a8!important}
 
@@ -297,7 +304,7 @@
   @media(max-width:720px){.dash-kpi-grid,.dash-module-grid{grid-template-columns:1fr}.dash-hero h1{font-size:22px}}
 
   /* ----- RIGHT DIALOGUE BOX ----- */
-  .dialogue-fab{position:fixed;right:18px;top:92px;z-index:42;border:none;background:#facc15;color:#01112f;border-radius:999px;padding:10px 14px;font-size:12px;font-weight:800;box-shadow:var(--shadow-lg);cursor:pointer}
+  .dialogue-fab{display:none!important}
   .dialogue-fab.hidden{display:none}
   .dialogue-fab .badge{background:#dc2626;color:#fff;border-radius:999px;padding:2px 7px;margin-left:8px;font-size:11px}
   .dialogue-panel{width:310px;max-width:310px;height:100vh;background:#f1f5f9;border-left:1px solid #cbd5e1;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;flex-shrink:0;color:#0f172a}
@@ -1770,24 +1777,30 @@ function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","
 function enterSocieteStructureDirect(mod){session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
 function exitTransverseModule(){session.transverse=null;saveSession(session);try{sessionStorage.removeItem("ficheContext")}catch(e){}location.hash=session?.societe?"#/dashboard":"#/select-societe";route()}
 
-function societeStructureBarHTML(){
-  if(!session?.societe)return"";
+function structureTopbarItems(){
   const items=[
     {key:"drh",icon:"👥",label:"DRH",roles:["rh","admin"]},
     {key:"ops",icon:"🎯",label:"OPS",roles:["rh","dispatch","admin"]},
-    {key:"materiel",icon:"📦",label:"Matériel / Équipement",roles:["rh","dispatch","admin"]},
-    {key:"facturation",icon:"💼",label:"Finances / Comptabilité",roles:["rh","admin"]},
+    {key:"materiel",icon:"📦",label:"Matériel",roles:["rh","dispatch","admin"]},
+    {key:"facturation",icon:"💼",label:"Finances",roles:["rh","admin"]},
     {key:"commercial",icon:"🤝",label:"Commercial",roles:["rh","admin"]}
   ];
-  const role=session.role||"agent";
-  const visible=(session.transverse==="drh"?items.filter(i=>i.key==="drh"):items).filter(i=>i.roles.includes(role));
-  if(!visible.length)return"";
-  return`<div class="societe-structure-bar no-print">
-    <div class="societe-structure-inner">
-      ${visible.map(i=>`<button type="button" class="structure-tab ${session.transverse===i.key?"active":""}" onclick="enterSocieteStructure('${i.key}')">${i.icon} ${i.label}</button>`).join("")}
-    </div>
-  </div>`;
+  const role=session?.role||"agent";
+  return (session?.transverse==="drh"?items.filter(i=>i.key==="drh"):items).filter(i=>i.roles.includes(role));
 }
+function topbarStructureTabsHTML(){
+  if(!session)return"";
+  const visible=structureTopbarItems();
+  if(!visible.length)return"";
+  return `<div class="topbar-structure-tabs no-print">${visible.map(i=>`<button type="button" class="topbar-structure-btn ${session.transverse===i.key?"active":""}" title="${escapeHTML(i.label)}" onclick="${session.societe?`enterSocieteStructure('${i.key}')`:`enterTransverseModule('${i.key}')`}"><span>${i.icon}</span><span>${escapeHTML(i.label)}</span></button>`).join("")}</div>`;
+}
+function dialogueTopbarButtonHTML(){
+  if(!session)return"";
+  const unread=dialogueIncomingUnreadItems().length;
+  return `<button type="button" data-no-lang="1" class="topbar-dialogue-btn no-print" onclick="dialogueToggle(true)" title="Boîte de dialogue"><span aria-hidden="true">💬</span><span>Boîte dialogue</span>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
+}
+function societeStructureBarHTML(){return "";}
+
 
 
 /* ---- LANGUES / اللغات ---- */
@@ -1896,17 +1909,17 @@ function render(){
       </div>
     </aside>
     <main class="flex-1 flex flex-col overflow-hidden">
-      <div class="flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor}">
-        <div class="flex items-center gap-3">
+      <div class="flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
+        <div class="flex items-center gap-3 shrink-0">
           <button type="button" class="btn btn-ghost text-xs" onclick="goBackSmart()" title="Retour" style="min-width:36px;height:36px;padding:0;font-size:18px">←</button>
           <div>
             <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
             <div class="font-bold" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
           </div>
         </div>
-        <div class="flex items-center gap-2">${sgdiLanguageSelectorHTML()}${headerBtn}</div>
+        ${topbarStructureTabsHTML()}
+        <div class="flex items-center gap-2 shrink-0">${dialogueTopbarButtonHTML()}${sgdiLanguageSelectorHTML()}${headerBtn}</div>
       </div>
-      ${societeStructureBarHTML()}
       ${globalSocieteBandHTML()}
       ${(()=>{const h=(location.hash||"").slice(2);const onMateriel=h.startsWith("materiel")&&!h.startsWith("materiel/magasin");if(onMateriel&&typeof materielSocieteStripHTML==="function")return materielSocieteStripHTML();return""})()}
       <div class="flex-1 overflow-y-auto p-6" id="view"></div>
@@ -2801,8 +2814,7 @@ function dialogueBoxHTML(){
   const peer=peers.find(p=>p.key===selected)||peers[0]||{key:"all",label:"Général",sub:"Tous"};
   const unread=dialogueIncomingUnreadItems().length;
   const usersHTML=peers.map(p=>'<button class="dialogue-user '+(p.key===selected?'active ':'')+(p.unread?'has-unread':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
-  return '<button class="dialogue-fab no-print '+(open?'hidden':'')+'" onclick="dialogueToggle(true)">Boîte dialogue'+(unread?'<span class="badge">'+unread+'</span>':'')+'</button>'+
-  '<aside class="dialogue-panel no-print '+(open?'':'closed')+'" aria-label="Boîte de dialogue interne">'+
+  return '<aside class="dialogue-panel no-print '+(open?'':'closed')+'" aria-label="Boîte de dialogue interne">'+
     '<div class="dialogue-head"><div class="dialogue-title">BOÎTE DE DIALOGUE'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Messages entre utilisateurs SGDI</div><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Réduire</button></div></div>'+
     '<div class="dialogue-layout"><div class="dialogue-users">'+(usersHTML||'<div class="text-xs text-slate-500">Aucun utilisateur</div>')+'</div><div class="dialogue-chat">'+
       '<div class="dialogue-chat-head">'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div>'+
