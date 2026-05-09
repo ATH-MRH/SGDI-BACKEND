@@ -10939,8 +10939,44 @@ async function saveAdminAccessSecurity(form){
   try{await persistSocieteConfig();saveDB();logActivity("Configuration sécurité accès","SGDI · Sociétés · Structures");toast("Configuration des accès enregistrée","success");renderView()}catch(e){toast("Erreur sauvegarde sécurité : "+(e.message||e),"error")}
 }
 
+function adminRoleGuide(){return[
+  ["AG1","Agent consultation","Voir uniquement ce qui est autorisé"],
+  ["AG2","Agent saisie","Créer des demandes et renseigner les formulaires"],
+  ["AG3","Agent avancé","Saisie complète avec suivi opérationnel"],
+  ["CAD1","Cadre validation","Valider les dossiers et opérations courantes"],
+  ["CAD2","Cadre contrôle","Contrôler, corriger et superviser une société"],
+  ["CAD3","Cadre supérieur","Superviser plusieurs périmètres métier"],
+  ["SUP1","Superviseur terrain","Accès terrain, pointage, sites, missions"],
+  ["SUP2","Superviseur confirmé","Contrôle des équipes et rapports terrain"],
+  ["SUP3","Superviseur principal","Pilotage complet des opérations"],
+  ["ADM1","Administrateur gestion","Utilisateurs, droits, paramètres courants"],
+  ["ADM2","Administrateur système","Pouvoir complet, création société, sécurité"]
+]}
+function adminRoleDescription(role){const r=adminRoleGuide().find(x=>x[0]===String(role||""));return r?r[1]+" — "+r[2]:"Profil utilisateur SGDI"}
+function adminDashboardCard(title,desc,route,color,icon){return`<button class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px"><div class="text-2xl mb-2">${icon||""}</div><div class="font-black text-lg mb-1">${title}</div><div class="text-sm text-slate-500 leading-relaxed">${desc}</div></button>`}
 function renderAdminDashboard(view){
-  renderAdminAccessSecurity(view,"access");
+  ensureNiveauxAcces();
+  const users=db.users||[];
+  const actifs=users.filter(u=>u.actif!==false).length;
+  const adm=users.filter(u=>/^ADM|admin/i.test(String(u.role||""))).length;
+  const limited=users.filter(u=>Array.isArray(u.societesAutorisees)&&u.societesAutorisees.length).length;
+  const modules=ADMIN_MODULES.length;
+  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Centre de configuration des accès</h1><p class="text-sm text-slate-500 mt-1">Une méthode simple : choisir l'utilisateur, définir sa fonction, son niveau d'habilitation, ses sociétés, puis appliquer ses droits par module.</p></div>
+  <div class="grid grid-4 gap-3 mb-5">
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Utilisateurs actifs</div><div class="text-3xl font-black" style="color:#043970">${actifs}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Administrateurs</div><div class="text-3xl font-black text-red-700">${adm}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Accès société limité</div><div class="text-3xl font-black text-amber-700">${limited}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Modules contrôlés</div><div class="text-3xl font-black text-emerald-700">${modules}</div></div>
+  </div>
+  <div class="grid grid-3 gap-4 mb-5">
+    ${adminDashboardCard("1. Utilisateurs & fonctions","Créer un compte, choisir AG/CAD/SUP/ADM, définir le niveau et les sociétés autorisées.","admin/users","#043970","")}
+    ${adminDashboardCard("2. Niveaux d'habilitation","Paramétrer H1 à H5 : consultation, saisie, validation, supervision, administration.","admin/niveaux","#ca8a04","")}
+    ${adminDashboardCard("3. Droits par module","Autoriser ou refuser les accès par rôle : DRH, OPS, Matériel, Finances, Commercial.","admin/droits","#7c3aed","")}
+    ${adminDashboardCard("4. Mots de passe accès","Configurer les accès SGDI, sociétés et structures dans une seule page.","admin/access","#dc2626","")}
+    ${adminDashboardCard("5. Historique messages","Consulter les échanges, accusés, pièces jointes et traces utilisateurs.","admin/messages","#0f766e","")}
+    ${adminDashboardCard("6. Nettoyage & contrôle","Surveiller le stockage, corriger les données et nettoyer les anciens journaux.","admin/storage","#64748b","")}
+  </div>
+  <div class="card p-5"><h2 class="font-black text-lg mb-3">Guide rapide des fonctions</h2><div class="grid grid-3 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<button class="p-3 rounded-lg text-left" style="border:1px solid #e2e8f0;background:#f8fafc" onclick="navigate('admin/users')"><div class="font-black" style="color:${adminRoleColor(code)}">${code} · ${title}</div><div class="text-xs text-slate-500 mt-1">${desc}</div></button>`).join("")}</div></div>`;
 }
 function adminFeedItemsHTML(items,compact){
   if(!items.length)return`<div class="text-sm text-slate-400 p-4 text-center">Aucun échange enregistré.</div>`;
@@ -11041,12 +11077,13 @@ function renderAdminMessagesHistory(view){
 function renderAdminUsers(view){
   ensureNiveauxAcces();
   const u=db.users||[];
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">👤 Utilisateurs & accès</h1>
+  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Utilisateurs & accès</h1><p class="text-sm text-slate-500 mt-1">Pour chaque utilisateur : fonction, niveau d'habilitation, sociétés autorisées et statut.</p></div>
     <div class="card p-4 mb-4" style="background:#f8fafc;border-left:4px solid #043970">
-      <div class="flex items-center justify-between gap-3 flex-wrap">
-        <div><div class="font-bold">Niveaux d'habilitation</div><div class="text-xs text-slate-500">Chaque utilisateur reçoit un niveau H1 à H5. Le niveau complète le rôle et les sociétés autorisées.</div></div>
-        <div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="navigate('admin/niveaux')">Configurer les niveaux</button><button class="btn btn-primary" onclick="openAdminUserModal('')">Nouvel utilisateur</button></div>
+      <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+        <div><div class="font-bold">Méthode simple d'attribution</div><div class="text-xs text-slate-500">1. Choisir la fonction · 2. Choisir le niveau · 3. Cocher les sociétés · 4. Enregistrer.</div></div>
+        <div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="navigate('admin/niveaux')">Configurer les niveaux</button><button class="btn btn-secondary text-xs" onclick="navigate('admin/droits')">Matrice des droits</button><button class="btn btn-primary" onclick="openAdminUserModal('')">Nouvel utilisateur</button></div>
       </div>
+      <div class="grid grid-4 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<div class="p-2 rounded-lg" style="background:#fff;border:1px solid #e2e8f0"><div class="font-black text-xs" style="color:${adminRoleColor(code)}">${code} · ${title}</div><div class="text-[11px] text-slate-500">${desc}</div></div>`).join("")}</div>
     </div>
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
@@ -11076,7 +11113,7 @@ function openAdminUserModal(username){
         <div><label class="label">Identifiant *</label><input class="input" name="username"  value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
-        <div><label class="label">Rôle *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r}</option>`).join("")}</select><div class="text-[11px] text-slate-500 mt-1">Le rôle définit le niveau opérationnel autorisé.</div></div>
+        <div><label class="label">Fonction / rôle *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
         <div><label class="label">Niveau d'habilitation *</label><select class="input" name="niveau"  onchange="previewUserAccessLevel(this.value)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
       </div>
