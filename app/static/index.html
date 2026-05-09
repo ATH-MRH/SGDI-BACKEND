@@ -98,7 +98,7 @@
   .nav-group>span:first-child,.nav-link,.sub-link{min-width:0!important;flex:1 1 auto!important}
   .nav-group>span:first-child{justify-content:flex-start!important;text-align:left!important}
   .nav-group .arrow{flex:0 0 auto!important}
-  .nav-link .ico,.sub-link>span:first-child,.nav-group .arrow{width:18px!important;min-width:18px!important;max-width:18px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;flex:0 0 18px!important}
+  .nav-link .ico,.sub-link>span:first-child,.nav-group .arrow,.nav-group .ico{width:18px!important;min-width:18px!important;max-width:18px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;flex:0 0 18px!important}
   .nav-link,.sub-link,.nav-group>span:first-child{display:flex!important;align-items:center!important}
   .nav-link{padding-left:8px!important}
   .sub-link{padding-left:10px!important}
@@ -114,7 +114,8 @@
   .nav-link:hover{background:#18181b!important;color:#facc15!important}
   .nav-link:hover *{color:#facc15!important}
   .nav-link.active{background:#27272a!important;color:#facc15!important;font-weight:850;box-shadow:none!important}
-  .nav-link .ico{width:18px!important;min-width:18px!important;max-width:18px!important;text-align:center;font-size:14px!important;color:#facc15!important;opacity:.95}
+  .nav-link .ico,.nav-group .ico{width:18px!important;min-width:18px!important;max-width:18px!important;text-align:center;font-size:14px!important;color:#facc15!important;opacity:.95}
+  .nav-link .nav-count{margin-left:auto;background:#facc15!important;color:#111113!important;font-size:10px!important;font-weight:900;min-width:20px;height:19px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;box-shadow:none!important}
   .sub-link{display:flex;align-items:center;gap:7px;padding:7px 8px 7px 8px;font-size:11.5px!important;color:#a1a1aa!important;border-radius:7px;cursor:pointer;transition:background .12s,color .12s,box-shadow .12s;font-weight:600}
   .sub-link:hover{color:#facc15!important;background:#18181b!important}
   .sub-link:hover *{color:#facc15!important}
@@ -2029,7 +2030,6 @@ function render(){
     ${dialogueBoxHTML()}
   </div>`;
   renderSidebar();
-  renderSidebar();
   renderView();
   setTimeout(()=>applyLanguagePreference(),0);
 }
@@ -2361,7 +2361,10 @@ function navDemandesPersonnelLabel(item){
   const label=escapeHTML(item&&item.label||"");
   return item&&item.route==="demandes_personnel/dashboard"&&Number(item.count||0)>0?`<span class="dp-reception-text">${label}</span>`:label;
 }
-function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE",children:[{label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
+function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE",icon:"📨",children:[{label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
+function sidebarGroupStorageKey(){return "navOpenGroup:"+(session?.transverse||"global")}
+function sidebarOpenGroup(){try{return sessionStorage.getItem(sidebarGroupStorageKey())||""}catch(e){return""}}
+function sidebarRouteActive(path,route){return path===route||path.startsWith(route+"/")}
 function renderSidebar(){
   const path=(location.hash||"#/dashboard").slice(2);
   const _ag=myAgents();const _ca=myCandidats();const _co=myConges();
@@ -2450,10 +2453,12 @@ function renderSidebar(){
       ]}
     };
     if(mod==="ops"){
-      const _ag=db.agents;
+      const soc=currentStructureSocieteFilter();
+      const _ag=(db.agents||[]).filter(a=>!soc||a.societe===soc);
+      const opsIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,soc));
       const opsGroups=[
         {type:"link",label:"TABLEAU DE BORD OPS",icon:"📊",route:"ops/dashboard"},
-        {type:"group",label:"🕒 POINTAGE",children:[
+        {type:"group",label:"POINTAGE",icon:"🕒",children:[
           {label:"Feuille de présence quotidienne",icon:"📅",route:"pointage/quotidien"},
           {label:"Saisie pointage",icon:"📝",route:"pointage/saisie"},
           {label:"Récap par agent",icon:"👤",route:"pointage/recap"},
@@ -2461,23 +2466,23 @@ function renderSidebar(){
           {label:"Statistiques",icon:"📈",route:"pointage/stats"},
           {label:"Légende & codes",icon:"🎨",route:"pointage/legende"}
         ]},
-        {type:"link",label:"🪪 FICHES DE POSITION",icon:"🪪",route:"fiches"},
+        {type:"link",label:"FICHES DE POSITION",icon:"🪪",route:"fiches"},
         structureDemandSidebarGroup(),
-        {type:"group",label:"📍 SITES",children:[
+        {type:"group",label:"SITES",icon:"📍",children:[
           {label:"Création de site",icon:"➕",route:"sites/nouveau"},
-          {label:"Sites actifs",icon:"📍",route:"sites/actifs"}
+          {label:"Sites actifs",icon:"📍",route:"sites/actifs",count:(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc)).length}
         ]},
         {type:"link",label:"MISSIONS",icon:"🧭",route:"ops/missions",count:(db.missions||[]).filter(m=>!currentStructureSocieteFilter()||m.societe===currentStructureSocieteFilter()).length},
-        {type:"group",label:"SUPERVISION SITE",children:[
+        {type:"group",label:"SUPERVISION SITE",icon:"🛡",children:[
           {label:"Programmer une Inspection",icon:"🗓",route:"ops/supervision/programmer"},
           {label:"Inspections programmées",icon:"📋",route:"ops/supervision/programmees",count:(db.siteInspections||[]).filter(i=>i.type==="programmee"&&(!currentStructureSocieteFilter()||i.societe===currentStructureSocieteFilter())).length},
           {label:"Inspections inopinées",icon:"⚡",route:"ops/supervision/inopinees",count:(db.siteInspections||[]).filter(i=>i.type==="inopinee"&&(!currentStructureSocieteFilter()||i.societe===currentStructureSocieteFilter())).length}
         ]},
-        {type:"group",label:"MAIN COURANTE",children:[
-          {label:"Évènements site",icon:"🚨",route:"incidents/site",count:(db.incidents||[]).filter(i=>i.type==="Evenement site"&&i.statut!=="clos").length},
-          {label:"Évènements autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
+        {type:"group",label:"MAIN COURANTE",icon:"📌",children:[
+          {label:"Évènements site",icon:"🚨",route:"incidents/site",count:opsIncidents.filter(i=>i.type==="Evenement site").length},
+          {label:"Évènements autres",icon:"📌",route:"incidents/autres",count:opsIncidents.filter(i=>i.type==="Autre").length}
         ]},
-        {type:"group",label:"👮 EFFECTIF",children:[
+        {type:"group",label:"EFFECTIF",icon:"👮",children:[
           {label:"Effectif opérationnel",icon:"👮",route:"effectif/actifs",count:_ag.filter(a=>a.statut==="actif").length},
           {label:"Employé en attente d'affectation",icon:"📍",route:"effectif/instance_affectation",count:_ag.filter(a=>a.statut==="actif"&&!(a.affectationCourante&&a.affectationCourante.siteId)).length},
           {label:"En congé",icon:"🏖",route:"effectif/conge"},
@@ -2488,17 +2493,18 @@ function renderSidebar(){
         ]}
       ];
       const head="";
-      const openGroup=sessionStorage.getItem("navOpenGroup")||"";
+      const openGroup=sidebarOpenGroup();
       const html=opsGroups.map(g=>{
-        if(g.type==="link"){const a=path===g.route?"active":"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span>${g.label}</div>`}
-        const key=g.label;const hasActive=g.children.some(c=>path===c.route||path.startsWith(c.route+"/"));const isCol=openGroup?openGroup!==key:!hasActive;
+        if(g.type==="link"){const a=sidebarRouteActive(path,g.route)?"active":"";const badge=typeof g.count==="number"?`<span class="nav-count">${g.count}</span>`:"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span>${escapeHTML(g.label)}${badge}</div>`}
+        const key=g.label;const hasActive=g.children.some(c=>sidebarRouteActive(path,c.route));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=isCol&&totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span style="display:flex;align-items:center;gap:6px"><span class="arrow">▾</span>${g.label}${groupBadge}</span></div>`;
+        const groupIcon=g.icon?`<span class="ico">${g.icon}</span>`:"";
+        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')"><span style="display:flex;align-items:center;gap:6px"><span class="arrow">▾</span>${groupIcon}<span>${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
-        return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${c.label}${badge}</div>`}).join("");
+        return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span>${escapeHTML(c.label)}${badge}</div>`}).join("");
       }).join("");
-      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-800">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
       setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
       return;
@@ -2542,7 +2548,7 @@ function renderSidebar(){
         ]}
       ];
       const head="";
-      const openGroup=sessionStorage.getItem("navOpenGroup")||"";
+      const openGroup=sidebarOpenGroup();
       const drhOrangeTitles=new Set(["RECRUTEMENT","DEMANDE STRUCTURE","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
       const html=drhGroups.map(g=>{
         const isOrange=drhOrangeTitles.has(g.label);
@@ -2623,7 +2629,7 @@ function renderSidebar(){
       {label:"Journal déverrouillages",icon:"📜",route:"parametres/log"}
     ]});
   }
-  const openGroup=sessionStorage.getItem("navOpenGroup")||"";
+  const openGroup=sidebarOpenGroup();
   const html=groups.map(g=>{
     if(g.type==="link"){if(!canAccess(g.route))return"";const a=path===g.route?"active":"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span>${g.label}</div>`}
     const vis=g.children.filter(c=>{const b=c.route.split("/")[0];return canAccess(b)||canAccess(c.route.replace("/","_"))});
@@ -2638,7 +2644,7 @@ function renderSidebar(){
   document.getElementById("sidebar-nav").innerHTML=html+`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}</div>`;
   setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
 }
-function toggleNavGroup(key){const nav=document.getElementById("sidebar-nav");const y=nav?nav.scrollTop:0;const current=sessionStorage.getItem("navOpenGroup")||"";if(current===key)sessionStorage.removeItem("navOpenGroup");else sessionStorage.setItem("navOpenGroup",key);renderSidebar();stripCryptogrammes();const next=document.getElementById("sidebar-nav");if(next)next.scrollTop=y}
+function toggleNavGroup(key){const nav=document.getElementById("sidebar-nav");const y=nav?nav.scrollTop:0;const storageKey=sidebarGroupStorageKey();const current=sessionStorage.getItem(storageKey)||"";if(current===key)sessionStorage.removeItem(storageKey);else sessionStorage.setItem(storageKey,key);renderSidebar();stripCryptogrammes();const next=document.getElementById("sidebar-nav");if(next)next.scrollTop=y}
 
 function navigate(r){try{uiProgressStart();if(r.startsWith("materiel/fiche")||r==="materiel/fiches")sessionStorage.setItem("ficheContext","materiel");else if(r.startsWith("fiches")||r.startsWith("agents")||r.startsWith("effectif/agent"))sessionStorage.setItem("ficheContext",session?.transverse||"")}catch(e){}location.hash="#/"+r}
 function setFicheContext(ctx){try{if(ctx)sessionStorage.setItem("ficheContext",ctx);else sessionStorage.removeItem("ficheContext")}catch(e){}}
