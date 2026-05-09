@@ -994,12 +994,13 @@ async function sgdiLoadAuthState(){
 
 function candidateHasMinimumData(c){
   if(!c||typeof c!=="object")return false;
+  if(isTempCandidateId(c.id))return false;
   const nom=String(c.nom||c.last_name||"").trim();
   const prenom=String(c.prenom||c.first_name||"").trim();
-  const nin=String(c.nin||"").trim();
-  const contact=String(c.telephone||c.phone||c.email||"").trim();
-  return (nom.length>=2&&prenom.length>=2)||(nin.length>=6)||(contact.length>=5&&(nom.length>=2||prenom.length>=2));
+  return nom.length>=2&&prenom.length>=2;
 }
+function isTempCandidateId(id){return String(id||"").startsWith("tmp_cd_")}
+function newTempCandidateId(){return "tmp_cd_"+uid("cd")}
 function pruneEmptyCandidates(){
   if(!db||!Array.isArray(db.candidats))return 0;
   const before=db.candidats.length;
@@ -1053,13 +1054,16 @@ async function syncCandidatesFromPostgres(){
     console.warn("Candidats PostgreSQL indisponibles",e);
   }
 }
-async function persistCandidateToPostgres(c){
+async function persistCandidateToPostgres(c,options){
   if(!c||!sgdiAuthToken())return null;
+  const opt=options||{};
   const backendId=sqlBackendId(c.backendId);
+  if(isTempCandidateId(c.id))return null;
   if(!candidateHasMinimumData(c)){
     if(backendId)await deleteCandidateFromPostgres(c);
     return null;
   }
+  if(!backendId&&!opt.allowCreate)return null;
   const payload=candidateApiPayload(c);
   const saved=backendId?await SGDI.rh.updateCandidate(backendId,payload):await SGDI.rh.createCandidate(payload);
   const mapped=candidateFromApi(saved);
@@ -3247,7 +3251,7 @@ function applyCandidatSectionLocks(){
 function renderCandidatForm(view,id){
   let c;
   if(id){c=db.candidats.find(x=>x.id===id);if(!c){toast("Candidat introuvable","error");return navigate("recrutement")}}
-  else{c={id:uid("cd"),statut:"nouvelle",photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
+  else{c={id:newTempCandidateId(),statut:"nouvelle",photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
   const step=candidatEtape1Valid(c)?2:1;
   const allValid=candidatAllSectionsValid(c);
   view.innerHTML=`<div class="max-w-5xl mx-auto">
@@ -3444,11 +3448,14 @@ async function saveCandidat(id,showToast){
   if(!validateCandidatIdentification(data))return;
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return}
   if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
-  let c=db.candidats.find(x=>x.id===id);if(!c){c={id,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
-  Object.assign(c,data);delete c.isNew;
+  const creating=!db.candidats.find(x=>x.id===id);
+  const realId=isTempCandidateId(id)?uid("cd"):id;
+  let c=db.candidats.find(x=>x.id===realId);
+  if(!c){c={id:realId,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
+  Object.assign(c,data,{id:realId});delete c.isNew;
   if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
   try{
-    await persistCandidateToPostgres(c);
+    await persistCandidateToPostgres(c,{allowCreate:creating});
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
   }catch(e){
     toast("Candidat non enregistré dans PostgreSQL : "+(e.message||e),"error");
@@ -3456,7 +3463,7 @@ async function saveCandidat(id,showToast){
   }
   if(showToast)toast("Candidat enregistré dans PostgreSQL","success");
   if((location.hash||"").endsWith("/nouveau")){
-    location.hash="#/recrutement/"+id;
+    location.hash="#/recrutement/"+c.id;
   }
   return c;
 }
@@ -3584,16 +3591,18 @@ function validateCandidatSection(key,data){
   return true;
 }
 async function validateCandidatSectionAction(id,key){
-  let c=db.candidats.find(x=>x.id===id);
+  const realId=isTempCandidateId(id)?uid("cd"):id;
+  let c=db.candidats.find(x=>x.id===realId)||db.candidats.find(x=>x.id===id);
   markRequiredFields(document.getElementById("candidat-form"));
   const data=collectCandidatFormData();if(!data)return;
-  const validationTarget=c||{id,statut:"nouvelle",createdAt:today(),sectionValidations:{}};
+  const creating=!c;
+  const validationTarget=c||{id:realId,statut:"nouvelle",createdAt:today(),sectionValidations:{}};
   if(!candidatPreviousSectionsValid(validationTarget,key)){toast("Validez d'abord la section précédente","error");return}
   if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");return}
   if(!validateCandidatSection(key,data))return;
   if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
   if(!c){c=validationTarget;db.candidats.push(c)}
-  Object.assign(c,data);delete c.isNew;
+  Object.assign(c,data,{id:realId});delete c.isNew;
   const locks=candidatSectionValidations(c);
   locks[key]={by:session?session.username:"system",at:new Date().toISOString()};
   c.statut="nouvelle";
@@ -3603,10 +3612,10 @@ async function validateCandidatSectionAction(id,key){
   const next=CANDIDAT_SECTIONS[candidatSectionIndex(key)+1];
   if(next)sessionStorage.setItem("candidatFocusSection",next.key);
   try{
-    await persistCandidateToPostgres(c);
+    await persistCandidateToPostgres(c,{allowCreate:creating});
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
-    if((location.hash||"").endsWith("/nouveau"))navigate("recrutement/"+id);else renderView();
+    if((location.hash||"").endsWith("/nouveau"))navigate("recrutement/"+c.id);else renderView();
   }catch(e){toast("Validation PostgreSQL refusée : "+(e.message||e),"error")}
 }
 function unlockCandidatSection(id,key){
