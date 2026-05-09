@@ -2504,7 +2504,7 @@ function renderSidebar(){
         if(isCol)return header;
         return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${escapeHTML(c.label)}</span>${badge}</div>`}).join("");
       }).join("");
-      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-800">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-800"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
       setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
       return;
@@ -2562,7 +2562,7 @@ function renderSidebar(){
         if(isCol)return header;
         return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
       }).join("");
-      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
       setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
       return;
@@ -2570,7 +2570,7 @@ function renderSidebar(){
     const g=transFlat[mod];
     const head="";
     const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${c.label}</span>${badge}</div>`}).join("");
-    const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}<button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+    const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
     document.getElementById("sidebar-nav").innerHTML=head+items+back;
     setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
     return;
@@ -2641,7 +2641,7 @@ function renderSidebar(){
     if(isCol)return header;
     return header+vis.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
   }).join("");
-  document.getElementById("sidebar-nav").innerHTML=html+`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200">${sgdiLanguageSelectorHTML()}</div>`;
+  document.getElementById("sidebar-nav").innerHTML=html;
   setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
 }
 function toggleNavGroup(key){const nav=document.getElementById("sidebar-nav");const y=nav?nav.scrollTop:0;const storageKey=sidebarGroupStorageKey();const current=sessionStorage.getItem(storageKey)||"";if(current===key)sessionStorage.removeItem(storageKey);else sessionStorage.setItem(storageKey,key);renderSidebar();stripCryptogrammes();const next=document.getElementById("sidebar-nav");if(next)next.scrollTop=y}
