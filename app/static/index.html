@@ -2219,6 +2219,7 @@ function renderSidebar(){
         {label:"Utilisateurs & accès",icon:"👤",route:"admin/users",count:(db.users||[]).length},
         {label:"Droits d'accès",icon:"🔐",route:"admin/droits"},
         {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
+        {label:"Historique messages",icon:"💬",route:"admin/messages",count:(db.echanges||[]).filter(e=>e.type==="message"||e.attachments?.length).length},
         {label:"Niveaux d'accès",icon:"🎚",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"Contrats du personnel",icon:"📄",route:"admin/contrats",count:(db.contratsPersonnel||[]).length},
         {label:"Priorités",icon:"⚡",route:"admin/priorites",count:(db.priorites||[]).length},
@@ -10152,6 +10153,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="dashboard")return renderAdminDashboard(view);
   if(["access","access_sgdi","access_societes","access_structures"].includes(sub))return renderAdminAccessSecurity(view,sub);
   if(sub==="feed")return renderAdminFeed(view);
+  if(sub==="messages")return renderAdminMessagesHistory(view);
   if(sub==="users")return renderAdminUsers(view);
   if(sub==="droits")return renderAdminDroits(view);
   if(sub==="sections_candidat")return renderAdminCandidatSections(view);
@@ -10348,6 +10350,60 @@ function renderAdminFeed(view){
       </div>
     </div>
     <div class="max-w-4xl">${adminFeedItemsHTML(list,false)}</div>`;
+}
+function adminMessageAttachmentLinks(m){
+  const files=Array.isArray(m.attachments)?m.attachments:[];
+  if(!files.length)return '<span class="text-slate-400 text-xs">Aucune</span>';
+  return files.map((f,i)=>'<a class="btn btn-ghost text-xs" href="'+escapeHTML(f.data||'#')+'" download="'+escapeHTML(f.name||('piece-'+(i+1)))+'">📎 '+escapeHTML(f.name||('Pièce '+(i+1)))+'</a>').join(' ');
+}
+function renderAdminMessagesHistory(view){
+  const users=db.users||[];
+  const q=(sessionStorage.getItem("adminMsgSearch")||"").toLowerCase();
+  const user=sessionStorage.getItem("adminMsgUser")||"";
+  const kind=sessionStorage.getItem("adminMsgKind")||"all";
+  const all=(db.echanges||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const messages=all.filter(m=>{
+    const files=Array.isArray(m.attachments)?m.attachments:[];
+    if(kind==="attachments"&&!files.length)return false;
+    if(kind==="messages"&&files.length)return false;
+    if(user&&m.from!==user&&m.to!==user)return false;
+    if(!q)return true;
+    const fu=users.find(u=>u.username===m.from);const tu=users.find(u=>u.username===m.to);
+    const hay=[m.from,m.to,m.sujet,m.message,fu&&fu.nom,tu&&tu.nom].concat(files.map(f=>f.name)).join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+  const total=all.length;
+  const withFiles=all.filter(m=>Array.isArray(m.attachments)&&m.attachments.length).length;
+  const unread=all.filter(m=>!m.luPar||m.luPar.length<=1).length;
+  const userOptions=users.map(u=>'<option value="'+escapeHTML(u.username)+'" '+(user===u.username?'selected':'')+'>'+escapeHTML(u.nom||u.username)+' · '+escapeHTML(u.role||'')+'</option>').join('');
+  const rows=messages.map(m=>{
+    const fu=users.find(u=>u.username===m.from);const tu=users.find(u=>u.username===m.to);
+    const files=Array.isArray(m.attachments)?m.attachments:[];
+    const received=(m.receivedBy||[]).length;
+    const read=(m.luPar||[]).filter(x=>x!==m.from).length;
+    return '<tr class="border-t" data-searchable>'+
+      '<td class="p-3 text-xs"><div>'+formatDate(m.date)+'</div><div class="font-mono text-slate-500">'+new Date(m.date).toLocaleTimeString("fr-FR")+'</div></td>'+
+      '<td class="p-3 font-semibold">'+escapeHTML(fu?fu.nom:m.from||'—')+'<div class="text-[10px] text-slate-500">'+escapeHTML(m.from||'')+'</div></td>'+
+      '<td class="p-3">'+escapeHTML(m.to==="all"?"Général":(tu?tu.nom:m.to||'—'))+'<div class="text-[10px] text-slate-500">'+escapeHTML(m.to||'')+'</div></td>'+
+      '<td class="p-3"><div class="max-w-md whitespace-pre-wrap">'+escapeHTML(m.message||'—')+'</div>'+(m.sujet?'<div class="text-xs text-slate-500 mt-1">Sujet : '+escapeHTML(m.sujet)+'</div>':'')+'</td>'+
+      '<td class="p-3 text-xs"><span class="pill pill-gray">Reçu: '+received+'</span> <span class="pill '+(read?'pill-green':'pill-red')+'">Lu: '+read+'</span></td>'+
+      '<td class="p-3"><div class="flex gap-1 flex-wrap">'+adminMessageAttachmentLinks(m)+'</div>'+(files.length?'<div class="text-[10px] text-slate-500 mt-1">'+files.length+' fichier(s)</div>':'')+'</td>'+
+    '</tr>';
+  }).join('')||'<tr><td class="p-6 text-center text-slate-400" colspan="6">Aucun message trouvé.</td></tr>';
+  view.innerHTML='<h1 class="text-2xl font-bold mb-2">💬 Historique des messages et pièces jointes</h1>'+
+    '<p class="text-sm text-slate-500 mb-4">Consultation administrative complète des conversations internes SGDI.</p>'+
+    '<div class="grid grid-3 gap-3 mb-4">'+
+      '<div class="card p-4"><div class="text-xs text-slate-500 uppercase">Messages totaux</div><div class="text-3xl font-black text-slate-900">'+total+'</div></div>'+
+      '<div class="card p-4"><div class="text-xs text-slate-500 uppercase">Avec pièces jointes</div><div class="text-3xl font-black text-blue-700">'+withFiles+'</div></div>'+
+      '<div class="card p-4"><div class="text-xs text-slate-500 uppercase">Non lus / non confirmés</div><div class="text-3xl font-black text-red-700">'+unread+'</div></div>'+
+    '</div>'+
+    '<div class="card p-4 mb-4"><div class="grid grid-4">'+
+      '<div><label class="label">Recherche</label><input class="input" value="'+escapeHTML(q)+'" placeholder="Message, pièce, utilisateur..." oninput="sessionStorage.setItem(\'adminMsgSearch\',this.value);renderView()"/></div>'+
+      '<div><label class="label">Utilisateur</label><select class="select" onchange="sessionStorage.setItem(\'adminMsgUser\',this.value);renderView()"><option value="">Tous</option>'+userOptions+'</select></div>'+
+      '<div><label class="label">Type</label><select class="select" onchange="sessionStorage.setItem(\'adminMsgKind\',this.value);renderView()"><option value="all" '+(kind==="all"?'selected':'')+'>Tout</option><option value="messages" '+(kind==="messages"?'selected':'')+'>Messages seuls</option><option value="attachments" '+(kind==="attachments"?'selected':'')+'>Avec pièces jointes</option></select></div>'+
+      '<div class="flex items-end justify-between gap-2"><div><div class="text-xs text-slate-500">Résultat</div><div class="text-3xl font-black text-red-700">'+messages.length+'</div></div><button class="btn btn-ghost text-xs" onclick="sessionStorage.removeItem(\'adminMsgSearch\');sessionStorage.removeItem(\'adminMsgUser\');sessionStorage.removeItem(\'adminMsgKind\');renderView()">Réinitialiser</button></div>'+
+    '</div></div>'+
+    '<div class="card p-0 overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-3">Date</th><th class="text-left p-3">De</th><th class="text-left p-3">Vers</th><th class="text-left p-3">Message</th><th class="text-left p-3">Statut</th><th class="text-left p-3">Pièces jointes</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function renderAdminUsers(view){
   ensureNiveauxAcces();
