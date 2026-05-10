@@ -3690,10 +3690,24 @@ function renderRecrutement(view,mode){
         <td>${c.avisDecision?`<span class="pill ${c.avisDecision==="Favorable"?"pill-green":c.avisDecision==="Défavorable"?"pill-red":"pill-amber"}">${c.avisDecision}</span>`:"—"}</td>
         <td class="text-xs">${mode==="archive"?`${formatDate(c.archivedAt||c.updatedAt||c.createdAt)}<div class="text-[11px] text-slate-500">${escapeHTML(c.motifArchive||"—")}</div>`:formatDate(c.createdAt)}</td>
         <td>${mode==="archive"?'<span class="pill pill-gray">Archivé</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
-        <td class="flex gap-2 justify-end">${mode!=="archive"&&candidatIsReserve(c)?`<button class="btn btn-success text-xs" onclick="recruterCandidat('${c.id}')">🎯 RECRUTER</button>`:""}<a class="btn btn-ghost text-xs" href="#/${mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement"}/${c.id}">Ouvrir →</a></td>
+        <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<a class="btn btn-ghost text-xs" href="#/${mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement"}/${c.id}">Ouvrir →</a>`}</td>
       </tr>`).join("")}</tbody></table></div>`}`;
 }
 function recruterCandidat(id){const c=findCandidatById(id);if(!c)return;c.statut="a_contractualiser";saveDB();toast("Candidat envoyé vers contractualisation","success");navigate(`contrats/nouveau/${c.id}`)}
+function afficherCandidatReserve(id){closeModal();navigate(`reserve/${id}`)}
+function modifierCandidatReserve(id){sessionStorage.setItem("candidatAutoEdit:"+id,"1");closeModal();navigate(`reserve/${id}`)}
+function openReserveCandidateActions(id){
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  const name=String((c.nom||"")+" "+(c.prenom||"")).trim()||"Candidat";
+  openModal(`<h3 class="font-bold text-lg mb-1">Actions candidat</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(name)} · ${escapeHTML(c.societe||"—")}</p>
+    <div class="grid grid-cols-1 gap-2">
+      <button type="button" class="btn btn-secondary justify-start" onclick="afficherCandidatReserve('${jsString(id)}')">👁 Afficher</button>
+      <button type="button" class="btn btn-primary justify-start" onclick="modifierCandidatReserve('${jsString(id)}')">✎ Modifier</button>
+      <button type="button" class="btn btn-ghost justify-start text-red-600" onclick="closeModal();openArchiveCandidatModal('${jsString(id)}')">🗄 Archiver</button>
+      <button type="button" class="btn btn-danger justify-start" onclick="closeModal();deleteCandidat('${jsString(id)}')">🗑 Supprimer</button>
+    </div>
+    <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
+}
 
 /* ---- CANDIDAT FORM ---- */
 const CANDIDAT_SECTIONS=[
@@ -3931,7 +3945,7 @@ function renderCandidatForm(view,id,options){
       </div>
     </form>
   </div>`;
-  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'))},0);
+  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'));if(sessionStorage.getItem("candidatAutoEdit:"+c.id)==="1"){sessionStorage.removeItem("candidatAutoEdit:"+c.id);modifierCandidatForm(c.id)}},0);
 }
 
 function renderCandidatEtape1(c){
