@@ -1187,7 +1187,7 @@ function candidateMinimumDataMessage(c){
   return missing.length?"Champs obligatoires manquants : "+missing.join(", "):"Nom et prénom doivent contenir au moins 2 caractères";
 }
 function isTempCandidateId(id){return String(id||"").startsWith("tmp_cd_")}
-function newTempCandidateId(){return "tmp_cd_"+uid("cd")}
+function newTempCandidateId(){return uid("cd")}
 function pruneEmptyCandidates(){
   return sanitizeCandidatesInDB();
 }
