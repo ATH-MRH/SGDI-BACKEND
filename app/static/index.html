@@ -107,9 +107,6 @@
   .nav-group{padding:8px 9px;font-size:11px!important;letter-spacing:.04em!important;color:#fff!important;text-transform:uppercase;font-weight:800;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;border-radius:7px;margin-top:7px;background:transparent!important}
   .nav-group,.nav-link,.sub-link{position:relative;border-bottom:0!important}
   .nav-group::after,.nav-link::after,.sub-link::after{display:none!important}
-  .nav-group.sidebar-yellow-alert{background:rgba(250,204,21,.12)!important;border-left:3px solid #facc15!important;padding-left:6px!important;box-shadow:inset 0 0 0 1px rgba(250,204,21,.10)!important}
-  .nav-group.sidebar-yellow-alert .nav-label{color:#fff!important}
-  .nav-group.sidebar-yellow-alert .nav-count{background:#facc15!important;color:#01112f!important;box-shadow:0 0 0 3px rgba(250,204,21,.18)!important}
   .nav-group:hover{background:#18181b!important;color:#facc15!important}
   .nav-group:hover *{color:#facc15!important}
   .nav-group .arrow{font-size:10px!important;transition:transform .2s ease;color:#71717a!important}
@@ -2491,9 +2488,8 @@ function confirmFacture(){
 function navDemandesPersonnelClass(item){
   return item&&item.route==="demandes_personnel/dashboard"&&Number(item.count||0)>0?"dp-reception-blink":"";
 }
-function sidebarGroupAlertClass(totalCount){return Number(totalCount||0)>0?"sidebar-yellow-alert":""}
 function navDemandesPersonnelGroupClass(label,totalCount){
-  return sidebarGroupAlertClass(totalCount);
+  return "";
 }
 function navDemandesPersonnelLabel(item){
   const label=escapeHTML(item&&item.label||"");
@@ -2630,7 +2626,7 @@ function renderSidebar(){
         const groupBadge=totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
         const headerClick=g.route?`navigate('${g.route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
         const arrowClick=`event.stopPropagation();toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
-        const header=`<div class="nav-group ${isCol?"collapsed":""} ${sidebarGroupAlertClass(totalCount)}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
         if(isCol)return header;
         return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${escapeHTML(c.label)}</span>${badge}</div>`}).join("");
       }).join("");
