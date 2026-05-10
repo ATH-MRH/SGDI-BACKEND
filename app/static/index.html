@@ -1724,7 +1724,7 @@ function uiFocusFirstInvalid(root){
 }
 function commandRoutes(){
   const base=[
-    ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Candidats en reserve","reserve"],["Candidats archives","candidats_archives"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["Sites actifs","sites/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/quotidien"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
+    ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Ajouter candidats","reserve"],["Candidats archives","candidats_archives"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["Sites actifs","sites/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/quotidien"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
   ];
   if(isAdmin())base.push(["Administration systeme","admin/dashboard"],["Utilisateurs","admin/users"]);
   return base.filter(([_,r])=>canAccess(r.split("/")[0])||r.startsWith(session?.transverse||""));
@@ -2641,7 +2641,7 @@ function renderSidebar(){
       const drhGroups=[
         {type:"link",label:"TABLEAU DE BORD DRH",icon:"📊",route:"drh/dashboard"},
         {type:"group",label:"RECRUTEMENT",children:[
-          {label:"Candidats en réserve",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
+          {label:"Ajouter candidats",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
           {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
         ]},
         structureDemandSidebarGroup(),
@@ -2708,7 +2708,7 @@ function renderSidebar(){
     {type:"link",label:"Portail personnel",icon:"📱",route:"portail"},
     {type:"link",label:"Dossier administratif",icon:"📁",route:"dossiers"},
     {type:"group",label:"RECRUTEMENT",children:[
-      {label:"Candidats en réserve",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
+      {label:"Ajouter candidats",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
       {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
     ]},
     {type:"group",label:"DEMANDES PERSONNEL",children:[
