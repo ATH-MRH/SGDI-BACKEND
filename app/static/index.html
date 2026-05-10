@@ -1265,6 +1265,12 @@ async function persistCandidateToPostgres(c,options){
   const saved=backendId?await SGDI.rh.updateCandidate(backendId,payload):await SGDI.rh.createCandidate(payload);
   const mapped=candidateFromApi(saved);
   Object.assign(c,mapped,{id:c.id||mapped.id,backendId:saved.id});
+  if(db){
+    if(!Array.isArray(db.candidats))db.candidats=[];
+    if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||""))){
+      db.candidats.push(c);
+    }
+  }
   return c;
 }
 async function deleteCandidateFromPostgres(c){
@@ -3750,13 +3756,35 @@ function candidateDedupeKey(c){
   return "";
 }
 function candidateCompletenessScore(c){return ["nin","telephone","phone","dateNaissance","posteSouhaite","desired_position","avisDecision","avisCommentaire","source"].reduce((n,k)=>n+(String(c&&c[k]||"").trim()?1:0),0)+(c&&c.backendId?2:0)}
+function stashCandidatForRoute(c){
+  if(!c||!c.id)return;
+  try{sessionStorage.setItem("pendingCandidat:"+String(c.id),JSON.stringify(c))}catch(e){}
+}
+function restorePendingCandidat(id){
+  const raw=String(id||"");
+  if(!raw)return null;
+  let item=null;
+  try{item=JSON.parse(sessionStorage.getItem("pendingCandidat:"+raw)||"null")}catch(e){item=null}
+  if(!item&&isTempCandidateId(raw)&&candidatTempRealIds[raw]){
+    try{item=JSON.parse(sessionStorage.getItem("pendingCandidat:"+String(candidatTempRealIds[raw]))||"null")}catch(e){item=null}
+  }
+  if(!item||!candidateHasMinimumData(item))return null;
+  if(!db.candidats)db.candidats=[];
+  const existing=db.candidats.find(c=>String(c.id)===String(item.id)||String(c.backendId||"")===String(item.backendId||""));
+  if(existing){Object.assign(existing,item);return existing}
+  db.candidats.push(item);
+  return item;
+}
 function findCandidatById(id){
   const raw=String(id||"");
-  if(!raw||!db||!Array.isArray(db.candidats))return null;
+  if(!raw)return null;
+  if(!db)db={};
+  if(!Array.isArray(db.candidats))db.candidats=[];
   const mapped=isTempCandidateId(raw)?candidatTempRealIds[raw]:"";
   return db.candidats.find(c=>String(c.id)===raw)
     ||(mapped?db.candidats.find(c=>String(c.id)===String(mapped)):null)
     ||db.candidats.find(c=>String(c.backendId)===raw)
+    ||restorePendingCandidat(raw)
     ||null;
 }
 function cleanupDuplicateCandidates(deleteRemote){
@@ -4070,6 +4098,7 @@ async function saveCandidat(id,showToast){
   if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
   try{
     await persistCandidateToPostgres(c,{allowCreate:creating});
+    stashCandidatForRoute(c);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
   }catch(e){
     toast("Candidat non enregistré dans PostgreSQL : "+(e.message||e),"error");
@@ -4238,6 +4267,7 @@ async function validateCandidatSectionAction(id,key){
   if(next)sessionStorage.setItem("candidatFocusSection",next.key);
   try{
     await persistCandidateToPostgres(c,{allowCreate:creating});
+    stashCandidatForRoute(c);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
     if((location.hash||"").endsWith("/nouveau"))navigate("recrutement/"+c.id);else renderView();
