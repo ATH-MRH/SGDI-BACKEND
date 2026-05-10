@@ -3862,7 +3862,7 @@ function toggleServiceMilitaireFields(value){
 function collectCandidatFormData(){
   const f=document.getElementById("candidat-form");if(!f)return null;
   const existingId=f.querySelector('[name="id"]')?.value||"";
-  const existing=(db.candidats||[]).find(x=>x.id===existingId)||{};
+  const existing=findCandidatById(existingId)||{};
   const fd=new FormData(f);const data={...existing};
   fd.forEach((v,k)=>{if(k==="photo"){data.photo=v||null}else if(k.startsWith("hab_")||k.startsWith("lang_")||k.startsWith("doc_")||k.startsWith("exp_")||k.startsWith("verif")||k.startsWith("cv_")){}else{data[k]=v}});
   data.societe=data.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
@@ -4086,8 +4086,13 @@ async function validateCandidatSectionAction(id,key){
   markRequiredFields(document.getElementById("candidat-form"));
   const data=collectCandidatFormData();if(!data){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   const creating=!c;
-  const validationTarget=c||{id:realId,statut:"nouvelle",createdAt:today(),sectionValidations:{}};
-  if(!candidatPreviousSectionsValid(validationTarget,key)){toast("Validez d'abord la section précédente","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
+  const validationTarget=c||findCandidatById(data.id)||{id:realId,statut:"nouvelle",createdAt:today(),sectionValidations:{}};
+  if(data.sectionValidations&&!validationTarget.sectionValidations)validationTarget.sectionValidations=data.sectionValidations;
+  if(!candidatPreviousSectionsValid(validationTarget,key)){
+    const missing=CANDIDAT_SECTIONS.slice(0,candidatSectionIndex(key)).filter(s=>!candidatSectionIsValidated(validationTarget,s.key)).map(s=>s.label).join(", ");
+    toast("Validez d'abord la section précédente"+(missing?" : "+missing:""),"error");
+    candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return
+  }
   if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!validateCandidatSection(key,data)){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
