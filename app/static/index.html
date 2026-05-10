@@ -2010,7 +2010,7 @@ function confirmPickSocieteFilter(s,p){setCurrentStructureSocieteFilter(s);toast
 function changeSociete(){if(!confirm("Changer de société ?"))return;session.societe=null;session.transverse=null;saveSession(session);try{sessionStorage.removeItem("dashSociete");sessionStorage.removeItem("fpSociete");sessionStorage.removeItem("mtSociete")}catch(e){}location.hash="#/select-societe";route()}
 function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}}if(["facturation","commercial","drh","materiel","ops","pointage"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
 function enterTransverseModuleDirect(mod){session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage/saisie":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
-function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(session?.transverse==="drh"&&mod!=="drh"){toast("Accès aux autres structures bloqué depuis DRH","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
+function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
 function enterSocieteStructureDirect(mod){session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
 function exitTransverseModule(){session.transverse=null;saveSession(session);try{sessionStorage.removeItem("ficheContext")}catch(e){}location.hash=session?.societe?"#/dashboard":"#/select-societe";route()}
 
@@ -2022,11 +2022,10 @@ function structureTopbarItems(){
     {key:"facturation",icon:"💼",label:"Finances",roles:["rh","admin"]},
     {key:"commercial",icon:"🤝",label:"Commercial",roles:["rh","admin"]}
   ];
-  const baseItems=session?.transverse==="drh"?items.filter(i=>i.key==="drh"):items;
   const allowed=currentAllowedStructures();
-  if(allowed.length)return baseItems.filter(i=>allowed.includes(i.key));
+  if(allowed.length)return items.filter(i=>allowed.includes(i.key));
   const role=adminAccessBaseRole(session?.role||"agent");
-  return baseItems.filter(i=>i.roles.includes(role));
+  return items.filter(i=>i.roles.includes(role));
 }
 function topbarStructureTabsHTML(){
   if(!session)return"";
