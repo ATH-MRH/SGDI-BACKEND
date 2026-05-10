@@ -2649,43 +2649,23 @@ function renderSidebar(){
       const _ca=(db.candidats||[]).filter(c=>!drhSoc||c.societe===drhSoc);
       const _co=(db.conges||[]).filter(c=>!drhSoc||_ag.some(a=>a.id===c.agentId));
       const drhGroups=[
-        {type:"link",label:"TABLEAU DE BORD DRH",icon:"📊",route:"drh/dashboard"},
         {type:"link",label:"RECRUTEMENT",icon:"👥",route:"recrutement"},
-        {type:"group",label:"DEMANDES PERSONNEL",children:[
-          {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-          {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:drhDemandesPersonnelList().filter(d=>demandePersonnelIsAlert(d)).length},
-          {label:"Portail mobile",icon:"📱",route:"portail"}
-        ]},
-        {type:"group",label:"CONTRAT",children:[
-          {label:"Nouveau contrat",icon:"➕",route:"contrats/a_contractualiser"},
-          {label:"Avenant",icon:"✎",route:"contrats/avenants",count:(db.avenants||[]).filter(av=>{const a=(db.agents||[]).find(x=>x.id===av.agentId);return !drhSoc||a?.societe===drhSoc}).length},
-          {label:"Situation contrat",icon:"📑",route:"contrats/situation"}
-        ]},
+        {type:"link",label:"DEMANDE PERSONNEL",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+        {type:"link",label:"CONTRATS",icon:"📑",route:"contrats/dashboard"},
         {type:"link",label:"FICHE DE POSITION",icon:"🪪",route:"fiches"},
-        {type:"link",label:"BADGE",icon:"🏷",route:"fiches/badge"},
         {type:"link",label:"EFFECTIFS",icon:"👮",route:"effectif/recap"},
-        {type:"group",label:"MAIN COURANTE",route:"incidents",children:[
-          {label:"Évènements autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
-        ]},
-        {type:"group",label:"CONGÉS",children:[{label:"Situation des congés",icon:"🗓",route:"conges"}]},
+        {type:"link",label:"MAIN COURANTE",icon:"📌",route:"incidents/dashboard",count:(db.incidents||[]).filter(i=>i.statut!=="clos").length},
+        {type:"link",label:"CONGÉS",icon:"🗓",route:"conges"},
         {type:"link",label:"PAIE",icon:"💶",route:"paie"},
-        {type:"group",label:"📈 STATISTIQUES RH",children:[
-          {label:"Vue d'ensemble",icon:"📊",route:"drh/stats"},
-          {label:"Par société",icon:"🏢",route:"drh/stats_societe"},
-          {label:"Par thème",icon:"🎯",route:"drh/stats_theme"},
-          {label:"Par fonction",icon:"🪪",route:"drh/stats_fonction"},
-          {label:"Par catégorie",icon:"🏷",route:"drh/stats_categorie"},
-          {label:"Par salaire",icon:"💶",route:"drh/stats_salaire"},
-          {label:"Par affectation",icon:"📍",route:"drh/stats_affectation"}
-        ]}
+        {type:"link",label:"STATISTIQUES RH",icon:"📈",route:"drh/stats"}
       ];
       const head="";
       const openGroup=sidebarOpenGroup();
-      const drhOrangeTitles=new Set(["RECRUTEMENT","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
+      const drhOrangeTitles=new Set([]);
       const html=drhGroups.map(g=>{
         const isOrange=drhOrangeTitles.has(g.label);
         const titleStyle=isOrange?`style="color:#043970;font-size:13px;font-weight:900"`:"";
-        if(g.type==="link"){const a=path===g.route?"active":"";return`<div class="nav-link ${a}" ${titleStyle} onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span><span class="nav-label">${g.label}</span></div>`}
+        if(g.type==="link"){const a=sidebarRouteActive(path,g.route)||((g.route==="contrats/dashboard")&&path.startsWith("contrats/"))||((g.route==="demandes_personnel/dashboard")&&path.startsWith("demandes_personnel/"))||((g.route==="incidents/dashboard")&&path.startsWith("incidents/"))?"active":"";const badge=typeof g.count==="number"&&g.count>0?`<span class="nav-count">${g.count}</span>`:"";return`<div class="nav-link ${a}" ${titleStyle} onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span><span class="nav-label">${g.label}</span>${badge}</div>`}
         const key=g.label;const hasActive=g.children.some(c=>path===c.route||path.startsWith(c.route+"/"));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
@@ -3295,12 +3275,13 @@ function renderView(){
       case"reserve":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"reserve");break;
       case"candidats_archives":if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"archive");break;
       case"contrats":
-        if(sub==="a_contractualiser"&&!arg)renderContrats(view,"a_contractualiser");
+        if(sub==="dashboard")renderContratsDashboard(view);
+        else if(sub==="a_contractualiser"&&!arg)renderContrats(view,"a_contractualiser");
         else if(sub==="avenants")renderAvenants(view);
         else if(sub==="situation"||sub==="clients")renderContrats(view,"situation");
         else if(sub==="nouveau"&&arg)renderContractualisation(view,arg);
         else if(sub)renderContractualisation(view,sub);
-        else renderContrats(view,"situation");
+        else renderContratsDashboard(view);
         break;
       case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else renderEffectif(view,sub||"actifs");break;
       case"agents":if(sub)renderAgentForm(view,sub);else renderEffectif(view,"actifs");break;
@@ -4456,6 +4437,32 @@ function avenantHTML(av){
 }
 function previewAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;openModal(`<div style="max-height:82vh;overflow:auto;background:#fff">${avenantHTML(av)}</div><div class="flex justify-end gap-2 mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary" onclick="printAvenant('${id}')">Imprimer</button></div>`)}
 function printAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;const w=window.open("","_blank","width=900,height=700");w.document.write(`<html><head><title>${escapeHTML(av.numero||"Avenant")}</title></head><body>${avenantHTML(av)}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close()}
+
+function renderContratsDashboard(view){
+  const socFilter=currentStructureSocieteFilter();
+  const agents=(db.agents||[]).filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
+  const candidates=(db.candidats||[]).filter(c=>!socFilter||c.societe===socFilter);
+  const toContract=candidates.filter(c=>c.statut==="a_contractualiser");
+  const avenants=(db.avenants||[]).filter(av=>{const a=(db.agents||[]).find(x=>x.id===av.agentId);return !socFilter||a?.societe===socFilter});
+  const signedAvenants=avenants.filter(a=>a.statut==="signe");
+  const today_=today();
+  const cddSoon=agents.filter(a=>a.typeContrat==="CDD"&&a.dateFinContrat&&daysBetween(today_,a.dateFinContrat)>=0&&daysBetween(today_,a.dateFinContrat)<=60);
+  const trialSoon=agents.filter(a=>a.dateFinEssai&&daysBetween(today_,a.dateFinEssai)>=0&&daysBetween(today_,a.dateFinEssai)<=30);
+  const mass=agents.reduce((sum,a)=>sum+(parseFloat(a.salaireNet)||0),0);
+  const card=(label,value,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(label)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div><div class="text-3xl">${icon}</div></div></button>`;
+  const quick=(label,route,icon)=>`<button type="button" class="btn btn-secondary justify-start" onclick="navigate('${route}')">${icon} ${escapeHTML(label)}</button>`;
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRATS</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn btn-primary" onclick="openCreateContratDirectModal()">➕ Créer contrat</button></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+      ${card("Nouveau contrat",toContract.length,"Candidats à contractualiser","contrats/a_contractualiser","#043970","➕")}
+      ${card("Avenants",avenants.length,`${signedAvenants.length} signé(s)`,"contrats/avenants","#7c3aed","✎")}
+      ${card("Situation contrat",agents.length,"Agents avec contrat","contrats/situation","#0369a1","📑")}
+      ${card("Alertes",cddSoon.length+trialSoon.length,`${cddSoon.length} CDD · ${trialSoon.length} essai`,"contrats/situation","#dc2626","🔔")}
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div class="card p-4"><h3 class="font-black mb-3">Accès rapides</h3><div class="grid gap-2">${quick("Nouveau contrat","contrats/a_contractualiser","➕")}${quick("Avenant","contrats/avenants","✎")}${quick("Situation contrat","contrats/situation","📑")}</div></div>
+      <div class="card p-4"><h3 class="font-black mb-3">Synthèse financière</h3><div class="grid grid-cols-2 gap-3"><div class="p-3 rounded bg-slate-50"><div class="text-xs text-slate-500 uppercase">Masse salariale nette</div><div class="text-2xl font-black text-slate-800">${money(mass)}</div></div><div class="p-3 rounded bg-slate-50"><div class="text-xs text-slate-500 uppercase">Salaire moyen</div><div class="text-2xl font-black text-slate-800">${agents.length?money(mass/agents.length):money(0)}</div></div></div></div>
+    </div>`;
+}
 
 function renderContrats(view,mode){
   const socFilter=currentStructureSocieteFilter();
