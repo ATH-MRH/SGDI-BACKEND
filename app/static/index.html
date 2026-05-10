@@ -1595,24 +1595,13 @@ function jsString(s){return String(s??"").replace(/\\/g,"\\\\").replace(/'/g,"\\
 function safe(s){return s===null||s===undefined||s===""?"—":escapeHTML(s)}
 let feedRecording=false;
 function recordOperationFeed(message,subject){
-  if(feedRecording||!db||!session||!message)return;
-  const clean=stripCryptogramText(String(message)).trim();
-  if(!clean||/Publication ajoutée au fil/i.test(clean))return;
-  feedRecording=true;
-  try{
-    if(!db.echanges)db.echanges=[];
-    const last=db.echanges[db.echanges.length-1];
-    const now=new Date().toISOString();
-    if(!last||last.from!==session.username||last.sujet!==(subject||"Opération effectuée")||last.message!==clean){
-      db.echanges.push({id:uid("ech"),date:now,from:session.username,to:"all",sujet:subject||"Opération effectuée",message:clean,obligation:"Prendre connaissance de l'événement et assurer le suivi nécessaire.",droit:"Droit de consulter, commenter et demander clarification selon le niveau d'accès.",conduite:"Analyser l'événement, vérifier les pièces ou données concernées, puis clôturer l'action si tout est conforme.",luPar:[session.username],auto:true,type:"evenement"});
-      if(db.echanges.length>500)db.echanges=db.echanges.slice(-500);
-    }
-  }finally{feedRecording=false}
+  // Les opérations système ne sont plus publiées dans la boîte de dialogue.
+  return;
 }
 function closeMessageToast(){const h=document.getElementById("toast-host");if(h)h.innerHTML=""}
 function toast(msg,type="info"){
   const clean=stripCryptogramText(msg);
-  if(type==="success")recordOperationFeed(clean,"Opération effectuée");
+  // Les notifications ne créent plus de messages dans la boîte de dialogue.
   const h=document.getElementById("toast-host");
   if(!h)return;
   const safeType=["success","error","info","warning"].includes(type)?type:"info";
@@ -2877,7 +2866,7 @@ function dialogueToggle(open){
 function dialogueIncomingUnreadItems(){
   if(!session)return[];
   const u=session.username;
-  return (db.echanges||[]).filter(m=>m.from!==u&&(m.to===u||m.to==="all"||isAdmin())&&(!m.luPar||!m.luPar.includes(u)));
+  return (db.echanges||[]).filter(m=>m.type==="message"&&m.to!=="all"&&m.from!==u&&(m.to===u||isAdmin())&&(!m.luPar||!m.luPar.includes(u)));
 }
 function dialoguePlaySound(){
   try{
@@ -2935,40 +2924,32 @@ function dialogueFileChanged(input){
 }
 function dialogueMessageStatus(m){
   if(!session||!m||m.from!==session.username)return"";
-  if(m.to==="all"){
-    const readers=(m.luPar||[]).filter(x=>x!==session.username).length;
-    const receivers=(m.receivedBy||[]).filter(x=>x!==session.username).length;
-    if(readers)return '<div class="chat-status read">✓✓ Lu par '+readers+'</div>';
-    if(receivers)return '<div class="chat-status received">✓✓ Reçu par '+receivers+'</div>';
-    return '<div class="chat-status sent">✓ Envoyé</div>';
-  }
   if((m.luPar||[]).includes(m.to))return '<div class="chat-status read">✓✓ Lu</div>';
   if((m.receivedBy||[]).includes(m.to))return '<div class="chat-status received">✓✓ Reçu</div>';
   return '<div class="chat-status sent">✓ Envoyé</div>';
 }
 function dialogueVisibleItems(){
   const all=(db.echanges||[]).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
-  if(isAdmin())return all;
+  const messages=all.filter(m=>m.type==="message"&&m.to!=="all");
+  if(isAdmin())return messages;
   const u=session?session.username:"";
-  return all.filter(m=>m.from===u||m.to===u||m.to==="all");
+  return messages.filter(m=>m.from===u||m.to===u);
 }
 function dialoguePeerKey(m){
   if(!session||!m)return"admin";
   const u=session.username;
-  if(m.to==="all")return"all";
   return m.from===u?(m.to||"admin"):(m.from||"admin");
 }
 function dialogueSelectedPeer(){
   const saved=sessionStorage.getItem("dialoguePeer")||"";
   const peers=dialogueConversationUsers();
   if(saved&&peers.some(p=>p.key===saved))return saved;
-  return peers[0]?.key||"all";
+  return peers[0]?.key||"";
 }
-function dialogueSetPeer(peer){sessionStorage.setItem("dialoguePeer",peer||"all");dialogueMarkRead(peer);dialogueCheckNewMessages();render()}
+function dialogueSetPeer(peer){sessionStorage.setItem("dialoguePeer",peer||"");dialogueMarkRead(peer);dialogueCheckNewMessages();render()}
 function dialogueConversationUsers(){
   const users=(db.users||[]).filter(u=>u.username!==session?.username);
   const map=new Map();
-  map.set("all",{key:"all",label:"Général",sub:"Tous les utilisateurs",unread:0});
   users.forEach(u=>map.set(u.username,{key:u.username,label:u.nom||u.username,sub:(u.role||"").toUpperCase(),unread:0}));
   dialogueVisibleItems().forEach(m=>{
     const key=dialoguePeerKey(m);
@@ -2980,8 +2961,8 @@ function dialogueConversationUsers(){
 function dialogueThreadItems(peer){
   const u=session?.username||"";
   return dialogueVisibleItems().filter(m=>{
-    if(peer==="all")return m.to==="all";
-    return (m.from===u&&m.to===peer)||(m.from===peer&&m.to===u)||(isAdmin()&&(m.from===peer||m.to===peer)&&m.to!=="all");
+    if(!peer)return false;
+    return (m.from===u&&m.to===peer)||(m.from===peer&&m.to===u)||(isAdmin()&&(m.from===peer||m.to===peer));
   }).sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 function dialogueMarkRead(peer){
@@ -2996,7 +2977,7 @@ function dialogueMarkRead(peer){
 function dialogueUsersOptions(selected){
   const users=(db.users||[]).filter(u=>u.username!==session.username);
   const opts=users.map(u=>'<option value="'+escapeHTML(u.username)+'" '+(selected===u.username?'selected':'')+'>'+escapeHTML(u.nom||u.username)+' · '+escapeHTML(u.role||'')+'</option>').join('');
-  return '<select class="select" name="to"><option value="all" '+(selected==='all'?'selected':'')+'>Général</option>'+opts+'</select>';
+  return '<select class="select" name="to">'+opts+'</select>';
 }
 function importanceBadge(v,extraClass){
   const imp=v||"Normal";
@@ -3012,7 +2993,7 @@ function dialogueBoxHTML(){
   const selected=dialogueSelectedPeer();
   if(open)dialogueMarkRead(selected);
   const peers=dialogueConversationUsers();
-  const peer=peers.find(p=>p.key===selected)||peers[0]||{key:"all",label:"Général",sub:"Tous"};
+  const peer=peers.find(p=>p.key===selected)||peers[0]||{key:"",label:"Aucun utilisateur",sub:""};
   const unread=dialogueIncomingUnreadItems().length;
   const usersHTML=peers.map(p=>'<button class="dialogue-user '+(p.key===selected?'active ':'')+(p.unread?'has-unread':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
   return '<div class="dialogue-modal-backdrop no-print '+(open?'':'closed')+'" onclick="if(event.target===this)dialogueToggle(false)">'+
@@ -3035,6 +3016,7 @@ function feedRowsHTML(peer){
 }
 function dialogueComposerHTML(peer){
   const selected=peer||dialogueSelectedPeer();
+  if(!selected)return '<div class="dialogue-form text-xs text-slate-500">Aucun destinataire disponible.</div>';
   return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)"><input type="hidden" name="to" value="'+escapeHTML(selected)+'"/><input type="file" name="attachment" class="hidden" onchange="dialogueFileChanged(this)"/><div style="grid-column:1/3"><button type="button" class="dialogue-attach" title="Ajouter pièce jointe" onclick="this.form.attachment.click()"><span aria-hidden="true">📎</span><span>Ajouter pièce jointe</span></button></div><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button><div class="dialogue-file-name" data-dialogue-file-name>Aucune pièce jointe</div></form>';
 }
 function refreshRealtimeFeed(){
@@ -3049,7 +3031,8 @@ function refreshRealtimeFeed(){
 async function dialogueSend(form){
   const fd=new FormData(form);
   const msg=(fd.get("message")||"").toString().trim();
-  const to=(fd.get("to")||dialogueSelectedPeer()||"admin").toString();
+  const to=(fd.get("to")||dialogueSelectedPeer()||"").toString();
+  if(!to||to==="all"){toast("Choisissez un utilisateur destinataire","error");return}
   const attachmentFile=form.attachment&&form.attachment.files?form.attachment.files[0]:null;
   let attachment=null;
   try{attachment=await dialogueReadAttachment(attachmentFile)}catch(e){toast(e.message||String(e),"error");return}
