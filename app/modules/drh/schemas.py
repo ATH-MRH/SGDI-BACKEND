@@ -196,3 +196,92 @@ class DocumentOut(DocumentCreate):
 
     model_config = {"from_attributes": True}
 
+
+
+class ContractTemplateOut(BaseModel):
+    id: int
+    code: str
+    title: str
+    contract_type: str
+    position: str | None = None
+    function: str | None = None
+    description: str | None = None
+    file_name: str
+    mime_type: str
+    placeholders: dict[str, Any] | None = None
+    active: int = 1
+    uploaded_by: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ContractConditionalClauseBase(BaseModel):
+    template_id: int | None = None
+    title: str
+    condition_field: str = "function"
+    condition_operator: str = "equals"
+    condition_value: str
+    placeholder: str = "CLAUSES_CONDITIONNELLES"
+    content: str
+    active: int = 1
+
+
+class ContractConditionalClauseCreate(ContractConditionalClauseBase):
+    pass
+
+
+class ContractConditionalClauseUpdate(BaseModel):
+    template_id: int | None = None
+    title: str | None = None
+    condition_field: str | None = None
+    condition_operator: str | None = None
+    condition_value: str | None = None
+    placeholder: str | None = None
+    content: str | None = None
+    active: int | None = None
+
+
+class ContractConditionalClauseOut(ContractConditionalClauseBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class GenerateContractRequest(BaseModel):
+    employee_id: int
+    template_id: int | None = None
+    contract_type: str | None = None
+    position: str | None = None
+    function: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    salary_net: float | None = None
+    values: dict[str, Any] | None = None
+    output_format: str = "docx"
+
+
+class GeneratedContractOut(BaseModel):
+    id: int
+    employee_id: int
+    template_id: int | None = None
+    contract_id: int | None = None
+    reference: str
+    title: str
+    contract_type: str
+    position: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    output_format: str
+    file_name: str
+    mime_type: str
+    values: dict[str, Any] | None = None
+    generated_by: str | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

@@ -1,11 +1,16 @@
-from datetime import datetime
+from datetime import date, datetime
+from io import BytesIO
+from pathlib import Path
+import re
+import subprocess
+import tempfile
 from typing import Any, Type
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.modules.drh.models import Candidate, Contract, Document, Employee, Leave, Sanction
+from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 
 
 def list_rows(db: Session, model: Type, filters: dict[str, Any] | None = None):
@@ -174,3 +179,247 @@ def fiche_position(db: Session, employee_id: int):
         "equipment": equipment,
     }
 
+
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PDF_MIME = "application/pdf"
+PLACEHOLDER_RE = re.compile(r"{{\s*([A-Z0-9_]+)\s*}}")
+
+
+def extract_docx_placeholders(content: bytes) -> list[str]:
+    try:
+        from docx import Document as WordDocument
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="Dépendance python-docx manquante") from exc
+    try:
+        doc = WordDocument(BytesIO(content))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Modèle Word .docx invalide") from exc
+    text_parts: list[str] = []
+    text_parts.extend(p.text or "" for p in doc.paragraphs)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                text_parts.extend(p.text or "" for p in cell.paragraphs)
+    found = sorted({m.group(1).upper() for m in PLACEHOLDER_RE.finditer("\n".join(text_parts))})
+    return found
+
+
+def _date_str(value: Any) -> str:
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%d/%m/%Y")
+    return str(value or "")
+
+
+def contract_values(employee: Employee, request: Any | None = None) -> dict[str, str]:
+    extra = employee.extra if isinstance(employee.extra, dict) else {}
+    request_values = getattr(request, "values", None) if request is not None else None
+    request_values = request_values if isinstance(request_values, dict) else {}
+    start = getattr(request, "start_date", None) if request is not None else None
+    end = getattr(request, "end_date", None) if request is not None else None
+    salary = getattr(request, "salary_net", None) if request is not None else None
+    position = getattr(request, "position", None) if request is not None else None
+    function = getattr(request, "function", None) if request is not None else None
+    values: dict[str, Any] = {
+        "CODE": employee.code,
+        "MATRICULE": employee.code,
+        "NOM": employee.last_name,
+        "PRENOM": employee.first_name,
+        "NOM_PRENOM": f"{employee.last_name or ''} {employee.first_name or ''}".strip(),
+        "ADRESSE": employee.address,
+        "COMMUNE": employee.commune,
+        "WILAYA": employee.wilaya,
+        "NIN": employee.nin,
+        "DATE_NAISSANCE": _date_str(employee.birth_date),
+        "LIEU_NAISSANCE": employee.birth_place,
+        "TELEPHONE": employee.phone,
+        "EMAIL": employee.email,
+        "POSTE": position or employee.position,
+        "FONCTION": function or extra.get("fonction") or employee.position,
+        "SOCIETE": employee.society,
+        "TYPE_CONTRAT": getattr(request, "contract_type", None) if request is not None else employee.contract_type,
+        "DATE_DEBUT": _date_str(start or employee.recruit_date),
+        "DATE_FIN": _date_str(end or employee.contract_end_date),
+        "DATE_RECRUTEMENT": _date_str(employee.recruit_date),
+        "DATE_FIN_ESSAI": _date_str(employee.trial_end_date),
+        "SALAIRE": salary if salary is not None else employee.salary_net,
+        "SALAIRE_NET": salary if salary is not None else employee.salary_net,
+        "CLAUSES_CONDITIONNELLES": "",
+    }
+    for key, value in extra.items():
+        values.setdefault(str(key).upper(), value)
+    for key, value in request_values.items():
+        values[str(key).upper()] = value
+    return {k: _date_str(v) for k, v in values.items()}
+
+
+def _clause_matches(clause: ContractConditionalClause, values: dict[str, str]) -> bool:
+    actual = values.get(str(clause.condition_field or "").upper(), "")
+    expected = str(clause.condition_value or "")
+    op = str(clause.condition_operator or "equals").lower()
+    a = actual.lower().strip()
+    e = expected.lower().strip()
+    if op in {"equals", "=", "=="}:
+        return a == e
+    if op in {"contains", "contient"}:
+        return e in a
+    if op in {"not_equals", "!=", "different"}:
+        return a != e
+    return a == e
+
+
+def matching_clauses(db: Session, template_id: int | None, values: dict[str, str]) -> dict[str, str]:
+    stmt = select(ContractConditionalClause).where(ContractConditionalClause.active == 1)
+    if template_id is not None:
+        stmt = stmt.where(or_(ContractConditionalClause.template_id == template_id, ContractConditionalClause.template_id.is_(None)))
+    clauses = db.execute(stmt.order_by(ContractConditionalClause.id)).scalars().all()
+    grouped: dict[str, list[str]] = {}
+    for clause in clauses:
+        if _clause_matches(clause, values):
+            key = str(clause.placeholder or "CLAUSES_CONDITIONNELLES").upper()
+            grouped.setdefault(key, []).append(clause.content)
+    return {key: "\n\n".join(parts) for key, parts in grouped.items()}
+
+
+def find_contract_template(db: Session, request: Any, employee: Employee) -> ContractTemplate:
+    if request.template_id:
+        row = db.get(ContractTemplate, request.template_id)
+        if not row or row.active != 1:
+            raise HTTPException(status_code=404, detail="Modèle de contrat introuvable ou inactif")
+        return row
+    contract_type = request.contract_type or employee.contract_type or "CDI"
+    position = request.position or employee.position or ""
+    function = request.function or (employee.extra or {}).get("fonction") or position
+    stmt = select(ContractTemplate).where(ContractTemplate.active == 1, ContractTemplate.contract_type == contract_type)
+    candidates = db.execute(stmt.order_by(ContractTemplate.id.desc())).scalars().all()
+    if not candidates:
+        raise HTTPException(status_code=404, detail="Aucun modèle actif pour ce type de contrat")
+    def score(t: ContractTemplate) -> int:
+        points = 0
+        if t.position and position and t.position.lower() == position.lower():
+            points += 4
+        if t.function and function and t.function.lower() == str(function).lower():
+            points += 4
+        if not t.position and not t.function:
+            points += 1
+        return points
+    return sorted(candidates, key=score, reverse=True)[0]
+
+
+def _replace_text_in_paragraph(paragraph, values: dict[str, str]) -> None:
+    full_text = "".join(run.text for run in paragraph.runs)
+    if "{{" not in full_text:
+        return
+    replaced = PLACEHOLDER_RE.sub(lambda m: values.get(m.group(1).upper(), ""), full_text)
+    if paragraph.runs:
+        paragraph.runs[0].text = replaced
+        for run in paragraph.runs[1:]:
+            run.text = ""
+
+
+def render_docx(template: ContractTemplate, values: dict[str, str]) -> bytes:
+    try:
+        from docx import Document as WordDocument
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="Dépendance python-docx manquante") from exc
+    doc = WordDocument(BytesIO(template.docx_content))
+    for paragraph in doc.paragraphs:
+        _replace_text_in_paragraph(paragraph, values)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    _replace_text_in_paragraph(paragraph, values)
+    out = BytesIO()
+    doc.save(out)
+    return out.getvalue()
+
+
+def convert_docx_to_pdf(docx_bytes: bytes) -> bytes:
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        source = tmp_path / "contrat.docx"
+        source.write_bytes(docx_bytes)
+        try:
+            subprocess.run(
+                ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(tmp_path), str(source)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=501, detail="Conversion PDF indisponible: LibreOffice/soffice non installé sur le serveur") from exc
+        except subprocess.SubprocessError as exc:
+            raise HTTPException(status_code=500, detail="Conversion PDF échouée") from exc
+        pdf = tmp_path / "contrat.pdf"
+        if not pdf.exists():
+            raise HTTPException(status_code=500, detail="PDF non généré")
+        return pdf.read_bytes()
+
+
+def generate_contract(db: Session, request: Any, user: Any | None = None) -> GeneratedContract:
+    employee = get_or_404(db, Employee, request.employee_id)
+    template = find_contract_template(db, request, employee)
+    values = contract_values(employee, request)
+    values.update(matching_clauses(db, template.id, values))
+    docx_bytes = render_docx(template, values)
+    output_format = (request.output_format or "docx").lower()
+    if output_format == "pdf":
+        file_content = convert_docx_to_pdf(docx_bytes)
+        mime_type = PDF_MIME
+        ext = "pdf"
+    else:
+        output_format = "docx"
+        file_content = docx_bytes
+        mime_type = DOCX_MIME
+        ext = "docx"
+    now = datetime.utcnow()
+    reference = f"CTR-{now:%Y%m%d}-{employee.code}-{int(now.timestamp())}"
+    safe_name = f"{reference}-{template.contract_type}-{employee.last_name}-{employee.first_name}".replace(" ", "_")
+    row = GeneratedContract(
+        employee_id=employee.id,
+        template_id=template.id,
+        reference=reference,
+        title=template.title,
+        contract_type=request.contract_type or employee.contract_type or template.contract_type,
+        position=request.position or employee.position,
+        start_date=request.start_date or employee.recruit_date,
+        end_date=request.end_date or employee.contract_end_date,
+        output_format=output_format,
+        file_name=f"{safe_name}.{ext}",
+        mime_type=mime_type,
+        file_content=file_content,
+        values=values,
+        generated_by=getattr(user, "username", None),
+        status="genere",
+    )
+    db.add(row)
+    contract = Contract(
+        employee_id=employee.id,
+        contract_type=row.contract_type,
+        position=row.position,
+        start_date=row.start_date,
+        end_date=row.end_date,
+        trial_end_date=employee.trial_end_date,
+        salary_net=float(values.get("SALAIRE_NET") or employee.salary_net or 0),
+        status="actif",
+        template_code=template.code,
+        content=f"Contrat généré automatiquement: {reference}",
+    )
+    db.add(contract)
+    db.flush()
+    row.contract_id = contract.id
+    document = Document(
+        owner_type="employee",
+        owner_id=employee.id,
+        label=f"Contrat généré - {row.contract_type}",
+        file_name=row.file_name,
+        file_path=f"generated_contract:{reference}",
+        mime_type=row.mime_type,
+        uploaded_by=getattr(user, "username", None),
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(row)
+    return row

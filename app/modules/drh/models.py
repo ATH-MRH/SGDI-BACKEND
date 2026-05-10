@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, JSON, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -67,6 +67,60 @@ class Contract(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(40), default="actif", index=True)
     template_code: Mapped[str | None] = mapped_column(String(80))
     content: Mapped[str | None] = mapped_column(Text)
+
+
+class ContractTemplate(Base, TimestampMixin):
+    __tablename__ = "contract_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    code: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(180), index=True)
+    contract_type: Mapped[str] = mapped_column(String(80), index=True)
+    position: Mapped[str | None] = mapped_column(String(150), index=True)
+    function: Mapped[str | None] = mapped_column(String(150), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    file_name: Mapped[str] = mapped_column(String(255))
+    mime_type: Mapped[str] = mapped_column(String(120), default="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    docx_content: Mapped[bytes] = mapped_column(LargeBinary)
+    placeholders: Mapped[dict | None] = mapped_column(JSON)
+    active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    uploaded_by: Mapped[str | None] = mapped_column(String(120))
+
+
+class ContractConditionalClause(Base, TimestampMixin):
+    __tablename__ = "contract_conditional_clauses"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("contract_templates.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    condition_field: Mapped[str] = mapped_column(String(100), default="function")
+    condition_operator: Mapped[str] = mapped_column(String(40), default="equals")
+    condition_value: Mapped[str] = mapped_column(String(180), index=True)
+    placeholder: Mapped[str] = mapped_column(String(100), default="CLAUSES_CONDITIONNELLES")
+    content: Mapped[str] = mapped_column(Text)
+    active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+
+
+class GeneratedContract(Base, TimestampMixin):
+    __tablename__ = "generated_contracts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
+    template_id: Mapped[int | None] = mapped_column(ForeignKey("contract_templates.id", ondelete="SET NULL"), index=True)
+    contract_id: Mapped[int | None] = mapped_column(ForeignKey("contracts.id", ondelete="SET NULL"), index=True)
+    reference: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    contract_type: Mapped[str] = mapped_column(String(80), index=True)
+    position: Mapped[str | None] = mapped_column(String(150))
+    start_date: Mapped[date | None] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    output_format: Mapped[str] = mapped_column(String(20), default="docx")
+    file_name: Mapped[str] = mapped_column(String(255))
+    mime_type: Mapped[str] = mapped_column(String(120))
+    file_content: Mapped[bytes] = mapped_column(LargeBinary)
+    values: Mapped[dict | None] = mapped_column(JSON)
+    generated_by: Mapped[str | None] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(40), default="genere", index=True)
 
 
 class Leave(Base, TimestampMixin):

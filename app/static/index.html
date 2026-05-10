@@ -822,9 +822,12 @@ function sgdiAuthToken(){return sessionStorage.getItem(SGDI_API_TOKEN_KEY)||""}
 async function sgdiApi(path,options){
   const opts=options||{};
   const legacy=opts.legacy!==false;
-  const body=opts.body&&typeof opts.body!=="string"?JSON.stringify(opts.body):opts.body;
+  const isForm=typeof FormData!=="undefined"&&opts.body instanceof FormData;
+  const body=isForm?opts.body:(opts.body&&typeof opts.body!=="string"?JSON.stringify(opts.body):opts.body);
   const url=sgdiApiUrl(path,legacy);
-  const res=await fetch(url,{cache:"no-store",...opts,body,headers:sgdiAuthHeaders(opts.headers)});
+  const headers=sgdiAuthHeaders(opts.headers);
+  if(isForm)delete headers["content-type"];
+  const res=await fetch(url,{cache:"no-store",...opts,body,headers});
   const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
   if(!res.ok||out.ok===false){
     const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
@@ -833,6 +836,21 @@ async function sgdiApi(path,options){
     throw new Error(message);
   }
   return out.data===undefined?out:out.data;
+}
+async function sgdiDownload(path,filename){
+  const url=sgdiApiUrl(path,false);
+  const res=await fetch(url,{cache:"no-store",headers:sgdiAuthHeaders({})});
+  if(!res.ok){
+    const out=await res.json().catch(()=>({detail:"Téléchargement impossible"}));
+    throw new Error(out.detail||out.error||"Téléchargement impossible");
+  }
+  const blob=await res.blob();
+  const a=document.createElement("a");
+  const objectUrl=URL.createObjectURL(blob);
+  a.href=objectUrl;
+  a.download=filename||"document";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
 }
 function sgdiSetApiRoot(url){window.__SGDI_API_ROOT__=String(url||"").replace(/\/+$/,"");window.__SGDI_BACKEND_ENABLED__=true}
 function sgdiServerOnlyFailure(message){
@@ -1074,7 +1092,16 @@ window.SGDI_API={
     createCandidate:(payload)=>sgdiApi("/drh/candidates",{method:"POST",body:payload,legacy:false}),
     updateCandidate:(id,payload)=>sgdiApi("/drh/candidates/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),
     deleteCandidate:(id)=>sgdiApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
-    leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:()=>sgdiApi("/drh/contracts",{legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false})
+    leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:()=>sgdiApi("/drh/contracts",{legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false}),
+    contractTemplates:()=>sgdiApi("/drh/contract-templates",{legacy:false}),
+    createContractTemplate:(formData)=>sgdiApi("/drh/contract-templates",{method:"POST",body:formData,legacy:false}),
+    updateContractTemplate:(id,formData)=>sgdiApi("/drh/contract-templates/"+encodeURIComponent(id),{method:"PUT",body:formData,legacy:false}),
+    deleteContractTemplate:(id)=>sgdiApi("/drh/contract-templates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
+    contractClauses:()=>sgdiApi("/drh/contract-clauses",{legacy:false}),
+    createContractClause:(payload)=>sgdiApi("/drh/contract-clauses",{method:"POST",body:payload,legacy:false}),
+    deleteContractClause:(id)=>sgdiApi("/drh/contract-clauses/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
+    generateContract:(payload)=>sgdiApi("/drh/generated-contracts",{method:"POST",body:payload,legacy:false}),
+    generatedContracts:(employeeId)=>sgdiApi("/drh/generated-contracts"+(employeeId?"?employee_id="+encodeURIComponent(employeeId):""),{legacy:false})
   },
   sites:{list:()=>sgdiApi("/ops/sites",{legacy:false}),create:(payload)=>sgdiApi("/ops/sites",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),delete:(id)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),situation:()=>sgdiApi("/ops/sites/situation-generale",{legacy:false})},
   pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false}),generateRotation:(payload)=>sgdiApi("/ops/pointage/daily/generate-rotation",{method:"POST",body:payload,legacy:false}),standby:(date,soc,siteId)=>sgdiApi("/ops/pointage/standby?presence_date="+encodeURIComponent(date||today())+(soc?"&society="+encodeURIComponent(soc):"")+(siteId?"&site_id="+encodeURIComponent(siteId):""),{legacy:false}),updateDaily:(id,payload)=>sgdiApi("/ops/pointage/daily/"+encodeURIComponent(id),{method:"PATCH",body:payload,legacy:false})},
@@ -11653,36 +11680,61 @@ function confirmAdminNiveau(originalCode){
 function adminDeleteNiveau(code){if(!confirm("Supprimer le niveau "+code+" ?"))return;db.niveauxAcces=db.niveauxAcces.filter(n=>n.code!==code);logActivity("Suppression niveau d'accès",code);saveDB();toast("Supprimé","success");render()}
 
 function renderAdminContratsPersonnel(view){
-  ensureContratsPersonnel();
-  const list=db.contratsPersonnel||[];
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📄 Contrats du personnel</h1>
-    <div class="card p-3 mb-3 bg-amber-50 border border-amber-200 text-sm text-amber-800">Les modèles sont liés aux postes. En contractualisation, le contrat du poste choisi est intégré automatiquement.</div>
-    <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminContratPersonnelModal('')">➕ Nouveau contrat</button></div>
-    <div class="card overflow-hidden"><table><thead><tr><th>Poste</th><th>Titre</th><th>Type</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(c=>`<tr data-searchable><td class="font-semibold">${escapeHTML(c.poste||"—")}</td><td>${escapeHTML(c.titre||"")}</td><td><span class="pill pill-gray">${escapeHTML(c.typeContrat||"")}</span></td><td>${c.actif!==false?`<span class="pill pill-green">Actif</span>`:`<span class="pill pill-red">Inactif</span>`}</td><td class="text-right"><button class="btn btn-ghost text-xs" onclick="openAdminContratPersonnelModal('${c.id}')">Modifier</button><button class="btn btn-ghost text-xs text-red-600" onclick="adminDeleteContratPersonnel('${c.id}')">Supprimer</button></td></tr>`).join("")||`<tr><td colspan="5" class="text-center text-slate-400 p-6">Aucun contrat.</td></tr>`}</tbody></table></div>`;
+  view.innerHTML=`<div class="mb-4"><h1 class="text-2xl font-bold mb-1">📄 Génération automatique des contrats</h1><p class="text-sm text-slate-500">Modèles Word .docx, balises variables, clauses conditionnelles et génération depuis la fiche employé.</p></div>
+    <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800"><b>Balises disponibles :</b> {{NOM}}, {{PRENOM}}, {{NOM_PRENOM}}, {{ADRESSE}}, {{NIN}}, {{DATE_DEBUT}}, {{DATE_FIN}}, {{POSTE}}, {{FONCTION}}, {{SALAIRE}}, {{SOCIETE}}, {{CLAUSES_CONDITIONNELLES}}.</div>
+    <div class="flex flex-wrap justify-end gap-2 mb-3"><button class="btn btn-secondary" onclick="openAdminContractClauseModal()">➕ Paragraphe conditionnel</button><button class="btn btn-secondary" onclick="openGenerateContractModal()">⚙ Générer un contrat</button><button class="btn btn-primary" onclick="openAdminContractTemplateModal()">⬆ Ajouter modèle Word</button></div>
+    <div id="admin-contract-templates" class="card p-5 text-sm text-slate-500">Chargement des modèles PostgreSQL...</div>
+    <div id="admin-generated-contracts" class="card p-5 mt-4 text-sm text-slate-500">Chargement des contrats générés...</div>`;
+  setTimeout(loadAdminContractTemplates,0);
 }
-function openAdminContratPersonnelModal(id){
-  ensureContratsPersonnel();
-  const isNew=!id;const c=isNew?{id:uid("ctp"),poste:"",titre:"",typeContrat:"CDI",actif:true,texte:""}:(db.contratsPersonnel||[]).find(x=>x.id===id);
-  if(!c){toast("Contrat introuvable","error");return}
-  openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"Nouveau contrat du personnel":"Modifier contrat du personnel"}</h3>
-    <form onsubmit="event.preventDefault();confirmAdminContratPersonnel('${c.id}',${isNew})">
-      <div class="grid grid-2 gap-3">
-        <div><label class="label">Poste *</label><select class="select" name="poste" ><option value="">— Choisir —</option>${POSTES.map(p=>`<option ${c.poste===p?"selected":""}>${p}</option>`).join("")}</select></div>
-        <div><label class="label">Type contrat</label><select class="select" name="typeContrat">${TYPES_CONTRAT.map(t=>`<option ${c.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
-        <div class="col-span-2"><label class="label">Titre *</label><input class="input" name="titre"  value="${escapeHTML(c.titre||"")}"/></div>
-        <div class="col-span-2"><label class="label">Texte du contrat</label><textarea class="textarea" name="texte" rows="12" placeholder="Variables : {{nom}}, {{prenom}}, {{matricule}}, {{societe}}, {{dateRecrutement}}, {{salaireNet}}">${escapeHTML(c.texte||"")}</textarea></div>
-        <label class="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" name="actif" ${c.actif!==false?"checked":""}/> Contrat actif</label>
-      </div>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div>
-    </form>`);
+async function loadAdminContractTemplates(){
+  const host=document.getElementById("admin-contract-templates");
+  const genHost=document.getElementById("admin-generated-contracts");
+  if(!host)return;
+  try{
+    const [templates,clauses,generated]=await Promise.all([SGDI.rh.contractTemplates(),SGDI.rh.contractClauses(),SGDI.rh.generatedContracts()]);
+    window.__adminContractTemplates=templates;
+    window.__adminContractClauses=clauses;
+    window.__adminGeneratedContracts=generated;
+    host.innerHTML=`<h3 class="font-black mb-3">Modèles Word enregistrés</h3><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-3">Code</th><th class="text-left p-3">Titre</th><th class="p-3">Type</th><th class="p-3">Poste/Fonction</th><th class="p-3">Balises</th><th class="p-3">Statut</th><th></th></tr></thead><tbody>${templates.map(t=>`<tr class="border-t"><td class="p-3 font-mono font-bold">${escapeHTML(t.code)}</td><td class="p-3"><div class="font-semibold">${escapeHTML(t.title)}</div><div class="text-xs text-slate-500">${escapeHTML(t.file_name||"")}</div></td><td class="p-3 text-center"><span class="pill pill-gray">${escapeHTML(t.contract_type)}</span></td><td class="p-3 text-xs">${escapeHTML(t.position||"Tous postes")}<br>${escapeHTML(t.function||"Toutes fonctions")}</td><td class="p-3 text-xs">${escapeHTML(((t.placeholders&&t.placeholders.items)||[]).join(", "))}</td><td class="p-3 text-center">${t.active?'<span class="pill pill-green">Actif</span>':'<span class="pill pill-red">Inactif</span>'}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="downloadContractTemplate(${t.id},'${escapeHTML(t.file_name||'modele.docx')}')">Télécharger</button><button class="btn btn-ghost text-xs" onclick="openAdminContractTemplateModal(${t.id})">Modifier</button><button class="btn btn-ghost text-xs text-red-600" onclick="deleteContractTemplate(${t.id})">Supprimer</button></td></tr>`).join("")||'<tr><td colspan="7" class="p-6 text-center text-slate-400">Aucun modèle Word.</td></tr>'}</tbody></table></div>
+      <h3 class="font-black mt-5 mb-3">Paragraphes conditionnels</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-2">${clauses.map(c=>`<div class="p-3 rounded border border-slate-200 bg-slate-50"><div class="font-bold">${escapeHTML(c.title)}</div><div class="text-xs text-slate-500">Si ${escapeHTML(c.condition_field)} ${escapeHTML(c.condition_operator)} ${escapeHTML(c.condition_value)} → {{${escapeHTML(c.placeholder)}}}</div><div class="text-xs mt-2 whitespace-pre-wrap">${escapeHTML((c.content||"").slice(0,180))}</div><button class="btn btn-ghost text-xs text-red-600 mt-2" onclick="deleteContractClause(${c.id})">Supprimer</button></div>`).join("")||'<div class="text-sm text-slate-400">Aucun paragraphe conditionnel.</div>'}</div>`;
+    if(genHost)genHost.innerHTML=`<h3 class="font-black mb-3">Contrats générés</h3><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-3">Référence</th><th class="text-left p-3">Titre</th><th class="p-3">Type</th><th class="p-3">Date</th><th></th></tr></thead><tbody>${generated.map(g=>`<tr class="border-t"><td class="p-3 font-mono font-bold">${escapeHTML(g.reference)}</td><td class="p-3">${escapeHTML(g.title)}<div class="text-xs text-slate-500">${escapeHTML(g.file_name)}</div></td><td class="p-3 text-center"><span class="pill pill-blue">${escapeHTML(g.output_format)}</span></td><td class="p-3 text-xs">${formatDate((g.created_at||"").slice(0,10))}</td><td class="p-3 text-right"><button class="btn btn-primary text-xs" onclick="downloadGeneratedContract(${g.id},'${escapeHTML(g.file_name)}')">Télécharger</button></td></tr>`).join("")||'<tr><td colspan="5" class="p-6 text-center text-slate-400">Aucun contrat généré.</td></tr>'}</tbody></table></div>`;
+  }catch(e){host.innerHTML=`<div class="text-red-700 font-bold">Erreur chargement modèles : ${escapeHTML(e.message||String(e))}</div>`}
 }
-function confirmAdminContratPersonnel(id,isNew){
-  const f=document.querySelector(".modal-bg form");if(!f)return;const fd=new FormData(f);ensureContratsPersonnel();
-  const data={id,poste:fd.get("poste"),titre:fd.get("titre"),typeContrat:fd.get("typeContrat"),texte:fd.get("texte")||"",actif:fd.get("actif")==="on",updatedAt:new Date().toISOString()};
-  if(isNew){data.createdAt=new Date().toISOString();db.contratsPersonnel.push(data)}else{const idx=db.contratsPersonnel.findIndex(x=>x.id===id);if(idx>=0)db.contratsPersonnel[idx]={...db.contratsPersonnel[idx],...data}}
-  logActivity(isNew?"Création contrat personnel":"Modification contrat personnel",data.poste);saveDB();closeModal();toast("Contrat enregistré","success");render();
+function openAdminContractTemplateModal(id){
+  const item=id?(window.__adminContractTemplates||[]).find(t=>String(t.id)===String(id)):null;
+  const selected=(value,current)=>String(value||"")===String(current||"")?"selected":"";
+  openModal(`<h3 class="font-bold text-lg mb-4">${id?'Modifier modèle Word':'Ajouter modèle Word .docx'}</h3><form onsubmit="event.preventDefault();saveAdminContractTemplate(this,${id||0})" enctype="multipart/form-data">
+    <div class="grid grid-2 gap-3">
+      <div><label class="label">Code *</label><input class="input" name="code" required placeholder="CDI_AGENT" value="${escapeHTML(item&&item.code||"")}"/></div>
+      <div><label class="label">Titre *</label><input class="input" name="title" required placeholder="Contrat CDI agent" value="${escapeHTML(item&&item.title||"")}"/></div>
+      <div><label class="label">Type contrat *</label><select class="select" name="contract_type">${TYPES_CONTRAT.map(t=>`<option ${selected(t,item&&item.contract_type)}>${t}</option>`).join("")}</select></div>
+      <div><label class="label">Poste associé</label><select class="select" name="position"><option value="" ${selected("",item&&item.position)}>Tous postes</option>${POSTES.map(p=>`<option ${selected(p,item&&item.position)}>${p}</option>`).join("")}</select></div>
+      <div><label class="label">Fonction spécifique</label><input class="input" name="function" placeholder="Cadre, technicien..." value="${escapeHTML(item&&item.function||"")}"/></div>
+      <div><label class="label">Statut</label><select class="select" name="active"><option value="1" ${selected(1,item?item.active:1)}>Actif</option><option value="0" ${selected(0,item&&item.active)}>Inactif</option></select></div>
+      <div class="col-span-2"><label class="label">Fichier Word ${id?'(laisser vide pour conserver)':'*'}</label><input class="input" type="file" name="file" accept=".docx" ${id?'':'required'}/>${id&&item&&item.file_name?`<div class="text-xs text-slate-500 mt-1">Fichier actuel : ${escapeHTML(item.file_name)}</div>`:""}</div>
+      <div class="col-span-2"><label class="label">Description</label><textarea class="textarea" name="description" rows="2">${escapeHTML(item&&item.description||"")}</textarea></div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
 }
-function adminDeleteContratPersonnel(id){if(!confirm("Supprimer ce modèle de contrat ?"))return;const c=(db.contratsPersonnel||[]).find(x=>x.id===id);db.contratsPersonnel=(db.contratsPersonnel||[]).filter(x=>x.id!==id);logActivity("Suppression contrat personnel",c?c.poste:id);saveDB();toast("Supprimé","success");render()}
+async function saveAdminContractTemplate(form,id){
+  const fd=new FormData(form);
+  try{if(id)await SGDI.rh.updateContractTemplate(id,fd);else await SGDI.rh.createContractTemplate(fd);closeModal();toast("Modèle Word enregistré","success");loadAdminContractTemplates()}catch(e){toast("Erreur modèle : "+(e.message||e),"error")}
+}
+async function deleteContractTemplate(id){if(!confirm("Supprimer ce modèle Word ?"))return;try{await SGDI.rh.deleteContractTemplate(id);toast("Modèle supprimé","success");loadAdminContractTemplates()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+async function downloadContractTemplate(id,name){try{await sgdiDownload("/drh/contract-templates/"+id+"/download",name||"modele.docx")}catch(e){toast(e.message||String(e),"error")}}
+function openAdminContractClauseModal(){
+  openModal(`<h3 class="font-bold text-lg mb-4">Paragraphe conditionnel</h3><form onsubmit="event.preventDefault();saveAdminContractClause(this)"><div class="grid grid-2 gap-3"><div><label class="label">Titre *</label><input class="input" name="title" required/></div><div><label class="label">Champ condition</label><select class="select" name="condition_field"><option value="FONCTION">Fonction</option><option value="POSTE">Poste</option><option value="TYPE_CONTRAT">Type contrat</option><option value="SOCIETE">Société</option></select></div><div><label class="label">Opérateur</label><select class="select" name="condition_operator"><option value="equals">égal à</option><option value="contains">contient</option><option value="not_equals">différent de</option></select></div><div><label class="label">Valeur *</label><input class="input" name="condition_value" required placeholder="Cadre"/></div><div class="col-span-2"><label class="label">Balise cible</label><input class="input" name="placeholder" value="CLAUSES_CONDITIONNELLES"/></div><div class="col-span-2"><label class="label">Texte du paragraphe *</label><textarea class="textarea" name="content" rows="5" required></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`)
+}
+async function saveAdminContractClause(form){const fd=new FormData(form);const payload={title:fd.get("title"),condition_field:fd.get("condition_field"),condition_operator:fd.get("condition_operator"),condition_value:fd.get("condition_value"),placeholder:fd.get("placeholder"),content:fd.get("content"),active:1};try{await SGDI.rh.createContractClause(payload);closeModal();toast("Clause enregistrée","success");loadAdminContractTemplates()}catch(e){toast("Erreur clause : "+(e.message||e),"error")}}
+async function deleteContractClause(id){if(!confirm("Supprimer ce paragraphe ?"))return;try{await SGDI.rh.deleteContractClause(id);toast("Clause supprimée","success");loadAdminContractTemplates()}catch(e){toast("Suppression clause refusée : "+(e.message||e),"error")}}
+async function openGenerateContractModal(){
+  const employees=(db.agents||[]).filter(a=>a.backendId||/^\d+$/.test(String(a.id||"")));
+  openModal(`<h3 class="font-bold text-lg mb-4">Générer un contrat</h3><form onsubmit="event.preventDefault();generateEmployeeContract(this)"><div class="grid grid-2 gap-3"><div class="col-span-2"><label class="label">Employé *</label><select class="select" name="employee_id" required>${employees.map(a=>`<option value="${escapeHTML(a.backendId||a.id)}">${escapeHTML((a.nom||"")+" "+(a.prenom||""))} · ${escapeHTML(a.matricule||"")}</option>`).join("")}</select></div><div><label class="label">Type contrat</label><select class="select" name="contract_type">${TYPES_CONTRAT.map(t=>`<option>${t}</option>`).join("")}</select></div><div><label class="label">Format</label><select class="select" name="output_format"><option value="docx">Word DOCX</option><option value="pdf">PDF si LibreOffice installé</option></select></div><div><label class="label">Date début</label><input class="input" type="date" name="start_date"/></div><div><label class="label">Date fin</label><input class="input" type="date" name="end_date"/></div><div><label class="label">Poste</label><input class="input" name="position"/></div><div><label class="label">Salaire</label><input class="input" type="number" name="salary_net"/></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Générer</button></div></form>`)
+}
+async function generateEmployeeContract(form){const fd=new FormData(form);const payload={employee_id:Number(fd.get("employee_id")),contract_type:fd.get("contract_type"),output_format:fd.get("output_format"),start_date:fd.get("start_date")||null,end_date:fd.get("end_date")||null,position:fd.get("position")||null,salary_net:fd.get("salary_net")?Number(fd.get("salary_net")):null};try{const row=await SGDI.rh.generateContract(payload);closeModal();toast("Contrat généré","success");await downloadGeneratedContract(row.id,row.file_name);loadAdminContractTemplates()}catch(e){toast("Génération refusée : "+(e.message||e),"error")}}
+async function downloadGeneratedContract(id,name){try{await sgdiDownload("/drh/generated-contracts/"+id+"/download",name||"contrat.docx")}catch(e){toast(e.message||String(e),"error")}}
+
 function renderAdminPriorites(view){
   const pr=db.priorites||[];const niveaux=["haute","moyenne","basse"];
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">⚡ Priorités</h1>

@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from io import BytesIO
+from typing import Annotated
+
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -6,7 +10,7 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.drh import service
-from app.modules.drh.models import Candidate, Contract, Document, Employee, Leave, Sanction
+from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.drh.schemas import (
     CandidateCreate,
     CandidateOut,
@@ -14,11 +18,17 @@ from app.modules.drh.schemas import (
     ContractCreate,
     ContractOut,
     ContractUpdate,
+    ContractConditionalClauseCreate,
+    ContractConditionalClauseOut,
+    ContractConditionalClauseUpdate,
+    ContractTemplateOut,
     DocumentCreate,
     DocumentOut,
     EmployeeCreate,
     EmployeeOut,
     EmployeeUpdate,
+    GenerateContractRequest,
+    GeneratedContractOut,
     LeaveCreate,
     LeaveOut,
     SanctionCreate,
@@ -280,3 +290,159 @@ def documents(owner_type: str | None = None, owner_id: int | None = None, db: Se
 def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_document_allowed(db, user, payload.owner_type, payload.owner_id)
     return service.create_row(db, Document, payload)
+
+
+@router.get("/contract-templates", response_model=list[ContractTemplateOut])
+def contract_templates(
+    contract_type: str | None = None,
+    active: int | None = None,
+    db: Session = Depends(get_db),
+):
+    return service.list_rows(db, ContractTemplate, {"contract_type": contract_type, "active": active})
+
+
+@router.post("/contract-templates", response_model=ContractTemplateOut)
+async def create_contract_template(
+    code: Annotated[str, Form()],
+    title: Annotated[str, Form()],
+    contract_type: Annotated[str, Form()],
+    file: Annotated[UploadFile, File()],
+    position: Annotated[str | None, Form()] = None,
+    function: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    active: Annotated[int, Form()] = 1,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if not file.filename.lower().endswith(".docx"):
+        raise HTTPException(status_code=422, detail="Le modèle doit être un fichier Word .docx")
+    if db.execute(select(ContractTemplate).where(ContractTemplate.code == code)).scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Code modèle déjà utilisé")
+    content = await file.read()
+    placeholders = {"items": service.extract_docx_placeholders(content)}
+    row = ContractTemplate(
+        code=code.strip().upper(),
+        title=title.strip(),
+        contract_type=contract_type.strip(),
+        position=(position or "").strip() or None,
+        function=(function or "").strip() or None,
+        description=(description or "").strip() or None,
+        file_name=file.filename,
+        mime_type=file.content_type or service.DOCX_MIME,
+        docx_content=content,
+        placeholders=placeholders,
+        active=active,
+        uploaded_by=user.username,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.put("/contract-templates/{template_id}", response_model=ContractTemplateOut)
+async def update_contract_template(
+    template_id: int,
+    code: Annotated[str | None, Form()] = None,
+    title: Annotated[str | None, Form()] = None,
+    contract_type: Annotated[str | None, Form()] = None,
+    file: UploadFile | None = File(default=None),
+    position: Annotated[str | None, Form()] = None,
+    function: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    active: Annotated[int | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    row = service.get_or_404(db, ContractTemplate, template_id)
+    if code is not None:
+        other = db.execute(select(ContractTemplate).where(ContractTemplate.code == code.strip().upper(), ContractTemplate.id != template_id)).scalar_one_or_none()
+        if other:
+            raise HTTPException(status_code=409, detail="Code modèle déjà utilisé")
+        row.code = code.strip().upper()
+    if title is not None:
+        row.title = title.strip()
+    if contract_type is not None:
+        row.contract_type = contract_type.strip()
+    if position is not None:
+        row.position = position.strip() or None
+    if function is not None:
+        row.function = function.strip() or None
+    if description is not None:
+        row.description = description.strip() or None
+    if active is not None:
+        row.active = active
+    if file is not None and file.filename:
+        if not file.filename.lower().endswith(".docx"):
+            raise HTTPException(status_code=422, detail="Le modèle doit être un fichier Word .docx")
+        content = await file.read()
+        row.file_name = file.filename
+        row.mime_type = file.content_type or service.DOCX_MIME
+        row.docx_content = content
+        row.placeholders = {"items": service.extract_docx_placeholders(content)}
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/contract-templates/{template_id}")
+def delete_contract_template(template_id: int, db: Session = Depends(get_db)):
+    return service.delete_row(db, ContractTemplate, template_id)
+
+
+@router.get("/contract-templates/{template_id}/download")
+def download_contract_template(template_id: int, db: Session = Depends(get_db)):
+    row = service.get_or_404(db, ContractTemplate, template_id)
+    return StreamingResponse(
+        BytesIO(row.docx_content),
+        media_type=row.mime_type or service.DOCX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{row.file_name}"'},
+    )
+
+
+@router.get("/contract-clauses", response_model=list[ContractConditionalClauseOut])
+def contract_clauses(template_id: int | None = None, db: Session = Depends(get_db)):
+    return service.list_rows(db, ContractConditionalClause, {"template_id": template_id})
+
+
+@router.post("/contract-clauses", response_model=ContractConditionalClauseOut)
+def create_contract_clause(payload: ContractConditionalClauseCreate, db: Session = Depends(get_db)):
+    if payload.template_id:
+        service.get_or_404(db, ContractTemplate, payload.template_id)
+    return service.create_row(db, ContractConditionalClause, payload)
+
+
+@router.put("/contract-clauses/{clause_id}", response_model=ContractConditionalClauseOut)
+def update_contract_clause(clause_id: int, payload: ContractConditionalClauseUpdate, db: Session = Depends(get_db)):
+    if payload.template_id:
+        service.get_or_404(db, ContractTemplate, payload.template_id)
+    return service.update_row(db, ContractConditionalClause, clause_id, payload)
+
+
+@router.delete("/contract-clauses/{clause_id}")
+def delete_contract_clause(clause_id: int, db: Session = Depends(get_db)):
+    return service.delete_row(db, ContractConditionalClause, clause_id)
+
+
+@router.get("/generated-contracts", response_model=list[GeneratedContractOut])
+def generated_contracts(employee_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    if employee_id is not None:
+        _ensure_employee_allowed(db, user, employee_id)
+    rows = service.list_rows(db, GeneratedContract, {"employee_id": employee_id})
+    return _filter_employee_owned_rows(db, user, rows)
+
+
+@router.post("/generated-contracts", response_model=GeneratedContractOut)
+def generate_contract(payload: GenerateContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_employee_allowed(db, user, payload.employee_id)
+    return service.generate_contract(db, payload, user)
+
+
+@router.get("/generated-contracts/{generated_id}/download")
+def download_generated_contract(generated_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    row = service.get_or_404(db, GeneratedContract, generated_id)
+    _ensure_employee_allowed(db, user, row.employee_id)
+    return StreamingResponse(
+        BytesIO(row.file_content),
+        media_type=row.mime_type,
+        headers={"Content-Disposition": f'attachment; filename="{row.file_name}"'},
+    )
