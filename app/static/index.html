@@ -1163,9 +1163,11 @@ function candidateApiPayload(c){
 }
 function candidateFromApi(row){
   const data=row&&row.data&&typeof row.data==="object"?row.data:{};
+  const apiId=String(row.id);
+  const localId=data.id&&!isTempCandidateId(data.id)?String(data.id):apiId;
   return {
     ...data,
-    id:data.id||String(row.id),
+    id:localId,
     backendId:row.id,
     nom:data.nom||row.last_name||"",
     prenom:data.prenom||row.first_name||"",
@@ -3581,7 +3583,7 @@ function renderRecrutement(view,mode){
         <td class="flex gap-2 justify-end">${mode!=="archive"&&candidatIsReserve(c)?`<button class="btn btn-success text-xs" onclick="recruterCandidat('${c.id}')">🎯 RECRUTER</button>`:""}<a class="btn btn-ghost text-xs" href="#/${mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement"}/${c.id}">Ouvrir →</a></td>
       </tr>`).join("")}</tbody></table></div>`}`;
 }
-function recruterCandidat(id){const c=db.candidats.find(x=>x.id===id);if(!c)return;c.statut="a_contractualiser";saveDB();toast("Candidat envoyé vers contractualisation","success");navigate(`contrats/nouveau/${id}`)}
+function recruterCandidat(id){const c=findCandidatById(id);if(!c)return;c.statut="a_contractualiser";saveDB();toast("Candidat envoyé vers contractualisation","success");navigate(`contrats/nouveau/${c.id}`)}
 
 /* ---- CANDIDAT FORM ---- */
 const CANDIDAT_SECTIONS=[
@@ -3620,9 +3622,26 @@ function setCandidatSectionButtonsDisabled(id,key,disabled){
 function candidateDedupeKey(c){
   if(!candidateHasMinimumData(c))return"";
   const norm=v=>String(v||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
-  return [norm(c.nom||c.last_name),norm(c.prenom||c.first_name),norm(c.societe||c.society),norm(c.dateNaissance),norm(c.nin),norm(c.telephone||c.phone),norm(c.posteSouhaite||c.desired_position)].join("|");
+  const society=norm(c.societe||c.society);
+  const nin=norm(c.nin);
+  const birth=norm(c.dateNaissance||c.birth_date);
+  const phone=norm(c.telephone||c.phone);
+  const name=norm(c.nom||c.last_name)+"|"+norm(c.prenom||c.first_name);
+  if(nin&&nin.length>=6)return "nin|"+society+"|"+nin;
+  if(birth&&phone)return "birth-phone|"+society+"|"+name+"|"+birth+"|"+phone;
+  if(birth&&norm(c.lieuNaissance)&&norm(c.nomPere))return "identity|"+society+"|"+name+"|"+birth+"|"+norm(c.lieuNaissance)+"|"+norm(c.nomPere);
+  return "";
 }
 function candidateCompletenessScore(c){return ["nin","telephone","phone","dateNaissance","posteSouhaite","desired_position","avisDecision","avisCommentaire","source"].reduce((n,k)=>n+(String(c&&c[k]||"").trim()?1:0),0)+(c&&c.backendId?2:0)}
+function findCandidatById(id){
+  const raw=String(id||"");
+  if(!raw||!db||!Array.isArray(db.candidats))return null;
+  const mapped=isTempCandidateId(raw)?candidatTempRealIds[raw]:"";
+  return db.candidats.find(c=>String(c.id)===raw)
+    ||(mapped?db.candidats.find(c=>String(c.id)===String(mapped)):null)
+    ||db.candidats.find(c=>String(c.backendId)===raw)
+    ||null;
+}
 function cleanupDuplicateCandidates(deleteRemote){
   if(!db||!Array.isArray(db.candidats))return 0;
   const before=db.candidats.length;
@@ -3715,7 +3734,7 @@ function applyCandidatSectionLocks(){
 
 function renderCandidatForm(view,id){
   let c;
-  if(id){c=db.candidats.find(x=>x.id===id);if(!c){toast("Candidat introuvable","error");return navigate("recrutement")}}
+  if(id){c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate("recrutement")}}
   else{c={id:newTempCandidateId(),statut:"nouvelle",photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
   const step=candidatEtape1Valid(c)?2:1;
   const allValid=candidatAllSectionsValid(c);
@@ -3914,8 +3933,8 @@ async function saveCandidat(id,showToast){
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return}
   if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
   const realId=isTempCandidateId(id)?(candidatTempRealIds[id]||(candidatTempRealIds[id]=uid("cd"))):id;
-  const creating=!db.candidats.find(x=>x.id===realId)&&!db.candidats.find(x=>x.id===id);
-  let c=db.candidats.find(x=>x.id===realId)||db.candidats.find(x=>x.id===id);
+  const creating=!findCandidatById(realId)&&!findCandidatById(id);
+  let c=findCandidatById(realId)||findCandidatById(id);
   if(!c){c={id:realId,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
   Object.assign(c,data,{id:realId});delete c.isNew;
   if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
@@ -3934,7 +3953,7 @@ async function saveCandidat(id,showToast){
 }
 async function saveCandidatDraft(id){
   const data=collectCandidatFormData();if(!data||!candidateHasMinimumData(data))return false;
-  let c=db.candidats.find(x=>x.id===id);
+  let c=findCandidatById(id);
   if(!c)return false;
   Object.assign(c,data);
   delete c.isNew;
@@ -3952,7 +3971,7 @@ async function saveCandidatDraft(id){
   }
 }
 function openArchiveCandidatModal(id){
-  const c=(db.candidats||[]).find(x=>x.id===id)||{};
+  const c=findCandidatById(id)||{};
   openModal(`<h3 class="font-bold text-lg mb-4">Archiver candidat</h3>
     <form onsubmit="event.preventDefault();confirmArchiveCandidat('${id}')">
       <div class="mb-4 text-sm text-slate-600">Choisissez le motif d'archivage${c.nom||c.prenom?` pour <b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b>`:""}.</div>
@@ -3978,7 +3997,7 @@ async function confirmArchiveCandidat(id){
   const motif=String(new FormData(f).get("motifArchive")||"").trim();
   const commentaire=String(new FormData(f).get("commentaireArchive")||"").trim();
   const data=collectCandidatFormData()||{};
-  let c=db.candidats.find(x=>x.id===id);
+  let c=findCandidatById(id);
   if(!c){toast("Enregistrez d'abord le candidat avant de l'archiver","error");return}
   if(!motif){toast("Choisissez un motif d'archivage","error");return}
   const source=candidatIsReserve(c)||data.statut==="reserve"||data.fichePositionValidee===true?"reserve":"nouvelle";
@@ -4000,19 +4019,20 @@ async function confirmArchiveCandidat(id){
 }
 async function deleteCandidat(id){
   if(isTempCandidateId(id)){navigate("recrutement");return}
-  const c=(db.candidats||[]).find(x=>x.id===id);
-  const label=c?String((c.nom||"")+" "+(c.prenom||"")).trim():"ce candidat";
+  const c=findCandidatById(id);
+  if(!c){toast("Candidat introuvable","error");navigate("recrutement");return}
+  const label=String((c.nom||"")+" "+(c.prenom||"")).trim();
   if(!confirm("Supprimer définitivement "+(label||"ce candidat")+" ?"))return;
   const before=(db.candidats||[]).length;
   try{await deleteCandidateFromPostgres(c)}catch(e){toast("Suppression PostgreSQL refusée : "+(e.message||e),"error");return}
-  db.candidats=(db.candidats||[]).filter(x=>x.id!==id);
+  db.candidats=(db.candidats||[]).filter(x=>x!==c&&String(x.id)!==String(id)&&String(x.backendId)!==String(id));
   if(db.candidats.length===before){toast("Candidat introuvable","error");return}
   if(typeof sgdiBackendSave==="function")sgdiBackendSave();
   toast("Candidat supprimé de PostgreSQL","success");
   navigate(candidatIsArchived(c)?"candidats_archives":candidatIsReserve(c)?"reserve":"recrutement");
 }
 async function activerCandidat(id){
-  const c=(db.candidats||[]).find(x=>x.id===id);
+  const c=findCandidatById(id);
   if(!c){toast("Candidat introuvable","error");return}
   if(!confirm("Activer ce candidat et l'envoyer vers Candidats en réserve ?"))return;
   c.statut="reserve";
@@ -4035,7 +4055,7 @@ async function activerCandidat(id){
   }catch(e){toast("Activation PostgreSQL refusée : "+(e.message||e),"error")}
 }
 function scheduleCandidatDraftSave(id){
-  if(!db.candidats.find(x=>x.id===id))return;
+  if(!findCandidatById(id))return;
   sgdiDirty=true;
   clearTimeout(candidatDraftTimer);
   candidatDraftTimer=setTimeout(()=>saveCandidatDraft(id),700);
@@ -4062,7 +4082,7 @@ async function validateCandidatSectionAction(id,key){
   candidatValidationLocks.add(lockKey);
   setCandidatSectionButtonsDisabled(id,key,true);
   const realId=isTempCandidateId(id)?(candidatTempRealIds[id]||(candidatTempRealIds[id]=uid("cd"))):id;
-  let c=db.candidats.find(x=>x.id===realId)||db.candidats.find(x=>x.id===id);
+  let c=findCandidatById(realId)||findCandidatById(id);
   markRequiredFields(document.getElementById("candidat-form"));
   const data=collectCandidatFormData();if(!data){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   const creating=!c;
@@ -4091,7 +4111,7 @@ async function validateCandidatSectionAction(id,key){
 }
 function unlockCandidatSection(id,key){
   if(!candidatCanUnlockSections()){toast("Déverrouillage réservé à l'administrateur habilité","error");return}
-  const c=db.candidats.find(x=>x.id===id);if(!c)return;
+  const c=findCandidatById(id);if(!c)return;
   const idx=candidatSectionIndex(key);
   const locks=candidatSectionValidations(c);
   CANDIDAT_SECTIONS.slice(idx).forEach(s=>delete locks[s.key]);
@@ -4109,7 +4129,7 @@ async function validerFichePosition(id){
     toast("✓ Fiche de position validée — candidat en réserve","success");navigate("reserve");
   }catch(e){toast("Validation fiche PostgreSQL refusée : "+(e.message||e),"error")}
 }
-function presselectionner(id){validateCandidatSectionAction(id,candidatCurrentSectionKey(db.candidats.find(x=>x.id===id)||{sectionValidations:{}})||"identification")}
+function presselectionner(id){validateCandidatSectionAction(id,candidatCurrentSectionKey(findCandidatById(id)||{sectionValidations:{}})||"identification")}
 function validerVersContrat(id){validerFichePosition(id)}
 function mettreEnReserve(id){validerFichePosition(id)}
 
@@ -4295,7 +4315,7 @@ function openCreateContratDirectModal(){
 }
 function startContractFromReserve(id){
   if(!id){toast("Choisissez un candidat en réserve","error");return}
-  const c=(db.candidats||[]).find(x=>x.id===id);
+  const c=findCandidatById(id);
   if(!c){toast("Candidat introuvable","error");return}
   c.statut="a_contractualiser";
   c.updatedAt=new Date().toISOString();
@@ -4415,7 +4435,7 @@ function fillContratPersonnelText(tpl,agent){
 }
 
 function renderContractualisation(view,id){
-  const c=db.candidats.find(x=>x.id===id);if(!c){toast("Candidat introuvable","error");return navigate("contrats/a_contractualiser")}
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate("contrats/a_contractualiser")}
   const blockedAgent=candidateBlackListMatch(c);
   if(blockedAgent){view.innerHTML=`<div class="max-w-3xl mx-auto card p-8 text-center" style="border:2px solid #111827"><div style="font-size:42px">⛔</div><h1 class="text-2xl font-black mb-2">CONTRACTUALISATION BLOQUÉE</h1><p class="text-sm text-slate-600 mb-4">Ce candidat correspond à une personne inscrite sur la BLACKLIST : <b>${escapeHTML((blockedAgent.nom||"")+" "+(blockedAgent.prenom||""))}</b> · ${escapeHTML(blockedAgent.matricule||"")}. Il ne peut plus signer de contrat.</p><div class="p-3 rounded bg-red-50 text-red-800 text-sm mb-4"><b>Motif :</b> ${escapeHTML(blockedAgent.blacklistMotif||"Non précisé")}</div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div>`;return}
   ensureContratsPersonnel();
@@ -4455,7 +4475,7 @@ function renderContractualisation(view,id){
   setTimeout(updateContractEndDate,0);
 }
 function setContractualisationSociete(id,societe){
-  const c=db.candidats.find(x=>x.id===id);if(!c)return;
+  const c=findCandidatById(id);if(!c)return;
   c.societe=societe||"";
   saveDB();
   toast("Société sélectionnée","success");
@@ -4464,7 +4484,7 @@ function setContractualisationSociete(id,societe){
 function updateVerifBanner(){const f=document.getElementById("contract-form");if(!f)return;const keys=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"];const ok=keys.filter(k=>f.querySelector(`[name="verif${k}"]`)?.checked).length;document.getElementById("banner-warn").classList.toggle("hidden",ok===9);document.getElementById("banner-ok").classList.toggle("hidden",ok!==9);const n=document.getElementById("nbmissing");if(n)n.textContent=9-ok}
 
 function embaucherCandidat(id){
-  const c=db.candidats.find(x=>x.id===id);if(!c){toast("Introuvable","error");return}
+  const c=findCandidatById(id);if(!c){toast("Introuvable","error");return}
   const blockedAgent=candidateBlackListMatch(c);if(blockedAgent){toast("Contrat impossible : personne inscrite sur BLACKLIST","error");return}
   const f=document.getElementById("contract-form");
   const keys=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"];
