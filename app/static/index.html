@@ -2599,7 +2599,7 @@ function renderSidebar(){
         ]},
         {type:"group",label:"CONTRAT",children:[
           {label:"Nouveau contrat",icon:"➕",route:"contrats/a_contractualiser"},
-          {label:"Avenant",icon:"✎",route:"contrats/avenants",count:(db.avenants||[]).length},
+          {label:"Avenant",icon:"✎",route:"contrats/avenants",count:(db.avenants||[]).filter(av=>{const a=(db.agents||[]).find(x=>x.id===av.agentId);return !drhSoc||a?.societe===drhSoc}).length},
           {label:"Situation contrat",icon:"📑",route:"contrats/situation"}
         ]},
         {type:"link",label:"FICHE DE POSITION",icon:"🪪",route:"fiches"},
@@ -6305,7 +6305,10 @@ function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure||[]).
 /* ---- CONGES ---- */
 function renderConges(view){
   const filt=sessionStorage.getItem("congesFiltre")||"instance";
-  const all=(db.conges||[]).filter(c=>c.type!=="Maladie");
+  const soc=effectifSocieteFilter&&effectifSocieteFilter();
+  const agentsScope=(db.agents||[]).filter(a=>!soc||a.societe===soc);
+  const agentIds=new Set(agentsScope.map(a=>a.id));
+  const all=(db.conges||[]).filter(c=>c.type!=="Maladie"&&(!soc||agentIds.has(c.agentId)));
   const now=today();
   const tabs=[
     ["instance","Demandes en instance de validation",all.filter(c=>c.statut==="en_attente").length],
@@ -6321,15 +6324,15 @@ function renderConges(view){
   else if(filt==="refuses")list=list.filter(c=>c.statut==="refuse");
   else if(filt==="nouvelles")list=list.filter(c=>(c.createdAt||c.du||"")>=addDays(now,-7));
   list.sort((a,b)=>String(b.createdAt||b.du||"").localeCompare(String(a.createdAt||a.du||"")));
-  view.innerHTML=`<div class="flex justify-between mb-4"><div><h1 class="text-2xl font-bold">Situation des congés</h1><p class="text-sm text-slate-500">Suivi des demandes selon leur état.</p></div><button class="btn btn-primary" onclick="openCongeModal()">Nouvelle demande</button></div>
+  view.innerHTML=`<div class="flex justify-between mb-4"><div><h1 class="text-2xl font-bold">Situation des congés</h1><p class="text-sm text-slate-500">Suivi des demandes selon leur état${soc?` · <span class="font-semibold text-amber-700">${escapeHTML(soc)}</span>`:""}.</p></div><button class="btn btn-primary" onclick="openCongeModal()">Nouvelle demande</button></div>
   <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
     ${tabs.map(([k,l,n])=>`<button type="button" onclick="setCongesFiltre('${k}')" class="card p-4 text-left kpi-clickable" style="border:2px solid ${filt===k?"#043970":"#e2e8f0"};background:${filt===k?"#043970":"#fff"}"><div class="text-xs uppercase font-bold text-slate-500">${l}</div><div class="text-3xl font-black mt-1" style="color:${filt===k?"#043970":"#0f172a"}">${n}</div></button>`).join("")}
   </div>
   <div class="card overflow-hidden"><table><thead><tr><th>Agent</th><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${list.length===0?`<tr><td colspan="8" class="text-center text-slate-500 p-6">Aucune demande dans cette rubrique.</td></tr>`:list.map(c=>{const a=db.agents.find(x=>x.id===c.agentId);const j=c.du&&c.au?daysBetween(c.du,c.au)+1:"—";return`<tr data-searchable><td>${safe(a?a.nom+" "+a.prenom:"")}</td><td><span class="pill ${c.type==="Maladie"?"pill-red":"pill-blue"}">${c.type}</span></td><td class="text-xs">${formatDate(c.du)}</td><td class="text-xs">${formatDate(c.au)}</td><td>${j}</td><td class="text-xs">${escapeHTML((c.motif||"").slice(0,40))}</td><td><span class="pill ${c.statut==="approuve"?"pill-green":c.statut==="refuse"?"pill-red":"pill-amber"}">${c.statut}</span></td><td class="flex gap-1">${c.statut==="en_attente"?`<button class="btn btn-success text-xs" onclick="approuverConge('${c.id}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${c.id}')">Refuser</button>`:""}</td></tr>`}).join("")}</tbody></table></div>`;
 }
 function setCongesFiltre(v){sessionStorage.setItem("congesFiltre",v);renderView()}
-function openCongeModal(){openModal(`<h3 class="font-bold text-lg mb-4">Demande de congé</h3><form onsubmit="event.preventDefault();saveConge()"><div class="grid grid-2"><div class="col-span-2"><label class="label">Agent</label><select class="select" name="agentId" ><option value="">—</option>${db.agents.filter(a=>a.statut==="actif").map(a=>`<option value="${a.id}">${escapeHTML(a.nom+" "+a.prenom)}</option>`).join("")}</select></div><div><label class="label">Type</label><select class="select" name="type">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select><div class="text-xs text-slate-500 mt-1">La maladie est traitée comme une absence, pas comme un congé.</div></div><div><label class="label">Statut</label><select class="select" name="statut"><option>en_attente</option><option>approuve</option></select></div><div><label class="label">Du</label><input class="input" type="date" name="du" /></div><div><label class="label">Au</label><input class="input" type="date" name="au" /></div><div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`)}
-function saveConge(){const fd=new FormData(document.querySelector(".modal-bg form"));db.conges.push({id:uid("cg"),agentId:fd.get("agentId"),type:fd.get("type"),du:fd.get("du"),au:fd.get("au"),motif:fd.get("motif"),statut:fd.get("statut"),createdAt:today()});saveDB();closeModal();toast("Enregistré","success");renderView()}
+function openCongeModal(){const soc=effectifSocieteFilter&&effectifSocieteFilter();const agents=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));openModal(`<h3 class="font-bold text-lg mb-4">Demande de congé</h3><form onsubmit="event.preventDefault();saveConge()"><div class="grid grid-2"><div class="col-span-2"><label class="label">Agent</label><select class="select" name="agentId" ><option value="">—</option>${agents.map(a=>`<option value="${a.id}">${escapeHTML(a.nom+" "+a.prenom)} · ${escapeHTML(a.societe||"")}</option>`).join("")}</select></div><div><label class="label">Type</label><select class="select" name="type">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select><div class="text-xs text-slate-500 mt-1">La maladie est traitée comme une absence, pas comme un congé.</div></div><div><label class="label">Statut</label><select class="select" name="statut"><option>en_attente</option><option>approuve</option></select></div><div><label class="label">Du</label><input class="input" type="date" name="du" /></div><div><label class="label">Au</label><input class="input" type="date" name="au" /></div><div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`)}
+function saveConge(){const fd=new FormData(document.querySelector(".modal-bg form"));const agentId=fd.get("agentId");const soc=effectifSocieteFilter&&effectifSocieteFilter();const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Choisissez un agent","error");return}if(soc&&a.societe!==soc){toast("Agent hors société active","error");return}db.conges.push({id:uid("cg"),agentId,type:fd.get("type"),du:fd.get("du"),au:fd.get("au"),motif:fd.get("motif"),statut:fd.get("statut"),createdAt:today()});saveDB();closeModal();toast("Enregistré","success");renderView()}
 function approuverConge(id){const c=db.conges.find(x=>x.id===id);c.statut="approuve";saveDB();renderView()}
 function refuserConge(id){const c=db.conges.find(x=>x.id===id);c.statut="refuse";saveDB();renderView()}
 
@@ -6360,12 +6363,13 @@ function renderFiches(view,sub){
   else if(sub==="imprimer"){return renderFichesImpression(view)}
   else if(sub==="badge"){return renderBadgeModule(view)}
   const list=socFilter?baseList.filter(a=>a.societe===socFilter):baseList;
+  const statsBase=socFilter?db.agents.filter(a=>a.societe===socFilter):db.agents;
   const cards=[
-    ["maladie","🤒 En maladie",db.agents.filter(a=>ficheAgentInMaladie(a)).length,"#f97316"],
-    ["conge","🏖 En congé",db.agents.filter(a=>ficheAgentInConge(a)).length,"#0360a8"],
-    ["suspendu","⏸ Suspendu",db.agents.filter(a=>a.statut==="suspendu").length,"#7c3aed"],
-    ["abandon","🚫 En abandon de poste",db.agents.filter(a=>ficheAgentInAbandon(a)).length,"#dc2626"],
-    ["archivees","🗄 Sortants / archivés",db.agents.filter(a=>ficheAgentIsSortantArchive(a)).length,"#475569"]
+    ["maladie","🤒 En maladie",statsBase.filter(a=>ficheAgentInMaladie(a)).length,"#f97316"],
+    ["conge","🏖 En congé",statsBase.filter(a=>ficheAgentInConge(a)).length,"#0360a8"],
+    ["suspendu","⏸ Suspendu",statsBase.filter(a=>a.statut==="suspendu").length,"#7c3aed"],
+    ["abandon","🚫 En abandon de poste",statsBase.filter(a=>ficheAgentInAbandon(a)).length,"#dc2626"],
+    ["archivees","🗄 Sortants / archivés",statsBase.filter(a=>ficheAgentIsSortantArchive(a)).length,"#475569"]
   ];
   view.innerHTML=`<div class="mb-3"><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${sub==="badge"?"Préparation des badges personnel":"Annuaire des fiches de position employé"} — ${list.length} fiche(s)${socFilter?` · <span class="font-semibold text-amber-700">${escapeHTML(socFilter)}</span>`:""}.</p></div>
     <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
