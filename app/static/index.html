@@ -2593,8 +2593,8 @@ function renderSidebar(){
         ]},
         structureDemandSidebarGroup(),
         {type:"group",label:"DEMANDES PERSONNEL",children:[
-          {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:incomingPortalDemandesPersonnel().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-          {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:incomingPortalDemandesPersonnel().filter(d=>demandePersonnelIsAlert(d)).length},
+          {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+          {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:drhDemandesPersonnelList().filter(d=>demandePersonnelIsAlert(d)).length},
           {label:"Portail mobile",icon:"📱",route:"portail"}
         ]},
         {type:"group",label:"CONTRAT",children:[
@@ -2660,8 +2660,8 @@ function renderSidebar(){
       {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
     ]},
     {type:"group",label:"DEMANDES PERSONNEL",children:[
-      {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:incomingPortalDemandesPersonnel().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-      {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:incomingPortalDemandesPersonnel().filter(d=>demandePersonnelIsAlert(d)).length}
+      {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+      {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:drhDemandesPersonnelList().filter(d=>demandePersonnelIsAlert(d)).length}
     ]},
     structureDemandSidebarGroup(),
     {type:"group",label:"CONTRAT",children:[
@@ -3492,7 +3492,10 @@ function resetArchiveCandidateFilters(){
 function renderRecrutement(view,mode){
   cleanupDuplicateCandidates(true);
   const title=mode==="archive"?"Candidats archivés":mode==="reserve"?"Candidats en réserve":"Nouvelles candidatures";
+  const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
+  const allowed=(isDrhModuleContext()&&!socFilter)?drhAuthorizedSocieties():[];
   let cs=db.candidats.filter(c=>mode==="archive"?candidatIsArchived(c):!candidatIsArchived(c)).filter(c=>mode==="archive"?true:mode==="reserve"?candidatIsReserve(c):!candidatIsReserve(c));
+  if(socFilter)cs=cs.filter(c=>c.societe===socFilter);else if(allowed.length)cs=cs.filter(c=>allowed.includes(c.societe));
   const st=mode==="archive"?"Dossiers archivés depuis les nouvelles candidatures et les candidats en réserve.":mode==="reserve"?"Candidats validés, en attente de recrutement.":"Candidats à présélectionner pour la fiche de renseignement.";
   let statsHTML="";
   let archiveToolsHTML="";
@@ -3841,7 +3844,7 @@ function collectCandidatFormData(){
   const existing=(db.candidats||[]).find(x=>x.id===existingId)||{};
   const fd=new FormData(f);const data={...existing};
   fd.forEach((v,k)=>{if(k==="photo"){data.photo=v||null}else if(k.startsWith("hab_")||k.startsWith("lang_")||k.startsWith("doc_")||k.startsWith("exp_")||k.startsWith("verif")||k.startsWith("cv_")){}else{data[k]=v}});
-  data.societe=data.societe||mySoc()||sessionStorage.getItem("dashSociete")||"";
+  data.societe=data.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   if(data.serviceMilitaire!=="Oui"){
     data.serviceMilitaire="Non";
     data.armeService="";
@@ -4096,7 +4099,7 @@ function unlockCandidatSection(id,key){
 async function validerFichePosition(id){
   const c=await saveCandidat(id,false);if(!c)return;
   if(!candidatAllSectionsValid(c)){toast("Impossible de valider la fiche : toutes les sections doivent être validées","error");renderView();return}
-  c.societe=c.societe||mySoc()||sessionStorage.getItem("dashSociete")||"";
+  c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   c.statut="reserve";c.fichePositionValidee=true;c.fichePositionValideeAt=new Date().toISOString();c.fichePositionValideeBy=session?session.username:"system";
   try{
     await persistCandidateToPostgres(c);
@@ -4466,7 +4469,7 @@ function embaucherCandidat(id){
   const missing=keys.filter(k=>!f.querySelector(`[name="verif${k}"]`)?.checked);
   if(missing.length){toast(`${missing.length} vérif. manquante(s)`,"error");return}
   const fd=new FormData(f);
-  c.societe=c.societe||mySoc()||f.querySelector('[name="contractSociete"]')?.value||"";
+  c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||f.querySelector('[name="contractSociete"]')?.value||"";
   if(!c.societe){toast("Choisissez la société","error");return}
   keys.forEach(k=>c["verif"+k]=f.querySelector(`[name="verif${k}"]`)?.checked||false);
   c.documents=c.documents||{};
@@ -6133,8 +6136,8 @@ function renderDemandesPersonnel(view,sub,arg){
   if(!canAccess("demandes_personnel")){view.innerHTML=`<div class="card p-6 text-red-700">Accès réservé DRH / Administration.</div>`;return}
   ensureDemandesPersonnel();
   refreshDemandesPersonnelFromPostgres({silent:true});
-  const soc=isDrhModuleContext()?((sessionStorage.getItem("drhSociete")||"")):mySoc();
-  const all=incomingPortalDemandesPersonnel().filter(d=>!soc||demandePersonnelSociete(d)===soc);
+  const soc=isDrhModuleContext()?drhActiveSocieteFilter():mySoc();
+  const all=isDrhModuleContext()?drhDemandesPersonnelList():incomingPortalDemandesPersonnel().filter(d=>!soc||demandePersonnelSociete(d)===soc);
   const q=(sessionStorage.getItem("dp_q")||"").toLowerCase();
   const statut=sessionStorage.getItem("dp_statut")||"";
   const type=sessionStorage.getItem("dp_type")||"";
@@ -10577,7 +10580,9 @@ function drhSocieteValue(v){return v===DRH_NO_SOCIETE?"":String(v||"")}
 function drhSocieteLabel(v){return v===DRH_NO_SOCIETE?"Sans société":(v||"Toutes les sociétés")}
 function drhSocieteRows(){
   const ag=db.agents||[];
-  const rows=SOCIETES.map(s=>({key:s,label:s}));
+  const allowed=typeof drhAuthorizedSocieties==="function"?drhAuthorizedSocieties():[];
+  const source=allowed.length?SOCIETES.filter(s=>allowed.includes(s)):SOCIETES;
+  const rows=source.map(s=>({key:s,label:s}));
   if(ag.some(a=>!String(a.societe||"").trim()))rows.push({key:DRH_NO_SOCIETE,label:"Sans société"});
   return rows;
 }
@@ -10587,14 +10592,45 @@ function drhMatchSoc(row,selected){
   return selected===DRH_NO_SOCIETE?!value:value===selected;
 }
 function setDrhSociete(s){try{sessionStorage.setItem("drhSociete",s||"")}catch(e){}render()}
+function drhAuthorizedSocieties(){
+  const u=typeof currentUserRecord==="function"?currentUserRecord():null;
+  const list=Array.isArray(u?.societesAutorisees)?u.societesAutorisees:[];
+  return list.filter(Boolean);
+}
+function drhActiveSocieteFilter(){
+  const allowed=drhAuthorizedSocieties();
+  if(session?.societe)return session.societe;
+  if(allowed.length===1)return allowed[0];
+  const stored=(typeof sessionStorage!=="undefined"&&sessionStorage.getItem("drhSociete"))||"";
+  if(stored&&(!allowed.length||allowed.includes(stored)))return stored;
+  return "";
+}
+function drhApplySocieteFilter(list,key){
+  const soc=drhActiveSocieteFilter();
+  const allowed=drhAuthorizedSocieties();
+  let rows=Array.isArray(list)?list.slice():[];
+  if(soc)return rows.filter(x=>drhMatchSoc(x,soc));
+  if(allowed.length)return rows.filter(x=>allowed.includes(String(x&&x[key||"societe"]||"").trim()));
+  return rows;
+}
+function drhAgentIdsForSociete(){return new Set(drhApplySocieteFilter(db.agents||[]).map(a=>a.id))}
+function drhDemandesPersonnelList(){
+  const soc=drhActiveSocieteFilter();
+  const allowed=drhAuthorizedSocieties();
+  return incomingPortalDemandesPersonnel().filter(d=>{
+    const ds=demandePersonnelSociete(d);
+    if(soc)return ds===soc;
+    if(allowed.length)return allowed.includes(ds);
+    return true;
+  });
+}
+function drhCandidatesList(){return drhApplySocieteFilter(db.candidats||[])}
+function drhAgentsList(){return drhApplySocieteFilter(db.agents||[])}
 function renderDRHDashboard(view){
-  const restrictedSocieties=Array.isArray(currentUserRecord()?.societesAutorisees)?currentUserRecord().societesAutorisees:[];
-  const sessionSoc=session?.societe||"";
-  const storedSoc=(typeof sessionStorage!=="undefined"&&sessionStorage.getItem("drhSociete"))||"";
-  const selSoc=sessionSoc||(restrictedSocieties.length===1?restrictedSocieties[0]:storedSoc);
+  const selSoc=drhActiveSocieteFilter();
   const allAg=db.agents||[];const allCa=db.candidats||[];const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];const allMa=db.materiel||[];
-  const ag=selSoc?allAg.filter(a=>drhMatchSoc(a,selSoc)):allAg;
-  const ca=selSoc?allCa.filter(c=>drhMatchSoc(c,selSoc)):allCa;
+  const ag=drhAgentsList();
+  const ca=drhCandidatesList();
   const agIds=new Set(ag.map(a=>a.id));
   const co=selSoc?allCo.filter(c=>agIds.has(c.agentId)):allCo;
   const siteIds=new Set(ag.map(a=>a.affectationCourante&&a.affectationCourante.siteId).filter(Boolean));
@@ -10613,7 +10649,7 @@ function renderDRHDashboard(view){
   const totalSalaires=ag.filter(a=>a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire)||0),0);
   const sites=si.length;
   const incidentsOuverts=inc.filter(i=>i.statut!=="cloture").length;
-  const demandesPersonnel=incomingPortalDemandesPersonnel().filter(d=>(!selSoc||demandePersonnelSociete(d)===selSoc)&&["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
+  const demandesPersonnel=drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
   const contratsExpires=ag.filter(a=>a.dateFinContrat&&daysBetween(today(),a.dateFinContrat)<0);
   const contratsFin30=ag.filter(a=>{if(!a.dateFinContrat)return false;const d=daysBetween(today(),a.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
@@ -10649,7 +10685,7 @@ function renderDRHDashboard(view){
     </div>`;
 }
 function renderDRHStats(view){
-  const ag=db.agents||[];
+  const ag=drhAgentsList();
   const parSoc=drhSocieteRows().map(r=>[r.label,ag.filter(a=>drhMatchSoc(a,r.key)).length]);
   const parFonc={};ag.forEach(a=>{const k=a.fonction||a.poste||"Non précisé";parFonc[k]=(parFonc[k]||0)+1});
   const parCat={};ag.forEach(a=>{const k=a.categorie||"Non précisé";parCat[k]=(parCat[k]||0)+1});
@@ -10673,7 +10709,7 @@ function renderDRHStats(view){
     </div>`;
 }
 function renderDRHStatsSociete(view){
-  const ag=db.agents||[];const co=db.conges||[];
+  const ag=drhAgentsList();const co=db.conges||[];
   const rows=drhSocieteRows().map(row=>{
     const list=ag.filter(a=>drhMatchSoc(a,row.key));
     const actif=list.filter(a=>a.statut==="actif").length;
@@ -10696,7 +10732,7 @@ function renderDRHStatsSociete(view){
     </div>`;
 }
 function renderDRHStatsTheme(view){
-  const ag=db.agents||[];
+  const ag=drhAgentsList();
   const themes={};ag.forEach(a=>{const k=a.theme||"Non précisé";if(!themes[k])themes[k]={total:0,masse:0,actif:0};themes[k].total++;if(a.statut==="actif"){themes[k].actif++;themes[k].masse+=Number(a.salaire)||0}});
   const entries=Object.entries(themes).sort((a,b)=>b[1].total-a[1].total);
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🎯 DRH — Statistiques par thème</h1>
@@ -10713,7 +10749,7 @@ function renderDRHStatsTheme(view){
     </div>`;
 }
 function renderDRHStatsFonction(view){
-  const ag=db.agents||[];
+  const ag=drhAgentsList();
   const fonctions={};ag.forEach(a=>{const k=a.fonction||a.poste||"Non précisé";if(!fonctions[k])fonctions[k]={total:0,actif:0,masse:0,salaires:[]};fonctions[k].total++;if(a.statut==="actif"){fonctions[k].actif++;const s=Number(a.salaire)||0;fonctions[k].masse+=s;if(s>0)fonctions[k].salaires.push(s)}});
   const entries=Object.entries(fonctions).sort((a,b)=>b[1].total-a[1].total);
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🪪 DRH — Statistiques par fonction</h1>
@@ -10727,7 +10763,7 @@ function renderDRHStatsFonction(view){
     </div>`;
 }
 function renderDRHStatsCategorie(view){
-  const ag=db.agents||[];
+  const ag=drhAgentsList();
   const cats={};ag.forEach(a=>{const k=a.categorie||"Non précisé";if(!cats[k])cats[k]={total:0,actif:0,masse:0};cats[k].total++;if(a.statut==="actif"){cats[k].actif++;cats[k].masse+=Number(a.salaire)||0}});
   const entries=Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🏷 DRH — Statistiques par catégorie</h1>
@@ -10744,7 +10780,7 @@ function renderDRHStatsCategorie(view){
     </div>`;
 }
 function renderDRHStatsSalaire(view){
-  const ag=(db.agents||[]).filter(a=>a.statut==="actif"&&Number(a.salaire)>0);
+  const ag=drhAgentsList().filter(a=>a.statut==="actif"&&Number(a.salaire)>0);
   const tranches=[
     {label:"< 30 000 DA",min:0,max:30000,c:"#ef4444"},
     {label:"30 000 – 45 000 DA",min:30000,max:45000,c:"#043970"},
@@ -10776,7 +10812,7 @@ function renderDRHStatsSalaire(view){
     </div>`;
 }
 function renderDRHStatsAffectation(view){
-  const ag=db.agents||[];const sites=db.sites||[];
+  const ag=drhAgentsList();const sites=db.sites||[];
   const bySite={};const noAffect=[];
   ag.forEach(a=>{const sid=a.affectationCourante&&a.affectationCourante.siteId;if(sid){if(!bySite[sid])bySite[sid]={total:0,actif:0,masse:0,site:sites.find(s=>s.id===sid)};bySite[sid].total++;if(a.statut==="actif"){bySite[sid].actif++;bySite[sid].masse+=Number(a.salaire)||0}}else noAffect.push(a)});
   const rows=Object.entries(bySite).map(([sid,v])=>({...v,sid})).sort((a,b)=>b.total-a.total);

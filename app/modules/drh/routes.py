@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
+from app.modules.auth.models import User
 from app.modules.drh import service
 from app.modules.drh.models import Candidate, Contract, Document, Employee, Leave, Sanction
 from app.modules.drh.schemas import (
@@ -27,18 +28,50 @@ from app.modules.drh.schemas import (
 router = APIRouter(dependencies=[Depends(current_user)])
 
 
+def _allowed_societies(user: User) -> list[str]:
+    values = user.authorized_societies if isinstance(user.authorized_societies, list) else []
+    return [str(v).strip() for v in values if str(v).strip()]
+
+
+def _ensure_society_allowed(user: User, society: str | None) -> None:
+    allowed = _allowed_societies(user)
+    if allowed and (not society or society not in allowed):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+
+
+def _effective_society_filter(user: User, requested: str | None) -> str | None:
+    allowed = _allowed_societies(user)
+    if requested:
+        _ensure_society_allowed(user, requested)
+        return requested
+    if len(allowed) == 1:
+        return allowed[0]
+    return None
+
+
 @router.get("/dashboard")
 def dashboard(db: Session = Depends(get_db)):
     return service.drh_dashboard(db)
 
 
 @router.get("/employees", response_model=list[EmployeeOut])
-def employees(status: str | None = None, society: str | None = None, db: Session = Depends(get_db)):
-    return service.list_rows(db, Employee, {"status": status, "society": society})
+def employees(
+    status: str | None = None,
+    society: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    effective_society = _effective_society_filter(user, society)
+    rows = service.list_rows(db, Employee, {"status": status, "society": effective_society})
+    allowed = _allowed_societies(user)
+    if allowed and not effective_society:
+        rows = [row for row in rows if row.society in allowed]
+    return rows
 
 
 @router.post("/employees", response_model=EmployeeOut)
-def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)):
+def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_society_allowed(user, payload.society)
     return service.create_row(db, Employee, payload)
 
 
@@ -63,22 +96,37 @@ def get_fiche_position(employee_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/candidates", response_model=list[CandidateOut])
-def candidates(status: str | None = None, society: str | None = None, db: Session = Depends(get_db)):
-    return service.list_rows(db, Candidate, {"status": status, "society": society})
+def candidates(
+    status: str | None = None,
+    society: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    effective_society = _effective_society_filter(user, society)
+    rows = service.list_rows(db, Candidate, {"status": status, "society": effective_society})
+    allowed = _allowed_societies(user)
+    if allowed and not effective_society:
+        rows = [row for row in rows if row.society in allowed]
+    return rows
 
 
 @router.post("/candidates", response_model=CandidateOut)
-def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db)):
+def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_society_allowed(user, payload.society)
     return service.create_candidate(db, payload)
 
 
 @router.put("/candidates/{candidate_id}", response_model=CandidateOut)
-def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db)):
+def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    existing = service.get_or_404(db, Candidate, candidate_id)
+    _ensure_society_allowed(user, payload.society or existing.society)
     return service.update_candidate(db, candidate_id, payload)
 
 
 @router.delete("/candidates/{candidate_id}")
-def delete_candidate(candidate_id: int, db: Session = Depends(get_db)):
+def delete_candidate(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    existing = service.get_or_404(db, Candidate, candidate_id)
+    _ensure_society_allowed(user, existing.society)
     return service.delete_row(db, Candidate, candidate_id)
 
 
