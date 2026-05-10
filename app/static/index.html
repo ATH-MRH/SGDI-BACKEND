@@ -1164,11 +1164,27 @@ async function sgdiLoadAuthState(){
   }
 }
 
+function normalizeCandidateIdentity(c){
+  if(!c||typeof c!=="object")return c;
+  c.nom=String(c.nom??c.last_name??c.lastName??"").trim();
+  c.prenom=String(c.prenom??c.first_name??c.firstName??"").trim();
+  return c;
+}
+function candidateIdentityMissing(c){
+  normalizeCandidateIdentity(c);
+  const missing=[];
+  if(!String(c?.nom||"").trim())missing.push("Nom");
+  if(!String(c?.prenom||"").trim())missing.push("Prénom");
+  return missing;
+}
 function candidateHasMinimumData(c){
   if(!c||typeof c!=="object")return false;
-  const nom=String(c.nom||c.last_name||"").trim();
-  const prenom=String(c.prenom||c.first_name||"").trim();
-  return nom.length>=2&&prenom.length>=2;
+  normalizeCandidateIdentity(c);
+  return String(c.nom||"").trim().length>=2&&String(c.prenom||"").trim().length>=2;
+}
+function candidateMinimumDataMessage(c){
+  const missing=candidateIdentityMissing(c);
+  return missing.length?"Champs obligatoires manquants : "+missing.join(", "):"Nom et prénom doivent contenir au moins 2 caractères";
 }
 function isTempCandidateId(id){return String(id||"").startsWith("tmp_cd_")}
 function newTempCandidateId(){return "tmp_cd_"+uid("cd")}
@@ -4021,7 +4037,10 @@ function collectCandidatFormData(){
   const existingId=f.querySelector('[name="id"]')?.value||"";
   const existing=findCandidatById(existingId)||{};
   const fd=new FormData(f);const data={...existing};
-  fd.forEach((v,k)=>{if(k==="photo"){data.photo=v||null}else if(k.startsWith("hab_")||k.startsWith("lang_")||k.startsWith("doc_")||k.startsWith("exp_")||k.startsWith("verif")||k.startsWith("cv_")){}else{data[k]=v}});
+  fd.forEach((v,k)=>{if(k==="photo"){data.photo=v||null}else if(k.startsWith("hab_")||k.startsWith("lang_")||k.startsWith("doc_")||k.startsWith("exp_")||k.startsWith("verif")||k.startsWith("cv_")){}else{data[k]=typeof v==="string"?v.trim():v}});
+  data.nom=String(fd.get("nom")||data.nom||"").trim();
+  data.prenom=String(fd.get("prenom")||data.prenom||"").trim();
+  normalizeCandidateIdentity(data);
   data.societe=data.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   if(data.serviceMilitaire!=="Oui"){
     data.serviceMilitaire="Non";
@@ -4088,7 +4107,7 @@ async function saveCandidat(id,showToast){
   if(!candidatSectionRequiredValid("identification",data))return;
   if(!validateCandidatIdentification(data))return;
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return}
-  if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");return}
+  if(!candidateHasMinimumData(data)){toast(candidateMinimumDataMessage(data),"error");return}
   const realId=isTempCandidateId(id)?(candidatTempRealIds[id]||(candidatTempRealIds[id]=uid("cd"))):id;
   const creating=!findCandidatById(realId)&&!findCandidatById(id);
   let c=findCandidatById(realId)||findCandidatById(id);
@@ -4254,7 +4273,7 @@ async function validateCandidatSectionAction(id,key){
   }
   if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!validateCandidatSection(key,data)){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
-  if(!candidateHasMinimumData(data)){toast("Aucune donnée candidat valide à enregistrer","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
+  if(!candidateHasMinimumData(data)){toast(candidateMinimumDataMessage(data),"error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!c){c=validationTarget;db.candidats.push(c)}
   Object.assign(c,data,{id:realId});delete c.isNew;
   const locks=candidatSectionValidations(c);
