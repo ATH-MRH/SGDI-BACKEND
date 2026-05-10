@@ -1724,7 +1724,7 @@ function uiFocusFirstInvalid(root){
 }
 function commandRoutes(){
   const base=[
-    ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Nouvelle candidature","recrutement/nouveau"],["Candidats en reserve","reserve"],["Candidats archives","candidats_archives"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["Sites actifs","sites/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/quotidien"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
+    ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Candidats en reserve","reserve"],["Candidats archives","candidats_archives"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["Sites actifs","sites/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/quotidien"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
   ];
   if(isAdmin())base.push(["Administration systeme","admin/dashboard"],["Utilisateurs","admin/users"]);
   return base.filter(([_,r])=>canAccess(r.split("/")[0])||r.startsWith(session?.transverse||""));
@@ -2028,7 +2028,7 @@ const SGDI_LANG_PAIRS=[
   ["DRH","الموارد البشرية"],["OPS","العمليات"],["MATERIEL/EQUIP","العتاد والتجهيز"],["MATÉRIEL & ÉQUIPEMENT","العتاد والتجهيز"],["FINANCES/COMPTA","المالية والمحاسبة"],["COMMERCIAL","التجاري"],["ADMINISTRATION SYSTEME","إدارة النظام"],
   ["DEMANDE STRUCTURE","طلبات الهيكل"],["Demande structure","طلب الهيكل"],["Réception","الاستقبال"],["Envoi","الإرسال"],["Boîte interne entre structures SGDI","صندوق داخلي بين هياكل SGDI"],["Recherche demande structure","بحث طلب الهيكل"],["Aucune demande structure.","لا يوجد أي طلب هيكل."],["Répondre à la demande structure","الرد على طلب الهيكل"],["Réponse structure","رد الهيكل"],["Demande structure mise à jour","تم تحديث طلب الهيكل"],
   ["DEMANDES PERSONNEL","طلبات الموظفين"],["Réception demandes","استقبال الطلبات"],["Réception demandes & réclamations","استقبال الطلبات والشكاوى"],["Demandes","الطلبات"],["Réclamations","الشكاوى"],["Portail mobile","البوابة المحمولة"],["Portail personnel","بوابة الموظف"],["Portail RH personnel","بوابة الموارد البشرية للموظف"],["Historique portail mobile","سجل البوابة المحمولة"],
-  ["RECRUTEMENT","التوظيف"],["Nouvelle candidature","ترشح جديد"],["Candidats en réserve","المرشحون في الاحتياط"],["Candidats archivés","المرشحون المؤرشفون"],["Candidat","مرشح"],["Candidats","مرشحون"],["Identification du candidat","تعريف المرشح"],["Coordonnées","بيانات الاتصال"],["Contact d'urgence","اتصال الطوارئ"],
+  ["RECRUTEMENT","التوظيف"],["Candidats en réserve","المرشحون في الاحتياط"],["Candidats archivés","المرشحون المؤرشفون"],["Candidat","مرشح"],["Candidats","مرشحون"],["Identification du candidat","تعريف المرشح"],["Coordonnées","بيانات الاتصال"],["Contact d'urgence","اتصال الطوارئ"],
   ["CONTRAT","العقد"],["Contrats","العقود"],["Nouveau contrat","عقد جديد"],["Avenant","ملحق عقد"],["Situation contrat","وضعية العقد"],["Contrats du personnel","عقود الموظفين"],["Date début contrat","تاريخ بداية العقد"],["Date fin contrat","تاريخ نهاية العقد"],
   ["FICHE DE POSITION","بطاقة الوضعية"],["Fiches de position","بطاقات الوضعية"],["Fiche de position","بطاقة الوضعية"],["BADGE","الشارة"],["Documents","الوثائق"],["Photo","الصورة"],["Nom Prénom","الاسم واللقب"],["Nom","الاسم"],["Prénom","اللقب"],["Code","الرمز"],["Matricule","الرقم المهني"],["Téléphone","الهاتف"],["Age","العمر"],["Recrutement","التوظيف"],["Affectation","التعيين"],
   ["EFFECTIFS","التعداد"],["EFFECTIF","التعداد"],["Effectif opérationnel","التعداد العملي"],["Employé en attente d'affectation","موظف في انتظار التعيين"],["Employé en instance de dotation","موظف في انتظار التجهيز"],["En congé","في عطلة"],["En maladie","في مرض"],["En absence","في غياب"],["Suspendu","موقوف"],["Sortant","خارج الخدمة"],["Opérationnels","عمليون"],["Effectif total","إجمالي التعداد"],
@@ -2641,7 +2641,6 @@ function renderSidebar(){
       const drhGroups=[
         {type:"link",label:"TABLEAU DE BORD DRH",icon:"📊",route:"drh/dashboard"},
         {type:"group",label:"RECRUTEMENT",children:[
-          {label:"Nouvelle candidature",icon:"📝",route:"recrutement",count:_ca.filter(c=>c.statut==="nouvelle").length},
           {label:"Candidats en réserve",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
           {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
         ]},
@@ -2709,7 +2708,6 @@ function renderSidebar(){
     {type:"link",label:"Portail personnel",icon:"📱",route:"portail"},
     {type:"link",label:"Dossier administratif",icon:"📁",route:"dossiers"},
     {type:"group",label:"RECRUTEMENT",children:[
-      {label:"Nouvelle candidature",icon:"📝",route:"recrutement",count:_ca.filter(c=>c.statut==="nouvelle").length},
       {label:"Candidats en réserve",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
       {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
     ]},
@@ -3440,7 +3438,7 @@ function renderDashboard(view){
         </div>
       </div>
       <div class="dash-action-row">
-        <button class="btn btn-primary" onclick="navigate('recrutement/nouveau')">Nouvelle candidature</button>
+
         <button class="btn btn-secondary" onclick="navigate('pointage/quotidien')">Feuille de présence</button>
         <button class="btn btn-secondary" onclick="navigate('sites/nouveau')">Nouveau site</button>
         <button class="btn btn-secondary" onclick="navigate('materiel/articles')">Stock articles</button>
@@ -3490,7 +3488,6 @@ function renderDashboard(view){
       <div class="dash-panel">
         <div class="dash-panel-head"><div class="dash-panel-title">Actions fréquentes</div><span class="text-xs text-slate-500">Accès direct</span></div>
         <div class="dash-panel-body"><div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-          ${dashboardAction("Créer candidat","Fiche complète DRH","recrutement/nouveau")}
           ${dashboardAction("Candidats en réserve","Liste et activation","reserve")}
           ${dashboardAction("Créer / modifier site","Effectifs et relèves","sites/nouveau")}
           ${dashboardAction("Générer présence","Pointage du jour","pointage/quotidien")}
@@ -3602,7 +3599,7 @@ function candidatIsArchived(c){
   const st=normalizeSocieteName(c&&c.statut);
   return st==="ARCHIVE"||st==="ARCHIVED"||st==="ARCHIVÉ"||st==="ARCHIVEE"||st==="ARCHIVÉE"||!!(c&&(c.archivedAt||c.motifArchive||c.commentaireArchive));
 }
-function candidatArchiveSourceLabel(c){return c&&c.archiveSource==="reserve"?"Candidat en réserve":"Nouvelle candidature"}
+function candidatArchiveSourceLabel(c){return c&&c.archiveSource==="reserve"?"Candidat en réserve":"Candidat"}
 function archiveCandidateFilters(){
   try{return JSON.parse(sessionStorage.getItem("archiveCandidateFilters")||"{}")}catch(e){return{}}
 }
@@ -3688,7 +3685,7 @@ function renderRecrutement(view,mode){
       <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
-  const addButton=mode==="nouvelle"?`<button class="btn btn-primary" onclick="navigate('recrutement/nouveau')">➕ Nouvelle candidature</button>`:mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">👥 Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">👥 Ajouter candidat</button>`:"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
@@ -3900,7 +3897,7 @@ function renderCandidatForm(view,id,options){
   const allValid=candidatAllSectionsValid(c);
   view.innerHTML=`<div class="max-w-5xl mx-auto">
     <div class="flex items-start justify-between mb-4">
-      <div><h1 class="text-2xl font-bold">${c.isNew?"Nouvelle candidature":escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Processus de recrutement — étape ${step}/2</p></div>
+      <div><h1 class="text-2xl font-bold">${c.isNew?(c.reserveDirect?"Ajouter candidat en réserve":"Fiche candidat"):escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Processus de recrutement — étape ${step}/2</p></div>
       <div class="flex gap-2"><button class="btn btn-ghost" onclick="navigate('${candidatIsArchived(c)?'candidats_archives':c.statut==='reserve'?'reserve':'recrutement'}')">← Retour</button></div>
     </div>
     <div class="stepper"><div class="step ${step>=1?"done":"active"}">1. Candidature</div><div class="step ${step===2?"active":""}">2. Fiche de renseignement</div></div>
