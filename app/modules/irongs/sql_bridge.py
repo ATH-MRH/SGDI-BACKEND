@@ -9,13 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.commercial.models import Client
-from app.modules.drh.models import Employee
+from app.modules.drh.models import Candidate, Employee
 from app.modules.finance_models import Advance, CashEntry, CreditNote, Invoice, Payment
 from app.modules.materiel.models import StockArticle, StockMovement, Store, Supplier
 from app.modules.ops.models import Assignment, DailyPresence, Site
 
 SQL_COLLECTIONS = {
-    "agents", "employees", "sites", "assignments", "affectations", "pointages", "pointageMensuel", "feuillePresence",
+    "candidats", "agents", "employees", "sites", "assignments", "affectations", "pointages", "pointageMensuel", "feuillePresence",
     "clients", "magasins", "fournisseurs", "stockArticles", "stockMouvements",
     "factures", "paiements", "avances", "avoirs", "caisse",
 }
@@ -89,6 +89,50 @@ def site_by_ref(db: Session, value: Any):
         return db.execute(select(Site).where((Site.indicatif == text) | (Site.name == text))).scalar_one_or_none()
     return None
 
+
+
+def candidate_to_item(row: Candidate) -> dict[str, Any]:
+    data = row.data if isinstance(row.data, dict) else {}
+    item = dict(data or {})
+    item.update({
+        "id": item.get("id") or str(row.id),
+        "backendId": row.id,
+        "nom": item.get("nom") or row.last_name or "",
+        "prenom": item.get("prenom") or row.first_name or "",
+        "telephone": item.get("telephone") or row.phone or "",
+        "email": item.get("email") or row.email or "",
+        "posteSouhaite": item.get("posteSouhaite") or row.desired_position or "",
+        "societe": item.get("societe") or row.society or "",
+        "salairePrevu": item.get("salairePrevu") if item.get("salairePrevu") not in (None, "") else row.expected_salary,
+        "avisCommentaire": item.get("avisCommentaire") or row.recruiter_opinion or "",
+        "statut": item.get("statut") or row.status or "nouvelle",
+        "createdAt": item.get("createdAt") or date_out(getattr(row, "created_at", None)),
+    })
+    return item
+
+
+def upsert_candidate(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+    row = db.get(Candidate, as_int(item.get("backendId")) or 0)
+    first_name = str(item.get("prenom") or item.get("first_name") or "").strip()
+    last_name = str(item.get("nom") or item.get("last_name") or "").strip()
+    if len(first_name) < 2 or len(last_name) < 2:
+        raise HTTPException(status_code=422, detail="Candidat refusé: nom et prénom obligatoires")
+    if not row:
+        row = Candidate(first_name=first_name, last_name=last_name)
+        db.add(row)
+    row.first_name = first_name
+    row.last_name = last_name
+    row.phone = item.get("telephone") or item.get("phone")
+    row.email = item.get("email")
+    row.desired_position = item.get("posteSouhaite") or item.get("poste") or item.get("desired_position")
+    row.society = item.get("societe") or item.get("society")
+    raw_salary = item.get("salairePrevu") if item.get("salairePrevu") not in (None, "") else item.get("expected_salary")
+    row.expected_salary = None if raw_salary in (None, "") else as_float(raw_salary)
+    row.recruiter_opinion = item.get("avisCommentaire") or item.get("avisRecruteur") or item.get("recruiter_opinion")
+    row.status = item.get("statut") or item.get("status") or row.status or "nouvelle"
+    row.data = deepcopy(item)
+    db.flush()
+    return candidate_to_item(row)
 
 def employee_to_item(row: Employee) -> dict[str, Any]:
     extra = row.extra if isinstance(row.extra, dict) else {}
@@ -325,6 +369,7 @@ def upsert_presence(db: Session, item: dict[str, Any], collection: str) -> dict[
 
 
 def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
+    if name == "candidats": return [candidate_to_item(r) for r in db.execute(select(Candidate).order_by(Candidate.id)).scalars().all()]
     if name in {"agents", "employees"}: return [employee_to_item(r) for r in db.execute(select(Employee).order_by(Employee.id)).scalars().all()]
     if name == "sites": return [site_to_item(r) for r in db.execute(select(Site).order_by(Site.id)).scalars().all()]
     if name == "clients": return [simple_raw(r) | {"nom": r.name, "raisonSociale": r.legal_name, "societe": r.society, "statut": r.status} for r in db.execute(select(Client).order_by(Client.id)).scalars().all()]
@@ -336,6 +381,7 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
 
 
 def upsert_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+    if name == "candidats": return upsert_candidate(db, item)
     if name in {"agents", "employees"}: return upsert_employee(db, item)
     if name == "sites": return upsert_site(db, item)
     if name == "clients": return upsert_client(db, item)
@@ -355,7 +401,8 @@ def replace_collection(db: Session, name: str, data: list[Any] | dict[str, Any] 
 
 def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
     model = None
-    if name in {"agents", "employees"}: model = Employee
+    if name == "candidats": model = Candidate
+    elif name in {"agents", "employees"}: model = Employee
     elif name == "sites": model = Site
     elif name == "clients": model = Client
     elif name in {"pointages", "feuillePresence", "pointageMensuel"}: model = DailyPresence

@@ -1252,7 +1252,10 @@ async function persistCandidateToPostgres(c,options){
   sgdiRequireServerWrite();
   const opt=options||{};
   const backendId=sqlBackendId(c.backendId);
-  if(isTempCandidateId(c.id))return null;
+  if(isTempCandidateId(c.id)){
+    if(!opt.allowCreate)return null;
+    c.id=candidatTempRealIds[c.id]||(candidatTempRealIds[c.id]=uid("cd"));
+  }
   if(!candidateHasMinimumData(c)){
     if(backendId)await deleteCandidateFromPostgres(c);
     return null;
