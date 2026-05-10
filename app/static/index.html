@@ -4681,16 +4681,11 @@ function renderContractualisation(view,id){
   const sitesContract=(db.sites||[])
     .filter(s=>s.actif!==false)
     .sort((a,b)=>((a.societe||"")+(a.nom||"")).localeCompare((b.societe||"")+(b.nom||"")));
-  const verifs=[["ActeNaissance","Acte de naissance"],["CertifResidence","Certificat de résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Copie pièce d'identité biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]];
+  const verifs=contractVerificationItems();
   const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
   view.innerHTML=`<div class="max-w-5xl mx-auto">
     <div class="flex justify-between mb-4 gap-3 items-start"><div><h1 class="text-2xl font-bold">Contractualisation — ${escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Vérifications, contrat et affectation.</p></div><div class="flex gap-2 items-end flex-wrap justify-end"><div style="min-width:240px"><label class="label">Société *</label><select class="select" name="contractSociete" onchange="setContractualisationSociete('${c.id}',this.value)" ><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${selectedSociete===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
     <form id="contract-form" onsubmit="event.preventDefault();embaucherCandidat('${c.id}')">
-      <div id="banner-warn" class="section-banner banner-amber ${nbOk===9?"hidden":""}">⚠ Vérifications manquantes — <span id="nbmissing">${9-nbOk}</span> case(s)</div>
-      <div id="banner-ok" class="section-banner banner-green ${nbOk===9?"":"hidden"}">✅ Toutes les vérifications validées</div>
-      <div class="card p-5 mb-4"><div class="section-banner banner-blue">Vérifications & agréments (9 pièces)</div><div class="space-y-2">
-        ${verifs.map(([k,l])=>{const ex=c.documents?.[k];return`<div class="grid grid-6 items-center p-3 bg-slate-100 rounded-lg"><div class="col-span-3 flex items-center gap-2"><input type="checkbox" name="verif${k}" ${c["verif"+k]?"checked":""} onchange="updateVerifBanner()"/><span class="text-sm">${l}</span></div><div class="col-span-3 flex justify-end gap-2 items-center">${docUploadField(k,l,ex?.url,ex?.name)}</div></div>`}).join("")}
-      </div></div>
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">Contrat de travail</div><div class="grid grid-6">
         <div class="col-span-3"><label class="label">Type de contrat</label><select class="select" name="typeContrat">${TYPES_CONTRAT.map(t=>`<option ${c.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Poste</label><select class="select" name="posteContrat" onchange="const auto=contratPersonnelByPoste(this.value);const sel=document.querySelector('[name=contratPersonnelId]');if(sel&&auto)sel.value=auto.id;updateContratPersonnelPreview()"><option value="">— Choisir —</option>${POSTES.map(p=>`<option ${((c.posteContrat||c.posteSouhaite)===p)?"selected":""}>${p}</option>`).join("")}</select></div>
@@ -4705,7 +4700,7 @@ function renderContractualisation(view,id){
         <div class="col-span-6"><label class="label">IBAN</label><input class="input" name="iban" value="${escapeHTML(c.iban||"")}"/></div>
       </div></div>
       <div class="card p-5 mb-4"><div class="section-banner banner-blue">Affectation opérationnelle</div><div class="text-sm text-slate-600">L'affectation du nouvel agent à un site est confiée au module OPS. Après validation DRH, l'agent sera créé sans site d'affectation.</div></div>
-      <div class="card p-4 flex justify-between items-center"><div class="text-sm text-slate-500">Matricule attribué automatiquement.</div><button type="submit" class="btn btn-success">✓ Valider & embaucher</button></div>
+      <div class="card p-4 flex justify-between items-center gap-3 flex-wrap"><div class="text-sm text-slate-500">Matricule attribué automatiquement. Documents contractualisation : <b>${nbOk}/9</b>.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button type="submit" class="btn btn-success">✓ Valider & embaucher</button></div></div>
     </form>
   </div>`;
   setTimeout(updateContractEndDate,0);
@@ -4717,21 +4712,42 @@ function setContractualisationSociete(id,societe){
   toast("Société sélectionnée","success");
   renderView();
 }
-function updateVerifBanner(){const f=document.getElementById("contract-form");if(!f)return;const keys=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"];const ok=keys.filter(k=>f.querySelector(`[name="verif${k}"]`)?.checked).length;document.getElementById("banner-warn").classList.toggle("hidden",ok===9);document.getElementById("banner-ok").classList.toggle("hidden",ok!==9);const n=document.getElementById("nbmissing");if(n)n.textContent=9-ok}
+function contractVerificationItems(){return [["ActeNaissance","Acte de naissance"],["CertifResidence","Certificat de résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Copie pièce d'identité biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]]}
+function updateVerifBanner(){const f=document.getElementById("contract-documents-form")||document.getElementById("contract-form");if(!f)return;const keys=contractVerificationItems().map(x=>x[0]);const ok=keys.filter(k=>f.querySelector(`[name="verif${k}"]`)?.checked).length;const warn=document.getElementById("banner-warn");const done=document.getElementById("banner-ok");if(warn)warn.classList.toggle("hidden",ok===keys.length);if(done)done.classList.toggle("hidden",ok!==keys.length);const n=document.getElementById("nbmissing");if(n)n.textContent=keys.length-ok}
+function openContractDocumentsModal(id){
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  const verifs=contractVerificationItems();
+  const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
+  openModal(`<h3 class="font-bold text-lg mb-2">Ajouter document</h3><p class="text-sm text-slate-500 mb-4">Vérification & agrément du dossier contractualisation.</p>
+    <form id="contract-documents-form" onsubmit="event.preventDefault();saveContractDocuments('${id}')">
+      <div id="banner-warn" class="section-banner banner-amber ${nbOk===verifs.length?"hidden":""}">⚠ Vérifications manquantes — <span id="nbmissing">${verifs.length-nbOk}</span> pièce(s)</div>
+      <div id="banner-ok" class="section-banner banner-green ${nbOk===verifs.length?"":"hidden"}">✅ Toutes les vérifications sont validées</div>
+      <div class="space-y-2 mt-3">${verifs.map(([k,l])=>{const ex=c.documents?.[k];return`<div class="grid grid-6 items-center p-3 bg-slate-100 rounded-lg"><div class="col-span-3 flex items-center gap-2"><input type="checkbox" name="verif${k}" ${c["verif"+k]?"checked":""} onchange="updateVerifBanner()"/><span class="text-sm">${l}</span></div><div class="col-span-3 flex justify-end gap-2 items-center">${docUploadField(k,l,ex?.url,ex?.name)}</div></div>`}).join("")}</div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary">Enregistrer documents</button></div>
+    </form>`);
+}
+async function saveContractDocuments(id){
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  const f=document.getElementById("contract-documents-form");if(!f)return;
+  const keys=contractVerificationItems().map(x=>x[0]);
+  c.documents=c.documents||{};
+  keys.forEach(k=>{c["verif"+k]=!!f.querySelector(`[name="verif${k}"]`)?.checked});
+  [...f.querySelectorAll('[name^="doc_"][name$="_url"]')].forEach(inp=>{const k=inp.name.replace("doc_","").replace("_url","");const nm=f.querySelector(`[name="doc_${k}_name"]`)?.value||"fichier";if(inp.value)c.documents[k]={url:inp.value,name:nm};else delete c.documents[k]});
+  try{await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});if(typeof sgdiBackendSave==="function")sgdiBackendSave();closeModal();toast("Documents enregistrés","success");renderView()}catch(e){toast("Enregistrement documents refusé : "+(e.message||e),"error")}
+}
 
 function embaucherCandidat(id){
   const c=findCandidatById(id);if(!c){toast("Introuvable","error");return}
   const blockedAgent=candidateBlackListMatch(c);if(blockedAgent){toast("Contrat impossible : personne inscrite sur BLACKLIST","error");return}
   const f=document.getElementById("contract-form");
-  const keys=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"];
-  const missing=keys.filter(k=>!f.querySelector(`[name="verif${k}"]`)?.checked);
+  const keys=contractVerificationItems().map(x=>x[0]);
+  const missing=keys.filter(k=>!c["verif"+k]);
   if(missing.length){toast(`${missing.length} vérif. manquante(s)`,"error");return}
   const fd=new FormData(f);
   c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||f.querySelector('[name="contractSociete"]')?.value||"";
   if(!c.societe){toast("Choisissez la société","error");return}
-  keys.forEach(k=>c["verif"+k]=f.querySelector(`[name="verif${k}"]`)?.checked||false);
+  keys.forEach(k=>c["verif"+k]=!!c["verif"+k]);
   c.documents=c.documents||{};
-  [...f.querySelectorAll('[name^="doc_"][name$="_url"]')].forEach(inp=>{if(inp.value){const k=inp.name.replace("doc_","").replace("_url","");const nm=f.querySelector(`[name="doc_${k}_name"]`)?.value||"fichier";c.documents[k]={url:inp.value,name:nm}}});
   const dureeEssai=parseInt(fd.get("dureeEssai"))||90;
   const dateRecrutement=fd.get("dateRecrutement")||today();
   const dureeContrat=fd.get("dureeContrat")||"";
