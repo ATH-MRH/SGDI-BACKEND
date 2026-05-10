@@ -3289,7 +3289,7 @@ function renderView(){
     switch(root){
       case"dashboard":renderDashboard(view);break;
       case"dossiers":renderDossiers(view);break;
-      case"recrutement":if(sub==="nouveau")renderCandidatForm(view,null);else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"nouvelle");break;
+      case"recrutement":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"reserve");break;
       case"reserve":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"reserve");break;
       case"candidats_archives":if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"archive");break;
       case"contrats":
@@ -3449,7 +3449,7 @@ function renderDashboard(view){
     <section class="dash-kpi-grid">
       ${dashboardKpi("Effectif actif",agentsActifs.length,`${agentsSoc.length} total`,"effectif/actifs","ok")}
       ${dashboardKpi("Sites actifs",sitesActifs.length,"Sites opérationnels","sites/actifs","ok")}
-      ${dashboardKpi("Candidatures",candidatsNouveaux.length,`${candidatsReserve.length} en réserve`,"recrutement","info")}
+      ${dashboardKpi("Candidats",candidatsReserve.length,`${candidatsNouveaux.length} à compléter`,"reserve","info")}
       ${dashboardKpi("Pointage du jour",fpRate+"%",`${fpPointes}/${fpToday.length||0} lignes`,"pointage/quotidien",fpRate<80&&fpToday.length?"warn":"ok")}
       ${dashboardKpi("Absence / maladie",absents.length+enMaladie.length,`${absents.length} absence · ${enMaladie.length} maladie`,"effectif/absents",(absents.length+enMaladie.length)?"danger":"ok")}
       ${dashboardKpi("Congés",enConge.length,`${nbCongesPending} en attente`,"conges",nbCongesPending?"warn":"ok")}
@@ -3534,7 +3534,7 @@ function renderDossiers(view){
     <div class="grid grid-4 mb-6">${kpiCard("Dossiers agents",db.agents.length,"👮","amber")}${kpiCard("Candidats",db.candidats.length,"📝","indigo")}${kpiCard("Pièces archivées",totalPieces,"📄","blue")}${kpiCard("Sociétés",SOCIETES.length,"🏢","green")}</div>
     <div class="card overflow-hidden"><table>
       <thead><tr><th>Personne</th><th>Type</th><th>Matricule</th><th>Société</th><th>Pièces</th><th>Complétude</th><th></th></tr></thead>
-      <tbody>${people.map(p=>{const nb=Object.keys(p.documents||{}).length+(p.cvFile?1:0);const pct=Math.min(100,Math.round(nb/10*100));const link=p.type==="agent"?`#/agents/${p.id}`:`#/recrutement/${p.id}`;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${p.photo?`<img src="${p.photo}"/>`:escapeHTML(p.nom.slice(0,1))}</div>${escapeHTML(p.nom)}</div></td><td>${p.type==="agent"?'<span class="pill pill-green">Agent</span>':'<span class="pill pill-indigo">Candidat</span>'}</td><td class="font-mono">${safe(p.matricule)}</td><td class="text-xs">${safe(p.societe)}</td><td><div class="flex flex-wrap gap-1">${p.cvFile?'<span class="pill pill-blue">CV</span>':''}${Object.keys(p.documents||{}).map(k=>`<span class="pill pill-gray">${k.slice(0,4)}</span>`).join("")}</div></td><td><div class="h-2 bg-slate-100 rounded-full w-24"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div><div class="text-xs text-slate-500 mt-1">${pct}%</div></td><td><a class="btn btn-ghost text-xs" href="${link}">Ouvrir →</a></td></tr>`}).join("")}</tbody>
+      <tbody>${people.map(p=>{const nb=Object.keys(p.documents||{}).length+(p.cvFile?1:0);const pct=Math.min(100,Math.round(nb/10*100));const link=p.type==="agent"?`#/agents/${p.id}`:`#/reserve/${p.id}`;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${p.photo?`<img src="${p.photo}"/>`:escapeHTML(p.nom.slice(0,1))}</div>${escapeHTML(p.nom)}</div></td><td>${p.type==="agent"?'<span class="pill pill-green">Agent</span>':'<span class="pill pill-indigo">Candidat</span>'}</td><td class="font-mono">${safe(p.matricule)}</td><td class="text-xs">${safe(p.societe)}</td><td><div class="flex flex-wrap gap-1">${p.cvFile?'<span class="pill pill-blue">CV</span>':''}${Object.keys(p.documents||{}).map(k=>`<span class="pill pill-gray">${k.slice(0,4)}</span>`).join("")}</div></td><td><div class="h-2 bg-slate-100 rounded-full w-24"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div><div class="text-xs text-slate-500 mt-1">${pct}%</div></td><td><a class="btn btn-ghost text-xs" href="${link}">Ouvrir →</a></td></tr>`}).join("")}</tbody>
     </table></div>`;
 }
 
@@ -3891,7 +3891,7 @@ function modifierCandidatForm(id){
 function renderCandidatForm(view,id,options){
   const formOptions=options||{};
   let c;
-  if(id){c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate("recrutement")}}
+  if(id){c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate((location.hash||"").includes("#/candidats_archives")?"candidats_archives":"reserve")}}
   else{c={id:newTempCandidateId(),statut:formOptions.reserveDirect?"reserve":"nouvelle",reserveDirect:!!formOptions.reserveDirect,fichePositionValidee:!!formOptions.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
   const step=candidatEtape1Valid(c)?2:1;
   const allValid=candidatAllSectionsValid(c);
@@ -4106,7 +4106,7 @@ async function saveCandidat(id,showToast){
   }
   if(showToast)toast("Candidat enregistré dans PostgreSQL","success");
   if((location.hash||"").endsWith("/nouveau")){
-    location.hash="#/recrutement/"+c.id;
+    location.hash="#/"+(c.reserveDirect?"reserve/":"recrutement/")+c.id;
   }
   return c;
 }
@@ -4121,7 +4121,7 @@ async function saveCandidatDraft(id){
     await persistCandidateToPostgres(c);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     if((location.hash||"").endsWith("/nouveau")){
-      history.replaceState(null,"","#/recrutement/"+id);
+      history.replaceState(null,"","#/"+(c.reserveDirect?"reserve/":"recrutement/")+id);
     }
     return true;
   }catch(e){
@@ -4177,9 +4177,9 @@ async function confirmArchiveCandidat(id){
   }catch(e){toast("Archivage PostgreSQL refusé : "+(e.message||e),"error")}
 }
 async function deleteCandidat(id){
-  if(isTempCandidateId(id)){navigate("recrutement");return}
+  if(isTempCandidateId(id)){navigate("reserve");return}
   const c=findCandidatById(id);
-  if(!c){toast("Candidat introuvable","error");navigate("recrutement");return}
+  if(!c){toast("Candidat introuvable","error");navigate("reserve");return}
   const label=String((c.nom||"")+" "+(c.prenom||"")).trim();
   if(!confirm("Supprimer définitivement "+(label||"ce candidat")+" ?"))return;
   const before=(db.candidats||[]).length;
@@ -10863,7 +10863,7 @@ function renderDRHDashboard(view){
       <a href="#/effectif/sortant" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Sortants</div><div class="text-3xl font-bold text-slate-700">${sortants}</div></a>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-      <a href="#/recrutement" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Candidatures nouvelles</div><div class="text-2xl font-bold text-indigo-700">${candNouv}</div></a>
+      <a href="#/reserve" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Ajouter candidats</div><div class="text-2xl font-bold text-indigo-700">${candReserve}</div></a>
       <a href="#/reserve" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Réserve candidats</div><div class="text-2xl font-bold text-indigo-500">${candReserve}</div></a>
       <a href="#/sites/actifs" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Sites actifs</div><div class="text-2xl font-bold text-cyan-700">${sites}</div></a>
       <a href="#/incidents/site" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Incidents ouverts</div><div class="text-2xl font-bold text-rose-700">${incidentsOuverts}</div></a>
