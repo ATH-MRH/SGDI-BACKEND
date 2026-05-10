@@ -1265,12 +1265,15 @@ async function syncCandidatesFromPostgres(){
 }
 async function persistCandidateToPostgres(c,options){
   if(!c)return null;
+  const originalId=String(c.id||"");
+  const originalBackendId=String(c.backendId||"");
   sgdiRequireServerWrite();
   const opt=options||{};
   const backendId=sqlBackendId(c.backendId);
   if(isTempCandidateId(c.id)){
     if(!opt.allowCreate)return null;
     c.id=candidatTempRealIds[c.id]||(candidatTempRealIds[c.id]=uid("cd"));
+    rememberCandidatAlias(originalId,c.id);
   }
   if(!candidateHasMinimumData(c)){
     if(backendId)await deleteCandidateFromPostgres(c);
@@ -1281,6 +1284,11 @@ async function persistCandidateToPostgres(c,options){
   const saved=backendId?await SGDI.rh.updateCandidate(backendId,payload):await SGDI.rh.createCandidate(payload);
   const mapped=candidateFromApi(saved);
   Object.assign(c,mapped,{id:c.id||mapped.id,backendId:saved.id});
+  rememberCandidatAlias(originalId,c.id);
+  rememberCandidatAlias(originalId,saved.id);
+  rememberCandidatAlias(originalBackendId,c.id);
+  rememberCandidatAlias(saved.id,c.id);
+  stashCandidatForRoute(c,[originalId,originalBackendId,saved.id,mapped.id]);
   if(db){
     if(!Array.isArray(db.candidats))db.candidats=[];
     if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||""))){
@@ -3755,6 +3763,20 @@ const CANDIDAT_ARCHIVE_MOTIFS=[
 const CANDIDAT_ETAPE1_KEYS=["identification","mensurations","militaire","poste","avis"];
 const candidatValidationLocks=new Set();
 const candidatTempRealIds={};
+function candidatAliasStorageKey(){return "candidatIdAliases"}
+function loadCandidatAliases(){try{return JSON.parse(sessionStorage.getItem(candidatAliasStorageKey())||"{}")}catch(e){return {}}}
+function saveCandidatAliases(aliases){try{sessionStorage.setItem(candidatAliasStorageKey(),JSON.stringify(aliases||{}))}catch(e){}}
+function rememberCandidatAlias(from,to){
+  from=String(from||"").trim();to=String(to||"").trim();
+  if(!from||!to||from===to)return;
+  const aliases=loadCandidatAliases();aliases[from]=to;saveCandidatAliases(aliases);
+}
+function resolveCandidatAlias(id){
+  let cur=String(id||"").trim();if(!cur)return "";
+  const aliases=loadCandidatAliases();const seen=new Set();
+  while(aliases[cur]&&!seen.has(cur)){seen.add(cur);cur=String(aliases[cur]);}
+  return cur;
+}
 function candidatValidationLockKey(id,key){return String(id||"")+":"+String(key||"")}
 function setCandidatSectionButtonsDisabled(id,key,disabled){
   document.querySelectorAll('[data-section-action="1"]').forEach(b=>{
@@ -3778,15 +3800,21 @@ function candidateDedupeKey(c){
   return "";
 }
 function candidateCompletenessScore(c){return ["nin","telephone","phone","dateNaissance","posteSouhaite","desired_position","avisDecision","avisCommentaire","source"].reduce((n,k)=>n+(String(c&&c[k]||"").trim()?1:0),0)+(c&&c.backendId?2:0)}
-function stashCandidatForRoute(c){
-  if(!c||!c.id)return;
-  try{sessionStorage.setItem("pendingCandidat:"+String(c.id),JSON.stringify(c))}catch(e){}
+function stashCandidatForRoute(c,aliases){
+  if(!c)return;
+  const keys=new Set();
+  if(c.id)keys.add(String(c.id));
+  if(c.backendId)keys.add(String(c.backendId));
+  (aliases||[]).forEach(k=>{if(k)keys.add(String(k))});
+  keys.forEach(k=>{try{sessionStorage.setItem("pendingCandidat:"+k,JSON.stringify(c))}catch(e){}});
 }
 function restorePendingCandidat(id){
   const raw=String(id||"");
   if(!raw)return null;
   let item=null;
+  const alias=resolveCandidatAlias(raw);
   try{item=JSON.parse(sessionStorage.getItem("pendingCandidat:"+raw)||"null")}catch(e){item=null}
+  if(!item&&alias&&alias!==raw){try{item=JSON.parse(sessionStorage.getItem("pendingCandidat:"+alias)||"null")}catch(e){item=null}}
   if(!item&&isTempCandidateId(raw)&&candidatTempRealIds[raw]){
     try{item=JSON.parse(sessionStorage.getItem("pendingCandidat:"+String(candidatTempRealIds[raw]))||"null")}catch(e){item=null}
   }
@@ -3798,15 +3826,17 @@ function restorePendingCandidat(id){
   return item;
 }
 function findCandidatById(id){
-  const raw=String(id||"");
+  const raw=String(id||"").trim();
   if(!raw)return null;
   if(!db)db={};
   if(!Array.isArray(db.candidats))db.candidats=[];
+  const alias=resolveCandidatAlias(raw);
   const mapped=isTempCandidateId(raw)?candidatTempRealIds[raw]:"";
-  return db.candidats.find(c=>String(c.id)===raw)
-    ||(mapped?db.candidats.find(c=>String(c.id)===String(mapped)):null)
-    ||db.candidats.find(c=>String(c.backendId)===raw)
+  const keys=[raw,alias,mapped].filter(Boolean).map(String);
+  return db.candidats.find(c=>keys.includes(String(c.id)))
+    ||db.candidats.find(c=>keys.includes(String(c.backendId||"")))
     ||restorePendingCandidat(raw)
+    ||(alias&&alias!==raw?restorePendingCandidat(alias):null)
     ||null;
 }
 function cleanupDuplicateCandidates(deleteRemote){
@@ -3828,7 +3858,13 @@ function cleanupDuplicateCandidates(deleteRemote){
       dropped.push(c);
     }
   });
-  db.candidats=[...byKey.values()].map(c=>{delete c.isNew;return c});
+  const kept=[...byKey.values()];
+  dropped.forEach(d=>{
+    const dk=candidateDedupeKey(d);
+    const keep=dk?byKey.get(dk):null;
+    if(keep){rememberCandidatAlias(d.id,keep.id||keep.backendId);rememberCandidatAlias(d.backendId,keep.id||keep.backendId);}
+  });
+  db.candidats=kept.map(c=>{delete c.isNew;return c});
   if(deleteRemote&&dropped.length&&sgdiAuthToken()){
     dropped.filter(c=>sqlBackendId(c&&c.backendId)).forEach(c=>deleteCandidateFromPostgres(c).catch(e=>console.warn("Doublon candidat non supprimé",e)));
   }
@@ -4125,7 +4161,7 @@ async function saveCandidat(id,showToast){
   else if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
   try{
     await persistCandidateToPostgres(c,{allowCreate:creating});
-    stashCandidatForRoute(c);
+    stashCandidatForRoute(c,[id,realId,data.id]);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
   }catch(e){
     toast("Candidat non enregistré dans PostgreSQL : "+(e.message||e),"error");
@@ -4302,7 +4338,7 @@ async function validateCandidatSectionAction(id,key){
   if(next)sessionStorage.setItem("candidatFocusSection",next.key);
   try{
     await persistCandidateToPostgres(c,{allowCreate:creating});
-    stashCandidatForRoute(c);
+    stashCandidatForRoute(c,[id,realId,data.id]);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
     if((location.hash||"").endsWith("/nouveau"))navigate((c.reserveDirect?"reserve/":"recrutement/")+c.id);else renderView();
