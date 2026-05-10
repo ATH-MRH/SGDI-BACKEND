@@ -3810,6 +3810,34 @@ function findCandidatById(id){
     ||(alias&&alias!==raw?restorePendingCandidat(alias):null)
     ||null;
 }
+function candidatDeleteKeys(c,extra){
+  const keys=new Set();
+  [extra,c?.id,c?.backendId,resolveCandidatAlias(extra),resolveCandidatAlias(c?.id),resolveCandidatAlias(c?.backendId)].forEach(v=>{if(v!==null&&v!==undefined&&String(v).trim())keys.add(String(v).trim())});
+  return keys;
+}
+function forgetPendingCandidat(c,extra){
+  const keys=candidatDeleteKeys(c,extra);
+  try{
+    keys.forEach(k=>sessionStorage.removeItem("pendingCandidat:"+k));
+    const aliases=loadCandidatAliases();
+    Object.keys(aliases).forEach(k=>{if(keys.has(k)||keys.has(String(aliases[k]))){keys.add(k);keys.add(String(aliases[k]));delete aliases[k]}});
+    saveCandidatAliases(aliases);
+    for(let i=sessionStorage.length-1;i>=0;i--){
+      const k=sessionStorage.key(i);
+      if(!k||!k.startsWith("pendingCandidat:"))continue;
+      let item=null;try{item=JSON.parse(sessionStorage.getItem(k)||"null")}catch(e){}
+      if(item&&(keys.has(String(item.id||""))||keys.has(String(item.backendId||""))))sessionStorage.removeItem(k);
+    }
+  }catch(e){}
+}
+function removeCandidatLocal(c,extra){
+  if(!db||!Array.isArray(db.candidats))return 0;
+  const keys=candidatDeleteKeys(c,extra);
+  const before=db.candidats.length;
+  db.candidats=db.candidats.filter(x=>x!==c&&!keys.has(String(x.id||""))&&!keys.has(String(x.backendId||"")));
+  forgetPendingCandidat(c,extra);
+  return before-db.candidats.length;
+}
 function cleanupDuplicateCandidates(deleteRemote){
   if(!db||!Array.isArray(db.candidats))return 0;
   const before=db.candidats.length;
@@ -4211,18 +4239,20 @@ async function confirmArchiveCandidat(id){
   }catch(e){toast("Archivage PostgreSQL refusé : "+(e.message||e),"error")}
 }
 async function deleteCandidat(id){
-  if(isTempCandidateId(id)){navigate("reserve");return}
+  if(isTempCandidateId(id)){forgetPendingCandidat(null,id);navigate("reserve");setTimeout(renderView,0);return}
   const c=findCandidatById(id);
-  if(!c){toast("Candidat introuvable","error");navigate("reserve");return}
+  if(!c){forgetPendingCandidat(null,id);toast("Candidat déjà supprimé","info");navigate("reserve");setTimeout(renderView,0);return}
   const label=String((c.nom||"")+" "+(c.prenom||"")).trim();
+  const targetRoute=candidatIsArchived(c)?"candidats_archives":candidatIsReserve(c)?"reserve":"recrutement";
   if(!confirm("Supprimer définitivement "+(label||"ce candidat")+" ?"))return;
-  const before=(db.candidats||[]).length;
-  try{await deleteCandidateFromPostgres(c)}catch(e){toast("Suppression PostgreSQL refusée : "+(e.message||e),"error");return}
-  db.candidats=(db.candidats||[]).filter(x=>x!==c&&String(x.id)!==String(id)&&String(x.backendId)!==String(id));
-  if(db.candidats.length===before){toast("Candidat introuvable","error");return}
+  try{await deleteCandidateFromPostgres(c)}catch(e){
+    const msg=String(e&&e.message||e||"");
+    if(!/not found|introuvable|404/i.test(msg)){toast("Suppression PostgreSQL refusée : "+msg,"error");return}
+  }
+  const removed=removeCandidatLocal(c,id);
   if(typeof sgdiBackendSave==="function")sgdiBackendSave();
-  toast("Candidat supprimé de PostgreSQL","success");
-  navigate(candidatIsArchived(c)?"candidats_archives":candidatIsReserve(c)?"reserve":"recrutement");
+  toast(removed?"Candidat supprimé de PostgreSQL":"Candidat déjà supprimé","success");
+  if((location.hash||"").slice(2)===targetRoute)renderView();else navigate(targetRoute);
 }
 async function activerCandidat(id){
   const c=findCandidatById(id);
