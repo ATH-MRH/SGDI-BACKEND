@@ -4144,13 +4144,14 @@ function candidatSectionRequiredValid(key,data){
   if(missing.length){toast("Champs obligatoires manquants : "+missing.slice(0,6).join(", ")+(missing.length>6?"...":""),"error");return false}
   return true;
 }
-async function saveCandidat(id,showToast){
-  markRequiredFields(document.getElementById("candidat-form"));
+async function saveCandidat(id,showToast,options){
+  const opt=options||{};
+  if(opt.requireIdentification)markRequiredFields(document.getElementById("candidat-form"));
   const data=collectCandidatFormData();if(!data){toast("Formulaire introuvable","error");return}
-  if(!candidatSectionRequiredValid("identification",data))return;
+  if(!candidateHasMinimumData(data)){toast(candidateMinimumDataMessage(data),"error");return}
+  if(opt.requireIdentification&& !candidatSectionRequiredValid("identification",data))return;
   if(!validateCandidatIdentification(data))return;
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return}
-  if(!candidateHasMinimumData(data)){toast(candidateMinimumDataMessage(data),"error");return}
   const realId=isTempCandidateId(id)?(candidatTempRealIds[id]||(candidatTempRealIds[id]=uid("cd"))):id;
   const creating=!findCandidatById(realId)&&!findCandidatById(id);
   let c=findCandidatById(realId)||findCandidatById(id);
@@ -4356,7 +4357,7 @@ function unlockCandidatSection(id,key){
   saveDB();toast("Section déverrouillée. Les sections suivantes devront être revalidées.","success");renderView();
 }
 async function validerFichePosition(id){
-  const c=await saveCandidat(id,false);if(!c)return;
+  const c=await saveCandidat(id,false,{requireIdentification:true});if(!c)return;
   if(!candidatAllSectionsValid(c)){toast("Impossible de valider la fiche : toutes les sections doivent être validées","error");renderView();return}
   c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   c.statut="reserve";c.fichePositionValidee=true;c.fichePositionValideeAt=new Date().toISOString();c.fichePositionValideeBy=session?session.username:"system";
