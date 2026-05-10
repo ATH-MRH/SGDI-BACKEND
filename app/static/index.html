@@ -229,14 +229,14 @@
   @keyframes modalSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 
   /* ----- MESSAGES / NOTIFICATIONS ----- */
-  .message-bg{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:130;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px);animation:modalFadeIn .12s ease}
-  .message-box{width:min(520px,92vw);background:#fff;border:1px solid #dbe3ef;border-radius:12px;box-shadow:0 24px 70px rgba(15,23,42,.24);padding:22px 24px;color:#0f172a;text-align:center}
-  .message-text{font-size:15px;line-height:1.55;font-weight:650;white-space:pre-wrap;margin-bottom:18px}
-  .message-close{background:#e5e7eb;color:#1f2937;border:1px solid #d1d5db;border-radius:8px;padding:10px 22px;font-weight:700;cursor:pointer}
+  .message-toast{position:fixed;right:18px;bottom:18px;z-index:130;width:min(390px,calc(100vw - 36px));background:#fff;border:1px solid #dbe3ef;border-left:5px solid var(--info);border-radius:10px;box-shadow:0 14px 38px rgba(15,23,42,.18);padding:13px 42px 13px 14px;color:#0f172a;animation:toastSlideIn .16s ease}
+  .message-toast.message-error{border-left-color:var(--danger)}
+  .message-toast.message-success{border-left-color:#475569}
+  .message-toast.message-warning{border-left-color:var(--warn)}
+  .message-text{font-size:13px;line-height:1.45;font-weight:700;white-space:pre-wrap;margin:0}
+  .message-close{position:absolute;right:8px;top:8px;width:24px;height:24px;border:0;border-radius:999px;background:#e5e7eb;color:#1f2937;font-size:16px;line-height:20px;font-weight:900;cursor:pointer}
   .message-close:hover{background:#d1d5db}
-  .message-box.message-error{border-top:5px solid var(--danger)}
-  .message-box.message-success{border-top:5px solid #475569}
-  .message-box.message-info,.message-box.message-warning{border-top:5px solid var(--info)}
+  @keyframes toastSlideIn{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
 
   /* ----- INTERACTIVE LAYER ----- */
   #ui-progress{position:fixed;left:0;top:0;height:3px;width:0;background:var(--primary);box-shadow:0 0 12px rgba(4,57,112,.45);z-index:120;opacity:0;transition:width .28s ease,opacity .2s ease}
@@ -1614,7 +1614,9 @@ function toast(msg,type="info"){
   const h=document.getElementById("toast-host");
   if(!h)return;
   const safeType=["success","error","info","warning"].includes(type)?type:"info";
-  h.innerHTML=`<div class="message-bg" role="dialog" aria-modal="true" onclick="if(event.target===this)closeMessageToast()"><div class="message-box message-${safeType}"><div class="message-text">${escapeHTML(clean)}</div><button type="button" class="message-close" onclick="closeMessageToast()">Fermer</button></div></div>`;
+  h.innerHTML=`<div class="message-toast message-${safeType}" role="status"><div class="message-text">${escapeHTML(clean)}</div><button type="button" class="message-close" aria-label="Fermer" onclick="closeMessageToast()">×</button></div>`;
+  clearTimeout(window.__sgdiToastTimer);
+  window.__sgdiToastTimer=setTimeout(closeMessageToast,3600);
 }
 function openModal(html){const sx=window.scrollX,sy=window.scrollY;document.getElementById("modal-host").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal p-6">${html}</div></div>`;stripCryptogrammes();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
 function closeModal(){document.getElementById("modal-host").innerHTML=""}
