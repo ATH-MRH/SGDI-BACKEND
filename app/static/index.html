@@ -279,9 +279,6 @@
 
   /* ----- EXECUTIVE DASHBOARD ----- */
   .dash-shell{display:flex;flex-direction:column;gap:16px}
-  .dash-hero{background:#0f172a;color:#fff;border:1px solid #1e293b;border-radius:8px;padding:18px 20px;box-shadow:var(--shadow-lg)}
-  .dash-hero h1{font-size:26px;line-height:1.1;font-weight:900;margin:0;letter-spacing:0}
-  .dash-hero p{font-size:13px;color:#cbd5e1;margin-top:5px}
   .dash-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   .dash-action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
   .dash-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -316,7 +313,7 @@
   .dash-status-dot.warn{background:#ca8a04}
   .dash-status-dot.danger{background:#dc2626}
   @media(max-width:1180px){.dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-layout{grid-template-columns:1fr}.dash-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media(max-width:720px){.dash-kpi-grid,.dash-module-grid{grid-template-columns:1fr}.dash-hero h1{font-size:22px}}
+  @media(max-width:720px){.dash-kpi-grid,.dash-module-grid{grid-template-columns:1fr}}
 
   /* ----- CENTER DIALOGUE BOX ----- */
   .dialogue-fab{display:none!important}
@@ -3409,26 +3406,6 @@ function renderDashboard(view){
     {n:(stockKpi.enRupture||0)+(stockKpi.enAlerte||0),title:"Stock critique",text:"Rupture ou stock bas",route:"materiel/articles",type:((stockKpi.enRupture||0)+(stockKpi.enAlerte||0))?"danger":"info"}
   ];
   view.innerHTML=`<div class="dash-shell">
-    <section class="dash-hero">
-      <div class="dash-toolbar">
-        <div>
-          <h1>Tableau de bord opérationnel</h1>
-          <p>${escapeHTML(filter||"Toutes les sociétés")} · ${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})}</p>
-        </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          ${lockSoc?`<span class="pill pill-blue" style="padding:7px 12px;font-weight:900">${escapeHTML(filter)}</span><button class="btn btn-secondary text-xs" onclick="changeSociete()">Changer</button>`:`<select class="select" style="max-width:280px;background:#fff" onchange="setDashSociete(this.value)"><option value="" ${!filter?"selected":""}>Toutes les sociétés</option>${SOCIETES.map(s=>`<option ${filter===s?"selected":""}>${s}</option>`).join("")}</select>`}
-          <button class="btn btn-secondary text-xs" onclick="openCommandPalette()">Navigation rapide</button>
-        </div>
-      </div>
-      <div class="dash-action-row">
-
-        <button class="btn btn-secondary" onclick="navigate('pointage/quotidien')">Feuille de présence</button>
-        <button class="btn btn-secondary" onclick="navigate('sites/nouveau')">Nouveau site</button>
-        <button class="btn btn-secondary" onclick="navigate('materiel/articles')">Stock articles</button>
-        <button class="btn btn-secondary" onclick="navigate('commercial/clients')">Clients</button>
-      </div>
-    </section>
-
     <section class="dash-kpi-grid">
       ${dashboardKpi("Effectif actif",agentsActifs.length,`${agentsSoc.length} total`,"effectif/actifs","ok")}
       ${dashboardKpi("Sites actifs",sitesActifs.length,"Sites opérationnels","sites/actifs","ok")}
