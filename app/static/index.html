@@ -2642,10 +2642,7 @@ function renderSidebar(){
       const _co=(db.conges||[]).filter(c=>!drhSoc||_ag.some(a=>a.id===c.agentId));
       const drhGroups=[
         {type:"link",label:"TABLEAU DE BORD DRH",icon:"📊",route:"drh/dashboard"},
-        {type:"group",label:"RECRUTEMENT",route:"recrutement",children:[
-          {label:"Ajouter candidats",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
-          {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
-        ]},
+        {type:"link",label:"RECRUTEMENT",icon:"👥",route:"recrutement"},
         {type:"group",label:"DEMANDES PERSONNEL",children:[
           {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
           {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:drhDemandesPersonnelList().filter(d=>demandePersonnelIsAlert(d)).length},
@@ -2708,10 +2705,7 @@ function renderSidebar(){
     {type:"link",label:"Tableau de bord",icon:"📊",route:"dashboard"},
     {type:"link",label:"Portail personnel",icon:"📱",route:"portail"},
     {type:"link",label:"Dossier administratif",icon:"📁",route:"dossiers"},
-    {type:"group",label:"RECRUTEMENT",route:"recrutement",children:[
-      {label:"Ajouter candidats",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
-      {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
-    ]},
+    {type:"link",label:"RECRUTEMENT",icon:"👥",route:"recrutement"},
     {type:"group",label:"DEMANDES PERSONNEL",children:[
       {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
       {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:drhDemandesPersonnelList().filter(d=>demandePersonnelIsAlert(d)).length}
