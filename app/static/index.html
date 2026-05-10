@@ -1798,13 +1798,25 @@ function societeAccessPassword(s){
 }
 function isAdminSystemUnlocked(){return true}
 function openAdminSystemAccess(){if(!isAdmin()){toast("Connectez-vous avec un compte administrateur","error");return}session={...session,societe:null,transverse:"admin"};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function openAdminLoginAccess(){toast("Utilisez votre identifiant administrateur sur la page de connexion","info")}
+function openAdminLoginAccess(){
+  openModal(`<h3 class="font-bold text-lg mb-3">Accès administration système</h3>
+    <p class="text-sm text-slate-500 mb-4">Entrez le mot de passe administrateur pour accéder directement au module Administration système.</p>
+    <form onsubmit="event.preventDefault();confirmAdminLoginAccess(this.password.value)">
+      <label class="label">Mot de passe admin</label>
+      <input class="input mb-4" type="password" name="password" autofocus autocomplete="current-password"/>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+        <button class="btn btn-primary">Accéder</button>
+      </div>
+    </form>`);
+}
 function confirmAdminSystemAccess(p){openAdminSystemAccess()}
 async function confirmAdminLoginAccess(p){
   try{
+    const password=String(p||"").trim();
+    if(!password){toast("Mot de passe administrateur obligatoire","error");return}
     closeModal();
-    let r;
-    try{r=await SGDI.auth.adminSystemLogin(p||"Hytera@01")}catch(firstError){r=await SGDI.auth.adminSystemLogin("Hytera@01")}
+    const r=await SGDI.auth.adminSystemLogin(password);
     const authUser=r?.user||r;
     session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||"H5",nom:authUser.full_name||authUser.nom||"Administrateur",agentId:null,societe:null,transverse:"admin"};
     saveSession(session);
