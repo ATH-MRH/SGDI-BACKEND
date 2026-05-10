@@ -2522,9 +2522,6 @@ function renderSidebar(){
         {label:"TABLEAU DE BORD FINANCES",icon:"📊",route:"facturation/dashboard"},
         {label:"Devis",icon:"📝",route:"facturation/devis",count:(db.devis||[]).length},
         {label:"Factures",icon:"🧾",route:"facturation/factures",count:(db.factures||[]).length},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Paiements",icon:"💳",route:"facturation/paiements"},
         {label:"Avances clients",icon:"💰",route:"facturation/avances"},
         {label:"Avoirs",icon:"↩️",route:"facturation/avoirs"},
@@ -2537,9 +2534,6 @@ function renderSidebar(){
       ]},
       commercial:{label:"COMMERCIAL",color:"#8b5cf6",children:[
         {label:"TABLEAU DE BORD COMMERCIAL",icon:"📊",route:"commercial/dashboard"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Prospects",icon:"🎯",route:"commercial/prospects",count:(db.prospects||[]).length},
         {label:"Clients",icon:"🤝",route:"commercial/clients",count:(db.clients||[]).length},
         {label:"Opportunités",icon:"💼",route:"commercial/opportunites",count:(db.opportunites||[]).filter(o=>!["gagnee","perdue"].includes(o.etape)).length},
@@ -2551,9 +2545,6 @@ function renderSidebar(){
       ]},
       materiel:{label:"MATÉRIEL & ÉQUIPEMENT",color:"#043970",children:[
         {label:"TABLEAU DE BORD MATERIEL",icon:"🏠",route:"materiel/dashboard"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Articles",icon:"📦",route:"materiel/articles",count:(db.stockArticles||[]).length},
         {label:"MAGASIN",icon:"🏬",route:"materiel/magasins",count:(db.magasins||[]).length,title:true},
         {label:"Fournisseurs",icon:"🤝",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
@@ -2565,9 +2556,6 @@ function renderSidebar(){
       ]},
       pointage:{label:"POINTAGE",color:"#043970",children:[
         {label:"TABLEAU DE BORD POINTAGE",icon:"📊",route:"pointage"},
-        {label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",count:structureOpenCount(),title:true},
-        {label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount(),childOfTitle:true},
-        {label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length,childOfTitle:true},
         {label:"Récap par agent",icon:"👤",route:"pointage/recap"},
         {label:"Récap par société",icon:"🏢",route:"pointage/societe"},
         {label:"Statistiques",icon:"📈",route:"pointage/stats"},
@@ -2583,7 +2571,6 @@ function renderSidebar(){
         {label:"Droits d'accès",icon:"🔐",route:"admin/droits"},
         {label:"Fil d'actualité",icon:"🗞",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"Historique messages",icon:"💬",route:"admin/messages",count:(db.echanges||[]).filter(e=>e.type==="message"||e.attachments?.length).length},
-        {label:"Demande structure",icon:"📨",route:"demandes_structure",count:structureOpenCount()},
         {label:"Niveaux d'accès",icon:"🎚",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"Contrats du personnel",icon:"📄",route:"admin/contrats",count:(db.contratsPersonnel||[]).length},
         {label:"Priorités",icon:"⚡",route:"admin/priorites",count:(db.priorites||[]).length},
@@ -2610,7 +2597,6 @@ function renderSidebar(){
           {label:"Légende & codes",icon:"🎨",route:"pointage/legende"}
         ]},
         {type:"link",label:"FICHES DE POSITION",icon:"🪪",route:"fiches"},
-        structureDemandSidebarGroup(),
         {type:"group",label:"SITES",icon:"📍",route:"sites",children:[
           {label:"Création de site",icon:"➕",route:"sites/nouveau"},
           {label:"Sites actifs",icon:"📍",route:"sites/actifs",count:(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc)).length}
@@ -2664,7 +2650,6 @@ function renderSidebar(){
           {label:"Ajouter candidats",icon:"👥",route:"reserve",count:_ca.filter(c=>candidatIsReserve(c)).length},
           {label:"Candidats archivés",icon:"🗄",route:"candidats_archives",count:_ca.filter(c=>candidatIsArchived(c)).length}
         ]},
-        structureDemandSidebarGroup(),
         {type:"group",label:"DEMANDES PERSONNEL",children:[
           {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
           {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:drhDemandesPersonnelList().filter(d=>demandePersonnelIsAlert(d)).length},
@@ -2695,7 +2680,7 @@ function renderSidebar(){
       ];
       const head="";
       const openGroup=sidebarOpenGroup();
-      const drhOrangeTitles=new Set(["RECRUTEMENT","DEMANDE STRUCTURE","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
+      const drhOrangeTitles=new Set(["RECRUTEMENT","CONTRAT","FICHE DE POSITION","EFFECTIFS","MAIN COURANTE","CONGÉS","PAIE"]);
       const html=drhGroups.map(g=>{
         const isOrange=drhOrangeTitles.has(g.label);
         const titleStyle=isOrange?`style="color:#043970;font-size:13px;font-weight:900"`:"";
@@ -2735,7 +2720,6 @@ function renderSidebar(){
       {label:"Réception demandes",icon:"📥",route:"demandes_personnel/dashboard",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
       {label:"Alertes",icon:"🔔",route:"demandes_personnel/alertes",count:drhDemandesPersonnelList().filter(d=>demandePersonnelIsAlert(d)).length}
     ]},
-    structureDemandSidebarGroup(),
     {type:"group",label:"CONTRAT",children:[
       {label:"Nouveau contrat",icon:"➕",route:"contrats/a_contractualiser"},
       {label:"Avenant",icon:"✎",route:"contrats/avenants",count:(db.avenants||[]).length},
