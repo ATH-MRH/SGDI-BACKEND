@@ -3292,7 +3292,7 @@ function renderView(){
       case"dashboard":renderDashboard(view);break;
       case"dossiers":renderDossiers(view);break;
       case"recrutement":if(sub==="nouveau")renderCandidatForm(view,null);else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"nouvelle");break;
-      case"reserve":if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"reserve");break;
+      case"reserve":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"reserve");break;
       case"candidats_archives":if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"archive");break;
       case"contrats":
         if(sub==="a_contractualiser"&&!arg)renderContrats(view,"a_contractualiser");
@@ -3688,7 +3688,8 @@ function renderRecrutement(view,mode){
       <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
-  view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${mode==="nouvelle"?`<button class="btn btn-primary" onclick="navigate('recrutement/nouveau')">➕ Nouvelle candidature</button>`:""}</div>
+  const addButton=mode==="nouvelle"?`<button class="btn btn-primary" onclick="navigate('recrutement/nouveau')">➕ Nouvelle candidature</button>`:mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">👥 Ajouter candidat</button>`:"";
+  view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
     ${cs.length===0?(archiveEmptyHTML||`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`):`<div class="card overflow-hidden"><table>
@@ -3890,10 +3891,11 @@ function modifierCandidatForm(id){
   toast("Modification activée. Corrigez les informations puis cliquez sur Enregistrer.","info");
 }
 
-function renderCandidatForm(view,id){
+function renderCandidatForm(view,id,options){
+  const formOptions=options||{};
   let c;
   if(id){c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate("recrutement")}}
-  else{c={id:newTempCandidateId(),statut:"nouvelle",photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
+  else{c={id:newTempCandidateId(),statut:formOptions.reserveDirect?"reserve":"nouvelle",reserveDirect:!!formOptions.reserveDirect,fichePositionValidee:!!formOptions.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
   const step=candidatEtape1Valid(c)?2:1;
   const allValid=candidatAllSectionsValid(c);
   view.innerHTML=`<div class="max-w-5xl mx-auto">
@@ -3903,7 +3905,7 @@ function renderCandidatForm(view,id){
     </div>
     <div class="stepper"><div class="step ${step>=1?"done":"active"}">1. Candidature</div><div class="step ${step===2?"active":""}">2. Fiche de renseignement</div></div>
     <form id="candidat-form" onsubmit="event.preventDefault();saveCandidat('${c.id}')">
-      <input type="hidden" name="id" value="${c.id}"/><input type="hidden" name="isNew" value="${c.isNew?"1":""}"/>
+      <input type="hidden" name="id" value="${c.id}"/><input type="hidden" name="isNew" value="${c.isNew?"1":""}"/><input type="hidden" name="reserveDirect" value="${c.reserveDirect?"1":""}"/>
       ${renderCandidatEtape1(c)}
       <div id="etape2-block" class="${candidatEtape1Valid(c)?"":"hidden"}">${candidatEtape1Valid(c)?renderCandidatEtape2(c):""}</div>
       <div class="card p-4 mt-4 flex justify-between items-center">
@@ -4095,7 +4097,8 @@ async function saveCandidat(id,showToast){
   let c=findCandidatById(realId)||findCandidatById(id);
   if(!c){c={id:realId,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
   Object.assign(c,data,{id:realId});delete c.isNew;
-  if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
+  if(data.reserveDirect==="1"||c.reserveDirect){c.reserveDirect=true;c.statut="reserve";c.fichePositionValidee=true;c.fichePositionValideeAt=c.fichePositionValideeAt||new Date().toISOString();c.fichePositionValideeBy=c.fichePositionValideeBy||session?.username||"system";}
+  else if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
   try{
     await persistCandidateToPostgres(c,{allowCreate:creating});
     stashCandidatForRoute(c);
@@ -4259,10 +4262,18 @@ async function validateCandidatSectionAction(id,key){
   Object.assign(c,data,{id:realId});delete c.isNew;
   const locks=candidatSectionValidations(c);
   locks[key]={by:session?session.username:"system",at:new Date().toISOString()};
-  c.statut="nouvelle";
-  c.fichePositionValidee=false;
-  delete c.fichePositionValideeAt;
-  delete c.fichePositionValideeBy;
+  if(data.reserveDirect==="1"||c.reserveDirect){
+    c.reserveDirect=true;
+    c.statut="reserve";
+    c.fichePositionValidee=true;
+    c.fichePositionValideeAt=c.fichePositionValideeAt||new Date().toISOString();
+    c.fichePositionValideeBy=c.fichePositionValideeBy||session?.username||"system";
+  }else{
+    c.statut="nouvelle";
+    c.fichePositionValidee=false;
+    delete c.fichePositionValideeAt;
+    delete c.fichePositionValideeBy;
+  }
   const next=CANDIDAT_SECTIONS[candidatSectionIndex(key)+1];
   if(next)sessionStorage.setItem("candidatFocusSection",next.key);
   try{
@@ -4270,7 +4281,7 @@ async function validateCandidatSectionAction(id,key){
     stashCandidatForRoute(c);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
-    if((location.hash||"").endsWith("/nouveau"))navigate("recrutement/"+c.id);else renderView();
+    if((location.hash||"").endsWith("/nouveau"))navigate((c.reserveDirect?"reserve/":"recrutement/")+c.id);else renderView();
   }catch(e){toast("Validation PostgreSQL refusée : "+(e.message||e),"error");setCandidatSectionButtonsDisabled(id,key,false)}
   finally{candidatValidationLocks.delete(lockKey)}
 }
