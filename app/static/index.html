@@ -362,6 +362,9 @@
   .chat-status.read{color:#38bdf8}.chat-status.received{color:#bbf7d0}.chat-status.sent{color:#e5e7eb}
   .dialogue-composer{border-top:1px solid #cbd5e1;background:#fff;padding:8px;display:grid;grid-template-columns:1fr auto;gap:6px;align-items:end}
   .dialogue-composer textarea{min-height:38px;max-height:88px;resize:vertical;font-size:12px;padding:8px}
+  .dialogue-recipients{grid-column:1/3;border:1px solid #dbe3ee;background:#f8fafc;border-radius:9px;padding:7px;display:flex;gap:6px;overflow-x:auto;white-space:nowrap}
+  .dialogue-recipient{display:inline-flex;align-items:center;gap:5px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:5px 8px;font-size:10.5px;font-weight:800;color:#0f172a;cursor:pointer;flex:0 0 auto}
+  .dialogue-recipient input{width:13px;height:13px;accent-color:#043970}
   .dialogue-attach{border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:9px;height:32px;padding:0 9px;font-size:11px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:5px;justify-content:center}.dialogue-send{border:none;background:#111827;color:#fff;border-radius:9px;width:38px;height:38px;font-weight:900;cursor:pointer}.chat-attachment{display:inline-flex;align-items:center;gap:5px;margin-top:7px;padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);font-size:11px;font-weight:800;text-decoration:none}.chat-bubble.theirs .chat-attachment{background:#eef2ff;border-color:#c7d2fe;color:#1e3a8a}.dialogue-file-name{grid-column:1/3;font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .instruction-form{background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:10px;margin-top:8px}
 
@@ -2979,6 +2982,15 @@ function dialogueUsersOptions(selected){
   const opts=users.map(u=>'<option value="'+escapeHTML(u.username)+'" '+(selected===u.username?'selected':'')+'>'+escapeHTML(u.nom||u.username)+' · '+escapeHTML(u.role||'')+'</option>').join('');
   return '<select class="select" name="to">'+opts+'</select>';
 }
+function dialogueRecipientsHTML(selected){
+  const users=(db.users||[]).filter(u=>u.username!==session.username);
+  if(!users.length)return '<div class="dialogue-recipients"><span class="text-xs text-slate-500">Aucun destinataire disponible</span></div>';
+  return '<div class="dialogue-recipients" aria-label="Destinataires">'+users.map(u=>{
+    const checked=u.username===selected?' checked':'';
+    const label=(u.nom||u.username)+(u.role?' · '+u.role:'');
+    return '<label class="dialogue-recipient"><input type="checkbox" name="to" value="'+escapeHTML(u.username)+'"'+checked+'><span>'+escapeHTML(label)+'</span></label>';
+  }).join('')+'</div>';
+}
 function importanceBadge(v,extraClass){
   const imp=v||"Normal";
   if(imp==="Très élevée")return'<span class="pill pill-red '+(extraClass||'')+'" style="background:#7f1d1d;color:#fff">Très élevée</span>';
@@ -3016,8 +3028,7 @@ function feedRowsHTML(peer){
 }
 function dialogueComposerHTML(peer){
   const selected=peer||dialogueSelectedPeer();
-  if(!selected)return '<div class="dialogue-form text-xs text-slate-500">Aucun destinataire disponible.</div>';
-  return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)"><input type="hidden" name="to" value="'+escapeHTML(selected)+'"/><input type="file" name="attachment" class="hidden" onchange="dialogueFileChanged(this)"/><div style="grid-column:1/3"><button type="button" class="dialogue-attach" title="Ajouter pièce jointe" onclick="this.form.attachment.click()"><span aria-hidden="true">📎</span><span>Ajouter pièce jointe</span></button></div><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button><div class="dialogue-file-name" data-dialogue-file-name>Aucune pièce jointe</div></form>';
+  return '<form class="dialogue-composer" onsubmit="event.preventDefault();dialogueSend(this)">'+dialogueRecipientsHTML(selected)+'<input type="file" name="attachment" class="hidden" onchange="dialogueFileChanged(this)"/><div style="grid-column:1/3"><button type="button" class="dialogue-attach" title="Ajouter pièce jointe" onclick="this.form.attachment.click()"><span aria-hidden="true">📎</span><span>Ajouter pièce jointe</span></button></div><textarea class="input" name="message" placeholder="Écrire un message..." onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();this.form.requestSubmit();}"></textarea><button class="dialogue-send" title="Envoyer">➤</button><div class="dialogue-file-name" data-dialogue-file-name>Aucune pièce jointe</div></form>';
 }
 function refreshRealtimeFeed(){
   const body=document.getElementById("dialogue-body");
@@ -3031,19 +3042,21 @@ function refreshRealtimeFeed(){
 async function dialogueSend(form){
   const fd=new FormData(form);
   const msg=(fd.get("message")||"").toString().trim();
-  const to=(fd.get("to")||dialogueSelectedPeer()||"").toString();
-  if(!to||to==="all"){toast("Choisissez un utilisateur destinataire","error");return}
+  const recipients=[...new Set(fd.getAll("to").map(v=>String(v||"").trim()).filter(v=>v&&v!=="all"&&v!==session.username))];
+  if(!recipients.length){toast("Choisissez au moins un utilisateur destinataire","error");return}
   const attachmentFile=form.attachment&&form.attachment.files?form.attachment.files[0]:null;
   let attachment=null;
   try{attachment=await dialogueReadAttachment(attachmentFile)}catch(e){toast(e.message||String(e),"error");return}
   if(!msg&&!attachment){toast("Message ou pièce jointe obligatoire","error");return}
   if(!db.echanges)db.echanges=[];
-  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session.username,to,sujet:"",importance:"Normal",message:msg,attachments:attachment?[attachment]:[],obligation:"",droit:"",conduite:"",receivedBy:[],luPar:[session.username],type:"message"});
+  const createdAt=new Date().toISOString();
+  recipients.forEach(to=>db.echanges.push({id:uid("ech"),date:createdAt,from:session.username,to,sujet:"",importance:"Normal",message:msg,attachments:attachment?[attachment]:[],obligation:"",droit:"",conduite:"",receivedBy:[],luPar:[session.username],type:"message"}));
   if(db.echanges.length>800)db.echanges=db.echanges.slice(-800);
   saveDB();
   sessionStorage.setItem("dialogueOpen","1");
-  sessionStorage.setItem("dialoguePeer",to);
+  sessionStorage.setItem("dialoguePeer",recipients[0]);
   form.reset();
+  toast(recipients.length>1?"Message envoyé à "+recipients.length+" utilisateurs":"Message envoyé","success");
   render();
   setTimeout(()=>{const b=document.getElementById("dialogue-body");if(b)b.scrollTop=b.scrollHeight},50);
 }
