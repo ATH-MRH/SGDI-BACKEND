@@ -19,6 +19,7 @@ from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
 from app.modules.commercial import models as _commercial_models  # noqa: F401
 from app.modules.irongs import models as _irongs_models  # noqa: F401
+from app.modules import finance_models as _finance_models  # noqa: F401
 from app.modules.materiel import models as _materiel_models  # noqa: F401
 from app.modules.ops import models as _ops_models  # noqa: F401
 

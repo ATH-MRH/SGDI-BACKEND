@@ -1,0 +1,372 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from datetime import date, datetime
+from typing import Any
+
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.modules.commercial.models import Client
+from app.modules.drh.models import Employee
+from app.modules.finance_models import Advance, CashEntry, CreditNote, Invoice, Payment
+from app.modules.materiel.models import StockArticle, StockMovement, Store, Supplier
+from app.modules.ops.models import Assignment, DailyPresence, Site
+
+SQL_COLLECTIONS = {
+    "agents", "employees", "sites", "assignments", "affectations", "pointages", "pointageMensuel", "feuillePresence",
+    "clients", "magasins", "fournisseurs", "stockArticles", "stockMouvements",
+    "factures", "paiements", "avances", "avoirs", "caisse",
+}
+SQL_SKIP_EMPTY_ON_DB_REPLACE = {"sites", "clients", "magasins", "fournisseurs", "stockArticles", "stockMouvements"}
+FINANCE_MODELS = {"factures": Invoice, "paiements": Payment, "avances": Advance, "avoirs": CreditNote, "caisse": CashEntry}
+STOCK_MODELS = {"stockArticles": StockArticle, "stockMouvements": StockMovement, "magasins": Store, "fournisseurs": Supplier}
+
+
+def as_int(value: Any) -> int | None:
+    try:
+        if value in (None, "", "None", "undefined", "null"):
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def as_float(value: Any) -> float:
+    try:
+        if value in (None, "", "None", "undefined", "null"):
+            return 0.0
+        return float(str(value).replace(" ", "").replace(",", "."))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def as_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def date_out(value: Any) -> str:
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()[:10]
+    return str(value or "")
+
+
+def legacy_id(item: dict[str, Any]) -> str:
+    for key in ("id", "external_id", "numero", "number", "code", "matricule"):
+        value = item.get(key)
+        if value not in (None, "", "None", "undefined", "null"):
+            return str(value)
+    return f"row-{abs(hash(str(item))) % 10_000_000}"
+
+
+def employee_by_ref(db: Session, value: Any):
+    row_id = as_int(value)
+    if row_id:
+        row = db.get(Employee, row_id)
+        if row:
+            return row
+    if value not in (None, "", "None", "undefined", "null"):
+        return db.execute(select(Employee).where(Employee.code == str(value))).scalar_one_or_none()
+    return None
+
+
+def site_by_ref(db: Session, value: Any):
+    row_id = as_int(value)
+    if row_id:
+        row = db.get(Site, row_id)
+        if row:
+            return row
+    if value not in (None, "", "None", "undefined", "null"):
+        text = str(value)
+        return db.execute(select(Site).where((Site.indicatif == text) | (Site.name == text))).scalar_one_or_none()
+    return None
+
+
+def employee_to_item(row: Employee) -> dict[str, Any]:
+    extra = row.extra if isinstance(row.extra, dict) else {}
+    item = dict(extra.get("_legacy") or {})
+    item.update({
+        "id": item.get("id") or str(row.id), "backendId": row.id,
+        "matricule": row.code, "code": row.code, "nom": row.last_name, "prenom": row.first_name,
+        "telephone": row.phone, "phone": row.phone, "email": row.email, "adresse": row.address,
+        "commune": row.commune, "wilaya": row.wilaya, "poste": row.position,
+        "fonction": extra.get("fonction") or row.position, "societe": row.society, "statut": row.status,
+        "typeContrat": row.contract_type, "salaireNet": row.salary_net,
+        "dateRecrutement": date_out(row.recruit_date), "dateFinEssai": date_out(row.trial_end_date),
+        "dateFinContrat": date_out(row.contract_end_date), "locked": bool(row.locked),
+    })
+    return item
+
+
+def upsert_employee(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+    row = db.get(Employee, as_int(item.get("backendId")) or 0)
+    code = str(item.get("matricule") or item.get("code") or item.get("id") or "").strip()[:30]
+    if not row and code:
+        row = db.execute(select(Employee).where(Employee.code == code)).scalar_one_or_none()
+    if not row:
+        row = Employee(code=code or legacy_id(item)[:30], first_name=" ", last_name=" ")
+        db.add(row)
+    row.code = code or row.code
+    row.first_name = str(item.get("prenom") or row.first_name or " ").strip() or " "
+    row.last_name = str(item.get("nom") or item.get("name") or row.last_name or row.code).strip() or row.code
+    row.nin = item.get("nin") or item.get("NIN") or row.nin
+    row.birth_date = as_date(item.get("dateNaissance"))
+    row.birth_place = item.get("lieuNaissance")
+    row.phone = item.get("telephone") or item.get("phone")
+    row.email = item.get("email")
+    row.address = item.get("adresse") or item.get("address")
+    row.commune = item.get("commune")
+    row.wilaya = item.get("wilaya")
+    row.position = item.get("poste") or item.get("fonction") or item.get("position")
+    row.society = item.get("societe") or item.get("society")
+    row.status = item.get("statut") or item.get("status") or "actif"
+    row.contract_type = item.get("typeContrat") or item.get("contract_type")
+    row.salary_net = as_float(item.get("salaireNet") or item.get("salary_net"))
+    row.recruit_date = as_date(item.get("dateRecrutement") or item.get("recruit_date"))
+    row.trial_end_date = as_date(item.get("dateFinEssai"))
+    row.contract_end_date = as_date(item.get("dateFinContrat"))
+    row.locked = 1 if item.get("locked", True) else 0
+    row.extra = {**(row.extra or {}), "fonction": item.get("fonction") or item.get("poste"), "_legacy": deepcopy(item)}
+    db.flush()
+    sync_assignment_from_agent(db, row, item)
+    return employee_to_item(row)
+
+
+def sync_assignment_from_agent(db: Session, employee: Employee, item: dict[str, Any]) -> None:
+    aff = item.get("affectationCourante") if isinstance(item.get("affectationCourante"), dict) else None
+    if not aff:
+        return
+    site = site_by_ref(db, aff.get("siteBackendId") or aff.get("site_id") or aff.get("siteId") or aff.get("site"))
+    if not site:
+        return
+    current = db.execute(select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())).scalars().first()
+    if not current or current.site_id != site.id:
+        if current:
+            current.active = 0
+            current.end_date = as_date(aff.get("date")) or date.today()
+        current = Assignment(employee_id=employee.id, site_id=site.id, start_date=as_date(aff.get("date")) or date.today())
+        db.add(current)
+    current.group_code = str(aff.get("groupe") or aff.get("group_code") or "A")[:20]
+    current.position = aff.get("poste") or employee.position
+    current.change_reason = aff.get("motif")
+    current.active = 1
+
+
+def site_to_item(row: Site) -> dict[str, Any]:
+    raw = row.equipment_plan.get("_legacy") if isinstance(row.equipment_plan, dict) else {}
+    item = dict(raw or {})
+    item.update({"id": item.get("id") or str(row.id), "backendId": row.id, "nom": row.name, "name": row.name, "indicatif": row.indicatif, "client": row.client_name, "adresse": row.address, "commune": row.commune, "wilaya": row.wilaya, "type": row.site_type, "rotationSystem": row.rotation_system, "actif": bool(row.active), "effectifs": {"totalContractuel": row.contractual_staff, "jour": row.day_staff, "nuit": row.night_staff, "weekend": row.weekend_staff, "feries": row.holiday_staff, "groupes": row.groups_count}})
+    return item
+
+
+def upsert_site(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+    row = db.get(Site, as_int(item.get("backendId")) or 0)
+    indicatif = item.get("indicatif") or item.get("code")
+    if not row and indicatif:
+        row = db.execute(select(Site).where(Site.indicatif == str(indicatif))).scalar_one_or_none()
+    if not row:
+        row = Site(name=str(item.get("nom") or item.get("name") or "Site"))
+        db.add(row)
+    eff = item.get("effectifs") if isinstance(item.get("effectifs"), dict) else {}
+    row.name = str(item.get("nom") or item.get("name") or row.name)
+    row.indicatif = indicatif
+    row.client_name = item.get("client") or item.get("client_name")
+    row.address = item.get("adresse") or item.get("address")
+    row.commune = item.get("commune")
+    row.wilaya = item.get("wilaya")
+    row.site_type = item.get("type") or item.get("site_type")
+    row.rotation_system = item.get("rotationSystem") or item.get("rotation_system")
+    row.contractual_staff = as_int(eff.get("totalContractuel")) or 0
+    row.day_staff = as_int(eff.get("jour")) or 0
+    row.night_staff = as_int(eff.get("nuit")) or 0
+    row.weekend_staff = as_int(eff.get("weekend")) or 0
+    row.holiday_staff = as_int(eff.get("feries")) or 0
+    row.groups_count = as_int(eff.get("groupes")) or 0
+    row.active = 1 if item.get("actif", item.get("active", True)) else 0
+    row.equipment_plan = {**(row.equipment_plan or {}), "_legacy": deepcopy(item)}
+    db.flush()
+    return site_to_item(row)
+
+
+def simple_raw(row: Any) -> dict[str, Any]:
+    item = dict((getattr(row, "data", None) or {}).get("_legacy") or {})
+    item["id"] = item.get("id") or getattr(row, "external_id", None) or str(row.id)
+    item["backendId"] = row.id
+    return item
+
+
+def upsert_client(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+    row = db.get(Client, as_int(item.get("backendId")) or 0)
+    if not row:
+        row = Client(name=str(item.get("nom") or item.get("raisonSociale") or "Client"))
+        db.add(row)
+    row.name = str(item.get("nom") or item.get("raisonSociale") or row.name)
+    row.legal_name = item.get("raisonSociale")
+    row.society = item.get("societe")
+    row.structure = item.get("structure")
+    row.status = item.get("statut") or "actif"
+    row.phone = item.get("tel") or item.get("phone")
+    row.email = item.get("email")
+    row.address = item.get("adresse")
+    row.nif = item.get("nif")
+    row.rc = item.get("rc")
+    row.data = {**(row.data or {}), "_legacy": deepcopy(item)}
+    db.flush()
+    out = simple_raw(row)
+    out.update({"nom": row.name, "raisonSociale": row.legal_name, "societe": row.society, "statut": row.status})
+    return out
+
+
+def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str) -> dict[str, Any]:
+    external = legacy_id(item)
+    row = db.get(model, as_int(item.get("backendId")) or 0)
+    if not row:
+        row = db.execute(select(model).where(model.external_id == external)).scalar_one_or_none()
+    if not row:
+        row = model(external_id=external)
+        db.add(row)
+    row.external_id = external
+    if isinstance(row, Invoice):
+        row.number = item.get("numero") or item.get("number")
+        row.invoice_date = as_date(item.get("date"))
+        row.society = item.get("societe")
+        row.client_name = item.get("client")
+        row.subject = item.get("objet")
+        row.status = item.get("statut")
+        row.total_ht = as_float(item.get("totalHT"))
+        row.total_ttc = as_float(item.get("ttc") or item.get("total") or item.get("montant"))
+    elif isinstance(row, Payment):
+        row.invoice_external_id = str(item.get("factureId") or "") or None
+        row.payment_date = as_date(item.get("date"))
+        row.society = item.get("societe")
+        row.client_name = item.get("client")
+        row.payment_mode = item.get("mode")
+        row.reference = item.get("reference")
+        row.amount = as_float(item.get("montant"))
+        row.notes = item.get("notes")
+    elif isinstance(row, Advance):
+        row.advance_date = as_date(item.get("date")); row.society = item.get("societe"); row.beneficiary = item.get("beneficiaire") or item.get("client"); row.amount = as_float(item.get("montant")); row.status = item.get("statut")
+    elif isinstance(row, CreditNote):
+        row.invoice_external_id = str(item.get("factureId") or "") or None; row.credit_date = as_date(item.get("date")); row.society = item.get("societe"); row.client_name = item.get("client"); row.amount = as_float(item.get("montant")); row.reason = item.get("motif")
+    elif isinstance(row, CashEntry):
+        row.entry_date = as_date(item.get("date")); row.society = item.get("societe"); row.category = item.get("categorie"); row.label = item.get("libelle") or item.get("label"); row.amount = as_float(item.get("montant")); row.entry_type = item.get("type")
+    row.data = {"_legacy": deepcopy(item), "collection": collection}
+    db.flush()
+    return simple_raw(row)
+
+
+def stock_raw(row: Any) -> dict[str, Any]:
+    data = getattr(row, "attributes", None) or getattr(row, "size_breakdown", None) or {}
+    item = dict((data or {}).get("_legacy") or {}) if isinstance(data, dict) else {}
+    item["id"] = item.get("id") or str(row.id)
+    item["backendId"] = row.id
+    return item
+
+
+def upsert_stock(db: Session, model: type, item: dict[str, Any], collection: str) -> dict[str, Any]:
+    row = db.get(model, as_int(item.get("backendId")) or 0)
+    if model is StockArticle:
+        code = str(item.get("code") or legacy_id(item))[:60]
+        if not row:
+            row = db.execute(select(StockArticle).where(StockArticle.code == code)).scalar_one_or_none()
+        if not row:
+            row = StockArticle(code=code, designation=str(item.get("designation") or item.get("nom") or "Article")); db.add(row)
+        row.designation = str(item.get("designation") or item.get("nom") or row.designation); row.category = item.get("categorie"); row.society = item.get("societe"); row.quantity = as_float(item.get("quantite")); row.unit_price = as_float(item.get("prixUnitaire")); row.attributes = {**(row.attributes or {}), "_legacy": deepcopy(item)}
+    elif model is Store:
+        if not row: row = Store(name=str(item.get("nom") or "Magasin")); db.add(row)
+        row.name = str(item.get("nom") or row.name); row.code = item.get("code"); row.society = item.get("societe"); row.address = item.get("adresse")
+    elif model is Supplier:
+        if not row: row = Supplier(name=str(item.get("raisonSociale") or item.get("nom") or "Fournisseur")); db.add(row)
+        row.name = str(item.get("raisonSociale") or item.get("nom") or row.name); row.society = item.get("societe"); row.phone = item.get("telephone"); row.email = item.get("email"); row.address = item.get("adresse")
+    elif model is StockMovement:
+        article = db.get(StockArticle, as_int(item.get("articleBackendId") or item.get("article_id")) or 0) or db.execute(select(StockArticle).order_by(StockArticle.id)).scalars().first()
+        if not article:
+            article = StockArticle(code="AUTO", designation="Article auto"); db.add(article); db.flush()
+        if not row: row = StockMovement(article_id=article.id, movement_date=date.today(), movement_type="mouvement", quantity=0); db.add(row)
+        row.article_id = article.id; row.movement_date = as_date(item.get("date")) or row.movement_date; row.movement_type = str(item.get("type") or row.movement_type); row.quantity = as_float(item.get("quantite") or row.quantity); row.unit_price = as_float(item.get("prixUnitaire") or row.unit_price); row.notes = item.get("notes"); row.size_breakdown = {**(row.size_breakdown or {}), "_legacy": deepcopy(item)}
+    db.flush()
+    return stock_raw(row)
+
+
+def presence_to_item(row: DailyPresence) -> dict[str, Any]:
+    item = dict((row.data or {}).get("_legacy") or {})
+    item.update({"id": item.get("id") or str(row.id), "backendId": row.id, "date": date_out(row.presence_date), "agentId": row.employee_id, "siteId": row.site_id, "heureArrivee": row.arrival_time, "heureDepart": row.departure_time, "heureReleve": row.relief_time, "statut": row.status, "observations": row.notes})
+    return item
+
+
+def upsert_presence(db: Session, item: dict[str, Any], collection: str) -> dict[str, Any]:
+    employee = employee_by_ref(db, item.get("employee_id") or item.get("agentId") or item.get("matricule"))
+    if not employee:
+        raise HTTPException(status_code=422, detail="Pointage refusé: employé SQL introuvable")
+    row = db.get(DailyPresence, as_int(item.get("backendId")) or 0)
+    if not row:
+        row = DailyPresence(presence_date=as_date(item.get("date") or item.get("presence_date")) or date.today(), employee_id=employee.id)
+        db.add(row)
+    site = site_by_ref(db, item.get("siteBackendId") or item.get("site_id") or item.get("siteId"))
+    row.presence_date = as_date(item.get("date") or item.get("presence_date")) or row.presence_date
+    row.employee_id = employee.id
+    if site: row.site_id = site.id
+    row.arrival_time = item.get("heureArrivee") or item.get("arrival_time")
+    row.departure_time = item.get("heureDepart") or item.get("departure_time")
+    row.relief_time = item.get("heureReleve") or item.get("relief_time")
+    row.status = item.get("statut") or item.get("status") or row.status or "present"
+    row.notes = item.get("observations") or item.get("notes")
+    row.data = {**(row.data or {}), "_legacy": deepcopy(item), "collection": collection}
+    db.flush()
+    return presence_to_item(row)
+
+
+def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
+    if name in {"agents", "employees"}: return [employee_to_item(r) for r in db.execute(select(Employee).order_by(Employee.id)).scalars().all()]
+    if name == "sites": return [site_to_item(r) for r in db.execute(select(Site).order_by(Site.id)).scalars().all()]
+    if name == "clients": return [simple_raw(r) | {"nom": r.name, "raisonSociale": r.legal_name, "societe": r.society, "statut": r.status} for r in db.execute(select(Client).order_by(Client.id)).scalars().all()]
+    if name in {"pointages", "feuillePresence", "pointageMensuel"}: return [presence_to_item(r) for r in db.execute(select(DailyPresence).order_by(DailyPresence.id)).scalars().all()]
+    if name in FINANCE_MODELS: return [simple_raw(r) for r in db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()]
+    if name in STOCK_MODELS: return [stock_raw(r) for r in db.execute(select(STOCK_MODELS[name]).order_by(STOCK_MODELS[name].id)).scalars().all()]
+    if name in {"assignments", "affectations"}: return [{"id": str(r.id), "backendId": r.id, "employee_id": r.employee_id, "site_id": r.site_id, "agentId": r.employee_id, "siteId": r.site_id, "groupe": r.group_code, "poste": r.position, "date": date_out(r.start_date), "active": bool(r.active)} for r in db.execute(select(Assignment).order_by(Assignment.id)).scalars().all()]
+    raise HTTPException(status_code=400, detail=f"Collection SQL non prise en charge: {name}")
+
+
+def upsert_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+    if name in {"agents", "employees"}: return upsert_employee(db, item)
+    if name == "sites": return upsert_site(db, item)
+    if name == "clients": return upsert_client(db, item)
+    if name in {"pointages", "feuillePresence", "pointageMensuel"}: return upsert_presence(db, item, name)
+    if name in FINANCE_MODELS: return upsert_finance(db, FINANCE_MODELS[name], item, name)
+    if name in STOCK_MODELS: return upsert_stock(db, STOCK_MODELS[name], item, name)
+    raise HTTPException(status_code=400, detail=f"Ecriture SQL non prise en charge: {name}")
+
+
+def replace_collection(db: Session, name: str, data: list[Any] | dict[str, Any] | Any) -> list[dict[str, Any]]:
+    if not isinstance(data, list):
+        raise HTTPException(status_code=400, detail=f"{name} doit être une liste")
+    if not data:
+        return list_collection(db, name)
+    return [upsert_item(db, name, dict(item)) for item in data if isinstance(item, dict)]
+
+
+def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
+    model = None
+    if name in {"agents", "employees"}: model = Employee
+    elif name == "sites": model = Site
+    elif name == "clients": model = Client
+    elif name in {"pointages", "feuillePresence", "pointageMensuel"}: model = DailyPresence
+    elif name in FINANCE_MODELS: model = FINANCE_MODELS[name]
+    elif name in STOCK_MODELS: model = STOCK_MODELS[name]
+    if model is None:
+        raise HTTPException(status_code=400, detail="Suppression SQL non prise en charge")
+    row = db.get(model, as_int(item_id) or 0)
+    if not row and hasattr(model, "external_id"):
+        row = db.execute(select(model).where(model.external_id == str(item_id))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Élément SQL introuvable")
+    db.delete(row); db.commit()
+    return {"deleted": item_id, "storage": "sql"}

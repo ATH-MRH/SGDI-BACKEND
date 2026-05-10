@@ -7,6 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.modules.irongs.models import SgdiRecord
+from app.modules.irongs import sql_bridge
 
 logger = logging.getLogger("sgdi.records")
 OBJECT_ITEM_ID = "__object__"
@@ -58,6 +59,8 @@ def get_database(db: Session) -> dict[str, list[Any] | dict[str, Any]]:
     rows = db.execute(select(SgdiRecord).order_by(SgdiRecord.collection.asc(), SgdiRecord.position.asc(), SgdiRecord.id.asc())).scalars().all()
     grouped: dict[str, list[SgdiRecord]] = {}
     for row in rows:
+        if row.collection in sql_bridge.SQL_COLLECTIONS:
+            continue
         grouped.setdefault(row.collection, []).append(row)
     result: dict[str, list[Any] | dict[str, Any]] = {}
     for name, items in grouped.items():
@@ -65,20 +68,28 @@ def get_database(db: Session) -> dict[str, list[Any] | dict[str, Any]]:
             result[name] = deepcopy(items[0].data) if isinstance(items[0].data, dict) else {}
         else:
             result[name] = [deepcopy(row.data) for row in items if row.kind == "item"]
+    for name in sorted(sql_bridge.SQL_COLLECTIONS):
+        result[name] = sql_bridge.list_collection(db, name)
     return result
 
 
 def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]) -> dict[str, list[Any] | dict[str, Any]]:
     db.execute(delete(SgdiRecord))
-    logger.info("Remplacement base SGDI SQL: %s collection(s)", len(payload))
+    logger.info("Remplacement base SGDI API-first: %s collection(s)", len(payload))
     for name, data in payload.items():
+        if name in sql_bridge.SQL_COLLECTIONS:
+            if isinstance(data, list) and (data or name not in sql_bridge.SQL_SKIP_EMPTY_ON_DB_REPLACE):
+                sql_bridge.replace_collection(db, name, data)
+            continue
         _replace_collection_no_commit(db, name, data)
     db.commit()
-    logger.info("Base SGDI sauvegardée dans les tables SQL")
+    logger.info("Base SGDI sauvegardée: tables SQL métier + sgdi_records résiduel")
     return get_database(db)
 
 
 def get_collection(db: Session, name: str) -> list[Any] | dict[str, Any]:
+    if name in sql_bridge.SQL_COLLECTIONS:
+        return sql_bridge.list_collection(db, name)
     rows = _collection_rows(db, name)
     if not rows:
         return []
@@ -105,6 +116,11 @@ def _replace_collection_no_commit(db: Session, name: str, data: list[Any] | dict
 
 
 def replace_collection(db: Session, name: str, data: list[Any] | dict[str, Any]) -> list[Any] | dict[str, Any]:
+    if name in sql_bridge.SQL_COLLECTIONS:
+        db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
+        out = sql_bridge.replace_collection(db, name, data)
+        db.commit()
+        return out
     _replace_collection_no_commit(db, name, data)
     db.commit()
     return get_collection(db, name)
@@ -118,6 +134,11 @@ def list_items(db: Session, name: str) -> list[Any]:
 
 
 def create_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+    if name in sql_bridge.SQL_COLLECTIONS:
+        db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
+        out = sql_bridge.upsert_item(db, name, dict(item))
+        db.commit()
+        return out
     item = _ensure_id(dict(item), name)
     item_id = str(item["id"])
     exists = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
@@ -137,6 +158,13 @@ def get_item(db: Session, name: str, item_id: str) -> dict[str, Any]:
 
 
 def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], partial: bool = True) -> dict[str, Any]:
+    if name in sql_bridge.SQL_COLLECTIONS:
+        db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
+        data = dict(patch)
+        data.setdefault("id", item_id)
+        out = sql_bridge.upsert_item(db, name, data)
+        db.commit()
+        return out
     row = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
     if not row or not isinstance(row.data, dict):
         raise HTTPException(status_code=404, detail="Élément introuvable")
@@ -149,6 +177,8 @@ def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], par
 
 
 def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
+    if name in sql_bridge.SQL_COLLECTIONS:
+        return sql_bridge.delete_item(db, name, item_id)
     row = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Élément introuvable")
