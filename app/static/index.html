@@ -3713,6 +3713,7 @@ function candidatSectionClose(c,key){
   </div>`;
 }
 function applyCandidatSectionLocks(){
+  if(document.getElementById("candidat-form")?.dataset.editMode==="1")return;
   document.querySelectorAll("[data-candidat-section][data-locked='1']").forEach(sec=>{
     sec.querySelectorAll("input,select,textarea,button").forEach(el=>{
       if(el.dataset.sectionAction==="1")return;
@@ -3721,7 +3722,7 @@ function applyCandidatSectionLocks(){
     if(!sec.querySelector(".section-lock-note")){
       const note=document.createElement("div");
       note.className="section-lock-note text-xs text-emerald-700 mt-2";
-      note.textContent="Section verrouillée après validation. Modification réservée au niveau ADM1.";
+      note.textContent="Section verrouillée après validation. Cliquez sur Modifier pour corriger les informations du formulaire.";
       sec.appendChild(note);
     }
   });
@@ -3730,6 +3731,18 @@ function applyCandidatSectionLocks(){
     sessionStorage.removeItem("candidatFocusSection");
     setTimeout(()=>document.getElementById("section-"+focus)?.scrollIntoView({behavior:"smooth",block:"start"}),50);
   }
+}
+function modifierCandidatForm(id){
+  const form=document.getElementById("candidat-form");
+  if(!form)return;
+  const c=findCandidatById(id);
+  if(!c){toast("Candidat introuvable","error");return}
+  form.dataset.editMode="1";
+  form.querySelectorAll("input,select,textarea").forEach(el=>{el.disabled=false;el.classList.remove("bg-slate-100","text-slate-400")});
+  form.querySelectorAll(".section-lock-note").forEach(el=>el.remove());
+  form.querySelectorAll("[data-candidat-section]").forEach(sec=>{sec.dataset.locked="0";sec.classList.remove("opacity-80")});
+  bindCandidatDraftAutosave(c.id);
+  toast("Modification activée. Corrigez les informations puis cliquez sur Enregistrer.","info");
 }
 
 function renderCandidatForm(view,id){
@@ -3750,7 +3763,7 @@ function renderCandidatForm(view,id){
       <div id="etape2-block" class="${candidatEtape1Valid(c)?"":"hidden"}">${candidatEtape1Valid(c)?renderCandidatEtape2(c):""}</div>
       <div class="card p-4 mt-4 flex justify-between items-center">
         <div class="text-sm text-slate-500">${allValid?"Toutes les sections sont validées.":"Validez chaque section dans l'ordre pour continuer."}</div>
-        <div class="flex gap-2"><button type="button" class="btn btn-ghost text-red-600" onclick="deleteCandidat('${c.id}')">Supprimer</button>
+        <div class="flex gap-2"><button type="button" class="btn btn-secondary" onclick="modifierCandidatForm('${c.id}')">Modifier</button><button type="button" class="btn btn-ghost text-red-600" onclick="deleteCandidat('${c.id}')">Supprimer</button>
         <button type="button" class="btn btn-secondary" onclick="saveCandidat('${c.id}',true)">💾 Enregistrer</button>
         ${candidatIsArchived(c)?`<button type="button" class="btn btn-success" onclick="activerCandidat('${c.id}')">Activer</button>`:`<button type="button" class="btn btn-ghost text-red-600" onclick="openArchiveCandidatModal('${c.id}')">Archiver candidat</button>`}
         ${!candidatIsArchived(c)?(allValid?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">✓ Valider la fiche de position</button>`:`<button type="button" class="btn btn-ghost" disabled>Fiche de position non complète</button>`):""}</div>
