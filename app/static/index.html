@@ -1879,6 +1879,8 @@ function defaultAccessMap(){return {"DRH":["rh","admin"],"OPS":["rh","dispatch",
 function canAccess(key){
   if(!session)return false;
   const r=session.role;
+  const level=accessLevelRecord(session.niveau);
+  if(level&&!levelAllowsModule(level,key))return false;
   const droits=(db&&db.droitsAcces&&typeof db.droitsAcces==="object")?db.droitsAcces:null;
   if(droits&&Object.keys(droits).length){
     const direct=droits[key+":"+r];
@@ -10989,6 +10991,34 @@ function adminAccessBaseRole(role){const r=String(role||"").toUpperCase();if(r.s
 function normalizeAdminUserRole(role){const r=String(role||"").trim();if(ADMIN_USER_ROLES.includes(r))return r;const b=adminAccessBaseRole(r);return b==="admin"?"ADM2":b==="rh"?"CAD1":b==="dispatch"?"SUP1":"AG1"}
 function adminRoleColor(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"#0f766e";if(r.startsWith("CAD"))return"#043970";if(r.startsWith("SUP"))return"#7c3aed";if(r.startsWith("ADM")||r==="ADMIN")return"#dc2626";return"#64748b"}
 const ADMIN_ENTITIES=[["agents","Agents"],["sites","Sites"],["candidats","Candidats"],["materiel","Matériel"],["clients","Clients"],["prospects","Prospects"],["devis","Devis"],["factures","Factures"]];
+const ADMIN_LEVEL_ACTIONS=[
+  {key:"read",label:"Consulter"},
+  {key:"create",label:"Créer"},
+  {key:"update",label:"Modifier"},
+  {key:"validate",label:"Valider"},
+  {key:"delete",label:"Supprimer"},
+  {key:"export",label:"Exporter / imprimer"},
+  {key:"unlock",label:"Déverrouiller"},
+  {key:"admin",label:"Administrer"}
+];
+const ADMIN_LEVEL_SENSITIVE=[
+  {key:"users",label:"Gestion des utilisateurs"},
+  {key:"rights",label:"Gestion des droits"},
+  {key:"companies",label:"Création / modification sociétés"},
+  {key:"structures",label:"Accès structures"},
+  {key:"locked_forms",label:"Modification formulaires validés"},
+  {key:"messages_history",label:"Historique messagerie"},
+  {key:"storage",label:"Nettoyage stockage"}
+];
+function accessLevelRecord(code){return ensureNiveauxAcces().find(n=>String(n.code||"")===String(code||""))||null}
+function normalizeAdminLevelList(value,allowed){
+  const list=Array.isArray(value)?value:[];
+  return list.map(x=>String(x||"").trim()).filter(x=>x&&(!allowed||allowed.includes(x))).filter((x,i,a)=>a.indexOf(x)===i);
+}
+function levelAllowsModule(level,key){
+  if(!level||!Array.isArray(level.modules)||!level.modules.length)return true;
+  return level.modules.includes(key)||level.modules.includes(String(key||"").toUpperCase());
+}
 function defaultNiveauxAcces(){
   return[
     {code:"H1",label:"H1 - Consultation",description:"Lire et consulter les données autorisées uniquement.",weight:1,color:"#64748b"},
@@ -11544,40 +11574,84 @@ function saveAdminCandidatSectionSettings(){
 }
 function renderAdminNiveaux(view){
   const niv=ensureNiveauxAcces();
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🎚 Niveaux d'accès</h1>
+  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Niveaux d'accès</h1><p class="text-sm text-slate-500 mt-1">Chaque niveau définit les rôles compatibles, les modules visibles et les actions autorisées.</p></div>
     <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminNiveauModal('')">➕ Nouveau niveau</button></div>
-    <div class="grid grid-2 gap-3">${niv.sort((a,b)=>a.weight-b.weight).map(n=>`<div class="card p-4" style="border-left:4px solid ${n.color}">
-      <div class="flex justify-between items-start">
+    <div class="grid grid-2 gap-3">${niv.sort((a,b)=>a.weight-b.weight).map(n=>{const modules=Array.isArray(n.modules)&&n.modules.length?n.modules:["Défaut système"];const actions=Array.isArray(n.actions)&&n.actions.length?n.actions:[];const roles=Array.isArray(n.roles)&&n.roles.length?n.roles:[];return`<div class="card p-4" style="border-left:4px solid ${n.color}">
+      <div class="flex justify-between items-start gap-3">
         <div><div class="font-bold text-lg" style="color:${n.color}">${escapeHTML(n.label)}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(n.code)} · poids ${n.weight}</div></div>
         <div class="flex gap-2"><button class="btn btn-ghost text-xs inline-flex items-center gap-1" title="Modifier" onclick="openAdminNiveauModal('${n.code}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%230360a8%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 20h9%22/%3E%3Cpath d=%22M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z%22/%3E%3C/svg%3E" alt="" style="width:18px;height:18px;display:inline-block;vertical-align:middle"/> Modifier</button><button class="btn btn-ghost text-xs text-red-600 inline-flex items-center gap-1" title="Supprimer" onclick="adminDeleteNiveau('${n.code}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23dc2626%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M8 6V4h8v2%22/%3E%3Cpath d=%22M19 6l-1 14H6L5 6%22/%3E%3Cpath d=%22M10 11v6%22/%3E%3Cpath d=%22M14 11v6%22/%3E%3C/svg%3E" alt="" style="width:18px;height:18px;display:inline-block;vertical-align:middle"/> Supprimer</button></div>
       </div>
       <div class="text-sm text-slate-600 mt-2">${escapeHTML(n.description||"")}</div>
-    </div>`).join("")||`<div class="text-slate-400 text-sm">Aucun niveau.</div>`}</div>`;
+      <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+        <div><div class="font-black text-slate-500 uppercase mb-1">Rôles</div><div class="flex flex-wrap gap-1">${(roles.length?roles:["Tous"]).map(x=>`<span class="pill pill-gray">${escapeHTML(x)}</span>`).join("")}</div></div>
+        <div><div class="font-black text-slate-500 uppercase mb-1">Modules</div><div class="flex flex-wrap gap-1">${modules.slice(0,6).map(x=>`<span class="pill pill-blue">${escapeHTML(x)}</span>`).join("")}${modules.length>6?`<span class="pill pill-gray">+${modules.length-6}</span>`:""}</div></div>
+        <div><div class="font-black text-slate-500 uppercase mb-1">Actions</div><div class="flex flex-wrap gap-1">${(actions.length?actions:["Défaut"]).slice(0,5).map(x=>`<span class="pill pill-green">${escapeHTML(ADMIN_LEVEL_ACTIONS.find(a=>a.key===x)?.label||x)}</span>`).join("")}</div></div>
+      </div>
+    </div>`}).join("")||`<div class="text-slate-400 text-sm">Aucun niveau.</div>`}</div>`;
+}
+function adminNiveauCheckGrid(name,items,selected,cols){
+  const set=new Set(Array.isArray(selected)?selected:[]);
+  return `<div class="grid grid-cols-1 md:grid-cols-${cols||2} gap-2">${items.map(it=>{const key=typeof it==="string"?it:it.key;const label=typeof it==="string"?it:(it.label||it.key);return`<label class="flex items-center gap-2 p-2 rounded border border-slate-200 bg-white text-sm"><input type="checkbox" name="${name}" value="${escapeHTML(key)}" ${set.has(key)?"checked":""}/> <span>${escapeHTML(label)}</span></label>`}).join("")}</div>`;
 }
 function openAdminNiveauModal(code){
-  const isNew=!code;const n=isNew?{code:"",label:"",description:"",weight:5,color:"#043970"}:db.niveauxAcces.find(x=>x.code===code);
+  const isNew=!code;
+  const n=isNew?{code:"",label:"",description:"",weight:5,color:"#043970",roles:[],modules:[],actions:["read"],societes:[],structures:[],sensitive:[]}:db.niveauxAcces.find(x=>x.code===code);
   if(!n){toast("Niveau introuvable","error");return}
-  openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"➕ Nouveau niveau":"✏ Modifier"}</h3>
-    <form onsubmit="event.preventDefault();confirmAdminNiveau('${n.code||''}')">
+  const roles=normalizeAdminLevelList(n.roles,ADMIN_ACCESS_ROLES);
+  const modules=normalizeAdminLevelList(n.modules,ADMIN_MODULES);
+  const actions=normalizeAdminLevelList(n.actions,ADMIN_LEVEL_ACTIONS.map(a=>a.key));
+  const societes=normalizeAdminLevelList(n.societes,SOCIETES);
+  const structures=normalizeAdminLevelList(n.structures,ADMIN_STRUCTURES.map(s=>s.key));
+  const sensitive=normalizeAdminLevelList(n.sensitive,ADMIN_LEVEL_SENSITIVE.map(s=>s.key));
+  openModal(`<h3 class="font-bold text-lg mb-1">${isNew?"➕ Nouveau niveau d'accès":"✏ Configurer le niveau"}</h3>
+    <p class="text-sm text-slate-500 mb-4">Définissez précisément ce que ce niveau peut voir et faire dans SGDI.</p>
+    <form onsubmit="event.preventDefault();confirmAdminNiveau('${n.code||''}')" class="space-y-4">
       <div class="grid grid-2 gap-3">
-        <div><label class="label">Code *</label><input class="input" name="code"  value="${escapeHTML(n.code)}" ${isNew?"":"readonly"}/></div>
-        <div><label class="label">Libellé *</label><input class="input" name="label"  value="${escapeHTML(n.label)}"/></div>
-        <div><label class="label">Poids (1-10)</label><input class="input" name="weight" type="number" min="1" max="10" value="${n.weight}"/></div>
-        <div><label class="label">Couleur</label><input class="input" name="color" type="color" value="${n.color}"/></div>
+        <div><label class="label">Code *</label><input class="input" name="code" value="${escapeHTML(n.code)}" placeholder="Ex: H6 ou NIV_OPS" ${isNew?"":"readonly"}/></div>
+        <div><label class="label">Libellé *</label><input class="input" name="label" value="${escapeHTML(n.label)}" placeholder="Ex: Supervision OPS"/></div>
+        <div><label class="label">Poids hiérarchique (1-10)</label><input class="input" name="weight" type="number" min="1" max="10" value="${Number(n.weight)||5}"/></div>
+        <div><label class="label">Couleur</label><input class="input" name="color" type="color" value="${escapeHTML(n.color||"#043970")}"/></div>
       </div>
-      <label class="label mt-3">Description</label><textarea class="input" name="description" rows="3">${escapeHTML(n.description||"")}</textarea>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
+      <div><label class="label">Description</label><textarea class="input" name="description" rows="2" placeholder="Expliquez le périmètre de ce niveau">${escapeHTML(n.description||"")}</textarea></div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">1. Rôles compatibles</div>${adminNiveauCheckGrid("roles",ADMIN_ACCESS_ROLES,roles,4)}</div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">2. Modules autorisés</div><div class="text-xs text-slate-500 mb-2">Si aucun module n'est coché, le niveau utilise les droits par défaut du rôle.</div>${adminNiveauCheckGrid("modules",ADMIN_MODULES,modules,3)}</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="card p-3 bg-slate-50"><div class="font-black mb-2">3. Sociétés autorisées par défaut</div><div class="text-xs text-slate-500 mb-2">Vide = toutes, sauf restriction dans la fiche utilisateur.</div>${adminNiveauCheckGrid("societes",SOCIETES,societes,1)}</div>
+        <div class="card p-3 bg-slate-50"><div class="font-black mb-2">4. Structures autorisées par défaut</div><div class="text-xs text-slate-500 mb-2">Vide = toutes, sauf restriction dans la fiche utilisateur.</div>${adminNiveauCheckGrid("structures",ADMIN_STRUCTURES,structures,1)}</div>
+      </div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">5. Actions autorisées</div>${adminNiveauCheckGrid("actions",ADMIN_LEVEL_ACTIONS,actions,4)}</div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">6. Droits sensibles</div>${adminNiveauCheckGrid("sensitive",ADMIN_LEVEL_SENSITIVE,sensitive,2)}</div>
+      <div class="flex justify-end gap-2 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer la configuration</button></div>
     </form>`);
 }
 function confirmAdminNiveau(originalCode){
   const f=document.querySelector(".modal-bg form");if(!f)return;
   const fd=new FormData(f);
-  const data={code:fd.get("code"),label:fd.get("label"),description:fd.get("description"),weight:Number(fd.get("weight"))||5,color:fd.get("color")||"#043970"};
+  const code=String(fd.get("code")||"").trim().toUpperCase().replace(/\s+/g,"_");
+  const label=String(fd.get("label")||"").trim();
+  if(code.length<2){toast("Code niveau obligatoire","error");return}
+  if(!label){toast("Libellé obligatoire","error");return}
+  const data={
+    code,
+    label,
+    description:String(fd.get("description")||"").trim(),
+    weight:Number(fd.get("weight"))||5,
+    color:fd.get("color")||"#043970",
+    roles:normalizeAdminLevelList(fd.getAll("roles"),ADMIN_ACCESS_ROLES),
+    modules:normalizeAdminLevelList(fd.getAll("modules"),ADMIN_MODULES),
+    societes:normalizeAdminLevelList(fd.getAll("societes"),SOCIETES),
+    structures:normalizeAdminLevelList(fd.getAll("structures"),ADMIN_STRUCTURES.map(s=>s.key)),
+    actions:normalizeAdminLevelList(fd.getAll("actions"),ADMIN_LEVEL_ACTIONS.map(a=>a.key)),
+    sensitive:normalizeAdminLevelList(fd.getAll("sensitive"),ADMIN_LEVEL_SENSITIVE.map(s=>s.key)),
+    updatedAt:new Date().toISOString(),
+    updatedBy:session?session.username:"system"
+  };
   if(!originalCode){if(db.niveauxAcces.find(n=>n.code===data.code)){toast("Code déjà utilisé","error");return}db.niveauxAcces.push(data);logActivity("Création niveau d'accès",data.code)}
-  else{const idx=db.niveauxAcces.findIndex(n=>n.code===originalCode);if(idx<0)return;db.niveauxAcces[idx]=data;logActivity("Modification niveau d'accès",data.code)}
-  saveDB();closeModal();toast("Niveau enregistré","success");render();
+  else{const idx=db.niveauxAcces.findIndex(n=>n.code===originalCode);if(idx<0)return;db.niveauxAcces[idx]={...db.niveauxAcces[idx],...data};logActivity("Modification niveau d'accès",data.code)}
+  saveDB();closeModal();toast("Niveau configuré","success");render();
 }
 function adminDeleteNiveau(code){if(!confirm("Supprimer le niveau "+code+" ?"))return;db.niveauxAcces=db.niveauxAcces.filter(n=>n.code!==code);logActivity("Suppression niveau d'accès",code);saveDB();toast("Supprimé","success");render()}
+
 function renderAdminContratsPersonnel(view){
   ensureContratsPersonnel();
   const list=db.contratsPersonnel||[];
