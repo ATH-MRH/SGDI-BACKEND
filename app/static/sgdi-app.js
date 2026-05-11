@@ -434,29 +434,46 @@ async function refreshDemandesPersonnelFromPostgres(options){
   }
   return null;
 }
+function employeeFromApi(emp){
+  const extra=emp&&emp.extra&&typeof emp.extra==="object"?emp.extra:{};
+  return {
+    ...extra,
+    id:extra.id||String(emp.id),
+    backendId:emp.id,
+    matricule:extra.matricule||emp.code||String(emp.id),
+    nom:extra.nom||emp.last_name||"",
+    prenom:extra.prenom||emp.first_name||"",
+    societe:extra.societe||emp.society||"",
+    statut:extra.statut||emp.status||"actif",
+    typeContrat:extra.typeContrat||emp.contract_type||"",
+    email:extra.email||emp.email||"",
+    telephone:extra.telephone||emp.phone||"",
+    address:extra.address||emp.address||"",
+    position:extra.position||emp.position||"",
+    fonction:extra.fonction||emp.position||"",
+    dateFinContrat:extra.dateFinContrat||emp.contract_end_date||"",
+    dateFinEssai:extra.dateFinEssai||emp.trial_end_date||"",
+    dateNaissance:extra.dateNaissance||emp.birth_date||"",
+    dateRecrutement:extra.dateRecrutement||emp.recruit_date||"",
+    photo:extra.photo||"",
+    extra
+  };
+}
+function upsertServerEmployee(row){
+  const a=employeeFromApi(row);
+  if(!db)db={};
+  if(!Array.isArray(db.agents))db.agents=[];
+  const existing=db.agents.find(x=>String(x.backendId||"")===String(a.backendId)||String(x.id||"")===String(a.id)||String(x.matricule||"")===String(a.matricule));
+  if(existing)Object.assign(existing,a);else db.agents.push(a);
+  return existing||a;
+}
 async function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   try{
     const employees=await window.SGDI_API.employees.list();
     if(!Array.isArray(employees))return null;
-    db.agents=employees.map(emp=>({
-      id:String(emp.id),
-      matricule:emp.code||String(emp.id),
-      nom:emp.last_name||"",
-      prenom:emp.first_name||"",
-      societe:emp.society||"",
-      statut:emp.status||"actif",
-      typeContrat:emp.contract_type||"",
-      email:emp.email||"",
-      telephone:emp.phone||"",
-      address:emp.address||"",
-      position:emp.position||"",
-      dateFinContrat:emp.contract_end_date||"",
-      dateFinEssai:emp.trial_end_date||"",
-      dateNaissance:emp.birth_date||"",
-      extra:emp.extra||{}
-    }));
+    db.agents=employees.map(employeeFromApi);
     if(opt.render&&typeof render==="function")render();
     if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
     return db.agents;
@@ -505,7 +522,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false})},
+  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
@@ -4389,6 +4406,28 @@ function effectifFilteredData(filter){
   list=sortEffectif(list,effectifSort);
   return{list,title,soc,filter};
 }
+function effectifModeToApi(filter){return filter||"actifs"}
+function effectifServerSupported(filter){return ["actifs","absents","suspension","sortant","blacklist"].includes(filter||"actifs")}
+function effectifPageStorageKey(filter){return "effectifPage:"+effectifModeToApi(filter)+":"+(effectifSocieteFilter()||"")}
+function effectifCurrentPage(filter){return Math.max(parseInt(sessionStorage.getItem(effectifPageStorageKey(filter))||"1",10)||1,1)}
+function setEffectifPage(filter,page){sessionStorage.setItem(effectifPageStorageKey(filter),String(Math.max(parseInt(page||1,10)||1,1)));renderView()}
+function employeeListRowHTML(a,filter){
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}"><td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${a.id}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
+}
+async function effectifListServerHTML(filter){
+  if(!sgdiAuthToken()||!effectifServerSupported(filter))return null;
+  const soc=effectifSocieteFilter();
+  const page=effectifCurrentPage(filter);
+  const pageSize=25;
+  const result=await SGDI.employees.page({mode:effectifModeToApi(filter),society:soc,page,page_size:pageSize});
+  const list=(result.items||[]).map(upsertServerEmployee);
+  const titleMap={actifs:"Effectif opérationnel",absents:"Agents en absence",suspension:"Agents suspendus",sortant:"Sortant",blacklist:"BLACKLIST"};
+  const title=titleMap[filter]||"Effectif opérationnel";
+  const pages=result.pages||1;
+  const pagination=`<div class="flex items-center justify-between gap-2 p-3 border-t border-slate-100 text-sm"><div class="text-slate-500">${result.total||0} employé(s) · page ${result.page||1}/${pages}</div><div class="flex gap-2"><button class="btn btn-ghost text-xs" ${result.page<=1?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)-1})">Précédent</button><button class="btn btn-ghost text-xs" ${result.page>=pages?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)+1})">Suivant</button></div></div>`;
+  return `<div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${result.total||0} employé(s)${soc?` · ${escapeHTML(soc)}`:" · sociétés autorisées"} · source PostgreSQL</p></div><div class="flex items-center gap-2"><span class="text-xs text-slate-500">Page serveur</span></div></div>
+  ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun agent.</div>`:`<div class="card overflow-hidden"><table><thead><tr><th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}`;
+}
 function effectifListHTML(filter){
   const data=effectifFilteredData(filter);
   const {list,title,soc}=data;
@@ -4407,7 +4446,17 @@ function effectifListHTML(filter){
 }
 function renderEffectif(view,filter,stableMode){
   if(filter==="recap")return renderEffectifRecap(view);
-  view.innerHTML=`${filter==="instance_affectation"?"":`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`}<div id="effectif-list-zone">${effectifListHTML(filter)}</div>`;
+  const cards=filter==="instance_affectation"?"":`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`;
+  view.innerHTML=`${cards}<div id="effectif-list-zone"><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div></div>`;
+  effectifListServerHTML(filter).then(html=>{
+    const zone=document.getElementById("effectif-list-zone");
+    if(zone)zone.innerHTML=html||effectifListHTML(filter);
+  }).catch(e=>{
+    console.warn("Effectif PostgreSQL paginé indisponible",e);
+    const zone=document.getElementById("effectif-list-zone");
+    if(zone)zone.innerHTML=effectifListHTML(filter);
+    toast("Lecture PostgreSQL effectifs refusée : "+(e.message||e),"error");
+  });
 }
 function setEffectifSort(v){effectifSort=v;renderView()}
 function sortEffectif(list,k){const a=list.slice();switch(k){case"nom_asc":a.sort((x,y)=>(x.nom+x.prenom).localeCompare(y.nom+y.prenom));break;case"nom_desc":a.sort((x,y)=>(y.nom+y.prenom).localeCompare(x.nom+x.prenom));break;case"recrut_asc":a.sort((x,y)=>(x.dateRecrutement||"").localeCompare(y.dateRecrutement||""));break;case"recrut_desc":a.sort((x,y)=>(y.dateRecrutement||"").localeCompare(x.dateRecrutement||""));break;case"mat_asc":a.sort((x,y)=>(x.matricule||"").localeCompare(y.matricule||""));break;case"mat_desc":a.sort((x,y)=>(y.matricule||"").localeCompare(x.matricule||""));break}return a}

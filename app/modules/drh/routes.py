@@ -27,6 +27,7 @@ from app.modules.drh.schemas import (
     DocumentOut,
     EmployeeCreate,
     EmployeeOut,
+    EmployeePage,
     EmployeeUpdate,
     GenerateContractRequest,
     GeneratedContractOut,
@@ -127,6 +128,29 @@ def dashboard(
             if e.trial_end_date is not None and e.status == "actif"
         ],
     }
+
+
+@router.get("/employees/page", response_model=EmployeePage)
+def employees_page(
+    mode: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    society: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    effective_society = _effective_society_filter(user, society)
+    allowed = _allowed_societies(user)
+    return service.list_employees_page(
+        db,
+        society=effective_society,
+        allowed_societies=allowed if allowed and not effective_society else None,
+        mode=mode,
+        q=q,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/employees", response_model=list[EmployeeOut])

@@ -62,6 +62,15 @@ class EmployeeOut(EmployeeBase):
     model_config = {"from_attributes": True}
 
 
+class EmployeePage(BaseModel):
+    items: list[EmployeeOut]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+
 class CandidateBase(BaseModel):
     first_name: str
     last_name: str

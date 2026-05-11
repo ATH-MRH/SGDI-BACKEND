@@ -30,6 +30,72 @@ def get_or_404(db: Session, model: Type, row_id: int):
 
 
 
+def _employee_matches_text(row: Employee, query: str) -> bool:
+    if not query:
+        return True
+    extra = row.extra if isinstance(row.extra, dict) else {}
+    haystack = " ".join(
+        str(value or "")
+        for value in (
+            row.code,
+            row.first_name,
+            row.last_name,
+            row.phone,
+            row.email,
+            row.position,
+            row.society,
+            extra.get("matricule"),
+            extra.get("fonction"),
+            extra.get("poste"),
+            extra.get("affectationCourante", {}).get("siteName") if isinstance(extra.get("affectationCourante"), dict) else "",
+        )
+    ).lower()
+    return query.lower() in haystack
+
+
+def list_employees_page(
+    db: Session,
+    *,
+    society: str | None = None,
+    allowed_societies: list[str] | None = None,
+    mode: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> dict[str, Any]:
+    stmt = select(Employee)
+    if society:
+        stmt = stmt.where(Employee.society == society)
+    elif allowed_societies:
+        stmt = stmt.where(Employee.society.in_(allowed_societies))
+
+    selected_mode = (mode or "actifs").strip().lower()
+    if selected_mode in {"actifs", "active", "actif"}:
+        stmt = stmt.where(Employee.status.in_(["actif", "active"]))
+    elif selected_mode in {"absents", "absence", "absent"}:
+        stmt = stmt.where(Employee.status == "absent")
+    elif selected_mode in {"suspension", "suspendu", "suspendus"}:
+        stmt = stmt.where(Employee.status == "suspendu")
+    elif selected_mode in {"sortant", "sortants"}:
+        stmt = stmt.where(Employee.status.in_(["sortant", "demissionne", "licencie"]))
+    elif selected_mode not in {"all", "tous", "recap"}:
+        stmt = stmt.where(Employee.status == selected_mode)
+
+    rows = db.execute(stmt.order_by(Employee.last_name.asc(), Employee.first_name.asc(), Employee.id.desc())).scalars().all()
+    query = str(q or "").strip()
+    if query:
+        rows = [row for row in rows if _employee_matches_text(row, query)]
+
+    page = max(int(page or 1), 1)
+    page_size = min(max(int(page_size or 25), 5), 100)
+    total = len(rows)
+    pages = max((total + page_size - 1) // page_size, 1)
+    if page > pages:
+        page = pages
+    start = (page - 1) * page_size
+    return {"items": rows[start:start + page_size], "total": total, "page": page, "page_size": page_size, "pages": pages}
+
+
 def _candidate_is_archived(row: Candidate) -> bool:
     data = row.data if isinstance(row.data, dict) else {}
     status = str(row.status or data.get("statut") or "").strip().lower()
