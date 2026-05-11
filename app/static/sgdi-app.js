@@ -552,6 +552,39 @@ window.SGDI_API={
   sync:{pull:sgdiPullState,push:()=>sgdiBackendSave(),repair:()=>{const r=sgdiAutoRepairDB();if(r.length)sgdiBackendSave();return r}}
 };
 window.SGDI=window.SGDI_API;
+function sgdiServerPageKey(scope,extra){
+  return "sgdi:page:"+String(scope||"list")+":"+String(extra||"");
+}
+function sgdiServerCurrentPage(scope,extra){
+  return Math.max(1,parseInt(sessionStorage.getItem(sgdiServerPageKey(scope,extra))||"1",10)||1);
+}
+function sgdiServerSetPage(scope,extra,page){
+  sessionStorage.setItem(sgdiServerPageKey(scope,extra),String(Math.max(1,parseInt(page||"1",10)||1)));
+  if(typeof renderView==="function")renderView();
+  else if(typeof render==="function")render();
+}
+function sgdiServerPaginationHTML(scope,extra,result){
+  const page=Math.max(1,parseInt(result?.page||"1",10)||1);
+  const pages=Math.max(1,parseInt(result?.pages||"1",10)||1);
+  const total=parseInt(result?.total||"0",10)||0;
+  if(total===0||pages<=1)return "";
+  return `<div class="flex items-center justify-between gap-3 mt-4 text-sm">
+    <div class="text-slate-500 font-semibold">${total} élément(s) · page ${page}/${pages}</div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost text-xs" ${page<=1?"disabled":""} onclick="sgdiServerSetPage('${scope}','${extra}',${page-1})">← Précédent</button>
+      <button class="btn btn-ghost text-xs" ${page>=pages?"disabled":""} onclick="sgdiServerSetPage('${scope}','${extra}',${page+1})">Suivant →</button>
+    </div>
+  </div>`;
+}
+function sgdiUpsertServerItem(listName,item){
+  if(!item)return null;
+  if(!db[listName])db[listName]=[];
+  const list=db[listName];
+  const idx=list.findIndex(x=>(item.backendId&&x.backendId===item.backendId)||(item.id&&x.id===item.id));
+  if(idx>=0)list[idx]={...list[idx],...item};
+  else list.push(item);
+  return idx>=0?list[idx]:item;
+}
 window.SGDI_SIDEBAR_STATS=null;
 async function sgdiRefreshSidebarStats(){
   if(!window.SGDI_API?.ui?.sidebarStats)return null;
@@ -5241,7 +5274,30 @@ function printFiche(id){
 }
 
 /* ---- SITES ---- */
+
+async function renderSitesServer(view){
+  const soc=currentStructureSocieteFilter();
+  const page=sgdiServerCurrentPage("sites",soc||"all");
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des sites depuis PostgreSQL...</div>`;
+  try{
+    const result=await SGDI.sites.page({society:soc||undefined,active:1,page,page_size:12});
+    const rows=(result?.items||result?.data||[]).map(siteFromApi);
+    rows.forEach(site=>sgdiUpsertServerItem("sites",site));
+    const sites=rows.filter(s=>s.actif&&siteMatchesSociete(s,soc));
+    const pagination=sgdiServerPaginationHTML("sites",soc||"all",result);
+    view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary" onclick="navigate('sites/nouveau')">Nouveau site</button>`}</div>
+    ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
+    <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
+    ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;return `<div class="card p-5 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black">${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><a class="btn btn-ghost text-xs" href="#/sites/${s.id}">Modifier</a></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid grid-4 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Affecté</div><div class="text-lg font-bold">${agents.length}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div></div></div>`}).join("")}</div>`}
+    ${pagination}`;
+  }catch(e){
+    console.warn("Sites serveur indisponibles, repli local",e);
+    window.__sgdiSitesLocalFallback=true;
+    renderSites(view);
+  }
+}
 function renderSites(view){
+  if(sgdiAuthToken()&&!window.__sgdiSitesLocalFallback){renderSitesServer(view);return}
   const soc=currentStructureSocieteFilter();
   const sites=db.sites.filter(s=>s.actif&&siteMatchesSociete(s,soc));
   view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
@@ -5595,8 +5651,41 @@ function renderMainCouranteDashboard(view){
     <div class="card p-4"><div class="font-black mb-3">Alertes ouvertes</div>${recent.length?recent.map(i=>`<button class="w-full text-left p-2 rounded-lg bg-slate-50 mb-2" onclick="viewIncident('${i.id}')"><div class="text-xs font-bold">${escapeHTML(i.sujet||i.categorie||"Évènement")}</div><div class="text-[10px] text-slate-500">${formatDate(i.date||i.createdAt||"")} · ${escapeHTML(i.statut||"ouvert")} · ${escapeHTML(i.gravite||"")}</div></button>`).join(""):`<div class="text-sm text-emerald-700 font-semibold">Aucune alerte ouverte.</div>`}</div>
   </div>`;
 }
+function incidentFromApi(row){
+  if(!row)return null;
+  const when=row.event_date||row.created_at||new Date().toISOString();
+  const d=String(when).slice(0,10);
+  const h=String(when).includes("T")?String(when).slice(11,16):"";
+  return {
+    id:String(row.id||row.item_id||uid("in")),backendId:row.id,date:d,heure:h,type:row.event_type==="autre"?"Autre":"Evenement site",
+    categorie:row.event_type||"",gravite:row.level||"normal",sujet:row.title||"Évènement",description:row.message||"",consigne:row.action_taken||"",
+    siteId:row.site_id?String(row.site_id):"",agentId:row.employee_id?String(row.employee_id):"",statut:row.status||"en_cours",createdAt:row.created_at||when,actions:[]
+  };
+}
+async function renderIncidentsServer(view,mode){
+  const type=mode==="autres"?"autre":"site";
+  const page=sgdiServerCurrentPage("incidents",type);
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement de la main courante depuis PostgreSQL...</div>`;
+  try{
+    const result=await SGDI.events.page({event_type:type,page,page_size:20});
+    const list=(result?.items||result?.data||[]).map(incidentFromApi).filter(Boolean);
+    list.forEach(i=>sgdiUpsertServerItem("incidents",i));
+    const ouverts=list.filter(i=>!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
+    const critiques=list.filter(i=>["critique","majeur","urgent"].includes((i.gravite||"").toLowerCase())&&!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
+    const clos=list.filter(i=>["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
+    view.innerHTML=`<div class="flex justify-between items-start mb-4"><div><h1 class="text-2xl font-bold">${mode==="autres"?"Main courante - évènements autres":"Main courante - évènements site"}</h1><div class="text-sm text-slate-500">Journal opérationnel chargé depuis PostgreSQL.</div></div><button class="btn btn-primary" onclick="openIncidentModal('${mode}')">Nouvel évènement</button></div>
+    <div class="grid grid-4 gap-3 mb-4"><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Total</div><div class="text-3xl font-black">${result?.total??list.length}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Ouverts</div><div class="text-3xl font-black text-amber-700">${ouverts}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Critiques</div><div class="text-3xl font-black text-red-700">${critiques}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Clôturés</div><div class="text-3xl font-black text-emerald-700">${clos}</div></div></div>
+    ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun évènement.</div>`:`<div class="space-y-3">${list.map(i=>mainCouranteCardHTML(i)).join("")}</div>`}
+    ${sgdiServerPaginationHTML("incidents",type,result)}`;
+  }catch(e){
+    console.warn("Main courante serveur indisponible, repli local",e);
+    window.__sgdiIncidentsLocalFallback=true;
+    renderIncidents(view,mode);
+  }
+}
 function renderIncidents(view,mode){
   if(mode==="dashboard")return renderMainCouranteDashboard(view);
+  if(sgdiAuthToken()&&!window.__sgdiIncidentsLocalFallback){renderIncidentsServer(view,mode);return}
   const type=mode==="autres"?"Autre":"Evenement site";
   const list=(db.incidents||[]).map(incidentNorm).filter(i=>i.type===type).sort((a,b)=>(b.date+b.heure).localeCompare(a.date+a.heure));
   const ouverts=list.filter(i=>!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
@@ -7165,10 +7254,34 @@ function renderMatSimpleMouvements(view){
   view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2"><div><h1 class="text-2xl font-bold">🔄 Mouvements stock</h1><p class="text-slate-500 text-sm">Historique général des entrées et sorties</p></div><div class="flex gap-2"><button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">📥 Nouvelle entrée</button><button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">📤 Nouvelle sortie</button></div></div>${header}${body}`;
 }
 
+function serverItems(result){return result?.items||result?.data||[]}
+async function renderMatSimpleArticlesServer(view){
+  const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-articles",soc||"all");
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des articles depuis PostgreSQL...</div>`;
+  try{const result=await SGDI.stock.articlesPage({society:soc||undefined,page,page_size:25});const arts=serverItems(result).map(articleFromApi);arts.forEach(a=>sgdiUpsertServerItem("stockArticles",a));
+    const mags=db.magasins||[];const header=matSimpleHeader("articles");
+    view.innerHTML=`<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold">Articles</h1><p class="text-slate-500 text-sm">${result?.total??arts.length} article(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/article-nouveau')">Nouvel article</button></div>${header}<div class="card overflow-x-auto">${arts.length===0?`<div class="p-10 text-center text-slate-500">Aucun article.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Code</th><th class="p-3 text-left">Désignation</th><th class="p-3 text-left">Catégorie</th><th class="p-3 text-left">Magasin</th><th class="p-3 text-center">Stock</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${arts.map(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);const mag=mags.find(m=>m.id===a.magasinId);return `<tr class="border-t hover:bg-slate-50"><td class="p-3 font-mono text-xs">${escapeHTML(a.code||"—")}</td><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/article/${a.id}">${escapeHTML(a.designation||"—")}</a></td><td class="p-3 text-xs">${escapeHTML(a.categorie||"—")}</td><td class="p-3 text-xs">${escapeHTML(mag?.nom||"—")}</td><td class="p-3 text-center font-black">${qty(q)}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/article-edit/${a.id}')">Modifier</button></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-articles",soc||"all",result)}`;
+  }catch(e){console.warn("Articles serveur indisponibles",e);window.__sgdiMatArticlesLocalFallback=true;renderMatSimpleArticles(view)}
+}
+async function renderMatSimpleMagasinsServer(view){
+  const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-magasins",soc||"all");
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des magasins depuis PostgreSQL...</div>`;
+  try{const result=await SGDI.stock.storesPage({society:soc||undefined,page,page_size:18});const mags=serverItems(result).map(storeFromApi);mags.forEach(m=>sgdiUpsertServerItem("magasins",m));const header=matSimpleHeader("magasins");
+    view.innerHTML=`<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold">Magasins</h1><p class="text-slate-500 text-sm">${result?.total??mags.length} magasin(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">Nouveau magasin</button></div>${header}${mags.length===0?`<div class="card p-10 text-center text-slate-500">Aucun magasin.</div>`:`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${mags.map(m=>{const st=matSimpleStockMagasin(m.id);return `<div class="card p-5 cursor-pointer hover:shadow-lg transition" onclick="navigate('materiel/magasin/${m.id}')"><div class="flex justify-between gap-3"><div><h3 class="font-bold text-base">${escapeHTML(m.nom||"—")}</h3><div class="text-xs text-slate-500 font-mono">${escapeHTML(m.code||"")}</div></div><button class="btn btn-ghost text-xs" onclick="event.stopPropagation();navigate('materiel/magasin-edit/${m.id}')">Modifier</button></div><div class="text-xs text-slate-500 mt-2">${escapeHTML(m.responsable||"")}${m.telephone?` · ${escapeHTML(m.telephone)}`:""}</div><div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t text-center"><div><div class="text-[9px] uppercase font-bold text-slate-500">Articles</div><div class="text-lg font-black">${st.nb}</div></div><div><div class="text-[9px] uppercase font-bold text-slate-500">Unités</div><div class="text-lg font-black text-emerald-700">${qty(st.qty)}</div></div></div></div>`}).join("")}</div>`}${sgdiServerPaginationHTML("mat-magasins",soc||"all",result)}`;
+  }catch(e){console.warn("Magasins serveur indisponibles",e);window.__sgdiMatMagasinsLocalFallback=true;renderMatSimpleMagasins(view)}
+}
+async function renderMatSimpleFournisseursServer(view){
+  const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-fournisseurs",soc||"all");
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des fournisseurs depuis PostgreSQL...</div>`;
+  try{const result=await SGDI.stock.suppliersPage({society:soc||undefined,page,page_size:25});const fours=serverItems(result).map(supplierFromApi);fours.forEach(f=>sgdiUpsertServerItem("fournisseurs",f));const header=matSimpleHeader("fournisseurs");
+    view.innerHTML=`<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold">Fournisseurs</h1><p class="text-slate-500 text-sm">${result?.total??fours.length} fournisseur(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/fournisseur-nouveau')">Nouveau fournisseur</button></div>${header}<div class="card overflow-x-auto">${fours.length===0?`<div class="p-10 text-center text-slate-500">Aucun fournisseur.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Raison sociale</th><th class="p-3 text-left">RC / NIF</th><th class="p-3 text-left">Téléphone</th><th class="p-3 text-left">E-mail</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${fours.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/fournisseur/${f.id}">${escapeHTML(f.raisonSociale||"—")}</a></td><td class="p-3 text-xs font-mono">${escapeHTML(f.rc||"—")} ${f.nif?"/ "+escapeHTML(f.nif):""}</td><td class="p-3 text-xs">${escapeHTML(f.telephone||"—")}</td><td class="p-3 text-xs">${escapeHTML(f.email||"—")}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/fournisseur-edit/${f.id}')">Modifier</button></td></tr>`).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-fournisseurs",soc||"all",result)}`;
+  }catch(e){console.warn("Fournisseurs serveur indisponibles",e);window.__sgdiMatFournisseursLocalFallback=true;renderMatSimpleFournisseurs(view)}
+}
 // =====================================================================
 // ARTICLES (table simple)
 // =====================================================================
 function renderMatSimpleArticles(view){
+  if(sgdiAuthToken()&&!window.__sgdiMatArticlesLocalFallback){renderMatSimpleArticlesServer(view);return}
   const soc=matSimpleSocFilter();
   const arts=matSimpleBySoc(db.stockArticles||[]);
   const mags=db.magasins||[];
@@ -7243,6 +7356,7 @@ function matSimpleClearFilters(){
 // MAGASINS
 // =====================================================================
 function renderMatSimpleMagasins(view){
+  if(sgdiAuthToken()&&!window.__sgdiMatMagasinsLocalFallback){renderMatSimpleMagasinsServer(view);return}
   const soc=matSimpleSocFilter();
   const mags=matSimpleBySoc(db.magasins||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   const header=matSimpleHeader("magasins");
@@ -7399,6 +7513,7 @@ function renderMatSimpleMagasinDetail(view,id){
 // FOURNISSEURS
 // =====================================================================
 function renderMatSimpleFournisseurs(view){
+  if(sgdiAuthToken()&&!window.__sgdiMatFournisseursLocalFallback){renderMatSimpleFournisseursServer(view);return}
   const soc=matSimpleSocFilter();
   const fours=matSimpleBySoc(db.fournisseurs||[]).slice().sort((a,b)=>(a.raisonSociale||"").localeCompare(b.raisonSociale||""));
   const header=matSimpleHeader("fournisseurs");
@@ -10142,7 +10257,20 @@ function confirmProspect(){
 function updateProspectStatut(id,s){const p=db.prospects.find(x=>x.id===id);if(p){p.statut=s;saveDB();toast("Statut mis à jour","success")}}
 function deleteProspect(id){if(!confirm("Supprimer ?"))return;db.prospects=db.prospects.filter(p=>p.id!==id);saveDB();renderView()}
 function convertProspect(id){const p=db.prospects.find(x=>x.id===id);if(!p)return;if(!confirm("Convertir "+p.nom+" en client ?"))return;db.clients=db.clients||[];db.clients.push({id:uid("cl"),nom:p.nom,raisonSociale:p.nom,nif:"",rc:"",contact:p.contact,fonction:p.fonction,tel:p.tel,email:p.email,adresse:p.adresse,societe:p.societe,structure:"",statut:"actif",notes:p.notes,prospectId:p.id,createdAt:new Date().toISOString()});p.statut="converti";saveDB();toast("Client créé","success");renderView()}
+async function renderCommClientsServer(view){
+  const soc=mySoc();const page=sgdiServerCurrentPage("comm-clients",soc||"all");
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des clients depuis PostgreSQL...</div>`;
+  try{
+    const result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25});
+    const list=serverItems(result).map(clientFromApi);
+    list.forEach(c=>sgdiUpsertServerItem("clients",c));
+    view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">Clients</h1><p class="text-slate-500 text-sm">${result?.total??list.length} clients</p></div><button class="btn btn-primary" onclick="openClientModal()">Nouveau client</button></div>
+    ${commTabs("clients")}
+    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun client.</div>`:`<table><thead><tr><th>Nom</th><th>Raison sociale</th><th>NIF / RC</th><th>Contact</th><th>Tel</th><th>Fin contrat</th><th>Structure</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";return `<tr data-searchable style="${alert?"background:#fff7ed":""}"><td class="font-semibold">${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML(c.raisonSociale||"")}</td><td class="text-xs font-mono">${safe(c.nif)} ${c.rc?"/"+escapeHTML(c.rc):""}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${finCell}</td><td class="text-xs"><span class="pill pill-indigo">${safe(c.structure)}</span></td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td><td><div class="flex gap-1 justify-end"><button class="btn btn-ghost text-xs" onclick="openClientModal('${c.id}')">Modifier</button><button class="btn btn-ghost text-xs text-red-600" onclick="deleteClient('${c.id}')">Supprimer</button></div></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("comm-clients",soc||"all",result)}`;
+  }catch(e){console.warn("Clients serveur indisponibles",e);window.__sgdiCommClientsLocalFallback=true;renderCommClients(view)}
+}
 function renderCommClients(view){
+  if(sgdiAuthToken()&&!window.__sgdiCommClientsLocalFallback){renderCommClientsServer(view);return}
   const list=bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">🤝 Clients</h1><p class="text-slate-500 text-sm">${list.length} clients</p></div><button class="btn btn-primary" onclick="openClientModal()">➕ Nouveau client</button></div>
     ${commTabs("clients")}
