@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.pagination import paginate_statement
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.materiel import service
@@ -28,6 +30,14 @@ def materiel_dashboard(db: Session = Depends(get_db)):
     return service.dashboard(db)
 
 
+@router.get("/stores/page")
+def stores_page(society: str | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
+    stmt = select(Store)
+    if society:
+        stmt = stmt.where(Store.society == society)
+    return paginate_statement(db, stmt, model=Store, search_fields=[Store.name, Store.code, Store.society, Store.manager_name, Store.phone, Store.email], q=q, page=page, page_size=page_size)
+
+
 @router.get("/stores", response_model=list[StoreOut])
 def stores(society: str | None = None, db: Session = Depends(get_db)):
     return service.list_rows(db, Store, {"society": society})
@@ -48,6 +58,14 @@ def delete_store(store_id: int, db: Session = Depends(get_db)):
     return service.delete_row(db, Store, store_id)
 
 
+@router.get("/suppliers/page")
+def suppliers_page(society: str | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
+    stmt = select(Supplier)
+    if society:
+        stmt = stmt.where(Supplier.society == society)
+    return paginate_statement(db, stmt, model=Supplier, search_fields=[Supplier.name, Supplier.society, Supplier.contact_name, Supplier.phone, Supplier.email, Supplier.products], q=q, page=page, page_size=page_size)
+
+
 @router.get("/suppliers", response_model=list[SupplierOut])
 def suppliers(society: str | None = None, db: Session = Depends(get_db)):
     return service.list_rows(db, Supplier, {"society": society})
@@ -66,6 +84,18 @@ def update_supplier(supplier_id: int, payload: SupplierCreate, db: Session = Dep
 @router.delete("/suppliers/{supplier_id}")
 def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
     return service.delete_row(db, Supplier, supplier_id)
+
+
+@router.get("/articles/page")
+def articles_page(store_id: int | None = None, category: str | None = None, society: str | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
+    stmt = select(StockArticle).where(StockArticle.active == 1)
+    if store_id is not None:
+        stmt = stmt.where(StockArticle.store_id == store_id)
+    if category:
+        stmt = stmt.where(StockArticle.category == category)
+    if society:
+        stmt = stmt.where(StockArticle.society == society)
+    return paginate_statement(db, stmt, model=StockArticle, search_fields=[StockArticle.code, StockArticle.designation, StockArticle.category, StockArticle.sub_category, StockArticle.society, StockArticle.brand, StockArticle.model], q=q, page=page, page_size=page_size)
 
 
 @router.get("/articles", response_model=list[ArticleOut])
@@ -91,6 +121,16 @@ def delete_article(article_id: int, db: Session = Depends(get_db)):
 @router.get("/inventory")
 def inventory(store_id: int | None = None, category: str | None = None, db: Session = Depends(get_db)):
     return service.inventory(db, store_id, category)
+
+
+@router.get("/movements/page")
+def movements_page(article_id: int | None = None, employee_id: int | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
+    stmt = select(StockMovement)
+    if article_id is not None:
+        stmt = stmt.where(StockMovement.article_id == article_id)
+    if employee_id is not None:
+        stmt = stmt.where(StockMovement.employee_id == employee_id)
+    return paginate_statement(db, stmt, model=StockMovement, search_fields=[StockMovement.movement_type, StockMovement.recipient, StockMovement.reason, StockMovement.voucher_number, StockMovement.notes], q=q, page=page, page_size=page_size)
 
 
 @router.get("/movements", response_model=list[MovementOut])

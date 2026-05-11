@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.pagination import paginate_list
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.irongs import service
@@ -34,3 +35,19 @@ def payroll(db: Session = Depends(get_db)) -> dict[str, list[Any]]:
         "pointageMensuel": _list_collection(db, "pointageMensuel"),
         "contratsPersonnel": _list_collection(db, "contratsPersonnel"),
     }
+
+
+@router.get("/entries/{collection}/page")
+def entries_page(collection: str, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
+    allowed = {"caisse", "factures", "paiements", "avances", "avoirs"}
+    if collection not in allowed:
+        return {"items": [], "total": 0, "page": 1, "page_size": page_size, "pages": 1}
+    return paginate_list(_list_collection(db, collection), page=page, page_size=page_size)
+
+
+@router.get("/payroll/{collection}/page")
+def payroll_page(collection: str, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
+    allowed = {"agents", "pointageMensuel", "contratsPersonnel"}
+    if collection not in allowed:
+        return {"items": [], "total": 0, "page": 1, "page_size": page_size, "pages": 1}
+    return paginate_list(_list_collection(db, collection), page=page, page_size=page_size)
