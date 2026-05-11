@@ -2121,13 +2121,13 @@ function renderSidebar(){
       const head="";
       const openGroup=sidebarOpenGroup();
       const html=opsGroups.map(g=>{
-        if(g.type==="link"){const a=sidebarRouteActive(path,g.route)?"active":"";const badge=typeof g.count==="number"?`<span class="nav-count">${g.count}</span>`:"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="ico">${g.icon}</span><span class="nav-label">${escapeHTML(g.label)}</span>${badge}</div>`}
+        if(g.type==="link"){const a=sidebarRouteActive(path,g.route)?"active":"";const badge=typeof g.count==="number"?`<span class="nav-count">${g.count}</span>`:"";return`<div class="nav-link ${a}" onclick="navigate('${g.route}')"><span class="nav-label">${escapeHTML(g.label)}</span>${badge}</div>`}
         const key=g.label;const hasActive=g.children.some(c=>sidebarRouteActive(path,c.route));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
         const headerClick=g.route?`navigate('${g.route}')`:(g.children&&g.children[0]?`navigate('${g.children[0].route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`);
         const arrowClick=`event.stopPropagation();toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
-        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="${headerClick}"><span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
         return header;
       }).join("");
       const back=`<div class="sidebar-back"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
@@ -2165,7 +2165,7 @@ function renderSidebar(){
         const groupClick=g.label==="EFFECTIFS"?`navigate('effectif/recap');toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
         const headerClick=g.route?`navigate('${g.route}')`:(g.children&&g.children[0]?`navigate('${g.children[0].route}')`:groupClick);
         const arrowClick=`event.stopPropagation();${groupClick}`;
-        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
+        const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${headerClick}"><span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
         return header;
       }).join("");
       const back=`<div class="sidebar-back"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
@@ -2175,7 +2175,7 @@ function renderSidebar(){
     }
     const g=transFlat[mod];
     const head="";
-    const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${c.label}</span>${badge}</div>`}).join("");
+    const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span class="nav-label">${c.label}</span>${badge}</div>`}).join("");
     const back=`<div class="sidebar-back"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
     document.getElementById("sidebar-nav").innerHTML=head+items+back;
     setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);scheduleSidebarStatsRefresh();
@@ -2240,7 +2240,7 @@ function renderSidebar(){
     const groupBadge=totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
     const headerClick=g.route?`navigate('${g.route}')`:(vis&&vis[0]?`navigate('${vis[0].route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`);
     const arrowClick=`event.stopPropagation();toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
-    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
+    const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="${headerClick}"><span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
     return header;
   }).join("");
   document.getElementById("sidebar-nav").innerHTML=html;
