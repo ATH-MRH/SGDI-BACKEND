@@ -508,6 +508,7 @@ window.SGDI_API={
   employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
+    candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
     createCandidate:(payload)=>sgdiApi("/drh/candidates",{method:"POST",body:payload,legacy:false}),
     updateCandidate:(id,payload)=>sgdiApi("/drh/candidates/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),
     deleteCandidate:(id)=>sgdiApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
@@ -3044,7 +3045,60 @@ function renderRecrutementDashboard(view){
       <div class="card p-4"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Postes demandés en réserve</h3><span class="pill pill-amber">${reserves.length}</span></div><div class="dash-mini-list">${topPostes.length?topPostes.map(([k,n])=>bar(k,n,reserves.length,"#f59e0b")).join(""):`<div class="p-8 text-center text-slate-500">Aucun candidat en réserve.</div>`}</div></div>
     </div>`;
 }
+function recrutementModeToApi(mode){return mode==="archive"?"archive":mode==="reserve"?"reserve":"new"}
+function recrutementPageStorageKey(mode){return "recrutementPage:"+recrutementModeToApi(mode)+":"+((isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"")}
+function recrutementCurrentPage(mode){return Math.max(parseInt(sessionStorage.getItem(recrutementPageStorageKey(mode))||"1",10)||1,1)}
+function setRecrutementPage(mode,page){sessionStorage.setItem(recrutementPageStorageKey(mode),String(Math.max(parseInt(page||1,10)||1,1)));renderView()}
+function upsertServerCandidate(row){
+  const c=candidateFromApi(row);
+  if(!db)db={};
+  if(!Array.isArray(db.candidats))db.candidats=[];
+  const existing=db.candidats.find(x=>String(x.backendId||"")===String(c.backendId)||String(x.id||"")===String(c.id));
+  if(existing)Object.assign(existing,c);else db.candidats.push(c);
+  stashCandidatForRoute(existing||c,[c.id,c.backendId]);
+  return existing||c;
+}
+function candidateListRowHTML(c,mode){
+  const route=mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement";
+  const archived=mode==="archive";
+  return `<tr data-searchable data-candidate-id="${escapeHTML(c.id)}" data-backend-id="${escapeHTML(c.backendId||"")}">
+    <td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML((c.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(c.email||"")}</div></div></div></td>
+    <td>${safe(c.posteSouhaite)}</td>
+    <td><span class="pill pill-indigo">${safe(c.societe)}</span></td>
+    ${archived?`<td><span class="pill pill-blue">${escapeHTML(candidatArchiveSourceLabel(c))}</span></td><td><span class="pill pill-gray">${safe(c.wilaya||"—")}</span></td>`:""}
+    <td>${safe(c.telephone)}</td>
+    <td>${c.avisDecision?`<span class="pill ${c.avisDecision==="Favorable"?"pill-green":c.avisDecision==="Défavorable"?"pill-red":"pill-amber"}">${escapeHTML(c.avisDecision)}</span>`:"—"}</td>
+    <td class="text-xs">${archived?`${formatDate(c.archivedAt||c.updatedAt||c.createdAt)}<div class="text-[11px] text-slate-500">${escapeHTML(c.motifArchive||"—")}</div>`:formatDate(c.createdAt)}</td>
+    <td>${archived?'<span class="pill pill-gray">Archivé</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
+    <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<a class="btn btn-ghost text-xs" href="#/${route}/${escapeHTML(c.id)}">Ouvrir →</a>`}</td>
+  </tr>`;
+}
+async function renderRecrutementServer(view,mode){
+  const title=mode==="archive"?"Candidats archivés":mode==="reserve"?"Candidats en réserve":"Nouvelles candidatures";
+  const st=mode==="archive"?"Dossiers archivés depuis les nouvelles candidatures et les candidats en réserve.":mode==="reserve"?"Candidats validés, en attente de recrutement.":"Candidats à présélectionner pour la fiche de renseignement.";
+  const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
+  const page=recrutementCurrentPage(mode);
+  const pageSize=25;
+  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">👥 Ajouter candidat</button>`:"";
+  view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div>`;
+  try{
+    const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});
+    const cs=(result.items||[]).map(upsertServerCandidate);
+    const pages=result.pages||1;
+    const pagination=`<div class="flex items-center justify-between gap-2 p-3 border-t border-slate-100 text-sm"><div class="text-slate-500">${result.total||0} candidat(s) · page ${result.page||1}/${pages}</div><div class="flex gap-2"><button class="btn btn-ghost text-xs" ${result.page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${(result.page||1)-1})">Précédent</button><button class="btn btn-ghost text-xs" ${result.page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${(result.page||1)+1})">Suivant</button></div></div>`;
+    view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st} · source PostgreSQL</p></div>${addButton}</div>
+      <div class="grid grid-3 mb-4"><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Total serveur</div><div class="text-3xl font-bold mt-1">${result.total||0}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Page affichée</div><div class="text-3xl font-bold mt-1">${cs.length}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Société</div><div class="text-sm font-bold mt-2">${escapeHTML(socFilter||"Toutes autorisées")}</div></div></div>
+      ${cs.length===0?`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`:`<div class="card overflow-hidden"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead><tbody>${cs.map(c=>candidateListRowHTML(c,mode)).join("")}</tbody></table>${pagination}</div>`}`;
+    setTimeout(()=>applyLanguagePreference(view),0);
+  }catch(e){
+    console.warn("Liste candidats PostgreSQL indisponible",e);
+    window.__sgdiLocalRecrutementFallback=true;
+    try{renderRecrutement(view,mode)}finally{window.__sgdiLocalRecrutementFallback=false}
+    toast("Lecture PostgreSQL candidats refusée : "+(e.message||e),"error");
+  }
+}
 function renderRecrutement(view,mode){
+  if(sgdiAuthToken()&&!window.__sgdiLocalRecrutementFallback){renderRecrutementServer(view,mode);return}
   cleanupDuplicateCandidates(true);
   const title=mode==="archive"?"Candidats archivés":mode==="reserve"?"Candidats en réserve":"Nouvelles candidatures";
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";

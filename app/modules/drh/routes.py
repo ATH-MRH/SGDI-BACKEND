@@ -14,6 +14,7 @@ from app.modules.drh.models import Candidate, Contract, ContractConditionalClaus
 from app.modules.drh.schemas import (
     CandidateCreate,
     CandidateOut,
+    CandidatePage,
     CandidateUpdate,
     ContractCreate,
     ContractOut,
@@ -171,6 +172,29 @@ def delete_employee(employee_id: int, db: Session = Depends(get_db), user: User 
 def get_fiche_position(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, employee_id)
     return service.fiche_position(db, employee_id)
+
+
+@router.get("/candidates/page", response_model=CandidatePage)
+def candidates_page(
+    mode: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    society: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    effective_society = _effective_society_filter(user, society)
+    allowed = _allowed_societies(user)
+    return service.list_candidates_page(
+        db,
+        society=effective_society,
+        allowed_societies=allowed if allowed and not effective_society else None,
+        mode=mode,
+        q=q,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get("/candidates", response_model=list[CandidateOut])

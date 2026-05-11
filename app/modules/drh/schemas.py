@@ -100,6 +100,15 @@ class CandidateOut(CandidateBase):
     model_config = {"from_attributes": True}
 
 
+class CandidatePage(BaseModel):
+    items: list[CandidateOut]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+
 class ContractBase(BaseModel):
     employee_id: int
     contract_type: str = "CDI"

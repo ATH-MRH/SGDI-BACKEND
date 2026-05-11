@@ -30,6 +30,82 @@ def get_or_404(db: Session, model: Type, row_id: int):
 
 
 
+def _candidate_is_archived(row: Candidate) -> bool:
+    data = row.data if isinstance(row.data, dict) else {}
+    status = str(row.status or data.get("statut") or "").strip().lower()
+    return status in {"archive", "archived", "archivé", "archivee", "archivée"} or bool(
+        data.get("archivedAt") or data.get("motifArchive") or data.get("commentaireArchive")
+    )
+
+
+def _candidate_is_reserve(row: Candidate) -> bool:
+    data = row.data if isinstance(row.data, dict) else {}
+    status = str(row.status or data.get("statut") or "").strip().lower()
+    return status == "reserve" and bool(data.get("fichePositionValidee"))
+
+
+def _candidate_matches_text(row: Candidate, query: str) -> bool:
+    if not query:
+        return True
+    data = row.data if isinstance(row.data, dict) else {}
+    haystack = " ".join(
+        str(value or "")
+        for value in (
+            row.first_name,
+            row.last_name,
+            row.phone,
+            row.email,
+            row.desired_position,
+            row.society,
+            data.get("nom"),
+            data.get("prenom"),
+            data.get("telephone"),
+            data.get("posteSouhaite"),
+            data.get("wilaya"),
+        )
+    ).lower()
+    return query.lower() in haystack
+
+
+def list_candidates_page(
+    db: Session,
+    *,
+    society: str | None = None,
+    allowed_societies: list[str] | None = None,
+    mode: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> dict[str, Any]:
+    stmt = select(Candidate)
+    if society:
+        stmt = stmt.where(Candidate.society == society)
+    elif allowed_societies:
+        stmt = stmt.where(Candidate.society.in_(allowed_societies))
+
+    rows = db.execute(stmt.order_by(Candidate.id.desc())).scalars().all()
+    selected_mode = (mode or "").strip().lower()
+    if selected_mode in {"archive", "archived", "archives"}:
+        rows = [row for row in rows if _candidate_is_archived(row)]
+    elif selected_mode in {"reserve", "reserves"}:
+        rows = [row for row in rows if _candidate_is_reserve(row) and not _candidate_is_archived(row)]
+    elif selected_mode in {"new", "nouveau", "nouvelle", "recrutement"}:
+        rows = [row for row in rows if not _candidate_is_reserve(row) and not _candidate_is_archived(row)]
+
+    query = str(q or "").strip()
+    if query:
+        rows = [row for row in rows if _candidate_matches_text(row, query)]
+
+    page = max(int(page or 1), 1)
+    page_size = min(max(int(page_size or 25), 5), 100)
+    total = len(rows)
+    pages = max((total + page_size - 1) // page_size, 1)
+    if page > pages:
+        page = pages
+    start = (page - 1) * page_size
+    return {"items": rows[start:start + page_size], "total": total, "page": page, "page_size": page_size, "pages": pages}
+
+
 
 def _candidate_text(value: Any) -> str:
     return str(value or "").strip()
