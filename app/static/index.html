@@ -84,9 +84,9 @@
   ::selection{background:var(--primary-ring);color:var(--text)}
 
   /* ----- SIDEBAR ----- */
-  .sidebar{background:#01112f!important;border-right:1px solid #262626!important;width:218px!important;min-width:218px!important;max-width:218px!important;flex:0 0 218px!important;color:#f5f5f4!important;box-shadow:none}
+  .sidebar{background:#01112f!important;border-right:1px solid #262626!important;width:5cm!important;min-width:5cm!important;max-width:5cm!important;flex:0 0 5cm!important;color:#f5f5f4!important;box-shadow:none}
   .sidebar,.sidebar *{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif!important;font-size:12px!important;letter-spacing:0!important}
-  .sidebar nav{padding:calc(10px + 4cm) 8px 10px 8px!important;background:#01112f!important;scrollbar-color:#3f3f46 #01112f}
+  .sidebar nav{padding:4cm 8px 10px 8px!important;background:#01112f!important;scrollbar-color:#3f3f46 #01112f;display:flex!important;flex-direction:column!important}
   .sidebar nav::-webkit-scrollbar{width:8px}.sidebar nav::-webkit-scrollbar-track{background:#01112f}.sidebar nav::-webkit-scrollbar-thumb{background:#3f3f46;border-radius:999px}
   .sidebar .card{background:#121214!important;border:1px solid #27272a!important;box-shadow:none!important;color:#f5f5f4!important;border-radius:8px!important}
   .sidebar .card *{color:#f5f5f4!important}.sidebar .text-slate-500,.sidebar .text-slate-400{color:#a1a1aa!important}
@@ -104,20 +104,20 @@
   .nav-link{padding-left:8px!important}
   .sub-link{padding-left:8px!important}
   .sidebar-module-title{color:#fff!important;font-size:28px!important;font-weight:900!important;line-height:1.05!important}
-  .nav-group{padding:8px 9px;font-size:11px!important;letter-spacing:.04em!important;color:#fff!important;text-transform:uppercase;font-weight:800;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;border-radius:7px;margin-top:1cm;background:transparent!important}
+  .nav-group{padding:8px 9px;font-size:11px!important;letter-spacing:.04em!important;color:#fff!important;text-transform:uppercase;font-weight:800;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;border-radius:7px;margin-top:2cm;background:transparent!important}
   .nav-group,.nav-link,.sub-link{position:relative;border-bottom:0!important}
   .nav-group::after,.nav-link::after,.sub-link::after{display:none!important}
   .nav-group:hover{background:#18181b!important;color:#facc15!important}
   .nav-group:hover *{color:#facc15!important}
   .nav-group .arrow{font-size:10px!important;transition:transform .2s ease;color:#71717a!important}
   .nav-group.collapsed .arrow{transform:rotate(-90deg)}
-  .nav-link{padding:8px 9px;border-radius:7px;color:#fff!important;font-size:12px!important;font-weight:650;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s}
+  .nav-link{padding:8px 9px;border-radius:7px;color:#fff!important;font-size:12px!important;font-weight:650;cursor:pointer;transition:background .15s,color .15s,box-shadow .15s;margin-top:2cm}
   .nav-link:hover{background:#18181b!important;color:#facc15!important}
   .nav-link:hover *{color:#facc15!important}
   .nav-link.active{background:#27272a!important;color:#facc15!important;font-weight:850;box-shadow:none!important}
   .nav-link .ico,.nav-group .ico{width:18px!important;min-width:18px!important;max-width:18px!important;text-align:center;font-size:14px!important;color:#facc15!important;opacity:.95}
   .nav-link .nav-count{margin-left:auto;background:#facc15!important;color:#111113!important;font-size:10px!important;font-weight:900;min-width:20px;height:19px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;box-shadow:none!important}
-  .sub-link{padding:7px 8px 7px 8px;font-size:11.5px!important;color:#fff!important;border-radius:7px;cursor:pointer;transition:background .12s,color .12s,box-shadow .12s;font-weight:600}
+  .sub-link{padding:7px 8px 7px 8px;font-size:11.5px!important;color:#fff!important;border-radius:7px;cursor:pointer;transition:background .12s,color .12s,box-shadow .12s;font-weight:600;margin-top:2cm}
   .sub-link:hover{color:#facc15!important;background:#18181b!important}
   .sub-link:hover *{color:#facc15!important}
   .sub-link.active{color:#facc15!important;background:#27272a!important;font-weight:850;box-shadow:none!important}
@@ -125,6 +125,9 @@
   .sub-link .nav-count{margin-left:auto;background:#facc15!important;color:#111113!important;font-size:10px!important;font-weight:900;min-width:20px;height:19px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;box-shadow:none!important}
   .sub-link.active .nav-count{background:#fde047!important;color:#111113!important}
   .gestion-badge{position:absolute;top:-8px;right:-8px;background:#facc15;color:#111113;font-size:10px!important;font-weight:900;min-width:23px;height:23px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;border:2px solid #01112f;box-shadow:none}
+  #sidebar-nav>.nav-link:first-child,#sidebar-nav>.nav-group:first-child,#sidebar-nav>.sub-link:first-child{margin-top:0!important}
+  .sidebar-back{margin-top:auto!important;margin-bottom:1cm!important;border-top:1px solid #1f2937!important;padding:8px 12px!important}
+
   .societe-structure-bar{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 4px 12px rgba(15,23,42,.05);z-index:20}
   .societe-structure-inner{min-height:58px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:8px 16px}
   .societe-active-pill{display:inline-flex;align-items:center;gap:8px;background:#0f172a;color:#fff;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
@@ -394,9 +397,9 @@
   .mat-form-band-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:900;color:#0f172a;margin-bottom:12px}
   @media(max-width:900px){.mat-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mat-panel-grid{grid-template-columns:1fr}}
   @media (min-width:768px) and (max-width:1180px){
-    .sidebar{width:174px!important;min-width:174px!important;max-width:174px!important;flex-basis:174px!important}
+    .sidebar{width:5cm!important;min-width:5cm!important;max-width:5cm!important;flex-basis:5cm!important}
     .sidebar,.sidebar *{font-size:10.5px!important}
-    .sidebar nav{padding:calc(7px + 4cm) 5px 7px 5px!important}
+    .sidebar nav{padding:4cm 5px 7px 5px!important;display:flex!important;flex-direction:column!important}
     .sidebar .px-5{padding-left:10px!important;padding-right:10px!important}
     .sidebar .py-5{padding-top:12px!important;padding-bottom:12px!important}
     .sidebar [data-no-lang="1"]{font-size:28px!important}
@@ -2628,13 +2631,12 @@ function renderSidebar(){
         const key=g.label;const hasActive=g.children.some(c=>sidebarRouteActive(path,c.route));const isCol=openGroup?openGroup!==key:!hasActive;
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-        const headerClick=g.route?`navigate('${g.route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
+        const headerClick=g.route?`navigate('${g.route}')`:(g.children&&g.children[0]?`navigate('${g.children[0].route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`);
         const arrowClick=`event.stopPropagation();toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
         const header=`<div class="nav-group ${isCol?"collapsed":""}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${escapeHTML(g.label)}</span>${groupBadge}</span></div>`;
-        if(isCol)return header;
-        return header+g.children.map(c=>{const a=sidebarRouteActive(path,c.route)?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${escapeHTML(c.label)}</span>${badge}</div>`}).join("");
+        return header;
       }).join("");
-      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-800"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+      const back=`<div class="sidebar-back"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
       setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
       return;
@@ -2666,13 +2668,12 @@ function renderSidebar(){
         const totalCount=g.children.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
         const groupBadge=totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
         const groupClick=g.label==="EFFECTIFS"?`navigate('effectif/recap');toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
-        const headerClick=g.route?`navigate('${g.route}')`:groupClick;
+        const headerClick=g.route?`navigate('${g.route}')`:(g.children&&g.children[0]?`navigate('${g.children[0].route}')`:groupClick);
         const arrowClick=`event.stopPropagation();${groupClick}`;
         const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" ${titleStyle} onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
-        if(isCol)return header;
-        return header+g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";return`<div class="sub-link ${a} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
+        return header;
       }).join("");
-      const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+      const back=`<div class="sidebar-back"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
       document.getElementById("sidebar-nav").innerHTML=head+html+back;
       setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
       return;
@@ -2680,7 +2681,7 @@ function renderSidebar(){
     const g=transFlat[mod];
     const head="";
     const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${c.label}</span>${badge}</div>`}).join("");
-    const back=`<div class="px-3 pt-2 pb-3 mt-2 border-t border-slate-200"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
+    const back=`<div class="sidebar-back"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
     document.getElementById("sidebar-nav").innerHTML=head+items+back;
     setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
     return;
@@ -2742,11 +2743,10 @@ function renderSidebar(){
     const key=g.label;const hasActive=vis.some(c=>path===c.route||path.startsWith(c.route+"/"));const isCol=openGroup?openGroup!==key:!hasActive;
     const totalCount=vis.reduce((s,c)=>s+(typeof c.count==="number"?c.count:0),0);
     const groupBadge=totalCount>0?`<span class="nav-count" style="margin-left:8px">${totalCount}</span>`:"";
-    const headerClick=g.route?`navigate('${g.route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
+    const headerClick=g.route?`navigate('${g.route}')`:(vis&&vis[0]?`navigate('${vis[0].route}')`:`toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`);
     const arrowClick=`event.stopPropagation();toggleNavGroup('${escapeHTML(key).replace(/'/g,"\\'")}')`;
     const header=`<div class="nav-group ${isCol?"collapsed":""} ${navDemandesPersonnelGroupClass(g.label,totalCount)}" onclick="${headerClick}"><span><span class="arrow" onclick="${arrowClick}">▾</span><span class="nav-label">${g.label}</span>${groupBadge}</span></div>`;
-    if(isCol)return header;
-    return header+vis.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls} ${navDemandesPersonnelClass(c)}" onclick="navigate('${c.route}')"><span>${c.icon}</span><span class="nav-label">${navDemandesPersonnelLabel(c)}</span>${badge}</div>`}).join("");
+    return header;
   }).join("");
   document.getElementById("sidebar-nav").innerHTML=html;
   setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);
