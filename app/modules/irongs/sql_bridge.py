@@ -13,6 +13,7 @@ from app.modules.drh.models import Candidate, Employee
 from app.modules.finance_models import Advance, CashEntry, CreditNote, Invoice, Payment
 from app.modules.materiel.models import StockArticle, StockMovement, Store, Supplier
 from app.modules.ops.models import Assignment, DailyPresence, Site
+from app.core.photo_storage import normalize_photo_fields
 
 SQL_COLLECTIONS = {
     "candidats", "agents", "employees", "sites", "assignments", "affectations", "pointages", "pointageMensuel", "feuillePresence",
@@ -112,6 +113,7 @@ def candidate_to_item(row: Candidate) -> dict[str, Any]:
 
 
 def upsert_candidate(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+    item = normalize_photo_fields(item, fallback=str(item.get("backendId") or item.get("id") or "candidate"))
     row = db.get(Candidate, as_int(item.get("backendId")) or 0)
     first_name = str(item.get("prenom") or item.get("first_name") or "").strip()
     last_name = str(item.get("nom") or item.get("last_name") or "").strip()
@@ -151,6 +153,7 @@ def employee_to_item(row: Employee) -> dict[str, Any]:
 
 
 def upsert_employee(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+    item = normalize_photo_fields(item, fallback=str(item.get("matricule") or item.get("code") or item.get("backendId") or "employee"))
     row = db.get(Employee, as_int(item.get("backendId")) or 0)
     code = str(item.get("matricule") or item.get("code") or item.get("id") or "").strip()[:30]
     if not row and code:

@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
+from app.core.photo_storage import normalize_photo_fields
 
 
 def list_rows(db: Session, model: Type, filters: dict[str, Any] | None = None):
@@ -41,6 +42,7 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
         if raw_id.startswith("tmp_cd_"):
             raise HTTPException(status_code=422, detail="Candidature temporaire refusée. Enregistrez uniquement une fiche complète.")
         data.pop("isNew", None)
+        values["data"] = normalize_photo_fields(data, fallback=raw_id or values.get("last_name") or "candidate")
     first_name = _candidate_text(values.get("first_name", existing.first_name if existing else ""))
     last_name = _candidate_text(values.get("last_name", existing.last_name if existing else ""))
     if len(first_name) < 2 or len(last_name) < 2:
@@ -67,7 +69,10 @@ def update_candidate(db: Session, candidate_id: int, payload: Any):
     return row
 
 def create_row(db: Session, model: Type, payload: Any):
-    row = model(**payload.model_dump(exclude_unset=True))
+    values = payload.model_dump(exclude_unset=True)
+    if model is Employee and isinstance(values.get("extra"), dict):
+        values["extra"] = normalize_photo_fields(values["extra"], fallback=values.get("code") or "employee")
+    row = model(**values)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -76,7 +81,10 @@ def create_row(db: Session, model: Type, payload: Any):
 
 def update_row(db: Session, model: Type, row_id: int, payload: Any):
     row = get_or_404(db, model, row_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    values = payload.model_dump(exclude_unset=True)
+    if model is Employee and isinstance(values.get("extra"), dict):
+        values["extra"] = normalize_photo_fields(values["extra"], fallback=getattr(row, "code", None) or str(row_id))
+    for key, value in values.items():
         setattr(row, key, value)
     db.commit()
     db.refresh(row)
@@ -423,3 +431,22 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
     db.commit()
     db.refresh(row)
     return row
+
+
+def cleanup_base64_photos(db: Session) -> int:
+    changed = 0
+    for row in db.execute(select(Candidate)).scalars().all():
+        if isinstance(row.data, dict):
+            cleaned = normalize_photo_fields(row.data, fallback=str(row.id))
+            if cleaned != row.data:
+                row.data = cleaned
+                changed += 1
+    for row in db.execute(select(Employee)).scalars().all():
+        if isinstance(row.extra, dict):
+            cleaned = normalize_photo_fields(row.extra, fallback=row.code or str(row.id))
+            if cleaned != row.extra:
+                row.extra = cleaned
+                changed += 1
+    if changed:
+        db.commit()
+    return changed

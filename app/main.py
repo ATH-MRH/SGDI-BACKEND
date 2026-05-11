@@ -15,6 +15,7 @@ from app.core.security import hash_password
 from app.db.session import SessionLocal, engine, safe_database_url
 from app.modules.auth.models import User
 from app.modules.irongs.models import SgdiRecord
+from app.core.photo_storage import UPLOADS_ROOT, ensure_upload_dirs
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
 from app.modules.commercial import models as _commercial_models  # noqa: F401
@@ -22,6 +23,8 @@ from app.modules.irongs import models as _irongs_models  # noqa: F401
 from app.modules import finance_models as _finance_models  # noqa: F401
 from app.modules.materiel import models as _materiel_models  # noqa: F401
 from app.modules.ops import models as _ops_models  # noqa: F401
+from app.modules.irongs import service as irongs_service
+from app.modules.drh import service as drh_service
 
 
 logging.basicConfig(
@@ -33,6 +36,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title=settings.app_name, debug=settings.app_debug)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
 
 def ensure_schema_upgrades() -> None:
     inspector = inspect(engine)
@@ -130,10 +134,15 @@ app.add_middleware(
 def on_startup() -> None:
     logger.info("Démarrage %s en mode %s", settings.app_name, settings.app_env)
     logger.info("Base de données: %s", safe_database_url())
+    ensure_upload_dirs()
     Base.metadata.create_all(bind=engine)
     ensure_schema_upgrades()
     logger.info("Tables PostgreSQL vérifiées/créées")
     with SessionLocal() as db:
+        irongs_service.cleanup_base64_photos(db)
+        cleaned_drh = drh_service.cleanup_base64_photos(db)
+        if cleaned_drh:
+            logger.info("Photos Base64 nettoyées dans les tables DRH: %s ligne(s)", cleaned_drh)
         admin = db.query(User).filter(User.username == "admin").one_or_none()
         if admin is None:
             admin = User(

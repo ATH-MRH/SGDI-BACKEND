@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.irongs.models import SgdiRecord
 from app.modules.irongs import sql_bridge
+from app.core.photo_storage import normalize_photo_fields
 
 logger = logging.getLogger("sgdi.records")
 OBJECT_ITEM_ID = "__object__"
@@ -100,7 +101,7 @@ def get_collection(db: Session, name: str) -> list[Any] | dict[str, Any]:
 
 def _replace_collection_no_commit(db: Session, name: str, data: list[Any] | dict[str, Any] | Any) -> None:
     db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
-    clean_data = deepcopy(data)
+    clean_data = normalize_photo_fields(data, fallback=name)
     if isinstance(clean_data, list):
         used_ids: set[str] = set()
         for idx, item in enumerate(clean_data):
@@ -134,6 +135,7 @@ def list_items(db: Session, name: str) -> list[Any]:
 
 
 def create_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+    item = normalize_photo_fields(dict(item), fallback=name)
     if name in sql_bridge.SQL_COLLECTIONS:
         db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
         out = sql_bridge.upsert_item(db, name, dict(item))
@@ -158,6 +160,7 @@ def get_item(db: Session, name: str, item_id: str) -> dict[str, Any]:
 
 
 def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], partial: bool = True) -> dict[str, Any]:
+    patch = normalize_photo_fields(dict(patch), fallback=item_id)
     if name in sql_bridge.SQL_COLLECTIONS:
         db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
         data = dict(patch)
@@ -185,3 +188,17 @@ def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
     db.delete(row)
     db.commit()
     return {"deleted": item_id}
+
+
+def cleanup_base64_photos(db: Session) -> int:
+    changed = 0
+    rows = db.execute(select(SgdiRecord)).scalars().all()
+    for row in rows:
+        cleaned = normalize_photo_fields(row.data, fallback=f"{row.collection}_{row.item_id}")
+        if cleaned != row.data:
+            row.data = cleaned
+            changed += 1
+    if changed:
+        db.commit()
+        logger.info("Photos Base64 nettoyees dans sgdi_records: %s ligne(s)", changed)
+    return changed
