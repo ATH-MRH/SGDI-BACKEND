@@ -6910,16 +6910,15 @@ function renderMatSimpleDashboard(view){
   const topMags=mags.map(m=>({m,...matSimpleStockMagasin(m.id)})).sort((a,b)=>b.qty-a.qty).slice(0,5);
 
   const header=matSimpleHeader("dashboard");
-  const titleBar=`<div class="mat-hero"><div class="flex justify-between items-start gap-4 flex-wrap">
-    <div><h1>MATÉRIEL & ÉQUIPEMENT</h1><p>${soc?escapeHTML(soc):"Toutes les sociétés"} · Pilotage des articles, stocks, fournisseurs, magasins, dotations et reversements.</p></div>
+  const titleBar=`<div class="dash-toolbar mb-4"><div><h1 class="text-2xl font-black uppercase mb-2">MATÉRIEL - TABLEAU DE BORD</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Pilotage des articles, stocks, fournisseurs, magasins, dotations et reversements.</p></div>
     <div class="mat-actions">
       <button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">Entrée stock</button>
       <button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">Sortie stock</button>
       <button class="btn btn-warn text-sm" onclick="navigate('materiel/article-nouveau')">Nouvel article</button>
       <button class="btn btn-secondary text-sm" onclick="navigate('materiel/magasin-nouveau')">Magasin</button>
       <button class="btn btn-secondary text-sm" onclick="navigate('materiel/fournisseur-nouveau')">Fournisseur</button>
-    </div></div></div>`;
-  const kpi=`<div class="mat-kpi-grid">
+    </div></div>`;
+  const kpi=`<div class="grid grid-4 mb-4">
     <button type="button" class="mat-kpi" onclick="navigate('materiel/articles')" style="border-left-color:#043970"><div class="label">Articles catalogue</div><div class="value">${arts.length}</div><div class="sub">${qty(totalQty)} unités suivies</div></button>
     <button type="button" class="mat-kpi" onclick="navigate('materiel/magasins')" style="border-left-color:#7c3aed"><div class="label">Magasins</div><div class="value">${mags.length}</div><div class="sub">lieux de stockage</div></button>
     <button type="button" class="mat-kpi" onclick="navigate('materiel/fournisseurs')" style="border-left-color:#0284c7"><div class="label">Fournisseurs</div><div class="value">${fours.length}</div><div class="sub">partenaires achats</div></button>
@@ -10448,8 +10447,10 @@ function renderDRHDashboard(view){
   const contratsExpires=ag.filter(a=>a.dateFinContrat&&daysBetween(today(),a.dateFinContrat)<0);
   const contratsFin30=ag.filter(a=>{if(!a.dateFinContrat)return false;const d=daysBetween(today(),a.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
-  view.innerHTML=`${drhTabs("dashboard")}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - TABLEAU DE BORD</h1>
+    <p class="text-slate-500 text-sm mb-4">${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${ag.length} employés · ${ca.length} candidats</p>
+    ${drhTabs("dashboard")}
+    <div class="grid grid-4 mb-4">
       <a href="#/fiches/toutes" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Effectif total</div><div class="text-3xl font-bold text-sky-700">${ag.length}</div></a>
       <a href="#/effectif/actifs" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Opérationnels</div><div class="text-3xl font-bold text-emerald-700">${actifs}</div></a>
       <a href="#/effectif/conge" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">En congé</div><div class="text-3xl font-bold text-amber-600">${enConge}</div></a>
@@ -11587,10 +11588,8 @@ function renderOPS(view,sub,arg){
   const tauxPointage=fpqToday.length?Math.round(fpqPointes*100/fpqToday.length):0;
   const opsLine=(label,value,color,route)=>`<a href="#/${route}" class="p-3 rounded-lg block" style="background:${color}12;border:1px solid ${color}44;text-decoration:none;color:inherit"><div class="text-[10px] uppercase tracking-wider font-black" style="color:${color}">${label}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></a>`;
   const societeRows=SOCIETES.map(s=>{const eff=actifs.filter(a=>a.societe===s);const aff=eff.filter(a=>a.affectationCourante?.siteId);const st=sitesActifs.filter(x=>x.societe===s);const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));return{soc:s,eff:eff.length,aff:aff.length,sans:eff.length-aff.length,sites:st.length,inc:inc.length}});
-  view.innerHTML=`<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
-    <h1 class="text-2xl font-bold">🎯 Tableau de bord OPS</h1>
-    <div class="text-xs text-slate-500">Opérations · Pointage, Fiches de position, Sites · ${soc?escapeHTML(soc):"Toutes sociétés"}</div>
-  </div>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">OPS - TABLEAU DE BORD</h1>
+  <p class="text-slate-500 text-sm mb-4">Opérations · Pointage, fiches de position, sites · ${soc?escapeHTML(soc):"Toutes sociétés"}</p>
   <div class="grid grid-4 mb-6">
     <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif actif</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir l'effectif</div></a>
     <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${instanceAffectation.length}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
