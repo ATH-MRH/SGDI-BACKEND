@@ -401,6 +401,75 @@ def _presence_line_action(db: Session, line_id: str, validate: bool, user: Any) 
     return _replace_and_success(db, "feuillePresence", lines, {"item": line})
 
 
+def _presence_line_upsert(db: Session, data: dict[str, Any]) -> dict[str, Any]:
+    date_value = str(data.get("date") or "").strip()
+    agent_id = str(data.get("agentId") or "").strip()
+    if not date_value or not agent_id:
+        raise HTTPException(status_code=422, detail="Date et agent obligatoires")
+    closures = _collection_object(db, "feuillePresenceCloture")
+    if closures.get(date_value):
+        raise HTTPException(status_code=422, detail="Feuille clôturée")
+    lines = _collection_list(db, "feuillePresence")
+    line = next((row for row in lines if str(row.get("date")) == date_value and str(row.get("agentId")) == agent_id), None)
+    if line and line.get("valide"):
+        raise HTTPException(status_code=422, detail="Ligne validée")
+    if not line:
+        line = {"id": data.get("id") or f"fpq_{date_value}_{agent_id}", "date": date_value, "agentId": agent_id, "createdAt": _now_iso()}
+        lines.append(line)
+    patch = dict(data.get("patch") or {})
+    patch.pop("valide", None)
+    patch.pop("valideBy", None)
+    patch.pop("valideAt", None)
+    target_agent_id = str(patch.get("agentId") or agent_id)
+    if target_agent_id != agent_id and any(str(row.get("date")) == date_value and str(row.get("agentId")) == target_agent_id and str(row.get("id")) != str(line.get("id")) for row in lines):
+        raise HTTPException(status_code=409, detail="Cet agent figure déjà sur la feuille")
+    line.update(patch)
+    line["date"] = date_value
+    line["agentId"] = target_agent_id
+    line["updatedAt"] = _now_iso()
+    return _replace_and_success(db, "feuillePresence", lines, {"item": line})
+
+
+def _presence_line_delete(db: Session, line_id: str | None, data: dict[str, Any]) -> dict[str, Any]:
+    lines = _collection_list(db, "feuillePresence")
+    if line_id:
+        line = _find_item(lines, line_id)
+    else:
+        line = next((row for row in lines if str(row.get("date")) == str(data.get("date")) and str(row.get("agentId")) == str(data.get("agentId"))), None)
+        if not line:
+            raise HTTPException(status_code=404, detail="Ligne introuvable")
+    closures = _collection_object(db, "feuillePresenceCloture")
+    if closures.get(str(line.get("date"))):
+        raise HTTPException(status_code=422, detail="Feuille clôturée")
+    if line.get("valide"):
+        raise HTTPException(status_code=422, detail="Ligne validée")
+    _sync_presence_line_to_pointage(db, line, False)
+    lines = [row for row in lines if str(row.get("id")) != str(line.get("id"))]
+    return _replace_and_success(db, "feuillePresence", lines, {"deleted": True, "id": line.get("id")})
+
+
+def _create_legacy_item(db: Session, collection: str | None, data: dict[str, Any], user: Any) -> dict[str, Any]:
+    if collection not in {"prospects", "opportunites"}:
+        raise HTTPException(status_code=422, detail="Création non autorisée pour cette collection")
+    items = _collection_list(db, collection)
+    item = dict(data)
+    item["id"] = str(item.get("id") or f"{collection[:2]}_{int(datetime.utcnow().timestamp() * 1000)}")
+    if any(str(row.get("id")) == item["id"] for row in items):
+        raise HTTPException(status_code=409, detail="Identifiant déjà existant")
+    item["createdBy"] = item.get("createdBy") or _actor_name(user)
+    item["createdAt"] = item.get("createdAt") or _now_iso()
+    if collection == "prospects":
+        item["statut"] = _validate_status_value(item.get("statut", "nouveau"), {"nouveau", "contacte", "interesse", "rdv_planifie", "rdv_realise", "converti", "perdu"})
+        if not str(item.get("nom") or "").strip():
+            raise HTTPException(status_code=422, detail="Nom prospect obligatoire")
+    if collection == "opportunites":
+        item["etape"] = _validate_status_value(item.get("etape", "nouveau"), {"nouveau", "qualification", "proposition", "negociation", "gagnee", "perdue"}, "Étape")
+        if not str(item.get("intitule") or "").strip():
+            raise HTTPException(status_code=422, detail="Intitulé opportunité obligatoire")
+    items.append(item)
+    return _replace_and_success(db, collection, items, {"item": item})
+
+
 def _presence_day_close(db: Session, day: str, close: bool, user: Any, motif: str | None = None) -> dict[str, Any]:
     if not day:
         raise HTTPException(status_code=422, detail="Date obligatoire")
@@ -485,6 +554,9 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         replace_collection(db, "prospects", prospects)
         return {"status": "success", "data": {"client": client, "prospect": prospect}}
 
+    if action == "create-item":
+        return _create_legacy_item(db, collection, data, user)
+
     if action == "validate-pointage":
         return _validate_pointage_sheet(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), user)
     if action == "unlock-pointage":
@@ -501,6 +573,16 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         return _presence_day_close(db, str(data.get("date") or ""), True, user)
     if action == "reopen-presence-day":
         return _presence_day_close(db, str(data.get("date") or ""), False, user, data.get("motif"))
+    if action == "upsert-presence-line":
+        return _presence_line_upsert(db, data)
+    if action == "delete-presence-line":
+        return _presence_line_delete(db, item_id, data)
+    if action == "save-presence-movement":
+        return _presence_line_upsert(db, data)
+    if action == "add-presence-agent":
+        return _presence_line_upsert(db, {"date": data.get("date"), "agentId": data.get("agentId"), "patch": data.get("patch") or {}})
+    if action == "assign-vacant-agent":
+        return _presence_line_upsert(db, data)
 
     raise HTTPException(status_code=422, detail="Action métier inconnue")
 

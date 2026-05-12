@@ -10199,11 +10199,14 @@ function openProspectModal(){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
 }
-function confirmProspect(){
+async function confirmProspect(){
   const fd=new FormData(document.querySelector(".modal-bg form"));
-  db.prospects=db.prospects||[];
-  db.prospects.push({id:uid("pr"),nom:fd.get("nom"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",societe:fd.get("societe"),source:fd.get("source"),score:parseInt(fd.get("score")||"5",10),statut:fd.get("statut")||"nouveau",notes:fd.get("notes")||"",createdBy:session.username,createdAt:new Date().toISOString()});
-  saveDB();closeModal();toast("Prospect créé","success");renderView();
+  const item={id:uid("pr"),nom:fd.get("nom"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",societe:fd.get("societe"),source:fd.get("source"),score:parseInt(fd.get("score")||"5",10),statut:fd.get("statut")||"nouveau",notes:fd.get("notes")||""};
+  try{
+    await sgdiRunLegacyAction("create-item",{collection:"prospects",data:item});
+    await sgdiPullState({silent:true});
+    closeModal();toast("Prospect créé par le backend","success");renderView();
+  }catch(e){toast("Création prospect refusée : "+(e.message||e),"error")}
 }
 async function updateProspectStatut(id,s){
   try{
@@ -10336,11 +10339,14 @@ function openOpportuniteModal(){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
 }
-function confirmOpportunite(){
+async function confirmOpportunite(){
   const fd=new FormData(document.querySelector(".modal-bg form"));
-  db.opportunites=db.opportunites||[];
-  db.opportunites.push({id:uid("op"),intitule:fd.get("intitule"),clientId:fd.get("clientId")||"",prospectId:fd.get("prospectId")||"",cible:fd.get("cible")||"",montant:parseFloat(fd.get("montant"))||0,probabilite:parseInt(fd.get("probabilite")||"50",10),dateCloture:fd.get("dateCloture")||"",etape:fd.get("etape")||"nouveau",societe:fd.get("societe"),notes:fd.get("notes")||"",createdBy:session.username,createdAt:new Date().toISOString()});
-  saveDB();closeModal();toast("Opportunité créée","success");renderView();
+  const item={id:uid("op"),intitule:fd.get("intitule"),clientId:fd.get("clientId")||"",prospectId:fd.get("prospectId")||"",cible:fd.get("cible")||"",montant:parseFloat(fd.get("montant"))||0,probabilite:parseInt(fd.get("probabilite")||"50",10),dateCloture:fd.get("dateCloture")||"",etape:fd.get("etape")||"nouveau",societe:fd.get("societe"),notes:fd.get("notes")||""};
+  try{
+    await sgdiRunLegacyAction("create-item",{collection:"opportunites",data:item});
+    await sgdiPullState({silent:true});
+    closeModal();toast("Opportunité créée par le backend","success");renderView();
+  }catch(e){toast("Création opportunité refusée : "+(e.message||e),"error")}
 }
 async function updateOppEtape(id,e){
   try{
@@ -12170,11 +12176,11 @@ function fpqIsCloture(date){if(!db.feuillePresenceCloture)db.feuillePresenceClot
 function fpqClotureInfo(date){if(!db.feuillePresenceCloture)return null;return db.feuillePresenceCloture[date]||null}
 function fpqGuardCloture(date){if(fpqIsCloture(date)){toast("🔒 Feuille du "+formatDate(date)+" clôturée · déclôturez d'abord","error");return true}return false}
 function fpqGuardLine(date,agentId){const f=fpqGet(date,agentId);if(f&&f.valide){toast("🔒 Ligne validée · déverrouillez avant modification","error");return true}return false}
-function fpqSetField(date,agentId,field,value){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const f=fpqEnsure(date,agentId);f[field]=value||"";f.updatedAt=new Date().toISOString();saveDB()}
-function fpqSetRowField(rowId,field,value){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId)){renderView();return}f[field]=value||"";f.updatedAt=new Date().toISOString();saveDB()}
-function fpqSetSite(date,agentId,siteId){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const f=fpqEnsure(date,agentId);const s=db.sites.find(x=>x.id===siteId);f.siteId=siteId||"";f.siteName=s?(s.nom||s.intitule||""):"";f.siteManual=true;f.updatedAt=new Date().toISOString();saveDB();renderView()}
-function fpqDelete(date,agentId){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;db.feuillePresence=(db.feuillePresence||[]).filter(f=>!(f.date===date&&f.agentId===agentId));saveDB();renderView()}
-function fpqDeleteRow(rowId){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;ptRemovePresenceLine(f);db.feuillePresence=(db.feuillePresence||[]).filter(x=>x.id!==rowId);saveDB();renderView()}
+async function fpqSetField(date,agentId,field,value){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
+async function fpqSetRowField(rowId,field,value){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date:f.date,agentId:f.agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
+async function fpqSetSite(date,agentId,siteId){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const s=db.sites.find(x=>x.id===siteId);try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{siteId:siteId||"",siteName:s?(s.nom||s.intitule||""):"",siteManual:true}}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Affectation refusée : "+(e.message||e),"error");renderView()}}
+async function fpqDelete(date,agentId){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{data:{date,agentId}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+async function fpqDeleteRow(rowId){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{item_id:rowId,data:{}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
 function fpqNeedsRemplaceAgent(motif){return["Remplacement Absence","Remplacement Malade","Remplacement Abandon de poste"].includes(motif)}
 function fpqRemplaceAgentLabel(motif){if(motif==="Remplacement Malade")return"Employé malade";if(motif==="Remplacement Abandon de poste")return"Employé en abandon de poste";return"Employé absent"}
 function nextOrdreMouvementNumero(){
@@ -12227,15 +12233,18 @@ function fpqOpenMouvement(date,agentId){
       <div class="flex gap-2 justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Valider mouvement</button></div>
     </form>`);
 }
-function fpqSaveMouvement(date,agentId){
+async function fpqSaveMouvement(date,agentId){
   const form=document.querySelector(".modal-bg form");if(!form)return;
   const fd=new FormData(form);const siteId=fd.get("siteId")||"";const s=(db.sites||[]).find(x=>x.id===siteId);const autreAffectation=(fd.get("autreAffectation")||"").trim();
   const f=fpqEnsure(date,agentId);const motif=fd.get("mouvementMotif")||"";const remplaceAgentId=fpqNeedsRemplaceAgent(motif)?(fd.get("remplaceAgentId")||""):"";const remplaceAgent=(db.agents||[]).find(x=>x.id===remplaceAgentId);
-  f.ordreMouvementNumero=fd.get("ordreMouvementNumero")||f.ordreMouvementNumero||nextOrdreMouvementNumero();f.mouvementNumero=f.ordreMouvementNumero;
-  f.positionActuelle=fd.get("positionActuelle")||"";f.siteId=siteId;f.siteName=siteId==="autres"?(autreAffectation||"Autres"):(s?(s.nom||s.intitule||""):"");f.societe=f.societe||s?.societe||"";f.autreAffectation=siteId==="autres"?autreAffectation:"";
-  f.mouvementMotif=motif;f.mouvementType=motif;f.mouvementDuree=fd.get("mouvementDuree")||"";f.remplaceAgentId=remplaceAgentId;f.remplaceAgentName=remplaceAgent?((remplaceAgent.nom||"")+" "+(remplaceAgent.prenom||"")).trim():"";f.remplaceAgentCode=remplaceAgent?.matricule||"";
-  f.absentAgentId=motif==="Remplacement Absence"?remplaceAgentId:"";f.absentAgentName=motif==="Remplacement Absence"?f.remplaceAgentName:"";f.maladeAgentId=motif==="Remplacement Malade"?remplaceAgentId:"";f.maladeAgentName=motif==="Remplacement Malade"?f.remplaceAgentName:"";f.abandonAgentId=motif==="Remplacement Abandon de poste"?remplaceAgentId:"";f.abandonEmployeCode=motif==="Remplacement Abandon de poste"?(remplaceAgent?.matricule||""):"";f.mouvementObs=fd.get("mouvementObs")||"";f.siteManual=true;f.updatedAt=new Date().toISOString();
-  saveDB();closeModal();toast("Mouvement enregistré","success");renderView();
+  const remplaceAgentName=remplaceAgent?((remplaceAgent.nom||"")+" "+(remplaceAgent.prenom||"")).trim():"";
+  const patch={ordreMouvementNumero:fd.get("ordreMouvementNumero")||f.ordreMouvementNumero||nextOrdreMouvementNumero(),positionActuelle:fd.get("positionActuelle")||"",siteId,siteName:siteId==="autres"?(autreAffectation||"Autres"):(s?(s.nom||s.intitule||""):""),societe:f.societe||s?.societe||"",autreAffectation:siteId==="autres"?autreAffectation:"",mouvementMotif:motif,mouvementType:motif,mouvementDuree:fd.get("mouvementDuree")||"",remplaceAgentId,remplaceAgentName,remplaceAgentCode:remplaceAgent?.matricule||"",absentAgentId:motif==="Remplacement Absence"?remplaceAgentId:"",absentAgentName:motif==="Remplacement Absence"?remplaceAgentName:"",maladeAgentId:motif==="Remplacement Malade"?remplaceAgentId:"",maladeAgentName:motif==="Remplacement Malade"?remplaceAgentName:"",abandonAgentId:motif==="Remplacement Abandon de poste"?remplaceAgentId:"",abandonEmployeCode:motif==="Remplacement Abandon de poste"?(remplaceAgent?.matricule||""):"",mouvementObs:fd.get("mouvementObs")||"",siteManual:true};
+  patch.mouvementNumero=patch.ordreMouvementNumero;
+  try{
+    await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId,patch}});
+    await sgdiPullState({silent:true});
+    closeModal();toast("Mouvement enregistré par le backend","success");renderView();
+  }catch(e){toast("Mouvement refusé : "+(e.message||e),"error")}
 }
 async function fpqValiderLigne(date,agentId){
   if(fpqGuardCloture(date))return;
@@ -12460,7 +12469,7 @@ function fpqAddAgentModal(date){
       <div class="flex gap-2 justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Ajouter</button></div>
     </form>`);
 }
-function fpqConfirmAdd(date){const fd=new FormData(document.querySelector(".modal-bg form"));const id=fd.get("agentId");if(!id)return;if(fpqGet(date,id)){toast("Cet agent figure déjà sur la feuille","error");return}fpqEnsure(date,id);saveDB();closeModal();toast("Agent ajouté","success");renderView()}
+async function fpqConfirmAdd(date){const fd=new FormData(document.querySelector(".modal-bg form"));const id=fd.get("agentId");if(!id)return;if(fpqGet(date,id)){toast("Cet agent figure déjà sur la feuille","error");return}try{await sgdiRunLegacyAction("add-presence-agent",{data:{date,agentId:id}});await sgdiPullState({silent:true});closeModal();toast("Agent ajouté par le backend","success");renderView()}catch(e){toast("Ajout refusé : "+(e.message||e),"error")}}
 function fpqFonctionAbbr(label){
   const stop=new Set(["a","au","aux","d","de","des","du","et","en","l","la","le","les","un","une"]);
   const words=String(label||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -12474,13 +12483,13 @@ function fpqApsAgentsForPrise(date,currentId){
   const seen=new Set();
   return [...standby,...aps].filter(a=>{if(seen.has(a.id))return false;seen.add(a.id);return true}).sort((x,y)=>(x.matricule||x.nom||"").localeCompare(y.matricule||y.nom||""));
 }
-function fpqAssignVacantAgent(rowId,agentId){
+async function fpqAssignVacantAgent(rowId,agentId){
   const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f||!agentId)return;
   if(fpqGuardCloture(f.date))return;
   if((db.feuillePresence||[]).some(x=>x.date===f.date&&x.agentId===agentId&&x.id!==rowId)){toast("Cet employé figure déjà sur la feuille","error");renderView();return}
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
-  f.presenceOrder=fpqLineOrder(f);f.agentId=agentId;f.vacant=false;f.siteManual=true;f.poste=a.affectationCourante?.poste||a.fonction||"APS";f.societe=f.societe||a.societe||"";f.updatedAt=new Date().toISOString();
-  saveDB();toast("APS affecté à la prise","success");renderView();
+  const patch={presenceOrder:fpqLineOrder(f),agentId,vacant:false,siteManual:true,poste:a.affectationCourante?.poste||a.fonction||"APS",societe:f.societe||a.societe||""};
+  try{await sgdiRunLegacyAction("assign-vacant-agent",{data:{date:f.date,agentId:f.agentId,patch}});await sgdiPullState({silent:true});toast("APS affecté par le backend","success");renderView()}catch(e){toast("Affectation refusée : "+(e.message||e),"error")}
 }
 function renderPointageQuotidien(){
   const date=fpqCurrentDate();const soc=fpqCurrentSoc();const sit=fpqCurrentSite();const fpqStatus=fpqCurrentStatus();const fpqFaction=fpqCurrentFaction();
