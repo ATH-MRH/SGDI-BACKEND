@@ -3494,8 +3494,8 @@ function renderCandidatEtape1(c){
   return`${candidatSectionAvailable(c,"identification")?`${candidatSectionOpen(c,"identification","banner-amber","IDENTIFICATION DU CANDIDAT")}
     <div class="grid grid-6">
       <div class="col-span-6"><label class="label">Photo *</label>${photoField(c.photo)}</div>
-      <div class="col-span-3"><label class="label">Nom *</label><input class="input" name="nom" value="${escapeHTML(c.nom)}" /></div>
-      <div class="col-span-3"><label class="label">Prénom *</label><input class="input" name="prenom" value="${escapeHTML(c.prenom)}" /></div>
+      <div class="col-span-2"><label class="label">Nom *</label><input class="input" name="nom" value="${escapeHTML(c.nom)}" /></div>
+      <div class="col-span-4"><label class="label">Prénom *</label><input class="input" name="prenom" value="${escapeHTML(c.prenom)}" /></div>
       <div class="col-span-3"><label class="label">Date de naissance *</label><input class="input" type="date" name="dateNaissance" max="${candidatBirthMaxDate()}" value="${c.dateNaissance||""}"  aria-describedby="date-naissance-alert" title="Le candidat doit avoir 20 ans révolus à la date d'enregistrement" oninput="validateCandidatBirthField(this)" onchange="validateCandidatBirthField(this)"/><div id="date-naissance-alert" class="text-[11px] text-slate-500 mt-1">Âge minimum requis : 20 ans révolus à la date d'enregistrement.</div></div>
       <div class="col-span-3"><label class="label">Lieu de naissance *</label><input class="input" name="lieuNaissance" value="${escapeHTML(c.lieuNaissance)}" /></div>
       <div class="col-span-3"><label class="label">Nom du père *</label><input class="input" name="nomPere" value="${escapeHTML(c.nomPere||"")}" /></div>
