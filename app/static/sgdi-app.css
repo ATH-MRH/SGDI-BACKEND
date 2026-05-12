@@ -135,6 +135,7 @@
   .sgdi-shell{width:100%;min-width:0;overflow:hidden}
   .sgdi-shell-body{min-height:0;width:100%;min-width:0}
   .sgdi-topbar{width:100%;min-width:0}
+  .sgdi-view{padding:14px 24px 24px!important;width:100%;max-width:none}
 
   .societe-structure-bar{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 4px 12px rgba(15,23,42,.05);z-index:20}
   .societe-structure-inner{min-height:58px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:8px 16px}

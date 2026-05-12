@@ -1655,9 +1655,7 @@ function render(){
         </div>
       </aside>
       <main class="flex-1 flex flex-col overflow-hidden min-w-0">
-        ${globalSocieteBandHTML()}
-        ${(()=>{const h=(location.hash||"").slice(2);const onMateriel=h.startsWith("materiel")&&!h.startsWith("materiel/magasin");if(onMateriel&&typeof materielSocieteStripHTML==="function")return materielSocieteStripHTML();return""})()}
-        <div class="flex-1 overflow-y-auto p-6" id="view"></div>
+        <div class="sgdi-view flex-1 overflow-y-auto" id="view"></div>
       </main>
     </div>
     ${dialogueBoxHTML()}
