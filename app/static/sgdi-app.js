@@ -1505,18 +1505,18 @@ function pickSocieteFilter(s){if(!s){setCurrentStructureSocieteFilter("");toast(
 function confirmPickSocieteFilter(s,p){setCurrentStructureSocieteFilter(s);toast("Filtre société : "+s,"success")}
 function changeSociete(){if(!confirm("Changer de société ?"))return;session.societe=null;session.transverse=null;saveSession(session);try{sessionStorage.removeItem("dashSociete");sessionStorage.removeItem("fpSociete");sessionStorage.removeItem("mtSociete")}catch(e){}location.hash="#/select-societe";route()}
 function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}}if(["facturation","commercial","drh","materiel","ops","pointage"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
-function enterTransverseModuleDirect(mod){session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage/saisie":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
+function enterTransverseModuleDirect(mod){session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
 function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
 function enterSocieteStructureDirect(mod){session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
 function exitTransverseModule(){session.transverse=null;saveSession(session);try{sessionStorage.removeItem("ficheContext")}catch(e){}location.hash=session?.societe?"#/dashboard":"#/select-societe";route()}
 
 function structureTopbarItems(){
   const items=[
-    {key:"drh",icon:"👥",label:"DRH",roles:["rh","admin"]},
-    {key:"ops",icon:"🎯",label:"OPS",roles:["rh","dispatch","admin"]},
-    {key:"materiel",icon:"📦",label:"Matériel",roles:["rh","dispatch","admin"]},
-    {key:"facturation",icon:"💼",label:"Finances",roles:["rh","admin"]},
-    {key:"commercial",icon:"🤝",label:"Commercial",roles:["rh","admin"]}
+    {key:"drh",label:"DRH",roles:["rh","admin"]},
+    {key:"ops",label:"OPS",roles:["rh","dispatch","admin"]},
+    {key:"materiel",label:"Matériel",roles:["rh","dispatch","admin"]},
+    {key:"facturation",label:"Finances",roles:["rh","admin"]},
+    {key:"commercial",label:"Commercial",roles:["rh","admin"]}
   ];
   const allowed=currentAllowedStructures();
   if(allowed.length)return items.filter(i=>allowed.includes(i.key));
@@ -1527,7 +1527,7 @@ function topbarStructureTabsHTML(){
   if(!session)return"";
   const visible=structureTopbarItems();
   if(!visible.length)return"";
-  return `<div class="topbar-structure-tabs no-print">${visible.map(i=>`<button type="button" class="topbar-structure-btn ${session.transverse===i.key?"active":""}" title="${escapeHTML(i.label)}" onclick="${session.societe?`enterSocieteStructure('${i.key}')`:`enterTransverseModule('${i.key}')`}"><span>${i.icon}</span><span>${escapeHTML(i.label)}</span></button>`).join("")}</div>`;
+  return `<div class="topbar-structure-tabs no-print">${visible.map(i=>`<button type="button" class="topbar-structure-btn ${session.transverse===i.key?"active":""}" title="${escapeHTML(i.label)}" onclick="${session.societe?`enterSocieteStructure('${i.key}')`:`enterTransverseModule('${i.key}')`}"><span>${escapeHTML(i.label)}</span></button>`).join("")}</div>`;
 }
 function dialogueTopbarButtonHTML(){
   if(!session)return"";
@@ -1614,17 +1614,14 @@ function render(){
       drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail"]
     };
     const allowed=allowedByMod[session.transverse]||[session.transverse];
-    if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":(session.transverse==="pointage"?"pointage/saisie":(session.transverse==="ops"?"ops/dashboard":session.transverse+"/dashboard"));location.hash="#/"+target;return}
+    if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":(session.transverse==="pointage"?"pointage":(session.transverse==="ops"?"ops/dashboard":session.transverse+"/dashboard"));location.hash="#/"+target;return}
   }
   const app=document.getElementById("app");
-  const socIcons={};
   const socColors={};
   const isTrans=!!session.transverse;
   const transLabels={facturation:"MODULE FINANCES",commercial:"MODULE COMMERCIAL",drh:"MODULE DRH",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:"ADMINISTRATION SYSTEME",pointage:"MODULE POINTAGE",ops:"MODULE OPS"};
   const transColors={facturation:"#043970",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af"};
-  const transIcons={facturation:"💼",commercial:"🤝",drh:"👥",materiel:"📦",admin:"⚙️",pointage:"🕒",ops:"🎯"};
   const transDescs={facturation:"Toutes sociétés confondues",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"Opérations · Pointage · Fiches · Sites"};
-  const socIcon=isTrans?transIcons[session.transverse]:(socIcons[session.societe]||"🏢");
   const socColor=isTrans?transColors[session.transverse]:(socColors[session.societe]||"#64748b");
   const headerTitle=isTrans?transLabels[session.transverse]:session.societe;
   const headerSub=isTrans?(session.societe?`Société active : ${session.societe}`:transDescs[session.transverse]):"Société active";
@@ -1820,7 +1817,6 @@ async function confirmCreateSociete(){
   renderSocieteSelector();
 }
 function renderSocieteSelector(){
-  const socIcons={};
   const socColors={};
   const socDesc={};
   Object.assign(socDesc,loadSocieteDescriptions());
@@ -1989,19 +1985,6 @@ function confirmFacture(){
   toast("Facture "+fd.get("numero")+" enregistrée · TTC: "+money(ttc),"success");
 }
 
-function navDemandesPersonnelClass(item){
-  return item&&item.route==="demandes_personnel/dashboard"&&Number(item.count||0)>0?"dp-reception-blink":"";
-}
-function navDemandesPersonnelGroupClass(label,totalCount){
-  return "";
-}
-function navDemandesPersonnelLabel(item){
-  const label=escapeHTML(item&&item.label||"");
-  return item&&item.route==="demandes_personnel/dashboard"&&Number(item.count||0)>0?`<span class="dp-reception-text">${label}</span>`:label;
-}
-function structureDemandSidebarGroup(){return {type:"group",label:"DEMANDE STRUCTURE",icon:"📨",route:"demandes_structure",children:[{label:"Réception",icon:"📥",route:"demandes_structure/reception",count:structureOpenCount()},{label:"Envoi",icon:"📤",route:"demandes_structure/envoi",count:ensureDemandesStructure().filter(structureDemandSent).length}]}}
-function sidebarGroupStorageKey(){return "navOpenGroup:"+(session?.transverse||"global")}
-function sidebarOpenGroup(){try{return sessionStorage.getItem(sidebarGroupStorageKey())||""}catch(e){return""}}
 function sidebarRouteActive(path,route){return path===route||path.startsWith(route+"/")}
 function renderSidebar(){
   const path=(location.hash||"#/dashboard").slice(2);
@@ -2115,25 +2098,9 @@ function renderSidebar(){
     return;
   }
 
-  const groups=[
-    {type:"link",label:"Tableau de bord",route:"dashboard"},
-    {type:"link",label:"DRH",route:"drh/dashboard"},
-    {type:"link",label:"Ajouter candidats",route:"reserve",count:(db.candidats||[]).filter(c=>c.statut!=="archive").length},
-    {type:"link",label:"Candidats archives",route:"candidats_archives",count:(db.candidats||[]).filter(c=>c.statut==="archive").length},
-    {type:"link",label:"Fiches de position",route:"fiches"},
-    {type:"link",label:"Badge",route:"fiches/badge"},
-    {type:"link",label:"Effectif",route:"effectif/actifs"},
-    {type:"link",label:"Sites actifs",route:"sites/actifs"},
-    {type:"link",label:"OPS",route:"ops/dashboard"},
-    {type:"link",label:"Pointage",route:"pointage/dashboard"},
-    {type:"link",label:"Materiel et equipement",route:"materiel/dashboard"},
-    {type:"link",label:"Commercial",route:"commercial/dashboard"},
-    {type:"link",label:"Finances",route:"facturation/dashboard"}
-  ];
-  if(isAdmin())groups.push({type:"link",label:"Administration systeme",route:"admin/dashboard"},{type:"link",label:"Utilisateurs",route:"admin/users"});
-  renderItems(groups.map(g=>({label:g.label,route:g.route,count:g.count})),false);
+  nav.innerHTML="";
+  if(backSlot)backSlot.innerHTML="";
 }
-function toggleNavGroup(key){const nav=document.getElementById("sidebar-nav");const y=nav?nav.scrollTop:0;const storageKey=sidebarGroupStorageKey();const current=sessionStorage.getItem(storageKey)||"";if(current===key)sessionStorage.removeItem(storageKey);else sessionStorage.setItem(storageKey,key);renderSidebar();stripCryptogrammes();const next=document.getElementById("sidebar-nav");if(next)next.scrollTop=y}
 
 function navigate(r){try{uiProgressStart();if(r.startsWith("materiel/fiche")||r==="materiel/fiches")sessionStorage.setItem("ficheContext","materiel");else if(r.startsWith("fiches")||r.startsWith("agents")||r.startsWith("effectif/agent"))sessionStorage.setItem("ficheContext",session?.transverse||"")}catch(e){}location.hash="#/"+r}
 function setFicheContext(ctx){try{if(ctx)sessionStorage.setItem("ficheContext",ctx);else sessionStorage.removeItem("ficheContext")}catch(e){}}
@@ -6697,7 +6664,6 @@ function etatMatPill(e){return{"Neuf":"pill-green","Bon état":"pill-blue","Usé
 function nextMatCode(cat){const prefix={"Uniforme":"UN","Chaussures":"CH","Casquette":"CP","Insigne":"IN","Badge":"BD","Talkie-walkie":"TW","Téléphone":"TP","Bâton télescopique":"BT","Menottes":"MN","Lampe torche":"LM","Sifflet":"SF","Détecteur de métaux":"DM","Veste pare-balles":"VP","Imperméable":"IM","Brassard":"BR","Véhicule":"VH","Vélo":"VL","Ordinateur":"OR","Tablette":"TB","Caméra-piéton":"CM","Trousse 1ers secours":"TS","Autre":"AU"}[cat]||"AU";const n=db.materiel.filter(m=>m.code&&m.code.startsWith(prefix+"-")).length+1;return prefix+"-"+String(n).padStart(3,"0")}
 function renderMaterielStats(view){
   const all=db.materiel||[];
-  const socIcons={};
   const socColors={};
   const total=all.length;
   const enStock=all.filter(m=>m.statut==="en_stock").length;
@@ -6734,7 +6700,7 @@ function renderMaterielStats(view){
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
         <thead class="bg-slate-50"><tr><th class="text-left p-3">Société</th><th class="p-3">Nb articles</th></tr></thead>
-        <tbody>${parSoc.map(r=>`<tr class="border-t"><td class="p-3 font-semibold"><span class="mr-2">${socIcons[r.s]||"🏢"}</span>${escapeHTML(r.s)}</td><td class="p-3 text-center">${r.n}</td></tr>`).join("")}
+        <tbody>${parSoc.map(r=>`<tr class="border-t"><td class="p-3 font-semibold">${escapeHTML(r.s)}</td><td class="p-3 text-center">${r.n}</td></tr>`).join("")}
         <tr class="border-t bg-slate-50 font-bold"><td class="p-3">TOTAL</td><td class="p-3 text-center">${total}</td></tr></tbody>
       </table>
     </div>`;
@@ -7615,7 +7581,6 @@ function filterMateriel(){
 function setMtSociete(v){if(mySoc()){toast("Vous êtes sur "+mySoc()+". Utilisez Changer de société.","error");return}sessionStorage.setItem("mtSociete",v||"");render()}
 function materielSocieteStripHTML(){
   const socFilter=sessionStorage.getItem("mtSociete")||"";
-  const socIcons={};
   const socColors={};
   const list=db.materiel||[];
   const totalAll=list.length;
@@ -7623,14 +7588,13 @@ function materielSocieteStripHTML(){
     const baseStyle=`border-left:5px solid ${color};border-top:1px solid ${color}33;border-right:1px solid ${color}33;border-bottom:1px solid ${color}33;background:linear-gradient(135deg,${color}10,${color}22);padding:6px 12px;border-radius:8px;cursor:pointer;transition:all .15s`;
     const activeStyle=`border:2px solid ${color};border-left:5px solid ${color};box-shadow:0 4px 12px ${color}55;background:linear-gradient(135deg,${color}30,${color}45);padding:5px 11px;border-radius:8px;cursor:pointer;transform:translateY(-1px)`;
     return`<button type="button" onclick="setMtSociete('${value.replace(/'/g,"\\'")}')" style="${active?activeStyle:baseStyle}" class="flex items-center gap-2 whitespace-nowrap" title="${escapeHTML(label)}">
-      <span style="font-size:18px;filter:drop-shadow(0 1px 2px ${color}66)">${icon}</span>
       <span class="text-xs font-bold uppercase tracking-wide" style="color:${color};line-height:1">${escapeHTML(label)}</span>
       <span class="pill" style="font-weight:800;background:${color};color:#fff;border:0;font-size:10px;padding:1px 7px">${count}</span>
     </button>`;
   };
   return`<div class="no-print flex items-center gap-2 px-4 py-2 overflow-x-auto" style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-bottom:1px solid #e2e8f0">
-    ${chip("","🏢","Toutes",totalAll,"#475569",!socFilter)}
-    ${SOCIETES.map(s=>chip(s,socIcons[s]||"🏢",s,list.filter(m=>m.societe===s).length,socColors[s]||"#64748b",socFilter===s)).join("")}
+    ${chip("","","Toutes",totalAll,"#475569",!socFilter)}
+    ${SOCIETES.map(s=>chip(s,"",s,list.filter(m=>m.societe===s).length,socColors[s]||"#64748b",socFilter===s)).join("")}
     <div class="flex-1"></div>
     <input id="global-search" class="input text-xs" style="max-width:200px" placeholder="🔎 Rechercher…" value="${escapeHTML(currentSearch)}" oninput="onGlobalSearch(this.value)"/>
     ${currentSearch?`<button class="btn btn-ghost text-xs" onclick="clearSearch()">✕</button>`:""}
@@ -9674,7 +9638,6 @@ function renderUnlockLog(view){if(!isAdmin()){view.innerHTML=`<div class="card p
 function changeUnlockCode(){const f=event.target;if(f.c1.value!==f.c2.value){toast("Les codes diffèrent","error");return}db.settings.unlockCode=f.c1.value;saveDB();toast("Code mis à jour","success");renderView()}
 
 /* ============ FACTURATION MODULE ============ */
-const FACT_TABS=[["dashboard","📊 Tableau de bord"],["devis","📝 Devis"],["factures","🧾 Factures"],["paiements","💳 Paiements"],["avances","💰 Avances"],["avoirs","↩️ Avoirs"],["caisse","🏦 Caisse"],["stock","📦 Stock"],["situation","📈 Situation"],["categories","🏷 Catégories"],["themes","🎯 Thèmes"],["structures","🏛 Structures"]];
 const MODES_PAIEMENT=["Virement bancaire","Chèque","Espèces","Carte bancaire","Mixte"];
 const STATUTS_DEVIS=["brouillon","envoye","accepte","refuse","expire"];
 const STATUTS_FACTURE=["emise","partielle","payee","echue","annulee"];
@@ -10052,7 +10015,6 @@ function addStructure(nom){if(!nom)return;db.structures=db.structures||[];if(db.
 function deleteStructure(nom){if(!confirm("Supprimer ?"))return;db.structures=(db.structures||[]).filter(s=>s!==nom);saveDB();renderView()}
 
 /* ============ COMMERCIAL MODULE ============ */
-const COMM_TABS=[["dashboard","📊 Tableau de bord"],["prospects","🎯 Prospects"],["clients","🤝 Clients"],["opportunites","💼 Opportunités"],["visites","📞 Visites / Suivi"],["catalogue","📋 Catalogue"],["tarifs","💲 Tarifs"],["stats","📈 Statistiques"]];
 function commTabs(active){return ""}
 function statutProspectPill(s){return{"nouveau":"pill-blue","contacte":"pill-indigo","interesse":"pill-amber","rdv_planifie":"pill-amber","rdv_realise":"pill-amber","converti":"pill-green","perdu":"pill-red"}[s]||"pill-gray"}
 function etapeOppPill(e){return{"nouveau":"pill-blue","qualification":"pill-indigo","proposition":"pill-amber","negociation":"pill-amber","gagnee":"pill-green","perdue":"pill-red"}[e]||"pill-gray"}
