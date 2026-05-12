@@ -19,3 +19,8 @@ class ItemPayload(BaseModel):
 class DbReplace(BaseModel):
     data: dict[str, list[Any] | dict[str, Any]]
 
+
+class LegacyActionPayload(BaseModel):
+    collection: str | None = None
+    item_id: str | None = None
+    data: dict[str, Any] = Field(default_factory=dict)

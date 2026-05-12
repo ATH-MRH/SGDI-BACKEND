@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
-from app.modules.irongs.schemas import CollectionOut, CollectionReplace, DbReplace, ItemPayload
+from app.modules.irongs.schemas import CollectionOut, CollectionReplace, DbReplace, ItemPayload, LegacyActionPayload
 from app.modules.irongs import service
 from app.modules.irongs.constants import CATEGORIES_PREST, POSTES, SOCIETES
 
@@ -87,3 +87,13 @@ def patch_item(name: str, item_id: str, payload: ItemPayload, db: Session = Depe
 @router.delete("/collections/{name}/items/{item_id}")
 def delete_item(name: str, item_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
     return service.delete_item(db, name, item_id)
+
+
+@router.post("/actions/{action}")
+def legacy_action(
+    action: str,
+    payload: LegacyActionPayload,
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+) -> dict[str, Any]:
+    return service.run_legacy_action(db, action, payload, user)

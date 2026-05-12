@@ -569,9 +569,20 @@ window.SGDI_API={
   commercial:{clients:()=>sgdiApi("/commercial/clients",{legacy:false}),clientsPage:(params)=>sgdiApi("/commercial/clients/page"+sgdiQuery(params),{legacy:false}),createClient:(payload)=>sgdiApi("/commercial/clients",{method:"POST",body:payload,legacy:false}),updateClient:(id,payload)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteClient:(id)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   finance:{entries:()=>sgdiApi("/finance/entries",{legacy:false}),entriesPage:(collection,params)=>sgdiApi("/finance/entries/"+encodeURIComponent(collection)+"/page"+sgdiQuery(params),{legacy:false}),payroll:()=>sgdiApi("/finance/payroll",{legacy:false}),payrollPage:(collection,params)=>sgdiApi("/finance/payroll/"+encodeURIComponent(collection)+"/page"+sgdiQuery(params),{legacy:false})},
   ui:{sidebarStats:()=>sgdiApi("/ui/sidebar-stats",{legacy:false})},
+  actions:{run:(action,payload)=>sgdiActionApi("/irongs/actions/"+encodeURIComponent(action),{method:"POST",body:payload||{},legacy:false})},
   sync:{pull:sgdiPullState,push:()=>sgdiBackendSave(),repair:()=>{const r=sgdiAutoRepairDB();if(r.length)sgdiBackendSave();return r}}
 };
 window.SGDI=window.SGDI_API;
+async function sgdiRunLegacyAction(action,payload){
+  const out=await SGDI.actions.run(action,payload||{});
+  if(out&&out.data&&typeof out.data==="object"){
+    const data=out.data;
+    if(data.item&&payload?.collection)sgdiUpsertServerItem(payload.collection,data.item);
+    if(data.client)sgdiUpsertServerItem("clients",data.client);
+    if(data.prospect)sgdiUpsertServerItem("prospects",data.prospect);
+  }
+  return out;
+}
 function sgdiServerPageKey(scope,extra){
   return "sgdi:page:"+String(scope||"list")+":"+String(extra||"");
 }
@@ -3927,8 +3938,26 @@ function appliquerAvenantAgent(av){
     a.updatedAt=today();
   }
 }
-function signerAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;appliquerAvenantAgent(av);av.statut="signe";av.signedAt=new Date().toISOString();av.signedBy=session?.username||"";saveDB();toast("Avenant signé et porté sur la fiche employé","success");renderView()}
-function annulerAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;if(!confirm("Annuler cet avenant ?"))return;av.statut="annule";av.cancelledAt=new Date().toISOString();av.cancelledBy=session?.username||"";saveDB();toast("Avenant annulé","success");renderView()}
+async function signerAvenant(id){
+  const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;
+  try{
+    await sgdiRunLegacyAction("set-status",{collection:"avenants",item_id:id,data:{statut:"signe"}});
+    appliquerAvenantAgent(av);
+    await sgdiPullState({silent:true});
+    toast("Avenant signé par le backend","success");
+    renderView();
+  }catch(e){toast("Signature refusée par PostgreSQL : "+(e.message||e),"error")}
+}
+async function annulerAvenant(id){
+  const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;
+  if(!confirm("Annuler cet avenant ?"))return;
+  try{
+    await sgdiRunLegacyAction("set-status",{collection:"avenants",item_id:id,data:{statut:"annule"}});
+    await sgdiPullState({silent:true});
+    toast("Avenant annulé par le backend","success");
+    renderView();
+  }catch(e){toast("Annulation refusée par PostgreSQL : "+(e.message||e),"error")}
+}
 function avenantHTML(av){
   const a=db.agents.find(x=>x.id===av.agentId)||{};
   return`<div style="font-family:Arial,sans-serif;color:#111;background:#fff;padding:28px;max-width:850px;margin:auto">
@@ -10176,9 +10205,33 @@ function confirmProspect(){
   db.prospects.push({id:uid("pr"),nom:fd.get("nom"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",societe:fd.get("societe"),source:fd.get("source"),score:parseInt(fd.get("score")||"5",10),statut:fd.get("statut")||"nouveau",notes:fd.get("notes")||"",createdBy:session.username,createdAt:new Date().toISOString()});
   saveDB();closeModal();toast("Prospect créé","success");renderView();
 }
-function updateProspectStatut(id,s){const p=db.prospects.find(x=>x.id===id);if(p){p.statut=s;saveDB();toast("Statut mis à jour","success")}}
-function deleteProspect(id){if(!confirm("Supprimer ?"))return;db.prospects=db.prospects.filter(p=>p.id!==id);saveDB();renderView()}
-function convertProspect(id){const p=db.prospects.find(x=>x.id===id);if(!p)return;if(!confirm("Convertir "+p.nom+" en client ?"))return;db.clients=db.clients||[];db.clients.push({id:uid("cl"),nom:p.nom,raisonSociale:p.nom,nif:"",rc:"",contact:p.contact,fonction:p.fonction,tel:p.tel,email:p.email,adresse:p.adresse,societe:p.societe,structure:"",statut:"actif",notes:p.notes,prospectId:p.id,createdAt:new Date().toISOString()});p.statut="converti";saveDB();toast("Client créé","success");renderView()}
+async function updateProspectStatut(id,s){
+  try{
+    await sgdiRunLegacyAction("set-status",{collection:"prospects",item_id:id,data:{statut:s}});
+    await sgdiPullState({silent:true});
+    toast("Statut mis à jour par le backend","success");
+    renderView();
+  }catch(e){toast("Statut refusé par PostgreSQL : "+(e.message||e),"error");renderView()}
+}
+async function deleteProspect(id){
+  if(!confirm("Supprimer ?"))return;
+  try{
+    await sgdiRunLegacyAction("delete-item",{collection:"prospects",item_id:id,data:{}});
+    db.prospects=(db.prospects||[]).filter(p=>String(p.id)!==String(id));
+    toast("Prospect supprimé par le backend","success");
+    renderView();
+  }catch(e){toast("Suppression refusée par PostgreSQL : "+(e.message||e),"error")}
+}
+async function convertProspect(id){
+  const p=db.prospects.find(x=>x.id===id);if(!p)return;
+  if(!confirm("Convertir "+p.nom+" en client ?"))return;
+  try{
+    await sgdiRunLegacyAction("convert-prospect",{item_id:id,data:{clientId:uid("cl")}});
+    await sgdiPullState({silent:true});
+    toast("Client créé par le backend","success");
+    renderView();
+  }catch(e){toast("Conversion refusée par PostgreSQL : "+(e.message||e),"error")}
+}
 async function renderCommClientsServer(view){
   const soc=mySoc();const page=sgdiServerCurrentPage("comm-clients",soc||"all");
   view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des clients depuis PostgreSQL...</div>`;
@@ -10289,8 +10342,23 @@ function confirmOpportunite(){
   db.opportunites.push({id:uid("op"),intitule:fd.get("intitule"),clientId:fd.get("clientId")||"",prospectId:fd.get("prospectId")||"",cible:fd.get("cible")||"",montant:parseFloat(fd.get("montant"))||0,probabilite:parseInt(fd.get("probabilite")||"50",10),dateCloture:fd.get("dateCloture")||"",etape:fd.get("etape")||"nouveau",societe:fd.get("societe"),notes:fd.get("notes")||"",createdBy:session.username,createdAt:new Date().toISOString()});
   saveDB();closeModal();toast("Opportunité créée","success");renderView();
 }
-function updateOppEtape(id,e){const o=db.opportunites.find(x=>x.id===id);if(o){o.etape=e;saveDB();toast("Étape mise à jour","success")}}
-function deleteOpp(id){if(!confirm("Supprimer ?"))return;db.opportunites=db.opportunites.filter(o=>o.id!==id);saveDB();renderView()}
+async function updateOppEtape(id,e){
+  try{
+    await sgdiRunLegacyAction("set-status",{collection:"opportunites",item_id:id,data:{etape:e}});
+    await sgdiPullState({silent:true});
+    toast("Étape mise à jour par le backend","success");
+    renderView();
+  }catch(err){toast("Étape refusée par PostgreSQL : "+(err.message||err),"error");renderView()}
+}
+async function deleteOpp(id){
+  if(!confirm("Supprimer ?"))return;
+  try{
+    await sgdiRunLegacyAction("delete-item",{collection:"opportunites",item_id:id,data:{}});
+    db.opportunites=(db.opportunites||[]).filter(o=>String(o.id)!==String(id));
+    toast("Opportunité supprimée par le backend","success");
+    renderView();
+  }catch(e){toast("Suppression refusée par PostgreSQL : "+(e.message||e),"error")}
+}
 function renderCommVisites(view){
   const list=bySoc(db.visites||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">📞 Visites / Suivi</h1><p class="text-slate-500 text-sm">${list.length} visites</p></div><button class="btn btn-primary" onclick="openVisiteModal()">➕ Nouvelle visite</button></div>
@@ -12018,10 +12086,47 @@ function ptSyncFeuillePresenceMonth(ym){
   (db.feuillePresence||[]).filter(f=>f.date&&f.date.slice(0,7)===ym&&f.valide).forEach(f=>{if(ptApplyPresenceLine(f))changed=true});
   return changed;
 }
-function ptValiderSheet(agentId,ym){const s=ptEnsureSheet(agentId,ym);s.valide=true;s.valideBy=session?session.username:"system";s.valideAt=new Date().toISOString();saveDB();logActivity&&logActivity("Pointage validé","Agent "+agentId+" · "+ym);toast("Pointage validé","success");renderView()}
-function ptDevaliderSheet(agentId,ym){if(!confirm("Déverrouiller ce pointage validé ?"))return;const s=ptGetSheet(agentId,ym);if(!s)return;s.valide=false;s.valideBy=null;s.valideAt=null;saveDB();logActivity&&logActivity("Pointage déverrouillé","Agent "+agentId+" · "+ym);toast("Pointage déverrouillé","success");renderView()}
-function ptValiderTous(ym,soc){const allAg=(db.agents||[]).filter(a=>!["sortant","demissionne","licencie","archive"].includes(a.statut));const ag=soc?allAg.filter(a=>a.societe===soc):allAg;if(!ag.length){toast("Aucun agent à valider","error");return}if(!confirm(`Valider le pointage de ${ag.length} agent(s) pour la période ${ym} ?`))return;let n=0;ag.forEach(a=>{const s=ptEnsureSheet(a.id,ym);if(!s.valide){s.valide=true;s.valideBy=session?session.username:"system";s.valideAt=new Date().toISOString();n++}});saveDB();logActivity&&logActivity("Validation globale du pointage",ym+" · "+n+" agents · société: "+(soc||"toutes"));toast(n+" pointage(s) validé(s)","success");renderView()}
-function ptDevaliderTous(ym,soc){const allAg=(db.agents||[]).filter(a=>!["sortant","demissionne","licencie","archive"].includes(a.statut));const ag=soc?allAg.filter(a=>a.societe===soc):allAg;if(!confirm(`Déverrouiller TOUS les pointages validés pour ${ym} ?`))return;let n=0;ag.forEach(a=>{const s=ptGetSheet(a.id,ym);if(s&&s.valide){s.valide=false;s.valideBy=null;s.valideAt=null;n++}});saveDB();toast(n+" pointage(s) déverrouillé(s)","success");renderView()}
+async function ptValiderSheet(agentId,ym){
+  try{
+    await sgdiRunLegacyAction("validate-pointage",{data:{agentId,periode:ym}});
+    await sgdiPullState({silent:true});
+    logActivity&&logActivity("Pointage validé","Agent "+agentId+" · "+ym);
+    toast("Pointage validé par le backend","success");
+    renderView();
+  }catch(e){toast("Validation refusée par PostgreSQL : "+(e.message||e),"error")}
+}
+async function ptDevaliderSheet(agentId,ym){
+  if(!confirm("Déverrouiller ce pointage validé ?"))return;
+  try{
+    await sgdiRunLegacyAction("unlock-pointage",{data:{agentId,periode:ym}});
+    await sgdiPullState({silent:true});
+    logActivity&&logActivity("Pointage déverrouillé","Agent "+agentId+" · "+ym);
+    toast("Pointage déverrouillé par le backend","success");
+    renderView();
+  }catch(e){toast("Déverrouillage refusé par PostgreSQL : "+(e.message||e),"error")}
+}
+async function ptValiderTous(ym,soc){
+  const allAg=(db.agents||[]).filter(a=>!["sortant","demissionne","licencie","archive"].includes(a.statut));
+  const ag=soc?allAg.filter(a=>a.societe===soc):allAg;
+  if(!ag.length){toast("Aucun agent à valider","error");return}
+  if(!confirm(`Valider le pointage de ${ag.length} agent(s) pour la période ${ym} ?`))return;
+  try{
+    const out=await sgdiRunLegacyAction("validate-pointage-all",{data:{periode:ym,societe:soc||""}});
+    await sgdiPullState({silent:true});
+    logActivity&&logActivity("Validation globale du pointage",ym+" · société: "+(soc||"toutes"));
+    toast((out.data?.count??0)+" pointage(s) validé(s) par le backend","success");
+    renderView();
+  }catch(e){toast("Validation globale refusée : "+(e.message||e),"error")}
+}
+async function ptDevaliderTous(ym,soc){
+  if(!confirm(`Déverrouiller TOUS les pointages validés pour ${ym} ?`))return;
+  try{
+    const out=await sgdiRunLegacyAction("unlock-pointage-all",{data:{periode:ym,societe:soc||""}});
+    await sgdiPullState({silent:true});
+    toast((out.data?.count??0)+" pointage(s) déverrouillé(s) par le backend","success");
+    renderView();
+  }catch(e){toast("Déverrouillage global refusé : "+(e.message||e),"error")}
+}
 
 /* ---- POINTAGE QUOTIDIEN — feuille de présence ---- */
 function fpqCurrentDate(){return sessionStorage.getItem("fpqDate")||today()}
@@ -12132,24 +12237,29 @@ function fpqSaveMouvement(date,agentId){
   f.absentAgentId=motif==="Remplacement Absence"?remplaceAgentId:"";f.absentAgentName=motif==="Remplacement Absence"?f.remplaceAgentName:"";f.maladeAgentId=motif==="Remplacement Malade"?remplaceAgentId:"";f.maladeAgentName=motif==="Remplacement Malade"?f.remplaceAgentName:"";f.abandonAgentId=motif==="Remplacement Abandon de poste"?remplaceAgentId:"";f.abandonEmployeCode=motif==="Remplacement Abandon de poste"?(remplaceAgent?.matricule||""):"";f.mouvementObs=fd.get("mouvementObs")||"";f.siteManual=true;f.updatedAt=new Date().toISOString();
   saveDB();closeModal();toast("Mouvement enregistré","success");renderView();
 }
-function fpqValiderLigne(date,agentId){
+async function fpqValiderLigne(date,agentId){
   if(fpqGuardCloture(date))return;
   const f=fpqEnsure(date,agentId);
   if(!f.siteId){toast("Site obligatoire avant validation","error");return}
-  f.valide=true;f.valideBy=session?session.username:"system";f.valideAt=new Date().toISOString();f.updatedAt=f.valideAt;
-  ptApplyPresenceLine(f);
-  saveDB();toast("Ligne validée · pointage mensuel mis à jour","success");renderView();
+  try{
+    await sgdiRunLegacyAction("validate-presence-line",{collection:"feuillePresence",item_id:f.id,data:{}});
+    await sgdiPullState({silent:true});
+    toast("Ligne validée par le backend","success");
+    renderView();
+  }catch(e){toast("Validation ligne refusée : "+(e.message||e),"error")}
 }
-function fpqDevaliderLigne(date,agentId){
-  if(!session||!["rh","admin","dispatch"].includes(session.role)){toast("Déverrouillage réservé RH/Admin/Dispatch","error");return}
+async function fpqDevaliderLigne(date,agentId){
   const f=fpqGet(date,agentId);if(!f)return;
-  ptRemovePresenceLine(f);
-  f.valide=false;f.valideBy=null;f.valideAt=null;f.updatedAt=new Date().toISOString();
-  saveDB();toast("Ligne déverrouillée","success");renderView();
+  try{
+    await sgdiRunLegacyAction("unlock-presence-line",{collection:"feuillePresence",item_id:f.id,data:{}});
+    await sgdiPullState({silent:true});
+    toast("Ligne déverrouillée par le backend","success");
+    renderView();
+  }catch(e){toast("Déverrouillage ligne refusé : "+(e.message||e),"error")}
 }
-function fpqCloturerJournee(date){if(!date)date=fpqCurrentDate();if(fpqIsCloture(date)){toast("Déjà clôturée","info");return}const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);if(!lignes.length){if(!confirm("Aucune ligne saisie pour le "+formatDate(date)+".\nClôturer la feuille à zéro quand même ?"))return}else{const incomplets=lignes.filter(f=>!f.heureArrivee).length;const msg="Clôturer définitivement la feuille du "+formatDate(date)+" ?\n\n• "+lignes.length+" ligne(s) au total\n"+(incomplets?"• ⚠ "+incomplets+" ligne(s) incomplète(s) (situation manquante)\n":"")+"\nLes lignes ne pourront plus être modifiées sans déclôture.";if(!confirm(msg))return}if(!db.feuillePresenceCloture)db.feuillePresenceCloture={};db.feuillePresenceCloture[date]={by:session?session.username:"system",at:new Date().toISOString(),count:lignes.length};saveDB();if(typeof logActivity==="function")logActivity("Clôture feuille de présence","Date: "+formatDate(date)+" · "+lignes.length+" ligne(s)");toast("✅ Feuille du "+formatDate(date)+" clôturée","success");renderView()}
+async function fpqCloturerJournee(date){if(!date)date=fpqCurrentDate();if(fpqIsCloture(date)){toast("Déjà clôturée","info");return}const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);if(!lignes.length){if(!confirm("Aucune ligne saisie pour le "+formatDate(date)+".\nClôturer la feuille à zéro quand même ?"))return}else{const incomplets=lignes.filter(f=>!f.heureArrivee).length;const msg="Clôturer définitivement la feuille du "+formatDate(date)+" ?\n\n• "+lignes.length+" ligne(s) au total\n"+(incomplets?"• ⚠ "+incomplets+" ligne(s) incomplète(s) (situation manquante)\n":"")+"\nLes lignes ne pourront plus être modifiées sans déclôture.";if(!confirm(msg))return}try{await sgdiRunLegacyAction("close-presence-day",{data:{date}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Clôture feuille de présence","Date: "+formatDate(date)+" · "+lignes.length+" ligne(s)");toast("Feuille clôturée par le backend","success");renderView()}catch(e){toast("Clôture refusée : "+(e.message||e),"error")}}
 function fpqDeclôturerJournee(date){return fpqDecloturerJournee(date)}
-function fpqDecloturerJournee(date){if(!date)date=fpqCurrentDate();if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}if(!session||!["rh","admin","dispatch"].includes(session.role)){toast("🔐 Accès refusé · réservé RH/Admin/Dispatch","error");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}const prev=db.feuillePresenceCloture[date];delete db.feuillePresenceCloture[date];if(!db.feuillePresenceClotureLog)db.feuillePresenceClotureLog=[];db.feuillePresenceClotureLog.push({date,action:"decloture",by:session.username,at:new Date().toISOString(),motif:motif.trim(),previous:prev});saveDB();if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("🔓 Feuille du "+formatDate(date)+" déclôturée","success");renderView()}
+async function fpqDecloturerJournee(date){if(!date)date=fpqCurrentDate();if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}try{await sgdiRunLegacyAction("reopen-presence-day",{data:{date,motif:motif.trim()}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("Feuille déclôturée par le backend","success");renderView()}catch(e){toast("Déclôture refusée : "+(e.message||e),"error")}}
 function fpqClotureBannerHTML(){if(!db||!session)return"";if(session.transverse!=="ops")return"";if(typeof canAccess==="function"&&!canAccess("ops"))return"";const today=new Date().toISOString().slice(0,10);const allDates=new Set();(db.feuillePresence||[]).forEach(f=>allDates.add(f.date));allDates.add(today);const c=db.feuillePresenceCloture||{};const pending=[...allDates].filter(d=>!c[d]).sort((a,b)=>b.localeCompare(a));if(!pending.length)return"";const todayPending=pending.includes(today);const oldPending=pending.filter(d=>d!==today).sort((a,b)=>b.localeCompare(a));const todayCount=(db.feuillePresence||[]).filter(f=>f.date===today).length;const oldList=oldPending.slice(0,5).map(d=>{const cnt=(db.feuillePresence||[]).filter(f=>f.date===d).length;return`<button class="text-[11px] px-2 py-0.5 rounded-full font-bold" style="background:#fff;color:#b91c1c;border:1px solid #fca5a5" onclick="setFpqDate('${d}');navigate('pointage/quotidien')">📅 ${formatDate(d)} · ${cnt} ligne${cnt>1?"s":""}</button>`}).join(" ");const moreOld=oldPending.length>5?` <span class="text-[11px] text-red-700 font-semibold">+ ${oldPending.length-5} autre(s)…</span>`:"";const todayLabel=new Date(today).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});const bg=todayPending&&!oldPending.length?"linear-gradient(90deg,#043970,#043970)":"linear-gradient(90deg,#fee2e2,#fecaca)";const border=todayPending&&!oldPending.length?"#043970":"#dc2626";const titleColor=todayPending&&!oldPending.length?"#043970":"#991b1b";const subColor=todayPending&&!oldPending.length?"#043970":"#7f1d1d";return`<div class="no-print mx-4 mt-3 p-4 rounded-lg shadow-lg fpq-banner-pulse" style="background:${bg};border:3px solid ${border}">
     <div class="flex items-center justify-between gap-3 flex-wrap">
       <div class="flex items-center gap-3 flex-1 min-w-0">

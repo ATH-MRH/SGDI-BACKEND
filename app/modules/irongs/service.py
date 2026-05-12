@@ -1,5 +1,6 @@
 import logging
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -12,6 +13,7 @@ from app.core.photo_storage import normalize_photo_fields
 
 logger = logging.getLogger("sgdi.records")
 OBJECT_ITEM_ID = "__object__"
+ADMIN_ACTION_ROLES = {"admin", "rh", "dispatch", "ADM1", "adm1"}
 
 
 def _invalid_item_id(value: Any) -> bool:
@@ -75,6 +77,7 @@ def get_database(db: Session) -> dict[str, list[Any] | dict[str, Any]]:
 
 
 def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]) -> dict[str, list[Any] | dict[str, Any]]:
+    _validate_legacy_database_payload(payload)
     db.execute(delete(SgdiRecord))
     logger.info("Remplacement base SGDI API-first: %s collection(s)", len(payload))
     for name, data in payload.items():
@@ -99,7 +102,51 @@ def get_collection(db: Session, name: str) -> list[Any] | dict[str, Any]:
     return [deepcopy(row.data) for row in rows if row.kind == "item"]
 
 
+def _validate_legacy_collection(name: str, data: list[Any] | dict[str, Any] | Any) -> None:
+    if name == "prospects" and isinstance(data, list):
+        allowed = {"nouveau", "contacte", "interesse", "rdv_planifie", "rdv_realise", "converti", "perdu"}
+        for item in data:
+            if isinstance(item, dict):
+                _validate_status_value(item.get("statut", "nouveau"), allowed)
+    if name == "opportunites" and isinstance(data, list):
+        allowed = {"nouveau", "qualification", "proposition", "negociation", "gagnee", "perdue"}
+        for item in data:
+            if isinstance(item, dict):
+                _validate_status_value(item.get("etape", "nouveau"), allowed, "Étape")
+    if name == "avenants" and isinstance(data, list):
+        allowed = {"brouillon", "signe", "annule"}
+        for item in data:
+            if isinstance(item, dict):
+                _validate_status_value(item.get("statut", "brouillon"), allowed)
+    if name == "pointages" and isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict) or not item.get("valide"):
+                continue
+            if not item.get("agentId") or not item.get("periode"):
+                raise HTTPException(status_code=422, detail="Pointage validé incomplet")
+            if item.get("days") is not None and not isinstance(item.get("days"), dict):
+                raise HTTPException(status_code=422, detail="Jours de pointage invalides")
+    if name == "feuillePresence" and isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict) or not item.get("valide"):
+                continue
+            if not item.get("date") or not item.get("agentId") or not item.get("siteId"):
+                raise HTTPException(status_code=422, detail="Ligne de présence validée incomplète")
+    if name == "feuillePresenceCloture" and isinstance(data, dict):
+        for day, info in data.items():
+            if not str(day or "").strip():
+                raise HTTPException(status_code=422, detail="Date de clôture invalide")
+            if not isinstance(info, dict) or not info.get("by") or not info.get("at"):
+                raise HTTPException(status_code=422, detail="Clôture de présence invalide")
+
+
+def _validate_legacy_database_payload(payload: dict[str, list[Any] | dict[str, Any]]) -> None:
+    for name, data in payload.items():
+        _validate_legacy_collection(name, data)
+
+
 def _replace_collection_no_commit(db: Session, name: str, data: list[Any] | dict[str, Any] | Any) -> None:
+    _validate_legacy_collection(name, data)
     db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
     clean_data = normalize_photo_fields(data, fallback=name)
     if isinstance(clean_data, list):
@@ -188,6 +235,274 @@ def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
     db.delete(row)
     db.commit()
     return {"deleted": item_id}
+
+
+def _now_iso() -> str:
+    return datetime.utcnow().isoformat()
+
+
+def _actor_name(user: Any | None) -> str:
+    return str(getattr(user, "username", "") or getattr(user, "full_name", "") or "system")
+
+
+def _actor_role(user: Any | None) -> str:
+    return str(getattr(user, "role", "") or "")
+
+
+def _require_admin_action(user: Any | None) -> None:
+    if _actor_role(user) not in ADMIN_ACTION_ROLES:
+        raise HTTPException(status_code=403, detail="Action réservée RH/Admin/Dispatch")
+
+
+def _collection_list(db: Session, name: str) -> list[dict[str, Any]]:
+    data = get_collection(db, name)
+    if not isinstance(data, list):
+        raise HTTPException(status_code=400, detail="Collection liste attendue")
+    return [dict(item) for item in data if isinstance(item, dict)]
+
+
+def _collection_object(db: Session, name: str) -> dict[str, Any]:
+    data = get_collection(db, name)
+    return dict(data) if isinstance(data, dict) else {}
+
+
+def _find_item(items: list[dict[str, Any]], item_id: str | None) -> dict[str, Any]:
+    if _invalid_item_id(item_id):
+        raise HTTPException(status_code=422, detail="Identifiant obligatoire")
+    for item in items:
+        if str(item.get("id")) == str(item_id):
+            return item
+    raise HTTPException(status_code=404, detail="Élément introuvable")
+
+
+def _validate_status_value(value: Any, allowed: set[str], label: str = "Statut") -> str:
+    clean = str(value or "").strip()
+    if clean not in allowed:
+        raise HTTPException(status_code=422, detail=f"{label} non autorisé")
+    return clean
+
+
+def _replace_and_success(db: Session, name: str, data: list[Any] | dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    saved = replace_collection(db, name, data)
+    return {"status": "success", "data": payload if payload is not None else saved}
+
+
+def _validate_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) -> dict[str, Any]:
+    if not agent_id or not periode:
+        raise HTTPException(status_code=422, detail="Agent et période obligatoires")
+    sheets = _collection_list(db, "pointages")
+    sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
+    if not sheet:
+        sheet = {"id": f"pt_{agent_id}_{periode}", "agentId": agent_id, "periode": periode, "days": {}, "createdAt": _now_iso()}
+        sheets.append(sheet)
+    sheet["valide"] = True
+    sheet["valideBy"] = _actor_name(user)
+    sheet["valideAt"] = _now_iso()
+    sheet["updatedAt"] = sheet["valideAt"]
+    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+
+
+def _unlock_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) -> dict[str, Any]:
+    _require_admin_action(user)
+    sheets = _collection_list(db, "pointages")
+    sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Pointage introuvable")
+    sheet["valide"] = False
+    sheet["valideBy"] = None
+    sheet["valideAt"] = None
+    sheet["updatedAt"] = _now_iso()
+    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+
+
+def _bulk_pointage(db: Session, periode: str, society: str | None, validate: bool, user: Any) -> dict[str, Any]:
+    if not periode:
+        raise HTTPException(status_code=422, detail="Période obligatoire")
+    if not validate:
+        _require_admin_action(user)
+    agents = [
+        row for row in _collection_list(db, "agents")
+        if row.get("statut") not in {"sortant", "demissionne", "licencie", "archive"}
+        and (not society or row.get("societe") == society)
+    ]
+    sheets = _collection_list(db, "pointages")
+    count = 0
+    for agent in agents:
+        sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent.get("id")) and row.get("periode") == periode), None)
+        if validate and not sheet:
+            sheet = {"id": f"pt_{agent.get('id')}_{periode}", "agentId": agent.get("id"), "periode": periode, "societe": agent.get("societe"), "days": {}, "createdAt": _now_iso()}
+            sheets.append(sheet)
+        if not sheet:
+            continue
+        if validate and not sheet.get("valide"):
+            sheet["valide"] = True
+            sheet["valideBy"] = _actor_name(user)
+            sheet["valideAt"] = _now_iso()
+            sheet["updatedAt"] = sheet["valideAt"]
+            count += 1
+        elif not validate and sheet.get("valide"):
+            sheet["valide"] = False
+            sheet["valideBy"] = None
+            sheet["valideAt"] = None
+            sheet["updatedAt"] = _now_iso()
+            count += 1
+    return _replace_and_success(db, "pointages", sheets, {"count": count})
+
+
+def _presence_code(value: Any) -> str:
+    clean = str(value or "").strip().upper()
+    return clean if clean in {"P", "A", "AB", "M", "S", "C", "R", "CP", "CM", "REC"} else "P"
+
+
+def _sync_presence_line_to_pointage(db: Session, line: dict[str, Any], validate: bool) -> None:
+    date_value = str(line.get("date") or "")
+    agent_id = str(line.get("agentId") or "")
+    line_id = str(line.get("id") or "")
+    if len(date_value) < 10 or not agent_id:
+        return
+    periode = date_value[:7]
+    day = date_value[8:10]
+    sheets = _collection_list(db, "pointages")
+    sheet = next((row for row in sheets if str(row.get("agentId")) == agent_id and row.get("periode") == periode), None)
+    if not sheet:
+        sheet = {"id": f"pt_{agent_id}_{periode}", "agentId": agent_id, "periode": periode, "days": {}, "fpqSync": {}, "createdAt": _now_iso()}
+        sheets.append(sheet)
+    if sheet.get("valide"):
+        raise HTTPException(status_code=422, detail="Pointage mensuel déjà validé")
+    days = dict(sheet.get("days") or {})
+    sync = dict(sheet.get("fpqSync") or {})
+    if validate:
+        days[day] = _presence_code(line.get("heureArrivee"))
+        sync[day] = line_id or True
+    elif sync.get(day) == line_id:
+        days.pop(day, None)
+        sync.pop(day, None)
+    sheet["days"] = days
+    sheet["fpqSync"] = sync
+    sheet["updatedAt"] = _now_iso()
+    replace_collection(db, "pointages", sheets)
+
+
+def _presence_line_action(db: Session, line_id: str, validate: bool, user: Any) -> dict[str, Any]:
+    if not validate:
+        _require_admin_action(user)
+    lines = _collection_list(db, "feuillePresence")
+    line = _find_item(lines, line_id)
+    closures = _collection_object(db, "feuillePresenceCloture")
+    if closures.get(str(line.get("date"))):
+        raise HTTPException(status_code=422, detail="Feuille clôturée")
+    if validate and not line.get("siteId"):
+        raise HTTPException(status_code=422, detail="Site obligatoire avant validation")
+    line["valide"] = bool(validate)
+    line["valideBy"] = _actor_name(user) if validate else None
+    line["valideAt"] = _now_iso() if validate else None
+    line["updatedAt"] = _now_iso()
+    _sync_presence_line_to_pointage(db, line, validate)
+    return _replace_and_success(db, "feuillePresence", lines, {"item": line})
+
+
+def _presence_day_close(db: Session, day: str, close: bool, user: Any, motif: str | None = None) -> dict[str, Any]:
+    if not day:
+        raise HTTPException(status_code=422, detail="Date obligatoire")
+    closures = _collection_object(db, "feuillePresenceCloture")
+    if close:
+        if closures.get(day):
+            raise HTTPException(status_code=422, detail="Feuille déjà clôturée")
+        lines = [row for row in _collection_list(db, "feuillePresence") if row.get("date") == day]
+        closures[day] = {"by": _actor_name(user), "at": _now_iso(), "count": len(lines)}
+    else:
+        _require_admin_action(user)
+        if not closures.get(day):
+            raise HTTPException(status_code=422, detail="Feuille non clôturée")
+        if not str(motif or "").strip():
+            raise HTTPException(status_code=422, detail="Motif obligatoire")
+        previous = closures.pop(day)
+        logs = _collection_list(db, "feuillePresenceClotureLog")
+        logs.append({"id": f"decloture_{day}_{int(datetime.utcnow().timestamp())}", "date": day, "action": "decloture", "by": _actor_name(user), "at": _now_iso(), "motif": str(motif).strip(), "previous": previous})
+        replace_collection(db, "feuillePresenceClotureLog", logs)
+    return _replace_and_success(db, "feuillePresenceCloture", closures, {"date": day, "closed": close})
+
+
+def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None = None) -> dict[str, Any]:
+    data = dict(getattr(payload, "data", {}) or {})
+    collection = getattr(payload, "collection", None)
+    item_id = getattr(payload, "item_id", None)
+
+    if action == "set-status":
+        allowed_by_collection = {
+            "prospects": {"nouveau", "contacte", "interesse", "rdv_planifie", "rdv_realise", "converti", "perdu"},
+            "opportunites": {"nouveau", "qualification", "proposition", "negociation", "gagnee", "perdue"},
+            "avenants": {"brouillon", "signe", "annule"},
+            "clients": {"actif", "prospect", "inactif"},
+        }
+        if collection not in allowed_by_collection:
+            raise HTTPException(status_code=422, detail="Collection non autorisée pour changement de statut")
+        items = _collection_list(db, collection)
+        item = _find_item(items, item_id)
+        target = _validate_status_value(data.get("status") or data.get("statut") or data.get("etape"), allowed_by_collection[collection])
+        field = "etape" if collection == "opportunites" else "statut"
+        item[field] = target
+        item["updatedAt"] = _now_iso()
+        return _replace_and_success(db, collection, items, {"item": item})
+
+    if action == "delete-item":
+        if collection not in {"prospects", "opportunites", "avenants"}:
+            raise HTTPException(status_code=422, detail="Suppression non autorisée pour cette collection")
+        items = _collection_list(db, collection)
+        _find_item(items, item_id)
+        items = [row for row in items if str(row.get("id")) != str(item_id)]
+        return _replace_and_success(db, collection, items, {"deleted": True, "id": item_id})
+
+    if action == "convert-prospect":
+        prospects = _collection_list(db, "prospects")
+        clients = _collection_list(db, "clients")
+        prospect = _find_item(prospects, item_id)
+        if prospect.get("statut") == "converti":
+            raise HTTPException(status_code=422, detail="Prospect déjà converti")
+        client = {
+            "id": data.get("clientId") or f"cl_{item_id}",
+            "nom": prospect.get("nom"),
+            "raisonSociale": prospect.get("nom"),
+            "nif": "",
+            "rc": "",
+            "contact": prospect.get("contact", ""),
+            "fonction": prospect.get("fonction", ""),
+            "tel": prospect.get("tel", ""),
+            "email": prospect.get("email", ""),
+            "adresse": prospect.get("adresse", ""),
+            "societe": prospect.get("societe"),
+            "structure": "",
+            "statut": "actif",
+            "notes": prospect.get("notes", ""),
+            "prospectId": prospect.get("id"),
+            "createdAt": _now_iso(),
+            "createdBy": _actor_name(user),
+        }
+        clients.append(client)
+        prospect["statut"] = "converti"
+        prospect["updatedAt"] = _now_iso()
+        replace_collection(db, "clients", clients)
+        replace_collection(db, "prospects", prospects)
+        return {"status": "success", "data": {"client": client, "prospect": prospect}}
+
+    if action == "validate-pointage":
+        return _validate_pointage_sheet(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), user)
+    if action == "unlock-pointage":
+        return _unlock_pointage_sheet(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), user)
+    if action == "validate-pointage-all":
+        return _bulk_pointage(db, str(data.get("periode") or ""), data.get("societe") or None, True, user)
+    if action == "unlock-pointage-all":
+        return _bulk_pointage(db, str(data.get("periode") or ""), data.get("societe") or None, False, user)
+    if action == "validate-presence-line":
+        return _presence_line_action(db, str(item_id or data.get("id") or ""), True, user)
+    if action == "unlock-presence-line":
+        return _presence_line_action(db, str(item_id or data.get("id") or ""), False, user)
+    if action == "close-presence-day":
+        return _presence_day_close(db, str(data.get("date") or ""), True, user)
+    if action == "reopen-presence-day":
+        return _presence_day_close(db, str(data.get("date") or ""), False, user, data.get("motif"))
+
+    raise HTTPException(status_code=422, detail="Action métier inconnue")
 
 
 def cleanup_base64_photos(db: Session) -> int:
