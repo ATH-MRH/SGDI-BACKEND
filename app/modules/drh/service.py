@@ -261,7 +261,7 @@ def _validate_candidate_transition(values: dict[str, Any], existing: Candidate |
     status_value = values.get("status", existing.status if existing else "nouvelle")
     status_norm = _candidate_status(status_value)
     sections = _candidate_sections(data)
-    all_sections = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "documents", "verification"]
+    all_sections = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "habilitations", "experience"]
     etape1 = ["identification", "mensurations", "militaire", "poste", "avis"]
 
     if _candidate_bool(data.get("fichePositionValidee")) or status_norm in {"reserve", "a_contractualiser", "embauche"}:
@@ -299,7 +299,7 @@ def validate_candidate_section(db: Session, payload: Any, section: str, existing
     values = payload.model_dump(exclude_unset=True)
     existing = get_or_404(db, Candidate, existing_id) if existing_id else None
     data = _candidate_data(values, existing)
-    order = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "documents", "verification"]
+    order = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "habilitations", "experience"]
     if section not in order:
         raise HTTPException(status_code=422, detail="Section inconnue")
     sections = dict(_candidate_sections(data))
