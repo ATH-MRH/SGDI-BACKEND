@@ -2925,24 +2925,31 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
   const inp=document.getElementById(inputId);if(!inp||!inp.files[0])return;
   const f=inp.files[0];
   if(f.size>5*1024*1024){toast("Photo > 5 Mo · trop volumineuse","error");return}
+  const setPreview=src=>{
+    const html=`<img src="${src}" class="w-full h-full object-cover rounded-lg" style="background:#fff"/>`;
+    const prev=document.getElementById(previewId);
+    if(prev){prev.classList.remove("field-error-box");prev.innerHTML=html}
+    const hero=document.querySelector(".candidate-photo");
+    if(hero)hero.innerHTML=`<img src="${src}" alt="">`;
+  };
+  let instantUrl="";
+  try{instantUrl=URL.createObjectURL(f);setPreview(instantUrl)}catch(e){}
   const r=new FileReader();
   r.onload=async e=>{
     const raw=e.target.result;
-    const prev=document.getElementById(previewId);
-    if(prev){
-      prev.classList.remove("field-error-box");
-      prev.innerHTML=`<img src="${raw}" class="w-full h-full object-cover rounded-lg" style="background:#fff"/>`;
-    }
+    if(!instantUrl)setPreview(raw);
     const compressed=await compressImage(raw,1000,0.9);
     const finalSize=Math.round(compressed.length/1024);
     const targetEl=document.getElementById(targetHidden);
     if(targetEl){targetEl.value=compressed;targetEl.dispatchEvent(new Event("change",{bubbles:true}))}
-    if(prev){prev.classList.remove("field-error-box");prev.innerHTML=`<img src="${compressed}" class="w-full h-full object-cover rounded-lg" style="background:#fff"/>`}
+    setPreview(compressed);
+    if(instantUrl)URL.revokeObjectURL(instantUrl);
     if(finalSize>500&&typeof toast==="function")toast("📷 Photo compressée à "+finalSize+" Ko","info");
   };
+  r.onerror=()=>{if(instantUrl)URL.revokeObjectURL(instantUrl)};
   r.readAsDataURL(f);
 }
-function removePhoto(targetHidden,previewId){const h=document.getElementById(targetHidden);if(h){h.value="";h.dispatchEvent(new Event("change",{bubbles:true}))}const p=document.getElementById(previewId);if(p){p.innerHTML="👤";p.classList.add("field-error-box")}}
+function removePhoto(targetHidden,previewId){const h=document.getElementById(targetHidden);if(h){h.value="";h.dispatchEvent(new Event("change",{bubbles:true}))}const p=document.getElementById(previewId);if(p){p.innerHTML="👤";p.classList.add("field-error-box")}const hero=document.querySelector(".candidate-photo");if(hero){const f=document.getElementById("candidat-form");const nom=String(f?.querySelector('[name="nom"]')?.value||"").trim();const prenom=String(f?.querySelector('[name="prenom"]')?.value||"").trim();hero.textContent=((nom+" "+prenom).trim()?((nom+" "+prenom).trim().split(/\s+/).slice(0,2).map(x=>x.charAt(0)).join("")):"CR").toUpperCase()}}
 function photoField(currentPhoto,hiddenName="photo"){const id=Math.random().toString(36).slice(2,8);return`<div class="flex items-start gap-4"><div id="photo-preview-${id}" class="w-32 h-32 bg-white border border-slate-300 rounded-lg flex items-center justify-center text-4xl overflow-hidden" style="background:#fff">${currentPhoto?`<img src="${currentPhoto}" class="w-full h-full object-cover" style="background:#fff"/>`:"👤"}</div><div class="flex flex-col gap-2"><input type="hidden" id="photo-hidden-${id}" name="${hiddenName}" value="${currentPhoto||""}"/><input id="photo-input-${id}" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload('photo-input-${id}','photo-hidden-${id}','photo-preview-${id}')"/><button type="button" class="btn btn-secondary text-xs" onclick="document.getElementById('photo-input-${id}').click()">📷 ${currentPhoto?"Changer":"Ajouter"}</button>${currentPhoto?`<button type="button" class="btn btn-ghost text-xs" onclick="removePhoto('photo-hidden-${id}','photo-preview-${id}')">✕ Retirer</button>`:""}<div class="text-[10px] text-slate-500">Photo nette sur fond blanc · JPG/PNG</div></div></div>`}
 function handleDocUpload(key,inputId,holderId){const inp=document.getElementById(inputId);if(!inp||!inp.files[0])return;const f=inp.files[0];if(f.size>5*1024*1024){toast("Fichier > 5 Mo","error");return}const r=new FileReader();r.onload=e=>{const urlI=document.querySelector(`[name="doc_${key}_url"]`);const nmI=document.querySelector(`[name="doc_${key}_name"]`);const vc=document.querySelector(`[name="verif${key}"]`);if(urlI)urlI.value=e.target.result;if(nmI)nmI.value=f.name;if(vc){vc.checked=true;vc.dispatchEvent(new Event("change",{bubbles:true}))}document.getElementById(holderId).innerHTML=`<div class="text-xs text-emerald-600">✅ ${escapeHTML(f.name)}</div><button type="button" class="btn btn-ghost text-xs mt-1" onclick="viewDoc('${e.target.result}','${escapeHTML(f.name)}')">👁 Voir</button><button type="button" class="btn btn-ghost text-xs mt-1 text-red-600" onclick="removeDoc('${key}','${holderId}')">✕ Retirer</button>`;toast(`Pièce "${key}" téléversée`,"success")};r.readAsDataURL(f)}
 function removeDoc(key,holderId){const urlI=document.querySelector(`[name="doc_${key}_url"]`);const nmI=document.querySelector(`[name="doc_${key}_name"]`);if(urlI)urlI.value="";if(nmI)nmI.value="";const id=Math.random().toString(36).slice(2,8);document.getElementById(holderId).innerHTML=`<input id="docinp-${id}" type="file" accept="image/*,.pdf" class="hidden" onchange="handleDocUpload('${key}','docinp-${id}','${holderId}')"/><button type="button" class="btn btn-secondary text-xs" onclick="document.getElementById('docinp-${id}').click()">📤 Téléverser</button>`}
