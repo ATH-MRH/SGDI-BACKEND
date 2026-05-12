@@ -6292,8 +6292,7 @@ function ficheAgentIsSortantArchive(a){
 }
 function renderFiches(view,sub){
   const socFilter=session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||"");
-  const showSocieteSelection=true;
-  let baseList=db.agents.slice();let title="🪪 Fiches de position — Toutes";
+  let baseList=db.agents.filter(a=>!ficheAgentIsSortantArchive(a));let title="Fiches de position — Toutes";
   if(sub==="maladie"){baseList=baseList.filter(a=>ficheAgentInMaladie(a));title="🤒 Fiches de position — En maladie"}
   else if(sub==="conge"){baseList=baseList.filter(a=>ficheAgentInConge(a));title="🏖 Fiches de position — En congé"}
   else if(sub==="suspendu"){baseList=baseList.filter(a=>a.statut==="suspendu");title="⏸ Fiches de position — Suspendu"}
@@ -6303,6 +6302,9 @@ function renderFiches(view,sub){
   else if(sub==="badge"){return renderBadgeModule(view)}
   const list=socFilter?baseList.filter(a=>a.societe===socFilter):baseList;
   const statsBase=socFilter?db.agents.filter(a=>a.societe===socFilter):db.agents;
+  const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
+  const withoutAffectation=activeBase.filter(a=>!(a.affectationCourante&&a.affectationCourante.siteId)).length;
+  const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const cards=[
     ["maladie","🤒 En maladie",statsBase.filter(a=>ficheAgentInMaladie(a)).length,"#f97316"],
     ["conge","🏖 En congé",statsBase.filter(a=>ficheAgentInConge(a)).length,"#0360a8"],
@@ -6310,20 +6312,40 @@ function renderFiches(view,sub){
     ["abandon","🚫 En abandon de poste",statsBase.filter(a=>ficheAgentInAbandon(a)).length,"#dc2626"],
     ["archivees","🗄 Sortants / archivés",statsBase.filter(a=>ficheAgentIsSortantArchive(a)).length,"#475569"]
   ];
-  view.innerHTML=`<div class="mb-3"><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${sub==="badge"?"Préparation des badges personnel":"Annuaire des fiches de position employé"} — ${list.length} fiche(s)${socFilter?` · <span class="font-semibold text-amber-700">${escapeHTML(socFilter)}</span>`:""}.</p></div>
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
-      ${cards.map(([k,l,n,c])=>`<a href="#/fiches/${k}" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit;border:2px solid ${sub===k?c:"#e2e8f0"};background:${sub===k?c+"12":"#fff"}"><div class="text-xs font-black uppercase text-slate-500">${l}</div><div class="text-3xl font-black mt-1" style="color:${c}">${n}</div></a>`).join("")}
+  view.innerHTML=`<div class="fp-page">
+    <div class="fp-head">
+      <div>
+        <h1>${title}</h1>
+        <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Synthèse opérationnelle des fiches de position"} · ${list.length} fiche(s) affichée(s)${socFilter?` · <span>${escapeHTML(socFilter)}</span>`:""}.</p>
+      </div>
+      <div class="fp-head-actions">
+        <a href="#/fiches/imprimer" class="btn ${sub==="imprimer"?"btn-primary":"btn-ghost"} text-sm">🖨 Impression en lot</a>
+        <a href="#/fiches/badge" class="btn ${sub==="badge"?"btn-primary":"btn-ghost"} text-sm">🏷 BADGE</a>
+      </div>
     </div>
-    <div class="flex gap-2 mb-4 flex-wrap"><a href="#/fiches/imprimer" class="btn ${sub==="imprimer"?"btn-primary":"btn-ghost"} text-sm">🖨 Impression en lot</a><a href="#/fiches/badge" class="btn ${sub==="badge"?"btn-primary":"btn-ghost"} text-sm">🏷 BADGE</a></div>
-    <div class="card p-4 mb-4">
-      <h3 class="text-sm font-semibold mb-3">🔎 Filtres complémentaires</h3>
-      <div class="grid grid-3 gap-3">
+    <div class="fp-summary-grid">
+      ${[
+        ["Fiches actives",activeBase.length,"Hors sortants / archivés","#043970",100],
+        ["Agents actifs",statsBase.filter(a=>a.statut==="actif").length,"Présents dans l'effectif","#166534",ratio(statsBase.filter(a=>a.statut==="actif").length,activeBase.length)],
+        ["Sans affectation",withoutAffectation,"Site non renseigné","#b45309",ratio(withoutAffectation,activeBase.length)],
+        ["À surveiller",statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,"Congé, maladie, suspension, abandon","#b91c1c",ratio(statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,activeBase.length)]
+      ].map(([label,note,desc,color,pct])=>`<div class="fp-summary-card"><div><span>${label}</span><strong style="color:${color}">${note}</strong><small>${desc}</small></div><div class="fp-ring" style="--pct:${pct}%;--ring:${color}"><b>${pct}%</b></div></div>`).join("")}
+    </div>
+    ${fpSocieteBandHTML(baseList)}
+    <div class="fp-status-grid">
+      ${cards.map(([k,l,n,c])=>`<a href="#/fiches/${k}" class="fp-status-card ${sub===k?"active":""}" style="--accent:${c};text-decoration:none;color:inherit"><span>${l}</span><strong>${n}</strong></a>`).join("")}
+    </div>
+    <div class="fp-filter-card">
+      <h3>Filtres complémentaires</h3>
+      <div class="grid grid-4 gap-3">
         <div><label class="label">Site</label><select id="fp-site" class="select" onchange="filterFiches()"><option value="">Tous</option>${db.sites.map(s=>`<option value="${s.id}">${escapeHTML(s.nom)}</option>`).join("")}</select></div>
         <div><label class="label">Poste</label><select id="fp-poste" class="select" onchange="filterFiches()"><option value="">Tous</option>${POSTES_SITE.map(p=>`<option>${p}</option>`).join("")}</select></div>
+        <div><label class="label">Statut</label><select id="fp-status" class="select" onchange="filterFiches()"><option value="">Tous</option><option value="actif">Actif</option><option value="congé">Congé</option><option value="maladie">Maladie</option><option value="suspendu">Suspendu</option><option value="absent">Absent</option><option value="abandon">Abandon</option><option value="sortant">Sortant / archivé</option></select></div>
         <div><label class="label">Recherche</label><input id="fp-q" class="input" placeholder="Nom, matricule..." oninput="filterFiches()"/></div>
       </div>
     </div>
-    ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucune fiche${socFilter?` pour ${escapeHTML(socFilter)}`:""}.</div>`:`<div id="fp-grid" class="grid grid-3 gap-4">${list.map(a=>fichePositionCard(a)).join("")}</div>`}`;
+    ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucune fiche${socFilter?` pour ${escapeHTML(socFilter)}`:""}.</div>`:`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`}
+  </div>`;
 }
 function setFpSociete(v){if(mySoc()){toast("Vous êtes sur "+mySoc()+". Utilisez Changer de société.","error");return}if(session?.transverse)sessionStorage.setItem(structureSocieteFilterKey(),v||"");else sessionStorage.setItem("fpSociete",v||"");renderView()}
 function fpSocieteBandHTML(baseList){
@@ -6351,15 +6373,18 @@ function fpSocieteBandHTML(baseList){
 function fichePositionCard(a){
   let situation="actif",sitClass="pill-green",sitIcon="✅";
   const congeActif=db.conges.find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
+  const abandon=ficheAgentInAbandon(a);
   if(a.statut==="suspendu"){situation="suspendu";sitClass="pill-red";sitIcon="⏸"}
   else if(a.statut==="absent"){situation="absent";sitClass="pill-red";sitIcon="❌"}
+  else if(abandon){situation="abandon";sitClass="pill-red";sitIcon="🚫"}
   else if(congeActif&&congeActif.type==="Maladie"){situation="maladie";sitClass="pill-amber";sitIcon="🤒"}
   else if(congeActif){situation="congé";sitClass="pill-blue";sitIcon="🏖"}
+  else if(ficheAgentIsSortantArchive(a)){situation="sortant";sitClass="pill-gray";sitIcon="🗄"}
   else if(a.statut!=="actif"){situation=a.statut||"—";sitClass="pill-gray";sitIcon="•"}
   const aff=a.affectationCourante||{};
   const ficheHref=isMaterielFicheContext()?"#/materiel/fiche/"+a.id:"#/effectif/agent/"+a.id;
   const ficheClick=isMaterielFicheContext()?"setFicheContext('materiel')":"";
-  return`<div class="card p-4" data-row data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-poste="${escapeHTML(aff.poste||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
+  return`<div class="card p-4 fp-agent-card" data-row data-status="${escapeHTML(situation)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-poste="${escapeHTML(aff.poste||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
     <div class="flex items-center gap-3 mb-3">
       <div class="avatar" style="width:56px;height:56px;font-size:18px">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div>
       <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="font-mono text-lg font-black text-amber-600 leading-tight mt-1">${safe(a.matricule)}</div><div><span class="pill ${sitClass}" style="font-size:10px">${sitIcon} ${situation}</span></div></div>
@@ -6382,11 +6407,13 @@ function fichePositionCard(a){
 function filterFiches(){
   const site=document.getElementById("fp-site")?.value||"";
   const poste=document.getElementById("fp-poste")?.value||"";
+  const status=document.getElementById("fp-status")?.value||"";
   const q=(document.getElementById("fp-q")?.value||"").toLowerCase().trim();
   document.querySelectorAll("#fp-grid [data-row]").forEach(c=>{
     let ok=true;
     if(site&&c.dataset.site!==site)ok=false;
     if(poste&&c.dataset.poste!==poste)ok=false;
+    if(status&&c.dataset.status!==status)ok=false;
     if(q&&!c.dataset.q.includes(q))ok=false;
     c.classList.toggle("hidden",!ok);
   });
