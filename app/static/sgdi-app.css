@@ -136,7 +136,7 @@
   .sgdi-shell{width:100%;min-width:0;overflow:hidden}
   .sgdi-shell-body{min-height:0;width:100%;min-width:0}
   .sgdi-topbar{width:100%;min-width:0}
-  .sgdi-view{padding:6px 24px 24px!important;width:100%;max-width:none;overflow-x:hidden}
+  .sgdi-view{padding:6px 24px 24px!important;width:100%;max-width:none}
 
   .societe-structure-bar{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 4px 12px rgba(15,23,42,.05);z-index:20}
   .societe-structure-inner{min-height:58px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:8px 16px}
@@ -550,7 +550,7 @@
   .step.done{background:var(--success-soft);color:#047857;border-color:#86efac}
 
   /* ----- CANDIDATE DOSSIER ----- */
-  .candidate-dossier{width:100%;max-width:1180px;margin:0 auto 32px;padding-bottom:24px}
+  .candidate-dossier{max-width:1180px;margin:0 auto 32px;padding-bottom:24px}
   .candidate-hero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs)}
   .candidate-photo{width:78px;height:92px;border-radius:8px;border:1px solid var(--border-strong);background:#f8fafc;color:#043970;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;overflow:hidden;flex-shrink:0}
   .candidate-photo img{width:100%;height:100%;object-fit:cover}
@@ -559,11 +559,11 @@
   .candidate-title{font-size:25px;line-height:1.15;font-weight:900;color:var(--text);margin:0;word-break:break-word}
   .candidate-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
   .candidate-chip{display:inline-flex;align-items:center;min-height:26px;border:1px solid var(--border);background:#f8fafc;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;color:#334155;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .candidate-dossier-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,310px);gap:18px;align-items:start;max-width:100%}
+  .candidate-dossier-grid{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px;align-items:start}
   .candidate-main{min-width:0}
   .candidate-stepper{margin-bottom:14px}
-  .candidate-side{position:static;display:flex;flex-direction:column;gap:12px;min-width:0}
-  .candidate-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-xs);min-width:0}
+  .candidate-side{position:sticky;top:14px;display:flex;flex-direction:column;gap:12px}
+  .candidate-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-xs)}
   .candidate-panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:900;margin-bottom:10px}
   .candidate-panel p{font-size:12px;line-height:1.45;color:var(--text-soft);margin:10px 0 0}
   .candidate-progress-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;color:var(--text)}
