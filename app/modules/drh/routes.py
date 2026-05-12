@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.encoders import jsonable_encoder
 from io import BytesIO
 from typing import Annotated
 
@@ -236,32 +237,51 @@ def candidates(
     return rows
 
 
-@router.post("/candidates", response_model=CandidateOut)
+def _action_success(data):
+    return {"status": "success", "data": jsonable_encoder(data)}
+
+
+@router.post("/candidates")
 def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
-    return service.create_candidate(db, payload)
+    return _action_success(service.create_candidate(db, payload))
 
 
-@router.put("/candidates/{candidate_id}", response_model=CandidateOut)
+@router.put("/candidates/{candidate_id}")
 def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
     _ensure_society_allowed(user, payload.society or existing.society)
-    return service.update_candidate(db, candidate_id, payload)
+    return _action_success(service.update_candidate(db, candidate_id, payload))
+
+
+@router.post("/candidates/validate-section")
+def validate_candidate_section(
+    payload: CandidateCreate,
+    section: str,
+    candidate_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _ensure_society_allowed(user, payload.society)
+    if candidate_id is not None:
+        existing = service.get_or_404(db, Candidate, candidate_id)
+        _ensure_society_allowed(user, existing.society)
+    return service.validate_candidate_section(db, payload, section=section, existing_id=candidate_id, username=user.username)
 
 
 @router.delete("/candidates/{candidate_id}")
 def delete_candidate(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
-    return service.delete_row(db, Candidate, candidate_id)
+    return _action_success(service.delete_row(db, Candidate, candidate_id))
 
 
-@router.post("/candidates/{candidate_id}/recruit", response_model=EmployeeOut)
+@router.post("/candidates/{candidate_id}/recruit")
 def recruit(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     candidate = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, candidate.society)
-    return service.recruit_candidate(db, candidate_id)
+    return _action_success(service.recruit_candidate(db, candidate_id))
 
 
 @router.get("/contracts", response_model=list[ContractOut])

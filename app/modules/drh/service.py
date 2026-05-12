@@ -176,6 +176,104 @@ def list_candidates_page(
 def _candidate_text(value: Any) -> str:
     return str(value or "").strip()
 
+def _candidate_data(values: dict[str, Any], existing: Candidate | None = None) -> dict[str, Any]:
+    data = values.get("data")
+    if isinstance(data, dict):
+        return dict(data)
+    if existing and isinstance(existing.data, dict):
+        return dict(existing.data)
+    return {}
+
+def _candidate_status(value: Any) -> str:
+    return str(value or "nouvelle").strip().lower()
+
+def _candidate_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "oui", "yes", "on"}
+
+def _candidate_sections(data: dict[str, Any]) -> dict[str, Any]:
+    raw = data.get("sectionValidations")
+    return raw if isinstance(raw, dict) else {}
+
+def _candidate_required_fields(section: str) -> list[tuple[str, str]]:
+    return {
+        "identification": [
+            ("nom", "Nom"),
+            ("prenom", "Prénom"),
+            ("dateNaissance", "Date de naissance"),
+            ("lieuNaissance", "Lieu de naissance"),
+            ("sexe", "Sexe"),
+            ("nomPere", "Nom du père"),
+            ("nomMere", "Nom de la mère"),
+            ("nin", "NIN"),
+            ("situation", "Situation familiale"),
+            ("source", "Source"),
+        ],
+        "poste": [("posteSouhaite", "Poste souhaité"), ("telephone", "Téléphone")],
+        "avis": [
+            ("avisDecision", "Décision"),
+            ("avisDate", "Date de l'avis"),
+            ("avisRecruteur", "Recruteur"),
+            ("avisCommentaire", "Commentaire"),
+        ],
+        "contact": [
+            ("adresse", "Adresse"),
+            ("commune", "Commune"),
+            ("wilaya", "Wilaya"),
+            ("contactUrgenceLien", "Lien contact urgence"),
+            ("contactUrgenceNom", "Nom contact urgence"),
+            ("contactUrgenceTel", "Téléphone urgence"),
+        ],
+    }.get(section, [])
+
+def _candidate_age_on_save(date_naissance: Any) -> int | None:
+    if not date_naissance:
+        return None
+    try:
+        born = date.fromisoformat(str(date_naissance)[:10])
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Date de naissance invalide")
+    today = date.today()
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+def _validate_candidate_form_rules(values: dict[str, Any], existing: Candidate | None = None, section: str | None = None) -> None:
+    data = _candidate_data(values, existing)
+    first_name = _candidate_text(values.get("first_name", existing.first_name if existing else data.get("prenom")))
+    last_name = _candidate_text(values.get("last_name", existing.last_name if existing else data.get("nom")))
+    if len(first_name) < 2 or len(last_name) < 2:
+        raise HTTPException(status_code=422, detail="Nom et prénom obligatoires pour créer une candidature.")
+
+    nin = _candidate_text(data.get("nin"))
+    if nin and not re.fullmatch(r"\d{10}", nin):
+        raise HTTPException(status_code=422, detail="Le NIN doit contenir exactement 10 chiffres")
+    age = _candidate_age_on_save(data.get("dateNaissance"))
+    if age is not None and age < 20:
+        raise HTTPException(status_code=422, detail="Le candidat doit avoir au moins 20 ans à la date d'enregistrement")
+
+    if section:
+        missing = [label for field, label in _candidate_required_fields(section) if not _candidate_text(data.get(field))]
+        if missing:
+            raise HTTPException(status_code=422, detail="Champs obligatoires manquants : " + ", ".join(missing))
+
+def _validate_candidate_transition(values: dict[str, Any], existing: Candidate | None = None) -> None:
+    data = _candidate_data(values, existing)
+    status_value = values.get("status", existing.status if existing else "nouvelle")
+    status_norm = _candidate_status(status_value)
+    sections = _candidate_sections(data)
+    all_sections = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "documents", "verification"]
+    etape1 = ["identification", "mensurations", "militaire", "poste", "avis"]
+
+    if _candidate_bool(data.get("fichePositionValidee")) or status_norm in {"reserve", "a_contractualiser", "embauche"}:
+        missing = [key for key in all_sections if not sections.get(key)]
+        if missing:
+            raise HTTPException(status_code=422, detail="Fiche de position refusée : sections non validées (" + ", ".join(missing) + ")")
+
+    if status_norm == "reserve" and any(sections.get(key) for key in etape1):
+        missing = [key for key in etape1 if not sections.get(key)]
+        if missing:
+            raise HTTPException(status_code=422, detail="Mise en réserve refusée : étape précédente non validée")
+
 def _candidate_values(payload: Any, existing: Candidate | None = None, partial: bool = False) -> dict[str, Any]:
     values = payload.model_dump(exclude_unset=True)
     data = values.get("data")
@@ -193,7 +291,27 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
         values["first_name"] = first_name
     if not partial or "last_name" in values:
         values["last_name"] = last_name
+    _validate_candidate_form_rules(values, existing)
+    _validate_candidate_transition(values, existing)
     return values
+
+def validate_candidate_section(db: Session, payload: Any, section: str, existing_id: int | None = None, username: str | None = None):
+    values = payload.model_dump(exclude_unset=True)
+    existing = get_or_404(db, Candidate, existing_id) if existing_id else None
+    data = _candidate_data(values, existing)
+    order = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "documents", "verification"]
+    if section not in order:
+        raise HTTPException(status_code=422, detail="Section inconnue")
+    sections = dict(_candidate_sections(data))
+    idx = order.index(section)
+    previous_missing = [key for key in order[:idx] if not sections.get(key)]
+    if previous_missing:
+        raise HTTPException(status_code=422, detail="Validez d'abord la section précédente : " + ", ".join(previous_missing))
+    _validate_candidate_form_rules(values, existing, section=section)
+    sections[section] = {"by": username or "system", "at": datetime.utcnow().isoformat()}
+    data["sectionValidations"] = sections
+    values["data"] = data
+    return {"status": "success", "data": {"section": section, "sectionValidations": sections, "next": order[idx + 1] if idx + 1 < len(order) else None}}
 
 def create_candidate(db: Session, payload: Any):
     row = Candidate(**_candidate_values(payload))
@@ -266,6 +384,7 @@ def drh_dashboard(db: Session):
 
 def recruit_candidate(db: Session, candidate_id: int):
     candidate = get_or_404(db, Candidate, candidate_id)
+    _validate_candidate_transition({"status": "embauche", "data": candidate.data or {}}, candidate)
     next_code = f"A{(db.scalar(select(func.count(Employee.id))) or 0) + 1:02d}"
     employee = Employee(
         code=next_code,

@@ -256,6 +256,24 @@ async function sgdiApi(path,options){
   }
   return out.data===undefined?out:out.data;
 }
+async function sgdiActionApi(path,options){
+  const opts=options||{};
+  const legacy=opts.legacy!==false;
+  const isForm=typeof FormData!=="undefined"&&opts.body instanceof FormData;
+  const body=isForm?opts.body:(opts.body&&typeof opts.body!=="string"?JSON.stringify(opts.body):opts.body);
+  const url=sgdiApiUrl(path,legacy);
+  const headers=sgdiAuthHeaders(opts.headers);
+  if(isForm)delete headers["content-type"];
+  const res=await fetch(url,{cache:"no-store",...opts,body,headers});
+  const out=await res.json().catch(()=>({status:"error",error:"Réponse API invalide"}));
+  if(!res.ok||out.status!=="success"){
+    const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
+    const message=out.error||detail||out.message||("Action refusée par le backend "+res.status);
+    console.error("Action API refusée",res.status,url,out);
+    throw new Error(message);
+  }
+  return out;
+}
 async function sgdiDownload(path,filename){
   const url=sgdiApiUrl(path,false);
   const res=await fetch(url,{cache:"no-store",headers:sgdiAuthHeaders({})});
@@ -527,9 +545,11 @@ window.SGDI_API={
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
-    createCandidate:(payload)=>sgdiApi("/drh/candidates",{method:"POST",body:payload,legacy:false}),
-    updateCandidate:(id,payload)=>sgdiApi("/drh/candidates/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),
-    deleteCandidate:(id)=>sgdiApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
+    createCandidate:(payload)=>sgdiActionApi("/drh/candidates",{method:"POST",body:payload,legacy:false}),
+    updateCandidate:(id,payload)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),
+    validateCandidateSection:(payload,section,id)=>sgdiActionApi("/drh/candidates/validate-section?"+new URLSearchParams(Object.entries({section,candidate_id:id||""}).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString(),{method:"POST",body:payload,legacy:false}),
+    deleteCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
+    recruitCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/recruit",{method:"POST",legacy:false}),
     leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:()=>sgdiApi("/drh/contracts",{legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false}),
     contractTemplates:()=>sgdiApi("/drh/contract-templates",{legacy:false}),
     createContractTemplate:(formData)=>sgdiApi("/drh/contract-templates",{method:"POST",body:formData,legacy:false}),
@@ -774,7 +794,9 @@ async function persistCandidateToPostgres(c,options){
   }
   if(!backendId&&!opt.allowCreate)return null;
   const payload=candidateApiPayload(c);
-  const saved=backendId?await SGDI.rh.updateCandidate(backendId,payload):await SGDI.rh.createCandidate(payload);
+  const action=backendId?await SGDI.rh.updateCandidate(backendId,payload):await SGDI.rh.createCandidate(payload);
+  const saved=action&&action.status==="success"?action.data:action;
+  if(!saved||!saved.id)throw new Error("Confirmation PostgreSQL invalide");
   const mapped=candidateFromApi(saved);
   Object.assign(c,mapped,{id:c.id||mapped.id,backendId:saved.id});
   rememberCandidatAlias(originalId,c.id);
@@ -1640,8 +1662,8 @@ function render(){
     </div>
     <div class="sgdi-shell-body flex flex-1 min-h-0">
       <aside class="sidebar w-72 flex flex-col shrink-0">
-        <div class="px-5 py-6 border-b" style="border-color:#343a3b!important;text-align:left!important;background:#171c1d!important">
-          <div class="sidebar-module-title font-black tracking-tight" data-no-lang="1" style="line-height:1;color:#fff!important;text-align:left!important">SGDI</div>
+        <div class="sidebar-brand px-5 py-6 border-b">
+          <div class="sidebar-module-title font-black tracking-tight" data-no-lang="1">SGDI</div>
           <div class="sidebar-console-label" data-no-lang="1">CONSOLE</div>
         </div>
         <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
@@ -3118,7 +3140,19 @@ function renderRecrutement(view,mode){
         <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<a class="btn btn-ghost text-xs" href="#/${mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement"}/${c.id}">Ouvrir →</a>`}</td>
       </tr>`).join("")}</tbody></table></div>`}`;
 }
-function recruterCandidat(id){const c=findCandidatById(id);if(!c)return;c.statut="a_contractualiser";saveDB();toast("Candidat envoyé vers contractualisation","success");navigate(`contrats/nouveau/${c.id}`)}
+async function recruterCandidat(id){
+  const c=findCandidatById(id);if(!c)return;
+  const draft={...c,statut:"a_contractualiser"};
+  try{
+    await persistCandidateToPostgres(draft);
+    Object.assign(c,draft);
+    if(typeof sgdiBackendSave==="function")sgdiBackendSave();
+    toast("Candidat envoyé vers contractualisation","success");
+    navigate(`contrats/nouveau/${c.id}`);
+  }catch(e){
+    toast("Action refusée par PostgreSQL : "+(e.message||e),"error");
+  }
+}
 function afficherCandidatReserve(id){closeModal();navigate(`reserve/${id}`)}
 function modifierCandidatReserve(id){sessionStorage.setItem("candidatAutoEdit:"+id,"1");closeModal();navigate(`reserve/${id}`)}
 function openReserveCandidateActions(id){
@@ -3580,12 +3614,24 @@ async function saveCandidat(id,showToast,options){
   const realId=isTempCandidateId(id)?(candidatTempRealIds[id]||(candidatTempRealIds[id]=uid("cd"))):id;
   const creating=!findCandidatById(realId)&&!findCandidatById(id);
   let c=findCandidatById(realId)||findCandidatById(id);
-  if(!c){c={id:realId,statut:"nouvelle",createdAt:today()};db.candidats.push(c)}
-  Object.assign(c,data,{id:realId});delete c.isNew;
-  if(data.reserveDirect==="1"||c.reserveDirect){c.reserveDirect=true;c.statut="reserve";c.fichePositionValidee=true;c.fichePositionValideeAt=c.fichePositionValideeAt||new Date().toISOString();c.fichePositionValideeBy=c.fichePositionValideeBy||session?.username||"system";}
-  else if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
+  const draft={...(c||{id:realId,statut:"nouvelle",createdAt:today()}),...data,id:realId};
+  delete draft.isNew;
+  if((data.reserveDirect==="1"||draft.reserveDirect)&&candidatAllSectionsValid(draft)){
+    draft.reserveDirect=true;
+    draft.statut="reserve";
+    draft.fichePositionValidee=true;
+    draft.fichePositionValideeAt=draft.fichePositionValideeAt||new Date().toISOString();
+    draft.fichePositionValideeBy=draft.fichePositionValideeBy||session?.username||"system";
+  }
+  else if(!candidatIsArchived(draft)){
+    draft.statut="nouvelle";
+    draft.fichePositionValidee=false;
+    delete draft.fichePositionValideeAt;
+    delete draft.fichePositionValideeBy;
+  }
   try{
-    await persistCandidateToPostgres(c,{allowCreate:creating});
+    await persistCandidateToPostgres(draft,{allowCreate:creating});
+    if(c)Object.assign(c,draft);else{c=draft;if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c)}
     stashCandidatForRoute(c,[id,realId,data.id]);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
   }catch(e){
@@ -3648,16 +3694,17 @@ async function confirmArchiveCandidat(id){
   if(!c){toast("Enregistrez d'abord le candidat avant de l'archiver","error");return}
   if(!motif){toast("Choisissez un motif d'archivage","error");return}
   const source=candidatIsReserve(c)||data.statut==="reserve"||data.fichePositionValidee===true?"reserve":"nouvelle";
-  Object.assign(c,data);
-  c.statut="archive";
-  c.archiveSource=source;
-  c.motifArchive=motif;
-  c.commentaireArchive=commentaire;
-  c.archivedAt=new Date().toISOString();
-  c.archivedBy=session?.username||session?.nom||"";
-  delete c.isNew;
+  const draft={...c,...data};
+  draft.statut="archive";
+  draft.archiveSource=source;
+  draft.motifArchive=motif;
+  draft.commentaireArchive=commentaire;
+  draft.archivedAt=new Date().toISOString();
+  draft.archivedBy=session?.username||session?.nom||"";
+  delete draft.isNew;
   try{
-    await persistCandidateToPostgres(c);
+    await persistCandidateToPostgres(draft);
+    Object.assign(c,draft);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     closeModal();
     toast("Candidat archivé dans PostgreSQL","success");
@@ -3684,20 +3731,22 @@ async function activerCandidat(id){
   const c=findCandidatById(id);
   if(!c){toast("Candidat introuvable","error");return}
   if(!confirm("Activer ce candidat et l'envoyer vers Candidats en réserve ?"))return;
-  c.statut="reserve";
-  c.fichePositionValidee=true;
-  c.fichePositionValideeAt=c.fichePositionValideeAt||new Date().toISOString();
-  c.fichePositionValideeBy=c.fichePositionValideeBy||session?.username||"system";
-  c.reactivatedAt=new Date().toISOString();
-  c.reactivatedBy=session?.username||session?.nom||"";
-  delete c.motifArchive;
-  delete c.commentaireArchive;
-  delete c.archivedAt;
-  delete c.archivedBy;
-  delete c.archiveSource;
-  delete c.isNew;
+  const draft={...c};
+  draft.statut="reserve";
+  draft.fichePositionValidee=true;
+  draft.fichePositionValideeAt=draft.fichePositionValideeAt||new Date().toISOString();
+  draft.fichePositionValideeBy=draft.fichePositionValideeBy||session?.username||"system";
+  draft.reactivatedAt=new Date().toISOString();
+  draft.reactivatedBy=session?.username||session?.nom||"";
+  delete draft.motifArchive;
+  delete draft.commentaireArchive;
+  delete draft.archivedAt;
+  delete draft.archivedBy;
+  delete draft.archiveSource;
+  delete draft.isNew;
   try{
-    await persistCandidateToPostgres(c);
+    await persistCandidateToPostgres(draft);
+    Object.assign(c,draft);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast("Candidat activé et envoyé en réserve","success");
     navigate("reserve");
@@ -3745,26 +3794,33 @@ async function validateCandidatSectionAction(id,key){
   if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!validateCandidatSection(key,data)){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!candidateHasMinimumData(data)){toast(candidateMinimumDataMessage(data),"error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
-  if(!c){c=validationTarget;db.candidats.push(c)}
-  Object.assign(c,data,{id:realId});delete c.isNew;
-  const locks=candidatSectionValidations(c);
-  locks[key]={by:session?session.username:"system",at:new Date().toISOString()};
-  if(data.reserveDirect==="1"||c.reserveDirect){
-    c.reserveDirect=true;
-    c.statut="reserve";
-    c.fichePositionValidee=true;
-    c.fichePositionValideeAt=c.fichePositionValideeAt||new Date().toISOString();
-    c.fichePositionValideeBy=c.fichePositionValideeBy||session?.username||"system";
+  const draft={...validationTarget,...data,id:realId};
+  delete draft.isNew;
+  let validation;
+  try{
+    validation=await SGDI.rh.validateCandidateSection(candidateApiPayload(draft),key,sqlBackendId(draft.backendId));
+  }catch(e){
+    toast("Validation backend refusée : "+(e.message||e),"error");
+    candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return
+  }
+  draft.sectionValidations=validation.data?.sectionValidations||draft.sectionValidations||{};
+  if((data.reserveDirect==="1"||draft.reserveDirect)&&candidatAllSectionsValid(draft)){
+    draft.reserveDirect=true;
+    draft.statut="reserve";
+    draft.fichePositionValidee=true;
+    draft.fichePositionValideeAt=draft.fichePositionValideeAt||new Date().toISOString();
+    draft.fichePositionValideeBy=draft.fichePositionValideeBy||session?.username||"system";
   }else{
-    c.statut="nouvelle";
-    c.fichePositionValidee=false;
-    delete c.fichePositionValideeAt;
-    delete c.fichePositionValideeBy;
+    draft.statut="nouvelle";
+    draft.fichePositionValidee=false;
+    delete draft.fichePositionValideeAt;
+    delete draft.fichePositionValideeBy;
   }
   const next=CANDIDAT_SECTIONS[candidatSectionIndex(key)+1];
   if(next)sessionStorage.setItem("candidatFocusSection",next.key);
   try{
-    await persistCandidateToPostgres(c,{allowCreate:creating});
+    await persistCandidateToPostgres(draft,{allowCreate:creating});
+    if(c)Object.assign(c,draft);else{c=draft;if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c)}
     stashCandidatForRoute(c,[id,realId,data.id]);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
@@ -3784,10 +3840,12 @@ function unlockCandidatSection(id,key){
 async function validerFichePosition(id){
   const c=await saveCandidat(id,false,{requireIdentification:true});if(!c)return;
   if(!candidatAllSectionsValid(c)){toast("Impossible de valider la fiche : toutes les sections doivent être validées","error");renderView();return}
-  c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
-  c.statut="reserve";c.fichePositionValidee=true;c.fichePositionValideeAt=new Date().toISOString();c.fichePositionValideeBy=session?session.username:"system";
+  const draft={...c};
+  draft.societe=draft.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
+  draft.statut="reserve";draft.fichePositionValidee=true;draft.fichePositionValideeAt=new Date().toISOString();draft.fichePositionValideeBy=session?session.username:"system";
   try{
-    await persistCandidateToPostgres(c);
+    await persistCandidateToPostgres(draft);
+    Object.assign(c,draft);
     if(typeof sgdiBackendSave==="function")sgdiBackendSave();
     toast("✓ Fiche de position validée — candidat en réserve","success");navigate("reserve");
   }catch(e){toast("Validation fiche PostgreSQL refusée : "+(e.message||e),"error")}
