@@ -563,6 +563,9 @@
   .kpi .kpi-sub{font-size:11px;color:var(--text-mute);margin-top:4px}
   .kpi.kpi-clickable{cursor:pointer}
   .kpi.kpi-clickable:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+  .card.kpi-clickable .label{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:#64748b;font-weight:800;margin:0}
+  .card.kpi-clickable .value{font-size:28px;line-height:1.1;font-weight:900;color:#0f172a;margin-top:6px}
+  .card.kpi-clickable .sub{font-size:11px;color:#64748b;margin-top:4px}
 
   /* ----- LOCKED FORM (presence sheet) ----- */
   @keyframes fpqPulseRing{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.45),var(--shadow-lg)}50%{box-shadow:0 0 0 12px rgba(220,38,38,0),var(--shadow-lg)}}

@@ -6911,37 +6911,37 @@ function renderMatSimpleDashboard(view){
 
   const header=matSimpleHeader("dashboard");
   const titleBar=`<div class="dash-toolbar mb-4"><div><h1 class="text-2xl font-black uppercase mb-2">MATÉRIEL - TABLEAU DE BORD</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Pilotage des articles, stocks, fournisseurs, magasins, dotations et reversements.</p></div>
-    <div class="mat-actions">
+    <div class="flex gap-2 flex-wrap">
       <button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">Entrée stock</button>
       <button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">Sortie stock</button>
       <button class="btn btn-warn text-sm" onclick="navigate('materiel/article-nouveau')">Nouvel article</button>
       <button class="btn btn-secondary text-sm" onclick="navigate('materiel/magasin-nouveau')">Magasin</button>
       <button class="btn btn-secondary text-sm" onclick="navigate('materiel/fournisseur-nouveau')">Fournisseur</button>
     </div></div>`;
-  const kpi=`<div class="grid grid-4 mb-4">
-    <button type="button" class="mat-kpi" onclick="navigate('materiel/articles')" style="border-left-color:#043970"><div class="label">Articles catalogue</div><div class="value">${arts.length}</div><div class="sub">${qty(totalQty)} unités suivies</div></button>
-    <button type="button" class="mat-kpi" onclick="navigate('materiel/magasins')" style="border-left-color:#7c3aed"><div class="label">Magasins</div><div class="value">${mags.length}</div><div class="sub">lieux de stockage</div></button>
-    <button type="button" class="mat-kpi" onclick="navigate('materiel/fournisseurs')" style="border-left-color:#0284c7"><div class="label">Fournisseurs</div><div class="value">${fours.length}</div><div class="sub">partenaires achats</div></button>
-    <button type="button" class="mat-kpi" onclick="navigate('materiel/mouvements')" style="border-left-color:#475569"><div class="label">Mouvements 30j</div><div class="value">${mvts30.length}</div><div class="sub">+${qty(entreesMois)} / -${qty(sortiesMois)}</div></button>
-    <button type="button" class="mat-kpi" onclick="sessionStorage.setItem('matFiltEtat','${nbRupture>0?"rupture":"alerte"}');navigate('materiel/articles')" style="border-left-color:${nbRupture>0?"#dc2626":(nbAlertes>0?"#c2410c":"#16a34a")}"><div class="label">Alertes stock</div><div class="value" style="color:${nbRupture>0?"#dc2626":(nbAlertes>0?"#b45309":"#16a34a")}">${nbRupture+nbAlertes}</div><div class="sub">${nbRupture} rupture · ${nbAlertes} stock bas</div></button>
+  const kpi=`<div class="grid grid-5 mb-4">
+    <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/articles')" style="text-decoration:none;color:inherit"><div class="label">Articles catalogue</div><div class="value">${arts.length}</div><div class="sub">${qty(totalQty)} unités suivies</div></button>
+    <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/magasins')" style="text-decoration:none;color:inherit"><div class="label">Magasins</div><div class="value">${mags.length}</div><div class="sub">lieux de stockage</div></button>
+    <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/fournisseurs')" style="text-decoration:none;color:inherit"><div class="label">Fournisseurs</div><div class="value">${fours.length}</div><div class="sub">partenaires achats</div></button>
+    <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/mouvements')" style="text-decoration:none;color:inherit"><div class="label">Mouvements 30j</div><div class="value">${mvts30.length}</div><div class="sub">+${qty(entreesMois)} / -${qty(sortiesMois)}</div></button>
+    <button type="button" class="card p-4 text-left kpi-clickable" onclick="sessionStorage.setItem('matFiltEtat','${nbRupture>0?"rupture":"alerte"}');navigate('materiel/articles')" style="text-decoration:none;color:inherit"><div class="label">Alertes stock</div><div class="value" style="color:${nbRupture>0?"#dc2626":(nbAlertes>0?"#b45309":"#16a34a")}">${nbRupture+nbAlertes}</div><div class="sub">${nbRupture} rupture · ${nbAlertes} stock bas</div></button>
   </div>`;
-  const mvtCard=`<div class="mat-panel"><div class="mat-panel-title"><span>Flux des 30 derniers jours</span><a href="#/materiel/mouvements" class="text-xs text-amber-600">Voir mouvements</a></div>
+  const mvtCard=`<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">Flux des 30 derniers jours</h3><a href="#/materiel/mouvements" class="text-xs text-amber-600">Voir mouvements</a></div>
     <div class="grid grid-cols-3 gap-3 text-center">
       <div><div class="text-xs uppercase font-bold text-emerald-700">Entrées</div><div class="text-2xl font-black text-emerald-600">+${qty(entreesMois)}</div><div class="text-[11px] text-slate-400">${money(valEntreesMois)}</div></div>
       <div><div class="text-xs uppercase font-bold text-red-700">Sorties</div><div class="text-2xl font-black text-red-600">-${qty(sortiesMois)}</div><div class="text-[11px] text-slate-400">unités sorties</div></div>
       <div><div class="text-xs uppercase font-bold text-slate-500">Opérations</div><div class="text-2xl font-black">${mvts30.length}</div><div class="text-[11px] text-slate-400">tracées</div></div>
     </div></div>`;
-  const sideBySide=`<div class="mat-panel-grid">
-    <div class="mat-panel">
-      <div class="mat-panel-title"><span>Magasins les plus chargés</span><a href="#/materiel/magasins" class="text-xs text-amber-600">Tous les magasins</a></div>
-      ${topMags.length===0?`<div class="text-sm text-slate-400 italic py-4 text-center">Aucun magasin créé.</div>`:topMags.map(t=>`<div class="mat-row cursor-pointer" onclick="navigate('materiel/magasin/${t.m.id}')">
+  const sideBySide=`<div class="grid grid-2 gap-4 mb-4">
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">Magasins les plus chargés</h3><a href="#/materiel/magasins" class="text-xs text-amber-600">Tous les magasins</a></div>
+      ${topMags.length===0?`<div class="text-sm text-slate-400 italic py-4 text-center">Aucun magasin créé.</div>`:topMags.map(t=>`<div class="flex items-center justify-between gap-3 py-2 border-b cursor-pointer hover:bg-slate-50" onclick="navigate('materiel/magasin/${t.m.id}')">
         <div class="flex items-center gap-2"><div><div class="font-bold text-sm">${escapeHTML(t.m.nom)}</div><div class="text-[10px] text-slate-400">${t.nb} article(s)${t.alertes?` · <span class="text-red-600">${t.alertes} alerte(s)</span>`:""}</div></div></div>
         <div class="text-right"><div class="font-bold text-emerald-700 text-sm">${qty(t.qty)}</div><div class="text-[10px] text-slate-400">unités</div></div>
       </div>`).join("")}
     </div>
-    <div class="mat-panel">
-      <div class="mat-panel-title"><span>Fournisseurs actifs</span><a href="#/materiel/fournisseurs" class="text-xs text-amber-600">Tous les fournisseurs</a></div>
-      ${topFourns.length===0?`<div class="text-sm text-slate-400 italic py-4 text-center">Aucun achat fournisseur identifié.</div>`:topFourns.map(t=>`<div class="mat-row cursor-pointer" onclick="navigate('materiel/fournisseur/${t.id}')">
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">Fournisseurs actifs</h3><a href="#/materiel/fournisseurs" class="text-xs text-amber-600">Tous les fournisseurs</a></div>
+      ${topFourns.length===0?`<div class="text-sm text-slate-400 italic py-4 text-center">Aucun achat fournisseur identifié.</div>`:topFourns.map(t=>`<div class="flex items-center justify-between gap-3 py-2 border-b cursor-pointer hover:bg-slate-50" onclick="navigate('materiel/fournisseur/${t.id}')">
         <div><div class="font-bold text-sm">${escapeHTML(t.name)}</div><div class="text-[10px] text-slate-400">${t.nb} entrée(s) sur 90 jours</div></div>
         <div class="font-bold text-emerald-700 text-sm">${money(t.total)}</div>
       </div>`).join("")}
@@ -6954,13 +6954,13 @@ function renderMatSimpleDashboard(view){
       ${arts.filter(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):0;const s=parseFloat(a.seuilAlerte)||0;return q>0&&s&&q<=s}).slice(0,5).map(a=>{const q=stockGetActuel(a.id);return`<div class="flex justify-between py-1.5 border-b border-amber-100"><a class="hover:underline font-semibold text-amber-700" href="#/materiel/article/${a.id}">${escapeHTML(a.designation)}</a><span class="text-xs text-amber-600 font-bold">${qty(q)} ≤ ${qty(a.seuilAlerte)}</span></div>`}).join("")}
     </div>
   </div>`:"";
-  view.innerHTML=`<div class="mat-shell">${titleBar}${header}${kpi}${alertsCard}<div class="mat-panel-grid">${mvtCard}<div class="mat-panel"><div class="mat-panel-title"><span>Actions de contrôle</span></div>
+  view.innerHTML=`${titleBar}${header}${kpi}${alertsCard}<div class="grid grid-2 gap-4 mb-4">${mvtCard}<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">Actions de contrôle</h3></div>
     <div class="grid grid-cols-2 gap-2">
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/inventaire')">Inventaire</button>
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/dotation')">Dotations</button>
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/reversement')">Reversements</button>
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/articles')">Catalogue</button>
-    </div></div></div>${sideBySide}</div>`;
+    </div></div></div>${sideBySide}`;
 }
 
 function renderMatSimpleDotation(view){
