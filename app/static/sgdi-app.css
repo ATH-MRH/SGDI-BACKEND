@@ -334,11 +334,13 @@
   .module-table-clean th{font-size:11px!important;text-transform:uppercase!important;letter-spacing:.04em!important}
   .module-view .btn{border-radius:8px!important;font-weight:850!important;letter-spacing:0!important}
   .module-view .grid.grid-cols-2,.module-view .grid.grid-cols-3,.module-view .grid.grid-cols-4,.module-view .grid.grid-cols-5{gap:12px!important}
+  .module-view .text-6xl:empty,.module-view .text-5xl:empty,.module-view .text-4xl:empty,[data-icon-only]:empty{display:none!important}
+  .module-view .mat-actions .btn,.module-view td .btn{min-height:32px;padding:7px 10px;font-size:12px}
   .mat-hero{background:#fff!important;color:#0f172a!important;border:1px solid #d8e0ea!important;box-shadow:0 8px 22px rgba(15,23,42,.055)!important}
   .mat-hero h1{color:#0f172a!important;font-size:24px!important}
   .mat-hero p{color:#64748b!important}
   .mat-actions .btn{box-shadow:none!important}
-  .mat-kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important}
+  .mat-kpi-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))!important;gap:12px!important}
   .mat-kpi{background:#fff!important;border-color:#d8e0ea!important;box-shadow:0 8px 22px rgba(15,23,42,.045)!important}
   .mat-panel{box-shadow:0 8px 22px rgba(15,23,42,.045)!important}
 

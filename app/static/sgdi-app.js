@@ -2624,6 +2624,9 @@ function normalizeCentralPage(view){
   });
   view.querySelectorAll("h2,h3").forEach(h=>{h.textContent=(h.textContent||"").replace(/\s+/g," ").trim()});
   view.querySelectorAll(".btn").forEach(btn=>{btn.innerHTML=(btn.innerHTML||"").replace(iconPattern,"").replace(/\s{2,}/g," ").trim()});
+  view.querySelectorAll(".text-6xl,.text-5xl,.text-4xl,[data-icon-only]").forEach(el=>{
+    if(!(el.textContent||"").trim()&&!el.querySelector("img,svg,input,select,button,a"))el.remove();
+  });
   view.querySelectorAll("table").forEach(t=>t.classList.add("module-table-clean"));
   view.querySelectorAll(".card").forEach(c=>c.classList.add("module-card-clean"));
 }
@@ -6933,7 +6936,7 @@ function renderMatSimpleDashboard(view){
     <div class="mat-panel">
       <div class="mat-panel-title"><span>Magasins les plus chargés</span><a href="#/materiel/magasins" class="text-xs text-amber-600">Tous les magasins</a></div>
       ${topMags.length===0?`<div class="text-sm text-slate-400 italic py-4 text-center">Aucun magasin créé.</div>`:topMags.map(t=>`<div class="mat-row cursor-pointer" onclick="navigate('materiel/magasin/${t.m.id}')">
-        <div class="flex items-center gap-2"><span style="font-size:18px">${t.m.icon||"🏬"}</span><div><div class="font-bold text-sm">${escapeHTML(t.m.nom)}</div><div class="text-[10px] text-slate-400">${t.nb} article(s)${t.alertes?` · <span class="text-red-600">⚠ ${t.alertes}</span>`:""}</div></div></div>
+        <div class="flex items-center gap-2"><div><div class="font-bold text-sm">${escapeHTML(t.m.nom)}</div><div class="text-[10px] text-slate-400">${t.nb} article(s)${t.alertes?` · <span class="text-red-600">${t.alertes} alerte(s)</span>`:""}</div></div></div>
         <div class="text-right"><div class="font-bold text-emerald-700 text-sm">${qty(t.qty)}</div><div class="text-[10px] text-slate-400">unités</div></div>
       </div>`).join("")}
     </div>
@@ -8112,9 +8115,10 @@ function stockSummaryKPI(){
 }
 function stockMvtTypeLabel(t){return{entree:"Entrée",retour:"Retour",sortie:"Sortie",perte:"Perte",casse:"Casse",ajustement:"Ajustement",nouvelle_dotation:"Nouvelle dotation",renouvellement_dotation:"Renouvellement de dotation",dotation_pret:"Dotation à titre de prêt (mission)",reforme:"Réformer"}[t]||t}
 function stockMvtTypeColor(t){return{entree:"#16a34a",retour:"#043970",sortie:"#dc2626",perte:"#043970",casse:"#7c2d12",ajustement:"#7c3aed",nouvelle_dotation:"#dc2626",renouvellement_dotation:"#043970",dotation_pret:"#7c3aed",reforme:"#475569"}[t]||"#64748b"}
-function stockMvtTypeIcon(t){return{entree:"📥",retour:"↩",sortie:"📤",perte:"⚠",casse:"💥",ajustement:"⚖",nouvelle_dotation:"📤",renouvellement_dotation:"♻",dotation_pret:"🕒",reforme:"🗑"}[t]||"🔄"}
+function stockMvtTypeIcon(t){return ""}
 
 function renderStockProMain(view,tab){
+  return renderMatSimpleArticles(view);
   const soc=stockGetSocFilter();
   tab=tab||"catalogue";
   const kpi=stockSummaryKPI();
