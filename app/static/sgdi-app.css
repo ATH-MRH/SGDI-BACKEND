@@ -100,7 +100,7 @@
   }
   .nav-group{display:flex!important;justify-content:flex-start!important;user-select:none!important}
   .nav-group>span:first-child{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important;width:100%!important}
-  #sidebar-nav>.nav-link+ .nav-link,#sidebar-nav>.nav-link+ .nav-group,#sidebar-nav>.nav-group+ .nav-link,#sidebar-nav>.nav-group+ .nav-group,#sidebar-nav>.sub-link+ .sub-link{margin-top:16px!important}
+  #sidebar-nav>.nav-link+ .nav-link,#sidebar-nav>.nav-link+ .nav-group,#sidebar-nav>.nav-group+ .nav-link,#sidebar-nav>.nav-group+ .nav-group,#sidebar-nav>.sub-link+ .sub-link{margin-top:38px!important}
   #sidebar-nav>.nav-link:first-child,#sidebar-nav>.nav-group:first-child,#sidebar-nav>.sub-link:first-child{margin-top:0!important}
   .nav-label{display:block!important;min-width:0!important;max-width:100%!important;padding:0!important;margin:0!important;overflow:visible!important;text-overflow:clip!important;white-space:normal!important;word-break:normal!important;overflow-wrap:normal!important;color:inherit!important;text-align:left!important;line-height:1.2!important}
   .sidebar .ico,.sidebar .arrow,.sidebar .sub-link>span:first-child,.nav-link .ico,.nav-group .ico{display:none!important}
@@ -117,9 +117,10 @@
     display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:0 6px!important;line-height:1!important;box-shadow:none!important;
   }
   .gestion-badge{position:absolute;top:-8px;right:-8px;background:#ffd16a;color:#01112f;font-size:10px!important;font-weight:950;min-width:23px;height:23px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0 6px;line-height:1;border:2px solid #01112f;box-shadow:none}
-  .sidebar-back{margin-top:auto!important;margin-bottom:12px!important;border-top:1px solid #183765!important;padding:10px 12px 0!important}
+  .sidebar-back{margin-top:0!important;margin-bottom:10px!important;border-top:1px solid #183765!important;padding:10px 12px 0!important}
   .sidebar-back .btn{width:100%!important;justify-content:center!important;background:transparent!important;border:1px solid #2c4a78!important;color:#fff!important;border-radius:8px!important;font-size:12px!important;font-weight:850!important;box-shadow:none!important}
   .sidebar-back .btn:hover{background:rgba(255,255,255,.07)!important;color:#ffd16a!important}
+  #sidebar-back-slot:empty{display:none!important}
   .sidebar-user{background:#01112f!important;border-top:1px solid #183765!important;color:#fff!important}
   .sidebar-user .avatar{background:#f1f5f9!important;color:#01112f!important;border:0!important;font-weight:950!important}
   .sidebar-user-name{color:#fff!important;font-size:12px!important;font-weight:850!important;line-height:1.1!important}
