@@ -2016,7 +2016,7 @@ function renderSidebar(){
     const mod=session.transverse;
     const transFlat={
       facturation:{label:"FINANCES",color:"#043970",children:[
-        {label:"TABLEAU DE BORD FINANCES",icon:"📊",route:"facturation/dashboard"},
+        {label:"TABLEAU DE BORD",icon:"📊",route:"facturation/dashboard"},
         {label:"Devis",icon:"📝",route:"facturation/devis",count:(db.devis||[]).length},
         {label:"Factures",icon:"🧾",route:"facturation/factures",count:(db.factures||[]).length},
         {label:"Paiements",icon:"💳",route:"facturation/paiements"},
@@ -2027,10 +2027,9 @@ function renderSidebar(){
         {label:"Catégories",icon:"🏷",route:"facturation/categories"},
         {label:"Thèmes",icon:"🎯",route:"facturation/themes"},
         {label:"Structures",icon:"🏛",route:"facturation/structures"},
-        {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
       ]},
       commercial:{label:"COMMERCIAL",color:"#8b5cf6",children:[
-        {label:"TABLEAU DE BORD COMMERCIAL",icon:"📊",route:"commercial/dashboard"},
+        {label:"TABLEAU DE BORD",icon:"📊",route:"commercial/dashboard"},
         {label:"Prospects",icon:"🎯",route:"commercial/prospects",count:(db.prospects||[]).length},
         {label:"Clients",icon:"🤝",route:"commercial/clients",count:(db.clients||[]).length},
         {label:"Opportunités",icon:"💼",route:"commercial/opportunites",count:(db.opportunites||[]).filter(o=>!["gagnee","perdue"].includes(o.etape)).length},
@@ -2038,18 +2037,16 @@ function renderSidebar(){
         {label:"Catalogue prestations",icon:"📋",route:"commercial/catalogue"},
         {label:"Tarification",icon:"💲",route:"commercial/tarifs"},
         {label:"Statistiques",icon:"📈",route:"commercial/stats"},
-        {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
       ]},
       materiel:{label:"MATÉRIEL & ÉQUIPEMENT",color:"#043970",children:[
-        {label:"TABLEAU DE BORD MATERIEL",icon:"🏠",route:"materiel/dashboard"},
+        {label:"TABLEAU DE BORD",icon:"🏠",route:"materiel/dashboard"},
         {label:"Articles",icon:"📦",route:"materiel/articles",count:(db.stockArticles||[]).length},
-        {label:"MAGASIN",icon:"🏬",route:"materiel/magasins",count:(db.magasins||[]).length,title:true},
+        {label:"MAGASINS",icon:"🏬",route:"materiel/magasins",count:(db.magasins||[]).length},
         {label:"Fournisseurs",icon:"🤝",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
-        {label:"Employé en instance de dotation",icon:"👤",route:"materiel/dotation",count:_dotationCount},
-        {label:"Équipement / matériel en instance de reversement",icon:"↩",route:"materiel/reversement",count:_reversementCount},
-        {label:"Fiche de position",icon:"🪪",route:"materiel/fiches",count:(db.agents||[]).length},
-        {label:"Site",icon:"📍",route:"sites/actifs",count:(db.sites||[]).filter(s=>s.actif!==false).length},
-        {label:"Main courante - autres",icon:"📌",route:"incidents/autres",count:(db.incidents||[]).filter(i=>i.type==="Autre"&&i.statut!=="clos").length}
+        {label:"Dotations en attente",icon:"👤",route:"materiel/dotation",count:_dotationCount},
+        {label:"Reversements en attente",icon:"↩",route:"materiel/reversement",count:_reversementCount},
+        {label:"Fiches de position",icon:"🪪",route:"materiel/fiches",count:(db.agents||[]).length},
+        {label:"Sites",icon:"📍",route:"sites/actifs",count:(db.sites||[]).filter(s=>s.actif!==false).length},
       ]},
       pointage:{label:"POINTAGE",color:"#043970",children:[
         {label:"TABLEAU DE BORD POINTAGE",icon:"📊",route:"pointage"},
@@ -2175,7 +2172,7 @@ function renderSidebar(){
     }
     const g=transFlat[mod];
     const head="";
-    const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"?`<span class="nav-count">${c.count}</span>`:"";const cls=c.title?"font-black uppercase tracking-wide":(c.childOfTitle?"pl-12 text-xs":"");return`<div class="sub-link ${a} ${cls}" onclick="navigate('${c.route}')"><span class="nav-label">${c.label}</span>${badge}</div>`}).join("");
+    const items=g.children.map(c=>{const a=path===c.route||path.startsWith(c.route+"/")?"active":"";const badge=typeof c.count==="number"&&c.count>0?`<span class="nav-count">${c.count}</span>`:"";return`<div class="nav-link ${a}" onclick="navigate('${c.route}')"><span class="nav-label">${escapeHTML(c.label)}</span>${badge}</div>`}).join("");
     const back=`<div class="sidebar-back"><button class="btn btn-secondary w-full justify-center text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button></div>`;
     document.getElementById("sidebar-nav").innerHTML=head+items+back;
     setTimeout(()=>applyLanguagePreference(document.getElementById("sidebar-nav")),0);scheduleSidebarStatsRefresh();
@@ -2216,10 +2213,10 @@ function renderSidebar(){
     {type:"group",label:"MATÉRIEL & ÉQUIPEMENT",children:[
       {label:"Tableau de bord",icon:"🏠",route:"materiel/dashboard"},
       {label:"Articles",icon:"📦",route:"materiel/articles"},
-      {label:"MAGASIN",icon:"🏬",route:"materiel/magasins",title:true},
+      {label:"MAGASINS",icon:"🏬",route:"materiel/magasins",title:true},
       {label:"Fournisseurs",icon:"🤝",route:"materiel/fournisseurs"},
-      {label:"Employé en instance de dotation",icon:"👤",route:"materiel/dotation",count:_dotationCount},
-      {label:"Équipement / matériel en instance de reversement",icon:"↩",route:"materiel/reversement",count:_reversementCount}
+      {label:"Dotations en attente",icon:"👤",route:"materiel/dotation",count:_dotationCount},
+      {label:"Reversements en attente",icon:"↩",route:"materiel/reversement",count:_reversementCount}
     ]},
     {type:"link",label:"Paie",icon:"💶",route:"paie"},
     {type:"link",label:"Rapports",icon:"📈",route:"rapports"}
