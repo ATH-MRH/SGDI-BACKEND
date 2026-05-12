@@ -3502,10 +3502,10 @@ function renderCandidatEtape1(c){
 	        <div class="candidate-id-name-fields">
 	          <div><label class="label">Nom *</label><input class="input" name="nom" value="${escapeHTML(c.nom)}" /></div>
 	          <div><label class="label">Prénom *</label><input class="input" name="prenom" value="${escapeHTML(c.prenom)}" /></div>
+	          <div><label class="label">Date de naissance *</label><input class="input" type="date" name="dateNaissance" max="${candidatBirthMaxDate()}" value="${c.dateNaissance||""}"  aria-describedby="date-naissance-alert" title="Le candidat doit avoir 20 ans révolus à la date d'enregistrement" oninput="validateCandidatBirthField(this)" onchange="validateCandidatBirthField(this)"/><div id="date-naissance-alert" class="text-[11px] text-slate-500 mt-1">Âge minimum requis : 20 ans révolus à la date d'enregistrement.</div></div>
+	          <div><label class="label">Lieu de naissance *</label><input class="input" name="lieuNaissance" value="${escapeHTML(c.lieuNaissance)}" /></div>
 	        </div>
 	      </div>
-      <div class="col-span-3"><label class="label">Date de naissance *</label><input class="input" type="date" name="dateNaissance" max="${candidatBirthMaxDate()}" value="${c.dateNaissance||""}"  aria-describedby="date-naissance-alert" title="Le candidat doit avoir 20 ans révolus à la date d'enregistrement" oninput="validateCandidatBirthField(this)" onchange="validateCandidatBirthField(this)"/><div id="date-naissance-alert" class="text-[11px] text-slate-500 mt-1">Âge minimum requis : 20 ans révolus à la date d'enregistrement.</div></div>
-      <div class="col-span-3"><label class="label">Lieu de naissance *</label><input class="input" name="lieuNaissance" value="${escapeHTML(c.lieuNaissance)}" /></div>
       <div class="col-span-3"><label class="label">Nom du père *</label><input class="input" name="nomPere" value="${escapeHTML(c.nomPere||"")}" /></div>
       <div class="col-span-3"><label class="label">Nom de la mère *</label><input class="input" name="nomMere" value="${escapeHTML(c.nomMere||"")}" /></div>
       <div class="col-span-2"><label class="label">Sexe *</label><select class="select" name="sexe" ><option ${c.sexe==="M"?"selected":""}>M</option><option ${c.sexe==="F"?"selected":""}>F</option></select></div>
