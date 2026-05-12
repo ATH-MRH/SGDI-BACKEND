@@ -601,23 +601,23 @@
   .candidate-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-xs);min-width:0}
   .candidate-panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:900;margin-bottom:10px}
   .candidate-panel p{font-size:12px;line-height:1.45;color:var(--text-soft);margin:10px 0 0}
-  .candidate-progress-strip{position:sticky;top:0;z-index:16;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:var(--shadow-xs)}
-  .candidate-progress-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:10px}
-  .candidate-progress-top .candidate-panel-label{margin-bottom:4px}
-  .candidate-progress-top p{font-size:12px;line-height:1.35;color:var(--text-soft);margin:0}
+  .candidate-progress-strip{position:sticky;top:0;z-index:16;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px;box-shadow:var(--shadow-xs)}
+  .candidate-progress-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px}
+  .candidate-progress-top .candidate-panel-label{margin-bottom:2px;font-size:9.5px}
+  .candidate-progress-top p{font-size:10.5px;line-height:1.25;color:var(--text-soft);margin:0}
   .candidate-progress-score{display:flex;align-items:baseline;gap:8px;white-space:nowrap;color:var(--text)}
-  .candidate-progress-score strong{font-size:24px;line-height:1;font-weight:900}
-  .candidate-progress-score span{font-size:13px;font-weight:900;color:#047857}
+  .candidate-progress-score strong{font-size:18px;line-height:1;font-weight:900}
+  .candidate-progress-score span{font-size:11px;font-weight:900;color:#047857}
   .candidate-progress-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;color:var(--text)}
   .candidate-progress-row strong{font-size:24px;line-height:1;font-weight:900}
   .candidate-progress-row span{font-size:13px;font-weight:800;color:#047857}
-  .candidate-progress-track{height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:10px}
+  .candidate-progress-track{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px}
   .candidate-progress-bar{height:100%;background:#047857;border-radius:999px;transition:width .2s ease}
   .candidate-section-list{display:flex;flex-direction:column;gap:6px}
-  .candidate-section-list-horizontal{display:grid;grid-template-columns:repeat(8,minmax(112px,1fr));gap:7px;margin-top:11px;overflow-x:auto;padding-bottom:2px}
-  .candidate-section-link{width:100%;min-height:42px;display:grid;grid-template-columns:26px minmax(0,1fr);align-items:center;gap:9px;text-align:left;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 9px;color:#475569;cursor:pointer}
-  .candidate-section-link span{width:26px;height:26px;border-radius:999px;background:#e2e8f0;color:#475569;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:900}
-  .candidate-section-link strong{font-size:12px;line-height:1.25;font-weight:800;white-space:normal}
+  .candidate-section-list-horizontal{display:grid;grid-template-columns:repeat(8,minmax(96px,1fr));gap:5px;margin-top:7px;overflow-x:auto;padding-bottom:1px}
+  .candidate-section-link{width:100%;min-height:32px;display:grid;grid-template-columns:21px minmax(0,1fr);align-items:center;gap:6px;text-align:left;border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px 7px;color:#475569;cursor:pointer}
+  .candidate-section-link span{width:21px;height:21px;border-radius:999px;background:#e2e8f0;color:#475569;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:900}
+  .candidate-section-link strong{font-size:10.5px;line-height:1.15;font-weight:800;white-space:normal}
   .candidate-section-link.active{border-color:#f59e0b;background:#fffbeb;color:#92400e}
   .candidate-section-link.active span{background:#f59e0b;color:#fff}
   .candidate-section-link.done{border-color:#86efac;background:#f0fdf4;color:#166534}
