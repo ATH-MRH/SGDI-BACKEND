@@ -1629,37 +1629,39 @@ function render(){
   const headerTitle=isTrans?transLabels[session.transverse]:session.societe;
   const headerSub=isTrans?(session.societe?`Société active : ${session.societe}`:transDescs[session.transverse]):"Société active";
   const headerBtn=isTrans?`<button class="btn btn-secondary text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button>`:`<button class="btn btn-secondary text-xs" onclick="changeSociete()">🔄 Changer de société</button>`;
-  app.innerHTML=`<div class="flex h-screen">
-    <aside class="sidebar w-72 flex flex-col shrink-0">
-      <div class="px-5 py-6 border-b" style="border-color:#343a3b!important;text-align:left!important;background:#171c1d!important">
-        <div class="sidebar-module-title font-black tracking-tight" data-no-lang="1" style="line-height:1;color:#fff!important;text-align:left!important">SGDI</div>
-        <div class="sidebar-console-label" data-no-lang="1">CONSOLE</div>
-      </div>
-      <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
-      <div class="sidebar-user px-4 py-3 text-xs">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="avatar" style="width:28px;height:28px;font-size:11px">${(session.nom||"?").slice(0,1)}</div>
-          <div class="leading-tight"><div class="sidebar-user-name">${escapeHTML(session.nom)}</div><div class="sidebar-user-role">${session.role}</div></div>
+  app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col">
+    <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
+      <div class="sgdi-topbar-left flex items-center gap-3 shrink-0">
+        <button type="button" class="btn btn-ghost text-xs" onclick="goBackSmart()" title="Retour" style="min-width:36px;height:36px;padding:0;font-size:18px">←</button>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
+          <div class="font-bold" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
         </div>
-        <button class="btn btn-ghost w-full justify-center" onclick="logout()">Se déconnecter</button>
       </div>
-    </aside>
-    <main class="flex-1 flex flex-col overflow-hidden">
-      <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
-        <div class="sgdi-topbar-left flex items-center gap-3 shrink-0">
-          <button type="button" class="btn btn-ghost text-xs" onclick="goBackSmart()" title="Retour" style="min-width:36px;height:36px;padding:0;font-size:18px">←</button>
-          <div>
-            <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
-            <div class="font-bold" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
+      ${topbarStructureTabsHTML()}
+      <div class="sgdi-topbar-actions flex items-center gap-2 shrink-0">${dialogueTopbarButtonHTML()}${sgdiLanguageSelectorHTML()}${headerBtn}</div>
+    </div>
+    <div class="sgdi-shell-body flex flex-1 min-h-0">
+      <aside class="sidebar w-72 flex flex-col shrink-0">
+        <div class="px-5 py-6 border-b" style="border-color:#343a3b!important;text-align:left!important;background:#171c1d!important">
+          <div class="sidebar-module-title font-black tracking-tight" data-no-lang="1" style="line-height:1;color:#fff!important;text-align:left!important">SGDI</div>
+          <div class="sidebar-console-label" data-no-lang="1">CONSOLE</div>
+        </div>
+        <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
+        <div class="sidebar-user px-4 py-3 text-xs">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="avatar" style="width:28px;height:28px;font-size:11px">${(session.nom||"?").slice(0,1)}</div>
+            <div class="leading-tight"><div class="sidebar-user-name">${escapeHTML(session.nom)}</div><div class="sidebar-user-role">${session.role}</div></div>
           </div>
+          <button class="btn btn-ghost w-full justify-center" onclick="logout()">Se déconnecter</button>
         </div>
-        ${topbarStructureTabsHTML()}
-        <div class="sgdi-topbar-actions flex items-center gap-2 shrink-0">${dialogueTopbarButtonHTML()}${sgdiLanguageSelectorHTML()}${headerBtn}</div>
-      </div>
-      ${globalSocieteBandHTML()}
-      ${(()=>{const h=(location.hash||"").slice(2);const onMateriel=h.startsWith("materiel")&&!h.startsWith("materiel/magasin");if(onMateriel&&typeof materielSocieteStripHTML==="function")return materielSocieteStripHTML();return""})()}
-      <div class="flex-1 overflow-y-auto p-6" id="view"></div>
-    </main>
+      </aside>
+      <main class="flex-1 flex flex-col overflow-hidden min-w-0">
+        ${globalSocieteBandHTML()}
+        ${(()=>{const h=(location.hash||"").slice(2);const onMateriel=h.startsWith("materiel")&&!h.startsWith("materiel/magasin");if(onMateriel&&typeof materielSocieteStripHTML==="function")return materielSocieteStripHTML();return""})()}
+        <div class="flex-1 overflow-y-auto p-6" id="view"></div>
+      </main>
+    </div>
     ${dialogueBoxHTML()}
   </div>`;
   renderSidebar();
@@ -6965,16 +6967,8 @@ function agentsEnInstanceReversement(){
 }
 
 function matSimpleHeader(active){
-  const tabs=[
-    ["dashboard","🏠","Tableau de bord","Vue d'ensemble"],
-    ["inventaire","📋","Inventaire","Inventaire général"],
-    ["articles","📦","Articles","Catalogue stock"],
-    ["magasins","🏬","Magasins","Lieux de stockage"],
-    ["mouvements","🔄","Mouvements","Mouvements stock"],
-    ["fournisseurs","🤝","Fournisseurs","Partenaires achats"]
-  ];
-  const tabBar=`<div class="card p-1 mb-4 flex gap-1 flex-wrap" style="background:#f8fafc">${tabs.map(([k,ic,l,d])=>`<a href="#/materiel/${k}" class="flex-1 min-w-[120px] text-center py-2 px-3 rounded-md text-sm transition" style="${active===k?`background:${MAT_SIMPLE_HEADER_COLOR};color:#fff;font-weight:700;box-shadow:0 4px 10px ${MAT_SIMPLE_HEADER_COLOR}55`:"color:#475569"}" title="${d}">${ic} ${l}</a>`).join("")}</div>`;
-  return tabBar;
+  // Navigation centralisée dans la barre latérale gauche.
+  return "";
 }
 
 // ---- Helpers stock par magasin
@@ -7038,13 +7032,13 @@ function renderMatSimpleDashboard(view){
 
   const header=matSimpleHeader("dashboard");
   const titleBar=`<div class="mat-hero"><div class="flex justify-between items-start gap-4 flex-wrap">
-    <div><h1>Matériel & Équipement</h1><p>${soc?escapeHTML(soc):"Toutes les sociétés"} · Pilotage des articles, stocks, fournisseurs, magasins, dotations et reversements.</p></div>
+    <div><h1>MATÉRIEL & ÉQUIPEMENT</h1><p>${soc?escapeHTML(soc):"Toutes les sociétés"} · Pilotage des articles, stocks, fournisseurs, magasins, dotations et reversements.</p></div>
     <div class="mat-actions">
-      <button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">📥 Entrée stock</button>
-      <button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">📤 Sortie stock</button>
-      <button class="btn btn-warn text-sm" onclick="navigate('materiel/article-nouveau')">➕ Article</button>
-      <button class="btn btn-secondary text-sm" onclick="navigate('materiel/magasin-nouveau')">🏬 Magasin</button>
-      <button class="btn btn-secondary text-sm" onclick="navigate('materiel/fournisseur-nouveau')">🤝 Fournisseur</button>
+      <button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">Entrée stock</button>
+      <button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">Sortie stock</button>
+      <button class="btn btn-warn text-sm" onclick="navigate('materiel/article-nouveau')">Nouvel article</button>
+      <button class="btn btn-secondary text-sm" onclick="navigate('materiel/magasin-nouveau')">Magasin</button>
+      <button class="btn btn-secondary text-sm" onclick="navigate('materiel/fournisseur-nouveau')">Fournisseur</button>
     </div></div></div>`;
   const kpi=`<div class="mat-kpi-grid">
     <button type="button" class="mat-kpi" onclick="navigate('materiel/articles')" style="border-left-color:#043970"><div class="label">Articles catalogue</div><div class="value">${arts.length}</div><div class="sub">${qty(totalQty)} unités suivies</div></button>
@@ -8274,8 +8268,8 @@ function renderStockProMain(view,tab){
       </div>
       <div class="flex flex-wrap gap-2">
         <button class="btn btn-primary" onclick="stockNouvelArticle()">➕ Nouvel article</button>
-        <button class="btn btn-success" onclick="stockOpenMvt('entree')">📥 Entrée stock</button>
-        <button class="btn btn-secondary" style="background:#dc2626;color:#fff" onclick="stockOpenMvt('sortie')">📤 Sortie stock</button>
+        <button class="btn btn-success" onclick="stockOpenMvt('entree')">Entrée stock</button>
+        <button class="btn btn-secondary" style="background:#dc2626;color:#fff" onclick="stockOpenMvt('sortie')">Sortie stock</button>
         <button class="btn btn-ghost" onclick="stockExportCSV()">⬇ Export CSV</button>
       </div>
     </div>
@@ -9798,7 +9792,7 @@ const STATUTS_DEVIS=["brouillon","envoye","accepte","refuse","expire"];
 const STATUTS_FACTURE=["emise","partielle","payee","echue","annulee"];
 const ETAPES_OPP=["nouveau","qualification","proposition","negociation","gagnee","perdue"];
 const STATUTS_PROSPECT=["nouveau","contacte","interesse","rdv_planifie","rdv_realise","converti","perdu"];
-function factTabs(active){return`<div class="flex gap-2 mb-4 flex-wrap">${FACT_TABS.map(([k,l])=>`<a href="#/facturation/${k}" class="btn ${active===k?"btn-primary":"btn-ghost"} text-sm">${l}</a>`).join("")}</div>`}
+function factTabs(active){return ""}
 function factureStatutPaye(f){const pa=(db.paiements||[]).filter(p=>p.factureId===f.id).reduce((s,p)=>s+(p.montant||0),0);const av=(db.avoirs||[]).filter(a=>a.factureId===f.id).reduce((s,a)=>s+(a.montant||0),0);const reste=Math.max(0,(f.ttc||0)-pa-av);let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else if(f.echeance){const due=addDays(f.date,f.echeance);if(due<today())st="echue"}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
 function statutFactPill(s){return{"emise":"pill-blue","partielle":"pill-amber","payee":"pill-green","echue":"pill-red","annulee":"pill-gray"}[s]||"pill-gray"}
 function statutDevisPill(s){return{"brouillon":"pill-gray","envoye":"pill-blue","accepte":"pill-green","refuse":"pill-red","expire":"pill-amber"}[s]||"pill-gray"}
@@ -9830,18 +9824,18 @@ function renderFactDashboard(view){
   const caisseSolde=caisse.reduce((s,c)=>s+(c.type==="entree"?(c.montant||0):-(c.montant||0)),0);
   const echues=factures.filter(f=>factureStatutPaye(f).statut==="echue");
   const recents=factures.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,5);
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📊 Finances — Tableau de bord</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">FINANCES - TABLEAU DE BORD</h1>
     <p class="text-slate-500 text-sm mb-4">${mySoc()?escapeHTML(mySoc()):"Toutes sociétés"} · ${factures.length} factures · ${devis.length} devis</p>
     ${factTabs("dashboard")}
     <div class="mb-2 flex items-center justify-between flex-wrap gap-2">
-      <h2 class="text-sm uppercase tracking-widest font-bold text-slate-500">📦 Indicateurs Stock</h2>
+      <h2 class="text-sm uppercase tracking-widest font-bold text-slate-500">Indicateurs stock</h2>
       <div class="flex gap-2">
-        <a href="#/facturation/stock" class="btn btn-ghost text-xs" style="background:#0f172a;color:#fff">📊 Vue financière stock →</a>
-        <a href="#/materiel/inventaire" class="btn btn-ghost text-xs">📦 Module matériel →</a>
+        <a href="#/facturation/stock" class="btn btn-ghost text-xs" style="background:#0f172a;color:#fff">Vue financière stock</a>
+        <a href="#/materiel/inventaire" class="btn btn-ghost text-xs">Module matériel</a>
       </div>
     </div>
     ${stockKpiCardsHTML()}
-    <h2 class="text-sm uppercase tracking-widest font-bold text-slate-500 mb-2 mt-2">💰 Indicateurs Finance</h2>
+    <h2 class="text-sm uppercase tracking-widest font-bold text-slate-500 mb-2 mt-2">Indicateurs finance</h2>
     <div class="grid grid-4 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CA facturé</div><div class="text-2xl font-bold mt-1 text-blue-600">${money(totalFact)}</div><div class="text-xs text-slate-400 mt-1">${factures.length} factures</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Encaissé</div><div class="text-2xl font-bold mt-1 text-emerald-600">${money(totalEncaisse)}</div><div class="text-xs text-slate-400 mt-1">${myPaiements.length} paiements</div></div>
@@ -10171,7 +10165,7 @@ function deleteStructure(nom){if(!confirm("Supprimer ?"))return;db.structures=(d
 
 /* ============ COMMERCIAL MODULE ============ */
 const COMM_TABS=[["dashboard","📊 Tableau de bord"],["prospects","🎯 Prospects"],["clients","🤝 Clients"],["opportunites","💼 Opportunités"],["visites","📞 Visites / Suivi"],["catalogue","📋 Catalogue"],["tarifs","💲 Tarifs"],["stats","📈 Statistiques"]];
-function commTabs(active){return`<div class="flex gap-2 mb-4 flex-wrap">${COMM_TABS.map(([k,l])=>`<a href="#/commercial/${k}" class="btn ${active===k?"btn-primary":"btn-ghost"} text-sm">${l}</a>`).join("")}</div>`}
+function commTabs(active){return ""}
 function statutProspectPill(s){return{"nouveau":"pill-blue","contacte":"pill-indigo","interesse":"pill-amber","rdv_planifie":"pill-amber","rdv_realise":"pill-amber","converti":"pill-green","perdu":"pill-red"}[s]||"pill-gray"}
 function etapeOppPill(e){return{"nouveau":"pill-blue","qualification":"pill-indigo","proposition":"pill-amber","negociation":"pill-amber","gagnee":"pill-green","perdue":"pill-red"}[e]||"pill-gray"}
 function renderCommercial(view,sub,arg){
@@ -10194,7 +10188,7 @@ function renderCommDashboard(view){
   const contratsExpires=clients.filter(c=>c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)<0);
   const contratsFin30=clients.filter(c=>{if(!c.dateFinContrat)return false;const d=daysBetween(today(),c.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📊 Commercial — Tableau de bord</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">COMMERCIAL - TABLEAU DE BORD</h1>
     <p class="text-slate-500 text-sm mb-4">${mySoc()||"Toutes sociétés"}</p>
     ${commTabs("dashboard")}
     <div class="card p-5 mb-4" style="border-left:5px solid ${contratsAlerte.length?"#dc2626":"#059669"};background:${contratsAlerte.length?"#fef2f2":"#ecfdf5"}">
@@ -10218,7 +10212,7 @@ function renderCommDashboard(view){
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Taux conversion</div><div class="text-2xl font-bold mt-1">${tauxConv}%</div><div class="text-xs text-slate-400 mt-1">prospects → clients</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Visites enregistrées</div><div class="text-2xl font-bold mt-1">${visites.length}</div><div class="text-xs text-slate-400 mt-1">${visites.filter(v=>v.date>=today()).length} à venir</div></div>
     </div>
-    <div class="card p-5"><h3 class="mb-3 font-bold">📊 Pipeline par étape</h3><div class="grid grid-cols-6 gap-2">${ETAPES_OPP.map(e=>{const n=opps.filter(o=>o.etape===e).length;const t=opps.filter(o=>o.etape===e).reduce((s,o)=>s+(o.montant||0),0);return`<div class="card p-3 bg-slate-50 text-center"><div class="text-xs uppercase text-slate-500 mb-1">${e}</div><div class="text-2xl font-bold ${e==="gagnee"?"text-emerald-600":e==="perdue"?"text-red-600":"text-amber-600"}">${n}</div><div class="text-xs text-slate-500 mt-1">${money(t)}</div></div>`}).join("")}</div></div>`;
+    <div class="card p-5"><h3 class="mb-3 font-bold">Pipeline par étape</h3><div class="grid grid-cols-6 gap-2">${ETAPES_OPP.map(e=>{const n=opps.filter(o=>o.etape===e).length;const t=opps.filter(o=>o.etape===e).reduce((s,o)=>s+(o.montant||0),0);return`<div class="card p-3 bg-slate-50 text-center"><div class="text-xs uppercase text-slate-500 mb-1">${e}</div><div class="text-2xl font-bold ${e==="gagnee"?"text-emerald-600":e==="perdue"?"text-red-600":"text-amber-600"}">${n}</div><div class="text-xs text-slate-500 mt-1">${money(t)}</div></div>`}).join("")}</div></div>`;
 }
 function renderCommProspects(view){
   const list=bySoc(db.prospects||[]).slice().sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));

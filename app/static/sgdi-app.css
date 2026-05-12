@@ -128,6 +128,11 @@
   .sidebar-user .btn:hover{background:rgba(255,255,255,.07)!important;color:#ffd16a!important}
 
 
+
+  .sgdi-shell{width:100%;min-width:0;overflow:hidden}
+  .sgdi-shell-body{min-height:0;width:100%;min-width:0}
+  .sgdi-topbar{width:100%;min-width:0}
+
   .societe-structure-bar{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 4px 12px rgba(15,23,42,.05);z-index:20}
   .societe-structure-inner{min-height:58px;display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:8px 16px}
   .societe-active-pill{display:inline-flex;align-items:center;gap:8px;background:#0f172a;color:#fff;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
