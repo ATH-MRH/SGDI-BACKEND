@@ -505,7 +505,14 @@
   @media (max-width:1200px){.fp-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-status-grid,.fp-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media (max-width:760px){.fp-head{flex-direction:column}.fp-head-actions{justify-content:flex-start}.fp-summary-grid,.fp-status-grid,.fp-card-grid,.grid-4{grid-template-columns:1fr}.fp-summary-card{min-height:96px}}
 
-  .recrutement-add-btn{margin-top:.5cm}
+  .recrutement-add-btn{
+    margin-top:.5cm;
+    animation:recrutement-add-pulse 1.15s ease-in-out infinite;
+  }
+  @keyframes recrutement-add-pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(4,57,112,.34);filter:brightness(1)}
+    50%{box-shadow:0 0 0 7px rgba(4,57,112,.08);filter:brightness(1.18)}
+  }
 
   /* ----- RADIO PILL ----- */
   .radio-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--border-strong);border-radius:9999px;cursor:pointer;font-size:12.5px;background:#fff;transition:all .12s}
