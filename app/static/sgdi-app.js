@@ -2925,6 +2925,10 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
   const inp=document.getElementById(inputId);if(!inp||!inp.files[0])return;
   const f=inp.files[0];
   if(f.size>5*1024*1024){toast("Photo > 5 Mo · trop volumineuse","error");return}
+  const afterPaint=()=>new Promise(resolve=>{
+    const raf=window.requestAnimationFrame||((cb)=>setTimeout(cb,16));
+    raf(()=>raf(resolve));
+  });
   const setPreview=src=>{
     const html=`<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;background:#fff"/>`;
     const prev=document.getElementById(previewId);
@@ -2939,6 +2943,7 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
     const targetEl=document.getElementById(targetHidden);
     if(targetEl)targetEl.value=raw;
     if(!instantUrl)setPreview(raw);
+    await afterPaint();
     const compressed=await compressImage(raw,1000,0.9);
     const finalSize=Math.round(compressed.length/1024);
     if(targetEl){targetEl.value=compressed;targetEl.dispatchEvent(new Event("change",{bubbles:true}))}
