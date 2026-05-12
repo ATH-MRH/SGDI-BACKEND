@@ -3364,15 +3364,10 @@ function candidatSectionOpen(c,key,bannerClass,title){
   const locked=candidatSectionLocked(c,key);
   const current=candidatCurrentSectionKey(c)===key;
   const v=candidatSectionValidations(c)[key];
-  return `<div class="card candidate-section-card ${locked?"opacity-80":""}" id="section-${key}" data-candidat-section="${key}" data-locked="${locked?"1":"0"}">
-    <div class="candidate-section-head ${bannerClass}">
-      <div>
-        <div class="candidate-section-kicker">Section ${candidatSectionIndex(key)+1}</div>
-        <h2>${title}</h2>
-      </div>
-      <div class="candidate-section-state">
-        ${v?`<span class="pill pill-green">Validée ${v.by?`par ${escapeHTML(v.by)}`:""}</span>`:(current?`<span class="pill pill-amber">À valider</span>`:`<span class="pill pill-gray">En attente</span>`)}
-      </div>
+  return `<div class="card p-5 mb-4 ${locked?"opacity-80":""}" id="section-${key}" data-candidat-section="${key}" data-locked="${locked?"1":"0"}">
+    <div class="section-banner ${bannerClass} flex items-center justify-between gap-2">
+      <span>${title}</span>
+      ${v?`<span class="pill pill-green">Validée ${v.by?`par ${escapeHTML(v.by)}`:""}</span>`:(current?`<span class="pill pill-amber">À valider</span>`:`<span class="pill pill-gray">En attente</span>`)}
     </div>`;
 }
 function candidatSectionClose(c,key){
@@ -3380,12 +3375,12 @@ function candidatSectionClose(c,key){
   const valid=candidatSectionIsValidated(c,key);
   const canUnlock=candidatCanUnlockSections();
   const meta=candidatSectionValidations(c)[key];
-  return `<div class="candidate-section-footer">
-      <div class="candidate-section-actions">
+  return `<div class="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
+      <div class="flex gap-2">
         ${valid&&canUnlock?`<button type="button" class="btn btn-ghost text-xs" data-section-action="1" onclick="unlockCandidatSection('${escapeHTML(c.id)}','${key}')">Déverrouiller</button>`:""}
         ${!valid?`<button type="button" class="btn btn-primary text-xs" data-section-action="1" onclick="validateCandidatSectionAction('${escapeHTML(c.id)}','${key}')">Valider la section</button>`:""}
       </div>
-      <div class="candidate-section-note">${valid?`Section validée ${meta?.at?`le ${new Date(meta.at).toLocaleString("fr-FR")}`:""}`:"Après validation, la section suivante s'ouvre automatiquement."}</div>
+      <div class="text-xs text-slate-500 text-right">${valid?`Section validée ${meta?.at?`le ${new Date(meta.at).toLocaleString("fr-FR")}`:""}`:"Après validation, la section suivante s'ouvre automatiquement."}</div>
     </div>
   </div>`;
 }
@@ -3429,62 +3424,23 @@ function renderCandidatForm(view,id,options){
   else{c={id:newTempCandidateId(),statut:formOptions.reserveDirect?"reserve":"nouvelle",reserveDirect:!!formOptions.reserveDirect,fichePositionValidee:!!formOptions.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
   const step=candidatEtape1Valid(c)?2:1;
   const allValid=candidatAllSectionsValid(c);
-  const validatedCount=CANDIDAT_SECTIONS.filter(s=>candidatSectionIsValidated(c,s.key)).length;
-  const progressPct=Math.round((validatedCount/(CANDIDAT_SECTIONS.length||1))*100);
-  const displayName=String(`${c.nom||""} ${c.prenom||""}`).trim();
-  const pageTitle=c.isNew?(c.reserveDirect?"Ajouter candidat en réserve":"Fiche candidat"):(displayName||"Fiche candidat");
-  const initials=(displayName?displayName.split(/\s+/).slice(0,2).map(x=>x.charAt(0)).join(""):"CR").toUpperCase();
-  const returnRoute=candidatIsArchived(c)?"candidats_archives":c.statut==="reserve"?"reserve":"recrutement";
-  const currentKey=candidatCurrentSectionKey(c);
-  const sectionList=CANDIDAT_SECTIONS.map((s,i)=>{
-    const done=candidatSectionIsValidated(c,s.key);
-    const active=currentKey===s.key;
-    const available=candidatSectionAvailable(c,s.key);
-    return `<button type="button" class="candidate-section-link ${done?"done":active?"active":""}" ${available?`onclick="document.getElementById('section-${s.key}')?.scrollIntoView({behavior:'smooth',block:'start'})"`:"disabled"}>
-      <span>${i+1}</span><strong>${escapeHTML(s.label)}</strong>
-    </button>`;
-  }).join("");
-  view.innerHTML=`<div class="candidate-dossier">
-    <div class="candidate-hero">
-      <div class="candidate-photo">${c.photo?`<img src="${escapeHTML(c.photo)}" alt="">`:escapeHTML(initials)}</div>
-      <div class="candidate-hero-main">
-        <div class="candidate-eyebrow">Recrutement / réserve</div>
-        <h1 class="candidate-title">${escapeHTML(pageTitle)}</h1>
-        <div class="candidate-meta">
-          <span class="candidate-chip">${escapeHTML(c.posteSouhaite||"Poste à définir")}</span>
-          <span class="candidate-chip">${escapeHTML(c.societe||"Société non renseignée")}</span>
-          <span class="candidate-chip">${escapeHTML(c.statut||"nouvelle")}</span>
-          <span class="candidate-chip">Étape ${step}/2</span>
-        </div>
-      </div>
-      <button type="button" class="btn btn-ghost" onclick="navigate('${returnRoute}')">Retour</button>
+  view.innerHTML=`<div class="max-w-5xl mx-auto">
+    <div class="flex items-start justify-between mb-4">
+      <div><h1 class="text-2xl font-bold">${c.isNew?(c.reserveDirect?"Ajouter candidat en réserve":"Fiche candidat"):escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Processus de recrutement — étape ${step}/2</p></div>
+      <div class="flex gap-2"><button class="btn btn-ghost" onclick="navigate('${candidatIsArchived(c)?'candidats_archives':c.statut==='reserve'?'reserve':'recrutement'}')">← Retour</button></div>
     </div>
-    <form id="candidat-form" class="candidate-dossier-grid" onsubmit="event.preventDefault();saveCandidat('${c.id}')">
+    <div class="stepper"><div class="step ${step>=1?"done":"active"}">1. Candidature</div><div class="step ${step===2?"active":""}">2. Fiche de renseignement</div></div>
+    <form id="candidat-form" onsubmit="event.preventDefault();saveCandidat('${c.id}')">
       <input type="hidden" name="id" value="${c.id}"/><input type="hidden" name="isNew" value="${c.isNew?"1":""}"/><input type="hidden" name="reserveDirect" value="${c.reserveDirect?"1":""}"/>
-      <div class="candidate-main">
-        <div class="stepper candidate-stepper"><div class="step ${step>=1?"done":"active"}">1. Candidature</div><div class="step ${step===2?"active":""}">2. Fiche de renseignement</div></div>
-        ${renderCandidatEtape1(c)}
-        <div id="etape2-block" class="${candidatEtape1Valid(c)?"":"hidden"}">${candidatEtape1Valid(c)?renderCandidatEtape2(c):""}</div>
+      ${renderCandidatEtape1(c)}
+      <div id="etape2-block" class="${candidatEtape1Valid(c)?"":"hidden"}">${candidatEtape1Valid(c)?renderCandidatEtape2(c):""}</div>
+      <div class="card p-4 mt-4 flex justify-between items-center">
+        <div class="text-sm text-slate-500">${allValid?"Toutes les sections sont validées.":"Validez chaque section dans l'ordre pour continuer."}</div>
+        <div class="flex gap-2"><button type="button" class="btn btn-secondary" onclick="modifierCandidatForm('${c.id}')">Modifier</button><button type="button" class="btn btn-ghost text-red-600" onclick="deleteCandidat('${c.id}')">Supprimer</button>
+        <button type="button" class="btn btn-secondary" onclick="saveCandidat('${c.id}',true)">💾 Enregistrer</button>
+        ${candidatIsArchived(c)?`<button type="button" class="btn btn-success" onclick="activerCandidat('${c.id}')">Activer</button>`:`<button type="button" class="btn btn-ghost text-red-600" onclick="openArchiveCandidatModal('${c.id}')">Archiver candidat</button>`}
+        ${!candidatIsArchived(c)?(allValid?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">✓ Valider la fiche de position</button>`:`<button type="button" class="btn btn-ghost" disabled>Fiche de position non complète</button>`):""}</div>
       </div>
-      <aside class="candidate-side">
-        <div class="candidate-panel">
-          <div class="candidate-panel-label">Avancement du dossier</div>
-          <div class="candidate-progress-row"><strong>${validatedCount}/${CANDIDAT_SECTIONS.length}</strong><span>${progressPct}%</span></div>
-          <div class="candidate-progress-track"><div class="candidate-progress-bar" style="width:${progressPct}%"></div></div>
-          <p>${allValid?"Toutes les sections sont validées.":"Validez chaque section dans l'ordre pour continuer."}</p>
-        </div>
-        <div class="candidate-panel">
-          <div class="candidate-panel-label">Sections</div>
-          <div class="candidate-section-list">${sectionList}</div>
-        </div>
-        <div class="candidate-panel candidate-actions-panel">
-          <button type="button" class="btn btn-secondary" onclick="modifierCandidatForm('${c.id}')">Modifier</button>
-          <button type="button" class="btn btn-secondary" onclick="saveCandidat('${c.id}',true)">Enregistrer</button>
-          ${candidatIsArchived(c)?`<button type="button" class="btn btn-success" onclick="activerCandidat('${c.id}')">Activer</button>`:`<button type="button" class="btn btn-ghost text-red-600" onclick="openArchiveCandidatModal('${c.id}')">Archiver candidat</button>`}
-          ${!candidatIsArchived(c)?(allValid?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">Valider la fiche de position</button>`:`<button type="button" class="btn btn-ghost" disabled>Fiche de position non complète</button>`):""}
-          <button type="button" class="btn btn-ghost text-red-600" onclick="deleteCandidat('${c.id}')">Supprimer</button>
-        </div>
-      </aside>
     </form>
   </div>`;
   setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'));if(sessionStorage.getItem("candidatAutoEdit:"+c.id)==="1"){sessionStorage.removeItem("candidatAutoEdit:"+c.id);modifierCandidatForm(c.id)}},0);

@@ -549,62 +549,6 @@
   .step.active{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:600;box-shadow:0 4px 10px rgba(4,57,112,.22)}
   .step.done{background:var(--success-soft);color:#047857;border-color:#86efac}
 
-  /* ----- CANDIDATE DOSSIER ----- */
-  .candidate-dossier{max-width:1180px;margin:0 auto 32px;padding-bottom:24px}
-  .candidate-hero{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:16px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs)}
-  .candidate-photo{width:78px;height:92px;border-radius:8px;border:1px solid var(--border-strong);background:#f8fafc;color:#043970;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:900;overflow:hidden;flex-shrink:0}
-  .candidate-photo img{width:100%;height:100%;object-fit:cover}
-  .candidate-hero-main{min-width:0}
-  .candidate-eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:800;margin-bottom:4px}
-  .candidate-title{font-size:25px;line-height:1.15;font-weight:900;color:var(--text);margin:0;word-break:break-word}
-  .candidate-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
-  .candidate-chip{display:inline-flex;align-items:center;min-height:26px;border:1px solid var(--border);background:#f8fafc;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;color:#334155;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .candidate-dossier-grid{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px;align-items:start}
-  .candidate-main{min-width:0}
-  .candidate-stepper{margin-bottom:14px}
-  .candidate-side{position:sticky;top:14px;display:flex;flex-direction:column;gap:12px}
-  .candidate-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;box-shadow:var(--shadow-xs)}
-  .candidate-panel-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:900;margin-bottom:10px}
-  .candidate-panel p{font-size:12px;line-height:1.45;color:var(--text-soft);margin:10px 0 0}
-  .candidate-progress-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;color:var(--text)}
-  .candidate-progress-row strong{font-size:24px;line-height:1;font-weight:900}
-  .candidate-progress-row span{font-size:13px;font-weight:800;color:#047857}
-  .candidate-progress-track{height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:10px}
-  .candidate-progress-bar{height:100%;background:#047857;border-radius:999px;transition:width .2s ease}
-  .candidate-section-list{display:flex;flex-direction:column;gap:6px}
-  .candidate-section-link{width:100%;min-height:42px;display:grid;grid-template-columns:26px minmax(0,1fr);align-items:center;gap:9px;text-align:left;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 9px;color:#475569;cursor:pointer}
-  .candidate-section-link span{width:26px;height:26px;border-radius:999px;background:#e2e8f0;color:#475569;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:900}
-  .candidate-section-link strong{font-size:12px;line-height:1.25;font-weight:800;white-space:normal}
-  .candidate-section-link.active{border-color:#f59e0b;background:#fffbeb;color:#92400e}
-  .candidate-section-link.active span{background:#f59e0b;color:#fff}
-  .candidate-section-link.done{border-color:#86efac;background:#f0fdf4;color:#166534}
-  .candidate-section-link.done span{background:#16a34a;color:#fff}
-  .candidate-section-link:disabled{opacity:.55;cursor:not-allowed;background:#f8fafc}
-  .candidate-actions-panel{display:flex;flex-direction:column;gap:8px}
-  .candidate-actions-panel .btn{width:100%;justify-content:center}
-  .candidate-section-card{padding:0;margin-bottom:14px;overflow:hidden}
-  .candidate-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:#f8fafc;color:var(--text)}
-  .candidate-section-head h2{font-size:14px;line-height:1.25;margin:2px 0 0;font-weight:900;color:var(--text)}
-  .candidate-section-kicker{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:900}
-  .candidate-section-state{flex-shrink:0}
-  .candidate-section-card>.grid,.candidate-section-card>.mt-4:not(.candidate-section-footer){padding:16px}
-  .candidate-section-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);background:#f8fafc;padding:12px 16px}
-  .candidate-section-actions{display:flex;flex-wrap:wrap;gap:8px}
-  .candidate-section-note{font-size:12px;line-height:1.35;color:var(--text-soft);text-align:right}
-  @media (max-width:980px){
-    .candidate-hero{grid-template-columns:auto minmax(0,1fr);align-items:start}
-    .candidate-hero>.btn{grid-column:1/-1;width:100%;justify-content:center}
-    .candidate-dossier-grid{grid-template-columns:1fr}
-    .candidate-side{position:static;order:-1}
-  }
-  @media (max-width:640px){
-    .candidate-hero{grid-template-columns:1fr}
-    .candidate-photo{width:70px;height:82px}
-    .candidate-title{font-size:21px}
-    .candidate-section-head,.candidate-section-footer{flex-direction:column;align-items:flex-start}
-    .candidate-section-note{text-align:left}
-  }
-
   /* ----- BREADCRUMB / TOPBAR HEADER ----- */
   .topbar-shell{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
   .topbar-id{display:flex;align-items:center;gap:12px}
