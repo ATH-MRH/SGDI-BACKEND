@@ -2606,6 +2606,28 @@ async function retryPostgresLoad(){
   if(typeof toast==="function")toast("Session expirée ou PostgreSQL indisponible : reconnectez-vous.","error");
 }
 
+function normalizeCentralPage(view){
+  if(!view)return;
+  view.classList.add("module-view");
+  const iconPattern=/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
+  const walker=document.createTreeWalker(view,NodeFilter.SHOW_TEXT,{acceptNode(node){
+    const parent=node.parentElement;
+    if(!parent||["SCRIPT","STYLE","TEXTAREA","INPUT","OPTION"].includes(parent.tagName))return NodeFilter.FILTER_REJECT;
+    return iconPattern.test(node.nodeValue||"")?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP;
+  }});
+  const nodes=[];
+  while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(node=>{node.nodeValue=(node.nodeValue||"").replace(iconPattern,"").replace(/\s{2,}/g," ").trimStart()});
+  view.querySelectorAll("h1").forEach(h=>{
+    h.classList.add("module-title-clean");
+    h.textContent=(h.textContent||"").replace(/\s+/g," ").trim().toUpperCase();
+  });
+  view.querySelectorAll("h2,h3").forEach(h=>{h.textContent=(h.textContent||"").replace(/\s+/g," ").trim()});
+  view.querySelectorAll(".btn").forEach(btn=>{btn.innerHTML=(btn.innerHTML||"").replace(iconPattern,"").replace(/\s{2,}/g," ").trim()});
+  view.querySelectorAll("table").forEach(t=>t.classList.add("module-table-clean"));
+  view.querySelectorAll(".card").forEach(c=>c.classList.add("module-card-clean"));
+}
+
 function renderView(){
   sanitizeCandidatesInDB();
   uiProgressStart();
@@ -2937,9 +2959,9 @@ function renderRecrutementDashboard(view){
   const topSoc=Object.entries(bySoc).sort((a,b)=>b[1]-a[1]).slice(0,4);
   const topPostes=Object.entries(byPoste).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const scope=socFilter?escapeHTML(socFilter):(allowed.length?"Sociétés autorisées":"Toutes sociétés");
-  const card=(title,count,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(title)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${count}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div><div class="text-3xl">${icon}</div></div></button>`;
+  const card=(title,count,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(title)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${count}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const bar=(label,n,total,color)=>{const pct=total?Math.round(n/total*100):0;return`<button type="button" class="dash-mini-row text-left w-full" onclick="navigate('reserve')" data-searchable><div style="min-width:190px"><div class="font-bold text-sm">${escapeHTML(label)}</div><div class="text-[11px] text-slate-500">${n} candidat(s)</div></div><div class="flex-1"><div class="dash-bar"><span style="width:${pct}%;background:${color}"></span></div></div><div class="font-black text-sm">${pct}%</div></button>`};
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">RECRUTEMENT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides · ${scope}</p></div><button class="btn btn-primary" onclick="navigate('reserve/nouveau')">👥 Ajouter candidat</button></div>
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">RECRUTEMENT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides · ${scope}</p></div><button class="btn btn-primary" onclick="navigate('reserve/nouveau')">Ajouter candidat</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Ajouter candidats",reserves.length,"Candidats en réserve","reserve","#043970","👥")}
       ${card("Candidats archivés",archives.length,"Dossiers archivés","candidats_archives","#64748b","🗄")}
@@ -2985,7 +3007,7 @@ async function renderRecrutementServer(view,mode){
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
   const page=recrutementCurrentPage(mode);
   const pageSize=25;
-  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">👥 Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div>`;
   try{
     const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});
@@ -3076,7 +3098,7 @@ function renderRecrutement(view,mode){
       <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
-  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">👥 Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
@@ -3872,7 +3894,7 @@ function renderContratsDashboard(view){
   const cddSoon=agents.filter(a=>a.typeContrat==="CDD"&&a.dateFinContrat&&daysBetween(today_,a.dateFinContrat)>=0&&daysBetween(today_,a.dateFinContrat)<=60);
   const trialSoon=agents.filter(a=>a.dateFinEssai&&daysBetween(today_,a.dateFinEssai)>=0&&daysBetween(today_,a.dateFinEssai)<=30);
   const mass=agents.reduce((sum,a)=>sum+(parseFloat(a.salaireNet)||0),0);
-  const card=(label,value,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(label)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div><div class="text-3xl">${icon}</div></div></button>`;
+  const card=(label,value,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(label)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const quick=(label,route,icon)=>`<button type="button" class="btn btn-secondary justify-start" onclick="navigate('${route}')">${icon} ${escapeHTML(label)}</button>`;
   view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRATS</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn btn-primary" onclick="openCreateContratDirectModal()">➕ Créer contrat</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
@@ -6924,10 +6946,10 @@ function renderMatSimpleDashboard(view){
     </div>
   </div>`;
   const alertsCard=(nbRupture+nbAlertes)>0?`<div class="card p-5 mb-4" style="background:linear-gradient(135deg,#fef2f2,#fff);border-left:4px solid #dc2626">
-    <h3 class="font-bold mb-3 text-red-700">⚠ Alertes stock</h3>
+    <h3 class="font-bold mb-3 text-red-700">Alertes stock</h3>
     <div class="text-sm space-y-1">
-      ${arts.filter(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):0;return q<=0}).slice(0,5).map(a=>`<div class="flex justify-between py-1.5 border-b border-red-100"><a class="hover:underline font-semibold text-red-700" href="#/materiel/article/${a.id}">🔴 ${escapeHTML(a.designation)}</a><span class="text-xs text-red-600 font-bold">RUPTURE</span></div>`).join("")}
-      ${arts.filter(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):0;const s=parseFloat(a.seuilAlerte)||0;return q>0&&s&&q<=s}).slice(0,5).map(a=>{const q=stockGetActuel(a.id);return`<div class="flex justify-between py-1.5 border-b border-amber-100"><a class="hover:underline font-semibold text-amber-700" href="#/materiel/article/${a.id}">🟡 ${escapeHTML(a.designation)}</a><span class="text-xs text-amber-600 font-bold">${qty(q)} ≤ ${qty(a.seuilAlerte)}</span></div>`}).join("")}
+      ${arts.filter(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):0;return q<=0}).slice(0,5).map(a=>`<div class="flex justify-between py-1.5 border-b border-red-100"><a class="hover:underline font-semibold text-red-700" href="#/materiel/article/${a.id}">${escapeHTML(a.designation)}</a><span class="text-xs text-red-600 font-bold">RUPTURE</span></div>`).join("")}
+      ${arts.filter(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):0;const s=parseFloat(a.seuilAlerte)||0;return q>0&&s&&q<=s}).slice(0,5).map(a=>{const q=stockGetActuel(a.id);return`<div class="flex justify-between py-1.5 border-b border-amber-100"><a class="hover:underline font-semibold text-amber-700" href="#/materiel/article/${a.id}">${escapeHTML(a.designation)}</a><span class="text-xs text-amber-600 font-bold">${qty(q)} ≤ ${qty(a.seuilAlerte)}</span></div>`}).join("")}
     </div>
   </div>`:"";
   view.innerHTML=`<div class="mat-shell">${titleBar}${header}${kpi}${alertsCard}<div class="mat-panel-grid">${mvtCard}<div class="mat-panel"><div class="mat-panel-title"><span>Actions de contrôle</span></div>
@@ -10327,8 +10349,7 @@ function renderCommStats(view){
 }
 
 /* ============ DRH MODULE (transverse) ============ */
-const DRH_TABS=[["dashboard","📊 Tableau de bord"],["stats","📈 Vue d'ensemble"],["stats_societe","🏢 Par société"],["stats_theme","🎯 Par thème"],["stats_fonction","🪪 Par fonction"],["stats_categorie","🏷 Par catégorie"],["stats_salaire","💶 Par salaire"],["stats_affectation","📍 Par affectation"]];
-function drhTabs(active){return`<div class="flex gap-2 mb-4 flex-wrap">${DRH_TABS.map(([k,l])=>`<a href="#/drh/${k}" class="btn ${active===k?"btn-primary":"btn-ghost"} text-sm">${l}</a>`).join("")}</div>`}
+function drhTabs(active){return ""}
 function renderDRH(view,sub,arg){
   if(sub==="dashboard")return renderDRHDashboard(view);
   if(sub==="stats")return renderDRHStats(view);
@@ -10463,7 +10484,7 @@ function renderDRHStats(view){
   const salaires=ag.filter(a=>a.statut==="actif").map(a=>Number(a.salaire)||0).filter(s=>s>0);
   const masseSal=salaires.reduce((s,n)=>s+n,0);
   const moyenneSal=salaires.length?Math.round(masseSal/salaires.length):0;
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📈 DRH — Vue d'ensemble</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - VUE D'ENSEMBLE</h1>
     ${drhTabs("stats")}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500">Effectif total</div><div class="text-3xl font-bold text-sky-700">${ag.length}</div></div>
@@ -10491,7 +10512,7 @@ function renderDRHStatsSociete(view){
     const masse=list.filter(a=>a.statut==="actif").reduce((sum,a)=>sum+(Number(a.salaire)||0),0);
     return{s:row.label,total:list.length,actif,enCo,enMa,abs,sus,sor,masse};
   });
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🏢 DRH — Statistiques par société</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR SOCIÉTÉ</h1>
     ${drhTabs("stats_societe")}
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
@@ -10505,7 +10526,7 @@ function renderDRHStatsTheme(view){
   const ag=drhAgentsList();
   const themes={};ag.forEach(a=>{const k=a.theme||"Non précisé";if(!themes[k])themes[k]={total:0,masse:0,actif:0};themes[k].total++;if(a.statut==="actif"){themes[k].actif++;themes[k].masse+=Number(a.salaire)||0}});
   const entries=Object.entries(themes).sort((a,b)=>b[1].total-a[1].total);
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🎯 DRH — Statistiques par thème</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR THÈME</h1>
     ${drhTabs("stats_theme")}
     <div class="grid grid-cols-2 gap-4 mb-4">
       <div class="card p-5"><h3 class="font-bold mb-3">Effectif par thème</h3>${drhBars(entries.map(([k,v])=>[k,v.total]),"#043970")}</div>
@@ -10522,7 +10543,7 @@ function renderDRHStatsFonction(view){
   const ag=drhAgentsList();
   const fonctions={};ag.forEach(a=>{const k=a.fonction||a.poste||"Non précisé";if(!fonctions[k])fonctions[k]={total:0,actif:0,masse:0,salaires:[]};fonctions[k].total++;if(a.statut==="actif"){fonctions[k].actif++;const s=Number(a.salaire)||0;fonctions[k].masse+=s;if(s>0)fonctions[k].salaires.push(s)}});
   const entries=Object.entries(fonctions).sort((a,b)=>b[1].total-a[1].total);
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🪪 DRH — Statistiques par fonction</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR FONCTION</h1>
     ${drhTabs("stats_fonction")}
     <div class="card p-5 mb-4"><h3 class="font-bold mb-3">Répartition par fonction</h3>${drhBars(entries.map(([k,v])=>[k,v.total]),"#8b5cf6")}</div>
     <div class="card p-0 overflow-x-auto">
@@ -10536,7 +10557,7 @@ function renderDRHStatsCategorie(view){
   const ag=drhAgentsList();
   const cats={};ag.forEach(a=>{const k=a.categorie||"Non précisé";if(!cats[k])cats[k]={total:0,actif:0,masse:0};cats[k].total++;if(a.statut==="actif"){cats[k].actif++;cats[k].masse+=Number(a.salaire)||0}});
   const entries=Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🏷 DRH — Statistiques par catégorie</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR CATÉGORIE</h1>
     ${drhTabs("stats_categorie")}
     <div class="grid grid-cols-2 gap-4 mb-4">
       <div class="card p-5"><h3 class="font-bold mb-3">Effectif par catégorie</h3>${drhBars(entries.map(([k,v])=>[k,v.total]),"#043970")}</div>
@@ -10565,7 +10586,7 @@ function renderDRHStatsSalaire(view){
   const moy=salaires.length?Math.round(total/salaires.length):0;
   const med=salaires.length?(salaires.length%2?salaires[Math.floor(salaires.length/2)]:Math.round((salaires[salaires.length/2-1]+salaires[salaires.length/2])/2)):0;
   const min=salaires[0]||0;const max=salaires[salaires.length-1]||0;
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">💶 DRH — Statistiques par salaire</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR SALAIRE</h1>
     ${drhTabs("stats_salaire")}
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500">Effectif rémunéré</div><div class="text-2xl font-bold">${ag.length}</div></div>
@@ -10586,7 +10607,7 @@ function renderDRHStatsAffectation(view){
   const bySite={};const noAffect=[];
   ag.forEach(a=>{const sid=a.affectationCourante&&a.affectationCourante.siteId;if(sid){if(!bySite[sid])bySite[sid]={total:0,actif:0,masse:0,site:sites.find(s=>s.id===sid)};bySite[sid].total++;if(a.statut==="actif"){bySite[sid].actif++;bySite[sid].masse+=Number(a.salaire)||0}}else noAffect.push(a)});
   const rows=Object.entries(bySite).map(([sid,v])=>({...v,sid})).sort((a,b)=>b.total-a.total);
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📍 DRH — Statistiques par affectation</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR AFFECTATION</h1>
     ${drhTabs("stats_affectation")}
     <div class="grid grid-cols-3 gap-3 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500">Sites avec affectation</div><div class="text-3xl font-bold">${rows.length}</div></div>

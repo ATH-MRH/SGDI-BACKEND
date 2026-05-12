@@ -324,6 +324,24 @@
   @media(max-width:1180px){.dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-layout{grid-template-columns:1fr}.dash-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:720px){.dash-kpi-grid,.dash-module-grid{grid-template-columns:1fr}}
 
+
+  /* ----- MODULE CENTER NORMALIZATION ----- */
+  .module-view{color:#0f172a}
+  .module-title-clean{font-size:24px!important;line-height:1.16!important;font-weight:950!important;letter-spacing:0!important;color:#0f172a!important;margin:0 0 6px!important}
+  .module-view h1 + p,.module-view h1 + .text-slate-500{font-size:13px!important;color:#64748b!important;margin-bottom:16px!important}
+  .module-view .card.module-card-clean{border-radius:8px!important;border-color:#d8e0ea!important;box-shadow:0 8px 22px rgba(15,23,42,.055)!important}
+  .module-table-clean thead,.module-table-clean thead tr,.module-table-clean th{background:#f8fafc!important;color:#475569!important;border-color:#e2e8f0!important}
+  .module-table-clean th{font-size:11px!important;text-transform:uppercase!important;letter-spacing:.04em!important}
+  .module-view .btn{border-radius:8px!important;font-weight:850!important;letter-spacing:0!important}
+  .module-view .grid.grid-cols-2,.module-view .grid.grid-cols-3,.module-view .grid.grid-cols-4,.module-view .grid.grid-cols-5{gap:12px!important}
+  .mat-hero{background:#fff!important;color:#0f172a!important;border:1px solid #d8e0ea!important;box-shadow:0 8px 22px rgba(15,23,42,.055)!important}
+  .mat-hero h1{color:#0f172a!important;font-size:24px!important}
+  .mat-hero p{color:#64748b!important}
+  .mat-actions .btn{box-shadow:none!important}
+  .mat-kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important}
+  .mat-kpi{background:#fff!important;border-color:#d8e0ea!important;box-shadow:0 8px 22px rgba(15,23,42,.045)!important}
+  .mat-panel{box-shadow:0 8px 22px rgba(15,23,42,.045)!important}
+
   /* ----- CENTER DIALOGUE BOX ----- */
   .dialogue-fab{display:none!important}
   .dialogue-fab.hidden{display:none}
