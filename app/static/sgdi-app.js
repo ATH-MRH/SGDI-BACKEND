@@ -10601,7 +10601,7 @@ function drhCandidatesList(){return drhApplySocieteFilter(db.candidats||[])}
 function drhAgentsList(){return drhApplySocieteFilter(db.agents||[])}
 function renderDRHDashboard(view){
   const selSoc=drhActiveSocieteFilter();
-  const allAg=db.agents||[];const allCa=db.candidats||[];const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];const allMa=db.materiel||[];
+  const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];
   const ag=drhAgentsList();
   const ca=drhCandidatesList();
   const agIds=new Set(ag.map(a=>a.id));
@@ -10610,53 +10610,101 @@ function renderDRHDashboard(view){
   const si=selSoc?allSi.filter(s=>siteIds.has(s.id)||drhMatchSoc(s,selSoc)):allSi;
   const sIds=new Set(si.map(s=>s.id));
   const inc=selSoc?allInc.filter(i=>(i.agentId&&agIds.has(i.agentId))||(i.siteId&&sIds.has(i.siteId))):allInc;
-  const ma=selSoc?allMa.filter(m=>drhMatchSoc(m,selSoc)):allMa;
   const actifs=ag.filter(a=>a.statut==="actif").length;
   const enConge=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
   const enMaladie=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
   const absents=ag.filter(a=>a.statut==="absent").length;
   const susp=ag.filter(a=>a.statut==="suspendu").length;
   const sortants=ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length;
-  const candNouv=ca.filter(c=>c.statut==="nouvelle").length;
+  const candNouv=ca.filter(c=>!candidatIsArchived(c)&&!candidatIsReserve(c)).length;
   const candReserve=ca.filter(c=>candidatIsReserve(c)).length;
-  const totalSalaires=ag.filter(a=>a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire)||0),0);
+  const candArchives=ca.filter(c=>candidatIsArchived(c)).length;
+  const candTotal=Math.max(1,ca.length);
+  const actifsBase=Math.max(1,ag.length);
+  const salaires=ag.filter(a=>a.statut==="actif").map(a=>Number(a.salaire||a.salaireNet||0)).filter(n=>n>0);
+  const masseSalaires=salaires.reduce((s,n)=>s+n,0);
+  const salaireMoyen=salaires.length?Math.round(masseSalaires/salaires.length):0;
   const sites=si.length;
   const incidentsOuverts=inc.filter(i=>i.statut!=="cloture").length;
   const demandesPersonnel=drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
+  const congesAttente=co.filter(c=>c.statut==="en_attente").length;
   const contratsExpires=ag.filter(a=>a.dateFinContrat&&daysBetween(today(),a.dateFinContrat)<0);
   const contratsFin30=ag.filter(a=>{if(!a.dateFinContrat)return false;const d=daysBetween(today(),a.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
-  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - TABLEAU DE BORD</h1>
-    <p class="text-slate-500 text-sm mb-4">${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${ag.length} employés · ${ca.length} candidats</p>
+  const candPct=n=>Math.round((n/candTotal)*100);
+  const ratioCard=(label,value,total,sub,color,route)=>`<a href="${route}" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit">
+      <div class="text-xs text-slate-500 uppercase font-bold">${label}</div>
+      <div class="flex items-end justify-between gap-2 mt-2"><div class="text-3xl font-black" style="color:${color}">${value}</div><div class="text-sm font-black text-slate-500">${total?Math.round(value/total*100):0}%</div></div>
+      <div class="h-2 bg-slate-100 rounded-full mt-3 overflow-hidden"><div style="height:100%;width:${total?Math.round(value/total*100):0}%;background:${color}"></div></div>
+      <div class="text-xs text-slate-500 mt-2">${sub}</div>
+    </a>`;
+  const progressRow=(label,value,total,color)=>`<div class="mb-3">
+      <div class="flex justify-between text-sm mb-1"><span class="font-semibold">${escapeHTML(label)}</span><span class="text-slate-500">${value} / ${total} · ${total?Math.round(value/total*100):0}%</span></div>
+      <div class="h-3 bg-slate-100 rounded-full overflow-hidden"><div style="height:100%;width:${total?Math.round(value/total*100):0}%;background:${color}"></div></div>
+    </div>`;
+  const bySoc=drhSocieteRows().map(r=>[r.label,ag.filter(a=>drhMatchSoc(a,r.key)).length]).filter(x=>x[1]>0);
+  const byFonction={};ag.forEach(a=>{const k=a.fonction||a.poste||a.affectationCourante?.poste||"Non précisé";byFonction[k]=(byFonction[k]||0)+1});
+  const topFonctions=Object.entries(byFonction).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const months=[];
+  for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);months.push(d.toISOString().slice(0,7))}
+  const monthLabel=m=>{const [y,mo]=m.split("-");return `${mo}/${String(y).slice(2)}`};
+  const recrutements=months.map(m=>ag.filter(a=>String(a.dateRecrutement||"").slice(0,7)===m).length);
+  const departs=months.map(m=>ag.filter(a=>String(a.dateSortie||a.departAt||a.updatedAt||"").slice(0,7)===m&&["sortant","demissionne","licencie"].includes(a.statut)).length);
+  const chart=(seriesA,seriesB)=>{
+    const max=Math.max(1,...seriesA,...seriesB);
+    const pts=arr=>arr.map((v,i)=>`${i*60},${80-(v/max*68)}`).join(" ");
+    return `<svg viewBox="0 0 300 100" style="width:100%;height:170px;display:block">
+      <polyline points="${pts(seriesA)}" fill="none" stroke="#047857" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <polyline points="${pts(seriesB)}" fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      ${months.map((m,i)=>`<text x="${i*60}" y="98" font-size="9" fill="#64748b">${monthLabel(m)}</text>`).join("")}
+    </svg>`;
+  };
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - Récap général</h1>
+    <p class="text-slate-500 text-sm mb-4">${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${ag.length} employés · ${ca.length} candidats · ${sites} sites</p>
     ${drhTabs("dashboard")}
     <div class="grid grid-4 mb-4">
-      <a href="#/fiches/toutes" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Effectif total</div><div class="text-3xl font-bold text-sky-700">${ag.length}</div></a>
-      <a href="#/effectif/actifs" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Opérationnels</div><div class="text-3xl font-bold text-emerald-700">${actifs}</div></a>
-      <a href="#/effectif/conge" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">En congé</div><div class="text-3xl font-bold text-amber-600">${enConge}</div></a>
-      <a href="#/effectif/maladie" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">En maladie</div><div class="text-3xl font-bold text-orange-600">${enMaladie}</div></a>
-      <a href="#/effectif/absents" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">En absence</div><div class="text-3xl font-bold text-red-700">${absents}</div></a>
-      <a href="#/effectif/suspension" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Suspendus</div><div class="text-3xl font-bold text-purple-700">${susp}</div></a>
-      <a href="#/effectif/sortant" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Sortants</div><div class="text-3xl font-bold text-slate-700">${sortants}</div></a>
+      ${ratioCard("Effectif actif",actifs,ag.length,"Taux opérationnel","#047857","#/effectif/actifs")}
+      ${ratioCard("Congé",enConge,actifsBase,"Agents actuellement en congé","#f59e0b","#/effectif/conge")}
+      ${ratioCard("Maladie",enMaladie,actifsBase,"Indisponibilité médicale","#c2410c","#/effectif/maladie")}
+      ${ratioCard("Absence",absents,actifsBase,"Absences déclarées","#dc2626","#/effectif/absents")}
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-      <a href="#/reserve" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Ajouter candidats</div><div class="text-2xl font-bold text-indigo-700">${candReserve}</div></a>
-      <a href="#/reserve" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Réserve candidats</div><div class="text-2xl font-bold text-indigo-500">${candReserve}</div></a>
-      <a href="#/sites/actifs" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Sites actifs</div><div class="text-2xl font-bold text-cyan-700">${sites}</div></a>
-      <a href="#/incidents/site" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Incidents ouverts</div><div class="text-2xl font-bold text-rose-700">${incidentsOuverts}</div></a>
-      <a href="#/demandes_personnel/dashboard" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500">Demande personnel</div><div class="text-2xl font-bold text-sky-700">${demandesPersonnel}</div></a>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+      <a href="#/reserve" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500 uppercase font-bold">Réserve</div><div class="text-2xl font-black text-indigo-700">${candReserve}</div><div class="text-xs text-slate-500">${candPct(candReserve)}% des candidats</div></a>
+      <a href="#/recrutement" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500 uppercase font-bold">Nouveaux</div><div class="text-2xl font-black text-sky-700">${candNouv}</div><div class="text-xs text-slate-500">${candPct(candNouv)}% du vivier</div></a>
+      <a href="#/candidats_archives" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500 uppercase font-bold">Archivés</div><div class="text-2xl font-black text-slate-700">${candArchives}</div><div class="text-xs text-slate-500">${candPct(candArchives)}% du vivier</div></a>
+      <a href="#/demandes_personnel/dashboard" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500 uppercase font-bold">Demandes</div><div class="text-2xl font-black text-cyan-700">${demandesPersonnel}</div><div class="text-xs text-slate-500">Personnel à traiter</div></a>
+      <a href="#/conges" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500 uppercase font-bold">Congés attente</div><div class="text-2xl font-black text-amber-700">${congesAttente}</div><div class="text-xs text-slate-500">Validation DRH</div></a>
     </div>
-    <div class="card p-5 mb-6" style="border-left:5px solid ${contratsAlerte.length?"#dc2626":"#043970"};background:${contratsAlerte.length?"#fef2f2":"#043970"}">
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+      <div class="card p-5"><h3 class="font-bold mb-3">Ratios opérationnels</h3>
+        ${progressRow("Actifs",actifs,ag.length,"#047857")}
+        ${progressRow("Congés",enConge,actifsBase,"#f59e0b")}
+        ${progressRow("Maladies",enMaladie,actifsBase,"#c2410c")}
+        ${progressRow("Absences",absents,actifsBase,"#dc2626")}
+        ${progressRow("Suspensions",susp,actifsBase,"#7c3aed")}
+      </div>
+      <div class="card p-5"><h3 class="font-bold mb-3">Courbe recrutement / départ</h3>${chart(recrutements,departs)}
+        <div class="flex gap-4 text-xs"><span><b style="color:#047857">●</b> Recrutements</span><span><b style="color:#dc2626">●</b> Départs</span></div>
+      </div>
+      <div class="card p-5"><h3 class="font-bold mb-3">Masse salariale</h3>
+        <div class="text-3xl font-black text-slate-900">${money(masseSalaires)}</div>
+        <div class="text-xs text-slate-500 mt-1">Moyenne active : ${money(salaireMoyen)} · ${salaires.length} salaire(s) renseigné(s)</div>
+        <div class="grid grid-2 mt-4 text-sm"><div class="p-3 rounded bg-slate-50"><b>${sites}</b><br><span class="text-slate-500">Sites couverts</span></div><div class="p-3 rounded bg-slate-50"><b>${incidentsOuverts}</b><br><span class="text-slate-500">Incidents ouverts</span></div></div>
+      </div>
+    </div>
+    <div class="card p-5 mb-6" style="border-left:5px solid ${contratsAlerte.length?"#dc2626":"#047857"};background:${contratsAlerte.length?"#fef2f2":"#f0fdf4"}">
       <div class="flex items-center justify-between gap-3 mb-3">
         <div>
-          <h3 class="font-bold text-lg" style="color:${contratsAlerte.length?"#991b1b":"#043970"}">Alerte fin de contrat</h3>
-          <div class="text-xs" style="color:${contratsAlerte.length?"#7f1d1d":"#043970"}">${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} fin(s) dans 30 jours</div>
+          <h3 class="font-bold text-lg" style="color:${contratsAlerte.length?"#991b1b":"#166534"}">Alerte fin de contrat</h3>
+          <div class="text-xs" style="color:${contratsAlerte.length?"#7f1d1d":"#166534"}">${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} fin(s) dans 30 jours</div>
         </div>
         <a class="btn ${contratsAlerte.length?"btn-danger":"btn-success"} text-xs" href="#/contrats/situation">Voir situation contrat</a>
       </div>
       ${contratsAlerte.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${contratsAlerte.slice(0,6).map(a=>{const d=daysBetween(today(),a.dateFinContrat);return`<a href="#/effectif/agent/${a.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #fecaca;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b><span class="pill ${d<0?"pill-red":"pill-amber"}">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.societe||"—")} · Fin : ${formatDate(a.dateFinContrat)}</div></a>`}).join("")}</div>${contratsAlerte.length>6?`<div class="text-xs text-red-700 mt-2 font-semibold">+ ${contratsAlerte.length-6} autre(s) contrat(s) en alerte.</div>`:""}`:`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat critique.</div>`}
     </div>
-    <div class="grid grid-cols-1 gap-4 mb-4">
-      <div class="card p-5"><h3 class="font-bold mb-3">Effectifs par statut</h3>${drhBars([["Actif",actifs],["En congé",enConge],["En maladie",enMaladie],["Absent",absents],["Suspendu",susp],["Sortant",sortants]],"#043970")}</div>
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
+      <div class="card p-5"><h3 class="font-bold mb-3">Répartition par société</h3>${drhBars(bySoc,"#043970")}</div>
+      <div class="card p-5"><h3 class="font-bold mb-3">Top fonctions / postes</h3>${drhBars(topFonctions,"#047857")}</div>
     </div>`;
 }
 function renderDRHStats(view){
