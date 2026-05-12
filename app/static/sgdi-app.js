@@ -3453,7 +3453,6 @@ function renderCandidatForm(view,id,options){
   }).join("");
   view.innerHTML=`<div class="candidate-dossier">
     <div class="candidate-hero">
-      <div class="candidate-photo">${c.photo?`<img src="${escapeHTML(c.photo)}" alt="">`:escapeHTML(initials)}</div>
       <div class="candidate-hero-main">
         <div class="candidate-eyebrow">Recrutement / réserve</div>
         <h1 class="candidate-title">${escapeHTML(pageTitle)}</h1>
