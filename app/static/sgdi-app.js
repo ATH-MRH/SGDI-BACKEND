@@ -10626,7 +10626,8 @@ function renderDRHDashboard(view){
   const salaireMoyen=salaires.length?Math.round(masseSalaires/salaires.length):0;
   const sites=si.length;
   const incidentsOuverts=inc.filter(i=>i.statut!=="cloture").length;
-  const demandesPersonnel=drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
+  const demandesList=drhDemandesPersonnelList();
+  const demandesPersonnel=demandesList.filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
   const congesAttente=co.filter(c=>c.statut==="en_attente").length;
   const contratsExpires=ag.filter(a=>a.dateFinContrat&&daysBetween(today(),a.dateFinContrat)<0);
   const contratsFin30=ag.filter(a=>{if(!a.dateFinContrat)return false;const d=daysBetween(today(),a.dateFinContrat);return d>=0&&d<=30});
@@ -10650,6 +10651,19 @@ function renderDRHDashboard(view){
   const monthLabel=m=>{const [y,mo]=m.split("-");return `${mo}/${String(y).slice(2)}`};
   const recrutements=months.map(m=>ag.filter(a=>String(a.dateRecrutement||"").slice(0,7)===m).length);
   const departs=months.map(m=>ag.filter(a=>String(a.dateSortie||a.departAt||a.updatedAt||"").slice(0,7)===m&&["sortant","demissionne","licencie"].includes(a.statut)).length);
+  const monthOf=v=>String(v||"").slice(0,7);
+  const seriesEffectif=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)).length);
+  const seriesConges=months.map(m=>co.filter(c=>c.type!=="Maladie"&&monthOf(c.du||c.createdAt)===m).length);
+  const seriesMaladies=months.map(m=>co.filter(c=>c.type==="Maladie"&&monthOf(c.du||c.createdAt)===m).length);
+  const seriesAbsences=months.map(m=>ag.filter(a=>a.statut==="absent"&&monthOf(a.updatedAt||a.createdAt)===m).length);
+  const seriesSuspensions=months.map(m=>ag.filter(a=>a.statut==="suspendu"&&monthOf(a.updatedAt||a.createdAt)===m).length);
+  const seriesCandidats=months.map(m=>ca.filter(c=>monthOf(c.createdAt||c.dateCreation||c.updatedAt)===m).length);
+  const seriesReserve=months.map(m=>ca.filter(c=>candidatIsReserve(c)&&monthOf(c.fichePositionValideeAt||c.updatedAt||c.createdAt)===m).length);
+  const seriesDemandes=months.map(m=>demandesList.filter(d=>monthOf(d.createdAt||d.date||d.submittedAt)===m).length);
+  const seriesIncidents=months.map(m=>inc.filter(i=>monthOf(i.date||i.createdAt)===m).length);
+  const seriesContrats=months.map(m=>ag.filter(a=>monthOf(a.dateFinContrat)===m).length);
+  const seriesSites=months.map(m=>si.filter(s=>monthOf(s.createdAt||s.dateCreation||s.updatedAt)===m).length);
+  const seriesMasse=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)&&a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire||a.salaireNet||0)||0),0));
   const chart=(seriesA,seriesB)=>{
     const max=Math.max(1,...seriesA,...seriesB);
     const pts=arr=>arr.map((v,i)=>`${i*60},${80-(v/max*68)}`).join(" ");
@@ -10659,6 +10673,14 @@ function renderDRHDashboard(view){
       ${months.map((m,i)=>`<text x="${i*60}" y="98" font-size="9" fill="#64748b">${monthLabel(m)}</text>`).join("")}
     </svg>`;
   };
+  const miniCurve=(title,value,series,color,route)=>{const max=Math.max(1,...series);const pts=series.map((v,i)=>`${i*34},${56-(v/max*46)}`).join(" ");return `<a href="${route}" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit">
+      <div class="flex items-start justify-between gap-2"><div><div class="text-xs text-slate-500 uppercase font-bold">${title}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></div><div class="text-xs text-slate-400">${months.length} mois</div></div>
+      <svg viewBox="0 0 170 66" style="width:100%;height:76px;display:block;margin-top:8px">
+        <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        ${series.map((v,i)=>`<circle cx="${i*34}" cy="${56-(v/max*46)}" r="3" fill="${color}"/>`).join("")}
+      </svg>
+      <div class="flex justify-between text-[10px] text-slate-400"><span>${monthLabel(months[0])}</span><span>${monthLabel(months[months.length-1])}</span></div>
+    </a>`};
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - Récap général</h1>
     <p class="text-slate-500 text-sm mb-4">${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${ag.length} employés · ${ca.length} candidats · ${sites} sites</p>
     ${drhTabs("dashboard")}
@@ -10690,6 +10712,23 @@ function renderDRHDashboard(view){
         <div class="text-3xl font-black text-slate-900">${money(masseSalaires)}</div>
         <div class="text-xs text-slate-500 mt-1">Moyenne active : ${money(salaireMoyen)} · ${salaires.length} salaire(s) renseigné(s)</div>
         <div class="grid grid-2 mt-4 text-sm"><div class="p-3 rounded bg-slate-50"><b>${sites}</b><br><span class="text-slate-500">Sites couverts</span></div><div class="p-3 rounded bg-slate-50"><b>${incidentsOuverts}</b><br><span class="text-slate-500">Incidents ouverts</span></div></div>
+      </div>
+    </div>
+    <div class="mb-4">
+      <h3 class="font-bold mb-3">Courbes par rubrique</h3>
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+        ${miniCurve("Effectif",ag.length,seriesEffectif,"#043970","#/effectif/actifs")}
+        ${miniCurve("Congés",enConge,seriesConges,"#f59e0b","#/conges")}
+        ${miniCurve("Maladies",enMaladie,seriesMaladies,"#c2410c","#/effectif/maladie")}
+        ${miniCurve("Absences",absents,seriesAbsences,"#dc2626","#/effectif/absents")}
+        ${miniCurve("Suspensions",susp,seriesSuspensions,"#7c3aed","#/effectif/suspension")}
+        ${miniCurve("Candidats",ca.length,seriesCandidats,"#4f46e5","#/recrutement")}
+        ${miniCurve("Réserve",candReserve,seriesReserve,"#7c3aed","#/reserve")}
+        ${miniCurve("Demandes",demandesPersonnel,seriesDemandes,"#0891b2","#/demandes_personnel/dashboard")}
+        ${miniCurve("Incidents",incidentsOuverts,seriesIncidents,"#be123c","#/incidents/site")}
+        ${miniCurve("Contrats",contratsAlerte.length,seriesContrats,"#0f172a","#/contrats/situation")}
+        ${miniCurve("Sites",sites,seriesSites,"#047857","#/sites/actifs")}
+        ${miniCurve("Masse salariale",money(masseSalaires),seriesMasse,"#0f766e","#/paie")}
       </div>
     </div>
     <div class="card p-5 mb-6" style="border-left:5px solid ${contratsAlerte.length?"#dc2626":"#047857"};background:${contratsAlerte.length?"#fef2f2":"#f0fdf4"}">
