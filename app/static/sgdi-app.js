@@ -3463,35 +3463,34 @@ function renderCandidatForm(view,id,options){
         </div>
       </div>
       <button type="button" class="btn btn-ghost" onclick="navigate('${returnRoute}')">Retour</button>
-    </div>
-    <form id="candidat-form" class="candidate-dossier-grid" onsubmit="event.preventDefault();saveCandidat('${c.id}')">
-      <input type="hidden" name="id" value="${c.id}"/><input type="hidden" name="isNew" value="${c.isNew?"1":""}"/><input type="hidden" name="reserveDirect" value="${c.reserveDirect?"1":""}"/>
-      <div class="candidate-main">
-        <div class="stepper candidate-stepper"><div class="step ${step>=1?"done":"active"}">1. Candidature</div><div class="step ${step===2?"active":""}">2. Fiche de renseignement</div></div>
-        ${renderCandidatEtape1(c)}
-        <div id="etape2-block" class="${candidatEtape1Valid(c)?"":"hidden"}">${candidatEtape1Valid(c)?renderCandidatEtape2(c):""}</div>
-      </div>
-      <aside class="candidate-side">
-        <div class="candidate-panel">
-          <div class="candidate-panel-label">Avancement du dossier</div>
-          <div class="candidate-progress-row"><strong>${validatedCount}/${CANDIDAT_SECTIONS.length}</strong><span>${progressPct}%</span></div>
-          <div class="candidate-progress-track"><div class="candidate-progress-bar" style="width:${progressPct}%"></div></div>
-          <p>${allValid?"Toutes les sections sont validées.":"Validez chaque section dans l'ordre pour continuer."}</p>
-        </div>
-        <div class="candidate-panel">
-          <div class="candidate-panel-label">Sections</div>
-          <div class="candidate-section-list">${sectionList}</div>
-        </div>
-        <div class="candidate-panel candidate-actions-panel">
-          <button type="button" class="btn btn-secondary" onclick="modifierCandidatForm('${c.id}')">Modifier</button>
-          <button type="button" class="btn btn-secondary" onclick="saveCandidat('${c.id}',true)">Enregistrer</button>
-          ${candidatIsArchived(c)?`<button type="button" class="btn btn-success" onclick="activerCandidat('${c.id}')">Activer</button>`:`<button type="button" class="btn btn-ghost text-red-600" onclick="openArchiveCandidatModal('${c.id}')">Archiver candidat</button>`}
-          ${!candidatIsArchived(c)?(allValid?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">Valider la fiche de position</button>`:`<button type="button" class="btn btn-ghost" disabled>Fiche de position non complète</button>`):""}
-          <button type="button" class="btn btn-ghost text-red-600" onclick="deleteCandidat('${c.id}')">Supprimer</button>
-        </div>
-      </aside>
-    </form>
-  </div>`;
+	    </div>
+	    <form id="candidat-form" class="candidate-dossier-grid" onsubmit="event.preventDefault();saveCandidat('${c.id}')">
+	      <input type="hidden" name="id" value="${c.id}"/><input type="hidden" name="isNew" value="${c.isNew?"1":""}"/><input type="hidden" name="reserveDirect" value="${c.reserveDirect?"1":""}"/>
+	      <div class="candidate-progress-strip">
+	        <div class="candidate-progress-top">
+	          <div>
+	            <div class="candidate-panel-label">Avancement du dossier</div>
+	            <p>${allValid?"Toutes les sections sont validées.":"Validez chaque section dans l'ordre pour continuer."}</p>
+	          </div>
+	          <div class="candidate-progress-score"><strong>${validatedCount}/${CANDIDAT_SECTIONS.length}</strong><span>${progressPct}%</span></div>
+	        </div>
+	        <div class="candidate-progress-track"><div class="candidate-progress-bar" style="width:${progressPct}%"></div></div>
+	        <div class="candidate-section-list candidate-section-list-horizontal">${sectionList}</div>
+	      </div>
+	      <div class="candidate-actions-panel candidate-actions-row">
+	        <button type="button" class="btn btn-secondary" onclick="modifierCandidatForm('${c.id}')">Modifier</button>
+	        <button type="button" class="btn btn-secondary" onclick="saveCandidat('${c.id}',true)">Enregistrer</button>
+	        ${candidatIsArchived(c)?`<button type="button" class="btn btn-success" onclick="activerCandidat('${c.id}')">Activer</button>`:`<button type="button" class="btn btn-ghost text-red-600" onclick="openArchiveCandidatModal('${c.id}')">Archiver candidat</button>`}
+	        ${!candidatIsArchived(c)?(allValid?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">Valider la fiche de position</button>`:`<button type="button" class="btn btn-ghost" disabled>Fiche de position non complète</button>`):""}
+	        <button type="button" class="btn btn-ghost text-red-600" onclick="deleteCandidat('${c.id}')">Supprimer</button>
+	      </div>
+	      <div class="candidate-main">
+	        <div class="stepper candidate-stepper"><div class="step ${step>=1?"done":"active"}">1. Candidature</div><div class="step ${step===2?"active":""}">2. Fiche de renseignement</div></div>
+	        ${renderCandidatEtape1(c)}
+	        <div id="etape2-block" class="${candidatEtape1Valid(c)?"":"hidden"}">${candidatEtape1Valid(c)?renderCandidatEtape2(c):""}</div>
+	      </div>
+	    </form>
+	  </div>`;
   setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'));if(sessionStorage.getItem("candidatAutoEdit:"+c.id)==="1"){sessionStorage.removeItem("candidatAutoEdit:"+c.id);modifierCandidatForm(c.id)}},0);
 }
 
