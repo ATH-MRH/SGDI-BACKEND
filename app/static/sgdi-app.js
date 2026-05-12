@@ -5191,19 +5191,48 @@ function agentSnapshotForPreview(id){
   const f=document.getElementById("agent-form");
   if(f&&String(location.hash||"").includes(id)){
     const fd=new FormData(f);
-    ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dateFinEssai","dateFinContrat","iban","photo"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
+    ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dateFinEssai","dateFinContrat","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
+    const photoValue=fd.get("photo");
+    if(typeof photoValue==="string"&&photoValue.trim())a.photo=photoValue;
     a.habilitations=a.habilitations||{};
     ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
   }
   return a;
 }
 function fichePrintStyles(){
-  return``;
+  return`<style>
+    @page{size:A4 portrait;margin:10mm}
+    html,body{margin:0;background:#f1f5f9;color:#111827;font-family:Arial,Helvetica,sans-serif}
+    .fiche-real{background:#fff;width:190mm;min-height:277mm;margin:0 auto;padding:10mm;box-sizing:border-box;color:#111827;font-family:Arial,Helvetica,sans-serif}
+    .fiche-doc-head{display:grid;grid-template-columns:1fr auto;gap:10mm;align-items:start;border-bottom:2px solid #043970;padding-bottom:6mm;margin-bottom:6mm}
+    .fiche-brand{font-size:18px;font-weight:900;text-transform:uppercase;color:#043970}.fiche-doc-title{font-size:20px;font-weight:900;text-transform:uppercase;margin-top:3mm;letter-spacing:.03em}.fiche-doc-sub{font-size:11px;color:#64748b;margin-top:1.5mm}
+    .fiche-meta{border:1px solid #cbd5e1;border-radius:4px;min-width:54mm;font-size:10px}.fiche-meta div{display:grid;grid-template-columns:22mm 1fr;border-bottom:1px solid #e2e8f0}.fiche-meta div:last-child{border-bottom:0}.fiche-meta b{background:#f8fafc;padding:2mm;color:#475569;text-transform:uppercase}.fiche-meta span{padding:2mm;font-weight:800}
+    .fiche-identity{display:grid;grid-template-columns:38mm 1fr;gap:7mm;margin-bottom:6mm}.fiche-photo{width:38mm;height:48mm;border:1px solid #94a3b8;background:#f8fafc;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#94a3b8;font-size:10px;font-weight:800}.fiche-photo img{width:100%;height:100%;object-fit:cover}
+    .fiche-name{font-size:22px;font-weight:900;text-transform:uppercase;margin-bottom:2mm}.fiche-line{font-size:12px;color:#475569;margin-top:1.2mm}.fiche-status{display:inline-flex;margin-top:3mm;padding:5px 9px;border-radius:999px;background:#e8f0f8;color:#043970;font-size:10px;font-weight:900;text-transform:uppercase}
+    .fiche-alert{margin-top:3mm;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;padding:2.5mm;font-size:11px;font-weight:800}
+    .fiche-section{break-inside:avoid;margin-top:5mm}.fiche-section h2{font-size:12px;text-transform:uppercase;color:#043970;border-bottom:1px solid #043970;padding-bottom:1.8mm;margin:0 0 2.8mm;font-weight:900;letter-spacing:.04em}
+    .fiche-grid{display:grid;grid-template-columns:1fr 1fr;gap:2mm 3mm}.fiche-cell{border:1px solid #d1d5db;padding:2.1mm;background:#fff;min-height:11mm}.fiche-cell b{display:block;font-size:8.5px;text-transform:uppercase;color:#64748b;margin-bottom:1mm}.fiche-cell span{font-size:11.5px;font-weight:700;word-break:break-word}
+    .fiche-table{width:100%;border-collapse:collapse;font-size:10.5px}.fiche-table th{background:#f1f5f9;text-align:left;color:#334155;font-size:8.5px;text-transform:uppercase}.fiche-table th,.fiche-table td{border:1px solid #d1d5db;padding:4px;vertical-align:top}
+    .fiche-annex{break-before:page}.fiche-sign{display:grid;grid-template-columns:repeat(3,1fr);gap:8mm;margin-top:12mm;font-size:11px}.fiche-sign div{border-top:1px solid #111827;text-align:center;padding-top:3mm;font-weight:800;min-height:14mm}
+    .fiche-footer{margin-top:7mm;border-top:1px solid #cbd5e1;padding-top:2mm;color:#64748b;font-size:9px;display:flex;justify-content:space-between;gap:8mm}
+    @media print{html,body{background:#fff}.fiche-real{width:auto;min-height:auto;margin:0;padding:0}.fiche-annex{break-before:page}.no-print{display:none!important}}
+  </style>`;
 }
 function ficheCell(label,value){return`<div class="fiche-cell"><b>${escapeHTML(label)}</b><span>${value!==undefined&&value!==null&&String(value)!==""?escapeHTML(value):"—"}</span></div>`}
 function ficheRows(rows,emptyCols){
   if(!rows||!rows.length)return`<tr><td colspan="${emptyCols||6}" style="text-align:center;color:#64748b">Aucune donnée.</td></tr>`;
   return rows.join("");
+}
+function ficheStatusInfo(a){
+  const congeActif=(db.conges||[]).find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
+  if(a.blacklist)return{label:"Black list",alert:"Agent inscrit sur la black list. Vérifier la référence et le motif avant toute décision RH."};
+  if(ficheAgentIsSortantArchive(a))return{label:"Sortant / archivé",alert:"Cette fiche appartient à un agent sorti du cycle actif."};
+  if(ficheAgentInAbandon(a))return{label:"Abandon de poste",alert:"Situation sensible : abandon de poste détecté dans les événements de gestion."};
+  if(a.statut==="suspendu")return{label:"Suspendu",alert:"Agent suspendu. Les actions opérationnelles doivent être validées par la DRH."};
+  if(congeActif&&congeActif.type==="Maladie")return{label:"En maladie",alert:`Maladie approuvée du ${formatDate(congeActif.du)} au ${formatDate(congeActif.au)}.`};
+  if(congeActif)return{label:"En congé",alert:`Congé approuvé du ${formatDate(congeActif.du)} au ${formatDate(congeActif.au)}.`};
+  if(a.statut&&a.statut!=="actif")return{label:a.statut,alert:"Statut non actif à contrôler."};
+  return{label:"Actif",alert:""};
 }
 function ficheHTML(a){
   if(!a)return`<div class="fiche-real">Agent introuvable.</div>`;
@@ -5215,18 +5244,32 @@ function ficheHTML(a){
   const ver=a.verifications||{};
   const docs=a.documents||{};
   const mat=(a.materiel||a.dotations||a.equipements||[]);
+  const status=ficheStatusInfo(a);
+  const fullName=((a.nom||"")+" "+(a.prenom||"")).trim()||"—";
+  const ref=`FP-${String(a.matricule||a.id||"SGDI").replace(/\s+/g,"-")}-${today().replaceAll("-","")}`;
   return`<div class="fiche-real">
-    <div class="fiche-head">
-      <div><div class="fiche-title">Fiche de position employé</div><div class="fiche-sub">${escapeHTML(a.societe||"SGDI")} · Générée le ${formatDate(today())}</div></div>
-      <div class="fiche-code">${escapeHTML(a.matricule||"—")}</div>
+    <div class="fiche-doc-head">
+      <div>
+        <div class="fiche-brand">${escapeHTML(a.societe||"SGDI")}</div>
+        <div class="fiche-doc-title">Fiche de position employé</div>
+        <div class="fiche-doc-sub">Document RH officiel · Gestion des ressources humaines</div>
+      </div>
+      <div class="fiche-meta">
+        <div><b>Réf.</b><span>${escapeHTML(ref)}</span></div>
+        <div><b>Date</b><span>${formatDate(today())}</span></div>
+        <div><b>Matricule</b><span>${escapeHTML(a.matricule||"—")}</span></div>
+        <div><b>Version</b><span>1.0</span></div>
+      </div>
     </div>
-    <div class="fiche-hero">
+    <div class="fiche-identity">
       <div class="fiche-photo">${a.photo?`<img src="${a.photo}"/>`:"PHOTO"}</div>
       <div>
-        <div class="fiche-name">${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim()||"—")}</div>
-        <div class="fiche-muted">${escapeHTML(aff.poste||a.fonction||"Poste non défini")} · ${escapeHTML(aff.siteName||"Sans affectation")}</div>
-        <div class="fiche-muted">Né(e) le ${formatDate(a.dateNaissance)} à ${escapeHTML(a.lieuNaissance||"—")}</div>
-        <div class="fiche-status">${escapeHTML(a.statut||"actif")}${a.blacklist?" · BLACK LIST":""}</div>
+        <div class="fiche-name">${escapeHTML(fullName)}</div>
+        <div class="fiche-line"><b>Poste :</b> ${escapeHTML(aff.poste||a.fonction||"Poste non défini")}</div>
+        <div class="fiche-line"><b>Site :</b> ${escapeHTML(aff.siteName||"Sans affectation")} ${aff.clientName?`· ${escapeHTML(aff.clientName)}`:""}</div>
+        <div class="fiche-line"><b>Naissance :</b> ${formatDate(a.dateNaissance)} à ${escapeHTML(a.lieuNaissance||"—")}</div>
+        <div class="fiche-status">${escapeHTML(status.label)}</div>
+        ${status.alert?`<div class="fiche-alert">${escapeHTML(status.alert)}</div>`:""}
       </div>
     </div>
     <section class="fiche-section"><h2>1. Identification</h2><div class="fiche-grid">
@@ -5248,28 +5291,29 @@ function ficheHTML(a){
     <section class="fiche-section"><h2>5. Vérifications et documents archivés</h2><div class="fiche-grid">
       ${[["ActeNaissance","Acte de naissance"],["CertifResidence","Certificat résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce identité"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]].map(([k,l])=>ficheCell(l,(ver["verif"+k]?"Validé":"Non validé")+(docs[k]?" · Document archivé":""))).join("")}
     </div></section>
-    <section class="fiche-section"><h2>6. Matériel et équipement</h2>
+    <div class="fiche-sign"><div>Préparé par RH</div><div>Vérifié par DRH</div><div>Cachet / approbation</div></div>
+    <div class="fiche-footer"><span>Référence : ${escapeHTML(ref)}</span><span>Document généré automatiquement depuis SGDI.</span></div>
+    <section class="fiche-section fiche-annex"><h2>Annexe 1. Matériel et équipement</h2>
       <table class="fiche-table"><thead><tr><th>Article</th><th>Catégorie</th><th>Taille/Pointure</th><th>Quantité</th><th>Date</th><th>État</th></tr></thead><tbody>
       ${ficheRows((Array.isArray(mat)?mat:[]).map(x=>`<tr><td>${escapeHTML(x.article||x.designation||x.nom||"—")}</td><td>${escapeHTML(x.categorie||"—")}</td><td>${escapeHTML(x.taille||x.pointure||"—")}</td><td>${escapeHTML(x.quantite||x.qte||"—")}</td><td>${formatDate(x.date||x.dateDotation||x.createdAt)}</td><td>${escapeHTML(x.etat||"—")}</td></tr>`),6)}
       </tbody></table>
     </section>
-    <section class="fiche-section"><h2>7. Affectations sur site</h2>
+    <section class="fiche-section"><h2>Annexe 2. Affectations sur site</h2>
       <table class="fiche-table"><thead><tr><th>Statut</th><th>Site</th><th>Client</th><th>Poste</th><th>Groupe</th><th>Du</th><th>Au</th><th>Motif</th></tr></thead><tbody>
       ${ficheRows(hist.map((h,i)=>`<tr><td>${h.active?"En cours":"Historique"}</td><td>${escapeHTML(h.siteName||"—")}</td><td>${escapeHTML(h.clientName||"—")}</td><td>${escapeHTML(h.poste||"—")}</td><td>${escapeHTML(h.groupe||"—")}</td><td>${formatDate(h.dateDebut)}</td><td>${h.dateFin?formatDate(h.dateFin):"—"}</td><td>${escapeHTML(h.motifChangement||"—")}</td></tr>`),8)}
       </tbody></table>
     </section>
-    <section class="fiche-section"><h2>8. Événements de gestion</h2>
+    <section class="fiche-section"><h2>Annexe 3. Événements de gestion</h2>
       <table class="fiche-table"><thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th></tr></thead><tbody>
       ${ficheRows(gest.map(e=>`<tr><td>${escapeHTML(e.type||"—")}</td><td>${formatDate(e.du)}</td><td>${formatDate(e.au)}</td><td>${e.du&&e.au?daysBetween(e.du,e.au)+1:"—"}</td><td>${escapeHTML(e.motif||"—")}</td><td>${escapeHTML(e.statut||"—")}</td></tr>`),6)}
       </tbody></table>
     </section>
-    <section class="fiche-section"><h2>9. Sanctions disciplinaires</h2>
+    <section class="fiche-section"><h2>Annexe 4. Sanctions disciplinaires</h2>
       <table class="fiche-table"><thead><tr><th>Date infraction</th><th>Site</th><th>Indicatif</th><th>Faute</th><th>Sanction</th><th>Mise à pied</th><th>Début</th><th>Reprise</th></tr></thead><tbody>
       ${ficheRows(sanctions.map(x=>`<tr><td>${formatDate(x.dateInfraction||x.date)}</td><td>${escapeHTML(x.site||"—")}</td><td>${escapeHTML(x.indicatif||"—")}</td><td>${escapeHTML(x.faute||"—")}</td><td>${escapeHTML(x.type||"—")}</td><td>${x.joursMiseAPied?x.joursMiseAPied+" j":"—"}</td><td>${formatDate(x.dateDebut)}</td><td>${formatDate(x.dateReprise)}</td></tr>`),8)}
       </tbody></table>
     </section>
     ${a.blacklist?`<section class="fiche-section"><h2>Black list</h2><div class="fiche-grid">${ficheCell("Inscrit le",formatDate(a.blacklistAt))}${ficheCell("Par",a.blacklistBy)}${ficheCell("Référence",a.blacklistReference)}${ficheCell("Motif",a.blacklistMotif)}</div></section>`:""}
-    <div class="fiche-sign"><div>Signature agent</div><div>Signature DRH</div></div>
   </div>`;
 }
 function previewFiche(id){
