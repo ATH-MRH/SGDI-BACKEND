@@ -1492,6 +1492,7 @@ function criticalActionNeedsPassword(el){
   if(!el||criticalActionAuthorized.has(el)||!session||!session.username)return"";
   if(el.disabled||el.getAttribute("aria-disabled")==="true")return"";
   if(el.closest("[data-critical-auth], #login-form, .login-admin-system-shortcut"))return"";
+  if(el.closest("[data-section-action]"))return"";
   return criticalActionName(el);
 }
 function removeCriticalActionPasswordModal(){
