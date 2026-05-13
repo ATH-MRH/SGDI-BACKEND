@@ -6179,7 +6179,7 @@ function renderDemandesPersonnel(view,sub,arg){
   </button>`};
   view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
     <div><h1 class="text-2xl font-bold">Réception demandes & réclamations</h1><p class="text-sm text-slate-500">${all.length} demande(s) · ${employeeGroups.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" toutes sociétés"} · source portail RH mobile.</p></div>
-    <a class="btn btn-secondary text-sm" href="#/portail">Ouvrir portail</a>
+    <a class="btn portal-open-btn text-sm" href="#/portail">Ouvrir portail</a>
   </div>
   <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
     <button class="card p-4 text-left" onclick="setDemandesPersonnelFilter('statut','')"><div class="text-xs text-slate-500">Total reçu</div><div class="text-3xl font-black">${all.length}</div></button>
