@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.irongs.models import SgdiRecord
 from app.modules.irongs import sql_bridge
+from app.modules.drh.models import Employee
 from app.core.photo_storage import normalize_photo_fields
 
 logger = logging.getLogger("sgdi.records")
@@ -287,6 +288,71 @@ def _replace_and_success(db: Session, name: str, data: list[Any] | dict[str, Any
     return {"status": "success", "data": payload if payload is not None else saved}
 
 
+def _clean_ref(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _delete_employee_fiche(db: Session, data: dict[str, Any], user: Any | None) -> dict[str, Any]:
+    _require_admin_action(user)
+    refs = {
+        _clean_ref(data.get("agentId")),
+        _clean_ref(data.get("id")),
+        _clean_ref(data.get("backendId")),
+        _clean_ref(data.get("matricule")),
+        _clean_ref(data.get("code")),
+    }
+    refs = {value for value in refs if value}
+    if not refs:
+        raise HTTPException(status_code=422, detail="Identifiant employé obligatoire")
+
+    linked_collections = {
+        "agents", "employees", "conges", "contrats", "contratsPersonnel", "materiel",
+        "pointages", "pointageMensuel", "feuillePresence", "demandesPersonnel",
+        "demandesStructure", "missions", "siteInspections", "stockMouvements",
+    }
+    linked_fields = {
+        "id", "backendId", "agentId", "employeeId", "employee_id",
+        "beneficiaireAgentId", "retourAgentId", "matricule", "code",
+    }
+
+    def record_matches(row: SgdiRecord) -> bool:
+        if _clean_ref(row.item_id) in refs:
+            return True
+        if not isinstance(row.data, dict):
+            return False
+        return any(_clean_ref(row.data.get(field)) in refs for field in linked_fields)
+
+    deleted_legacy = 0
+    rows = db.execute(select(SgdiRecord).where(SgdiRecord.collection.in_(linked_collections))).scalars().all()
+    for row in rows:
+        if record_matches(row):
+            db.delete(row)
+            deleted_legacy += 1
+
+    deleted_sql = 0
+    employee = None
+    backend_id = sql_bridge.as_int(data.get("backendId") or data.get("employeeId") or data.get("employee_id"))
+    if backend_id:
+        employee = db.get(Employee, backend_id)
+    for ref in refs:
+        if employee:
+            break
+        employee = db.execute(select(Employee).where(Employee.code == ref)).scalar_one_or_none()
+    if employee:
+        db.delete(employee)
+        deleted_sql = 1
+
+    db.commit()
+    return {
+        "status": "success",
+        "data": {
+            "deleted": True,
+            "legacy": deleted_legacy,
+            "sql": deleted_sql,
+        },
+    }
+
+
 def _validate_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) -> dict[str, Any]:
     if not agent_id or not periode:
         raise HTTPException(status_code=422, detail="Agent et période obligatoires")
@@ -521,6 +587,9 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         _find_item(items, item_id)
         items = [row for row in items if str(row.get("id")) != str(item_id)]
         return _replace_and_success(db, collection, items, {"deleted": True, "id": item_id})
+
+    if action == "delete-employee-fiche":
+        return _delete_employee_fiche(db, data | {"agentId": item_id}, user)
 
     if action == "convert-prospect":
         prospects = _collection_list(db, "prospects")

@@ -530,7 +530,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false})},
+  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
@@ -4585,7 +4585,7 @@ function renderAgentForm(view,id){
     </div>
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div class="flex items-center gap-2 flex-wrap">${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}${locked?'<span class="pill pill-gray">🔒 Verrouillée</span>':''}${!locked&&a.locked?'<span class="pill pill-amber">🔓 Déverrouillée (session)</span>':''}</div>
-      <div class="flex gap-2 items-start flex-wrap justify-end">${essaiBadge}${!locked?`<button class="btn btn-secondary text-xs" onclick="importAgentExcel('${a.id}')">Importer Excel</button>`:""}<button class="btn btn-secondary text-xs" onclick="openAgentDocumentsModal('${a.id}')">📄 Documents</button><button class="btn btn-ghost text-xs" onclick="previewFiche('${a.id}')">👁 Aperçu</button><button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">🖨 Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="printFicheDotation('${a.id}')">Imprimer fiche de dotation</button>`:""}${isAdmin()&&a.locked&&locked?`<button class="btn btn-secondary text-xs" onclick="unlockAgent('${a.id}')">🔓 Déverrouiller Admin</button>`:""}${isAdmin()&&(!locked||unlockedAgents.has(a.id))?`<button class="btn btn-secondary text-xs" onclick="lockAgent('${a.id}')">🔒 Verrouiller la fiche</button>`:""}<button class="btn btn-ghost" onclick="history.back()">← Retour</button></div>
+      <div class="flex gap-2 items-start flex-wrap justify-end">${essaiBadge}${!locked?`<button class="btn btn-secondary text-xs" onclick="importAgentExcel('${a.id}')">Importer Excel</button>`:""}<button class="btn btn-secondary text-xs" onclick="openAgentDocumentsModal('${a.id}')">📄 Documents</button><button class="btn btn-ghost text-xs" onclick="previewFiche('${a.id}')">👁 Aperçu</button>${isAdmin()?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">🖨 Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="printFicheDotation('${a.id}')">Imprimer fiche de dotation</button>`:""}${isAdmin()&&a.locked&&locked?`<button class="btn btn-secondary text-xs" onclick="unlockAgent('${a.id}')">🔓 Déverrouiller Admin</button>`:""}${isAdmin()&&(!locked||unlockedAgents.has(a.id))?`<button class="btn btn-secondary text-xs" onclick="lockAgent('${a.id}')">🔒 Verrouiller la fiche</button>`:""}<button class="btn btn-ghost" onclick="history.back()">← Retour</button></div>
     </div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${renderAgentDemandesSection(a)}
@@ -4950,6 +4950,31 @@ function saveAgent(id){
   a.habilitations=a.habilitations||{};
   ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
   applyOkbaCodeIfNeeded(a,a.fonction||a.poste||a.affectationCourante?.poste);a.salaireNet=parseMoneyInput(a.salaireNet)||0;a.updatedAt=today();saveDB();toast("Fiche enregistrée","success");
+}
+function agentDeleteLinkedCollections(){return["conges","contrats","contratsPersonnel","materiel","pointages","pointageMensuel","feuillePresence","demandesPersonnel","demandesStructure","missions","siteInspections","stockMouvements"]}
+function agentDeleteItemMatches(item,a){
+  if(!item||!a)return false;
+  const refs=[a.id,a.backendId,a.matricule,a.code].map(v=>String(v||"").trim()).filter(Boolean);
+  const fields=["agentId","employeeId","employee_id","beneficiaireAgentId","retourAgentId","matricule","code"];
+  return fields.some(k=>refs.includes(String(item[k]||"").trim()));
+}
+async function deleteAgent(id){
+  if(!isAdmin()){toast("Suppression réservée à l'administrateur","error");return}
+  const a=db.agents.find(x=>x.id===id);if(!a){toast("Agent introuvable","error");return}
+  const label=((a.matricule?`${a.matricule} · `:"")+(a.nom||"")+" "+(a.prenom||"")).trim();
+  const linked=agentDeleteLinkedCollections().flatMap(collection=>(db[collection]||[]).filter(item=>agentDeleteItemMatches(item,a)).map(item=>({collection,item})));
+  const msg=`Supprimer définitivement la fiche employé ${label||"sélectionnée"} ?`+(linked.length?`\n\n${linked.length} ligne(s) liée(s) seront aussi supprimée(s).`:"")+"\n\nCette action est irréversible.";
+  if(!confirm(msg))return;
+  try{
+    const res=await sgdiRunLegacyAction("delete-employee-fiche",{item_id:id,data:{agentId:id,backendId:a.backendId||"",matricule:a.matricule||"",code:a.code||""}});
+    if(res?.status!=="success"){toast("Suppression refusée par le backend","error");return}
+  }catch(e){toast("Suppression fiche legacy refusée : "+(e.message||e),"error");return}
+  agentDeleteLinkedCollections().forEach(collection=>{db[collection]=(db[collection]||[]).filter(item=>!agentDeleteItemMatches(item,a))});
+  db.agents=(db.agents||[]).filter(x=>x.id!==id);
+  unlockedAgents.delete(id);saveUnlocked();
+  saveDB();
+  toast("Fiche employé supprimée","success");
+  navigate("fiches/toutes");
 }
 function openReaffectation(agentId){
   if(!isOpsFicheContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
