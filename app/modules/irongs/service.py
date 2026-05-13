@@ -14,7 +14,7 @@ from app.core.photo_storage import normalize_photo_fields
 
 logger = logging.getLogger("sgdi.records")
 OBJECT_ITEM_ID = "__object__"
-ADMIN_ACTION_ROLES = {"admin", "rh", "dispatch", "ADM1", "adm1"}
+ADMIN_ACTION_ROLES = {"admin", "adm", "adm1", "adm2", "rh", "drh", "dispatch", "ops"}
 
 
 def _invalid_item_id(value: Any) -> bool:
@@ -247,7 +247,7 @@ def _actor_name(user: Any | None) -> str:
 
 
 def _actor_role(user: Any | None) -> str:
-    return str(getattr(user, "role", "") or "")
+    return str(getattr(user, "role", "") or "").strip().lower()
 
 
 def _require_admin_action(user: Any | None) -> None:
