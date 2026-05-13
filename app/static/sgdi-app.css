@@ -509,8 +509,13 @@
 
   .recrutement-add-btn{
     margin-top:.5cm;
+    background:#ffd16a!important;
+    border-color:#eab308!important;
+    color:#01112f!important;
+    font-weight:900;
     animation:recrutement-add-pulse 1.15s ease-in-out infinite;
   }
+  .recrutement-add-btn:hover{background:#facc15!important;border-color:#ca8a04!important;color:#01112f!important}
   @keyframes recrutement-add-pulse{
     0%,100%{box-shadow:0 0 0 0 rgba(4,57,112,.34);filter:brightness(1)}
     50%{box-shadow:0 0 0 7px rgba(4,57,112,.08);filter:brightness(1.18)}
