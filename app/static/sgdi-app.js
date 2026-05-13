@@ -6392,7 +6392,7 @@ function renderFiches(view,sub){
       </div>
       <div class="fp-head-actions">
         <a href="#/fiches/imprimer" class="btn ${sub==="imprimer"?"btn-primary":"btn-ghost"} text-sm">🖨 Impression en lot</a>
-        <a href="#/fiches/badge" class="btn ${sub==="badge"?"btn-primary":"btn-ghost"} text-sm">🏷 BADGE</a>
+        <a href="#/fiches/badge" class="btn fp-badge-btn text-sm">🏷 BADGE</a>
       </div>
     </div>
     <div class="fp-summary-grid">

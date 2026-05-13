@@ -486,6 +486,8 @@
   .fp-head p{margin:5px 0 0;color:#64748b;font-size:13px;line-height:1.35}
   .fp-head p span{font-weight:800;color:#043970}
   .fp-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+  .fp-badge-btn{background:#ffd16a!important;border-color:#eab308!important;color:#01112f!important;font-weight:900}
+  .fp-badge-btn:hover{background:#facc15!important;border-color:#ca8a04!important;color:#01112f!important}
   .fp-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
   .fp-summary-card{min-height:112px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:var(--shadow-xs)}
   .fp-summary-card span{display:block;color:#64748b;text-transform:uppercase;font-size:11px;font-weight:900;letter-spacing:.03em}
