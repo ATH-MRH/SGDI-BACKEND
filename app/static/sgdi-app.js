@@ -1435,6 +1435,85 @@ function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_
 function isAdm1(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM1","ADMI1","ADMIN1"].includes(normalizeAccessCode(v)))}
 function isAdm2(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM2","ADMI2","ADMIN2"].includes(normalizeAccessCode(v)))}
 function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
+const CRITICAL_ACTION_WORDS=["supprimer","valider","modifier"];
+const criticalActionAuthorized=new WeakSet();
+function normalizeCriticalActionText(value){
+  return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+}
+function criticalActionElementLabel(el){
+  if(!el)return"";
+  return [el.innerText,el.textContent,el.value,el.getAttribute("aria-label"),el.getAttribute("title")].filter(Boolean).join(" ");
+}
+function criticalActionName(el){
+  const text=normalizeCriticalActionText(criticalActionElementLabel(el));
+  return CRITICAL_ACTION_WORDS.find(word=>text.includes(word))||"";
+}
+function criticalActionNeedsPassword(el){
+  if(!el||criticalActionAuthorized.has(el)||!session||!session.username)return"";
+  if(el.disabled||el.getAttribute("aria-disabled")==="true")return"";
+  if(el.closest("[data-critical-auth], #login-form, .login-admin-system-shortcut"))return"";
+  return criticalActionName(el);
+}
+function removeCriticalActionPasswordModal(){
+  document.getElementById("critical-action-auth-host")?.remove();
+}
+function requestCriticalActionPassword(action){
+  return new Promise(resolve=>{
+    removeCriticalActionPasswordModal();
+    const host=document.createElement("div");
+    host.id="critical-action-auth-host";
+    host.setAttribute("data-critical-auth","1");
+    host.innerHTML=`<div class="modal-bg" data-critical-auth="1">
+      <div class="modal p-6" data-critical-auth="1" style="max-width:420px">
+        <h3 class="font-bold text-lg mb-2">Mot de passe requis</h3>
+        <p class="text-sm text-slate-500 mb-4">Confirmez votre mot de passe pour ${escapeHTML(action)}.</p>
+        <form data-critical-auth="1">
+          <label class="label">Utilisateur</label>
+          <input class="input mb-3" value="${escapeHTML(session?.username||"")}" readonly/>
+          <label class="label">Mot de passe</label>
+          <input class="input mb-4" type="password" name="password" autocomplete="current-password" autofocus/>
+          <div class="flex gap-2 justify-end">
+            <button type="button" class="btn btn-ghost" data-critical-auth-cancel="1">Annuler</button>
+            <button class="btn btn-primary" data-critical-auth-submit="1">Valider</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+    document.body.appendChild(host);
+    const finish=ok=>{removeCriticalActionPasswordModal();resolve(ok)};
+    host.querySelector("[data-critical-auth-cancel]")?.addEventListener("click",()=>finish(false));
+    host.querySelector(".modal-bg")?.addEventListener("click",event=>{if(event.target===event.currentTarget)finish(false)});
+    host.querySelector("form")?.addEventListener("submit",async event=>{
+      event.preventDefault();
+      const password=String(event.currentTarget.password?.value||"");
+      if(!password){toast("Mot de passe obligatoire","error");return}
+      try{
+        const res=await sgdiApi("/auth/login",{method:"POST",body:{username:session.username,password},legacy:false});
+        const token=res?.access_token||res?.token;
+        if(token)sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
+        finish(true);
+      }catch(e){
+        toast("Mot de passe incorrect","error");
+        event.currentTarget.password.value="";
+        event.currentTarget.password.focus();
+      }
+    });
+    setTimeout(()=>host.querySelector('[name="password"]')?.focus(),0);
+  });
+}
+document.addEventListener("click",event=>{
+  const el=event.target&&event.target.closest?event.target.closest("button,a,[role='button'],input[type='button'],input[type='submit'],input[type='reset']"):null;
+  const action=criticalActionNeedsPassword(el);
+  if(!action)return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  requestCriticalActionPassword(action).then(ok=>{
+    if(!ok)return;
+    criticalActionAuthorized.add(el);
+    el.click();
+    setTimeout(()=>criticalActionAuthorized.delete(el),0);
+  });
+},true);
 function currentAccessLevelCode(){const u=currentUserRecord();return String(session?.niveau||u?.niveau||"").trim()}
 function isCadreCat01(){return currentAccessLevelCode().toUpperCase().replace(/[\s-]+/g,"_")==="CADRE_CAT_01"}
 function structureSocieteFilterKey(mod){
