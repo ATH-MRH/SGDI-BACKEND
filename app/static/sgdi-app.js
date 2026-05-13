@@ -2054,9 +2054,9 @@ function renderSidebar(){
     const sidebarByModule={
       drh:[
         {label:"TABLEAU DE BORD DRH",route:"drh/dashboard"},
-        {label:"RECRUTEMENT",route:"recrutement"},
+        {label:"CANDIDATS",route:"recrutement"},
         {label:"DEMANDE PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"]},
+        {label:"RECRUTEMENT/CONTRAT",route:"contrats/dashboard",aliases:["contrats"]},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"EFFECTIFS",route:"effectif/recap"},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:(db.incidents||[]).filter(i=>i.statut!=="clos").length},
