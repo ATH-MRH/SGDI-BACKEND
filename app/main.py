@@ -143,10 +143,11 @@ def on_startup() -> None:
         cleaned_drh = drh_service.cleanup_base64_photos(db)
         if cleaned_drh:
             logger.info("Photos Base64 nettoyées dans les tables DRH: %s ligne(s)", cleaned_drh)
-        admin = db.query(User).filter(User.username == "admin").one_or_none()
-        if admin is None and settings.admin_initial_password:
+        admin_username = (settings.admin_initial_username or settings.admin_system_username or "").strip()
+        admin = db.query(User).filter(User.username == admin_username).one_or_none() if admin_username else None
+        if admin is None and admin_username and settings.admin_initial_password:
             admin = User(
-                username="admin",
+                username=admin_username,
                 email=None,
                 full_name="Administrateur",
                 role="admin",
@@ -158,7 +159,7 @@ def on_startup() -> None:
             )
             db.add(admin)
         elif admin is None:
-            logger.warning("Compte administrateur absent: définissez ADMIN_INITIAL_PASSWORD pour le créer au démarrage")
+            logger.warning("Compte administrateur absent: définissez ADMIN_INITIAL_USERNAME et ADMIN_INITIAL_PASSWORD pour le créer au démarrage")
         db.commit()
     logger.info("Compte administrateur vérifié")
 

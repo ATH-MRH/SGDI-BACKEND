@@ -49,7 +49,7 @@ désactivée par défaut avec `ALLOW_PUBLIC_REGISTRATION=false`.
 Création ponctuelle d'un premier utilisateur administrateur :
 
 ```bash
-python -c "from app.db.session import SessionLocal; from app.modules.auth.schemas import UserCreate; from app.modules.auth.service import create_user; db=SessionLocal(); create_user(db, UserCreate(username='admin', email='admin@example.com', full_name='Administrateur', role='admin', password='CHANGE-ME-STRONG')); db.close()"
+ADMIN_INITIAL_USERNAME=<identifiant> ADMIN_INITIAL_PASSWORD=<mot_de_passe_fort> python -m scripts.create_initial_admin
 ```
 
 ## API IRONGS BASE
@@ -133,10 +133,10 @@ curl http://localhost:8000/api/irongs/bootstrap \
 Le backend utilise SQLAlchemy, PostgreSQL et Alembic. Les tables ne sont pas
 créées au démarrage de l'API : elles sont gérées par migrations.
 
-Exemple PostgreSQL local :
+La connexion PostgreSQL doit être fournie par variable d'environnement :
 
 ```env
-DATABASE_URL=postgresql://sgdi:change-me@localhost:5432/sgdi
+DATABASE_URL=<url_postgresql>
 ```
 
 Si le mot de passe contient le caractère `@`, il doit rester encodé en `%40` dans l'URL.

@@ -140,13 +140,16 @@ def patch_access_rule(
 
 @router.post("/admin-system-login", response_model=TokenOut)
 def admin_system_login(payload: AdminSystemLoginIn, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == "admin", User.is_active.is_(True)).one_or_none()
+    admin_username = (settings.admin_system_username or settings.admin_initial_username or "").strip()
+    if not admin_username:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Compte administration système non configuré")
+    user = db.query(User).filter(User.username == admin_username, User.is_active.is_(True)).one_or_none()
     if user is None or not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte admin introuvable ou inactif")
     password_ok = bool(settings.admin_system_password and payload.password == settings.admin_system_password)
     if not password_ok:
         try:
-            _, authenticated = authenticate(db, "admin", payload.password)
+            _, authenticated = authenticate(db, admin_username, payload.password)
             password_ok = authenticated.id == user.id and is_admin_role(authenticated.role)
         except HTTPException:
             password_ok = False

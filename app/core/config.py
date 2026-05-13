@@ -11,11 +11,13 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     allow_public_registration: bool = False
     admin_system_password: str | None = None
+    admin_system_username: str | None = None
+    admin_initial_username: str | None = None
     admin_initial_password: str | None = None
 
-    database_url: str = "postgresql://sgdi:change-me@localhost:5432/sgdi"
+    database_url: str
 
-    jwt_secret: str = "dev-secret-change-me"
+    jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 720
 

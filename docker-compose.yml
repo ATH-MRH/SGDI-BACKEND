@@ -7,7 +7,7 @@ services:
       LOG_LEVEL: INFO
       API_PREFIX: /api
       ALLOW_PUBLIC_REGISTRATION: "false"
-      DATABASE_URL: postgresql+psycopg2://sgdi:${POSTGRES_PASSWORD:?}@postgres:5432/sgdi
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:?}
       JWT_SECRET: ${JWT_SECRET:?}
       JWT_ALGORITHM: HS256
       JWT_EXPIRES_MINUTES: "720"
@@ -25,13 +25,13 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_DB: sgdi
-      POSTGRES_USER: sgdi
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     volumes:
       - sgdi_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sgdi -d sgdi"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 10

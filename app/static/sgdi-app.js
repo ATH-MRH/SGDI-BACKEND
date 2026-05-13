@@ -21,13 +21,7 @@ const POSTES = [
  "Chef de site","Contrôleur","Coordinateur","Hôtesse d'accueil","Inspecteur",
  "Maître-chien","Manutentionnaire","Superviseur"
 ];
-const ALLOWED_SOCIETES = [
-  "IRON GLOBAL SOLUTION",
-  "IRON GLOBAL SECURITE",
-  "SWORD CONSTRUCTION",
-  "SWORD CORPORATION"
-];
-const SOCIETES = ALLOWED_SOCIETES.slice();
+const SOCIETES = [];
 const REMOVED_SOCIETES = [];
 const TYPES_CONTRAT = ["CDI","CDD","CTT (Intérim)","Contrat de mission","Pré-emploi ANEM","DAIP","Période d'essai","Stage"];
 const DUREES_CONTRAT = [
@@ -96,12 +90,10 @@ function normalizeSocieteName(name){
   return String(name||"").trim().replace(/\s+/g," ").toUpperCase();
 }
 function isRemovedSociete(name){
-  const n=normalizeSocieteName(name);
-  return !!n&&!ALLOWED_SOCIETES.some(s=>normalizeSocieteName(s)===n);
+  return REMOVED_SOCIETES.some(s=>normalizeSocieteName(s)===normalizeSocieteName(name));
 }
 function isAllowedSociete(name){
-  const n=normalizeSocieteName(name);
-  return ALLOWED_SOCIETES.some(s=>normalizeSocieteName(s)===n);
+  return !!normalizeSocieteName(name);
 }
 function societeExists(name){
   const n=normalizeSocieteName(name);
@@ -111,12 +103,29 @@ function defaultSocieteAccessPasswords(){
   return {};
 }
 function purgeRemovedSocietesFromStorage(){}
+function uniqueSocieteNames(names){
+  const out=[];
+  (names||[]).forEach(name=>{
+    const normalized=normalizeSocieteName(name);
+    if(normalized&&!out.some(s=>normalizeSocieteName(s)===normalized))out.push(normalized);
+  });
+  return out;
+}
+function deriveSocietesFromData(source){
+  const src=source||db||{};
+  const names=[];
+  ["agents","candidats","sites","materiel","clients","prospects","opportunites","devis","factures","paiements","demandesPersonnel","demandesStructure","pointages","feuillePresence"].forEach(key=>{
+    if(!Array.isArray(src[key]))return;
+    src[key].forEach(item=>{if(item&&item.societe)names.push(item.societe)});
+  });
+  return uniqueSocieteNames(names);
+}
 function societeConfig(){
   const remote=(db&&db.societesConfig&&typeof db.societesConfig==="object")?db.societesConfig:{};
   const remoteAccess=(remote.access&&typeof remote.access==="object")?remote.access:{};
-  const defaultPasswords=defaultSocieteAccessPasswords();
+  const custom=Array.isArray(remote.custom)?remote.custom:deriveSocietesFromData();
   return {
-    custom:ALLOWED_SOCIETES.slice(),
+    custom:uniqueSocieteNames(custom).filter(s=>!isRemovedSociete(s)),
     descriptions:{...(remote.descriptions||{})},
     images:{...(remote.images||{})},
     access:{...remoteAccess,requirePassword:false,passwords:{}},
@@ -126,15 +135,15 @@ function societeConfig(){
 function saveSocieteConfig(patch){
   const cur=societeConfig();
   const next={...cur,...(patch||{}),removed:REMOVED_SOCIETES.slice()};
-  next.custom=[...new Set((next.custom||[]).filter(s=>s&&!isRemovedSociete(s)))];
+  next.custom=uniqueSocieteNames(next.custom).filter(s=>!isRemovedSociete(s));
   if(db)db.societesConfig=next;
 }
 function loadCustomSocietes(){
   purgeRemovedSocietesFromStorage();
-  SOCIETES.splice(0,SOCIETES.length,...ALLOWED_SOCIETES);
+  SOCIETES.splice(0,SOCIETES.length,...societeConfig().custom);
 }
 function saveCustomSocietes(){
-  saveSocieteConfig({custom:ALLOWED_SOCIETES.slice()});
+  saveSocieteConfig({custom:SOCIETES.slice()});
 }
 function buildSocieteConfigWith(name,description,image){
   const cfg=societeConfig();
@@ -164,7 +173,7 @@ async function verifySocietePersisted(name){
 }
 async function persistSocieteConfig(nameToVerify){
   if(!db)throw new Error("Base non chargée");
-  if(nameToVerify&&!isAllowedSociete(nameToVerify))throw new Error("Seules les 4 sociétés officielles sont autorisées");
+  if(nameToVerify&&!isAllowedSociete(nameToVerify))throw new Error("Nom de société obligatoire");
   db.societesConfig=societeConfig();
   let saved=unwrapIrongsCollection(await sgdiApi("/api/irongs/collections/societesConfig",{method:"PUT",body:{data:db.societesConfig},legacy:false}));
   if(!saved||typeof saved!=="object"||Array.isArray(saved))throw new Error("Réponse PostgreSQL invalide");
@@ -897,8 +906,8 @@ function emptyDB(){
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
     activityLog:[],categoriesPrest:[],themes:[],structures:[],
     niveauxAcces:[],priorites:[],alertes:[],customFields:[],customModules:[],
-    societesConfig:{custom:ALLOWED_SOCIETES.slice(),descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
-    settings:{unlockCode:"IRONGS-2026",unlockLog:[]}
+    societesConfig:{custom:[],descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
+    settings:{unlockCode:"",unlockLog:[]}
   };
 }
 function sgdiAutoRepairDB(options){
@@ -927,9 +936,9 @@ function sgdiAutoRepairDB(options){
     });
   };
   [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"]].forEach(([k,p])=>fixListIds(k,p));
-  db.societesConfig={custom:ALLOWED_SOCIETES.slice(),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
-  if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"IRONGS-2026",unlockLog:[]};
-  if(!db.settings.unlockCode)db.settings.unlockCode="IRONGS-2026";
+  db.societesConfig={custom:uniqueSocieteNames([...(db.societesConfig?.custom||[]),...deriveSocietesFromData(db)]),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
+  if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[]};
+  if(typeof db.settings.unlockCode!=="string")db.settings.unlockCode="";
   if(!Array.isArray(db.settings.unlockLog))db.settings.unlockLog=[];
   if(typeof ensureNiveauxAcces==="function")ensureNiveauxAcces();
   if(typeof sanitizeCandidatesInDB==="function")sanitizeCandidatesInDB();
@@ -1029,7 +1038,7 @@ function purgeRemovedSocieteData(d){
   if(d.societesConfig&&typeof d.societesConfig==="object"){
     const cfg=d.societesConfig;
     const beforeCustom=Array.isArray(cfg.custom)?cfg.custom.join("|"):"";
-    cfg.custom=ALLOWED_SOCIETES.slice();
+    cfg.custom=uniqueSocieteNames([...(Array.isArray(cfg.custom)?cfg.custom:[]),...deriveSocietesFromData(d)]).filter(s=>!isRemovedSociete(s));
     if(cfg.custom.join("|")!==beforeCustom)changed=true;
     ["images","descriptions"].forEach(key=>{
       if(!cfg[key]||typeof cfg[key]!=="object")return;
@@ -1808,7 +1817,7 @@ async function confirmEditSociete(original){
   const description=String(fd.get("description")||"").trim();
   const image=String(fd.get("image")||"");
   if(!name){toast("Nom de société obligatoire","error");return}
-  if(!isAllowedSociete(name)){toast("Seules les 4 sociétés officielles sont autorisées","error");return}
+  if(!isAllowedSociete(name)){toast("Nom de société obligatoire","error");return}
   if(name!==original&&societeExists(name)){toast("Cette société existe déjà","error");return}
   const idx=SOCIETES.indexOf(original);
   if(idx>=0&&name!==original)SOCIETES[idx]=name;
@@ -1838,7 +1847,7 @@ async function confirmCreateSociete(){
   const description=String(fd.get("description")||"").trim();
   const image=String(fd.get("image")||"");
   if(!name){toast("Nom de société obligatoire","error");return}
-  if(!isAllowedSociete(name)){toast("Seules les 4 sociétés officielles sont autorisées","error");return}
+  if(!isAllowedSociete(name)){toast("Nom de société obligatoire","error");return}
   if(societeExists(name)){toast("Cette société existe déjà","error");return}
   SOCIETES.push(name);
   db.societesConfig=buildSocieteConfigWith(name,description,image);
@@ -9927,7 +9936,7 @@ function renderPaie(view){
 function renderRapports(view){view.innerHTML=`<h1 class="text-2xl font-bold mb-6">📈 Rapports</h1><div class="grid grid-3 mb-6">${kpiCard("Agents actifs",db.agents.filter(a=>a.statut==="actif").length,"👮","amber")}${kpiCard("Sites actifs",db.sites.filter(s=>s.actif).length,"📍","blue")}${kpiCard("Évèn. en cours",db.incidents.filter(i=>i.statut==="en_cours").length,"🚨","red")}</div><div class="grid grid-2 gap-4"><div class="card p-5"><h3 class="mb-4">Par société</h3>${SOCIETES.map(s=>{const n=db.agents.filter(a=>a.societe===s&&a.statut==="actif").length;return`<div class="flex justify-between text-sm py-1 border-b border-slate-200"><span>${s}</span><b>${n}</b></div>`}).join("")}</div><div class="card p-5"><h3 class="mb-4">Types de contrat</h3>${TYPES_CONTRAT.map(t=>{const n=db.agents.filter(a=>a.typeContrat===t&&a.statut==="actif").length;if(!n)return"";return`<div class="flex justify-between text-sm py-1 border-b border-slate-200"><span>${t}</span><b>${n}</b></div>`}).join("")}</div></div>`}
 
 /* ---- PARAMETRES ---- */
-function renderParametres(view){if(!isAdmin()){view.innerHTML=`<div class="card p-6 text-red-700">Accès réservé à l'administrateur.</div>`;return}view.innerHTML=`<h1 class="text-2xl font-bold mb-6">⚙️ Paramètres</h1><div class="card p-6 max-w-2xl"><h2 class="text-lg font-bold mb-4">🔐 Code de déverrouillage</h2><p class="text-sm text-slate-500 mb-4">Ce code permet de déverrouiller les fiches agents.</p><div class="grid grid-2 mb-4"><div><label class="label">Code actuel</label><div class="flex gap-2"><input id="code-current" class="input" type="password" value="${escapeHTML(db.settings.unlockCode)}" readonly/><button class="btn btn-ghost text-xs" onclick="const e=document.getElementById('code-current');e.type=e.type==='password'?'text':'password'">👁</button><button class="btn btn-ghost text-xs" onclick="navigator.clipboard.writeText(db.settings.unlockCode);toast('Copié','success')">📋</button></div></div><div><label class="label">Défaut</label><button class="btn btn-secondary" onclick="if(confirm('Restaurer IRONGS-2026 ?')){db.settings.unlockCode='IRONGS-2026';saveDB();renderView();toast('Restauré','success')}">↻ Restaurer</button></div></div><form onsubmit="event.preventDefault();changeUnlockCode()"><div class="grid grid-2"><div><label class="label">Nouveau (4-32)</label><input class="input" type="password" name="c1" minlength="4" maxlength="32" /></div><div><label class="label">Confirmer</label><input class="input" type="password" name="c2" minlength="4" maxlength="32" /></div></div><button class="btn btn-primary mt-3">Mettre à jour</button></form></div><div class="mt-6 card p-5 max-w-4xl"><div class="flex justify-between mb-3"><h3>Journal (20 derniers)</h3><button class="btn btn-ghost text-xs" onclick="navigate('parametres/log')">Voir tout →</button></div><table><thead><tr><th>Date</th><th>Utilisateur</th><th>Rôle</th><th>Agent</th></tr></thead><tbody>${(db.settings.unlockLog||[]).slice(0,20).map(l=>{const a=db.agents.find(x=>x.id===l.agentId);return`<tr><td class="text-xs">${new Date(l.date).toLocaleString("fr-FR")}</td><td>${safe(l.user)}</td><td><span class="pill pill-gray">${safe(l.role)}</span></td><td><a class="text-amber-600" href="#/agents/${l.agentId}">${safe(a?a.matricule+" "+a.nom:"—")}</a></td></tr>`}).join("")||`<tr><td colspan="4" class="text-center text-slate-500">Aucun.</td></tr>`}</tbody></table></div>`}
+function renderParametres(view){if(!isAdmin()){view.innerHTML=`<div class="card p-6 text-red-700">Accès réservé à l'administrateur.</div>`;return}view.innerHTML=`<h1 class="text-2xl font-bold mb-6">⚙️ Paramètres</h1><div class="card p-6 max-w-2xl"><h2 class="text-lg font-bold mb-4">🔐 Code de déverrouillage</h2><p class="text-sm text-slate-500 mb-4">Ce code permet de déverrouiller les fiches agents.</p><div class="grid grid-2 mb-4"><div><label class="label">Code actuel</label><div class="flex gap-2"><input id="code-current" class="input" type="password" value="${escapeHTML(db.settings.unlockCode)}" readonly/><button class="btn btn-ghost text-xs" onclick="const e=document.getElementById('code-current');e.type=e.type==='password'?'text':'password'">👁</button><button class="btn btn-ghost text-xs" onclick="navigator.clipboard.writeText(db.settings.unlockCode);toast('Copié','success')">📋</button></div></div><div><label class="label">Action</label><button class="btn btn-secondary" onclick="if(confirm('Vider le code de déverrouillage ?')){db.settings.unlockCode='';saveDB();renderView();toast('Code vidé','success')}">Vider</button></div></div><form onsubmit="event.preventDefault();changeUnlockCode()"><div class="grid grid-2"><div><label class="label">Nouveau (4-32)</label><input class="input" type="password" name="c1" minlength="4" maxlength="32" /></div><div><label class="label">Confirmer</label><input class="input" type="password" name="c2" minlength="4" maxlength="32" /></div></div><button class="btn btn-primary mt-3">Mettre à jour</button></form></div><div class="mt-6 card p-5 max-w-4xl"><div class="flex justify-between mb-3"><h3>Journal (20 derniers)</h3><button class="btn btn-ghost text-xs" onclick="navigate('parametres/log')">Voir tout →</button></div><table><thead><tr><th>Date</th><th>Utilisateur</th><th>Rôle</th><th>Agent</th></tr></thead><tbody>${(db.settings.unlockLog||[]).slice(0,20).map(l=>{const a=db.agents.find(x=>x.id===l.agentId);return`<tr><td class="text-xs">${new Date(l.date).toLocaleString("fr-FR")}</td><td>${safe(l.user)}</td><td><span class="pill pill-gray">${safe(l.role)}</span></td><td><a class="text-amber-600" href="#/agents/${l.agentId}">${safe(a?a.matricule+" "+a.nom:"—")}</a></td></tr>`}).join("")||`<tr><td colspan="4" class="text-center text-slate-500">Aucun.</td></tr>`}</tbody></table></div>`}
 function renderUnlockLog(view){if(!isAdmin()){view.innerHTML=`<div class="card p-6 text-red-700">Accès réservé.</div>`;return}view.innerHTML=`<div class="flex justify-between mb-4"><h1 class="text-2xl font-bold">📜 Journal</h1><button class="btn btn-danger" onclick="if(confirm('Vider ?')){db.settings.unlockLog=[];saveDB();renderView()}">🗑 Vider</button></div><div class="card overflow-hidden"><table><thead><tr><th>Date</th><th>Utilisateur</th><th>Rôle</th><th>Agent</th></tr></thead><tbody>${(db.settings.unlockLog||[]).map(l=>{const a=db.agents.find(x=>x.id===l.agentId);return`<tr><td class="text-xs">${new Date(l.date).toLocaleString("fr-FR")}</td><td>${safe(l.user)}</td><td>${safe(l.role)}</td><td><a class="text-amber-600" href="#/agents/${l.agentId}">${safe(a?a.matricule+" "+a.nom:"—")}</a></td></tr>`}).join("")||`<tr><td colspan="4" class="text-center text-slate-500 p-6">Aucun.</td></tr>`}</tbody></table></div>`}
 function changeUnlockCode(){const f=event.target;if(f.c1.value!==f.c2.value){toast("Les codes diffèrent","error");return}db.settings.unlockCode=f.c1.value;saveDB();toast("Code mis à jour","success");renderView()}
 
