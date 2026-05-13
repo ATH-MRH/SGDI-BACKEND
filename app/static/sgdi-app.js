@@ -6391,7 +6391,7 @@ function renderFiches(view,sub){
         <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Synthèse opérationnelle des fiches de position"} · ${list.length} fiche(s) affichée(s)${socFilter?` · <span>${escapeHTML(socFilter)}</span>`:""}.</p>
       </div>
       <div class="fp-head-actions">
-        <a href="#/fiches/imprimer" class="btn ${sub==="imprimer"?"btn-primary":"btn-ghost"} text-sm">🖨 Impression en lot</a>
+        <a href="#/fiches/imprimer" class="btn fp-print-batch-btn text-sm">🖨 Impression en lot</a>
         <a href="#/fiches/badge" class="btn fp-badge-btn text-sm">🏷 BADGE</a>
       </div>
     </div>
