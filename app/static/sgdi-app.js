@@ -1346,10 +1346,27 @@ async function login(u,p,opt={}){
   }
   toast("Connexion PostgreSQL obligatoire : aucun mode local autorisé","error");return
 }
-function loginAdminSystemFromLanding(form){
+function openAdminSystemPasswordModal(form){
+  const username=String(form?.username?.value||"").trim();
+  if(!username){toast("Saisissez d'abord l'identifiant admin","error");form?.username?.focus?.();return}
+  openModal(`<h3 class="font-bold text-lg mb-2">Administration système</h3>
+    <p class="text-sm text-slate-500 mb-4">Entrez le mot de passe administrateur.</p>
+    <form onsubmit="event.preventDefault();validateAdminSystemPassword(this)">
+      <input type="hidden" name="username" value="${escapeHTML(username)}"/>
+      <label class="label">Mot de passe</label>
+      <input class="input mb-4" type="password" name="password" autocomplete="current-password" autofocus/>
+      <div class="flex gap-2 justify-end">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+        <button class="btn" style="background:#facc15;color:#01112f;border:0;font-weight:950">Valider</button>
+      </div>
+    </form>`);
+  setTimeout(()=>document.querySelector(".modal-bg [name='password']")?.focus(),0);
+}
+function validateAdminSystemPassword(form){
   const username=String(form?.username?.value||"").trim();
   const password=String(form?.password?.value||"");
-  if(!username||!password){toast("Identifiant et mot de passe obligatoires","error");return}
+  if(!password){toast("Mot de passe obligatoire","error");return}
+  closeModal();
   login(username,password,{adminSystem:true});
 }
 function defaultStructureAccessPasswords(){return{}}
@@ -2701,7 +2718,7 @@ function renderLogin(){
         </form>
       </div>
     </div>
-    <button type="button" class="login-admin-system-shortcut" onclick="loginAdminSystemFromLanding(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">
+    <button type="button" class="login-admin-system-shortcut" onclick="openAdminSystemPasswordModal(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">
       <span aria-hidden="true">⚙</span>
       <span>Administration système</span>
     </button>
