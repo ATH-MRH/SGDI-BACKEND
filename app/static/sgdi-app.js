@@ -3395,9 +3395,8 @@ function candidatSectionClose(c,key){
   return `<div class="candidate-section-footer">
       <div class="candidate-section-actions">
         ${valid&&canUnlock?`<button type="button" class="btn btn-ghost text-xs" data-section-action="1" onclick="unlockCandidatSection('${escapeHTML(c.id)}','${key}')">Déverrouiller</button>`:""}
-        ${!valid?`<button type="button" class="btn btn-primary text-xs" data-section-action="1" onclick="validateCandidatSectionAction('${escapeHTML(c.id)}','${key}')">Valider la section</button>`:""}
       </div>
-      <div class="candidate-section-note">${valid?`Section validée ${meta?.at?`le ${new Date(meta.at).toLocaleString("fr-FR")}`:""}`:"Après validation, la section suivante s'ouvre automatiquement."}</div>
+      <div class="candidate-section-note">${valid?`Section validée ${meta?.at?`le ${new Date(meta.at).toLocaleString("fr-FR")}`:""}`:"La validation se fait depuis la barre d'action en bas de page."}</div>
     </div>
   </div>`;
 }
@@ -3448,6 +3447,7 @@ function renderCandidatForm(view,id,options){
   const initials=(displayName?displayName.split(/\s+/).slice(0,2).map(x=>x.charAt(0)).join(""):"CR").toUpperCase();
   const returnRoute=candidatIsArchived(c)?"candidats_archives":c.statut==="reserve"?"reserve":"recrutement";
   const currentKey=candidatCurrentSectionKey(c);
+  const currentSection=CANDIDAT_SECTIONS.find(s=>s.key===currentKey);
   const sectionList=CANDIDAT_SECTIONS.map((s,i)=>{
     const done=candidatSectionIsValidated(c,s.key);
     const active=currentKey===s.key;
@@ -3494,6 +3494,16 @@ function renderCandidatForm(view,id,options){
 	        <div class="stepper candidate-stepper"><div class="step ${step>=1?"done":"active"}">1. Candidature</div><div class="step ${step===2?"active":""}">2. Fiche de renseignement</div></div>
 	        ${renderCandidatEtape1(c)}
 	        <div id="etape2-block" class="${candidatEtape1Valid(c)?"":"hidden"}">${candidatEtape1Valid(c)?renderCandidatEtape2(c):""}</div>
+	      </div>
+	      <div class="candidate-global-section-footer">
+	        <div>
+	          <div class="candidate-global-footer-label">${allValid?"Dossier complet":currentSection?`Section en cours : ${escapeHTML(currentSection.label)}`:"Validation du dossier"}</div>
+	          <div class="candidate-global-footer-note">${allValid?"Toutes les sections sont validées. Vous pouvez valider la fiche de position.":"Après validation, la section suivante s'ouvre automatiquement."}</div>
+	        </div>
+	        <div class="candidate-global-footer-actions">
+	          ${!allValid&&currentKey?`<button type="button" class="btn btn-primary" data-section-action="1" onclick="validateCandidatSectionAction('${escapeHTML(c.id)}','${currentKey}')">Valider la section</button>`:""}
+	          ${allValid&&!candidatIsArchived(c)?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">Valider la fiche de position</button>`:""}
+	        </div>
 	      </div>
 	    </form>
 	  </div>`;

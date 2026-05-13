@@ -596,9 +596,8 @@
   .candidate-chip{display:inline-flex;align-items:center;min-height:26px;border:1px solid var(--border);background:#f8fafc;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;color:#334155;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .candidate-photo-preview{
     width:180px;height:225px;background:#fff;
-    border:2px solid #043970!important;
-    box-shadow:inset 0 0 0 6px #fff,0 8px 18px rgba(15,23,42,.12);
-    outline:1px solid #cbd5e1;
+    border:1px solid #043970!important;
+    box-shadow:0 4px 12px rgba(15,23,42,.10);
   }
   .candidate-id-photo-row{display:grid;grid-template-columns:auto minmax(260px,1fr);gap:18px;align-items:start}
   .candidate-id-name-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;padding-top:20px}
@@ -641,16 +640,27 @@
   .candidate-section-kicker{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:900}
   .candidate-section-state{flex-shrink:0}
   .candidate-section-card>.grid,.candidate-section-card>.mt-4:not(.candidate-section-footer){padding:16px}
-  .candidate-section-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);background:#f8fafc;padding:12px 16px;box-shadow:0 -8px 18px rgba(15,23,42,.06)}
-  .candidate-section-card.current .candidate-section-footer{
+  .candidate-section-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);background:#f8fafc;padding:10px 16px}
+  .candidate-section-card.current .candidate-section-footer{display:none}
+  .candidate-global-section-footer{
     position:sticky;
     bottom:10px;
-    z-index:28;
+    z-index:34;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
     border:1px solid var(--border);
-    border-radius:0 0 8px 8px;
-    background:rgba(248,250,252,.98);
+    border-radius:8px;
+    background:rgba(255,255,255,.98);
     backdrop-filter:blur(6px);
+    box-shadow:0 -10px 24px rgba(15,23,42,.12);
+    padding:12px 14px;
+    margin-top:6px;
   }
+  .candidate-global-footer-label{font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase;letter-spacing:.03em}
+  .candidate-global-footer-note{font-size:12px;color:#64748b;margin-top:2px}
+  .candidate-global-footer-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
   .candidate-section-actions{display:flex;flex-wrap:wrap;gap:8px}
   .candidate-section-note{font-size:12px;line-height:1.35;color:var(--text-soft);text-align:right}
   @media (max-width:980px){
@@ -667,6 +677,8 @@
     .candidate-section-list-horizontal{grid-template-columns:repeat(2,minmax(132px,1fr))}
     .candidate-actions-row{justify-content:stretch}
     .candidate-actions-row .btn{width:100%}
+    .candidate-global-section-footer{position:static;flex-direction:column;align-items:stretch}
+    .candidate-global-footer-actions .btn{width:100%;justify-content:center}
     .candidate-photo{width:70px;height:82px}
     .candidate-title{font-size:21px}
     .candidate-section-head,.candidate-section-footer{flex-direction:column;align-items:flex-start}
