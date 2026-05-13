@@ -533,7 +533,6 @@
     font-weight:950!important;
     white-space:nowrap!important;
     box-shadow:0 6px 14px rgba(15,23,42,.14);
-    animation:dialogueTopbarBlink .85s infinite;
   }
   .topbar-back-btn{
     width:155px!important;
@@ -553,7 +552,6 @@
     font-weight:950!important;
     white-space:nowrap!important;
     box-shadow:0 6px 14px rgba(15,23,42,.14);
-    animation:dialogueTopbarBlink .85s infinite;
   }
   .recrutement-add-btn:hover,
   .portal-open-btn:hover,
