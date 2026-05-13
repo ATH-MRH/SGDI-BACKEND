@@ -5155,9 +5155,9 @@ async function deleteAgent(id){
   const msg=`Supprimer définitivement la fiche employé ${label||"sélectionnée"} ?`+(linked.length?`\n\n${linked.length} ligne(s) liée(s) seront aussi supprimée(s).`:"")+"\n\nCette action est irréversible.";
   if(!confirm(msg))return;
   try{
-    const res=await sgdiRunLegacyAction("delete-employee-fiche",{item_id:id,data:{agentId:id,backendId:a.backendId||"",matricule:a.matricule||"",code:a.code||""}});
-    if(res?.status!=="success"){toast("Suppression refusée par le backend","error");return}
-  }catch(e){toast("Suppression fiche legacy refusée : "+(e.message||e),"error");return}
+    if(!a.backendId){toast("Suppression directe refusée : identifiant SQL absent","error");return}
+    await SGDI.employees.delete(a.backendId);
+  }catch(e){toast("Suppression base de donnée refusée : "+(e.message||e),"error");return}
   agentDeleteLinkedCollections().forEach(collection=>{db[collection]=(db[collection]||[]).filter(item=>!agentDeleteItemMatches(item,a))});
   db.agents=(db.agents||[]).filter(x=>x.id!==id);
   unlockedAgents.delete(id);saveUnlocked();

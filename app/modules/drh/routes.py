@@ -190,7 +190,7 @@ def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Dep
 @router.delete("/employees/{employee_id}")
 def delete_employee(employee_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, employee_id)
-    return service.delete_row(db, Employee, employee_id)
+    return service.delete_employee_direct(db, employee_id)
 
 
 @router.get("/employees/{employee_id}/fiche-position")

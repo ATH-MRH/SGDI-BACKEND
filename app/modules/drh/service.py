@@ -11,6 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
+from app.modules.irongs.models import SgdiRecord
 from app.core.photo_storage import normalize_photo_fields
 
 
@@ -356,6 +357,42 @@ def delete_row(db: Session, model: Type, row_id: int):
     db.delete(row)
     db.commit()
     return {"deleted": True, "id": row_id}
+
+
+def delete_employee_direct(db: Session, employee_id: int):
+    employee = get_or_404(db, Employee, employee_id)
+    refs = {str(employee_id), str(employee.code or "").strip()}
+    extra = employee.extra if isinstance(employee.extra, dict) else {}
+    legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+    refs.update(str(legacy.get(key) or "").strip() for key in ("id", "backendId", "matricule", "code"))
+    refs = {value for value in refs if value}
+    linked_collections = {
+        "agents", "employees", "conges", "contrats", "contratsPersonnel", "materiel",
+        "pointages", "pointageMensuel", "feuillePresence", "demandesPersonnel",
+        "demandesStructure", "missions", "siteInspections", "stockMouvements",
+    }
+    linked_fields = {
+        "id", "backendId", "agentId", "employeeId", "employee_id",
+        "beneficiaireAgentId", "retourAgentId", "matricule", "code",
+    }
+
+    def matches(row: SgdiRecord) -> bool:
+        if str(row.item_id or "").strip() in refs:
+            return True
+        if not isinstance(row.data, dict):
+            return False
+        return any(str(row.data.get(field) or "").strip() in refs for field in linked_fields)
+
+    deleted_legacy = 0
+    rows = db.execute(select(SgdiRecord).where(SgdiRecord.collection.in_(linked_collections))).scalars().all()
+    for row in rows:
+        if matches(row):
+            db.delete(row)
+            deleted_legacy += 1
+
+    db.delete(employee)
+    db.commit()
+    return {"deleted": True, "id": employee_id, "storage": "sql", "legacy_deleted": deleted_legacy}
 
 
 def drh_dashboard(db: Session):
