@@ -3636,7 +3636,7 @@ function renderCandidatForm(view,id,options){
 	        <button type="button" class="btn btn-secondary" onclick="modifierCandidatForm('${c.id}')">Modifier</button>
 	        <button type="button" class="btn btn-secondary" onclick="saveCandidat('${c.id}',true)">Enregistrer</button>
 	        ${candidatIsArchived(c)?`<button type="button" class="btn btn-success" onclick="activerCandidat('${c.id}')">Activer</button>`:`<button type="button" class="btn btn-ghost text-red-600" onclick="openArchiveCandidatModal('${c.id}')">Archiver candidat</button>`}
-	        ${!candidatIsArchived(c)?(allValid?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">Valider la fiche de position</button>`:`<button type="button" class="btn btn-ghost" disabled>Fiche de position non complète</button>`):""}
+	        ${!candidatIsArchived(c)?(allValid?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">VALIDER FICHE CANDIDAT</button>`:`<button type="button" class="btn btn-ghost" disabled>Fiche de position non complète</button>`):""}
 	        <button type="button" class="btn btn-ghost text-red-600" onclick="deleteCandidat('${c.id}')">Supprimer</button>
 	      </div>
 	      <div class="candidate-main">
@@ -3651,7 +3651,7 @@ function renderCandidatForm(view,id,options){
 	        </div>
 	        <div class="candidate-global-footer-actions">
 	          ${!allValid&&currentKey?`<button type="button" class="btn btn-primary" data-section-action="1" onclick="validateCandidatSectionAction('${escapeHTML(c.id)}','${currentKey}')">Valider la section</button>`:""}
-	          ${allValid&&!candidatIsArchived(c)?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">Valider la fiche de position</button>`:""}
+	          ${allValid&&!candidatIsArchived(c)?`<button type="button" class="btn btn-primary" onclick="validerFichePosition('${c.id}')">VALIDER FICHE CANDIDAT</button>`:""}
 	        </div>
 	      </div>
 	    </form>
