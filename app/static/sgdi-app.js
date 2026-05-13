@@ -9843,7 +9843,7 @@ function renderPaie(view){
   const anomalies=lines.filter(x=>x.c.brutCotisable<cfg.snmg);
   view.innerHTML=`<div class="flex justify-between items-start gap-3 mb-4">
     <div><h1 class="text-2xl font-bold">Paie — ${paieMonthLabel(ym)}</h1><p class="text-sm text-slate-500">Calcul paie Algérie : CNAS, IRG, net à payer, coût employeur.</p></div>
-    <div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary" onclick="paieExportCSV()">Exporter CSV</button><button class="btn btn-ghost" onclick="window.print()">Imprimer</button></div>
+    <div class="flex gap-2 flex-wrap justify-end"><button class="btn paie-export-btn" onclick="paieExportCSV()">Exporter CSV</button><button class="btn paie-print-btn" onclick="window.print()">Imprimer</button></div>
   </div>
   <div class="card p-4 mb-4">
     <div class="grid grid-4">
