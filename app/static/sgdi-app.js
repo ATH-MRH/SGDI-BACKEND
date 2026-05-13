@@ -1662,7 +1662,7 @@ function render(){
   app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col">
     <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
       <div class="sgdi-topbar-left flex items-center gap-3 shrink-0">
-        <button type="button" class="btn btn-ghost text-xs" onclick="goBackSmart()" title="Retour" style="min-width:36px;height:36px;padding:0;font-size:18px">←</button>
+        <button type="button" class="btn btn-ghost text-xs topbar-back-btn" onclick="goBackSmart()" title="Retour">← Retour</button>
         <div>
           <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
           <div class="font-bold" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
@@ -3954,7 +3954,7 @@ function renderAvenants(view){
   const signes=list.filter(a=>a.statut==="signe").length;
   view.innerHTML=`<div class="flex justify-between items-start gap-3 mb-4">
     <div><h1 class="text-2xl font-bold">Avenants au contrat</h1><p class="text-sm text-slate-500">Gestion des modifications contractuelles du personnel${socFilter?` · <span class="font-semibold text-amber-700">${escapeHTML(socFilter)}</span>`:""}.</p></div>
-    <button class="btn btn-primary" onclick="openAvenantModal('general')">Nouvel avenant</button>
+    <button class="btn avenant-create-btn" onclick="openAvenantModal('general')">Nouvel avenant</button>
   </div>
   <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Total avenants</div><div class="text-3xl font-black text-sky-700">${list.length}</div></div>
@@ -4061,7 +4061,7 @@ function renderContratsDashboard(view){
   const mass=agents.reduce((sum,a)=>sum+(parseFloat(a.salaireNet)||0),0);
   const card=(label,value,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(label)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const quick=(label,route,icon)=>`<button type="button" class="btn btn-secondary justify-start" onclick="navigate('${route}')">${icon} ${escapeHTML(label)}</button>`;
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRATS</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn btn-primary" onclick="openCreateContratDirectModal()">➕ Créer contrat</button></div>
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRATS</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn contract-create-btn" onclick="openCreateContratDirectModal()">➕ Créer contrat</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Nouveau contrat",toContract.length,"Candidats à contractualiser","contrats/a_contractualiser","#043970","➕")}
       ${card("Avenants",avenants.length,`${signedAvenants.length} signé(s)`,"contrats/avenants","#7c3aed","✎")}
@@ -4080,7 +4080,7 @@ function renderContrats(view,mode){
     const list=db.candidats.filter(c=>c.statut==="a_contractualiser"&&(!socFilter||c.societe===socFilter));
     view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
       <div><h1 class="text-2xl font-bold mb-2">📋 À contractualiser</h1><p class="text-slate-500 text-sm">Candidats retenus.</p></div>
-      <button type="button" class="btn btn-primary" onclick="openCreateContratDirectModal()">Créer contrat</button>
+      <button type="button" class="btn contract-create-btn" onclick="openCreateContratDirectModal()">Créer contrat</button>
     </div>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:`<div class="card overflow-hidden"><table>
       <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Vérifs.</th><th></th></tr></thead>
@@ -5758,7 +5758,7 @@ async function renderIncidentsServer(view,mode){
     const ouverts=list.filter(i=>!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
     const critiques=list.filter(i=>["critique","majeur","urgent"].includes((i.gravite||"").toLowerCase())&&!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
     const clos=list.filter(i=>["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
-    view.innerHTML=`<div class="flex justify-between items-start mb-4"><div><h1 class="text-2xl font-bold">${mode==="autres"?"Main courante - évènements autres":"Main courante - évènements site"}</h1><div class="text-sm text-slate-500">Journal opérationnel chargé depuis PostgreSQL.</div></div><button class="btn btn-primary" onclick="openIncidentModal('${mode}')">Nouvel évènement</button></div>
+    view.innerHTML=`<div class="flex justify-between items-start mb-4"><div><h1 class="text-2xl font-bold">${mode==="autres"?"Main courante - évènements autres":"Main courante - évènements site"}</h1><div class="text-sm text-slate-500">Journal opérationnel chargé depuis PostgreSQL.</div></div><button class="btn main-event-btn" onclick="openIncidentModal('${mode}')">Nouvel évènement</button></div>
     <div class="grid grid-4 gap-3 mb-4"><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Total</div><div class="text-3xl font-black">${result?.total??list.length}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Ouverts</div><div class="text-3xl font-black text-amber-700">${ouverts}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Critiques</div><div class="text-3xl font-black text-red-700">${critiques}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Clôturés</div><div class="text-3xl font-black text-emerald-700">${clos}</div></div></div>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun évènement.</div>`:`<div class="space-y-3">${list.map(i=>mainCouranteCardHTML(i)).join("")}</div>`}
     ${sgdiServerPaginationHTML("incidents",type,result)}`;
@@ -5776,7 +5776,7 @@ function renderIncidents(view,mode){
   const ouverts=list.filter(i=>!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
   const critiques=list.filter(i=>["critique","majeur","urgent"].includes((i.gravite||"").toLowerCase())&&!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
   const clos=list.filter(i=>["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
-  view.innerHTML=`<div class="flex justify-between items-start mb-4"><div><h1 class="text-2xl font-bold">${mode==="autres"?"Main courante - évènements autres":"Main courante - évènements site"}</h1><div class="text-sm text-slate-500">Journal opérationnel, suivi des faits, décisions et clôtures.</div></div><button class="btn btn-primary" onclick="openIncidentModal('${mode}')">Nouvel évènement</button></div>
+  view.innerHTML=`<div class="flex justify-between items-start mb-4"><div><h1 class="text-2xl font-bold">${mode==="autres"?"Main courante - évènements autres":"Main courante - évènements site"}</h1><div class="text-sm text-slate-500">Journal opérationnel, suivi des faits, décisions et clôtures.</div></div><button class="btn main-event-btn" onclick="openIncidentModal('${mode}')">Nouvel évènement</button></div>
   <div class="grid grid-4 gap-3 mb-4">
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Total</div><div class="text-3xl font-black">${list.length}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Ouverts</div><div class="text-3xl font-black text-amber-700">${ouverts}</div></div>
@@ -6335,7 +6335,7 @@ function renderConges(view){
   else if(filt==="refuses")list=list.filter(c=>c.statut==="refuse");
   else if(filt==="nouvelles")list=list.filter(c=>(c.createdAt||c.du||"")>=addDays(now,-7));
   list.sort((a,b)=>String(b.createdAt||b.du||"").localeCompare(String(a.createdAt||a.du||"")));
-  view.innerHTML=`<div class="flex justify-between mb-4"><div><h1 class="text-2xl font-bold">Situation des congés</h1><p class="text-sm text-slate-500">Suivi des demandes selon leur état${soc?` · <span class="font-semibold text-amber-700">${escapeHTML(soc)}</span>`:""}.</p></div><button class="btn btn-primary" onclick="openCongeModal()">Nouvelle demande</button></div>
+  view.innerHTML=`<div class="flex justify-between mb-4"><div><h1 class="text-2xl font-bold">Situation des congés</h1><p class="text-sm text-slate-500">Suivi des demandes selon leur état${soc?` · <span class="font-semibold text-amber-700">${escapeHTML(soc)}</span>`:""}.</p></div><button class="btn conge-request-btn" onclick="openCongeModal()">Nouvelle demande</button></div>
   <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
     ${tabs.map(([k,l,n])=>`<button type="button" onclick="setCongesFiltre('${k}')" class="card p-4 text-left kpi-clickable" style="border:2px solid ${filt===k?"#043970":"#e2e8f0"};background:${filt===k?"#043970":"#fff"}"><div class="text-xs uppercase font-bold text-slate-500">${l}</div><div class="text-3xl font-black mt-1" style="color:${filt===k?"#043970":"#0f172a"}">${n}</div></button>`).join("")}
   </div>
