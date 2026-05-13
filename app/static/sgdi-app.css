@@ -517,39 +517,39 @@
   .conge-request-btn,
   .main-event-btn{
     margin-top:.35cm;
-    width:155px!important;
-    min-width:155px!important;
-    height:34px!important;
-    min-height:34px!important;
+    width:168px!important;
+    min-width:168px!important;
+    height:38px!important;
+    min-height:38px!important;
     border:0!important;
     border-radius:999px!important;
-    padding:0 12px!important;
+    padding:0 14px!important;
     display:inline-flex!important;
     align-items:center!important;
     gap:7px!important;
     justify-content:center!important;
     background:#facc15!important;
     color:#01112f!important;
-    font-size:11px!important;
+    font-size:12px!important;
     font-weight:950!important;
     white-space:nowrap!important;
     box-shadow:0 6px 14px rgba(15,23,42,.14);
   }
   .topbar-back-btn{
-    width:155px!important;
-    min-width:155px!important;
-    height:34px!important;
-    min-height:34px!important;
+    width:168px!important;
+    min-width:168px!important;
+    height:38px!important;
+    min-height:38px!important;
     border:0!important;
     border-radius:999px!important;
-    padding:0 12px!important;
+    padding:0 14px!important;
     display:inline-flex!important;
     align-items:center!important;
     gap:7px!important;
     justify-content:center!important;
     background:#facc15!important;
     color:#01112f!important;
-    font-size:11px!important;
+    font-size:12px!important;
     font-weight:950!important;
     white-space:nowrap!important;
     box-shadow:0 6px 14px rgba(15,23,42,.14);
