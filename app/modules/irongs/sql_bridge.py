@@ -207,6 +207,49 @@ def sync_assignment_from_agent(db: Session, employee: Employee, item: dict[str, 
     current.active = 1
 
 
+def assignment_to_item(row: Assignment) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "backendId": row.id,
+        "employee_id": row.employee_id,
+        "site_id": row.site_id,
+        "agentId": row.employee_id,
+        "siteId": row.site_id,
+        "groupe": row.group_code,
+        "poste": row.position,
+        "date": date_out(row.start_date),
+        "dateDebut": date_out(row.start_date),
+        "dateFin": date_out(row.end_date),
+        "motifChangement": row.change_reason or "",
+        "active": bool(row.active),
+    }
+
+
+def upsert_assignment(db: Session, item: dict[str, Any]) -> dict[str, Any] | None:
+    row = db.get(Assignment, as_int(item.get("backendId")) or as_int(item.get("id")) or 0)
+    employee = employee_by_ref(db, item.get("employee_id") or item.get("employeeId") or item.get("agentBackendId") or item.get("agentId") or item.get("matricule"))
+    site = site_by_ref(db, item.get("site_id") or item.get("siteBackendId") or item.get("siteId") or item.get("site") or item.get("siteName"))
+    if not employee or not site:
+        return assignment_to_item(row) if row else None
+    if not row:
+        row = Assignment(
+            employee_id=employee.id,
+            site_id=site.id,
+            start_date=as_date(item.get("dateDebut") or item.get("date") or item.get("start_date")) or date.today(),
+        )
+        db.add(row)
+    row.employee_id = employee.id
+    row.site_id = site.id
+    row.group_code = str(item.get("groupe") or item.get("group_code") or row.group_code or "A")[:20]
+    row.position = item.get("poste") or item.get("position")
+    row.start_date = as_date(item.get("dateDebut") or item.get("date") or item.get("start_date")) or row.start_date or date.today()
+    row.end_date = as_date(item.get("dateFin") or item.get("end_date"))
+    row.change_reason = item.get("motifChangement") or item.get("motif") or item.get("change_reason")
+    row.active = 1 if item.get("active", True) else 0
+    db.flush()
+    return assignment_to_item(row)
+
+
 def site_to_item(row: Site) -> dict[str, Any]:
     raw = row.equipment_plan.get("_legacy") if isinstance(row.equipment_plan, dict) else {}
     item = dict(raw or {})
@@ -379,7 +422,7 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name in {"pointages", "feuillePresence", "pointageMensuel"}: return [presence_to_item(r) for r in db.execute(select(DailyPresence).order_by(DailyPresence.id)).scalars().all()]
     if name in FINANCE_MODELS: return [simple_raw(r) for r in db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()]
     if name in STOCK_MODELS: return [stock_raw(r) for r in db.execute(select(STOCK_MODELS[name]).order_by(STOCK_MODELS[name].id)).scalars().all()]
-    if name in {"assignments", "affectations"}: return [{"id": str(r.id), "backendId": r.id, "employee_id": r.employee_id, "site_id": r.site_id, "agentId": r.employee_id, "siteId": r.site_id, "groupe": r.group_code, "poste": r.position, "date": date_out(r.start_date), "active": bool(r.active)} for r in db.execute(select(Assignment).order_by(Assignment.id)).scalars().all()]
+    if name in {"assignments", "affectations"}: return [assignment_to_item(r) for r in db.execute(select(Assignment).order_by(Assignment.id)).scalars().all()]
     raise HTTPException(status_code=400, detail=f"Collection SQL non prise en charge: {name}")
 
 
@@ -391,6 +434,9 @@ def upsert_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
     if name in {"pointages", "feuillePresence", "pointageMensuel"}: return upsert_presence(db, item, name)
     if name in FINANCE_MODELS: return upsert_finance(db, FINANCE_MODELS[name], item, name)
     if name in STOCK_MODELS: return upsert_stock(db, STOCK_MODELS[name], item, name)
+    if name in {"assignments", "affectations"}:
+        saved = upsert_assignment(db, item)
+        return saved or dict(item)
     raise HTTPException(status_code=400, detail=f"Ecriture SQL non prise en charge: {name}")
 
 

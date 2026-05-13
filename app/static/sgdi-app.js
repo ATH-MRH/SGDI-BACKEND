@@ -309,7 +309,7 @@ function sgdiRequireServerWrite(){
   return true;
 }
 let sgdiSaveQueue=Promise.resolve();
-const SQL_OWNED_COLLECTIONS=new Set(["candidats","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs"]);
+const SQL_OWNED_COLLECTIONS=new Set(["candidats","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs","assignments","affectations"]);
 function sgdiLegacySnapshot(){
   const source=db&&typeof db==="object"?db:{};
   const snap={...source};
