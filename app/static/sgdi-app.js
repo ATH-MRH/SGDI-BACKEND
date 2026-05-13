@@ -3376,7 +3376,7 @@ function candidatSectionOpen(c,key,bannerClass,title){
   const locked=candidatSectionLocked(c,key);
   const current=candidatCurrentSectionKey(c)===key;
   const v=candidatSectionValidations(c)[key];
-  return `<div class="card candidate-section-card ${locked?"opacity-80":""}" id="section-${key}" data-candidat-section="${key}" data-locked="${locked?"1":"0"}">
+  return `<div class="card candidate-section-card ${current?"current":""} ${locked?"opacity-80":""}" id="section-${key}" data-candidat-section="${key}" data-locked="${locked?"1":"0"}">
     <div class="candidate-section-head ${bannerClass}">
       <div>
         <div class="candidate-section-kicker">Section ${candidatSectionIndex(key)+1}</div>
