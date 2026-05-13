@@ -3004,6 +3004,7 @@ function renderRecrutementDashboard(view){
   const byPoste={};reserves.forEach(c=>{const k=c.posteSouhaite||"Non renseigné";byPoste[k]=(byPoste[k]||0)+1});
   const topSoc=Object.entries(bySoc).sort((a,b)=>b[1]-a[1]).slice(0,4);
   const topPostes=Object.entries(byPoste).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const reserveRows=reserves.slice().sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   const scope=socFilter?escapeHTML(socFilter):(allowed.length?"Sociétés autorisées":"Toutes sociétés");
   const card=(title,count,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(title)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${count}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const bar=(label,n,total,color)=>{const pct=total?Math.round(n/total*100):0;return`<button type="button" class="dash-mini-row text-left w-full" onclick="navigate('reserve')" data-searchable><div style="min-width:190px"><div class="font-bold text-sm">${escapeHTML(label)}</div><div class="text-[11px] text-slate-500">${n} candidat(s)</div></div><div class="flex-1"><div class="dash-bar"><span style="width:${pct}%;background:${color}"></span></div></div><div class="font-black text-sm">${pct}%</div></button>`};
@@ -3017,6 +3018,13 @@ function renderRecrutementDashboard(view){
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div class="card p-4"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Répartition par société</h3><span class="pill pill-blue">${all.length}</span></div><div class="dash-mini-list">${topSoc.length?topSoc.map(([k,n])=>bar(k,n,all.length,"#043970")).join(""):`<div class="p-8 text-center text-slate-500">Aucune donnée recrutement.</div>`}</div></div>
       <div class="card p-4"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Postes demandés en réserve</h3><span class="pill pill-amber">${reserves.length}</span></div><div class="dash-mini-list">${topPostes.length?topPostes.map(([k,n])=>bar(k,n,reserves.length,"#f59e0b")).join(""):`<div class="p-8 text-center text-slate-500">Aucun candidat en réserve.</div>`}</div></div>
+    </div>
+    <div class="card overflow-hidden mt-4">
+      <div class="flex items-center justify-between gap-3 p-4 border-b border-slate-100 flex-wrap">
+        <div><h3 class="font-black">Liste des candidats en réserve</h3><div class="text-xs text-slate-500">${reserveRows.length} candidat(s) affiché(s) · ${scope}</div></div>
+        <button type="button" class="btn btn-ghost text-xs" onclick="navigate('reserve')">Voir la page réserve</button>
+      </div>
+      ${reserveRows.length?`<div class="overflow-x-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Date</th><th>Statut</th><th></th></tr></thead><tbody>${reserveRows.map(c=>candidateListRowHTML(c,"reserve")).join("")}</tbody></table></div>`:`<div class="p-10 text-center text-slate-500">Aucun candidat en réserve.</div>`}
     </div>`;
 }
 function recrutementModeToApi(mode){return mode==="archive"?"archive":mode==="reserve"?"reserve":"new"}
