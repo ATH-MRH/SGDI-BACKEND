@@ -386,14 +386,10 @@ function sgdiAutoRefreshSettings(){
   if(!db)db={settings:{}};
   if(!db.settings||typeof db.settings!=="object")db.settings={};
   const cfg=db.settings.autoRefresh&&typeof db.settings.autoRefresh==="object"?db.settings.autoRefresh:{};
-  const raw=Number(cfg.intervalSeconds);
-  const intervalSeconds=Math.min(20,Math.max(5,Number.isFinite(raw)&&raw>0?Math.round(raw):10));
+  const configured=Number(cfg.intervalSeconds);
+  const raw=(!cfg.updatedBy&&configured===10)?20:configured;
+  const intervalSeconds=Math.min(20,Math.max(5,Number.isFinite(raw)&&raw>0?Math.round(raw):20));
   return{enabled:cfg.enabled!==false,intervalSeconds};
-}
-function sgdiAutoRefreshCanRender(){
-  const active=document.activeElement;
-  const editing=active&&["INPUT","TEXTAREA","SELECT"].includes(active.tagName);
-  return !document.querySelector(".modal-bg")&&!editing&&!(active&&active.isContentEditable);
 }
 function sgdiScheduleAutoRefresh(){
   if(sgdiAutoRefreshTimer){clearInterval(sgdiAutoRefreshTimer);sgdiAutoRefreshTimer=null}
@@ -404,9 +400,9 @@ function sgdiScheduleAutoRefresh(){
     if(document.hidden)return;
     sgdiAutoRefreshRunning=true;
     try{
-      const canRender=sgdiAutoRefreshCanRender();
-      const pulled=await sgdiPullState({silent:true,render:false,light:true,auto:true});
-      if(pulled&&canRender&&typeof renderView==="function")renderView();
+      const currentHash=location.hash;
+      await sgdiPullState({silent:true,render:false,light:true,auto:true});
+      if(location.hash!==currentHash)location.hash=currentHash;
     }catch(e){
       console.warn("Actualisation automatique SGDI échouée",e);
     }finally{
@@ -416,7 +412,7 @@ function sgdiScheduleAutoRefresh(){
 }
 function saveAdminAutoRefreshSettings(form){
   if(!db.settings||typeof db.settings!=="object")db.settings={};
-  const seconds=Math.min(20,Math.max(5,parseInt(form.intervalSeconds.value||"10",10)||10));
+  const seconds=Math.min(20,Math.max(5,parseInt(form.intervalSeconds.value||"20",10)||20));
   db.settings.autoRefresh={enabled:!!form.enabled.checked,intervalSeconds:seconds,updatedAt:new Date().toISOString(),updatedBy:session?.username||""};
   sgdiScheduleAutoRefresh();
   if(saveDB())toast("Paramètres d'actualisation enregistrés","success");
@@ -950,7 +946,7 @@ function emptyDB(){
     activityLog:[],categoriesPrest:[],themes:[],structures:[],
     niveauxAcces:[],priorites:[],alertes:[],customFields:[],customModules:[],
     societesConfig:{custom:[],descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
-    settings:{unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:10}}
+    settings:{unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:20}}
   };
 }
 function sgdiAutoRepairDB(options){
@@ -980,10 +976,10 @@ function sgdiAutoRepairDB(options){
   };
   [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"]].forEach(([k,p])=>fixListIds(k,p));
   db.societesConfig={custom:uniqueSocieteNames([...(db.societesConfig?.custom||[]),...deriveSocietesFromData(db)]),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
-  if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:10}};
+  if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:20}};
   if(typeof db.settings.unlockCode!=="string")db.settings.unlockCode="";
   if(!Array.isArray(db.settings.unlockLog))db.settings.unlockLog=[];
-  if(!db.settings.autoRefresh||typeof db.settings.autoRefresh!=="object")db.settings.autoRefresh={enabled:true,intervalSeconds:10};
+  if(!db.settings.autoRefresh||typeof db.settings.autoRefresh!=="object")db.settings.autoRefresh={enabled:true,intervalSeconds:20};
   if(typeof ensureNiveauxAcces==="function")ensureNiveauxAcces();
   if(typeof sanitizeCandidatesInDB==="function")sanitizeCandidatesInDB();
   if(typeof migrateStructureDemandes==="function")migrateStructureDemandes();
