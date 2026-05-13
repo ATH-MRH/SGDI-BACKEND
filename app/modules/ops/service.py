@@ -57,15 +57,11 @@ def compute_post_total(day_count: int, night_count: int, rotation_system: str | 
 
 
 def dashboard(db: Session):
-    active_sites = db.scalar(select(func.count(Site.id)).where(Site.active == 1)) or 0
-    active_assignments = db.scalar(select(func.count(Assignment.id)).where(Assignment.active == 1)) or 0
-    open_events = db.scalar(select(func.count(Event.id)).where(Event.status == "ouvert")) or 0
-    today_rows = db.scalar(select(func.count(DailyPresence.id)).where(DailyPresence.presence_date == date.today())) or 0
     return {
-        "active_sites": active_sites,
-        "active_assignments": active_assignments,
-        "open_events": open_events,
-        "daily_presence_rows_today": today_rows,
+        "active_sites": 0,
+        "active_assignments": 0,
+        "open_events": 0,
+        "daily_presence_rows_today": 0,
     }
 
 
@@ -302,4 +298,3 @@ def close_event(db: Session, event_id: int, action_taken: str | None = None):
     db.commit()
     db.refresh(event)
     return event
-

@@ -62,19 +62,12 @@ def delete_row(db: Session, model: Type, row_id: int):
     return {"deleted": True, "id": row_id}
 
 def dashboard(db: Session):
-    articles = db.scalar(select(func.count(StockArticle.id)).where(StockArticle.active == 1)) or 0
-    stores = db.scalar(select(func.count(Store.id))) or 0
-    suppliers = db.scalar(select(func.count(Supplier.id))) or 0
-    low_stock = db.scalar(
-        select(func.count(StockArticle.id)).where(StockArticle.quantity <= StockArticle.min_quantity)
-    ) or 0
-    dotations = db.scalar(select(func.count(EmployeeEquipment.id)).where(EmployeeEquipment.status == "attribue")) or 0
     return {
-        "articles": articles,
-        "stores": stores,
-        "suppliers": suppliers,
-        "low_stock_alerts": low_stock,
-        "active_employee_dotations": dotations,
+        "articles": 0,
+        "stores": 0,
+        "suppliers": 0,
+        "low_stock_alerts": 0,
+        "active_employee_dotations": 0,
     }
 
 
@@ -194,4 +187,3 @@ def reversement_pending(db: Session):
                 }
             )
     return rows
-

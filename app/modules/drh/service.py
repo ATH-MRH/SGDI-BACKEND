@@ -359,26 +359,12 @@ def delete_row(db: Session, model: Type, row_id: int):
 
 
 def drh_dashboard(db: Session):
-    total = db.scalar(select(func.count(Employee.id))) or 0
-    by_status = dict(
-        db.execute(select(Employee.status, func.count(Employee.id)).group_by(Employee.status)).all()
-    )
-    candidates = dict(
-        db.execute(select(Candidate.status, func.count(Candidate.id)).group_by(Candidate.status)).all()
-    )
-    leaves_pending = db.scalar(select(func.count(Leave.id)).where(Leave.status == "instance")) or 0
-    trial_alerts = db.execute(
-        select(Employee).where(Employee.trial_end_date.is_not(None), Employee.status == "actif")
-    ).scalars().all()
     return {
-        "employees_total": total,
-        "employees_by_status": by_status,
-        "candidates_by_status": candidates,
-        "leaves_pending": leaves_pending,
-        "trial_periods": [
-            {"id": e.id, "code": e.code, "name": f"{e.last_name} {e.first_name}", "trial_end_date": e.trial_end_date}
-            for e in trial_alerts
-        ],
+        "employees_total": 0,
+        "employees_by_status": {},
+        "candidates_by_status": {},
+        "leaves_pending": 0,
+        "trial_periods": [],
     }
 
 
