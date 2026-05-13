@@ -1347,8 +1347,7 @@ async function login(u,p,opt={}){
   toast("Connexion PostgreSQL obligatoire : aucun mode local autorisé","error");return
 }
 function openAdminSystemPasswordModal(form){
-  const username=String(form?.username?.value||"").trim();
-  if(!username){toast("Saisissez d'abord l'identifiant admin","error");form?.username?.focus?.();return}
+  const username=String(form?.username?.value||"").trim()||"admin";
   openModal(`<h3 class="font-bold text-lg mb-2">Administration système</h3>
     <p class="text-sm text-slate-500 mb-4">Entrez le mot de passe administrateur.</p>
     <form onsubmit="event.preventDefault();validateAdminSystemPassword(this)">
