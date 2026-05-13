@@ -154,7 +154,10 @@ def employee_to_item(row: Employee) -> dict[str, Any]:
 
 def upsert_employee(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     item = normalize_photo_fields(item, fallback=str(item.get("matricule") or item.get("code") or item.get("backendId") or "employee"))
-    row = db.get(Employee, as_int(item.get("backendId")) or 0)
+    backend_id = as_int(item.get("backendId"))
+    row = db.get(Employee, backend_id or 0)
+    if backend_id and not row:
+        return dict(item)
     code = str(item.get("matricule") or item.get("code") or item.get("id") or "").strip()[:30]
     if not row and code:
         row = db.execute(select(Employee).where(Employee.code == code)).scalar_one_or_none()
