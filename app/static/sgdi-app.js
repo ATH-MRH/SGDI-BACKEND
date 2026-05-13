@@ -108,12 +108,7 @@ function societeExists(name){
   return SOCIETES.some(s=>normalizeSocieteName(s)===n);
 }
 function defaultSocieteAccessPasswords(){
-  return {
-    "IRON GLOBAL SECURITE":"admin",
-    "IRON GLOBAL SOLUTION":"Admin",
-    "SWORD CORPORATION":"Admin",
-    "SWORD CONSTRUCTION":"Admin"
-  };
+  return {};
 }
 function purgeRemovedSocietesFromStorage(){}
 function societeConfig(){
@@ -124,7 +119,7 @@ function societeConfig(){
     custom:ALLOWED_SOCIETES.slice(),
     descriptions:{...(remote.descriptions||{})},
     images:{...(remote.images||{})},
-    access:{...remoteAccess,requirePassword:false,passwords:{...defaultPasswords,...(remoteAccess.passwords||{})}},
+    access:{...remoteAccess,requirePassword:false,passwords:{}},
     removed:REMOVED_SOCIETES.slice()
   };
 }
@@ -517,12 +512,6 @@ window.SGDI_API={
   auth:{
     login:async(username,password)=>{
       const r=await sgdiApi("/auth/login",{method:"POST",body:{username,password},legacy:false});
-      const token=r?.token||r?.access_token;
-      if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
-      return r;
-    },
-    adminSystemLogin:async(password)=>{
-      const r=await sgdiApi("/auth/admin-system-login",{method:"POST",body:{password},legacy:false});
       const token=r?.token||r?.access_token;
       if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
       return r;
@@ -1356,18 +1345,17 @@ async function login(u,p){
   }
   toast("Connexion PostgreSQL obligatoire : aucun mode local autorisé","error");return
 }
-function defaultStructureAccessPasswords(){return{drh:"Admin",ops:"Admin",materiel:"Admin",facturation:"Admin",commercial:"Admin",pointage:"Admin"}}
+function defaultStructureAccessPasswords(){return{}}
 function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE"}[mod]||String(mod||"").toUpperCase())}
 function accessSecuritySettings(){
   if(!db.settings)db.settings={};
   const cfg=db.settings.accessSecurity&&typeof db.settings.accessSecurity==="object"?db.settings.accessSecurity:{};
   const structures=cfg.structures&&typeof cfg.structures==="object"?cfg.structures:{};
   return{
-    sgdi:{password:(cfg.sgdi&&cfg.sgdi.password)||db.settings.adminSystemPassword||"Hytera@01"},
+    sgdi:{password:""},
     structures:{requirePassword:false,passwords:{...defaultStructureAccessPasswords(),...(structures.passwords||{})}}
   };
 }
-function adminSystemPassword(){return accessSecuritySettings().sgdi.password||"Hytera@01"}
 function structureAccessSettings(){return accessSecuritySettings().structures}
 function structureAccessPasswordRequired(){return false}
 function structureAccessPassword(mod){const cfg=structureAccessSettings();return cfg.passwords&&cfg.passwords[mod]||defaultStructureAccessPasswords()[mod]||null}
@@ -1384,43 +1372,6 @@ function societeAccessPassword(s){
 }
 function isAdminSystemUnlocked(){return true}
 function openAdminSystemAccess(){if(!isAdmin()){toast("Connectez-vous avec un compte administrateur","error");return}session={...session,societe:null,transverse:"admin"};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function openAdminLoginAccess(){
-  openModal(`<h3 class="font-bold text-lg mb-3">Accès administration système</h3>
-    <p class="text-sm text-slate-500 mb-4">Entrez le mot de passe administrateur pour accéder directement au module Administration système.</p>
-    <form onsubmit="event.preventDefault();confirmAdminLoginAccess(this.password.value)">
-      <label class="label">Mot de passe admin</label>
-      <input class="input mb-4" type="password" name="password" autofocus autocomplete="current-password"/>
-      <div class="flex justify-end gap-2">
-        <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-        <button class="btn btn-primary">Accéder</button>
-      </div>
-    </form>`);
-}
-function confirmAdminSystemAccess(p){openAdminSystemAccess()}
-async function confirmAdminLoginAccess(p){
-  try{
-    const password=String(p||"").trim();
-    if(!password){toast("Mot de passe administrateur obligatoire","error");return}
-    closeModal();
-    const r=await SGDI.auth.adminSystemLogin(password);
-    const authUser=r?.user||r;
-    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||"H5",nom:authUser.full_name||authUser.nom||"Administrateur",agentId:null,societe:null,transverse:"admin"};
-    saveSession(session);
-    db=emptyDB();
-    hydrateDB(db);
-    await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>{});
-    await sgdiLoadAuthState();
-    session={...session,transverse:"admin",societe:null};
-    sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");
-    saveSession(session);
-    sgdiPostgresReady=true;
-    location.hash="#/admin/dashboard";
-    route();
-  }catch(e){
-    toast("Accès admin impossible : "+(e.message||e),"error");
-  }
-}
-function loginAdminDirect(){if(isAdmin()){openAdminSystemAccess();return}session=null;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);openAdminLoginAccess()}
 function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
@@ -2741,7 +2692,6 @@ function renderLogin(){
           <input class="input mb-4" style="background:#fff;color:#0f172a;border-color:#cbd5e1" type="password" name="password" />
           <button class="btn w-full justify-center" style="background:#043970;color:#111;font-weight:800">Se connecter</button>
         </form>
-        <div class="mt-2 text-center"><button class="text-xs text-amber-600 hover:text-amber-700 font-semibold" onclick="loginAdminDirect()">Accès admin</button></div>
       </div>
     </div>
   </div>`;
@@ -11469,8 +11419,9 @@ async function confirmAdminUser(originalUsername){
       const msg=String(e.message||e||"");
       if(/not found|introuvable|404/i.test(msg)){
         try{
-          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password:password||"Admin"});
-          toast("Utilisateur recréé dans PostgreSQL. Mot de passe par défaut : Admin","warning");
+          if(!password){toast("Mot de passe obligatoire pour recréer l'utilisateur côté backend","error");return}
+          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password});
+          toast("Utilisateur recréé dans PostgreSQL","warning");
         }catch(createErr){
           const createMsg=String(createErr.message||createErr||"");
           if(/déjà existant|deja existant|already/i.test(createMsg)){

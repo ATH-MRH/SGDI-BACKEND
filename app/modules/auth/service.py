@@ -2,7 +2,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.modules.auth.models import User
 from app.modules.auth.schemas import UserCreate, UserUpdate
@@ -42,12 +41,7 @@ def authenticate(db: Session, username: str, password: str) -> tuple[str, User]:
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants incorrects")
     password_ok = verify_password(password, user.password_hash)
-    admin_fallback_ok = (
-        user.username == "admin"
-        and (user.role or "").strip().upper() in {"ADMIN", "ADM", "ADM1", "ADM2"}
-        and password in {settings.admin_system_password, "admin"}
-    )
-    if not password_ok and not admin_fallback_ok:
+    if not password_ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Identifiants incorrects")
     token = create_access_token(str(user.id), {"role": user.role, "username": user.username})
     return token, user

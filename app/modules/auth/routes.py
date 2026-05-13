@@ -140,6 +140,8 @@ def patch_access_rule(
 
 @router.post("/admin-system-login", response_model=TokenOut)
 def admin_system_login(payload: AdminSystemLoginIn, db: Session = Depends(get_db)):
+    if not settings.admin_system_password:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès administration système désactivé")
     if payload.password != settings.admin_system_password:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mot de passe administration système incorrect")
     user = db.query(User).filter(User.username == "admin", User.is_active.is_(True)).one_or_none()

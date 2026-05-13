@@ -137,7 +137,6 @@
           <button class="btn w-full justify-center" style="background:#043970;color:#111;font-weight:800">Se connecter</button>
         </form>
         <div class="mt-5 text-center"><button class="text-xs text-slate-500 hover:text-amber-600" onclick="if(confirm('Réinitialiser toutes les données ?')){localStorage.clear();location.reload()}">Réinitialiser les données</button></div>
-        <div class="mt-2 text-center"><button class="text-xs text-amber-600 hover:text-amber-700 font-semibold" onclick="loginAdminDirect()">Accès admin</button></div>
       </div>
     </div>
   </div>`;
@@ -146,10 +145,6 @@
   window.login = async function (username, password) {
     await apiCall(() => SGDI.login(username, password), "Connexion réussie");
     setPath("/dashboard");
-  };
-
-  window.loginAdminDirect = function () {
-    login("admin", "admin");
   };
 
   /* ================================================================

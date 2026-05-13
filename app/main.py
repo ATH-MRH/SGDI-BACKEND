@@ -144,7 +144,7 @@ def on_startup() -> None:
         if cleaned_drh:
             logger.info("Photos Base64 nettoyées dans les tables DRH: %s ligne(s)", cleaned_drh)
         admin = db.query(User).filter(User.username == "admin").one_or_none()
-        if admin is None:
+        if admin is None and settings.admin_initial_password:
             admin = User(
                 username="admin",
                 email=None,
@@ -153,10 +153,12 @@ def on_startup() -> None:
                 access_level="H5",
                 authorized_societies=[],
                 authorized_structures=[],
-                password_hash=hash_password("admin"),
+                password_hash=hash_password(settings.admin_initial_password),
                 is_active=True,
             )
             db.add(admin)
+        elif admin is None:
+            logger.warning("Compte administrateur absent: définissez ADMIN_INITIAL_PASSWORD pour le créer au démarrage")
         db.commit()
     logger.info("Compte administrateur vérifié")
 
