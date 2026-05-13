@@ -3043,7 +3043,8 @@ function upsertServerCandidate(row){
 function candidateListRowHTML(c,mode){
   const route=mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement";
   const archived=mode==="archive";
-  return `<tr data-searchable data-candidate-id="${escapeHTML(c.id)}" data-backend-id="${escapeHTML(c.backendId||"")}">
+  const rowClick=mode==="reserve"?` onclick="navigate('reserve/${jsString(c.id)}')" class="cursor-pointer hover:bg-slate-50"`:"";
+  return `<tr data-searchable data-candidate-id="${escapeHTML(c.id)}" data-backend-id="${escapeHTML(c.backendId||"")}"${rowClick}>
     <td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML((c.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(c.email||"")}</div></div></div></td>
     <td>${safe(c.posteSouhaite)}</td>
     <td><span class="pill pill-indigo">${safe(c.societe)}</span></td>
@@ -3052,7 +3053,7 @@ function candidateListRowHTML(c,mode){
     <td>${c.avisDecision?`<span class="pill ${c.avisDecision==="Favorable"?"pill-green":c.avisDecision==="Défavorable"?"pill-red":"pill-amber"}">${escapeHTML(c.avisDecision)}</span>`:"—"}</td>
     <td class="text-xs">${archived?`${formatDate(c.archivedAt||c.updatedAt||c.createdAt)}<div class="text-[11px] text-slate-500">${escapeHTML(c.motifArchive||"—")}</div>`:formatDate(c.createdAt)}</td>
     <td>${archived?'<span class="pill pill-gray">Archivé</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
-    <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<a class="btn btn-ghost text-xs" href="#/${route}/${escapeHTML(c.id)}">Ouvrir →</a>`}</td>
+    <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<a class="btn btn-ghost text-xs" href="#/${route}/${escapeHTML(c.id)}">Ouvrir →</a>`}</td>
   </tr>`;
 }
 async function renderRecrutementServer(view,mode){
