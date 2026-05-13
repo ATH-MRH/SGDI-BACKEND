@@ -360,6 +360,7 @@ async function sgdiPullState(options){
       sanitizeCandidatesInDB();
       sgdiPostgresReady=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
+      if(typeof sgdiScheduleAutoRefresh==="function")sgdiScheduleAutoRefresh();
       await sgdiLoadAuthState();
       if(opt.deferSql){
         setTimeout(()=>sgdiBackgroundSqlSync({silent:opt.silent,render:opt.render}),50);
@@ -378,6 +379,48 @@ async function sgdiPullState(options){
     if(!opt.silent&&typeof toast==="function")toast("Backend indisponible : "+(e.message||e),"error");
   }
   return null;
+}
+let sgdiAutoRefreshTimer=null;
+let sgdiAutoRefreshRunning=false;
+function sgdiAutoRefreshSettings(){
+  if(!db)db={settings:{}};
+  if(!db.settings||typeof db.settings!=="object")db.settings={};
+  const cfg=db.settings.autoRefresh&&typeof db.settings.autoRefresh==="object"?db.settings.autoRefresh:{};
+  const raw=Number(cfg.intervalSeconds);
+  const intervalSeconds=Math.min(20,Math.max(5,Number.isFinite(raw)&&raw>0?Math.round(raw):10));
+  return{enabled:cfg.enabled!==false,intervalSeconds};
+}
+function sgdiAutoRefreshCanRender(){
+  const active=document.activeElement;
+  const editing=active&&["INPUT","TEXTAREA","SELECT"].includes(active.tagName);
+  return !document.querySelector(".modal-bg")&&!editing&&!(active&&active.isContentEditable);
+}
+function sgdiScheduleAutoRefresh(){
+  if(sgdiAutoRefreshTimer){clearInterval(sgdiAutoRefreshTimer);sgdiAutoRefreshTimer=null}
+  const cfg=sgdiAutoRefreshSettings();
+  if(!cfg.enabled)return;
+  sgdiAutoRefreshTimer=setInterval(async()=>{
+    if(sgdiAutoRefreshRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||sgdiDirty)return;
+    if(document.hidden)return;
+    sgdiAutoRefreshRunning=true;
+    try{
+      const canRender=sgdiAutoRefreshCanRender();
+      const pulled=await sgdiPullState({silent:true,render:false,light:true,auto:true});
+      if(pulled&&canRender&&typeof renderView==="function")renderView();
+    }catch(e){
+      console.warn("Actualisation automatique SGDI échouée",e);
+    }finally{
+      sgdiAutoRefreshRunning=false;
+    }
+  },cfg.intervalSeconds*1000);
+}
+function saveAdminAutoRefreshSettings(form){
+  if(!db.settings||typeof db.settings!=="object")db.settings={};
+  const seconds=Math.min(20,Math.max(5,parseInt(form.intervalSeconds.value||"10",10)||10));
+  db.settings.autoRefresh={enabled:!!form.enabled.checked,intervalSeconds:seconds,updatedAt:new Date().toISOString(),updatedBy:session?.username||""};
+  sgdiScheduleAutoRefresh();
+  if(saveDB())toast("Paramètres d'actualisation enregistrés","success");
+  renderView();
 }
 let demandesPersonnelRefreshing=false;
 let demandesPersonnelKnownIds=null;
@@ -907,7 +950,7 @@ function emptyDB(){
     activityLog:[],categoriesPrest:[],themes:[],structures:[],
     niveauxAcces:[],priorites:[],alertes:[],customFields:[],customModules:[],
     societesConfig:{custom:[],descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
-    settings:{unlockCode:"",unlockLog:[]}
+    settings:{unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:10}}
   };
 }
 function sgdiAutoRepairDB(options){
@@ -937,9 +980,10 @@ function sgdiAutoRepairDB(options){
   };
   [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"]].forEach(([k,p])=>fixListIds(k,p));
   db.societesConfig={custom:uniqueSocieteNames([...(db.societesConfig?.custom||[]),...deriveSocietesFromData(db)]),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
-  if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[]};
+  if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:10}};
   if(typeof db.settings.unlockCode!=="string")db.settings.unlockCode="";
   if(!Array.isArray(db.settings.unlockLog))db.settings.unlockLog=[];
+  if(!db.settings.autoRefresh||typeof db.settings.autoRefresh!=="object")db.settings.autoRefresh={enabled:true,intervalSeconds:10};
   if(typeof ensureNiveauxAcces==="function")ensureNiveauxAcces();
   if(typeof sanitizeCandidatesInDB==="function")sanitizeCandidatesInDB();
   if(typeof migrateStructureDemandes==="function")migrateStructureDemandes();
@@ -11208,6 +11252,7 @@ function renderAdmin(view,sub,arg){
   if(["access","access_sgdi","access_societes","access_structures"].includes(sub))return renderAdminAccessSecurity(view,sub);
   if(sub==="feed")return renderAdminFeed(view);
   if(sub==="messages")return renderAdminMessagesHistory(view);
+  if(sub==="sync")return renderAdminSyncSettings(view);
   if(sub==="users")return renderAdminUsers(view);
   if(sub==="droits")return renderAdminDroits(view);
   if(sub==="sections_candidat")return renderAdminCandidatSections(view);
@@ -11396,9 +11441,39 @@ function renderAdminDashboard(view){
     ${adminDashboardCard("3. Droits par module","Autoriser ou refuser les accès par rôle : DRH, OPS, Matériel, Finances, Commercial.","admin/droits","#7c3aed","")}
     ${adminDashboardCard("4. Mots de passe accès","Configurer les accès SGDI, sociétés et structures dans une seule page.","admin/access","#dc2626","")}
     ${adminDashboardCard("5. Historique messages","Consulter les échanges, accusés, pièces jointes et traces utilisateurs.","admin/messages","#0f766e","")}
-    ${adminDashboardCard("6. Nettoyage & contrôle","Surveiller le stockage, corriger les données et nettoyer les anciens journaux.","admin/storage","#64748b","")}
+    ${adminDashboardCard("6. Synchronisation","Régler l'actualisation automatique des données entre tous les utilisateurs.","admin/sync","#0369a1","")}
+    ${adminDashboardCard("7. Nettoyage & contrôle","Surveiller le stockage, corriger les données et nettoyer les anciens journaux.","admin/storage","#64748b","")}
   </div>
   <div class="card p-5"><h2 class="font-black text-lg mb-3">Guide rapide des fonctions</h2><div class="grid grid-3 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<button class="p-3 rounded-lg text-left" style="border:1px solid #e2e8f0;background:#f8fafc" onclick="navigate('admin/users')"><div class="font-black" style="color:${adminRoleColor(code)}">${code} · ${title}</div><div class="text-xs text-slate-500 mt-1">${desc}</div></button>`).join("")}</div></div>`;
+}
+function renderAdminSyncSettings(view){
+  const cfg=sgdiAutoRefreshSettings();
+  const nextLabel=cfg.enabled?`Toutes les ${cfg.intervalSeconds} seconde(s)`:"Désactivée";
+  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Synchronisation automatique</h1><p class="text-sm text-slate-500 mt-1">Les utilisateurs connectés récupèrent automatiquement les données PostgreSQL selon cette fréquence.</p></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+      <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Etat</div><div class="text-2xl font-black ${cfg.enabled?"text-emerald-700":"text-slate-500"}">${cfg.enabled?"Active":"Arrêtée"}</div></div>
+      <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Fréquence</div><div class="text-2xl font-black" style="color:#043970">${escapeHTML(nextLabel)}</div></div>
+      <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Plage autorisée</div><div class="text-2xl font-black text-amber-700">5 - 20 s</div></div>
+    </div>
+    <form class="card p-5 max-w-3xl" onsubmit="event.preventDefault();saveAdminAutoRefreshSettings(this)">
+      <h2 class="font-black text-lg mb-4">Paramétrage de l'actualisation</h2>
+      <label class="flex items-center gap-3 mb-5 p-3 rounded-lg" style="background:#f8fafc;border:1px solid #e2e8f0">
+        <input type="checkbox" name="enabled" ${cfg.enabled?"checked":""}/>
+        <span><b>Activer l'actualisation automatique</b><br/><small class="text-slate-500">Chaque poste connecté se synchronise avec PostgreSQL.</small></span>
+      </label>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div>
+          <label class="label">Durée entre deux actualisations</label>
+          <input class="input" type="number" name="intervalSeconds" min="5" max="20" step="1" value="${cfg.intervalSeconds}" oninput="document.getElementById('sync-range').value=this.value"/>
+        </div>
+        <div>
+          <label class="label">Réglage rapide</label>
+          <input id="sync-range" class="w-full" type="range" min="5" max="20" step="1" value="${cfg.intervalSeconds}" oninput="this.form.intervalSeconds.value=this.value"/>
+        </div>
+      </div>
+      <div class="mt-4 p-3 rounded-md text-xs text-sky-800" style="background:#eff6ff;border:1px solid #bfdbfe">L'actualisation ne coupe pas une saisie en cours : elle attend que l'utilisateur ne soit pas dans un champ ou une fenêtre.</div>
+      <div class="sticky bottom-0 mt-5 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="button" class="btn btn-ghost" onclick="renderView()">Annuler</button><button class="btn btn-primary">Enregistrer la configuration</button></div>
+    </form>`;
 }
 function adminFeedItemsHTML(items,compact){
   if(!items.length)return`<div class="text-sm text-slate-400 p-4 text-center">Aucun échange enregistré.</div>`;
@@ -13157,9 +13232,7 @@ try{
     stripTimer=setTimeout(()=>stripCryptogrammes(document.getElementById("app")||document.body),30);
   }).observe(document.body,{childList:true,subtree:true,characterData:true});
 }catch(e){}
-try{
-  setInterval(()=>{if(session&&sgdiAuthToken()&&!sgdiDirty)sgdiPullState({silent:true,render:false,light:true}).catch(()=>{})},60000);
-}catch(e){}
+try{sgdiScheduleAutoRefresh()}catch(e){}
 try{
   window.addEventListener("beforeunload",()=>{
     if(candidatDraftTimer){
