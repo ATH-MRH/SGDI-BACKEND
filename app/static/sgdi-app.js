@@ -3062,7 +3062,7 @@ async function renderRecrutementServer(view,mode){
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
   const page=recrutementCurrentPage(mode);
   const pageSize=25;
-  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div>`;
   try{
     const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});
@@ -3153,7 +3153,7 @@ function renderRecrutement(view,mode){
       <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
-  const addButton=mode==="reserve"?`<button class="btn btn-primary" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
