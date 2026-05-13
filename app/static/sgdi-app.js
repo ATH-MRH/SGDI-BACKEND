@@ -1460,7 +1460,7 @@ function incidentMatchesSociete(incident,soc){
   if(incident.siteId&&(db.sites||[]).some(s=>s.id===incident.siteId&&siteMatchesSociete(s,soc)))return true;
   return false;
 }
-function defaultAccessMap(){return {"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],admin:["admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],parametres:["admin"],portail:["rh","dispatch","agent","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"]}}
+function defaultAccessMap(){const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],admin:["admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],parametres:["admin"],portail:["rh","dispatch","agent","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"]};Object.values(map).forEach(roles=>{if(roles.includes("rh")&&!roles.includes("ops"))roles.push("ops")});return map}
 function canAccess(key){
   if(!session)return false;
   const r=session.role;
@@ -11023,8 +11023,8 @@ function renderDRHStatsAffectation(view){
 /* ============ ADMIN MODULE (transverse, admin only) ============ */
 const ADMIN_MODULES=["DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","COMMERCIAL","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","effectif","agents","fiches","sites","incidents","conges","materiel","facturation","commercial","drh","paie","rapports","parametres"];
 function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","COMMERCIAL":"commercial/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives",contrats:"contrats/situation",effectif:"effectif",agents:"agents",fiches:"fiches",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",materiel:"materiel/dashboard",facturation:"facturation/dashboard",commercial:"commercial/dashboard",drh:"drh/dashboard",paie:"paie",rapports:"rapports",parametres:"parametres"}[module]||module)}
-const ADMIN_ROLES=["rh","dispatch","agent","admin"];
-const ADMIN_ACCESS_ROLES=["AG1","AG2","AG3","CAD1","CAD2","CAD3","SUP1","SUP2","SUP3","ADM1","ADM2"];
+const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
+const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"commercial",label:"COMMERCIAL"},{key:"pointage",label:"POINTAGE"},{key:"admin",label:"ADMINISTRATION SYSTEME"}];
 function normalizeStructureKey(value){
@@ -11044,9 +11044,9 @@ function adminStructureLabel(key){const k=normalizeStructureKey(key);const x=ADM
 function userAllowedStructures(user){return normalizeStructureList(user&&user.structuresAutorisees)}
 function currentAllowedStructures(){return userAllowedStructures(currentUserRecord()||session)}
 function canAccessStructureKey(key){if(isAdmin())return true;const allowed=currentAllowedStructures();return !allowed.length||allowed.includes(normalizeStructureKey(key))}
-function adminAccessBaseRole(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"agent";if(r.startsWith("CAD"))return"rh";if(r.startsWith("SUP"))return"dispatch";if(r.startsWith("ADM"))return"admin";return String(role||"").toLowerCase()}
-function normalizeAdminUserRole(role){const r=String(role||"").trim();if(ADMIN_USER_ROLES.includes(r))return r;const b=adminAccessBaseRole(r);return b==="admin"?"ADM2":b==="rh"?"CAD1":b==="dispatch"?"SUP1":"AG1"}
-function adminRoleColor(role){const r=String(role||"").toUpperCase();if(r.startsWith("AG"))return"#0f766e";if(r.startsWith("CAD"))return"#043970";if(r.startsWith("SUP"))return"#7c3aed";if(r.startsWith("ADM")||r==="ADMIN")return"#dc2626";return"#64748b"}
+function adminAccessBaseRole(role){const r=String(role||"").trim();const u=r.toUpperCase();if(u.startsWith("AG"))return"agent";if(u.startsWith("CAD")||u==="RH")return"ops";if(u.startsWith("SUP"))return"dispatch";if(u.startsWith("ADM")||u==="ADMIN")return"admin";return r.toLowerCase()}
+function normalizeAdminUserRole(role){const b=adminAccessBaseRole(role);if(b==="admin")return"ADM";if(b==="dispatch")return"dispatch";if(b==="ops"||b==="rh")return"ops";return"agent"}
+function adminRoleColor(role){const b=normalizeAdminUserRole(role);if(b==="agent")return"#0f766e";if(b==="ops")return"#043970";if(b==="dispatch")return"#7c3aed";if(b==="ADM")return"#dc2626";return"#64748b"}
 const ADMIN_ENTITIES=[["agents","Agents"],["sites","Sites"],["candidats","Candidats"],["materiel","Matériel"],["clients","Clients"],["prospects","Prospects"],["devis","Devis"],["factures","Factures"]];
 const ADMIN_LEVEL_ACTIONS=[
   {key:"read",label:"Consulter"},
@@ -11263,17 +11263,10 @@ async function saveAdminAccessSecurity(form){
 }
 
 function adminRoleGuide(){return[
-  ["AG1","Agent consultation","Voir uniquement ce qui est autorisé"],
-  ["AG2","Agent saisie","Créer des demandes et renseigner les formulaires"],
-  ["AG3","Agent avancé","Saisie complète avec suivi opérationnel"],
-  ["CAD1","Cadre validation","Valider les dossiers et opérations courantes"],
-  ["CAD2","Cadre contrôle","Contrôler, corriger et superviser une société"],
-  ["CAD3","Cadre supérieur","Superviser plusieurs périmètres métier"],
-  ["SUP1","Superviseur terrain","Accès terrain, pointage, sites, missions"],
-  ["SUP2","Superviseur confirmé","Contrôle des équipes et rapports terrain"],
-  ["SUP3","Superviseur principal","Pilotage complet des opérations"],
-  ["ADM1","Administrateur gestion","Utilisateurs, droits, paramètres courants"],
-  ["ADM2","Administrateur système","Pouvoir complet, création société, sécurité"]
+  ["agent","Agent","Accès utilisateur standard selon les modules autorisés"],
+  ["dispatch","Dispatch","Suivi opérationnel, terrain, pointage et structures autorisées"],
+  ["ops","OPS","Accès aux rubriques opérationnelles et DRH selon la matrice"],
+  ["ADM","Administration","Pouvoir complet sur utilisateurs, droits et paramètres"]
 ]}
 function adminRoleDescription(role){const r=adminRoleGuide().find(x=>x[0]===String(role||""));return r?r[1]+" — "+r[2]:"Profil utilisateur SGDI"}
 function adminDashboardCard(title,desc,route,color,icon){return`<button class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px"><div class="text-2xl mb-2">${icon||""}</div><div class="font-black text-lg mb-1">${title}</div><div class="text-sm text-slate-500 leading-relaxed">${desc}</div></button>`}
@@ -11292,7 +11285,7 @@ function renderAdminDashboard(view){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Modules contrôlés</div><div class="text-3xl font-black text-emerald-700">${modules}</div></div>
   </div>
   <div class="grid grid-3 gap-4 mb-5">
-    ${adminDashboardCard("1. Utilisateurs & fonctions","Créer un compte, choisir AG/CAD/SUP/ADM, définir le niveau et les sociétés autorisées.","admin/users","#043970","")}
+    ${adminDashboardCard("1. Utilisateurs & fonctions","Créer un compte, choisir agent/dispatch/ops/ADM, définir le niveau et les sociétés autorisées.","admin/users","#043970","")}
     ${adminDashboardCard("2. Niveaux d'habilitation","Paramétrer H1 à H5 : consultation, saisie, validation, supervision, administration.","admin/niveaux","#ca8a04","")}
     ${adminDashboardCard("3. Droits par module","Autoriser ou refuser les accès par rôle : DRH, OPS, Matériel, Finances, Commercial.","admin/droits","#7c3aed","")}
     ${adminDashboardCard("4. Mots de passe accès","Configurer les accès SGDI, sociétés et structures dans une seule page.","admin/access","#dc2626","")}
@@ -11426,11 +11419,11 @@ function renderAdminUsers(view){
 }
 function openAdminUserModal(username){
   const isNew=!username;
-  const u=isNew?{username:"",password:"",nom:"",role:"AG1",niveau:"H1",societesAutorisees:[],structuresAutorisees:[],actif:true}:db.users.find(x=>x.username===username);
+  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",societesAutorisees:[],structuresAutorisees:[],actif:true}:db.users.find(x=>x.username===username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
-  const selectedNiveau=u.niveau||(selectedRole.startsWith("ADM")?"H5":selectedRole.startsWith("CAD")?"H3":selectedRole.startsWith("SUP")?"H2":"H1");
+  const selectedNiveau=u.niveau||(selectedRole==="ADM"?"H5":selectedRole==="ops"?"H3":selectedRole==="dispatch"?"H2":"H1");
   openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"➕ Nouvel utilisateur":"✏ Modifier "+escapeHTML(u.username)}</h3>
     <form onsubmit="event.preventDefault();confirmAdminUser('${u.username||''}')">
       <div class="grid grid-2 gap-3">
@@ -11458,8 +11451,8 @@ function previewUserAccessLevel(code){
 function syncUserAccessLevelWithRole(role){
   const sel=document.querySelector('.modal-bg [name="niveau"]');
   if(!sel)return;
-  const r=String(role||"").toUpperCase();
-  const wanted=r.startsWith("ADM")||r==="ADMIN"?"H5":r.startsWith("CAD")||r==="RH"?"H3":r.startsWith("SUP")||r==="DISPATCH"?"H2":"H1";
+  const r=normalizeAdminUserRole(role);
+  const wanted=r==="ADM"?"H5":r==="ops"?"H3":r==="dispatch"?"H2":"H1";
   if([...sel.options].some(o=>o.value===wanted))sel.value=wanted;
   previewUserAccessLevel(sel.value);
 }
@@ -11541,13 +11534,13 @@ async function adminDeleteUser(username){
 }
 function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
-  const colors={AG:"#0f766e",CAD:"#043970",SUP:"#7c3aed",ADM:"#dc2626"};
+  const colors={agent:"#0f766e",ops:"#043970",dispatch:"#7c3aed",ADM:"#dc2626"};
   const accessRoles=ADMIN_ACCESS_ROLES;
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🔐 Droits d'accès — Matrice rôle × module</h1>
     <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">ℹ️ Cochez/décochez les cases pour autoriser ou refuser l'accès d'un niveau à un module. Les droits par défaut sont appliqués si aucune règle personnalisée n'est définie.</div>
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-slate-50"><tr><th class="text-left p-3">Module</th>${accessRoles.map(r=>`<th class="p-3" style="color:${colors[String(r).replace(/[0-9]/g,"")]||"#043970"}">${r}</th>`).join("")}</tr></thead>
+        <thead class="bg-slate-50"><tr><th class="text-left p-3">Module</th>${accessRoles.map(r=>`<th class="p-3" style="color:${colors[r]||"#043970"}">${r}</th>`).join("")}</tr></thead>
         <tbody>${ADMIN_MODULES.map(m=>{const route=adminModuleRoute(m);return`<tr class="border-t"><td class="p-3 font-semibold"><button type="button" class="text-left font-semibold text-sky-700 hover:underline" onclick="navigate('${route}')">${m}</button></td>${accessRoles.map(r=>{const key=m+":"+r;const def=canAccessOriginal(m,r);const override=droits[key];const enabled=override===undefined?def:override;return`<td class="p-3 text-center"><input type="checkbox" ${enabled?"checked":""} onchange="adminToggleDroit('${m}','${r}',this.checked)" style="width:18px;height:18px;cursor:pointer"/></td>`}).join("")}</tr>`}).join("")}</tbody>
       </table>
     </div>
