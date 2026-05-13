@@ -3022,7 +3022,7 @@ function renderRecrutementDashboard(view){
     <div class="card overflow-hidden mt-4">
       <div class="flex items-center justify-between gap-3 p-4 border-b border-slate-100 flex-wrap">
         <div><h3 class="font-black">Liste des candidats en réserve</h3><div class="text-xs text-slate-500">${reserveRows.length} candidat(s) affiché(s) · ${scope}</div></div>
-        <button type="button" class="btn btn-ghost text-xs" onclick="navigate('reserve')">Voir la page réserve</button>
+        <button type="button" class="btn candidate-reserve-page-btn text-xs" onclick="navigate('reserve')">Voir la page réserve</button>
       </div>
       ${reserveRows.length?`<div class="overflow-x-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Date</th><th>Statut</th><th></th></tr></thead><tbody>${reserveRows.map(c=>candidateListRowHTML(c,"reserve")).join("")}</tbody></table></div>`:`<div class="p-10 text-center text-slate-500">Aucun candidat en réserve.</div>`}
     </div>`;
