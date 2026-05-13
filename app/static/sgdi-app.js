@@ -516,6 +516,12 @@ window.SGDI_API={
       if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
       return r;
     },
+    adminSystemLogin:async(password)=>{
+      const r=await sgdiApi("/auth/admin-system-login",{method:"POST",body:{password},legacy:false});
+      const token=r?.token||r?.access_token;
+      if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
+      return r;
+    },
     register:(payload)=>sgdiApi("/auth/register",{method:"POST",body:payload,legacy:false}),
     createUser:(payload)=>sgdiApi("/auth/users",{method:"POST",body:payload,legacy:false}),
     listUsers:()=>sgdiApi("/auth/users",{method:"GET",legacy:false}),
@@ -1361,12 +1367,31 @@ function openAdminSystemPasswordModal(form){
     </form>`);
   setTimeout(()=>document.querySelector(".modal-bg [name='password']")?.focus(),0);
 }
-function validateAdminSystemPassword(form){
-  const username=String(form?.username?.value||"").trim();
+async function validateAdminSystemPassword(form){
   const password=String(form?.password?.value||"");
   if(!password){toast("Mot de passe obligatoire","error");return}
   closeModal();
-  login(username,password,{adminSystem:true});
+  try{
+    const us=await window.SGDI_API.auth.adminSystemLogin(password);
+    window.__SGDI_BACKEND_ENABLED__=true;
+    const authUser=us?.user||us;
+    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
+    saveSession(session);
+    const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
+    if(!loaded){
+      sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+      saveSession(null);
+      session=null;
+      sgdiPostgresReady=false;
+      toast("Connexion refusée : PostgreSQL n'a pas chargé les données","error");return;
+    }
+    openAdminSystemAccess();
+  }catch(e){
+    sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+    saveSession(null);
+    session=null;
+    toast("Accès administration refusé : "+(e.message||"mot de passe incorrect"),"error");
+  }
 }
 function defaultStructureAccessPasswords(){return{}}
 function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE"}[mod]||String(mod||"").toUpperCase())}
