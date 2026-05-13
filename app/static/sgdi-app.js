@@ -2692,16 +2692,19 @@ function renderLogin(){
         <div class="text-sm text-slate-500 mt-1 tracking-widest uppercase">Algérie</div>
       </div>
       <div class="p-7 rounded-xl" style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 24px 60px rgba(15,23,42,.10)">
-        <form onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
+        <form id="login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
           <label class="block text-xs font-semibold text-slate-600 mb-2">Identifiant</label>
           <input class="input mb-4" style="background:#fff;color:#0f172a;border-color:#cbd5e1" name="username"  autofocus/>
           <label class="block text-xs font-semibold text-slate-600 mb-2">Mot de passe</label>
           <input class="input mb-4" style="background:#fff;color:#0f172a;border-color:#cbd5e1" type="password" name="password" />
           <button class="btn w-full justify-center" style="background:#043970;color:#111;font-weight:800">Se connecter</button>
-          <button type="button" class="btn w-full justify-center mt-3" style="background:#facc15;color:#01112f;border:0;font-weight:950;min-height:40px" onclick="loginAdminSystemFromLanding(this.form)">Administration système</button>
         </form>
       </div>
     </div>
+    <button type="button" class="login-admin-system-shortcut" onclick="loginAdminSystemFromLanding(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">
+      <span aria-hidden="true">⚙</span>
+      <span>Administration système</span>
+    </button>
   </div>`;
 }
 

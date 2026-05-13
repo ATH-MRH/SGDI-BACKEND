@@ -154,6 +154,9 @@
   .topbar-dialogue-btn.has-unread:before{content:"";position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:999px;background:#dc2626;border:2px solid #fff;box-shadow:0 0 0 4px rgba(220,38,38,.18)}
   .topbar-dialogue-btn .badge{background:#dc2626;color:#fff;border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:950}
   @keyframes dialogueTopbarBlink{0%,100%{background:#facc15;transform:translateY(0)}50%{background:#fee2e2;transform:translateY(-1px)}}
+  .login-admin-system-shortcut{position:fixed;right:24px;bottom:24px;z-index:20;border:0;border-radius:999px;background:#facc15;color:#01112f;min-width:210px;height:46px;padding:0 18px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.02em;box-shadow:0 16px 34px rgba(15,23,42,.22);cursor:pointer}
+  .login-admin-system-shortcut:hover{background:#fde047;color:#01112f;transform:translateY(-1px)}
+  .login-admin-system-shortcut span[aria-hidden="true"]{font-size:18px;line-height:1}
   .societe-band-btn:hover{background:#dff3ff!important;color:#0360a8!important;border-color:#7dd3fc!important}
   .societe-band-btn:hover *{color:#0360a8!important}
 
