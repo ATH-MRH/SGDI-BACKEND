@@ -1318,7 +1318,7 @@ function applyOkbaCodeIfNeeded(agent,poste){
 }
 
 /* ---- AUTH ---- */
-async function login(u,p){
+async function login(u,p,opt={}){
   if(sgdiBackendShouldUse()){
     try{
       const us=await window.SGDI_API.auth.login(u,p);
@@ -1336,6 +1336,7 @@ async function login(u,p){
       }
       const localUser=(db.users||[]).find(x=>x.username===session.username);
       if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+      if(opt.adminSystem){openAdminSystemAccess();return}
       location.hash="#/select-societe";route();return;
     }catch(e){
       sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
@@ -1344,6 +1345,12 @@ async function login(u,p){
     }
   }
   toast("Connexion PostgreSQL obligatoire : aucun mode local autorisé","error");return
+}
+function loginAdminSystemFromLanding(form){
+  const username=String(form?.username?.value||"").trim();
+  const password=String(form?.password?.value||"");
+  if(!username||!password){toast("Identifiant et mot de passe obligatoires","error");return}
+  login(username,password,{adminSystem:true});
 }
 function defaultStructureAccessPasswords(){return{}}
 function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE"}[mod]||String(mod||"").toUpperCase())}
@@ -2691,6 +2698,7 @@ function renderLogin(){
           <label class="block text-xs font-semibold text-slate-600 mb-2">Mot de passe</label>
           <input class="input mb-4" style="background:#fff;color:#0f172a;border-color:#cbd5e1" type="password" name="password" />
           <button class="btn w-full justify-center" style="background:#043970;color:#111;font-weight:800">Se connecter</button>
+          <button type="button" class="btn w-full justify-center mt-3" style="background:#facc15;color:#01112f;border:0;font-weight:950;min-height:40px" onclick="loginAdminSystemFromLanding(this.form)">Administration système</button>
         </form>
       </div>
     </div>
