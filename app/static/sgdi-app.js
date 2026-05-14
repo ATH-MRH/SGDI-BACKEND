@@ -4507,11 +4507,36 @@ function setContratQuickFilter(type){
   const table=document.getElementById("ct-tbody");if(table)table.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
-function contratPersonnelByPoste(poste){ensureContratsPersonnel();return (db.contratsPersonnel||[]).find(c=>c.actif!==false&&c.poste===poste)||null}
+function activeBackendContractTemplates(){return (window.__contractTemplates||window.__adminContractTemplates||[]).filter(t=>Number(t.active)!==0)}
+function contractModelByValue(value){
+  const v=String(value||"");
+  if(v.startsWith("tpl:"))return activeBackendContractTemplates().find(t=>String(t.id)===v.slice(4))||null;
+  if(v.startsWith("legacy:"))return (db.contratsPersonnel||[]).find(c=>String(c.id)===v.slice(7))||null;
+  return activeBackendContractTemplates().find(t=>String(t.id)===v)||(db.contratsPersonnel||[]).find(c=>String(c.id)===v)||null;
+}
+function contratPersonnelByPoste(poste){
+  ensureContratsPersonnel();
+  const p=String(poste||"").trim().toLowerCase();
+  const backend=activeBackendContractTemplates();
+  return backend.find(t=>p&&(String(t.position||"").trim().toLowerCase()===p||String(t.function||"").trim().toLowerCase()===p))||backend.find(t=>!t.position&&!t.function)||backend[0]||(db.contratsPersonnel||[]).find(c=>c.actif!==false&&c.poste===poste)||null
+}
 function contratPersonnelOptions(selectedId,poste){
   ensureContratsPersonnel();
-  const list=(db.contratsPersonnel||[]).filter(c=>c.actif!==false);
-  return `<option value="">— Aucun modèle —</option>`+list.map(c=>`<option value="${c.id}" ${(selectedId===c.id||(!selectedId&&poste&&c.poste===poste))?"selected":""}>${escapeHTML(c.titre||c.poste)} — ${escapeHTML(c.poste||"")}</option>`).join("");
+  const selected=String(selectedId||"");
+  const backend=activeBackendContractTemplates();
+  const legacy=(db.contratsPersonnel||[]).filter(c=>c.actif!==false);
+  if(!backend.length&&!legacy.length)return `<option value="">Aucun modèle actif — ajoutez-le dans Administration système > CONTRAT</option>`;
+  const backendHTML=backend.map(t=>{const v=`tpl:${t.id}`;const auto=!selected&&poste&&(t.position===poste||t.function===poste);return`<option value="${v}" ${(selected===v||selected===String(t.id)||auto)?"selected":""}>${escapeHTML(t.title)} — ${escapeHTML(t.contract_type||"")} ${t.position?`· ${escapeHTML(t.position)}`:""}</option>`}).join("");
+  const legacyHTML=legacy.map(c=>{const v=`legacy:${c.id}`;return`<option value="${v}" ${(selected===v||selected===String(c.id)||(!selected&&poste&&c.poste===poste))?"selected":""}>${escapeHTML(c.titre||c.poste)} — ${escapeHTML(c.poste||"")}</option>`}).join("");
+  return `<option value="">— Choisir un modèle —</option>`+backendHTML+legacyHTML;
+}
+function selectAutoContractForPoste(poste){
+  const sel=document.querySelector('[name=contratPersonnelId]');
+  const auto=contratPersonnelByPoste(poste);
+  if(sel&&auto){
+    sel.value=auto.file_name!==undefined?`tpl:${auto.id}`:`legacy:${auto.id}`;
+  }
+  updateContratPersonnelPreview();
 }
 function updateContratPersonnelPreview(){
   const f=document.getElementById("contract-form");if(!f)return;
@@ -4520,13 +4545,24 @@ function updateContratPersonnelPreview(){
   if(!sel)return;
   if(poste){
     const auto=contratPersonnelByPoste(poste);
-    if(auto&&!sel.value)sel.value=auto.id;
+    if(auto&&!sel.value)sel.value=auto.file_name!==undefined?`tpl:${auto.id}`:`legacy:${auto.id}`;
   }
-  const c=(db.contratsPersonnel||[]).find(x=>x.id===sel.value);
+  const c=contractModelByValue(sel.value);
   const title=document.getElementById("contrat-personnel-title");
   const prev=document.getElementById("contrat-personnel-preview");
-  if(title)title.textContent=c?c.titre:"Aucun contrat spécifique sélectionné";
-  if(prev)prev.textContent=c?c.texte:"Sélectionnez un poste ou un modèle dans Administration Système.";
+  if(title)title.textContent=c?(c.title||c.titre):"Aucun contrat spécifique sélectionné";
+  if(prev)prev.textContent=c?(c.description||c.texte||`Modèle Word PostgreSQL : ${c.file_name||""}`):"Sélectionnez un poste ou un modèle dans Administration système > CONTRAT.";
+}
+async function loadContractualisationContractTemplates(){
+  const f=document.getElementById("contract-form");if(!f)return;
+  try{
+    window.__contractTemplates=(await SGDI.rh.contractTemplates()).filter(t=>Number(t.active)!==0);
+    const sel=f.querySelector('[name="contratPersonnelId"]');
+    if(sel)sel.innerHTML=contratPersonnelOptions(sel.value,f.querySelector('[name="posteContrat"]')?.value||"");
+    updateContratPersonnelPreview();
+  }catch(e){
+    console.warn("Modèles contrat PostgreSQL indisponibles",e);
+  }
 }
 function contratDureeOptions(selected){
   return `<option value="">— Choisir —</option>`+DUREES_CONTRAT.map(d=>`<option value="${d.value}" ${selected===d.value?"selected":""}>${d.label}</option>`).join("");
@@ -4586,10 +4622,10 @@ function renderContractualisation(view,id){
     <form id="contract-form" onsubmit="event.preventDefault();embaucherCandidat('${c.id}')">
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">Contrat de travail</div><div class="grid grid-6">
         <div class="col-span-3"><label class="label">Type de contrat</label><select class="select" name="typeContrat">${TYPES_CONTRAT.map(t=>`<option ${c.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
-        <div class="col-span-3"><label class="label">Poste</label><select class="select" name="posteContrat" onchange="const auto=contratPersonnelByPoste(this.value);const sel=document.querySelector('[name=contratPersonnelId]');if(sel&&auto)sel.value=auto.id;updateContratPersonnelPreview()"><option value="">— Choisir —</option>${POSTES.map(p=>`<option ${((c.posteContrat||c.posteSouhaite)===p)?"selected":""}>${p}</option>`).join("")}</select></div>
+        <div class="col-span-3"><label class="label">Poste</label><select class="select" name="posteContrat" onchange="selectAutoContractForPoste(this.value)"><option value="">— Choisir —</option>${POSTES.map(p=>`<option ${((c.posteContrat||c.posteSouhaite)===p)?"selected":""}>${p}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Salaire net (DA/mois)</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(c.salaireNet||c.salairePrevu||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)"/>${c.salairePrevu?`<div class="text-xs text-slate-500 mt-1">💡 Salaire prévu : <b>${money(c.salairePrevu)}</b></div>`:""}</div>
         <div class="col-span-6"><label class="label">Modèle de contrat spécifique au poste</label><select class="select" name="contratPersonnelId" onchange="updateContratPersonnelPreview()">${contratPersonnelOptions(c.contratPersonnelId, c.posteContrat||c.posteSouhaite)}</select></div>
-        <div class="col-span-6 p-3 rounded-lg" style="background:#f8fafc;border:1px solid #e2e8f0"><div id="contrat-personnel-title" class="text-sm font-bold text-slate-800 mb-2">${escapeHTML((autoContrat&&autoContrat.titre)||"Contrat spécifique au poste")}</div><pre id="contrat-personnel-preview" class="text-xs text-slate-600 whitespace-pre-wrap max-h-40 overflow-auto">${escapeHTML((autoContrat&&autoContrat.texte)||"Aucun modèle trouvé pour ce poste. Ajoutez-le dans Administration Système > Contrats du personnel.")}</pre></div>
+        <div class="col-span-6 p-3 rounded-lg" style="background:#f8fafc;border:1px solid #e2e8f0"><div id="contrat-personnel-title" class="text-sm font-bold text-slate-800 mb-2">${escapeHTML((autoContrat&&(autoContrat.title||autoContrat.titre))||"Contrat spécifique au poste")}</div><pre id="contrat-personnel-preview" class="text-xs text-slate-600 whitespace-pre-wrap max-h-40 overflow-auto">${escapeHTML((autoContrat&&(autoContrat.description||autoContrat.texte||autoContrat.file_name))||"Aucun modèle trouvé pour ce poste. Ajoutez-le dans Administration système > CONTRAT.")}</pre></div>
         <div class="col-span-2"><label class="label">Date de recrutement</label><input class="input" type="date" name="dateRecrutement" value="${today()}" onchange="updateContractEndDate()"/></div>
         <div class="col-span-2"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${c.dureeEssai||90}" min="0" onchange="updateContractEndDate()" oninput="updateContractEndDate()"/></div>
         <div class="col-span-2"><label class="label">Date fin période d'essai</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${c.dateFinEssai||""}" readonly/></div>
@@ -4601,7 +4637,7 @@ function renderContractualisation(view,id){
       <div class="card p-4 flex justify-between items-center gap-3 flex-wrap"><div class="text-sm text-slate-500">Matricule attribué automatiquement. Documents contractualisation : <b>${nbOk}/9</b>.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button type="submit" class="btn btn-success">✓ Valider & embaucher</button></div></div>
     </form>
   </div>`;
-  setTimeout(updateContractEndDate,0);
+  setTimeout(()=>{updateContractEndDate();loadContractualisationContractTemplates()},0);
 }
 function setContractualisationSociete(id,societe){
   const c=findCandidatById(id);if(!c)return;
@@ -4652,7 +4688,7 @@ function embaucherCandidat(id){
   const dateFinEssai=fd.get("dateFinEssai")||addDays(dateRecrutement,dureeEssai);
   const dateFinContrat=fd.get("dateFinContrat")||contractEndDate(dateRecrutement,dureeContrat);
   const posteContrat=fd.get("posteContrat")||c.posteSouhaite||"";
-  const contratModele=(db.contratsPersonnel||[]).find(x=>x.id===fd.get("contratPersonnelId"))||contratPersonnelByPoste(posteContrat);
+  const contratModele=contractModelByValue(fd.get("contratPersonnelId"))||contratPersonnelByPoste(posteContrat);
   const matricule=isOkbaFunction(posteContrat)?nextOkbaCode(db.agents):nextMatricule(db.agents,c.societe);
   const agent={
     id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,sexe:c.sexe,situation:c.situation,telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
@@ -4662,13 +4698,13 @@ function embaucherCandidat(id){
     affectationCourante:{siteId:"",siteName:"",clientName:"",poste:posteContrat,horaire:"",dateDebut:""},
     affectationsHistorique:[],sanctions:[],gestionEvents:[],
     documents:c.documents,cvFile:c.cvFile,
-    contratPersonnelId:contratModele?contratModele.id:"",
-    contratPersonnelTitre:contratModele?contratModele.titre:"",
+    contratPersonnelId:contratModele?(contratModele.file_name!==undefined?`tpl:${contratModele.id}`:`legacy:${contratModele.id}`):"",
+    contratPersonnelTitre:contratModele?(contratModele.title||contratModele.titre):"",
     contratPersonnelTexte:"",
     verifications:keys.reduce((o,k)=>{o["verif"+k]=true;return o},{}),
     statut:"actif",locked:true,createdAt:today(),updatedAt:today()
   };
-  if(contratModele)agent.contratPersonnelTexte=fillContratPersonnelText(contratModele.texte,agent);
+  if(contratModele&&contratModele.texte)agent.contratPersonnelTexte=fillContratPersonnelText(contratModele.texte,agent);
   db.agents.push(agent);
   db.candidats=db.candidats.filter(x=>x.id!==id);
   saveDB();toast(`Agent ${agent.matricule} embauché`,"success");navigate(`agents/${agent.id}`);
