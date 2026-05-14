@@ -2176,7 +2176,8 @@ function renderSidebar(){
   const itemHTML=item=>{
     const active=sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r));
     const badge=positiveCount(item.count)?`<span class="nav-count">${positiveCount(item.count)}</span>`:"";
-    return `<div class="nav-link ${active?"active":""}" onclick="navigate('${item.route}')"><span class="nav-label">${escapeHTML(item.label)}</span>${badge}</div>`;
+    const gapClass=item.gapBefore?" nav-gap-before":"";
+    return `<div class="nav-link ${active?"active":""}${gapClass}" onclick="navigate('${item.route}')"><span class="nav-label">${escapeHTML(item.label)}</span>${badge}</div>`;
   };
   const renderItems=(items,showBack=true)=>{
     nav.innerHTML=items.map(itemHTML).join("");
@@ -2200,13 +2201,13 @@ function renderSidebar(){
       drh:[
         {label:"TABLEAU DE BORD DRH",route:"drh/dashboard"},
         {label:"CANDIDATS",route:"recrutement"},
-        {label:"DEMANDE PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"RECRUTEMENT/CONTRAT",route:"contrats/dashboard",aliases:["contrats"]},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"EFFECTIFS",route:"effectif/recap"},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:(db.incidents||[]).filter(i=>i.statut!=="clos").length},
         {label:"CONGÉS",route:"conges"},
         {label:"PAIE",route:"paie"},
+        {label:"DEMANDE PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length,gapBefore:true},
         {label:"STATISTIQUES RH",route:"drh/stats"}
       ],
       ops:[
