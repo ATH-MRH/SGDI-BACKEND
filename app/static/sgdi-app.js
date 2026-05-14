@@ -6024,9 +6024,25 @@ function renderSiteForm(view,id){
       <table class="mb-2"><thead><tr><th>Catégorie</th><th>Désignation</th><th>Quantité</th><th>État / observation</th><th></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table>
       <div class="text-xs text-slate-500">Cette section permet d’indiquer les besoins ou le matériel affecté au site.</div>
     </div>
-    <div class="card p-4 flex justify-end"><button class="btn btn-primary">💾 Enregistrer</button></div>
+    <div class="card p-4 flex justify-end gap-2">${s.isNew?"":`<button type="button" class="btn btn-danger" onclick="deleteSite('${s.id}')">Supprimer</button>`}<button class="btn btn-primary">💾 Enregistrer</button></div>
   </form></div>`;
   setTimeout(updateSiteEffectifTotalContractuel,0);
+}
+async function deleteSite(id){
+  const site=(db.sites||[]).find(s=>String(s.id)===String(id));
+  if(!site){toast("Site introuvable","error");return}
+  if(!confirm("Supprimer définitivement ce site ?"))return;
+  const backendId=sqlBackendId(site.backendId);
+  try{
+    if(backendId)await SGDI.sites.delete(backendId);
+    db.sites=(db.sites||[]).filter(s=>String(s.id)!==String(id)&&String(s.backendId||"")!==String(backendId||""));
+    await syncSitesFromPostgres().catch(()=>{});
+    saveDB();
+    toast("Site supprimé de PostgreSQL","success");
+    navigate("sites/actifs");
+  }catch(e){
+    toast("Suppression site refusée : "+(e.message||e),"error");
+  }
 }
 async function saveSite(id){
   const f=document.getElementById("site-form");
