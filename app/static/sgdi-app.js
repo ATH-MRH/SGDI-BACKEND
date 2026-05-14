@@ -5717,7 +5717,7 @@ async function renderSitesServer(view){
     view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
     ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
     <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
-    ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;return `<div class="card p-5 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black">${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><a class="btn btn-ghost text-xs" href="#/sites/${s.id}">Modifier</a></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid grid-4 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Affecté</div><div class="text-lg font-bold">${agents.length}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div></div></div>`}).join("")}</div>`}
+    ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;return `<div class="card p-5 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-instance="${agents.length===0?1:0}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black">${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><a class="btn btn-ghost text-xs" href="#/sites/${s.id}">Modifier</a></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid grid-4 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Affecté</div><div class="text-lg font-bold">${agents.length}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div></div></div>`}).join("")}</div>`}
     ${pagination}`;
   }catch(e){
     console.warn("Sites serveur indisponibles, repli local",e);
@@ -5732,7 +5732,7 @@ function renderSites(view){
   view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
   ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
   <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
-  ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;const hideManque=session?.transverse==="materiel";const hideAffecte=session?.transverse==="materiel";const hideGroupes=session?.transverse==="materiel";return`<div class="card p-5 mb-4 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold">${escapeHTML(s.nom)} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${s.id}">Modifier</a><span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid ${hideManque&&hideAffecte?"grid-3":hideManque||hideAffecte?"grid-4":"grid-5"} mb-4 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif total contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div>${hideAffecte?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif affecté</div><div class="text-lg font-bold">${agents.length}</div></div>`}<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div>${hideManque?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Manquant</div><div class="text-lg font-bold ${manque>0?"text-red-700":"text-emerald-700"}">${manque}</div></div>`}</div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${hideGroupes?"":`<div class="mt-4"><h4 class="text-sm font-bold mb-2">Employés affectés par groupe</h4>${renderSiteAgentsByGroup(s,agents)}</div>`}</div>`}).join("")}`;
+  ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;const hideManque=session?.transverse==="materiel";const hideAffecte=session?.transverse==="materiel";const hideGroupes=session?.transverse==="materiel";return`<div class="card p-5 mb-4 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-instance="${agents.length===0?1:0}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold">${escapeHTML(s.nom)} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${s.id}">Modifier</a><span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid ${hideManque&&hideAffecte?"grid-3":hideManque||hideAffecte?"grid-4":"grid-5"} mb-4 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif total contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div>${hideAffecte?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif affecté</div><div class="text-lg font-bold">${agents.length}</div></div>`}<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div>${hideManque?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Manquant</div><div class="text-lg font-bold ${manque>0?"text-red-700":"text-emerald-700"}">${manque}</div></div>`}</div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${hideGroupes?"":`<div class="mt-4"><h4 class="text-sm font-bold mb-2">Employés affectés par groupe</h4>${renderSiteAgentsByGroup(s,agents)}</div>`}</div>`}).join("")}`;
 }
 function siteDotationHTML(site){
   const rows=(site.equipements||site.materiel||[]).filter(x=>x&&(x.categorie||x.designation||x.quantite||x.etat));
@@ -5755,7 +5755,7 @@ function siteSyntheseGeneraleHTML(sites){
   return`<div class="card p-5 mb-5" style="background:#f8fafc;border:1px solid #e2e8f0">
     <h2 class="text-lg font-black mb-4">Synthèse situation générale des sites</h2>
     <div class="grid grid-6 gap-3">
-      <button type="button" onclick="filterSitesSituation('manque')" class="p-4 rounded-lg bg-white border ${siteInstanceAffectation>0?"border-amber-400":"border-slate-200"} text-left hover:shadow transition"><div class="text-xs uppercase font-bold ${siteInstanceAffectation>0?"text-amber-700":"text-slate-500"}">📍 Site en instance d'affectation</div><div class="text-3xl font-black mt-1 ${siteInstanceAffectation>0?"text-amber-700":"text-slate-700"}">${siteInstanceAffectation}</div></button>
+      <button type="button" onclick="filterSitesSituation('instance')" class="p-4 rounded-lg bg-white border ${siteInstanceAffectation>0?"border-amber-400":"border-slate-200"} text-left hover:shadow transition"><div class="text-xs uppercase font-bold ${siteInstanceAffectation>0?"text-amber-700":"text-slate-500"}">📍 Site en instance d'affectation</div><div class="text-3xl font-black mt-1 ${siteInstanceAffectation>0?"text-amber-700":"text-slate-700"}">${siteInstanceAffectation}</div></button>
       <button type="button" onclick="filterSitesSituation('all')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition"><div class="text-xs uppercase font-bold text-slate-500">Site actif</div><div class="text-3xl font-black mt-1">${siteActif}</div></button>
       <button type="button" onclick="filterSitesSituation('operationnel')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition"><div class="text-xs uppercase font-bold text-slate-500">Site opérationnel</div><div class="text-3xl font-black mt-1 text-emerald-700">${siteOperationnel}</div></button>
       <button type="button" onclick="filterSitesSituation('all')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition"><div class="text-xs uppercase font-bold text-slate-500">Effectif contractuel</div><div class="text-3xl font-black mt-1">${effectifGlobal}</div></button>
@@ -5770,14 +5770,15 @@ function filterSitesSituation(mode){
   cards.forEach(card=>{
     const manque=+card.dataset.siteManque||0;
     const status=card.dataset.siteStatus||"";
-    const ok=mode==="all"||(mode==="operationnel"&&status==="operationnel")||(mode==="manque"&&manque>0);
+    const instance=+card.dataset.siteInstance||0;
+    const ok=mode==="all"||(mode==="operationnel"&&status==="operationnel")||(mode==="manque"&&manque>0)||(mode==="instance"&&instance>0);
     card.style.display=ok?"":"none";
     if(ok)shown++;
   });
   const info=document.getElementById("sites-filter-info");
   if(info){
     if(mode==="all"){info.classList.add("hidden");info.innerHTML="";}
-    else{info.classList.remove("hidden");info.innerHTML=`Filtre actif : ${mode==="operationnel"?"sites opérationnels":"sites avec manque d'effectif"} · ${shown} site(s) affiché(s) <button class="btn btn-ghost text-xs ml-3" onclick="filterSitesSituation('all')">Réinitialiser</button>`;}
+    else{info.classList.remove("hidden");info.innerHTML=`Filtre actif : ${mode==="operationnel"?"sites opérationnels":mode==="instance"?"sites en instance d'affectation":"sites avec manque d'effectif"} · ${shown} site(s) affiché(s) <button class="btn btn-ghost text-xs ml-3" onclick="filterSitesSituation('all')">Réinitialiser</button>`;}
   }
 }
 function siteEffectifAlertHTML(eff,agents){
@@ -6027,7 +6028,66 @@ function renderSiteForm(view,id){
   </form></div>`;
   setTimeout(updateSiteEffectifTotalContractuel,0);
 }
-async function saveSite(id){const f=document.getElementById("site-form");const fd=new FormData(f);let s=db.sites.find(x=>x.id===id);if(!s){s={id,actif:true,dateCreation:today(),rotation:ROTATION_DEFAUT.map(r=>({...r}))};db.sites.push(s)}s.nom=fd.get("nom");s.indicatif=fd.get("indicatif");s.adresse=fd.get("adresse");s.commune=fd.get("commune");s.wilaya=fd.get("wilaya");s.type=fd.get("type");s.contact={nom:fd.get("contact_nom"),fonction:fd.get("contact_fonction"),telephone:fd.get("contact_tel"),email:fd.get("contact_email")};s.client=fd.get("client")||s.contact.nom;s.postes={};const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit"),rotations=fd.getAll("poste_rotationSystem");let totalContractuel=0,totalJour=0,totalNuit=0;noms.forEach((nom,i)=>{nom=(nom||"").trim();if(!nom)return;const jour=+jours[i]||0,nuit=+nuits[i]||0,rotationSystem=rotations[i]||"";const total=sitePosteTotalCalc(jour,nuit,rotationSystem);totalContractuel+=total;totalJour+=jour;totalNuit+=nuit;s.postes[nom]={total,jour,nuit,rotationSystem}});s.effectifs={totalContractuel,groupes:+fd.get("eff_groupes")||0,jour:totalJour,nuit:totalNuit,weekend:+fd.get("eff_weekend")||0,feries:+fd.get("eff_feries")||0};const cats=fd.getAll("site_mat_categorie"),desigs=fd.getAll("site_mat_designation"),qtes=fd.getAll("site_mat_quantite"),etats=fd.getAll("site_mat_etat");s.equipements=[];cats.forEach((categorie,i)=>{categorie=(categorie||"").trim();const designation=(desigs[i]||"").trim();const quantite=+qtes[i]||0;const etat=(etats[i]||"").trim();if(!categorie&&!designation&&!quantite&&!etat)return;s.equipements.push({categorie,designation,quantite,etat})});s.heureReleveJour=fd.get("heureReleveJour")||"";s.heureReleveNuit=fd.get("heureReleveNuit")||"";s.horairesReleves="";s.groupesAffectation={};for(const [k,v] of fd.entries()){if(k.startsWith("grp_")&&v)s.groupesAffectation[k.slice(4)]=v}s.rotationSystem=fd.get("rotationSystem")||"24/48";s.rotation=siteRotationFromSystem(s.rotationSystem);try{await persistSiteToPostgres(s)}catch(e){toast("Site non sauvegardé PostgreSQL : "+(e.message||e),"error");return}saveDB();toast("Site enregistré dans PostgreSQL","success");navigate("sites/actifs")}
+async function saveSite(id){
+  const f=document.getElementById("site-form");
+  const fd=new FormData(f);
+  const scopeSociete=currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||session?.societe||"";
+  let s=db.sites.find(x=>x.id===id);
+  if(!s){
+    s={id,actif:true,dateCreation:today(),societe:scopeSociete,rotation:ROTATION_DEFAUT.map(r=>({...r}))};
+    db.sites.push(s);
+  }
+  s.societe=s.societe||scopeSociete;
+  s.nom=(fd.get("nom")||"").trim();
+  if(!s.nom){toast("Dénomination du site obligatoire","error");return}
+  s.indicatif=fd.get("indicatif");
+  s.adresse=fd.get("adresse");
+  s.commune=fd.get("commune");
+  s.wilaya=fd.get("wilaya");
+  s.type=fd.get("type");
+  s.contact={nom:fd.get("contact_nom"),fonction:fd.get("contact_fonction"),telephone:fd.get("contact_tel"),email:fd.get("contact_email")};
+  s.client=fd.get("client")||s.contact.nom;
+  s.postes={};
+  const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit"),rotations=fd.getAll("poste_rotationSystem");
+  let totalContractuel=0,totalJour=0,totalNuit=0;
+  noms.forEach((nom,i)=>{
+    nom=(nom||"").trim();
+    if(!nom)return;
+    const jour=+jours[i]||0,nuit=+nuits[i]||0,rotationSystem=rotations[i]||"";
+    const total=sitePosteTotalCalc(jour,nuit,rotationSystem);
+    totalContractuel+=total;totalJour+=jour;totalNuit+=nuit;
+    s.postes[nom]={total,jour,nuit,rotationSystem};
+  });
+  s.effectifs={totalContractuel,groupes:+fd.get("eff_groupes")||0,jour:totalJour,nuit:totalNuit,weekend:+fd.get("eff_weekend")||0,feries:+fd.get("eff_feries")||0};
+  const cats=fd.getAll("site_mat_categorie"),desigs=fd.getAll("site_mat_designation"),qtes=fd.getAll("site_mat_quantite"),etats=fd.getAll("site_mat_etat");
+  s.equipements=[];
+  cats.forEach((categorie,i)=>{
+    categorie=(categorie||"").trim();
+    const designation=(desigs[i]||"").trim();
+    const quantite=+qtes[i]||0;
+    const etat=(etats[i]||"").trim();
+    if(!categorie&&!designation&&!quantite&&!etat)return;
+    s.equipements.push({categorie,designation,quantite,etat});
+  });
+  s.heureReleveJour=fd.get("heureReleveJour")||"";
+  s.heureReleveNuit=fd.get("heureReleveNuit")||"";
+  s.horairesReleves="";
+  s.groupesAffectation={};
+  for(const [k,v] of fd.entries()){if(k.startsWith("grp_")&&v)s.groupesAffectation[k.slice(4)]=v}
+  s.rotationSystem=fd.get("rotationSystem")||"24/48";
+  s.rotation=siteRotationFromSystem(s.rotationSystem);
+  try{
+    await persistSiteToPostgres(s);
+    await syncSitesFromPostgres();
+  }catch(e){
+    toast("Site non sauvegardé PostgreSQL : "+(e.message||e),"error");
+    return;
+  }
+  saveDB();
+  sgdiServerSetPage("sites",scopeSociete||"all",1);
+  toast("Site enregistré dans PostgreSQL","success");
+  navigate("sites/actifs");
+}
 
 /* ---- MAIN COURANTE / EVENEMENTS ---- */
 function incidentNorm(i){
