@@ -1323,7 +1323,7 @@ function commandRoutes(){
   const base=[
     ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Ajouter candidats","reserve"],["Candidats archives","candidats_archives"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["Sites actifs","sites/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/quotidien"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
   ];
-  if(isAdmin())base.push(["Administration systeme","admin/dashboard"],["Utilisateurs","admin/users"]);
+  if(isAdminSystemSession())base.push(["Administration systeme","admin/dashboard"],["Utilisateurs","admin/users"]);
   return base.filter(([_,r])=>canAccess(r.split("/")[0])||r.startsWith(session?.transverse||""));
 }
 function openCommandPalette(){
@@ -1394,7 +1394,7 @@ async function login(u,p,opt={}){
       }
       const localUser=(db.users||[]).find(x=>x.username===session.username);
       if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
-      if(opt.adminSystem){openAdminSystemAccess();return}
+      if(opt.adminSystem){toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       location.hash="#/select-societe";route();return;
     }catch(e){
       sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
@@ -1427,7 +1427,7 @@ async function validateAdminSystemPassword(form){
     const us=await window.SGDI_API.auth.adminSystemLogin(password);
     window.__SGDI_BACKEND_ENABLED__=true;
     const authUser=us?.user||us;
-    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
+    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
     saveSession(session);
     const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
     if(!loaded){
@@ -1470,8 +1470,9 @@ function societeAccessPassword(s){
   if(custom)return custom;
   return defaultSocieteAccessPasswords()[n]||null;
 }
-function isAdminSystemUnlocked(){return true}
-function openAdminSystemAccess(){if(!isAdmin()){toast("Connectez-vous avec un compte administrateur","error");return}session={...session,societe:null,transverse:"admin"};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
+function isAdminSystemUnlocked(){return sessionStorage.getItem(ADMIN_SYSTEM_UNLOCK_KEY)==="1"&&session?.adminSystem===true}
+function isAdminSystemSession(){return isAdmin()&&session?.adminSystem===true}
+function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administrateur système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
 function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
@@ -1677,7 +1678,7 @@ function confirmPickSociete(s,p){selectSocieteDirect(s)}
 function pickSocieteFilter(s){if(!s){setCurrentStructureSocieteFilter("");toast("Filtre société : Toutes les sociétés","success");return}setCurrentStructureSocieteFilter(s);toast("Filtre société : "+s,"success")}
 function confirmPickSocieteFilter(s,p){setCurrentStructureSocieteFilter(s);toast("Filtre société : "+s,"success")}
 function changeSociete(){if(!confirm("Changer de société ?"))return;session.societe=null;session.transverse=null;saveSession(session);try{sessionStorage.removeItem("dashSociete");sessionStorage.removeItem("fpSociete");sessionStorage.removeItem("mtSociete")}catch(e){}location.hash="#/select-societe";route()}
-function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdmin()){toast("Accès réservé aux administrateurs","error");return}}if(["facturation","commercial","drh","materiel","ops","pointage"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
+function enterTransverseModule(mod){const ok=["facturation","commercial","drh","materiel","admin","pointage","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdminSystemSession()){toast("Accès réservé au compte Administrateur système","error");return}}if(["facturation","commercial","drh","materiel","ops","pointage"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
 function enterTransverseModuleDirect(mod){session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
 function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
 function enterSocieteStructureDirect(mod){session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
@@ -2041,7 +2042,7 @@ function renderSocieteSelector(){
         </div>
       </section>
 
-      ${session.role==="admin"?`<section>
+      ${isAdminSystemSession()?`<section>
         <button type="button" onclick="enterTransverseModule('admin')" class="card p-4 w-full text-left mt-3" style="border:1px solid #fecaca;background:linear-gradient(135deg,#fff5f5 0%,#ffffff 50%);transition:all .2s">
           <div class="flex items-center gap-4">
             <div style="width:44px;height:44px;border-radius:10px;background:#fee2e2;display:flex;align-items:center;justify-content:center;font-size:22px">⚙️</div>
@@ -2336,7 +2337,7 @@ function globalSearchItems(){
     ...make("facture","Facture",db.factures,o=>`facturation/factures`,o=>o.numero||o.num||"Facture",o=>`${o.societe||""} · ${o.client||""} · ${money(o.total||o.montant)}`),
     ...make("devis","Devis",db.devis,o=>`facturation/devis`,o=>o.numero||o.num||"Devis",o=>`${o.societe||""} · ${o.client||""} · ${money(o.total||o.montant)}`)
   ];
-  if(isAdmin())rows.push(...make("user","Utilisateur",db.users,o=>`admin/users`,o=>`${o.username||""} ${o.nom||""}`.trim(),o=>`${o.role||""} · ${o.niveau||""}`));
+  if(isAdminSystemSession())rows.push(...make("user","Utilisateur",db.users,o=>`admin/users`,o=>`${o.username||""} ${o.nom||""}`.trim(),o=>`${o.role||""} · ${o.niveau||""}`));
   return rows.filter(globalSearchScopeAllows);
 }
 function renderGlobalSearchResults(q){
@@ -3005,7 +3006,7 @@ function renderDashboard(view){
           ${dashboardAction("Dotation matériel","Sortie stock personnel","materiel/dotation")}
           ${dashboardAction("Inventaire articles","Contrôle stock","materiel/articles")}
           ${dashboardAction("Nouveau client","Contrat commercial","commercial/clients")}
-          ${dashboardAction("Administration","Droits et paramètres","admin/dashboard")}
+          ${isAdminSystemSession()?dashboardAction("Administration","Droits et paramètres","admin/dashboard"):""}
         </div></div>
       </div>
       <div class="dash-panel">
@@ -11503,7 +11504,7 @@ function ensureNiveauxAcces(){
 }
 function logActivity(action,details){if(!db.activityLog)db.activityLog=[];db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:action,details:details||""});if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);recordOperationFeed(action+(details?" · "+details:""),"Activité système");saveDB()}
 function renderAdmin(view,sub,arg){
-  if(!isAdmin()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée aux administrateurs.</p></div>`;return}
+  if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administrateur système.</p></div>`;return}
   if(sub==="dashboard")return renderAdminDashboard(view);
   if(["access","access_sgdi","access_societes","access_structures"].includes(sub))return renderAdminAccessSecurity(view,sub);
   if(sub==="feed")return renderAdminFeed(view);
