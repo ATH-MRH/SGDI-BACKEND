@@ -11982,8 +11982,8 @@ async function adminDeleteUser(username){
       toast("Suppression PostgreSQL refusée : "+msg,"error");return;
     }
   }
-  db.users=db.users.filter(x=>x.username!==username);
-  try{const cache=userPermissionCache();delete cache[username]}catch(e){}
+  db.users=db.users.filter(x=>String(x.username||"").toLowerCase()!==username.toLowerCase());
+  try{const cache=userPermissionCache();delete cache[username];Object.keys(cache).forEach(k=>{if(k.toLowerCase()===username.toLowerCase())delete cache[k]})}catch(e){}
   logActivity("Suppression utilisateur",username);
   saveDB();
   toast(pgDeleted?"Utilisateur supprimé":"Utilisateur supprimé localement, déjà absent de PostgreSQL","success");

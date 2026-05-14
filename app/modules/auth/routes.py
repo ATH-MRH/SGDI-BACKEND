@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from urllib.parse import unquote
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -33,6 +34,29 @@ def require_admin(user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès administrateur requis")
 
 
+def find_user_by_identifier(db: Session, identifier: str) -> User | None:
+    lookup = unquote(identifier or "").strip()
+    candidates = [lookup]
+    if "/" in lookup:
+        candidates.append(lookup.replace("/", ""))
+        candidates.append(lookup.replace("/", "-"))
+        candidates.append(lookup.split("/")[-1])
+    candidates = list(dict.fromkeys(c for c in candidates if c))
+    lowered = [c.lower() for c in candidates]
+    return (
+        db.query(User)
+        .filter(
+            or_(
+                User.username.in_(candidates),
+                User.email.in_(candidates),
+                func.lower(User.username).in_(lowered),
+                func.lower(User.email).in_(lowered),
+            )
+        )
+        .one_or_none()
+    )
+
+
 @router.post("/register", response_model=UserOut)
 def register(payload: UserCreate, db: Session = Depends(get_db)):
     if not settings.allow_public_registration:
@@ -64,13 +88,7 @@ def patch_user(
     user: User = Depends(current_user),
 ):
     require_admin(user)
-    lookup = unquote(username).strip()
-    candidates = [lookup]
-    if "/" in lookup:
-        candidates.append(lookup.replace("/", ""))
-        candidates.append(lookup.replace("/", "-"))
-        candidates.append(lookup.split("/")[-1])
-    target = db.query(User).filter(User.username.in_(dict.fromkeys(candidates))).one_or_none()
+    target = find_user_by_identifier(db, username)
     if target is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     return update_user(db, target, payload)
@@ -79,20 +97,14 @@ def patch_user(
 @router.delete("/users/{username:path}")
 def delete_user(username: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
-    if username == user.username:
-        raise HTTPException(status_code=400, detail="Impossible de supprimer votre propre compte")
-    lookup = unquote(username).strip()
-    candidates = [lookup]
-    if "/" in lookup:
-        candidates.append(lookup.replace("/", ""))
-        candidates.append(lookup.replace("/", "-"))
-        candidates.append(lookup.split("/")[-1])
-    target = db.query(User).filter(User.username.in_(dict.fromkeys(candidates))).one_or_none()
+    target = find_user_by_identifier(db, username)
     if target is None:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    if target.id == user.id:
+        raise HTTPException(status_code=400, detail="Impossible de supprimer votre propre compte")
     db.delete(target)
     db.commit()
-    return {"deleted": username}
+    return {"deleted": target.username}
 
 
 @router.get("/access-rules", response_model=list[AccessRuleOut])
