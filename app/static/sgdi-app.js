@@ -4443,6 +4443,13 @@ function updateContractEndDate(){
   if(out)out.value=contractEndDate(start,duration);
   if(trialOut)trialOut.value=start&&trialDays?addDays(start,trialDays):"";
 }
+function updateAgentTrialEndDate(){
+  const f=document.getElementById("agent-form");if(!f)return;
+  const start=f.querySelector('[name="dateRecrutement"]')?.value||"";
+  const trialDays=parseInt(f.querySelector('[name="dureeEssai"]')?.value||"0",10)||0;
+  const trialOut=f.querySelector('[name="dateFinEssai"]');
+  if(trialOut)trialOut.value=start&&trialDays?addDays(start,trialDays):"";
+}
 function fillContratPersonnelText(tpl,agent){
   return String(tpl||"")
     .replaceAll("{{nom}}",agent.nom||"")
@@ -4780,6 +4787,7 @@ function renderAgentForm(view,id){
   const secPointage=9;
   const agentAge=ageFromDate(a.dateNaissance);
   const anciennete=formatElapsedYMD(a.dateRecrutement);
+  const dureeEssaiValue=parseInt(a.dureeEssai,10)||((a.dateRecrutement&&a.dateFinEssai)?Math.max(daysBetween(a.dateRecrutement,a.dateFinEssai),0):90);
   const aff=a.affectationCourante||{};
   view.innerHTML=`<div class="max-w-6xl mx-auto">
     <div class="text-center mb-3"><h1 style="font-size:30px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">FICHE DE POSITION EMPLOYÉ</h1></div>
@@ -4846,8 +4854,9 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">4. Contrat</div><div class="grid grid-6">
         <div class="col-span-3"><label class="label">Type</label><select class="select" name="typeContrat" ${locked?"disabled":""}>${TYPES_CONTRAT.map(t=>`<option ${a.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Salaire net</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(a.salaireNet||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Recrutement</label><input class="input" type="date" name="dateRecrutement" value="${a.dateRecrutement||""}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Fin essai</label><input class="input" type="date" name="dateFinEssai" value="${a.dateFinEssai||""}" ${locked?"disabled":""}/></div>
+        <div class="col-span-2"><label class="label">Recrutement</label><input class="input" type="date" name="dateRecrutement" value="${a.dateRecrutement||""}" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
+        <div class="col-span-2"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${dureeEssaiValue}" min="0" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
+        <div class="col-span-2"><label class="label">Fin essai</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${a.dateFinEssai||""}" readonly ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Fin de contrat</label><input class="input" type="date" name="dateFinContrat" value="${a.dateFinContrat||""}" ${locked?"disabled":""}/></div>
         <div class="col-span-3"><label class="label">IBAN</label><input class="input" name="iban" value="${escapeHTML(a.iban||"")}" ${locked?"disabled":""}/></div>
       </div></div>
@@ -5162,7 +5171,7 @@ function applyAgentExcelRow(agentId,rows){
 function saveAgent(id){
   const a=db.agents.find(x=>x.id===id);if(!a)return;
   const f=document.getElementById("agent-form");const fd=new FormData(f);
-  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dateFinEssai","dateFinContrat","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
+  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
   a.habilitations=a.habilitations||{};
   ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
