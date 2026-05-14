@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from types import SimpleNamespace
 from typing import Any, Type
 
 from fastapi import HTTPException
@@ -436,7 +437,7 @@ def drh_dashboard(db: Session):
 def recruit_candidate(db: Session, candidate_id: int):
     candidate = get_or_404(db, Candidate, candidate_id)
     _validate_candidate_transition({"status": "embauche", "data": candidate.data or {}}, candidate)
-    next_code = f"A{(db.scalar(select(func.count(Employee.id))) or 0) + 1:02d}"
+    next_code = next_employee_code(db)
     employee = Employee(
         code=next_code,
         first_name=candidate.first_name,
@@ -531,6 +532,15 @@ def _date_str(value: Any) -> str:
     return str(value or "")
 
 
+def next_employee_code(db: Session) -> str:
+    base = (db.scalar(select(func.count(Employee.id))) or 0) + 1
+    while True:
+        code = f"A{base:02d}"
+        if db.execute(select(Employee.id).where(Employee.code == code)).scalar_one_or_none() is None:
+            return code
+        base += 1
+
+
 def contract_values(employee: Employee, request: Any | None = None) -> dict[str, str]:
     extra = employee.extra if isinstance(employee.extra, dict) else {}
     request_values = getattr(request, "values", None) if request is not None else None
@@ -546,6 +556,10 @@ def contract_values(employee: Employee, request: Any | None = None) -> dict[str,
         "NOM": employee.last_name,
         "PRENOM": employee.first_name,
         "NOM_PRENOM": f"{employee.last_name or ''} {employee.first_name or ''}".strip(),
+        "NOM_PERE": employee.father_name,
+        "NOM_DU_PERE": employee.father_name,
+        "NOM_MERE": employee.mother_name,
+        "NOM_DE_LA_MERE": employee.mother_name,
         "ADRESSE": employee.address,
         "COMMUNE": employee.commune,
         "WILAYA": employee.wilaya,
@@ -743,6 +757,77 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
     db.commit()
     db.refresh(row)
     return row
+
+
+def generate_contract_from_form(db: Session, request: Any, user: Any | None = None) -> GeneratedContract:
+    first_name = str(request.first_name or "").strip()
+    last_name = str(request.last_name or "").strip()
+    if len(first_name) < 2 or len(last_name) < 2:
+        raise HTTPException(status_code=422, detail="Nom et prénom obligatoires")
+    extra = {
+        "nomPere": request.father_name or "",
+        "nomMere": request.mother_name or "",
+        "lieuTravail": request.work_place or "",
+        "motifRecrutement": request.recruitment_reason or "",
+        "detailSalaire": request.salary_details or "",
+    }
+    employee = None
+    nin = str(request.nin or "").strip()
+    if nin:
+        employee = db.execute(select(Employee).where(Employee.nin == nin)).scalar_one_or_none()
+    if employee is None:
+        employee = Employee(
+            code=next_employee_code(db),
+            first_name=first_name,
+            last_name=last_name,
+            father_name=request.father_name,
+            mother_name=request.mother_name,
+            nin=nin or None,
+            birth_date=request.birth_date,
+            birth_place=request.birth_place,
+            position=request.position or request.work_place,
+            society=request.society,
+            status="actif",
+            contract_type=request.contract_type or "CDI",
+            salary_net=float(request.salary_net or 0),
+            recruit_date=request.start_date,
+            contract_end_date=request.end_date,
+            extra=extra,
+        )
+        db.add(employee)
+        db.flush()
+    else:
+        employee.first_name = first_name
+        employee.last_name = last_name
+        employee.father_name = request.father_name
+        employee.mother_name = request.mother_name
+        employee.birth_date = request.birth_date
+        employee.birth_place = request.birth_place
+        employee.position = request.position or request.work_place
+        employee.society = request.society
+        employee.contract_type = request.contract_type or employee.contract_type or "CDI"
+        employee.salary_net = float(request.salary_net or employee.salary_net or 0)
+        employee.recruit_date = request.start_date
+        employee.contract_end_date = request.end_date
+        employee.extra = {**(employee.extra if isinstance(employee.extra, dict) else {}), **extra}
+        db.flush()
+    generated_request = SimpleNamespace(
+        employee_id=employee.id,
+        template_id=request.template_id,
+        contract_type=request.contract_type,
+        position=request.position or request.work_place,
+        function=request.position or request.work_place,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        salary_net=request.salary_net,
+        output_format=request.output_format or "docx",
+        values={
+            "LIEU_TRAVAIL": request.work_place or "",
+            "MOTIF_RECRUTEMENT": request.recruitment_reason or "",
+            "DETAIL_SALAIRE": request.salary_details or "",
+        },
+    )
+    return generate_contract(db, generated_request, user)
 
 
 def cleanup_base64_photos(db: Session) -> int:

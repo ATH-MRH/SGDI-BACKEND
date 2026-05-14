@@ -26,6 +26,7 @@ from app.modules.drh.schemas import (
     ContractTemplateOut,
     DocumentCreate,
     DocumentOut,
+    DirectContractRequest,
     EmployeeCreate,
     EmployeeOut,
     EmployeePage,
@@ -510,6 +511,12 @@ def generated_contracts(employee_id: int | None = None, db: Session = Depends(ge
 def generate_contract(payload: GenerateContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, payload.employee_id)
     return service.generate_contract(db, payload, user)
+
+
+@router.post("/generated-contracts/from-form", response_model=GeneratedContractOut)
+def generate_contract_from_form(payload: DirectContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_society_allowed(user, payload.society)
+    return service.generate_contract_from_form(db, payload, user)
 
 
 @router.get("/generated-contracts/{generated_id}/download")

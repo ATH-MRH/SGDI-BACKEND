@@ -282,6 +282,27 @@ class GenerateContractRequest(BaseModel):
     output_format: str = "docx"
 
 
+class DirectContractRequest(BaseModel):
+    template_id: int | None = None
+    contract_type: str = "CDI"
+    first_name: str
+    last_name: str
+    birth_date: date | None = None
+    birth_place: str | None = None
+    father_name: str | None = None
+    mother_name: str | None = None
+    nin: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    work_place: str | None = None
+    recruitment_reason: str | None = None
+    salary_net: float | None = None
+    salary_details: str | None = None
+    position: str | None = None
+    society: str | None = None
+    output_format: str = "docx"
+
+
 class GeneratedContractOut(BaseModel):
     id: int
     employee_id: int

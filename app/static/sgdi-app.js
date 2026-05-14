@@ -612,6 +612,7 @@ window.SGDI_API={
     createContractClause:(payload)=>sgdiApi("/drh/contract-clauses",{method:"POST",body:payload,legacy:false}),
     deleteContractClause:(id)=>sgdiApi("/drh/contract-clauses/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
     generateContract:(payload)=>sgdiApi("/drh/generated-contracts",{method:"POST",body:payload,legacy:false}),
+    generateContractFromForm:(payload)=>sgdiApi("/drh/generated-contracts/from-form",{method:"POST",body:payload,legacy:false}),
     generatedContracts:(employeeId)=>sgdiApi("/drh/generated-contracts"+(employeeId?"?employee_id="+encodeURIComponent(employeeId):""),{legacy:false})
   },
   sites:{list:()=>sgdiApi("/ops/sites",{legacy:false}),page:(params)=>sgdiApi("/ops/sites/page"+sgdiQuery(params),{legacy:false}),create:(payload)=>sgdiApi("/ops/sites",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),delete:(id)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),situation:()=>sgdiApi("/ops/sites/situation-generale",{legacy:false})},
@@ -2821,6 +2822,7 @@ function renderView(){
         else if(sub==="a_contractualiser"&&!arg)renderContrats(view,"a_contractualiser");
         else if(sub==="avenants")renderAvenants(view);
         else if(sub==="situation"||sub==="clients")renderContrats(view,"situation");
+        else if(sub==="nouveau_contrat")renderNouveauContratDirect(view);
         else if(sub==="nouveau"&&arg)renderContractualisation(view,arg);
         else if(sub)renderContractualisation(view,sub);
         else renderContratsDashboard(view);
@@ -4223,7 +4225,7 @@ function renderContratsDashboard(view){
     <td class="text-xs">${formatDate(c.createdAt)}</td>
     <td class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="recruterCandidat('${jsString(c.id)}')">Contractualiser</button></td>
   </tr>`).join("");
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn contract-create-btn" onclick="openCreateContratDirectModal()">➕ Créer contrat</button></div>
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">➕ Créer contrat</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Nouveau contrat",toContract.length,"Candidats à contractualiser","contrats/a_contractualiser","#043970","➕")}
       ${card("Avenants",avenants.length,`${signedAvenants.length} signé(s)`,"contrats/avenants","#7c3aed","✎")}
@@ -4231,7 +4233,7 @@ function renderContratsDashboard(view){
       ${card("Alertes",cddSoon.length+trialSoon.length,`${cddSoon.length} CDD · ${trialSoon.length} essai`,"contrats/situation","#dc2626","🔔")}
     </div>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      <div class="card p-4"><h3 class="font-black mb-3">Accès rapides</h3><div class="grid gap-2">${quick("Nouveau contrat","contrats/a_contractualiser","➕")}${quick("Avenant","contrats/avenants","✎")}${quick("Situation contrat","contrats/situation","📑")}</div></div>
+      <div class="card p-4"><h3 class="font-black mb-3">Accès rapides</h3><div class="grid gap-2">${quick("Nouveau contrat","contrats/nouveau_contrat","➕")}${quick("À contractualiser","contrats/a_contractualiser","✓")}${quick("Avenant","contrats/avenants","✎")}${quick("Situation contrat","contrats/situation","📑")}</div></div>
       <div class="card p-4"><h3 class="font-black mb-3">Synthèse financière</h3><div class="grid grid-cols-2 gap-3"><div class="p-3 rounded bg-slate-50"><div class="text-xs text-slate-500 uppercase">Masse salariale nette</div><div class="text-2xl font-black text-slate-800">${money(mass)}</div></div><div class="p-3 rounded bg-slate-50"><div class="text-xs text-slate-500 uppercase">Salaire moyen</div><div class="text-2xl font-black text-slate-800">${agents.length?money(mass/agents.length):money(0)}</div></div></div></div>
     </div>
     <div class="card overflow-hidden mt-4">
@@ -4249,7 +4251,7 @@ function renderContrats(view,mode){
     const list=db.candidats.filter(c=>c.statut==="a_contractualiser"&&(!socFilter||c.societe===socFilter));
     view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
       <div><h1 class="text-2xl font-bold mb-2">📋 À contractualiser</h1><p class="text-slate-500 text-sm">Candidats retenus.</p></div>
-      <button type="button" class="btn contract-create-btn" onclick="openCreateContratDirectModal()">Créer contrat</button>
+      <button type="button" class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">Créer contrat</button>
     </div>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:`<div class="card overflow-hidden"><table>
       <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Vérifs.</th><th></th></tr></thead>
@@ -4334,6 +4336,109 @@ function openCreateContratDirectModal(){
         <button class="btn btn-primary" ${reserves.length?"":"disabled"}>Continuer contrat</button>
       </div>
     </form>`);
+}
+function directContractPayload(form){
+  const fd=new FormData(form);
+  return {
+    template_id:fd.get("template_id")?Number(fd.get("template_id")):null,
+    contract_type:String(fd.get("contract_type")||"CDI"),
+    first_name:String(fd.get("first_name")||"").trim(),
+    last_name:String(fd.get("last_name")||"").trim(),
+    birth_date:fd.get("birth_date")||null,
+    birth_place:String(fd.get("birth_place")||"").trim()||null,
+    father_name:String(fd.get("father_name")||"").trim()||null,
+    mother_name:String(fd.get("mother_name")||"").trim()||null,
+    nin:String(fd.get("nin")||"").trim()||null,
+    start_date:fd.get("start_date")||null,
+    end_date:fd.get("end_date")||null,
+    work_place:String(fd.get("work_place")||"").trim()||null,
+    recruitment_reason:String(fd.get("recruitment_reason")||"").trim()||null,
+    salary_net:parseMoneyInput(fd.get("salary_net"))||0,
+    salary_details:String(fd.get("salary_details")||"").trim()||null,
+    position:String(fd.get("position")||"").trim()||String(fd.get("work_place")||"").trim()||null,
+    society:String(fd.get("society")||"").trim()||null,
+    output_format:"docx"
+  };
+}
+function renderNouveauContratDirect(view){
+  const soc=currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
+  view.innerHTML=`<div class="max-w-5xl mx-auto">
+    <div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-3xl font-black uppercase">Nouveau contrat</h1><p class="text-sm text-slate-500">Saisie RH directe, génération depuis un modèle en base PostgreSQL, validation puis impression.</p></div><button class="btn btn-ghost" onclick="navigate('contrats/dashboard')">Retour</button></div>
+    <form id="direct-contract-form" class="card p-5" onsubmit="event.preventDefault();validateDirectContract(this)">
+      <input type="hidden" name="generated_id" value=""/>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div><label class="label">Modèle de contrat *</label><select class="select" name="template_id" required><option value="">Chargement des modèles...</option></select></div>
+        <div><label class="label">Type de contrat *</label><select class="select" name="contract_type">${TYPES_CONTRAT.map(t=>`<option>${escapeHTML(t)}</option>`).join("")}</select></div>
+        <div><label class="label">Nom *</label><input class="input" name="last_name" required/></div>
+        <div><label class="label">Prénom *</label><input class="input" name="first_name" required/></div>
+        <div><label class="label">Date de naissance</label><input class="input" type="date" name="birth_date"/></div>
+        <div><label class="label">Lieu de naissance</label><input class="input" name="birth_place"/></div>
+        <div><label class="label">Nom du père</label><input class="input" name="father_name"/></div>
+        <div><label class="label">Nom de la mère</label><input class="input" name="mother_name"/></div>
+        <div><label class="label">NIN</label><input class="input" name="nin" inputmode="numeric"/></div>
+        <div><label class="label">Société</label><select class="select" name="society"><option value="">—</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${s===soc?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
+        <div><label class="label">Date début contrat *</label><input class="input" type="date" name="start_date" required/></div>
+        <div><label class="label">Date fin contrat</label><input class="input" type="date" name="end_date"/></div>
+        <div><label class="label">Lieu de travail</label><input class="input" name="work_place"/></div>
+        <div><label class="label">Motif du recrutement</label><input class="input" name="recruitment_reason"/></div>
+        <div><label class="label">Salaire net</label><input class="input" name="salary_net" inputmode="decimal" onblur="formatMoneyField(this)" placeholder="45 000,00"/></div>
+        <div><label class="label">Poste / fonction</label><input class="input" name="position"/></div>
+        <div class="md:col-span-2"><label class="label">Détail du salaire</label><textarea class="textarea" name="salary_details" rows="3" placeholder="Base, primes, indemnités..."></textarea></div>
+      </div>
+      <div class="mt-5 p-3 flex justify-end gap-2 flex-wrap" style="border-top:1px solid #e2e8f0">
+        <button type="button" class="btn btn-secondary" onclick="previewDirectContract(this.form)">Visualisation</button>
+        <button type="submit" class="btn btn-primary">Valider contrat</button>
+        <button type="button" class="btn btn-ghost" data-print-contract disabled onclick="printDirectContract(this.form)">Imprimer contrat</button>
+      </div>
+    </form>
+  </div>`;
+  setTimeout(loadDirectContractTemplates,0);
+}
+async function loadDirectContractTemplates(){
+  const f=document.getElementById("direct-contract-form");if(!f)return;
+  const select=f.template_id;
+  try{
+    const templates=(await SGDI.rh.contractTemplates()).filter(t=>Number(t.active)!==0);
+    select.innerHTML=`<option value="">— Choisir un modèle —</option>`+templates.map(t=>`<option value="${t.id}" data-type="${escapeHTML(t.contract_type||"")}">${escapeHTML(t.title)} · ${escapeHTML(t.contract_type||"")}</option>`).join("");
+    select.onchange=()=>{const opt=select.selectedOptions&&select.selectedOptions[0];if(opt?.dataset?.type)f.contract_type.value=opt.dataset.type};
+  }catch(e){
+    select.innerHTML=`<option value="">Modèles indisponibles</option>`;
+    toast("Modèles contrat indisponibles : "+(e.message||e),"error");
+  }
+}
+function previewDirectContract(form){
+  const p=directContractPayload(form);
+  if(!p.first_name||!p.last_name){toast("Nom et prénom obligatoires","error");return}
+  openModal(`<h3 class="font-bold text-lg mb-4">Visualisation contrat</h3>
+    <div class="p-4 rounded-lg bg-slate-50 text-sm space-y-2">
+      <div><b>Employé :</b> ${escapeHTML(p.last_name+" "+p.first_name)}</div>
+      <div><b>Naissance :</b> ${formatDate(p.birth_date)} · ${escapeHTML(p.birth_place||"—")}</div>
+      <div><b>Parents :</b> Père ${escapeHTML(p.father_name||"—")} · Mère ${escapeHTML(p.mother_name||"—")}</div>
+      <div><b>NIN :</b> ${escapeHTML(p.nin||"—")}</div>
+      <div><b>Contrat :</b> ${escapeHTML(p.contract_type)} du ${formatDate(p.start_date)} au ${formatDate(p.end_date)}</div>
+      <div><b>Lieu de travail :</b> ${escapeHTML(p.work_place||"—")}</div>
+      <div><b>Motif recrutement :</b> ${escapeHTML(p.recruitment_reason||"—")}</div>
+      <div><b>Salaire net :</b> ${money(p.salary_net||0)}</div>
+      <div><b>Détail salaire :</b><br/>${escapeHTML(p.salary_details||"—")}</div>
+    </div>
+    <div class="flex justify-end mt-4"><button class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
+}
+async function validateDirectContract(form){
+  const payload=directContractPayload(form);
+  if(!payload.template_id){toast("Choisissez un modèle de contrat","error");return}
+  try{
+    const row=await SGDI.rh.generateContractFromForm(payload);
+    form.generated_id.value=row.id;
+    const btn=form.querySelector("[data-print-contract]");
+    if(btn){btn.disabled=false;btn.classList.remove("btn-ghost");btn.classList.add("btn-primary")}
+    await sgdiPullState({silent:true,render:false,light:true});
+    toast("Contrat validé dans PostgreSQL","success");
+  }catch(e){toast("Validation contrat refusée : "+(e.message||e),"error")}
+}
+async function printDirectContract(form){
+  const id=form.generated_id.value;
+  if(!id){toast("Validez d'abord le contrat","error");return}
+  await downloadGeneratedContract(id,"contrat.docx");
 }
 function startContractFromReserve(id){
   if(!id){toast("Choisissez un candidat en réserve","error");return}
