@@ -3131,6 +3131,9 @@ function resetArchiveCandidateFilters(){
   sessionStorage.removeItem("archiveCandidateFilters");
   renderView();
 }
+function openAddCandidateForm(){
+  navigate("reserve/nouveau");
+}
 function renderRecrutementDashboard(view){
   cleanupDuplicateCandidates(true);
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
@@ -3150,7 +3153,7 @@ function renderRecrutementDashboard(view){
   const scope=socFilter?escapeHTML(socFilter):(allowed.length?"Sociétés autorisées":"Toutes sociétés");
   const card=(title,count,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(title)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${count}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const bar=(label,n,total,color)=>{const pct=total?Math.round(n/total*100):0;return`<button type="button" class="dash-mini-row text-left w-full" onclick="navigate('reserve')" data-searchable><div style="min-width:190px"><div class="font-bold text-sm">${escapeHTML(label)}</div><div class="text-[11px] text-slate-500">${n} candidat(s)</div></div><div class="flex-1"><div class="dash-bar"><span style="width:${pct}%;background:${color}"></span></div></div><div class="font-black text-sm">${pct}%</div></button>`};
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CANDIDAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides · ${scope}</p></div><button class="btn btn-primary recrutement-add-btn" onclick="navigate('reserve/nouveau')">Ajouter candidat</button></div>
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CANDIDAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides · ${scope}</p></div><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Ajouter candidats",reserves.length,"Candidats en réserve","reserve","#043970","👥")}
       ${card("Candidats archivés",archives.length,"Dossiers archivés","candidats_archives","#64748b","🗄")}
@@ -3204,7 +3207,7 @@ async function renderRecrutementServer(view,mode){
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
   const page=recrutementCurrentPage(mode);
   const pageSize=25;
-  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button>`:"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div>`;
   try{
     const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});
@@ -3295,7 +3298,7 @@ function renderRecrutement(view,mode){
       <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
-  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="navigate('reserve/nouveau')">Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button>`:"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
