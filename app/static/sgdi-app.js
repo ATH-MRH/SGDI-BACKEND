@@ -4203,6 +4203,7 @@ function renderContratsDashboard(view){
   const socFilter=currentStructureSocieteFilter();
   const agents=(db.agents||[]).filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
   const candidates=(db.candidats||[]).filter(c=>!socFilter||c.societe===socFilter);
+  const reserveCandidates=candidates.filter(c=>candidatIsReserve(c)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   const toContract=candidates.filter(c=>c.statut==="a_contractualiser");
   const avenants=(db.avenants||[]).filter(av=>{const a=(db.agents||[]).find(x=>x.id===av.agentId);return !socFilter||a?.societe===socFilter});
   const signedAvenants=avenants.filter(a=>a.statut==="signe");
@@ -4212,7 +4213,15 @@ function renderContratsDashboard(view){
   const mass=agents.reduce((sum,a)=>sum+(parseFloat(a.salaireNet)||0),0);
   const card=(label,value,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(label)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const quick=(label,route,icon)=>`<button type="button" class="btn btn-secondary justify-start" onclick="navigate('${route}')">${icon} ${escapeHTML(label)}</button>`;
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRATS</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn contract-create-btn" onclick="openCreateContratDirectModal()">➕ Créer contrat</button></div>
+  const reserveRows=reserveCandidates.slice(0,12).map(c=>`<tr data-searchable>
+    <td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML((c.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(c.telephone||c.email||"")}</div></div></div></td>
+    <td>${safe(c.posteSouhaite)}</td>
+    <td><span class="pill pill-indigo">${safe(c.societe)}</span></td>
+    <td>${c.avisDecision?`<span class="pill ${c.avisDecision==="Favorable"?"pill-green":c.avisDecision==="Défavorable"?"pill-red":"pill-amber"}">${escapeHTML(c.avisDecision)}</span>`:"—"}</td>
+    <td class="text-xs">${formatDate(c.createdAt)}</td>
+    <td class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="recruterCandidat('${jsString(c.id)}')">Contractualiser</button></td>
+  </tr>`).join("");
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn contract-create-btn" onclick="openCreateContratDirectModal()">➕ Créer contrat</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Nouveau contrat",toContract.length,"Candidats à contractualiser","contrats/a_contractualiser","#043970","➕")}
       ${card("Avenants",avenants.length,`${signedAvenants.length} signé(s)`,"contrats/avenants","#7c3aed","✎")}
@@ -4222,6 +4231,13 @@ function renderContratsDashboard(view){
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div class="card p-4"><h3 class="font-black mb-3">Accès rapides</h3><div class="grid gap-2">${quick("Nouveau contrat","contrats/a_contractualiser","➕")}${quick("Avenant","contrats/avenants","✎")}${quick("Situation contrat","contrats/situation","📑")}</div></div>
       <div class="card p-4"><h3 class="font-black mb-3">Synthèse financière</h3><div class="grid grid-cols-2 gap-3"><div class="p-3 rounded bg-slate-50"><div class="text-xs text-slate-500 uppercase">Masse salariale nette</div><div class="text-2xl font-black text-slate-800">${money(mass)}</div></div><div class="p-3 rounded bg-slate-50"><div class="text-xs text-slate-500 uppercase">Salaire moyen</div><div class="text-2xl font-black text-slate-800">${agents.length?money(mass/agents.length):money(0)}</div></div></div></div>
+    </div>
+    <div class="card overflow-hidden mt-4">
+      <div class="flex items-center justify-between gap-3 p-4 border-b border-slate-100 flex-wrap">
+        <div><h3 class="font-black">Candidats en réserve</h3><div class="text-xs text-slate-500">${reserveCandidates.length} candidat(s) disponible(s) pour contrat</div></div>
+        <button type="button" class="btn btn-secondary text-xs" onclick="navigate('reserve')">Voir toute la réserve</button>
+      </div>
+      ${reserveCandidates.length?`<div class="overflow-x-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Avis</th><th>Date réserve</th><th></th></tr></thead><tbody>${reserveRows}</tbody></table></div>`:`<div class="p-10 text-center text-slate-500">Aucun candidat en réserve.</div>`}
     </div>`;
 }
 
