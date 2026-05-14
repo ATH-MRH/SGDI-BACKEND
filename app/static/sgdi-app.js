@@ -318,6 +318,7 @@ function sgdiLegacySnapshot(){
 }
 function sgdiBackendSave(){
   if(!sgdiBackendShouldUse()||!db)return false;
+  try{sgdiRequireServerWrite()}catch(e){sgdiServerOnlyFailure(e.message||String(e));uiSaveState("Sauvegarde refusée","error");return false}
   sanitizeCandidatesInDB();
   const token=sgdiAuthToken();
   if(!token){
