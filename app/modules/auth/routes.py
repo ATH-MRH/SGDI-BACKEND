@@ -152,7 +152,7 @@ def patch_access_rule(
 
 @router.post("/admin-system-login", response_model=TokenOut)
 def admin_system_login(payload: AdminSystemLoginIn, db: Session = Depends(get_db)):
-    admin_username = (settings.admin_system_username or settings.admin_initial_username or "").strip()
+    admin_username = (settings.admin_system_username or settings.admin_initial_username or "admin").strip()
     if not admin_username:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte administration système non configuré")
     user = db.query(User).filter(User.username == admin_username, User.is_active.is_(True)).one_or_none()
