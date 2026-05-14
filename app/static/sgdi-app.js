@@ -2260,6 +2260,7 @@ function renderSidebar(){
         {label:"FIL D'ACTUALITÉ",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"HISTORIQUE MESSAGES",route:"admin/messages",count:(db.echanges||[]).filter(e=>e.type==="message"||e.attachments?.length).length},
         {label:"NIVEAUX D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
+        {label:"CONTRAT",route:"admin/contrats",count:((window.__adminContractTemplates||db.contractTemplates||[]).length||null)},
         {label:"JOURNAL D'ACTIVITÉ",route:"admin/log"},
         {label:"STOCKAGE POSTGRESQL",route:"admin/storage"}
       ]
