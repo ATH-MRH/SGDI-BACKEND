@@ -599,6 +599,7 @@ window.SGDI_API={
     createCandidate:(payload)=>sgdiActionApi("/drh/candidates",{method:"POST",body:payload,legacy:false}),
     updateCandidate:(id,payload)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),
     validateCandidateSection:(payload,section,id)=>sgdiActionApi("/drh/candidates/validate-section?"+new URLSearchParams(Object.entries({section,candidate_id:id||""}).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString(),{method:"POST",body:payload,legacy:false}),
+    validateCandidateFinal:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/validate-final",{method:"POST",legacy:false}),
     deleteCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
     recruitCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/recruit",{method:"POST",legacy:false}),
     leaves:()=>sgdiApi("/drh/leaves",{legacy:false}),contracts:()=>sgdiApi("/drh/contracts",{legacy:false}),amendments:()=>sgdiApi("/drh/amendments",{legacy:false}),
@@ -4074,11 +4075,12 @@ async function validerFichePosition(id){
   try{
     const c=await saveCandidat(id,false,{requireIdentification:true});if(!c)return;
     if(!candidatAllSectionsValid(c)){toast("Impossible de valider la fiche : toutes les sections doivent être validées","error");renderView();return}
-    const draft={...c};
-    draft.societe=draft.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
-    draft.statut="reserve";draft.fichePositionValidee=true;draft.fichePositionValideeAt=new Date().toISOString();draft.fichePositionValideeBy=session?session.username:"system";
-    await persistCandidateToPostgres(draft);
-    Object.assign(c,draft);
+    const backendId=sqlBackendId(c.backendId);
+    if(!backendId)throw new Error("Identifiant backend candidat introuvable");
+    const finalAction=await SGDI.rh.validateCandidateFinal(backendId);
+    const saved=finalAction&&finalAction.status==="success"?finalAction.data:finalAction;
+    if(!saved||!saved.id)throw new Error("Confirmation backend finale invalide");
+    Object.assign(c,candidateFromApi(saved));
     await sgdiBackendSaveAndWait();
     toast("✓ Fiche de position validée — candidat en réserve","success");navigate("reserve");
   }catch(e){toast("Validation fiche PostgreSQL refusée : "+(e.message||e),"error")}

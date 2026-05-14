@@ -314,6 +314,34 @@ def validate_candidate_section(db: Session, payload: Any, section: str, existing
     values["data"] = data
     return {"status": "success", "data": {"section": section, "sectionValidations": sections, "next": order[idx + 1] if idx + 1 < len(order) else None}}
 
+def validate_candidate_final(db: Session, candidate_id: int, username: str | None = None):
+    row = get_or_404(db, Candidate, candidate_id)
+    data = row.data if isinstance(row.data, dict) else {}
+    sections = _candidate_sections(data)
+    order = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "habilitations", "experience"]
+    missing = [key for key in order if not sections.get(key)]
+    if missing:
+        raise HTTPException(status_code=422, detail="Fiche candidat refusée : sections non validées (" + ", ".join(missing) + ")")
+    values = {
+        "first_name": row.first_name,
+        "last_name": row.last_name,
+        "status": "reserve",
+        "data": {
+            **data,
+            "statut": "reserve",
+            "fichePositionValidee": True,
+            "fichePositionValideeAt": datetime.utcnow().isoformat(),
+            "fichePositionValideeBy": username or "system",
+        },
+    }
+    _validate_candidate_form_rules(values, row)
+    _validate_candidate_transition(values, row)
+    row.status = "reserve"
+    row.data = normalize_photo_fields(values["data"], fallback=str(row.id))
+    db.commit()
+    db.refresh(row)
+    return row
+
 def create_candidate(db: Session, payload: Any):
     row = Candidate(**_candidate_values(payload))
     db.add(row)

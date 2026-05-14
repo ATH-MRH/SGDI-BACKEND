@@ -270,6 +270,13 @@ def validate_candidate_section(
     return service.validate_candidate_section(db, payload, section=section, existing_id=candidate_id, username=user.username)
 
 
+@router.post("/candidates/{candidate_id}/validate-final")
+def validate_candidate_final(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    existing = service.get_or_404(db, Candidate, candidate_id)
+    _ensure_society_allowed(user, existing.society)
+    return _action_success(service.validate_candidate_final(db, candidate_id, username=user.username))
+
+
 @router.delete("/candidates/{candidate_id}")
 def delete_candidate(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_or_404(db, Candidate, candidate_id)
