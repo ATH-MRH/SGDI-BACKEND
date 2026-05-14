@@ -11850,20 +11850,31 @@ function renderAdminUsers(view){
           <td class="p-3 text-xs">${x.societesAutorisees&&x.societesAutorisees.length?escapeHTML(x.societesAutorisees.join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
           <td class="p-3 text-xs">${x.structuresAutorisees&&x.structuresAutorisees.length?escapeHTML(x.structuresAutorisees.map(adminStructureLabel).join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
           <td class="p-3">${x.actif===false?'<span class="pill pill-red">Désactivé</span>':'<span class="pill pill-green">Actif</span>'}</td>
-          <td class="p-3"><button class="btn btn-ghost text-xs" onclick="openAdminUserModal('${x.username}')">Modifier</button> ${x.username!=="admin"?`<button class="btn btn-ghost text-xs text-red-600 inline-flex items-center justify-center" title="Supprimer" onclick="adminDeleteUser('${x.username}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23dc2626%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M8 6V4h8v2%22/%3E%3Cpath d=%22M19 6l-1 14H6L5 6%22/%3E%3Cpath d=%22M10 11v6%22/%3E%3Cpath d=%22M14 11v6%22/%3E%3C/svg%3E" alt="Supprimer" style="width:18px;height:18px;display:inline-block"/></button>`:""}</td>
+          <td class="p-3"><button class="btn btn-ghost text-xs" onclick="openAdminUserModalByKey('${encodeURIComponent(x.username)}')">Modifier</button> ${x.username!=="admin"?`<button class="btn btn-ghost text-xs text-red-600 inline-flex items-center justify-center" title="Supprimer" onclick="adminDeleteUserByKey('${encodeURIComponent(x.username)}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23dc2626%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M8 6V4h8v2%22/%3E%3Cpath d=%22M19 6l-1 14H6L5 6%22/%3E%3Cpath d=%22M10 11v6%22/%3E%3Cpath d=%22M14 11v6%22/%3E%3C/svg%3E" alt="Supprimer" style="width:18px;height:18px;display:inline-block"/></button>`:""}</td>
         </tr>`}).join("")||`<tr><td class="p-6 text-center text-slate-400" colspan="8">Aucun utilisateur.</td></tr>`}</tbody>
       </table>
     </div>`;
 }
+function adminUserByUsername(username){
+  const key=String(username||"").trim();
+  return (db.users||[]).find(x=>String(x.username||"")===key)||(db.users||[]).find(x=>String(x.username||"").toLowerCase()===key.toLowerCase());
+}
+function openAdminUserModalByKey(encodedUsername){
+  openAdminUserModal(decodeURIComponent(String(encodedUsername||"")));
+}
+function adminDeleteUserByKey(encodedUsername){
+  adminDeleteUser(decodeURIComponent(String(encodedUsername||"")));
+}
 function openAdminUserModal(username){
+  username=String(username||"").trim();
   const isNew=!username;
-  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",societesAutorisees:[],structuresAutorisees:[],actif:true}:db.users.find(x=>x.username===username);
+  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",societesAutorisees:[],structuresAutorisees:[],actif:true}:adminUserByUsername(username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
   const selectedNiveau=u.niveau||(selectedRole==="ADM"?"H5":selectedRole==="ops"?"H3":selectedRole==="dispatch"?"H2":"H1");
   openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"➕ Nouvel utilisateur":"✏ Modifier "+escapeHTML(u.username)}</h3>
-    <form onsubmit="event.preventDefault();confirmAdminUser('${u.username||''}')">
+    <form onsubmit="event.preventDefault();confirmAdminUserByKey('${encodeURIComponent(u.username||"")}')">
       <div class="grid grid-2 gap-3">
         <div><label class="label">Identifiant *</label><input class="input" name="username"  value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
@@ -11918,7 +11929,9 @@ async function confirmAdminUser(originalUsername){
     data.password=password;db.users.push(data);
     logActivity("Création utilisateur",username);
   }else{
-    const idx=db.users.findIndex(x=>x.username===originalUsername);if(idx<0){toast("Utilisateur introuvable","error");return}
+    const existing=adminUserByUsername(originalUsername);
+    const idx=existing?db.users.findIndex(x=>x.username===existing.username):-1;if(idx<0){toast("Utilisateur introuvable","error");return}
+    originalUsername=existing.username;
     try{
       const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,is_active:data.actif};
       if(password)payload.password=password;
@@ -11952,7 +11965,13 @@ async function confirmAdminUser(originalUsername){
   if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees};saveSession(session)}
   saveDB();closeModal();toast("Utilisateur enregistré","success");render();
 }
+function confirmAdminUserByKey(encodedUsername){
+  return confirmAdminUser(decodeURIComponent(String(encodedUsername||"")));
+}
 async function adminDeleteUser(username){
+  username=String(username||"").trim();
+  const target=adminUserByUsername(username);
+  if(target)username=target.username;
   if(!confirm("Supprimer l'utilisateur "+username+" ?"))return;
   let pgDeleted=true;
   try{await SGDI.auth.deleteUser(username)}catch(e){
