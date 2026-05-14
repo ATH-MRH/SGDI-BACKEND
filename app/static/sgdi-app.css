@@ -508,7 +508,7 @@
   .fp-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
   .fp-agent-card{border-radius:8px!important;min-width:0}
   @media (max-width:1200px){.fp-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-status-grid,.fp-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media (max-width:760px){.fp-head{flex-direction:column}.fp-head-actions{justify-content:flex-start}.fp-summary-grid,.fp-status-grid,.fp-card-grid,.grid-4{grid-template-columns:1fr}.fp-summary-card{min-height:96px}}
+  @media (max-width:760px){.fp-head{flex-direction:column}.fp-head-actions{justify-content:flex-start}.fp-summary-grid,.fp-status-grid,.fp-card-grid,.grid-6,.grid-5,.grid-4{grid-template-columns:1fr}.fp-summary-card{min-height:96px}}
 
   .recrutement-add-btn,
   .portal-open-btn,
@@ -517,6 +517,7 @@
   .paie-export-btn,
   .paie-print-btn,
   .candidate-reserve-page-btn,
+  .site-create-btn,
   .contract-create-btn,
   .avenant-create-btn,
   .conge-request-btn,
@@ -566,6 +567,7 @@
   .paie-export-btn:hover,
   .paie-print-btn:hover,
   .candidate-reserve-page-btn:hover,
+  .site-create-btn:hover,
   .contract-create-btn:hover,
   .avenant-create-btn:hover,
   .conge-request-btn:hover,
