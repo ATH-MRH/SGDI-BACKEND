@@ -8233,7 +8233,16 @@ async function matSimpleSaveMagasin(id,isNew){
     else{idx=db.magasins.findIndex(x=>x.id===id);if(idx<0){toast("Magasin introuvable","error");return}Object.assign(obj,{...db.magasins[idx],...obj})}
     try{await persistStoreToPostgres(obj)}catch(e){toast("Magasin non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
     if(isNew)db.magasins.push(obj);else db.magasins[idx]=obj;
-    if(saveDB()){toast(isNew?"Magasin créé dans PostgreSQL":"Magasin mis à jour dans PostgreSQL","success");if(typeof logActivity==="function")logActivity(isNew?"Création magasin":"Modification magasin",nom);navigate("materiel/magasins")}
+    if(typeof logActivity==="function")logActivity(isNew?"Création magasin":"Modification magasin",nom);
+    try{
+      sgdiDirty=true;
+      await sgdiBackendSaveAndWait();
+    }catch(e){
+      toast("Magasin créé, mais synchronisation globale PostgreSQL incomplète : "+(e.message||e),"warning");
+      return;
+    }
+    toast(isNew?"Magasin créé dans PostgreSQL":"Magasin mis à jour dans PostgreSQL","success");
+    navigate("materiel/magasins");
   }catch(err){console.error(err);toast("Erreur: "+(err.message||err),"error")}
 }
 function selectMagasinIcon(icon){
