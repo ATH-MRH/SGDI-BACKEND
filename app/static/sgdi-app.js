@@ -1693,9 +1693,10 @@ function myCandidats(){return bySoc(db.candidats)}
 function myMateriel(){return db.materiel?bySoc(db.materiel):[]}
 function myConges(){const ids=new Set(myAgents().map(a=>a.id));return db.conges.filter(c=>ids.has(c.agentId))}
 function myIncidents(){const aids=new Set(myAgents().map(a=>a.id));const sids=new Set(mySites().map(st=>st.id));return db.incidents.filter(i=>(i.agentId&&aids.has(i.agentId))||(i.siteId&&sids.has(i.siteId)))}
+function workflowTaskAllowedForCurrentUser(t){return !t?.module||canAccessStructureKey(t.module)}
 function workflowTasksForModule(module){
   const soc=currentStructureSocieteFilter()||mySoc()||"";
-  return (db.workflowTasks||[]).filter(t=>t&&t.module===module&&t.status!=="done"&&(!soc||t.societe===soc)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  return (db.workflowTasks||[]).filter(t=>t&&t.module===module&&t.status!=="done"&&workflowTaskAllowedForCurrentUser(t)&&(!soc||t.societe===soc)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
 }
 function workflowTasksCardHTML(module,title,emptyText){
   const rows=workflowTasksForModule(module);
@@ -1738,6 +1739,20 @@ function dialogueTopbarButtonHTML(){
   if(!session)return"";
   const unread=dialogueIncomingUnreadItems().length;
   return `<button type="button" data-no-lang="1" class="topbar-dialogue-btn no-print ${unread?"has-unread":""}" onclick="dialogueToggle(true)" title="Boîte de dialogue"><span aria-hidden="true">💬</span><span>Boîte dialogue</span>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
+}
+function notificationVisibleTasks(){
+  if(!session)return[];
+  const soc=currentStructureSocieteFilter()||mySoc()||"";
+  return (db.workflowTasks||[]).filter(t=>{
+    if(!t||t.status==="done")return false;
+    if(soc&&t.societe&&t.societe!==soc)return false;
+    return workflowTaskAllowedForCurrentUser(t);
+  }).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+}
+function notificationTopbarButtonHTML(){
+  if(!session)return"";
+  const count=notificationVisibleTasks().length;
+  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${count?"has-alert":""}" onclick="notificationToggle(true)" title="Notifications"><span aria-hidden="true">🔔</span><span>Notifications</span>${count?`<span class="badge">${count}</span>`:""}</button>`;
 }
 function societeStructureBarHTML(){return "";}
 
@@ -1841,7 +1856,7 @@ function render(){
         </div>
       </div>
       ${topbarStructureTabsHTML()}
-      <div class="sgdi-topbar-actions flex items-center gap-2 shrink-0">${dialogueTopbarButtonHTML()}${sgdiLanguageSelectorHTML()}${headerBtn}</div>
+      <div class="sgdi-topbar-actions flex items-center gap-2 shrink-0">${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiLanguageSelectorHTML()}${headerBtn}</div>
     </div>
     <div class="sgdi-shell-body flex flex-1 min-h-0">
       <aside class="sidebar w-72 flex flex-col shrink-0">
@@ -1863,6 +1878,7 @@ function render(){
         <div class="sgdi-view flex-1 overflow-y-auto" id="view"></div>
       </main>
     </div>
+    ${notificationPanelHTML()}
     ${dialogueBoxHTML()}
   </div>`;
   renderSidebar();
@@ -2437,6 +2453,30 @@ function filterDomBySearch(){
   if(q&&rows.length&&visible===0&&view)view.insertAdjacentHTML("beforeend",`<div id="ui-empty-search" class="ui-empty-search">Aucun résultat pour <strong>${escapeHTML(currentSearch)}</strong></div>`);
 }
 function dialogueIsOpen(){return sessionStorage.getItem("dialogueOpen")!=="0"}
+function notificationIsOpen(){return sessionStorage.getItem("notificationOpen")==="1"}
+function notificationToggle(open){
+  sessionStorage.setItem("notificationOpen",open?"1":"0");
+  render();
+}
+function notificationPanelHTML(){
+  if(!session)return"";
+  const open=notificationIsOpen();
+  const rows=notificationVisibleTasks();
+  const moduleLabel=m=>({drh:"DRH",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Module").toUpperCase());
+  const item=t=>`<div class="notification-item">
+    <div class="notification-item-head"><span>${escapeHTML(moduleLabel(t.module))}</span><span>${escapeHTML(t.societe||"—")}</span></div>
+    <div class="notification-item-title">${escapeHTML(t.title||"Action à effectuer")}</div>
+    <div class="notification-item-body">${escapeHTML(t.message||"Instruction non renseignée.")}</div>
+    <div class="notification-item-meta">${escapeHTML(t.candidateName||"")} ${t.poste?`· ${escapeHTML(t.poste)}`:""}</div>
+    <button type="button" class="btn btn-primary notification-action-btn" onclick="notificationToggle(false);navigate('${jsString(t.route||"dashboard")}')">Action</button>
+  </div>`;
+  return `<div class="notification-backdrop no-print ${open?"":"closed"}" onclick="if(event.target===this)notificationToggle(false)">
+    <aside class="notification-panel" aria-label="Notifications système">
+      <div class="notification-head"><div><div class="notification-title">NOTIFICATIONS</div><div class="notification-subtitle">${rows.length} action(s) à traiter</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
+      <div class="notification-list">${rows.length?rows.map(item).join(""):`<div class="notification-empty">Aucune action système à traiter.</div>`}</div>
+    </aside>
+  </div>`;
+}
 function dialogueToggle(open){
   const next=open===undefined?!dialogueIsOpen():!!open;
   sessionStorage.setItem("dialogueOpen",next?"1":"0");
@@ -2446,7 +2486,7 @@ function dialogueToggle(open){
 function dialogueIncomingUnreadItems(){
   if(!session)return[];
   const u=session.username;
-  return (db.echanges||[]).filter(m=>m.type==="message"&&m.to!=="all"&&!dialogueMessageArchived(m)&&m.from!==u&&(m.to===u||isAdmin())&&(!m.luPar||!m.luPar.includes(u)));
+  return (db.echanges||[]).filter(m=>!m.workflowTaskType&&m.type==="message"&&m.to!=="all"&&!dialogueMessageArchived(m)&&m.from!==u&&(m.to===u||isAdmin())&&(!m.luPar||!m.luPar.includes(u)));
 }
 function dialoguePlaySound(){
   try{
@@ -2566,7 +2606,7 @@ function dialogueSelectedRecipientChips(form){
 }
 function dialogueVisibleItems(){
   const all=(db.echanges||[]).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const messages=all.filter(m=>m.type==="message"&&m.to!=="all");
+  const messages=all.filter(m=>!m.workflowTaskType&&m.type==="message"&&m.to!=="all");
   if(isAdmin())return messages;
   const u=session?session.username:"";
   return messages.filter(m=>m.from===u||m.to===u);

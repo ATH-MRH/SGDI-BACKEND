@@ -155,7 +155,13 @@
   .topbar-dialogue-btn.has-unread{animation:dialogueTopbarBlink .85s infinite;box-shadow:0 0 0 3px rgba(220,38,38,.18),0 8px 18px rgba(220,38,38,.28)}
   .topbar-dialogue-btn.has-unread:before{content:"";position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:999px;background:#dc2626;border:2px solid #fff;box-shadow:0 0 0 4px rgba(220,38,38,.18)}
   .topbar-dialogue-btn .badge{background:#dc2626;color:#fff;border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:950}
+  .topbar-notification-btn{height:34px;border:0;background:#fff;color:#01112f;border-radius:999px;padding:0 12px;font-size:11px!important;font-weight:950;display:inline-flex;align-items:center;gap:7px;box-shadow:0 6px 14px rgba(15,23,42,.14);cursor:pointer;white-space:nowrap;position:relative}
+  .topbar-notification-btn:hover{background:#fee2e2;color:#991b1b}
+  .topbar-notification-btn.has-alert{background:#dc2626;color:#fff;animation:notificationBlink .8s infinite;box-shadow:0 0 0 3px rgba(220,38,38,.2),0 8px 20px rgba(220,38,38,.32)}
+  .topbar-notification-btn.has-alert:before{content:"";position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:999px;background:#fff;border:2px solid #dc2626;box-shadow:0 0 0 5px rgba(220,38,38,.18)}
+  .topbar-notification-btn .badge{background:#fff;color:#dc2626;border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:950}
   @keyframes dialogueTopbarBlink{0%,100%{background:#facc15;transform:translateY(0)}50%{background:#fee2e2;transform:translateY(-1px)}}
+  @keyframes notificationBlink{0%,100%{transform:translateY(0);filter:brightness(1)}50%{transform:translateY(-1px);filter:brightness(1.22)}}
   .login-admin-system-shortcut{position:fixed;right:24px;bottom:24px;z-index:20;border:0;border-radius:999px;background:#facc15;color:#01112f;min-width:210px;height:46px;padding:0 18px;display:inline-flex;align-items:center;justify-content:center;gap:9px;font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.02em;box-shadow:0 16px 34px rgba(15,23,42,.22);cursor:pointer}
   .login-admin-system-shortcut:hover{background:#fde047;color:#01112f;transform:translateY(-1px)}
   .login-admin-system-shortcut span[aria-hidden="true"]{font-size:18px;line-height:1}
@@ -364,6 +370,20 @@
   .dialogue-modal-backdrop.closed{display:none}
   .dialogue-panel{width:min(920px,calc(100vw - 44px));max-width:920px;height:min(720px,calc(100vh - 44px));background:#f1f5f9;border:1px solid #cbd5e1;border-radius:14px;box-shadow:0 24px 80px rgba(1,17,47,.38);display:flex;flex-direction:column;flex-shrink:0;color:#0f172a;overflow:hidden}
   .dialogue-panel.closed{display:none}
+  .notification-backdrop{position:fixed;inset:0;z-index:82;background:rgba(1,17,47,.45);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:flex-end;padding:72px 22px 22px}
+  .notification-backdrop.closed{display:none}
+  .notification-panel{width:min(420px,calc(100vw - 44px));max-height:calc(100vh - 96px);background:#fff;border:1px solid #fecaca;border-radius:12px;box-shadow:0 24px 70px rgba(1,17,47,.28);display:flex;flex-direction:column;overflow:hidden;color:#0f172a}
+  .notification-head{padding:14px 16px;background:#fff5f5;border-bottom:1px solid #fecaca;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .notification-title{font-size:13px;font-weight:950;color:#991b1b;letter-spacing:.08em}
+  .notification-subtitle{font-size:11px;color:#7f1d1d;font-weight:800;margin-top:2px}
+  .notification-list{padding:12px;overflow:auto}
+  .notification-item{border:1px solid #fed7aa;background:#fffbeb;border-radius:10px;padding:12px;margin-bottom:10px}
+  .notification-item-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;font-weight:950;text-transform:uppercase;color:#b45309}
+  .notification-item-title{font-size:13px;font-weight:950;color:#111827;margin-top:7px}
+  .notification-item-body{font-size:12px;color:#475569;margin-top:5px;line-height:1.4}
+  .notification-item-meta{font-size:11px;color:#64748b;margin-top:7px;font-weight:800}
+  .notification-action-btn{width:100%;margin-top:10px;justify-content:center}
+  .notification-empty{padding:34px 12px;text-align:center;color:#047857;font-size:13px;font-weight:900}
   .dialogue-head{padding:12px 14px;border-bottom:1px solid #cbd5e1;display:flex;flex-direction:column;gap:8px;background:#e2e8f0;color:#0f172a;flex-shrink:0}
   .dialogue-title{font-size:13px;font-weight:900;letter-spacing:.02em;white-space:nowrap;line-height:1.15}
   .dialogue-head-row{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
@@ -449,6 +469,7 @@
     .topbar-structure-btn{height:30px!important;padding:0 8px!important;font-size:10px!important;gap:4px!important;flex:0 0 auto}
     .sgdi-topbar-actions{order:3;margin-left:auto;gap:5px!important;flex-wrap:nowrap!important;justify-content:flex-end!important;flex:0 0 auto!important}
     .topbar-dialogue-btn{height:30px!important;padding:0 9px!important;font-size:10px!important}
+    .topbar-notification-btn{height:30px!important;padding:0 9px!important;font-size:10px!important}
     .sgdi-lang-choice{margin-bottom:0!important}
     .sgdi-lang-choice span{display:none!important}
     .sgdi-lang-choice .btn{height:30px!important;padding:0 8px!important}
@@ -464,6 +485,8 @@
     .modal{max-width:calc(100vw - 24px)!important;max-height:calc(100vh - 24px)!important}
     .dialogue-modal-backdrop{padding:14px!important}
     .dialogue-panel{width:calc(100vw - 28px)!important;height:calc(100vh - 28px)!important;max-width:860px!important}
+    .notification-backdrop{padding:58px 14px 14px!important;align-items:flex-start!important}
+    .notification-panel{width:calc(100vw - 28px)!important;max-height:calc(100vh - 72px)!important}
     .dialogue-layout{grid-template-columns:170px 1fr!important}
     .dialogue-users{padding:7px!important}
     .dialogue-user{font-size:10.5px!important;padding:8px 6px!important}
