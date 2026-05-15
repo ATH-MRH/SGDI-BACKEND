@@ -561,6 +561,41 @@ function upsertServerEmployee(row){
   if(existing)Object.assign(existing,a);else db.agents.push(a);
   return existing||a;
 }
+function employeeApiPayload(a){
+  if(!a)throw new Error("Employé invalide");
+  const firstName=String(a.prenom||a.first_name||"").trim();
+  const lastName=String(a.nom||a.last_name||"").trim();
+  if(!firstName||!lastName)throw new Error("Nom et prénom employé obligatoires");
+  const extra={...a};
+  delete extra.backendId;
+  delete extra.extra;
+  return {
+    code:String(a.matricule||a.code||"").trim()||nextMatricule(db.agents,a.societe),
+    first_name:firstName,
+    last_name:lastName,
+    father_name:a.nomPere||null,
+    mother_name:a.nomMere||null,
+    nin:a.nin||null,
+    birth_date:a.dateNaissance||null,
+    birth_place:a.lieuNaissance||null,
+    family_status:a.situation||null,
+    phone:a.telephone||null,
+    email:a.email||null,
+    address:a.adresse||a.address||null,
+    commune:a.commune||null,
+    wilaya:a.wilaya||null,
+    position:a.fonction||a.posteContrat||a.posteSouhaite||null,
+    society:a.societe||null,
+    status:a.statut||"actif",
+    contract_type:a.typeContrat||null,
+    salary_net:Number(a.salaireNet||0)||0,
+    recruit_date:a.dateRecrutement||null,
+    trial_end_date:a.dateFinEssai||null,
+    contract_end_date:a.dateFinContrat||null,
+    locked:a.locked?1:0,
+    extra
+  };
+}
 async function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
@@ -617,7 +652,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
+  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
@@ -1720,6 +1755,46 @@ function workflowTaskAllowedForCurrentUser(t){return !t?.module||canAccessStruct
 function workflowTasksForModule(module){
   const soc=currentStructureSocieteFilter()||mySoc()||"";
   return (db.workflowTasks||[]).filter(t=>t&&t.module===module&&t.status!=="done"&&workflowTaskAllowedForCurrentUser(t)&&(!soc||t.societe===soc)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+}
+function workflowUpsertTask(task){
+  if(!db.workflowTasks)db.workflowTasks=[];
+  const id=String(task?.id||"");
+  if(!id)return;
+  const i=db.workflowTasks.findIndex(t=>String(t.id||"")===id);
+  const row={status:"open",createdAt:new Date().toISOString(),...task};
+  if(i>=0)db.workflowTasks[i]={...db.workflowTasks[i],...row,status:db.workflowTasks[i].status==="done"?"open":row.status};
+  else db.workflowTasks.unshift(row);
+}
+function createRecruitmentWorkflowForEmployee(agent,candidate){
+  if(!agent)return;
+  const name=String((agent.nom||candidate?.nom||"")+" "+(agent.prenom||candidate?.prenom||"")).trim()||"Nouvel employé";
+  const soc=agent.societe||candidate?.societe||"";
+  const base={
+    employeeId:agent.id,
+    candidateId:candidate?.id||"",
+    candidateBackendId:candidate?.backendId||"",
+    candidateName:name,
+    matricule:agent.matricule||"",
+    societe:soc,
+    createdBy:session?.username||"system",
+    createdAt:new Date().toISOString()
+  };
+  workflowUpsertTask({
+    ...base,
+    id:`recruitment_employee_${agent.id}_ops`,
+    module:"ops",
+    route:"ops/instance_dotation",
+    title:"Employé en instance de dotation",
+    message:`${name} est recruté. OPS doit suivre l'affectation et la coordination dotation.`
+  });
+  workflowUpsertTask({
+    ...base,
+    id:`recruitment_employee_${agent.id}_materiel`,
+    module:"materiel",
+    route:"materiel/dotation",
+    title:"Dotation matériel à préparer",
+    message:`${name} est recruté. Matériel doit préparer la dotation.`
+  });
 }
 function workflowTasksCardHTML(module,title,emptyText){
   const rows=workflowTasksForModule(module);
@@ -4803,7 +4878,7 @@ function confirmEmbaucherCandidat(id){
   </div>`);
 }
 
-function embaucherCandidat(id){
+async function embaucherCandidat(id){
   const c=findCandidatById(id);if(!c){toast("Introuvable","error");return}
   const blockedAgent=candidateBlackListMatch(c);if(blockedAgent){toast("Contrat impossible : personne inscrite sur BLACKLIST","error");return}
   const f=document.getElementById("contract-form");
@@ -4838,10 +4913,24 @@ function embaucherCandidat(id){
     statut:"actif",locked:true,fichePositionOfficielle:true,fichePositionOfficielleAt:new Date().toISOString(),fichePositionOfficielleBy:session?.username||"system",lockedAt:new Date().toISOString(),lockedBy:session?.username||"system",createdAt:today(),updatedAt:today()
   };
   if(contratModele&&contratModele.texte)agent.contratPersonnelTexte=fillContratPersonnelText(contratModele.texte,agent);
-  db.agents.push(agent);
-  unlockedAgents.delete(agent.id);saveUnlocked();
-  db.candidats=db.candidats.filter(x=>x.id!==id);
-  saveDB();toast(`Agent ${agent.matricule} embauché`,"success");navigate(`agents/${agent.id}`);
+  try{
+    const created=await SGDI.employees.create(employeeApiPayload(agent));
+    Object.assign(agent,employeeFromApi(created),agent,{backendId:created?.id||agent.backendId});
+    if(sqlBackendId(c.backendId)){
+      const updatedCandidate={...c,statut:"embauche",status:"embauche",convertedEmployeeId:agent.backendId||agent.id,convertedAt:new Date().toISOString()};
+      await SGDI.rh.updateCandidate(c.backendId,candidateApiPayload(updatedCandidate));
+    }
+    db.agents.push(agent);
+    unlockedAgents.delete(agent.id);saveUnlocked();
+    db.candidats=db.candidats.filter(x=>x.id!==id);
+    createRecruitmentWorkflowForEmployee(agent,c);
+    sgdiDirty=true;
+    await sgdiBackendSaveAndWait();
+    toastCenter("NOUVEAU EMPLOYÉ CRÉÉ","success");
+    navigate(`agents/${agent.id}`);
+  }catch(e){
+    toast("Recrutement non enregistré dans le backend : "+(e.message||e),"error");
+  }
 }
 
 /* ---- EFFECTIF ---- */
@@ -6975,7 +7064,15 @@ function renderFiches(view,sub){
   const statsBase=socFilter?db.agents.filter(a=>a.societe===socFilter):db.agents;
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
   const withoutAffectation=activeBase.filter(a=>!(a.affectationCourante&&a.affectationCourante.siteId)).length;
+  const withoutDotation=agentsEnInstanceDotationForSoc(socFilter).length;
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
+  const summaryCards=[
+    ["Fiches actives",activeBase.length,"Hors sortants / archivés","#043970",100,""],
+    ["Agents actifs",statsBase.filter(a=>a.statut==="actif").length,"Présents dans l'effectif","#166534",ratio(statsBase.filter(a=>a.statut==="actif").length,activeBase.length),""],
+    ["Sans affectation",withoutAffectation,"Site non renseigné","#b45309",ratio(withoutAffectation,activeBase.length),""],
+    ["À surveiller",statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,"Congé, maladie, suspension, abandon","#b91c1c",ratio(statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,activeBase.length),""]
+  ];
+  if(isOpsFicheContext())summaryCards.splice(3,0,["Employés en instance de dotation",withoutDotation,"Dotation matériel non enregistrée","#dc2626",ratio(withoutDotation,activeBase.length),"ops/instance_dotation"]);
   const cards=[
     ["maladie","🤒 En maladie",statsBase.filter(a=>ficheAgentInMaladie(a)).length,"#f97316"],
     ["conge","🏖 En congé",statsBase.filter(a=>ficheAgentInConge(a)).length,"#0360a8"],
@@ -6995,12 +7092,7 @@ function renderFiches(view,sub){
       </div>
     </div>
     <div class="fp-summary-grid">
-      ${[
-        ["Fiches actives",activeBase.length,"Hors sortants / archivés","#043970",100],
-        ["Agents actifs",statsBase.filter(a=>a.statut==="actif").length,"Présents dans l'effectif","#166534",ratio(statsBase.filter(a=>a.statut==="actif").length,activeBase.length)],
-        ["Sans affectation",withoutAffectation,"Site non renseigné","#b45309",ratio(withoutAffectation,activeBase.length)],
-        ["À surveiller",statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,"Congé, maladie, suspension, abandon","#b91c1c",ratio(statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,activeBase.length)]
-      ].map(([label,note,desc,color,pct])=>`<div class="fp-summary-card"><div><span>${label}</span><strong style="color:${color}">${note}</strong><small>${desc}</small></div><div class="fp-ring" style="--pct:${pct}%;--ring:${color}"><b>${pct}%</b></div></div>`).join("")}
+      ${summaryCards.map(([label,note,desc,color,pct,route])=>`${route?`<a href="#/${route}" class="fp-summary-card ${note?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit">`:`<div class="fp-summary-card">`}<div><span>${label}</span><strong style="color:${color}">${note}</strong><small>${desc}</small></div><div class="fp-ring" style="--pct:${pct}%;--ring:${color}"><b>${pct}%</b></div>${route?`</a>`:`</div>`}`).join("")}
     </div>
     ${fpSocieteBandHTML(baseList)}
     <div class="fp-status-grid">
@@ -7643,9 +7735,11 @@ function agentDotationCount(agentId){
   const stock=(db.stockMouvements||[]).filter(m=>typeof stockMvtIsOut==="function"&&stockMvtIsOut(m.type)&&m.beneficiaireAgentId===agentId).length;
   return legacy+stock;
 }
-function agentsEnInstanceDotation(){
-  const soc=matSimpleSocFilter();
+function agentsEnInstanceDotationForSoc(soc){
   return (db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc)&&agentDotationCount(a.id)===0);
+}
+function agentsEnInstanceDotation(){
+  return agentsEnInstanceDotationForSoc(matSimpleSocFilter());
 }
 function isAgentSortant(a){return a&&["sortant","demissionne","licencie","archive"].includes(a.statut)}
 function agentReversementSituation(agentId){
@@ -12604,12 +12698,14 @@ function renderOPS(view,sub,arg){
   if(!canAccess("ops")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub==="missions"){renderOpsMissions(view,arg);return}
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
+  if(sub==="instance_dotation"){renderOpsInstanceDotation(view);return}
   const soc=currentStructureSocieteFilter();
   const ag=(db.agents||[]).filter(a=>!soc||a.societe===soc);
   const sites=(db.sites||[]).filter(s=>siteMatchesSociete(s,soc));
   const pts=(db.pointages||[]).filter(p=>!soc||((db.agents||[]).find(a=>a.id===p.agentId)?.societe===soc)||p.societe===soc);
   const actifs=ag.filter(a=>a.statut==="actif");
   const instanceAffectation=actifs.filter(a=>!(a.affectationCourante&&a.affectationCourante.siteId));
+  const instanceDotation=agentsEnInstanceDotationForSoc(soc);
   const sitesActifs=sites.filter(s=>s.actif!==false);
   const now=new Date();const curYM=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const ptsCur=pts.filter(p=>p.periode===curYM);
@@ -12636,9 +12732,10 @@ function renderOPS(view,sub,arg){
   const societeRows=SOCIETES.map(s=>{const eff=actifs.filter(a=>a.societe===s);const aff=eff.filter(a=>a.affectationCourante?.siteId);const st=sitesActifs.filter(x=>x.societe===s);const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));return{soc:s,eff:eff.length,aff:aff.length,sans:eff.length-aff.length,sites:st.length,inc:inc.length}});
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">OPS - TABLEAU DE BORD</h1>
   <p class="text-slate-500 text-sm mb-4">Opérations · Pointage, fiches de position, sites · ${soc?escapeHTML(soc):"Toutes sociétés"}</p>
-  <div class="grid grid-4 mb-6">
+  <div class="grid grid-5 mb-6">
     <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif actif</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir l'effectif</div></a>
     <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${instanceAffectation.length}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
+    <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotation.length?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div class="text-4xl font-bold text-red-700">${instanceDotation.length}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${sitesActifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
     <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position</h3></div><div class="text-4xl font-bold">${ag.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir toutes les fiches</div></a>
   </div>
@@ -12658,6 +12755,7 @@ function renderOPS(view,sub,arg){
       <h3 class="mb-3">⚠️ Opérations à traiter</h3>
       <div class="space-y-2">
         <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-orange-50 text-sm" style="text-decoration:none;color:inherit"><span>Employés sans affectation</span><b class="text-orange-700">${instanceAffectation.length}</b></a>
+        <a href="#/ops/instance_dotation" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm ${instanceDotation.length?"ops-dot-row-alert":""}" style="text-decoration:none;color:inherit"><span>Employés en instance de dotation</span><b class="text-red-700">${instanceDotation.length}</b></a>
         <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-amber-50 text-sm" style="text-decoration:none;color:inherit"><span>Fiches validées à traiter</span><b class="text-amber-700">${opsWorkflowTasks.length}</b></a>
         <a href="#/sites/actifs" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 text-sm" style="text-decoration:none;color:inherit"><span>Sites actifs sans effectif</span><b>${sitesSansEffectif.length}</b></a>
         <a href="#/pointage/quotidien" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm" style="text-decoration:none;color:inherit"><span>Feuilles non clôturées</span><b class="text-red-700">${feuillesNonCloturees}</b></a>
@@ -12690,6 +12788,32 @@ function renderOPS(view,sub,arg){
     <a href="#/pointage/quotidien" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">🕒</div><div><div class="font-bold text-cyan-700">Pointage</div><div class="text-xs text-slate-500">Feuille quotidienne · Saisie mensuelle · Récap</div></div></div></a>
     <a href="#/fiches/toutes" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">🪪</div><div><div class="font-bold text-emerald-700">Fiches de position</div><div class="text-xs text-slate-500">Toutes · Actifs · Archivées</div></div></div></a>
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">📍</div><div><div class="font-bold text-amber-700">Sites</div><div class="text-xs text-slate-500">Création · Sites actifs</div></div></div></a>
+  </div>`;
+}
+
+function renderOpsInstanceDotation(view){
+  const soc=currentStructureSocieteFilter();
+  const agents=agentsEnInstanceDotationForSoc(soc);
+  const actifs=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));
+  view.innerHTML=`<div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+    <div><h1 class="text-2xl font-black uppercase">EMPLOYÉS EN INSTANCE DE DOTATION</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Employés recrutés sans dotation matériel enregistrée.</p></div>
+    <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="navigate('ops/dashboard')">← Tableau de bord OPS</button><button class="btn btn-primary text-sm" onclick="navigate('materiel/dotation')">Module matériel</button></div>
+  </div>
+  <div class="grid grid-3 gap-3 mb-4">
+    <div class="card p-4 ${agents.length?"ops-dot-counter-alert":""}"><div class="text-xs text-slate-500 uppercase font-black">En instance de dotation</div><div class="text-3xl font-black mt-1 text-red-700">${agents.length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-black">Effectif actif</div><div class="text-3xl font-black mt-1">${actifs.length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-black">Déjà dotés</div><div class="text-3xl font-black mt-1 text-emerald-700">${actifs.filter(a=>agentDotationCount(a.id)>0).length}</div></div>
+  </div>
+  <div class="card overflow-hidden">
+    <table><thead><tr><th>Employé</th><th>Matricule</th><th>Société</th><th>Poste</th><th>Site</th><th>Action</th></tr></thead>
+    <tbody>${agents.length===0?`<tr><td colspan="6" class="text-center text-slate-500 p-6">Aucun employé en instance de dotation.</td></tr>`:agents.map(a=>`<tr data-searchable>
+      <td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||a.nom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(a.telephone||"")}</div></div></div></td>
+      <td class="font-mono font-bold">${escapeHTML(a.matricule||"—")}</td>
+      <td class="text-xs">${escapeHTML(a.societe||"—")}</td>
+      <td class="text-xs">${escapeHTML(a.affectationCourante?.poste||a.fonction||"—")}</td>
+      <td class="text-xs">${escapeHTML(a.affectationCourante?.siteName||"—")}</td>
+      <td><div class="flex gap-1 flex-wrap"><a class="btn btn-ghost text-xs" href="#/effectif/agent/${a.id}">Fiche</a><button class="btn btn-primary text-xs" onclick="navigate('materiel/dotation')">Doter</button></div></td>
+    </tr>`).join("")}</tbody></table>
   </div>`;
 }
 
