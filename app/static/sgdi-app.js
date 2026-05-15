@@ -385,6 +385,19 @@ async function sgdiBackendSaveAndWait(){
   if(!saved)throw new Error("Confirmation PostgreSQL globale invalide");
   return true;
 }
+async function saveDBAndWait(){
+  sgdiDirty=true;
+  return await sgdiBackendSaveAndWait();
+}
+async function saveDBAndWaitToast(context){
+  try{
+    await saveDBAndWait();
+    return true;
+  }catch(e){
+    toast((context||"Sauvegarde backend refusée")+" : "+(e.message||e),"error");
+    return false;
+  }
+}
 async function sgdiPullState(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
@@ -8288,8 +8301,9 @@ async function matSimpleDeleteMagasin(id){
   (db.stockArticles||[]).forEach(a=>{if(a.magasinId===id)a.magasinId=""});
   if(m.backendId){try{await SGDI.stock.deleteStore(m.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.magasins=(db.magasins||[]).filter(x=>x.id!==id);
-  saveDB();toast("Magasin supprimé","success");
   if(typeof logActivity==="function")logActivity("Suppression magasin",m.nom);
+  if(!(await saveDBAndWaitToast("Suppression magasin non confirmée par PostgreSQL")))return;
+  toast("Magasin supprimé","success");
   render();
 }
 function renderMatSimpleMagasinDetail(view,id){
@@ -8499,8 +8513,9 @@ async function matSimpleDeleteFournisseur(id){
   (db.stockMouvements||[]).forEach(m=>{if(m.fournisseurId===id)m.fournisseurId=""});
   if(f.backendId){try{await SGDI.stock.deleteSupplier(f.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.fournisseurs=(db.fournisseurs||[]).filter(x=>x.id!==id);
-  saveDB();toast("Fournisseur supprimé","success");
   if(typeof logActivity==="function")logActivity("Suppression fournisseur",f.raisonSociale);
+  if(!(await saveDBAndWaitToast("Suppression fournisseur non confirmée par PostgreSQL")))return;
+  toast("Fournisseur supprimé","success");
   render();
 }
 function renderMatSimpleFournisseurDetail(view,id){
@@ -8626,7 +8641,7 @@ function renderMaterielForm(view,id){
     if(f&&!f._wired){f._wired=true;f.addEventListener("submit",e=>{e.preventDefault();saveMateriel(m.id,m.isNew?"true":"false")});}
   },0);
 }
-function saveMateriel(id,isNew){
+async function saveMateriel(id,isNew){
   try{
     const f=document.getElementById("mat-form");
     if(!f){toast("Formulaire introuvable","error");return}
@@ -8644,9 +8659,9 @@ function saveMateriel(id,isNew){
     if(!m.code)m.code=nextMatCode(m.categorie);
     if(m.statut==="attribue"&&!m.dateAttribution)m.dateAttribution=today();
     if(m.statut!=="attribue")m.agentId=null;
-    saveDB();
-    toast(isCreating?"✓ Article ajouté":"✓ Article modifié","success");
     if(typeof logActivity==="function")logActivity(isCreating?"Article matériel créé":"Article matériel modifié",(m.code||"")+" · "+(m.designation||""));
+    if(!(await saveDBAndWaitToast("Article matériel non confirmé par PostgreSQL")))return;
+    toast(isCreating?"✓ Article ajouté":"✓ Article modifié","success");
     navigate("materiel/inventaire");
   }catch(err){
     console.error("saveMateriel error:",err);
@@ -8798,7 +8813,7 @@ function openMagasinFormModal(id){
     if(f&&!f._wired){f._wired=true;f.addEventListener("submit",e=>{e.preventDefault();saveMagasin(id||"")});}
   },0);
 }
-function saveMagasin(id){
+async function saveMagasin(id){
   try{
     const f=document.getElementById("magasin-form")||document.querySelector(".modal-bg form");
     if(!f){toast("Formulaire introuvable","error");return}
@@ -8821,8 +8836,9 @@ function saveMagasin(id){
       if(!db.magasins)db.magasins=[];
       db.magasins.push({id:uid("mag"),nom:nom,theme:theme,description:fd.get("description")||"",societe:fd.get("societe")||"",icon:fd.get("icon")||t.icon,color:t.color,createdAt:new Date().toISOString()});
     }
-    saveDB();closeModal();toast(id?"✓ Magasin modifié":"✓ Magasin créé","success");
     if(typeof logActivity==="function")logActivity(id?"Magasin modifié":"Magasin créé",nom);
+    if(!(await saveDBAndWaitToast("Magasin non confirmé par PostgreSQL")))return;
+    closeModal();toast(id?"✓ Magasin modifié":"✓ Magasin créé","success");
     renderView();
   }catch(err){
     console.error("saveMagasin error:",err);
@@ -8941,7 +8957,7 @@ function openMagasinArticleModal(magasinId,articleId){
     if(f&&!f._wired){f._wired=true;f.addEventListener("submit",e=>{e.preventDefault();saveMagasinArticle(magasinId,articleId||"")});}
   },0);
 }
-function saveMagasinArticle(magasinId,articleId){
+async function saveMagasinArticle(magasinId,articleId){
   try{
     const f=document.getElementById("magart-form")||document.querySelector(".modal-bg form");
     if(!f){toast("Formulaire introuvable","error");return}
@@ -8972,8 +8988,9 @@ function saveMagasinArticle(magasinId,articleId){
     }else{
       db.magasinArticles.push(Object.assign({id:uid("magart"),createdAt:new Date().toISOString()},data));
     }
-    saveDB();closeModal();toast(articleId?"✓ Article modifié":"✓ Article ajouté","success");
     if(typeof logActivity==="function")logActivity(articleId?"Article magasin modifié":"Article magasin ajouté",data.type+" · "+data.quantite+" unité(s)");
+    if(!(await saveDBAndWaitToast("Article magasin non confirmé par PostgreSQL")))return;
+    closeModal();toast(articleId?"✓ Article modifié":"✓ Article ajouté","success");
     renderView();
   }catch(err){
     console.error("saveMagasinArticle error:",err);
@@ -10018,7 +10035,7 @@ async function stockDeleteArticle(id){
   if(a.backendId){try{await SGDI.stock.deleteArticle(a.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.stockArticles=(db.stockArticles||[]).filter(x=>x.id!==id);
   db.stockMouvements=(db.stockMouvements||[]).filter(m=>m.articleId!==id);
-  saveDB();
+  if(!(await saveDBAndWaitToast("Suppression article stock non confirmée par PostgreSQL")))return;
   toast("Article supprimé","success");
   navigate("materiel/inventaire");
 }
@@ -10387,11 +10404,11 @@ async function stockSaveMvt(initialType){
     m.caisseId=caisseEntry.id;
     caisseCreated=true;
   }
-  saveDB();
-  closeModal();
   const tLabel=stockMvtTypeLabel(type);
-  toast(`${tLabel} enregistrée : ${qty(qte)} ${a.unite||"unité(s)"} de ${a.designation}${caisseCreated?" · ✓ caisse mise à jour":""}`,"success");
   if(typeof logActivity==="function")logActivity("Mouvement stock "+tLabel,a.code+" · "+a.designation+" · "+(stockMvtIsOut(type)?"−":"+")+qte+(caisseCreated?" · caisse"+money(valeur)+" DA":""));
+  if(!(await saveDBAndWaitToast("Mouvement stock non confirmé par PostgreSQL")))return;
+  closeModal();
+  toast(`${tLabel} enregistrée : ${qty(qte)} ${a.unite||"unité(s)"} de ${a.designation}${caisseCreated?" · ✓ caisse mise à jour":""}`,"success");
   renderView();
   }catch(err){
     console.error("stockSaveMvt error:",err);
@@ -10406,7 +10423,8 @@ async function stockDeleteMvt(id){
   if(m.backendId){try{await SGDI.stock.deleteMovement(m.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.stockMouvements=(db.stockMouvements||[]).filter(x=>x.id!==id);
   if(hasCaisse){db.caisse=(db.caisse||[]).filter(c=>c.id!==m.caisseId)}
-  saveDB();toast("Mouvement supprimé"+(hasCaisse?" · caisse mise à jour":""),"success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Suppression mouvement non confirmée par PostgreSQL")))return;
+  toast("Mouvement supprimé"+(hasCaisse?" · caisse mise à jour":""),"success");renderSidebar();renderView();
 }
 function stockShowMvt(id){
   const m=(db.stockMouvements||[]).find(x=>x.id===id);if(!m)return;
