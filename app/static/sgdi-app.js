@@ -6329,7 +6329,7 @@ async function deleteSite(id){
     if(backendId)await SGDI.sites.delete(backendId);
     db.sites=(db.sites||[]).filter(s=>String(s.id)!==String(id)&&String(s.backendId||"")!==String(backendId||""));
     await syncSitesFromPostgres().catch(()=>{});
-    saveDB();
+    if(!(await saveDBAndWaitToast("Suppression site non confirmée par PostgreSQL")))return;
     toast("Site supprimé de PostgreSQL","success");
     navigate("sites/actifs");
   }catch(e){
@@ -6391,7 +6391,7 @@ async function saveSite(id){
     toast("Site non sauvegardé PostgreSQL : "+(e.message||e),"error");
     return;
   }
-  saveDB();
+  if(!(await saveDBAndWaitToast("Site non confirmé par PostgreSQL")))return;
   sgdiServerSetPage("sites",scopeSociete||"all",1);
   toast("Site enregistré dans PostgreSQL","success");
   navigate("sites/actifs");
@@ -12953,7 +12953,7 @@ function renderOpsMissions(view,arg){
     </div>
   </div>`;
 }
-function saveOpsMission(id){
+async function saveOpsMission(id){
   if(!db.missions)db.missions=[];
   const form=document.querySelector("#view form");if(!form)return;
   const fd=new FormData(form);
@@ -12969,14 +12969,14 @@ function saveOpsMission(id){
   m.consignes=(fd.get("consignes")||"").trim();
   m.societe=m.societe||currentStructureSocieteFilter()||session?.societe||"";
   m.updatedAt=new Date().toISOString();
-  saveDB();
+  if(!(await saveDBAndWaitToast("Mission OPS non confirmée par PostgreSQL")))return;
   toast("Mission enregistrée","success");
   navigate("ops/missions");
 }
-function deleteOpsMission(id){
+async function deleteOpsMission(id){
   if(!confirm("Supprimer cette mission ?"))return;
   db.missions=(db.missions||[]).filter(m=>m.id!==id);
-  saveDB();
+  if(!(await saveDBAndWaitToast("Suppression mission non confirmée par PostgreSQL")))return;
   toast("Mission supprimée","success");
   renderView();
 }
@@ -13088,7 +13088,7 @@ function renderOpsSupervision(view,tab){
   </div>
   <div class="mt-5"><h3 class="font-black mb-2">Espaces superviseurs</h3>${inspectionSupervisorSpaceHTML(supervisors,inspections)}</div>`;
 }
-function saveProgrammedInspection(){
+async function saveProgrammedInspection(){
   const form=document.querySelector("#view form");if(!form)return;
   const fd=new FormData(form);const siteIds=fd.getAll("siteIds").filter(Boolean);const dates=fd.getAll("inspectionDates").filter(Boolean);
   if(!fd.get("supervisorId")){toast("Nom du superviseur obligatoire","error");return}
@@ -13096,7 +13096,8 @@ function saveProgrammedInspection(){
   if(!siteIds.length){toast("Sélectionnez au moins un site","error");return}
   if(!db.siteInspections)db.siteInspections=[];
   dates.sort().reverse().forEach(date=>db.siteInspections.unshift({id:uid("insp"),type:"programmee",date,horaire:fd.get("inspectionTime_"+date)||"",supervisorId:fd.get("supervisorId")||"",siteIds,vehicule:(fd.get("vehicule")||"").trim(),chauffeurId:fd.get("chauffeurId")||"",moyens:(fd.get("moyens")||"").trim(),scans:{},societe:currentStructureSocieteFilter()||session?.societe||"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));
-  saveDB();toast(dates.length+" inspection(s) programmée(s)","success");navigate("ops/supervision/programmees");
+  if(!(await saveDBAndWaitToast("Inspection programmée non confirmée par PostgreSQL")))return;
+  toast(dates.length+" inspection(s) programmée(s)","success");navigate("ops/supervision/programmees");
 }
 function renderProgrammedInspections(view,soc,inspections,supervisors){
   const list=inspections.filter(i=>i.type==="programmee").sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
@@ -13109,11 +13110,13 @@ function openInspectionScan(id){
   const i=(db.siteInspections||[]).find(x=>x.id===id);if(!i)return;
   openModal(`<h3 class="font-bold text-lg mb-3">Scan QR - Inspection</h3><div class="text-sm text-slate-600 mb-3">${escapeHTML(inspectionSupervisorName(i.supervisorId))} · ${formatDate(i.date)}</div>${(i.siteIds||[]).map(siteId=>{const sc=(i.scans||{})[siteId]||{};return`<div class="card p-3 mb-2"><div class="font-bold mb-2">${escapeHTML(inspectionSiteName(siteId))}</div><div class="text-xs text-slate-500 mb-2">Entrée: ${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"} · Sortie: ${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}</div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inspectionScan('${i.id}','${siteId}','entree')">Scanner entrée</button><button class="btn btn-primary text-xs" onclick="inspectionScan('${i.id}','${siteId}','sortie')">Scanner sortie</button></div></div>`}).join("")}<div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
-function inspectionScan(id,siteId,kind){
+async function inspectionScan(id,siteId,kind){
   const i=(db.siteInspections||[]).find(x=>x.id===id);if(!i)return;
   if(!i.scans)i.scans={};if(!i.scans[siteId])i.scans[siteId]={};
   if(kind==="sortie"&&!i.scans[siteId].entree){toast("Scanner l'entrée avant la sortie","error");return}
-  i.scans[siteId][kind]=new Date().toISOString();i.updatedAt=new Date().toISOString();saveDB();toast("Scan QR enregistré","success");closeModal();renderView();
+  i.scans[siteId][kind]=new Date().toISOString();i.updatedAt=new Date().toISOString();
+  if(!(await saveDBAndWaitToast("Scan QR non confirmé par PostgreSQL")))return;
+  toast("Scan QR enregistré","success");closeModal();renderView();
 }
 function renderUnexpectedInspections(view,soc,sites,supervisors,inspections){
   const list=inspections.filter(i=>i.type==="inopinee").sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
@@ -13121,7 +13124,7 @@ function renderUnexpectedInspections(view,soc,sites,supervisors,inspections){
   <div class="card p-5 mb-5"><h3 class="font-black mb-3">Scan QR inspection inopinée</h3><form onsubmit="event.preventDefault();saveUnexpectedInspectionScan()"><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="label">Superviseur</label><select class="select" name="supervisorId"><option value="">— Choisir superviseur —</option>${supervisors.map(a=>`<option value="${a.id}">${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</option>`).join("")}</select></div><div><label class="label">Site scanné</label><select class="select" name="siteId"><option value="">— Choisir site —</option>${sites.map(st=>`<option value="${st.id}">${escapeHTML((st.societe?st.societe+" · ":"")+(st.nom||st.intitule||"Site"))}</option>`).join("")}</select></div><div><label class="label">Action QR</label><select class="select" name="kind"><option value="entree">Arrivée / Entrée</option><option value="sortie">Départ / Sortie</option></select></div></div><div class="flex justify-end mt-4"><button class="btn btn-primary">Valider scan</button></div></form></div>
   <div class="card p-5 overflow-hidden"><table><thead><tr><th>Date</th><th>Superviseur</th><th>Site</th><th>Entrée</th><th>Sortie</th><th>Temps sur site</th><th>Alerte</th></tr></thead><tbody>${list.length?list.map(i=>{const id=(i.siteIds||[])[0];const sc=(i.scans||{})[id]||{};return`<tr><td>${formatDate(i.date)}</td><td>${escapeHTML(inspectionSupervisorName(i.supervisorId))}</td><td>${escapeHTML(inspectionSiteName(id))}</td><td>${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"}</td><td>${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}</td><td>${escapeHTML(inspectionElapsed(sc)||"")}</td><td><span class="pill pill-red">Inspection non programmée</span></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune inspection inopinée.</td></tr>`}</tbody></table></div>`;
 }
-function saveUnexpectedInspectionScan(){
+async function saveUnexpectedInspectionScan(){
   const form=document.querySelector("#view form");if(!form)return;const fd=new FormData(form);const supervisorId=fd.get("supervisorId")||"",siteId=fd.get("siteId")||"",kind=fd.get("kind")||"entree";
   if(!supervisorId||!siteId){toast("Superviseur et site obligatoires","error");return}
   if(!db.siteInspections)db.siteInspections=[];
@@ -13129,7 +13132,9 @@ function saveUnexpectedInspectionScan(){
   if(!i){i={id:uid("insp"),type:"inopinee",date:today(),supervisorId,siteIds:[siteId],vehicule:"",moyens:"",scans:{},societe:currentStructureSocieteFilter()||session?.societe||"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.siteInspections.unshift(i)}
   if(!i.scans)i.scans={};if(!i.scans[siteId])i.scans[siteId]={};
   if(kind==="sortie"&&!i.scans[siteId].entree){toast("Scanner l'arrivée avant le départ","error");return}
-  i.scans[siteId][kind]=new Date().toISOString();i.updatedAt=new Date().toISOString();saveDB();toast("Inspection inopinée enregistrée avec alerte","success");renderView();
+  i.scans[siteId][kind]=new Date().toISOString();i.updatedAt=new Date().toISOString();
+  if(!(await saveDBAndWaitToast("Inspection inopinée non confirmée par PostgreSQL")))return;
+  toast("Inspection inopinée enregistrée avec alerte","success");renderView();
 }
 
 
