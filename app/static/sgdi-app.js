@@ -1392,7 +1392,7 @@ async function login(u,p,opt={}){
       const us=await window.SGDI_API.auth.login(u,p);
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
-      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
+      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
       saveSession(session);
       const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
       if(!loaded){
@@ -1403,7 +1403,7 @@ async function login(u,p,opt={}){
         toast("Connexion refusée : PostgreSQL n'a pas chargé les données","error");return;
       }
       const localUser=(db.users||[]).find(x=>x.username===session.username);
-      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
       if(opt.adminSystem){toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       location.hash="#/select-societe";route();return;
     }catch(e){
@@ -1489,6 +1489,16 @@ function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_
 function isAdm1(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM1","ADMI1","ADMIN1"].includes(normalizeAccessCode(v)))}
 function isAdm2(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM2","ADMI2","ADMIN2"].includes(normalizeAccessCode(v)))}
 function currentUserRecord(){return session?(db.users||[]).find(u=>u.username===session.username)||null:null}
+function currentAllowedSocietes(){
+  const u=currentUserRecord();
+  const list=Array.isArray(u?.societesAutorisees)?u.societesAutorisees:(Array.isArray(session?.societesAutorisees)?session.societesAutorisees:[]);
+  const clean=uniqueSocieteNames(list).filter(s=>SOCIETES.some(x=>normalizeSocieteName(x)===normalizeSocieteName(s))&&!isRemovedSociete(s));
+  return clean.length?SOCIETES.filter(s=>clean.some(x=>normalizeSocieteName(x)===normalizeSocieteName(s))):SOCIETES.slice();
+}
+function canUseSociete(societe){
+  if(!societe)return false;
+  return currentAllowedSocietes().some(s=>normalizeSocieteName(s)===normalizeSocieteName(societe));
+}
 const CRITICAL_ACTION_WORDS=["supprimer","valider","modifier"];
 const criticalActionAuthorized=new WeakSet();
 function normalizeCriticalActionText(value){
@@ -1636,8 +1646,9 @@ function globalSocieteBandHTML(){
   const imgs=typeof loadSocieteImages==="function"?loadSocieteImages():{};
   const drhContext=isDrhModuleContext();
   const active=currentStructureSocieteFilter();
+  const visibleSocietes=currentAllowedSocietes();
   const countFor=s=>(db.agents||[]).filter(a=>a.statut==="actif"&&a.societe===s).length;
-  const total=(db.agents||[]).filter(a=>a.statut==="actif").length;
+  const total=(db.agents||[]).filter(a=>a.statut==="actif"&&visibleSocietes.includes(a.societe)).length;
   const allActive=!active;
   const allBtn=`<button type="button" onclick="globalSocieteBandPick('')" class="societe-band-btn flex items-center gap-2 px-3 py-2 rounded-lg transition" style="background:${allActive?"#043970":"#fff"};color:${allActive?"#fff":"#334155"};border:1px solid ${allActive?"#043970":"#dbeafe"};min-height:42px">
     <span style="font-size:20px">🌐</span>
@@ -1658,7 +1669,7 @@ function globalSocieteBandHTML(){
     <div class="flex items-center gap-2 flex-wrap">
       <div class="font-black uppercase text-slate-600 mr-1" style="font-size:10px!important;letter-spacing:.08em">Section société</div>
       ${allBtn}
-      ${SOCIETES.map(btn).join("")}
+      ${visibleSocietes.map(btn).join("")}
     </div>
   </div>`;
 }
@@ -1682,7 +1693,7 @@ function myCandidats(){return bySoc(db.candidats)}
 function myMateriel(){return db.materiel?bySoc(db.materiel):[]}
 function myConges(){const ids=new Set(myAgents().map(a=>a.id));return db.conges.filter(c=>ids.has(c.agentId))}
 function myIncidents(){const aids=new Set(myAgents().map(a=>a.id));const sids=new Set(mySites().map(st=>st.id));return db.incidents.filter(i=>(i.agentId&&aids.has(i.agentId))||(i.siteId&&sids.has(i.siteId)))}
-function selectSocieteDirect(s){session.societe=s;session.transverse=null;saveSession(session);try{sessionStorage.setItem("dashSociete",s);sessionStorage.setItem("fpSociete",s);sessionStorage.setItem("mtSociete",s)}catch(e){}toast("Société active : "+s,"success");location.hash="#/dashboard";route()}
+function selectSocieteDirect(s){if(!canUseSociete(s)){toast("Société non autorisée pour cet utilisateur","error");return}session.societe=s;session.transverse=null;saveSession(session);try{sessionStorage.setItem("dashSociete",s);sessionStorage.setItem("fpSociete",s);sessionStorage.setItem("mtSociete",s)}catch(e){}toast("Société active : "+s,"success");location.hash="#/dashboard";route()}
 function pickSociete(s){selectSocieteDirect(s)}
 function confirmPickSociete(s,p){selectSocieteDirect(s)}
 function pickSocieteFilter(s){if(!s){setCurrentStructureSocieteFilter("");toast("Filtre société : Toutes les sociétés","success");return}setCurrentStructureSocieteFilter(s);toast("Filtre société : "+s,"success")}
@@ -2004,6 +2015,7 @@ function renderSocieteSelector(){
   Object.assign(socDesc,loadSocieteDescriptions());
   const socImages=loadSocieteImages();
   const role=session.role||"agent";
+  const selectableSocietes=currentAllowedSocietes();
   const dt=new Date();const months=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
   const dateStr=dt.getDate()+" "+months[dt.getMonth()]+" "+dt.getFullYear();
   document.getElementById("app").innerHTML=`<div class="min-h-screen" style="background:var(--bg)">
@@ -2031,7 +2043,7 @@ function renderSocieteSelector(){
             <p class="text-slate-500 text-sm mt-1">Cloisonnement strict des données par droits utilisateur.</p>
           </div>
           <div class="flex items-center gap-2">
-            <div class="text-xs text-slate-400 hidden md:block">${SOCIETES.length} sociétés actives</div>
+            <div class="text-xs text-slate-400 hidden md:block">${selectableSocietes.length} société(s) autorisée(s)</div>
             <button type="button" class="btn btn-secondary text-xs" onclick="openSelectSocieteToEditModal()">Modifier société</button>
           </div>
         </div>
@@ -2040,13 +2052,13 @@ function renderSocieteSelector(){
           <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
             <select id="societe-main-select" class="select" onchange="if(this.value)pickSociete(this.value)">
               <option value="">— Sélectionner une société —</option>
-              ${SOCIETES.map(s=>`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join("")}
+              ${selectableSocietes.map(s=>`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join("")}
             </select>
             <button type="button" class="btn btn-primary" onclick="const s=document.getElementById('societe-main-select')?.value;if(s)pickSociete(s);else toast('Choisissez une société','error')">Accéder</button>
             ${isAdm2()?`<button type="button" class="btn btn-secondary" onclick="openCreateSocieteModal()">Créer société</button>`:""}
           </div>
           <div class="flex justify-between items-center mt-3 text-xs" style="color:#cbd5e1">
-            <span>${SOCIETES.length} sociétés actives disponibles</span>
+            <span>${selectableSocietes.length} société(s) disponible(s) dans votre périmètre</span>
             <button type="button" class="btn btn-ghost text-xs" onclick="openSelectSocieteToEditModal()">Modifier société</button>
           </div>
         </div>
@@ -13530,6 +13542,12 @@ async function bootApp(){
       renderLogin();
       if(typeof toast==="function")toast("Session expirée ou PostgreSQL indisponible : reconnectez-vous.","error");
       return;
+    }
+    if(session.societe&&!canUseSociete(session.societe)){
+      session.societe=null;
+      session.transverse=null;
+      saveSession(session);
+      location.hash="#/select-societe";
     }
   }
   if(!location.hash)location.hash=session?(session.societe?"#/dashboard":(session.transverse?"#/"+(session.transverse==="materiel"?"materiel/dashboard":session.transverse+"/dashboard"):"#/select-societe")):"#/login";
