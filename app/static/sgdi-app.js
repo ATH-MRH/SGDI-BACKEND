@@ -21,7 +21,7 @@ const POSTES = [
  "Chef de site","Contrôleur","Coordinateur","Hôtesse d'accueil","Inspecteur",
  "Maître-chien","Manutentionnaire","Superviseur"
 ];
-const DEFAULT_SOCIETES = ["IRON GLOBAL SECURITE","IRON GLOBAL SOLUTION","SWORD CORPORATION"];
+const DEFAULT_SOCIETES = ["IRON GLOBAL SECURITE","IRON GLOBAL SOLUTION","SWORD CORPORATION","SWORD CONSTRUCTION"];
 const SOCIETES = [];
 const REMOVED_SOCIETES = [];
 const TYPES_CONTRAT = ["CDI","CDD","CTT (Intérim)","Contrat de mission","Pré-emploi ANEM","DAIP","Période d'essai","Stage"];
