@@ -2910,7 +2910,7 @@ function renderView(){
     switch(root){
       case"dashboard":renderDashboard(view);break;
       case"dossiers":renderDossiers(view);break;
-      case"recrutement":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub)renderCandidatForm(view,sub);else renderRecrutementDashboard(view);break;
+      case"recrutement":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub==="liste")renderRecrutement(view,"new");else if(sub)renderCandidatForm(view,sub);else renderRecrutementDashboard(view);break;
       case"reserve":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"reserve");break;
       case"candidats_archives":if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"archive");break;
       case"contrats":
@@ -3257,7 +3257,7 @@ function renderRecrutementDashboard(view){
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Ajouter candidats",reserves.length,"Candidats en réserve","reserve","#043970","👥")}
       ${card("Candidats archivés",archives.length,"Dossiers archivés","candidats_archives","#64748b","🗄")}
-      ${card("Nouvelles fiches",nouvelles.length,"Fiches non finalisées","reserve","#f59e0b","📝")}
+      ${card("Nouvelles fiches",nouvelles.length,"Fiches non finalisées","recrutement/liste","#f59e0b","📝")}
       ${card("Avis favorables",favorables,`${sansAvis} sans avis`,"reserve","#16a34a","✅")}
     </div>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
