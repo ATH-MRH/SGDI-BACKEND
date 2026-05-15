@@ -4754,7 +4754,7 @@ function renderContractualisation(view,id){
         <div class="col-span-6"><label class="label">IBAN *</label><input class="input" name="iban" value="${escapeHTML(c.iban||"")}" required/></div>
       </div></div>
       <div class="card p-5 mb-4"><div class="section-banner banner-blue">Affectation opérationnelle</div><div class="text-sm text-slate-600">L'affectation du nouvel agent à un site est confiée au module OPS. Après validation DRH, l'agent sera créé sans site d'affectation.</div></div>
-      <div class="card p-4 flex justify-between items-center gap-3 flex-wrap"><div class="text-sm text-slate-500">Matricule attribué automatiquement. Documents contractualisation : <b>${nbOk}/9</b>.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button type="submit" class="btn btn-success">✓ Valider & embaucher</button></div></div>
+      <div class="card p-4 flex justify-between items-center gap-3 flex-wrap"><div class="text-sm text-slate-500">Matricule attribué automatiquement. Documents contractualisation : <b>${nbOk}/9</b>.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button type="submit" class="btn btn-success" data-no-critical-auth="1">✓ Valider & embaucher</button></div></div>
     </form>
   </div>`;
   setTimeout(()=>{updateContractEndDate();loadContractualisationContractTemplates()},0);
