@@ -4715,7 +4715,7 @@ function renderContractualisation(view,id){
   const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
   view.innerHTML=`<div class="max-w-5xl mx-auto">
     <div class="flex justify-between mb-4 gap-3 items-start"><div><h1 class="text-2xl font-bold">Contractualisation — ${escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Vérifications, contrat et affectation.</p></div><div class="flex gap-2 items-end flex-wrap justify-end"><div style="min-width:240px"><label class="label">Société *</label><select class="select" name="contractSociete" onchange="setContractualisationSociete('${c.id}',this.value)" ><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${selectedSociete===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
-    <form id="contract-form" onsubmit="event.preventDefault();embaucherCandidat('${c.id}')">
+    <form id="contract-form" onsubmit="event.preventDefault();confirmEmbaucherCandidat('${c.id}')">
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">Contrat de travail</div><div class="grid grid-6">
         <div class="col-span-3"><label class="label">Type de contrat</label><select class="select" name="typeContrat">${TYPES_CONTRAT.filter(t=>t!=="CDI").map(t=>`<option ${c.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Poste</label><select class="select" name="posteContrat" onchange="selectAutoContractForPoste(this.value)"><option value="">— Choisir —</option>${POSTES.map(p=>`<option ${((c.posteContrat||c.posteSouhaite)===p)?"selected":""}>${p}</option>`).join("")}</select></div>
@@ -4764,6 +4764,19 @@ async function saveContractDocuments(id){
   keys.forEach(k=>{c["verif"+k]=!!f.querySelector(`[name="verif${k}"]`)?.checked});
   [...f.querySelectorAll('[name^="doc_"][name$="_url"]')].forEach(inp=>{const k=inp.name.replace("doc_","").replace("_url","");const nm=f.querySelector(`[name="doc_${k}_name"]`)?.value||"fichier";if(inp.value)c.documents[k]={url:inp.value,name:nm};else delete c.documents[k]});
   try{await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});await sgdiPullState({silent:true,render:false,force:true,light:true});closeModal();toast("Documents enregistrés","success");renderView()}catch(e){toast("Enregistrement documents refusé : "+(e.message||e),"error")}
+}
+
+function confirmEmbaucherCandidat(id){
+  const c=findCandidatById(id);if(!c){toast("Introuvable","error");return}
+  const name=String((c.nom||"")+" "+(c.prenom||"")).trim()||"ce candidat";
+  openModal(`<div class="text-center p-2">
+    <h3 class="font-black text-lg mb-3">Confirmation recrutement</h3>
+    <p class="text-sm text-slate-700 mb-5">Voulez vous recruter ce candidat : <b>${escapeHTML(name)}</b> ?</p>
+    <div class="flex justify-center gap-3">
+      <button type="button" class="btn btn-danger" onclick="closeModal()">NON</button>
+      <button type="button" class="btn btn-success" onclick="closeModal();embaucherCandidat('${jsString(id)}')">OUI</button>
+    </div>
+  </div>`);
 }
 
 function embaucherCandidat(id){
