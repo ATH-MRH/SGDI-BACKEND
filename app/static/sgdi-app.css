@@ -251,10 +251,13 @@
   .message-toast.message-error{border-left-color:var(--danger)}
   .message-toast.message-success{border-left-color:#475569}
   .message-toast.message-warning{border-left-color:var(--warn)}
+  .message-toast.message-center{left:50%;right:auto;top:50%;bottom:auto;transform:translate(-50%,-50%);text-align:center;animation:toastCenterPop .16s ease}
+  .message-toast.message-success.message-center{background:#dcfce7;border-color:#86efac;border-left-color:#16a34a;color:#14532d;box-shadow:0 20px 55px rgba(22,163,74,.22)}
   .message-text{font-size:13px;line-height:1.45;font-weight:700;white-space:pre-wrap;margin:0}
   .message-close{position:absolute;right:8px;top:8px;width:24px;height:24px;border:0;border-radius:999px;background:#e5e7eb;color:#1f2937;font-size:16px;line-height:20px;font-weight:900;cursor:pointer}
   .message-close:hover{background:#d1d5db}
   @keyframes toastSlideIn{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes toastCenterPop{from{transform:translate(-50%,-46%) scale(.96);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
 
   /* ----- INTERACTIVE LAYER ----- */
   #ui-progress{position:fixed;left:0;top:0;height:3px;width:0;background:var(--primary);box-shadow:0 0 12px rgba(4,57,112,.45);z-index:120;opacity:0;transition:width .28s ease,opacity .2s ease}

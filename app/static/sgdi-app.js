@@ -1254,6 +1254,15 @@ function toast(msg,type="info"){
   clearTimeout(window.__sgdiToastTimer);
   window.__sgdiToastTimer=setTimeout(closeMessageToast,3600);
 }
+function toastCenter(msg,type="success"){
+  const clean=stripCryptogramText(msg);
+  const h=document.getElementById("toast-host");
+  if(!h)return;
+  const safeType=["success","error","info","warning"].includes(type)?type:"success";
+  h.innerHTML=`<div class="message-toast message-${safeType} message-center" role="status"><div class="message-text">${escapeHTML(clean)}</div><button type="button" class="message-close" aria-label="Fermer" onclick="closeMessageToast()">×</button></div>`;
+  clearTimeout(window.__sgdiToastTimer);
+  window.__sgdiToastTimer=setTimeout(closeMessageToast,2800);
+}
 function openModal(html){const sx=window.scrollX,sy=window.scrollY;document.getElementById("modal-host").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal p-6">${html}</div></div>`;stripCryptogrammes();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
 function closeModal(){document.getElementById("modal-host").innerHTML=""}
 function uiProgressStart(){const p=document.getElementById("ui-progress");if(!p)return;p.classList.remove("done");p.classList.add("active")}
@@ -11980,7 +11989,7 @@ async function confirmAdminUser(originalUsername){
   rememberUserPermissions(username,data.societesAutorisees,data.niveau,data.structuresAutorisees);
   if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees};saveSession(session)}
   try{await sgdiLoadAuthState()}catch(e){toast("Utilisateur enregistré, rechargement liste impossible : "+(e.message||e),"warning")}
-  saveDB();closeModal();toast("Utilisateur enregistré dans PostgreSQL","success");render();
+  saveDB();closeModal();toastCenter("Données enregistrées","success");render();
 }
 function confirmAdminUserByKey(encodedUsername){
   return confirmAdminUser(decodeURIComponent(String(encodedUsername||"")));
