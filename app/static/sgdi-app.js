@@ -25,6 +25,29 @@ const DEFAULT_SOCIETES = ["IRON GLOBAL SECURITE","IRON GLOBAL SOLUTION","SWORD C
 const SOCIETES = [];
 const REMOVED_SOCIETES = [];
 const TYPES_CONTRAT = ["CDI","CDD","CTT (Intérim)","Contrat de mission","Pré-emploi ANEM","DAIP","Période d'essai","Stage"];
+const BANQUES_ALGERIE = [
+  "Banque Extérieure d'Algérie (BEA)",
+  "Banque Nationale d'Algérie (BNA)",
+  "Crédit Populaire d'Algérie (CPA)",
+  "Banque de l'Agriculture et du Développement Rural (BADR)",
+  "Banque de Développement Local (BDL)",
+  "CNEP Banque",
+  "Banque Al Baraka d'Algérie",
+  "Arab Banking Corporation Algeria",
+  "Natixis Algérie",
+  "Société Générale Algérie",
+  "Citibank N.A. Algeria",
+  "Arab Bank PLC Algeria",
+  "BNP Paribas El Djazaïr",
+  "Trust Bank Algeria",
+  "Gulf Bank Algeria (AGB)",
+  "The Housing Bank for Trade and Finance Algeria",
+  "Fransabank El Djazaïr",
+  "Crédit Agricole CIB Algérie",
+  "Al Salam Bank Algeria",
+  "HSBC Algeria",
+  "Bank of Africa Algeria"
+];
 const DUREES_CONTRAT = [
   {value:"15d",label:"15 jours"},
   ...Array.from({length:12},(_,i)=>({value:(i+1)+"m",label:(i+1)+" mois"}))
@@ -4727,6 +4750,7 @@ function renderContractualisation(view,id){
         <div class="col-span-2"><label class="label">Date fin période d'essai *</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${c.dateFinEssai||""}" required readonly/></div>
         <div class="col-span-3"><label class="label">Durée du contrat *</label><select class="select" name="dureeContrat" required onchange="updateContractEndDate()">${contratDureeOptions(c.dureeContrat||"")}</select></div>
         <div class="col-span-3"><label class="label">Date fin contrat *</label><input class="input bg-slate-50" type="date" name="dateFinContrat" value="${c.dateFinContrat||""}" required readonly/></div>
+        <div class="col-span-6"><label class="label">Banque *</label><select class="select" name="banque" required><option value="">— Choisir une banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${c.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></div>
         <div class="col-span-6"><label class="label">IBAN *</label><input class="input" name="iban" value="${escapeHTML(c.iban||"")}" required/></div>
       </div></div>
       <div class="card p-5 mb-4"><div class="section-banner banner-blue">Affectation opérationnelle</div><div class="text-sm text-slate-600">L'affectation du nouvel agent à un site est confiée au module OPS. Après validation DRH, l'agent sera créé sans site d'affectation.</div></div>
@@ -4802,7 +4826,7 @@ function embaucherCandidat(id){
   const agent={
     id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,sexe:c.sexe,situation:c.situation,telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
     salairePrevu:parseMoneyInput(c.salairePrevu)||0,avisDecision:c.avisDecision||"",avisDate:c.avisDate||"",avisRecruteur:c.avisRecruteur||"",avisCommentaire:c.avisCommentaire||"",
-    typeContrat:fd.get("typeContrat"),dureeEssai,dureeContrat,dateFinContrat,salaireNet:parseMoneyInput(fd.get("salaireNet"))||0,iban:fd.get("iban"),
+    typeContrat:fd.get("typeContrat"),dureeEssai,dureeContrat,dateFinContrat,salaireNet:parseMoneyInput(fd.get("salaireNet"))||0,banque:fd.get("banque")||"",iban:fd.get("iban"),
     dateRecrutement,dateFinEssai,
     affectationCourante:{siteId:"",siteName:"",clientName:"",poste:posteContrat,horaire:"",dateDebut:""},
     affectationsHistorique:[],sanctions:[],gestionEvents:[],
@@ -5112,6 +5136,7 @@ function renderAgentForm(view,id){
         <div class="col-span-2"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${dureeEssaiValue}" min="0" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
         <div class="col-span-2"><label class="label">Fin essai</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${a.dateFinEssai||""}" readonly ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Fin de contrat</label><input class="input" type="date" name="dateFinContrat" value="${a.dateFinContrat||""}" ${locked?"disabled":""}/></div>
+        <div class="col-span-3"><label class="label">Banque</label><select class="select" name="banque" ${locked?"disabled":""}><option value="">— Choisir une banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">IBAN</label><input class="input" name="iban" value="${escapeHTML(a.iban||"")}" ${locked?"disabled":""}/></div>
       </div></div>
       ${showVerifications?`<div class="card p-5 mb-4"><div class="section-banner banner-blue">5. Vérifications (archivées)</div><div class="grid grid-3 text-sm">
@@ -5398,7 +5423,7 @@ function applyAgentExcelRow(agentId,rows){
     nomPere:["pere","père","nom pere","nom du pere"],nomMere:["mere","mère","nom mere","nom de la mere"],nin:["nin","nni","numero identification","numero identite"],
     telephone:["telephone","téléphone","tel","mobile"],email:["email","mail"],wilaya:["wilaya"],commune:["commune"],adresse:["adresse","address"],
     contactUrgenceNom:["contact urgence","nom contact urgence"],contactUrgenceLien:["lien urgence","lien contact"],contactUrgenceTel:["telephone urgence","tel urgence"],
-    typeContrat:["type contrat","contrat"],iban:["iban","rib"],societe:["societe","société"],statut:["statut","situation"]
+    typeContrat:["type contrat","contrat"],banque:["banque","bank"],iban:["iban","rib"],societe:["societe","société"],statut:["statut","situation"]
   };
   Object.entries(textMap).forEach(([field,aliases])=>{const v=excelCell(row,aliases);if(v!=="")a[field]=String(v).trim()});
   const matricule=excelCell(row,["matricule","code","code employe","code employé"]);if(matricule)a.matricule=String(matricule).trim();
@@ -5425,7 +5450,7 @@ function applyAgentExcelRow(agentId,rows){
 function saveAgent(id){
   const a=db.agents.find(x=>x.id===id);if(!a)return;
   const f=document.getElementById("agent-form");const fd=new FormData(f);
-  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
+  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
   a.habilitations=a.habilitations||{};
   ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
@@ -5674,7 +5699,7 @@ function agentSnapshotForPreview(id){
   const f=document.getElementById("agent-form");
   if(f&&String(location.hash||"").includes(id)){
     const fd=new FormData(f);
-    ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dateFinEssai","dateFinContrat","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
+    ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
     const photoValue=fd.get("photo");
     if(typeof photoValue==="string"&&photoValue.trim())a.photo=photoValue;
     a.habilitations=a.habilitations||{};
@@ -5769,7 +5794,7 @@ function ficheHTML(a){
     </div></section>
     <section class="fiche-section"><h2>4. Contrat</h2><div class="fiche-grid">
       ${ficheCell("Type contrat",a.typeContrat)}${ficheCell("Salaire net",money(parseMoneyInput(a.salaireNet)||a.salaireNet||0))}${ficheCell("Date recrutement",formatDate(a.dateRecrutement))}${ficheCell("Fin période d'essai",formatDate(a.dateFinEssai))}
-      ${ficheCell("Date fin contrat",formatDate(a.dateFinContrat))}${ficheCell("IBAN",a.iban)}
+      ${ficheCell("Date fin contrat",formatDate(a.dateFinContrat))}${ficheCell("Banque",a.banque)}${ficheCell("IBAN",a.iban)}
     </div></section>
     <section class="fiche-section"><h2>5. Vérifications et documents archivés</h2><div class="fiche-grid">
       ${[["ActeNaissance","Acte de naissance"],["CertifResidence","Certificat résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce identité"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]].map(([k,l])=>ficheCell(l,(ver["verif"+k]?"Validé":"Non validé")+(docs[k]?" · Document archivé":""))).join("")}
@@ -5813,7 +5838,7 @@ function agentContractHTML(a){
     </div></section>
     <section class="fiche-section"><h2>Conditions contractuelles</h2><div class="fiche-grid">
       ${ficheCell("Type contrat",a.typeContrat)}${ficheCell("Poste",a.fonction||a.poste||a.affectationCourante?.poste)}${ficheCell("Date recrutement",formatDate(a.dateRecrutement))}${ficheCell("Fin période d'essai",formatDate(a.dateFinEssai))}
-      ${ficheCell("Fin contrat",formatDate(a.dateFinContrat))}${ficheCell("Salaire net",money(parseMoneyInput(a.salaireNet)||a.salaireNet||0))}${ficheCell("Société",a.societe)}${ficheCell("Lieu de travail",a.affectationCourante?.siteName||"Sans affectation")}
+      ${ficheCell("Fin contrat",formatDate(a.dateFinContrat))}${ficheCell("Salaire net",money(parseMoneyInput(a.salaireNet)||a.salaireNet||0))}${ficheCell("Banque",a.banque)}${ficheCell("IBAN",a.iban)}${ficheCell("Société",a.societe)}${ficheCell("Lieu de travail",a.affectationCourante?.siteName||"Sans affectation")}
     </div></section>
     <section class="fiche-section"><h2>Clause de base</h2>
       <p style="font-size:13px;line-height:1.7;margin:0">Le présent contrat formalise le recrutement de l'employé désigné ci-dessus selon les informations enregistrées dans SGDI. Les clauses détaillées, annexes et éventuels modèles Word validés par l'administration système restent la référence documentaire officielle lorsqu'ils sont générés.</p>
