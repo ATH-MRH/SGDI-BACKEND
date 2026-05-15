@@ -5148,7 +5148,7 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4"><div class="section-banner banner-green">${secAffectation}. Affectations sur site (historique)</div>${renderAffectationsHistorique(a,locked,canEditAffectations)}</div>
       <div id="sanctions-section" class="card p-5 mb-4"><div class="section-banner banner-red">${secSanctions}. Sanctions disciplinaires</div>${renderSanctions(a,locked,canEditSanctions)}</div>
       ${showPointage?`<div class="card p-5 mb-4"><div class="section-banner banner-blue">${secPointage}. Situation pointage</div>${renderAgentPointageSituation(a)}</div>`:""}
-      ${!locked?`<div class="card p-4 flex justify-end"><button class="btn btn-primary">💾 Enregistrer</button></div>`:`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Modifications désactivées</div>`}
+      ${locked?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Modifications désactivées</div>`:""}
     </form>
   </div>`;
 }
