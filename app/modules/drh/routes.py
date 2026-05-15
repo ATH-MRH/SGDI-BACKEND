@@ -245,7 +245,7 @@ def _action_success(data):
 @router.post("/candidates")
 def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
-    return _action_success(service.create_candidate(db, payload))
+    return _action_success(service.create_candidate(db, payload, username=user.username))
 
 
 @router.put("/candidates/{candidate_id}")

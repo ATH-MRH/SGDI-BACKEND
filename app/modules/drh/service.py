@@ -312,6 +312,39 @@ def _create_candidate_workflow(db: Session, row: Candidate, username: str | None
             "societe": society,
         })
 
+def _record_candidate_recruitment_creation(db: Session, row: Candidate, username: str | None) -> None:
+    data = row.data if isinstance(row.data, dict) else {}
+    created_at = datetime.utcnow().isoformat()
+    society = row.society or data.get("societe") or data.get("society")
+    candidate_name = f"{row.last_name or data.get('nom') or ''} {row.first_name or data.get('prenom') or ''}".strip() or "Candidat"
+    row.data = normalize_photo_fields(
+        {
+            **data,
+            "moduleOrigine": data.get("moduleOrigine") or "recrutement",
+            "recruitmentAction": "fiche_position_created",
+            "fichePositionCreatedAt": data.get("fichePositionCreatedAt") or created_at,
+            "fichePositionCreatedBy": data.get("fichePositionCreatedBy") or username or "system",
+        },
+        fallback=str(row.id),
+    )
+    activity_id = f"recrutement_fiche_position_{row.id}"
+    _upsert_sgdi_item(db, "activityLog", activity_id, {
+        "id": activity_id,
+        "date": created_at,
+        "user": username or "system",
+        "module": "recrutement",
+        "action": "Création fiche de position",
+        "details": (
+            f"Nouvelle fiche de position / recrutement : {candidate_name}"
+            f" · Société : {society or 'Non renseignée'}"
+            f" · Poste : {data.get('posteSouhaite') or row.desired_position or 'Non renseigné'}"
+        ),
+        "candidateBackendId": row.id,
+        "candidateName": candidate_name,
+        "societe": society,
+        "type": "recrutement",
+    })
+
 def _candidate_required_fields(section: str) -> list[tuple[str, str]]:
     return {
         "identification": [
@@ -458,9 +491,11 @@ def validate_candidate_final(db: Session, candidate_id: int, username: str | Non
     db.refresh(row)
     return row
 
-def create_candidate(db: Session, payload: Any):
+def create_candidate(db: Session, payload: Any, username: str | None = None):
     row = Candidate(**_candidate_values(payload))
     db.add(row)
+    db.flush()
+    _record_candidate_recruitment_creation(db, row, username)
     db.commit()
     db.refresh(row)
     return row
