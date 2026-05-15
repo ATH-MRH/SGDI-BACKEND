@@ -10909,7 +10909,7 @@ function paieOptimizerHTML(agents,ym){
     <div class="flex items-start justify-between gap-3 flex-wrap mb-3"><div><h3 class="font-black">Simulateur net cible → paie optimisée</h3><div class="text-xs text-slate-500">Optimisation encadrée par les plafonds panier/transport configurés. Le système respecte SNMG, CNAS et IRG.</div></div>${paieIsClosed(ym)?`<span class="pill pill-green">Mois clôturé</span>`:""}</div>
     <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
       <div><label class="label">Employé</label><select class="select" onchange="sessionStorage.setItem('paieOptimAgent',this.value);renderView()">${agents.map(a=>`<option value="${a.id}" ${selected===a.id?"selected":""}>${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</option>`).join("")}</select></div>
-      <div><label class="label">Net à payer cible</label><input class="input" inputmode="decimal" value="${escapeHTML(target)}" placeholder="Ex : 55 000,00" oninput="sessionStorage.setItem('paieOptimNet',this.value);renderView()"/></div>
+      <div><label class="label">Net à payer cible</label><input id="paie-optim-net-input" class="input" inputmode="decimal" value="${escapeHTML(target)}" placeholder="Ex : 55 000,00" onkeydown="if(event.key==='Enter'){event.preventDefault();paieSetOptimNet(this.value)}" onblur="paieSetOptimNet(this.value)"/></div>
       <div><label class="label">Grille fonction</label><div class="input bg-slate-50">${bounds?`${escapeHTML(bounds.fonction)} · ${money(bounds.min)}${bounds.max?" / "+money(bounds.max):""}`:"SNMG"}</div></div>
       <div><label class="label">Panier max optimisation</label><div class="input bg-slate-50">${money(paieConfig().optimisationPanierMax||0)}</div></div>
       <div><label class="label">Transport max optimisation</label><div class="input bg-slate-50">${money(paieConfig().optimisationTransportMax||0)}</div></div>
@@ -10925,6 +10925,10 @@ function paieOptimizerHTML(agents,ym){
     ${opt.warning?`<div class="text-xs text-red-700 mt-2">${escapeHTML(opt.warning)}</div>`:""}
     <div class="flex justify-end mt-3"><button class="btn btn-primary" onclick="paieApplyOptimization('${selected}')">Appliquer à l'employé</button></div>`:""}
   </div>`;
+}
+function paieSetOptimNet(value){
+  sessionStorage.setItem("paieOptimNet",value||"");
+  renderView();
 }
 async function paieApplyOptimization(agentId){
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
