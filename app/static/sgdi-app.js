@@ -964,6 +964,15 @@ async function persistStoreToPostgres(m){if(!m)return null;sgdiRequireServerWrit
 function supplierApiPayload(f){return{name:String(f.raisonSociale||f.name||"Fournisseur").trim()||"Fournisseur",society:f.societe||f.society||null,contact_name:f.contact||f.contact_name||null,rc:f.rc||null,nif:f.nif||null,nis:f.nis||null,ai:f.ai||null,phone:f.telephone||f.phone||null,email:f.email||null,address:f.adresse||f.address||null,products:f.produits||f.products||null,payment_terms:f.delaiPaiement||f.payment_terms||null,rating:parseInt(f.note??f.rating)||0,notes:f.commentaires||f.notes||null}}
 function supplierFromApi(row){return{id:String(row.id),backendId:row.id,raisonSociale:row.name||"",societe:row.society||"",contact:row.contact_name||"",rc:row.rc||"",nif:row.nif||"",nis:row.nis||"",ai:row.ai||"",telephone:row.phone||"",email:row.email||"",adresse:row.address||"",produits:row.products||"",delaiPaiement:row.payment_terms||"",note:row.rating||0,commentaires:row.notes||""}}
 async function persistSupplierToPostgres(f){if(!f)return null;sgdiRequireServerWrite();const saved=f.backendId?await SGDI.stock.updateSupplier(f.backendId,supplierApiPayload(f)):await SGDI.stock.createSupplier(supplierApiPayload(f));Object.assign(f,supplierFromApi(saved),{id:f.id||String(saved.id),backendId:saved.id});return f}
+async function loadSuppliersForArticleForm(){
+  if(!sgdiAuthToken()||!window.SGDI?.stock?.suppliers)return;
+  try{
+    const rows=await SGDI.stock.suppliers();
+    if(Array.isArray(rows))db.fournisseurs=rows.map(supplierFromApi);
+  }catch(e){
+    console.warn("Fournisseurs PostgreSQL non chargés pour formulaire article",e);
+  }
+}
 function articleApiPayload(a){return{code:String(a.code||"").trim()||("ART-"+Date.now()),designation:String(a.designation||a.sousCategorie||a.code||"Article").trim()||"Article",category:a.categorie||a.category||null,sub_category:a.sousCategorie||a.sub_category||null,society:a.societe||a.society||null,store_id:sqlRelationId(db.magasins,a.magasinId),supplier_id:sqlRelationId(db.fournisseurs,a.fournisseurId),unit:a.unite||"Pièce",quantity:sqlNum(a.stockInitial||a.quantiteGlobaleRecue||a.quantity),unit_price:sqlNum(a.prixUnitaire||a.unit_price),min_quantity:sqlNum(a.stockMin||a.seuilAlerte||a.min_quantity),barcode:a.codeBarre||a.barcode||null,brand:a.marque||a.brand||null,model:a.modele||a.model||null,attributes:{...(a.attributs||{}),raw:a,stockVariantes:a.stockVariantes||[],stockReceptionsGlobales:a.stockReceptionsGlobales||[]},active:a.actif===false||a.active===0?0:1}}
 function articleFromApi(row){const attrs=row.attributes||{};const raw=attrs.raw&&typeof attrs.raw==="object"?attrs.raw:{};const store=(db.magasins||[]).find(m=>String(m.backendId)===String(row.store_id));const supplier=(db.fournisseurs||[]).find(f=>String(f.backendId)===String(row.supplier_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,code:row.code||raw.code||"",designation:row.designation||raw.designation||"",categorie:row.category||raw.categorie||"",sousCategorie:row.sub_category||raw.sousCategorie||"",societe:row.society||raw.societe||"",magasinId:store?.id||raw.magasinId||"",fournisseurId:supplier?.id||raw.fournisseurId||"",unite:row.unit||raw.unite||"Pièce",stockInitial:row.quantity??raw.stockInitial??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,stockMin:row.min_quantity??raw.stockMin??"",codeBarre:row.barcode||raw.codeBarre||"",marque:row.brand||raw.marque||"",modele:row.model||raw.modele||"",attributs:attrs,stockVariantes:attrs.stockVariantes||raw.stockVariantes||[],stockReceptionsGlobales:attrs.stockReceptionsGlobales||raw.stockReceptionsGlobales||[],actif:row.active!==0}}
 async function persistArticleToPostgres(a){if(!a)return null;sgdiRequireServerWrite();const saved=a.backendId?await SGDI.stock.updateArticle(a.backendId,articleApiPayload(a)):await SGDI.stock.createArticle(articleApiPayload(a));Object.assign(a,articleFromApi(saved),{id:a.id||String(saved.id),backendId:saved.id});return a}
@@ -8463,11 +8472,23 @@ async function matSimpleSaveFournisseur(id,isNew){
     const fd=new FormData(fr);
     const raisonSociale=(fd.get("raisonSociale")||"").trim();
     if(!raisonSociale){toast("Raison sociale obligatoire","error");return}
-    const obj={id,raisonSociale,contact:(fd.get("contact")||"").trim(),rc:(fd.get("rc")||"").trim(),nif:(fd.get("nif")||"").trim(),nis:(fd.get("nis")||"").trim(),ai:(fd.get("ai")||"").trim(),adresse:(fd.get("adresse")||"").trim(),telephone:(fd.get("telephone")||"").trim(),email:(fd.get("email")||"").trim(),societe:fd.get("societe")||"",produits:(fd.get("produits")||"").trim(),delaiPaiement:fd.get("delaiPaiement")||"30",modeReglement:fd.get("modeReglement")||"Virement",remise:fd.get("remise")||"",note:parseInt(fd.get("note"))||0,commentaires:fd.get("commentaires")||""};
+    const obj={id,raisonSociale,contact:(fd.get("contact")||"").trim(),rc:(fd.get("rc")||"").trim(),nif:(fd.get("nif")||"").trim(),nis:(fd.get("nis")||"").trim(),ai:(fd.get("ai")||"").trim(),adresse:(fd.get("adresse")||"").trim(),telephone:(fd.get("telephone")||"").trim(),email:(fd.get("email")||"").trim(),societe:fd.get("societe")||matSimpleSocFilter()||mySoc()||"",produits:(fd.get("produits")||"").trim(),delaiPaiement:fd.get("delaiPaiement")||"30",modeReglement:fd.get("modeReglement")||"Virement",remise:fd.get("remise")||"",note:parseInt(fd.get("note"))||0,commentaires:fd.get("commentaires")||""};
     if(!db.fournisseurs)db.fournisseurs=[];
-    if(isNew){obj.createdAt=new Date().toISOString();db.fournisseurs.push(obj)}
-    else{const idx=db.fournisseurs.findIndex(x=>x.id===id);if(idx<0){toast("Fournisseur introuvable","error");return}db.fournisseurs[idx]={...db.fournisseurs[idx],...obj}}
-    try{await persistSupplierToPostgres(obj)}catch(e){toast("Fournisseur non sauvegardé PostgreSQL : "+(e.message||e),"error");return}if(saveDB()){toast(isNew?"Fournisseur créé dans PostgreSQL":"Fournisseur mis à jour dans PostgreSQL","success");if(typeof logActivity==="function")logActivity(isNew?"Création fournisseur":"Modification fournisseur",raisonSociale);navigate("materiel/fournisseurs")}
+    let idx=-1;
+    if(isNew){obj.createdAt=new Date().toISOString()}
+    else{idx=db.fournisseurs.findIndex(x=>x.id===id);if(idx<0){toast("Fournisseur introuvable","error");return}Object.assign(obj,{...db.fournisseurs[idx],...obj})}
+    try{await persistSupplierToPostgres(obj)}catch(e){toast("Fournisseur non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
+    if(isNew)db.fournisseurs.push(obj);else db.fournisseurs[idx]=obj;
+    if(typeof logActivity==="function")logActivity(isNew?"Création fournisseur":"Modification fournisseur",raisonSociale);
+    try{
+      sgdiDirty=true;
+      await sgdiBackendSaveAndWait();
+    }catch(e){
+      toast("Fournisseur créé, mais synchronisation globale PostgreSQL incomplète : "+(e.message||e),"warning");
+      return;
+    }
+    toast(isNew?"Fournisseur créé dans PostgreSQL":"Fournisseur mis à jour dans PostgreSQL","success");
+    navigate("materiel/fournisseurs");
   }catch(err){console.error(err);toast("Erreur: "+(err.message||err),"error")}
 }
 async function matSimpleDeleteFournisseur(id){
@@ -9573,7 +9594,9 @@ function renderStockArticleDetail(view,id){
     </div>`;
 }
 
-function renderStockArticleForm(view,id){
+async function renderStockArticleForm(view,id){
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des fournisseurs depuis PostgreSQL...</div>`;
+  await loadSuppliersForArticleForm();
   const isNew=!id;
   let a=isNew?{id:uid("stk"),code:"",designation:"",categorie:"",sousCategorie:"",societe:stockGetSocFilter()||"",marque:"",modele:"",reference:"",codeBarre:"",unite:"Pièce",prixUnitaire:"",quantiteGlobaleRecue:"",dateReceptionGlobale:"",stockReceptionsGlobales:[],stockInitial:0,stockVariantes:[],stockMin:"",stockMax:"",seuilAlerte:"",emplacement:"",fournisseur:"",description:"",notes:"",attributs:{},dateCreation:today(),actif:true}:(db.stockArticles||[]).find(x=>x.id===id);
   if(!a){toast("Article introuvable","error");return navigate("materiel/inventaire")}
