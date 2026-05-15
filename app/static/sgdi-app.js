@@ -21,6 +21,7 @@ const POSTES = [
  "Chef de site","Contrôleur","Coordinateur","Hôtesse d'accueil","Inspecteur",
  "Maître-chien","Manutentionnaire","Superviseur"
 ];
+const DEFAULT_SOCIETES = ["IRON GLOBAL SECURITE","IRON GLOBAL SOLUTION","SWORD CORPORATION"];
 const SOCIETES = [];
 const REMOVED_SOCIETES = [];
 const TYPES_CONTRAT = ["CDI","CDD","CTT (Intérim)","Contrat de mission","Pré-emploi ANEM","DAIP","Période d'essai","Stage"];
@@ -123,7 +124,7 @@ function deriveSocietesFromData(source){
 function societeConfig(){
   const remote=(db&&db.societesConfig&&typeof db.societesConfig==="object")?db.societesConfig:{};
   const remoteAccess=(remote.access&&typeof remote.access==="object")?remote.access:{};
-  const custom=Array.isArray(remote.custom)?remote.custom:deriveSocietesFromData();
+  const custom=[...DEFAULT_SOCIETES,...(Array.isArray(remote.custom)?remote.custom:[]),...deriveSocietesFromData()];
   return {
     custom:uniqueSocieteNames(custom).filter(s=>!isRemovedSociete(s)),
     descriptions:{...(remote.descriptions||{})},
@@ -956,7 +957,7 @@ function emptyDB(){
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
     activityLog:[],categoriesPrest:[],themes:[],structures:[],
     niveauxAcces:[],priorites:[],alertes:[],customFields:[],customModules:[],
-    societesConfig:{custom:[],descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
+    societesConfig:{custom:DEFAULT_SOCIETES.slice(),descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
     settings:{unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:20}}
   };
 }
@@ -986,7 +987,7 @@ function sgdiAutoRepairDB(options){
     });
   };
   [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"]].forEach(([k,p])=>fixListIds(k,p));
-  db.societesConfig={custom:uniqueSocieteNames([...(db.societesConfig?.custom||[]),...deriveSocietesFromData(db)]),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
+  db.societesConfig={custom:uniqueSocieteNames([...DEFAULT_SOCIETES,...(db.societesConfig?.custom||[]),...deriveSocietesFromData(db)]).filter(s=>!isRemovedSociete(s)),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
   if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:20}};
   if(typeof db.settings.unlockCode!=="string")db.settings.unlockCode="";
   if(!Array.isArray(db.settings.unlockLog))db.settings.unlockLog=[];
@@ -1089,7 +1090,7 @@ function purgeRemovedSocieteData(d){
   if(d.societesConfig&&typeof d.societesConfig==="object"){
     const cfg=d.societesConfig;
     const beforeCustom=Array.isArray(cfg.custom)?cfg.custom.join("|"):"";
-    cfg.custom=uniqueSocieteNames([...(Array.isArray(cfg.custom)?cfg.custom:[]),...deriveSocietesFromData(d)]).filter(s=>!isRemovedSociete(s));
+    cfg.custom=uniqueSocieteNames([...DEFAULT_SOCIETES,...(Array.isArray(cfg.custom)?cfg.custom:[]),...deriveSocietesFromData(d)]).filter(s=>!isRemovedSociete(s));
     if(cfg.custom.join("|")!==beforeCustom)changed=true;
     ["images","descriptions"].forEach(key=>{
       if(!cfg[key]||typeof cfg[key]!=="object")return;
