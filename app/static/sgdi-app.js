@@ -4835,10 +4835,11 @@ function embaucherCandidat(id){
     contratPersonnelTitre:contratModele?(contratModele.title||contratModele.titre):"",
     contratPersonnelTexte:"",
     verifications:keys.reduce((o,k)=>{o["verif"+k]=true;return o},{}),
-    statut:"actif",locked:true,createdAt:today(),updatedAt:today()
+    statut:"actif",locked:true,fichePositionOfficielle:true,fichePositionOfficielleAt:new Date().toISOString(),fichePositionOfficielleBy:session?.username||"system",lockedAt:new Date().toISOString(),lockedBy:session?.username||"system",createdAt:today(),updatedAt:today()
   };
   if(contratModele&&contratModele.texte)agent.contratPersonnelTexte=fillContratPersonnelText(contratModele.texte,agent);
   db.agents.push(agent);
+  unlockedAgents.delete(agent.id);saveUnlocked();
   db.candidats=db.candidats.filter(x=>x.id!==id);
   saveDB();toast(`Agent ${agent.matricule} embauché`,"success");navigate(`agents/${agent.id}`);
 }
@@ -5034,7 +5035,8 @@ function renderAgentDemandesSection(a){
 }
 function renderAgentForm(view,id){
   const a=db.agents.find(x=>x.id===id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
-  const locked=a.locked&&!unlockedAgents.has(a.id)&&!isAdmin();
+  const officialLocked=!!(a.fichePositionOfficielle&&a.locked);
+  const locked=officialLocked||(a.locked&&!unlockedAgents.has(a.id)&&!isAdmin());
   const essaiLeft=a.dateFinEssai?daysBetween(today(),a.dateFinEssai):null;
   let essaiBadge="";
   if(a.dateFinEssai){
@@ -5087,8 +5089,8 @@ function renderAgentForm(view,id){
       </div>
     </div>
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div class="flex items-center gap-2 flex-wrap">${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}${locked?'<span class="pill pill-gray">🔒 Verrouillée</span>':''}${!locked&&a.locked?'<span class="pill pill-amber">🔓 Déverrouillée (session)</span>':''}</div>
-      <div class="flex gap-2 items-start flex-wrap justify-end">${essaiBadge}<button class="btn btn-secondary text-xs" onclick="openAgentDocumentsModal('${a.id}')">📄 Documents</button>${isAdmin()?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">🖨 Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="printFicheDotation('${a.id}')">Imprimer fiche de dotation</button>`:""}${isAdmin()&&a.locked&&locked?`<button class="btn btn-secondary text-xs" onclick="unlockAgent('${a.id}')">🔓 Déverrouiller Admin</button>`:""}${isAdmin()&&(!locked||unlockedAgents.has(a.id))?`<button class="btn btn-secondary text-xs" onclick="lockAgent('${a.id}')">🔒 Verrouiller la fiche</button>`:""}<button class="btn btn-ghost" onclick="history.back()">← Retour</button></div>
+      <div class="flex items-center gap-2 flex-wrap">${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}${officialLocked?'<span class="pill pill-green">Fiche officielle</span>':""}${locked?'<span class="pill pill-gray">🔒 Verrouillée</span>':''}${!officialLocked&&!locked&&a.locked?'<span class="pill pill-amber">🔓 Déverrouillée (session)</span>':''}</div>
+      <div class="flex gap-2 items-start flex-wrap justify-end">${essaiBadge}<button class="btn btn-secondary text-xs" onclick="openAgentDocumentsModal('${a.id}')">📄 Documents</button>${isAdmin()?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">🖨 Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="printFicheDotation('${a.id}')">Imprimer fiche de dotation</button>`:""}${!officialLocked&&isAdmin()&&a.locked&&locked?`<button class="btn btn-secondary text-xs" onclick="unlockAgent('${a.id}')">🔓 Déverrouiller Admin</button>`:""}${!officialLocked&&isAdmin()&&(!locked||unlockedAgents.has(a.id))?`<button class="btn btn-secondary text-xs" onclick="lockAgent('${a.id}')">🔒 Verrouiller la fiche</button>`:""}<button class="btn btn-ghost" onclick="history.back()">← Retour</button></div>
     </div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${renderAgentDemandesSection(a)}
@@ -5449,6 +5451,7 @@ function applyAgentExcelRow(agentId,rows){
 
 function saveAgent(id){
   const a=db.agents.find(x=>x.id===id);if(!a)return;
+  if(a.fichePositionOfficielle&&a.locked){toast("Fiche officielle verrouillée : modification impossible","error");return}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
   ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
