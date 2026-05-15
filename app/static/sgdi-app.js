@@ -9996,9 +9996,15 @@ async function stockSaveArticle(id,isNew){
     if(!a.code)a.code=stockNextCode(a.societe,a.categorie);
     a.derniereMaj=today();
     try{await persistArticleToPostgres(a)}catch(e){toast("Article non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
-    saveDB();
-    toast(isCreating?"✓ Article ajouté dans PostgreSQL":"✓ Article modifié dans PostgreSQL","success");
     if(typeof logActivity==="function")logActivity(isCreating?"Article stock créé":"Article stock modifié",a.code+" · "+a.designation);
+    try{
+      sgdiDirty=true;
+      await sgdiBackendSaveAndWait();
+    }catch(e){
+      toast("Article créé, mais synchronisation globale PostgreSQL incomplète : "+(e.message||e),"warning");
+      return;
+    }
+    toast(isCreating?"✓ Article ajouté dans PostgreSQL":"✓ Article modifié dans PostgreSQL","success");
     navigate("materiel/article/"+a.id);
   }catch(err){
     console.error("stockSaveArticle error:",err);
