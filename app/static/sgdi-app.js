@@ -5092,7 +5092,7 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4"><div class="section-banner banner-green">3. Habilitations</div><div class="grid grid-2">
         ${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>{const v=a.habilitations?.[k]||"non";return`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="ahab_${k}" value="oui" ${v==="oui"?"checked":""} ${locked?"disabled":""}/> Oui</label><label class="radio-pill"><input type="radio" name="ahab_${k}" value="non" ${v!=="oui"?"checked":""} ${locked?"disabled":""}/> Non</label></div></div>`}).join("")}
       </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></div>
-      <div class="card p-5 mb-4"><div class="section-banner banner-amber">4. Contrat</div><div class="grid grid-6">
+      <div class="card p-5 mb-4"><div class="section-banner banner-amber">4. Contrat</div><div class="flex justify-end gap-2 flex-wrap mb-3"><button type="button" class="btn btn-secondary text-xs" onclick="previewAgentContract('${a.id}')">Voir contrat</button><button type="button" class="btn btn-primary text-xs" onclick="printAgentContract('${a.id}')">Imprimer contrat</button></div><div class="grid grid-6">
         <div class="col-span-3"><label class="label">Type</label><select class="select" name="typeContrat" ${locked?"disabled":""}>${TYPES_CONTRAT.map(t=>`<option ${a.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Salaire net</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(a.salaireNet||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Recrutement</label><input class="input" type="date" name="dateRecrutement" value="${a.dateRecrutement||""}" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
@@ -5785,6 +5785,42 @@ function ficheHTML(a){
     </section>
     ${a.blacklist?`<section class="fiche-section"><h2>Black list</h2><div class="fiche-grid">${ficheCell("Inscrit le",formatDate(a.blacklistAt))}${ficheCell("Par",a.blacklistBy)}${ficheCell("Référence",a.blacklistReference)}${ficheCell("Motif",a.blacklistMotif)}</div></section>`:""}
   </div>`;
+}
+function agentContractHTML(a){
+  const ref="CTR-"+(a.matricule||a.backendId||a.id||"").toString().replace(/\W+/g,"").toUpperCase();
+  const fullName=((a.nom||"")+" "+(a.prenom||"")).trim();
+  return `<div class="fiche-print">
+    <div class="fiche-doc-head">
+      <div><div class="fiche-doc-title">CONTRAT DE TRAVAIL</div><div class="fiche-doc-sub">Référence : ${escapeHTML(ref||"—")}</div></div>
+      <div class="fiche-doc-meta">${escapeHTML(a.societe||"SGDI")}<br/>Date : ${formatDate(a.dateRecrutement||today())}</div>
+    </div>
+    <section class="fiche-section"><h2>Employé recruté</h2><div class="fiche-grid">
+      ${ficheCell("Nom Prénom",fullName)}${ficheCell("Matricule",a.matricule)}${ficheCell("NIN",a.nin)}${ficheCell("Téléphone",a.telephone)}
+      ${ficheCell("Date naissance",formatDate(a.dateNaissance))}${ficheCell("Lieu naissance",a.lieuNaissance)}${ficheCell("Nom du père",a.nomPere)}${ficheCell("Nom de la mère",a.nomMere)}
+    </div></section>
+    <section class="fiche-section"><h2>Conditions contractuelles</h2><div class="fiche-grid">
+      ${ficheCell("Type contrat",a.typeContrat)}${ficheCell("Poste",a.fonction||a.poste||a.affectationCourante?.poste)}${ficheCell("Date recrutement",formatDate(a.dateRecrutement))}${ficheCell("Fin période d'essai",formatDate(a.dateFinEssai))}
+      ${ficheCell("Fin contrat",formatDate(a.dateFinContrat))}${ficheCell("Salaire net",money(parseMoneyInput(a.salaireNet)||a.salaireNet||0))}${ficheCell("Société",a.societe)}${ficheCell("Lieu de travail",a.affectationCourante?.siteName||"Sans affectation")}
+    </div></section>
+    <section class="fiche-section"><h2>Clause de base</h2>
+      <p style="font-size:13px;line-height:1.7;margin:0">Le présent contrat formalise le recrutement de l'employé désigné ci-dessus selon les informations enregistrées dans SGDI. Les clauses détaillées, annexes et éventuels modèles Word validés par l'administration système restent la référence documentaire officielle lorsqu'ils sont générés.</p>
+    </section>
+    <div class="fiche-sign"><div>Employé</div><div>Responsable RH</div><div>Cachet société</div></div>
+    <div class="fiche-footer"><span>${escapeHTML(ref||"—")}</span><span>Contrat généré depuis la fiche employé SGDI.</span></div>
+  </div>`;
+}
+function previewAgentContract(id){
+  const a=agentSnapshotForPreview(id);
+  if(!a){toast("Agent introuvable","error");return}
+  openModal(`<div class="bg-slate-100 rounded-lg" style="max-height:82vh;overflow:auto;padding:12px">${fichePrintStyles()}${agentContractHTML(a)}</div><div class="flex justify-end mt-3 gap-2"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary" onclick="printAgentContract('${id}')">Imprimer contrat</button></div>`);
+}
+function printAgentContract(id){
+  const a=agentSnapshotForPreview(id);
+  if(!a){toast("Agent introuvable","error");return}
+  const w=window.open("","_blank","width=1100,height=800");
+  if(!w){toast("Popup bloquée par le navigateur","error");return}
+  w.document.write(`<!doctype html><html><head><title>Contrat ${escapeHTML(a.matricule||"")}</title>${fichePrintStyles()}</head><body>${agentContractHTML(a)}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  w.document.close();
 }
 function previewFiche(id){
   const a=agentSnapshotForPreview(id);
