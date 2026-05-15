@@ -5013,6 +5013,8 @@ function renderAgentForm(view,id){
   else if(congeActif){situation="congé";sitClass="pill-blue";sitIcon="🏖"}
   else if(a.statut==="actif"){situation="actif";sitClass="pill-green";sitIcon="✅"}
   else{situation=a.statut||"—";sitClass="pill-gray";sitIcon="•"}
+  if(situation==="actif"){sitClass="pill-green";sitIcon="✅"}
+  else{situation="en reste";sitClass="pill-red";sitIcon="●"}
   const situationBadge=`<span class="pill ${sitClass}" style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:6px 14px">${sitIcon} ${situation}</span>`;
   const operationnel=(situation==="actif");
   const codeColor=operationnel?"#16a34a":"#dc2626";
