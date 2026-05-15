@@ -7806,6 +7806,7 @@ function renderMatSimpleDashboard(view){
   const mags=matSimpleBySoc(db.magasins||[]);
   const fours=matSimpleBySoc(db.fournisseurs||[]);
   const mvts=matSimpleBySoc(db.stockMouvements||[]);
+  const employeesEnInstanceDotation=agentsEnInstanceDotationForSoc(soc);
   let totalQty=0,totalVal=0,nbAlertes=0,nbRupture=0;
   arts.forEach(a=>{
     const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
@@ -7845,10 +7846,11 @@ function renderMatSimpleDashboard(view){
       <button class="btn btn-secondary text-sm" onclick="navigate('materiel/magasin-nouveau')">Magasin</button>
       <button class="btn btn-secondary text-sm" onclick="navigate('materiel/fournisseur-nouveau')">Fournisseur</button>
     </div></div>`;
-  const kpi=`<div class="grid grid-5 mb-4">
+  const kpi=`<div class="grid grid-6 mb-4">
     <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/articles')" style="text-decoration:none;color:inherit"><div class="label">Articles catalogue</div><div class="value">${arts.length}</div><div class="sub">${qty(totalQty)} unités suivies</div></button>
     <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/magasins')" style="text-decoration:none;color:inherit"><div class="label">Magasins</div><div class="value">${mags.length}</div><div class="sub">lieux de stockage</div></button>
     <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/fournisseurs')" style="text-decoration:none;color:inherit"><div class="label">Fournisseurs</div><div class="value">${fours.length}</div><div class="sub">partenaires achats</div></button>
+    <button type="button" class="card p-4 text-left kpi-clickable ${employeesEnInstanceDotation.length?"ops-dot-counter-alert":""}" onclick="navigate('materiel/dotation')" style="text-decoration:none;color:inherit;background:#fef2f2;border-color:#fecaca"><div class="label">Employés en instance de dotation</div><div class="value" style="color:#dc2626">${employeesEnInstanceDotation.length}</div><div class="sub">→ Préparer la dotation</div></button>
     <button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('materiel/mouvements')" style="text-decoration:none;color:inherit"><div class="label">Mouvements 30j</div><div class="value">${mvts30.length}</div><div class="sub">+${qty(entreesMois)} / -${qty(sortiesMois)}</div></button>
     <button type="button" class="card p-4 text-left kpi-clickable" onclick="sessionStorage.setItem('matFiltEtat','${nbRupture>0?"rupture":"alerte"}');navigate('materiel/articles')" style="text-decoration:none;color:inherit"><div class="label">Alertes stock</div><div class="value" style="color:${nbRupture>0?"#dc2626":(nbAlertes>0?"#b45309":"#16a34a")}">${nbRupture+nbAlertes}</div><div class="sub">${nbRupture} rupture · ${nbAlertes} stock bas</div></button>
   </div>`;
