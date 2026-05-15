@@ -1749,9 +1749,32 @@ function notificationVisibleTasks(){
     return workflowTaskAllowedForCurrentUser(t);
   }).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
 }
+function notificationReadStorageKey(){return "sgdiNotificationRead:"+(session?.username||"anonymous")}
+function notificationReadIds(){
+  try{return new Set(JSON.parse(localStorage.getItem(notificationReadStorageKey())||"[]"))}catch(e){return new Set()}
+}
+function notificationIsRead(task){
+  const id=String(task?.id||task?.candidateBackendId||"");
+  return !!id&&notificationReadIds().has(id);
+}
+function notificationUnreadTasks(){
+  const read=notificationReadIds();
+  return notificationVisibleTasks().filter(t=>!read.has(String(t.id||t.candidateBackendId||"")));
+}
+function notificationMarkVisibleRead(){
+  const read=notificationReadIds();
+  let changed=false;
+  notificationVisibleTasks().forEach(t=>{
+    const id=String(t.id||t.candidateBackendId||"");
+    if(id&&!read.has(id)){read.add(id);changed=true}
+  });
+  if(changed){
+    try{localStorage.setItem(notificationReadStorageKey(),JSON.stringify([...read].slice(-500)))}catch(e){}
+  }
+}
 function notificationTopbarButtonHTML(){
   if(!session)return"";
-  const count=notificationVisibleTasks().length;
+  const count=notificationUnreadTasks().length;
   return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${count?"has-alert":""}" onclick="notificationToggle(true)" title="Notifications"><span aria-hidden="true">🔔</span><span>Notifications</span>${count?`<span class="badge">${count}</span>`:""}</button>`;
 }
 function societeStructureBarHTML(){return "";}
@@ -2456,6 +2479,7 @@ function dialogueIsOpen(){return sessionStorage.getItem("dialogueOpen")!=="0"}
 function notificationIsOpen(){return sessionStorage.getItem("notificationOpen")==="1"}
 function notificationToggle(open){
   sessionStorage.setItem("notificationOpen",open?"1":"0");
+  if(open)notificationMarkVisibleRead();
   render();
 }
 function notificationPanelHTML(){
@@ -2463,13 +2487,13 @@ function notificationPanelHTML(){
   const open=notificationIsOpen();
   const rows=notificationVisibleTasks();
   const moduleLabel=m=>({drh:"DRH",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Module").toUpperCase());
-  const item=t=>`<div class="notification-item">
+  const item=t=>{const read=notificationIsRead(t);return `<div class="notification-item ${read?"is-read":"is-unread"}">
     <div class="notification-item-head"><span>${escapeHTML(moduleLabel(t.module))}</span><span>${escapeHTML(t.societe||"—")}</span></div>
     <div class="notification-item-title">${escapeHTML(t.title||"Action à effectuer")}</div>
     <div class="notification-item-body">${escapeHTML(t.message||"Instruction non renseignée.")}</div>
     <div class="notification-item-meta">${escapeHTML(t.candidateName||"")} ${t.poste?`· ${escapeHTML(t.poste)}`:""}</div>
     <button type="button" class="btn btn-primary notification-action-btn" onclick="notificationToggle(false);navigate('${jsString(t.route||"dashboard")}')">Action</button>
-  </div>`;
+  </div>`};
   return `<div class="notification-backdrop no-print ${open?"":"closed"}" onclick="if(event.target===this)notificationToggle(false)">
     <aside class="notification-panel" aria-label="Notifications système">
       <div class="notification-head"><div><div class="notification-title">NOTIFICATIONS</div><div class="notification-subtitle">${rows.length} action(s) à traiter</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
