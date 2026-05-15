@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.modules.auth.models import User
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.irongs.models import SgdiRecord
 from app.core.photo_storage import normalize_photo_fields
@@ -198,6 +199,119 @@ def _candidate_sections(data: dict[str, Any]) -> dict[str, Any]:
     raw = data.get("sectionValidations")
     return raw if isinstance(raw, dict) else {}
 
+
+def _normalized_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        return []
+    return [str(v).strip() for v in values if str(v).strip()]
+
+
+def _user_society_allowed(user: User, society: str | None) -> bool:
+    allowed = _normalized_list(user.authorized_societies)
+    return not allowed or bool(society and society in allowed)
+
+
+def _user_matches_module(user: User, module: str) -> bool:
+    role = str(user.role or "").strip().lower()
+    level = str(user.access_level or "").strip().lower()
+    structures = {s.lower() for s in _normalized_list(user.authorized_structures)}
+    if module in structures or "admin" in structures:
+        return True
+    if role in {"admin", "adm", "adm1", "adm2"} or level.startswith("adm"):
+        return True
+    if module == "drh":
+        return role in {"rh", "drh"}
+    if module == "ops":
+        return role in {"ops", "dispatch"}
+    if module == "materiel":
+        return role in {"ops", "dispatch"}
+    if module == "commercial":
+        return role in {"commercial"}
+    return False
+
+
+def _next_sgdi_position(db: Session, collection: str) -> int:
+    current = db.scalar(select(func.max(SgdiRecord.position)).where(SgdiRecord.collection == collection))
+    return int(current or 0) + 1
+
+
+def _upsert_sgdi_item(db: Session, collection: str, item_id: str, data: dict[str, Any]) -> None:
+    row = db.execute(select(SgdiRecord).where(SgdiRecord.collection == collection, SgdiRecord.item_id == item_id)).scalar_one_or_none()
+    label = str(data.get("title") or data.get("sujet") or data.get("message") or item_id)
+    if row:
+        row.data = data
+        row.label = label
+        return
+    db.add(SgdiRecord(collection=collection, item_id=item_id, position=_next_sgdi_position(db, collection), kind="item", data=data, label=label))
+
+
+def _create_candidate_workflow(db: Session, row: Candidate, username: str | None) -> None:
+    data = row.data if isinstance(row.data, dict) else {}
+    society = row.society or data.get("societe") or data.get("society")
+    candidate_name = f"{row.last_name or data.get('nom') or ''} {row.first_name or data.get('prenom') or ''}".strip() or "Candidat"
+    created_at = datetime.utcnow().isoformat()
+    modules = [
+        ("drh", "Suivi contractualisation", "Contrôler le passage du candidat vers la contractualisation.", "contrats/a_contractualiser"),
+        ("ops", "Affectation OPS à préparer", "Préparer le site, le poste et l'affectation opérationnelle.", "effectif/instance_affectation"),
+        ("materiel", "Dotation matériel à préparer", "Préparer la dotation initiale selon le poste demandé.", "materiel/dotation"),
+        ("commercial", "Information recrutement validé", "Prendre connaissance du recrutement validé et de son impact client/site si nécessaire.", "commercial/dashboard"),
+    ]
+    for module, title, message, route in modules:
+        task_id = f"fiche_position_{row.id}_{module}"
+        task = {
+            "id": task_id,
+            "type": "fiche_position_validee",
+            "module": module,
+            "title": title,
+            "message": message,
+            "status": "open",
+            "priority": "high" if module in {"ops", "materiel"} else "normal",
+            "societe": society,
+            "candidateId": row.data.get("id") if isinstance(row.data, dict) else "",
+            "candidateBackendId": row.id,
+            "candidateName": candidate_name,
+            "poste": data.get("posteSouhaite") or data.get("posteContrat") or row.desired_position,
+            "route": route,
+            "createdAt": created_at,
+            "createdBy": username or "system",
+        }
+        _upsert_sgdi_item(db, "workflowTasks", task_id, task)
+
+    users = db.execute(select(User).where(User.is_active.is_(True))).scalars().all()
+    for user in users:
+        if user.username == username:
+            continue
+        if not _user_society_allowed(user, society):
+            continue
+        if not any(_user_matches_module(user, module) for module, *_ in modules):
+            continue
+        msg_id = f"fiche_position_{row.id}_{user.username}"
+        message = (
+            f"Nouvelle fiche de position validée : {candidate_name}."
+            f"\nSociété : {society or 'Non renseignée'}"
+            f"\nPoste : {data.get('posteSouhaite') or data.get('posteContrat') or row.desired_position or 'Non renseigné'}"
+            "\nConsultez votre tableau de bord pour traiter la tâche correspondante."
+        )
+        _upsert_sgdi_item(db, "echanges", msg_id, {
+            "id": msg_id,
+            "date": created_at,
+            "from": username or "system",
+            "to": user.username,
+            "sujet": "Fiche de position validée",
+            "importance": "Élevée",
+            "message": message,
+            "attachments": [],
+            "obligation": "Traitement selon module",
+            "droit": society or "",
+            "conduite": "Consulter tableau de bord",
+            "receivedBy": [],
+            "luPar": [username or "system"],
+            "type": "message",
+            "workflowTaskType": "fiche_position_validee",
+            "candidateBackendId": row.id,
+            "societe": society,
+        })
+
 def _candidate_required_fields(section: str) -> list[tuple[str, str]]:
     return {
         "identification": [
@@ -339,6 +453,7 @@ def validate_candidate_final(db: Session, candidate_id: int, username: str | Non
     _validate_candidate_transition(values, row)
     row.status = "reserve"
     row.data = normalize_photo_fields(values["data"], fallback=str(row.id))
+    _create_candidate_workflow(db, row, username)
     db.commit()
     db.refresh(row)
     return row

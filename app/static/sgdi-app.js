@@ -951,7 +951,7 @@ function ensureContratsPersonnel(){
 function emptyDB(){
   return{
     users:[],agents:[],sites:[],candidats:[],incidents:[],conges:[],contrats:[],materiel:[],
-    echanges:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],demandesPersonnel:[],demandesStructure:[],missions:[],siteInspections:[],
+    echanges:[],workflowTasks:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],demandesPersonnel:[],demandesStructure:[],missions:[],siteInspections:[],
     devis:[],factures:[],paiements:[],avances:[],avoirs:[],caisse:[],
     prospects:[],clients:[],opportunites:[],visites:[],catalogue:[],
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
@@ -986,7 +986,7 @@ function sgdiAutoRepairDB(options){
       used.add(id);
     });
   };
-  [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"]].forEach(([k,p])=>fixListIds(k,p));
+  [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"],["workflowTasks","wft"]].forEach(([k,p])=>fixListIds(k,p));
   db.societesConfig={custom:uniqueSocieteNames([...DEFAULT_SOCIETES,...(db.societesConfig?.custom||[]),...deriveSocietesFromData(db)]).filter(s=>!isRemovedSociete(s)),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
   if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:20}};
   if(typeof db.settings.unlockCode!=="string")db.settings.unlockCode="";
@@ -1693,6 +1693,16 @@ function myCandidats(){return bySoc(db.candidats)}
 function myMateriel(){return db.materiel?bySoc(db.materiel):[]}
 function myConges(){const ids=new Set(myAgents().map(a=>a.id));return db.conges.filter(c=>ids.has(c.agentId))}
 function myIncidents(){const aids=new Set(myAgents().map(a=>a.id));const sids=new Set(mySites().map(st=>st.id));return db.incidents.filter(i=>(i.agentId&&aids.has(i.agentId))||(i.siteId&&sids.has(i.siteId)))}
+function workflowTasksForModule(module){
+  const soc=currentStructureSocieteFilter()||mySoc()||"";
+  return (db.workflowTasks||[]).filter(t=>t&&t.module===module&&t.status!=="done"&&(!soc||t.societe===soc)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+}
+function workflowTasksCardHTML(module,title,emptyText){
+  const rows=workflowTasksForModule(module);
+  return `<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">${escapeHTML(title)}</h3><span class="pill ${rows.length?"pill-amber":"pill-green"}">${rows.length}</span></div>
+    ${rows.length?rows.slice(0,5).map(t=>`<a href="#/${escapeHTML(t.route||"dashboard")}" class="block p-2 rounded-lg bg-amber-50 mb-2" style="text-decoration:none;color:inherit"><div class="text-xs font-black text-amber-800">${escapeHTML(t.candidateName||"Candidat")}</div><div class="text-[11px] text-slate-600">${escapeHTML(t.title||"Tâche")} · ${escapeHTML(t.societe||"—")}</div></a>`).join(""):`<div class="text-sm text-emerald-700 font-semibold">${escapeHTML(emptyText||"Aucune tâche ouverte.")}</div>`}
+  </div>`;
+}
 function selectSocieteDirect(s){if(!canUseSociete(s)){toast("Société non autorisée pour cet utilisateur","error");return}session.societe=s;session.transverse=null;saveSession(session);try{sessionStorage.setItem("dashSociete",s);sessionStorage.setItem("fpSociete",s);sessionStorage.setItem("mtSociete",s)}catch(e){}toast("Société active : "+s,"success");location.hash="#/dashboard";route()}
 function pickSociete(s){selectSocieteDirect(s)}
 function confirmPickSociete(s,p){selectSocieteDirect(s)}
@@ -3350,7 +3360,7 @@ async function recruterCandidat(id){
   try{
     await persistCandidateToPostgres(draft);
     Object.assign(c,draft);
-    await sgdiBackendSaveAndWait();
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
     toast("Candidat envoyé vers contractualisation","success");
     navigate(`contrats/nouveau/${c.id}`);
   }catch(e){
@@ -3893,7 +3903,7 @@ async function saveCandidat(id,showToast,options){
     await persistCandidateToPostgres(draft,{allowCreate:creating});
     if(c)Object.assign(c,draft);else{c=draft;if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c)}
     stashCandidatForRoute(c,[id,realId,data.id]);
-    await sgdiBackendSaveAndWait();
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
   }catch(e){
     toast("Candidat non enregistré dans PostgreSQL : "+(e.message||e),"error");
     return null;
@@ -3913,7 +3923,7 @@ async function saveCandidatDraft(id){
   if(!c.fichePositionValidee&&!candidatIsArchived(c))c.statut="nouvelle";
   try{
     await persistCandidateToPostgres(c);
-    await sgdiBackendSaveAndWait();
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
     if((location.hash||"").endsWith("/nouveau")){
       history.replaceState(null,"","#/"+(c.reserveDirect?"reserve/":"recrutement/")+id);
     }
@@ -3965,7 +3975,7 @@ async function confirmArchiveCandidat(id){
   try{
     await persistCandidateToPostgres(draft);
     Object.assign(c,draft);
-    await sgdiBackendSaveAndWait();
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
     closeModal();
     toast("Candidat archivé dans PostgreSQL","success");
     navigate("candidats_archives");
@@ -3983,7 +3993,7 @@ async function deleteCandidat(id){
     if(!/not found|introuvable|404/i.test(msg)){toast("Suppression PostgreSQL refusée : "+msg,"error");return}
   }
   const removed=removeCandidatLocal(c,id);
-  await sgdiBackendSaveAndWait();
+  await sgdiPullState({silent:true,render:false,force:true,light:true});
   toast(removed?"Candidat supprimé de PostgreSQL":"Candidat déjà supprimé","success");
   if((location.hash||"").slice(2)===targetRoute)renderView();else navigate(targetRoute);
 }
@@ -4007,7 +4017,7 @@ async function activerCandidat(id){
   try{
     await persistCandidateToPostgres(draft);
     Object.assign(c,draft);
-    await sgdiBackendSaveAndWait();
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
     toast("Candidat activé et envoyé en réserve","success");
     navigate("reserve");
   }catch(e){toast("Activation PostgreSQL refusée : "+(e.message||e),"error")}
@@ -4082,7 +4092,7 @@ async function validateCandidatSectionAction(id,key){
     await persistCandidateToPostgres(draft,{allowCreate:creating});
     if(c)Object.assign(c,draft);else{c=draft;if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c)}
     stashCandidatForRoute(c,[id,realId,data.id]);
-    await sgdiBackendSaveAndWait();
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
     if((location.hash||"").endsWith("/nouveau"))navigate((c.reserveDirect?"reserve/":"recrutement/")+c.id);else renderView();
   }catch(e){toast("Validation PostgreSQL refusée : "+(e.message||e),"error");setCandidatSectionButtonsDisabled(id,key,false)}
@@ -4111,7 +4121,7 @@ async function validerFichePosition(id){
     const saved=finalAction&&finalAction.status==="success"?finalAction.data:finalAction;
     if(!saved||!saved.id)throw new Error("Confirmation backend finale invalide");
     Object.assign(c,candidateFromApi(saved));
-    await sgdiBackendSaveAndWait();
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
     toast("✓ Fiche de position validée — candidat en réserve","success");navigate("reserve");
   }catch(e){toast("Validation fiche PostgreSQL refusée : "+(e.message||e),"error")}
   finally{candidatFinalValidationLocks.delete(lockKey)}
@@ -4690,7 +4700,7 @@ async function saveContractDocuments(id){
   c.documents=c.documents||{};
   keys.forEach(k=>{c["verif"+k]=!!f.querySelector(`[name="verif${k}"]`)?.checked});
   [...f.querySelectorAll('[name^="doc_"][name$="_url"]')].forEach(inp=>{const k=inp.name.replace("doc_","").replace("_url","");const nm=f.querySelector(`[name="doc_${k}_name"]`)?.value||"fichier";if(inp.value)c.documents[k]={url:inp.value,name:nm};else delete c.documents[k]});
-  try{await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});await sgdiBackendSaveAndWait();closeModal();toast("Documents enregistrés","success");renderView()}catch(e){toast("Enregistrement documents refusé : "+(e.message||e),"error")}
+  try{await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});await sgdiPullState({silent:true,render:false,force:true,light:true});closeModal();toast("Documents enregistrés","success");renderView()}catch(e){toast("Enregistrement documents refusé : "+(e.message||e),"error")}
 }
 
 function embaucherCandidat(id){
@@ -7590,6 +7600,7 @@ function renderMatSimpleDashboard(view){
   const topMags=mags.map(m=>({m,...matSimpleStockMagasin(m.id)})).sort((a,b)=>b.qty-a.qty).slice(0,5);
 
   const header=matSimpleHeader("dashboard");
+  const materielWorkflowCard=workflowTasksCardHTML("materiel","Dotations à préparer","Aucune dotation issue d'une fiche validée.");
   const titleBar=`<div class="dash-toolbar mb-4"><div><h1 class="text-2xl font-black uppercase mb-2">MATÉRIEL - TABLEAU DE BORD</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Pilotage des articles, stocks, fournisseurs, magasins, dotations et reversements.</p></div>
     <div class="flex gap-2 flex-wrap">
       <button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">Entrée stock</button>
@@ -7634,7 +7645,7 @@ function renderMatSimpleDashboard(view){
       ${arts.filter(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):0;const s=parseFloat(a.seuilAlerte)||0;return q>0&&s&&q<=s}).slice(0,5).map(a=>{const q=stockGetActuel(a.id);return`<div class="flex justify-between py-1.5 border-b border-amber-100"><a class="hover:underline font-semibold text-amber-700" href="#/materiel/article/${a.id}">${escapeHTML(a.designation)}</a><span class="text-xs text-amber-600 font-bold">${qty(q)} ≤ ${qty(a.seuilAlerte)}</span></div>`}).join("")}
     </div>
   </div>`:"";
-  view.innerHTML=`${titleBar}${header}${kpi}${alertsCard}<div class="grid grid-2 gap-4 mb-4">${mvtCard}<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">Actions de contrôle</h3></div>
+  view.innerHTML=`${titleBar}${header}${kpi}${alertsCard}<div class="grid grid-2 gap-4 mb-4">${mvtCard}${materielWorkflowCard}<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">Actions de contrôle</h3></div>
     <div class="grid grid-cols-2 gap-2">
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/inventaire')">Inventaire</button>
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/dotation')">Dotations</button>
@@ -10743,6 +10754,7 @@ function renderCommDashboard(view){
   const contratsExpires=clients.filter(c=>c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)<0);
   const contratsFin30=clients.filter(c=>{if(!c.dateFinContrat)return false;const d=daysBetween(today(),c.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
+  const commercialWorkflowCard=workflowTasksCardHTML("commercial","Informations recrutement","Aucune information recrutement à traiter.");
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">COMMERCIAL - TABLEAU DE BORD</h1>
     <p class="text-slate-500 text-sm mb-4">${mySoc()||"Toutes sociétés"}</p>
     ${commTabs("dashboard")}
@@ -10756,6 +10768,7 @@ function renderCommDashboard(view){
       </div>
       ${contratsAlerte.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${contratsAlerte.slice(0,6).map(c=>{const d=daysBetween(today(),c.dateFinContrat);return`<div class="p-3 rounded-lg text-sm" style="background:#fff;border:1px solid #fecaca"><div class="flex justify-between gap-2"><b>${escapeHTML(c.nom||c.raisonSociale||"Client")}</b><span class="pill ${d<0?"pill-red":"pill-amber"}">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(c.societe||"—")} · Fin contrat : ${formatDate(c.dateFinContrat)}${c.prestationsServices?` · ${escapeHTML(c.prestationsServices)}`:""}</div></div>`}).join("")}</div>${contratsAlerte.length>6?`<div class="text-xs text-red-700 mt-2 font-semibold">+ ${contratsAlerte.length-6} autre(s) client(s) en alerte.</div>`:""}`:`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat client dans les 30 jours.</div>`}
     </div>
+    <div class="mb-4">${commercialWorkflowCard}</div>
     <div class="grid grid-4 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Prospects</div><div class="text-2xl font-bold mt-1 text-blue-600">${prospects.length}</div><div class="text-xs text-slate-400 mt-1">${prospects.filter(p=>p.statut==="nouveau").length} nouveaux</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Clients actifs</div><div class="text-2xl font-bold mt-1 text-emerald-600">${clients.filter(c=>c.statut!=="inactif").length}</div><div class="text-xs text-slate-400 mt-1">${clients.length} au total · ${contratsFin30.length} alerte(s)</div></div>
@@ -12474,6 +12487,7 @@ function renderOPS(view,sub,arg){
   const sitesSansEffectif=sitesActifs.filter(s=>!actifs.some(a=>a.affectationCourante?.siteId===s.id));
   const feuillesNonCloturees=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(Boolean))].filter(d=>!fpqIsCloture(d)).length;
   const affectes=actifs.filter(a=>a.affectationCourante&&a.affectationCourante.siteId);
+  const opsWorkflowTasks=workflowTasksForModule("ops");
   const tauxAffectation=actifs.length?Math.round(affectes.length*100/actifs.length):0;
   const tauxPointage=fpqToday.length?Math.round(fpqPointes*100/fpqToday.length):0;
   const opsLine=(label,value,color,route)=>`<a href="#/${route}" class="p-3 rounded-lg block" style="background:${color}12;border:1px solid ${color}44;text-decoration:none;color:inherit"><div class="text-[10px] uppercase tracking-wider font-black" style="color:${color}">${label}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></a>`;
@@ -12502,6 +12516,7 @@ function renderOPS(view,sub,arg){
       <h3 class="mb-3">⚠️ Opérations à traiter</h3>
       <div class="space-y-2">
         <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-orange-50 text-sm" style="text-decoration:none;color:inherit"><span>Employés sans affectation</span><b class="text-orange-700">${instanceAffectation.length}</b></a>
+        <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-amber-50 text-sm" style="text-decoration:none;color:inherit"><span>Fiches validées à traiter</span><b class="text-amber-700">${opsWorkflowTasks.length}</b></a>
         <a href="#/sites/actifs" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 text-sm" style="text-decoration:none;color:inherit"><span>Sites actifs sans effectif</span><b>${sitesSansEffectif.length}</b></a>
         <a href="#/pointage/quotidien" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm" style="text-decoration:none;color:inherit"><span>Feuilles non clôturées</span><b class="text-red-700">${feuillesNonCloturees}</b></a>
       </div>
