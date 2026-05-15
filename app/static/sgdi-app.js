@@ -669,7 +669,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
+  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
@@ -5325,7 +5325,7 @@ function openOpsSuspensionRecipients(){
   const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
   openModal(`<h3 class="font-bold text-lg mb-3">Envoyer la demande de suspension</h3>${opsSuspensionPreviewHTML(a,pack.draft,pack.ref)}<form onsubmit="event.preventDefault();sendOpsSuspensionRequest(this)"><div class="mt-4"><label class="label">Destinataires membres SGDI</label>${opsSuspensionRecipientsHTML()}</div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsSuspensionPreviewAgain()">Retour</button><button class="btn btn-primary">Envoyer</button></div></form>`);
 }
-function sendOpsSuspensionRequest(form){
+async function sendOpsSuspensionRequest(form){
   const pack=window._opsSuspensionDraft;if(!pack)return;
   const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
   ensureDemandesStructure();
@@ -5339,7 +5339,8 @@ function sendOpsSuspensionRequest(form){
   const recipients=[...form.querySelectorAll('input[name="dest"]:checked')].map(x=>x.value).filter(Boolean);
   db.echanges=db.echanges||[];
   recipients.forEach(to=>db.echanges.push({id:uid("ech"),date:createdAt,from:session?.username||"ops",to,sujet:"Demande suspension "+(a.matricule||""),importance:"Élevée",message:"Demande de suspension à valider sous 03 heures pour "+d.agentName+". Réf: "+ref,attachments:[{name:ref+".html",type:"text/html",data:htmlData}],receivedBy:[],luPar:[session?.username||""],type:"message"}));
-  saveDB();closeModal();delete window._opsSuspensionDraft;toast("Demande de suspension envoyée à la DRH","success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Demande de suspension non confirmée par PostgreSQL")))return;
+  closeModal();delete window._opsSuspensionDraft;toast("Demande de suspension envoyée à la DRH","success");renderSidebar();renderView();
 }
 function suspensionDemandStatusHTML(d){
   if(d.source!=="ops-suspension")return"";
@@ -5351,7 +5352,7 @@ function suspensionDemandActionsHTML(d){
   if(['traite','rejete','annule'].includes(d.statut||''))return `<span class="pill ${d.statut==='traite'?'pill-green':'pill-red'}">Suspension ${d.statut==='traite'?'validée':'rejetée'}</span>`;
   return `<button class="btn btn-primary text-xs" onclick="validateOpsSuspensionDemand('${d.id}')">Valider suspension</button><button class="btn btn-ghost text-xs text-red-600" onclick="rejectOpsSuspensionDemand('${d.id}')">Rejeter</button>`;
 }
-function validateOpsSuspensionDemand(id){
+async function validateOpsSuspensionDemand(id){
   const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   const a=(db.agents||[]).find(x=>x.id===d.agentId);if(!a){toast("Employé introuvable","error");return}
   const susp=d.payloadOriginal?.suspension||{};
@@ -5362,14 +5363,18 @@ function validateOpsSuspensionDemand(id){
   d.statut="traite";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse="Votre suspension a été validée par la DRH. Période maximale : "+formatDate(susp.dateDebut||today())+" au "+formatDate(susp.dateFin||addDays(susp.dateDebut||today(),15))+". Motif : "+(susp.motif||d.message||"");
   d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Suspension validée",note:"Document transmis au portail RH"});
   ensureDemandesPersonnel().push({...d,id:uid("dp"),source:"drh-suspension-portail",statut:"traite",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
-  saveDB();toast("Suspension validée et transmise au portail RH","success");renderSidebar();renderView();
+  try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
+  catch(e){toast("Suspension non enregistrée PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Validation suspension non confirmée par PostgreSQL")))return;
+  toast("Suspension validée et transmise au portail RH","success");renderSidebar();renderView();
 }
-function rejectOpsSuspensionDemand(id){
+async function rejectOpsSuspensionDemand(id){
   const motif=prompt("Motif du rejet DRH :")||"Demande rejetée par la DRH";
   const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   d.statut="rejete";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse=motif;d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Suspension rejetée",note:motif});
   const a=(db.agents||[]).find(x=>x.id===d.agentId);(a?.suspensionsDemandes||[]).filter(x=>x.id===d.id||x.ref===d.ref).forEach(x=>{x.statut="rejetee_drh";x.rejectedAt=new Date().toISOString();x.rejectedBy=session?.username||"DRH";x.rejetMotif=motif});
-  saveDB();toast("Demande de suspension rejetée","success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Rejet suspension non confirmé par PostgreSQL")))return;
+  toast("Demande de suspension rejetée","success");renderSidebar();renderView();
 }
 
 function renderSanctions(a,locked,canEditSanctions){const s=a.sanctions||[];const canEdit=!!canEditSanctions&&!locked;return`<table class="mb-3"><thead><tr><th>Infraction</th><th>Site</th><th>Indicatif</th><th>Faute</th><th>Sanction</th><th>Mise à pied</th><th>Début</th><th>Reprise</th><th></th></tr></thead><tbody>${s.length===0?`<tr><td colspan="9" class="text-center text-slate-500 p-3">Aucune.</td></tr>`:s.map((x,i)=>`<tr><td class="text-xs">${formatDate(x.dateInfraction||x.date)}</td><td class="text-xs">${safe(x.site)}</td><td class="text-xs font-mono">${safe(x.indicatif)}</td><td class="text-xs">${escapeHTML((x.faute||"").slice(0,60))}</td><td><span class="pill ${x.type==="Licenciement"?"pill-red":x.type==="Blâme"||x.type==="Avertissement écrit"?"pill-amber":"pill-gray"}">${safe(x.type)}</span></td><td class="text-xs text-center">${x.joursMiseAPied?x.joursMiseAPied+" j":"—"}</td><td class="text-xs">${x.dateDebut?formatDate(x.dateDebut):"—"}</td><td class="text-xs">${x.dateReprise?formatDate(x.dateReprise):"—"}</td><td>${canEdit?`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="deleteSanction('${a.id}',${i})">✕</button>`:""}</td></tr>`).join("")}</tbody></table>${canEdit?`<button type="button" class="btn btn-secondary text-xs" onclick="openSanctionModal('${a.id}')">＋ Ajouter sanction</button>`:`<div class="text-xs text-slate-500">Visualisation uniquement. La création et la modification des sanctions disciplinaires sont réservées à la DRH.</div>`}`}
@@ -5564,7 +5569,7 @@ function applyAgentExcelRow(agentId,rows){
   renderView();
 }
 
-function saveAgent(id){
+async function saveAgent(id){
   const a=db.agents.find(x=>x.id===id);if(!a)return;
   if(a.fichePositionOfficielle&&a.locked){toast("Fiche officielle verrouillée : modification impossible","error");return}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
@@ -5572,7 +5577,17 @@ function saveAgent(id){
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
   a.habilitations=a.habilitations||{};
   ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
-  applyOkbaCodeIfNeeded(a,a.fonction||a.poste||a.affectationCourante?.poste);a.salaireNet=parseMoneyInput(a.salaireNet)||0;a.updatedAt=today();saveDB();toast("Fiche enregistrée","success");
+  applyOkbaCodeIfNeeded(a,a.fonction||a.poste||a.affectationCourante?.poste);a.salaireNet=parseMoneyInput(a.salaireNet)||0;a.updatedAt=today();
+  try{
+    const payload=employeeApiPayload(a);
+    const saved=a.backendId?await SGDI.employees.update(a.backendId,payload):await SGDI.employees.create(payload);
+    Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
+  }catch(e){
+    toast("Fiche employé non enregistrée PostgreSQL : "+(e.message||e),"error");
+    return;
+  }
+  if(!(await saveDBAndWaitToast("Fiche employé non confirmée par PostgreSQL")))return;
+  toast("Fiche enregistrée","success");
 }
 function agentDeleteLinkedCollections(){return["conges","contrats","contratsPersonnel","materiel","pointages","pointageMensuel","feuillePresence","demandesPersonnel","demandesStructure","missions","siteInspections","stockMouvements"]}
 function agentDeleteItemMatches(item,a){
@@ -5595,7 +5610,7 @@ async function deleteAgent(id){
   agentDeleteLinkedCollections().forEach(collection=>{db[collection]=(db[collection]||[]).filter(item=>!agentDeleteItemMatches(item,a))});
   db.agents=(db.agents||[]).filter(x=>x.id!==id);
   unlockedAgents.delete(id);saveUnlocked();
-  saveDB();
+  if(!(await saveDBAndWaitToast("Suppression fiche employé non confirmée par PostgreSQL")))return;
   toast("Fiche employé supprimée","success");
   navigate("fiches/toutes");
 }
@@ -5613,14 +5628,17 @@ function openReaffectation(agentId){
     <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Confirmer</button></div>
   </form>`);
 }
-function confirmReaffectation(agentId){
+async function confirmReaffectation(agentId){
   const a=db.agents.find(x=>x.id===agentId);const fd=new FormData(document.querySelector(".modal-bg form"));
   const siteId=fd.get("siteId");const site=db.sites.find(s=>s.id===siteId);
   if(a.affectationCourante&&a.affectationCourante.siteId){a.affectationsHistorique=a.affectationsHistorique||[];a.affectationsHistorique.push({...a.affectationCourante,dateFin:fd.get("dateDebut"),motifChangement:fd.get("motifChangement")||""})}
   const groupe=fd.get("groupe")||"";
   a.affectationCourante={siteId,siteName:site?.nom,clientName:site?.client,poste:a.affectationCourante?.poste||a.fonction||"",horaire:"Mixte",groupe,dateDebut:fd.get("dateDebut")};applyOkbaCodeIfNeeded(a,a.affectationCourante.poste||a.fonction);
   if(site){site.groupesAffectation=site.groupesAffectation||{};site.groupesAffectation[agentId]=groupe}
-  saveDB();closeModal();toast("Affectation enregistrée","success");renderView();
+  try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
+  catch(e){toast("Affectation non enregistrée PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Affectation non confirmée par PostgreSQL")))return;
+  closeModal();toast("Affectation enregistrée","success");renderView();
 }
 function openSanctionModal(agentId){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
@@ -5647,7 +5665,7 @@ function openSanctionModal(agentId){
 function onSanctionSiteChange(sel){const opt=sel.options[sel.selectedIndex];const ind=opt?opt.dataset.indicatif||"":"";const inp=document.querySelector('[name="indicatif"]');if(inp)inp.value=ind}
 function onSanctionTypeChange(sel){const j=document.getElementById("san-jours");if(!j)return;if(sel.value==="Mise à pied"||sel.value==="Suspension"){if(!j.value)j.value="1";onSanctionDateChange()}else{j.value="";onSanctionDateChange()}}
 function onSanctionDateChange(){const debut=document.getElementById("san-debut")?.value;const jours=parseInt(document.getElementById("san-jours")?.value||"0",10);const rep=document.getElementById("san-reprise");if(rep&&debut&&jours>0)rep.value=addDays(debut,jours)}
-function confirmSanction(agentId){
+async function confirmSanction(agentId){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(document.querySelector(".modal-bg form"));
   a.sanctions=a.sanctions||[];
@@ -5665,9 +5683,12 @@ function confirmSanction(agentId){
     dateReprise:fd.get("dateReprise")||"",
     createdAt:new Date().toISOString()
   });
-  saveDB();closeModal();toast("Sanction enregistrée","success");renderView();
+  try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
+  catch(e){toast("Sanction non enregistrée PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Sanction non confirmée par PostgreSQL")))return;
+  closeModal();toast("Sanction enregistrée","success");renderView();
 }
-function deleteSanction(agentId,idx){if(!confirm("Supprimer ?"))return;const a=db.agents.find(x=>x.id===agentId);a.sanctions.splice(idx,1);saveDB();renderView()}
+async function deleteSanction(agentId,idx){if(!confirm("Supprimer ?"))return;const a=db.agents.find(x=>x.id===agentId);a.sanctions.splice(idx,1);try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){toast("Suppression sanction non enregistrée PostgreSQL : "+(e.message||e),"error");return}if(!(await saveDBAndWaitToast("Suppression sanction non confirmée par PostgreSQL")))return;renderView()}
 
 
 
@@ -5688,7 +5709,7 @@ function openOpsConvocationModal(agentId){
     <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Envoyer à la DRH</button></div>
   </form>`);
 }
-function sendOpsConvocationRequest(agentId,form){
+async function sendOpsConvocationRequest(agentId,form){
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(form);const motif=String(fd.get("motif")||"").trim();if(!motif){toast("Motif obligatoire","error");return}
   ensureDemandesStructure();
@@ -5698,14 +5719,15 @@ function sendOpsConvocationRequest(agentId,form){
   db.demandesStructure.push(d);
   db.echanges=db.echanges||[];
   (db.users||[]).filter(u=>u.username&&u.username!==session?.username&&/(rh|drh|admin|adm)/i.test(String(u.role||u.niveau||""))).forEach(u=>db.echanges.push({id:uid("ech"),date:createdAt,from:session?.username||"ops",to:u.username,sujet:"Demande convocation "+(a.matricule||""),importance:"Élevée",message:"Demande de convocation officielle pour "+d.agentName+". Réf: "+ref,attachments:[],receivedBy:[],luPar:[session?.username||""],type:"message"}));
-  saveDB();closeModal();toast("Demande de convocation envoyée à la DRH","success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Demande de convocation non confirmée par PostgreSQL")))return;
+  closeModal();toast("Demande de convocation envoyée à la DRH","success");renderSidebar();renderView();
 }
 function convocationDemandActionsHTML(d){
   if(d.source!=="ops-convocation")return"";
   if(['traite','rejete','annule'].includes(d.statut||''))return `<span class="pill ${d.statut==='traite'?'pill-green':'pill-red'}">Convocation ${d.statut==='traite'?'envoyée':'rejetée'}</span>`;
   return `<button class="btn btn-primary text-xs" onclick="sendOfficialConvocationDemand('${d.id}')">Envoyer convocation</button><button class="btn btn-ghost text-xs text-red-600" onclick="rejectConvocationDemand('${d.id}')">Rejeter</button>`;
 }
-function sendOfficialConvocationDemand(id){
+async function sendOfficialConvocationDemand(id){
   const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   const a=(db.agents||[]).find(x=>x.id===d.agentId);if(!a){toast("Employé introuvable","error");return}
   const conv=d.payloadOriginal?.convocation||{};const ref=d.ref||("CONV-DRH-"+Date.now());
@@ -5714,13 +5736,15 @@ function sendOfficialConvocationDemand(id){
   d.pieces=d.pieces||[];d.pieces.push({name:ref+".html",type:"text/html",data:htmlData});
   d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Convocation officielle envoyée",note:"Document transmis au portail RH"});
   ensureDemandesPersonnel().push({...d,id:uid("dp"),source:"drh-convocation-portail",statut:"traite",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
-  saveDB();toast("Convocation officielle envoyée au portail RH","success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Convocation officielle non confirmée par PostgreSQL")))return;
+  toast("Convocation officielle envoyée au portail RH","success");renderSidebar();renderView();
 }
-function rejectConvocationDemand(id){
+async function rejectConvocationDemand(id){
   const motif=prompt("Motif du rejet DRH :")||"Demande de convocation rejetée par la DRH";
   const d=(db.demandesStructure||[]).find(x=>x.id===id)||(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   d.statut="rejete";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"DRH";d.reponse=motif;d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"DRH",action:"Convocation rejetée",note:motif});
-  saveDB();toast("Demande de convocation rejetée","success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Rejet convocation non confirmé par PostgreSQL")))return;
+  toast("Demande de convocation rejetée","success");renderSidebar();renderView();
 }
 
 function agentBlackListContractBlocked(a){return !!(a&&(a.blacklist||a.blacklistContractBlocked||a.contractBlocked))}
@@ -5774,7 +5798,7 @@ function openBlackListModal(agentId){
       <div class="flex gap-2 justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger" style="background:#1f2937;border-color:#000">⛔ Confirmer l'inscription</button></div>
     </form>`);
 }
-function confirmBlackList(agentId){
+async function confirmBlackList(agentId){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(document.querySelector(".modal-bg form"));
   a.blacklist=true;
@@ -5787,28 +5811,32 @@ function confirmBlackList(agentId){
   a.blacklistHistory=a.blacklistHistory||[];
   a.blacklistHistory.push({action:"inscription",date:a.blacklistAt,by:a.blacklistBy,motif:a.blacklistMotif,reference:a.blacklistReference,contractBlocked:true});
   sendBlackListAlertToDRH(a);
-  saveDB();
+  try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
+  catch(e){toast("Black list non enregistrée PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Black list non confirmée par PostgreSQL")))return;
   if(typeof logActivity==="function")logActivity("Inscription Black List",a.nom+" "+a.prenom+" · "+a.matricule+" · Motif: "+a.blacklistMotif);
   closeModal();toast("⛔ Agent inscrit sur la black list","success");renderView();
 }
-function removeBlackList(agentId){
+async function removeBlackList(agentId){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(!confirm("Retirer "+a.nom+" "+a.prenom+" de la black list ?"))return;
   const motif=prompt("Motif du retrait (obligatoire) :","");if(motif===null||!motif.trim()){toast("Motif requis","error");return}
   a.blacklistHistory=a.blacklistHistory||[];
   a.blacklistHistory.push({action:"retrait",date:new Date().toISOString(),by:session?session.username:"system",motif:motif.trim()});
   a.blacklist=false;a.blacklistAt=null;a.blacklistBy=null;a.blacklistMotif="";a.blacklistReference="";a.blacklistContractBlocked=false;a.contractBlocked=false;
-  saveDB();
+  try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
+  catch(e){toast("Retrait black list non enregistré PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Retrait black list non confirmé par PostgreSQL")))return;
   if(typeof logActivity==="function")logActivity("Retrait Black List",a.nom+" "+a.prenom+" · Motif: "+motif.trim());
   closeModal();toast("Agent retiré de la black list","success");renderView();
 }
 
 /* ---- UNLOCK ---- */
 function promptUnlock(agentId){openModal(`<h3 class="font-bold text-lg mb-4">🔓 Déverrouiller la fiche</h3><p class="text-sm text-slate-500 mb-4">Entrez le code maître.</p><form onsubmit="event.preventDefault();tryUnlock('${agentId}')"><input type="password" class="input mb-4" name="code" placeholder="Code maître" autofocus /><div class="flex gap-2 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-warn">Déverrouiller</button></div></form>`)}
-function tryUnlock(agentId){if(!isAdmin()){toast("Seul l'administrateur général peut déverrouiller","error");return}const code=document.querySelector(".modal-bg [name='code']").value;if(code!==db.settings.unlockCode){toast("Code incorrect","error");document.querySelector(".modal-bg [name='code']").value="";return}unlockedAgents.add(agentId);saveUnlocked();db.settings.unlockLog=db.settings.unlockLog||[];db.settings.unlockLog.unshift({date:new Date().toISOString(),user:session.username,role:session.role,agentId});if(db.settings.unlockLog.length>100)db.settings.unlockLog.length=100;saveDB();closeModal();toast("Fiche déverrouillée","success");renderView()}
+async function tryUnlock(agentId){if(!isAdmin()){toast("Seul l'administrateur général peut déverrouiller","error");return}const code=document.querySelector(".modal-bg [name='code']").value;if(code!==db.settings.unlockCode){toast("Code incorrect","error");document.querySelector(".modal-bg [name='code']").value="";return}unlockedAgents.add(agentId);saveUnlocked();db.settings.unlockLog=db.settings.unlockLog||[];db.settings.unlockLog.unshift({date:new Date().toISOString(),user:session.username,role:session.role,agentId});if(db.settings.unlockLog.length>100)db.settings.unlockLog.length=100;if(!(await saveDBAndWaitToast("Déverrouillage non confirmé par PostgreSQL")))return;closeModal();toast("Fiche déverrouillée","success");renderView()}
 function relockAgent(agentId){unlockedAgents.delete(agentId);saveUnlocked();renderView()}
-function lockAgent(agentId){const a=db.agents.find(x=>x.id===agentId);if(a){a.locked=true;a.updatedAt=today()}unlockedAgents.delete(agentId);saveUnlocked();saveDB();toast("Fiche verrouillée","success");renderView()}
-function unlockAgent(agentId){if(!isAdmin()){toast("Seul l'administrateur général peut déverrouiller","error");return}unlockedAgents.add(agentId);saveUnlocked();db.settings.unlockLog=db.settings.unlockLog||[];db.settings.unlockLog.unshift({date:new Date().toISOString(),user:session.username,role:"admin-direct",agentId});saveDB();toast("Fiche déverrouillée par l'administrateur général","success");renderView()}
+async function lockAgent(agentId){const a=db.agents.find(x=>x.id===agentId);if(a){a.locked=true;a.updatedAt=today();try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){toast("Verrouillage non enregistré PostgreSQL : "+(e.message||e),"error");return}}unlockedAgents.delete(agentId);saveUnlocked();if(!(await saveDBAndWaitToast("Verrouillage non confirmé par PostgreSQL")))return;toast("Fiche verrouillée","success");renderView()}
+async function unlockAgent(agentId){if(!isAdmin()){toast("Seul l'administrateur général peut déverrouiller","error");return}unlockedAgents.add(agentId);saveUnlocked();db.settings.unlockLog=db.settings.unlockLog||[];db.settings.unlockLog.unshift({date:new Date().toISOString(),user:session.username,role:"admin-direct",agentId});if(!(await saveDBAndWaitToast("Déverrouillage non confirmé par PostgreSQL")))return;toast("Fiche déverrouillée par l'administrateur général","success");renderView()}
 
 /* ---- FICHE / PRINT ---- */
 function agentSnapshotForPreview(id){
