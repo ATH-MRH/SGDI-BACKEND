@@ -11867,6 +11867,17 @@ function openAdminUserModalByKey(encodedUsername){
 function adminDeleteUserByKey(encodedUsername){
   adminDeleteUser(decodeURIComponent(String(encodedUsername||"")));
 }
+function adminUserFromApi(u){
+  return {
+    username:u.username,
+    nom:u.full_name||u.nom||u.username,
+    role:u.role||"agent",
+    niveau:u.access_level||u.niveau||"",
+    actif:u.is_active!==false,
+    societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:(Array.isArray(u.societesAutorisees)?u.societesAutorisees:[]),
+    structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees)
+  };
+}
 function openAdminUserModal(username){
   username=String(username||"").trim();
   const isNew=!username;
@@ -11921,14 +11932,18 @@ async function confirmAdminUser(originalUsername){
   if(!originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
     if(!password){toast("Mot de passe requis","error");return}
+    let savedUser=null;
     try{
-      await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password});
+      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password});
+      if(!savedUser||!savedUser.username)throw new Error("Confirmation PostgreSQL invalide");
     }catch(e){
       const msg=String(e.message||e||"");
       toast("Création PostgreSQL refusée : "+(/at least 3 characters/i.test(msg)?"l'identifiant doit contenir au moins 3 caractères":msg),"error");
       return;
     }
-    data.password=password;db.users.push(data);
+    const backendUser=adminUserFromApi(savedUser);
+    db.users=(db.users||[]).filter(x=>String(x.username||"").toLowerCase()!==backendUser.username.toLowerCase());
+    db.users.push(backendUser);
     logActivity("Création utilisateur",username);
   }else{
     const existing=adminUserByUsername(originalUsername);
@@ -11959,13 +11974,13 @@ async function confirmAdminUser(originalUsername){
         return;
       }
     }
-    if(password)data.password=password;else data.password=db.users[idx].password;
-    db.users[idx]=Object.assign({},db.users[idx],data);
+    db.users[idx]=Object.assign({},db.users[idx],data,password?{password}:{});
     logActivity("Modification utilisateur",username);
   }
   rememberUserPermissions(username,data.societesAutorisees,data.niveau,data.structuresAutorisees);
   if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees};saveSession(session)}
-  saveDB();closeModal();toast("Utilisateur enregistré","success");render();
+  try{await sgdiLoadAuthState()}catch(e){toast("Utilisateur enregistré, rechargement liste impossible : "+(e.message||e),"warning")}
+  saveDB();closeModal();toast("Utilisateur enregistré dans PostgreSQL","success");render();
 }
 function confirmAdminUserByKey(encodedUsername){
   return confirmAdminUser(decodeURIComponent(String(encodedUsername||"")));
