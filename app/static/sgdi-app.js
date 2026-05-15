@@ -1039,7 +1039,7 @@ function emptyDB(){
     devis:[],factures:[],paiements:[],avances:[],avoirs:[],caisse:[],
     prospects:[],clients:[],opportunites:[],visites:[],catalogue:[],
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
-    paieRubriques:[],paieElements:[],paieBulletins:[],paieClotures:[],
+    paieRubriques:[],paieElements:[],paieBulletins:[],paieClotures:[],paieGrilles:[],
     activityLog:[],categoriesPrest:[],themes:[],structures:[],
     niveauxAcces:[],priorites:[],alertes:[],customFields:[],customModules:[],
     societesConfig:{custom:DEFAULT_SOCIETES.slice(),descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
@@ -10520,7 +10520,7 @@ function stockExportCSV(){
 }
 
 /* ---- PAIE ---- */
-function defaultPaieConfig(){return{snmg:24000,heuresMois:173.33,tauxCnasSalarie:9,tauxCnasPatronal:25,tauxOeuvresSociales:0.5,abattementIRG:40,abattementMinMensuel:1000,abattementMaxMensuel:1500,primeNuit:3000,primePanier:0,primeTransport:0,retenueAbsenceJour:0}}
+function defaultPaieConfig(){return{snmg:24000,heuresMois:173.33,tauxCnasSalarie:9,tauxCnasPatronal:25,tauxOeuvresSociales:0.5,abattementIRG:40,abattementMinMensuel:1000,abattementMaxMensuel:1500,primeNuit:3000,primePanier:0,primeTransport:0,optimisationPanierMax:0,optimisationTransportMax:0,retenueAbsenceJour:0}}
 function paieConfig(){
   if(!db.paieConfig)db.paieConfig=defaultPaieConfig();
   db.paieConfig={...defaultPaieConfig(),...db.paieConfig};
@@ -10534,6 +10534,8 @@ function defaultPaieRubriques(){
     {id:"rub_prime_nuit",code:"PN",libelle:"Prime de nuit",type:"gain",imposable:true,cotisable:true,system:true,actif:true},
     {id:"rub_prime_panier",code:"PANIER",libelle:"Prime panier",type:"gain",imposable:false,cotisable:false,system:true,actif:true},
     {id:"rub_prime_transport",code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,system:true,actif:true},
+    {id:"rub_panier_variable",code:"PANIER_VAR",libelle:"Prime panier variable",type:"gain",imposable:false,cotisable:false,system:false,actif:true},
+    {id:"rub_transport_variable",code:"TRANS_VAR",libelle:"Prime transport variable",type:"gain",imposable:false,cotisable:false,system:false,actif:true},
     {id:"rub_absence",code:"ABS",libelle:"Retenue absence",type:"retenue",imposable:false,cotisable:false,system:true,actif:true},
     {id:"rub_avance",code:"AVS",libelle:"Avance sur salaire",type:"retenue",imposable:false,cotisable:false,system:false,actif:true},
     {id:"rub_rappel",code:"RAPPEL",libelle:"Rappel salaire",type:"gain",imposable:true,cotisable:true,system:false,actif:true},
@@ -10545,7 +10547,20 @@ function paieEnsure(){
   if(!Array.isArray(db.paieElements))db.paieElements=[];
   if(!Array.isArray(db.paieBulletins))db.paieBulletins=[];
   if(!Array.isArray(db.paieClotures))db.paieClotures=[];
+  if(!Array.isArray(db.paieGrilles))db.paieGrilles=[];
   defaultPaieRubriques().forEach(r=>{if(!db.paieRubriques.some(x=>x.id===r.id||x.code===r.code))db.paieRubriques.push({...r})});
+}
+function paieAgentFonction(a){return normalizePosteValue(a?.fonction||a?.poste||a?.affectationCourante?.poste||a?.posteContrat||"Non précisé")}
+function paieGrilleForAgent(a){
+  paieEnsure();
+  const fn=paieAgentFonction(a);
+  return (db.paieGrilles||[]).find(g=>String(g.fonction||"").toLowerCase()===String(fn||"").toLowerCase()&&(!g.societe||!a?.societe||g.societe===a.societe))||
+    (db.paieGrilles||[]).find(g=>String(g.fonction||"").toLowerCase()===String(fn||"").toLowerCase())||null;
+}
+function paieGrilleBounds(a){
+  const cfg=paieConfig();
+  const g=paieGrilleForAgent(a);
+  return{fonction:paieAgentFonction(a),grille:g,min:Math.max(Number(cfg.snmg||0),Number(g?.min||0)||0),max:Number(g?.max||0)||0,reference:Number(g?.reference||0)||0};
 }
 function paieIsClosed(ym,societe){
   paieEnsure();
@@ -10625,15 +10640,60 @@ function calcPaieAgent(a,ym){
   const netAPayer=Math.max(0,netSocial-irg+gainsNonCotisablesNonImposables-retenuesRubriques);
   const cnasPatronal=Math.round(brutCotisable*(Number(cfg.tauxCnasPatronal||0)/100));
   const oeuvresSociales=Math.round(brutCotisable*(Number(cfg.tauxOeuvresSociales||0)/100));
-  const coutEmployeur=brutCotisable+cnasPatronal+oeuvresSociales;
+  const coutEmployeur=gains+cnasPatronal+oeuvresSociales;
   return{brutBase,primeNuit,primes,absences:retenuesRubriques,retenuesRubriques,elements,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
+}
+function paieNetFromBase(base,cfg){
+  const brut=Math.max(0,Number(base)||0);
+  const cnas=Math.round(brut*(Number(cfg.tauxCnasSalarie||0)/100));
+  const netSocial=Math.max(0,brut-cnas);
+  const irgCalc=irgSalaireAlgerie(netSocial,cfg);
+  const cnasPatronal=Math.round(brut*(Number(cfg.tauxCnasPatronal||0)/100));
+  const oeuvresSociales=Math.round(brut*(Number(cfg.tauxOeuvresSociales||0)/100));
+  return{brutCotisable:brut,cnasSalarie:cnas,baseIRG:netSocial,irg:irgCalc.irg,netAPayer:Math.max(0,netSocial-irgCalc.irg),cnasPatronal,oeuvresSociales,coutEmployeur:brut+cnasPatronal+oeuvresSociales};
+}
+function paieOptimizeFromNet(targetNet,agent){
+  const cfg=paieConfig();
+  const target=Math.max(0,parseMoneyInput(targetNet)||0);
+  const bounds=paieGrilleBounds(agent);
+  const minBase=Math.max(0,Number(bounds.min||0));
+  const maxBase=Math.max(0,Number(bounds.max||0));
+  const panierMax=Math.max(0,Number(cfg.optimisationPanierMax||0));
+  const transportMax=Math.max(0,Number(cfg.optimisationTransportMax||0));
+  const maxNonTax=panierMax+transportMax;
+  const minCalc=paieNetFromBase(minBase,cfg);
+  let warning="";
+  if(target<=minCalc.netAPayer){
+    warning="Net cible inférieur ou égal au net minimal de la grille fonction. La base reste au minimum autorisé.";
+    return{target,base:minBase,panier:0,transport:0,nonTaxable:0,warning,bounds,...paieNetFromBase(minBase,cfg)};
+  }
+  const nonTaxable=Math.min(maxNonTax,Math.max(0,target-minCalc.netAPayer));
+  const taxableTarget=Math.max(0,target-nonTaxable);
+  let lo=minBase,hi=Math.max(minBase*2,taxableTarget*2,1);
+  while(paieNetFromBase(hi,cfg).netAPayer<taxableTarget&&hi<10000000)hi*=1.5;
+  for(let i=0;i<48;i++){
+    const mid=(lo+hi)/2;
+    if(paieNetFromBase(mid,cfg).netAPayer<taxableTarget)lo=mid;else hi=mid;
+  }
+  const base=Math.round(hi);
+  if(maxBase&&base>maxBase){
+    const calcMax=paieNetFromBase(maxBase,cfg);
+    const remaining=Math.max(0,target-calcMax.netAPayer);
+    const nt=Math.min(maxNonTax,remaining);
+    warning="Net cible supérieur au maximum de la grille fonction. La base est plafonnée au maximum autorisé.";
+    return{target,base:maxBase,panier:Math.min(nt,panierMax),transport:Math.max(0,nt-Math.min(nt,panierMax)),nonTaxable:nt,warning,bounds,...calcMax,netAPayer:calcMax.netAPayer+nt,coutEmployeur:calcMax.coutEmployeur+nt};
+  }
+  const calc=paieNetFromBase(base,cfg);
+  const panier=Math.min(nonTaxable,panierMax);
+  const transport=Math.max(0,nonTaxable-panier);
+  return{target,base,panier,transport,nonTaxable,warning,bounds,...calc,netAPayer:calc.netAPayer+nonTaxable,coutEmployeur:calc.coutEmployeur+nonTaxable};
 }
 function paieMonthLabel(ym){const [y,m]=String(ym||"").split("-").map(Number);if(!y||!m)return new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});return new Date(y,m-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}
 function setPaieFilter(k,v){sessionStorage.setItem("paie"+k,v||"");renderView()}
 async function savePaieConfig(){
   const f=document.getElementById("paie-config-form");if(!f)return;
   const fd=new FormData(f);const cfg=paieConfig();
-  ["snmg","heuresMois","tauxCnasSalarie","tauxCnasPatronal","tauxOeuvresSociales","abattementIRG","abattementMinMensuel","abattementMaxMensuel","primeNuit","primePanier","primeTransport","retenueAbsenceJour"].forEach(k=>cfg[k]=parseMoneyInput(fd.get(k))||0);
+  ["snmg","heuresMois","tauxCnasSalarie","tauxCnasPatronal","tauxOeuvresSociales","abattementIRG","abattementMinMensuel","abattementMaxMensuel","primeNuit","primePanier","primeTransport","optimisationPanierMax","optimisationTransportMax","retenueAbsenceJour"].forEach(k=>cfg[k]=parseMoneyInput(fd.get(k))||0);
   db.paieConfig=cfg;
   if(!(await saveDBAndWaitToast("Paramètres paie non confirmés par PostgreSQL")))return;
   toast("Paramètres paie enregistrés","success");renderView();
@@ -10748,6 +10808,39 @@ function paieRubriquesHTML(){
   paieEnsure();
   return `<div class="overflow-x-auto"><table><thead><tr><th>Code</th><th>Libellé</th><th>Type</th><th>Cotisable</th><th>Imposable</th><th>Actif</th><th></th></tr></thead><tbody>${(db.paieRubriques||[]).map(r=>`<tr><td class="font-mono text-xs">${escapeHTML(r.code||"")}</td><td>${escapeHTML(r.libelle||"")}</td><td><span class="pill ${r.type==="retenue"?"pill-red":"pill-green"}">${escapeHTML(r.type||"gain")}</span></td><td>${r.cotisable!==false?"Oui":"Non"}</td><td>${r.imposable!==false?"Oui":"Non"}</td><td>${r.actif!==false?"Oui":"Non"}</td><td>${r.system?`<span class="text-xs text-slate-400">Système</span>`:`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="paieDeleteRubrique('${r.id}')">Supprimer</button>`}</td></tr>`).join("")}</tbody></table></div>`;
 }
+function paieGrillesHTML(){
+  paieEnsure();
+  return `<div class="overflow-x-auto"><table><thead><tr><th>Fonction</th><th>Société</th><th>Min base</th><th>Référence</th><th>Max base</th><th></th></tr></thead><tbody>${(db.paieGrilles||[]).map(g=>`<tr><td class="font-bold">${escapeHTML(g.fonction||"")}</td><td>${escapeHTML(g.societe||"Toutes")}</td><td>${money(g.min||0)}</td><td>${money(g.reference||0)}</td><td>${g.max?money(g.max):"—"}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="paieDeleteGrille('${g.id}')">Supprimer</button></td></tr>`).join("")||`<tr><td colspan="6" class="text-center text-slate-500 p-4">Aucune grille. Le système utilise le SNMG comme minimum.</td></tr>`}</tbody></table></div>`;
+}
+function openPaieGrilleModal(){
+  const fonctions=[...new Set((db.agents||[]).map(paieAgentFonction).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  openModal(`<h3 class="font-bold text-lg mb-3">Nouvelle grille salariale par fonction</h3><form onsubmit="event.preventDefault();paieSaveGrille(this)">
+    <div class="grid grid-2 gap-3">
+      <div><label class="label">Fonction / poste</label><input class="input" name="fonction" list="paie-fonctions-list" required placeholder="Agent de sécurité"/><datalist id="paie-fonctions-list">${fonctions.map(f=>`<option value="${escapeHTML(f)}"></option>`).join("")}</datalist></div>
+      <div><label class="label">Société</label><select class="select" name="societe"><option value="">Toutes sociétés</option>${SOCIETES.map(s=>`<option>${escapeHTML(s)}</option>`).join("")}</select></div>
+      <div><label class="label">Salaire base minimum</label><input class="input" name="min" required onblur="formatMoneyField(this)" placeholder="Ex : 35 000,00"/></div>
+      <div><label class="label">Salaire base référence</label><input class="input" name="reference" onblur="formatMoneyField(this)" placeholder="Ex : 45 000,00"/></div>
+      <div><label class="label">Salaire base maximum</label><input class="input" name="max" onblur="formatMoneyField(this)" placeholder="Ex : 70 000,00"/></div>
+    </div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div>
+  </form>`);
+}
+async function paieSaveGrille(form){
+  paieEnsure();
+  const fd=new FormData(form);const fonction=normalizePosteValue(String(fd.get("fonction")||"").trim());
+  if(!fonction){toast("Fonction obligatoire","error");return}
+  const societe=String(fd.get("societe")||"").trim();
+  db.paieGrilles=(db.paieGrilles||[]).filter(g=>!(String(g.fonction||"").toLowerCase()===fonction.toLowerCase()&&String(g.societe||"")===societe));
+  db.paieGrilles.push({id:uid("pg"),fonction,societe,min:parseMoneyInput(fd.get("min"))||0,reference:parseMoneyInput(fd.get("reference"))||0,max:parseMoneyInput(fd.get("max"))||0,createdAt:new Date().toISOString(),createdBy:session?.username||""});
+  if(!(await saveDBAndWaitToast("Grille salariale non confirmée par PostgreSQL")))return;
+  closeModal();toast("Grille salariale enregistrée","success");renderView();
+}
+async function paieDeleteGrille(id){
+  if(!confirm("Supprimer cette grille salariale ?"))return;
+  db.paieGrilles=(db.paieGrilles||[]).filter(g=>g.id!==id);
+  if(!(await saveDBAndWaitToast("Suppression grille non confirmée par PostgreSQL")))return;
+  renderView();
+}
 function openPaieRubriqueModal(){
   openModal(`<h3 class="font-bold text-lg mb-3">Nouvelle rubrique de paie</h3><form onsubmit="event.preventDefault();paieSaveRubrique(this)">
     <div class="grid grid-2 gap-3">
@@ -10806,6 +10899,52 @@ async function paieSaveElements(agentId,form){
   if(!(await saveDBAndWaitToast("Éléments paie non confirmés par PostgreSQL")))return;
   closeModal();toast("Éléments de paie enregistrés","success");renderView();
 }
+function paieOptimizerHTML(agents,ym){
+  const selected=sessionStorage.getItem("paieOptimAgent")||agents[0]?.id||"";
+  const target=sessionStorage.getItem("paieOptimNet")||"";
+  const agent=(db.agents||[]).find(a=>a.id===selected)||agents[0]||null;
+  const bounds=agent?paieGrilleBounds(agent):null;
+  const opt=target?paieOptimizeFromNet(target,agent):null;
+  return `<div class="card p-4 mb-4">
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-3"><div><h3 class="font-black">Simulateur net cible → paie optimisée</h3><div class="text-xs text-slate-500">Optimisation encadrée par les plafonds panier/transport configurés. Le système respecte SNMG, CNAS et IRG.</div></div>${paieIsClosed(ym)?`<span class="pill pill-green">Mois clôturé</span>`:""}</div>
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div><label class="label">Employé</label><select class="select" onchange="sessionStorage.setItem('paieOptimAgent',this.value);renderView()">${agents.map(a=>`<option value="${a.id}" ${selected===a.id?"selected":""}>${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</option>`).join("")}</select></div>
+      <div><label class="label">Net à payer cible</label><input class="input" inputmode="decimal" value="${escapeHTML(target)}" placeholder="Ex : 55 000,00" oninput="sessionStorage.setItem('paieOptimNet',this.value);renderView()"/></div>
+      <div><label class="label">Grille fonction</label><div class="input bg-slate-50">${bounds?`${escapeHTML(bounds.fonction)} · ${money(bounds.min)}${bounds.max?" / "+money(bounds.max):""}`:"SNMG"}</div></div>
+      <div><label class="label">Panier max optimisation</label><div class="input bg-slate-50">${money(paieConfig().optimisationPanierMax||0)}</div></div>
+      <div><label class="label">Transport max optimisation</label><div class="input bg-slate-50">${money(paieConfig().optimisationTransportMax||0)}</div></div>
+    </div>
+    ${opt?`<div class="grid grid-cols-2 md:grid-cols-6 gap-2 mt-3">
+      <div class="p-3 rounded bg-slate-50"><div class="text-[10px] uppercase text-slate-500">Base brute</div><b>${money(opt.base)}</b></div>
+      <div class="p-3 rounded bg-emerald-50"><div class="text-[10px] uppercase text-slate-500">Panier</div><b>${money(opt.panier)}</b></div>
+      <div class="p-3 rounded bg-emerald-50"><div class="text-[10px] uppercase text-slate-500">Transport</div><b>${money(opt.transport)}</b></div>
+      <div class="p-3 rounded bg-red-50"><div class="text-[10px] uppercase text-slate-500">CNAS salarié</div><b>${money(opt.cnasSalarie)}</b></div>
+      <div class="p-3 rounded bg-purple-50"><div class="text-[10px] uppercase text-slate-500">IRG</div><b>${money(opt.irg)}</b></div>
+      <div class="p-3 rounded bg-amber-50"><div class="text-[10px] uppercase text-slate-500">Coût employeur</div><b>${money(opt.coutEmployeur)}</b></div>
+    </div>
+    ${opt.warning?`<div class="text-xs text-red-700 mt-2">${escapeHTML(opt.warning)}</div>`:""}
+    <div class="flex justify-end mt-3"><button class="btn btn-primary" onclick="paieApplyOptimization('${selected}')">Appliquer à l'employé</button></div>`:""}
+  </div>`;
+}
+async function paieApplyOptimization(agentId){
+  const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
+  if(paieIsClosed(ym)){toast("Mois clôturé : application refusée","error");return}
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Employé introuvable","error");return}
+  const opt=paieOptimizeFromNet(sessionStorage.getItem("paieOptimNet")||"",a);
+  if(!opt.target){toast("Saisissez un net cible","error");return}
+  const panierRub=(db.paieRubriques||[]).find(r=>r.code==="PANIER_VAR");
+  const transRub=(db.paieRubriques||[]).find(r=>r.code==="TRANS_VAR");
+  a.salaireNet=opt.base;
+  a.salaireBase=opt.base;
+  a.updatedAt=today();
+  db.paieElements=(db.paieElements||[]).filter(e=>!(e.agentId===agentId&&e.ym===ym&&[panierRub?.id,transRub?.id].includes(e.rubriqueId)));
+  if(opt.panier>0&&panierRub)db.paieElements.push({id:uid("pel"),ym,agentId,rubriqueId:panierRub.id,montant:opt.panier,note:"Optimisation net cible",createdAt:new Date().toISOString(),createdBy:session?.username||""});
+  if(opt.transport>0&&transRub)db.paieElements.push({id:uid("pel"),ym,agentId,rubriqueId:transRub.id,montant:opt.transport,note:"Optimisation net cible",createdAt:new Date().toISOString(),createdBy:session?.username||""});
+  try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
+  catch(e){toast("Salaire non enregistré PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Optimisation paie non confirmée par PostgreSQL")))return;
+  toast("Paie optimisée appliquée","success");renderView();
+}
 function renderPaie(view){
   paieEnsure();
   const cfg=paieConfig();
@@ -10840,6 +10979,11 @@ function renderPaie(view){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Alertes SNMG</div><div class="text-2xl font-black ${anomalies.length?"text-red-700":"text-emerald-700"}">${anomalies.length}</div></div>
   </div>
   ${anomalies.length?`<div class="card p-4 mb-4" style="background:#fef2f2;border:2px solid #dc2626"><div class="font-black text-red-700 mb-2">Alerte SNMG</div><div class="text-sm text-red-700">${anomalies.length} agent(s) ont un brut cotisable inférieur au SNMG ${money(cfg.snmg)}.</div></div>`:""}
+  ${paieOptimizerHTML(agents,ym)}
+  <details class="card p-4 mb-4"><summary class="font-bold cursor-pointer">Grilles salariales par fonction</summary>
+    <div class="mt-3">${paieGrillesHTML()}</div>
+    <button type="button" class="btn btn-primary mt-3" onclick="openPaieGrilleModal()">Ajouter grille fonction</button>
+  </details>
   <details class="card p-4 mb-4"><summary class="font-bold cursor-pointer">Rubriques de paie paramétrables</summary>
     <div class="mt-3">${paieRubriquesHTML()}</div>
     <button type="button" class="btn btn-primary mt-3" onclick="openPaieRubriqueModal()">Ajouter rubrique</button>
@@ -10857,6 +11001,8 @@ function renderPaie(view){
       <div><label class="label">Prime nuit</label><input class="input" name="primeNuit" value="${formatMoneyInputValue(cfg.primeNuit)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Prime panier</label><input class="input" name="primePanier" value="${formatMoneyInputValue(cfg.primePanier)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Prime transport</label><input class="input" name="primeTransport" value="${formatMoneyInputValue(cfg.primeTransport)}" onblur="formatMoneyField(this)"/></div>
+      <div><label class="label">Panier max optimisation</label><input class="input" name="optimisationPanierMax" value="${formatMoneyInputValue(cfg.optimisationPanierMax)}" onblur="formatMoneyField(this)"/></div>
+      <div><label class="label">Transport max optimisation</label><input class="input" name="optimisationTransportMax" value="${formatMoneyInputValue(cfg.optimisationTransportMax)}" onblur="formatMoneyField(this)"/></div>
       <div class="col-span-6 text-xs text-slate-500">IRG intégré : barème progressif mensuel 0 / 23 / 27 / 30 / 33 / 35%, exonération salaire jusqu'à 30 000 DA, abattement IRG ${qty(cfg.abattementIRG)}% plafonné entre ${money(cfg.abattementMinMensuel)} et ${money(cfg.abattementMaxMensuel)}, formule spéciale 30 001 - 35 000 DA. Les primes imposables/non imposables et cas particuliers restent à valider avec la comptabilité.</div>
       <div class="col-span-6"><button type="button" class="btn btn-primary" onclick="savePaieConfig()">Enregistrer paramètres</button></div>
     </form>
