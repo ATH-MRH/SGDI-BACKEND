@@ -6821,7 +6821,8 @@ async function submitPortailPersonnel(form){
     const piece=await readSmallFile(form.piece.files&&form.piece.files[0]);
     const d={id:uid("dp"),date:today(),createdAt:new Date().toISOString(),createdBy:session?.username||"",agentId:a?.id||session?.agentId||"",agentName:a?((a.nom||"")+" "+(a.prenom||"")).trim():(session?.nom||""),matricule:a?.matricule||"",societe:a?.societe||mySoc()||"",type:fd.get("type")||"Demande",categorie:fd.get("categorie")||"",urgence:fd.get("urgence")||"normale",objet:(fd.get("objet")||"").toString().trim(),message:(fd.get("message")||"").toString().trim(),statut:"nouveau",pieces:piece?[piece]:[],documentsDemandes:[],historique:[{date:new Date().toISOString(),user:session?.username||"",action:"Création",note:"Demande envoyée via portail mobile"}]};
     ensureDemandesPersonnel().push(d);
-    saveDB();toast("Demande envoyée à la DRH","success");renderSidebar();renderView();
+    if(!(await saveDBAndWaitToast("Demande personnel non confirmée par PostgreSQL")))return;
+    toast("Demande envoyée à la DRH","success");renderSidebar();renderView();
   }catch(e){toast(e.message||String(e),"error")}
 }
 function demandePersonnelCardHTML(d,personnel){
@@ -6962,13 +6963,14 @@ function openTraiterDemandePersonnel(id){
     <label class="label">Réponse complémentaire DRH</label><textarea class="textarea mb-3" name="reponse" rows="4" placeholder="Ajouter une précision libre si nécessaire...">${escapeHTML(d.reponseLibre||d.reponse||"")}</textarea>
     <div class="flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
 }
-function saveTraitementDemandePersonnel(id,form){
+async function saveTraitementDemandePersonnel(id,form){
   const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   const pred=Array.from(form.querySelectorAll('input[name="reponsesPred"]:checked')).map(x=>x.value.trim()).filter(Boolean);
   const libre=(form.reponse.value||"").trim();
   d.statut=form.statut.value;d.reponsesPredifinies=pred;d.reponseLibre=libre;d.reponse=[...pred,libre].filter(Boolean).join("\n\n");d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";
   d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse envoyée",note:d.statut});
-  saveDB();closeModal();toast("Demande mise à jour","success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Traitement demande non confirmé par PostgreSQL")))return;
+  closeModal();toast("Demande mise à jour","success");renderSidebar();renderView();
 }
 function openDemanderDocumentPersonnel(id){
   openModal(`<h3 class="font-bold text-lg mb-3">Demander un document</h3><form onsubmit="event.preventDefault();saveDocumentRequestPersonnel('${id}',this)">
@@ -6976,11 +6978,12 @@ function openDemanderDocumentPersonnel(id){
     <label class="label">Instruction</label><textarea class="textarea mb-3" name="note" rows="3" placeholder="Précision pour l'employé"></textarea>
     <div class="flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Envoyer demande</button></div></form>`);
 }
-function saveDocumentRequestPersonnel(id,form){
+async function saveDocumentRequestPersonnel(id,form){
   const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
   d.documentsDemandes=d.documentsDemandes||[];d.documentsDemandes.push({nom:form.nom.value||"Document",note:form.note.value||"",demandeLe:new Date().toISOString(),demandePar:session?.username||"",recu:false});
   d.statut=d.statut==="traite"?"en_cours":(d.statut||"nouveau");d.updatedAt=new Date().toISOString();
-  saveDB();closeModal();toast("Document demandé via plateforme","success");renderSidebar();renderView();
+  if(!(await saveDBAndWaitToast("Demande document non confirmée par PostgreSQL")))return;
+  closeModal();toast("Document demandé via plateforme","success");renderSidebar();renderView();
 }
 function openUploadDocumentDemande(id,index){
   openModal(`<h3 class="font-bold text-lg mb-3">Envoyer le document demandé</h3><form onsubmit="event.preventDefault();saveUploadDocumentDemande('${id}',${index},this)">
@@ -6994,7 +6997,8 @@ async function saveUploadDocumentDemande(id,index,form){
     const doc=d.documentsDemandes&&d.documentsDemandes[index];if(!doc)return;
     doc.recu=true;doc.recuLe=new Date().toISOString();doc.fichier=file;
     d.pieces=d.pieces||[];d.pieces.push(file);d.updatedAt=new Date().toISOString();
-    saveDB();closeModal();toast("Document envoyé","success");renderView();
+    if(!(await saveDBAndWaitToast("Envoi document non confirmé par PostgreSQL")))return;
+    closeModal();toast("Document envoyé","success");renderView();
   }catch(e){toast(e.message||String(e),"error")}
 }
 
@@ -7055,7 +7059,7 @@ function openTraiterStructureDemand(id){
   const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;
   openModal(`<h3 class="font-bold text-lg mb-3">Répondre à la demande structure</h3><form onsubmit="event.preventDefault();saveTraiterStructureDemand('${id}',this)"><label class="label">Statut</label><select class="select mb-3" name="statut"><option value="en_cours" ${d.statut==='en_cours'?'selected':''}>En cours</option><option value="traite" ${d.statut==='traite'?'selected':''}>Traité</option><option value="rejete" ${d.statut==='rejete'?'selected':''}>Rejeté</option></select><label class="label">Réponse</label><textarea class="textarea mb-3" name="reponse" rows="4">${escapeHTML(d.reponse||"")}</textarea><div class="flex justify-end gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
 }
-function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;d.statut=form.statut.value;d.reponse=form.reponse.value||"";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse structure",note:d.statut});saveDB();closeModal();toast("Demande structure mise à jour","success");renderSidebar();renderView()}
+async function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;d.statut=form.statut.value;d.reponse=form.reponse.value||"";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse structure",note:d.statut});if(!(await saveDBAndWaitToast("Demande structure non confirmée par PostgreSQL")))return;closeModal();toast("Demande structure mise à jour","success");renderSidebar();renderView()}
 
 /* ---- CONGES ---- */
 function renderConges(view){
@@ -7087,9 +7091,9 @@ function renderConges(view){
 }
 function setCongesFiltre(v){sessionStorage.setItem("congesFiltre",v);renderView()}
 function openCongeModal(){const soc=effectifSocieteFilter&&effectifSocieteFilter();const agents=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));openModal(`<h3 class="font-bold text-lg mb-4">Demande de congé</h3><form onsubmit="event.preventDefault();saveConge()"><div class="grid grid-2"><div class="col-span-2"><label class="label">Agent</label><select class="select" name="agentId" ><option value="">—</option>${agents.map(a=>`<option value="${a.id}">${escapeHTML(a.nom+" "+a.prenom)} · ${escapeHTML(a.societe||"")}</option>`).join("")}</select></div><div><label class="label">Type</label><select class="select" name="type">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select><div class="text-xs text-slate-500 mt-1">La maladie est traitée comme une absence, pas comme un congé.</div></div><div><label class="label">Statut</label><select class="select" name="statut"><option>en_attente</option><option>approuve</option></select></div><div><label class="label">Du</label><input class="input" type="date" name="du" /></div><div><label class="label">Au</label><input class="input" type="date" name="au" /></div><div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`)}
-function saveConge(){const fd=new FormData(document.querySelector(".modal-bg form"));const agentId=fd.get("agentId");const soc=effectifSocieteFilter&&effectifSocieteFilter();const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Choisissez un agent","error");return}if(soc&&a.societe!==soc){toast("Agent hors société active","error");return}db.conges.push({id:uid("cg"),agentId,type:fd.get("type"),du:fd.get("du"),au:fd.get("au"),motif:fd.get("motif"),statut:fd.get("statut"),createdAt:today()});saveDB();closeModal();toast("Enregistré","success");renderView()}
-function approuverConge(id){const c=db.conges.find(x=>x.id===id);c.statut="approuve";saveDB();renderView()}
-function refuserConge(id){const c=db.conges.find(x=>x.id===id);c.statut="refuse";saveDB();renderView()}
+async function saveConge(){const fd=new FormData(document.querySelector(".modal-bg form"));const agentId=fd.get("agentId");const soc=effectifSocieteFilter&&effectifSocieteFilter();const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Choisissez un agent","error");return}if(soc&&a.societe!==soc){toast("Agent hors société active","error");return}db.conges.push({id:uid("cg"),agentId,type:fd.get("type"),du:fd.get("du"),au:fd.get("au"),motif:fd.get("motif"),statut:fd.get("statut"),createdAt:today()});if(!(await saveDBAndWaitToast("Congé non confirmé par PostgreSQL")))return;closeModal();toast("Enregistré","success");renderView()}
+async function approuverConge(id){const c=db.conges.find(x=>x.id===id);c.statut="approuve";if(!(await saveDBAndWaitToast("Validation congé non confirmée par PostgreSQL")))return;renderView()}
+async function refuserConge(id){const c=db.conges.find(x=>x.id===id);c.statut="refuse";if(!(await saveDBAndWaitToast("Refus congé non confirmé par PostgreSQL")))return;renderView()}
 
 /* ---- FICHE DE POSITION ---- */
 function ficheAgentInConge(a){
