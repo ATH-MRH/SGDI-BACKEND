@@ -386,7 +386,6 @@
   .notification-item-meta{font-size:11px;color:#64748b;margin-top:7px;font-weight:800}
   .notification-item.is-read .notification-item-head,.notification-item.is-read .notification-item-title,.notification-item.is-read .notification-item-body,.notification-item.is-read .notification-item-meta{font-weight:650;color:#64748b}
   .notification-item.is-unread .notification-item-title,.notification-item.is-unread .notification-item-body{font-weight:950;color:#111827}
-  .notification-action-btn{width:100%;margin-top:10px;justify-content:center}
   .notification-empty{padding:34px 12px;text-align:center;color:#047857;font-size:13px;font-weight:900}
   .dialogue-head{padding:12px 14px;border-bottom:1px solid #cbd5e1;display:flex;flex-direction:column;gap:8px;background:#e2e8f0;color:#0f172a;flex-shrink:0}
   .dialogue-title{font-size:13px;font-weight:900;letter-spacing:.02em;white-space:nowrap;line-height:1.15}

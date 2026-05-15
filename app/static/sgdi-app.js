@@ -2492,7 +2492,6 @@ function notificationPanelHTML(){
     <div class="notification-item-title">${escapeHTML(t.title||"Action à effectuer")}</div>
     <div class="notification-item-body">${escapeHTML(t.message||"Instruction non renseignée.")}</div>
     <div class="notification-item-meta">${escapeHTML(t.candidateName||"")} ${t.poste?`· ${escapeHTML(t.poste)}`:""}</div>
-    <button type="button" class="btn btn-primary notification-action-btn" onclick="notificationToggle(false);navigate('${jsString(t.route||"dashboard")}')">Action</button>
   </div>`};
   return `<div class="notification-backdrop no-print ${open?"":"closed"}" onclick="if(event.target===this)notificationToggle(false)">
     <aside class="notification-panel" aria-label="Notifications système">
