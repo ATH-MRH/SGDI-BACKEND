@@ -15,6 +15,18 @@ from app.core.photo_storage import normalize_photo_fields
 logger = logging.getLogger("sgdi.records")
 OBJECT_ITEM_ID = "__object__"
 ADMIN_ACTION_ROLES = {"admin", "adm", "adm1", "adm2", "rh", "drh", "dispatch", "ops"}
+ADMIN_SNAPSHOT_ROLES = {"admin", "adm", "adm1", "adm2"}
+SOCIETY_FIELDS = ("societe", "society", "societeEmettrice", "contractSociete")
+AGENT_REF_FIELDS = ("agentId", "employeeId", "employee_id", "beneficiaireAgentId", "retourAgentId")
+SITE_REF_FIELDS = ("siteId", "site_id")
+SENSITIVE_SOCIETY_COLLECTIONS = {
+    "agents", "employees", "sites", "candidats", "candidatsReserve", "candidatsArchives",
+    "contrats", "contratsPersonnel", "avenants", "conges", "incidents", "materiel",
+    "demandesPersonnel", "demandesStructure", "pointages", "pointageMensuel",
+    "feuillePresence", "missions", "siteInspections", "clients", "prospects",
+    "opportunites", "visites", "devis", "factures", "paiements", "avances", "avoirs",
+    "caisse", "stockArticles", "stockMouvements", "magasins", "fournisseurs",
+}
 
 
 def _invalid_item_id(value: Any) -> bool:
@@ -59,7 +71,147 @@ def _collection_rows(db: Session, name: str) -> list[SgdiRecord]:
     ).scalars().all()
 
 
-def get_database(db: Session) -> dict[str, list[Any] | dict[str, Any]]:
+def _normalized_set(values: Any) -> set[str]:
+    out: set[str] = set()
+    if isinstance(values, (list, tuple, set)):
+        for value in values:
+            clean = str(value or "").strip().upper()
+            if clean:
+                out.add(clean)
+    return out
+
+
+def _user_role(user: Any | None) -> str:
+    return str(getattr(user, "role", "") or "").strip().lower()
+
+
+def _user_allowed_societies(user: Any | None) -> set[str]:
+    return _normalized_set(getattr(user, "authorized_societies", None))
+
+
+def _snapshot_unrestricted(user: Any | None) -> bool:
+    if user is None:
+        return True
+    return _user_role(user) in ADMIN_SNAPSHOT_ROLES or not _user_allowed_societies(user)
+
+
+def can_replace_collection_for_user(name: str, user: Any | None) -> bool:
+    return _snapshot_unrestricted(user) or name not in SENSITIVE_SOCIETY_COLLECTIONS
+
+
+def _item_society(item: dict[str, Any]) -> str:
+    for field in SOCIETY_FIELDS:
+        value = str(item.get(field) or "").strip()
+        if value:
+            return value.upper()
+    return ""
+
+
+def ensure_item_allowed_for_user(item: dict[str, Any], user: Any | None) -> None:
+    if _snapshot_unrestricted(user):
+        return
+    society = _item_society(item)
+    if society and society not in _user_allowed_societies(user):
+        raise HTTPException(status_code=403, detail="Société non autorisée pour cet utilisateur")
+
+
+def _item_refs(item: dict[str, Any], fields: tuple[str, ...]) -> set[str]:
+    refs: set[str] = set()
+    for field in fields:
+        value = str(item.get(field) or "").strip()
+        if value:
+            refs.add(value)
+    return refs
+
+
+def _item_identity_refs(item: dict[str, Any]) -> set[str]:
+    refs: set[str] = set()
+    for field in ("id", "backendId", "employeeId", "employee_id", "matricule", "code"):
+        value = str(item.get(field) or "").strip()
+        if value:
+            refs.add(value)
+    return refs
+
+
+def _filter_rows_for_scope(
+    rows: list[Any],
+    allowed_societies: set[str],
+    allowed_agent_refs: set[str],
+    allowed_site_refs: set[str],
+    keep_unscoped: bool,
+) -> list[Any]:
+    out: list[Any] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            out.append(row)
+            continue
+        society = _item_society(row)
+        if society:
+            if society in allowed_societies:
+                out.append(row)
+            continue
+        if _item_refs(row, AGENT_REF_FIELDS) & allowed_agent_refs:
+            out.append(row)
+            continue
+        if _item_refs(row, SITE_REF_FIELDS) & allowed_site_refs:
+            out.append(row)
+            continue
+        if keep_unscoped:
+            out.append(row)
+    return out
+
+
+def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], user: Any | None) -> dict[str, list[Any] | dict[str, Any]]:
+    if _snapshot_unrestricted(user):
+        return snapshot
+    allowed_societies = _user_allowed_societies(user)
+    scoped: dict[str, list[Any] | dict[str, Any]] = deepcopy(snapshot)
+
+    allowed_agent_refs: set[str] = set()
+    for name in ("agents", "employees"):
+        rows = scoped.get(name)
+        if not isinstance(rows, list):
+            continue
+        filtered = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if _item_society(row) in allowed_societies:
+                filtered.append(row)
+                allowed_agent_refs.update(_item_identity_refs(row))
+        scoped[name] = filtered
+
+    allowed_site_refs: set[str] = set()
+    rows = scoped.get("sites")
+    if isinstance(rows, list):
+        filtered = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if _item_society(row) in allowed_societies:
+                filtered.append(row)
+                allowed_site_refs.update(_item_identity_refs(row))
+        scoped["sites"] = filtered
+
+    for name, value in list(scoped.items()):
+        if not isinstance(value, list) or name in {"agents", "employees", "sites"}:
+            continue
+        scoped[name] = _filter_rows_for_scope(
+            value,
+            allowed_societies,
+            allowed_agent_refs,
+            allowed_site_refs,
+            keep_unscoped=name not in SENSITIVE_SOCIETY_COLLECTIONS,
+        )
+
+    current_username = str(getattr(user, "username", "") or "")
+    users = scoped.get("users")
+    if isinstance(users, list):
+        scoped["users"] = [row for row in users if isinstance(row, dict) and row.get("username") == current_username]
+    return scoped
+
+
+def get_database(db: Session, user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
     rows = db.execute(select(SgdiRecord).order_by(SgdiRecord.collection.asc(), SgdiRecord.position.asc(), SgdiRecord.id.asc())).scalars().all()
     grouped: dict[str, list[SgdiRecord]] = {}
     for row in rows:
@@ -74,10 +226,12 @@ def get_database(db: Session) -> dict[str, list[Any] | dict[str, Any]]:
             result[name] = [deepcopy(row.data) for row in items if row.kind == "item"]
     for name in sorted(sql_bridge.SQL_COLLECTIONS):
         result[name] = sql_bridge.list_collection(db, name)
-    return result
+    return scope_database_for_user(result, user)
 
 
-def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]) -> dict[str, list[Any] | dict[str, Any]]:
+def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]], user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
+    if not _snapshot_unrestricted(user):
+        raise HTTPException(status_code=403, detail="Remplacement global réservé administrateur")
     _validate_legacy_database_payload(payload)
     db.execute(delete(SgdiRecord))
     logger.info("Remplacement base SGDI API-first: %s collection(s)", len(payload))
@@ -89,7 +243,7 @@ def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]
         _replace_collection_no_commit(db, name, data)
     db.commit()
     logger.info("Base SGDI sauvegardée: tables SQL métier + sgdi_records résiduel")
-    return get_database(db)
+    return get_database(db, user)
 
 
 def get_collection(db: Session, name: str) -> list[Any] | dict[str, Any]:
