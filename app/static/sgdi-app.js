@@ -1316,6 +1316,7 @@ function bindRequiredFieldCleanup(form){
 function money(n){if(n===null||n===undefined||n==="")return"—";const v=Number(n);if(isNaN(v))return"—";return v.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" DA"}
 function parseMoneyInput(v){if(v===null||v===undefined||v==="")return"";const n=Number(String(v).replace(/\s/g,"").replace(",",".").replace(/[^\d.-]/g,""));return isNaN(n)?"":n}
 function formatMoneyInputValue(v){const n=parseMoneyInput(v);return n===""?"":n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function formatMoneyInputValueDA(v){const s=formatMoneyInputValue(v);return s?`${s} DA`:""}
 function formatMoneyField(el){if(el)el.value=formatMoneyInputValue(el.value)}
 function qty(n){if(n===null||n===undefined||n==="")return"—";const v=Number(n);if(isNaN(v))return"—";const isInt=v===Math.floor(v);return v.toLocaleString("fr-FR",{minimumFractionDigits:isInt?0:2,maximumFractionDigits:isInt?0:2})}
 function formatDate(d){if(!d)return"—";try{return new Date(d).toLocaleDateString("fr-FR")}catch(e){return d}}
@@ -10902,6 +10903,7 @@ async function paieSaveElements(agentId,form){
 function paieOptimizerHTML(agents,ym){
   const selected=sessionStorage.getItem("paieOptimAgent")||agents[0]?.id||"";
   const target=sessionStorage.getItem("paieOptimNet")||"";
+  const targetDisplay=formatMoneyInputValueDA(target);
   const agent=(db.agents||[]).find(a=>a.id===selected)||agents[0]||null;
   const bounds=agent?paieGrilleBounds(agent):null;
   const opt=target?paieOptimizeFromNet(target,agent):null;
@@ -10909,7 +10911,7 @@ function paieOptimizerHTML(agents,ym){
     <div class="flex items-start justify-between gap-3 flex-wrap mb-3"><div><h3 class="font-black">Simulateur net cible → paie optimisée</h3><div class="text-xs text-slate-500">Optimisation encadrée par les plafonds panier/transport configurés. Le système respecte SNMG, CNAS et IRG.</div></div>${paieIsClosed(ym)?`<span class="pill pill-green">Mois clôturé</span>`:""}</div>
     <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
       <div><label class="label">Employé</label><select class="select" onchange="sessionStorage.setItem('paieOptimAgent',this.value);renderView()">${agents.map(a=>`<option value="${a.id}" ${selected===a.id?"selected":""}>${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</option>`).join("")}</select></div>
-      <div><label class="label">Net à payer cible</label><input id="paie-optim-net-input" class="input" inputmode="decimal" value="${escapeHTML(target)}" placeholder="Ex : 55 000,00" onkeydown="if(event.key==='Enter'){event.preventDefault();paieSetOptimNet(this.value)}" onblur="paieSetOptimNet(this.value)"/></div>
+      <div><label class="label">Net à payer cible</label><input id="paie-optim-net-input" class="input" inputmode="decimal" value="${escapeHTML(targetDisplay)}" placeholder="Ex : 30 000,00 DA" onfocus="this.value=formatMoneyInputValue(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();paieSetOptimNet(this.value)}" onblur="paieSetOptimNet(this.value)"/></div>
       <div><label class="label">Grille fonction</label><div class="input bg-slate-50">${bounds?`${escapeHTML(bounds.fonction)} · ${money(bounds.min)}${bounds.max?" / "+money(bounds.max):""}`:"SNMG"}</div></div>
       <div><label class="label">Panier max optimisation</label><div class="input bg-slate-50">${money(paieConfig().optimisationPanierMax||0)}</div></div>
       <div><label class="label">Transport max optimisation</label><div class="input bg-slate-50">${money(paieConfig().optimisationTransportMax||0)}</div></div>
@@ -10927,7 +10929,8 @@ function paieOptimizerHTML(agents,ym){
   </div>`;
 }
 function paieSetOptimNet(value){
-  sessionStorage.setItem("paieOptimNet",value||"");
+  const n=parseMoneyInput(value);
+  sessionStorage.setItem("paieOptimNet",n===""?"":String(n));
   renderView();
 }
 async function paieApplyOptimization(agentId){
