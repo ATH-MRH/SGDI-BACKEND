@@ -2,6 +2,7 @@ from datetime import date
 from typing import Any, Type
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -38,20 +39,28 @@ def get_or_404(db: Session, model: Type, row_id: int):
 
 
 def create_row(db: Session, model: Type, payload: Any):
-    row = model(**payload.model_dump(exclude_unset=True))
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return row
+    try:
+        row = model(**payload.model_dump(exclude_unset=True))
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Enregistrement déjà existant ou code déjà utilisé") from exc
 
 
 def update_row(db: Session, model: Type, row_id: int, payload: Any):
-    row = get_or_404(db, model, row_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(row, key, value)
-    db.commit()
-    db.refresh(row)
-    return row
+    try:
+        row = get_or_404(db, model, row_id)
+        for key, value in payload.model_dump(exclude_unset=True).items():
+            setattr(row, key, value)
+        db.commit()
+        db.refresh(row)
+        return row
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Enregistrement déjà existant ou code déjà utilisé") from exc
 
 
 

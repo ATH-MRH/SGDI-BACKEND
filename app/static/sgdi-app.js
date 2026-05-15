@@ -275,7 +275,9 @@ async function sgdiApi(path,options){
   const headers=sgdiAuthHeaders(opts.headers);
   if(isForm)delete headers["content-type"];
   const res=await fetch(url,{cache:"no-store",...opts,body,headers});
-  const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
+  const raw=await res.text().catch(()=>"");
+  let out={};
+  try{out=raw?JSON.parse(raw):{}}catch(e){out={ok:false,error:raw?("Réponse API non JSON : "+raw.slice(0,180)):"Réponse API vide"}}
   if(!res.ok||out.ok===false){
     const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
     const message=out.error||detail||out.message||("Erreur API "+res.status);
@@ -293,7 +295,9 @@ async function sgdiActionApi(path,options){
   const headers=sgdiAuthHeaders(opts.headers);
   if(isForm)delete headers["content-type"];
   const res=await fetch(url,{cache:"no-store",...opts,body,headers});
-  const out=await res.json().catch(()=>({status:"error",error:"Réponse API invalide"}));
+  const raw=await res.text().catch(()=>"");
+  let out={};
+  try{out=raw?JSON.parse(raw):{}}catch(e){out={status:"error",error:raw?("Réponse API non JSON : "+raw.slice(0,180)):"Réponse API vide"}}
   if(!res.ok||out.status!=="success"){
     const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
     const message=out.error||detail||out.message||("Action refusée par le backend "+res.status);
@@ -8222,11 +8226,14 @@ async function matSimpleSaveMagasin(id,isNew){
     const fd=new FormData(f);
     const nom=(fd.get("nom")||"").trim();
     if(!nom){toast("Nom du magasin obligatoire","error");return}
-    const obj={id,nom,code:(fd.get("code")||"").trim(),adresse:(fd.get("adresse")||"").trim(),responsable:(fd.get("responsable")||"").trim(),telephone:(fd.get("telephone")||"").trim(),email:(fd.get("email")||"").trim(),societe:fd.get("societe")||"",icon:fd.get("icon")||"🏬",iconImage:fd.get("iconImage")||"",notes:fd.get("notes")||""};
+    const obj={id,nom,code:(fd.get("code")||"").trim(),adresse:(fd.get("adresse")||"").trim(),responsable:(fd.get("responsable")||"").trim(),telephone:(fd.get("telephone")||"").trim(),email:(fd.get("email")||"").trim(),societe:fd.get("societe")||matSimpleSocFilter()||mySoc()||"",icon:fd.get("icon")||"🏬",iconImage:fd.get("iconImage")||"",notes:fd.get("notes")||""};
     if(!db.magasins)db.magasins=[];
-    if(isNew){obj.color="#8b5cf6";obj.createdAt=new Date().toISOString();db.magasins.push(obj)}
-    else{const idx=db.magasins.findIndex(x=>x.id===id);if(idx<0){toast("Magasin introuvable","error");return}db.magasins[idx]={...db.magasins[idx],...obj}}
-    try{await persistStoreToPostgres(obj)}catch(e){toast("Magasin non sauvegardé PostgreSQL : "+(e.message||e),"error");return}if(saveDB()){toast(isNew?"Magasin créé dans PostgreSQL":"Magasin mis à jour dans PostgreSQL","success");if(typeof logActivity==="function")logActivity(isNew?"Création magasin":"Modification magasin",nom);navigate("materiel/magasins")}
+    let idx=-1;
+    if(isNew){obj.color="#8b5cf6";obj.createdAt=new Date().toISOString()}
+    else{idx=db.magasins.findIndex(x=>x.id===id);if(idx<0){toast("Magasin introuvable","error");return}Object.assign(obj,{...db.magasins[idx],...obj})}
+    try{await persistStoreToPostgres(obj)}catch(e){toast("Magasin non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
+    if(isNew)db.magasins.push(obj);else db.magasins[idx]=obj;
+    if(saveDB()){toast(isNew?"Magasin créé dans PostgreSQL":"Magasin mis à jour dans PostgreSQL","success");if(typeof logActivity==="function")logActivity(isNew?"Création magasin":"Modification magasin",nom);navigate("materiel/magasins")}
   }catch(err){console.error(err);toast("Erreur: "+(err.message||err),"error")}
 }
 function selectMagasinIcon(icon){
