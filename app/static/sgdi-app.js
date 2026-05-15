@@ -11246,9 +11246,11 @@ async function confirmClient(id){
   const dateDebutContrat=fd.get("dateDebutContrat")||"",dureeContrat=fd.get("dureeContrat")||"",dateFinContrat=fd.get("dateFinContrat")||contractEndDate(dateDebutContrat,dureeContrat);
   let c=id?db.clients.find(x=>x.id===id):null;const isEdit=!!c;if(!c){c={id:uid("cl"),createdBy:session.username,createdAt:new Date().toISOString()};db.clients.push(c)}
   Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",rc:fd.get("rc")||"",contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:fd.get("prestationsServices")||"",dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",updatedAt:new Date().toISOString()});
-  try{await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé PostgreSQL : "+(e.message||e),"error");return}saveDB();closeModal();toast(isEdit?"Client modifié dans PostgreSQL":"Client créé dans PostgreSQL","success");renderView();
+  try{await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Client non confirmé par PostgreSQL")))return;
+  closeModal();toast(isEdit?"Client modifié dans PostgreSQL":"Client créé dans PostgreSQL","success");renderView();
 }
-async function deleteClient(id){if(!confirm("Supprimer ?"))return;const c=(db.clients||[]).find(x=>x.id===id);if(c&&c.backendId){try{await SGDI.commercial.deleteClient(c.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}db.clients=db.clients.filter(c=>c.id!==id);saveDB();renderView()}
+async function deleteClient(id){if(!confirm("Supprimer ?"))return;const c=(db.clients||[]).find(x=>x.id===id);if(c&&c.backendId){try{await SGDI.commercial.deleteClient(c.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}db.clients=db.clients.filter(c=>c.id!==id);if(!(await saveDBAndWaitToast("Suppression client non confirmée par PostgreSQL")))return;renderView()}
 function renderCommOpportunites(view){
   const list=bySoc(db.opportunites||[]).slice().sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">💼 Opportunités</h1><p class="text-slate-500 text-sm">${list.length} opportunités</p></div><button class="btn btn-primary" onclick="openOpportuniteModal()">➕ Nouvelle opportunité</button></div>
@@ -11328,13 +11330,14 @@ function openVisiteModal(){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
 }
-function confirmVisite(){
+async function confirmVisite(){
   const fd=new FormData(document.querySelector(".modal-bg form"));
   db.visites=db.visites||[];
   db.visites.push({id:uid("vi"),date:fd.get("date"),type:fd.get("type"),clientId:fd.get("clientId")||"",prospectId:fd.get("prospectId")||"",personne:fd.get("personne")||"",societe:fd.get("societe"),compteRendu:fd.get("compteRendu"),prochaineDate:fd.get("prochaineDate")||"",prochaineAction:fd.get("prochaineAction")||"",createdBy:session.username,createdAt:new Date().toISOString()});
-  saveDB();closeModal();toast("Visite enregistrée","success");renderView();
+  if(!(await saveDBAndWaitToast("Visite non confirmée par PostgreSQL")))return;
+  closeModal();toast("Visite enregistrée","success");renderView();
 }
-function deleteVisite(id){if(!confirm("Supprimer ?"))return;db.visites=db.visites.filter(v=>v.id!==id);saveDB();renderView()}
+async function deleteVisite(id){if(!confirm("Supprimer ?"))return;db.visites=db.visites.filter(v=>v.id!==id);if(!(await saveDBAndWaitToast("Suppression visite non confirmée par PostgreSQL")))return;renderView()}
 function renderCommCatalogue(view){
   const list=bySoc(db.catalogue||[]).slice();
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">📋 Catalogue de prestations</h1><p class="text-slate-500 text-sm">${list.length} prestations</p></div><button class="btn btn-primary" onclick="openCataloguePrestModal()">➕ Nouvelle prestation</button></div>
@@ -11383,7 +11386,7 @@ function openCataloguePrestModal(id){
     </form>`);
   setTimeout(updateSiteEffectifTotalContractuel,0);
 }
-function confirmPrest(id){
+async function confirmPrest(id){
   const fd=new FormData(document.querySelector(".modal-bg form"));
   db.catalogue=db.catalogue||[];
   let p=id?db.catalogue.find(x=>x.id===id):null;
@@ -11392,9 +11395,10 @@ function confirmPrest(id){
   p.code=fd.get("code")||p.code||nextPrestCode();p.societe=fd.get("societe");p.designation=fd.get("designation");p.categorie=fd.get("categorie")||"";p.theme=fd.get("theme")||"";p.unite=fd.get("unite");p.prixHT=parseFloat(fd.get("prixHT"))||0;p.description=fd.get("description")||"";
   p.postes={};const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit"),rotations=fd.getAll("poste_rotationSystem");let totalContractuel=0,totalJour=0,totalNuit=0;noms.forEach((nom,i)=>{nom=(nom||"").trim();if(!nom)return;const jour=+jours[i]||0,nuit=+nuits[i]||0,rotationSystem=rotations[i]||"";const total=sitePosteTotalCalc(jour,nuit,rotationSystem);totalContractuel+=total;totalJour+=jour;totalNuit+=nuit;p.postes[nom]={total,jour,nuit,rotationSystem}});p.effectifs={totalContractuel,groupes:+fd.get("eff_groupes")||0,jour:totalJour,nuit:totalNuit,weekend:+fd.get("eff_weekend")||0,feries:+fd.get("eff_feries")||0};
   p.updatedAt=new Date().toISOString();
-  saveDB();closeModal();toast(isEdit?"Prestation modifiée":"Prestation ajoutée","success");renderView();
+  if(!(await saveDBAndWaitToast("Prestation non confirmée par PostgreSQL")))return;
+  closeModal();toast(isEdit?"Prestation modifiée":"Prestation ajoutée","success");renderView();
 }
-function deletePrest(id){if(!confirm("Supprimer ?"))return;db.catalogue=db.catalogue.filter(p=>p.id!==id);saveDB();renderView()}
+async function deletePrest(id){if(!confirm("Supprimer ?"))return;db.catalogue=db.catalogue.filter(p=>p.id!==id);if(!(await saveDBAndWaitToast("Suppression prestation non confirmée par PostgreSQL")))return;renderView()}
 function renderCommTarifs(view){
   const cat=bySoc(db.catalogue||[]);
   const byCat={};cat.forEach(p=>{const k=p.categorie||"—";if(!byCat[k])byCat[k]=[];byCat[k].push(p)});
