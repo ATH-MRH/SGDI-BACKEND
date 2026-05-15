@@ -1039,6 +1039,7 @@ function emptyDB(){
     devis:[],factures:[],paiements:[],avances:[],avoirs:[],caisse:[],
     prospects:[],clients:[],opportunites:[],visites:[],catalogue:[],
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
+    paieRubriques:[],paieElements:[],paieBulletins:[],paieClotures:[],
     activityLog:[],categoriesPrest:[],themes:[],structures:[],
     niveauxAcces:[],priorites:[],alertes:[],customFields:[],customModules:[],
     societesConfig:{custom:DEFAULT_SOCIETES.slice(),descriptions:{},images:{},removed:REMOVED_SOCIETES.slice()},
@@ -10527,6 +10528,46 @@ function paieConfig(){
   if(!("tauxOeuvresSociales" in db.paieConfig))db.paieConfig.tauxOeuvresSociales=0.5;
   return db.paieConfig;
 }
+function defaultPaieRubriques(){
+  return [
+    {id:"rub_base",code:"BASE",libelle:"Salaire de base",type:"gain",imposable:true,cotisable:true,system:true,actif:true},
+    {id:"rub_prime_nuit",code:"PN",libelle:"Prime de nuit",type:"gain",imposable:true,cotisable:true,system:true,actif:true},
+    {id:"rub_prime_panier",code:"PANIER",libelle:"Prime panier",type:"gain",imposable:false,cotisable:false,system:true,actif:true},
+    {id:"rub_prime_transport",code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,system:true,actif:true},
+    {id:"rub_absence",code:"ABS",libelle:"Retenue absence",type:"retenue",imposable:false,cotisable:false,system:true,actif:true},
+    {id:"rub_avance",code:"AVS",libelle:"Avance sur salaire",type:"retenue",imposable:false,cotisable:false,system:false,actif:true},
+    {id:"rub_rappel",code:"RAPPEL",libelle:"Rappel salaire",type:"gain",imposable:true,cotisable:true,system:false,actif:true},
+    {id:"rub_prime_exceptionnelle",code:"PRIME",libelle:"Prime exceptionnelle",type:"gain",imposable:true,cotisable:true,system:false,actif:true}
+  ];
+}
+function paieEnsure(){
+  if(!Array.isArray(db.paieRubriques))db.paieRubriques=[];
+  if(!Array.isArray(db.paieElements))db.paieElements=[];
+  if(!Array.isArray(db.paieBulletins))db.paieBulletins=[];
+  if(!Array.isArray(db.paieClotures))db.paieClotures=[];
+  defaultPaieRubriques().forEach(r=>{if(!db.paieRubriques.some(x=>x.id===r.id||x.code===r.code))db.paieRubriques.push({...r})});
+}
+function paieIsClosed(ym,societe){
+  paieEnsure();
+  return (db.paieClotures||[]).some(c=>c.ym===ym&&(!societe||c.societe===societe||c.societe===""));
+}
+function paieClosedInfo(ym,societe){
+  paieEnsure();
+  return (db.paieClotures||[]).find(c=>c.ym===ym&&(!societe||c.societe===societe||c.societe===""))||null;
+}
+function paieElementsFor(agentId,ym){
+  paieEnsure();
+  return (db.paieElements||[]).filter(e=>e.agentId===agentId&&e.ym===ym);
+}
+function paieBulletinFor(agentId,ym){
+  paieEnsure();
+  return (db.paieBulletins||[]).find(b=>b.agentId===agentId&&b.ym===ym)||null;
+}
+function paieCalcForAgent(a,ym){
+  const b=paieBulletinFor(a.id,ym);
+  if(b&&b.calcul)return b.calcul;
+  return calcPaieAgent(a,ym);
+}
 function irgBaremeMensuel(base){
   const b=Math.max(0,Number(base)||0);
   let irg=0;
@@ -10551,24 +10592,41 @@ function irgSalaireAlgerie(netImposable,cfg){
   }
   return{irgBrut,abattement,irg:Math.round(irgApres),formule};
 }
-function calcPaieAgent(a){
+function calcPaieAgent(a,ym){
   const cfg=paieConfig();
+  paieEnsure();
   const brutBase=Number(a.salaireNet||a.salaireBase||0)||0;
   const primeNuit=a.affectationCourante?.horaire==="Nuit"?Number(cfg.primeNuit||0):0;
-  const primes=primeNuit+Number(cfg.primePanier||0)+Number(cfg.primeTransport||0);
-  const absences=0;
-  const brutCotisable=Math.max(0,brutBase+primes-absences);
+  const fixedElements=[
+    {code:"BASE",libelle:"Salaire de base",type:"gain",imposable:true,cotisable:true,montant:brutBase},
+    {code:"PN",libelle:"Prime de nuit",type:"gain",imposable:true,cotisable:true,montant:primeNuit},
+    {code:"PANIER",libelle:"Prime panier",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primePanier||0)},
+    {code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primeTransport||0)}
+  ].filter(x=>Number(x.montant||0)>0);
+  const variableElements=paieElementsFor(a.id,ym||sessionStorage.getItem("paieMois")||today().slice(0,7)).map(e=>{
+    const r=(db.paieRubriques||[]).find(x=>x.id===e.rubriqueId)||{};
+    return{code:r.code||"",libelle:r.libelle||"Rubrique",type:r.type||"gain",imposable:r.imposable!==false,cotisable:r.cotisable!==false,montant:Number(e.montant||0),note:e.note||""};
+  }).filter(x=>x.montant>0);
+  const elements=[...fixedElements,...variableElements];
+  const gains=elements.filter(e=>e.type!=="retenue").reduce((s,e)=>s+e.montant,0);
+  const primes=Math.max(0,gains-brutBase);
+  const retenuesRubriques=elements.filter(e=>e.type==="retenue").reduce((s,e)=>s+e.montant,0);
+  const gainsCotisables=elements.filter(e=>e.type!=="retenue"&&e.cotisable!==false).reduce((s,e)=>s+e.montant,0);
+  const retenuesCotisables=elements.filter(e=>e.type==="retenue"&&e.cotisable!==false).reduce((s,e)=>s+e.montant,0);
+  const gainsNonCotisablesImposables=elements.filter(e=>e.type!=="retenue"&&e.cotisable===false&&e.imposable!==false).reduce((s,e)=>s+e.montant,0);
+  const gainsNonCotisablesNonImposables=elements.filter(e=>e.type!=="retenue"&&e.cotisable===false&&e.imposable===false).reduce((s,e)=>s+e.montant,0);
+  const brutCotisable=Math.max(0,gainsCotisables-retenuesCotisables);
   const cnasSalarie=Math.round(brutCotisable*(Number(cfg.tauxCnasSalarie||0)/100));
-  const netSocial=Math.max(0,brutCotisable-cnasSalarie);
+  const netSocial=Math.max(0,brutCotisable-cnasSalarie+gainsNonCotisablesImposables);
   const baseIRG=netSocial;
   const irgCalc=irgSalaireAlgerie(baseIRG,cfg);
   const abat=irgCalc.abattement;
   const irg=irgCalc.irg;
-  const netAPayer=Math.max(0,netSocial-irg);
+  const netAPayer=Math.max(0,netSocial-irg+gainsNonCotisablesNonImposables-retenuesRubriques);
   const cnasPatronal=Math.round(brutCotisable*(Number(cfg.tauxCnasPatronal||0)/100));
   const oeuvresSociales=Math.round(brutCotisable*(Number(cfg.tauxOeuvresSociales||0)/100));
   const coutEmployeur=brutCotisable+cnasPatronal+oeuvresSociales;
-  return{brutBase,primeNuit,primes,absences,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
+  return{brutBase,primeNuit,primes,absences:retenuesRubriques,retenuesRubriques,elements,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
 }
 function paieMonthLabel(ym){const [y,m]=String(ym||"").split("-").map(Number);if(!y||!m)return new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});return new Date(y,m-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}
 function setPaieFilter(k,v){sessionStorage.setItem("paie"+k,v||"");renderView()}
@@ -10583,18 +10641,54 @@ async function savePaieConfig(){
 function paieExportCSV(){
   const rows=[["Matricule","Nom","Société","Contrat","Brut cotisable","CNAS salarié","Base IRG","IRG","Net à payer","CNAS patronal","Coût employeur"]];
   document.querySelectorAll("#paie-tbody tr[data-paierow]").forEach(r=>rows.push(JSON.parse(r.dataset.csv)));
+  paieDownloadCSV(rows,"paie-"+(sessionStorage.getItem("paieMois")||today().slice(0,7))+".csv");
+}
+function paieDownloadCSV(rows,filename){
   const csv=rows.map(r=>r.map(c=>`"${String(c??"").replace(/"/g,'""')}"`).join(";")).join("\n");
-  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="paie-"+(sessionStorage.getItem("paieMois")||today().slice(0,7))+".csv";a.click();URL.revokeObjectURL(url);
+  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=filename||("paie-"+(sessionStorage.getItem("paieMois")||today().slice(0,7))+".csv");a.click();URL.revokeObjectURL(url);
+}
+function paieExportCNAS(){
+  const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
+  const rows=[["Période","Matricule","Nom","Société","Brut cotisable","Taux salarié","Cotisation salarié","Taux employeur","Cotisation employeur","Taux œuvres sociales","Cotisation œuvres sociales","Total patronal"]];
+  document.querySelectorAll("#paie-tbody tr[data-paierow]").forEach(r=>{
+    const csv=JSON.parse(r.dataset.csv);rows.push([ym,csv[0],csv[1],csv[2],csv[4],paieConfig().tauxCnasSalarie,csv[5],paieConfig().tauxCnasPatronal,csv[9],paieConfig().tauxOeuvresSociales,csv[10],Number(csv[9]||0)+Number(csv[10]||0)]);
+  });
+  paieDownloadCSV(rows,"cnas-"+ym+".csv");
+}
+function paieExportIRG(){
+  const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
+  const rows=[["Période","Matricule","Nom","Société","Base IRG","IRG retenu","Net à payer"]];
+  document.querySelectorAll("#paie-tbody tr[data-paierow]").forEach(r=>{const csv=JSON.parse(r.dataset.csv);rows.push([ym,csv[0],csv[1],csv[2],csv[6],csv[7],csv[8]])});
+  paieDownloadCSV(rows,"irg-"+ym+".csv");
+}
+function paieBulletinSnapshot(a,c,ym){
+  return{id:uid("bp"),ym,agentId:a.id,matricule:a.matricule||"",agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),societe:a.societe||"",poste:a.fonction||a.affectationCourante?.poste||"",typeContrat:a.typeContrat||"",config:{...paieConfig()},calcul:JSON.parse(JSON.stringify(c)),createdAt:new Date().toISOString(),createdBy:session?.username||""};
+}
+async function paieCloseMonth(){
+  const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
+  const soc=sessionStorage.getItem("paieSociete")||"";
+  if(paieIsClosed(ym,soc)){toast("Ce mois de paie est déjà clôturé","error");return}
+  let agents=(db.agents||[]).filter(a=>a.statut==="actif");if(soc)agents=agents.filter(a=>a.societe===soc);
+  if(!agents.length){toast("Aucun agent à clôturer","error");return}
+  if(!confirm(`Clôturer la paie ${paieMonthLabel(ym)}${soc?" · "+soc:""} ?\n\nLes bulletins seront figés et les éléments du mois ne seront plus modifiables.`))return;
+  paieEnsure();
+  db.paieBulletins=(db.paieBulletins||[]).filter(b=>!(b.ym===ym&&(!soc||b.societe===soc)));
+  agents.forEach(a=>db.paieBulletins.push(paieBulletinSnapshot(a,calcPaieAgent(a,ym),ym)));
+  db.paieClotures.push({id:uid("clp"),ym,societe:soc,closedAt:new Date().toISOString(),closedBy:session?.username||"",bulletins:agents.length});
+  if(!(await saveDBAndWaitToast("Clôture paie non confirmée par PostgreSQL")))return;
+  toast("Paie clôturée et bulletins historisés","success");renderView();
 }
 function paieFicheHTML(agentId,ym){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return"";
-  const cfg=paieConfig();const c=calcPaieAgent(a);const mois=paieMonthLabel(ym||sessionStorage.getItem("paieMois")||today().slice(0,7));
+  const period=ym||sessionStorage.getItem("paieMois")||today().slice(0,7);
+  const bulletin=paieBulletinFor(agentId,period);
+  const cfg=bulletin?.config||paieConfig();const c=bulletin?.calcul||calcPaieAgent(a,period);const mois=paieMonthLabel(period);
   const totalRetenues=c.cnasSalarie+c.irg;
   const ligne=(lib,base,taux,gain,retenue)=>`<tr><td>${escapeHTML(lib)}</td><td class="r">${base}</td><td class="r">${taux}</td><td class="r">${gain}</td><td class="r">${retenue}</td></tr>`;
   return`<div class="bulletin-paie">
     
     <div class="bp-head">
-      <div><div class="bp-title">Fiche de paie</div><div class="bp-sub">Période : ${escapeHTML(mois)} · SGDI</div></div>
+      <div><div class="bp-title">Fiche de paie</div><div class="bp-sub">Période : ${escapeHTML(mois)} · SGDI${bulletin?" · Bulletin clôturé":""}</div></div>
       <div style="text-align:right"><div style="font-size:18px;font-weight:900">${escapeHTML(a.societe||"")}</div><div class="bp-sub">Établie le ${formatDate(today())}</div></div>
     </div>
     <div class="bp-grid">
@@ -10613,10 +10707,8 @@ function paieFicheHTML(agentId,ym){
     <table>
       <thead><tr><th>Rubrique</th><th class="r">Base</th><th class="r">Taux</th><th class="r">Gains</th><th class="r">Retenues</th></tr></thead>
       <tbody>
-        ${ligne("Salaire de base",money(c.brutBase),"",money(c.brutBase),"")}
-        ${c.primeNuit?ligne("Prime de nuit",money(c.primeNuit),"",money(c.primeNuit),""):""}
-        ${cfg.primePanier?ligne("Prime panier",money(cfg.primePanier),"",money(cfg.primePanier),""):""}
-        ${cfg.primeTransport?ligne("Prime transport",money(cfg.primeTransport),"",money(cfg.primeTransport),""):""}
+        ${(c.elements||[]).filter(e=>e.type!=="retenue").map(e=>ligne(e.libelle||e.code||"Gain",money(e.montant),e.cotisable===false?"Non cot.":"",money(e.montant),"")).join("")||ligne("Salaire de base",money(c.brutBase),"",money(c.brutBase),"")}
+        ${(c.elements||[]).filter(e=>e.type==="retenue").map(e=>ligne(e.libelle||e.code||"Retenue",money(e.montant),e.cotisable?"Cot.":"", "",money(e.montant))).join("")}
         ${ligne("Brut cotisable",money(c.brutCotisable),"","<b>"+money(c.brutCotisable)+"</b>","")}
         ${ligne("CNAS salarié",money(c.brutCotisable),qty(cfg.tauxCnasSalarie)+" %","",money(c.cnasSalarie))}
         ${ligne("Net social",money(c.netSocial),"","<b>"+money(c.netSocial)+"</b>","")}
@@ -10652,18 +10744,82 @@ function printPaieFiche(agentId){
   w.document.write(`<html><head><title>Fiche paie ${a?escapeHTML(a.matricule):""}</title></head><body>${paieFicheHTML(agentId,ym)}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
   w.document.close();
 }
+function paieRubriquesHTML(){
+  paieEnsure();
+  return `<div class="overflow-x-auto"><table><thead><tr><th>Code</th><th>Libellé</th><th>Type</th><th>Cotisable</th><th>Imposable</th><th>Actif</th><th></th></tr></thead><tbody>${(db.paieRubriques||[]).map(r=>`<tr><td class="font-mono text-xs">${escapeHTML(r.code||"")}</td><td>${escapeHTML(r.libelle||"")}</td><td><span class="pill ${r.type==="retenue"?"pill-red":"pill-green"}">${escapeHTML(r.type||"gain")}</span></td><td>${r.cotisable!==false?"Oui":"Non"}</td><td>${r.imposable!==false?"Oui":"Non"}</td><td>${r.actif!==false?"Oui":"Non"}</td><td>${r.system?`<span class="text-xs text-slate-400">Système</span>`:`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="paieDeleteRubrique('${r.id}')">Supprimer</button>`}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function openPaieRubriqueModal(){
+  openModal(`<h3 class="font-bold text-lg mb-3">Nouvelle rubrique de paie</h3><form onsubmit="event.preventDefault();paieSaveRubrique(this)">
+    <div class="grid grid-2 gap-3">
+      <div><label class="label">Code</label><input class="input" name="code" required placeholder="EX : PRIME_SITE"/></div>
+      <div><label class="label">Libellé</label><input class="input" name="libelle" required placeholder="Prime de site"/></div>
+      <div><label class="label">Type</label><select class="select" name="type"><option value="gain">Gain</option><option value="retenue">Retenue</option></select></div>
+      <label class="flex items-center gap-2 mt-6"><input type="checkbox" name="cotisable" checked/> Cotisable CNAS</label>
+      <label class="flex items-center gap-2"><input type="checkbox" name="imposable" checked/> Imposable IRG</label>
+      <label class="flex items-center gap-2"><input type="checkbox" name="actif" checked/> Active</label>
+    </div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div>
+  </form>`);
+}
+async function paieSaveRubrique(form){
+  paieEnsure();
+  const fd=new FormData(form);const code=String(fd.get("code")||"").trim().toUpperCase();const libelle=String(fd.get("libelle")||"").trim();
+  if(!code||!libelle){toast("Code et libellé obligatoires","error");return}
+  if((db.paieRubriques||[]).some(r=>String(r.code||"").toUpperCase()===code)){toast("Code rubrique déjà existant","error");return}
+  db.paieRubriques.push({id:uid("rub"),code,libelle,type:fd.get("type")||"gain",cotisable:fd.get("cotisable")==="on",imposable:fd.get("imposable")==="on",actif:fd.get("actif")==="on",system:false});
+  if(!(await saveDBAndWaitToast("Rubrique paie non confirmée par PostgreSQL")))return;
+  closeModal();toast("Rubrique ajoutée","success");renderView();
+}
+async function paieDeleteRubrique(id){
+  if(!confirm("Supprimer cette rubrique ?"))return;
+  db.paieRubriques=(db.paieRubriques||[]).filter(r=>r.id!==id);
+  db.paieElements=(db.paieElements||[]).filter(e=>e.rubriqueId!==id);
+  if(!(await saveDBAndWaitToast("Suppression rubrique non confirmée par PostgreSQL")))return;
+  renderView();
+}
+function openPaieElementsModal(agentId){
+  const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
+  if(paieIsClosed(ym)){toast("Mois clôturé : éléments non modifiables","error");return}
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
+  const rubs=(db.paieRubriques||[]).filter(r=>!r.system&&r.actif!==false);
+  const existing=paieElementsFor(agentId,ym);
+  openModal(`<h3 class="font-bold text-lg mb-3">Éléments de paie - ${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</h3>
+    <div class="text-xs text-slate-500 mb-3">${paieMonthLabel(ym)} · primes, retenues, avances et rappels variables.</div>
+    <form onsubmit="event.preventDefault();paieSaveElements('${agentId}',this)">
+      <div id="paie-elements-body">${existing.map(paieElementRowHTML).join("")||paieElementRowHTML()}</div>
+      <button type="button" class="btn btn-secondary text-xs mt-2" onclick="document.getElementById('paie-elements-body').insertAdjacentHTML('beforeend',paieElementRowHTML())">Ajouter ligne</button>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div>
+    </form>`);
+  window.paieElementRowHTML=()=>paieElementRowHTML();
+  function paieElementRowHTML(e){
+    return `<div class="grid grid-6 gap-2 mb-2 paie-el-row"><div class="col-span-2"><select class="select" name="rubriqueId"><option value="">— Rubrique —</option>${rubs.map(r=>`<option value="${r.id}" ${e?.rubriqueId===r.id?"selected":""}>${escapeHTML(r.code+" · "+r.libelle)}</option>`).join("")}</select></div><div><input class="input" name="montant" value="${formatMoneyInputValue(e?.montant||"")}" placeholder="Montant" onblur="formatMoneyField(this)"/></div><div class="col-span-2"><input class="input" name="note" value="${escapeHTML(e?.note||"")}" placeholder="Note"/></div><div><button type="button" class="btn btn-ghost text-red-600" onclick="this.closest('.paie-el-row').remove()">✕</button></div></div>`;
+  }
+}
+async function paieSaveElements(agentId,form){
+  const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
+  if(paieIsClosed(ym)){toast("Mois clôturé : modification refusée","error");return}
+  db.paieElements=(db.paieElements||[]).filter(e=>!(e.agentId===agentId&&e.ym===ym));
+  [...form.querySelectorAll(".paie-el-row")].forEach(row=>{
+    const rubriqueId=row.querySelector('[name="rubriqueId"]')?.value||"";const montant=parseMoneyInput(row.querySelector('[name="montant"]')?.value)||0;
+    if(rubriqueId&&montant>0)db.paieElements.push({id:uid("pel"),ym,agentId,rubriqueId,montant,note:row.querySelector('[name="note"]')?.value||"",createdAt:new Date().toISOString(),createdBy:session?.username||""});
+  });
+  if(!(await saveDBAndWaitToast("Éléments paie non confirmés par PostgreSQL")))return;
+  closeModal();toast("Éléments de paie enregistrés","success");renderView();
+}
 function renderPaie(view){
+  paieEnsure();
   const cfg=paieConfig();
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
   const soc=sessionStorage.getItem("paieSociete")||"";
   let agents=db.agents.filter(a=>a.statut==="actif");
   if(soc)agents=agents.filter(a=>a.societe===soc);
-  const lines=agents.map(a=>({a,c:calcPaieAgent(a)}));
+  const closed=paieClosedInfo(ym,soc);
+  const lines=agents.map(a=>({a,c:paieCalcForAgent(a,ym)}));
   const sum=k=>lines.reduce((s,x)=>s+(Number(x.c[k])||0),0);
   const anomalies=lines.filter(x=>x.c.brutCotisable<cfg.snmg);
   view.innerHTML=`<div class="flex justify-between items-start gap-3 mb-4">
-    <div><h1 class="text-2xl font-bold">Paie — ${paieMonthLabel(ym)}</h1><p class="text-sm text-slate-500">Calcul paie Algérie : CNAS, IRG barème progressif, net à payer, coût employeur.</p></div>
-    <div class="flex gap-2 flex-wrap justify-end"><button class="btn paie-export-btn" onclick="paieExportCSV()">Exporter CSV</button><button class="btn paie-print-btn" onclick="window.print()">Imprimer</button></div>
+    <div><h1 class="text-2xl font-bold">Paie — ${paieMonthLabel(ym)} ${closed?`<span class="pill pill-green">Clôturée</span>`:""}</h1><p class="text-sm text-slate-500">Calcul paie Algérie : CNAS, IRG barème progressif, net à payer, coût employeur.</p>${closed?`<div class="text-xs text-emerald-700 mt-1">Clôturée le ${new Date(closed.closedAt).toLocaleString("fr-FR")} par ${escapeHTML(closed.closedBy||"")} · ${closed.bulletins||0} bulletin(s)</div>`:""}</div>
+    <div class="flex gap-2 flex-wrap justify-end"><button class="btn paie-export-btn" onclick="paieExportCSV()">Exporter CSV</button><button class="btn paie-export-btn" onclick="paieExportCNAS()">Export CNAS</button><button class="btn paie-export-btn" onclick="paieExportIRG()">Export IRG</button><button class="btn btn-primary" onclick="paieCloseMonth()">Clôturer le mois</button><button class="btn paie-print-btn" onclick="window.print()">Imprimer</button></div>
   </div>
   <div class="card p-4 mb-4">
     <div class="grid grid-4">
@@ -10684,6 +10840,10 @@ function renderPaie(view){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Alertes SNMG</div><div class="text-2xl font-black ${anomalies.length?"text-red-700":"text-emerald-700"}">${anomalies.length}</div></div>
   </div>
   ${anomalies.length?`<div class="card p-4 mb-4" style="background:#fef2f2;border:2px solid #dc2626"><div class="font-black text-red-700 mb-2">Alerte SNMG</div><div class="text-sm text-red-700">${anomalies.length} agent(s) ont un brut cotisable inférieur au SNMG ${money(cfg.snmg)}.</div></div>`:""}
+  <details class="card p-4 mb-4"><summary class="font-bold cursor-pointer">Rubriques de paie paramétrables</summary>
+    <div class="mt-3">${paieRubriquesHTML()}</div>
+    <button type="button" class="btn btn-primary mt-3" onclick="openPaieRubriqueModal()">Ajouter rubrique</button>
+  </details>
   <details class="card p-4 mb-4"><summary class="font-bold cursor-pointer">Paramètres réglementaires et primes</summary>
     <form id="paie-config-form" class="grid grid-6 mt-4">
       <div class="col-span-2"><label class="label">SNMG</label><input class="input" name="snmg" value="${formatMoneyInputValue(cfg.snmg)}" onblur="formatMoneyField(this)"/></div>
@@ -10703,7 +10863,7 @@ function renderPaie(view){
   </details>
   <div class="card overflow-hidden"><div class="overflow-x-auto"><table>
     <thead><tr><th>Matricule</th><th>Agent</th><th>Société</th><th>Contrat</th><th class="text-right">Base</th><th class="text-right">Primes</th><th class="text-right">Brut cotisable</th><th class="text-right">CNAS sal.</th><th class="text-right">Base IRG</th><th class="text-right">IRG</th><th class="text-right">Net à payer</th><th class="text-right">Coût employeur</th><th>Alerte</th><th></th></tr></thead>
-    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="14" class="text-center text-slate-500 p-6">Aucun agent actif.</td></tr>`:lines.map(({a,c})=>{const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,a.typeContrat,c.brutCotisable,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.coutEmployeur];return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/effectif/agent/${a.id}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(a.typeContrat)}</span></td><td class="text-right">${money(c.brutBase)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${c.brutCotisable<cfg.snmg?`<span class="pill pill-red">SNMG</span>`:`<span class="pill pill-green">OK</span>`}</td><td><button class="btn btn-primary text-xs" onclick="previewPaieFiche('${a.id}')">Fiche de paie</button></td></tr>`}).join("")}</tbody>
+    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="14" class="text-center text-slate-500 p-6">Aucun agent actif.</td></tr>`:lines.map(({a,c})=>{const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,a.typeContrat,c.brutCotisable,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.oeuvresSociales,c.coutEmployeur];return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/effectif/agent/${a.id}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(a.typeContrat)}</span></td><td class="text-right">${money(c.brutBase)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${c.brutCotisable<cfg.snmg?`<span class="pill pill-red">SNMG</span>`:`<span class="pill pill-green">OK</span>`}</td><td><div class="flex gap-1"><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${a.id}')">Éléments</button><button class="btn btn-primary text-xs" onclick="previewPaieFiche('${a.id}')">Fiche</button></div></td></tr>`}).join("")}</tbody>
   </table></div></div>
   <div class="text-xs text-slate-500 mt-3">Note : ce module automatise les calculs standards. Les cas particuliers (avantages en nature, indemnités imposables/non imposables, temps partiel, dispositifs aidés, rappels) doivent être validés par votre comptable ou gestionnaire paie.</div>`;
 }
