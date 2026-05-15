@@ -1496,7 +1496,7 @@ function criticalActionName(el){
 function criticalActionNeedsPassword(el){
   if(!el||criticalActionAuthorized.has(el)||!session||!session.username)return"";
   if(el.disabled||el.getAttribute("aria-disabled")==="true")return"";
-  if(el.closest("[data-critical-auth], #login-form, .login-admin-system-shortcut"))return"";
+  if(el.closest("[data-critical-auth], [data-no-critical-auth], #login-form, .login-admin-system-shortcut"))return"";
   if(el.closest("[data-section-action]"))return"";
   return criticalActionName(el);
 }
@@ -11852,7 +11852,7 @@ function renderAdminUsers(view){
           <td class="p-3 text-xs">${x.societesAutorisees&&x.societesAutorisees.length?escapeHTML(x.societesAutorisees.join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
           <td class="p-3 text-xs">${x.structuresAutorisees&&x.structuresAutorisees.length?escapeHTML(x.structuresAutorisees.map(adminStructureLabel).join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
           <td class="p-3">${x.actif===false?'<span class="pill pill-red">Désactivé</span>':'<span class="pill pill-green">Actif</span>'}</td>
-          <td class="p-3"><button class="btn btn-ghost text-xs" onclick="openAdminUserModalByKey('${encodeURIComponent(x.username)}')">Modifier</button> ${x.username!=="admin"?`<button class="btn btn-ghost text-xs text-red-600 inline-flex items-center justify-center" title="Supprimer" onclick="adminDeleteUserByKey('${encodeURIComponent(x.username)}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23dc2626%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M8 6V4h8v2%22/%3E%3Cpath d=%22M19 6l-1 14H6L5 6%22/%3E%3Cpath d=%22M10 11v6%22/%3E%3Cpath d=%22M14 11v6%22/%3E%3C/svg%3E" alt="Supprimer" style="width:18px;height:18px;display:inline-block"/></button>`:""}</td>
+          <td class="p-3"><button class="btn btn-ghost text-xs" data-no-critical-auth="1" onclick="openAdminUserModalByKey('${encodeURIComponent(x.username)}')">Modifier</button> ${x.username!=="admin"?`<button class="btn btn-ghost text-xs text-red-600 inline-flex items-center justify-center" title="Supprimer" onclick="adminDeleteUserByKey('${encodeURIComponent(x.username)}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23dc2626%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M8 6V4h8v2%22/%3E%3Cpath d=%22M19 6l-1 14H6L5 6%22/%3E%3Cpath d=%22M10 11v6%22/%3E%3Cpath d=%22M14 11v6%22/%3E%3C/svg%3E" alt="Supprimer" style="width:18px;height:18px;display:inline-block"/></button>`:""}</td>
         </tr>`}).join("")||`<tr><td class="p-6 text-center text-slate-400" colspan="8">Aucun utilisateur.</td></tr>`}</tbody>
       </table>
     </div>`;
