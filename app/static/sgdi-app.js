@@ -4319,7 +4319,7 @@ function renderContratsDashboard(view){
     <td><span class="pill pill-indigo">${safe(c.societe)}</span></td>
     <td>${c.avisDecision?`<span class="pill ${c.avisDecision==="Favorable"?"pill-green":c.avisDecision==="Défavorable"?"pill-red":"pill-amber"}">${escapeHTML(c.avisDecision)}</span>`:"—"}</td>
     <td class="text-xs">${formatDate(c.createdAt)}</td>
-    <td class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="recruterCandidat('${jsString(c.id)}')">Contractualiser</button></td>
+    <td class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="recruterCandidat('${jsString(c.id)}')">RECRUTER</button></td>
   </tr>`).join("");
   view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">➕ Créer contrat</button></div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
@@ -4351,7 +4351,7 @@ function renderContrats(view,mode){
     </div>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:`<div class="card overflow-hidden"><table>
       <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Vérifs.</th><th></th></tr></thead>
-      <tbody>${list.map(c=>{const v=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"].filter(k=>c["verif"+k]).length;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML(c.prenom.slice(0,1))}</div>${escapeHTML(c.nom+" "+c.prenom)}</div></td><td>${safe(c.posteSouhaite)}</td><td><span class="pill pill-indigo">${safe(c.societe)}</span></td><td><span class="pill ${v===9?"pill-green":"pill-amber"}">${v}/9</span></td><td class="text-right">${candidateBlackListMatch(c)?`<span class="pill" style="background:#111827;color:#fff">⛔ BLACKLIST</span>`:`<a class="btn btn-primary text-xs" href="#/contrats/nouveau/${c.id}">Contractualiser →</a>`}</td></tr>`}).join("")}</tbody></table></div>`}`;
+      <tbody>${list.map(c=>{const v=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"].filter(k=>c["verif"+k]).length;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML(c.prenom.slice(0,1))}</div>${escapeHTML(c.nom+" "+c.prenom)}</div></td><td>${safe(c.posteSouhaite)}</td><td><span class="pill pill-indigo">${safe(c.societe)}</span></td><td><span class="pill ${v===9?"pill-green":"pill-amber"}">${v}/9</span></td><td class="text-right">${candidateBlackListMatch(c)?`<span class="pill" style="background:#111827;color:#fff">⛔ BLACKLIST</span>`:`<a class="btn btn-primary text-xs" href="#/contrats/nouveau/${c.id}">RECRUTER →</a>`}</td></tr>`}).join("")}</tbody></table></div>`}`;
     return;
   }
   const agents=db.agents.filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
