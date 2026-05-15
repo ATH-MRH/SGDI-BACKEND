@@ -10519,15 +10519,37 @@ function stockExportCSV(){
 }
 
 /* ---- PAIE ---- */
-function defaultPaieConfig(){return{snmg:24000,heuresMois:173.33,tauxCnasSalarie:9,tauxCnasPatronal:26,abattementIRG:40,abattementMinMensuel:1000,abattementMaxMensuel:120000,primeNuit:3000,primePanier:0,primeTransport:0,retenueAbsenceJour:0}}
-function paieConfig(){if(!db.paieConfig)db.paieConfig=defaultPaieConfig();db.paieConfig={...defaultPaieConfig(),...db.paieConfig};return db.paieConfig}
+function defaultPaieConfig(){return{snmg:24000,heuresMois:173.33,tauxCnasSalarie:9,tauxCnasPatronal:25,tauxOeuvresSociales:0.5,abattementIRG:40,abattementMinMensuel:1000,abattementMaxMensuel:1500,primeNuit:3000,primePanier:0,primeTransport:0,retenueAbsenceJour:0}}
+function paieConfig(){
+  if(!db.paieConfig)db.paieConfig=defaultPaieConfig();
+  db.paieConfig={...defaultPaieConfig(),...db.paieConfig};
+  if(Number(db.paieConfig.abattementMaxMensuel||0)>10000)db.paieConfig.abattementMaxMensuel=1500;
+  if(!("tauxOeuvresSociales" in db.paieConfig))db.paieConfig.tauxOeuvresSociales=0.5;
+  return db.paieConfig;
+}
 function irgBaremeMensuel(base){
   const b=Math.max(0,Number(base)||0);
   let irg=0;
-  if(b>30000)irg+=Math.min(b,120000)-30000>0?(Math.min(b,120000)-30000)*0.23:0;
-  if(b>120000)irg+=(Math.min(b,360000)-120000)*0.27;
-  if(b>360000)irg+=(b-360000)*0.30;
+  if(b>20000)irg+=(Math.min(b,40000)-20000)*0.23;
+  if(b>40000)irg+=(Math.min(b,80000)-40000)*0.27;
+  if(b>80000)irg+=(Math.min(b,160000)-80000)*0.30;
+  if(b>160000)irg+=(Math.min(b,320000)-160000)*0.33;
+  if(b>320000)irg+=(b-320000)*0.35;
   return Math.max(0,Math.round(irg));
+}
+function irgSalaireAlgerie(netImposable,cfg){
+  const base=Math.max(0,Number(netImposable)||0);
+  if(base<=30000)return{irgBrut:0,abattement:0,irg:0,formule:"Exonération <= 30 000 DA"};
+  const irgBrut=irgBaremeMensuel(base);
+  const taux=Number(cfg.abattementIRG||0)/100;
+  const abattement=Math.min(irgBrut,Math.min(Math.max(irgBrut*taux,Number(cfg.abattementMinMensuel||0)),Number(cfg.abattementMaxMensuel||0)));
+  let irgApres=Math.max(0,irgBrut-abattement);
+  let formule="Barème progressif + abattement IRG";
+  if(base>30000&&base<35000){
+    irgApres=Math.max(0,(irgApres*(137/51))-(27925/8));
+    formule="Formule spéciale 30 001 - 35 000 DA";
+  }
+  return{irgBrut,abattement,irg:Math.round(irgApres),formule};
 }
 function calcPaieAgent(a){
   const cfg=paieConfig();
@@ -10538,22 +10560,25 @@ function calcPaieAgent(a){
   const brutCotisable=Math.max(0,brutBase+primes-absences);
   const cnasSalarie=Math.round(brutCotisable*(Number(cfg.tauxCnasSalarie||0)/100));
   const netSocial=Math.max(0,brutCotisable-cnasSalarie);
-  const abatRaw=netSocial*(Number(cfg.abattementIRG||0)/100);
-  const abat=Math.min(Math.max(abatRaw,Number(cfg.abattementMinMensuel||0)),Number(cfg.abattementMaxMensuel||0));
-  const baseIRG=Math.max(0,netSocial-abat);
-  const irg=irgBaremeMensuel(baseIRG);
+  const baseIRG=netSocial;
+  const irgCalc=irgSalaireAlgerie(baseIRG,cfg);
+  const abat=irgCalc.abattement;
+  const irg=irgCalc.irg;
   const netAPayer=Math.max(0,netSocial-irg);
   const cnasPatronal=Math.round(brutCotisable*(Number(cfg.tauxCnasPatronal||0)/100));
-  const coutEmployeur=brutCotisable+cnasPatronal;
-  return{brutBase,primeNuit,primes,absences,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irg,netAPayer,cnasPatronal,coutEmployeur};
+  const oeuvresSociales=Math.round(brutCotisable*(Number(cfg.tauxOeuvresSociales||0)/100));
+  const coutEmployeur=brutCotisable+cnasPatronal+oeuvresSociales;
+  return{brutBase,primeNuit,primes,absences,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
 }
 function paieMonthLabel(ym){const [y,m]=String(ym||"").split("-").map(Number);if(!y||!m)return new Date().toLocaleDateString("fr-FR",{month:"long",year:"numeric"});return new Date(y,m-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}
 function setPaieFilter(k,v){sessionStorage.setItem("paie"+k,v||"");renderView()}
-function savePaieConfig(){
+async function savePaieConfig(){
   const f=document.getElementById("paie-config-form");if(!f)return;
   const fd=new FormData(f);const cfg=paieConfig();
-  ["snmg","heuresMois","tauxCnasSalarie","tauxCnasPatronal","abattementIRG","abattementMinMensuel","abattementMaxMensuel","primeNuit","primePanier","primeTransport","retenueAbsenceJour"].forEach(k=>cfg[k]=parseMoneyInput(fd.get(k))||0);
-  db.paieConfig=cfg;saveDB();toast("Paramètres paie enregistrés","success");renderView();
+  ["snmg","heuresMois","tauxCnasSalarie","tauxCnasPatronal","tauxOeuvresSociales","abattementIRG","abattementMinMensuel","abattementMaxMensuel","primeNuit","primePanier","primeTransport","retenueAbsenceJour"].forEach(k=>cfg[k]=parseMoneyInput(fd.get(k))||0);
+  db.paieConfig=cfg;
+  if(!(await saveDBAndWaitToast("Paramètres paie non confirmés par PostgreSQL")))return;
+  toast("Paramètres paie enregistrés","success");renderView();
 }
 function paieExportCSV(){
   const rows=[["Matricule","Nom","Société","Contrat","Brut cotisable","CNAS salarié","Base IRG","IRG","Net à payer","CNAS patronal","Coût employeur"]];
@@ -10595,9 +10620,10 @@ function paieFicheHTML(agentId,ym){
         ${ligne("Brut cotisable",money(c.brutCotisable),"","<b>"+money(c.brutCotisable)+"</b>","")}
         ${ligne("CNAS salarié",money(c.brutCotisable),qty(cfg.tauxCnasSalarie)+" %","",money(c.cnasSalarie))}
         ${ligne("Net social",money(c.netSocial),"","<b>"+money(c.netSocial)+"</b>","")}
-        ${ligne("Abattement IRG",money(c.netSocial),qty(cfg.abattementIRG)+" %","",money(c.abat))}
-        ${ligne("Base IRG",money(c.baseIRG),"","",money(c.baseIRG))}
-        ${ligne("IRG retenu",money(c.baseIRG),"Barème","",money(c.irg))}
+        ${ligne("Base IRG / net imposable",money(c.baseIRG),"","",money(c.baseIRG))}
+        ${ligne("IRG brut",money(c.baseIRG),"Barème","",money(c.irgBrut))}
+        ${ligne("Abattement IRG",money(c.irgBrut),qty(cfg.abattementIRG)+" %","",money(c.abat))}
+        ${ligne("IRG retenu",money(c.baseIRG),escapeHTML(c.irgFormule||"Barème"),"",money(c.irg))}
       </tbody>
       <tfoot>
         <tr><th colspan="3" class="r">Totaux</th><th class="r">${money(c.brutCotisable)}</th><th class="r">${money(totalRetenues)}</th></tr>
@@ -10606,6 +10632,7 @@ function paieFicheHTML(agentId,ym){
     <div class="bp-grid" style="margin-top:12px">
       <div class="bp-box"><h3>Charges patronales</h3>
         <div class="bp-line"><span>CNAS patronal</span><b>${money(c.cnasPatronal)}</b></div>
+        <div class="bp-line"><span>Œuvres sociales</span><b>${money(c.oeuvresSociales)}</b></div>
         <div class="bp-line"><span>Coût employeur</span><b>${money(c.coutEmployeur)}</b></div>
       </div>
       <div class="bp-net"><div class="label">Net à payer</div><div class="value">${money(c.netAPayer)}</div></div>
@@ -10635,7 +10662,7 @@ function renderPaie(view){
   const sum=k=>lines.reduce((s,x)=>s+(Number(x.c[k])||0),0);
   const anomalies=lines.filter(x=>x.c.brutCotisable<cfg.snmg);
   view.innerHTML=`<div class="flex justify-between items-start gap-3 mb-4">
-    <div><h1 class="text-2xl font-bold">Paie — ${paieMonthLabel(ym)}</h1><p class="text-sm text-slate-500">Calcul paie Algérie : CNAS, IRG, net à payer, coût employeur.</p></div>
+    <div><h1 class="text-2xl font-bold">Paie — ${paieMonthLabel(ym)}</h1><p class="text-sm text-slate-500">Calcul paie Algérie : CNAS, IRG barème progressif, net à payer, coût employeur.</p></div>
     <div class="flex gap-2 flex-wrap justify-end"><button class="btn paie-export-btn" onclick="paieExportCSV()">Exporter CSV</button><button class="btn paie-print-btn" onclick="window.print()">Imprimer</button></div>
   </div>
   <div class="card p-4 mb-4">
@@ -10651,8 +10678,8 @@ function renderPaie(view){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Brut cotisable</div><div class="text-2xl font-black">${money(sum("brutCotisable"))}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Net à payer</div><div class="text-2xl font-black text-emerald-700">${money(sum("netAPayer"))}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Coût employeur</div><div class="text-2xl font-black text-amber-700">${money(sum("coutEmployeur"))}</div></div>
-    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CNAS salarié 9%</div><div class="text-2xl font-black text-red-700">${money(sum("cnasSalarie"))}</div></div>
-    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CNAS patronal 26%</div><div class="text-2xl font-black text-orange-700">${money(sum("cnasPatronal"))}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CNAS salarié ${qty(cfg.tauxCnasSalarie)}%</div><div class="text-2xl font-black text-red-700">${money(sum("cnasSalarie"))}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CNAS patronal ${qty(cfg.tauxCnasPatronal)}%</div><div class="text-2xl font-black text-orange-700">${money(sum("cnasPatronal"))}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">IRG retenu</div><div class="text-2xl font-black text-purple-700">${money(sum("irg"))}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Alertes SNMG</div><div class="text-2xl font-black ${anomalies.length?"text-red-700":"text-emerald-700"}">${anomalies.length}</div></div>
   </div>
@@ -10663,13 +10690,14 @@ function renderPaie(view){
       <div class="col-span-2"><label class="label">Heures / mois</label><input class="input" name="heuresMois" value="${cfg.heuresMois}"/></div>
       <div><label class="label">CNAS salarié %</label><input class="input" name="tauxCnasSalarie" value="${cfg.tauxCnasSalarie}"/></div>
       <div><label class="label">CNAS patronal %</label><input class="input" name="tauxCnasPatronal" value="${cfg.tauxCnasPatronal}"/></div>
+      <div><label class="label">Œuvres sociales %</label><input class="input" name="tauxOeuvresSociales" value="${cfg.tauxOeuvresSociales}"/></div>
       <div><label class="label">Abattement IRG %</label><input class="input" name="abattementIRG" value="${cfg.abattementIRG}"/></div>
       <div><label class="label">Abatt. min/mois</label><input class="input" name="abattementMinMensuel" value="${formatMoneyInputValue(cfg.abattementMinMensuel)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Abatt. max/mois</label><input class="input" name="abattementMaxMensuel" value="${formatMoneyInputValue(cfg.abattementMaxMensuel)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Prime nuit</label><input class="input" name="primeNuit" value="${formatMoneyInputValue(cfg.primeNuit)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Prime panier</label><input class="input" name="primePanier" value="${formatMoneyInputValue(cfg.primePanier)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Prime transport</label><input class="input" name="primeTransport" value="${formatMoneyInputValue(cfg.primeTransport)}" onblur="formatMoneyField(this)"/></div>
-      <div class="col-span-6 text-xs text-slate-500">Barème IRG mensuel intégré : 0% jusqu'à 30 000 DA, 23% de 30 001 à 120 000 DA, 27% de 120 001 à 360 000 DA, 30% au-delà. Les paramètres restent modifiables selon instruction comptable.</div>
+      <div class="col-span-6 text-xs text-slate-500">IRG intégré : barème progressif mensuel 0 / 23 / 27 / 30 / 33 / 35%, exonération salaire jusqu'à 30 000 DA, abattement IRG ${qty(cfg.abattementIRG)}% plafonné entre ${money(cfg.abattementMinMensuel)} et ${money(cfg.abattementMaxMensuel)}, formule spéciale 30 001 - 35 000 DA. Les primes imposables/non imposables et cas particuliers restent à valider avec la comptabilité.</div>
       <div class="col-span-6"><button type="button" class="btn btn-primary" onclick="savePaieConfig()">Enregistrer paramètres</button></div>
     </form>
   </details>
