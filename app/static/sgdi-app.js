@@ -2283,7 +2283,7 @@ function openDevisModal(){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer le devis</button></div>
     </form>`);
 }
-function confirmDevis(){
+async function confirmDevis(){
   const fd=new FormData(document.querySelector(".modal-bg form"));
   const qte=parseFloat(fd.get("quantite"))||0;
   const pu=parseFloat(fd.get("prixUnitaire"))||0;
@@ -2301,7 +2301,8 @@ function confirmDevis(){
     objet:fd.get("objet"),designation:fd.get("designation")||"",quantite:qte,prixUnitaire:pu,tva,remise:rem,
     totalHT:ht,tvaAmt,ttc,conditions:fd.get("conditions")||"",statut:"brouillon",createdBy:session.username,createdAt:new Date().toISOString()
   });
-  saveDB();closeModal();
+  if(!(await saveDBAndWaitToast("Devis non confirmé par PostgreSQL")))return;
+  closeModal();
   toast("Devis "+fd.get("numero")+" enregistré · TTC: "+money(ttc),"success");
 }
 function openFactureModal(){
@@ -2329,7 +2330,7 @@ function openFactureModal(){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer la facture</button></div>
     </form>`);
 }
-function confirmFacture(){
+async function confirmFacture(){
   const fd=new FormData(document.querySelector(".modal-bg form"));
   const qte=parseFloat(fd.get("quantite"))||0;
   const pu=parseFloat(fd.get("prixUnitaire"))||0;
@@ -2348,7 +2349,8 @@ function confirmFacture(){
     totalHT:ht,tvaAmt,ttc,modeReglement:fd.get("modeReglement")||"",observations:fd.get("observations")||"",
     statut:"emise",createdBy:session.username,createdAt:new Date().toISOString()
   });
-  saveDB();closeModal();
+  if(!(await saveDBAndWaitToast("Facture non confirmée par PostgreSQL")))return;
+  closeModal();
   toast("Facture "+fd.get("numero")+" enregistrée · TTC: "+money(ttc),"success");
 }
 
@@ -10755,16 +10757,16 @@ function renderFactDevis(view){
     ${factTabs("devis")}
     <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun devis.</div>`:`<table><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Objet</th><th>HT</th><th>TVA</th><th>TTC</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(d=>`<tr data-searchable><td class="font-mono text-xs">${safe(d.numero)}</td><td class="text-xs">${formatDate(d.date)}</td><td>${escapeHTML(d.client||"")}</td><td class="text-xs">${escapeHTML((d.objet||"").slice(0,40))}</td><td class="text-xs">${money(d.totalHT)}</td><td class="text-xs">${money(d.tvaAmt)}</td><td class="font-bold">${money(d.ttc)}</td><td><select class="select text-xs" onchange="updateDevisStatut('${d.id}',this.value)">${STATUTS_DEVIS.map(s=>`<option ${d.statut===s?"selected":""}>${s}</option>`).join("")}</select></td><td class="flex gap-1"><button class="btn btn-ghost text-xs" onclick="convertDevisToFacture('${d.id}')">→ Facture</button><button class="btn btn-ghost text-xs text-red-600" onclick="deleteDevis('${d.id}')">✕</button></td></tr>`).join("")}</tbody></table>`}</div>`;
 }
-function updateDevisStatut(id,s){const d=db.devis.find(x=>x.id===id);if(d){d.statut=s;saveDB();toast("Statut mis à jour","success")}}
-function deleteDevis(id){if(!confirm("Supprimer ce devis ?"))return;db.devis=db.devis.filter(d=>d.id!==id);saveDB();renderView();toast("Supprimé","success")}
-function convertDevisToFacture(id){const d=db.devis.find(x=>x.id===id);if(!d)return;const num=nextFactureNum();db.factures=db.factures||[];db.factures.push({id:uid("fc"),numero:num,date:today(),societe:d.societe,echeance:30,client:d.client,adresseClient:d.adresseClient||"",nif:"",email:d.email||"",objet:d.objet,designation:d.designation||"",quantite:d.quantite,prixUnitaire:d.prixUnitaire,tva:d.tva,remise:d.remise,totalHT:d.totalHT,tvaAmt:d.tvaAmt,ttc:d.ttc,modeReglement:"Virement bancaire",observations:"Issu du devis "+d.numero,statut:"emise",categorie:d.categorie||"",theme:d.theme||"",structure:d.structure||"",createdBy:session.username,createdAt:new Date().toISOString(),sourceDevisId:d.id});d.statut="accepte";saveDB();toast("Facture "+num+" créée","success");navigate("facturation/factures")}
+async function updateDevisStatut(id,s){const d=db.devis.find(x=>x.id===id);if(d){d.statut=s;if(!(await saveDBAndWaitToast("Statut devis non confirmé par PostgreSQL")))return;toast("Statut mis à jour","success")}}
+async function deleteDevis(id){if(!confirm("Supprimer ce devis ?"))return;db.devis=db.devis.filter(d=>d.id!==id);if(!(await saveDBAndWaitToast("Suppression devis non confirmée par PostgreSQL")))return;renderView();toast("Supprimé","success")}
+async function convertDevisToFacture(id){const d=db.devis.find(x=>x.id===id);if(!d)return;const num=nextFactureNum();db.factures=db.factures||[];db.factures.push({id:uid("fc"),numero:num,date:today(),societe:d.societe,echeance:30,client:d.client,adresseClient:d.adresseClient||"",nif:"",email:d.email||"",objet:d.objet,designation:d.designation||"",quantite:d.quantite,prixUnitaire:d.prixUnitaire,tva:d.tva,remise:d.remise,totalHT:d.totalHT,tvaAmt:d.tvaAmt,ttc:d.ttc,modeReglement:"Virement bancaire",observations:"Issu du devis "+d.numero,statut:"emise",categorie:d.categorie||"",theme:d.theme||"",structure:d.structure||"",createdBy:session.username,createdAt:new Date().toISOString(),sourceDevisId:d.id});d.statut="accepte";if(!(await saveDBAndWaitToast("Conversion devis non confirmée par PostgreSQL")))return;toast("Facture "+num+" créée","success");navigate("facturation/factures")}
 function renderFactFactures(view){
   const list=bySoc(db.factures||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">🧾 Factures</h1><p class="text-slate-500 text-sm">${list.length} factures · ${mySoc()||"Toutes"}</p></div><button class="btn btn-primary" onclick="openFactureModal()">➕ Nouvelle facture</button></div>
     ${factTabs("factures")}
     <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucune facture.</div>`:`<table><thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Objet</th><th>TTC</th><th>Payé</th><th>Reste</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(f=>{const sp=factureStatutPaye(f);return`<tr data-searchable><td class="font-mono text-xs">${safe(f.numero)}</td><td class="text-xs">${formatDate(f.date)}</td><td>${escapeHTML(f.client||"")}</td><td class="text-xs">${escapeHTML((f.objet||"").slice(0,40))}</td><td class="font-bold">${money(f.ttc)}</td><td class="text-emerald-600 text-xs">${money(sp.paye)}</td><td class="${sp.reste>0?"text-amber-600":""} text-xs">${money(sp.reste)}</td><td><span class="pill ${statutFactPill(sp.statut)}">${sp.statut}</span></td><td class="flex gap-1">${sp.reste>0?`<button class="btn btn-success text-xs" onclick="openPaiementModal('${f.id}')">💳 Payer</button>`:""}<button class="btn btn-ghost text-xs" onclick="openAvoirModal('${f.id}')">↩️ Avoir</button><button class="btn btn-ghost text-xs text-red-600" onclick="deleteFacture('${f.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
 }
-function deleteFacture(id){if(!confirm("Supprimer cette facture (et ses paiements/avoirs) ?"))return;db.factures=db.factures.filter(f=>f.id!==id);db.paiements=(db.paiements||[]).filter(p=>p.factureId!==id);db.avoirs=(db.avoirs||[]).filter(a=>a.factureId!==id);saveDB();renderView();toast("Supprimé","success")}
+async function deleteFacture(id){if(!confirm("Supprimer cette facture (et ses paiements/avoirs) ?"))return;db.factures=db.factures.filter(f=>f.id!==id);db.paiements=(db.paiements||[]).filter(p=>p.factureId!==id);db.avoirs=(db.avoirs||[]).filter(a=>a.factureId!==id);if(!(await saveDBAndWaitToast("Suppression facture non confirmée par PostgreSQL")))return;renderView();toast("Supprimé","success")}
 function openPaiementModal(factureId){
   const f=db.factures.find(x=>x.id===factureId);if(!f)return;const sp=factureStatutPaye(f);
   openModal(`<h3 class="font-bold text-lg mb-3">💳 Encaisser un paiement</h3>
@@ -10780,14 +10782,15 @@ function openPaiementModal(factureId){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-success">💾 Encaisser</button></div>
     </form>`);
 }
-function confirmPaiement(factureId){
+async function confirmPaiement(factureId){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
   if(m<=0){toast("Montant invalide","error");return}
   const f=db.factures.find(x=>x.id===factureId);if(!f)return;
   db.paiements=db.paiements||[];
   db.paiements.push({id:uid("pa"),factureId,date:fd.get("date"),montant:m,mode:fd.get("mode"),reference:fd.get("reference")||"",notes:fd.get("notes")||"",createdBy:session.username,createdAt:new Date().toISOString()});
   db.caisse=db.caisse||[];db.caisse.push({id:uid("cs"),date:fd.get("date"),type:"entree",montant:m,categorie:"Encaissement facture",libelle:"Paiement facture "+(f.numero||""),mode:fd.get("mode"),reference:fd.get("reference")||"",societe:f.societe||"",factureId,createdAt:new Date().toISOString()});
-  saveDB();closeModal();toast("Paiement enregistré : "+money(m),"success");renderView();
+  if(!(await saveDBAndWaitToast("Paiement non confirmé par PostgreSQL")))return;
+  closeModal();toast("Paiement enregistré : "+money(m),"success");renderView();
 }
 function openAvoirModal(factureId){
   const f=db.factures.find(x=>x.id===factureId);if(!f)return;const sp=factureStatutPaye(f);
@@ -10802,13 +10805,14 @@ function openAvoirModal(factureId){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-warn">💾 Émettre l'avoir</button></div>
     </form>`);
 }
-function confirmAvoir(factureId){
+async function confirmAvoir(factureId){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
   if(m<=0){toast("Montant invalide","error");return}
   const f=db.factures.find(x=>x.id===factureId);
   db.avoirs=db.avoirs||[];const num="AV-"+new Date().getFullYear()+"-"+String((db.avoirs.length+1)).padStart(4,"0");
   db.avoirs.push({id:uid("av"),numero:num,factureId,date:fd.get("date"),montant:m,motif:fd.get("motif"),client:f?.client||"",societe:f?.societe||"",createdBy:session.username,createdAt:new Date().toISOString()});
-  saveDB();closeModal();toast("Avoir "+num+" émis ("+money(m)+")","success");renderView();
+  if(!(await saveDBAndWaitToast("Avoir non confirmé par PostgreSQL")))return;
+  closeModal();toast("Avoir "+num+" émis ("+money(m)+")","success");renderView();
 }
 function renderFactPaiements(view){
   const factIds=new Set(bySoc(db.factures||[]).map(f=>f.id));
@@ -10818,7 +10822,7 @@ function renderFactPaiements(view){
     ${factTabs("paiements")}
     <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun paiement.</div>`:`<table><thead><tr><th>Date</th><th>Facture</th><th>Client</th><th>Mode</th><th>Réf.</th><th>Montant</th><th>Notes</th><th></th></tr></thead><tbody>${list.map(p=>{const f=db.factures.find(x=>x.id===p.factureId);return`<tr data-searchable><td class="text-xs">${formatDate(p.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(f?.client||"")}</td><td><span class="pill pill-blue">${safe(p.mode)}</span></td><td class="text-xs font-mono">${safe(p.reference)}</td><td class="font-bold text-emerald-600">${money(p.montant)}</td><td class="text-xs">${escapeHTML((p.notes||"").slice(0,40))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deletePaiement('${p.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
 }
-function deletePaiement(id){if(!confirm("Supprimer ce paiement ?"))return;db.paiements=db.paiements.filter(p=>p.id!==id);db.caisse=(db.caisse||[]).filter(c=>!(c.factureId&&c.categorie==="Encaissement facture"&&c.id&&db.paiements.find(pp=>pp.id===id)));saveDB();renderView();toast("Supprimé","success")}
+async function deletePaiement(id){if(!confirm("Supprimer ce paiement ?"))return;db.paiements=db.paiements.filter(p=>p.id!==id);db.caisse=(db.caisse||[]).filter(c=>!(c.factureId&&c.categorie==="Encaissement facture"&&c.id&&db.paiements.find(pp=>pp.id===id)));if(!(await saveDBAndWaitToast("Suppression paiement non confirmée par PostgreSQL")))return;renderView();toast("Supprimé","success")}
 function renderFactAvances(view){
   const list=bySoc(db.avances||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const total=list.reduce((s,a)=>s+(a.montant||0),0);
@@ -10841,14 +10845,15 @@ function openAvanceModal(){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
 }
-function confirmAvance(){
+async function confirmAvance(){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
   db.avances=db.avances||[];
   db.avances.push({id:uid("av"),date:fd.get("date"),societe:fd.get("societe"),client:fd.get("client"),montant:m,mode:fd.get("mode"),reference:fd.get("reference")||"",notes:fd.get("notes")||"",statut:"disponible",createdBy:session.username,createdAt:new Date().toISOString()});
   db.caisse=db.caisse||[];db.caisse.push({id:uid("cs"),date:fd.get("date"),type:"entree",montant:m,categorie:"Avance client",libelle:"Avance "+fd.get("client"),mode:fd.get("mode"),reference:fd.get("reference")||"",societe:fd.get("societe"),createdAt:new Date().toISOString()});
-  saveDB();closeModal();toast("Avance enregistrée : "+money(m),"success");renderView();
+  if(!(await saveDBAndWaitToast("Avance non confirmée par PostgreSQL")))return;
+  closeModal();toast("Avance enregistrée : "+money(m),"success");renderView();
 }
-function deleteAvance(id){if(!confirm("Supprimer ?"))return;db.avances=db.avances.filter(a=>a.id!==id);saveDB();renderView()}
+async function deleteAvance(id){if(!confirm("Supprimer ?"))return;db.avances=db.avances.filter(a=>a.id!==id);if(!(await saveDBAndWaitToast("Suppression avance non confirmée par PostgreSQL")))return;renderView()}
 function renderFactAvoirs(view){
   const factIds=new Set(bySoc(db.factures||[]).map(f=>f.id));
   const list=(db.avoirs||[]).filter(a=>factIds.has(a.factureId)).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
@@ -10857,7 +10862,7 @@ function renderFactAvoirs(view){
     ${factTabs("avoirs")}
     <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun avoir.</div>`:`<table><thead><tr><th>N°</th><th>Date</th><th>Facture</th><th>Client</th><th>Montant</th><th>Motif</th><th></th></tr></thead><tbody>${list.map(a=>{const f=db.factures.find(x=>x.id===a.factureId);return`<tr data-searchable><td class="font-mono text-xs">${safe(a.numero)}</td><td class="text-xs">${formatDate(a.date)}</td><td class="font-mono text-xs">${safe(f?.numero)}</td><td>${escapeHTML(a.client||f?.client||"")}</td><td class="font-bold text-purple-600">${money(a.montant)}</td><td class="text-xs">${escapeHTML((a.motif||"").slice(0,50))}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="deleteAvoir('${a.id}')">✕</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
 }
-function deleteAvoir(id){if(!confirm("Supprimer ?"))return;db.avoirs=db.avoirs.filter(a=>a.id!==id);saveDB();renderView()}
+async function deleteAvoir(id){if(!confirm("Supprimer ?"))return;db.avoirs=db.avoirs.filter(a=>a.id!==id);if(!(await saveDBAndWaitToast("Suppression avoir non confirmée par PostgreSQL")))return;renderView()}
 function renderFactCaisse(view){
   const list=bySoc(db.caisse||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const entrees=list.filter(c=>c.type==="entree").reduce((s,c)=>s+(c.montant||0),0);
@@ -10888,13 +10893,14 @@ function openCaisseModal(type){
       <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn ${type==="entree"?"btn-success":"btn-warn"}">💾 Enregistrer</button></div>
     </form>`);
 }
-function confirmCaisse(type){
+async function confirmCaisse(type){
   const fd=new FormData(document.querySelector(".modal-bg form"));const m=parseFloat(fd.get("montant"))||0;
   db.caisse=db.caisse||[];
   db.caisse.push({id:uid("cs"),date:fd.get("date"),type,montant:m,categorie:fd.get("categorie"),libelle:fd.get("libelle"),mode:fd.get("mode"),reference:fd.get("reference")||"",societe:fd.get("societe"),createdBy:session.username,createdAt:new Date().toISOString()});
-  saveDB();closeModal();toast("Mouvement enregistré","success");renderView();
+  if(!(await saveDBAndWaitToast("Mouvement caisse non confirmé par PostgreSQL")))return;
+  closeModal();toast("Mouvement enregistré","success");renderView();
 }
-function deleteCaisse(id){if(!confirm("Supprimer ?"))return;db.caisse=db.caisse.filter(c=>c.id!==id);saveDB();renderView()}
+async function deleteCaisse(id){if(!confirm("Supprimer ?"))return;db.caisse=db.caisse.filter(c=>c.id!==id);if(!(await saveDBAndWaitToast("Suppression caisse non confirmée par PostgreSQL")))return;renderView()}
 function renderFactStock(view){
   // Filtrer par société courante (mySoc) ou la société sélectionnée dans le module stock (mtSociete) si module transverse
   const soc=mySoc()||sessionStorage.getItem("mtSociete")||"";
