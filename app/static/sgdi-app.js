@@ -266,6 +266,17 @@ function sgdiAuthHeaders(headers){
   return h;
 }
 function sgdiAuthToken(){return sessionStorage.getItem(SGDI_API_TOKEN_KEY)||""}
+function sgdiIsAuthFailure(status,message){
+  return status===401||/token invalide|token manquant|session .*expir|unauthorized|not authenticated/i.test(String(message||""));
+}
+function sgdiHandleAuthFailure(message){
+  sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+  sgdiPostgresReady=false;
+  session=null;
+  saveSession(null);
+  if(typeof toast==="function")toast(message||"Session expirée. Veuillez vous reconnecter.","error");
+  setTimeout(()=>{location.hash="#/login";route()},0);
+}
 async function sgdiApi(path,options){
   const opts=options||{};
   const legacy=opts.legacy!==false;
@@ -282,6 +293,7 @@ async function sgdiApi(path,options){
     const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
     const message=out.error||detail||out.message||("Erreur API "+res.status);
     console.error("Erreur API",res.status,url,out);
+    if(sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
     throw new Error(message);
   }
   return out.data===undefined?out:out.data;
@@ -302,6 +314,7 @@ async function sgdiActionApi(path,options){
     const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
     const message=out.error||detail||out.message||("Action refusée par le backend "+res.status);
     console.error("Action API refusée",res.status,url,out);
+    if(sgdiIsAuthFailure(res.status,message))sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
     throw new Error(message);
   }
   return out;
@@ -1569,7 +1582,7 @@ function societeAccessPassword(s){
 function isAdminSystemUnlocked(){return sessionStorage.getItem(ADMIN_SYSTEM_UNLOCK_KEY)==="1"&&session?.adminSystem===true}
 function isAdminSystemSession(){return isAdmin()&&session?.adminSystem===true}
 function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administrateur système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
+function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
 function isAdm1(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM1","ADMI1","ADMIN1"].includes(normalizeAccessCode(v)))}
