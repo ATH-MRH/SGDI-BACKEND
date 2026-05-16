@@ -6776,6 +6776,15 @@ function sitePositionLabel(lat,lng){
   const a=parseFloat(lat),b=parseFloat(lng);
   return Number.isFinite(a)&&Number.isFinite(b)?`${a.toFixed(6)}, ${b.toFixed(6)}`:"Aucune position enregistrée";
 }
+function sitePositionMarkerIcon(L){
+  return L.divIcon({
+    className:"sgdi-site-logo-marker",
+    html:`<div style="width:34px;height:34px;border-radius:50%;background:#fff;border:2px solid #043970;box-shadow:0 6px 16px rgba(15,23,42,.28);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="/static/iron-securite-logo.png?v=2" alt="IRON GLOBAL SECURITE" style="width:28px;height:28px;object-fit:contain"/></div>`,
+    iconSize:[34,34],
+    iconAnchor:[17,17],
+    popupAnchor:[0,-18]
+  });
+}
 function openSitePositionModal(){
   const f=document.getElementById("site-form");if(!f)return;
   const lat=parseFloat(f.querySelector('[name="latitude"]')?.value);
@@ -6808,6 +6817,7 @@ async function initSitePositionMap(center){
     const L=await loadLeafletForSitePosition();
     const map=L.map(box).setView([center.lat,center.lng],Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&center.lat!==28.0339?15:5);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
+    const siteIcon=sitePositionMarkerIcon(L);
     let marker=null;
     const setPoint=(latlng)=>{
       const lat=+latlng.lat,lng=+latlng.lng;
@@ -6815,7 +6825,7 @@ async function initSitePositionMap(center){
       const lngInput=document.querySelector('.modal-bg [name="modal_longitude"]');
       if(latInput)latInput.value=lat.toFixed(6);
       if(lngInput)lngInput.value=lng.toFixed(6);
-      if(marker)marker.setLatLng(latlng);else marker=L.marker(latlng).addTo(map);
+      if(marker)marker.setLatLng(latlng);else marker=L.marker(latlng,{icon:siteIcon}).addTo(map);
     };
     if(Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&!(center.lat===28.0339&&center.lng===1.6596))setPoint(center);
     map.on("click",e=>setPoint(e.latlng));
