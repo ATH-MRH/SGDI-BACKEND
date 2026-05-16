@@ -4826,7 +4826,7 @@ function renderContrats(view,mode){
     const list=db.candidats.filter(c=>c.statut==="a_contractualiser"&&(!socFilter||c.societe===socFilter));
     view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
       <div><h1 class="text-2xl font-bold mb-2">📋 À contractualiser</h1><p class="text-slate-500 text-sm">Candidats retenus.</p></div>
-      <div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn btn-secondary text-xs" onclick="openContractExcelImport()">Importer Excel</button><button type="button" class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">Créer contrat</button></div>
+      <div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn btn-success text-xs" ${list.length?"":"disabled"} onclick="openRecruitAllContractCandidatesModal()">RECRUTER TOUS</button><button type="button" class="btn btn-secondary text-xs" onclick="openContractExcelImport()">Importer Excel</button><button type="button" class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">Créer contrat</button></div>
     </div>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:`<div class="card overflow-hidden"><table>
       <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Vérifs.</th><th></th></tr></thead>
@@ -5348,28 +5348,34 @@ function confirmEmbaucherCandidat(id){
   </div>`);
 }
 
-async function embaucherCandidat(id){
-  const c=findCandidatById(id);if(!c){toast("Introuvable","error");return}
-  const blockedAgent=candidateBlackListMatch(c);if(blockedAgent){toast("Contrat impossible : personne inscrite sur BLACKLIST","error");return}
-  const f=document.getElementById("contract-form");
+function contractFormDataOrNull(form){return form?new FormData(form):null}
+function contractValue(fd,name,fallback){
+  if(fd&&fd.has(name)){
+    const v=fd.get(name);
+    if(v!==null&&v!==undefined&&String(v).trim()!=="")return v;
+  }
+  return fallback;
+}
+function buildAgentFromContractCandidate(c,fd){
   const verifItems=contractVerificationItems();
   const keys=verifItems.map(x=>x[0]);
-  const fd=new FormData(f);
-  c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||f.querySelector('[name="contractSociete"]')?.value||"";
+  c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   keys.forEach(k=>c["verif"+k]=!!c["verif"+k]);
   c.documents=c.documents||{};
-  const dureeEssai=parseInt(fd.get("dureeEssai"))||90;
-  const dateRecrutement=fd.get("dateRecrutement")||today();
-  const dureeContrat=fd.get("dureeContrat")||"";
-  const dateFinEssai=fd.get("dateFinEssai")||addDays(dateRecrutement,dureeEssai);
-  const dateFinContrat=fd.get("dateFinContrat")||contractEndDate(dateRecrutement,dureeContrat);
-  const posteContrat=fd.get("posteContrat")||c.posteSouhaite||"";
-  const contratModele=contractModelByValue(fd.get("contratPersonnelId"))||contratPersonnelByPoste(posteContrat);
+  const dureeEssai=parseInt(contractValue(fd,"dureeEssai",c.dureeEssai||90),10)||90;
+  const dateRecrutement=contractValue(fd,"dateRecrutement",c.dateRecrutement||c.dateEntree||today());
+  const dureeContrat=contractValue(fd,"dureeContrat",c.dureeContrat||"");
+  const dateFinEssai=contractValue(fd,"dateFinEssai",c.dateFinEssai||addDays(dateRecrutement,dureeEssai));
+  const dateFinContrat=contractValue(fd,"dateFinContrat",c.dateFinContrat||contractEndDate(dateRecrutement,dureeContrat));
+  const posteContrat=contractValue(fd,"posteContrat",c.posteContrat||c.posteSouhaite||"");
+  const contratPersonnelId=contractValue(fd,"contratPersonnelId",c.contratPersonnelId||"");
+  const contratModele=contractModelByValue(contratPersonnelId)||contratPersonnelByPoste(posteContrat);
   const matricule=isOkbaFunction(posteContrat)?nextOkbaCode(db.agents):nextMatricule(db.agents,c.societe);
+  const salaireNet=parseMoneyInput(contractValue(fd,"salaireNet",c.salaireNet||c.salairePrevu||""))||0;
   const agent={
     id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,sexe:c.sexe,situation:c.situation,telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
     salairePrevu:parseMoneyInput(c.salairePrevu)||0,avisDecision:c.avisDecision||"",avisDate:c.avisDate||"",avisRecruteur:c.avisRecruteur||"",avisCommentaire:c.avisCommentaire||"",
-    typeContrat:fd.get("typeContrat"),dureeEssai,dureeContrat,dateFinContrat,salaireNet:parseMoneyInput(fd.get("salaireNet"))||0,banque:fd.get("banque")||"",iban:fd.get("iban"),
+    typeContrat:contractValue(fd,"typeContrat",c.typeContrat||""),dureeEssai,dureeContrat,dateFinContrat,salaireNet,banque:contractValue(fd,"banque",c.banque||""),iban:contractValue(fd,"iban",c.iban||""),
     dateRecrutement,dateFinEssai,
     affectationCourante:{siteId:"",siteName:"",clientName:"",poste:posteContrat,horaire:"",dateDebut:""},
     affectationsHistorique:[],sanctions:[],gestionEvents:[],
@@ -5381,24 +5387,76 @@ async function embaucherCandidat(id){
     statut:"actif",locked:true,fichePositionOfficielle:true,fichePositionOfficielleAt:new Date().toISOString(),fichePositionOfficielleBy:session?.username||"system",lockedAt:new Date().toISOString(),lockedBy:session?.username||"system",createdAt:today(),updatedAt:today()
   };
   if(contratModele&&contratModele.texte)agent.contratPersonnelTexte=fillContratPersonnelText(contratModele.texte,agent);
+  return agent;
+}
+async function recruitContractCandidateToEmployee(c,fd){
+  if(!c)throw new Error("Candidat introuvable");
+  if(candidateBlackListMatch(c))throw new Error(`${(c.nom||"")+" "+(c.prenom||"")} : personne inscrite sur BLACKLIST`);
+  if(!candidateHasMinimumData(c))throw new Error(`${(c.nom||"")+" "+(c.prenom||"")} : nom/prénom manquants`);
+  const agent=buildAgentFromContractCandidate(c,fd);
+  const created=await SGDI.employees.create(employeeApiPayload(agent));
+  Object.assign(agent,employeeFromApi(created),agent,{backendId:created?.id||agent.backendId});
+  if(sqlBackendId(c.backendId)){
+    const updatedCandidate={...c,statut:"embauche",status:"embauche",convertedEmployeeId:agent.backendId||agent.id,convertedAt:new Date().toISOString()};
+    await SGDI.rh.updateCandidate(c.backendId,candidateApiPayload(updatedCandidate));
+  }
+  if(!Array.isArray(db.agents))db.agents=[];
+  db.agents.push(agent);
+  unlockedAgents.delete(agent.id);saveUnlocked();
+  const cid=String(c.id||"");
+  const cbid=String(c.backendId||"");
+  db.candidats=(db.candidats||[]).filter(x=>String(x.id||"")!==cid&&(!cbid||String(x.backendId||"")!==cbid));
+  createRecruitmentWorkflowForEmployee(agent,c);
+  sgdiDirty=true;
+  return agent;
+}
+async function embaucherCandidat(id){
+  const c=findCandidatById(id);if(!c){toast("Introuvable","error");return}
   try{
-    const created=await SGDI.employees.create(employeeApiPayload(agent));
-    Object.assign(agent,employeeFromApi(created),agent,{backendId:created?.id||agent.backendId});
-    if(sqlBackendId(c.backendId)){
-      const updatedCandidate={...c,statut:"embauche",status:"embauche",convertedEmployeeId:agent.backendId||agent.id,convertedAt:new Date().toISOString()};
-      await SGDI.rh.updateCandidate(c.backendId,candidateApiPayload(updatedCandidate));
-    }
-    db.agents.push(agent);
-    unlockedAgents.delete(agent.id);saveUnlocked();
-    db.candidats=db.candidats.filter(x=>x.id!==id);
-    createRecruitmentWorkflowForEmployee(agent,c);
-    sgdiDirty=true;
+    const agent=await recruitContractCandidateToEmployee(c,contractFormDataOrNull(document.getElementById("contract-form")));
     await sgdiBackendSaveAndWait();
     toastCenter("NOUVEAU EMPLOYÉ CRÉÉ","success");
     navigate(`agents/${agent.id}`);
   }catch(e){
     toast("Recrutement non enregistré dans le backend : "+(e.message||e),"error");
   }
+}
+function openRecruitAllContractCandidatesModal(){
+  const socFilter=currentStructureSocieteFilter();
+  const list=(db.candidats||[]).filter(c=>c.statut==="a_contractualiser"&&(!socFilter||c.societe===socFilter));
+  const blocked=list.filter(candidateBlackListMatch).length;
+  openModal(`<div class="text-center p-2">
+    <h3 class="font-black text-lg mb-3">RECRUTER TOUS</h3>
+    <p class="text-sm text-slate-700 mb-3">Voulez vous recruter automatiquement <b>${list.length}</b> candidat(s) à contractualiser ?</p>
+    ${blocked?`<div class="text-xs text-red-700 mb-3">${blocked} candidat(s) blacklisté(s) seront refusés.</div>`:""}
+    <div class="flex justify-center gap-3">
+      <button type="button" class="btn btn-danger" onclick="closeModal()">NON</button>
+      <button type="button" class="btn btn-success" onclick="recruitAllContractCandidates(this)">OUI</button>
+    </div>
+  </div>`);
+}
+async function recruitAllContractCandidates(btn){
+  const socFilter=currentStructureSocieteFilter();
+  const list=(db.candidats||[]).filter(c=>c.statut==="a_contractualiser"&&(!socFilter||c.societe===socFilter));
+  if(!list.length){closeModal();toast("Aucun candidat à recruter","info");return}
+  if(btn)btn.disabled=true;
+  let ok=0,failed=0;
+  const errors=[];
+  for(const c of list.slice()){
+    try{
+      await recruitContractCandidateToEmployee(c,null);
+      ok++;
+    }catch(e){
+      failed++;
+      errors.push(e.message||String(e));
+      console.warn("Recrutement groupé refusé",c,e);
+    }
+  }
+  try{if(ok)await sgdiBackendSaveAndWait()}catch(e){failed++;errors.push("Sauvegarde workflow : "+(e.message||e))}
+  closeModal();
+  toastCenter(`${ok} EMPLOYÉ(S) CRÉÉ(S)${failed?` · ${failed} échec(s)`:""}`,failed?"error":"success");
+  if(errors.length)toast(errors.slice(0,3).join(" ; ")+(errors.length>3?` ; +${errors.length-3} autre(s)`:""),"error");
+  navigate("contrats/situation");
 }
 
 /* ---- EFFECTIF ---- */
