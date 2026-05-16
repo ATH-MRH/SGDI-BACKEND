@@ -8448,9 +8448,23 @@ function agentDotationRows(agentId,opts){
     const q=opts.onlyActive?remaining:initialQty;
     const rep=m.repartitionTailles||{};
     const detail=Object.keys(rep).length?Object.entries(rep).map(([k,v])=>`${k}: ${qty(v)}`).join(" / "):"";
-    return{date:m.date,code:art?.code||"—",article:art?.designation||"Article supprimé",categorie:art?.categorie||"Stock",articleId:m.articleId,qte:q,unite:art?.unite||"",pu,valeur:q*pu,motif:[stockMvtTypeLabel(m.type),m.motif,m.motifRenouvellement,m.motifRenouvellementPrecision].filter(Boolean).join(" · "),bon:m.numeroBon||"—",dateReversement:returned.map(r=>formatDate(r.date)).join(", "),motifReversement:returned.map(r=>[r.motif,qty(r.quantite)+(art?.unite?` ${art.unite}`:"")].filter(Boolean).join(" · ")).join(" / "),detail};
+    return{date:m.date,code:art?.code||"—",article:art?.designation||"Article supprimé",categorie:art?.categorie||"Stock",articleId:m.articleId,qte:q,unite:art?.unite||"",pu,valeur:q*pu,motif:[stockMvtTypeLabel(m.type),m.motif,m.motifRenouvellement,m.motifRenouvellementPrecision].filter(Boolean).join(" · "),bon:m.numeroBon||"—",dateReversement:returned.map(r=>formatDate(r.date)).join(", "),motifReversement:returned.map(r=>[r.motif,qty(r.quantite)+(art?.unite?` ${art.unite}`:"")].filter(Boolean).join(" · ")).join(" / "),detail,barcodeValue:m.barcodeValue||m.codeBarreDotation||"",codeSerie:m.codeSerie||m.numeroSerie||"",modele:m.modele||art?.modele||""};
   }).filter(Boolean);
   return legacy.concat(rows).sort((x,y)=>(y.date||"").localeCompare(x.date||""));
+}
+function sgdiBarcodeBars(value){
+  const text=String(value||"SGDI").toUpperCase();
+  let bits="101";
+  for(let i=0;i<text.length;i++){
+    const n=text.charCodeAt(i);
+    bits+=String((n*73+i*19)%2047).padStart(11,"0").replace(/[0-9]/g,d=>(+d%2)?"1":"0")+"0";
+  }
+  return bits+"101";
+}
+function sgdiBarcodeHTML(value){
+  const bits=sgdiBarcodeBars(value);
+  const bars=bits.split("").map((b,i)=>b==="1"?`<span style="left:${i*2}px;width:2px"></span>`:"").join("");
+  return `<div class="sgdi-barcode"><div class="sgdi-barcode-bars" style="width:${bits.length*2}px">${bars}</div><div class="sgdi-barcode-text">${escapeHTML(value||"")}</div></div>`;
 }
 function ficheDotationHTML(agentId){
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return"<div>Employé introuvable</div>";
@@ -8471,7 +8485,7 @@ function ficheDotationHTML(agentId){
     <h2>Équipements dotés au personnel</h2>
     <table class="items-table">
       <thead><tr><th>N°</th><th>Date</th><th>Code</th><th>Désignation</th><th>Catégorie</th><th>Détail taille/pointure</th><th>Qté</th><th>P.U.</th><th>Valeur</th><th>N° bon</th></tr></thead>
-      <tbody>${rows.length?rows.map((r,i)=>`<tr><td>${i+1}</td><td>${formatDate(r.date)}</td><td>${escapeHTML(r.code||"—")}</td><td><b>${escapeHTML(r.article||"—")}</b></td><td>${escapeHTML(r.categorie||"—")}</td><td>${escapeHTML(r.detail||"—")}</td><td class="num">${qty(r.qte)} ${escapeHTML(r.unite||"")}</td><td class="num">${money(r.pu)}</td><td class="num">${money(r.valeur)}</td><td>${escapeHTML(r.bon||"—")}</td></tr>`).join(""):`<tr><td colspan="10" style="text-align:center;color:#64748b;padding:18px">Aucune dotation active enregistrée.</td></tr>`}</tbody>
+      <tbody>${rows.length?rows.map((r,i)=>`<tr><td>${i+1}</td><td>${formatDate(r.date)}</td><td>${escapeHTML(r.codeSerie||r.code||"—")}</td><td><b>${escapeHTML(r.article||"—")}</b>${r.modele?`<br/><small>${escapeHTML(r.modele)}</small>`:""}${r.barcodeValue?sgdiBarcodeHTML(r.barcodeValue):""}</td><td>${escapeHTML(r.categorie||"—")}</td><td>${escapeHTML(r.detail||"—")}</td><td class="num">${qty(r.qte)} ${escapeHTML(r.unite||"")}</td><td class="num">${money(r.pu)}</td><td class="num">${money(r.valeur)}</td><td>${escapeHTML(r.bon||"—")}</td></tr>`).join(""):`<tr><td colspan="10" style="text-align:center;color:#64748b;padding:18px">Aucune dotation active enregistrée.</td></tr>`}</tbody>
       <tfoot><tr><td colspan="8" class="num">Valeur totale de la dotation</td><td class="num"><b>${money(total)}</b></td><td></td></tr></tfoot>
     </table>
     <div class="engagement">
@@ -8491,7 +8505,7 @@ function printFicheDotation(agentId){
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Employé introuvable","error");return}
   const html=ficheDotationHTML(agentId);
   const w=window.open("","_blank","width=1000,height=800");
-  w.document.write(`<!doctype html><html><head><title>Fiche dotation ${escapeHTML(a.matricule||"")}</title></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  w.document.write(`<!doctype html><html><head><title>Fiche dotation ${escapeHTML(a.matricule||"")}</title><link rel="stylesheet" href="/static/sgdi-app.css"/></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
   w.document.close();
 }
 function openAttribuerToAgentModal(agentId){
@@ -8863,31 +8877,148 @@ function renderMatSitesEnAttenteDotation(view){
   </div>`;
 }
 
+function dotationMagasinsForSoc(soc){
+  return (db.magasins||[]).filter(m=>!soc||m.societe===soc||!m.societe).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+}
+function dotationArticlesForMagasin(magasinId,soc){
+  if(!magasinId)return[];
+  return (db.stockArticles||[]).filter(a=>(!soc||a.societe===soc||!a.societe)&&(!magasinId||String(a.magasinId||"")===String(magasinId))).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
+}
+function dotationCodeSerieOptions(a){
+  if(!a)return[];
+  const values=[a.codeBarre,a.code,a.reference,a.numeroSerie].filter(Boolean);
+  (a.stockVariantes||[]).forEach(v=>[v.code,v.codeBarre,v.numeroSerie,v.lot,v.reference].filter(Boolean).forEach(x=>values.push(x)));
+  (a.stockReceptionsGlobales||[]).forEach(r=>{
+    [r.numeroBon,r.reference,r.codeBarre,r.numeroSerie].filter(Boolean).forEach(x=>values.push(x));
+    (r.details||[]).forEach(d=>[d.code,d.codeBarre,d.numeroSerie,d.lot,d.reference].filter(Boolean).forEach(x=>values.push(x)));
+  });
+  (db.materiel||[]).filter(m=>m.designation===a.designation||m.code===a.code).forEach(m=>[m.code,m.numeroSerie].filter(Boolean).forEach(x=>values.push(x)));
+  return [...new Set(values.map(v=>String(v).trim()).filter(Boolean))];
+}
+function dotationBarcodeValue(agentId,articleId,codeSerie){
+  const ag=(db.agents||[]).find(a=>a.id===agentId);
+  const art=(db.stockArticles||[]).find(a=>a.id===articleId);
+  return ["DOT",new Date().getFullYear(),ag?.matricule||agentId||"EMP",art?.code||articleId||"ART",codeSerie||Date.now()].join("-");
+}
+function dotationReloadMagasins(){
+  const f=document.getElementById("stock-dotation-form");if(!f)return;
+  const soc=f.querySelector('[name="societe"]')?.value||"";
+  const magSel=f.querySelector('[name="magasinId"]');
+  if(magSel)magSel.innerHTML=`<option value="">— Choisir type magasin —</option>${dotationMagasinsForSoc(soc).map(m=>`<option value="${escapeHTML(m.id)}">${m.icon||""} ${escapeHTML(m.nom||"Magasin")}</option>`).join("")}`;
+  dotationMagasinChanged();
+}
+function dotationMagasinChanged(){
+  const f=document.getElementById("stock-dotation-form");if(!f)return;
+  const soc=f.querySelector('[name="societe"]')?.value||"";
+  const magasinId=f.querySelector('[name="magasinId"]')?.value||"";
+  const artSel=f.querySelector('[name="articleId"]');
+  const articles=dotationArticlesForMagasin(magasinId,soc);
+  if(artSel)artSel.innerHTML=`<option value="">${magasinId?"— Choisir article —":"— Choisir d'abord un type magasin —"}</option>${articles.map(a=>`<option value="${escapeHTML(a.id)}">${escapeHTML(a.code||"")} · ${escapeHTML(a.designation||"Article")} · stock: ${qty(stockGetActuel(a.id))} ${escapeHTML(a.unite||"")}</option>`).join("")}`;
+  dotationArticleChanged();
+}
+function dotationArticleChanged(){
+  const f=document.getElementById("stock-dotation-form");if(!f)return;
+  const articleId=f.querySelector('[name="articleId"]')?.value||"";
+  const a=(db.stockArticles||[]).find(x=>x.id===articleId);
+  const codeSel=f.querySelector('[name="codeSerie"]');
+  const model=f.querySelector('[name="modele"]');
+  const stockInfo=document.getElementById("dotation-stock-info");
+  if(codeSel)codeSel.innerHTML=`<option value="">— Choisir code / N° série —</option>${dotationCodeSerieOptions(a).map(v=>`<option value="${escapeHTML(v)}">${escapeHTML(v)}</option>`).join("")}`;
+  if(model)model.value=a?.modele||a?.marque||"";
+  if(stockInfo)stockInfo.innerHTML=a?`Stock disponible : <b class="${stockGetActuel(a.id)>0?"text-emerald-700":"text-red-700"}">${qty(stockGetActuel(a.id))} ${escapeHTML(a.unite||"")}</b> · P.U. ${money(a.prixUnitaire)}`:"Choisissez un article.";
+  dotationRefreshBarcode();
+}
+function dotationRefreshBarcode(){
+  const f=document.getElementById("stock-dotation-form");if(!f)return;
+  const value=dotationBarcodeValue(f.querySelector('[name="agentId"]')?.value||"",f.querySelector('[name="articleId"]')?.value||"",f.querySelector('[name="codeSerie"]')?.value||"");
+  const input=f.querySelector('[name="barcodeValue"]');
+  if(input)input.value=value;
+  const box=document.getElementById("dotation-barcode-preview");
+  if(box)box.innerHTML=sgdiBarcodeHTML(value);
+}
+function dotationLastAgentId(){
+  try{return sessionStorage.getItem("lastDotationAgentId")||""}catch(e){return""}
+}
 function renderMatSimpleDotation(view){
   const header=matSimpleHeader("dotation");
-  const agents=agentsEnInstanceDotation();
   const soc=matSimpleSocFilter();
-  const actifs=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));
+  const agentsPending=agentsEnInstanceDotationForSoc(soc);
+  const activeAgents=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));
+  const agentOptions=[...agentsPending,...activeAgents.filter(a=>!agentsPending.some(p=>p.id===a.id))];
+  const selectedAgent=dotationLastAgentId();
+  const societies=soc?[soc]:SOCIETES;
+  const firstSoc=soc||societies[0]||"";
+  const mags=dotationMagasinsForSoc(firstSoc);
+  const lastAgent=selectedAgent?(db.agents||[]).find(a=>a.id===selectedAgent):null;
   view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
-    <div><h1 class="text-2xl font-bold">Employé en instance de dotation</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes les sociétés"} · Employés actifs sans matériel attribué</p></div>
-    <div class="flex gap-2"><button class="btn btn-secondary text-sm" onclick="navigate('materiel/articles')">Articles</button><button class="btn btn-secondary text-sm" onclick="navigate('fiches/toutes')">Fiches de position</button></div>
+    <div><h1 class="text-2xl font-black uppercase">NOUVELLE DOTATION</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes les sociétés"} · Dotation employé avec déduction automatique du stock.</p></div>
+    <div class="flex gap-2"><button class="btn btn-secondary text-sm" onclick="navigate('materiel/articles')">Articles</button><button class="btn btn-secondary text-sm" onclick="navigate('materiel/dashboard')">Tableau de bord</button></div>
   </div>${header}
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">En instance</div><div class="text-3xl font-black mt-1">${agents.length}</div></div>
-    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Effectif actif</div><div class="text-3xl font-black mt-1">${actifs.length}</div></div>
-    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Déjà dotés</div><div class="text-3xl font-black mt-1">${actifs.filter(a=>agentDotationCount(a.id)>0).length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Employés en attente</div><div class="text-3xl font-black mt-1">${agentsPending.length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Articles catalogue</div><div class="text-3xl font-black mt-1">${matSimpleBySoc(db.stockArticles||[]).length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Magasins</div><div class="text-3xl font-black mt-1">${mags.length}</div></div>
   </div>
-  <div class="card overflow-hidden">
-    <table><thead><tr><th>Employé</th><th>Matricule</th><th>Société</th><th>Poste</th><th>Site</th><th>Action</th></tr></thead>
-    <tbody>${agents.length===0?`<tr><td colspan="6" class="text-center text-slate-500 p-6">Aucun employé en instance de dotation.</td></tr>`:agents.map(a=>`<tr data-searchable>
-      <td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||a.nom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(a.telephone||"")}</div></div></div></td>
-      <td class="font-mono font-bold">${escapeHTML(a.matricule||"—")}</td>
-      <td class="text-xs">${escapeHTML(a.societe||"—")}</td>
-      <td class="text-xs">${escapeHTML(a.affectationCourante?.poste||a.fonction||"—")}</td>
-      <td class="text-xs">${escapeHTML(a.affectationCourante?.siteName||"—")}</td>
-      <td><div class="flex gap-1 flex-wrap"><a class="btn btn-ghost text-xs" href="#/materiel/fiche/${a.id}" onclick="setFicheContext('materiel')">Fiche</a><button class="btn btn-primary text-xs" onclick="stockOpenMvt('nouvelle_dotation','', '${a.id}')">Doter</button></div></td>
-    </tr>`).join("")}</tbody></table>
-  </div>`;
+  <form id="stock-dotation-form" class="card p-5" onsubmit="event.preventDefault();saveNouvelleDotation()">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div><label class="label">Société propriétaire</label><select class="select" name="societe" onchange="dotationReloadMagasins()">${societies.map(s=>`<option value="${escapeHTML(s)}" ${s===firstSoc?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
+      <div><label class="label">Employé bénéficiaire</label><select class="select" name="agentId" onchange="dotationRefreshBarcode()"><option value="">— Choisir employé —</option>${agentOptions.map(a=>`<option value="${a.id}" ${selectedAgent===a.id?"selected":""}>${escapeHTML((a.nom||"")+" "+(a.prenom||""))} · ${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.affectationCourante?.poste||a.fonction||"")}</option>`).join("")}</select></div>
+      <div><label class="label">Type magasin</label><select class="select" name="magasinId" onchange="dotationMagasinChanged()"><option value="">— Choisir type magasin —</option>${mags.map(m=>`<option value="${escapeHTML(m.id)}">${m.icon||""} ${escapeHTML(m.nom||"Magasin")}</option>`).join("")}</select></div>
+      <div><label class="label">Article</label><select class="select" name="articleId" onchange="dotationArticleChanged()"><option value="">— Choisir d'abord un type magasin —</option></select><div id="dotation-stock-info" class="text-xs text-slate-500 mt-1">Choisissez un article.</div></div>
+      <div><label class="label">Quantité</label><input class="input" type="number" min="1" step="1" name="quantite" value="1"/></div>
+      <div><label class="label">Code / N° Série</label><select class="select" name="codeSerie" onchange="dotationRefreshBarcode()"><option value="">— Choisir code / N° série —</option></select></div>
+      <div><label class="label">Modèle</label><input class="input bg-slate-50" name="modele" readonly/></div>
+      <div><label class="label">Code-barres dotation</label><input class="input font-mono bg-slate-50" name="barcodeValue" readonly/></div>
+      <div class="md:col-span-2" id="dotation-barcode-preview"></div>
+      <div class="md:col-span-2"><label class="label">Observations</label><textarea class="input" name="notes" rows="2" placeholder="État, accessoires, conditions de remise..."></textarea></div>
+    </div>
+    <div class="flex justify-end gap-2 mt-5 flex-wrap">
+      <button type="submit" class="btn btn-primary">Valider</button>
+      <button type="button" class="btn btn-secondary" ${lastAgent?"":"disabled"} onclick="voirFicheDotation('${lastAgent?.id||""}')">Voir fiche de dotation</button>
+      <button type="button" class="btn btn-warn" ${lastAgent?"":"disabled"} onclick="printFicheDotation('${lastAgent?.id||""}')">Imprimer Fiche dotation</button>
+    </div>
+  </form>`;
+  setTimeout(()=>{dotationMagasinChanged();dotationRefreshBarcode()},0);
+}
+async function saveNouvelleDotation(){
+  const f=document.getElementById("stock-dotation-form");if(!f)return;
+  const fd=new FormData(f);
+  const agentId=fd.get("agentId")||"";
+  const articleId=fd.get("articleId")||"";
+  const qte=parseFloat(fd.get("quantite"))||0;
+  const ag=(db.agents||[]).find(a=>a.id===agentId);
+  const art=(db.stockArticles||[]).find(a=>a.id===articleId);
+  if(!ag){toast("Choisissez l'employé bénéficiaire","error");return}
+  if(!art){toast("Choisissez l'article","error");return}
+  if(qte<=0){toast("Quantité invalide","error");return}
+  if(!(fd.get("codeSerie")||"").trim()){toast("Choisissez le Code / N° Série","error");return}
+  const dispo=stockGetActuel(articleId);
+  if(qte>dispo){toast(`Stock insuffisant : disponible ${qty(dispo)} ${art.unite||""}`,"error");return}
+  const type="nouvelle_dotation";
+  const m={
+    id:uid("mvt"),articleId,type,date:today(),quantite:qte,repartitionTailles:{},
+    prixUnitaire:parseFloat(art.prixUnitaire)||0,motif:"Dotation personnel",
+    beneficiaireAgentId:agentId,agentId,
+    beneficiaireNom:`${ag.nom||""} ${ag.prenom||""}${ag.matricule?" · "+ag.matricule:""}`.trim(),
+    magasinId:fd.get("magasinId")||art.magasinId||"",societe:fd.get("societe")||art.societe||ag.societe||"",
+    codeSerie:fd.get("codeSerie")||"",modele:fd.get("modele")||art.modele||"",
+    barcodeValue:fd.get("barcodeValue")||dotationBarcodeValue(agentId,articleId,fd.get("codeSerie")||""),
+    numeroBon:nextStockBonNum(type),refDocument:"",notes:fd.get("notes")||"",
+    userId:session?.username||"",createdAt:new Date().toISOString()
+  };
+  try{await persistMovementToPostgres(m)}catch(e){toast("Dotation non sauvegardée PostgreSQL : "+(e.message||e),"error");return}
+  db.stockMouvements=db.stockMouvements||[];
+  db.stockMouvements.push(m);
+  art.derniereMaj=today();
+  try{sessionStorage.setItem("lastDotationAgentId",agentId);sessionStorage.setItem("lastDotationMvtId",m.id)}catch(e){}
+  if(typeof logActivity==="function")logActivity("Nouvelle dotation",`${m.beneficiaireNom} · ${art.code||""} ${art.designation||""} · ${qty(qte)}`);
+  if(!(await saveDBAndWaitToast("Dotation non confirmée par PostgreSQL")))return;
+  toast("Dotation enregistrée et stock déduit","success");
+  renderView();
+}
+function voirFicheDotation(agentId){
+  if(!agentId){toast("Aucune dotation validée à afficher","error");return}
+  openModal(`<div class="bg-slate-100 rounded-lg" style="max-height:82vh;overflow:auto;padding:12px">${ficheDotationHTML(agentId)}</div><div class="flex justify-end mt-3 gap-2"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary" onclick="printFicheDotation('${agentId}')">Imprimer Fiche dotation</button></div>`);
 }
 
 function renderMatSimpleReversement(view){
