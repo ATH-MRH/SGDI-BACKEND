@@ -3369,7 +3369,7 @@ function candidateExcelTemplateColumns(){
   return ["Nom","Prénom","Date de naissance","Lieu de naissance","Nom du père","Nom de la mère","NIN","Sexe","Situation familiale","Téléphone","Email","Adresse","Commune","Wilaya","Poste souhaité","Société","Salaire prévu","Avis","Date avis","Recruteur","Commentaire","Taille (cm)","Pointure","Taille chemise","Ex-services","Précision ex-services","Sport","Sport précision","Contact urgence","Téléphone urgence","Lien urgence","Langues parlées","Service national","Enquête habilitation","Acte de naissance","Certificat résidence","Casier judiciaire","Aptitude médicale","Bulletin ANEM","Chèque barré","Pièce identité","Fiche familiale","Fiche individuelle"];
 }
 function candidateExcelTemplateExample(){
-  return ["DUPONT","Ahmed","1995-04-12","Alger","Mohamed","Fatima","123456789012345678","M","Célibataire","0550000000","ahmed.dupont@example.com","Cité exemple, Alger","Bir Mourad Raïs","Alger","Agent de sécurité",currentStructureSocieteFilter()||mySoc()||"IRON GLOBAL SECURITE","30000","Favorable",today(),"DRH","Exemple à remplacer ou supprimer.","178","42","L","Non","","Oui","Football","Karim DUPONT","0660000000","Frère","Arabe; Français","Oui","Non","Oui","Oui","Oui","Oui","Oui","Oui","Oui","Non","Oui"];
+  return ["DUPONT","Ahmed","1995-04-12","Alger","Mohamed","Fatima","1234567890","M","Célibataire","0550000000","ahmed.dupont@example.com","Cité exemple, Alger","Bir Mourad Raïs","Alger","Agent de sécurité",currentStructureSocieteFilter()||mySoc()||"IRON GLOBAL SECURITE","30000","Favorable",today(),"DRH","Exemple à remplacer ou supprimer.","178","42","L","Non","","Oui","Football","Karim DUPONT","0660000000","Frère","Arabe; Français","Oui","Non","Oui","Oui","Oui","Oui","Oui","Oui","Oui","Non","Oui"];
 }
 function candidateExcelTemplateHelpRows(){
   const help=["Obligatoire. Nom de famille du candidat.","Obligatoire. Prénom du candidat.","Format conseillé : jj/mm/aaaa ou aaaa-mm-jj.","Commune ou ville de naissance.","Identité du père.","Identité de la mère.","Numéro d'identification nationale si disponible.","M ou F.","Célibataire, Marié(e), Divorcé(e), Veuf(ve).","Numéro de téléphone principal.","Adresse email.","Adresse complète.","Commune de résidence.","Wilaya de résidence.","Fonction ou poste cible.","Société autorisée dans SGDI.","Montant net prévu. Exemple : 30000 ou 30 000,00.","Favorable, Favorable avec réserves, Défavorable.","Date de l'avis recruteur.","Nom du recruteur.","Observations libres.","Taille en centimètres.","Pointure chaussure.","XS, S, M, L, XL, XXL.","Oui ou Non.","Arme, corps ou précision utile.","Oui ou Non.","Discipline sportive.","Nom du contact d'urgence.","Téléphone du contact d'urgence.","Lien de parenté ou relation.","Exemple : Arabe; Français; Anglais.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non."];
@@ -3401,9 +3401,22 @@ function downloadCandidateExcelTemplate(){
   URL.revokeObjectURL(a.href);
   toast("Modèle CSV généré","success");
 }
+function candidateMarkImportedSectionsValidated(c){
+  const at=new Date().toISOString();
+  const by=session?.username||"import_excel";
+  c.sectionValidations={};
+  ["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"].forEach(key=>{
+    c.sectionValidations[key]={by,at,source:"import_excel"};
+  });
+  c.fichePositionValidee=true;
+  c.fichePositionValideeAt=at;
+  c.fichePositionValideeBy=by;
+  return c;
+}
 function candidateBlankDraft(options){
   const opt=options||{};
-  return {id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
+  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
+  return opt.reserveDirect?candidateMarkImportedSectionsValidated(draft):draft;
 }
 function openCandidateExcelImport(){
   if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
