@@ -8452,19 +8452,13 @@ function agentDotationRows(agentId,opts){
   }).filter(Boolean);
   return legacy.concat(rows).sort((x,y)=>(y.date||"").localeCompare(x.date||""));
 }
-function sgdiBarcodeBars(value){
-  const text=String(value||"SGDI").toUpperCase();
-  let bits="101";
-  for(let i=0;i<text.length;i++){
-    const n=text.charCodeAt(i);
-    bits+=String((n*73+i*19)%2047).padStart(11,"0").replace(/[0-9]/g,d=>(+d%2)?"1":"0")+"0";
-  }
-  return bits+"101";
+function sgdiQrSrc(value,size){
+  const data=encodeURIComponent(String(value||"SGDI"));
+  const s=size||140;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${s}x${s}&margin=1&data=${data}`;
 }
-function sgdiBarcodeHTML(value){
-  const bits=sgdiBarcodeBars(value);
-  const bars=bits.split("").map((b,i)=>b==="1"?`<span style="left:${i*2}px;width:2px"></span>`:"").join("");
-  return `<div class="sgdi-barcode"><div class="sgdi-barcode-bars" style="width:${bits.length*2}px">${bars}</div><div class="sgdi-barcode-text">${escapeHTML(value||"")}</div></div>`;
+function sgdiQrHTML(value,size){
+  return `<div class="sgdi-qr"><img src="${sgdiQrSrc(value,size||120)}" alt="QR ${escapeHTML(value||"")}" /><div class="sgdi-qr-text">${escapeHTML(value||"")}</div></div>`;
 }
 function ficheDotationHTML(agentId){
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return"<div>Employé introuvable</div>";
@@ -8485,7 +8479,7 @@ function ficheDotationHTML(agentId){
     <h2>Équipements dotés au personnel</h2>
     <table class="items-table">
       <thead><tr><th>N°</th><th>Date</th><th>Code</th><th>Désignation</th><th>Catégorie</th><th>Détail taille/pointure</th><th>Qté</th><th>P.U.</th><th>Valeur</th><th>N° bon</th></tr></thead>
-      <tbody>${rows.length?rows.map((r,i)=>`<tr><td>${i+1}</td><td>${formatDate(r.date)}</td><td>${escapeHTML(r.codeSerie||r.code||"—")}</td><td><b>${escapeHTML(r.article||"—")}</b>${r.modele?`<br/><small>${escapeHTML(r.modele)}</small>`:""}${r.barcodeValue?sgdiBarcodeHTML(r.barcodeValue):""}</td><td>${escapeHTML(r.categorie||"—")}</td><td>${escapeHTML(r.detail||"—")}</td><td class="num">${qty(r.qte)} ${escapeHTML(r.unite||"")}</td><td class="num">${money(r.pu)}</td><td class="num">${money(r.valeur)}</td><td>${escapeHTML(r.bon||"—")}</td></tr>`).join(""):`<tr><td colspan="10" style="text-align:center;color:#64748b;padding:18px">Aucune dotation active enregistrée.</td></tr>`}</tbody>
+      <tbody>${rows.length?rows.map((r,i)=>`<tr><td>${i+1}</td><td>${formatDate(r.date)}</td><td>${escapeHTML(r.codeSerie||r.code||"—")}</td><td><b>${escapeHTML(r.article||"—")}</b>${r.modele?`<br/><small>${escapeHTML(r.modele)}</small>`:""}${r.barcodeValue?sgdiQrHTML(r.barcodeValue,110):""}</td><td>${escapeHTML(r.categorie||"—")}</td><td>${escapeHTML(r.detail||"—")}</td><td class="num">${qty(r.qte)} ${escapeHTML(r.unite||"")}</td><td class="num">${money(r.pu)}</td><td class="num">${money(r.valeur)}</td><td>${escapeHTML(r.bon||"—")}</td></tr>`).join(""):`<tr><td colspan="10" style="text-align:center;color:#64748b;padding:18px">Aucune dotation active enregistrée.</td></tr>`}</tbody>
       <tfoot><tr><td colspan="8" class="num">Valeur totale de la dotation</td><td class="num"><b>${money(total)}</b></td><td></td></tr></tfoot>
     </table>
     <div class="engagement">
@@ -8934,7 +8928,7 @@ function dotationRefreshBarcode(){
   const input=f.querySelector('[name="barcodeValue"]');
   if(input)input.value=value;
   const box=document.getElementById("dotation-barcode-preview");
-  if(box)box.innerHTML=sgdiBarcodeHTML(value);
+  if(box)box.innerHTML=sgdiQrHTML(value,120);
 }
 function dotationLastAgentId(){
   try{return sessionStorage.getItem("lastDotationAgentId")||""}catch(e){return""}
@@ -8968,7 +8962,7 @@ function renderMatSimpleDotation(view){
       <div><label class="label">Quantité</label><input class="input" type="number" min="1" step="1" name="quantite" value="1"/></div>
       <div><label class="label">Code / N° Série</label><select class="select" name="codeSerie" onchange="dotationRefreshBarcode()"><option value="">— Choisir code / N° série —</option></select></div>
       <div><label class="label">Modèle</label><input class="input bg-slate-50" name="modele" readonly/></div>
-      <div><label class="label">Code-barres dotation</label><input class="input font-mono bg-slate-50" name="barcodeValue" readonly/></div>
+      <div><label class="label">Code QR dotation</label><input class="input font-mono bg-slate-50" name="barcodeValue" readonly/></div>
       <div class="md:col-span-2" id="dotation-barcode-preview"></div>
       <div class="md:col-span-2"><label class="label">Observations</label><textarea class="input" name="notes" rows="2" placeholder="État, accessoires, conditions de remise..."></textarea></div>
     </div>
