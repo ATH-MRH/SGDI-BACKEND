@@ -10803,7 +10803,8 @@ function irgSalaireAlgerie(netImposable,cfg){
 function calcPaieAgent(a,ym){
   const cfg=paieConfig();
   paieEnsure();
-  const brutBase=Number(a.salaireNet||a.salaireBase||0)||0;
+  const salaireNetContractuel=Number(a.salaireNet||0)||0;
+  const brutBase=paieBaseBruteForAgent(a);
   const primeNuit=a.affectationCourante?.horaire==="Nuit"?Number(cfg.primeNuit||0):0;
   const fixedElements=[
     {code:"BASE",libelle:"Salaire de base",type:"gain",imposable:true,cotisable:true,montant:brutBase},
@@ -10834,7 +10835,7 @@ function calcPaieAgent(a,ym){
   const cnasPatronal=Math.round(brutCotisable*(Number(cfg.tauxCnasPatronal||0)/100));
   const oeuvresSociales=Math.round(brutCotisable*(Number(cfg.tauxOeuvresSociales||0)/100));
   const coutEmployeur=gains+cnasPatronal+oeuvresSociales;
-  return{brutBase,primeNuit,primes,absences:retenuesRubriques,retenuesRubriques,elements,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
+  return{salaireNetContractuel,brutBase,primeNuit,primes,gains,absences:retenuesRubriques,retenuesRubriques,elements,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
 }
 function paieNetFromBase(base,cfg){
   const brut=Math.max(0,Number(base)||0);
@@ -10844,6 +10845,13 @@ function paieNetFromBase(base,cfg){
   const cnasPatronal=Math.round(brut*(Number(cfg.tauxCnasPatronal||0)/100));
   const oeuvresSociales=Math.round(brut*(Number(cfg.tauxOeuvresSociales||0)/100));
   return{brutCotisable:brut,cnasSalarie:cnas,baseIRG:netSocial,irg:irgCalc.irg,netAPayer:Math.max(0,netSocial-irgCalc.irg),cnasPatronal,oeuvresSociales,coutEmployeur:brut+cnasPatronal+oeuvresSociales};
+}
+function paieBaseBruteForAgent(a){
+  const explicit=Number(a?.salaireBase||a?.paieBaseBrute||0)||0;
+  if(explicit>0)return explicit;
+  const netContractuel=Number(a?.salaireNet||0)||0;
+  if(netContractuel>0)return paieOptimizeFromNet(netContractuel,a).base||0;
+  return 0;
 }
 function paieOptimizeFromNet(targetNet,agent){
   const cfg=paieConfig();
@@ -10936,7 +10944,8 @@ function paieFicheHTML(agentId,ym){
   const period=ym||sessionStorage.getItem("paieMois")||today().slice(0,7);
   const bulletin=paieBulletinFor(agentId,period);
   const cfg=bulletin?.config||paieConfig();const c=bulletin?.calcul||calcPaieAgent(a,period);const mois=paieMonthLabel(period);
-  const totalRetenues=c.cnasSalarie+c.irg;
+  const totalRetenues=(Number(c.cnasSalarie)||0)+(Number(c.irg)||0)+(Number(c.retenuesRubriques)||0);
+  const totalGains=Number(c.gains||0)||((c.elements||[]).filter(e=>e.type!=="retenue").reduce((s,e)=>s+(Number(e.montant)||0),0));
   const ligne=(lib,base,taux,gain,retenue)=>`<tr><td>${escapeHTML(lib)}</td><td class="r">${base}</td><td class="r">${taux}</td><td class="r">${gain}</td><td class="r">${retenue}</td></tr>`;
   return`<div class="bulletin-paie">
     
@@ -10965,13 +10974,13 @@ function paieFicheHTML(agentId,ym){
         ${ligne("Brut cotisable",money(c.brutCotisable),"","<b>"+money(c.brutCotisable)+"</b>","")}
         ${ligne("CNAS salarié",money(c.brutCotisable),qty(cfg.tauxCnasSalarie)+" %","",money(c.cnasSalarie))}
         ${ligne("Net social",money(c.netSocial),"","<b>"+money(c.netSocial)+"</b>","")}
-        ${ligne("Base IRG / net imposable",money(c.baseIRG),"","",money(c.baseIRG))}
-        ${ligne("IRG brut",money(c.baseIRG),"Barème","",money(c.irgBrut))}
-        ${ligne("Abattement IRG",money(c.irgBrut),qty(cfg.abattementIRG)+" %","",money(c.abat))}
+        ${ligne("Base IRG / net imposable",money(c.baseIRG),"","<b>"+money(c.baseIRG)+"</b>","")}
+        ${ligne("IRG brut",money(c.baseIRG),"Barème","","<span class=\"bp-muted\">"+money(c.irgBrut)+"</span>")}
+        ${ligne("Abattement IRG",money(c.irgBrut),qty(cfg.abattementIRG)+" %","<span class=\"bp-muted\">"+money(c.abat)+"</span>","")}
         ${ligne("IRG retenu",money(c.baseIRG),escapeHTML(c.irgFormule||"Barème"),"",money(c.irg))}
       </tbody>
       <tfoot>
-        <tr><th colspan="3" class="r">Totaux</th><th class="r">${money(c.brutCotisable)}</th><th class="r">${money(totalRetenues)}</th></tr>
+        <tr><th colspan="3" class="r">Totaux</th><th class="r">${money(totalGains)}</th><th class="r">${money(totalRetenues)}</th></tr>
       </tfoot>
     </table>
     <div class="bp-grid" style="margin-top:12px">
@@ -11133,8 +11142,9 @@ async function paieApplyOptimization(agentId){
   if(!opt.target){toast("Saisissez un net cible","error");return}
   const panierRub=(db.paieRubriques||[]).find(r=>r.code==="PANIER_VAR");
   const transRub=(db.paieRubriques||[]).find(r=>r.code==="TRANS_VAR");
-  a.salaireNet=opt.base;
+  a.salaireNet=opt.target;
   a.salaireBase=opt.base;
+  a.paieBaseBrute=opt.base;
   a.updatedAt=today();
   db.paieElements=(db.paieElements||[]).filter(e=>!(e.agentId===agentId&&e.ym===ym&&[panierRub?.id,transRub?.id].includes(e.rubriqueId)));
   if(opt.panier>0&&panierRub)db.paieElements.push({id:uid("pel"),ym,agentId,rubriqueId:panierRub.id,montant:opt.panier,note:"Optimisation net cible",createdAt:new Date().toISOString(),createdBy:session?.username||""});
