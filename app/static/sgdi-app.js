@@ -6711,8 +6711,16 @@ function renderSites(view){
   ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;const hideManque=session?.transverse==="materiel";const hideAffecte=session?.transverse==="materiel";const hideGroupes=session?.transverse==="materiel";return`<div class="card p-5 mb-4 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-instance="${agents.length===0?1:0}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold">${escapeHTML(s.nom)} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${siteEditRouteId(s)}">Modifier</a><button type="button" class="btn btn-danger text-xs" onclick="deleteSite('${siteEditRouteId(s)}')">Supprimer</button><span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid ${hideManque&&hideAffecte?"grid-3":hideManque||hideAffecte?"grid-4":"grid-5"} mb-4 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif total contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div>${hideAffecte?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif affecté</div><div class="text-lg font-bold">${agents.length}</div></div>`}<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div>${hideManque?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Manquant</div><div class="text-lg font-bold ${manque>0?"text-red-700":"text-emerald-700"}">${manque}</div></div>`}</div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${hideGroupes?"":`<div class="mt-4"><h4 class="text-sm font-bold mb-2">Employés affectés par groupe</h4>${renderSiteAgentsByGroup(s,agents)}</div>`}</div>`}).join("")}`;
 }
 function siteEditRouteId(site){return encodeURIComponent(String(site?.backendId||site?.id||""))}
+function siteLatLng(site){
+  site=site||{};
+  const lat=parseFloat(site.latitude??site.lat??site.coordonnees?.latitude);
+  const lng=parseFloat(site.longitude??site.lng??site.coordonnees?.longitude);
+  return Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng}:null;
+}
 function siteMapQuery(site){
   site=site||{};
+  const pos=siteLatLng(site);
+  if(pos)return `${pos.lat},${pos.lng}`;
   return [site.nom,site.adresse,site.commune,site.wilaya,"Algérie"].map(v=>String(v||"").trim()).filter(Boolean).join(", ");
 }
 function siteMapUrl(site){
@@ -6744,6 +6752,93 @@ function updateSitesMap(siteId){
   const label=document.getElementById("sites-map-label");
   if(frame)frame.src=siteMapUrl(site);
   if(label)label.textContent=siteMapQuery(site);
+}
+function loadLeafletForSitePosition(){
+  if(window.L)return Promise.resolve(window.L);
+  if(window.__sgdiLeafletPromise)return window.__sgdiLeafletPromise;
+  window.__sgdiLeafletPromise=new Promise((resolve,reject)=>{
+    if(!document.querySelector('link[data-sgdi-leaflet]')){
+      const link=document.createElement("link");
+      link.rel="stylesheet";link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";link.setAttribute("data-sgdi-leaflet","1");
+      document.head.appendChild(link);
+    }
+    const script=document.createElement("script");
+    script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.onload=()=>window.L?resolve(window.L):reject(new Error("Leaflet indisponible"));
+    script.onerror=()=>reject(new Error("Chargement carte impossible"));
+    document.head.appendChild(script);
+  });
+  return window.__sgdiLeafletPromise;
+}
+function sitePositionLabel(lat,lng){
+  const a=parseFloat(lat),b=parseFloat(lng);
+  return Number.isFinite(a)&&Number.isFinite(b)?`${a.toFixed(6)}, ${b.toFixed(6)}`:"Aucune position enregistrée";
+}
+function openSitePositionModal(){
+  const f=document.getElementById("site-form");if(!f)return;
+  const lat=parseFloat(f.querySelector('[name="latitude"]')?.value);
+  const lng=parseFloat(f.querySelector('[name="longitude"]')?.value);
+  const center=Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng}:{lat:28.0339,lng:1.6596};
+  openModal(`<div style="width:min(960px,92vw)">
+    <div class="flex items-start justify-between gap-3 mb-3">
+      <div>
+        <h3 class="font-black text-lg">Positionner site</h3>
+        <div class="text-xs text-slate-500">Cliquez sur la carte pour placer le point du site, puis enregistrez la position.</div>
+      </div>
+      <button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>
+    </div>
+    <div id="site-position-map" class="rounded-lg border border-slate-200 bg-slate-100" style="height:480px"></div>
+    <div class="grid grid-2 gap-3 mt-3">
+      <div><label class="label">Latitude</label><input class="input" name="modal_latitude" value="${Number.isFinite(lat)?lat:""}" readonly/></div>
+      <div><label class="label">Longitude</label><input class="input" name="modal_longitude" value="${Number.isFinite(lng)?lng:""}" readonly/></div>
+    </div>
+    <div id="site-position-fallback" class="hidden mt-3 p-3 rounded bg-amber-50 text-amber-800 text-xs">Carte non chargée. Saisissez les coordonnées manuellement ci-dessous.</div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button type="button" class="btn btn-primary" onclick="saveSitePositionFromModal()">Enregistrer position</button>
+    </div>
+  </div>`);
+  setTimeout(()=>initSitePositionMap(center),0);
+}
+async function initSitePositionMap(center){
+  const box=document.getElementById("site-position-map");if(!box)return;
+  try{
+    const L=await loadLeafletForSitePosition();
+    const map=L.map(box).setView([center.lat,center.lng],Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&center.lat!==28.0339?15:5);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
+    let marker=null;
+    const setPoint=(latlng)=>{
+      const lat=+latlng.lat,lng=+latlng.lng;
+      const latInput=document.querySelector('.modal-bg [name="modal_latitude"]');
+      const lngInput=document.querySelector('.modal-bg [name="modal_longitude"]');
+      if(latInput)latInput.value=lat.toFixed(6);
+      if(lngInput)lngInput.value=lng.toFixed(6);
+      if(marker)marker.setLatLng(latlng);else marker=L.marker(latlng).addTo(map);
+    };
+    if(Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&!(center.lat===28.0339&&center.lng===1.6596))setPoint(center);
+    map.on("click",e=>setPoint(e.latlng));
+    setTimeout(()=>map.invalidateSize(),120);
+  }catch(e){
+    const fb=document.getElementById("site-position-fallback");
+    if(fb)fb.classList.remove("hidden");
+    box.innerHTML=`<div class="p-6 text-sm text-slate-600">Carte indisponible. Vous pouvez saisir les coordonnées ci-dessous.</div>`;
+    document.querySelectorAll('.modal-bg [name="modal_latitude"],.modal-bg [name="modal_longitude"]').forEach(i=>i.removeAttribute("readonly"));
+  }
+}
+function saveSitePositionFromModal(){
+  const lat=document.querySelector('.modal-bg [name="modal_latitude"]')?.value;
+  const lng=document.querySelector('.modal-bg [name="modal_longitude"]')?.value;
+  const f=document.getElementById("site-form");
+  const a=parseFloat(lat),b=parseFloat(lng);
+  if(!f||!Number.isFinite(a)||!Number.isFinite(b)){toast("Choisissez un point sur la carte","error");return}
+  const latInput=f.querySelector('[name="latitude"]');
+  const lngInput=f.querySelector('[name="longitude"]');
+  if(latInput)latInput.value=a.toFixed(6);
+  if(lngInput)lngInput.value=b.toFixed(6);
+  const label=document.getElementById("site-position-current");
+  if(label)label.textContent=sitePositionLabel(a,b);
+  closeModal();
+  toast("Position du site prête à enregistrer","success");
 }
 function siteDotationHTML(site){
   const rows=(site.equipements||site.materiel||[]).filter(x=>x&&(x.categorie||x.designation||x.quantite||x.etat));
@@ -7035,12 +7130,12 @@ function inferSiteRotationSystem(site){
   return len===4?"1/3":"24/48";
 }
 function renderSiteForm(view,id){
-  let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),nom:"",indicatif:"",adresse:"",commune:"",wilaya:"",type:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
+  let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),nom:"",indicatif:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
   const rotationSystem=inferSiteRotationSystem(s);
   const eff=siteEffectifsNorm(s);
   view.innerHTML=`<div class="max-w-5xl mx-auto"><div class="flex justify-between mb-4"><h1 class="text-2xl font-bold">${s.isNew?"Création de site":"Modifier "+escapeHTML(s.nom)}</h1><button class="btn btn-ghost" onclick="navigate('sites/actifs')">← Retour</button></div>
   <form id="site-form" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
-    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div></div></div>
+    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div><div class="col-span-6 p-3 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3"><input type="hidden" name="latitude" value="${escapeHTML(s.latitude||"")}"/><input type="hidden" name="longitude" value="${escapeHTML(s.longitude||"")}"/><div><div class="label mb-1">Position GPS du site</div><div id="site-position-current" class="text-sm font-bold text-slate-700">${escapeHTML(sitePositionLabel(s.latitude,s.longitude))}</div></div><button type="button" class="btn btn-warn" onclick="openSitePositionModal()">Positionner site</button></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">S3. Effectifs</div>
       <div class="grid grid-2 mb-4">
@@ -7109,6 +7204,10 @@ async function saveSite(id){
   s.adresse=fd.get("adresse");
   s.commune=fd.get("commune");
   s.wilaya=fd.get("wilaya");
+  s.latitude=(fd.get("latitude")||"").trim();
+  s.longitude=(fd.get("longitude")||"").trim();
+  if(s.latitude&&s.longitude)s.coordonnees={latitude:parseFloat(s.latitude),longitude:parseFloat(s.longitude)};
+  else delete s.coordonnees;
   s.type=fd.get("type");
   s.contact={nom:fd.get("contact_nom"),fonction:fd.get("contact_fonction"),telephone:fd.get("contact_tel"),email:fd.get("contact_email")};
   s.client=fd.get("client")||s.contact.nom;
