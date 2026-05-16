@@ -3501,7 +3501,14 @@ function candidateImportFallbackKey(c){
   const norm=v=>String(v||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
   const name=norm(c.nom||c.last_name)+"|"+norm(c.prenom||c.first_name);
   if(name==="|")return "";
-  return "name|"+norm(c.societe||c.society)+"|"+name+"|"+norm(c.dateNaissance||c.birth_date);
+  const birth=norm(c.dateNaissance||c.birth_date);
+  const phone=norm(c.telephone||c.phone);
+  if(birth)return "name-birth|"+norm(c.societe||c.society)+"|"+name+"|"+birth;
+  if(phone)return "name-phone|"+norm(c.societe||c.society)+"|"+name+"|"+phone;
+  return "";
+}
+function candidateExcelRowHasData(row){
+  return Object.values(row||{}).some(v=>String(v??"").trim()!=="");
 }
 function readCandidateExcelFile(file){
   const reader=new FileReader();
@@ -3509,7 +3516,7 @@ function readCandidateExcelFile(file){
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:false});
       const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true}).filter(candidateExcelRowHasData);
       if(!rows.length){toast("Fichier Excel vide","error");return}
       previewCandidateExcelImport(rows,file.name);
     }catch(err){console.error(err);toast("Import Excel impossible: "+err.message,"error")}
