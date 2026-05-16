@@ -3528,6 +3528,11 @@ function candidateExcelTemplateValueWarnings(c){
 function candidateExcelRowHasData(row){
   return Object.values(row||{}).some(v=>String(v??"").trim()!=="");
 }
+function candidateImportLabel(item){
+  const c=item&&item.c?item.c:item;
+  const name=String(((c&&c.nom)||"")+" "+((c&&c.prenom)||"")).trim()||"Candidat sans nom";
+  return `${item&&item.row?`Ligne ${item.row} - `:""}${name}`;
+}
 function readCandidateExcelFile(file){
   const reader=new FileReader();
   reader.onload=e=>{
@@ -3573,7 +3578,13 @@ function previewCandidateExcelImport(rows,fileName){
 async function confirmCandidateExcelImport(btn){
   const batch=window._candidateExcelImport;
   if(!batch||!Array.isArray(batch.mapped)){toast("Aucun import en attente","error");return}
-  const items=batch.mapped.filter(x=>!x.errors.length).map(x=>({...x.c,importAllowDuplicate:!!x.duplicate,importDuplicateReason:x.duplicateReason||""}));
+  const rowsToImport=batch.mapped.filter(x=>!x.errors.length);
+  const underAge=rowsToImport.filter(x=>x.c.dateNaissance&&candidatAgeAtSave(x.c.dateNaissance)!==null&&candidatAgeAtSave(x.c.dateNaissance)<20);
+  if(underAge.length){
+    toast("Import refusé : candidat(s) de moins de 20 ans : "+underAge.slice(0,5).map(candidateImportLabel).join(" ; ")+(underAge.length>5?` ; +${underAge.length-5} autre(s)`:""),"error");
+    return;
+  }
+  const items=rowsToImport.map(x=>({...x.c,importRow:x.row,importAllowDuplicate:!!x.duplicate,importDuplicateReason:x.duplicateReason||""}));
   if(!items.length){toast("Aucune ligne valide à importer","error");return}
   if(btn)btn.disabled=true;
   try{
@@ -3581,7 +3592,11 @@ async function confirmCandidateExcelImport(btn){
     if(!Array.isArray(db.candidats))db.candidats=[];
     let ok=0;
     for(const c of items){
-      await persistCandidateToPostgres(c,{allowCreate:true});
+      try{
+        await persistCandidateToPostgres(c,{allowCreate:true});
+      }catch(e){
+        throw new Error(`${candidateImportLabel(c)} : ${e.message||e}`);
+      }
       if(!db.candidats.some(x=>String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c);
       ok++;
     }
