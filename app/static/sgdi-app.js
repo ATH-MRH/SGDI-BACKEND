@@ -4791,6 +4791,7 @@ function renderContratsDashboard(view){
   const mass=agents.reduce((sum,a)=>sum+(parseFloat(a.salaireNet)||0),0);
   const card=(label,value,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(label)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const quick=(label,route,icon)=>`<button type="button" class="btn btn-secondary justify-start" onclick="navigate('${route}')">${icon} ${escapeHTML(label)}</button>`;
+  const contractActions=`<div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary text-xs" onclick="openContractExcelImport()">Importer Excel</button><button class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">➕ Créer contrat</button></div>`;
   const reserveRows=reserveCandidates.slice(0,12).map(c=>`<tr data-searchable>
     <td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML((c.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(c.telephone||c.email||"")}</div></div></div></td>
     <td>${safe(c.posteSouhaite)}</td>
@@ -4799,7 +4800,7 @@ function renderContratsDashboard(view){
     <td class="text-xs">${formatDate(c.createdAt)}</td>
     <td class="text-right"><button type="button" class="btn btn-primary text-xs" onclick="recruterCandidat('${jsString(c.id)}')">RECRUTER</button></td>
   </tr>`).join("");
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div><button class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">➕ Créer contrat</button></div>
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div>${contractActions}</div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Nouveau contrat",toContract.length,"Candidats à contractualiser","contrats/a_contractualiser","#043970","➕")}
       ${card("Avenants",avenants.length,`${signedAvenants.length} signé(s)`,"contrats/avenants","#7c3aed","✎")}
@@ -4825,7 +4826,7 @@ function renderContrats(view,mode){
     const list=db.candidats.filter(c=>c.statut==="a_contractualiser"&&(!socFilter||c.societe===socFilter));
     view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
       <div><h1 class="text-2xl font-bold mb-2">📋 À contractualiser</h1><p class="text-slate-500 text-sm">Candidats retenus.</p></div>
-      <button type="button" class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">Créer contrat</button>
+      <div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn btn-secondary text-xs" onclick="openContractExcelImport()">Importer Excel</button><button type="button" class="btn contract-create-btn" onclick="navigate('contrats/nouveau_contrat')">Créer contrat</button></div>
     </div>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:`<div class="card overflow-hidden"><table>
       <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Vérifs.</th><th></th></tr></thead>
@@ -4934,24 +4935,113 @@ function directContractPayload(form){
     output_format:"docx"
   };
 }
+function openContractExcelImport(){
+  if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
+  const input=document.createElement("input");
+  input.type="file";input.accept=".xlsx,.xls,.csv";
+  input.onchange=()=>{const file=input.files&&input.files[0];if(file)readContractExcelFile(file)};
+  input.click();
+}
+function contractExcelMapRow(row,index){
+  const c=candidateExcelMapRow(row,index,"reserve",{free:true});
+  c.statut="a_contractualiser";
+  c.reserveDirect=true;
+  c.fichePositionValidee=true;
+  c.fichePositionValideeAt=c.fichePositionValideeAt||new Date().toISOString();
+  c.fichePositionValideeBy=c.fichePositionValideeBy||session?.username||"excel_contrat";
+  c.source="Import Excel contrat";
+  c.typeContrat=candidateExcelLooseText(row,["type contrat","type de contrat","contrat","nature contrat"])||c.typeContrat||"";
+  c.posteContrat=normalizePosteValue(candidateExcelLooseText(row,["poste contrat","poste","fonction","emploi","grade"]))||c.posteContrat||c.posteSouhaite||"";
+  c.dateRecrutement=c.dateRecrutement||candidateExcelLooseDate(row,["date recrutement","date de recrutement","date entree","date entrée","date embauche","date d'embauche","date debut contrat","date début contrat"]);
+  c.dateEntree=c.dateEntree||c.dateRecrutement;
+  c.dateFinContrat=candidateExcelLooseDate(row,["date fin contrat","fin contrat","date fin","echeance contrat","échéance contrat"])||c.dateFinContrat||"";
+  c.dateFinEssai=candidateExcelLooseDate(row,["date fin essai","fin essai","date fin periode essai","date fin période essai"])||c.dateFinEssai||"";
+  c.dureeEssai=candidateExcelLooseText(row,["duree essai","durée essai","periode essai","période essai"])||c.dureeEssai||"";
+  c.dureeContrat=candidateExcelLooseText(row,["duree contrat","durée contrat"])||c.dureeContrat||"";
+  c.salaireNet=parseMoneyInput(excelCellLoose(row,["salaire net","net a payer","net à payer","salaire"]))||c.salaireNet||c.salairePrevu||"";
+  c.salairePrevu=c.salairePrevu||c.salaireNet||"";
+  c.banque=candidateExcelLooseText(row,["banque","nom banque"])||c.banque||"";
+  c.iban=candidateExcelLooseText(row,["iban","rib","compte bancaire","numero compte","numéro compte"])||c.iban||"";
+  c.avisDecision=c.avisDecision||"Favorable";
+  c.avisDate=c.avisDate||today();
+  c.avisRecruteur=c.avisRecruteur||session?.username||"Import Excel";
+  c.avisCommentaire=c.avisCommentaire||"Importé depuis le module Contrat.";
+  return c;
+}
+function readContractExcelFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true}).filter(candidateExcelRowHasData);
+      if(!rows.length){toast("Fichier Excel vide","error");return}
+      previewContractExcelImport(rows,file.name);
+    }catch(err){console.error(err);toast("Import Excel contrat impossible : "+err.message,"error")}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function previewContractExcelImport(rows,fileName){
+  const mapped=rows.map((row,i)=>{
+    const c=contractExcelMapRow(row,i);
+    const errors=candidateIdentityMissing(c);
+    return {row:i+2,c,errors};
+  });
+  window._contractExcelImport={rows,mapped,fileName};
+  const valid=mapped.filter(x=>!x.errors.length).length;
+  const err=mapped.filter(x=>x.errors.length).length;
+  const sample=mapped.slice(0,25).map(x=>`<tr><td class="font-mono text-xs">${x.row}</td><td class="font-semibold">${escapeHTML((x.c.nom||"")+" "+(x.c.prenom||""))}</td><td>${safe(x.c.posteContrat||x.c.posteSouhaite)}</td><td>${safe(x.c.typeContrat)}</td><td>${safe(x.c.dateRecrutement)}</td><td>${x.errors.length?`<span class="pill pill-red">${escapeHTML(x.errors.join(", "))}</span>`:`<span class="pill pill-green">Prêt contrat</span>`}</td></tr>`).join("");
+  openModal(`<h3 class="font-bold text-lg mb-1">Import Excel contrats</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(fileName||"Fichier Excel")} · ${rows.length} ligne(s)</p>
+    <div class="grid grid-2 gap-3 mb-4">
+      <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Prêts</div><div class="text-2xl font-black text-emerald-600">${valid}</div></div>
+      <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Erreurs identité</div><div class="text-2xl font-black text-red-600">${err}</div></div>
+    </div>
+    <div class="card overflow-hidden mb-4" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Ligne</th><th>Employé</th><th>Poste</th><th>Contrat</th><th>Recrutement</th><th>Statut</th></tr></thead><tbody>${sample||`<tr><td colspan="6" class="text-center p-4 text-slate-500">Aucune ligne lisible.</td></tr>`}</tbody></table></div>
+    <div class="text-xs text-slate-500 mb-4">Les champs vides sont acceptés. Les lignes importées seront ajoutées dans <b>Contrat > À contractualiser</b>.</div>
+    <div class="flex justify-end gap-2 flex-wrap"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" ${valid?"":"disabled"} onclick="confirmContractExcelImport(this)">Enregistrer dans le backend</button></div>`);
+}
+async function confirmContractExcelImport(btn){
+  const batch=window._contractExcelImport;
+  if(!batch||!Array.isArray(batch.mapped)){toast("Aucun import contrat en attente","error");return}
+  const items=batch.mapped.filter(x=>!x.errors.length).map(x=>({...x.c,importRow:x.row,importAllowDuplicate:true}));
+  if(!items.length){toast("Aucune ligne valide à importer","error");return}
+  if(btn)btn.disabled=true;
+  try{
+    sgdiRequireServerWrite();
+    if(!Array.isArray(db.candidats))db.candidats=[];
+    let ok=0;
+    for(const c of items){
+      await persistCandidateToPostgres(c,{allowCreate:true});
+      if(!db.candidats.some(x=>String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c);
+      ok++;
+    }
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
+    closeModal();
+    toastCenter(`${ok} DOSSIER(S) CONTRAT IMPORTÉ(S)`,"success");
+    navigate("contrats/a_contractualiser");
+  }catch(e){
+    if(btn)btn.disabled=false;
+    toast("Import contrat refusé : "+(e.message||e),"error");
+  }
+}
 function renderNouveauContratDirect(view){
   const soc=currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   view.innerHTML=`<div class="max-w-5xl mx-auto">
-    <div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-3xl font-black uppercase">Nouveau contrat</h1><p class="text-sm text-slate-500">Saisie RH directe, génération depuis un modèle en base PostgreSQL, validation puis impression.</p></div><button class="btn btn-ghost" onclick="navigate('contrats/dashboard')">Retour</button></div>
+    <div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-3xl font-black uppercase">Nouveau contrat</h1><p class="text-sm text-slate-500">Saisie RH directe, génération depuis un modèle en base PostgreSQL, validation puis impression.</p></div><div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary text-xs" onclick="openContractExcelImport()">Importer Excel</button><button class="btn btn-ghost" onclick="navigate('contrats/dashboard')">Retour</button></div></div>
     <form id="direct-contract-form" class="card p-5" onsubmit="event.preventDefault();validateDirectContract(this)">
       <input type="hidden" name="generated_id" value=""/>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div><label class="label">Modèle de contrat *</label><select class="select" name="template_id" required><option value="">Chargement des modèles...</option></select></div>
-        <div><label class="label">Type de contrat *</label><select class="select" name="contract_type">${TYPES_CONTRAT.map(t=>`<option>${escapeHTML(t)}</option>`).join("")}</select></div>
-        <div><label class="label">Nom *</label><input class="input" name="last_name" required/></div>
-        <div><label class="label">Prénom *</label><input class="input" name="first_name" required/></div>
+        <div><label class="label">Modèle de contrat</label><select class="select" name="template_id"><option value="">Chargement des modèles...</option></select></div>
+        <div><label class="label">Type de contrat</label><select class="select" name="contract_type">${TYPES_CONTRAT.map(t=>`<option>${escapeHTML(t)}</option>`).join("")}</select></div>
+        <div><label class="label">Nom</label><input class="input" name="last_name"/></div>
+        <div><label class="label">Prénom</label><input class="input" name="first_name"/></div>
         <div><label class="label">Date de naissance</label><input class="input" type="date" name="birth_date"/></div>
         <div><label class="label">Lieu de naissance</label><input class="input" name="birth_place"/></div>
         <div><label class="label">Nom du père</label><input class="input" name="father_name"/></div>
         <div><label class="label">Nom de la mère</label><input class="input" name="mother_name"/></div>
         <div><label class="label">NIN</label><input class="input" name="nin" inputmode="numeric"/></div>
         <div><label class="label">Société</label><select class="select" name="society"><option value="">—</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${s===soc?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
-        <div><label class="label">Date début contrat *</label><input class="input" type="date" name="start_date" required/></div>
+        <div><label class="label">Date début contrat</label><input class="input" type="date" name="start_date"/></div>
         <div><label class="label">Date fin contrat</label><input class="input" type="date" name="end_date"/></div>
         <div><label class="label">Lieu de travail</label><input class="input" name="work_place"/></div>
         <div><label class="label">Motif du recrutement</label><input class="input" name="recruitment_reason"/></div>
@@ -4982,7 +5072,6 @@ async function loadDirectContractTemplates(){
 }
 function previewDirectContract(form){
   const p=directContractPayload(form);
-  if(!p.first_name||!p.last_name){toast("Nom et prénom obligatoires","error");return}
   openModal(`<h3 class="font-bold text-lg mb-4">Visualisation contrat</h3>
     <div class="p-4 rounded-lg bg-slate-50 text-sm space-y-2">
       <div><b>Employé :</b> ${escapeHTML(p.last_name+" "+p.first_name)}</div>
@@ -4999,7 +5088,6 @@ function previewDirectContract(form){
 }
 async function validateDirectContract(form){
   const payload=directContractPayload(form);
-  if(!payload.template_id){toast("Choisissez un modèle de contrat","error");return}
   try{
     const row=await SGDI.rh.generateContractFromForm(payload);
     form.generated_id.value=row.id;
@@ -5185,6 +5273,8 @@ function renderContractualisation(view,id){
   ensureContratsPersonnel();
   const autoContrat=contratPersonnelByPoste(c.posteContrat||c.posteSouhaite);
   const selectedSociete=c.societe||mySoc()||"";
+  const selectedPoste=c.posteContrat||c.posteSouhaite||"";
+  const posteOptions=POSTES.includes(selectedPoste)?POSTES:(selectedPoste?[selectedPoste,...POSTES]:POSTES);
   if(selectedSociete&&!c.societe){c.societe=selectedSociete;saveDB()}
   const sitesContract=(db.sites||[])
     .filter(s=>s.actif!==false)
@@ -5192,21 +5282,21 @@ function renderContractualisation(view,id){
   const verifs=contractVerificationItems();
   const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
   view.innerHTML=`<div class="max-w-5xl mx-auto">
-    <div class="flex justify-between mb-4 gap-3 items-start"><div><h1 class="text-2xl font-bold">Contractualisation — ${escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Vérifications, contrat et affectation.</p></div><div class="flex gap-2 items-end flex-wrap justify-end"><div style="min-width:240px"><label class="label">Société *</label><select class="select" name="contractSociete" onchange="setContractualisationSociete('${c.id}',this.value)" ><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${selectedSociete===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
+    <div class="flex justify-between mb-4 gap-3 items-start"><div><h1 class="text-2xl font-bold">Contractualisation — ${escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Vérifications, contrat et affectation.</p></div><div class="flex gap-2 items-end flex-wrap justify-end"><div style="min-width:240px"><label class="label">Société</label><select class="select" name="contractSociete" onchange="setContractualisationSociete('${c.id}',this.value)" ><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${selectedSociete===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
     <form id="contract-form" onsubmit="event.preventDefault();confirmEmbaucherCandidat('${c.id}')">
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">Contrat de travail</div><div class="grid grid-6">
-        <div class="col-span-3"><label class="label">Type de contrat *</label><select class="select" name="typeContrat" required>${TYPES_CONTRAT.filter(t=>t!=="CDI").map(t=>`<option ${c.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
-        <div class="col-span-3"><label class="label">Poste *</label><select class="select" name="posteContrat" required onchange="selectAutoContractForPoste(this.value)"><option value="">— Choisir —</option>${POSTES.map(p=>`<option ${((c.posteContrat||c.posteSouhaite)===p)?"selected":""}>${p}</option>`).join("")}</select></div>
-        <div class="col-span-3"><label class="label">Salaire net (DA/mois) *</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(c.salaireNet||c.salairePrevu||"")}" placeholder="45 000,00" required onblur="formatMoneyField(this)"/>${c.salairePrevu?`<div class="text-xs text-slate-500 mt-1">💡 Salaire prévu : <b>${money(c.salairePrevu)}</b></div>`:""}</div>
-        <div class="col-span-6"><label class="label">Modèle de contrat spécifique au poste *</label><select class="select" name="contratPersonnelId" required onchange="updateContratPersonnelPreview()">${contratPersonnelOptions(c.contratPersonnelId, c.posteContrat||c.posteSouhaite)}</select></div>
+        <div class="col-span-3"><label class="label">Type de contrat</label><select class="select" name="typeContrat">${TYPES_CONTRAT.filter(t=>t!=="CDI").map(t=>`<option ${c.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="col-span-3"><label class="label">Poste</label><select class="select" name="posteContrat" onchange="selectAutoContractForPoste(this.value)"><option value="">— Choisir —</option>${posteOptions.map(p=>`<option value="${escapeHTML(p)}" ${selectedPoste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
+        <div class="col-span-3"><label class="label">Salaire net (DA/mois)</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(c.salaireNet||c.salairePrevu||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)"/>${c.salairePrevu?`<div class="text-xs text-slate-500 mt-1">💡 Salaire prévu : <b>${money(c.salairePrevu)}</b></div>`:""}</div>
+        <div class="col-span-6"><label class="label">Modèle de contrat spécifique au poste</label><select class="select" name="contratPersonnelId" onchange="updateContratPersonnelPreview()">${contratPersonnelOptions(c.contratPersonnelId, c.posteContrat||c.posteSouhaite)}</select></div>
         <div class="col-span-6 p-3 rounded-lg" style="background:#f8fafc;border:1px solid #e2e8f0"><div id="contrat-personnel-title" class="text-sm font-bold text-slate-800 mb-2">${escapeHTML((autoContrat&&(autoContrat.title||autoContrat.titre))||"Contrat spécifique au poste")}</div><pre id="contrat-personnel-preview" class="text-xs text-slate-600 whitespace-pre-wrap max-h-40 overflow-auto">${escapeHTML((autoContrat&&(autoContrat.description||autoContrat.texte||autoContrat.file_name))||"Aucun modèle trouvé pour ce poste. Ajoutez-le dans Administration système > CONTRAT.")}</pre></div>
-        <div class="col-span-2"><label class="label">Date de recrutement *</label><input class="input" type="date" name="dateRecrutement" value="${c.dateRecrutement||c.dateEntree||today()}" required onchange="updateContractEndDate()"/></div>
-        <div class="col-span-2"><label class="label">Durée période d'essai (jours) *</label><input class="input" type="number" name="dureeEssai" value="${c.dureeEssai||90}" min="0" required onchange="updateContractEndDate()" oninput="updateContractEndDate()"/></div>
-        <div class="col-span-2"><label class="label">Date fin période d'essai *</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${c.dateFinEssai||""}" required readonly/></div>
-        <div class="col-span-3"><label class="label">Durée du contrat *</label><select class="select" name="dureeContrat" required onchange="updateContractEndDate()">${contratDureeOptions(c.dureeContrat||"")}</select></div>
-        <div class="col-span-3"><label class="label">Date fin contrat *</label><input class="input bg-slate-50" type="date" name="dateFinContrat" value="${c.dateFinContrat||""}" required readonly/></div>
-        <div class="col-span-6"><label class="label">Banque *</label><select class="select" name="banque" required><option value="">— Choisir une banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${c.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></div>
-        <div class="col-span-6"><label class="label">IBAN *</label><input class="input" name="iban" value="${escapeHTML(c.iban||"")}" required/></div>
+        <div class="col-span-2"><label class="label">Date de recrutement</label><input class="input" type="date" name="dateRecrutement" value="${c.dateRecrutement||c.dateEntree||today()}" onchange="updateContractEndDate()"/></div>
+        <div class="col-span-2"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${c.dureeEssai||90}" min="0" onchange="updateContractEndDate()" oninput="updateContractEndDate()"/></div>
+        <div class="col-span-2"><label class="label">Date fin période d'essai</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${c.dateFinEssai||""}" readonly/></div>
+        <div class="col-span-3"><label class="label">Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateContractEndDate()">${contratDureeOptions(c.dureeContrat||"")}</select></div>
+        <div class="col-span-3"><label class="label">Date fin contrat</label><input class="input bg-slate-50" type="date" name="dateFinContrat" value="${c.dateFinContrat||""}" readonly/></div>
+        <div class="col-span-6"><label class="label">Banque</label><select class="select" name="banque"><option value="">— Choisir une banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${c.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></div>
+        <div class="col-span-6"><label class="label">IBAN</label><input class="input" name="iban" value="${escapeHTML(c.iban||"")}"/></div>
       </div></div>
       <div class="card p-5 mb-4"><div class="section-banner banner-blue">Affectation opérationnelle</div><div class="text-sm text-slate-600">L'affectation du nouvel agent à un site est confiée au module OPS. Après validation DRH, l'agent sera créé sans site d'affectation.</div></div>
       <div class="card p-4 flex justify-between items-center gap-3 flex-wrap"><div class="text-sm text-slate-500">Matricule attribué automatiquement. Documents contractualisation : <b>${nbOk}/9</b>.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button type="submit" class="btn btn-success" data-no-critical-auth="1">✓ Valider & embaucher</button></div></div>
@@ -5264,11 +5354,8 @@ async function embaucherCandidat(id){
   const f=document.getElementById("contract-form");
   const verifItems=contractVerificationItems();
   const keys=verifItems.map(x=>x[0]);
-  const missing=verifItems.filter(([k])=>!c["verif"+k]).map(([,label])=>label);
-  if(missing.length){toast(`${missing.length} vérif. manquante(s) : ${missing.join(", ")}`,"error");return}
   const fd=new FormData(f);
   c.societe=c.societe||currentStructureSocieteFilter()||mySoc()||f.querySelector('[name="contractSociete"]')?.value||"";
-  if(!c.societe){toast("Choisissez la société","error");return}
   keys.forEach(k=>c["verif"+k]=!!c["verif"+k]);
   c.documents=c.documents||{};
   const dureeEssai=parseInt(fd.get("dureeEssai"))||90;
