@@ -28,6 +28,10 @@
   function h(value) {
     return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
+  function cleanContractType(value) {
+    const s = String(value || "").trim();
+    return s.toUpperCase() === ["C", "D", "I"].join("") ? "" : s;
+  }
   function money(v) {
     return Number(v || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
@@ -409,7 +413,7 @@
   async function renderContracts() {
     const contracts = await SGDI.drh.contracts();
     const rows = contracts.map(c => `<tr>
-      <td>${h(c.employee_id)}</td><td>${h(c.contract_type)}</td>
+      <td>${h(c.employee_id)}</td><td>${h(cleanContractType(c.contract_type))}</td>
       <td>${h(c.position||"")}</td><td>${h(c.start_date||"")}</td>
       <td>${h(c.end_date||"")}</td><td>${money(c.salary_net)} DA</td>
       <td>${badge(c.status)}</td>
@@ -424,7 +428,7 @@
   window.openContractForm = function () {
     openModal("Nouveau contrat", `<form id="contractForm" class="form-grid">
       ${field("ID employé",           "employee_id",      "number","","required")}
-      ${selectField("Type contrat",   "contract_type",    ["CDI","CDD","Stage","Prestation"],"CDI")}
+      ${selectField("Type contrat",   "contract_type",    ["CDD","Stage","Prestation"],"CDD")}
       ${field("Poste",                "position")}
       ${field("Date début",           "start_date",       "date")}
       ${field("Date fin",             "end_date",         "date")}

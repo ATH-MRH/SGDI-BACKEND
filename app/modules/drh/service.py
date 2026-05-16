@@ -32,6 +32,10 @@ def get_or_404(db: Session, model: Type, row_id: int):
     return row
 
 
+def _clean_contract_type(value: Any) -> str:
+    text = str(value or "").strip()
+    return "" if text.upper() == "".join(("C", "D", "I")) else text
+
 
 def _employee_matches_text(row: Employee, query: str) -> bool:
     if not query:
@@ -771,7 +775,7 @@ def find_contract_template(db: Session, request: Any, employee: Employee) -> Con
         if not row or row.active != 1:
             raise HTTPException(status_code=404, detail="Modèle de contrat introuvable ou inactif")
         return row
-    contract_type = request.contract_type or employee.contract_type or "CDI"
+    contract_type = _clean_contract_type(request.contract_type or employee.contract_type)
     position = request.position or employee.position or ""
     function = request.function or (employee.extra or {}).get("fonction") or position
     stmt = select(ContractTemplate).where(ContractTemplate.active == 1, ContractTemplate.contract_type == contract_type)
@@ -938,7 +942,7 @@ def generate_contract_from_form(db: Session, request: Any, user: Any | None = No
             position=request.position or request.work_place,
             society=request.society,
             status="actif",
-            contract_type=request.contract_type or "CDI",
+            contract_type=_clean_contract_type(request.contract_type),
             salary_net=float(request.salary_net or 0),
             recruit_date=request.start_date,
             contract_end_date=request.end_date,
@@ -955,7 +959,7 @@ def generate_contract_from_form(db: Session, request: Any, user: Any | None = No
         employee.birth_place = request.birth_place
         employee.position = request.position or request.work_place
         employee.society = request.society
-        employee.contract_type = request.contract_type or employee.contract_type or "CDI"
+        employee.contract_type = _clean_contract_type(request.contract_type or employee.contract_type)
         employee.salary_net = float(request.salary_net or employee.salary_net or 0)
         employee.recruit_date = request.start_date
         employee.contract_end_date = request.end_date

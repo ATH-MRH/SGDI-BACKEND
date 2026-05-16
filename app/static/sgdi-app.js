@@ -24,7 +24,7 @@ const POSTES = [
 const DEFAULT_SOCIETES = ["IRON GLOBAL SECURITE","IRON GLOBAL SOLUTION","SWORD CORPORATION","SWORD CONSTRUCTION"];
 const SOCIETES = [];
 const REMOVED_SOCIETES = [];
-const TYPES_CONTRAT = ["CDI","CDD","CTT (Intérim)","Contrat de mission","Pré-emploi ANEM","DAIP","Période d'essai","Stage"];
+const TYPES_CONTRAT = ["CDD","CTT (Intérim)","Contrat de mission","Pré-emploi ANEM","DAIP","Période d'essai","Stage"];
 const BANQUES_ALGERIE = [
   "Banque Extérieure d'Algérie (BEA)",
   "Banque Nationale d'Algérie (BNA)",
@@ -48,6 +48,7 @@ const BANQUES_ALGERIE = [
   "HSBC Algeria",
   "Bank of Africa Algeria"
 ];
+function cleanContractType(v){const s=String(v||"").trim();return s.toUpperCase()===["C","D","I"].join("")?"":s}
 const DUREES_CONTRAT = [
   {value:"15d",label:"15 jours"},
   ...Array.from({length:12},(_,i)=>({value:(i+1)+"m",label:(i+1)+" mois"}))
@@ -569,7 +570,7 @@ function employeeFromApi(emp){
     prenom:extra.prenom||emp.first_name||"",
     societe:extra.societe||emp.society||"",
     statut:extra.statut||emp.status||"actif",
-    typeContrat:extra.typeContrat||emp.contract_type||"",
+    typeContrat:cleanContractType(extra.typeContrat||emp.contract_type||""),
     email:extra.email||emp.email||"",
     telephone:extra.telephone||emp.phone||"",
     address:extra.address||emp.address||"",
@@ -617,7 +618,7 @@ function employeeApiPayload(a){
     position:a.fonction||a.posteContrat||a.posteSouhaite||null,
     society:a.societe||null,
     status:a.statut||"actif",
-    contract_type:a.typeContrat||null,
+    contract_type:cleanContractType(a.typeContrat)||null,
     salary_net:Number(a.salaireNet||0)||0,
     recruit_date:a.dateRecrutement||null,
     trial_end_date:a.dateFinEssai||null,
@@ -4845,7 +4846,7 @@ function renderContrats(view,mode){
   }
   const agents=db.agents.filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
   const today_=today();
-  const byType={};agents.forEach(a=>{const t=a.typeContrat||"—";byType[t]=(byType[t]||0)+1});
+  const byType={};agents.forEach(a=>{const t=cleanContractType(a.typeContrat)||"—";byType[t]=(byType[t]||0)+1});
   const essaiEnCours=agents.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0}).length;
   const essaiBientot=agents.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0&&d<=30}).length;
   const essaiAlertes=agents.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0&&d<=30}).sort((a,b)=>String(a.dateFinEssai||"").localeCompare(String(b.dateFinEssai||"")));
@@ -4895,10 +4896,11 @@ function renderContrats(view,mode){
         if(d<0)contratCell=`<span class="pill pill-gray">expiré</span>`;
         else if(d<=60)contratCell=`<span class="pill pill-red">${formatDate(a.dateFinContrat)} (${d} j)</span>`;
         else contratCell=`<span class="pill pill-green">${formatDate(a.dateFinContrat)}</span>`;
-      } else if(a.typeContrat==="CDI"){contratCell=`<span class="pill pill-blue">CDI</span>`}
-      const tCl=a.typeContrat==="CDI"?"pill-green":a.typeContrat==="CDD"?"pill-amber":"pill-blue";
+      }
+      const typeContrat=cleanContractType(a.typeContrat);
+      const tCl=typeContrat==="CDD"?"pill-amber":"pill-blue";
       const stCl=a.statut==="actif"?"pill-green":a.statut==="absent"||a.statut==="suspendu"?"pill-red":"pill-gray";
-      return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${a.dateFinContrat||""}" data-typecontrat="${escapeHTML(a.typeContrat||"")}" data-searchable><td><a class="font-semibold hover:underline" href="#/effectif/agent/${a.id}">${escapeHTML(a.nom+" "+a.prenom)}</a></td><td class="font-mono text-xs">${safe(a.matricule)}</td><td><span class="pill pill-indigo">${safe(a.societe)}</span></td><td><span class="pill ${tCl}">${safe(a.typeContrat)}</span></td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td class="text-xs">${essaiCell}</td><td class="text-xs">${contratCell}</td><td>${a.salaireNet?money(a.salaireNet):"—"}</td><td><span class="pill ${stCl}">${safe(a.statut)}</span></td></tr>`}).join("")}</tbody></table></div>`;
+      return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${a.dateFinContrat||""}" data-typecontrat="${escapeHTML(typeContrat)}" data-searchable><td><a class="font-semibold hover:underline" href="#/effectif/agent/${a.id}">${escapeHTML(a.nom+" "+a.prenom)}</a></td><td class="font-mono text-xs">${safe(a.matricule)}</td><td><span class="pill pill-indigo">${safe(a.societe)}</span></td><td><span class="pill ${tCl}">${safe(typeContrat)}</span></td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td class="text-xs">${essaiCell}</td><td class="text-xs">${contratCell}</td><td>${a.salaireNet?money(a.salaireNet):"—"}</td><td><span class="pill ${stCl}">${safe(a.statut)}</span></td></tr>`}).join("")}</tbody></table></div>`;
 }
 function openCreateContratDirectModal(){
   const soc=currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
@@ -4926,7 +4928,7 @@ function directContractPayload(form){
   const fd=new FormData(form);
   return {
     template_id:fd.get("template_id")?Number(fd.get("template_id")):null,
-    contract_type:String(fd.get("contract_type")||"CDI"),
+    contract_type:cleanContractType(fd.get("contract_type")),
     first_name:String(fd.get("first_name")||"").trim(),
     last_name:String(fd.get("last_name")||"").trim(),
     birth_date:fd.get("birth_date")||null,
@@ -4960,7 +4962,7 @@ function contractExcelMapRow(row,index){
   c.fichePositionValideeAt=c.fichePositionValideeAt||new Date().toISOString();
   c.fichePositionValideeBy=c.fichePositionValideeBy||session?.username||"excel_contrat";
   c.source="Import Excel contrat";
-  c.typeContrat=candidateExcelLooseText(row,["type contrat","type de contrat","contrat","nature contrat"])||c.typeContrat||"";
+  c.typeContrat=cleanContractType(candidateExcelLooseText(row,["type contrat","type de contrat","contrat","nature contrat"])||c.typeContrat||"");
   c.posteContrat=normalizePosteValue(candidateExcelLooseText(row,["poste contrat","poste","fonction","emploi","grade"]))||c.posteContrat||c.posteSouhaite||"";
   c.dateRecrutement=c.dateRecrutement||candidateExcelLooseDate(row,["date recrutement","date de recrutement","date entree","date entrée","date embauche","date d'embauche","date debut contrat","date début contrat"]);
   c.dateEntree=c.dateEntree||c.dateRecrutement;
@@ -5073,7 +5075,7 @@ async function loadDirectContractTemplates(){
   const select=f.template_id;
   try{
     const templates=(await SGDI.rh.contractTemplates()).filter(t=>Number(t.active)!==0);
-    select.innerHTML=`<option value="">— Choisir un modèle —</option>`+templates.map(t=>`<option value="${t.id}" data-type="${escapeHTML(t.contract_type||"")}">${escapeHTML(t.title)} · ${escapeHTML(t.contract_type||"")}</option>`).join("");
+    select.innerHTML=`<option value="">— Choisir un modèle —</option>`+templates.map(t=>{const typ=cleanContractType(t.contract_type);return`<option value="${t.id}" data-type="${escapeHTML(typ)}">${escapeHTML(t.title)}${typ?` · ${escapeHTML(typ)}`:""}</option>`}).join("");
     select.onchange=()=>{const opt=select.selectedOptions&&select.selectedOptions[0];if(opt?.dataset?.type)f.contract_type.value=opt.dataset.type};
   }catch(e){
     select.innerHTML=`<option value="">Modèles indisponibles</option>`;
@@ -5198,7 +5200,7 @@ function contratPersonnelOptions(selectedId,poste){
   const backend=activeBackendContractTemplates();
   const legacy=(db.contratsPersonnel||[]).filter(c=>c.actif!==false);
   if(!backend.length&&!legacy.length)return `<option value="">Aucun modèle actif — ajoutez-le dans Administration système > CONTRAT</option>`;
-  const backendHTML=backend.map(t=>{const v=`tpl:${t.id}`;const auto=!selected&&poste&&(t.position===poste||t.function===poste);return`<option value="${v}" ${(selected===v||selected===String(t.id)||auto)?"selected":""}>${escapeHTML(t.title)} — ${escapeHTML(t.contract_type||"")} ${t.position?`· ${escapeHTML(t.position)}`:""}</option>`}).join("");
+  const backendHTML=backend.map(t=>{const v=`tpl:${t.id}`;const typ=cleanContractType(t.contract_type);const auto=!selected&&poste&&(t.position===poste||t.function===poste);return`<option value="${v}" ${(selected===v||selected===String(t.id)||auto)?"selected":""}>${escapeHTML(t.title)}${typ?` — ${escapeHTML(typ)}`:""} ${t.position?`· ${escapeHTML(t.position)}`:""}</option>`}).join("");
   const legacyHTML=legacy.map(c=>{const v=`legacy:${c.id}`;return`<option value="${v}" ${(selected===v||selected===String(c.id)||(!selected&&poste&&c.poste===poste))?"selected":""}>${escapeHTML(c.titre||c.poste)} — ${escapeHTML(c.poste||"")}</option>`}).join("");
   return `<option value="">— Choisir un modèle —</option>`+backendHTML+legacyHTML;
 }
@@ -5295,7 +5297,7 @@ function renderContractualisation(view,id){
     <div class="flex justify-between mb-4 gap-3 items-start"><div><h1 class="text-2xl font-bold">Contractualisation — ${escapeHTML(c.nom+" "+c.prenom)}</h1><p class="text-slate-500 text-sm">Vérifications, contrat et affectation.</p></div><div class="flex gap-2 items-end flex-wrap justify-end"><div style="min-width:240px"><label class="label">Société</label><select class="select" name="contractSociete" onchange="setContractualisationSociete('${c.id}',this.value)" ><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${selectedSociete===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
     <form id="contract-form" onsubmit="event.preventDefault();confirmEmbaucherCandidat('${c.id}')">
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">Contrat de travail</div><div class="grid grid-6">
-        <div class="col-span-3"><label class="label">Type de contrat</label><select class="select" name="typeContrat">${TYPES_CONTRAT.filter(t=>t!=="CDI").map(t=>`<option ${c.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="col-span-3"><label class="label">Type de contrat</label><select class="select" name="typeContrat"><option value="">—</option>${TYPES_CONTRAT.map(t=>`<option ${cleanContractType(c.typeContrat)===t?"selected":""}>${t}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Poste</label><select class="select" name="posteContrat" onchange="selectAutoContractForPoste(this.value)"><option value="">— Choisir —</option>${posteOptions.map(p=>`<option value="${escapeHTML(p)}" ${selectedPoste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Salaire net (DA/mois)</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(c.salaireNet||c.salairePrevu||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)"/>${c.salairePrevu?`<div class="text-xs text-slate-500 mt-1">💡 Salaire prévu : <b>${money(c.salairePrevu)}</b></div>`:""}</div>
         <div class="col-span-6"><label class="label">Modèle de contrat spécifique au poste</label><select class="select" name="contratPersonnelId" onchange="updateContratPersonnelPreview()">${contratPersonnelOptions(c.contratPersonnelId, c.posteContrat||c.posteSouhaite)}</select></div>
@@ -5385,7 +5387,7 @@ function buildAgentFromContractCandidate(c,fd){
   const agent={
     id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,sexe:c.sexe,situation:c.situation,telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
     salairePrevu:parseMoneyInput(c.salairePrevu)||0,avisDecision:c.avisDecision||"",avisDate:c.avisDate||"",avisRecruteur:c.avisRecruteur||"",avisCommentaire:c.avisCommentaire||"",
-    typeContrat:contractValue(fd,"typeContrat",c.typeContrat||""),dureeEssai,dureeContrat,dateFinContrat,salaireNet,banque:contractValue(fd,"banque",c.banque||""),iban:contractValue(fd,"iban",c.iban||""),
+    typeContrat:cleanContractType(contractValue(fd,"typeContrat",c.typeContrat||"")),dureeEssai,dureeContrat,dateFinContrat,salaireNet,banque:contractValue(fd,"banque",c.banque||""),iban:contractValue(fd,"iban",c.iban||""),
     dateRecrutement,dateFinEssai,
     affectationCourante:{siteId:"",siteName:"",clientName:"",poste:posteContrat,horaire:"",dateDebut:""},
     affectationsHistorique:[],sanctions:[],gestionEvents:[],
@@ -5757,7 +5759,7 @@ function renderAgentForm(view,id){
         ${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>{const v=a.habilitations?.[k]||"non";return`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="ahab_${k}" value="oui" ${v==="oui"?"checked":""} ${locked?"disabled":""}/> Oui</label><label class="radio-pill"><input type="radio" name="ahab_${k}" value="non" ${v!=="oui"?"checked":""} ${locked?"disabled":""}/> Non</label></div></div>`}).join("")}
       </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></div>
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">4. Contrat</div><div class="flex justify-end gap-2 flex-wrap mb-3"><button type="button" class="btn btn-secondary text-xs" onclick="previewAgentContract('${a.id}')">Voir contrat</button><button type="button" class="btn btn-primary text-xs" onclick="printAgentContract('${a.id}')">Imprimer contrat</button></div><div class="grid grid-6">
-        <div class="col-span-3"><label class="label">Type</label><select class="select" name="typeContrat" ${locked?"disabled":""}>${TYPES_CONTRAT.map(t=>`<option ${a.typeContrat===t?"selected":""}>${t}</option>`).join("")}</select></div>
+        <div class="col-span-3"><label class="label">Type</label><select class="select" name="typeContrat" ${locked?"disabled":""}><option value="">—</option>${TYPES_CONTRAT.map(t=>`<option ${cleanContractType(a.typeContrat)===t?"selected":""}>${t}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">Salaire net</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(a.salaireNet||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Recrutement</label><input class="input" type="date" name="dateRecrutement" value="${a.dateRecrutement||""}" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
         <div class="col-span-2"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${dureeEssaiValue}" min="0" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
@@ -6098,7 +6100,7 @@ async function saveAgent(id){
   const a=db.agents.find(x=>x.id===id);if(!a)return;
   if(a.fichePositionOfficielle&&a.locked){toast("Fiche officielle verrouillée : modification impossible","error");return}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
-  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
+  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
   a.habilitations=a.habilitations||{};
   ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
@@ -6370,7 +6372,7 @@ function agentSnapshotForPreview(id){
   const f=document.getElementById("agent-form");
   if(f&&String(location.hash||"").includes(id)){
     const fd=new FormData(f);
-    ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=fd.get(k)});
+    ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
     const photoValue=fd.get("photo");
     if(typeof photoValue==="string"&&photoValue.trim())a.photo=photoValue;
     a.habilitations=a.habilitations||{};
@@ -6464,7 +6466,7 @@ function ficheHTML(a){
       ${ficheCell("Enquête d'habilitation",hab.enqueteHabilitation)}${ficheCell("Service national",hab.serviceNational)}${ficheCell("Diplôme secourisme",hab.diplomeSecourisme)}${ficheCell("Diplôme anti-incendie",hab.diplomeAntiIncendie)}
     </div></section>
     <section class="fiche-section"><h2>4. Contrat</h2><div class="fiche-grid">
-      ${ficheCell("Type contrat",a.typeContrat)}${ficheCell("Salaire net",money(parseMoneyInput(a.salaireNet)||a.salaireNet||0))}${ficheCell("Date recrutement",formatDate(a.dateRecrutement))}${ficheCell("Fin période d'essai",formatDate(a.dateFinEssai))}
+      ${ficheCell("Type contrat",cleanContractType(a.typeContrat))}${ficheCell("Salaire net",money(parseMoneyInput(a.salaireNet)||a.salaireNet||0))}${ficheCell("Date recrutement",formatDate(a.dateRecrutement))}${ficheCell("Fin période d'essai",formatDate(a.dateFinEssai))}
       ${ficheCell("Date fin contrat",formatDate(a.dateFinContrat))}${ficheCell("Banque",a.banque)}${ficheCell("IBAN",a.iban)}
     </div></section>
     <section class="fiche-section"><h2>5. Vérifications et documents archivés</h2><div class="fiche-grid">
@@ -6508,7 +6510,7 @@ function agentContractHTML(a){
       ${ficheCell("Date naissance",formatDate(a.dateNaissance))}${ficheCell("Lieu naissance",a.lieuNaissance)}${ficheCell("Nom du père",a.nomPere)}${ficheCell("Nom de la mère",a.nomMere)}
     </div></section>
     <section class="fiche-section"><h2>Conditions contractuelles</h2><div class="fiche-grid">
-      ${ficheCell("Type contrat",a.typeContrat)}${ficheCell("Poste",a.fonction||a.poste||a.affectationCourante?.poste)}${ficheCell("Date recrutement",formatDate(a.dateRecrutement))}${ficheCell("Fin période d'essai",formatDate(a.dateFinEssai))}
+      ${ficheCell("Type contrat",cleanContractType(a.typeContrat))}${ficheCell("Poste",a.fonction||a.poste||a.affectationCourante?.poste)}${ficheCell("Date recrutement",formatDate(a.dateRecrutement))}${ficheCell("Fin période d'essai",formatDate(a.dateFinEssai))}
       ${ficheCell("Fin contrat",formatDate(a.dateFinContrat))}${ficheCell("Salaire net",money(parseMoneyInput(a.salaireNet)||a.salaireNet||0))}${ficheCell("Banque",a.banque)}${ficheCell("IBAN",a.iban)}${ficheCell("Société",a.societe)}${ficheCell("Lieu de travail",a.affectationCourante?.siteName||"Sans affectation")}
     </div></section>
     <section class="fiche-section"><h2>Clause de base</h2>
@@ -7739,7 +7741,7 @@ function fichePositionCard(a){
       <div><span class="text-slate-400">Société :</span> ${safe(a.societe)}</div>
       <div><span class="text-slate-400">Poste :</span> ${safe(aff.poste)||"—"}</div>
       <div><span class="text-slate-400">Site :</span> ${safe(aff.siteName)||"—"}</div>
-      <div><span class="text-slate-400">Contrat :</span> ${safe(a.typeContrat)} · depuis ${formatDate(a.dateRecrutement)}</div>
+      <div><span class="text-slate-400">Contrat :</span> ${safe(cleanContractType(a.typeContrat))} · depuis ${formatDate(a.dateRecrutement)}</div>
     </div>
     <div class="flex gap-2 flex-wrap">
       <a class="btn btn-primary text-xs" href="${ficheHref}" ${ficheClick?`onclick="${ficheClick}"`:""}>🪪 Ouvrir fiche</a>
@@ -11319,7 +11321,7 @@ function paieExportIRG(){
   paieDownloadCSV(rows,"irg-"+ym+".csv");
 }
 function paieBulletinSnapshot(a,c,ym){
-  return{id:uid("bp"),ym,agentId:a.id,matricule:a.matricule||"",agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),societe:a.societe||"",poste:a.fonction||a.affectationCourante?.poste||"",typeContrat:a.typeContrat||"",config:{...paieConfig()},calcul:JSON.parse(JSON.stringify(c)),createdAt:new Date().toISOString(),createdBy:session?.username||""};
+  return{id:uid("bp"),ym,agentId:a.id,matricule:a.matricule||"",agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),societe:a.societe||"",poste:a.fonction||a.affectationCourante?.poste||"",typeContrat:cleanContractType(a.typeContrat),config:{...paieConfig()},calcul:JSON.parse(JSON.stringify(c)),createdAt:new Date().toISOString(),createdBy:session?.username||""};
 }
 async function paieCloseMonth(){
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
@@ -11358,7 +11360,7 @@ function paieFicheHTML(agentId,ym){
       <div class="bp-box"><h3>Salarié</h3>
         <div class="bp-line"><span>Nom et prénom</span><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b></div>
         <div class="bp-line"><span>Matricule</span><b>${escapeHTML(a.matricule||"—")}</b></div>
-        <div class="bp-line"><span>Contrat</span><b>${escapeHTML(a.typeContrat||"—")}</b></div>
+        <div class="bp-line"><span>Contrat</span><b>${escapeHTML(cleanContractType(a.typeContrat)||"—")}</b></div>
         <div class="bp-line"><span>Date recrutement</span><b>${formatDate(a.dateRecrutement)}</b></div>
       </div>
     </div>
@@ -11614,7 +11616,7 @@ function renderPaie(view){
   </details>
   <div class="card overflow-hidden"><div class="overflow-x-auto"><table>
     <thead><tr><th>Matricule</th><th>Agent</th><th>Société</th><th>Contrat</th><th class="text-right">Base</th><th class="text-right">Primes</th><th class="text-right">Brut cotisable</th><th class="text-right">CNAS sal.</th><th class="text-right">Base IRG</th><th class="text-right">IRG</th><th class="text-right">Net à payer</th><th class="text-right">Coût employeur</th><th>Alerte</th><th></th></tr></thead>
-    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="14" class="text-center text-slate-500 p-6">Aucun agent actif.</td></tr>`:lines.map(({a,c})=>{const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,a.typeContrat,c.brutCotisable,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.oeuvresSociales,c.coutEmployeur];return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/effectif/agent/${a.id}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(a.typeContrat)}</span></td><td class="text-right">${money(c.brutBase)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${c.brutCotisable<cfg.snmg?`<span class="pill pill-red">SNMG</span>`:`<span class="pill pill-green">OK</span>`}</td><td><div class="flex gap-1"><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${a.id}')">Éléments</button><button class="btn btn-primary text-xs" onclick="previewPaieFiche('${a.id}')">Fiche</button></div></td></tr>`}).join("")}</tbody>
+    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="14" class="text-center text-slate-500 p-6">Aucun agent actif.</td></tr>`:lines.map(({a,c})=>{const typeContrat=cleanContractType(a.typeContrat);const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,typeContrat,c.brutCotisable,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.oeuvresSociales,c.coutEmployeur];return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/effectif/agent/${a.id}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(typeContrat)}</span></td><td class="text-right">${money(c.brutBase)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${c.brutCotisable<cfg.snmg?`<span class="pill pill-red">SNMG</span>`:`<span class="pill pill-green">OK</span>`}</td><td><div class="flex gap-1"><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${a.id}')">Éléments</button><button class="btn btn-primary text-xs" onclick="previewPaieFiche('${a.id}')">Fiche</button></div></td></tr>`}).join("")}</tbody>
   </table></div></div>
   <div class="text-xs text-slate-500 mt-3">Note : ce module automatise les calculs standards. Les cas particuliers (avantages en nature, indemnités imposables/non imposables, temps partiel, dispositifs aidés, rappels) doivent être validés par votre comptable ou gestionnaire paie.</div>`;
 }
@@ -13519,7 +13521,7 @@ async function loadAdminContractTemplates(){
     const tplCount=document.getElementById("admin-contract-template-count");if(tplCount)tplCount.textContent=String(templates.length);
     const clauseCount=document.getElementById("admin-contract-clause-count");if(clauseCount)clauseCount.textContent=String(clauses.length);
     const genCount=document.getElementById("admin-generated-contract-count");if(genCount)genCount.textContent=String(generated.length);
-    host.innerHTML=`<h3 class="font-black mb-3">Modèles Word enregistrés</h3><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-3">Code</th><th class="text-left p-3">Titre</th><th class="p-3">Type</th><th class="p-3">Poste/Fonction</th><th class="p-3">Balises</th><th class="p-3">Statut</th><th></th></tr></thead><tbody>${templates.map(t=>`<tr class="border-t"><td class="p-3 font-mono font-bold">${escapeHTML(t.code)}</td><td class="p-3"><div class="font-semibold">${escapeHTML(t.title)}</div><div class="text-xs text-slate-500">${escapeHTML(t.file_name||"")}</div></td><td class="p-3 text-center"><span class="pill pill-gray">${escapeHTML(t.contract_type)}</span></td><td class="p-3 text-xs">${escapeHTML(t.position||"Tous postes")}<br>${escapeHTML(t.function||"Toutes fonctions")}</td><td class="p-3 text-xs">${escapeHTML(((t.placeholders&&t.placeholders.items)||[]).join(", "))}</td><td class="p-3 text-center">${t.active?'<span class="pill pill-green">Actif</span>':'<span class="pill pill-red">Inactif</span>'}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="downloadContractTemplate(${t.id},'${escapeHTML(t.file_name||'modele.docx')}')">Télécharger</button><button class="btn btn-ghost text-xs" onclick="openAdminContractTemplateModal(${t.id})">Modifier</button><button class="btn btn-ghost text-xs text-red-600" onclick="deleteContractTemplate(${t.id})">Supprimer</button></td></tr>`).join("")||'<tr><td colspan="7" class="p-6 text-center text-slate-400">Aucun modèle Word.</td></tr>'}</tbody></table></div>
+    host.innerHTML=`<h3 class="font-black mb-3">Modèles Word enregistrés</h3><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-3">Code</th><th class="text-left p-3">Titre</th><th class="p-3">Type</th><th class="p-3">Poste/Fonction</th><th class="p-3">Balises</th><th class="p-3">Statut</th><th></th></tr></thead><tbody>${templates.map(t=>`<tr class="border-t"><td class="p-3 font-mono font-bold">${escapeHTML(t.code)}</td><td class="p-3"><div class="font-semibold">${escapeHTML(t.title)}</div><div class="text-xs text-slate-500">${escapeHTML(t.file_name||"")}</div></td><td class="p-3 text-center"><span class="pill pill-gray">${escapeHTML(cleanContractType(t.contract_type)||"—")}</span></td><td class="p-3 text-xs">${escapeHTML(t.position||"Tous postes")}<br>${escapeHTML(t.function||"Toutes fonctions")}</td><td class="p-3 text-xs">${escapeHTML(((t.placeholders&&t.placeholders.items)||[]).join(", "))}</td><td class="p-3 text-center">${t.active?'<span class="pill pill-green">Actif</span>':'<span class="pill pill-red">Inactif</span>'}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="downloadContractTemplate(${t.id},'${escapeHTML(t.file_name||'modele.docx')}')">Télécharger</button><button class="btn btn-ghost text-xs" onclick="openAdminContractTemplateModal(${t.id})">Modifier</button><button class="btn btn-ghost text-xs text-red-600" onclick="deleteContractTemplate(${t.id})">Supprimer</button></td></tr>`).join("")||'<tr><td colspan="7" class="p-6 text-center text-slate-400">Aucun modèle Word.</td></tr>'}</tbody></table></div>
       <h3 class="font-black mt-5 mb-3">Paragraphes conditionnels</h3><div class="grid grid-cols-1 md:grid-cols-2 gap-2">${clauses.map(c=>`<div class="p-3 rounded border border-slate-200 bg-slate-50"><div class="font-bold">${escapeHTML(c.title)}</div><div class="text-xs text-slate-500">Si ${escapeHTML(c.condition_field)} ${escapeHTML(c.condition_operator)} ${escapeHTML(c.condition_value)} → {{${escapeHTML(c.placeholder)}}}</div><div class="text-xs mt-2 whitespace-pre-wrap">${escapeHTML((c.content||"").slice(0,180))}</div><button class="btn btn-ghost text-xs text-red-600 mt-2" onclick="deleteContractClause(${c.id})">Supprimer</button></div>`).join("")||'<div class="text-sm text-slate-400">Aucun paragraphe conditionnel.</div>'}</div>`;
     if(genHost)genHost.innerHTML=`<h3 class="font-black mb-3">Contrats générés</h3><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-3">Référence</th><th class="text-left p-3">Titre</th><th class="p-3">Type</th><th class="p-3">Date</th><th></th></tr></thead><tbody>${generated.map(g=>`<tr class="border-t"><td class="p-3 font-mono font-bold">${escapeHTML(g.reference)}</td><td class="p-3">${escapeHTML(g.title)}<div class="text-xs text-slate-500">${escapeHTML(g.file_name)}</div></td><td class="p-3 text-center"><span class="pill pill-blue">${escapeHTML(g.output_format)}</span></td><td class="p-3 text-xs">${formatDate((g.created_at||"").slice(0,10))}</td><td class="p-3 text-right"><button class="btn btn-primary text-xs" onclick="downloadGeneratedContract(${g.id},'${escapeHTML(g.file_name)}')">Télécharger</button></td></tr>`).join("")||'<tr><td colspan="5" class="p-6 text-center text-slate-400">Aucun contrat généré.</td></tr>'}</tbody></table></div>`;
   }catch(e){host.innerHTML=`<div class="text-red-700 font-bold">Erreur chargement modèles : ${escapeHTML(e.message||String(e))}</div>`}
@@ -13530,7 +13532,7 @@ function openAdminContractTemplateModal(id){
   openModal(`<h3 class="font-bold text-lg mb-4">${id?'Modifier modèle Word':'Ajouter modèle Word .docx'}</h3><form onsubmit="event.preventDefault();saveAdminContractTemplate(this,${id||0})" enctype="multipart/form-data">
     <div class="grid grid-2 gap-3">
       <div><label class="label">Code *</label><input class="input" name="code" required placeholder="CDI_AGENT" value="${escapeHTML(item&&item.code||"")}"/></div>
-      <div><label class="label">Titre *</label><input class="input" name="title" required placeholder="Contrat CDI agent" value="${escapeHTML(item&&item.title||"")}"/></div>
+      <div><label class="label">Titre *</label><input class="input" name="title" required placeholder="Contrat CDD agent" value="${escapeHTML(item&&item.title||"")}"/></div>
       <div><label class="label">Type contrat *</label><select class="select" name="contract_type">${TYPES_CONTRAT.map(t=>`<option ${selected(t,item&&item.contract_type)}>${t}</option>`).join("")}</select></div>
       <div><label class="label">Poste associé</label><select class="select" name="position"><option value="" ${selected("",item&&item.position)}>Tous postes</option>${POSTES.map(p=>`<option ${selected(p,item&&item.position)}>${p}</option>`).join("")}</select></div>
       <div><label class="label">Fonction spécifique</label><input class="input" name="function" placeholder="Cadre, technicien..." value="${escapeHTML(item&&item.function||"")}"/></div>
@@ -13555,7 +13557,7 @@ async function openGenerateContractModal(){
   const employees=(db.agents||[]).filter(a=>a.backendId||/^\d+$/.test(String(a.id||"")));
   openModal(`<h3 class="font-bold text-lg mb-4">Générer un contrat</h3><form onsubmit="event.preventDefault();generateEmployeeContract(this)"><div class="grid grid-2 gap-3"><div class="col-span-2"><label class="label">Employé *</label><select class="select" name="employee_id" required>${employees.map(a=>`<option value="${escapeHTML(a.backendId||a.id)}">${escapeHTML((a.nom||"")+" "+(a.prenom||""))} · ${escapeHTML(a.matricule||"")}</option>`).join("")}</select></div><div><label class="label">Type contrat</label><select class="select" name="contract_type">${TYPES_CONTRAT.map(t=>`<option>${t}</option>`).join("")}</select></div><div><label class="label">Format</label><select class="select" name="output_format"><option value="docx">Word DOCX</option><option value="pdf">PDF si LibreOffice installé</option></select></div><div><label class="label">Date début</label><input class="input" type="date" name="start_date"/></div><div><label class="label">Date fin</label><input class="input" type="date" name="end_date"/></div><div><label class="label">Poste</label><input class="input" name="position"/></div><div><label class="label">Salaire</label><input class="input" type="number" name="salary_net"/></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Générer</button></div></form>`)
 }
-async function generateEmployeeContract(form){const fd=new FormData(form);const payload={employee_id:Number(fd.get("employee_id")),contract_type:fd.get("contract_type"),output_format:fd.get("output_format"),start_date:fd.get("start_date")||null,end_date:fd.get("end_date")||null,position:fd.get("position")||null,salary_net:fd.get("salary_net")?Number(fd.get("salary_net")):null};try{const row=await SGDI.rh.generateContract(payload);closeModal();toast("Contrat généré","success");await downloadGeneratedContract(row.id,row.file_name);loadAdminContractTemplates()}catch(e){toast("Génération refusée : "+(e.message||e),"error")}}
+async function generateEmployeeContract(form){const fd=new FormData(form);const payload={employee_id:Number(fd.get("employee_id")),contract_type:cleanContractType(fd.get("contract_type")),output_format:fd.get("output_format"),start_date:fd.get("start_date")||null,end_date:fd.get("end_date")||null,position:fd.get("position")||null,salary_net:fd.get("salary_net")?Number(fd.get("salary_net")):null};try{const row=await SGDI.rh.generateContract(payload);closeModal();toast("Contrat généré","success");await downloadGeneratedContract(row.id,row.file_name);loadAdminContractTemplates()}catch(e){toast("Génération refusée : "+(e.message||e),"error")}}
 async function downloadGeneratedContract(id,name){try{await sgdiDownload("/drh/generated-contracts/"+id+"/download",name||"contrat.docx")}catch(e){toast(e.message||String(e),"error")}}
 
 function renderAdminPriorites(view){

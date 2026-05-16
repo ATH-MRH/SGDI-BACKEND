@@ -120,7 +120,7 @@ class CandidatePage(BaseModel):
 
 class ContractBase(BaseModel):
     employee_id: int
-    contract_type: str = "CDI"
+    contract_type: str = ""
     position: str | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -284,7 +284,7 @@ class GenerateContractRequest(BaseModel):
 
 class DirectContractRequest(BaseModel):
     template_id: int | None = None
-    contract_type: str = "CDI"
+    contract_type: str = ""
     first_name: str
     last_name: str
     birth_date: date | None = None

@@ -58,7 +58,7 @@ class Contract(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
-    contract_type: Mapped[str] = mapped_column(String(80), default="CDI")
+    contract_type: Mapped[str] = mapped_column(String(80), default="")
     position: Mapped[str | None] = mapped_column(String(150))
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
@@ -161,4 +161,3 @@ class Document(Base, TimestampMixin):
     file_path: Mapped[str | None] = mapped_column(String(500))
     mime_type: Mapped[str | None] = mapped_column(String(120))
     uploaded_by: Mapped[str | None] = mapped_column(String(120))
-
