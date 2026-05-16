@@ -6690,6 +6690,7 @@ async function renderSitesServer(view){
     const pagination=sgdiServerPaginationHTML("sites",soc||"all",result);
     view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
     ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
+    ${siteMapDashboardHTML(sites)}
     <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
     ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;return `<div class="card p-5 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-instance="${agents.length===0?1:0}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black">${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${siteEditRouteId(s)}">Modifier</a><button type="button" class="btn btn-danger text-xs" onclick="deleteSite('${siteEditRouteId(s)}')">Supprimer</button></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid grid-4 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Affecté</div><div class="text-lg font-bold">${agents.length}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div></div></div>`}).join("")}</div>`}
     ${pagination}`;
@@ -6705,10 +6706,45 @@ function renderSites(view){
   const sites=db.sites.filter(s=>s.actif&&siteMatchesSociete(s,soc));
   view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
   ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
+  ${siteMapDashboardHTML(sites)}
   <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
   ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;const hideManque=session?.transverse==="materiel";const hideAffecte=session?.transverse==="materiel";const hideGroupes=session?.transverse==="materiel";return`<div class="card p-5 mb-4 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-instance="${agents.length===0?1:0}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold">${escapeHTML(s.nom)} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${siteEditRouteId(s)}">Modifier</a><button type="button" class="btn btn-danger text-xs" onclick="deleteSite('${siteEditRouteId(s)}')">Supprimer</button><span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid ${hideManque&&hideAffecte?"grid-3":hideManque||hideAffecte?"grid-4":"grid-5"} mb-4 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif total contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div>${hideAffecte?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif affecté</div><div class="text-lg font-bold">${agents.length}</div></div>`}<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div>${hideManque?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Manquant</div><div class="text-lg font-bold ${manque>0?"text-red-700":"text-emerald-700"}">${manque}</div></div>`}</div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${hideGroupes?"":`<div class="mt-4"><h4 class="text-sm font-bold mb-2">Employés affectés par groupe</h4>${renderSiteAgentsByGroup(s,agents)}</div>`}</div>`}).join("")}`;
 }
 function siteEditRouteId(site){return encodeURIComponent(String(site?.backendId||site?.id||""))}
+function siteMapQuery(site){
+  site=site||{};
+  return [site.nom,site.adresse,site.commune,site.wilaya,"Algérie"].map(v=>String(v||"").trim()).filter(Boolean).join(", ");
+}
+function siteMapUrl(site){
+  const q=siteMapQuery(site)||"Algérie";
+  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
+}
+function siteMapDashboardHTML(sites){
+  sites=(sites||[]).filter(Boolean);
+  if(!sites.length)return "";
+  const first=sites[0];
+  const options=sites.map(s=>`<option value="${escapeHTML(String(s.id||s.backendId||""))}">${escapeHTML((s.nom||"Site")+" · "+[s.commune,s.wilaya].filter(Boolean).join(", "))}</option>`).join("");
+  return `<div class="card p-5 mb-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div>
+        <h2 class="text-lg font-black">Carte des sites</h2>
+        <div id="sites-map-label" class="text-xs text-slate-500">${escapeHTML(siteMapQuery(first))}</div>
+      </div>
+      <select class="select" style="max-width:420px" onchange="updateSitesMap(this.value)">${options}</select>
+    </div>
+    <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100" style="height:360px">
+      <iframe id="sites-map-frame" title="Position du site" src="${escapeHTML(siteMapUrl(first))}" width="100%" height="100%" style="border:0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+  </div>`;
+}
+function updateSitesMap(siteId){
+  const site=(db.sites||[]).find(s=>String(s.id||"")===String(siteId)||String(s.backendId||"")===String(siteId));
+  if(!site)return;
+  const frame=document.getElementById("sites-map-frame");
+  const label=document.getElementById("sites-map-label");
+  if(frame)frame.src=siteMapUrl(site);
+  if(label)label.textContent=siteMapQuery(site);
+}
 function siteDotationHTML(site){
   const rows=(site.equipements||site.materiel||[]).filter(x=>x&&(x.categorie||x.designation||x.quantite||x.etat));
   return `<div class="mt-4 p-4 rounded-lg border border-slate-200 bg-slate-50">
@@ -6937,15 +6973,52 @@ function addSitePosteRow(){
   const last=body.querySelector("tr:last-child select[name='poste_nom']");
   if(last)last.focus();
 }
+function siteMaterielStoreIdsFromItem(item){
+  item=item||{};
+  if(Array.isArray(item.magasinIds)&&item.magasinIds.length)return item.magasinIds.map(String);
+  if(item.magasinId)return [String(item.magasinId)];
+  const names=String(item.categorie||"").split(/[,+/|;]/).map(x=>x.trim()).filter(Boolean);
+  return (db.magasins||[]).filter(m=>names.includes(m.nom)||names.includes(String(m.id))).map(m=>String(m.id));
+}
+function siteMaterielStoreOptionsHTML(selectedIds){
+  const selected=new Set((selectedIds||[]).map(String));
+  return (db.magasins||[]).map(m=>`<option value="${escapeHTML(m.id)}" ${selected.has(String(m.id))?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom||"Magasin")}</option>`).join("");
+}
+function siteMaterielArticlesForStores(storeIds){
+  const ids=new Set((storeIds||[]).map(String));
+  return (db.stockArticles||[]).filter(a=>ids.has(String(a.magasinId||""))).sort((a,b)=>((a.designation||"").localeCompare(b.designation||"")));
+}
+function siteMaterielArticlesPickerHTML(storeIds,item){
+  item=item||{};
+  const selectedArticleIds=new Set([item.articleId,item.stockArticleId].map(v=>String(v||"")).filter(Boolean));
+  const articles=siteMaterielArticlesForStores(storeIds);
+  if(!storeIds||!storeIds.length)return `<div class="text-xs text-slate-500 p-3 rounded bg-slate-50">Choisissez un ou plusieurs magasins.</div>`;
+  if(!articles.length)return `<div class="text-xs text-red-600 p-3 rounded bg-red-50">Aucun article dans les magasins sélectionnés.</div>`;
+  const legacyDesignation=String(item.designation||"").trim();
+  return `<div class="space-y-2" data-site-mat-article-list>${articles.map(a=>{
+    const checked=selectedArticleIds.has(String(a.id))||(!selectedArticleIds.size&&legacyDesignation&&legacyDesignation===String(a.designation||""));
+    return `<label class="flex items-center gap-2 p-2 rounded border border-slate-200 bg-white">
+      <input type="checkbox" data-site-mat-article value="${escapeHTML(a.id)}" ${checked?"checked":""}/>
+      <span class="flex-1 text-xs"><b>${escapeHTML(a.designation||"Article")}</b>${a.code?` <span class="font-mono text-slate-400">${escapeHTML(a.code)}</span>`:""}</span>
+      <input class="input text-center" type="number" min="0" step="1" data-site-mat-qty value="${checked?(item.quantite||1):1}" style="width:82px" onclick="event.stopPropagation()"/>
+    </label>`;
+  }).join("")}</div>`;
+}
 function siteMaterielRowHTML(item){
   item=item||{};
+  const storeIds=siteMaterielStoreIdsFromItem(item);
   return`<tr class="site-materiel-row">
-    <td><select class="select" name="site_mat_categorie"><option value="">— Catégorie —</option>${CATEGORIES_MATERIEL.map(c=>`<option value="${escapeHTML(c)}" ${item.categorie===c?"selected":""}>${escapeHTML(c)}</option>`).join("")}</select></td>
-    <td><input class="input" name="site_mat_designation" value="${escapeHTML(item.designation||"")}" placeholder="Désignation"/></td>
-    <td><input class="input" type="number" min="0" name="site_mat_quantite" value="${item.quantite||0}" style="max-width:90px"/></td>
+    <td style="min-width:230px"><select class="select" multiple size="5" data-site-mat-magasins onchange="siteMaterielMagasinsChanged(this)">${siteMaterielStoreOptionsHTML(storeIds)}</select><div class="text-[10px] text-slate-400 mt-1">Plusieurs choix possibles.</div></td>
+    <td style="min-width:320px"><div data-site-mat-articles>${siteMaterielArticlesPickerHTML(storeIds,item)}</div></td>
     <td><input class="input" name="site_mat_etat" value="${escapeHTML(item.etat||"")}" placeholder="État / observation"/></td>
     <td><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('tr').remove()">Retirer</button></td>
   </tr>`;
+}
+function siteMaterielMagasinsChanged(sel){
+  const row=sel.closest(".site-materiel-row");if(!row)return;
+  const ids=[...sel.selectedOptions].map(o=>o.value).filter(Boolean);
+  const box=row.querySelector("[data-site-mat-articles]");
+  if(box)box.innerHTML=siteMaterielArticlesPickerHTML(ids,{});
 }
 function siteMaterielTableHTML(site){
   return (site.equipements||site.materiel||[]).map(siteMaterielRowHTML).join("");
@@ -6953,7 +7026,7 @@ function siteMaterielTableHTML(site){
 function addSiteMaterielRow(){
   const body=document.getElementById("site-materiel-body");if(!body)return;
   body.insertAdjacentHTML("beforeend",siteMaterielRowHTML({}));
-  const last=body.querySelector("tr:last-child select[name='site_mat_categorie']");
+  const last=body.querySelector("tr:last-child [data-site-mat-magasins]");
   if(last)last.focus();
 }
 function inferSiteRotationSystem(site){
@@ -6996,7 +7069,7 @@ function renderSiteForm(view,id){
     </div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">Équipement et matériel</div>
       <div class="flex justify-between items-center mb-2"><h4 class="text-sm font-bold">Matériel affecté au site</h4><button type="button" class="btn btn-secondary text-xs" onclick="addSiteMaterielRow()">Ajouter matériel</button></div>
-      <table class="mb-2"><thead><tr><th>Catégorie</th><th>Désignation</th><th>Quantité</th><th>État / observation</th><th></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table>
+      <table class="mb-2"><thead><tr><th>Magasin(s)</th><th>Article</th><th>État / observation</th><th></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table>
       <div class="text-xs text-slate-500">Cette section permet d’indiquer les besoins ou le matériel affecté au site.</div>
     </div>
     <div class="card p-4 flex justify-end gap-2">${s.isNew?"":`<button type="button" class="btn btn-danger" onclick="deleteSite('${s.id}')">Supprimer</button>`}<button class="btn btn-primary">💾 Enregistrer</button></div>
@@ -7051,15 +7124,28 @@ async function saveSite(id){
     s.postes[nom]={total,jour,nuit,rotationSystem};
   });
   s.effectifs={totalContractuel,groupes:+fd.get("eff_groupes")||0,jour:totalJour,nuit:totalNuit,weekend:+fd.get("eff_weekend")||0,feries:+fd.get("eff_feries")||0};
-  const cats=fd.getAll("site_mat_categorie"),desigs=fd.getAll("site_mat_designation"),qtes=fd.getAll("site_mat_quantite"),etats=fd.getAll("site_mat_etat");
   s.equipements=[];
-  cats.forEach((categorie,i)=>{
-    categorie=(categorie||"").trim();
-    const designation=(desigs[i]||"").trim();
-    const quantite=+qtes[i]||0;
-    const etat=(etats[i]||"").trim();
-    if(!categorie&&!designation&&!quantite&&!etat)return;
-    s.equipements.push({categorie,designation,quantite,etat});
+  document.querySelectorAll("#site-materiel-body .site-materiel-row").forEach(row=>{
+    const storeIds=[...(row.querySelector("[data-site-mat-magasins]")?.selectedOptions||[])].map(o=>String(o.value||"")).filter(Boolean);
+    const stores=(db.magasins||[]).filter(m=>storeIds.includes(String(m.id)));
+    const etat=(row.querySelector('[name="site_mat_etat"]')?.value||"").trim();
+    row.querySelectorAll("[data-site-mat-article]:checked").forEach(chk=>{
+      const article=(db.stockArticles||[]).find(a=>String(a.id)===String(chk.value));
+      if(!article)return;
+      const mag=(db.magasins||[]).find(m=>String(m.id)===String(article.magasinId))||stores[0];
+      const qtyInput=chk.closest("label")?.querySelector("[data-site-mat-qty]");
+      const quantite=parseFloat(qtyInput?.value||"0")||0;
+      if(!quantite)return;
+      s.equipements.push({
+        categorie:mag?.nom||article.categorie||"",
+        magasinId:mag?.id||article.magasinId||"",
+        magasinIds:storeIds,
+        articleId:article.id,
+        designation:article.designation||article.sousCategorie||article.code||"Article",
+        quantite,
+        etat
+      });
+    });
   });
   s.heureReleveJour=fd.get("heureReleveJour")||"";
   s.heureReleveNuit=fd.get("heureReleveNuit")||"";
