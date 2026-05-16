@@ -8361,8 +8361,10 @@ function matSimpleHeader(active){
 
 // ---- Helpers stock par magasin
 function matSimpleStockMagasin(magasinId){
-  // Articles dans ce magasin + valeur stock
+  // Articles dans ce magasin + valeur stock, en agrégeant le catalogue stock
+  // et les articles saisis directement dans la fiche magasin.
   const arts=(db.stockArticles||[]).filter(a=>a.magasinId===magasinId||(a.emplacement&&!a.magasinId&&a.magasinIdAlias===magasinId));
+  const magasinArts=(db.magasinArticles||[]).filter(a=>a.magasinId===magasinId);
   let totalQty=0,totalVal=0,nbAlertes=0;
   arts.forEach(a=>{
     const q=stockGetActuel?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
@@ -8371,7 +8373,13 @@ function matSimpleStockMagasin(magasinId){
     const seuil=parseFloat(a.seuilAlerte)||0;
     if(seuil&&q<=seuil)nbAlertes++;
   });
-  return{nb:arts.length,qty:totalQty,val:totalVal,alertes:nbAlertes};
+  magasinArts.forEach(a=>{
+    const q=parseFloat(a.quantite)||0;
+    totalQty+=q;
+    totalVal+=q*(parseFloat(a.prix)||0);
+    if(q<=5)nbAlertes++;
+  });
+  return{nb:arts.length+magasinArts.length,qty:totalQty,val:totalVal,alertes:nbAlertes,stockArticles:arts.length,magasinArticles:magasinArts.length};
 }
 function matSimpleFournisseurStats(fid){
   const mvts=(db.stockMouvements||[]).filter(m=>m.type==="entree"&&m.fournisseurId===fid);
