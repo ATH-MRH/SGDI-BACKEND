@@ -2521,7 +2521,7 @@ function renderSidebar(){
         {label:"MAGASINS",route:"materiel/magasins",count:(db.magasins||[]).length},
         {label:"FOURNISSEURS",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
         {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",count:siteDotationCount},
-        {label:"DOTATIONS EN ATTENTE",route:"materiel/dotation",count:dotationCount},
+        {label:"EMPLOYÉ EN ATTENTE DE DOTATION",route:"materiel/dotation",count:dotationCount},
         {label:"REVERSEMENTS EN ATTENTE",route:"materiel/reversement",count:reversementCount},
         {label:"FICHES DE POSITION",route:"materiel/fiches"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],count:(db.sites||[]).filter(s=>s.actif!==false).length}
