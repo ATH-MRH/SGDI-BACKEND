@@ -3507,6 +3507,24 @@ function candidateImportFallbackKey(c){
   if(phone)return "name-phone|"+norm(c.societe||c.society)+"|"+name+"|"+phone;
   return "";
 }
+function candidateImportKeyLabel(key){
+  key=String(key||"");
+  if(key.startsWith("nin|"))return "même NIN";
+  if(key.startsWith("birth-phone|"))return "même naissance + téléphone";
+  if(key.startsWith("identity|"))return "même identité complète";
+  if(key.startsWith("name-birth|"))return "même nom/prénom + date de naissance";
+  if(key.startsWith("name-phone|"))return "même nom/prénom + téléphone";
+  return "identité similaire";
+}
+function candidateExcelTemplateValueErrors(c){
+  const errors=[];
+  const norm=v=>String(v||"").trim().toLowerCase();
+  if(norm(c.nom)==="dupont"&&norm(c.prenom)==="ahmed")errors.push("Ligne exemple à remplacer ou supprimer");
+  if(String(c.nin||"").trim()==="1234567890")errors.push("NIN exemple à remplacer ou vider");
+  if(String(c.telephone||"").replace(/\s+/g,"")==="0550000000")errors.push("Téléphone exemple à remplacer ou vider");
+  if(norm(c.email)==="ahmed.dupont@example.com")errors.push("Email exemple à remplacer ou vider");
+  return errors;
+}
 function candidateExcelRowHasData(row){
   return Object.values(row||{}).some(v=>String(v??"").trim()!=="");
 }
@@ -3528,17 +3546,18 @@ function previewCandidateExcelImport(rows,fileName){
   const seen=new Set();
   const mapped=rows.map((row,i)=>{
     const c=candidateExcelMapRow(row,i,"reserve");
-    const errors=candidateIdentityMissing(c);
+    const errors=[...candidateIdentityMissing(c),...candidateExcelTemplateValueErrors(c)];
     const key=candidateDedupeKey(c)||candidateImportFallbackKey(c);
-    const duplicate=!!key&&(existing.has(key)||seen.has(key));
+    const duplicate=!errors.length&&!!key&&(existing.has(key)||seen.has(key));
+    const duplicateReason=duplicate?`${existing.has(key)?"Déjà existant en base":"Répété dans le fichier"} (${candidateImportKeyLabel(key)})`:"";
     if(key)seen.add(key);
-    return {row:i+2,c,key,errors,duplicate};
+    return {row:i+2,c,key,errors,duplicate,duplicateReason};
   });
   window._candidateExcelImport={rows,mapped,fileName};
   const valid=mapped.filter(x=>!x.errors.length&&!x.duplicate).length;
-  const dup=mapped.filter(x=>x.duplicate).length;
+  const dup=mapped.filter(x=>!x.errors.length&&x.duplicate).length;
   const err=mapped.filter(x=>x.errors.length).length;
-  const sample=mapped.slice(0,25).map(x=>`<tr><td class="font-mono text-xs">${x.row}</td><td class="font-semibold">${escapeHTML((x.c.nom||"")+" "+(x.c.prenom||""))}</td><td>${safe(x.c.dateNaissance)}</td><td>${safe(x.c.posteSouhaite)}</td><td>${safe(x.c.societe)}</td><td>${x.errors.length?`<span class="pill pill-red">${escapeHTML(x.errors.join(", "))}</span>`:x.duplicate?`<span class="pill pill-amber">Doublon ignoré</span>`:`<span class="pill pill-green">Prêt backend</span>`}</td></tr>`).join("");
+  const sample=mapped.slice(0,25).map(x=>`<tr><td class="font-mono text-xs">${x.row}</td><td class="font-semibold">${escapeHTML((x.c.nom||"")+" "+(x.c.prenom||""))}</td><td>${safe(x.c.dateNaissance)}</td><td>${safe(x.c.posteSouhaite)}</td><td>${safe(x.c.societe)}</td><td>${x.errors.length?`<span class="pill pill-red">${escapeHTML(x.errors.join(", "))}</span>`:x.duplicate?`<span class="pill pill-amber">${escapeHTML(x.duplicateReason||"Doublon ignoré")}</span>`:`<span class="pill pill-green">Prêt backend</span>`}</td></tr>`).join("");
   openModal(`<h3 class="font-bold text-lg mb-1">Import Excel candidats</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(fileName||"Fichier Excel")} · ${rows.length} ligne(s)</p>
     <div class="grid grid-3 gap-3 mb-4">
       <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Prêts</div><div class="text-2xl font-black text-emerald-600">${valid}</div></div>
