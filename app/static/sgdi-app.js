@@ -3363,7 +3363,43 @@ function openAddCandidateForm(){
   navigate("reserve/nouveau");
 }
 function candidatImportActionsHTML(){
-  return `<div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+  return `<div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+}
+function candidateExcelTemplateColumns(){
+  return ["Nom","Prénom","Date de naissance","Lieu de naissance","Nom du père","Nom de la mère","NIN","Sexe","Situation familiale","Téléphone","Email","Adresse","Commune","Wilaya","Poste souhaité","Société","Salaire prévu","Avis","Date avis","Recruteur","Commentaire","Taille (cm)","Pointure","Taille chemise","Ex-services","Précision ex-services","Sport","Sport précision","Contact urgence","Téléphone urgence","Lien urgence","Langues parlées","Service national","Enquête habilitation","Acte de naissance","Certificat résidence","Casier judiciaire","Aptitude médicale","Bulletin ANEM","Chèque barré","Pièce identité","Fiche familiale","Fiche individuelle"];
+}
+function candidateExcelTemplateExample(){
+  return ["DUPONT","Ahmed","1995-04-12","Alger","Mohamed","Fatima","123456789012345678","M","Célibataire","0550000000","ahmed.dupont@example.com","Cité exemple, Alger","Bir Mourad Raïs","Alger","Agent de sécurité",currentStructureSocieteFilter()||mySoc()||"IRON GLOBAL SECURITE","30000","Favorable",today(),"DRH","Exemple à remplacer ou supprimer.","178","42","L","Non","","Oui","Football","Karim DUPONT","0660000000","Frère","Arabe; Français","Oui","Non","Oui","Oui","Oui","Oui","Oui","Oui","Oui","Non","Oui"];
+}
+function candidateExcelTemplateHelpRows(){
+  const help=["Obligatoire. Nom de famille du candidat.","Obligatoire. Prénom du candidat.","Format conseillé : jj/mm/aaaa ou aaaa-mm-jj.","Commune ou ville de naissance.","Identité du père.","Identité de la mère.","Numéro d'identification nationale si disponible.","M ou F.","Célibataire, Marié(e), Divorcé(e), Veuf(ve).","Numéro de téléphone principal.","Adresse email.","Adresse complète.","Commune de résidence.","Wilaya de résidence.","Fonction ou poste cible.","Société autorisée dans SGDI.","Montant net prévu. Exemple : 30000 ou 30 000,00.","Favorable, Favorable avec réserves, Défavorable.","Date de l'avis recruteur.","Nom du recruteur.","Observations libres.","Taille en centimètres.","Pointure chaussure.","XS, S, M, L, XL, XXL.","Oui ou Non.","Arme, corps ou précision utile.","Oui ou Non.","Discipline sportive.","Nom du contact d'urgence.","Téléphone du contact d'urgence.","Lien de parenté ou relation.","Exemple : Arabe; Français; Anglais.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non."];
+  return candidateExcelTemplateColumns().map((h,i)=>[h,help[i]||""]);
+}
+function downloadCandidateExcelTemplate(){
+  const headers=candidateExcelTemplateColumns();
+  const example=candidateExcelTemplateExample();
+  const blankRows=Array.from({length:48},()=>headers.map(()=>""));
+  const fileName="MODELE_IMPORT_CANDIDATS_SGDI.xlsx";
+  if(typeof XLSX!=="undefined"){
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet([headers,example,...blankRows]);
+    ws["!cols"]=headers.map(h=>({wch:Math.max(14,Math.min(28,String(h).length+4))}));
+    ws["!autofilter"]={ref:`A1:${XLSX.utils.encode_col(headers.length-1)}${blankRows.length+2}`};
+    XLSX.utils.book_append_sheet(wb,ws,"Candidats");
+    const helpWs=XLSX.utils.aoa_to_sheet([["Colonne","Utilisation"],...candidateExcelTemplateHelpRows()]);
+    helpWs["!cols"]=[{wch:28},{wch:80}];
+    XLSX.utils.book_append_sheet(wb,helpWs,"Aide colonnes");
+    XLSX.writeFile(wb,fileName);
+    toast("Modèle Excel généré","success");
+    return;
+  }
+  const csv=[headers,example,...blankRows].map(r=>r.map(v=>`"${String(v??"").replace(/"/g,'""')}"`).join(";")).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download="MODELE_IMPORT_CANDIDATS_SGDI.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("Modèle CSV généré","success");
 }
 function candidateBlankDraft(options){
   const opt=options||{};
