@@ -8872,11 +8872,21 @@ function renderMatSitesEnAttenteDotation(view){
 }
 
 function dotationMagasinsForSoc(soc){
-  return (db.magasins||[]).filter(m=>m&&m.id&&m.nom).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  const all=(db.magasins||[]).filter(m=>m&&m.id&&m.nom);
+  const global=all.filter(m=>!m.societe);
+  const owned=soc?all.filter(m=>m.societe===soc):all;
+  const rows=owned.length?owned:(soc?global:all);
+  return rows.sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
 }
 function dotationArticlesForMagasin(magasinId,soc){
   if(!magasinId)return[];
-  return (db.stockArticles||[]).filter(a=>String(a.magasinId||"")===String(magasinId)).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
+  const mag=(db.magasins||[]).find(m=>String(m.id)===String(magasinId));
+  const magName=String(mag?.nom||"").trim().toLowerCase();
+  return (db.stockArticles||[]).filter(a=>{
+    if(soc&&a.societe&&a.societe!==soc)return false;
+    if(String(a.magasinId||"")===String(magasinId))return true;
+    return magName&&String(a.categorie||"").trim().toLowerCase()===magName;
+  }).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
 }
 function dotationCodeSerieOptions(a){
   if(!a)return[];
