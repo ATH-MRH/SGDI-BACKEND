@@ -3376,7 +3376,7 @@ function openAddCandidateForm(){
   navigate("reserve/nouveau");
 }
 function candidatImportActionsHTML(){
-  return `<div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+  return `<div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-secondary recrutement-import-free-btn" onclick="openCandidateFreeExcelImport()">Excel libre</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
 }
 function candidateExcelTemplateColumns(){
   return ["Nom","Prénom","Date de naissance","Lieu de naissance","Nom du père","Nom de la mère","NIN","Sexe","Situation familiale","Téléphone","Email","Adresse","Commune","Wilaya","Poste souhaité","Société","Salaire prévu","Avis","Date avis","Recruteur","Commentaire","Taille (cm)","Pointure","Taille chemise","Ex-services","Précision ex-services","Sport","Sport précision","Contact urgence","Téléphone urgence","Lien urgence","Langues parlées","Service national","Enquête habilitation","Acte de naissance","Certificat résidence","Casier judiciaire","Aptitude médicale","Bulletin ANEM","Chèque barré","Pièce identité","Fiche familiale","Fiche individuelle"];
@@ -3435,13 +3435,53 @@ function openCandidateExcelImport(){
   if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
   const input=document.createElement("input");
   input.type="file";input.accept=".xlsx,.xls,.csv";
-  input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file)};
+  input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file,{free:false})};
+  input.click();
+}
+function openCandidateFreeExcelImport(){
+  if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
+  const input=document.createElement("input");
+  input.type="file";input.accept=".xlsx,.xls,.csv";
+  input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file,{free:true})};
   input.click();
 }
 function candidateExcelText(row,aliases){return String(excelCell(row,aliases)||"").trim()}
 function candidateExcelMoney(row,aliases){const v=excelCell(row,aliases);const n=parseMoneyInput(v);return n||""}
-function candidateExcelMapRow(row,index,mode){
+function candidateExcelSplitName(full){
+  const parts=String(full||"").trim().replace(/\s+/g," ").split(" ").filter(Boolean);
+  if(parts.length<2)return {nom:parts[0]||"",prenom:""};
+  return {nom:parts[0],prenom:parts.slice(1).join(" ")};
+}
+function candidateExcelSplitBirth(text){
+  const raw=String(text||"").trim();
+  if(!raw)return {};
+  const dateRaw=(raw.match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/)||[])[0]||"";
+  const date=excelDateValue(dateRaw);
+  let place=raw.replace(dateRaw,"").replace(/\b(né|nee|née|ne|naissance|le|a|à)\b/gi," ").replace(/[,:;()_-]+/g," ").trim();
+  return {dateNaissance:date,lieuNaissance:place};
+}
+function candidateExcelSplitAddress(text){
+  const parts=String(text||"").split(/[,;|/]+/).map(x=>x.trim()).filter(Boolean);
+  if(parts.length>=3)return {adresse:parts.slice(0,-2).join(", "),commune:parts[parts.length-2],wilaya:parts[parts.length-1]};
+  if(parts.length===2)return {adresse:parts[0],wilaya:parts[1]};
+  return {adresse:String(text||"").trim()};
+}
+function candidateExcelSmartEnhance(c,row){
+  const fullName=candidateExcelText(row,["nom et prenom","nom et prénom","nom/prenom","nom/prénom","nom complet","employe","employé","agent","salarie","salarié"]);
+  if((!c.nom||!c.prenom)&&fullName){const sp=candidateExcelSplitName(fullName);c.nom=c.nom||sp.nom;c.prenom=c.prenom||sp.prenom}
+  const birthCombined=candidateExcelText(row,["date et lieu de naissance","date/lieu naissance","date lieu naissance","naissance complete","naissance complète","né le","ne le"]);
+  if((!c.dateNaissance||!c.lieuNaissance)&&birthCombined){const sp=candidateExcelSplitBirth(birthCombined);c.dateNaissance=c.dateNaissance||sp.dateNaissance;c.lieuNaissance=c.lieuNaissance||sp.lieuNaissance}
+  const addrCombined=candidateExcelText(row,["adresse complete","adresse complète","adresse commune wilaya","adresse et wilaya","adresse/wilaya","lieu residence","lieu résidence"]);
+  if(addrCombined){const sp=candidateExcelSplitAddress(addrCombined);c.adresse=c.adresse||sp.adresse;c.commune=c.commune||sp.commune;c.wilaya=c.wilaya||sp.wilaya}
+  if(c.nin&&!/^\d{10}$/.test(String(c.nin).trim())){c.notes=(c.notes?c.notes+"\n":"")+"NIN importé non conforme ignoré : "+c.nin;c.nin=""}
+  if(c.dateNaissance&&candidatAgeAtSave(c.dateNaissance)!==null&&candidatAgeAtSave(c.dateNaissance)<20){c.notes=(c.notes?c.notes+"\n":"")+"Date de naissance importée à vérifier : "+c.dateNaissance;c.dateNaissance=""}
+  c.source="Import Excel libre";
+  c.importFreeMode=true;
+  return c;
+}
+function candidateExcelMapRow(row,index,mode,options){
   const reserve=mode!=="new";
+  const opt=options||{};
   const c=candidateBlankDraft({reserveDirect:reserve});
   c.source="Import Excel";
   c.importedAt=new Date().toISOString();
@@ -3492,7 +3532,7 @@ function candidateExcelMapRow(row,index,mode){
   if(String(c.nin||"").trim()==="1234567890")c.nin="";
   if(String(c.telephone||"").replace(/\s+/g,"")==="0550000000")c.telephone="";
   if(String(c.email||"").trim().toLowerCase()==="ahmed.dupont@example.com")c.email="";
-  return c;
+  return opt.free?candidateExcelSmartEnhance(c,row):c;
 }
 function candidateImportExistingKeys(){
   const keys=new Set();
@@ -3533,7 +3573,8 @@ function candidateImportLabel(item){
   const name=String(((c&&c.nom)||"")+" "+((c&&c.prenom)||"")).trim()||"Candidat sans nom";
   return `${item&&item.row?`Ligne ${item.row} - `:""}${name}`;
 }
-function readCandidateExcelFile(file){
+function readCandidateExcelFile(file,options){
+  const opt=options||{};
   const reader=new FileReader();
   reader.onload=e=>{
     try{
@@ -3541,16 +3582,17 @@ function readCandidateExcelFile(file){
       const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true}).filter(candidateExcelRowHasData);
       if(!rows.length){toast("Fichier Excel vide","error");return}
-      previewCandidateExcelImport(rows,file.name);
+      previewCandidateExcelImport(rows,file.name,opt);
     }catch(err){console.error(err);toast("Import Excel impossible: "+err.message,"error")}
   };
   reader.readAsArrayBuffer(file);
 }
-function previewCandidateExcelImport(rows,fileName){
+function previewCandidateExcelImport(rows,fileName,options){
+  const opt=options||{};
   const existing=candidateImportExistingKeys();
   const seen=new Set();
   const mapped=rows.map((row,i)=>{
-    const c=candidateExcelMapRow(row,i,"reserve");
+    const c=candidateExcelMapRow(row,i,"reserve",opt);
     const errors=candidateIdentityMissing(c);
     const warnings=candidateExcelTemplateValueWarnings(c);
     const key=candidateDedupeKey(c)||candidateImportFallbackKey(c);
@@ -3565,14 +3607,14 @@ function previewCandidateExcelImport(rows,fileName){
   const dup=mapped.filter(x=>x.duplicate).length;
   const err=mapped.filter(x=>x.errors.length).length;
   const sample=mapped.slice(0,25).map(x=>`<tr><td class="font-mono text-xs">${x.row}</td><td class="font-semibold">${escapeHTML((x.c.nom||"")+" "+(x.c.prenom||""))}</td><td>${safe(x.c.dateNaissance)}</td><td>${safe(x.c.posteSouhaite)}</td><td>${safe(x.c.societe)}</td><td>${x.errors.length?`<span class="pill pill-red">${escapeHTML(x.errors.join(", "))}</span>`:x.warnings.length?`<span class="pill pill-amber">${escapeHTML(x.warnings.join(" · "))}</span>`:`<span class="pill pill-green">Prêt backend</span>`}</td></tr>`).join("");
-  openModal(`<h3 class="font-bold text-lg mb-1">Import Excel candidats</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(fileName||"Fichier Excel")} · ${rows.length} ligne(s)</p>
+  openModal(`<h3 class="font-bold text-lg mb-1">${opt.free?"Import Excel libre":"Import Excel candidats"}</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(fileName||"Fichier Excel")} · ${rows.length} ligne(s)${opt.free?" · format non conforme accepté":""}</p>
     <div class="grid grid-3 gap-3 mb-4">
       <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Prêts</div><div class="text-2xl font-black text-emerald-600">${valid}</div></div>
       <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Avertissements</div><div class="text-2xl font-black text-amber-600">${dup}</div></div>
       <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Erreurs</div><div class="text-2xl font-black text-red-600">${err}</div></div>
     </div>
     <div class="card overflow-hidden mb-4" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Ligne</th><th>Candidat</th><th>Naissance</th><th>Poste</th><th>Société</th><th>Statut</th></tr></thead><tbody>${sample||`<tr><td colspan="6" class="text-center p-4 text-slate-500">Aucune ligne lisible.</td></tr>`}</tbody></table></div>
-    <div class="text-xs text-slate-500 mb-4">Les doublons sont affichés en avertissement mais seront copiés dans le système. Seules les lignes sans nom/prénom sont refusées.</div>
+    <div class="text-xs text-slate-500 mb-4">${opt.free?"Mode libre : SGDI tente de séparer automatiquement nom/prénom, date/lieu de naissance et adresse/commune/wilaya. Les champs vides sont acceptés. ":""}Les doublons sont affichés en avertissement mais seront copiés dans le système. Seules les lignes sans nom/prénom sont refusées.</div>
     <div class="flex justify-end gap-2 flex-wrap"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" ${valid?"":"disabled"} onclick="confirmCandidateExcelImport(this)">Enregistrer dans le backend</button></div>`);
 }
 async function confirmCandidateExcelImport(btn){
