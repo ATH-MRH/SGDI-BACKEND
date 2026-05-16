@@ -3443,7 +3443,7 @@ function candidateMarkImportedSectionsValidated(c){
 }
 function candidateBlankDraft(options){
   const opt=options||{};
-  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
+  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
   return opt.reserveDirect?candidateMarkImportedSectionsValidated(draft):draft;
 }
 function openCandidateExcelImport(){
@@ -3461,6 +3461,8 @@ function openCandidateFreeExcelImport(){
   input.click();
 }
 function candidateExcelText(row,aliases){return String(excelCell(row,aliases)||"").trim()}
+function candidateExcelLooseText(row,aliases){return String(excelCellLoose(row,aliases)||"").trim()}
+function candidateExcelLooseDate(row,aliases){return excelDateValue(excelCellLoose(row,aliases))}
 function candidateExcelMoney(row,aliases){const v=excelCell(row,aliases);const n=parseMoneyInput(v);return n||""}
 function candidateExcelSplitName(full){
   const parts=String(full||"").trim().replace(/\s+/g," ").split(" ").filter(Boolean);
@@ -3484,10 +3486,20 @@ function candidateExcelSplitAddress(text){
 function candidateExcelSmartEnhance(c,row){
   const fullName=candidateExcelText(row,["nom et prenom","nom et prénom","nom/prenom","nom/prénom","nom complet","employe","employé","agent","salarie","salarié"]);
   if((!c.nom||!c.prenom)&&fullName){const sp=candidateExcelSplitName(fullName);c.nom=c.nom||sp.nom;c.prenom=c.prenom||sp.prenom}
-  const birthCombined=candidateExcelText(row,["date et lieu de naissance","date/lieu naissance","date lieu naissance","naissance complete","naissance complète","né le","ne le"]);
+  c.nom=c.nom||candidateExcelLooseText(row,["nom","nom candidat","patronyme","family name"]);
+  c.prenom=c.prenom||candidateExcelLooseText(row,["prenom","prénom","prenom candidat","first name"]);
+  const birthCombined=candidateExcelLooseText(row,["date et lieu de naissance","date/lieu naissance","date lieu naissance","naissance complete","naissance complète","né le","ne le","ne(e) le","né(e) le"]);
   if((!c.dateNaissance||!c.lieuNaissance)&&birthCombined){const sp=candidateExcelSplitBirth(birthCombined);c.dateNaissance=c.dateNaissance||sp.dateNaissance;c.lieuNaissance=c.lieuNaissance||sp.lieuNaissance}
-  const addrCombined=candidateExcelText(row,["adresse complete","adresse complète","adresse commune wilaya","adresse et wilaya","adresse/wilaya","lieu residence","lieu résidence"]);
+  c.dateNaissance=c.dateNaissance||candidateExcelLooseDate(row,["date naissance","date de naissance","naissance","né le","ne le","date né","date ne"]);
+  c.lieuNaissance=c.lieuNaissance||candidateExcelLooseText(row,["lieu naissance","lieu de naissance","commune naissance","wilaya naissance","né à","ne a","lieu né","lieu ne"]);
+  const addrCombined=candidateExcelLooseText(row,["adresse complete","adresse complète","adresse commune wilaya","adresse et wilaya","adresse/wilaya","lieu residence","lieu résidence","domicile","adresse personnelle"]);
   if(addrCombined){const sp=candidateExcelSplitAddress(addrCombined);c.adresse=c.adresse||sp.adresse;c.commune=c.commune||sp.commune;c.wilaya=c.wilaya||sp.wilaya}
+  c.adresse=c.adresse||candidateExcelLooseText(row,["adresse","adresse personnelle","domicile","residence","résidence"]);
+  c.commune=c.commune||candidateExcelLooseText(row,["commune","commune residence","commune résidence","ville"]);
+  c.wilaya=c.wilaya||candidateExcelLooseText(row,["wilaya","wilaya residence","wilaya résidence","province"]);
+  c.posteSouhaite=c.posteSouhaite||normalizePosteValue(candidateExcelLooseText(row,["poste","poste souhaite","poste souhaité","poste occupe","poste occupé","fonction","fonction actuelle","metier","métier","emploi","emploi occupe","emploi occupé","profession","qualification","grade"]));
+  c.dateRecrutement=c.dateRecrutement||candidateExcelLooseDate(row,["date entree","date entrée","date d'entree","date d’entrée","date recrutement","date de recrutement","date embauche","date d'embauche","date integration","date intégration","date installation","date prise de service","date debut","date début","debut contrat","début contrat"]);
+  c.dateEntree=c.dateEntree||c.dateRecrutement;
   if(c.nin&&!/^\d{10}$/.test(String(c.nin).trim())){c.notes=(c.notes?c.notes+"\n":"")+"NIN importé non conforme ignoré : "+c.nin;c.nin=""}
   if(c.dateNaissance&&candidatAgeAtSave(c.dateNaissance)!==null&&candidatAgeAtSave(c.dateNaissance)<20){c.notes=(c.notes?c.notes+"\n":"")+"Date de naissance importée à vérifier : "+c.dateNaissance;c.dateNaissance=""}
   c.source="Import Excel libre";
@@ -3516,6 +3528,8 @@ function candidateExcelMapRow(row,index,mode,options){
   c.commune=candidateExcelText(row,["commune","municipality"]);
   c.wilaya=candidateExcelText(row,["wilaya","province"]);
   c.posteSouhaite=normalizePosteValue(candidateExcelText(row,["poste","poste souhaite","poste souhaité","fonction","metier","métier","emploi","job"]));
+  c.dateRecrutement=excelDateValue(excelCell(row,["date entree","date entrée","date d'entree","date d’entrée","date recrutement","date de recrutement","date embauche","date d'embauche","date integration","date intégration","date installation","date prise de service","date debut","date début","debut contrat","début contrat"]));
+  c.dateEntree=c.dateRecrutement;
   c.societe=candidateExcelText(row,["societe","société","entreprise","company"])||currentStructureSocieteFilter()||mySoc()||"";
   c.salairePrevu=candidateExcelMoney(row,["salaire","salaire prevu","salaire prévu","salaire net","net a payer","net à payer"]);
   c.avisDecision=candidateExcelText(row,["avis","decision","décision","avis decision","avis décision"])||(reserve?"Favorable":"");
@@ -4204,6 +4218,7 @@ function renderCandidatForm(view,id,options){
 }
 
 function renderCandidatEtape1(c){
+  const posteOptions=POSTES.includes(c.posteSouhaite)?POSTES:(c.posteSouhaite?[c.posteSouhaite,...POSTES]:POSTES);
 	return`${candidatSectionAvailable(c,"identification")?`${candidatSectionOpen(c,"identification","banner-amber","IDENTIFICATION DU CANDIDAT")}
 	    <div class="grid grid-6">
 	      <div class="col-span-6 candidate-id-photo-row">
@@ -4252,7 +4267,8 @@ function renderCandidatEtape1(c){
   ${candidatSectionClose(c,"militaire")}`:""}
   ${candidatSectionAvailable(c,"poste")?`${candidatSectionOpen(c,"poste","banner-green","Poste & CV")}
     <div class="grid grid-6">
-      <div class="col-span-6"><label class="label">Poste souhaité *</label><select class="select" name="posteSouhaite" ><option value="">— Choisir —</option>${POSTES.map(p=>`<option ${c.posteSouhaite===p?"selected":""}>${p}</option>`).join("")}</select></div>
+      <div class="col-span-3"><label class="label">Poste souhaité *</label><select class="select" name="posteSouhaite" ><option value="">— Choisir —</option>${posteOptions.map(p=>`<option value="${escapeHTML(p)}" ${c.posteSouhaite===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
+      <div class="col-span-3"><label class="label">Date d'entrée / recrutement</label><input class="input" type="date" name="dateRecrutement" value="${c.dateRecrutement||c.dateEntree||""}"/></div>
       <div class="col-span-3"><label class="label">Salaire prévu pour le poste (DA/mois)</label><input class="input" type="text" inputmode="decimal" name="salairePrevu" value="${formatMoneyInputValue(c.salairePrevu)}" placeholder="45 000,00" onblur="formatMoneyField(this)"/></div>
       <div class="col-span-3"><label class="label">&nbsp;</label><div class="text-xs text-slate-500 pt-2">${c.salairePrevu?`Fourchette estimée : <b>${money(c.salairePrevu)}</b>`:"Montant brut prévisionnel pour ce poste"}</div></div>
       <div class="col-span-3"><label class="label">Téléphone *</label><input class="input" name="telephone" value="${escapeHTML(c.telephone||"")}" /></div>
@@ -4315,6 +4331,7 @@ function collectCandidatFormData(){
   data.nom=String(fd.get("nom")||data.nom||"").trim();
   data.prenom=String(fd.get("prenom")||data.prenom||"").trim();
   normalizeCandidateIdentity(data);
+  data.dateEntree=data.dateRecrutement||data.dateEntree||"";
   data.societe=data.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   if(data.serviceMilitaire!=="Oui"){
     data.serviceMilitaire="Non";
@@ -5183,7 +5200,7 @@ function renderContractualisation(view,id){
         <div class="col-span-3"><label class="label">Salaire net (DA/mois) *</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(c.salaireNet||c.salairePrevu||"")}" placeholder="45 000,00" required onblur="formatMoneyField(this)"/>${c.salairePrevu?`<div class="text-xs text-slate-500 mt-1">💡 Salaire prévu : <b>${money(c.salairePrevu)}</b></div>`:""}</div>
         <div class="col-span-6"><label class="label">Modèle de contrat spécifique au poste *</label><select class="select" name="contratPersonnelId" required onchange="updateContratPersonnelPreview()">${contratPersonnelOptions(c.contratPersonnelId, c.posteContrat||c.posteSouhaite)}</select></div>
         <div class="col-span-6 p-3 rounded-lg" style="background:#f8fafc;border:1px solid #e2e8f0"><div id="contrat-personnel-title" class="text-sm font-bold text-slate-800 mb-2">${escapeHTML((autoContrat&&(autoContrat.title||autoContrat.titre))||"Contrat spécifique au poste")}</div><pre id="contrat-personnel-preview" class="text-xs text-slate-600 whitespace-pre-wrap max-h-40 overflow-auto">${escapeHTML((autoContrat&&(autoContrat.description||autoContrat.texte||autoContrat.file_name))||"Aucun modèle trouvé pour ce poste. Ajoutez-le dans Administration système > CONTRAT.")}</pre></div>
-        <div class="col-span-2"><label class="label">Date de recrutement *</label><input class="input" type="date" name="dateRecrutement" value="${today()}" required onchange="updateContractEndDate()"/></div>
+        <div class="col-span-2"><label class="label">Date de recrutement *</label><input class="input" type="date" name="dateRecrutement" value="${c.dateRecrutement||c.dateEntree||today()}" required onchange="updateContractEndDate()"/></div>
         <div class="col-span-2"><label class="label">Durée période d'essai (jours) *</label><input class="input" type="number" name="dureeEssai" value="${c.dureeEssai||90}" min="0" required onchange="updateContractEndDate()" oninput="updateContractEndDate()"/></div>
         <div class="col-span-2"><label class="label">Date fin période d'essai *</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${c.dateFinEssai||""}" required readonly/></div>
         <div class="col-span-3"><label class="label">Durée du contrat *</label><select class="select" name="dureeContrat" required onchange="updateContractEndDate()">${contratDureeOptions(c.dureeContrat||"")}</select></div>
@@ -5831,6 +5848,21 @@ function excelCell(row,aliases){
   for(const alias of aliases){
     const n=excelNormKey(alias);
     const k=keys.find(x=>excelNormKey(x)===n);
+    if(k!==undefined&&row[k]!==undefined&&row[k]!==null&&String(row[k]).trim()!=="")return row[k];
+  }
+  return "";
+}
+function excelCellLoose(row,aliases){
+  const exact=excelCell(row,aliases);
+  if(exact!==""&&exact!==undefined&&exact!==null)return exact;
+  const keys=Object.keys(row||{});
+  for(const alias of aliases){
+    const n=excelNormKey(alias);
+    if(n.length<3)continue;
+    const k=keys.find(x=>{
+      const nx=excelNormKey(x);
+      return nx.length>=3&&(nx.includes(n)||n.includes(nx));
+    });
     if(k!==undefined&&row[k]!==undefined&&row[k]!==null&&String(row[k]).trim()!=="")return row[k];
   }
   return "";
