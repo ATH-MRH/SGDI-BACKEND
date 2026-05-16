@@ -9784,7 +9784,19 @@ function stockGetCategoriesFor(soc){
   stockDotationCategories().forEach(c=>{if(!seen.has(c.code.toLowerCase()))base.push(c)});
   return base;
 }
-function stockGetCategorie(soc,code){return stockGetCategoriesFor(soc).find(c=>c.code===code)||{code,label:code||"—",icon:"📦",color:"#64748b"}}
+function stockMagasinsForCategorie(soc){
+  return (db.magasins||[]).filter(m=>!soc||!m.societe||m.societe===soc).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+}
+function stockMagasinCategorieOptionsHTML(soc,selected){
+  const mags=stockMagasinsForCategorie(soc);
+  if(!mags.length)return `<option value="">Aucun magasin créé</option>`;
+  return `<option value="">— Choisir un magasin —</option>${mags.map(m=>`<option value="${escapeHTML(m.id)}" ${String(selected||"")===String(m.id)||String(selected||"")===String(m.nom||"")?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom||"Magasin")}</option>`).join("")}`;
+}
+function stockGetCategorie(soc,code){
+  const mag=(db.magasins||[]).find(m=>String(m.id)===String(code)||String(m.nom||"")===String(code));
+  if(mag)return{code,label:mag.nom||"Magasin",icon:mag.icon||"🏬",color:mag.color||"#043970"};
+  return stockGetCategoriesFor(soc).find(c=>c.code===code)||{code,label:code||"—",icon:"📦",color:"#64748b"}
+}
 function stockGetMouvements(articleId){return (db.stockMouvements||[]).filter(m=>m.articleId===articleId).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||"").localeCompare(a.createdAt||""))}
 function stockMvtIsIn(t){return t==="entree"||t==="retour"}
 function stockMvtIsOut(t){return ["sortie","perte","casse","nouvelle_dotation","renouvellement_dotation","dotation_pret","reforme"].includes(t)}
@@ -10389,10 +10401,9 @@ async function renderStockArticleForm(view,id){
   let a=isNew?{id:uid("stk"),code:"",designation:"",categorie:"",sousCategorie:"",societe:stockGetSocFilter()||"",marque:"",modele:"",reference:"",codeBarre:"",unite:"Pièce",prixUnitaire:"",quantiteGlobaleRecue:"",dateReceptionGlobale:"",stockReceptionsGlobales:[],stockInitial:0,stockVariantes:[],stockMin:"",stockMax:"",seuilAlerte:"",emplacement:"",fournisseur:"",description:"",notes:"",attributs:{},dateCreation:today(),actif:true}:(db.stockArticles||[]).find(x=>x.id===id);
   if(!a){toast("Article introuvable","error");return navigate("materiel/inventaire")}
   const soc=a.societe||stockGetSocFilter()||"";
-  const cats=soc?stockGetCategoriesFor(soc):[];
   const unites=db.stockUnites||["Pièce"];
   const attrs=a.attributs||{};
-  const isHabillement=cats.find(c=>c.code===a.categorie)&&stockIsHabillementCategory(a.categorie);
+  const isHabillement=stockIsHabillementCategory(a.categorie);
   view.innerHTML=`<div class="max-w-6xl mx-auto mat-shell">
     <div class="mat-hero">
       <div class="flex items-start justify-between gap-4 flex-wrap">
@@ -10407,8 +10418,8 @@ async function renderStockArticleForm(view,id){
       <div class="mat-form-band"><div class="mat-form-band-title">Identification article</div>
         <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
           <div class="md:col-span-2"><label class="label">Société propriétaire *</label><select class="select" name="societe"  onchange="document.getElementById('stock-article-form').dispatchEvent(new Event('change'));stockReloadCatOptions(this.value)"><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option ${a.societe===s?"selected":""}>${s}</option>`).join("")}</select></div>
-          <div class="md:col-span-2"><label class="label">Catégorie *</label><select class="select" name="categorie" id="stk-cat-select"  onchange="stockCategorieChanged(this)">${soc?`<option value="">— Choisir —</option>${cats.map(c=>`<option value="${c.code}" ${a.categorie===c.code?"selected":""}>${c.icon} ${c.label}</option>`).join("")}`:`<option value="">— Sélectionnez d'abord une société —</option>`}</select></div>
-          <div class="md:col-span-2"><label class="label">Sous-catégorie</label><div id="stk-subcat-container">${stockSousCategoriePickerHTML(a.categorie,a.sousCategorie)}</div></div>
+          <div class="md:col-span-2"><label class="label">Catégorie *</label><select class="select" name="categorie" id="stk-cat-select"  onchange="stockCategorieChanged(this)">${soc?stockMagasinCategorieOptionsHTML(soc,a.categorie||a.magasinId):`<option value="">— Sélectionnez d'abord une société —</option>`}</select></div>
+          <div class="md:col-span-2"><label class="label">Sous-catégorie</label><div id="stk-subcat-container">${stockSousCategoriePickerHTML(a.magasinId||a.categorie,a.sousCategorie)}</div></div>
           <div class="md:col-span-2"><label class="label">Code (auto si vide)</label><input class="input font-mono" name="code" value="${escapeHTML(a.code||"")}" placeholder="auto"/></div>
           <div class="md:col-span-4"><label class="label">🤝 Fournisseur principal</label><select class="select" name="fournisseurId"><option value="">— Aucun fournisseur —</option>${(db.fournisseurs||[]).map(f=>`<option value="${f.id}" ${a.fournisseurId===f.id?"selected":""}>${escapeHTML(f.raisonSociale)}</option>`).join("")}</select><div class="text-[10px] text-slate-400 mt-1">Pas de fournisseur ? <a href="#/materiel/fournisseur-nouveau" class="text-amber-600 underline">+ Créer un fournisseur</a></div></div>
           <div class="md:col-span-2"><label class="label">Marque</label><input class="input" name="marque" value="${escapeHTML(a.marque||"")}" placeholder="ex: 5.11 Tactical"/></div>
@@ -10441,7 +10452,7 @@ async function renderStockArticleForm(view,id){
       </div>
       <div class="mat-form-band"><div class="mat-form-band-title">Logistique</div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div><label class="label">🏬 Magasin (lieu de stockage)</label><select class="select" name="magasinId"><option value="">— Aucun rattachement —</option>${(db.magasins||[]).map(m=>`<option value="${m.id}" ${a.magasinId===m.id?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom)}</option>`).join("")}</select><div class="text-[10px] text-slate-400 mt-1">Pas de magasin ? <a href="#/materiel/magasin-nouveau" class="text-amber-600 underline">+ Créer un magasin</a></div></div>
+          <div><label class="label">🏬 Magasin (lieu de stockage)</label><select class="select" name="magasinId"><option value="">— Aucun rattachement —</option>${(db.magasins||[]).map(m=>`<option value="${m.id}" ${String(a.magasinId||"")===String(m.id)||String(a.categorie||"")===String(m.nom||"")?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom)}</option>`).join("")}</select><div class="text-[10px] text-slate-400 mt-1">Pas de magasin ? <a href="#/materiel/magasin-nouveau" class="text-amber-600 underline">+ Créer un magasin</a></div></div>
           <div class="md:col-span-2"><label class="label">Emplacement précis (optionnel)</label><input class="input" name="emplacement" value="${escapeHTML(a.emplacement||"")}" placeholder="ex: Étagère B3, Allée 2"/></div>
         </div>
       </div>
@@ -10481,6 +10492,13 @@ function stockSousCategorieValues(value){
   return String(value||"").split("||").map(x=>x.trim()).filter(Boolean);
 }
 function stockSousCategoriePickerHTML(catCode,selected){
+  const mag=(db.magasins||[]).find(m=>String(m.id)===String(catCode||"")||String(m.nom||"")===String(catCode||""));
+  if(mag){
+    const articles=(db.stockArticles||[]).filter(a=>String(a.magasinId||"")===String(mag.id)).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
+    if(!articles.length)return `<select class="select text-slate-400" name="sousCategorie" id="stk-subcat-select" disabled><option value="">Aucun article dans ce magasin</option></select>`;
+    const val=stockSousCategorieValues(selected)[0]||"";
+    return `<select class="select" name="sousCategorie" id="stk-subcat-select" onchange="stockSousCategorieChanged(this)"><option value="">— Nouvel article —</option>${articles.map(a=>{const label=(a.code?`${a.code} · `:"")+(a.designation||a.sousCategorie||"Article");return`<option value="${escapeHTML(a.designation||a.sousCategorie||label)}" ${val===(a.designation||a.sousCategorie||label)?"selected":""}>${escapeHTML(label)}</option>`}).join("")}</select>`;
+  }
   const list=DOTATION_PERSONNEL_SOUS_CATEGORIES[catCode]||[];
   const val=stockSousCategorieValues(selected)[0]||"";
   if(!list.length)return `<select class="select text-slate-400" name="sousCategorie" id="stk-subcat-select" disabled><option value="">Aucune sous-catégorie</option></select>`;
@@ -10714,6 +10732,8 @@ function stockCategorieChanged(sel){
   stockToggleStockFields(sel.value);
   stockReloadSousCategories(sel.value);
   const f=document.getElementById("stock-article-form");
+  const magasin=f?.querySelector('[name="magasinId"]');
+  if(magasin&&(db.magasins||[]).some(m=>String(m.id)===String(sel.value)))magasin.value=sel.value;
   const designation=f?.querySelector('[name="designation"]');
   if(designation&&!designation.value.trim()){
     const label=sel.options[sel.selectedIndex]?.textContent||"";
@@ -10722,8 +10742,8 @@ function stockCategorieChanged(sel){
 }
 function stockReloadCatOptions(soc){
   const sel=document.getElementById("stk-cat-select");if(!sel)return;
-  const cats=stockGetCategoriesFor(soc);
-  sel.innerHTML=`<option value="">— Choisir —</option>${cats.map(c=>`<option value="${c.code}">${c.icon} ${c.label}</option>`).join("")}`;
+  sel.innerHTML=stockMagasinCategorieOptionsHTML(soc,"");
+  stockReloadSousCategories("");
   stockToggleStockFields("");
   stockUpdateTailleButton();
   stockUpdatePointureButton();
@@ -10757,6 +10777,8 @@ async function stockSaveArticle(id,isNew){
     let a=(db.stockArticles||[]).find(x=>x.id===id);
     if(!a){a={id,dateCreation:today(),actif:true};db.stockArticles=db.stockArticles||[];db.stockArticles.push(a)}
     ["code","categorie","sousCategorie","societe","marque","modele","reference","codeBarre","emplacement","fournisseur","description","notes","magasinId","fournisseurId"].forEach(k=>{a[k]=(get(k)||"").trim()});
+    const selectedMag=(db.magasins||[]).find(m=>String(m.id)===String(get("categorie")||""));
+    if(selectedMag){a.magasinId=selectedMag.id;a.categorie=selectedMag.nom||"Magasin"}
     if(!a.unite)a.unite="Pièce";
     const receptionsGlobales=stockCollectGlobalStockRows();
     const receptionsGlobalesTotal=stockGlobalStockTotal(receptionsGlobales);
