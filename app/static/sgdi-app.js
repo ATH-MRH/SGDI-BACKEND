@@ -3376,7 +3376,22 @@ function openAddCandidateForm(){
   navigate("reserve/nouveau");
 }
 function candidatImportActionsHTML(){
-  return `<div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-secondary recrutement-import-free-btn" onclick="openCandidateFreeExcelImport()">Excel libre</button><button class="btn btn-danger text-xs" onclick="openDeleteAllReserveCandidatesModal()">Supprimer tout</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+  const bulk=reserveBulkDeleteMode();
+  return `<div class="flex gap-2 flex-wrap justify-end items-center"><label class="btn btn-ghost text-xs flex items-center gap-2" title="Afficher les cases de sélection pour supprimer plusieurs candidats"><input type="checkbox" ${bulk?"checked":""} onchange="setReserveBulkDeleteMode(this.checked)"/> Tout supprimer</label><button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-secondary recrutement-import-free-btn" onclick="openCandidateFreeExcelImport()">Excel libre</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+}
+function reserveBulkDeleteMode(){return sessionStorage.getItem("reserveBulkDeleteMode")==="1"}
+function setReserveBulkDeleteMode(v){sessionStorage.setItem("reserveBulkDeleteMode",v?"1":"0");renderView()}
+function reserveBulkSelectionHeaderHTML(mode){return mode==="reserve"&&reserveBulkDeleteMode()?`<th style="width:42px">Suppr.</th>`:""}
+function reserveBulkSelectionCellHTML(c,mode){
+  if(mode!=="reserve"||!reserveBulkDeleteMode())return "";
+  return `<td onclick="event.stopPropagation()" class="text-center"><input type="checkbox" data-reserve-delete-id="${escapeHTML(c.id)}" data-reserve-delete-backend="${escapeHTML(c.backendId||"")}"/></td>`;
+}
+function reserveBulkDeleteBarHTML(mode,count){
+  if(mode!=="reserve"||!reserveBulkDeleteMode())return "";
+  return `<div class="card p-3 mb-3 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border:1px solid #fed7aa">
+    <div class="text-sm text-slate-700"><b>Mode suppression activé.</b> Cochez uniquement les candidats à supprimer.</div>
+    <div class="flex gap-2"><button type="button" class="btn btn-ghost text-xs" onclick="document.querySelectorAll('[data-reserve-delete-id]').forEach(x=>x.checked=true)">Tout cocher (${count||0})</button><button type="button" class="btn btn-ghost text-xs" onclick="document.querySelectorAll('[data-reserve-delete-id]').forEach(x=>x.checked=false)">Tout décocher</button><button type="button" class="btn btn-danger text-xs" onclick="deleteSelectedReserveCandidates()">Supprimer la sélection</button></div>
+  </div>`;
 }
 function candidateExcelTemplateColumns(){
   return ["Nom","Prénom","Date de naissance","Lieu de naissance","Nom du père","Nom de la mère","NIN","Sexe","Situation familiale","Téléphone","Email","Adresse","Commune","Wilaya","Poste souhaité","Société","Salaire prévu","Avis","Date avis","Recruteur","Commentaire","Taille (cm)","Pointure","Taille chemise","Ex-services","Précision ex-services","Sport","Sport précision","Contact urgence","Téléphone urgence","Lien urgence","Langues parlées","Service national","Enquête habilitation","Acte de naissance","Certificat résidence","Casier judiciaire","Aptitude médicale","Bulletin ANEM","Chèque barré","Pièce identité","Fiche familiale","Fiche individuelle"];
@@ -3686,7 +3701,8 @@ function renderRecrutementDashboard(view){
         <div><h3 class="font-black">Liste des candidats en réserve</h3><div class="text-xs text-slate-500">${reserveRows.length} candidat(s) affiché(s) · ${scope}</div></div>
         <button type="button" class="btn candidate-reserve-page-btn text-xs" onclick="navigate('reserve')">Voir la page réserve</button>
       </div>
-      ${reserveRows.length?`<div class="overflow-x-auto"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Date</th><th>Statut</th><th></th></tr></thead><tbody>${reserveRows.map(c=>candidateListRowHTML(c,"reserve")).join("")}</tbody></table></div>`:`<div class="p-10 text-center text-slate-500">Aucun candidat en réserve.</div>`}
+      ${reserveBulkDeleteBarHTML("reserve",reserveRows.length)}
+      ${reserveRows.length?`<div class="overflow-x-auto"><table><thead><tr>${reserveBulkSelectionHeaderHTML("reserve")}<th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Date</th><th>Statut</th><th></th></tr></thead><tbody>${reserveRows.map(c=>candidateListRowHTML(c,"reserve")).join("")}</tbody></table></div>`:`<div class="p-10 text-center text-slate-500">Aucun candidat en réserve.</div>`}
     </div>`;
 }
 function recrutementModeToApi(mode){return mode==="archive"?"archive":mode==="reserve"?"reserve":"new"}
@@ -3705,8 +3721,10 @@ function upsertServerCandidate(row){
 function candidateListRowHTML(c,mode){
   const route=mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement";
   const archived=mode==="archive";
-  const rowClick=mode==="reserve"?` onclick="navigate('reserve/${jsString(c.id)}')" class="cursor-pointer hover:bg-slate-50"`:"";
+  const bulk=mode==="reserve"&&reserveBulkDeleteMode();
+  const rowClick=mode==="reserve"&&!bulk?` onclick="navigate('reserve/${jsString(c.id)}')" class="cursor-pointer hover:bg-slate-50"`:"";
   return `<tr data-searchable data-candidate-id="${escapeHTML(c.id)}" data-backend-id="${escapeHTML(c.backendId||"")}"${rowClick}>
+    ${reserveBulkSelectionCellHTML(c,mode)}
     <td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML((c.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(c.email||"")}</div></div></div></td>
     <td>${safe(c.posteSouhaite)}</td>
     <td><span class="pill pill-indigo">${safe(c.societe)}</span></td>
@@ -3733,7 +3751,8 @@ async function renderRecrutementServer(view,mode){
     const pagination=`<div class="flex items-center justify-between gap-2 p-3 border-t border-slate-100 text-sm"><div class="text-slate-500">${result.total||0} candidat(s) · page ${result.page||1}/${pages}</div><div class="flex gap-2"><button class="btn btn-ghost text-xs" ${result.page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${(result.page||1)-1})">Précédent</button><button class="btn btn-ghost text-xs" ${result.page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${(result.page||1)+1})">Suivant</button></div></div>`;
     view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st} · source PostgreSQL</p></div>${addButton}</div>
       <div class="grid grid-3 mb-4"><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Total serveur</div><div class="text-3xl font-bold mt-1">${result.total||0}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Page affichée</div><div class="text-3xl font-bold mt-1">${cs.length}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Société</div><div class="text-sm font-bold mt-2">${escapeHTML(socFilter||"Toutes autorisées")}</div></div></div>
-      ${cs.length===0?`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`:`<div class="card overflow-hidden"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead><tbody>${cs.map(c=>candidateListRowHTML(c,mode)).join("")}</tbody></table>${pagination}</div>`}`;
+      ${reserveBulkDeleteBarHTML(mode,cs.length)}
+      ${cs.length===0?`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`:`<div class="card overflow-hidden"><table><thead><tr>${reserveBulkSelectionHeaderHTML(mode)}<th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead><tbody>${cs.map(c=>candidateListRowHTML(c,mode)).join("")}</tbody></table>${pagination}</div>`}`;
     setTimeout(()=>applyLanguagePreference(view),0);
   }catch(e){
     console.warn("Liste candidats PostgreSQL indisponible",e);
@@ -3819,9 +3838,11 @@ function renderRecrutement(view,mode){
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
+    ${reserveBulkDeleteBarHTML(mode,cs.length)}
     ${cs.length===0?(archiveEmptyHTML||`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`):`<div class="card overflow-hidden"><table>
-      <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead>
+      <thead><tr>${reserveBulkSelectionHeaderHTML(mode)}<th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead>
       <tbody>${cs.map(c=>`<tr data-searchable>
+        ${reserveBulkSelectionCellHTML(c,mode)}
         <td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML((c.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML(c.nom+" "+c.prenom)}</div><div class="text-xs text-slate-500">${escapeHTML(c.email||"")}</div></div></div></td>
         <td>${safe(c.posteSouhaite)}</td>
         <td><span class="pill pill-indigo">${safe(c.societe)}</span></td>
@@ -4478,60 +4499,27 @@ async function deleteCandidat(id){
   toast(removed?"Candidat supprimé de PostgreSQL":"Candidat déjà supprimé","success");
   if((location.hash||"").slice(2)===targetRoute)renderView();else navigate(targetRoute);
 }
-function reserveCandidateScope(){
-  const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
-  const allowed=(isDrhModuleContext()&&!socFilter)?drhAuthorizedSocieties():[];
-  let rows=(db.candidats||[]).filter(c=>!candidatIsArchived(c)&&candidatIsReserve(c));
-  if(socFilter)rows=rows.filter(c=>c.societe===socFilter);else if(allowed.length)rows=rows.filter(c=>allowed.includes(c.societe));
-  return {rows,socFilter,allowed};
-}
-function openDeleteAllReserveCandidatesModal(){
-  const scope=reserveCandidateScope();
-  const label=scope.socFilter?scope.socFilter:(scope.allowed.length?"sociétés autorisées":"toutes sociétés");
-  openModal(`<h3 class="font-bold text-lg mb-2 text-red-700">Supprimer tous les candidats en réserve</h3>
-    <p class="text-sm text-slate-600 mb-3">Cette action supprime définitivement les candidats en réserve du périmètre : <b>${escapeHTML(label)}</b>.</p>
-    <div class="card p-3 mb-3" style="background:#fef2f2;border:1px solid #fecaca"><div class="text-xs uppercase font-black text-red-700">Candidats détectés localement</div><div class="text-3xl font-black text-red-700">${scope.rows.length}</div></div>
-    <p class="text-xs text-slate-500 mb-4">La suppression sera envoyée au backend PostgreSQL. Les candidats déjà recrutés ou archivés ne sont pas concernés.</p>
-    <div class="flex justify-end gap-2"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger" onclick="deleteAllReserveCandidates()">Supprimer tout</button></div>`);
-}
-async function loadAllReserveCandidatesForDeletion(){
-  const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
-  if(!sgdiAuthToken())return reserveCandidateScope().rows;
-  const rows=[];
-  let page=1,pages=1;
-  do{
-    const result=await SGDI.rh.candidatesPage({mode:"reserve",society:socFilter,page,page_size:500});
-    (result.items||[]).forEach(r=>rows.push(upsertServerCandidate(r)));
-    pages=result.pages||1;
-    page++;
-  }while(page<=pages);
-  return rows.filter(c=>!candidatIsArchived(c)&&candidatIsReserve(c));
-}
-async function deleteAllReserveCandidates(){
-  const confirmText=prompt("Tapez SUPPRIMER pour confirmer la suppression totale des candidats en réserve.");
-  if(String(confirmText||"").trim().toUpperCase()!=="SUPPRIMER"){toast("Suppression annulée","info");return}
-  try{
-    const rows=await loadAllReserveCandidatesForDeletion();
-    if(!rows.length){closeModal();toast("Aucun candidat en réserve à supprimer","info");renderView();return}
-    let ok=0,failed=0;
-    for(const c of rows){
-      try{
-        await deleteCandidateFromPostgres(c);
-        removeCandidatLocal(c,c.id);
-        ok++;
-      }catch(e){
-        const msg=String(e&&e.message||e||"");
-        if(/not found|introuvable|404/i.test(msg)){removeCandidatLocal(c,c.id);ok++}
-        else{failed++;console.warn("Suppression candidat réserve refusée",c,e)}
-      }
+async function deleteSelectedReserveCandidates(){
+  const selected=[...document.querySelectorAll("[data-reserve-delete-id]:checked")].map(x=>({id:x.dataset.reserveDeleteId||"",backendId:x.dataset.reserveDeleteBackend||""}));
+  if(!selected.length){toast("Cochez au moins un candidat à supprimer","error");return}
+  if(!confirm(`Supprimer définitivement ${selected.length} candidat(s) sélectionné(s) ?`))return;
+  let ok=0,failed=0;
+  for(const item of selected){
+    const c=findCandidatById(item.id)||(db.candidats||[]).find(x=>String(x.backendId||"")===String(item.backendId||""));
+    if(!c){failed++;continue}
+    try{
+      await deleteCandidateFromPostgres(c);
+      removeCandidatLocal(c,item.id||c.id);
+      ok++;
+    }catch(e){
+      const msg=String(e&&e.message||e||"");
+      if(/not found|introuvable|404/i.test(msg)){removeCandidatLocal(c,item.id||c.id);ok++}
+      else{failed++;console.warn("Suppression candidat sélectionné refusée",c,e)}
     }
-    await sgdiPullState({silent:true,render:false,force:true,light:true}).catch(e=>console.warn("Rafraîchissement après suppression réserve",e));
-    closeModal();
-    toastCenter(`${ok} CANDIDAT(S) EN RÉSERVE SUPPRIMÉ(S)${failed?` · ${failed} échec(s)`:""}`,failed?"warning":"success");
-    navigate("reserve");
-  }catch(e){
-    toast("Suppression globale refusée : "+(e.message||e),"error");
   }
+  await sgdiPullState({silent:true,render:false,force:true,light:true}).catch(e=>console.warn("Rafraîchissement après suppression sélection réserve",e));
+  toastCenter(`${ok} CANDIDAT(S) SUPPRIMÉ(S)${failed?` · ${failed} échec(s)`:""}`,failed?"error":"success");
+  renderView();
 }
 async function activerCandidat(id){
   const c=findCandidatById(id);
