@@ -3443,7 +3443,7 @@ function candidateMarkImportedSectionsValidated(c){
 }
 function candidateBlankDraft(options){
   const opt=options||{};
-  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
+  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",dureeContrat:"",dateFinContrat:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
   return opt.reserveDirect?candidateMarkImportedSectionsValidated(draft):draft;
 }
 function openCandidateExcelImport(){
@@ -4214,7 +4214,7 @@ function renderCandidatForm(view,id,options){
 	      </div>
 	    </form>
 	  </div>`;
-  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'));if(sessionStorage.getItem("candidatAutoEdit:"+c.id)==="1"){sessionStorage.removeItem("candidatAutoEdit:"+c.id);modifierCandidatForm(c.id)}},0);
+  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));updateCandidateContractEndDate();if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'));if(sessionStorage.getItem("candidatAutoEdit:"+c.id)==="1"){sessionStorage.removeItem("candidatAutoEdit:"+c.id);modifierCandidatForm(c.id)}},0);
 }
 
 function renderCandidatEtape1(c){
@@ -4268,7 +4268,9 @@ function renderCandidatEtape1(c){
   ${candidatSectionAvailable(c,"poste")?`${candidatSectionOpen(c,"poste","banner-green","Poste & CV")}
     <div class="grid grid-6">
       <div class="col-span-3"><label class="label">Poste souhaité *</label><select class="select" name="posteSouhaite" ><option value="">— Choisir —</option>${posteOptions.map(p=>`<option value="${escapeHTML(p)}" ${c.posteSouhaite===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
-      <div class="col-span-3"><label class="label">Date d'entrée / recrutement</label><input class="input" type="date" name="dateRecrutement" value="${c.dateRecrutement||c.dateEntree||""}"/></div>
+      <div class="col-span-3"><label class="label">Date d'entrée / recrutement</label><input class="input" type="date" name="dateRecrutement" value="${c.dateRecrutement||c.dateEntree||""}" onchange="updateCandidateContractEndDate()" oninput="updateCandidateContractEndDate()"/></div>
+      <div class="col-span-3"><label class="label">Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateCandidateContractEndDate()">${contratDureeOptions(c.dureeContrat||"")}</select></div>
+      <div class="col-span-3"><label class="label">Fin de contrat</label><input class="input bg-slate-50" type="date" name="dateFinContrat" value="${c.dateFinContrat||""}" readonly/></div>
       <div class="col-span-3"><label class="label">Salaire prévu pour le poste (DA/mois)</label><input class="input" type="text" inputmode="decimal" name="salairePrevu" value="${formatMoneyInputValue(c.salairePrevu)}" placeholder="45 000,00" onblur="formatMoneyField(this)"/></div>
       <div class="col-span-3"><label class="label">&nbsp;</label><div class="text-xs text-slate-500 pt-2">${c.salairePrevu?`Fourchette estimée : <b>${money(c.salairePrevu)}</b>`:"Montant brut prévisionnel pour ce poste"}</div></div>
       <div class="col-span-3"><label class="label">Téléphone *</label><input class="input" name="telephone" value="${escapeHTML(c.telephone||"")}" /></div>
@@ -4321,6 +4323,13 @@ function toggleServiceMilitaireFields(value){
     el.classList.toggle("text-slate-400",!enabled);
   });
 }
+function updateCandidateContractEndDate(){
+  const f=document.getElementById("candidat-form");if(!f)return;
+  const start=f.querySelector('[name="dateRecrutement"]')?.value||"";
+  const duration=f.querySelector('[name="dureeContrat"]')?.value||"";
+  const out=f.querySelector('[name="dateFinContrat"]');
+  if(out)out.value=contractEndDate(start,duration);
+}
 
 function collectCandidatFormData(){
   const f=document.getElementById("candidat-form");if(!f)return null;
@@ -4332,6 +4341,7 @@ function collectCandidatFormData(){
   data.prenom=String(fd.get("prenom")||data.prenom||"").trim();
   normalizeCandidateIdentity(data);
   data.dateEntree=data.dateRecrutement||data.dateEntree||"";
+  data.dateFinContrat=data.dateFinContrat||contractEndDate(data.dateRecrutement||data.dateEntree||"",data.dureeContrat||"");
   data.societe=data.societe||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
   if(data.serviceMilitaire!=="Oui"){
     data.serviceMilitaire="Non";
