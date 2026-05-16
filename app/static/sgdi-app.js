@@ -8872,11 +8872,11 @@ function renderMatSitesEnAttenteDotation(view){
 }
 
 function dotationMagasinsForSoc(soc){
-  return (db.magasins||[]).filter(m=>!soc||m.societe===soc||!m.societe).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  return (db.magasins||[]).filter(m=>m&&m.id&&m.nom).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
 }
 function dotationArticlesForMagasin(magasinId,soc){
   if(!magasinId)return[];
-  return (db.stockArticles||[]).filter(a=>(!soc||a.societe===soc||!a.societe)&&(!magasinId||String(a.magasinId||"")===String(magasinId))).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
+  return (db.stockArticles||[]).filter(a=>String(a.magasinId||"")===String(magasinId)).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
 }
 function dotationCodeSerieOptions(a){
   if(!a)return[];
@@ -8898,7 +8898,7 @@ function dotationReloadMagasins(){
   const f=document.getElementById("stock-dotation-form");if(!f)return;
   const soc=f.querySelector('[name="societe"]')?.value||"";
   const magSel=f.querySelector('[name="magasinId"]');
-  if(magSel)magSel.innerHTML=`<option value="">— Choisir type magasin —</option>${dotationMagasinsForSoc(soc).map(m=>`<option value="${escapeHTML(m.id)}">${m.icon||""} ${escapeHTML(m.nom||"Magasin")}</option>`).join("")}`;
+  if(magSel)magSel.innerHTML=`<option value="">— Choisir type magasin —</option>${dotationMagasinsForSoc(soc).map(m=>`<option value="${escapeHTML(m.id)}">${m.icon||""} ${escapeHTML(m.nom||"Magasin")}${m.societe?` · ${escapeHTML(m.societe)}`:""}</option>`).join("")}`;
   dotationMagasinChanged();
 }
 function dotationMagasinChanged(){
@@ -8957,7 +8957,7 @@ function renderMatSimpleDotation(view){
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div><label class="label">Société propriétaire</label><select class="select" name="societe" onchange="dotationReloadMagasins()">${societies.map(s=>`<option value="${escapeHTML(s)}" ${s===firstSoc?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
       <div><label class="label">Employé bénéficiaire</label><select class="select" name="agentId" onchange="dotationRefreshBarcode()"><option value="">— Choisir employé —</option>${agentOptions.map(a=>`<option value="${a.id}" ${selectedAgent===a.id?"selected":""}>${escapeHTML((a.nom||"")+" "+(a.prenom||""))} · ${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.affectationCourante?.poste||a.fonction||"")}</option>`).join("")}</select></div>
-      <div><label class="label">Type magasin</label><select class="select" name="magasinId" onchange="dotationMagasinChanged()"><option value="">— Choisir type magasin —</option>${mags.map(m=>`<option value="${escapeHTML(m.id)}">${m.icon||""} ${escapeHTML(m.nom||"Magasin")}</option>`).join("")}</select></div>
+      <div><label class="label">Type magasin</label><select class="select" name="magasinId" onchange="dotationMagasinChanged()"><option value="">— Choisir type magasin —</option>${mags.map(m=>`<option value="${escapeHTML(m.id)}">${m.icon||""} ${escapeHTML(m.nom||"Magasin")}${m.societe?` · ${escapeHTML(m.societe)}`:""}</option>`).join("")}</select></div>
       <div><label class="label">Article</label><select class="select" name="articleId" onchange="dotationArticleChanged()"><option value="">— Choisir d'abord un type magasin —</option></select><div id="dotation-stock-info" class="text-xs text-slate-500 mt-1">Choisissez un article.</div></div>
       <div><label class="label">Quantité</label><input class="input" type="number" min="1" step="1" name="quantite" value="1"/></div>
       <div><label class="label">Code / N° Série</label><select class="select" name="codeSerie" onchange="dotationRefreshBarcode()"><option value="">— Choisir code / N° série —</option></select></div>
