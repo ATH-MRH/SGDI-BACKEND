@@ -1,19 +1,22 @@
 import logging
+import asyncio
+import json
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.base import Base
-from app.core.security import hash_password
+from app.core.security import decode_token, hash_password
 from app.db.session import SessionLocal, engine, safe_database_url
 from app.modules.auth.models import User
+from app.modules.auth.service import get_user
 from app.modules.irongs.models import SgdiRecord
 from app.core.photo_storage import UPLOADS_ROOT, ensure_upload_dirs
 from app.modules.auth import models as _auth_models  # noqa: F401
@@ -185,6 +188,38 @@ def database_health() -> dict:
             "tables_count": len(tables),
             "tables": tables,
         }
+
+
+def _events_signature() -> str:
+    with SessionLocal() as db:
+        row = db.execute(text("SELECT COUNT(*) AS c, MAX(updated_at) AS u, MAX(created_at) AS r FROM sgdi_records")).mappings().one()
+        return f"{row['c']}:{row['u'] or ''}:{row['r'] or ''}"
+
+
+@app.get("/api/irongs/events/stream", include_in_schema=False)
+def irongs_events_stream(token: str):
+    with SessionLocal() as db:
+        try:
+            payload = decode_token(token)
+            user = get_user(db, int(payload["sub"]))
+        except Exception:
+            user = None
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="Token invalide")
+
+    async def stream():
+        last = None
+        while True:
+            sig = _events_signature()
+            if sig != last:
+                last = sig
+                yield "event: sgdi-change\n"
+                yield "data: " + json.dumps({"signature": sig}) + "\n\n"
+            else:
+                yield ": keepalive\n\n"
+            await asyncio.sleep(1)
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 @app.get("/", include_in_schema=False)

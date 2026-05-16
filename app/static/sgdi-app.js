@@ -446,6 +446,8 @@ async function sgdiPullState(options){
 }
 let sgdiAutoRefreshTimer=null;
 let sgdiAutoRefreshRunning=false;
+let sgdiEventsSource=null;
+let sgdiEventsLastPull=0;
 function sgdiAutoRefreshSettings(){
   if(!db)db={settings:{}};
   if(!db.settings||typeof db.settings!=="object")db.settings={};
@@ -455,8 +457,30 @@ function sgdiAutoRefreshSettings(){
   const intervalSeconds=Math.min(20,Math.max(5,Number.isFinite(raw)&&raw>0?Math.round(raw):20));
   return{enabled:cfg.enabled!==false,intervalSeconds};
 }
+function sgdiStartEventStream(){
+  if(sgdiEventsSource||!session||!sgdiAuthToken()||!sgdiPostgresReady)return;
+  if(typeof EventSource==="undefined")return;
+  const url=sgdiApiUrl("/irongs/events/stream?token="+encodeURIComponent(sgdiAuthToken()),false);
+  try{
+    sgdiEventsSource=new EventSource(url);
+    sgdiEventsSource.addEventListener("sgdi-change",async()=>{
+      if(!session||!sgdiAuthToken()||sgdiDirty)return;
+      const now=Date.now();
+      if(now-sgdiEventsLastPull<900)return;
+      sgdiEventsLastPull=now;
+      const currentHash=location.hash;
+      try{
+        await sgdiPullState({silent:true,render:false,light:true,auto:true});
+        if(location.hash!==currentHash)location.hash=currentHash;
+        if(typeof render==="function")render();
+      }catch(e){console.warn("Alerte temps réel SGDI non synchronisée",e)}
+    });
+    sgdiEventsSource.onerror=()=>{try{sgdiEventsSource.close()}catch(e){}sgdiEventsSource=null;setTimeout(sgdiStartEventStream,5000)};
+  }catch(e){console.warn("Flux alertes SGDI indisponible",e);sgdiEventsSource=null}
+}
 function sgdiScheduleAutoRefresh(){
   if(sgdiAutoRefreshTimer){clearInterval(sgdiAutoRefreshTimer);sgdiAutoRefreshTimer=null}
+  sgdiStartEventStream();
   const cfg=sgdiAutoRefreshSettings();
   if(!cfg.enabled)return;
   sgdiAutoRefreshTimer=setInterval(async()=>{
@@ -1889,6 +1913,67 @@ function notificationVisibleTasks(){
     return workflowTaskAllowedForCurrentUser(t);
   }).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
 }
+function sgdiAlertVisibleItems(){
+  if(!session||!db)return[];
+  const soc=currentStructureSocieteFilter()||mySoc()||"";
+  const rows=[];
+  notificationVisibleTasks().forEach(t=>rows.push({
+    id:"workflow:"+(t.id||t.candidateBackendId||t.createdAt||Math.random()),
+    module:t.module||"systeme",
+    societe:t.societe||"",
+    title:t.title||"Action à effectuer",
+    message:t.message||"Instruction non renseignée.",
+    meta:[t.candidateName,t.poste].filter(Boolean).join(" · "),
+    route:t.route||""
+  }));
+  (db.stockArticles||[]).forEach(a=>{
+    if(soc&&a.societe&&a.societe!==soc)return;
+    if(typeof stockGetEtat!=="function")return;
+    const etat=stockGetEtat(a);
+    if(!["alerte","min","rupture"].includes(etat.code))return;
+    const mag=(db.magasins||[]).find(m=>String(m.id)===String(a.magasinId));
+    rows.push({
+      id:"stock:"+(a.id||a.backendId||a.code),
+      module:"materiel",
+      societe:a.societe||"",
+      title:(etat.code==="rupture"?"Rupture stock":"Alerte stock")+" - "+(a.designation||a.code||"Article"),
+      message:`${etat.label} · stock actuel ${qty(stockGetActuel(a.id))} ${a.unite||""}`,
+      meta:[mag?.nom,a.categorie,a.sousCategorie].filter(Boolean).join(" · "),
+      route:"materiel/article/"+a.id
+    });
+  });
+  (db.agents||[]).forEach(a=>{
+    if(soc&&a.societe&&a.societe!==soc)return;
+    if(!a.dateFinContrat)return;
+    const d=daysBetween(today(),a.dateFinContrat);
+    if(d>30)return;
+    rows.push({
+      id:"contract-agent:"+(a.id||a.matricule),
+      module:"drh",
+      societe:a.societe||"",
+      title:d<0?"Contrat employé expiré":"Fin contrat employé proche",
+      message:`${(a.nom||"")+" "+(a.prenom||"")} · fin ${formatDate(a.dateFinContrat)}${d>=0?" · J-"+d:""}`,
+      meta:a.matricule||"",
+      route:"effectif/agent/"+a.id
+    });
+  });
+  (db.clients||[]).forEach(c=>{
+    if(soc&&c.societe&&c.societe!==soc)return;
+    if(!c.dateFinContrat)return;
+    const d=daysBetween(today(),c.dateFinContrat);
+    if(d>30)return;
+    rows.push({
+      id:"contract-client:"+(c.id||c.nom||c.raisonSociale),
+      module:"commercial",
+      societe:c.societe||"",
+      title:d<0?"Contrat client expiré":"Fin contrat client proche",
+      message:`${c.nom||c.raisonSociale||"Client"} · fin ${formatDate(c.dateFinContrat)}${d>=0?" · J-"+d:""}`,
+      meta:c.structure||c.contact||"",
+      route:"commercial/clients"
+    });
+  });
+  return rows.sort((a,b)=>String(a.module+a.title).localeCompare(String(b.module+b.title)));
+}
 function notificationReadStorageKey(){return "sgdiNotificationRead:"+(session?.username||"anonymous")}
 function notificationReadIds(){
   try{return new Set(JSON.parse(localStorage.getItem(notificationReadStorageKey())||"[]"))}catch(e){return new Set()}
@@ -1914,8 +1999,8 @@ function notificationMarkVisibleRead(){
 }
 function notificationTopbarButtonHTML(){
   if(!session)return"";
-  const count=notificationUnreadTasks().length;
-  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${count?"has-alert":""}" onclick="notificationToggle(true)" title="Notifications"><span aria-hidden="true">🔔</span><span>Notifications</span>${count?`<span class="badge">${count}</span>`:""}</button>`;
+  const count=sgdiAlertVisibleItems().length;
+  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${count?"has-alert":""}" onclick="notificationToggle(true)" title="Alertes"><span aria-hidden="true">🚨</span><span>ALERTE</span><span class="badge">${count}</span></button>`;
 }
 function societeStructureBarHTML(){return "";}
 
@@ -2627,18 +2712,18 @@ function notificationToggle(open){
 function notificationPanelHTML(){
   if(!session)return"";
   const open=notificationIsOpen();
-  const rows=notificationVisibleTasks();
+  const rows=sgdiAlertVisibleItems();
   const moduleLabel=m=>({drh:"DRH",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Module").toUpperCase());
-  const item=t=>{const read=notificationIsRead(t);return `<div class="notification-item ${read?"is-read":"is-unread"}">
+  const item=t=>{const read=notificationIsRead(t);const body=`<div class="notification-item ${read?"is-read":"is-unread"}">
     <div class="notification-item-head"><span>${escapeHTML(moduleLabel(t.module))}</span><span>${escapeHTML(t.societe||"—")}</span></div>
     <div class="notification-item-title">${escapeHTML(t.title||"Action à effectuer")}</div>
     <div class="notification-item-body">${escapeHTML(t.message||"Instruction non renseignée.")}</div>
-    <div class="notification-item-meta">${escapeHTML(t.candidateName||"")} ${t.poste?`· ${escapeHTML(t.poste)}`:""}</div>
-  </div>`};
+    <div class="notification-item-meta">${escapeHTML(t.meta||t.candidateName||"")} ${t.poste?`· ${escapeHTML(t.poste)}`:""}</div>
+  </div>`;return t.route?`<button type="button" class="notification-item ${read?"is-read":"is-unread"}" onclick="notificationToggle(false);navigate('${escapeHTML(t.route)}')">${body.replace(/^<div class="notification-item [^"]+">/,"").replace(/<\/div>$/,"")}</button>`:body};
   return `<div class="notification-backdrop no-print ${open?"":"closed"}" onclick="if(event.target===this)notificationToggle(false)">
     <aside class="notification-panel" aria-label="Notifications système">
-      <div class="notification-head"><div><div class="notification-title">NOTIFICATIONS</div><div class="notification-subtitle">${rows.length} action(s) à traiter</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
-      <div class="notification-list">${rows.length?rows.map(item).join(""):`<div class="notification-empty">Aucune action système à traiter.</div>`}</div>
+      <div class="notification-head"><div><div class="notification-title">ALERTES</div><div class="notification-subtitle">${rows.length} alerte(s) à traiter</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
+      <div class="notification-list">${rows.length?rows.map(item).join(""):`<div class="notification-empty">Aucune alerte à traiter.</div>`}</div>
     </aside>
   </div>`;
 }
@@ -5663,7 +5748,8 @@ function renderAgentDemandesSection(a){
 function renderAgentForm(view,id){
   const a=db.agents.find(x=>x.id===id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
   const officialLocked=!!(a.fichePositionOfficielle&&a.locked);
-  const locked=officialLocked||(a.locked&&!unlockedAgents.has(a.id)&&!isAdmin());
+  const officialUnlocked=officialLocked&&isAdmin()&&unlockedAgents.has(a.id);
+  const locked=(officialLocked&&!officialUnlocked)||(a.locked&&!unlockedAgents.has(a.id)&&!isAdmin());
   const essaiLeft=a.dateFinEssai?daysBetween(today(),a.dateFinEssai):null;
   let essaiBadge="";
   if(a.dateFinEssai){
@@ -5696,7 +5782,12 @@ function renderAgentForm(view,id){
   const anciennete=formatElapsedYMD(a.dateRecrutement);
   const dureeEssaiValue=parseInt(a.dureeEssai,10)||((a.dateRecrutement&&a.dateFinEssai)?Math.max(daysBetween(a.dateRecrutement,a.dateFinEssai),0):90);
   const aff=a.affectationCourante||{};
+  const drhTopActions=isDrhFicheContext()?`<div class="flex justify-end gap-2 mb-3">
+    <button type="button" class="btn text-xs" style="background:#f97316;border-color:#ea580c;color:#fff;font-weight:900" onclick="drhModifierFichePosition('${a.id}')">Modifier</button>
+    <button type="button" class="btn text-xs" style="background:#16a34a;border-color:#15803d;color:#fff;font-weight:900" onclick="drhValiderVerrouillerFichePosition('${a.id}')">Valider et verrouiller</button>
+  </div>`:"";
   view.innerHTML=`<div class="max-w-6xl mx-auto">
+    ${drhTopActions}
     <div class="text-center mb-3"><h1 style="font-size:30px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">FICHE DE POSITION EMPLOYÉ</h1></div>
     <div class="mb-4 grid grid-cols-1 md:grid-cols-[220px_1fr] gap-5 items-start">
       <div class="text-center">
@@ -6096,9 +6187,10 @@ function applyAgentExcelRow(agentId,rows){
   renderView();
 }
 
-async function saveAgent(id){
+async function saveAgent(id,options){
+  const opt=options||{};
   const a=db.agents.find(x=>x.id===id);if(!a)return;
-  if(a.fichePositionOfficielle&&a.locked){toast("Fiche officielle verrouillée : modification impossible","error");return}
+  if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave){toast("Fiche officielle verrouillée : modification impossible","error");return false}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
   ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
@@ -6111,10 +6203,11 @@ async function saveAgent(id){
     Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
   }catch(e){
     toast("Fiche employé non enregistrée PostgreSQL : "+(e.message||e),"error");
-    return;
+    return false;
   }
-  if(!(await saveDBAndWaitToast("Fiche employé non confirmée par PostgreSQL")))return;
-  toast("Fiche enregistrée","success");
+  if(!(await saveDBAndWaitToast("Fiche employé non confirmée par PostgreSQL")))return false;
+  if(!opt.silent)toast("Fiche enregistrée","success");
+  return true;
 }
 function agentDeleteLinkedCollections(){return["conges","contrats","contratsPersonnel","materiel","pointages","pointageMensuel","feuillePresence","demandesPersonnel","demandesStructure","missions","siteInspections","stockMouvements"]}
 function agentDeleteItemMatches(item,a){
@@ -6364,6 +6457,42 @@ async function tryUnlock(agentId){if(!isAdmin()){toast("Seul l'administrateur g�
 function relockAgent(agentId){unlockedAgents.delete(agentId);saveUnlocked();renderView()}
 async function lockAgent(agentId){const a=db.agents.find(x=>x.id===agentId);if(a){a.locked=true;a.updatedAt=today();try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){toast("Verrouillage non enregistré PostgreSQL : "+(e.message||e),"error");return}}unlockedAgents.delete(agentId);saveUnlocked();if(!(await saveDBAndWaitToast("Verrouillage non confirmé par PostgreSQL")))return;toast("Fiche verrouillée","success");renderView()}
 async function unlockAgent(agentId){if(!isAdmin()){toast("Seul l'administrateur général peut déverrouiller","error");return}unlockedAgents.add(agentId);saveUnlocked();db.settings.unlockLog=db.settings.unlockLog||[];db.settings.unlockLog.unshift({date:new Date().toISOString(),user:session.username,role:"admin-direct",agentId});if(!(await saveDBAndWaitToast("Déverrouillage non confirmé par PostgreSQL")))return;toast("Fiche déverrouillée par l'administrateur général","success");renderView()}
+async function drhModifierFichePosition(agentId){
+  if(!isDrhFicheContext()){toast("Action réservée au module DRH","error");return}
+  const a=db.agents.find(x=>x.id===agentId);if(!a)return;
+  if(a.locked&&!isAdmin()){toast("Fiche verrouillée : modification réservée à ADM","error");return}
+  if(a.locked){
+    unlockedAgents.add(agentId);
+    saveUnlocked();
+    db.settings.unlockLog=db.settings.unlockLog||[];
+    db.settings.unlockLog.unshift({date:new Date().toISOString(),user:session.username,role:session.role||"drh",agentId,action:"modifier_fiche_position"});
+    if(!(await saveDBAndWaitToast("Déverrouillage fiche non confirmé par PostgreSQL")))return;
+  }
+  toast("Mode modification activé","success");
+  renderView();
+  setTimeout(()=>document.querySelector("#agent-form input:not([disabled]), #agent-form select:not([disabled]), #agent-form textarea:not([disabled])")?.focus(),80);
+}
+async function drhValiderVerrouillerFichePosition(agentId){
+  if(!isDrhFicheContext()){toast("Action réservée au module DRH","error");return}
+  const a=db.agents.find(x=>x.id===agentId);if(!a)return;
+  if(a.locked&&!unlockedAgents.has(agentId)&&!isAdmin()){toast("Fiche déjà verrouillée","error");return}
+  const ok=await saveAgent(agentId,{silent:true,forceOfficialSave:isAdmin()||unlockedAgents.has(agentId)});
+  if(!ok)return;
+  a.fichePositionOfficielle=true;
+  a.fichePositionOfficielleAt=a.fichePositionOfficielleAt||new Date().toISOString();
+  a.fichePositionOfficielleBy=a.fichePositionOfficielleBy||session?.username||"drh";
+  a.locked=true;
+  a.lockedAt=new Date().toISOString();
+  a.lockedBy=session?.username||"drh";
+  a.updatedAt=today();
+  try{
+    if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId});
+  }catch(e){toast("Verrouillage PostgreSQL refusé : "+(e.message||e),"error");return}
+  unlockedAgents.delete(agentId);saveUnlocked();
+  if(!(await saveDBAndWaitToast("Validation fiche non confirmée par PostgreSQL")))return;
+  toast("Fiche validée et verrouillée","success");
+  renderView();
+}
 
 /* ---- FICHE / PRINT ---- */
 function agentSnapshotForPreview(id){
@@ -8852,10 +8981,14 @@ function openMagasinConfigurationModal(id){
   const m=(db.magasins||[]).find(x=>String(x.id)===String(id));
   if(!m){toast("Magasin introuvable","error");return}
   const cfg=magasinConfig(m);
+  const selectedMagasinId=String((m.config&&m.config.categorieMagasinId)||m.id||"");
+  const selectedArticleId=String((m.config&&m.config.sousCategorieArticleId)||"");
   openModal(`<h3 class="font-bold text-lg mb-1">Configuration magasin</h3>
     <p class="text-sm text-slate-500 mb-4">${escapeHTML(m.nom||"Magasin")} · paramètres de stock et alertes.</p>
     <form id="magasin-config-form" onsubmit="event.preventDefault();saveMagasinConfiguration('${id}')">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div><label class="label">Catégorie</label><select class="select" name="categorieMagasinId" onchange="magasinConfigCategorieChanged(this.value)"><option value="">— Choisir un magasin —</option>${(db.magasins||[]).map(x=>`<option value="${escapeHTML(x.id)}" ${String(x.id)===selectedMagasinId?"selected":""}>${escapeHTML(x.nom||"Magasin")}</option>`).join("")}</select></div>
+        <div><label class="label">Sous-catégorie</label><div id="magasin-config-subcat">${magasinConfigSousCategorieHTML(selectedMagasinId,selectedArticleId)}</div></div>
         <div><label class="label">Seuil stock bas</label><input class="input" type="number" min="0" step="1" name="seuilBas" value="${escapeHTML(cfg.seuilBas)}"/></div>
         <div><label class="label">Seuil critique / rupture</label><input class="input" type="number" min="0" step="1" name="seuilCritique" value="${escapeHTML(cfg.seuilCritique)}"/></div>
         <div><label class="label">Unité par défaut</label><input class="input" name="uniteDefaut" value="${escapeHTML(cfg.uniteDefaut)}" placeholder="Pièce, paire, lot..."/></div>
@@ -8865,6 +8998,16 @@ function openMagasinConfigurationModal(id){
       <div class="mt-4 p-3 rounded text-xs text-slate-600" style="background:#f8fafc;border:1px solid #e2e8f0">Les compteurs Articles, Unités et Alertes sont recalculés automatiquement avec ces paramètres.</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer configuration</button></div>
     </form>`);
+}
+function magasinConfigSousCategorieHTML(magasinId,selectedArticleId){
+  const articles=(db.stockArticles||[]).filter(a=>String(a.magasinId||"")===String(magasinId||""));
+  if(!magasinId)return `<select class="select text-slate-400" name="sousCategorieArticleId" disabled><option value="">Choisissez d'abord un magasin</option></select>`;
+  if(!articles.length)return `<select class="select text-slate-400" name="sousCategorieArticleId" disabled><option value="">Aucun article dans ce magasin</option></select>`;
+  return `<select class="select" name="sousCategorieArticleId"><option value="">Tous les articles du magasin</option>${articles.map(a=>`<option value="${escapeHTML(a.id)}" ${String(a.id)===String(selectedArticleId||"")?"selected":""}>${escapeHTML((a.code?`${a.code} · `:"")+(a.designation||a.sousCategorie||"Article"))}</option>`).join("")}</select>`;
+}
+function magasinConfigCategorieChanged(magasinId){
+  const box=document.getElementById("magasin-config-subcat");
+  if(box)box.innerHTML=magasinConfigSousCategorieHTML(magasinId,"");
 }
 async function saveMagasinConfiguration(id){
   const m=(db.magasins||[]).find(x=>String(x.id)===String(id));
@@ -8879,7 +9022,9 @@ async function saveMagasinConfiguration(id){
     seuilCritique,
     uniteDefaut:String(fd.get("uniteDefaut")||"Pièce").trim()||"Pièce",
     valorisation:String(fd.get("valorisation")||"prix_unitaire"),
-    alertesActives:fd.get("alertesActives")?"1":"0"
+    alertesActives:fd.get("alertesActives")?"1":"0",
+    categorieMagasinId:String(fd.get("categorieMagasinId")||"").trim(),
+    sousCategorieArticleId:String(fd.get("sousCategorieArticleId")||"").trim()
   };
   m.seuilStockBas=seuilBas;
   m.seuilStockCritique=seuilCritique;
