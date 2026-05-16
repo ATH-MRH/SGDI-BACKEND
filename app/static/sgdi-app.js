@@ -1739,7 +1739,7 @@ function incidentMatchesSociete(incident,soc){
 }
 function defaultAccessMap(){
   const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],"POINTAGE":["rh","dispatch","admin"],"ADMINISTRATION SYSTEME":["admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],badge:["rh","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],drh:["rh","admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],portail:["rh","dispatch","agent","admin"],parametres:["admin"],admin:["admin"]};
-  ["materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/dotation","materiel/reversement"].forEach(k=>map[k]=map.materiel);
+  ["materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/dotation","materiel/sites-dotation","materiel/reversement"].forEach(k=>map[k]=map.materiel);
   ["facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation"].forEach(k=>map[k]=map.facturation);
   ["commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats"].forEach(k=>map[k]=map.commercial);
   ["pointage/recap","pointage/societe","pointage/stats","pointage/legende"].forEach(k=>map[k]=map.pointage);
@@ -2488,6 +2488,7 @@ function renderSidebar(){
     const agents=(db.agents||[]).filter(a=>!soc||a.societe===soc);
     const opsIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,soc));
     const dotationCount=typeof agentsEnInstanceDotation==="function"?agentsEnInstanceDotation().length:0;
+    const siteDotationCount=typeof sitesEnAttenteDotation==="function"?sitesEnAttenteDotation().length:0;
     const reversementCount=typeof agentsEnInstanceReversement==="function"?agentsEnInstanceReversement().length:0;
     const drhSoc=session?.societe||currentStructureSocieteFilter()||"";
     const drhAgents=(db.agents||[]).filter(a=>!drhSoc||a.societe===drhSoc);
@@ -2519,6 +2520,7 @@ function renderSidebar(){
         {label:"ARTICLES",route:"materiel/articles",count:(db.stockArticles||[]).length},
         {label:"MAGASINS",route:"materiel/magasins",count:(db.magasins||[]).length},
         {label:"FOURNISSEURS",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
+        {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",count:siteDotationCount},
         {label:"DOTATIONS EN ATTENTE",route:"materiel/dotation",count:dotationCount},
         {label:"REVERSEMENTS EN ATTENTE",route:"materiel/reversement",count:reversementCount},
         {label:"FICHES DE POSITION",route:"materiel/fiches"},
@@ -8577,6 +8579,7 @@ function renderMateriel(view,sub,arg){
   if(sub==="fournisseur"&&arg){return renderMatSimpleFournisseurDetail(view,arg)}
   if(sub==="fournisseur-nouveau"){return renderMatSimpleFournisseurForm(view,null)}
   if(sub==="fournisseur-edit"&&arg){return renderMatSimpleFournisseurForm(view,arg)}
+  if(sub==="sites-dotation"){return renderMatSitesEnAttenteDotation(view)}
   if(sub==="dotation"){return renderMatSimpleDotation(view)}
   if(sub==="reversement"){return renderMatSimpleReversement(view)}
   // Stock pro routes (still available for article detail & forms)
@@ -8639,6 +8642,16 @@ function agentsEnInstanceDotationForSoc(soc){
 }
 function agentsEnInstanceDotation(){
   return agentsEnInstanceDotationForSoc(matSimpleSocFilter());
+}
+function siteHasDotationMateriel(site){
+  const rows=[...(site?.equipements||[]),...(site?.materiel||[])];
+  return rows.some(x=>x&&(x.articleId||x.designation||x.categorie||parseFloat(x.quantite)||x.etat));
+}
+function sitesEnAttenteDotationForSoc(soc){
+  return (db.sites||[]).filter(s=>s&&s.actif!==false&&(!soc||siteMatchesSociete(s,soc))&&!siteHasDotationMateriel(s));
+}
+function sitesEnAttenteDotation(){
+  return sitesEnAttenteDotationForSoc(matSimpleSocFilter());
 }
 function isAgentSortant(a){return a&&["sortant","demissionne","licencie","archive"].includes(a.statut)}
 function agentReversementSituation(agentId){
@@ -8809,6 +8822,35 @@ function renderMatSimpleDashboard(view){
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/reversement')">Reversements</button>
       <button class="btn btn-secondary justify-center" onclick="navigate('materiel/articles')">Catalogue</button>
     </div></div></div>${sideBySide}`;
+}
+
+function renderMatSitesEnAttenteDotation(view){
+  const header=matSimpleHeader("sites-dotation");
+  const soc=matSimpleSocFilter();
+  const sites=sitesEnAttenteDotationForSoc(soc);
+  const actifs=(db.sites||[]).filter(s=>s&&s.actif!==false&&(!soc||siteMatchesSociete(s,soc)));
+  const dotes=actifs.filter(siteHasDotationMateriel);
+  view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+    <div><h1 class="text-2xl font-bold uppercase">Site en attente de dotation</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes les sociétés"} · Sites actifs sans dotation matériel/site enregistrée.</p></div>
+    <div class="flex gap-2"><button class="btn btn-secondary text-sm" onclick="navigate('materiel/dashboard')">Tableau de bord</button><button class="btn btn-secondary text-sm" onclick="navigate('sites/actifs')">Sites actifs</button></div>
+  </div>${header}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+    <div class="card p-4 ${sites.length?"ops-dot-counter-alert":""}"><div class="text-xs text-slate-500 uppercase">Sites en attente</div><div class="text-3xl font-black mt-1 text-red-700">${sites.length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Sites actifs</div><div class="text-3xl font-black mt-1">${actifs.length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Sites dotés</div><div class="text-3xl font-black mt-1 text-emerald-700">${dotes.length}</div></div>
+  </div>
+  <div class="card overflow-hidden">
+    <table><thead><tr><th>Site</th><th>Indicatif</th><th>Société</th><th>Client</th><th>Localisation</th><th>Effectif contractuel</th><th>Action</th></tr></thead>
+    <tbody>${sites.length===0?`<tr><td colspan="7" class="text-center text-slate-500 p-6">Aucun site en attente de dotation.</td></tr>`:sites.map(s=>{const eff=siteEffectifsNorm(s);return`<tr data-searchable>
+      <td><div class="font-semibold">${escapeHTML(s.nom||"Site")}</div><div class="text-xs text-slate-500">${escapeHTML(s.type||"")}</div></td>
+      <td class="font-mono font-bold">${escapeHTML(s.indicatif||"—")}</td>
+      <td class="text-xs">${escapeHTML(s.societe||"—")}</td>
+      <td class="text-xs">${escapeHTML(s.client||"—")}</td>
+      <td class="text-xs">${escapeHTML([s.commune,s.wilaya].filter(Boolean).join(", ")||s.adresse||"—")}</td>
+      <td class="font-bold text-center">${eff.totalContractuel||0}</td>
+      <td><div class="flex gap-1 flex-wrap"><a class="btn btn-ghost text-xs" href="#/sites/${siteEditRouteId(s)}">Fiche site</a><a class="btn btn-primary text-xs" href="#/sites/${siteEditRouteId(s)}">Doter site</a></div></td>
+    </tr>`}).join("")}</tbody></table>
+  </div>`;
 }
 
 function renderMatSimpleDotation(view){
@@ -13094,13 +13136,13 @@ const ADMIN_MODULES=[
   "DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","COMMERCIAL","POINTAGE","ADMINISTRATION SYSTEME",
   "dashboard","dossiers","recrutement","reserve","candidats_archives","demandes_personnel","demandes_structure",
   "contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports",
-  "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/dotation","materiel/reversement",
+  "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/dotation","materiel/sites-dotation","materiel/reversement",
   "facturation","facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
   "commercial","commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats",
   "pointage","pointage/recap","pointage/societe","pointage/stats","pointage/legende",
   "ops","ops/missions","ops/supervision","portail","parametres","admin"
 ];
-function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","COMMERCIAL":"commercial/dashboard","POINTAGE":"pointage/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",ops:"ops/dashboard","ops/missions":"ops/missions","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
+function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","COMMERCIAL":"commercial/dashboard","POINTAGE":"pointage/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",ops:"ops/dashboard","ops/missions":"ops/missions","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
 const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
