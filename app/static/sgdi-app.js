@@ -8987,8 +8987,8 @@ function openMagasinConfigurationModal(id){
     <p class="text-sm text-slate-500 mb-4">${escapeHTML(m.nom||"Magasin")} · paramètres de stock et alertes.</p>
     <form id="magasin-config-form" onsubmit="event.preventDefault();saveMagasinConfiguration('${id}')">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div><label class="label">Catégorie</label><select class="select" name="categorieMagasinId" onchange="magasinConfigCategorieChanged(this.value)"><option value="">— Choisir un magasin —</option>${(db.magasins||[]).map(x=>`<option value="${escapeHTML(x.id)}" ${String(x.id)===selectedMagasinId?"selected":""}>${escapeHTML(x.nom||"Magasin")}</option>`).join("")}</select></div>
-        <div><label class="label">Sous-catégorie</label><div id="magasin-config-subcat">${magasinConfigSousCategorieHTML(selectedMagasinId,selectedArticleId)}</div></div>
+        <div><label class="label">Magasin</label><select class="select" name="categorieMagasinId" onchange="magasinConfigCategorieChanged(this.value)"><option value="">— Choisir un magasin —</option>${(db.magasins||[]).map(x=>`<option value="${escapeHTML(x.id)}" ${String(x.id)===selectedMagasinId?"selected":""}>${escapeHTML(x.nom||"Magasin")}</option>`).join("")}</select></div>
+        <div><label class="label">Articles par magasin</label><div id="magasin-config-subcat">${magasinConfigSousCategorieHTML(selectedMagasinId,selectedArticleId)}</div></div>
         <div><label class="label">Seuil stock bas</label><input class="input" type="number" min="0" step="1" name="seuilBas" value="${escapeHTML(cfg.seuilBas)}"/></div>
         <div><label class="label">Seuil critique / rupture</label><input class="input" type="number" min="0" step="1" name="seuilCritique" value="${escapeHTML(cfg.seuilCritique)}"/></div>
         <div><label class="label">Unité par défaut</label><input class="input" name="uniteDefaut" value="${escapeHTML(cfg.uniteDefaut)}" placeholder="Pièce, paire, lot..."/></div>
