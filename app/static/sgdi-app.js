@@ -2469,8 +2469,7 @@ function renderSidebar(){
   const positiveCount=n=>Number(n||0)>0?Number(n||0):null;
   const itemHTML=item=>{
     const active=sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r));
-    const badgeClass=item.countDanger?" nav-count-red":"";
-    const badge=positiveCount(item.count)?`<span class="nav-count${badgeClass}">${positiveCount(item.count)}</span>`:"";
+    const badge=positiveCount(item.count)?`<span class="nav-count">${positiveCount(item.count)}</span>`:"";
     const gapClass=item.gapBefore?" nav-gap-before":"";
     return `<div class="nav-link ${active?"active":""}${gapClass}" onclick="navigate('${item.route}')"><span class="nav-label">${escapeHTML(item.label)}</span>${badge}</div>`;
   };
@@ -2522,7 +2521,7 @@ function renderSidebar(){
         {label:"MAGASINS",route:"materiel/magasins",count:(db.magasins||[]).length},
         {label:"FOURNISSEURS",route:"materiel/fournisseurs",count:(db.fournisseurs||[]).length},
         {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",count:siteDotationCount},
-        {label:"EMPLOYÉ EN ATTENTE DE DOTATION",route:"materiel/dotation",count:dotationCount,countDanger:true},
+        {label:"EMPLOYÉ EN ATTENTE DE DOTATION",route:"materiel/dotation",count:dotationCount},
         {label:"REVERSEMENTS EN ATTENTE",route:"materiel/reversement",count:reversementCount},
         {label:"FICHES DE POSITION",route:"materiel/fiches"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],count:(db.sites||[]).filter(s=>s.actif!==false).length}
