@@ -8885,8 +8885,7 @@ async function saveMagasinConfiguration(id){
   m.valorisationStock=m.config.valorisation;
   m.alertesStockActives=m.config.alertesActives;
   m.updatedAt=new Date().toISOString();
-  try{await persistStoreToPostgres(m)}catch(e){toast("Configuration non sauvegardée PostgreSQL : "+(e.message||e),"error");return}
-  try{sgdiDirty=true;await sgdiBackendSaveAndWait()}catch(e){toast("Configuration enregistrée localement, synchronisation globale incomplète : "+(e.message||e),"warning");return}
+  try{sgdiDirty=true;await sgdiBackendSaveAndWait()}catch(e){toast("Configuration non sauvegardée backend : "+(e.message||e),"error");return}
   closeModal();
   toast("Configuration magasin enregistrée","success");
   renderView();
