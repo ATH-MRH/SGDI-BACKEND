@@ -3362,6 +3362,148 @@ function resetArchiveCandidateFilters(){
 function openAddCandidateForm(){
   navigate("reserve/nouveau");
 }
+function candidatImportActionsHTML(){
+  return `<div class="flex gap-2 flex-wrap justify-end"><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+}
+function candidateBlankDraft(options){
+  const opt=options||{};
+  return {id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
+}
+function openCandidateExcelImport(){
+  if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
+  const input=document.createElement("input");
+  input.type="file";input.accept=".xlsx,.xls,.csv";
+  input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file)};
+  input.click();
+}
+function candidateExcelText(row,aliases){return String(excelCell(row,aliases)||"").trim()}
+function candidateExcelMoney(row,aliases){const v=excelCell(row,aliases);const n=parseMoneyInput(v);return n||""}
+function candidateExcelMapRow(row,index,mode){
+  const reserve=mode!=="new";
+  const c=candidateBlankDraft({reserveDirect:reserve});
+  c.source="Import Excel";
+  c.importedAt=new Date().toISOString();
+  c.importRow=index+2;
+  c.nom=candidateExcelText(row,["nom","nom candidat","last name","lastname","family name","اللقب"]);
+  c.prenom=candidateExcelText(row,["prenom","prénom","prenom candidat","prénom candidat","first name","firstname","given name","الاسم"]);
+  c.dateNaissance=excelDateValue(excelCell(row,["date naissance","date de naissance","naissance","date naissance candidat","birth date","date birth"]));
+  c.lieuNaissance=candidateExcelText(row,["lieu naissance","lieu de naissance","lieu","birth place","place of birth"]);
+  c.nomPere=candidateExcelText(row,["nom pere","nom père","pere","père","nom du pere","nom du père","father","father name"]);
+  c.nomMere=candidateExcelText(row,["nom mere","nom mère","mere","mère","nom de la mere","nom de la mère","mother","mother name"]);
+  c.nin=candidateExcelText(row,["nin","nni","numero nin","numéro nin","numero identification","numéro identification","identifiant national","cin"]);
+  c.sexe=candidateExcelText(row,["sexe","genre","gender"])||"M";
+  c.situation=candidateExcelText(row,["situation","situation familiale","etat civil","état civil"])||"Célibataire";
+  c.telephone=candidateExcelText(row,["telephone","téléphone","tel","mobile","gsm","phone"]);
+  c.email=candidateExcelText(row,["email","mail","courriel"]);
+  c.adresse=candidateExcelText(row,["adresse","address"]);
+  c.commune=candidateExcelText(row,["commune","municipality"]);
+  c.wilaya=candidateExcelText(row,["wilaya","province"]);
+  c.posteSouhaite=normalizePosteValue(candidateExcelText(row,["poste","poste souhaite","poste souhaité","fonction","metier","métier","emploi","job"]));
+  c.societe=candidateExcelText(row,["societe","société","entreprise","company"])||currentStructureSocieteFilter()||mySoc()||"";
+  c.salairePrevu=candidateExcelMoney(row,["salaire","salaire prevu","salaire prévu","salaire net","net a payer","net à payer"]);
+  c.avisDecision=candidateExcelText(row,["avis","decision","décision","avis decision","avis décision"])||(reserve?"Favorable":"");
+  c.avisDate=excelDateValue(excelCell(row,["date avis","date decision","date décision"]))||today();
+  c.avisRecruteur=candidateExcelText(row,["recruteur","avis recruteur"]);
+  c.avisCommentaire=candidateExcelText(row,["commentaire","observation","observations","notes"]);
+  c.taille=candidateExcelText(row,["taille","taille cm","taille (cm)"]);
+  c.pointure=candidateExcelText(row,["pointure"]);
+  c.tailleChemise=candidateExcelText(row,["taille chemise","chemise"])||"M";
+  c.exServices=excelYesNo(excelCell(row,["ex services","ex-services","ancien militaire","ancien services"]))==="oui"?"Oui":"Non";
+  c.exServicesPrecision=candidateExcelText(row,["precision ex services","précision ex-services","arme"]);
+  c.sport=excelYesNo(excelCell(row,["sport","sportif"]))==="oui"?"Oui":"Non";
+  c.sportPrecision=candidateExcelText(row,["sport precision","sport précision","discipline"]);
+  c.contactUrgenceNom=candidateExcelText(row,["contact urgence","nom contact urgence","urgence nom"]);
+  c.contactUrgenceTel=candidateExcelText(row,["telephone urgence","téléphone urgence","tel urgence","urgence tel"]);
+  c.contactUrgenceLien=candidateExcelText(row,["lien urgence","relation urgence"]);
+  const langues=candidateExcelText(row,["langues","langues parlees","langues parlées"]);
+  if(langues)c.langues=langues.split(/[;,/]+/).map(x=>x.trim()).filter(Boolean);
+  c.habilitations={...c.habilitations,serviceNational:excelYesNo(excelCell(row,["service national","service militaire"])),enqueteHabilitation:excelYesNo(excelCell(row,["enquete habilitation","enquête habilitation","habilitation"]))};
+  c.verifActeNaissance=excelYesNo(excelCell(row,["acte naissance","acte de naissance"]))==="oui";
+  c.verifCertifResidence=excelYesNo(excelCell(row,["certificat residence","certificat résidence","residence"]))==="oui";
+  c.verifCasierJudiciaire=excelYesNo(excelCell(row,["casier judiciaire","casier"]))==="oui";
+  c.verifAptitudeMedicale=excelYesNo(excelCell(row,["aptitude medicale","aptitude médicale","medical"]))==="oui";
+  c.verifBulletinANEM=excelYesNo(excelCell(row,["bulletin anem","anem"]))==="oui";
+  c.verifChequeBarre=excelYesNo(excelCell(row,["cheque barre","chèque barré","cheque"]))==="oui";
+  c.verifPieceIdentite=excelYesNo(excelCell(row,["piece identite","pièce identité","piece d'identite","carte identite"]))==="oui";
+  c.verifFicheFamiliale=excelYesNo(excelCell(row,["fiche familiale"]))==="oui";
+  c.verifFicheIndividuelle=excelYesNo(excelCell(row,["fiche individuelle"]))==="oui";
+  return c;
+}
+function candidateImportExistingKeys(){
+  const keys=new Set();
+  (db.candidats||[]).forEach(c=>{const k=candidateDedupeKey(c)||candidateImportFallbackKey(c);if(k)keys.add(k)});
+  (db.agents||[]).forEach(a=>{const k=candidateDedupeKey(a)||candidateImportFallbackKey(a);if(k)keys.add(k)});
+  return keys;
+}
+function candidateImportFallbackKey(c){
+  const norm=v=>String(v||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+  const name=norm(c.nom||c.last_name)+"|"+norm(c.prenom||c.first_name);
+  if(name==="|")return "";
+  return "name|"+norm(c.societe||c.society)+"|"+name+"|"+norm(c.dateNaissance||c.birth_date);
+}
+function readCandidateExcelFile(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:false});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});
+      if(!rows.length){toast("Fichier Excel vide","error");return}
+      previewCandidateExcelImport(rows,file.name);
+    }catch(err){console.error(err);toast("Import Excel impossible: "+err.message,"error")}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function previewCandidateExcelImport(rows,fileName){
+  const existing=candidateImportExistingKeys();
+  const seen=new Set();
+  const mapped=rows.map((row,i)=>{
+    const c=candidateExcelMapRow(row,i,"reserve");
+    const errors=candidateIdentityMissing(c);
+    const key=candidateDedupeKey(c)||candidateImportFallbackKey(c);
+    const duplicate=!!key&&(existing.has(key)||seen.has(key));
+    if(key)seen.add(key);
+    return {row:i+2,c,key,errors,duplicate};
+  });
+  window._candidateExcelImport={rows,mapped,fileName};
+  const valid=mapped.filter(x=>!x.errors.length&&!x.duplicate).length;
+  const dup=mapped.filter(x=>x.duplicate).length;
+  const err=mapped.filter(x=>x.errors.length).length;
+  const sample=mapped.slice(0,25).map(x=>`<tr><td class="font-mono text-xs">${x.row}</td><td class="font-semibold">${escapeHTML((x.c.nom||"")+" "+(x.c.prenom||""))}</td><td>${safe(x.c.dateNaissance)}</td><td>${safe(x.c.posteSouhaite)}</td><td>${safe(x.c.societe)}</td><td>${x.errors.length?`<span class="pill pill-red">${escapeHTML(x.errors.join(", "))}</span>`:x.duplicate?`<span class="pill pill-amber">Doublon ignoré</span>`:`<span class="pill pill-green">Prêt backend</span>`}</td></tr>`).join("");
+  openModal(`<h3 class="font-bold text-lg mb-1">Import Excel candidats</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(fileName||"Fichier Excel")} · ${rows.length} ligne(s)</p>
+    <div class="grid grid-3 gap-3 mb-4">
+      <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Prêts</div><div class="text-2xl font-black text-emerald-600">${valid}</div></div>
+      <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Doublons</div><div class="text-2xl font-black text-amber-600">${dup}</div></div>
+      <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Erreurs</div><div class="text-2xl font-black text-red-600">${err}</div></div>
+    </div>
+    <div class="card overflow-hidden mb-4" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Ligne</th><th>Candidat</th><th>Naissance</th><th>Poste</th><th>Société</th><th>Statut</th></tr></thead><tbody>${sample||`<tr><td colspan="6" class="text-center p-4 text-slate-500">Aucune ligne lisible.</td></tr>`}</tbody></table></div>
+    <div class="text-xs text-slate-500 mb-4">Colonnes reconnues : nom, prénom, date/lieu de naissance, parents, NIN, téléphone, email, poste, société, salaire, avis, documents. Les lignes sans nom/prénom sont refusées.</div>
+    <div class="flex justify-end gap-2 flex-wrap"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" ${valid?"":"disabled"} onclick="confirmCandidateExcelImport(this)">Enregistrer dans le backend</button></div>`);
+}
+async function confirmCandidateExcelImport(btn){
+  const batch=window._candidateExcelImport;
+  if(!batch||!Array.isArray(batch.mapped)){toast("Aucun import en attente","error");return}
+  const items=batch.mapped.filter(x=>!x.errors.length&&!x.duplicate).map(x=>x.c);
+  if(!items.length){toast("Aucune ligne valide à importer","error");return}
+  if(btn)btn.disabled=true;
+  try{
+    sgdiRequireServerWrite();
+    if(!Array.isArray(db.candidats))db.candidats=[];
+    let ok=0;
+    for(const c of items){
+      await persistCandidateToPostgres(c,{allowCreate:true});
+      if(!db.candidats.some(x=>String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c);
+      ok++;
+    }
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
+    closeModal();
+    toastCenter(`${ok} CANDIDAT(S) IMPORTÉ(S) DANS LE BACKEND`,"success");
+    navigate("reserve");
+  }catch(e){
+    if(btn)btn.disabled=false;
+    toast("Import backend refusé : "+(e.message||e),"error");
+  }
+}
 function renderRecrutementDashboard(view){
   cleanupDuplicateCandidates(true);
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
@@ -3381,7 +3523,7 @@ function renderRecrutementDashboard(view){
   const scope=socFilter?escapeHTML(socFilter):(allowed.length?"Sociétés autorisées":"Toutes sociétés");
   const card=(title,count,sub,route,color,icon)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px;background:#fff"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(title)}</div><div class="text-4xl font-black mt-2" style="color:${color}">${count}</div><div class="text-xs text-slate-400 mt-2">${escapeHTML(sub||"Cliquer pour ouvrir")}</div></div></div></button>`;
   const bar=(label,n,total,color)=>{const pct=total?Math.round(n/total*100):0;return`<button type="button" class="dash-mini-row text-left w-full" onclick="navigate('reserve')" data-searchable><div style="min-width:190px"><div class="font-bold text-sm">${escapeHTML(label)}</div><div class="text-[11px] text-slate-500">${n} candidat(s)</div></div><div class="flex-1"><div class="dash-bar"><span style="width:${pct}%;background:${color}"></span></div></div><div class="font-black text-sm">${pct}%</div></button>`};
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CANDIDAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides · ${scope}</p></div><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CANDIDAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides · ${scope}</p></div>${candidatImportActionsHTML()}</div>
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
       ${card("Ajouter candidats",reserves.length,"Candidats en réserve","reserve","#043970","👥")}
       ${card("Candidats archivés",archives.length,"Dossiers archivés","candidats_archives","#64748b","🗄")}
@@ -3435,7 +3577,7 @@ async function renderRecrutementServer(view,mode){
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
   const page=recrutementCurrentPage(mode);
   const pageSize=25;
-  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?candidatImportActionsHTML():"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div>`;
   try{
     const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});
@@ -3526,7 +3668,7 @@ function renderRecrutement(view,mode){
       <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
-  const addButton=mode==="reserve"?`<button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button>`:"";
+  const addButton=mode==="reserve"?candidatImportActionsHTML():"";
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
@@ -3819,7 +3961,7 @@ function renderCandidatForm(view,id,options){
   const formOptions=options||{};
   let c;
   if(id){c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate((location.hash||"").includes("#/candidats_archives")?"candidats_archives":"reserve")}}
-  else{c={id:newTempCandidateId(),statut:formOptions.reserveDirect?"reserve":"nouvelle",reserveDirect:!!formOptions.reserveDirect,fichePositionValidee:!!formOptions.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true}}
+  else{c=candidateBlankDraft({reserveDirect:!!formOptions.reserveDirect})}
   const step=candidatEtape1Valid(c)?2:1;
   const allValid=candidatAllSectionsValid(c);
   const validatedCount=CANDIDAT_SECTIONS.filter(s=>candidatSectionIsValidated(c,s.key)).length;
