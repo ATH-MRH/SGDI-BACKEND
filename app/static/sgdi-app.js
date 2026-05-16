@@ -3489,6 +3489,9 @@ function candidateExcelMapRow(row,index,mode){
   c.verifPieceIdentite=excelYesNo(excelCell(row,["piece identite","pièce identité","piece d'identite","carte identite"]))==="oui";
   c.verifFicheFamiliale=excelYesNo(excelCell(row,["fiche familiale"]))==="oui";
   c.verifFicheIndividuelle=excelYesNo(excelCell(row,["fiche individuelle"]))==="oui";
+  if(String(c.nin||"").trim()==="1234567890")c.nin="";
+  if(String(c.telephone||"").replace(/\s+/g,"")==="0550000000")c.telephone="";
+  if(String(c.email||"").trim().toLowerCase()==="ahmed.dupont@example.com")c.email="";
   return c;
 }
 function candidateImportExistingKeys(){
@@ -3516,14 +3519,11 @@ function candidateImportKeyLabel(key){
   if(key.startsWith("name-phone|"))return "même nom/prénom + téléphone";
   return "identité similaire";
 }
-function candidateExcelTemplateValueErrors(c){
-  const errors=[];
+function candidateExcelTemplateValueWarnings(c){
+  const warnings=[];
   const norm=v=>String(v||"").trim().toLowerCase();
-  if(norm(c.nom)==="dupont"&&norm(c.prenom)==="ahmed")errors.push("Ligne exemple à remplacer ou supprimer");
-  if(String(c.nin||"").trim()==="1234567890")errors.push("NIN exemple à remplacer ou vider");
-  if(String(c.telephone||"").replace(/\s+/g,"")==="0550000000")errors.push("Téléphone exemple à remplacer ou vider");
-  if(norm(c.email)==="ahmed.dupont@example.com")errors.push("Email exemple à remplacer ou vider");
-  return errors;
+  if(norm(c.nom)==="dupont"&&norm(c.prenom)==="ahmed")warnings.push("Ligne exemple importée si non supprimée");
+  return warnings;
 }
 function candidateExcelRowHasData(row){
   return Object.values(row||{}).some(v=>String(v??"").trim()!=="");
@@ -3546,32 +3546,34 @@ function previewCandidateExcelImport(rows,fileName){
   const seen=new Set();
   const mapped=rows.map((row,i)=>{
     const c=candidateExcelMapRow(row,i,"reserve");
-    const errors=[...candidateIdentityMissing(c),...candidateExcelTemplateValueErrors(c)];
+    const errors=candidateIdentityMissing(c);
+    const warnings=candidateExcelTemplateValueWarnings(c);
     const key=candidateDedupeKey(c)||candidateImportFallbackKey(c);
-    const duplicate=!errors.length&&!!key&&(existing.has(key)||seen.has(key));
+    const duplicate=!!key&&(existing.has(key)||seen.has(key));
     const duplicateReason=duplicate?`${existing.has(key)?"Déjà existant en base":"Répété dans le fichier"} (${candidateImportKeyLabel(key)})`:"";
+    if(duplicate)warnings.push(duplicateReason);
     if(key)seen.add(key);
-    return {row:i+2,c,key,errors,duplicate,duplicateReason};
+    return {row:i+2,c,key,errors,warnings,duplicate,duplicateReason};
   });
   window._candidateExcelImport={rows,mapped,fileName};
-  const valid=mapped.filter(x=>!x.errors.length&&!x.duplicate).length;
-  const dup=mapped.filter(x=>!x.errors.length&&x.duplicate).length;
+  const valid=mapped.filter(x=>!x.errors.length).length;
+  const dup=mapped.filter(x=>x.duplicate).length;
   const err=mapped.filter(x=>x.errors.length).length;
-  const sample=mapped.slice(0,25).map(x=>`<tr><td class="font-mono text-xs">${x.row}</td><td class="font-semibold">${escapeHTML((x.c.nom||"")+" "+(x.c.prenom||""))}</td><td>${safe(x.c.dateNaissance)}</td><td>${safe(x.c.posteSouhaite)}</td><td>${safe(x.c.societe)}</td><td>${x.errors.length?`<span class="pill pill-red">${escapeHTML(x.errors.join(", "))}</span>`:x.duplicate?`<span class="pill pill-amber">${escapeHTML(x.duplicateReason||"Doublon ignoré")}</span>`:`<span class="pill pill-green">Prêt backend</span>`}</td></tr>`).join("");
+  const sample=mapped.slice(0,25).map(x=>`<tr><td class="font-mono text-xs">${x.row}</td><td class="font-semibold">${escapeHTML((x.c.nom||"")+" "+(x.c.prenom||""))}</td><td>${safe(x.c.dateNaissance)}</td><td>${safe(x.c.posteSouhaite)}</td><td>${safe(x.c.societe)}</td><td>${x.errors.length?`<span class="pill pill-red">${escapeHTML(x.errors.join(", "))}</span>`:x.warnings.length?`<span class="pill pill-amber">${escapeHTML(x.warnings.join(" · "))}</span>`:`<span class="pill pill-green">Prêt backend</span>`}</td></tr>`).join("");
   openModal(`<h3 class="font-bold text-lg mb-1">Import Excel candidats</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(fileName||"Fichier Excel")} · ${rows.length} ligne(s)</p>
     <div class="grid grid-3 gap-3 mb-4">
       <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Prêts</div><div class="text-2xl font-black text-emerald-600">${valid}</div></div>
-      <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Doublons</div><div class="text-2xl font-black text-amber-600">${dup}</div></div>
+      <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Avertissements</div><div class="text-2xl font-black text-amber-600">${dup}</div></div>
       <div class="card p-3"><div class="text-xs uppercase text-slate-500 font-bold">Erreurs</div><div class="text-2xl font-black text-red-600">${err}</div></div>
     </div>
     <div class="card overflow-hidden mb-4" style="max-height:50vh;overflow:auto"><table><thead><tr><th>Ligne</th><th>Candidat</th><th>Naissance</th><th>Poste</th><th>Société</th><th>Statut</th></tr></thead><tbody>${sample||`<tr><td colspan="6" class="text-center p-4 text-slate-500">Aucune ligne lisible.</td></tr>`}</tbody></table></div>
-    <div class="text-xs text-slate-500 mb-4">Colonnes reconnues : nom, prénom, date/lieu de naissance, parents, NIN, téléphone, email, poste, société, salaire, avis, documents. Les lignes sans nom/prénom sont refusées.</div>
+    <div class="text-xs text-slate-500 mb-4">Les doublons sont affichés en avertissement mais seront copiés dans le système. Seules les lignes sans nom/prénom sont refusées.</div>
     <div class="flex justify-end gap-2 flex-wrap"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" ${valid?"":"disabled"} onclick="confirmCandidateExcelImport(this)">Enregistrer dans le backend</button></div>`);
 }
 async function confirmCandidateExcelImport(btn){
   const batch=window._candidateExcelImport;
   if(!batch||!Array.isArray(batch.mapped)){toast("Aucun import en attente","error");return}
-  const items=batch.mapped.filter(x=>!x.errors.length&&!x.duplicate).map(x=>x.c);
+  const items=batch.mapped.filter(x=>!x.errors.length).map(x=>({...x.c,importAllowDuplicate:!!x.duplicate,importDuplicateReason:x.duplicateReason||""}));
   if(!items.length){toast("Aucune ligne valide à importer","error");return}
   if(btn)btn.disabled=true;
   try{
@@ -3853,6 +3855,7 @@ function setCandidatSectionButtonsDisabled(id,key,disabled){
 }
 function candidateDedupeKey(c){
   if(!candidateHasMinimumData(c))return"";
+  if(c&&c.importAllowDuplicate)return"";
   const norm=v=>String(v||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
   const society=norm(c.societe||c.society);
   const nin=norm(c.nin);
