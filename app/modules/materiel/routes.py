@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.pagination import paginate_statement
@@ -54,6 +54,24 @@ def _ensure_row_society_allowed(row, user: User):
     return row
 
 
+def _store_allowed_filter(allowed: list[str]):
+    return or_(Store.society.in_(allowed), Store.society.is_(None), Store.society == "")
+
+
+def _ensure_store_update_allowed(row: Store | None, user: User, payload: StoreCreate) -> Store:
+    if not row:
+        raise HTTPException(status_code=404, detail="Enregistrement introuvable")
+    allowed = _allowed_societies(user)
+    if not allowed:
+        return row
+    if row.society in allowed:
+        _ensure_society_allowed(user, payload.society)
+        return row
+    if not row.society and payload.society in allowed:
+        return row
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+
+
 def _ensure_article_allowed(db: Session, user: User, article_id: int | None) -> StockArticle | None:
     if article_id is None:
         return None
@@ -73,7 +91,7 @@ def stores_page(society: str | None = None, q: str | None = None, page: int = 1,
     if effective_society:
         stmt = stmt.where(Store.society == effective_society)
     elif allowed:
-        stmt = stmt.where(Store.society.in_(allowed))
+        stmt = stmt.where(_store_allowed_filter(allowed))
     return paginate_statement(db, stmt, model=Store, search_fields=[Store.name, Store.code, Store.society, Store.manager_name, Store.phone, Store.email], q=q, page=page, page_size=page_size)
 
 
@@ -83,7 +101,7 @@ def stores(society: str | None = None, db: Session = Depends(get_db), user: User
     rows = service.list_rows(db, Store, {"society": effective_society})
     allowed = _allowed_societies(user)
     if allowed and not effective_society:
-        rows = [row for row in rows if row.society in allowed]
+        rows = [row for row in rows if row.society in allowed or not row.society]
     return rows
 
 
@@ -95,7 +113,7 @@ def create_store(payload: StoreCreate, db: Session = Depends(get_db), user: User
 
 @router.put("/stores/{store_id}", response_model=StoreOut)
 def update_store(store_id: int, payload: StoreCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_row_society_allowed(db.get(Store, store_id), user)
+    _ensure_store_update_allowed(db.get(Store, store_id), user, payload)
     _ensure_society_allowed(user, payload.society)
     return service.update_row(db, Store, store_id, payload)
 

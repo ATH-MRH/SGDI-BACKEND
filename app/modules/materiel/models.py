@@ -19,6 +19,7 @@ class Store(Base, TimestampMixin):
     email: Mapped[str | None] = mapped_column(String(150))
     icon_path: Mapped[str | None] = mapped_column(String(500))
     notes: Mapped[str | None] = mapped_column(Text)
+    config: Mapped[dict | None] = mapped_column(JSON)
 
 
 class Supplier(Base, TimestampMixin):
@@ -103,4 +104,3 @@ class EmployeeEquipment(Base, TimestampMixin):
     return_date: Mapped[date | None] = mapped_column(Date)
     return_reason: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), default="attribue", index=True)
-

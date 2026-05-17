@@ -1009,8 +1009,12 @@ function siteApiPayload(site){
 function siteFromApi(row){const data=row&&row.equipment_plan&&typeof row.equipment_plan==="object"?row.equipment_plan:{};return {...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",indicatif:data.indicatif||row.indicatif||"",client:data.client||row.client_name||"",adresse:data.adresse||row.address||"",commune:data.commune||row.commune||"",wilaya:data.wilaya||row.wilaya||"",type:data.type||row.site_type||"",rotationSystem:data.rotationSystem||row.rotation_system||"",actif:row.active!==0,effectifs:{...(data.effectifs||{}),totalContractuel:data.effectifs?.totalContractuel??row.contractual_staff??0,jour:data.effectifs?.jour??row.day_staff??0,nuit:data.effectifs?.nuit??row.night_staff??0,weekend:data.effectifs?.weekend??row.weekend_staff??0,feries:data.effectifs?.feries??row.holiday_staff??0,groupes:data.effectifs?.groupes??row.groups_count??0}}}
 async function persistSiteToPostgres(site){if(!site)return null;sgdiRequireServerWrite();const saved=site.backendId?await SGDI.sites.update(site.backendId,siteApiPayload(site)):await SGDI.sites.create(siteApiPayload(site));Object.assign(site,siteFromApi(saved),{id:site.id||String(saved.id),backendId:saved.id});return site}
 async function syncSitesFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.sites.list();if((!rows||!rows.length)&&(db.sites||[]).length){for(const s of db.sites){await persistSiteToPostgres(s)}rows=await SGDI.sites.list()}db.sites=(rows||[]).map(siteFromApi)}catch(e){console.warn("Sites PostgreSQL indisponibles",e);throw e}}
-function storeApiPayload(m){return{name:String(m.nom||m.name||"Magasin").trim()||"Magasin",code:m.code||null,society:m.societe||m.society||null,address:m.adresse||m.address||null,manager_name:m.responsable||m.manager_name||null,phone:m.telephone||m.phone||null,email:m.email||null,icon_path:m.iconImage||m.icon_path||null,notes:m.notes||null}}
-function storeFromApi(row){const prev=(db.magasins||[]).find(m=>String(m.backendId||"")===String(row.id));return{id:String(row.id),backendId:row.id,nom:row.name||"",code:row.code||"",societe:row.society||"",adresse:row.address||"",responsable:row.manager_name||"",telephone:row.phone||"",email:row.email||"",iconImage:row.icon_path||"",icon:prev?.icon||"🏬",color:prev?.color||"#8b5cf6",notes:row.notes||"",config:prev?.config||{},seuilStockBas:prev?.seuilStockBas||"",seuilStockCritique:prev?.seuilStockCritique||"",uniteDefaut:prev?.uniteDefaut||"",valorisationStock:prev?.valorisationStock||"",alertesStockActives:prev?.alertesStockActives||""}}
+function storeApiPayload(m){
+  const config={...(m.config||{})};
+  ["icon","color","theme","seuilStockBas","seuilStockCritique","uniteDefaut","valorisationStock","alertesStockActives"].forEach(k=>{if(m[k]!==undefined&&m[k]!==null)config[k]=m[k]});
+  return{name:String(m.nom||m.name||"Magasin").trim()||"Magasin",code:m.code||null,society:m.societe||m.society||null,address:m.adresse||m.address||null,manager_name:m.responsable||m.manager_name||null,phone:m.telephone||m.phone||null,email:m.email||null,icon_path:m.iconImage||m.icon_path||null,notes:m.notes||null,config};
+}
+function storeFromApi(row){const prev=(db.magasins||[]).find(m=>String(m.backendId||"")===String(row.id));const cfg=row.config&&typeof row.config==="object"?row.config:{};return{id:String(row.id),backendId:row.id,nom:row.name||"",code:row.code||"",societe:row.society||"",adresse:row.address||"",responsable:row.manager_name||"",telephone:row.phone||"",email:row.email||"",iconImage:row.icon_path||"",icon:cfg.icon||prev?.icon||"🏬",color:cfg.color||prev?.color||"#8b5cf6",theme:cfg.theme||prev?.theme||"",notes:row.notes||"",config:{...(prev?.config||{}),...cfg},seuilStockBas:cfg.seuilStockBas??prev?.seuilStockBas??"",seuilStockCritique:cfg.seuilStockCritique??prev?.seuilStockCritique??"",uniteDefaut:cfg.uniteDefaut??prev?.uniteDefaut??"",valorisationStock:cfg.valorisationStock??prev?.valorisationStock??"",alertesStockActives:cfg.alertesStockActives??prev?.alertesStockActives??""}}
 async function persistStoreToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const saved=m.backendId?await SGDI.stock.updateStore(m.backendId,storeApiPayload(m)):await SGDI.stock.createStore(storeApiPayload(m));Object.assign(m,storeFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
 function supplierApiPayload(f){return{name:String(f.raisonSociale||f.name||"Fournisseur").trim()||"Fournisseur",society:f.societe||f.society||null,contact_name:f.contact||f.contact_name||null,rc:f.rc||null,nif:f.nif||null,nis:f.nis||null,ai:f.ai||null,phone:f.telephone||f.phone||null,email:f.email||null,address:f.adresse||f.address||null,products:f.produits||f.products||null,payment_terms:f.delaiPaiement||f.payment_terms||null,rating:parseInt(f.note??f.rating)||0,notes:f.commentaires||f.notes||null}}
 function supplierFromApi(row){return{id:String(row.id),backendId:row.id,raisonSociale:row.name||"",societe:row.society||"",contact:row.contact_name||"",rc:row.rc||"",nif:row.nif||"",nis:row.nis||"",ai:row.ai||"",telephone:row.phone||"",email:row.email||"",adresse:row.address||"",produits:row.products||"",delaiPaiement:row.payment_terms||"",note:row.rating||0,commentaires:row.notes||""}}
@@ -8619,6 +8623,10 @@ function renderMateriel(view,sub,arg){
 // =====================================================================
 
 const MAT_SIMPLE_HEADER_COLOR="#043970";
+const MAT_SIMPLE_MAGASIN_TITRES_20=new Set(["EQUIPEMENT SPECIFIQUE","FOURNITURE BUREAU","COMMUNICATION","TRANSMISSION","HABILLEMENT"]);
+function matSimpleMagasinTitleClass(nom){
+  return MAT_SIMPLE_MAGASIN_TITRES_20.has(String(nom||"").trim().toUpperCase())?"font-black text-[20px] leading-tight":"font-bold text-base";
+}
 function matNormalizeRelations(){
   try{
     const fournisseursById=new Map((db.fournisseurs||[]).map(f=>[f.id,f]));
@@ -9179,7 +9187,7 @@ async function renderMatSimpleMagasinsServer(view){
   const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-magasins",soc||"all");
   view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des magasins depuis PostgreSQL...</div>`;
   try{const result=await SGDI.stock.storesPage({society:soc||undefined,page,page_size:18});const mags=serverItems(result).map(storeFromApi);mags.forEach(m=>sgdiUpsertServerItem("magasins",m));const header=matSimpleHeader("magasins");
-    view.innerHTML=`<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold">Magasins</h1><p class="text-slate-500 text-sm">${result?.total??mags.length} magasin(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">Nouveau magasin</button></div>${header}${mags.length===0?`<div class="card p-10 text-center text-slate-500">Aucun magasin.</div>`:`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${mags.map(m=>{const st=matSimpleStockMagasin(m.id);return `<div class="card p-5 cursor-pointer hover:shadow-lg transition" onclick="navigate('materiel/magasin/${m.id}')"><div class="flex justify-between gap-3"><div><h3 class="font-bold text-base">${escapeHTML(m.nom||"—")}</h3><div class="text-xs text-slate-500 font-mono">${escapeHTML(m.code||"")}</div></div><div class="flex gap-1" onclick="event.stopPropagation()"><button class="btn btn-ghost text-xs" onclick="event.stopPropagation();openMagasinConfigurationModal('${m.id}')">Configuration</button><button class="btn btn-ghost text-xs" onclick="event.stopPropagation();navigate('materiel/magasin-edit/${m.id}')">Modifier</button></div></div><div class="text-xs text-slate-500 mt-2">${escapeHTML(m.responsable||"")}${m.telephone?` · ${escapeHTML(m.telephone)}`:""}</div><div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t text-center"><div><div class="text-[9px] uppercase font-bold text-slate-500">Articles</div><div class="text-lg font-black">${st.nb}</div></div><div><div class="text-[9px] uppercase font-bold text-slate-500">Unités</div><div class="text-lg font-black text-emerald-700">${qty(st.qty)}</div></div></div><div class="text-[10px] text-slate-400 mt-2 text-center">Seuil bas : ${qty(st.seuilBas)} · Critique : ${qty(st.seuilCritique)}</div></div>`}).join("")}</div>`}${sgdiServerPaginationHTML("mat-magasins",soc||"all",result)}`;
+    view.innerHTML=`<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold">Magasins</h1><p class="text-slate-500 text-sm">${result?.total??mags.length} magasin(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">Nouveau magasin</button></div>${header}${mags.length===0?`<div class="card p-10 text-center text-slate-500">Aucun magasin.</div>`:`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${mags.map(m=>{const st=matSimpleStockMagasin(m.id);return `<div class="card p-5 cursor-pointer hover:shadow-lg transition" onclick="navigate('materiel/magasin/${m.id}')"><div class="flex justify-between gap-3"><div><h3 class="${matSimpleMagasinTitleClass(m.nom)}">${escapeHTML(m.nom||"—")}</h3><div class="text-xs text-slate-500 font-mono">${escapeHTML(m.code||"")}</div></div><div class="flex gap-1" onclick="event.stopPropagation()"><button class="btn btn-ghost text-xs" onclick="event.stopPropagation();openMagasinConfigurationModal('${m.id}')">Configuration</button><button class="btn btn-ghost text-xs" onclick="event.stopPropagation();navigate('materiel/magasin-edit/${m.id}')">Modifier</button></div></div><div class="text-xs text-slate-500 mt-2">${escapeHTML(m.responsable||"")}${m.telephone?` · ${escapeHTML(m.telephone)}`:""}</div><div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t text-center"><div><div class="text-[9px] uppercase font-bold text-slate-500">Articles</div><div class="text-lg font-black">${st.nb}</div></div><div><div class="text-[9px] uppercase font-bold text-slate-500">Unités</div><div class="text-lg font-black text-emerald-700">${qty(st.qty)}</div></div></div><div class="text-[10px] text-slate-400 mt-2 text-center">Seuil bas : ${qty(st.seuilBas)} · Critique : ${qty(st.seuilCritique)}</div></div>`}).join("")}</div>`}${sgdiServerPaginationHTML("mat-magasins",soc||"all",result)}`;
   }catch(e){console.warn("Magasins serveur indisponibles",e);window.__sgdiMatMagasinsLocalFallback=true;renderMatSimpleMagasins(view)}
 }
 async function renderMatSimpleFournisseursServer(view){
@@ -9276,7 +9284,7 @@ function renderMatSimpleMagasins(view){
     <button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">➕ Nouveau magasin</button></div>`;
   const body=mags.length===0?`<div class="card p-10 text-center"><div class="text-4xl mb-2">🏬</div><div class="text-slate-500 mb-3">Aucun magasin créé. Créez-en un pour répartir le stock.</div><button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">➕ Créer le premier magasin</button></div>`:`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${mags.map(m=>{const st=matSimpleStockMagasin(m.id);return`<div class="card p-5 cursor-pointer hover:shadow-lg transition" style="border-top:4px solid ${m.color||"#8b5cf6"}" onclick="navigate('materiel/magasin/${m.id}')">
     <div class="flex justify-between items-start mb-2">
-      <div class="flex gap-3 items-center"><div style="font-size:32px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:10px;background:#f8fafc">${m.iconImage?`<img src="${m.iconImage}" style="width:100%;height:100%;object-fit:cover"/>`:(m.icon||"🏬")}</div><div><h3 class="font-bold text-base">${escapeHTML(m.nom)}</h3>${m.code?`<div class="text-[10px] font-mono text-slate-500">${escapeHTML(m.code)}</div>`:""}</div></div>
+      <div class="flex gap-3 items-center"><div style="font-size:32px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:10px;background:#f8fafc">${m.iconImage?`<img src="${m.iconImage}" style="width:100%;height:100%;object-fit:cover"/>`:(m.icon||"🏬")}</div><div><h3 class="${matSimpleMagasinTitleClass(m.nom)}">${escapeHTML(m.nom)}</h3>${m.code?`<div class="text-[10px] font-mono text-slate-500">${escapeHTML(m.code)}</div>`:""}</div></div>
       <div class="flex gap-1 no-print" onclick="event.stopPropagation()">
         <button class="btn btn-ghost text-xs" title="Configuration" onclick="event.stopPropagation();openMagasinConfigurationModal('${m.id}')" style="border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8">Configuration</button>
         <button class="btn btn-ghost text-xs" title="Modifier" onclick="event.stopPropagation();navigate('materiel/magasin-edit/${m.id}')" style="border:1px solid #cbd5e1;background:#f8fafc">✏ Modifier</button>
@@ -9411,8 +9419,9 @@ async function saveMagasinConfiguration(id){
   m.uniteDefaut=m.config.uniteDefaut;
   m.valorisationStock=m.config.valorisation;
   m.alertesStockActives=m.config.alertesActives;
+  if(!m.societe)m.societe=matSimpleSocFilter()||mySoc()||session?.societe||"";
   m.updatedAt=new Date().toISOString();
-  try{sgdiDirty=true;await sgdiBackendSaveAndWait()}catch(e){toast("Configuration non sauvegardée backend : "+(e.message||e),"error");return}
+  try{await persistStoreToPostgres(m);sgdiDirty=true;await sgdiBackendSaveAndWait()}catch(e){toast("Configuration non sauvegardée backend : "+(e.message||e),"error");return}
   closeModal();
   toast("Configuration magasin enregistrée","success");
   renderView();
@@ -9983,9 +9992,13 @@ async function saveMagasin(id){
       m.icon=fd.get("icon")||t.icon;
       m.color=t.color;
       m.updatedAt=new Date().toISOString();
+      if(!m.societe)m.societe=matSimpleSocFilter()||mySoc()||session?.societe||"";
+      try{await persistStoreToPostgres(m)}catch(e){toast("Magasin non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
     }else{
       if(!db.magasins)db.magasins=[];
-      db.magasins.push({id:uid("mag"),nom:nom,theme:theme,description:fd.get("description")||"",societe:fd.get("societe")||"",icon:fd.get("icon")||t.icon,color:t.color,createdAt:new Date().toISOString()});
+      const m={id:uid("mag"),nom:nom,theme:theme,description:fd.get("description")||"",societe:fd.get("societe")||matSimpleSocFilter()||mySoc()||session?.societe||"",icon:fd.get("icon")||t.icon,color:t.color,createdAt:new Date().toISOString()};
+      try{await persistStoreToPostgres(m)}catch(e){toast("Magasin non sauvegardé PostgreSQL : "+(e.message||e),"error");return}
+      db.magasins.push(m);
     }
     if(typeof logActivity==="function")logActivity(id?"Magasin modifié":"Magasin créé",nom);
     if(!(await saveDBAndWaitToast("Magasin non confirmé par PostgreSQL")))return;
@@ -9996,13 +10009,15 @@ async function saveMagasin(id){
     toast("Erreur d'enregistrement: "+err.message,"error");
   }
 }
-function deleteMagasin(id){
+async function deleteMagasin(id){
   const m=(db.magasins||[]).find(x=>x.id===id);if(!m)return;
   const arts=(db.magasinArticles||[]).filter(a=>a.magasinId===id);
   if(arts.length){if(!confirm("⚠ Ce magasin contient "+arts.length+" article(s). Tout supprimer ?"))return;db.magasinArticles=(db.magasinArticles||[]).filter(a=>a.magasinId!==id)}
   else if(!confirm("Supprimer le magasin « "+m.nom+" » ?"))return;
+  if(m.backendId){try{await SGDI.stock.deleteStore(m.backendId)}catch(e){toast("Suppression PostgreSQL impossible : "+(e.message||e),"error");return}}
   db.magasins=(db.magasins||[]).filter(x=>x.id!==id);
-  saveDB();closeModal();toast("Magasin supprimé","success");navigate("materiel/magasins");
+  if(!(await saveDBAndWaitToast("Suppression magasin non confirmée par PostgreSQL")))return;
+  closeModal();toast("Magasin supprimé","success");navigate("materiel/magasins");
 }
 function renderMagasinDetail(view,id){
   const m=(db.magasins||[]).find(x=>x.id===id);

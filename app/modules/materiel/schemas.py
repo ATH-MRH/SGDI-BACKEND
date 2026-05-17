@@ -14,6 +14,7 @@ class StoreBase(BaseModel):
     email: str | None = None
     icon_path: str | None = None
     notes: str | None = None
+    config: dict[str, Any] | None = None
 
 
 class StoreCreate(StoreBase):
