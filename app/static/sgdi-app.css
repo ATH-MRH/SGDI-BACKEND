@@ -171,7 +171,8 @@
   .societe-band-btn:hover{background:#dff3ff!important;color:#0360a8!important;border-color:#7dd3fc!important}
   .societe-band-btn:hover *{color:#0360a8!important}
   body:has(.company-portal),html:has(.company-portal),body:has(.company-portal) #app{background:#fff!important}
-  .company-portal{min-height:100vh;background:#fff!important;position:relative;overflow:auto;color:#061b42}
+  .company-portal{min-height:100vh;width:100vw;min-width:100%;background:#fff!important;position:relative;overflow:auto;color:#061b42;isolation:isolate}
+  .company-portal:before{content:"";position:fixed;inset:0;background:#fff;z-index:-1;pointer-events:none}
   .company-portal-main{width:min(1120px,92vw);min-height:100vh;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0 54px}
   .company-portal-logo-wrap{width:290px;height:290px;border-radius:50%;display:flex;align-items:center;justify-content:center;filter:none;margin-bottom:52px;transform:translateY(-3cm)}
   .company-portal-logo{width:100%;height:100%;object-fit:contain}
