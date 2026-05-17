@@ -3292,25 +3292,20 @@ setInterval(()=>{if(session&&sgdiPostgresReady)refreshDemandesPersonnelFromPostg
 
 /* ---- LOGIN ---- */
 function renderLogin(){
-  document.getElementById("app").innerHTML=`<div class="min-h-screen flex items-center justify-center p-6" style="background:#f8fafc;color:#0f172a">
-    <div class="w-full max-w-sm">
-      <div class="text-center mb-8">
-        <div class="text-4xl font-black tracking-wide text-slate-950">SGDI</div>
-        <div class="text-sm text-slate-500 mt-1 tracking-widest uppercase">Algérie</div>
-      </div>
-      <div class="p-7 rounded-xl" style="background:#ffffff;border:1px solid #e2e8f0;box-shadow:0 24px 60px rgba(15,23,42,.10)">
-        <form id="login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
-          <label class="block text-xs font-semibold text-slate-600 mb-2">Identifiant</label>
-          <input class="input mb-4" style="background:#fff;color:#0f172a;border-color:#cbd5e1" name="username"  autofocus/>
-          <label class="block text-xs font-semibold text-slate-600 mb-2">Mot de passe</label>
-          <input class="input mb-4" style="background:#fff;color:#0f172a;border-color:#cbd5e1" type="password" name="password" />
-          <button class="btn w-full justify-center" style="background:#043970;color:#111;font-weight:800">Se connecter</button>
-        </form>
-      </div>
-    </div>
+  document.getElementById("app").innerHTML=`<div class="sgdi-login-page">
+    <main class="sgdi-login-main">
+      <div class="sgdi-login-brand" aria-label="SGDI"><span>SGD</span><i>I</i></div>
+      <div class="sgdi-login-subtitle">ACCEDER A VOTRE ESPACE</div>
+      <form id="login-form" class="sgdi-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
+        <label>Identifiant</label>
+        <input name="username" autocomplete="username" autofocus/>
+        <label>Mot de passe</label>
+        <input type="password" name="password" autocomplete="current-password"/>
+      </form>
+      <button class="sgdi-login-submit" type="submit" form="login-form">Valider</button>
+    </main>
     <button type="button" class="login-admin-system-shortcut" onclick="openAdminSystemPasswordModal(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">
-      <span aria-hidden="true">⚙</span>
-      <span>Administration système</span>
+      <span>Accès Administration Systeme</span>
     </button>
   </div>`;
 }
