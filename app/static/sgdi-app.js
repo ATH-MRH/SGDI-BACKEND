@@ -8875,13 +8875,21 @@ function dotationMagasinsForSoc(soc){
   const all=(db.magasins||[]).filter(m=>m&&m.id&&m.nom);
   const global=all.filter(m=>!m.societe);
   const owned=soc?all.filter(m=>m.societe===soc):all;
-  const rows=owned.length?owned:(soc?global:all);
-  return rows.sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  const rows=(soc?owned.concat(global):all);
+  const seen=new Set();
+  const unique=rows.filter(m=>{
+    const key=String(m.nom||"").trim().toLowerCase();
+    if(!key||seen.has(key))return false;
+    seen.add(key);
+    return true;
+  });
+  const fallback=["Habillement","Transmission","Communication","Fourniture","Équipement","Protection","Outillage"].map(n=>({id:"default:"+n,nom:n,societe:"",icon:"🏬",isDefault:true}));
+  return (unique.length?unique:fallback).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
 }
 function dotationArticlesForMagasin(magasinId,soc){
   if(!magasinId)return[];
   const mag=(db.magasins||[]).find(m=>String(m.id)===String(magasinId));
-  const magName=String(mag?.nom||"").trim().toLowerCase();
+  const magName=String(mag?.nom||String(magasinId).replace(/^default:/,"")).trim().toLowerCase();
   return (db.stockArticles||[]).filter(a=>{
     if(soc&&a.societe&&a.societe!==soc)return false;
     if(String(a.magasinId||"")===String(magasinId))return true;
