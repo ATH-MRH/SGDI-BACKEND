@@ -733,7 +733,7 @@ window.SGDI_API={
   pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),dailyPage:(params)=>sgdiApi("/ops/pointage/daily/page"+sgdiQuery(params),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false}),generateRotation:(payload)=>sgdiApi("/ops/pointage/daily/generate-rotation",{method:"POST",body:payload,legacy:false}),standby:(date,soc,siteId)=>sgdiApi("/ops/pointage/standby?presence_date="+encodeURIComponent(date||today())+(soc?"&society="+encodeURIComponent(soc):"")+(siteId?"&site_id="+encodeURIComponent(siteId):""),{legacy:false}),updateDaily:(id,payload)=>sgdiApi("/ops/pointage/daily/"+encodeURIComponent(id),{method:"PATCH",body:payload,legacy:false})},
   events:{list:()=>sgdiApi("/ops/events",{legacy:false}),page:(params)=>sgdiApi("/ops/events/page"+sgdiQuery(params),{legacy:false})},
   assignments:{page:(params)=>sgdiApi("/ops/assignments/page"+sgdiQuery(params),{legacy:false})},
-  stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),storesPage:(params)=>sgdiApi("/materiel/stores/page"+sgdiQuery(params),{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),suppliersPage:(params)=>sgdiApi("/materiel/suppliers/page"+sgdiQuery(params),{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),articles:()=>sgdiApi("/materiel/articles",{legacy:false}),articlesPage:(params)=>sgdiApi("/materiel/articles/page"+sgdiQuery(params),{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),movementsPage:(params)=>sgdiApi("/materiel/movements/page"+sgdiQuery(params),{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),createDotation:(payload)=>sgdiApi("/materiel/dotations",{method:"POST",body:payload,legacy:false})},
+  stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),storesPage:(params)=>sgdiApi("/materiel/stores/page"+sgdiQuery(params),{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),suppliersPage:(params)=>sgdiApi("/materiel/suppliers/page"+sgdiQuery(params),{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),articles:(params)=>sgdiApi("/materiel/articles"+sgdiQuery(params),{legacy:false}),articlesPage:(params)=>sgdiApi("/materiel/articles/page"+sgdiQuery(params),{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),movementsPage:(params)=>sgdiApi("/materiel/movements/page"+sgdiQuery(params),{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),createDotation:(payload)=>sgdiApi("/materiel/dotations",{method:"POST",body:payload,legacy:false})},
   commercial:{clients:()=>sgdiApi("/commercial/clients",{legacy:false}),clientsPage:(params)=>sgdiApi("/commercial/clients/page"+sgdiQuery(params),{legacy:false}),createClient:(payload)=>sgdiApi("/commercial/clients",{method:"POST",body:payload,legacy:false}),updateClient:(id,payload)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteClient:(id)=>sgdiApi("/commercial/clients/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   finance:{entries:()=>sgdiApi("/finance/entries",{legacy:false}),entriesPage:(collection,params)=>sgdiApi("/finance/entries/"+encodeURIComponent(collection)+"/page"+sgdiQuery(params),{legacy:false}),payroll:()=>sgdiApi("/finance/payroll",{legacy:false}),payrollPage:(collection,params)=>sgdiApi("/finance/payroll/"+encodeURIComponent(collection)+"/page"+sgdiQuery(params),{legacy:false})},
   ui:{sidebarStats:()=>sgdiApi("/ui/sidebar-stats",{legacy:false})},
@@ -9350,6 +9350,12 @@ function renderMatSimpleMagasinForm(view,id){
   </div>`;
   setTimeout(()=>{const f=document.getElementById("magasin-form-simple");if(f)f.addEventListener("submit",e=>{e.preventDefault();matSimpleSaveMagasin(m.id,isNew)});},0);
 }
+function stockStartArticleForMagasin(magasinId){
+  const m=(db.magasins||[]).find(x=>String(x.id)===String(magasinId));
+  if(!m){toast("Magasin introuvable","error");return}
+  sessionStorage.setItem("stockArticlePreselectMagasinId",String(m.id));
+  navigate("materiel/article-nouveau");
+}
 async function matSimpleSaveMagasin(id,isNew){
   try{
     const f=document.getElementById("magasin-form-simple");
@@ -9476,10 +9482,20 @@ async function matSimpleDeleteMagasin(id){
   toast("Magasin supprimé","success");
   render();
 }
-function renderMatSimpleMagasinDetail(view,id){
+async function renderMatSimpleMagasinDetail(view,id){
   const m=(db.magasins||[]).find(x=>x.id===id);
   if(!m){view.innerHTML=`<div class="card p-6">Magasin introuvable. <a href="#/materiel/magasins" class="text-amber-600 underline">← Retour</a></div>`;return}
-  const arts=(db.stockArticles||[]).filter(a=>a.magasinId===id);
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement du magasin et de ses articles...</div>`;
+  if(sgdiAuthToken()&&window.SGDI?.stock?.articles&&m.backendId){
+    try{
+      const rows=await SGDI.stock.articles({store_id:m.backendId});
+      (rows||[]).map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));
+    }catch(e){
+      console.warn("Articles du magasin PostgreSQL indisponibles",e);
+    }
+  }
+  const magName=String(m.nom||"").trim().toLowerCase();
+  const arts=(db.stockArticles||[]).filter(a=>String(a.magasinId||"")===String(id)||String(a.categorie||"").trim().toLowerCase()===magName);
   const st=matSimpleStockMagasin(id);
   const mvts=(db.stockMouvements||[]).filter(mv=>arts.some(a=>a.id===mv.articleId)).sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,20);
   view.innerHTML=`<div class="flex justify-between mb-4">
@@ -9508,7 +9524,7 @@ function renderMatSimpleMagasinDetail(view,id){
     </div>
   </div>
   <div class="card p-5 mb-4">
-    <div class="flex justify-between items-center mb-3"><h3 class="font-bold">📦 Articles du magasin (${arts.length})</h3><button class="btn btn-warn text-sm" onclick="navigate('materiel/article-nouveau')">➕ Ajouter article</button></div>
+    <div class="flex justify-between items-center mb-3"><h3 class="font-bold">📦 Articles du magasin (${arts.length})</h3><button class="btn btn-warn text-sm" onclick="stockStartArticleForMagasin('${m.id}')">➕ Ajouter article</button></div>
     ${arts.length===0?`<div class="text-sm text-slate-400 italic py-6 text-center">Aucun article rattaché à ce magasin.</div>`:`<div class="overflow-x-auto"><table class="w-full text-sm"><thead style="background:#f8fafc"><tr><th class="p-2 text-left">Code</th><th class="p-2 text-left">Désignation</th><th class="p-2 text-center">Stock</th><th class="p-2 text-right">P.U.</th></tr></thead><tbody>${arts.map(a=>{const q=stockGetActuel(a.id);return`<tr class="border-t hover:bg-slate-50"><td class="p-2 font-mono text-xs">${escapeHTML(a.code||"—")}</td><td class="p-2"><a class="hover:underline font-semibold" href="#/materiel/article/${a.id}">${escapeHTML(a.designation)}</a></td><td class="p-2 text-center font-bold">${qty(q)} <span class="text-[10px] text-slate-400">${escapeHTML(a.unite||"")}</span></td><td class="p-2 text-right text-xs">${money(a.prixUnitaire)}</td></tr>`}).join("")}</tbody></table></div>`}
   </div>
   <div class="card p-5">
@@ -10198,6 +10214,11 @@ function stockMagasinCategorieOptionsHTML(soc,selected){
   if(!mags.length)return `<option value="">Aucun magasin créé</option>`;
   return `<option value="">— Choisir un magasin —</option>${mags.map(m=>`<option value="${escapeHTML(m.id)}" ${String(selected||"")===String(m.id)||String(selected||"")===String(m.nom||"")?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom||"Magasin")}</option>`).join("")}`;
 }
+function stockSelectedMagasinSummaryHTML(value){
+  const m=(db.magasins||[]).find(x=>String(x.id)===String(value||"")||String(x.nom||"")===String(value||""));
+  if(!m)return `<span class="text-slate-400">Aucun magasin sélectionné</span>`;
+  return `${m.icon||"🏬"} <b>${escapeHTML(m.nom||"Magasin")}</b>${m.societe?` · ${escapeHTML(m.societe)}`:""}`;
+}
 function stockGetCategorie(soc,code){
   const mag=(db.magasins||[]).find(m=>String(m.id)===String(code)||String(m.nom||"")===String(code));
   if(mag)return{code,label:mag.nom||"Magasin",icon:mag.icon||"🏬",color:mag.color||"#043970"};
@@ -10806,6 +10827,16 @@ async function renderStockArticleForm(view,id){
   const isNew=!id;
   let a=isNew?{id:uid("stk"),code:"",designation:"",categorie:"",sousCategorie:"",societe:stockGetSocFilter()||"",marque:"",modele:"",reference:"",codeBarre:"",unite:"Pièce",prixUnitaire:"",quantiteGlobaleRecue:"",dateReceptionGlobale:"",stockReceptionsGlobales:[],stockInitial:0,stockVariantes:[],stockMin:"",stockMax:"",seuilAlerte:"",emplacement:"",fournisseur:"",description:"",notes:"",attributs:{},dateCreation:today(),actif:true}:(db.stockArticles||[]).find(x=>x.id===id);
   if(!a){toast("Article introuvable","error");return navigate("materiel/inventaire")}
+  if(isNew){
+    const preselectMagasinId=sessionStorage.getItem("stockArticlePreselectMagasinId")||"";
+    const preselectMagasin=(db.magasins||[]).find(m=>String(m.id)===String(preselectMagasinId));
+    if(preselectMagasin){
+      a.magasinId=preselectMagasin.id;
+      a.categorie=preselectMagasin.nom||"Magasin";
+      if(preselectMagasin.societe)a.societe=preselectMagasin.societe;
+    }
+    sessionStorage.removeItem("stockArticlePreselectMagasinId");
+  }
   const soc=a.societe||stockGetSocFilter()||"";
   const unites=db.stockUnites||["Pièce"];
   const attrs=a.attributs||{};
@@ -10860,7 +10891,7 @@ async function renderStockArticleForm(view,id){
       </div>
       <div class="mat-form-band"><div class="mat-form-band-title">Logistique</div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div><label class="label">🏬 Magasin (lieu de stockage)</label><select class="select" name="magasinId"><option value="">${magasinsArticle.length?"— Aucun rattachement —":"Aucun magasin disponible"}</option>${magasinsArticle.map(m=>`<option value="${escapeHTML(m.id)}" ${String(a.magasinId||"")===String(m.id)||String(a.categorie||"")===String(m.nom||"")?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom)}${m.societe?` · ${escapeHTML(m.societe)}`:""}</option>`).join("")}</select><div class="text-[10px] text-slate-400 mt-1">Pas de magasin ? <a href="#/materiel/magasin-nouveau" class="text-amber-600 underline">+ Créer un magasin</a></div></div>
+          <div><label class="label">🏬 Rattachement magasin</label><input type="hidden" name="magasinId" value="${escapeHTML(a.magasinId||"")}"/><div id="stk-store-summary" class="input bg-slate-50" style="min-height:38px">${stockSelectedMagasinSummaryHTML(a.magasinId||a.categorie)}</div><div class="text-[10px] text-slate-400 mt-1">Le rattachement se règle avec le champ Magasin en haut du formulaire.</div></div>
           <div class="md:col-span-2"><label class="label">Emplacement précis (optionnel)</label><input class="input" name="emplacement" value="${escapeHTML(a.emplacement||"")}" placeholder="ex: Étagère B3, Allée 2"/></div>
         </div>
       </div>
@@ -11232,12 +11263,19 @@ function stockCategorieChanged(sel){
   const f=document.getElementById("stock-article-form");
   const magasin=f?.querySelector('[name="magasinId"]');
   if(magasin&&(db.magasins||[]).some(m=>String(m.id)===String(sel.value)))magasin.value=sel.value;
+  const summary=document.getElementById("stk-store-summary");
+  if(summary)summary.innerHTML=stockSelectedMagasinSummaryHTML(sel.value);
 }
 function stockReloadCatOptions(soc){
   const sel=document.getElementById("stk-cat-select");if(!sel)return;
   sel.innerHTML=stockMagasinCategorieOptionsHTML(soc,"");
   stockReloadSousCategories("");
   stockToggleStockFields("");
+  const f=document.getElementById("stock-article-form");
+  const magasin=f?.querySelector('[name="magasinId"]');
+  if(magasin)magasin.value="";
+  const summary=document.getElementById("stk-store-summary");
+  if(summary)summary.innerHTML=stockSelectedMagasinSummaryHTML("");
   stockUpdateTailleButton();
   stockUpdatePointureButton();
 }
