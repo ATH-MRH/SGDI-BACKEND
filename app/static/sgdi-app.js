@@ -1044,9 +1044,20 @@ function movementTypeToApi(t){return({retour:"retour_employe",dotation_pret:"dot
 function movementFromApiType(t){return({retour_employe:"retour",dotation_pret_mission:"dotation_pret",reformer:"reforme"}[t])||t}
 function movementApiPayload(m){const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));return{article_id:article?.backendId||sqlInt(m.articleId),movement_date:sqlDate(m.date)||today(),movement_type:movementTypeToApi(m.type),quantity:sqlNum(m.quantite),unit_price:sqlNum(m.prixUnitaire),store_id:sqlRelationId(db.magasins,m.magasinId||article?.magasinId),supplier_id:sqlRelationId(db.fournisseurs,m.fournisseurId),employee_id:sqlRelationId(db.agents,m.beneficiaireAgentId||m.retourAgentId||m.agentId),recipient:m.beneficiaireNom||m.retourAgentNom||null,reason:m.motif||null,renewal_reason:m.motifRenouvellement||null,voucher_number:m.numeroBon||null,notes:m.notes||null,size_breakdown:{repartitionTailles:m.repartitionTailles||{},raw:m}}}
 function movementFromApi(row){const raw=row.size_breakdown?.raw&&typeof row.size_breakdown.raw==="object"?row.size_breakdown.raw:{};const article=(db.stockArticles||[]).find(a=>String(a.backendId)===String(row.article_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,articleId:article?.id||raw.articleId||String(row.article_id),type:movementFromApiType(row.movement_type),date:String(row.movement_date||"").slice(0,10),quantite:row.quantity??raw.quantite??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,motif:row.reason||raw.motif||"",numeroBon:row.voucher_number||raw.numeroBon||"",notes:row.notes||raw.notes||"",repartitionTailles:row.size_breakdown?.repartitionTailles||raw.repartitionTailles||{},createdAt:row.created_at||raw.createdAt||""}}
-async function persistMovementToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=movementApiPayload(m);if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour le mouvement");const saved=await SGDI.stock.createMovement(payload);Object.assign(m,movementFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});return m}
+async function reloadArticleFromPostgres(a){
+  if(!a||!sgdiAuthToken()||!window.SGDI?.stock?.articles)return a;
+  try{
+    const rows=await SGDI.stock.articles({store_id:a.backendId?undefined:sqlRelationId(db.magasins,a.magasinId),society:a.societe||undefined});
+    const fresh=(rows||[]).map(articleFromApi).find(x=>String(x.backendId||"")===String(a.backendId||"")||String(x.id)===String(a.id));
+    if(fresh){Object.assign(a,fresh);sgdiUpsertServerItem("stockArticles",a)}
+  }catch(e){
+    console.warn("Article PostgreSQL non rechargé",e);
+  }
+  return a;
+}
+async function persistMovementToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=movementApiPayload(m);if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour le mouvement");const saved=await SGDI.stock.createMovement(payload);Object.assign(m,movementFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));if(article)await reloadArticleFromPostgres(article);return m}
 function dotationApiPayload(m){const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));const employeeId=sqlRelationId(db.agents,m.agentId||m.beneficiaireAgentId);return{employee_id:employeeId,article_id:article?.backendId||sqlInt(m.articleId),quantity:sqlNum(m.quantite),dotation_date:sqlDate(m.date)||today(),dotation_reason:m.motif||"Nouvelle dotation",voucher_number:m.numeroBon||null,unit_price:sqlNum(m.prixUnitaire)}}
-async function persistDotationToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=dotationApiPayload(m);if(!payload.employee_id)throw new Error("Employé PostgreSQL manquant pour la dotation");if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour la dotation");const saved=await SGDI.stock.createDotation(payload);m.backendId=saved.movement_id||m.backendId;m.equipmentBackendId=saved.id||m.equipmentBackendId;return saved}
+async function persistDotationToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=dotationApiPayload(m);if(!payload.employee_id)throw new Error("Employé PostgreSQL manquant pour la dotation");if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour la dotation");const saved=await SGDI.stock.createDotation(payload);m.backendId=saved.movement_id||m.backendId;m.equipmentBackendId=saved.id||m.equipmentBackendId;const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));if(article)await reloadArticleFromPostgres(article);return saved}
 async function syncMaterielFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let stores=await SGDI.stock.stores();if((!stores||!stores.length)&&(db.magasins||[]).length){for(const m of db.magasins){await persistStoreToPostgres(m)}stores=await SGDI.stock.stores()}db.magasins=(stores||[]).map(storeFromApi);let suppliers=await SGDI.stock.suppliers();if((!suppliers||!suppliers.length)&&(db.fournisseurs||[]).length){for(const f of db.fournisseurs){await persistSupplierToPostgres(f)}suppliers=await SGDI.stock.suppliers()}db.fournisseurs=(suppliers||[]).map(supplierFromApi);let articles=await SGDI.stock.articles();if((!articles||!articles.length)&&(db.stockArticles||[]).length){for(const a of db.stockArticles){await persistArticleToPostgres(a)}articles=await SGDI.stock.articles()}db.stockArticles=(articles||[]).map(articleFromApi);let mvts=await SGDI.stock.movements();if((!mvts||!mvts.length)&&(db.stockMouvements||[]).length){for(const m of db.stockMouvements){await persistMovementToPostgres(m).catch(e=>console.warn("Mouvement non migré",m,e))}mvts=await SGDI.stock.movements()}db.stockMouvements=(mvts||[]).map(movementFromApi)}catch(e){console.warn("Matériel PostgreSQL indisponible",e);throw e}}
 function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()||"Client",legal_name:c.raisonSociale||c.legal_name||null,society:c.societe||c.society||null,structure:c.structure||null,status:c.statut||c.status||"actif",contact_name:c.contact||c.contact_name||null,contact_position:c.fonction||c.contact_position||null,phone:c.tel||c.phone||null,email:c.email||null,address:c.adresse||c.address||null,nif:c.nif||null,rc:c.rc||null,services:c.prestationsServices||c.services||null,contract_start:sqlDate(c.dateDebutContrat),contract_duration:c.dureeContrat||null,contract_end:sqlDate(c.dateFinContrat),notes:c.notes||null,data:{...c}}}
 function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||""}}
@@ -8737,12 +8748,10 @@ function magasinConfig(m){
   };
 }
 function matSimpleStockMagasin(magasinId){
-  // Articles dans ce magasin + valeur stock, en agrégeant le catalogue stock
-  // et les articles saisis directement dans la fiche magasin.
   const mag=(db.magasins||[]).find(m=>String(m.id)===String(magasinId));
   const cfg=magasinConfig(mag);
-  const arts=(db.stockArticles||[]).filter(a=>a.magasinId===magasinId||(a.emplacement&&!a.magasinId&&a.magasinIdAlias===magasinId));
-  const magasinArts=(db.magasinArticles||[]).filter(a=>a.magasinId===magasinId);
+  const magName=String(mag?.nom||"").trim().toLowerCase();
+  const arts=(db.stockArticles||[]).filter(a=>String(a.magasinId||"")===String(magasinId)||String(a.categorie||"").trim().toLowerCase()===magName);
   let totalQty=0,totalVal=0,nbAlertes=0;
   arts.forEach(a=>{
     const q=stockGetActuel?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
@@ -8751,13 +8760,7 @@ function matSimpleStockMagasin(magasinId){
     const seuil=parseFloat(a.seuilAlerte)||0;
     if(cfg.alertesActives&&((seuil&&q<=seuil)||(!seuil&&q<=cfg.seuilBas)))nbAlertes++;
   });
-  magasinArts.forEach(a=>{
-    const q=parseFloat(a.quantite)||0;
-    totalQty+=q;
-    totalVal+=q*(parseFloat(a.prix)||0);
-    if(cfg.alertesActives&&q<=cfg.seuilBas)nbAlertes++;
-  });
-  return{nb:arts.length+magasinArts.length,qty:totalQty,val:totalVal,alertes:nbAlertes,stockArticles:arts.length,magasinArticles:magasinArts.length,seuilBas:cfg.seuilBas,seuilCritique:cfg.seuilCritique};
+  return{nb:arts.length,qty:totalQty,val:totalVal,alertes:nbAlertes,stockArticles:arts.length,magasinArticles:0,seuilBas:cfg.seuilBas,seuilCritique:cfg.seuilCritique};
 }
 function matSimpleFournisseurStats(fid){
   const mvts=(db.stockMouvements||[]).filter(m=>m.type==="entree"&&m.fournisseurId===fid);
@@ -9926,7 +9929,7 @@ function openAjouterArticleChoix(){
   const mags=db.magasins||[];
   const magsList=mags.map(m=>{const t=getTheme(m.theme);return`<button type="button" onclick="closeModal();navigate('materiel/magasin/${m.id}')" class="card p-4 text-left transition hover:shadow-lg" style="border:2px solid ${t.color}55;background:${t.color}08">
     <div class="flex items-center gap-3 mb-2"><div style="font-size:32px">${m.icon||t.icon}</div><div><div class="font-bold" style="color:${t.color}">${escapeHTML(m.nom)}</div><div class="text-[11px] uppercase tracking-wider text-slate-500">${t.label}</div></div></div>
-    <div class="text-xs text-slate-500">${(db.magasinArticles||[]).filter(a=>a.magasinId===m.id).length} article(s)</div>
+    <div class="text-xs text-slate-500">${matSimpleStockMagasin(m.id).nb} article(s)</div>
   </button>`}).join("");
   openModal(`<h3 class="font-bold text-lg mb-1">➕ Ajouter un article</h3>
     <p class="text-sm text-slate-500 mb-4">Choisissez le mode d'enregistrement :</p>
