@@ -1921,7 +1921,7 @@ function workflowTasksCardHTML(module,title,emptyText){
     ${rows.length?rows.slice(0,5).map(t=>`<a href="#/${escapeHTML(t.route||"dashboard")}" class="block p-2 rounded-lg bg-amber-50 mb-2" style="text-decoration:none;color:inherit"><div class="text-xs font-black text-amber-800">${escapeHTML(t.candidateName||"Candidat")}</div><div class="text-[11px] text-slate-600">${escapeHTML(t.title||"Tâche")} · ${escapeHTML(t.societe||"—")}</div></a>`).join(""):`<div class="text-sm text-emerald-700 font-semibold">${escapeHTML(emptyText||"Aucune tâche ouverte.")}</div>`}
   </div>`;
 }
-function selectSocieteDirect(s){if(!canUseSociete(s)){toast("Société non autorisée pour cet utilisateur","error");return}session.societe=s;session.transverse=null;saveSession(session);try{sessionStorage.setItem("dashSociete",s);sessionStorage.setItem("fpSociete",s);sessionStorage.setItem("mtSociete",s)}catch(e){}toast("Société active : "+s,"success");location.hash="#/dashboard";route()}
+function selectSocieteDirect(s){if(!canUseSociete(s)){toast("Société non autorisée pour cet utilisateur","error");return}session.societe=s;session.transverse=null;saveSession(session);try{sessionStorage.setItem("dashSociete",s);sessionStorage.setItem("fpSociete",s);sessionStorage.setItem("mtSociete",s)}catch(e){}toast("Société active : "+s,"success");location.hash="#/societe-portal";route()}
 function pickSociete(s){selectSocieteDirect(s)}
 function confirmPickSociete(s,p){selectSocieteDirect(s)}
 function pickSocieteFilter(s){if(!s){setCurrentStructureSocieteFilter("");toast("Filtre société : Toutes les sociétés","success");return}setCurrentStructureSocieteFilter(s);toast("Filtre société : "+s,"success")}
@@ -1931,7 +1931,50 @@ function enterTransverseModule(mod){const ok=["facturation","commercial","drh","
 function enterTransverseModuleDirect(mod){session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage":(mod==="ops"?"ops/dashboard":mod+"/dashboard"));location.hash="#/"+target;route()}
 function enterSocieteStructure(mod){const ok=["facturation","commercial","drh","materiel","ops"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
 function enterSocieteStructureDirect(mod){session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=mod==="materiel"?"materiel/dashboard":(mod==="ops"?"ops/dashboard":mod+"/dashboard");location.hash="#/"+target;route()}
-function exitTransverseModule(){session.transverse=null;saveSession(session);try{sessionStorage.removeItem("ficheContext")}catch(e){}location.hash=session?.societe?"#/dashboard":"#/select-societe";route()}
+function exitTransverseModule(){session.transverse=null;saveSession(session);try{sessionStorage.removeItem("ficheContext")}catch(e){}location.hash=session?.societe?"#/societe-portal":"#/select-societe";route()}
+
+function societePortalLogo(societe){
+  const images=loadSocieteImages();
+  if(images&&images[societe])return images[societe];
+  return "/static/iron-securite-logo.png?v=2";
+}
+function enterSocietePortalRoute(mod,targetRoute){
+  if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}
+  if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}
+  session.transverse=mod;
+  saveSession(session);
+  try{sessionStorage.setItem("ficheContext",mod)}catch(e){}
+  location.hash="#/"+targetRoute;
+  route();
+}
+function societePortalModules(){
+  return [
+    {key:"drh",label:"R-H",route:"drh/dashboard"},
+    {key:"ops",label:"OPS",route:"ops/dashboard"},
+    {key:"materiel",label:"MATERIEL",route:"materiel/dashboard"},
+    {key:"commercial",label:"COMMERCIAL",route:"commercial/dashboard"},
+    {key:"facturation",label:"FINANCES/COMPTABILITE",route:"facturation/dashboard"},
+    {key:"ops",label:"CONTROL",route:"ops/supervision"}
+  ].filter(m=>canAccessStructureKey(m.key));
+}
+function renderSocietePortal(){
+  const soc=session?.societe||"";
+  const modules=societePortalModules();
+  document.getElementById("app").innerHTML=`<div class="company-portal">
+    <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
+    <button type="button" class="company-portal-change" onclick="changeSociete()">Changer société</button>
+    <main class="company-portal-main">
+      <div class="company-portal-logo-wrap">
+        <img class="company-portal-logo" src="${escapeHTML(societePortalLogo(soc))}" alt="${escapeHTML(soc)}"/>
+      </div>
+      <div class="company-portal-title">${escapeHTML(soc)}</div>
+      <div class="company-portal-grid">
+        ${modules.map(m=>`<button type="button" class="company-portal-module" onclick="enterSocietePortalRoute('${m.key}','${m.route}')">${escapeHTML(m.label)}</button>`).join("")}
+      </div>
+      ${modules.length?`<div class="company-portal-foot">Modules autorisés pour votre compte</div>`:`<div class="company-portal-foot text-red-700">Aucun module autorisé pour cette société.</div>`}
+    </main>
+  </div>`;
+}
 
 function structureTopbarItems(){
   const items=[
@@ -2121,6 +2164,7 @@ function render(){
   sanitizeCandidatesInDB();
   if(!session){renderLogin();return}
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
+  if(session.societe&&!session.transverse&&(location.hash||"").slice(2)==="societe-portal"){renderSocietePortal();return}
   // En mode transverse, restreindre aux routes du module sélectionné
   if(session.transverse){
     const h=(location.hash||"").slice(2);
@@ -15347,7 +15391,7 @@ async function bootApp(){
       location.hash="#/select-societe";
     }
   }
-  if(!location.hash)location.hash=session?(session.societe?"#/dashboard":(session.transverse?"#/"+(session.transverse==="materiel"?"materiel/dashboard":session.transverse+"/dashboard"):"#/select-societe")):"#/login";
+  if(!location.hash)location.hash=session?(session.societe?"#/societe-portal":(session.transverse?"#/"+(session.transverse==="materiel"?"materiel/dashboard":session.transverse+"/dashboard"):"#/select-societe")):"#/login";
   route();
 }
 bootApp();
