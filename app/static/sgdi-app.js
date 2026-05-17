@@ -1039,7 +1039,34 @@ async function loadStoresForArticleForm(){
 }
 function articleApiPayload(a){return{code:String(a.code||"").trim()||("ART-"+Date.now()),designation:String(a.designation||a.sousCategorie||a.code||"Article").trim()||"Article",category:a.categorie||a.category||null,sub_category:a.sousCategorie||a.sub_category||null,society:a.societe||a.society||null,store_id:sqlRelationId(db.magasins,a.magasinId),supplier_id:sqlRelationId(db.fournisseurs,a.fournisseurId),unit:a.unite||"Pièce",quantity:sqlNum(a.stockInitial||a.quantiteGlobaleRecue||a.quantity),unit_price:sqlNum(a.prixUnitaire||a.unit_price),min_quantity:sqlNum(a.stockMin||a.seuilAlerte||a.min_quantity),barcode:a.codeBarre||a.barcode||null,brand:a.marque||a.brand||null,model:a.modele||a.model||null,attributes:{...(a.attributs||{}),raw:a,stockVariantes:a.stockVariantes||[],stockReceptionsGlobales:a.stockReceptionsGlobales||[]},active:a.actif===false||a.active===0?0:1}}
 function articleFromApi(row){const attrs=row.attributes||{};const raw=attrs.raw&&typeof attrs.raw==="object"?attrs.raw:{};const store=(db.magasins||[]).find(m=>String(m.backendId)===String(row.store_id));const supplier=(db.fournisseurs||[]).find(f=>String(f.backendId)===String(row.supplier_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,code:row.code||raw.code||"",designation:row.designation||raw.designation||"",categorie:row.category||raw.categorie||"",sousCategorie:row.sub_category||raw.sousCategorie||"",societe:row.society||raw.societe||"",magasinId:store?.id||raw.magasinId||"",fournisseurId:supplier?.id||raw.fournisseurId||"",unite:row.unit||raw.unite||"Pièce",stockInitial:row.quantity??raw.stockInitial??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,stockMin:row.min_quantity??raw.stockMin??"",codeBarre:row.barcode||raw.codeBarre||"",marque:row.brand||raw.marque||"",modele:row.model||raw.modele||"",attributs:attrs,stockVariantes:attrs.stockVariantes||raw.stockVariantes||[],stockReceptionsGlobales:attrs.stockReceptionsGlobales||raw.stockReceptionsGlobales||[],actif:row.active!==0}}
-async function persistArticleToPostgres(a){if(!a)return null;sgdiRequireServerWrite();const saved=a.backendId?await SGDI.stock.updateArticle(a.backendId,articleApiPayload(a)):await SGDI.stock.createArticle(articleApiPayload(a));Object.assign(a,articleFromApi(saved),{id:a.id||String(saved.id),backendId:saved.id});return a}
+function stockArticleCodeConflict(err){
+  return /déjà existant|deja existant|code déjà utilisé|code deja utilise|unique|duplicate/i.test(String(err?.message||err||""));
+}
+function stockUniqueCodeFallback(a,attempt){
+  const base=stockNextCode(a.societe,a.categorie);
+  const suffix=String(Date.now()).slice(-5)+String(attempt||1);
+  return `${base}-${suffix}`;
+}
+async function persistArticleToPostgres(a){
+  if(!a)return null;
+  sgdiRequireServerWrite();
+  let saved;
+  if(a.backendId){
+    saved=await SGDI.stock.updateArticle(a.backendId,articleApiPayload(a));
+  }else{
+    for(let attempt=1;attempt<=3;attempt++){
+      try{
+        saved=await SGDI.stock.createArticle(articleApiPayload(a));
+        break;
+      }catch(e){
+        if(!stockArticleCodeConflict(e)||attempt===3)throw e;
+        a.code=stockUniqueCodeFallback(a,attempt);
+      }
+    }
+  }
+  Object.assign(a,articleFromApi(saved),{id:a.id||String(saved.id),backendId:saved.id});
+  return a;
+}
 function movementTypeToApi(t){return({retour:"retour_employe",dotation_pret:"dotation_pret_mission",reforme:"reformer"}[t])||t||"entree"}
 function movementFromApiType(t){return({retour_employe:"retour",dotation_pret_mission:"dotation_pret",reformer:"reforme"}[t])||t}
 function movementApiPayload(m){const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));return{article_id:article?.backendId||sqlInt(m.articleId),movement_date:sqlDate(m.date)||today(),movement_type:movementTypeToApi(m.type),quantity:sqlNum(m.quantite),unit_price:sqlNum(m.prixUnitaire),store_id:sqlRelationId(db.magasins,m.magasinId||article?.magasinId),supplier_id:sqlRelationId(db.fournisseurs,m.fournisseurId),employee_id:sqlRelationId(db.agents,m.beneficiaireAgentId||m.retourAgentId||m.agentId),recipient:m.beneficiaireNom||m.retourAgentNom||null,reason:m.motif||null,renewal_reason:m.motifRenouvellement||null,voucher_number:m.numeroBon||null,notes:m.notes||null,size_breakdown:{repartitionTailles:m.repartitionTailles||{},raw:m}}}
@@ -10007,10 +10034,15 @@ function stockMouvementsFiltered(){
 }
 function stockNextCode(soc,catCode){
   const prefSoc=(soc||"GEN").split(" ").map(s=>s[0]||"").join("").substring(0,3).toUpperCase();
-  const c=(catCode||"GEN").substring(0,3).toUpperCase();
-  const list=(db.stockArticles||[]).filter(a=>a.societe===soc&&a.categorie===catCode);
-  const n=String(list.length+1).padStart(4,"0");
-  return `${prefSoc}-${c}-${n}`;
+  const mag=(db.magasins||[]).find(m=>String(m.id)===String(catCode||"")||String(m.nom||"")===String(catCode||""));
+  const c=String(mag?.nom||catCode||"GEN").replace(/[^A-Za-z0-9]/g,"").substring(0,3).toUpperCase()||"GEN";
+  const prefix=`${prefSoc}-${c}-`;
+  const used=(db.stockArticles||[]).map(a=>String(a.code||"")).filter(code=>code.startsWith(prefix));
+  const max=used.reduce((n,code)=>{
+    const m=code.slice(prefix.length).match(/^(\d+)/);
+    return m?Math.max(n,parseInt(m[1],10)||0):n;
+  },0);
+  return `${prefix}${String(max+1).padStart(4,"0")}`;
 }
 function stockMonthRange(){const d=new Date();const start=new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10);const end=d.toISOString().slice(0,10);return{start,end}}
 function stockSummaryKPI(){
