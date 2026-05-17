@@ -173,7 +173,7 @@
   body:has(.company-portal),html:has(.company-portal),body:has(.company-portal) #app{background:#fff!important}
   .company-portal{min-height:100vh;background:#fff!important;position:relative;overflow:auto;color:#061b42}
   .company-portal-main{width:min(1120px,92vw);min-height:100vh;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0 54px}
-  .company-portal-logo-wrap{width:290px;height:290px;border-radius:50%;display:flex;align-items:center;justify-content:center;filter:none;margin-bottom:52px}
+  .company-portal-logo-wrap{width:290px;height:290px;border-radius:50%;display:flex;align-items:center;justify-content:center;filter:none;margin-bottom:52px;transform:translateY(-3cm)}
   .company-portal-logo{width:100%;height:100%;object-fit:contain}
   .company-portal-title{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.16em;color:#64748b;margin-top:-34px;margin-bottom:44px}
   .company-portal-grid{width:100%;display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:70px 88px;align-items:center}
