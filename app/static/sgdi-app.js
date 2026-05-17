@@ -10821,7 +10821,7 @@ async function renderStockArticleForm(view,id){
         <button class="btn btn-ghost" style="background:#fff;color:#0f172a;border-color:#fff" onclick="navigate('materiel/inventaire')">Retour</button>
       </div>
     </div>
-    <form id="stock-article-form">
+    <form id="stock-article-form" data-stock-article-id="${escapeHTML(a.id||"")}" data-stock-article-new="${isNew?"1":"0"}">
       <div class="mat-form-band"><div class="mat-form-band-title">Identification article</div>
         <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
           <div class="md:col-span-2"><label class="label">Société propriétaire *</label><select class="select" name="societe"  onchange="document.getElementById('stock-article-form').dispatchEvent(new Event('change'));stockReloadCatOptions(this.value)"><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option ${a.societe===s?"selected":""}>${s}</option>`).join("")}</select></div>
@@ -11047,7 +11047,7 @@ function stockAddDetailVariantRow(type){
   const last=box.querySelector(".stk-variant-row:last-child [data-stock-var-qty]");
   if(last)last.focus();
 }
-function stockSaveDetailVariantRows(){
+async function stockSaveDetailVariantRows(){
   const rows=stockCollectVariantsFrom("#stk-detail-variant-rows");
   if(!rows.length){toast("Ajoutez au moins une quantité par taille","error");return}
   const total=stockVariantesTotal(rows);
@@ -11060,9 +11060,11 @@ function stockSaveDetailVariantRows(){
     target.dataset.stockGlobalDetails=stockGlobalDetailsAttr(rows);
   }
   updateStockGlobalTotal();
+  const saved=await stockPersistCurrentArticleForm("Détail quantité non enregistré PostgreSQL");
+  if(!saved)return;
   window._stockDetailTargetRow=null;
   closeModal();
-  toast("Détail des tailles enregistré","success");
+  toast("Détail des quantités enregistré sur serveur","success");
 }
 function stockValidateGlobalStockRow(btn){
   const row=btn.closest(".stk-global-stock-row");if(!row)return;
@@ -11147,6 +11149,65 @@ function stockCollectVariantsFrom(selector){
     if(!valeur||quantite<=0)return null;
     return{type,valeur,quantite,dateReception};
   }).filter(Boolean);
+}
+async function stockPersistCurrentArticleForm(errorPrefix){
+  const f=document.getElementById("stock-article-form");
+  if(!f){toast("Formulaire article introuvable","error");return false}
+  const get=n=>{const el=f.querySelector(`[name="${n}"]`);return el?el.value:"";};
+  const soc=(get("societe")||"").trim();
+  const cat=(get("categorie")||"").trim();
+  const designation=(get("designation")||"").trim();
+  if(!soc){toast("Sélectionnez une société avant l'enregistrement serveur","error");f.querySelector('[name="societe"]')?.focus();return false}
+  if(!cat){toast("Sélectionnez un magasin avant l'enregistrement serveur","error");f.querySelector('[name="categorie"]')?.focus();return false}
+  if(!designation){toast("Saisissez la désignation article avant l'enregistrement serveur","error");f.querySelector('[name="designation"]')?.focus();return false}
+  const id=f.dataset.stockArticleId||uid("stk");
+  let a=(db.stockArticles||[]).find(x=>String(x.id)===String(id));
+  if(!a){
+    a={id,dateCreation:today(),actif:true};
+    db.stockArticles=db.stockArticles||[];
+    db.stockArticles.push(a);
+    f.dataset.stockArticleId=id;
+  }
+  ["code","categorie","sousCategorie","societe","designation","marque","modele","reference","codeBarre","emplacement","fournisseur","description","notes","magasinId","fournisseurId"].forEach(k=>{a[k]=(get(k)||"").trim()});
+  const selectedMag=(db.magasins||[]).find(m=>String(m.id)===String(get("categorie")||""));
+  if(selectedMag){a.magasinId=selectedMag.id;a.categorie=selectedMag.nom||"Magasin"}
+  if(!a.unite)a.unite="Pièce";
+  const receptionsGlobales=stockCollectGlobalStockRows();
+  const receptionsGlobalesTotal=stockGlobalStockTotal(receptionsGlobales);
+  a.stockReceptionsGlobales=receptionsGlobales;
+  a.quantiteGlobaleRecue=receptionsGlobalesTotal;
+  a.dateReceptionGlobale=receptionsGlobales[0]?.dateReception||"";
+  const dernierPrixGlobal=receptionsGlobales.slice().reverse().find(r=>parseFloat(r.prixUnitaire)>0)?.prixUnitaire;
+  if(dernierPrixGlobal!==undefined)a.prixUnitaire=dernierPrixGlobal;
+  const isHabSave=stockIsHabillementCategory(a.categorie);
+  const variantes=stockCollectVariants();
+  const variantesTotal=stockVariantesTotal(variantes);
+  a.stockVariantes=variantes;
+  if(isHabSave){
+    a.stockInitial=variantesTotal||receptionsGlobalesTotal||0;
+    a.stockMin="";
+    a.stockMax="";
+    a.seuilAlerte="";
+  }else{
+    ["stockInitial","stockMin","stockMax","seuilAlerte"].forEach(k=>{const v=get(k);a[k]=v===""||v===null||v===undefined?"":parseFloat(v)});
+    if(receptionsGlobalesTotal>0)a.stockInitial=receptionsGlobalesTotal;
+    if(variantesTotal>0)a.stockInitial=variantesTotal;
+  }
+  const attrs={};
+  document.querySelectorAll("#stk-attrs-list .stk-attr-row").forEach(r=>{const k=(r.querySelector("[data-attr-key]")?.value||"").trim();const v=(r.querySelector("[data-attr-val]")?.value||"").trim();if(k)attrs[k]=v});
+  a.attributs=attrs;
+  if(!a.code)a.code=stockNextCode(a.societe,a.categorie);
+  a.derniereMaj=today();
+  try{
+    await persistArticleToPostgres(a);
+    f.dataset.stockArticleNew="0";
+    sgdiDirty=true;
+    await sgdiBackendSaveAndWait();
+    return true;
+  }catch(e){
+    toast(`${errorPrefix||"Enregistrement PostgreSQL refusé"} : ${e.message||e}`,"error");
+    return false;
+  }
 }
 function updateStockVariantTotal(){
   const detailRows=document.getElementById("stk-detail-variant-rows");
