@@ -1936,7 +1936,7 @@ function exitTransverseModule(){session.transverse=null;saveSession(session);try
 function societePortalLogo(societe){
   const images=loadSocieteImages();
   if(images&&images[societe])return images[societe];
-  return "/static/iron-securite-logo.png?v=2";
+  return normalizeSocieteName(societe)==="IRON GLOBAL SECURITE"?"/static/iron-securite-logo.png?v=2":"";
 }
 function enterSocietePortalRoute(mod,targetRoute){
   if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}
@@ -1959,20 +1959,23 @@ function societePortalModules(){
 }
 function renderSocietePortal(){
   const soc=session?.societe||"";
+  const userName=session?.nom||session?.username||"Utilisateur";
+  const logo=societePortalLogo(soc);
   const modules=societePortalModules();
   document.getElementById("app").innerHTML=`<div class="company-portal">
     <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
     <button type="button" class="company-portal-change" onclick="changeSociete()">Changer société</button>
     <main class="company-portal-main">
-      <div class="company-portal-logo-wrap">
-        <img class="company-portal-logo" src="${escapeHTML(societePortalLogo(soc))}" alt="${escapeHTML(soc)}"/>
-      </div>
+      ${logo?`<div class="company-portal-logo-wrap">
+        <img class="company-portal-logo" src="${escapeHTML(logo)}" alt="${escapeHTML(soc)}"/>
+      </div>`:`<div class="company-portal-logo-spacer" aria-hidden="true"></div>`}
       <div class="company-portal-title">${escapeHTML(soc)}</div>
       <div class="company-portal-grid">
         ${modules.map(m=>`<button type="button" class="company-portal-module" onclick="enterSocietePortalRoute('${m.key}','${m.route}')">${escapeHTML(m.label)}</button>`).join("")}
       </div>
       ${modules.length?`<div class="company-portal-foot">Modules autorisés pour votre compte</div>`:`<div class="company-portal-foot text-red-700">Aucun module autorisé pour cette société.</div>`}
     </main>
+    <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
   </div>`;
 }
 
@@ -2382,6 +2385,7 @@ async function confirmCreateSociete(){
 }
 function renderSocieteSelector(){
   const selectableSocietes=currentAllowedSocietes();
+  const userName=session?.nom||session?.username||"Utilisateur";
   document.getElementById("app").innerHTML=`<div class="sgdi-societe-page">
     <button type="button" class="sgdi-societe-edit" onclick="openSelectSocieteToEditModal()">Modifier société</button>
     <main class="sgdi-societe-main">
@@ -2400,7 +2404,7 @@ function renderSocieteSelector(){
     </main>
     <div class="sgdi-societe-bottom">
       <button type="button" class="sgdi-societe-logout" onclick="logout()">Déconnexion</button>
-      <div class="sgdi-societe-user">Connecté en tant que :</div>
+      <div class="sgdi-societe-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
     </div>
     ${isAdminSystemSession()?`<button type="button" class="sgdi-societe-admin" onclick="enterTransverseModule('admin')">ADMINISTRATION SYSTEME</button>`:""}
   </div>`;
