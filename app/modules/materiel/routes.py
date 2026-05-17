@@ -6,6 +6,7 @@ from app.core.pagination import paginate_statement
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
+from app.modules.drh.models import Employee
 from app.modules.materiel import service
 from app.modules.materiel.models import EmployeeEquipment, StockArticle, StockMovement, Store, Supplier
 from app.modules.materiel.schemas import (
@@ -78,9 +79,43 @@ def _ensure_article_allowed(db: Session, user: User, article_id: int | None) -> 
     return _ensure_row_society_allowed(db.get(StockArticle, article_id), user)
 
 
+def _ensure_employee_allowed(db: Session, user: User, employee_id: int | None) -> Employee | None:
+    if employee_id is None:
+        return None
+    row = db.get(Employee, employee_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    _ensure_society_allowed(user, row.society)
+    return row
+
+
+def _ensure_store_allowed(db: Session, user: User, store_id: int | None) -> Store | None:
+    if store_id is None:
+        return None
+    row = db.get(Store, store_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Enregistrement introuvable")
+    allowed = _allowed_societies(user)
+    if allowed and row.society and row.society not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+    return row
+
+
+def _ensure_supplier_allowed(db: Session, user: User, supplier_id: int | None) -> Supplier | None:
+    if supplier_id is None:
+        return None
+    row = db.get(Supplier, supplier_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Enregistrement introuvable")
+    allowed = _allowed_societies(user)
+    if allowed and row.society and row.society not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+    return row
+
+
 @router.get("/dashboard")
-def materiel_dashboard(db: Session = Depends(get_db)):
-    return service.dashboard(db)
+def materiel_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return service.dashboard(db, _allowed_societies(user))
 
 
 @router.get("/stores/page")
@@ -211,8 +246,9 @@ def delete_article(article_id: int, db: Session = Depends(get_db), user: User = 
 
 
 @router.get("/inventory")
-def inventory(store_id: int | None = None, category: str | None = None, db: Session = Depends(get_db)):
-    return service.inventory(db, store_id, category)
+def inventory(store_id: int | None = None, category: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_store_allowed(db, user, store_id)
+    return service.inventory(db, store_id, category, _allowed_societies(user))
 
 
 @router.get("/movements/page")
@@ -247,7 +283,12 @@ def movements(article_id: int | None = None, employee_id: int | None = None, db:
 
 @router.post("/movements", response_model=MovementOut)
 def create_movement(payload: MovementCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_article_allowed(db, user, payload.article_id)
+    article = _ensure_article_allowed(db, user, payload.article_id)
+    store = _ensure_store_allowed(db, user, payload.store_id)
+    _ensure_supplier_allowed(db, user, payload.supplier_id)
+    _ensure_employee_allowed(db, user, payload.employee_id)
+    if store and article and article.store_id and store.id != article.store_id:
+        raise HTTPException(status_code=422, detail="Magasin incohérent avec l'article")
     return service.create_movement(db, payload)
 
 
@@ -262,7 +303,10 @@ def delete_movement(movement_id: int, db: Session = Depends(get_db), user: User 
 
 @router.post("/dotations", response_model=EquipmentOut)
 def create_dotation(payload: DotationCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_article_allowed(db, user, payload.article_id)
+    article = _ensure_article_allowed(db, user, payload.article_id)
+    employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    if article and employee and article.society and employee.society and article.society != employee.society:
+        raise HTTPException(status_code=422, detail="Article et employé de sociétés différentes")
     return service.create_dotation(db, payload)
 
 
@@ -286,5 +330,5 @@ def return_equipment(equipment_id: int, payload: ReturnEquipmentIn, db: Session 
 
 
 @router.get("/reversements/pending")
-def reversement_pending(db: Session = Depends(get_db)):
-    return service.reversement_pending(db)
+def reversement_pending(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return service.reversement_pending(db, _allowed_societies(user))

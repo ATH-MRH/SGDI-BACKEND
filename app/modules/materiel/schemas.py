@@ -126,6 +126,7 @@ class EquipmentOut(BaseModel):
     id: int
     employee_id: int
     article_id: int
+    movement_id: int | None = None
     quantity: float
     unit_price: float
     dotation_date: date

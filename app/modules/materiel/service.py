@@ -70,18 +70,45 @@ def delete_row(db: Session, model: Type, row_id: int):
     db.commit()
     return {"deleted": True, "id": row_id}
 
-def dashboard(db: Session):
+def dashboard(db: Session, allowed_societies: list[str] | None = None):
+    allowed = [s for s in (allowed_societies or []) if s]
+    articles_stmt = select(StockArticle).where(StockArticle.active == 1)
+    stores_stmt = select(Store)
+    suppliers_stmt = select(Supplier)
+    if allowed:
+        articles_stmt = articles_stmt.where(StockArticle.society.in_(allowed))
+        stores_stmt = stores_stmt.where((Store.society.in_(allowed)) | (Store.society.is_(None)) | (Store.society == ""))
+        suppliers_stmt = suppliers_stmt.where(Supplier.society.in_(allowed))
+    articles = db.execute(articles_stmt).scalars().all()
+    article_ids = [a.id for a in articles]
+    active_dotations = 0
+    if article_ids:
+        active_dotations = db.execute(
+            select(func.count(EmployeeEquipment.id)).where(
+                EmployeeEquipment.status == "attribue",
+                EmployeeEquipment.article_id.in_(article_ids),
+            )
+        ).scalar() or 0
+    low_stock_alerts = sum(1 for a in articles if (a.quantity or 0) <= 0 or ((a.min_quantity or 0) > 0 and (a.quantity or 0) <= (a.min_quantity or 0)))
     return {
-        "articles": 0,
-        "stores": 0,
-        "suppliers": 0,
-        "low_stock_alerts": 0,
-        "active_employee_dotations": 0,
+        "articles": len(articles),
+        "stores": db.execute(select(func.count()).select_from(stores_stmt.subquery())).scalar() or 0,
+        "suppliers": db.execute(select(func.count()).select_from(suppliers_stmt.subquery())).scalar() or 0,
+        "low_stock_alerts": low_stock_alerts,
+        "active_employee_dotations": active_dotations,
     }
 
 
-def inventory(db: Session, store_id: int | None = None, category: str | None = None):
-    articles = list_rows(db, StockArticle, {"store_id": store_id, "category": category, "active": 1})
+def inventory(db: Session, store_id: int | None = None, category: str | None = None, allowed_societies: list[str] | None = None):
+    stmt = select(StockArticle).where(StockArticle.active == 1)
+    if store_id is not None:
+        stmt = stmt.where(StockArticle.store_id == store_id)
+    if category:
+        stmt = stmt.where(StockArticle.category == category)
+    allowed = [s for s in (allowed_societies or []) if s]
+    if allowed:
+        stmt = stmt.where(StockArticle.society.in_(allowed))
+    articles = db.execute(stmt.order_by(StockArticle.id.desc())).scalars().all()
     return {
         "count": len(articles),
         "total_quantity": sum(a.quantity or 0 for a in articles),
@@ -92,7 +119,15 @@ def inventory(db: Session, store_id: int | None = None, category: str | None = N
 def create_movement(db: Session, payload: MovementCreate):
     article = get_or_404(db, StockArticle, payload.article_id)
     movement_type = payload.movement_type
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=422, detail="Quantité invalide")
+    if article.active == 0:
+        raise HTTPException(status_code=422, detail="Article inactif")
     sign = 1 if movement_type in ENTRY_TYPES else -1 if movement_type in EXIT_TYPES else 0
+    if sign == 0:
+        raise HTTPException(status_code=422, detail="Type de mouvement inconnu")
+    if payload.store_id is not None and article.store_id is not None and payload.store_id != article.store_id:
+        raise HTTPException(status_code=422, detail="Magasin incohérent avec l'article")
     if sign == -1 and article.quantity < payload.quantity:
         raise HTTPException(status_code=422, detail="Stock insuffisant")
     article.quantity = (article.quantity or 0) + sign * payload.quantity
@@ -108,6 +143,8 @@ def create_movement(db: Session, payload: MovementCreate):
 def create_dotation(db: Session, payload: DotationCreate):
     article = get_or_404(db, StockArticle, payload.article_id)
     employee = get_or_404(db, Employee, payload.employee_id)
+    if article.society and employee.society and article.society != employee.society:
+        raise HTTPException(status_code=422, detail="Article et employé de sociétés différentes")
     unit_price = payload.unit_price if payload.unit_price is not None else article.unit_price
     movement = create_movement(
         db,
@@ -179,8 +216,12 @@ def employee_equipment(db: Session, employee_id: int):
     return list_rows(db, EmployeeEquipment, {"employee_id": employee_id})
 
 
-def reversement_pending(db: Session):
-    employees = db.execute(select(Employee).where(Employee.status.in_(["sortant", "archive"]))).scalars().all()
+def reversement_pending(db: Session, allowed_societies: list[str] | None = None):
+    stmt = select(Employee).where(Employee.status.in_(["sortant", "archive"]))
+    allowed = [s for s in (allowed_societies or []) if s]
+    if allowed:
+        stmt = stmt.where(Employee.society.in_(allowed))
+    employees = db.execute(stmt).scalars().all()
     rows = []
     for employee in employees:
         equipment = list_rows(db, EmployeeEquipment, {"employee_id": employee.id, "status": "attribue"})
