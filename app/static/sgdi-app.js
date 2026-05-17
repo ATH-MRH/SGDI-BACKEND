@@ -10944,7 +10944,11 @@ function stockPointureAllowed(sousCategorie){
 }
 function stockTailleAllowed(categorie){
   const val=stockNormalizeLabel(categorie);
-  return val==="tenues";
+  const mag=(db?.magasins||[]).find(m=>String(m.id)===String(categorie||"")||String(m.nom||"")===String(categorie||""));
+  const magName=stockNormalizeLabel(mag?.nom||"");
+  const sub=stockNormalizeLabel(document.getElementById("stk-subcat-select")?.value||"");
+  if(val==="tenues"||magName==="habillement"||stockIsHabillementCategory(categorie))return true;
+  return /(tenue|casquette|parkas?|blouson|chandail|polo|tee shirt|ceinture|ceinturon|gilet|gants)/i.test(sub);
 }
 function stockUpdateTailleButton(){
   const btn=document.getElementById("stk-add-taille-btn");if(!btn)return;
@@ -10953,7 +10957,7 @@ function stockUpdateTailleButton(){
   btn.disabled=!allowed;
   btn.style.opacity=allowed?"1":".45";
   btn.style.cursor=allowed?"pointer":"not-allowed";
-  btn.title=allowed?"":"Choisissez la catégorie Tenues";
+  btn.title=allowed?"":"Choisissez un magasin Habillement ou une famille de tenue";
 }
 function stockUpdatePointureButton(){
   const btn=document.getElementById("stk-add-pointure-btn");if(!btn)return;
@@ -11032,7 +11036,7 @@ function stockOpenTailleDetailForm(btn){
 }
 function stockAddDetailVariantRow(type){
   if(type==="Taille"&&!stockTailleAllowed(document.getElementById("stk-cat-select")?.value||"")){
-    toast("Choisissez d'abord la catégorie Tenues","error");return;
+    toast("Choisissez d'abord un magasin Habillement ou une famille de tenue","error");return;
   }
   if(type==="Pointure"&&!stockPointureAllowed(document.getElementById("stk-subcat-select")?.value||"")){
     toast("Choisissez d'abord Rangers, Chaussure de ville ou Chaussure de securite","error");return;
@@ -11040,6 +11044,8 @@ function stockAddDetailVariantRow(type){
   const box=document.getElementById("stk-detail-variant-rows");if(!box)return;
   box.insertAdjacentHTML("beforeend",stockVariantRowHTML(type||"Taille","","",today()));
   updateStockVariantTotal();
+  const last=box.querySelector(".stk-variant-row:last-child [data-stock-var-qty]");
+  if(last)last.focus();
 }
 function stockSaveDetailVariantRows(){
   const rows=stockCollectVariantsFrom("#stk-detail-variant-rows");
@@ -11115,7 +11121,7 @@ function stockVariantRowHTML(type,valeur,quantite,dateReception){
 function stockAddVariantRow(type){
   const box=document.getElementById("stk-variant-rows");if(!box)return;
   if(type==="Taille"&&!stockTailleAllowed(document.getElementById("stk-cat-select")?.value||"")){
-    toast("Choisissez d'abord la catégorie Tenues","error");
+    toast("Choisissez d'abord un magasin Habillement ou une famille de tenue","error");
     stockUpdateTailleButton();
     return;
   }
