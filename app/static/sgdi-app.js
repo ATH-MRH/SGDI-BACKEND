@@ -1961,7 +1961,8 @@ function renderSocietePortal(){
   const soc=session?.societe||"";
   const userName=session?.nom||session?.username||"Utilisateur";
   const logo=societePortalLogo(soc);
-  const portalTheme=normalizeSocieteName(soc)==="IRON GLOBAL SOLUTION"?" company-portal-yellow":"";
+  const normalizedSociete=normalizeSocieteName(soc);
+  const portalTheme=normalizedSociete==="IRON GLOBAL SOLUTION"?" company-portal-yellow":(normalizedSociete==="SWORD CONSTRUCTION"?" company-portal-orange":(normalizedSociete==="SWORD CORPORATION"?" company-portal-blue":""));
   const modules=societePortalModules();
   document.getElementById("app").innerHTML=`<div class="company-portal${portalTheme}">
     <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
