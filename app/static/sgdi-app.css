@@ -170,10 +170,10 @@
   .login-admin-system-shortcut span[aria-hidden="true"]{font-size:18px;line-height:1}
   .societe-band-btn:hover{background:#dff3ff!important;color:#0360a8!important;border-color:#7dd3fc!important}
   .societe-band-btn:hover *{color:#0360a8!important}
-  body:has(.company-portal),html:has(.company-portal),body:has(.company-portal) #app{background:#fff!important}
-  .company-portal{min-height:100vh;width:100vw;min-width:100%;background:#fff!important;position:relative;overflow:auto;color:#061b42;isolation:isolate}
+  body:has(.company-portal),html:has(.company-portal),body:has(.company-portal) #app{background:#fff!important;background-image:none!important}
+  .company-portal{min-height:100vh;width:100vw;min-width:100%;background:#fff!important;background-image:none!important;position:relative;overflow:auto;color:#061b42;isolation:isolate}
   .company-portal:before{content:"";position:fixed;inset:0;background:#fff;z-index:-1;pointer-events:none}
-  .company-portal-main{width:min(1120px,92vw);min-height:100vh;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 0 54px}
+  .company-portal-main{width:100%;max-width:none;min-height:100vh;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px max(6vw,24px) 54px;background:#fff!important;background-image:none!important}
   .company-portal-logo-wrap{width:290px;height:290px;border-radius:50%;display:flex;align-items:center;justify-content:center;filter:none;margin-bottom:52px;transform:translateY(-3cm);animation:companyLogoEnter .72s cubic-bezier(.2,.75,.2,1) both}
   .company-portal-logo{width:100%;height:100%;object-fit:contain}
   .company-portal-title{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.16em;color:#64748b;margin-top:-34px;margin-bottom:44px;animation:companyFadeUp .58s ease .16s both}
