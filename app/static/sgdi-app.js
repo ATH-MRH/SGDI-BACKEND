@@ -1945,7 +1945,7 @@ function enterSocietePortalRoute(mod,targetRoute){
   saveSession(session);
   try{sessionStorage.setItem("ficheContext",mod)}catch(e){}
   location.hash="#/"+targetRoute;
-  route();
+  window.route();
 }
 function societePortalModules(){
   return [
@@ -2164,7 +2164,7 @@ function render(){
   sanitizeCandidatesInDB();
   if(!session){renderLogin();return}
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
-  if(session.societe&&!session.transverse&&(location.hash||"").slice(2)==="societe-portal"){renderSocietePortal();return}
+  if(session.societe&&!session.transverse&&["societe-portal","dashboard"].includes((location.hash||"").slice(2)||"dashboard")){renderSocietePortal();return}
   // En mode transverse, restreindre aux routes du module sélectionné
   if(session.transverse){
     const h=(location.hash||"").slice(2);
