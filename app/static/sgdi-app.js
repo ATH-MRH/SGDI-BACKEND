@@ -2381,77 +2381,28 @@ async function confirmCreateSociete(){
   renderSocieteSelector();
 }
 function renderSocieteSelector(){
-  const socColors={};
-  const socDesc={};
-  Object.assign(socDesc,loadSocieteDescriptions());
-  const socImages=loadSocieteImages();
-  const role=session.role||"agent";
   const selectableSocietes=currentAllowedSocietes();
-  const dt=new Date();const months=["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
-  const dateStr=dt.getDate()+" "+months[dt.getMonth()]+" "+dt.getFullYear();
-  document.getElementById("app").innerHTML=`<div class="min-h-screen" style="background:var(--bg)">
-    <div class="max-w-6xl mx-auto px-6 py-10">
-
-      <header class="relative mb-10">
-        <div class="text-center">
-          <div class="text-4xl font-black tracking-tight text-slate-950">SGDI</div>
-          <div class="text-xs text-slate-500 mt-1 uppercase tracking-widest">Création de société</div>
-        </div>
-        <div class="absolute right-0 top-0 flex items-center gap-3">
-          <div class="text-right hidden md:block">
-            <div class="text-xs text-slate-500">Connecté en tant que</div>
-            <div class="text-sm font-semibold">${escapeHTML(session.nom)} <span class="pill pill-amber ml-1">${escapeHTML(role)}</span></div>
-          </div>
-          <button class="btn btn-ghost text-xs" style="background:transparent!important;border-color:transparent!important;color:#fff!important;box-shadow:none" onclick="logout()">↩ Déconnexion</button>
-        </div>
-      </header>
-
-      <section class="mb-10">
-        <div class="flex items-end justify-between mb-4">
-          <div>
-            <div class="text-[11px] uppercase tracking-widest font-bold text-slate-500">Espace société</div>
-            <h2 class="text-2xl font-bold tracking-tight mt-1">Sélectionnez votre société</h2>
-            <p class="text-slate-500 text-sm mt-1">Cloisonnement strict des données par droits utilisateur.</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <div class="text-xs text-slate-400 hidden md:block">${selectableSocietes.length} société(s) autorisée(s)</div>
-            <button type="button" class="btn btn-secondary text-xs" onclick="openSelectSocieteToEditModal()">Modifier société</button>
-          </div>
-        </div>
-        <div class="card p-5" style="background:#020617;color:#fff;border-color:#111827">
-          <label class="label">Société</label>
-          <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
-            <select id="societe-main-select" class="select" onchange="if(this.value)pickSociete(this.value)">
-              <option value="">— Sélectionner une société —</option>
-              ${selectableSocietes.map(s=>`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join("")}
-            </select>
-            <button type="button" class="btn btn-primary" onclick="const s=document.getElementById('societe-main-select')?.value;if(s)pickSociete(s);else toast('Choisissez une société','error')">Accéder</button>
-            ${isAdm2()?`<button type="button" class="btn btn-secondary" onclick="openCreateSocieteModal()">Créer société</button>`:""}
-          </div>
-          <div class="flex justify-between items-center mt-3 text-xs" style="color:#cbd5e1">
-            <span>${selectableSocietes.length} société(s) disponible(s) dans votre périmètre</span>
-            <button type="button" class="btn btn-ghost text-xs" onclick="openSelectSocieteToEditModal()">Modifier société</button>
-          </div>
+  document.getElementById("app").innerHTML=`<div class="sgdi-societe-page">
+    <button type="button" class="sgdi-societe-edit" onclick="openSelectSocieteToEditModal()">Modifier société</button>
+    <main class="sgdi-societe-main">
+      <div class="sgdi-societe-brand" aria-label="SGDI"><span>SGD</span><i>I</i></div>
+      <div class="sgdi-societe-subtitle">ACCEDER A VOTRE ESPACE</div>
+      <section class="sgdi-societe-selector">
+        <h1 class="sgdi-societe-title">Sélectionnez la société</h1>
+        <div class="sgdi-societe-input-wrap">
+          <select id="societe-main-select" class="sgdi-societe-select" required>
+            <option value="" selected></option>
+            ${selectableSocietes.map(s=>`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join("")}
+          </select>
+          <button type="button" class="sgdi-societe-access" onclick="const s=document.getElementById('societe-main-select')?.value;if(s)pickSociete(s);else toast('Choisissez une société','error')">Accéder</button>
         </div>
       </section>
-
-      ${isAdminSystemSession()?`<section>
-        <button type="button" onclick="enterTransverseModule('admin')" class="card p-4 w-full text-left mt-3" style="border:1px solid #fecaca;background:linear-gradient(135deg,#fff5f5 0%,#ffffff 50%);transition:all .2s">
-          <div class="flex items-center gap-4">
-            <div style="width:44px;height:44px;border-radius:10px;background:#fee2e2;display:flex;align-items:center;justify-content:center;font-size:22px">⚙️</div>
-            <div class="flex-1">
-              <div class="text-sm font-black uppercase tracking-wide text-red-700">ADMINISTRATION SYSTEME</div>
-              <div class="text-xs text-slate-600 mt-1">Utilisateurs · Droits · Niveaux d'accès · Priorités · Alertes · Champs perso · Modules perso · Journal · Stockage</div>
-            </div>
-            <span class="pill pill-red">🔐 Admin uniquement</span>
-          </div>
-        </button>
-      </section>`:""}
-
-      <footer class="mt-10 text-center text-[11px] text-slate-400">
-        IRONGS BASE © ${dt.getFullYear()} · Logiciel RH dédié sécurité privée Algérie
-      </footer>
+    </main>
+    <div class="sgdi-societe-bottom">
+      <button type="button" class="sgdi-societe-logout" onclick="logout()">Déconnexion</button>
+      <div class="sgdi-societe-user">Connecté en tant que :</div>
     </div>
+    ${isAdminSystemSession()?`<button type="button" class="sgdi-societe-admin" onclick="enterTransverseModule('admin')">ADMINISTRATION SYSTEME</button>`:""}
   </div>`;
   stripCryptogrammes();
 }
