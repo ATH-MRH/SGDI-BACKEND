@@ -2,8 +2,8 @@ from datetime import date
 from typing import Any, Type
 
 from fastapi import HTTPException
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.modules.drh.models import Employee
@@ -21,6 +21,18 @@ EXIT_TYPES = {
     "perte",
     "casse",
 }
+
+
+def ensure_store_schema(db: Session) -> None:
+    try:
+        bind = db.get_bind()
+        columns = {column["name"] for column in inspect(bind).get_columns("stores")}
+        if "config" not in columns:
+            db.execute(text("ALTER TABLE stores ADD COLUMN config JSON"))
+            db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Migration magasin PostgreSQL impossible: {exc}") from exc
 
 
 def list_rows(db: Session, model: Type, filters: dict[str, Any] | None = None):
@@ -48,6 +60,9 @@ def create_row(db: Session, model: Type, payload: Any):
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Enregistrement déjà existant ou code déjà utilisé") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Sauvegarde PostgreSQL échouée: {exc}") from exc
 
 
 def update_row(db: Session, model: Type, row_id: int, payload: Any):
@@ -61,6 +76,9 @@ def update_row(db: Session, model: Type, row_id: int, payload: Any):
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Enregistrement déjà existant ou code déjà utilisé") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Sauvegarde PostgreSQL échouée: {exc}") from exc
 
 
 

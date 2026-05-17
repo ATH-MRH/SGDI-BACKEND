@@ -120,6 +120,7 @@ def materiel_dashboard(db: Session = Depends(get_db), user: User = Depends(curre
 
 @router.get("/stores/page")
 def stores_page(society: str | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    service.ensure_store_schema(db)
     effective_society = _effective_society_filter(user, society)
     allowed = _allowed_societies(user)
     stmt = select(Store)
@@ -132,6 +133,7 @@ def stores_page(society: str | None = None, q: str | None = None, page: int = 1,
 
 @router.get("/stores", response_model=list[StoreOut])
 def stores(society: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    service.ensure_store_schema(db)
     effective_society = _effective_society_filter(user, society)
     rows = service.list_rows(db, Store, {"society": effective_society})
     allowed = _allowed_societies(user)
@@ -142,12 +144,14 @@ def stores(society: str | None = None, db: Session = Depends(get_db), user: User
 
 @router.post("/stores", response_model=StoreOut)
 def create_store(payload: StoreCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    service.ensure_store_schema(db)
     _ensure_society_allowed(user, payload.society)
     return service.create_row(db, Store, payload)
 
 
 @router.put("/stores/{store_id}", response_model=StoreOut)
 def update_store(store_id: int, payload: StoreCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    service.ensure_store_schema(db)
     _ensure_store_update_allowed(db.get(Store, store_id), user, payload)
     _ensure_society_allowed(user, payload.society)
     return service.update_row(db, Store, store_id, payload)
@@ -155,6 +159,7 @@ def update_store(store_id: int, payload: StoreCreate, db: Session = Depends(get_
 
 @router.delete("/stores/{store_id}")
 def delete_store(store_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    service.ensure_store_schema(db)
     _ensure_row_society_allowed(db.get(Store, store_id), user)
     return service.delete_row(db, Store, store_id)
 
