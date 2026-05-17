@@ -1961,8 +1961,9 @@ function renderSocietePortal(){
   const soc=session?.societe||"";
   const userName=session?.nom||session?.username||"Utilisateur";
   const logo=societePortalLogo(soc);
+  const portalTheme=normalizeSocieteName(soc)==="IRON GLOBAL SOLUTION"?" company-portal-yellow":"";
   const modules=societePortalModules();
-  document.getElementById("app").innerHTML=`<div class="company-portal">
+  document.getElementById("app").innerHTML=`<div class="company-portal${portalTheme}">
     <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
     <button type="button" class="company-portal-change" onclick="changeSociete()">Changer société</button>
     <main class="company-portal-main">
