@@ -1028,6 +1028,15 @@ async function loadSuppliersForArticleForm(){
     console.warn("Fournisseurs PostgreSQL non chargés pour formulaire article",e);
   }
 }
+async function loadStoresForArticleForm(){
+  if(!sgdiAuthToken()||!window.SGDI?.stock?.stores)return;
+  try{
+    const rows=await SGDI.stock.stores();
+    if(Array.isArray(rows))db.magasins=rows.map(storeFromApi);
+  }catch(e){
+    console.warn("Magasins PostgreSQL non chargés pour formulaire article",e);
+  }
+}
 function articleApiPayload(a){return{code:String(a.code||"").trim()||("ART-"+Date.now()),designation:String(a.designation||a.sousCategorie||a.code||"Article").trim()||"Article",category:a.categorie||a.category||null,sub_category:a.sousCategorie||a.sub_category||null,society:a.societe||a.society||null,store_id:sqlRelationId(db.magasins,a.magasinId),supplier_id:sqlRelationId(db.fournisseurs,a.fournisseurId),unit:a.unite||"Pièce",quantity:sqlNum(a.stockInitial||a.quantiteGlobaleRecue||a.quantity),unit_price:sqlNum(a.prixUnitaire||a.unit_price),min_quantity:sqlNum(a.stockMin||a.seuilAlerte||a.min_quantity),barcode:a.codeBarre||a.barcode||null,brand:a.marque||a.brand||null,model:a.modele||a.model||null,attributes:{...(a.attributs||{}),raw:a,stockVariantes:a.stockVariantes||[],stockReceptionsGlobales:a.stockReceptionsGlobales||[]},active:a.actif===false||a.active===0?0:1}}
 function articleFromApi(row){const attrs=row.attributes||{};const raw=attrs.raw&&typeof attrs.raw==="object"?attrs.raw:{};const store=(db.magasins||[]).find(m=>String(m.backendId)===String(row.store_id));const supplier=(db.fournisseurs||[]).find(f=>String(f.backendId)===String(row.supplier_id));return{...raw,id:raw.id||String(row.id),backendId:row.id,code:row.code||raw.code||"",designation:row.designation||raw.designation||"",categorie:row.category||raw.categorie||"",sousCategorie:row.sub_category||raw.sousCategorie||"",societe:row.society||raw.societe||"",magasinId:store?.id||raw.magasinId||"",fournisseurId:supplier?.id||raw.fournisseurId||"",unite:row.unit||raw.unite||"Pièce",stockInitial:row.quantity??raw.stockInitial??0,prixUnitaire:row.unit_price??raw.prixUnitaire??0,stockMin:row.min_quantity??raw.stockMin??"",codeBarre:row.barcode||raw.codeBarre||"",marque:row.brand||raw.marque||"",modele:row.model||raw.modele||"",attributs:attrs,stockVariantes:attrs.stockVariantes||raw.stockVariantes||[],stockReceptionsGlobales:attrs.stockReceptionsGlobales||raw.stockReceptionsGlobales||[],actif:row.active!==0}}
 async function persistArticleToPostgres(a){if(!a)return null;sgdiRequireServerWrite();const saved=a.backendId?await SGDI.stock.updateArticle(a.backendId,articleApiPayload(a)):await SGDI.stock.createArticle(articleApiPayload(a));Object.assign(a,articleFromApi(saved),{id:a.id||String(saved.id),backendId:saved.id});return a}
@@ -10790,8 +10799,8 @@ function renderStockArticleDetail(view,id){
 }
 
 async function renderStockArticleForm(view,id){
-  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des fournisseurs depuis PostgreSQL...</div>`;
-  await loadSuppliersForArticleForm();
+  view.innerHTML=`<div class="card p-8 text-center text-slate-500">Chargement des magasins et fournisseurs depuis PostgreSQL...</div>`;
+  await Promise.all([loadStoresForArticleForm(),loadSuppliersForArticleForm()]);
   const isNew=!id;
   let a=isNew?{id:uid("stk"),code:"",designation:"",categorie:"",sousCategorie:"",societe:stockGetSocFilter()||"",marque:"",modele:"",reference:"",codeBarre:"",unite:"Pièce",prixUnitaire:"",quantiteGlobaleRecue:"",dateReceptionGlobale:"",stockReceptionsGlobales:[],stockInitial:0,stockVariantes:[],stockMin:"",stockMax:"",seuilAlerte:"",emplacement:"",fournisseur:"",description:"",notes:"",attributs:{},dateCreation:today(),actif:true}:(db.stockArticles||[]).find(x=>x.id===id);
   if(!a){toast("Article introuvable","error");return navigate("materiel/inventaire")}
@@ -10799,6 +10808,7 @@ async function renderStockArticleForm(view,id){
   const unites=db.stockUnites||["Pièce"];
   const attrs=a.attributs||{};
   const isHabillement=stockIsHabillementCategory(a.categorie);
+  const magasinsArticle=stockMagasinsForCategorie(soc);
   view.innerHTML=`<div class="max-w-6xl mx-auto mat-shell">
     <div class="mat-hero">
       <div class="flex items-start justify-between gap-4 flex-wrap">
@@ -10847,7 +10857,7 @@ async function renderStockArticleForm(view,id){
       </div>
       <div class="mat-form-band"><div class="mat-form-band-title">Logistique</div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div><label class="label">🏬 Magasin (lieu de stockage)</label><select class="select" name="magasinId"><option value="">— Aucun rattachement —</option>${(db.magasins||[]).map(m=>`<option value="${m.id}" ${String(a.magasinId||"")===String(m.id)||String(a.categorie||"")===String(m.nom||"")?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom)}</option>`).join("")}</select><div class="text-[10px] text-slate-400 mt-1">Pas de magasin ? <a href="#/materiel/magasin-nouveau" class="text-amber-600 underline">+ Créer un magasin</a></div></div>
+          <div><label class="label">🏬 Magasin (lieu de stockage)</label><select class="select" name="magasinId"><option value="">${magasinsArticle.length?"— Aucun rattachement —":"Aucun magasin disponible"}</option>${magasinsArticle.map(m=>`<option value="${escapeHTML(m.id)}" ${String(a.magasinId||"")===String(m.id)||String(a.categorie||"")===String(m.nom||"")?"selected":""}>${m.icon||"🏬"} ${escapeHTML(m.nom)}${m.societe?` · ${escapeHTML(m.societe)}`:""}</option>`).join("")}</select><div class="text-[10px] text-slate-400 mt-1">Pas de magasin ? <a href="#/materiel/magasin-nouveau" class="text-amber-600 underline">+ Créer un magasin</a></div></div>
           <div class="md:col-span-2"><label class="label">Emplacement précis (optionnel)</label><input class="input" name="emplacement" value="${escapeHTML(a.emplacement||"")}" placeholder="ex: Étagère B3, Allée 2"/></div>
         </div>
       </div>
