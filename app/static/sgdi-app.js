@@ -10825,8 +10825,9 @@ async function renderStockArticleForm(view,id){
       <div class="mat-form-band"><div class="mat-form-band-title">Identification article</div>
         <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
           <div class="md:col-span-2"><label class="label">Société propriétaire *</label><select class="select" name="societe"  onchange="document.getElementById('stock-article-form').dispatchEvent(new Event('change'));stockReloadCatOptions(this.value)"><option value="">— Choisir —</option>${SOCIETES.map(s=>`<option ${a.societe===s?"selected":""}>${s}</option>`).join("")}</select></div>
-          <div class="md:col-span-2"><label class="label">Catégorie *</label><select class="select" name="categorie" id="stk-cat-select"  onchange="stockCategorieChanged(this)">${soc?stockMagasinCategorieOptionsHTML(soc,a.categorie||a.magasinId):`<option value="">— Sélectionnez d'abord une société —</option>`}</select></div>
-          <div class="md:col-span-2"><label class="label">Sous-catégorie</label><div id="stk-subcat-container">${stockSousCategoriePickerHTML(a.magasinId||a.categorie,a.sousCategorie)}</div></div>
+          <div class="md:col-span-2"><label class="label">Magasin *</label><select class="select" name="categorie" id="stk-cat-select"  onchange="stockCategorieChanged(this)">${soc?stockMagasinCategorieOptionsHTML(soc,a.categorie||a.magasinId):`<option value="">— Sélectionnez d'abord une société —</option>`}</select></div>
+          <div class="md:col-span-2"><label class="label">Sous-catégorie / famille</label><div id="stk-subcat-container">${stockSousCategoriePickerHTML(a.magasinId||a.categorie,a.sousCategorie)}</div></div>
+          <div class="md:col-span-6"><label class="label">Désignation article *</label><input class="input" name="designation" value="${escapeHTML(a.designation||"")}" placeholder="ex: Tenue bleue avec ecusson, Talkie-walkie Motorola, Ramette papier A4"/></div>
           <div class="md:col-span-2"><label class="label">Code (auto si vide)</label><input class="input font-mono" name="code" value="${escapeHTML(a.code||"")}" placeholder="auto"/></div>
           <div class="md:col-span-4"><label class="label">🤝 Fournisseur principal</label><select class="select" name="fournisseurId"><option value="">— Aucun fournisseur —</option>${(db.fournisseurs||[]).map(f=>`<option value="${f.id}" ${a.fournisseurId===f.id?"selected":""}>${escapeHTML(f.raisonSociale)}</option>`).join("")}</select><div class="text-[10px] text-slate-400 mt-1">Pas de fournisseur ? <a href="#/materiel/fournisseur-nouveau" class="text-amber-600 underline">+ Créer un fournisseur</a></div></div>
           <div class="md:col-span-2"><label class="label">Marque</label><input class="input" name="marque" value="${escapeHTML(a.marque||"")}" placeholder="ex: 5.11 Tactical"/></div>
@@ -10893,23 +10894,46 @@ async function renderStockArticleForm(view,id){
 }
 
 function stockIsHabillementCategory(catCode){
-  return ["unif","epi","epilog","epibtp"].includes(catCode)||/(tenue|casquette|parkas?|blouson|chandail|polo|tee\s*shirt|ceinture|ceinturon|gilet|gants)/i.test(String(catCode||""));
+  const mag=(db?.magasins||[]).find(m=>String(m.id)===String(catCode||"")||String(m.nom||"")===String(catCode||""));
+  const text=[catCode,mag?.nom].filter(Boolean).join(" ");
+  return ["unif","epi","epilog","epibtp"].includes(String(catCode||""))||/(habillement|tenue|casquette|parkas?|blouson|chandail|polo|tee\s*shirt|ceinture|ceinturon|gilet|gants)/i.test(text);
 }
 function stockSousCategorieValues(value){
   return String(value||"").split("||").map(x=>x.trim()).filter(Boolean);
 }
-function stockSousCategoriePickerHTML(catCode,selected){
+function stockArticlesForMagasin(mag){
+  if(!mag)return[];
+  const magId=String(mag.id||"");
+  const magName=String(mag.nom||"").trim().toLowerCase();
+  return (db.stockArticles||[]).filter(a=>{
+    if(String(a.magasinId||"")===magId)return true;
+    return magName&&String(a.categorie||"").trim().toLowerCase()===magName;
+  }).sort((a,b)=>(a.designation||a.sousCategorie||"").localeCompare(b.designation||b.sousCategorie||""));
+}
+function stockSousCategorieSuggestions(catCode){
   const mag=(db.magasins||[]).find(m=>String(m.id)===String(catCode||"")||String(m.nom||"")===String(catCode||""));
+  const values=[];
   if(mag){
-    const articles=(db.stockArticles||[]).filter(a=>String(a.magasinId||"")===String(mag.id)).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
-    if(!articles.length)return `<select class="select text-slate-400" name="sousCategorie" id="stk-subcat-select" disabled><option value="">Aucun article dans ce magasin</option></select>`;
-    const val=stockSousCategorieValues(selected)[0]||"";
-    return `<select class="select" name="sousCategorie" id="stk-subcat-select" onchange="stockSousCategorieChanged(this)"><option value="">— Nouvel article —</option>${articles.map(a=>{const label=(a.code?`${a.code} · `:"")+(a.designation||a.sousCategorie||"Article");return`<option value="${escapeHTML(a.designation||a.sousCategorie||label)}" ${val===(a.designation||a.sousCategorie||label)?"selected":""}>${escapeHTML(label)}</option>`}).join("")}</select>`;
+    stockArticlesForMagasin(mag).forEach(a=>{
+      if(a.sousCategorie)values.push(a.sousCategorie);
+    });
+    if(stockIsHabillementCategory(mag.id||mag.nom))values.push(...(DOTATION_PERSONNEL_SOUS_CATEGORIES.Tenues||[]));
+  }else{
+    values.push(...(DOTATION_PERSONNEL_SOUS_CATEGORIES[catCode]||[]));
   }
-  const list=DOTATION_PERSONNEL_SOUS_CATEGORIES[catCode]||[];
+  const seen=new Set();
+  return values.map(v=>String(v||"").trim()).filter(v=>{
+    const k=v.toLowerCase();
+    if(!v||seen.has(k))return false;
+    seen.add(k);
+    return true;
+  }).sort((a,b)=>a.localeCompare(b));
+}
+function stockSousCategoriePickerHTML(catCode,selected){
+  const list=stockSousCategorieSuggestions(catCode);
   const val=stockSousCategorieValues(selected)[0]||"";
-  if(!list.length)return `<select class="select text-slate-400" name="sousCategorie" id="stk-subcat-select" disabled><option value="">Aucune sous-catégorie</option></select>`;
-  return `<select class="select" name="sousCategorie" id="stk-subcat-select" onchange="stockSousCategorieChanged(this)"><option value="">— Choisir —</option>${list.map(x=>`<option value="${escapeHTML(x)}" ${val===x?"selected":""}>${escapeHTML(x)}</option>`).join("")}</select>`;
+  const listId=`stk-subcat-list-${String(catCode||"none").replace(/[^a-z0-9_-]/gi,"")}`;
+  return `<input class="input" name="sousCategorie" id="stk-subcat-select" list="${listId}" value="${escapeHTML(val)}" placeholder="${list.length?"Choisir ou saisir une famille":"Saisir une nouvelle famille"}" oninput="stockSousCategorieChanged(this)"/><datalist id="${listId}">${list.map(x=>`<option value="${escapeHTML(x)}"></option>`).join("")}</datalist><div class="text-[10px] text-slate-400 mt-1">${list.length?`${list.length} suggestion(s) disponibles. Saisie libre autorisée.`:"Aucune famille existante : créez-la librement."}</div>`;
 }
 function stockNormalizeLabel(v){
   return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
@@ -11141,11 +11165,6 @@ function stockCategorieChanged(sel){
   const f=document.getElementById("stock-article-form");
   const magasin=f?.querySelector('[name="magasinId"]');
   if(magasin&&(db.magasins||[]).some(m=>String(m.id)===String(sel.value)))magasin.value=sel.value;
-  const designation=f?.querySelector('[name="designation"]');
-  if(designation&&!designation.value.trim()){
-    const label=sel.options[sel.selectedIndex]?.textContent||"";
-    designation.value=label.replace(/^[^\wÀ-ÿ]+/,"").trim();
-  }
 }
 function stockReloadCatOptions(soc){
   const sel=document.getElementById("stk-cat-select");if(!sel)return;
@@ -11178,12 +11197,14 @@ async function stockSaveArticle(id,isNew){
     const get=n=>{const el=f.querySelector(`[name="${n}"]`);return el?el.value:"";};
     const soc=(get("societe")||"").trim();
     const cat=(get("categorie")||"").trim();
+    const designation=(get("designation")||"").trim();
     if(!soc){toast("Sélectionnez une société","error");f.querySelector('[name="societe"]')?.focus();return}
-    if(!cat){toast("Sélectionnez une catégorie","error");f.querySelector('[name="categorie"]')?.focus();return}
+    if(!cat){toast("Sélectionnez un magasin","error");f.querySelector('[name="categorie"]')?.focus();return}
+    if(!designation){toast("Saisissez la désignation article","error");f.querySelector('[name="designation"]')?.focus();return}
     const isCreating=isNew===true||isNew==="true";
     let a=(db.stockArticles||[]).find(x=>x.id===id);
     if(!a){a={id,dateCreation:today(),actif:true};db.stockArticles=db.stockArticles||[];db.stockArticles.push(a)}
-    ["code","categorie","sousCategorie","societe","marque","modele","reference","codeBarre","emplacement","fournisseur","description","notes","magasinId","fournisseurId"].forEach(k=>{a[k]=(get(k)||"").trim()});
+    ["code","categorie","sousCategorie","societe","designation","marque","modele","reference","codeBarre","emplacement","fournisseur","description","notes","magasinId","fournisseurId"].forEach(k=>{a[k]=(get(k)||"").trim()});
     const selectedMag=(db.magasins||[]).find(m=>String(m.id)===String(get("categorie")||""));
     if(selectedMag){a.magasinId=selectedMag.id;a.categorie=selectedMag.nom||"Magasin"}
     if(!a.unite)a.unite="Pièce";
