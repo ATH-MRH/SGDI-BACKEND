@@ -8919,7 +8919,7 @@ function renderMatSitesEnAttenteDotation(view){
 function dotationMagasinsForSoc(soc){
   const all=(db.magasins||[]).filter(m=>m&&m.id&&m.nom);
   const global=all.filter(m=>!m.societe);
-  const owned=soc?all.filter(m=>m.societe===soc):all;
+  const owned=soc?all.filter(m=>normalizeSocieteName(m.societe)===normalizeSocieteName(soc)):all;
   const rows=(soc?owned.concat(global):all);
   const seen=new Set();
   const unique=rows.filter(m=>{
@@ -8931,14 +8931,22 @@ function dotationMagasinsForSoc(soc){
   const fallback=["Habillement","Transmission","Communication","Fourniture","Équipement","Protection","Outillage"].map(n=>({id:"default:"+n,nom:n,societe:"",icon:"🏬",isDefault:true}));
   return (unique.length?unique:fallback).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
 }
+function dotationNorm(v){
+  return String(v||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+}
 function dotationArticlesForMagasin(magasinId,soc){
   if(!magasinId)return[];
   const mag=(db.magasins||[]).find(m=>String(m.id)===String(magasinId));
-  const magName=String(mag?.nom||String(magasinId).replace(/^default:/,"")).trim().toLowerCase();
+  const magName=dotationNorm(mag?.nom||String(magasinId).replace(/^default:/,""));
+  const magBackendId=mag?.backendId||"";
   return (db.stockArticles||[]).filter(a=>{
-    if(soc&&a.societe&&a.societe!==soc)return false;
+    if(soc&&a.societe&&normalizeSocieteName(a.societe)!==normalizeSocieteName(soc))return false;
     if(String(a.magasinId||"")===String(magasinId))return true;
-    return magName&&String(a.categorie||"").trim().toLowerCase()===magName;
+    if(magBackendId&&String(a.magasinId||"")===String(magBackendId))return true;
+    const articleStore=(db.magasins||[]).find(m=>String(m.id)===String(a.magasinId||"")||String(m.backendId||"")===String(a.magasinId||""));
+    const articleStoreName=dotationNorm(articleStore?.nom||a.magasin);
+    const articleCategory=dotationNorm(a.categorie||a.category);
+    return !!magName&&(articleStoreName===magName||articleCategory===magName);
   }).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
 }
 function dotationCodeSerieOptions(a){
