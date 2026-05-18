@@ -221,7 +221,7 @@
   .company-portal.company-portal-blue{background:#eaf6ff!important;background-image:linear-gradient(135deg,#f8fcff 0%,#cfeeff 44%,#9fddff 100%)!important}
   .company-portal.company-portal-blue:before{background:linear-gradient(135deg,#f8fcff 0%,#cfeeff 44%,#9fddff 100%)!important}
   .company-portal.company-portal-blue .company-portal-main{background:transparent!important;background-image:none!important}
-  .company-portal-logo-wrap{width:clamp(160px,21vw,260px);height:clamp(160px,21vw,260px);border-radius:50%;display:flex;align-items:center;justify-content:center;filter:none;margin-bottom:clamp(24px,5vh,42px);transform:translateY(clamp(-70px,-9vh,-18px));animation:companyLogoEnter .72s cubic-bezier(.2,.75,.2,1) both}
+  .company-portal-logo-wrap{width:clamp(160px,21vw,260px);height:clamp(160px,21vw,260px);border-radius:50%;display:flex;align-items:center;justify-content:center;filter:none;margin-bottom:clamp(24px,5vh,42px);transform:translateY(calc(clamp(-70px,-9vh,-18px) + 3cm));animation:companyLogoEnter .72s cubic-bezier(.2,.75,.2,1) both}
   .company-portal-logo{width:100%;height:100%;object-fit:contain}
   .company-portal-logo-spacer{height:clamp(48px,10vh,96px)}
   .company-portal-title{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.16em;color:#64748b;margin-top:clamp(-24px,-3vh,-8px);margin-bottom:clamp(24px,5vh,44px);animation:companyFadeUp .58s ease .16s both}
@@ -236,7 +236,7 @@
   .company-portal-change{left:22px}
   .company-portal-logout:hover,.company-portal-change:hover{background:#f8fafc}
   .company-portal-user{position:fixed;left:28px;bottom:28px;z-index:5;color:#061b42;font-size:18px;font-weight:500}
-  @keyframes companyLogoEnter{from{opacity:0;transform:translateY(-22px) scale(.94)}to{opacity:1;transform:translateY(clamp(-70px,-9vh,-18px)) scale(1)}}
+  @keyframes companyLogoEnter{from{opacity:0;transform:translateY(calc(clamp(-70px,-9vh,-18px) + 3cm + 22px)) scale(.94)}to{opacity:1;transform:translateY(calc(clamp(-70px,-9vh,-18px) + 3cm)) scale(1)}}
   @keyframes companyButtonEnter{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes companyFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @media(prefers-reduced-motion:reduce){.company-portal-logo-wrap,.company-portal-title,.company-portal-module,.company-portal-foot{animation:none!important}}
