@@ -1975,7 +1975,7 @@ function renderSocietePortal(){
       <div class="company-portal-grid">
         ${modules.map(m=>`<button type="button" class="company-portal-module" onclick="enterSocietePortalRoute('${m.key}','${m.route}')">${escapeHTML(m.label)}</button>`).join("")}
       </div>
-      ${modules.length?`<div class="company-portal-foot">Modules autorisés pour votre compte</div>`:`<div class="company-portal-foot text-red-700">Aucun module autorisé pour cette société.</div>`}
+      ${modules.length?``:`<div class="company-portal-foot text-red-700">Aucun module autorisé pour cette société.</div>`}
     </main>
     <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
   </div>`;
