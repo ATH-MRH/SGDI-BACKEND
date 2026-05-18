@@ -168,7 +168,7 @@
   .sgdi-login-page{min-height:100vh;background:#fff;color:#061b42;position:relative;overflow:auto}
   .sgdi-login-main{min-height:100svh;width:min(900px,92vw);margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:clamp(58px,11vh,150px) 0 clamp(70px,9vh,110px)}
   .sgdi-login-brand{font-size:clamp(58px,7vw,84px);line-height:.9;font-weight:950;letter-spacing:.015em;color:#000;text-shadow:0 8px 14px rgba(0,0,0,.28);margin-bottom:clamp(18px,3vh,32px)}
-  .sgdi-login-brand i{font-style:normal;color:#ff6900;margin-left:6px;text-shadow:0 8px 14px rgba(0,0,0,.18)}
+  .sgdi-login-brand i{font-style:normal;color:#061b42;margin-left:6px;text-shadow:0 8px 14px rgba(0,0,0,.18)}
   .sgdi-login-subtitle{font-size:clamp(13px,1.4vw,16px);font-weight:500;letter-spacing:.03em;color:#061b42;text-transform:uppercase;margin-bottom:clamp(62px,15vh,178px)}
   .sgdi-login-form{width:min(470px,100%);background:transparent;border-radius:0;padding:0;box-shadow:none;display:grid;gap:26px}
   .sgdi-login-form label{color:#061b42;font-size:15px;font-weight:950;line-height:1;margin-bottom:-16px}
@@ -184,23 +184,23 @@
   .sgdi-societe-page{min-height:100vh;background:#fff!important;background-image:none!important;color:#061b42;position:relative;overflow:auto}
   .sgdi-societe-main{min-height:100svh;width:min(1080px,92vw);margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:clamp(58px,11vh,150px) 0 clamp(90px,11vh,120px);background:#fff!important;background-image:none!important}
   .sgdi-societe-brand{font-size:clamp(58px,7vw,84px);line-height:.9;font-weight:950;letter-spacing:.015em;color:#000;text-shadow:0 8px 14px rgba(0,0,0,.28);margin-bottom:clamp(18px,3vh,32px)}
-  .sgdi-societe-brand i{font-style:normal;color:#ff6900;margin-left:6px;text-shadow:0 8px 14px rgba(0,0,0,.18)}
+  .sgdi-societe-brand i{font-style:normal;color:#061b42;margin-left:6px;text-shadow:0 8px 14px rgba(0,0,0,.18)}
   .sgdi-societe-subtitle{font-size:clamp(13px,1.4vw,16px);font-weight:500;letter-spacing:.03em;color:#061b42;text-transform:uppercase;margin-bottom:clamp(76px,16vh,185px)}
   .sgdi-societe-selector{width:min(780px,100%);align-self:center;margin-left:0}
   .sgdi-societe-title{font-size:25px;line-height:1.05;font-weight:400;letter-spacing:.005em;color:#061b42;margin:0 0 18px}
   .sgdi-societe-input-wrap{width:min(780px,100%);height:clamp(58px,7vh,68px);border-radius:18px;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.24);display:grid;grid-template-columns:1fr clamp(62px,7vh,72px);align-items:center;padding:0 5px 0 22px}
   .sgdi-societe-select{width:100%;height:100%;border:0;background:#fff;color:#061b42;font-size:20px;font-weight:400;outline:none;appearance:none;-webkit-appearance:none;padding:0 18px 0 0}
-  .sgdi-societe-select:invalid{color:#ff6900}
+  .sgdi-societe-select:invalid{color:#061b42}
   .sgdi-societe-select option{color:#061b42;background:#fff;font-weight:700}
-  .sgdi-societe-access{width:clamp(52px,6.4vh,62px);height:clamp(52px,6.4vh,62px);border-radius:999px;border:0;background:#ff6900;color:#fff;font-size:clamp(26px,3vh,32px);font-weight:950;font-family:Georgia,"Times New Roman",serif;font-style:italic;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,105,0,.28);cursor:pointer}
-  .sgdi-societe-access:hover{background:#ff7a1a;transform:translateY(-1px)}
+  .sgdi-societe-access{width:clamp(52px,6.4vh,62px);height:clamp(52px,6.4vh,62px);border-radius:999px;border:0;background:#061b42;color:#fff;font-size:clamp(26px,3vh,32px);font-weight:950;font-family:Georgia,"Times New Roman",serif;font-style:italic;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(6,27,66,.28);cursor:pointer}
+  .sgdi-societe-access:hover{background:#082a5f;transform:translateY(-1px)}
   .sgdi-societe-edit{position:fixed;right:clamp(24px,5vw,88px);bottom:clamp(24px,6vh,74px);z-index:10;height:44px;border:0;border-radius:999px;background:#fff;color:#061b42;padding:0 32px;font-size:15px;font-weight:950;box-shadow:0 10px 24px rgba(15,23,42,.18);cursor:pointer}
   .sgdi-societe-edit:hover{color:#0b4593;transform:translateY(-1px)}
   .sgdi-societe-bottom{position:fixed;left:clamp(24px,7vw,140px);bottom:clamp(24px,6vh,74px);color:#061b42}
   .sgdi-societe-logout{height:52px;border:0;border-radius:22px;background:#fff;color:#061b42;padding:0 28px;font-size:22px;font-weight:500;box-shadow:0 10px 24px rgba(15,23,42,.22);cursor:pointer;margin-bottom:22px}
   .sgdi-societe-logout:hover{color:#0b4593;transform:translateY(-1px)}
-  .sgdi-societe-user{font-size:15px;font-weight:500;color:#ff6900}
-  .sgdi-societe-user strong{font-weight:950;color:#ff6900;text-transform:uppercase}
+  .sgdi-societe-user{font-size:15px;font-weight:500;color:#061b42}
+  .sgdi-societe-user strong{font-weight:950;color:#061b42;text-transform:uppercase}
   .company-portal-user strong{font-weight:950;color:#061b42;text-transform:uppercase}
   .sgdi-societe-admin{position:fixed;right:clamp(24px,5vw,88px);bottom:clamp(24px,6vh,74px);border:0;background:transparent;color:#991b1b;font-size:14px;font-weight:900;cursor:pointer}
   @media(max-width:980px){.sgdi-societe-main{padding-top:88px}.sgdi-societe-subtitle{margin-bottom:96px}.sgdi-societe-selector{align-self:center;margin-left:0}.sgdi-societe-edit{right:32px;bottom:32px}.sgdi-societe-bottom{left:32px;bottom:32px}.sgdi-societe-admin{right:32px;bottom:32px}}
