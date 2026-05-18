@@ -2394,7 +2394,6 @@ function renderSocieteSelector(){
       <div class="sgdi-societe-brand" aria-label="SGDI"><span>SGD</span><i>I</i></div>
       <div class="sgdi-societe-subtitle">ACCEDER A VOTRE ESPACE</div>
       <section class="sgdi-societe-selector">
-        <h1 class="sgdi-societe-title">Sélectionnez la société</h1>
         <div class="sgdi-societe-input-wrap">
           <select id="societe-main-select" class="sgdi-societe-select" required>
             <option value="" selected>Selection société</option>
