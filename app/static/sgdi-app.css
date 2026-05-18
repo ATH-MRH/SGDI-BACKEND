@@ -190,7 +190,7 @@
   .sgdi-societe-title{font-size:25px;line-height:1.05;font-weight:400;letter-spacing:.005em;color:#061b42;margin:0 0 18px}
   .sgdi-societe-input-wrap{width:min(780px,100%);height:clamp(58px,7vh,68px);border-radius:18px;background:#fff;box-shadow:0 8px 22px rgba(15,23,42,.24);display:grid;grid-template-columns:1fr clamp(62px,7vh,72px);align-items:center;padding:0 5px 0 22px}
   .sgdi-societe-select{width:100%;height:100%;border:0;background:#fff;color:#061b42;font-size:20px;font-weight:400;outline:none;appearance:none;-webkit-appearance:none;padding:0 18px 0 0}
-  .sgdi-societe-select:invalid{color:transparent}
+  .sgdi-societe-select:invalid{color:#ff6900}
   .sgdi-societe-select option{color:#061b42;background:#fff;font-weight:700}
   .sgdi-societe-access{width:clamp(52px,6.4vh,62px);height:clamp(52px,6.4vh,62px);border-radius:999px;border:0;background:#ff6900;color:#fff;font-size:clamp(26px,3vh,32px);font-weight:950;font-family:Georgia,"Times New Roman",serif;font-style:italic;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,105,0,.28);cursor:pointer}
   .sgdi-societe-access:hover{background:#ff7a1a;transform:translateY(-1px)}
