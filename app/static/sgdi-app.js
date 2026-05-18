@@ -2197,11 +2197,11 @@ function render(){
   const headerBtn=isTrans?`<button class="btn btn-secondary text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button>`:`<button class="btn btn-secondary text-xs" onclick="changeSociete()">🔄 Changer de société</button>`;
   app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col">
     <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
-      <div class="sgdi-topbar-left flex items-center gap-3 shrink-0">
+      <div class="sgdi-topbar-left ${session.transverse==="materiel"?"sgdi-topbar-left-materiel":""} flex items-center gap-3 shrink-0">
         <button type="button" class="btn btn-ghost text-xs topbar-back-btn" onclick="goBackSmart()" title="Retour">← Retour</button>
         <div>
           <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
-          <div class="font-bold" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
+          <div class="sgdi-topbar-module-title ${session.transverse==="materiel"?"sgdi-topbar-module-title-materiel":""}" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
         </div>
       </div>
       ${topbarStructureTabsHTML()}
