@@ -2389,7 +2389,6 @@ function renderSocieteSelector(){
   const userName=session?.nom||session?.username||"Utilisateur";
   const whiteBackgroundStyle='background:#ffffff!important;background-image:none!important';
   document.getElementById("app").innerHTML=`<div class="sgdi-societe-page" style="${whiteBackgroundStyle}">
-    <button type="button" class="sgdi-societe-edit" onclick="openSelectSocieteToEditModal()">Modifier société</button>
     <main class="sgdi-societe-main" style="${whiteBackgroundStyle}">
       <div class="sgdi-societe-brand" aria-label="SGDI"><span>SGD</span><i>I</i></div>
       <div class="sgdi-societe-subtitle">ACCEDER A VOTRE ESPACE</div>
@@ -2403,8 +2402,11 @@ function renderSocieteSelector(){
         </div>
       </section>
     </main>
-    <div class="sgdi-societe-bottom">
+    <div class="sgdi-societe-actions">
       <button type="button" class="sgdi-societe-logout" onclick="logout()">Déconnexion</button>
+      <button type="button" class="sgdi-societe-edit" onclick="openSelectSocieteToEditModal()">Modifier société</button>
+    </div>
+    <div class="sgdi-societe-bottom">
       <div class="sgdi-societe-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
     </div>
     ${isAdminSystemSession()?`<button type="button" class="sgdi-societe-admin" onclick="enterTransverseModule('admin')">ADMINISTRATION SYSTEME</button>`:""}
