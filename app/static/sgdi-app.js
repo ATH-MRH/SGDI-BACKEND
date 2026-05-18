@@ -2561,7 +2561,7 @@ function renderSidebar(){
         {label:"STATISTIQUES RH",route:"drh/stats"}
       ],
       ops:[
-        {label:"TABLEAU DE BORD OPS",route:"ops/dashboard"},
+        {label:"TABLEAU DE BORD",route:"ops/dashboard"},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"FICHES DE POSITION",route:"fiches"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"]},
@@ -14318,7 +14318,7 @@ function renderOPS(view,sub,arg){
   const tauxPointage=fpqToday.length?Math.round(fpqPointes*100/fpqToday.length):0;
   const opsLine=(label,value,color,route)=>`<a href="#/${route}" class="p-3 rounded-lg block" style="background:${color}12;border:1px solid ${color}44;text-decoration:none;color:inherit"><div class="text-[10px] uppercase tracking-wider font-black" style="color:${color}">${label}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></a>`;
   const societeRows=SOCIETES.map(s=>{const eff=actifs.filter(a=>a.societe===s);const aff=eff.filter(a=>a.affectationCourante?.siteId);const st=sitesActifs.filter(x=>x.societe===s);const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));return{soc:s,eff:eff.length,aff:aff.length,sans:eff.length-aff.length,sites:st.length,inc:inc.length}});
-  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">OPS - TABLEAU DE BORD</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">TABLEAU DE BORD</h1>
   <p class="text-slate-500 text-sm mb-4">Opérations · Pointage, fiches de position, sites · ${soc?escapeHTML(soc):"Toutes sociétés"}</p>
   <div class="grid grid-5 mb-6">
     <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif actif</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir l'effectif</div></a>
@@ -14385,7 +14385,7 @@ function renderOpsInstanceDotation(view){
   const actifs=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));
   view.innerHTML=`<div class="flex justify-between items-center mb-4 flex-wrap gap-3">
     <div><h1 class="text-2xl font-black uppercase">EMPLOYÉS EN INSTANCE DE DOTATION</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Employés recrutés sans dotation matériel enregistrée.</p></div>
-    <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="navigate('ops/dashboard')">← Tableau de bord OPS</button><button class="btn btn-primary text-sm" onclick="navigate('materiel/dotation')">Module matériel</button></div>
+    <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="navigate('ops/dashboard')">← Tableau de bord</button><button class="btn btn-primary text-sm" onclick="navigate('materiel/dotation')">Module matériel</button></div>
   </div>
   <div class="grid grid-3 gap-3 mb-4">
     <div class="card p-4 ${agents.length?"ops-dot-counter-alert":""}"><div class="text-xs text-slate-500 uppercase font-black">En instance de dotation</div><div class="text-3xl font-black mt-1 text-red-700">${agents.length}</div></div>
