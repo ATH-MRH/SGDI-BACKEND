@@ -2397,7 +2397,7 @@ function renderSocieteSelector(){
         <h1 class="sgdi-societe-title">Sélectionnez la société</h1>
         <div class="sgdi-societe-input-wrap">
           <select id="societe-main-select" class="sgdi-societe-select" required>
-            <option value="" selected></option>
+            <option value="" selected>Selection société</option>
             ${selectableSocietes.map(s=>`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join("")}
           </select>
           <button type="button" class="sgdi-societe-access" aria-label="Accéder" onclick="const s=document.getElementById('societe-main-select')?.value;if(s)pickSociete(s);else toast('Choisissez une société','error')">I</button>
