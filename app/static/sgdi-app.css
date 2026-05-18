@@ -138,9 +138,9 @@
   .sgdi-shell{width:100%;min-width:0;overflow:hidden}
   .sgdi-shell-body{min-height:0;width:100%;min-width:0}
   .sgdi-topbar{width:100%;min-width:0}
-  .sgdi-topbar-left-materiel{min-width:330px!important;max-width:none!important}
+  .sgdi-topbar-left-module{min-width:330px!important;max-width:none!important}
   .sgdi-topbar-module-title{font-size:15px;font-weight:800;line-height:1.1;white-space:nowrap}
-  .sgdi-topbar-module-title-materiel{font-size:22px!important;font-weight:950!important;letter-spacing:.01em;white-space:nowrap;text-transform:uppercase}
+  .sgdi-topbar-module-title-active{font-size:22px!important;font-weight:950!important;letter-spacing:.01em;white-space:nowrap;text-transform:uppercase}
   .sgdi-view{padding:0 4px 24px!important;width:100%;max-width:none;overflow-x:hidden}
 
   .societe-structure-bar{background:#fff;border-bottom:1px solid var(--border);box-shadow:0 4px 12px rgba(15,23,42,.05);z-index:20}
@@ -555,8 +555,8 @@
     .nav-count{min-width:17px!important;height:17px!important;font-size:9px!important;padding:0 4px!important}
     .sgdi-topbar{align-items:center!important;flex-wrap:nowrap!important;padding:7px 10px!important;gap:7px!important;overflow:hidden!important}
     .sgdi-topbar-left{order:1;min-width:190px!important;max-width:260px!important}
-    .sgdi-topbar-left-materiel{min-width:330px!important;max-width:380px!important}
-    .sgdi-topbar-module-title-materiel{font-size:20px!important;font-weight:950!important}
+    .sgdi-topbar-left-module{min-width:330px!important;max-width:420px!important}
+    .sgdi-topbar-module-title-active{font-size:20px!important;font-weight:950!important}
     .topbar-structure-tabs{order:2;flex:1 1 auto!important;justify-content:flex-start!important;gap:5px!important;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap!important;padding-bottom:2px}
     .topbar-structure-btn{height:30px!important;padding:0 8px!important;font-size:10px!important;gap:4px!important;flex:0 0 auto}
     .sgdi-topbar-actions{order:3;margin-left:auto;gap:5px!important;flex-wrap:nowrap!important;justify-content:flex-end!important;flex:0 0 auto!important}

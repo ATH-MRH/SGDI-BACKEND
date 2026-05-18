@@ -2188,7 +2188,7 @@ function render(){
   const app=document.getElementById("app");
   const socColors={};
   const isTrans=!!session.transverse;
-  const transLabels={facturation:"MODULE FINANCES",commercial:"MODULE COMMERCIAL",drh:"MODULE DRH",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:"ADMINISTRATION SYSTEME",pointage:"MODULE POINTAGE",ops:"MODULE OPS"};
+  const transLabels={facturation:"FINANCES & COMPTABILITÉ",commercial:"MODULE COMMERCIAL",drh:"MODULE DRH",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:"ADMINISTRATION SYSTEME",pointage:"MODULE POINTAGE",ops:"MODULE OPS"};
   const transColors={facturation:"#043970",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af"};
   const transDescs={facturation:"Toutes sociétés confondues",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"Opérations · Pointage · Fiches · Sites"};
   const socColor=isTrans?transColors[session.transverse]:(socColors[session.societe]||"#64748b");
@@ -2197,11 +2197,11 @@ function render(){
   const headerBtn=isTrans?`<button class="btn btn-secondary text-xs" onclick="exitTransverseModule()">← ${session.societe?"Retour société":"Retour à la sélection"}</button>`:`<button class="btn btn-secondary text-xs" onclick="changeSociete()">🔄 Changer de société</button>`;
   app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col">
     <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:${socColor}11;border-bottom:2px solid ${socColor};gap:12px">
-      <div class="sgdi-topbar-left ${session.transverse==="materiel"?"sgdi-topbar-left-materiel":""} flex items-center gap-3 shrink-0">
+      <div class="sgdi-topbar-left ${isTrans?"sgdi-topbar-left-module":""} flex items-center gap-3 shrink-0">
         <button type="button" class="btn btn-ghost text-xs topbar-back-btn" onclick="goBackSmart()" title="Retour">← Retour</button>
         <div>
           <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">${headerSub}</div>
-          <div class="sgdi-topbar-module-title ${session.transverse==="materiel"?"sgdi-topbar-module-title-materiel":""}" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
+          <div class="sgdi-topbar-module-title ${isTrans?"sgdi-topbar-module-title-active":""}" style="color:${socColor}">${escapeHTML(headerTitle)}</div>
         </div>
       </div>
       ${topbarStructureTabsHTML()}
