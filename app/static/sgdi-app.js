@@ -2549,7 +2549,7 @@ function renderSidebar(){
     const drhAgents=(db.agents||[]).filter(a=>!drhSoc||a.societe===drhSoc);
     const sidebarByModule={
       drh:[
-        {label:"TABLEAU DE BORD DRH",route:"drh/dashboard"},
+        {label:"TABLEAU DE BORD",route:"drh/dashboard"},
         {label:"CANDIDATS",route:"recrutement"},
         {label:"RECRUTEMENT/CONTRAT",route:"contrats/dashboard",aliases:["contrats"]},
         {label:"FICHE DE POSITION",route:"fiches"},
@@ -13064,7 +13064,7 @@ function renderDRHDashboard(view){
       </svg>
       <div class="flex justify-between text-[10px] text-slate-400"><span>${monthLabel(months[0])}</span><span>${monthLabel(months[months.length-1])}</span></div>
     </a>`};
-  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - Récap général</h1>
+  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">Récap général</h1>
     <p class="text-slate-500 text-sm mb-4">${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${ag.length} employés · ${ca.length} candidats · ${sites} sites</p>
     ${drhTabs("dashboard")}
     <div class="grid grid-4 mb-4">
