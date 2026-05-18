@@ -2188,7 +2188,7 @@ function render(){
   const app=document.getElementById("app");
   const socColors={};
   const isTrans=!!session.transverse;
-  const transLabels={facturation:"FINANCES & COMPTABILITÉ",commercial:"MODULE COMMERCIAL",drh:"MODULE DRH",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:"ADMINISTRATION SYSTEME",pointage:"MODULE POINTAGE",ops:"MODULE OPS"};
+  const transLabels={facturation:"FINANCES & COMPTABILITÉ",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:"ADMINISTRATION SYSTEME",pointage:"MODULE POINTAGE",ops:"MODULE OPS"};
   const transColors={facturation:"#043970",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af"};
   const transDescs={facturation:"Toutes sociétés confondues",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"Opérations · Pointage · Fiches · Sites"};
   const socColor=isTrans?transColors[session.transverse]:(socColors[session.societe]||"#64748b");
