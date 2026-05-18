@@ -2387,9 +2387,10 @@ async function confirmCreateSociete(){
 function renderSocieteSelector(){
   const selectableSocietes=currentAllowedSocietes();
   const userName=session?.nom||session?.username||"Utilisateur";
-  document.getElementById("app").innerHTML=`<div class="sgdi-societe-page">
+  const whiteBackgroundStyle='background:#ffffff!important;background-image:none!important';
+  document.getElementById("app").innerHTML=`<div class="sgdi-societe-page" style="${whiteBackgroundStyle}">
     <button type="button" class="sgdi-societe-edit" onclick="openSelectSocieteToEditModal()">Modifier société</button>
-    <main class="sgdi-societe-main">
+    <main class="sgdi-societe-main" style="${whiteBackgroundStyle}">
       <div class="sgdi-societe-brand" aria-label="SGDI"><span>SGD</span><i>I</i></div>
       <div class="sgdi-societe-subtitle">ACCEDER A VOTRE ESPACE</div>
       <section class="sgdi-societe-selector">
