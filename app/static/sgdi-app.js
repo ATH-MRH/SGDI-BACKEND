@@ -1971,7 +1971,6 @@ function renderSocietePortal(){
       ${logo?`<div class="company-portal-logo-wrap">
         <img class="company-portal-logo" src="${escapeHTML(logo)}" alt="${escapeHTML(soc)}"/>
       </div>`:`<div class="company-portal-logo-spacer" aria-hidden="true"></div>`}
-      <div class="company-portal-title">${escapeHTML(soc)}</div>
       <div class="company-portal-grid">
         ${modules.map(m=>`<button type="button" class="company-portal-module" onclick="enterSocietePortalRoute('${m.key}','${m.route}')">${escapeHTML(m.label)}</button>`).join("")}
       </div>
