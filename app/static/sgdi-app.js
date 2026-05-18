@@ -5542,6 +5542,13 @@ async function recruitContractCandidateToEmployee(c,fd){
   if(candidateBlackListMatch(c))throw new Error(`${(c.nom||"")+" "+(c.prenom||"")} : personne inscrite sur BLACKLIST`);
   if(!candidateHasMinimumData(c))throw new Error(`${(c.nom||"")+" "+(c.prenom||"")} : nom/prénom manquants`);
   const agent=buildAgentFromContractCandidate(c,fd);
+  addEmployeeCareerEvent(agent,"Recrutement",{
+    date:agent.dateRecrutement||today(),
+    motif:`Recrutement validé${agent.posteContrat||agent.fonction?` · ${agent.posteContrat||agent.fonction}`:""}`,
+    source:"recrutement",
+    sourceId:`recrutement_${c.backendId||c.id||agent.id}`,
+    details:{candidateId:c.id||"",candidateBackendId:c.backendId||"",societe:agent.societe||"",matricule:agent.matricule||""}
+  });
   const created=await SGDI.employees.create(employeeApiPayload(agent));
   Object.assign(agent,employeeFromApi(created),agent,{backendId:created?.id||agent.backendId});
   if(sqlBackendId(c.backendId)){
@@ -6086,9 +6093,31 @@ function renderAgentPointageSituation(a){
 }
 
 /* ---- GESTION (section 8) ---- */
-function gestionIcon(t){return{"Congé":"🏖","Maladie":"🤒","Absence":"❌","Suspension":"⏸"}[t]||""}
-function gestionPillClass(t){return{"Congé":"pill-blue","Maladie":"pill-amber","Absence":"pill-gray","Suspension":"pill-red"}[t]||"pill-gray"}
+function gestionIcon(t){return{"Recrutement":"🧾","Dotation":"🎒","Affectation":"📍","Congé":"🏖","Maladie":"🤒","Absence":"❌","Suspension":"⏸"}[t]||""}
+function gestionPillClass(t){return{"Recrutement":"pill-green","Dotation":"pill-blue","Affectation":"pill-amber","Congé":"pill-blue","Maladie":"pill-amber","Absence":"pill-gray","Suspension":"pill-red"}[t]||"pill-gray"}
 function gestionCount(a,type){return((a.gestionEvents||[]).filter(e=>e.type===type)).length}
+function addEmployeeCareerEvent(agent,type,data){
+  if(!agent)return null;
+  agent.gestionEvents=Array.isArray(agent.gestionEvents)?agent.gestionEvents:[];
+  const now=new Date().toISOString();
+  const event={
+    id:uid("car"),
+    type,
+    du:data?.du||data?.date||today(),
+    au:data?.au||"",
+    motif:data?.motif||"",
+    statut:data?.statut||"termine",
+    createdAt:data?.createdAt||now,
+    createdBy:data?.createdBy||session?.username||"system",
+    source:data?.source||"workflow",
+    sourceId:data?.sourceId||"",
+    details:data?.details||{}
+  };
+  if(event.sourceId&&agent.gestionEvents.some(e=>e.sourceId===event.sourceId&&e.type===event.type))return null;
+  agent.gestionEvents.push(event);
+  agent.updatedAt=today();
+  return event;
+}
 function gestionButton(a,type,label){
   const n=gestionCount(a,type);
   const action=(type==="Suspension"&&isOpsFicheContext())?`openOpsSuspensionModal('${a.id}')`:`openGestionModal('${a.id}','${type}')`;
@@ -6096,8 +6125,8 @@ function gestionButton(a,type,label){
   return`<button type="button" class="btn btn-secondary justify-center relative" title="${title}" onclick="${action}">${label}${n>0?`<span class="gestion-badge">${n}</span>`:""}</button>`
 }
 function renderGestionHistorique(a){
-  const evs=(a.gestionEvents||[]).slice().sort((x,y)=>(y.du||"").localeCompare(x.du||""));
-  return`<h4 class="text-sm font-semibold text-slate-700 mb-2">Historique des événements de gestion</h4>
+  const evs=(a.gestionEvents||[]).slice().sort((x,y)=>String(y.du||y.createdAt||"").localeCompare(String(x.du||x.createdAt||"")));
+  return`<h4 class="text-sm font-semibold text-slate-700 mb-2">Carrière de l'employé</h4>
   <table><thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${evs.length===0?`<tr><td colspan="7" class="text-center text-slate-500 p-3">Aucun événement enregistré.</td></tr>`:evs.map((e,i)=>{const j=e.du&&e.au?daysBetween(e.du,e.au)+1:"—";return`<tr><td><span class="pill ${gestionPillClass(e.type)}">${gestionIcon(e.type)} ${e.type}</span></td><td class="text-xs">${formatDate(e.du)}</td><td class="text-xs">${formatDate(e.au)}</td><td>${j}</td><td class="text-xs">${escapeHTML((e.motif||"").slice(0,60))}</td><td><span class="pill ${e.statut==="en_cours"?"pill-amber":e.statut==="termine"?"pill-gray":"pill-green"}">${e.statut}</span></td><td>${!a.locked||unlockedAgents.has(a.id)||isAdmin()?`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="deleteGestionEvent('${a.id}',${i})">✕</button>`:""}</td></tr>`}).join("")}</tbody></table>`;
 }
 function openGestionModal(agentId,type){
@@ -6306,6 +6335,13 @@ async function confirmReaffectation(agentId){
   const groupe=fd.get("groupe")||"";
   a.affectationCourante={siteId,siteName:site?.nom,clientName:site?.client,poste:a.affectationCourante?.poste||a.fonction||"",horaire:"Mixte",groupe,dateDebut:fd.get("dateDebut")};applyOkbaCodeIfNeeded(a,a.affectationCourante.poste||a.fonction);
   if(site){site.groupesAffectation=site.groupesAffectation||{};site.groupesAffectation[agentId]=groupe}
+  addEmployeeCareerEvent(a,"Affectation",{
+    date:fd.get("dateDebut")||today(),
+    motif:`Affectation à ${site?.nom||"site non renseigné"}${groupe?` · Groupe ${groupe}`:""}`,
+    source:"ops-affectation",
+    sourceId:`affectation_${agentId}_${siteId}_${fd.get("dateDebut")||today()}`,
+    details:{siteId,siteName:site?.nom||"",clientName:site?.client||"",groupe,poste:a.affectationCourante.poste||""}
+  });
   try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
   catch(e){toast("Affectation non enregistrée PostgreSQL : "+(e.message||e),"error");return}
   if(!(await saveDBAndWaitToast("Affectation non confirmée par PostgreSQL")))return;
@@ -9101,6 +9137,15 @@ async function saveNouvelleDotation(){
   try{await persistDotationToPostgres(m)}catch(e){toast("Dotation non sauvegardée PostgreSQL : "+(e.message||e),"error");return}
   db.stockMouvements=db.stockMouvements||[];
   db.stockMouvements.push(m);
+  addEmployeeCareerEvent(ag,"Dotation",{
+    date:m.date||today(),
+    motif:`Dotation matériel : ${art.code?art.code+" · ":""}${art.designation||"Article"} · quantité ${qty(qte)}`,
+    source:"materiel-dotation",
+    sourceId:`dotation_${m.backendId||m.equipmentBackendId||m.id}`,
+    details:{articleId:art.id,articleBackendId:art.backendId||"",codeSerie:m.codeSerie||"",quantite:qte,numeroBon:m.numeroBon||"",magasinId:m.magasinId||""}
+  });
+  try{if(ag.backendId)Object.assign(ag,employeeFromApi(await SGDI.employees.update(ag.backendId,employeeApiPayload(ag))),ag,{backendId:ag.backendId})}
+  catch(e){toast("Dotation enregistrée, mais carrière non mise à jour PostgreSQL : "+(e.message||e),"error");return}
   art.derniereMaj=today();
   try{sessionStorage.setItem("lastDotationAgentId",agentId);sessionStorage.setItem("lastDotationMvtId",m.id)}catch(e){}
   if(typeof logActivity==="function")logActivity("Nouvelle dotation",`${m.beneficiaireNom} · ${art.code||""} ${art.designation||""} · ${qty(qte)}`);
