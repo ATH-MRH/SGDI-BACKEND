@@ -180,8 +180,9 @@
   .login-admin-system-shortcut{position:fixed;right:clamp(24px,5vw,88px);bottom:clamp(24px,5vh,58px);z-index:20;border:0;background:transparent;color:#061b42;height:auto;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:clamp(15px,1.8vw,23px);font-weight:500;letter-spacing:0;box-shadow:none;cursor:pointer;text-transform:none}
   .login-admin-system-shortcut:hover{color:#0b4593;text-decoration:underline}
   @media(max-width:760px){.sgdi-login-main{padding:34px 0 92px}.sgdi-login-brand{font-size:64px;margin-bottom:90px}.sgdi-login-subtitle{font-size:18px;text-align:center;margin-bottom:42px}.sgdi-login-form{width:min(420px,88vw)}.sgdi-login-form label{font-size:16px}.sgdi-login-form input{height:54px;border-radius:14px}.sgdi-login-submit{height:54px;margin-top:72px;font-size:18px;width:min(360px,78vw)}.login-admin-system-shortcut{right:24px;bottom:24px;font-size:16px}}
-  .sgdi-societe-page{min-height:100vh;background:#fff;color:#061b42;position:relative;overflow:auto}
-  .sgdi-societe-main{min-height:100svh;width:min(1080px,92vw);margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:clamp(58px,11vh,150px) 0 clamp(90px,11vh,120px)}
+  body:has(.sgdi-societe-page),html:has(.sgdi-societe-page),body:has(.sgdi-societe-page) #app{background:#fff!important;background-image:none!important}
+  .sgdi-societe-page{min-height:100vh;background:#fff!important;background-image:none!important;color:#061b42;position:relative;overflow:auto}
+  .sgdi-societe-main{min-height:100svh;width:min(1080px,92vw);margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:clamp(58px,11vh,150px) 0 clamp(90px,11vh,120px);background:#fff!important;background-image:none!important}
   .sgdi-societe-brand{font-size:clamp(58px,7vw,84px);line-height:.9;font-weight:950;letter-spacing:.015em;color:#000;text-shadow:0 8px 14px rgba(0,0,0,.28);margin-bottom:clamp(18px,3vh,32px)}
   .sgdi-societe-brand i{font-style:normal;color:#ff6900;margin-left:6px;text-shadow:0 8px 14px rgba(0,0,0,.18)}
   .sgdi-societe-subtitle{font-size:clamp(13px,1.4vw,16px);font-weight:500;letter-spacing:.03em;color:#061b42;text-transform:uppercase;margin-bottom:clamp(76px,16vh,185px)}
