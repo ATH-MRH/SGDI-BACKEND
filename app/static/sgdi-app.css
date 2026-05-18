@@ -6,7 +6,7 @@
      ============================================================= */
   :root{
     /* Couleurs neutres */
-    --bg:#eef0f3;
+    --bg:#ffffff;
     --bg-soft:#f3f4f6;
     --surface:#ffffff;
     --surface-2:#f8fafc;
@@ -165,8 +165,9 @@
   .ops-dot-counter-alert{animation:opsDotCounterBlink .85s infinite;border-color:#dc2626!important;box-shadow:0 0 0 3px rgba(220,38,38,.14),0 10px 24px rgba(220,38,38,.2)!important}
   .ops-dot-row-alert{animation:opsDotCounterBlink .85s infinite}
   @keyframes opsDotCounterBlink{0%,100%{filter:brightness(1);transform:translateY(0)}50%{filter:brightness(1.16);transform:translateY(-1px)}}
-  .sgdi-login-page{min-height:100vh;background:#fff;color:#061b42;position:relative;overflow:auto}
-  .sgdi-login-main{min-height:100svh;width:min(900px,92vw);margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:clamp(58px,11vh,150px) 0 clamp(70px,9vh,110px)}
+  body:has(.sgdi-login-page),html:has(.sgdi-login-page),body:has(.sgdi-login-page) #app{background:#fff!important;background-image:none!important}
+  .sgdi-login-page{min-height:100vh;background:#fff!important;background-image:none!important;color:#061b42;position:relative;overflow:auto}
+  .sgdi-login-main{min-height:100svh;width:min(900px,92vw);margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:clamp(58px,11vh,150px) 0 clamp(70px,9vh,110px);background:#fff!important;background-image:none!important}
   .sgdi-login-brand{font-size:clamp(58px,7vw,84px);line-height:.9;font-weight:950;letter-spacing:.015em;color:#000;text-shadow:0 8px 14px rgba(0,0,0,.28);margin-bottom:clamp(18px,3vh,32px)}
   .sgdi-login-brand i{font-style:normal;color:#061b42;margin-left:6px;text-shadow:0 8px 14px rgba(0,0,0,.18)}
   .sgdi-login-subtitle{font-size:clamp(13px,1.4vw,16px);font-weight:500;letter-spacing:.03em;color:#061b42;text-transform:uppercase;margin-bottom:clamp(62px,15vh,178px)}
