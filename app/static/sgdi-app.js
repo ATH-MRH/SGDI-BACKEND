@@ -2079,18 +2079,19 @@ function notificationReadIds(){
   try{return new Set(JSON.parse(localStorage.getItem(notificationReadStorageKey())||"[]"))}catch(e){return new Set()}
 }
 function notificationIsRead(task){
-  const id=String(task?.id||task?.candidateBackendId||"");
+  const id=notificationItemId(task);
   return !!id&&notificationReadIds().has(id);
 }
+function notificationItemId(task){return String(task?.id||task?.candidateBackendId||"")}
 function notificationUnreadTasks(){
   const read=notificationReadIds();
-  return notificationVisibleTasks().filter(t=>!read.has(String(t.id||t.candidateBackendId||"")));
+  return sgdiAlertVisibleItems().filter(t=>!read.has(notificationItemId(t)));
 }
 function notificationMarkVisibleRead(){
   const read=notificationReadIds();
   let changed=false;
-  notificationVisibleTasks().forEach(t=>{
-    const id=String(t.id||t.candidateBackendId||"");
+  sgdiAlertVisibleItems().forEach(t=>{
+    const id=notificationItemId(t);
     if(id&&!read.has(id)){read.add(id);changed=true}
   });
   if(changed){
@@ -2100,7 +2101,8 @@ function notificationMarkVisibleRead(){
 function notificationTopbarButtonHTML(){
   if(!session)return"";
   const count=sgdiAlertVisibleItems().length;
-  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${count?"has-alert":""}" onclick="notificationToggle(true)" title="Alertes"><span aria-hidden="true">🚨</span><span>ALERTE</span><span class="badge">${count}</span></button>`;
+  const unread=notificationUnreadTasks().length;
+  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="Alertes"><span aria-hidden="true">🚨</span><span>ALERTE</span><span class="badge">${count}</span></button>`;
 }
 function societeStructureBarHTML(){return "";}
 
@@ -2759,7 +2761,7 @@ function filterDomBySearch(){
   if(old)old.remove();
   if(q&&rows.length&&visible===0&&view)view.insertAdjacentHTML("beforeend",`<div id="ui-empty-search" class="ui-empty-search">Aucun résultat pour <strong>${escapeHTML(currentSearch)}</strong></div>`);
 }
-function dialogueIsOpen(){return sessionStorage.getItem("dialogueOpen")!=="0"}
+function dialogueIsOpen(){return sessionStorage.getItem("dialogueOpen")==="1"}
 function notificationIsOpen(){return sessionStorage.getItem("notificationOpen")==="1"}
 function notificationToggle(open){
   sessionStorage.setItem("notificationOpen",open?"1":"0");
@@ -2770,6 +2772,7 @@ function notificationPanelHTML(){
   if(!session)return"";
   const open=notificationIsOpen();
   const rows=sgdiAlertVisibleItems();
+  const unread=notificationUnreadTasks().length;
   const moduleLabel=m=>({drh:"DRH",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Module").toUpperCase());
   const item=t=>{const read=notificationIsRead(t);const body=`<div class="notification-item ${read?"is-read":"is-unread"}">
     <div class="notification-item-head"><span>${escapeHTML(moduleLabel(t.module))}</span><span>${escapeHTML(t.societe||"—")}</span></div>
@@ -2779,7 +2782,7 @@ function notificationPanelHTML(){
   </div>`;return t.route?`<button type="button" class="notification-item ${read?"is-read":"is-unread"}" onclick="notificationToggle(false);navigate('${escapeHTML(t.route)}')">${body.replace(/^<div class="notification-item [^"]+">/,"").replace(/<\/div>$/,"")}</button>`:body};
   return `<div class="notification-backdrop no-print ${open?"":"closed"}" onclick="if(event.target===this)notificationToggle(false)">
     <aside class="notification-panel" aria-label="Notifications système">
-      <div class="notification-head"><div><div class="notification-title">ALERTES</div><div class="notification-subtitle">${rows.length} alerte(s) à traiter</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
+      <div class="notification-head"><div><div class="notification-title">ACTIONS À TRAITER</div><div class="notification-subtitle">${rows.length} alerte(s) active(s) · ${unread} non lue(s)</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
       <div class="notification-list">${rows.length?rows.map(item).join(""):`<div class="notification-empty">Aucune alerte à traiter.</div>`}</div>
     </aside>
   </div>`;
@@ -2882,9 +2885,22 @@ function dialogueFolderCounts(){
 }
 function dialogueSetFolder(folder){
   sessionStorage.setItem("dialogueFolder",folder||"inbox");
+  sessionStorage.setItem("dialogueCompose","0");
   const peers=dialogueConversationUsers(folder||"inbox");
   sessionStorage.setItem("dialoguePeer",peers[0]?.key||"");
   dialogueCheckNewMessages();
+  render();
+}
+function dialogueStartNewMessage(){
+  sessionStorage.setItem("dialogueOpen","1");
+  sessionStorage.setItem("dialogueCompose","1");
+  sessionStorage.setItem("dialoguePeer","");
+  render();
+}
+function dialogueCancelNewMessage(){
+  sessionStorage.setItem("dialogueCompose","0");
+  const peers=dialogueConversationUsers(dialogueFolder());
+  sessionStorage.setItem("dialoguePeer",peers[0]?.key||"");
   render();
 }
 function dialogueArchivePeer(peer,restore){
@@ -2924,12 +2940,13 @@ function dialoguePeerKey(m){
   return m.from===u?(m.to||"admin"):(m.from||"admin");
 }
 function dialogueSelectedPeer(){
+  if(sessionStorage.getItem("dialogueCompose")==="1")return "";
   const saved=sessionStorage.getItem("dialoguePeer")||"";
   const peers=dialogueConversationUsers();
   if(saved&&peers.some(p=>p.key===saved))return saved;
   return peers[0]?.key||"";
 }
-function dialogueSetPeer(peer){sessionStorage.setItem("dialoguePeer",peer||"");dialogueMarkRead(peer);dialogueCheckNewMessages();render()}
+function dialogueSetPeer(peer){sessionStorage.setItem("dialogueCompose","0");sessionStorage.setItem("dialoguePeer",peer||"");dialogueMarkRead(peer);dialogueCheckNewMessages();render()}
 function dialogueConversationUsers(folder){
   const users=(db.users||[]).filter(u=>u.username!==session?.username);
   const map=new Map();
@@ -2989,9 +3006,10 @@ function dialogueBoxHTML(){
   dialogueCheckNewMessages();
   const folder=dialogueFolder();
   const selected=dialogueSelectedPeer();
+  const composing=sessionStorage.getItem("dialogueCompose")==="1";
   if(open)dialogueMarkRead(selected);
   const peers=dialogueConversationUsers(folder);
-  const peer=peers.find(p=>p.key===selected)||peers[0]||{key:"",label:"Nouvelle conversation",sub:""};
+  const peer=composing?{key:"",label:"Nouveau message",sub:"Choisissez un ou plusieurs destinataires"}:(peers.find(p=>p.key===selected)||peers[0]||{key:"",label:"Nouvelle conversation",sub:""});
   const unread=dialogueIncomingUnreadItems().length;
   const counts=dialogueFolderCounts();
   const foldersHTML=[
@@ -2999,17 +3017,19 @@ function dialogueBoxHTML(){
     {key:"sent",label:"Messages envoyés",count:counts.sent},
     {key:"archived",label:"Messages archivés",count:counts.archived}
   ].map(f=>'<button class="dialogue-folder '+(folder===f.key?'active':'')+'" onclick="dialogueSetFolder(\''+f.key+'\')"><span>'+f.label+'</span><span class="count">'+f.count+'</span></button>').join('');
-  const usersHTML=peers.map(p=>'<button class="dialogue-user '+(p.key===selected?'active ':'')+(p.unread?'has-unread':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
-  const archiveButton=selected?'<button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueArchivePeer(\''+escapeHTML(selected)+'\','+(folder==="archived"?'true':'false')+')">'+(folder==="archived"?'Restaurer':'Archiver')+'</button>':'';
+  const usersHTML='<button class="dialogue-user dialogue-new '+(composing?'active':'')+'" onclick="dialogueStartNewMessage()"><span>＋ Nouveau message</span><div style="font-size:9px;opacity:.7;margin-top:3px">Discussion directe</div></button>'+peers.map(p=>'<button class="dialogue-user '+(!composing&&p.key===selected?'active ':'')+(p.unread?'has-unread':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
+  const archiveButton=!composing&&selected?'<button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueArchivePeer(\''+escapeHTML(selected)+'\','+(folder==="archived"?'true':'false')+')">'+(folder==="archived"?'Restaurer':'Archiver')+'</button>':'';
+  const cancelButton=composing?'<button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueCancelNewMessage()">Annuler</button>':'';
   return '<div class="dialogue-modal-backdrop no-print '+(open?'':'closed')+'" onclick="if(event.target===this)dialogueToggle(false)">'+
     '<aside class="dialogue-panel" aria-label="Boîte de dialogue interne">'+
-      '<div class="dialogue-head"><div class="dialogue-title">MESSAGERIE SGDI'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Messages directs entre utilisateurs</div><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Fermer</button></div></div>'+
+      '<div class="dialogue-head"><div class="dialogue-title">MESSAGERIE SGDI'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Discussions entre utilisateurs uniquement. Les actions ERP sont dans ALERTE.</div><button class="btn btn-primary dialogue-slim-btn" onclick="dialogueStartNewMessage()">Nouveau message</button><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Fermer</button></div></div>'+
       '<div class="dialogue-layout"><div class="dialogue-users"><div class="dialogue-folders">'+foldersHTML+'</div>'+(usersHTML||'<div class="text-xs text-slate-500">Aucune conversation</div>')+'</div><div class="dialogue-chat">'+
-        '<div class="dialogue-chat-head"><div class="flex items-center justify-between gap-2"><div>'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div>'+archiveButton+'</div></div>'+
+        '<div class="dialogue-chat-head"><div class="flex items-center justify-between gap-2"><div>'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div><div class="flex gap-2">'+cancelButton+archiveButton+'</div></div></div>'+
         '<div class="dialogue-thread" id="dialogue-body">'+feedRowsHTML(selected)+'</div>'+dialogueComposerHTML(selected)+
       '</div></div></aside></div>';
 }
 function feedRowsHTML(peer){
+  if(sessionStorage.getItem("dialogueCompose")==="1")return '<div class="dialogue-empty-compose"><div class="font-black mb-1">Nouveau message</div><div>Sélectionnez les destinataires, écrivez votre message puis envoyez. Les alertes automatiques ne passent plus ici.</div></div>';
   const selected=peer||dialogueSelectedPeer();
   const items=dialogueThreadItems(selected);
   if(!items.length)return '<div class="text-center text-xs text-slate-500 mt-8">Aucun message. Lancez la conversation.</div>';
@@ -3047,6 +3067,7 @@ async function dialogueSend(form){
   if(db.echanges.length>800)db.echanges=db.echanges.slice(-800);
   saveDB();
   sessionStorage.setItem("dialogueOpen","1");
+  sessionStorage.setItem("dialogueCompose","0");
   sessionStorage.setItem("dialoguePeer",recipients[0]);
   form.reset();
   toast(recipients.length>1?"Message envoyé à "+recipients.length+" utilisateurs":"Message envoyé","success");

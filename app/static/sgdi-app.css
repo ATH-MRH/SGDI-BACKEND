@@ -499,6 +499,8 @@
   .dialogue-folder.active .count{background:#facc15;color:#043970}
   .dialogue-user{width:100%;border:1px solid transparent;background:transparent;color:#0f172a;border-radius:9px;padding:9px 8px;margin-bottom:6px;text-align:left;cursor:pointer;font-size:11.5px;line-height:1.18}
   .dialogue-user.active{background:#111827;color:#fff;border-color:#111827}
+  .dialogue-user.dialogue-new{background:#fff;border-color:#043970;color:#043970;font-weight:950}
+  .dialogue-user.dialogue-new.active{background:#043970;color:#fff;border-color:#043970}
   .dialogue-user.has-unread{border-color:#dc2626;background:#fee2e2}
   .dialogue-user.active.has-unread{background:#111827;color:#fff;box-shadow:0 0 0 2px rgba(220,38,38,.35)}
   .dialogue-user .dot{float:right;background:#dc2626;color:#fff;border-radius:999px;min-width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900}
@@ -507,6 +509,7 @@
   .dialogue-chat{display:flex;flex-direction:column;min-width:0;min-height:0;background:#f8fafc}
   .dialogue-chat-head{padding:9px 11px;border-bottom:1px solid #cbd5e1;background:#fff;font-size:12px;font-weight:900;color:#0f172a}
   .dialogue-thread{flex:1;overflow:auto;padding:14px;background:#f8fafc}
+  .dialogue-empty-compose{margin:34px auto 0;width:min(420px,100%);border:1px dashed #94a3b8;background:#fff;border-radius:12px;padding:18px;text-align:center;color:#334155;font-size:12.5px;line-height:1.45}
   .chat-bubble{max-width:78%;border-radius:12px;padding:9px 11px;margin:0 0 9px;font-size:12.5px;line-height:1.35;box-shadow:0 5px 12px rgba(15,23,42,.08);white-space:pre-wrap}
   .chat-bubble.mine{margin-left:auto;background:#043970;color:#fff;border-bottom-right-radius:4px}
   .chat-bubble.theirs{margin-right:auto;background:#fff;color:#0f172a;border:1px solid #cbd5e1;border-bottom-left-radius:4px}
