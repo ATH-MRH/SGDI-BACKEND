@@ -8255,7 +8255,7 @@ function renderFiches(view,sub){
       </div>
     </div>
     <div class="fp-summary-grid">
-      ${summaryCards.map(([label,note,desc,color,pct,route])=>`${route?`<a href="#/${route}" class="fp-summary-card ${note?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit">`:`<div class="fp-summary-card">`}<div><span>${label}</span><strong style="color:${color}">${note}</strong><small>${desc}</small></div><div class="fp-ring" style="--pct:${pct}%;--ring:${color}"><b>${pct}%</b></div>${route?`</a>`:`</div>`}`).join("")}
+      ${summaryCards.map(([label,note,desc,color,pct,route])=>`${route?`<a href="#/${route}" class="fp-summary-card" style="text-decoration:none;color:inherit">`:`<div class="fp-summary-card">`}<div><span>${label}</span><strong style="color:${color}">${note}</strong><small>${desc}</small></div><div class="fp-ring" style="--pct:${pct}%;--ring:${color}"><b>${pct}%</b></div>${route?`</a>`:`</div>`}`).join("")}
     </div>
     ${fpSocieteBandHTML(baseList)}
     <div class="fp-status-grid">
