@@ -446,6 +446,8 @@ async function sgdiPullState(options){
 }
 let sgdiAutoRefreshTimer=null;
 let sgdiAutoRefreshRunning=false;
+let sgdiMessageRefreshTimer=null;
+let sgdiMessageRefreshRunning=false;
 let sgdiEventsSource=null;
 let sgdiEventsLastPull=0;
 function sgdiAutoRefreshSettings(){
@@ -478,9 +480,52 @@ function sgdiStartEventStream(){
     sgdiEventsSource.onerror=()=>{try{sgdiEventsSource.close()}catch(e){}sgdiEventsSource=null;setTimeout(sgdiStartEventStream,5000)};
   }catch(e){console.warn("Flux alertes SGDI indisponible",e);sgdiEventsSource=null}
 }
+function dialogueMessagesSignature(){
+  if(!session||!db)return"";
+  return dialogueVisibleItems().map(m=>[
+    m.id||"",
+    m.date||"",
+    m.from||"",
+    m.to||"",
+    m.message||"",
+    (m.attachments||[]).length,
+    (m.luPar||[]).join(","),
+    (m.receivedBy||[]).join(","),
+    (m.archivedBy||[]).join(",")
+  ].join("~")).join("|");
+}
+function sgdiMessageRefreshCanRender(){
+  if(document.querySelector(".modal-bg"))return false;
+  const tag=(document.activeElement&&document.activeElement.tagName)||"";
+  return !["INPUT","TEXTAREA","SELECT"].includes(tag);
+}
+function sgdiStartMessageRefresh(){
+  if(sgdiMessageRefreshTimer)return;
+  sgdiMessageRefreshTimer=setInterval(async()=>{
+    if(sgdiMessageRefreshRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||sgdiDirty||document.hidden)return;
+    sgdiMessageRefreshRunning=true;
+    try{
+      const before=dialogueMessagesSignature();
+      const currentHash=location.hash;
+      await sgdiPullState({silent:true,render:false,force:true,light:true,auto:true});
+      if(location.hash!==currentHash)location.hash=currentHash;
+      const after=dialogueMessagesSignature();
+      if(before!==after){
+        dialogueCheckNewMessages();
+        if(dialogueIsOpen())refreshRealtimeFeed();
+        if(sgdiMessageRefreshCanRender())render();
+      }
+    }catch(e){
+      console.warn("Actualisation messagerie SGDI échouée",e);
+    }finally{
+      sgdiMessageRefreshRunning=false;
+    }
+  },5000);
+}
 function sgdiScheduleAutoRefresh(){
   if(sgdiAutoRefreshTimer){clearInterval(sgdiAutoRefreshTimer);sgdiAutoRefreshTimer=null}
   sgdiStartEventStream();
+  sgdiStartMessageRefresh();
   const cfg=sgdiAutoRefreshSettings();
   if(!cfg.enabled)return;
   sgdiAutoRefreshTimer=setInterval(async()=>{
