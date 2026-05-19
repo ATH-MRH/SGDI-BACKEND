@@ -166,6 +166,7 @@
   .topbar-dialogue-btn.has-unread{animation:dialogueTopbarBlink .85s infinite;box-shadow:0 0 0 3px rgba(220,38,38,.18),0 8px 18px rgba(220,38,38,.28)}
   .topbar-dialogue-btn.has-unread:before{content:"";position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:999px;background:#dc2626;border:2px solid #fff;box-shadow:0 0 0 4px rgba(220,38,38,.18)}
   .topbar-dialogue-btn .badge{background:#dc2626;color:#fff;border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;font-size:10px;font-weight:950}
+  .pointage-dialogue-style-btn{height:34px!important;padding:0 14px!important;text-decoration:none!important}
   .topbar-notification-btn{height:34px;border:0;background:#dc2626;color:#fff;border-radius:999px;padding:0 12px;font-size:11px!important;font-weight:950;display:inline-flex;align-items:center;gap:7px;box-shadow:0 0 0 3px rgba(220,38,38,.16),0 8px 20px rgba(220,38,38,.28);cursor:pointer;white-space:nowrap;position:relative;text-transform:uppercase;letter-spacing:.02em}
   .topbar-notification-btn:hover{background:#b91c1c;color:#fff}
   .topbar-notification-btn.has-alert{animation:notificationBlink .8s infinite;box-shadow:0 0 0 3px rgba(220,38,38,.24),0 8px 22px rgba(220,38,38,.36)}
