@@ -467,20 +467,27 @@
   .dialogue-panel.closed{display:none}
   .notification-backdrop{position:fixed;inset:0;z-index:82;background:rgba(1,17,47,.45);backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:flex-end;padding:72px 22px 22px}
   .notification-backdrop.closed{display:none}
-  .notification-panel{width:min(420px,calc(100vw - 44px));max-height:calc(100vh - 96px);background:#fff;border:1px solid #fecaca;border-radius:12px;box-shadow:0 24px 70px rgba(1,17,47,.28);display:flex;flex-direction:column;overflow:hidden;color:#0f172a}
+  .notification-panel{width:min(520px,calc(100vw - 44px));max-height:calc(100vh - 96px);background:#fff;border:1px solid #fecaca;border-radius:12px;box-shadow:0 24px 70px rgba(1,17,47,.28);display:flex;flex-direction:column;overflow:hidden;color:#0f172a}
   .notification-head{padding:14px 16px;background:#fff5f5;border-bottom:1px solid #fecaca;display:flex;align-items:center;justify-content:space-between;gap:12px}
   .notification-title{font-size:13px;font-weight:950;color:#991b1b;letter-spacing:.08em}
   .notification-subtitle{font-size:11px;color:#7f1d1d;font-weight:800;margin-top:2px}
   .notification-list{padding:12px;overflow:auto}
-  .notification-item{border:1px solid #fecaca;background:#fff1f2;border-left:5px solid #dc2626;border-radius:10px;padding:12px;margin-bottom:10px;text-align:left;width:100%;display:block}
-  .notification-item.is-read{background:#fff7f7;border-color:#fecaca;opacity:.82}
-  .notification-item.is-unread{background:#fee2e2;border-color:#dc2626;box-shadow:0 8px 22px rgba(220,38,38,.16)}
+  .notification-item{position:relative;border:1px solid #fecaca;background:#fff1f2;border-left:5px solid #dc2626;border-radius:10px;padding:12px 12px 38px;margin-bottom:10px;text-align:left;width:100%;display:block;color:#0f172a}
+  button.notification-item{cursor:pointer}
+  button.notification-item:hover{box-shadow:0 10px 24px rgba(15,23,42,.13);transform:translateY(-1px)}
+  .notification-item.alert-critical,.notification-item.alert-danger{border-left-color:#dc2626;background:#fff1f2;border-color:#fecaca}
+  .notification-item.alert-warn{border-left-color:#f59e0b;background:#fffbeb;border-color:#fde68a}
+  .notification-item.alert-info{border-left-color:#043970;background:#f8fafc;border-color:#dbeafe}
+  .notification-item.is-read{opacity:.78;filter:saturate(.82)}
+  .notification-item.is-unread{box-shadow:0 8px 22px rgba(220,38,38,.16)}
   .notification-item-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;font-weight:950;text-transform:uppercase;color:#991b1b}
-  .notification-item-title{font-size:13px;font-weight:950;color:#991b1b;margin-top:7px}
-  .notification-item-body{font-size:12px;color:#7f1d1d;margin-top:5px;line-height:1.4}
-  .notification-item-meta{font-size:11px;color:#b91c1c;margin-top:7px;font-weight:800}
-  .notification-item.is-read .notification-item-head,.notification-item.is-read .notification-item-title,.notification-item.is-read .notification-item-body,.notification-item.is-read .notification-item-meta{font-weight:700;color:#b91c1c}
-  .notification-item.is-unread .notification-item-title,.notification-item.is-unread .notification-item-body{font-weight:950;color:#7f1d1d}
+  .notification-item-title{font-size:13px;font-weight:950;color:#0f172a;margin-top:7px}
+  .notification-item-body{font-size:12px;color:#334155;margin-top:5px;line-height:1.4}
+  .notification-item-meta{display:flex;gap:5px;flex-wrap:wrap;font-size:10.5px;color:#64748b;margin-top:8px;font-weight:850}
+  .notification-item-meta span{background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:3px 7px}
+  .notification-item-action{position:absolute;right:10px;bottom:9px;background:#111827;color:#fff;border-radius:999px;padding:5px 10px;font-size:10px;font-weight:950}
+  .notification-item.is-read .notification-item-title,.notification-item.is-read .notification-item-body{font-weight:700;color:#475569}
+  .notification-item.is-unread .notification-item-title,.notification-item.is-unread .notification-item-body{font-weight:950}
   .notification-empty{padding:34px 12px;text-align:center;color:#047857;font-size:13px;font-weight:900}
   .dialogue-head{padding:12px 14px;border-bottom:1px solid #cbd5e1;display:flex;flex-direction:column;gap:8px;background:#e2e8f0;color:#0f172a;flex-shrink:0}
   .dialogue-title{font-size:13px;font-weight:900;letter-spacing:.02em;white-space:nowrap;line-height:1.15}

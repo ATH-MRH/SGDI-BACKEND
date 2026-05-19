@@ -2078,72 +2078,123 @@ function dialogueTopbarButtonHTML(){
 function notificationVisibleTasks(){
   if(!session)return[];
   const soc=currentStructureSocieteFilter()||mySoc()||"";
+  const mod=session.transverse||"";
   return (db.workflowTasks||[]).filter(t=>{
     if(!t||t.status==="done")return false;
     if(soc&&t.societe&&t.societe!==soc)return false;
+    if(mod&&t.module&&t.module!==mod)return false;
     return workflowTaskAllowedForCurrentUser(t);
   }).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+}
+function sgdiAlertModuleLabel(m){return{drh:"Direction R-H",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Système").toUpperCase()}
+function sgdiAlertModuleAllowed(module){
+  if(!module)return true;
+  if(!canAccessStructureKey(module))return false;
+  return !session?.transverse||module===session.transverse;
+}
+function sgdiAlertSeverityRank(s){return{critical:0,danger:0,warn:1,info:2}[s]??2}
+function sgdiAlertPush(rows,item){
+  if(!item||!item.id||!sgdiAlertModuleAllowed(item.module))return;
+  const soc=currentStructureSocieteFilter()||mySoc()||"";
+  if(soc&&item.societe&&item.societe!==soc)return;
+  rows.push({
+    severity:"info",
+    status:"Non traitée",
+    createdAt:"",
+    ...item,
+    actionLabel:item.actionLabel||"Ouvrir"
+  });
 }
 function sgdiAlertVisibleItems(){
   if(!session||!db)return[];
   const soc=currentStructureSocieteFilter()||mySoc()||"";
   const rows=[];
-  notificationVisibleTasks().forEach(t=>rows.push({
+  notificationVisibleTasks().forEach(t=>sgdiAlertPush(rows,{
     id:"workflow:"+(t.id||t.candidateBackendId||t.createdAt||Math.random()),
     module:t.module||"systeme",
     societe:t.societe||"",
     title:t.title||"Action à effectuer",
     message:t.message||"Instruction non renseignée.",
     meta:[t.candidateName,t.poste].filter(Boolean).join(" · "),
-    route:t.route||""
+    route:t.route||"",
+    severity:t.urgence==="haute"?"danger":"warn",
+    type:"Workflow",
+    createdAt:t.createdAt||""
   }));
   (db.stockArticles||[]).forEach(a=>{
     if(soc&&a.societe&&a.societe!==soc)return;
+    if(!sgdiAlertModuleAllowed("materiel"))return;
     if(typeof stockGetEtat!=="function")return;
     const etat=stockGetEtat(a);
     if(!["alerte","min","rupture"].includes(etat.code))return;
     const mag=(db.magasins||[]).find(m=>String(m.id)===String(a.magasinId));
-    rows.push({
+    sgdiAlertPush(rows,{
       id:"stock:"+(a.id||a.backendId||a.code),
       module:"materiel",
       societe:a.societe||"",
       title:(etat.code==="rupture"?"Rupture stock":"Alerte stock")+" - "+(a.designation||a.code||"Article"),
       message:`${etat.label} · stock actuel ${qty(stockGetActuel(a.id))} ${a.unite||""}`,
       meta:[mag?.nom,a.categorie,a.sousCategorie].filter(Boolean).join(" · "),
-      route:"materiel/article/"+a.id
+      route:"materiel/article/"+a.id,
+      severity:etat.code==="rupture"?"critical":"warn",
+      type:"Stock"
     });
   });
   (db.agents||[]).forEach(a=>{
     if(soc&&a.societe&&a.societe!==soc)return;
+    if(!sgdiAlertModuleAllowed("drh"))return;
     if(!a.dateFinContrat)return;
     const d=daysBetween(today(),a.dateFinContrat);
     if(d>30)return;
-    rows.push({
+    sgdiAlertPush(rows,{
       id:"contract-agent:"+(a.id||a.matricule),
       module:"drh",
       societe:a.societe||"",
       title:d<0?"Contrat employé expiré":"Fin contrat employé proche",
       message:`${(a.nom||"")+" "+(a.prenom||"")} · fin ${formatDate(a.dateFinContrat)}${d>=0?" · J-"+d:""}`,
       meta:a.matricule||"",
-      route:"effectif/agent/"+a.id
+      route:"effectif/agent/"+a.id,
+      severity:d<0?"critical":"warn",
+      type:"Contrat"
     });
   });
   (db.clients||[]).forEach(c=>{
     if(soc&&c.societe&&c.societe!==soc)return;
+    if(!sgdiAlertModuleAllowed("commercial"))return;
     if(!c.dateFinContrat)return;
     const d=daysBetween(today(),c.dateFinContrat);
     if(d>30)return;
-    rows.push({
+    sgdiAlertPush(rows,{
       id:"contract-client:"+(c.id||c.nom||c.raisonSociale),
       module:"commercial",
       societe:c.societe||"",
       title:d<0?"Contrat client expiré":"Fin contrat client proche",
       message:`${c.nom||c.raisonSociale||"Client"} · fin ${formatDate(c.dateFinContrat)}${d>=0?" · J-"+d:""}`,
       meta:c.structure||c.contact||"",
-      route:"commercial/clients"
+      route:"commercial/clients",
+      severity:d<0?"critical":"warn",
+      type:"Client"
     });
   });
-  return rows.sort((a,b)=>String(a.module+a.title).localeCompare(String(b.module+b.title)));
+  if(sgdiAlertModuleAllowed("drh")){
+    (typeof drhDemandesPersonnelList==="function"?drhDemandesPersonnelList():[]).forEach(d=>{
+      if(soc&&d.societe&&d.societe!==soc)return;
+      if(typeof demandePersonnelIsAlert!=="function"||!demandePersonnelIsAlert(d))return;
+      sgdiAlertPush(rows,{
+        id:"demande-personnel:"+(d.id||d.ref||d.createdAt),
+        module:"drh",
+        societe:d.societe||"",
+        title:d.objet||d.typeLabel||"Demande personnel en alerte",
+        message:d.message||d.description||"Demande personnel à traiter.",
+        meta:[d.agentName,d.urgence,d.statut].filter(Boolean).join(" · "),
+        route:"demandes_personnel/alertes",
+        severity:"warn",
+        type:"Personnel",
+        createdAt:d.createdAt||d.date||""
+      });
+    });
+  }
+  return rows.sort((a,b)=>sgdiAlertSeverityRank(a.severity)-sgdiAlertSeverityRank(b.severity)||String(b.createdAt||"").localeCompare(String(a.createdAt||""))||String(a.module+a.title).localeCompare(String(b.module+b.title)));
 }
 function notificationReadStorageKey(){return "sgdiNotificationRead:"+(session?.username||"anonymous")}
 function notificationReadIds(){
@@ -2173,7 +2224,8 @@ function notificationTopbarButtonHTML(){
   if(!session)return"";
   const count=sgdiAlertVisibleItems().length;
   const unread=notificationUnreadTasks().length;
-  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="Alertes"><span aria-hidden="true">🚨</span><span>ALERTE</span><span class="badge">${count}</span></button>`;
+  const label=session.transverse?`Alertes ${sgdiAlertModuleLabel(session.transverse)}`:"Alertes";
+  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="${escapeHTML(label)}"><span aria-hidden="true">🚨</span><span>ALERTE</span><span class="badge">${count}</span></button>`;
 }
 function societeStructureBarHTML(){return "";}
 
@@ -2845,16 +2897,20 @@ function notificationPanelHTML(){
   const open=notificationIsOpen();
   const rows=sgdiAlertVisibleItems();
   const unread=notificationUnreadTasks().length;
-  const moduleLabel=m=>({drh:"DRH",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Module").toUpperCase());
-  const item=t=>{const read=notificationIsRead(t);const body=`<div class="notification-item ${read?"is-read":"is-unread"}">
-    <div class="notification-item-head"><span>${escapeHTML(moduleLabel(t.module))}</span><span>${escapeHTML(t.societe||"—")}</span></div>
-    <div class="notification-item-title">${escapeHTML(t.title||"Action à effectuer")}</div>
-    <div class="notification-item-body">${escapeHTML(t.message||"Instruction non renseignée.")}</div>
-    <div class="notification-item-meta">${escapeHTML(t.meta||t.candidateName||"")} ${t.poste?`· ${escapeHTML(t.poste)}`:""}</div>
-  </div>`;return t.route?`<button type="button" class="notification-item ${read?"is-read":"is-unread"}" onclick="notificationToggle(false);navigate('${escapeHTML(t.route)}')">${body.replace(/^<div class="notification-item [^"]+">/,"").replace(/<\/div>$/,"")}</button>`:body};
+  const title=session.transverse?`ALERTES ${sgdiAlertModuleLabel(session.transverse).toUpperCase()}`:"CENTRE D'ALERTES ERP";
+  const item=t=>{
+    const read=notificationIsRead(t);
+    const route=String(t.route||"").replace(/'/g,"\\'");
+    const content=`<div class="notification-item-head"><span>${escapeHTML(sgdiAlertModuleLabel(t.module))}</span><span>${escapeHTML(t.societe||"—")}</span></div>
+      <div class="notification-item-title">${escapeHTML(t.title||"Alerte à traiter")}</div>
+      <div class="notification-item-body">${escapeHTML(t.message||"Instruction non renseignée.")}</div>
+      <div class="notification-item-meta"><span>${escapeHTML(t.type||"Alerte")}</span><span>${escapeHTML(t.status||"Non traitée")}</span>${t.meta?`<span>${escapeHTML(t.meta)}</span>`:""}</div>
+      ${t.route?`<div class="notification-item-action">${escapeHTML(t.actionLabel||"Ouvrir")}</div>`:""}`;
+    return t.route?`<button type="button" class="notification-item alert-${escapeHTML(t.severity||"info")} ${read?"is-read":"is-unread"}" onclick="notificationToggle(false);navigate('${route}')">${content}</button>`:`<div class="notification-item alert-${escapeHTML(t.severity||"info")} ${read?"is-read":"is-unread"}">${content}</div>`;
+  };
   return `<div class="notification-backdrop no-print ${open?"":"closed"}" onclick="if(event.target===this)notificationToggle(false)">
     <aside class="notification-panel" aria-label="Notifications système">
-      <div class="notification-head"><div><div class="notification-title">ACTIONS À TRAITER</div><div class="notification-subtitle">${rows.length} alerte(s) active(s) · ${unread} non lue(s)</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
+      <div class="notification-head"><div><div class="notification-title">${escapeHTML(title)}</div><div class="notification-subtitle">${rows.length} alerte(s) active(s) · ${unread} nouvelle(s)</div></div><button type="button" class="btn btn-ghost text-xs" onclick="notificationToggle(false)">Fermer</button></div>
       <div class="notification-list">${rows.length?rows.map(item).join(""):`<div class="notification-empty">Aucune alerte à traiter.</div>`}</div>
     </aside>
   </div>`;
