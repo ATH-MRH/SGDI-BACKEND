@@ -26,6 +26,7 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
     "feuillePresence", "missions", "siteInspections", "clients", "prospects",
     "opportunites", "visites", "devis", "factures", "paiements", "avances", "avoirs",
     "caisse", "stockArticles", "stockMouvements", "magasins", "fournisseurs",
+    "echanges",
 }
 
 
@@ -89,10 +90,68 @@ def _user_allowed_societies(user: Any | None) -> set[str]:
     return _normalized_set(getattr(user, "authorized_societies", None))
 
 
+def _user_username(user: Any | None) -> str:
+    return str(getattr(user, "username", "") or "").strip()
+
+
 def _snapshot_unrestricted(user: Any | None) -> bool:
     if user is None:
         return True
     return _user_role(user) in ADMIN_SNAPSHOT_ROLES or not _user_allowed_societies(user)
+
+
+def _message_participants(item: dict[str, Any]) -> set[str]:
+    participants: set[str] = set()
+    for field in ("from", "to"):
+        value = item.get(field)
+        if isinstance(value, str) and value.strip() and value.strip().lower() != "all":
+            participants.add(value.strip())
+        elif isinstance(value, list):
+            participants.update(str(v).strip() for v in value if str(v or "").strip())
+    for field in ("recipients", "destinataires"):
+        value = item.get(field)
+        if isinstance(value, list):
+            participants.update(str(v).strip() for v in value if str(v or "").strip())
+    return {p for p in participants if p}
+
+
+def _message_visible_to_user(item: dict[str, Any], user: Any | None) -> bool:
+    if user is None:
+        return True
+    username = _user_username(user)
+    if not username:
+        return False
+    if str(item.get("to") or "").strip().lower() == "all":
+        return True
+    return username in _message_participants(item)
+
+
+def _filter_echanges_for_user(rows: list[Any], user: Any | None) -> list[Any]:
+    out: list[Any] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if row.get("type") == "message" and not _message_visible_to_user(row, user):
+            continue
+        out.append(row)
+    return out
+
+
+def _merge_confidential_echanges_for_replace(db: Session, incoming: list[Any], user: Any | None) -> list[Any]:
+    if user is None:
+        return incoming
+    existing = get_collection(db, "echanges")
+    if not isinstance(existing, list):
+        existing = []
+    incoming_ids = {str(row.get("id")) for row in incoming if isinstance(row, dict) and row.get("id") is not None}
+    preserved = [
+        row for row in existing
+        if isinstance(row, dict)
+        and row.get("type") == "message"
+        and not _message_visible_to_user(row, user)
+        and str(row.get("id")) not in incoming_ids
+    ]
+    return preserved + incoming
 
 
 def can_replace_collection_for_user(name: str, user: Any | None) -> bool:
@@ -107,7 +166,9 @@ def _item_society(item: dict[str, Any]) -> str:
     return ""
 
 
-def ensure_item_allowed_for_user(item: dict[str, Any], user: Any | None) -> None:
+def ensure_item_allowed_for_user(item: dict[str, Any], user: Any | None, collection: str | None = None) -> None:
+    if collection == "echanges" and item.get("type") == "message" and not _message_visible_to_user(item, user):
+        raise HTTPException(status_code=403, detail="Message réservé à l'expéditeur et au destinataire")
     if _snapshot_unrestricted(user):
         return
     society = _item_society(item)
@@ -163,7 +224,11 @@ def _filter_rows_for_scope(
 
 def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], user: Any | None) -> dict[str, list[Any] | dict[str, Any]]:
     if _snapshot_unrestricted(user):
-        return snapshot
+        scoped_unrestricted = deepcopy(snapshot)
+        echanges = scoped_unrestricted.get("echanges")
+        if isinstance(echanges, list):
+            scoped_unrestricted["echanges"] = _filter_echanges_for_user(echanges, user)
+        return scoped_unrestricted
     allowed_societies = _user_allowed_societies(user)
     scoped: dict[str, list[Any] | dict[str, Any]] = deepcopy(snapshot)
 
@@ -195,6 +260,9 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
 
     for name, value in list(scoped.items()):
         if not isinstance(value, list) or name in {"agents", "employees", "sites"}:
+            continue
+        if name == "echanges":
+            scoped[name] = _filter_echanges_for_user(value, user)
             continue
         scoped[name] = _filter_rows_for_scope(
             value,
@@ -233,9 +301,13 @@ def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]
     if not _snapshot_unrestricted(user):
         raise HTTPException(status_code=403, detail="Remplacement global réservé administrateur")
     _validate_legacy_database_payload(payload)
+    payload_to_store = dict(payload)
+    echanges = payload_to_store.get("echanges")
+    if isinstance(echanges, list):
+        payload_to_store["echanges"] = _merge_confidential_echanges_for_replace(db, echanges, user)
     db.execute(delete(SgdiRecord))
     logger.info("Remplacement base SGDI API-first: %s collection(s)", len(payload))
-    for name, data in payload.items():
+    for name, data in payload_to_store.items():
         if name in sql_bridge.SQL_COLLECTIONS:
             if isinstance(data, list) and (data or name not in sql_bridge.SQL_SKIP_EMPTY_ON_DB_REPLACE):
                 sql_bridge.replace_collection(db, name, data)
@@ -318,7 +390,9 @@ def _replace_collection_no_commit(db: Session, name: str, data: list[Any] | dict
         db.add(SgdiRecord(collection=name, item_id=OBJECT_ITEM_ID, position=0, kind="object", data=clean_data, label=name))
 
 
-def replace_collection(db: Session, name: str, data: list[Any] | dict[str, Any]) -> list[Any] | dict[str, Any]:
+def replace_collection(db: Session, name: str, data: list[Any] | dict[str, Any], user: Any | None = None) -> list[Any] | dict[str, Any]:
+    if name == "echanges" and isinstance(data, list):
+        data = _merge_confidential_echanges_for_replace(db, data, user)
     if name in sql_bridge.SQL_COLLECTIONS:
         db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
         out = sql_bridge.replace_collection(db, name, data)

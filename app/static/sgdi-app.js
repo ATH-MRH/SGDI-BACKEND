@@ -2841,7 +2841,7 @@ function dialogueToggle(open){
 function dialogueIncomingUnreadItems(){
   if(!session)return[];
   const u=session.username;
-  return (db.echanges||[]).filter(m=>!m.workflowTaskType&&m.type==="message"&&m.to!=="all"&&!dialogueMessageArchived(m)&&m.from!==u&&(m.to===u||isAdmin())&&(!m.luPar||!m.luPar.includes(u)));
+  return (db.echanges||[]).filter(m=>!m.workflowTaskType&&m.type==="message"&&m.to!=="all"&&!dialogueMessageArchived(m)&&m.from!==u&&m.to===u&&(!m.luPar||!m.luPar.includes(u)));
 }
 function dialoguePlaySound(){
   try{
@@ -2917,14 +2917,14 @@ function dialogueFolderItems(folder){
     if(f==="archived")return archived;
     if(archived)return false;
     if(f==="unread")return m.to===u&&(!m.luPar||!m.luPar.includes(u));
-    return m.from===u||m.to===u||(isAdmin()&&m.from!==u);
+    return m.from===u||m.to===u;
   });
 }
 function dialogueFolderCounts(){
   const u=session?.username||"";
   const all=dialogueVisibleItems();
   return {
-    all:all.filter(m=>!dialogueMessageArchived(m)&&(m.from===u||m.to===u||(isAdmin()&&m.from!==u))).length,
+    all:all.filter(m=>!dialogueMessageArchived(m)&&(m.from===u||m.to===u)).length,
     unread:all.filter(m=>!dialogueMessageArchived(m)&&m.to===u&&(!m.luPar||!m.luPar.includes(u))).length,
     archived:all.filter(m=>dialogueMessageArchived(m)).length
   };
@@ -2977,7 +2977,6 @@ function dialogueSelectedRecipientChips(form){
 function dialogueVisibleItems(){
   const all=(db.echanges||[]).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
   const messages=all.filter(m=>!m.workflowTaskType&&m.type==="message"&&m.to!=="all");
-  if(isAdmin())return messages;
   const u=session?session.username:"";
   return messages.filter(m=>m.from===u||m.to===u);
 }
@@ -3015,7 +3014,7 @@ function dialogueThreadItems(peer){
     const archived=dialogueMessageArchived(m);
     if(folder==="archived"&&!archived)return false;
     if(folder!=="archived"&&archived)return false;
-    return (m.from===u&&m.to===peer)||(m.from===peer&&m.to===u)||(isAdmin()&&(m.from===peer||m.to===peer));
+    return (m.from===u&&m.to===peer)||(m.from===peer&&m.to===u);
   }).sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 function dialogueMarkRead(peer){

@@ -60,7 +60,7 @@ def get_collection(name: str, db: Session = Depends(get_db), user=Depends(curren
 def replace_collection(name: str, payload: CollectionReplace, db: Session = Depends(get_db), user=Depends(current_user)):
     if not service.can_replace_collection_for_user(name, user):
         raise HTTPException(status_code=403, detail="Remplacement collection réservé administrateur")
-    return {"name": name, "data": service.replace_collection(db, name, payload.data)}
+    return {"name": name, "data": service.replace_collection(db, name, payload.data, user)}
 
 
 @router.get("/collections/{name}/items")
@@ -73,7 +73,7 @@ def list_items(name: str, db: Session = Depends(get_db), user=Depends(current_us
 
 @router.post("/collections/{name}/items")
 def create_item(name: str, payload: ItemPayload, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
-    service.ensure_item_allowed_for_user(payload.data, user)
+    service.ensure_item_allowed_for_user(payload.data, user, name)
     return service.create_item(db, name, payload.data)
 
 
@@ -90,24 +90,24 @@ def get_item(name: str, item_id: str, db: Session = Depends(get_db), user=Depend
 @router.put("/collections/{name}/items/{item_id}")
 def replace_item(name: str, item_id: str, payload: ItemPayload, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     existing = service.get_item(db, name, item_id)
-    service.ensure_item_allowed_for_user(existing, user)
-    service.ensure_item_allowed_for_user(payload.data, user)
+    service.ensure_item_allowed_for_user(existing, user, name)
+    service.ensure_item_allowed_for_user(payload.data, user, name)
     return service.update_item(db, name, item_id, payload.data, partial=False)
 
 
 @router.patch("/collections/{name}/items/{item_id}")
 def patch_item(name: str, item_id: str, payload: ItemPayload, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     existing = service.get_item(db, name, item_id)
-    service.ensure_item_allowed_for_user(existing, user)
+    service.ensure_item_allowed_for_user(existing, user, name)
     merged = {**existing, **payload.data}
-    service.ensure_item_allowed_for_user(merged, user)
+    service.ensure_item_allowed_for_user(merged, user, name)
     return service.update_item(db, name, item_id, payload.data, partial=True)
 
 
 @router.delete("/collections/{name}/items/{item_id}")
 def delete_item(name: str, item_id: str, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, str]:
     existing = service.get_item(db, name, item_id)
-    service.ensure_item_allowed_for_user(existing, user)
+    service.ensure_item_allowed_for_user(existing, user, name)
     return service.delete_item(db, name, item_id)
 
 
