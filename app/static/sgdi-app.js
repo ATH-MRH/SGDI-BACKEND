@@ -13069,6 +13069,7 @@ function renderDRHDashboard(view){
   const enMaladie=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
   const absents=ag.filter(a=>a.statut==="absent").length;
   const susp=ag.filter(a=>a.statut==="suspendu").length;
+  const blacklist=ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
   const sortants=ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length;
   const candNouv=ca.filter(c=>!candidatIsArchived(c)&&!candidatIsReserve(c)).length;
   const candReserve=ca.filter(c=>candidatIsReserve(c)).length;
@@ -13138,11 +13139,13 @@ function renderDRHDashboard(view){
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">Synthèse Générale</h1>
     <p class="text-slate-500 text-sm mb-4">${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${ag.length} employés · ${ca.length} candidats · ${sites} sites</p>
     ${drhTabs("dashboard")}
-    <div class="grid grid-4 mb-4">
-      ${ratioCard("Effectif actif",actifs,ag.length,"Taux opérationnel","#047857","#/effectif/actifs")}
-      ${ratioCard("Congé",enConge,actifsBase,"Agents actuellement en congé","#f59e0b","#/effectif/conge")}
-      ${ratioCard("Maladie",enMaladie,actifsBase,"Indisponibilité médicale","#c2410c","#/effectif/maladie")}
-      ${ratioCard("Absence",absents,actifsBase,"Absences déclarées","#dc2626","#/effectif/absents")}
+    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+      ${ratioCard("EFF. ACTIF",actifs,ag.length,"Taux opérationnel","#047857","#/effectif/actifs")}
+      ${ratioCard("EFF. CONGE",enConge,actifsBase,"Agents actuellement en congé","#f59e0b","#/effectif/conge")}
+      ${ratioCard("EFF. MALADIE",enMaladie,actifsBase,"Indisponibilité médicale","#c2410c","#/effectif/maladie")}
+      ${ratioCard("EFF. ABSENT",absents,actifsBase,"Absences déclarées","#dc2626","#/effectif/absents")}
+      ${ratioCard("EFF. SUSPENDU",susp,actifsBase,"Suspensions en cours","#7c3aed","#/effectif/suspension")}
+      ${ratioCard("EFF. BLACKLISTÉ",blacklist,actifsBase,"Accès contractualisation bloqué","#111827","#/effectif/blacklist")}
     </div>
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
       <a href="#/reserve" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit"><div class="text-xs text-slate-500 uppercase font-bold">Réserve</div><div class="text-2xl font-black text-indigo-700">${candReserve}</div><div class="text-xs text-slate-500">${candPct(candReserve)}% des candidats</div></a>
