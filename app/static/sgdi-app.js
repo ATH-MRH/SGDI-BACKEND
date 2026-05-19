@@ -2222,10 +2222,9 @@ function notificationMarkVisibleRead(){
 }
 function notificationTopbarButtonHTML(){
   if(!session)return"";
-  const count=sgdiAlertVisibleItems().length;
   const unread=notificationUnreadTasks().length;
   const label=session.transverse?`Alertes ${sgdiAlertModuleLabel(session.transverse)}`:"Alertes";
-  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="${escapeHTML(label)}"><span aria-hidden="true">🚨</span><span>ALERTE</span><span class="badge">${count}</span></button>`;
+  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="${escapeHTML(label)}"><span aria-hidden="true">🚨</span><span>ALERTE</span>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
 }
 function societeStructureBarHTML(){return "";}
 
