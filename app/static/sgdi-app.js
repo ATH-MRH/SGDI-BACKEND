@@ -2002,7 +2002,7 @@ function topbarStructureTabsHTML(){
 function dialogueTopbarButtonHTML(){
   if(!session)return"";
   const unread=dialogueIncomingUnreadItems().length;
-  return `<button type="button" data-no-lang="1" class="topbar-dialogue-btn no-print ${unread?"has-unread":""}" onclick="dialogueToggle(true)" title="Boîte de dialogue"><span aria-hidden="true">💬</span><span>Boîte dialogue</span>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
+  return `<button type="button" data-no-lang="1" class="topbar-dialogue-btn no-print ${unread?"has-unread":""}" onclick="dialogueToggle(true)" title="Messages"><span aria-hidden="true">💬</span><span>Messages</span>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
 }
 function notificationVisibleTasks(){
   if(!session)return[];
@@ -2859,8 +2859,9 @@ function dialogueMessageStatus(m){
   return '<div class="chat-status sent">✓ Envoyé</div>';
 }
 function dialogueFolder(){
-  const v=sessionStorage.getItem("dialogueFolder")||"inbox";
-  return ["inbox","sent","archived"].includes(v)?v:"inbox";
+  const v=sessionStorage.getItem("dialogueFolder")||"all";
+  if(v==="inbox"||v==="sent")return"all";
+  return ["all","unread","archived"].includes(v)?v:"all";
 }
 function dialogueMessageArchived(m){return !!(session&&m&&Array.isArray(m.archivedBy)&&m.archivedBy.includes(session.username))}
 function dialogueFolderItems(folder){
@@ -2870,23 +2871,24 @@ function dialogueFolderItems(folder){
     const archived=dialogueMessageArchived(m);
     if(f==="archived")return archived;
     if(archived)return false;
-    if(f==="sent")return m.from===u;
-    return m.to===u||(isAdmin()&&m.from!==u);
+    if(f==="unread")return m.to===u&&(!m.luPar||!m.luPar.includes(u));
+    return m.from===u||m.to===u||(isAdmin()&&m.from!==u);
   });
 }
 function dialogueFolderCounts(){
   const u=session?.username||"";
   const all=dialogueVisibleItems();
   return {
-    inbox:all.filter(m=>!dialogueMessageArchived(m)&&(m.to===u||(isAdmin()&&m.from!==u))).length,
-    sent:all.filter(m=>!dialogueMessageArchived(m)&&m.from===u).length,
+    all:all.filter(m=>!dialogueMessageArchived(m)&&(m.from===u||m.to===u||(isAdmin()&&m.from!==u))).length,
+    unread:all.filter(m=>!dialogueMessageArchived(m)&&m.to===u&&(!m.luPar||!m.luPar.includes(u))).length,
     archived:all.filter(m=>dialogueMessageArchived(m)).length
   };
 }
 function dialogueSetFolder(folder){
-  sessionStorage.setItem("dialogueFolder",folder||"inbox");
+  const next=folder||"all";
+  sessionStorage.setItem("dialogueFolder",next);
   sessionStorage.setItem("dialogueCompose","0");
-  const peers=dialogueConversationUsers(folder||"inbox");
+  const peers=dialogueConversationUsers(next);
   sessionStorage.setItem("dialoguePeer",peers[0]?.key||"");
   dialogueCheckNewMessages();
   render();
@@ -2962,8 +2964,12 @@ function dialogueConversationUsers(folder){
 }
 function dialogueThreadItems(peer){
   const u=session?.username||"";
-  return dialogueFolderItems().filter(m=>{
+  const folder=dialogueFolder();
+  return dialogueVisibleItems().filter(m=>{
     if(!peer)return false;
+    const archived=dialogueMessageArchived(m);
+    if(folder==="archived"&&!archived)return false;
+    if(folder!=="archived"&&archived)return false;
     return (m.from===u&&m.to===peer)||(m.from===peer&&m.to===u)||(isAdmin()&&(m.from===peer||m.to===peer));
   }).sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
@@ -3013,16 +3019,16 @@ function dialogueBoxHTML(){
   const unread=dialogueIncomingUnreadItems().length;
   const counts=dialogueFolderCounts();
   const foldersHTML=[
-    {key:"inbox",label:"Messages reçus",count:counts.inbox},
-    {key:"sent",label:"Messages envoyés",count:counts.sent},
-    {key:"archived",label:"Messages archivés",count:counts.archived}
+    {key:"all",label:"Tous",count:counts.all},
+    {key:"unread",label:"Non lus",count:counts.unread},
+    {key:"archived",label:"Archivés",count:counts.archived}
   ].map(f=>'<button class="dialogue-folder '+(folder===f.key?'active':'')+'" onclick="dialogueSetFolder(\''+f.key+'\')"><span>'+f.label+'</span><span class="count">'+f.count+'</span></button>').join('');
   const usersHTML='<button class="dialogue-user dialogue-new '+(composing?'active':'')+'" onclick="dialogueStartNewMessage()"><span>＋ Nouveau message</span><div style="font-size:9px;opacity:.7;margin-top:3px">Discussion directe</div></button>'+peers.map(p=>'<button class="dialogue-user '+(!composing&&p.key===selected?'active ':'')+(p.unread?'has-unread':'')+'" onclick="dialogueSetPeer(\''+escapeHTML(p.key)+'\')"><span>'+escapeHTML(p.label)+'</span>'+(p.unread?'<span class="dot">'+p.unread+'</span>':'')+'<div style="font-size:9px;opacity:.7;margin-top:3px">'+escapeHTML(p.sub||'')+'</div></button>').join('');
   const archiveButton=!composing&&selected?'<button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueArchivePeer(\''+escapeHTML(selected)+'\','+(folder==="archived"?'true':'false')+')">'+(folder==="archived"?'Restaurer':'Archiver')+'</button>':'';
   const cancelButton=composing?'<button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueCancelNewMessage()">Annuler</button>':'';
   return '<div class="dialogue-modal-backdrop no-print '+(open?'':'closed')+'" onclick="if(event.target===this)dialogueToggle(false)">'+
     '<aside class="dialogue-panel" aria-label="Boîte de dialogue interne">'+
-      '<div class="dialogue-head"><div class="dialogue-title">MESSAGERIE SGDI'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Discussions entre utilisateurs uniquement. Les actions ERP sont dans ALERTE.</div><button class="btn btn-primary dialogue-slim-btn" onclick="dialogueStartNewMessage()">Nouveau message</button><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Fermer</button></div></div>'+
+      '<div class="dialogue-head"><div class="dialogue-title">MESSAGES'+(unread?'<span class="dialogue-red-light"></span>':'')+'</div><div class="dialogue-head-row"><div class="dialogue-subtitle">Discussions entre utilisateurs. Les actions ERP sont dans ALERTE.</div><button class="btn btn-primary dialogue-slim-btn" onclick="dialogueStartNewMessage()">Nouveau message</button><button class="btn btn-ghost dialogue-slim-btn" onclick="dialogueToggle(false)">Fermer</button></div></div>'+
       '<div class="dialogue-layout"><div class="dialogue-users"><div class="dialogue-folders">'+foldersHTML+'</div>'+(usersHTML||'<div class="text-xs text-slate-500">Aucune conversation</div>')+'</div><div class="dialogue-chat">'+
         '<div class="dialogue-chat-head"><div class="flex items-center justify-between gap-2"><div>'+escapeHTML(peer.label)+' <span class="text-[10px] text-slate-500 font-normal">'+escapeHTML(peer.sub||'')+'</span></div><div class="flex gap-2">'+cancelButton+archiveButton+'</div></div></div>'+
         '<div class="dialogue-thread" id="dialogue-body">'+feedRowsHTML(selected)+'</div>'+dialogueComposerHTML(selected)+
