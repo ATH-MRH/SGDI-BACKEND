@@ -1949,7 +1949,7 @@ function createRecruitmentWorkflowForEmployee(agent,candidate){
     module:"ops",
     route:"ops/instance_dotation",
     title:"Employé en instance de dotation",
-    message:`${name} est recruté. OPS doit suivre l'affectation et la coordination dotation.`
+    message:`${name} est recruté. OPS doit suivre l'avancement sans effectuer la dotation.`
   });
   workflowUpsertTask({
     ...base,
@@ -2109,18 +2109,21 @@ function sgdiAlertVisibleItems(){
   if(!session||!db)return[];
   const soc=currentStructureSocieteFilter()||mySoc()||"";
   const rows=[];
-  notificationVisibleTasks().forEach(t=>sgdiAlertPush(rows,{
+  notificationVisibleTasks().forEach(t=>{
+    const isOpsDotation=t.module==="ops"&&String(t.route||"")==="ops/instance_dotation";
+    sgdiAlertPush(rows,{
     id:"workflow:"+(t.id||t.candidateBackendId||t.createdAt||Math.random()),
     module:t.module||"systeme",
     societe:t.societe||"",
     title:t.title||"Action à effectuer",
-    message:t.message||"Instruction non renseignée.",
+    message:isOpsDotation?`${t.candidateName||"Employé recruté"} : suivi OPS uniquement. La dotation est réservée au module Matériel.`:(t.message||"Instruction non renseignée."),
     meta:[t.candidateName,t.poste].filter(Boolean).join(" · "),
     route:t.route||"",
     severity:t.urgence==="haute"?"danger":"warn",
     type:"Workflow",
     createdAt:t.createdAt||""
-  }));
+    });
+  });
   (db.stockArticles||[]).forEach(a=>{
     if(soc&&a.societe&&a.societe!==soc)return;
     if(!sgdiAlertModuleAllowed("materiel"))return;
@@ -14525,8 +14528,12 @@ function renderOpsInstanceDotation(view){
   const agents=agentsEnInstanceDotationForSoc(soc);
   const actifs=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));
   view.innerHTML=`<div class="flex justify-between items-center mb-4 flex-wrap gap-3">
-    <div><h1 class="text-2xl font-black uppercase">EMPLOYÉS EN INSTANCE DE DOTATION</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Employés recrutés sans dotation matériel enregistrée.</p></div>
-    <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="navigate('ops/dashboard')">← Tableau de bord</button><button class="btn btn-primary text-sm" onclick="navigate('materiel/dotation')">Module matériel</button></div>
+    <div><h1 class="text-2xl font-black uppercase">EMPLOYÉS EN INSTANCE DE DOTATION</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Suivi OPS uniquement. La dotation est réservée au module Matériel.</p></div>
+    <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="navigate('ops/dashboard')">← Tableau de bord</button></div>
+  </div>
+  <div class="card p-4 mb-4" style="background:#fff7ed;border-left:5px solid #f59e0b">
+    <div class="font-black text-amber-800 uppercase text-sm">Suivi uniquement</div>
+    <div class="text-xs text-amber-800 mt-1">OPS consulte l'état des employés en attente. La création de dotation, la déduction du stock et l'impression de fiche de dotation se font uniquement dans Matériel.</div>
   </div>
   <div class="grid grid-3 gap-3 mb-4">
     <div class="card p-4 ${agents.length?"ops-dot-counter-alert":""}"><div class="text-xs text-slate-500 uppercase font-black">En instance de dotation</div><div class="text-3xl font-black mt-1 text-red-700">${agents.length}</div></div>
@@ -14534,14 +14541,15 @@ function renderOpsInstanceDotation(view){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-black">Déjà dotés</div><div class="text-3xl font-black mt-1 text-emerald-700">${actifs.filter(a=>agentDotationCount(a.id)>0).length}</div></div>
   </div>
   <div class="card overflow-hidden">
-    <table><thead><tr><th>Employé</th><th>Matricule</th><th>Société</th><th>Poste</th><th>Site</th><th>Action</th></tr></thead>
-    <tbody>${agents.length===0?`<tr><td colspan="6" class="text-center text-slate-500 p-6">Aucun employé en instance de dotation.</td></tr>`:agents.map(a=>`<tr data-searchable>
+    <table><thead><tr><th>Employé</th><th>Matricule</th><th>Société</th><th>Poste</th><th>Site</th><th>Statut</th><th>Suivi</th></tr></thead>
+    <tbody>${agents.length===0?`<tr><td colspan="7" class="text-center text-slate-500 p-6">Aucun employé en instance de dotation.</td></tr>`:agents.map(a=>`<tr data-searchable>
       <td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||a.nom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(a.telephone||"")}</div></div></div></td>
       <td class="font-mono font-bold">${escapeHTML(a.matricule||"—")}</td>
       <td class="text-xs">${escapeHTML(a.societe||"—")}</td>
       <td class="text-xs">${escapeHTML(a.affectationCourante?.poste||a.fonction||"—")}</td>
       <td class="text-xs">${escapeHTML(a.affectationCourante?.siteName||"—")}</td>
-      <td><div class="flex gap-1 flex-wrap"><a class="btn btn-ghost text-xs" href="#/effectif/agent/${a.id}">Fiche</a><button class="btn btn-primary text-xs" onclick="navigate('materiel/dotation')">Doter</button></div></td>
+      <td><span class="pill pill-amber">En attente Matériel</span></td>
+      <td><div class="flex gap-1 flex-wrap"><a class="btn btn-ghost text-xs" href="#/effectif/agent/${a.id}">Fiche</a></div></td>
     </tr>`).join("")}</tbody></table>
   </div>`;
 }
