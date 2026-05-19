@@ -450,6 +450,8 @@ let sgdiMessageRefreshTimer=null;
 let sgdiMessageRefreshRunning=false;
 let sgdiEventsSource=null;
 let sgdiEventsLastPull=0;
+let sgdiLastUserNavigationAt=0;
+function sgdiMarkUserNavigation(){sgdiLastUserNavigationAt=Date.now()}
 function sgdiAutoRefreshSettings(){
   if(!db)db={settings:{}};
   if(!db.settings||typeof db.settings!=="object")db.settings={};
@@ -471,8 +473,10 @@ function sgdiStartEventStream(){
       if(now-sgdiEventsLastPull<900)return;
       sgdiEventsLastPull=now;
       const currentHash=location.hash;
+      const navStamp=sgdiLastUserNavigationAt;
       try{
         await sgdiPullState({silent:true,render:false,light:true,auto:true});
+        if(sgdiLastUserNavigationAt!==navStamp)return;
         if(location.hash!==currentHash)location.hash=currentHash;
         if(typeof render==="function")render();
       }catch(e){console.warn("Alerte temps réel SGDI non synchronisée",e)}
@@ -507,7 +511,9 @@ function sgdiStartMessageRefresh(){
     try{
       const before=dialogueMessagesSignature();
       const currentHash=location.hash;
+      const navStamp=sgdiLastUserNavigationAt;
       await sgdiPullState({silent:true,render:false,force:true,light:true,auto:true});
+      if(sgdiLastUserNavigationAt!==navStamp)return;
       if(location.hash!==currentHash)location.hash=currentHash;
       const after=dialogueMessagesSignature();
       if(before!==after){
@@ -534,7 +540,9 @@ function sgdiScheduleAutoRefresh(){
     sgdiAutoRefreshRunning=true;
     try{
       const currentHash=location.hash;
+      const navStamp=sgdiLastUserNavigationAt;
       await sgdiPullState({silent:true,render:false,light:true,auto:true});
+      if(sgdiLastUserNavigationAt!==navStamp)return;
       if(location.hash!==currentHash)location.hash=currentHash;
     }catch(e){
       console.warn("Actualisation automatique SGDI échouée",e);
@@ -2759,7 +2767,7 @@ function renderSidebar(){
   if(backSlot)backSlot.innerHTML="";
 }
 
-function navigate(r){try{uiProgressStart();if(r.startsWith("materiel/fiche")||r==="materiel/fiches")sessionStorage.setItem("ficheContext","materiel");else if(r.startsWith("fiches")||r.startsWith("agents")||r.startsWith("effectif/agent"))sessionStorage.setItem("ficheContext",session?.transverse||"")}catch(e){}location.hash="#/"+r}
+function navigate(r){try{sgdiMarkUserNavigation();uiProgressStart();if(r.startsWith("materiel/fiche")||r==="materiel/fiches")sessionStorage.setItem("ficheContext","materiel");else if(r.startsWith("fiches")||r.startsWith("agents")||r.startsWith("effectif/agent"))sessionStorage.setItem("ficheContext",session?.transverse||"")}catch(e){}location.hash="#/"+r}
 function setFicheContext(ctx){try{if(ctx)sessionStorage.setItem("ficheContext",ctx);else sessionStorage.removeItem("ficheContext")}catch(e){}}
 function goBackSmart(){if(history.length>1)history.back();else navigate(session?.transverse?session.transverse+"/dashboard":"dashboard")}
 function ficheContext(){try{return sessionStorage.getItem("ficheContext")||session?.transverse||""}catch(e){return session?.transverse||""}}
@@ -3392,7 +3400,7 @@ function renderView(){
   uiProgressDone();
   setTimeout(()=>applyLanguagePreference(view),0);
 }
-window.addEventListener("hashchange",()=>{uiProgressStart();render()});
+window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;
   if(!String(location.hash||"").startsWith("#/pointage/quotidien"))return;
