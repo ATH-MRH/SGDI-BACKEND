@@ -644,6 +644,8 @@
   .fp-filter-card h3{font-size:13px;text-transform:uppercase;letter-spacing:.03em;color:#334155;margin:0 0 12px;font-weight:900}
   .fp-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
   .fp-agent-card{border-radius:8px!important;min-width:0}
+  .fp-icon-btn{width:36px!important;height:32px!important;padding:0!important;justify-content:center!important}
+  .fp-icon-btn svg{width:16px;height:16px;display:block;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none}
   @media (max-width:1200px){.fp-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fp-status-grid,.fp-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media (max-width:1024px){.grid-6{grid-template-columns:repeat(3,minmax(0,1fr))}}
   @media (max-width:760px){.fp-head{flex-direction:column}.fp-head-actions{justify-content:flex-start}.fp-summary-grid,.fp-status-grid,.fp-card-grid,.grid-6,.grid-5,.grid-4{grid-template-columns:1fr}.fp-summary-card{min-height:96px}}
