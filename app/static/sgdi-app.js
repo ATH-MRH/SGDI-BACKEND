@@ -8218,6 +8218,7 @@ function renderFiches(view,sub){
   else if(sub==="conge"){baseList=baseList.filter(a=>ficheAgentInConge(a));title="🏖 Fiches de position — En congé"}
   else if(sub==="suspendu"){baseList=baseList.filter(a=>a.statut==="suspendu");title="⏸ Fiches de position — Suspendu"}
   else if(sub==="abandon"){baseList=baseList.filter(a=>ficheAgentInAbandon(a));title="🚫 Fiches de position — En abandon de poste"}
+  else if(sub==="surveiller"){baseList=baseList.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a));title="⚠ Fiches de position — À surveiller"}
   else if(sub==="archivees"){baseList=baseList.filter(a=>ficheAgentIsSortantArchive(a));title="🗄 Fiches de position — Sortants / archivés"}
   else if(sub==="imprimer"){return renderFichesImpression(view)}
   else if(sub==="badge"){return renderBadgeModule(view)}
@@ -8226,12 +8227,13 @@ function renderFiches(view,sub){
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
   const withoutAffectation=activeBase.filter(a=>!(a.affectationCourante&&a.affectationCourante.siteId)).length;
   const withoutDotation=agentsEnInstanceDotationForSoc(socFilter).length;
+  const surveillerCount=statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length;
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const summaryCards=[
-    ["Fiches actives",activeBase.length,"Hors sortants / archivés","#043970",100,""],
-    ["Agents actifs",statsBase.filter(a=>a.statut==="actif").length,"Présents dans l'effectif","#166534",ratio(statsBase.filter(a=>a.statut==="actif").length,activeBase.length),""],
-    ["Sans affectation",withoutAffectation,"Site non renseigné","#b45309",ratio(withoutAffectation,activeBase.length),""],
-    ["À surveiller",statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,"Congé, maladie, suspension, abandon","#b91c1c",ratio(statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length,activeBase.length),""]
+    ["Fiches actives",activeBase.length,"Hors sortants / archivés","#043970",100,"fiches/toutes"],
+    ["Agents actifs",statsBase.filter(a=>a.statut==="actif").length,"Présents dans l'effectif","#166534",ratio(statsBase.filter(a=>a.statut==="actif").length,activeBase.length),"effectif/actifs"],
+    ["Sans affectation",withoutAffectation,"Site non renseigné","#b45309",ratio(withoutAffectation,activeBase.length),"effectif/instance_affectation"],
+    ["À surveiller",surveillerCount,"Congé, maladie, suspension, abandon","#b91c1c",ratio(surveillerCount,activeBase.length),"fiches/surveiller"]
   ];
   if(isOpsFicheContext())summaryCards.splice(3,0,["Employés en instance de dotation",withoutDotation,"Dotation matériel non enregistrée","#dc2626",ratio(withoutDotation,activeBase.length),"ops/instance_dotation"]);
   const cards=[
