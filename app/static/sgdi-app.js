@@ -1493,8 +1493,39 @@ function toastCenter(msg,type="success"){
   clearTimeout(window.__sgdiToastTimer);
   window.__sgdiToastTimer=setTimeout(closeMessageToast,2800);
 }
-function openModal(html){const sx=window.scrollX,sy=window.scrollY;document.getElementById("modal-host").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal p-6">${html}</div></div>`;stripCryptogrammes();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
-function closeModal(){document.getElementById("modal-host").innerHTML=""}
+function sgdiOverlayIsOpen(){
+  return sessionStorage.getItem("notificationOpen")==="1"||sessionStorage.getItem("dialogueOpen")==="1"||!!document.querySelector(".modal-bg");
+}
+function sgdiSyncOverlayState(){
+  const open=sgdiOverlayIsOpen();
+  document.body.classList.toggle("sgdi-overlay-open",!!open);
+  sgdiMaskOverlayMaps(open);
+}
+function sgdiMaskOverlayMaps(open){
+  document.querySelectorAll("#sites-map-frame,#site-position-map").forEach(el=>{
+    if(open){
+      if(!el.dataset.sgdiPrevDisplay)el.dataset.sgdiPrevDisplay=el.style.display||"";
+      el.style.setProperty("display","none","important");
+      el.style.setProperty("visibility","hidden","important");
+      el.style.setProperty("pointer-events","none","important");
+    }else{
+      el.style.display=el.dataset.sgdiPrevDisplay||"";
+      el.style.removeProperty("visibility");
+      el.style.removeProperty("pointer-events");
+      delete el.dataset.sgdiPrevDisplay;
+    }
+  });
+  clearTimeout(window.__sgdiOverlayMapMaskTimer);
+  if(open)window.__sgdiOverlayMapMaskTimer=setTimeout(()=>sgdiMaskOverlayMaps(true),180);
+}
+function destroySitesDashboardMap(){
+  window.__sgdiSitesDashboardMap=null;
+  window.__sgdiSitesDashboardMarkers=null;
+  window.__sgdiSitesDashboardSearchMarker=null;
+  document.querySelectorAll("#sites-map-frame").forEach(el=>{try{el.remove()}catch(_){}});
+}
+function openModal(html){const sx=window.scrollX,sy=window.scrollY;document.getElementById("modal-host").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal p-6">${html}</div></div>`;stripCryptogrammes();sgdiSyncOverlayState();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
+function closeModal(){document.getElementById("modal-host").innerHTML="";sgdiSyncOverlayState()}
 function uiProgressStart(){const p=document.getElementById("ui-progress");if(!p)return;p.classList.remove("done");p.classList.add("active")}
 function uiProgressDone(){const p=document.getElementById("ui-progress");if(!p)return;p.classList.add("done");setTimeout(()=>p.classList.remove("active","done"),260)}
 function uiSaveState(text,type){
@@ -2091,7 +2122,7 @@ function dialogueTopbarButtonHTML(){
 function notificationVisibleTasks(){
   if(!session)return[];
   const soc=currentStructureSocieteFilter()||mySoc()||"";
-  const mod=session.transverse||"";
+  const mod=sgdiCurrentAlertModule();
   return (db.workflowTasks||[]).filter(t=>{
     if(!t||t.status==="done")return false;
     if(soc&&t.societe&&t.societe!==soc)return false;
@@ -2099,11 +2130,19 @@ function notificationVisibleTasks(){
     return workflowTaskAllowedForCurrentUser(t);
   }).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
 }
-function sgdiAlertModuleLabel(m){return{drh:"Direction R-H",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Système").toUpperCase()}
+function sgdiCurrentAlertModule(){
+  if(!session)return"";
+  if(session.transverse)return session.transverse;
+  const root=String((location.hash||"").slice(2).split("/")[0]||"").trim();
+  const byRoute={drh:"drh",dashboard:"drh",dossiers:"drh",recrutement:"drh",reserve:"drh",candidats_archives:"drh",contrats:"drh",fiches:"drh",effectif:"drh",agents:"drh",conges:"drh",paie:"drh",rapports:"drh",demandes_personnel:"drh",ops:"ops",sites:"ops",incidents:"ops",pointage:"pointage",materiel:"materiel",commercial:"commercial",facturation:"facturation"};
+  return byRoute[root]||"";
+}
+function sgdiAlertModuleLabel(m){return{drh:"RH",ops:"OPS",materiel:"Matériel",commercial:"Commercial",facturation:"Finances",pointage:"Pointage"}[m]||String(m||"Système").toUpperCase()}
 function sgdiAlertModuleAllowed(module){
   if(!module)return true;
   if(!canAccessStructureKey(module))return false;
-  return !session?.transverse||module===session.transverse;
+  const active=sgdiCurrentAlertModule();
+  return !active||module===active;
 }
 function sgdiAlertSeverityRank(s){return{critical:0,danger:0,warn:1,info:2}[s]??2}
 function sgdiAlertPush(rows,item){
@@ -2239,7 +2278,8 @@ function notificationMarkVisibleRead(){
 function notificationTopbarButtonHTML(){
   if(!session)return"";
   const unread=notificationUnreadTasks().length;
-  const label=session.transverse?`Alertes ${sgdiAlertModuleLabel(session.transverse)}`:"Alertes";
+  const mod=sgdiCurrentAlertModule();
+  const label=mod?`Alertes ${sgdiAlertModuleLabel(mod)}`:"Alertes";
   return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="${escapeHTML(label)}"><span aria-hidden="true">🚨</span><span>ALERTE</span>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
 }
 function societeStructureBarHTML(){return "";}
@@ -2306,6 +2346,7 @@ function applyLanguagePreference(root){
 /* ---- SHELL ---- */
 function render(){
   sanitizeCandidatesInDB();
+  if(!session)renderOverlayHost();
   if(!session){renderLogin();return}
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
   if(session.societe&&!session.transverse&&["societe-portal","dashboard"].includes((location.hash||"").slice(2)||"dashboard")){renderSocietePortal();return}
@@ -2368,11 +2409,12 @@ function render(){
         <div class="sgdi-view flex-1 overflow-y-auto" id="view"></div>
       </main>
     </div>
-    ${notificationPanelHTML()}
     ${dialogueBoxHTML()}
   </div>`;
   renderSidebar();
   renderView();
+  renderOverlayHost();
+  sgdiSyncOverlayState();
   setTimeout(()=>applyLanguagePreference(),0);
 }
 /* =============================================================
@@ -2902,17 +2944,25 @@ function filterDomBySearch(){
 }
 function dialogueIsOpen(){return sessionStorage.getItem("dialogueOpen")==="1"}
 function notificationIsOpen(){return sessionStorage.getItem("notificationOpen")==="1"}
+function renderOverlayHost(){
+  const host=document.getElementById("overlay-host");
+  if(host)host.innerHTML=session?notificationPanelHTML():"";
+}
 function notificationToggle(open){
   sessionStorage.setItem("notificationOpen",open?"1":"0");
+  if(open)destroySitesDashboardMap();
   if(open)notificationMarkVisibleRead();
   render();
+  renderOverlayHost();
+  sgdiSyncOverlayState();
 }
 function notificationPanelHTML(){
   if(!session)return"";
   const open=notificationIsOpen();
   const rows=sgdiAlertVisibleItems();
   const unread=notificationUnreadTasks().length;
-  const title=session.transverse?`ALERTES ${sgdiAlertModuleLabel(session.transverse).toUpperCase()}`:"CENTRE D'ALERTES ERP";
+  const mod=sgdiCurrentAlertModule();
+  const title=mod?`ALERTES ${sgdiAlertModuleLabel(mod).toUpperCase()}`:"CENTRE D'ALERTES ERP";
   const item=t=>{
     const read=notificationIsRead(t);
     const route=String(t.route||"").replace(/'/g,"\\'");
@@ -2935,6 +2985,7 @@ function dialogueToggle(open){
   sessionStorage.setItem("dialogueOpen",next?"1":"0");
   if(next)dialogueMarkRead();
   render();
+  sgdiSyncOverlayState();
 }
 function dialogueIncomingUnreadItems(){
   if(!session)return[];
@@ -6951,7 +7002,6 @@ async function renderSitesServer(view){
     <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
     ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;return `<div class="card p-5 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-instance="${agents.length===0?1:0}" data-site-contractuel="${eff.totalContractuel}" data-site-realise="${agents.length}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black">${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${siteEditRouteId(s)}">Modifier</a><button type="button" class="btn btn-danger text-xs" onclick="deleteSite('${siteEditRouteId(s)}')">Supprimer</button></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid grid-4 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Affecté</div><div class="text-lg font-bold">${agents.length}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border"><div class="text-slate-500">Nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div></div></div>`}).join("")}</div>`}
     ${pagination}`;
-    setTimeout(()=>initSitesDashboardMap(sites),0);
   }catch(e){
     console.warn("Sites serveur indisponibles, repli local",e);
     window.__sgdiSitesLocalFallback=true;
@@ -6967,7 +7017,6 @@ function renderSites(view){
   ${siteMapDashboardHTML(sites)}
   <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
   ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const op=eff.totalContractuel>0&&manque===0;const hideManque=session?.transverse==="materiel";const hideAffecte=session?.transverse==="materiel";const hideGroupes=session?.transverse==="materiel";return`<div class="card p-5 mb-4 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-instance="${agents.length===0?1:0}" data-site-contractuel="${eff.totalContractuel}" data-site-realise="${agents.length}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold">${escapeHTML(s.nom)} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${siteEditRouteId(s)}">Modifier</a><button type="button" class="btn btn-danger text-xs" onclick="deleteSite('${siteEditRouteId(s)}')">Supprimer</button><span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid ${hideManque&&hideAffecte?"grid-3":hideManque||hideAffecte?"grid-4":"grid-5"} mb-4 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif total contractuel</div><div class="text-lg font-bold">${eff.totalContractuel}</div></div>${hideAffecte?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif affecté</div><div class="text-lg font-bold">${agents.length}</div></div>`}<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de jour</div><div class="text-lg font-bold">${eff.jour}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Effectif de nuit</div><div class="text-lg font-bold">${eff.nuit}</div></div>${hideManque?"":`<div class="bg-slate-50 p-2 rounded border border-slate-200"><div class="text-slate-500">Manquant</div><div class="text-lg font-bold ${manque>0?"text-red-700":"text-emerald-700"}">${manque}</div></div>`}</div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${hideGroupes?"":`<div class="mt-4"><h4 class="text-sm font-bold mb-2">Employés affectés par groupe</h4>${renderSiteAgentsByGroup(s,agents)}</div>`}</div>`}).join("")}`;
-  setTimeout(()=>initSitesDashboardMap(sites),0);
 }
 function siteEditRouteId(site){return encodeURIComponent(String(site?.backendId||site?.id||""))}
 function siteLatLng(site){
@@ -6986,9 +7035,20 @@ function siteMapUrl(site){
   const q=siteMapQuery(site)||"Algérie";
   return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
 }
+function googleMapsEmbedUrl(query){
+  const q=String(query||"Algérie").trim()||"Algérie";
+  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
+}
+function googleMapsSearchUrl(query){
+  const q=String(query||"Algérie").trim()||"Algérie";
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
 function siteMapDashboardHTML(sites){
   sites=(sites||[]).filter(Boolean);
   if(!sites.length)return "";
+  if(sgdiOverlayIsOpen())return "";
+  const initial=sites.find(siteLatLng)||sites[0];
+  const initialQuery=initial?siteMapQuery(initial):"Algérie";
   const options=`<option value="__all__">Tous les sites</option>`+sites.map(s=>`<option value="${escapeHTML(String(s.id||s.backendId||""))}">${escapeHTML((s.nom||"Site")+" · "+[s.commune,s.wilaya].filter(Boolean).join(", "))}</option>`).join("");
   return `<div class="card p-5 mb-5">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -7000,190 +7060,87 @@ function siteMapDashboardHTML(sites){
         <input id="sites-map-search" class="input" style="width:260px" placeholder="Rechercher un lieu..." onkeydown="if(event.key==='Enter'){event.preventDefault();searchSitesMap()}"/>
         <button type="button" class="btn btn-secondary" onclick="searchSitesMap()">Rechercher</button>
         <select id="sites-map-select" class="select" style="max-width:360px" onchange="updateSitesMap(this.value)">${options}</select>
+        <a id="sites-map-open" class="btn btn-ghost" href="${escapeHTML(googleMapsSearchUrl(initialQuery))}" target="_blank" rel="noopener">Ouvrir Google Maps</a>
       </div>
     </div>
     <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100" style="height:360px">
-      <div id="sites-map-frame" title="Position des sites" style="width:100%;height:100%"></div>
+      <iframe id="sites-map-frame" title="Carte Google Maps des sites" src="${escapeHTML(googleMapsEmbedUrl(initialQuery))}" style="width:100%;height:100%;border:0;display:block" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
     </div>
   </div>`;
 }
-async function initSitesDashboardMap(sites){
-  const box=document.getElementById("sites-map-frame");if(!box)return;
-  try{
-    const L=await loadLeafletForSitePosition();
-    if(window.__sgdiSitesDashboardMap){
-      try{window.__sgdiSitesDashboardMap.remove()}catch(_){}
-    }
-    window.__sgdiSitesDashboardSites=(sites||[]).filter(Boolean);
-    const map=L.map(box,{scrollWheelZoom:false}).setView([28.0339,1.6596],5);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
-    window.__sgdiSitesDashboardMap=map;
-    window.__sgdiSitesDashboardMarkers=L.layerGroup().addTo(map);
-    window.__sgdiSitesDashboardSearchMarker=null;
-    renderSitesMapMarkers("__all__");
-    setTimeout(()=>map.invalidateSize(),120);
-  }catch(e){
-    box.innerHTML=`<div class="p-6 text-sm text-slate-600">Carte OpenStreetMap indisponible pour le moment.</div>`;
-  }
-}
-function siteDashboardMarkerPopup(site){
-  const title=escapeHTML(site.nom||site.intitule||"Site");
-  const place=escapeHTML([site.commune,site.wilaya].filter(Boolean).join(", "));
-  return `<div style="min-width:180px"><strong>${title}</strong><br><span>${place}</span><br><a href="#/sites/${siteEditRouteId(site)}">Ouvrir le site</a></div>`;
-}
+function initSitesDashboardMap(){return}
 function renderSitesMapMarkers(siteId){
-  const map=window.__sgdiSitesDashboardMap,group=window.__sgdiSitesDashboardMarkers,L=window.L;
-  if(!map||!group||!L)return;
-  const sites=(window.__sgdiSitesDashboardSites||[]).filter(Boolean);
-  const selected=String(siteId||"__all__");
-  const target=selected==="__all__"?sites:sites.filter(s=>String(s.id||"")===selected||String(s.backendId||"")===selected);
-  group.clearLayers();
-  const icon=sitePositionMarkerIcon(L);
-  const bounds=[];
-  target.forEach(site=>{
-    const pos=siteLatLng(site);
-    if(!pos)return;
-    const marker=L.marker([pos.lat,pos.lng],{icon}).bindPopup(siteDashboardMarkerPopup(site));
-    marker.addTo(group);
-    bounds.push([pos.lat,pos.lng]);
-  });
-  if(bounds.length>1)map.fitBounds(bounds,{padding:[28,28]});
-  else if(bounds.length===1)map.setView(bounds[0],15);
-  else map.setView([28.0339,1.6596],5);
-}
-async function geocodeSiteMapQuery(query){
-  const q=String(query||"").trim();
-  if(!q)return null;
-  const url=`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=dz&q=${encodeURIComponent(q)}`;
-  const res=await fetch(url,{headers:{"Accept":"application/json"}});
-  if(!res.ok)throw new Error("Recherche carte refusée");
-  const data=await res.json();
-  const first=Array.isArray(data)?data[0]:null;
-  if(!first)return null;
-  const lat=parseFloat(first.lat),lng=parseFloat(first.lon);
-  return Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng,label:first.display_name||q}:null;
+  updateSitesMap(siteId);
 }
 async function updateSitesMap(siteId){
   const label=document.getElementById("sites-map-label");
+  const frame=document.getElementById("sites-map-frame");
+  const open=document.getElementById("sites-map-open");
+  const setMap=(query,text)=>{
+    if(frame)frame.src=googleMapsEmbedUrl(query);
+    if(open)open.href=googleMapsSearchUrl(query);
+    if(label)label.textContent=text||query||"Google Maps";
+  };
   if(String(siteId||"__all__")==="__all__"){
-    if(label)label.textContent="Tous les sites";
-    renderSitesMapMarkers("__all__");
+    setMap("Algérie","Tous les sites");
     return;
   }
-  const allSites=[...(window.__sgdiSitesDashboardSites||[]),...(db.sites||[])];
+  const allSites=[...(db.sites||[])];
   const site=allSites.find(s=>String(s.id||"")===String(siteId)||String(s.backendId||"")===String(siteId));
   if(!site)return;
-  if(label)label.textContent=siteMapQuery(site);
-  renderSitesMapMarkers(siteId);
-  if(siteLatLng(site))return;
-  try{
-    const pos=await geocodeSiteMapQuery(siteMapQuery(site));
-    const map=window.__sgdiSitesDashboardMap,L=window.L;
-    if(pos&&map&&L){
-      const icon=sitePositionMarkerIcon(L);
-      if(window.__sgdiSitesDashboardSearchMarker)window.__sgdiSitesDashboardSearchMarker.remove();
-      window.__sgdiSitesDashboardSearchMarker=L.marker([pos.lat,pos.lng],{icon}).addTo(map).bindPopup(siteDashboardMarkerPopup(site)).openPopup();
-      map.setView([pos.lat,pos.lng],15);
-    }
-  }catch(e){toast("Recherche carte indisponible","error")}
+  setMap(siteMapQuery(site),siteMapQuery(site));
 }
 async function searchSitesMap(){
   const input=document.getElementById("sites-map-search");
   const q=String(input?.value||"").trim();
   if(!q){toast("Saisissez un lieu à rechercher","error");return}
-  try{
-    const pos=await geocodeSiteMapQuery(q);
-    if(!pos){toast("Lieu introuvable","error");return}
-    const map=window.__sgdiSitesDashboardMap,L=window.L;
-    if(!map||!L)return;
-    if(window.__sgdiSitesDashboardSearchMarker)window.__sgdiSitesDashboardSearchMarker.remove();
-    window.__sgdiSitesDashboardSearchMarker=L.marker([pos.lat,pos.lng]).addTo(map).bindPopup(escapeHTML(pos.label)).openPopup();
-    map.setView([pos.lat,pos.lng],15);
-    const label=document.getElementById("sites-map-label");
-    if(label)label.textContent=pos.label;
-  }catch(e){toast("Recherche carte indisponible","error")}
-}
-function loadLeafletForSitePosition(){
-  if(window.L)return Promise.resolve(window.L);
-  if(window.__sgdiLeafletPromise)return window.__sgdiLeafletPromise;
-  window.__sgdiLeafletPromise=new Promise((resolve,reject)=>{
-    if(!document.querySelector('link[data-sgdi-leaflet]')){
-      const link=document.createElement("link");
-      link.rel="stylesheet";link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";link.setAttribute("data-sgdi-leaflet","1");
-      document.head.appendChild(link);
-    }
-    const script=document.createElement("script");
-    script.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    script.onload=()=>window.L?resolve(window.L):reject(new Error("Leaflet indisponible"));
-    script.onerror=()=>reject(new Error("Chargement carte impossible"));
-    document.head.appendChild(script);
-  });
-  return window.__sgdiLeafletPromise;
+  const frame=document.getElementById("sites-map-frame"),label=document.getElementById("sites-map-label"),open=document.getElementById("sites-map-open");
+  if(frame)frame.src=googleMapsEmbedUrl(q);
+  if(open)open.href=googleMapsSearchUrl(q);
+  if(label)label.textContent=q;
 }
 function sitePositionLabel(lat,lng){
   const a=parseFloat(lat),b=parseFloat(lng);
   return Number.isFinite(a)&&Number.isFinite(b)?`${a.toFixed(6)}, ${b.toFixed(6)}`:"Aucune position enregistrée";
 }
-function sitePositionMarkerIcon(L){
-  return L.divIcon({
-    className:"sgdi-site-logo-marker",
-    html:`<div style="width:34px;height:34px;border-radius:50%;background:#fff;border:2px solid #043970;box-shadow:0 6px 16px rgba(15,23,42,.28);display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="/static/iron-securite-logo.png?v=2" alt="IRON GLOBAL SECURITE" style="width:28px;height:28px;object-fit:contain"/></div>`,
-    iconSize:[34,34],
-    iconAnchor:[17,17],
-    popupAnchor:[0,-18]
-  });
-}
+function sitePositionMarkerIcon(){return null}
 function openSitePositionModal(){
   const f=document.getElementById("site-form");if(!f)return;
   const lat=parseFloat(f.querySelector('[name="latitude"]')?.value);
   const lng=parseFloat(f.querySelector('[name="longitude"]')?.value);
   const center=Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng}:{lat:28.0339,lng:1.6596};
+  const query=Number.isFinite(lat)&&Number.isFinite(lng)?`${lat},${lng}`:[f.querySelector('[name="nom"]')?.value,f.querySelector('[name="adresse"]')?.value,f.querySelector('[name="commune"]')?.value,f.querySelector('[name="wilaya"]')?.value,"Algérie"].filter(Boolean).join(", ");
   openModal(`<div style="width:min(960px,92vw)">
     <div class="flex items-start justify-between gap-3 mb-3">
       <div>
         <h3 class="font-black text-lg">Positionner site</h3>
-        <div class="text-xs text-slate-500">Cliquez sur la carte pour placer le point du site, puis enregistrez la position.</div>
+        <div class="text-xs text-slate-500">Vérifiez le site sur Google Maps, puis saisissez les coordonnées GPS à enregistrer.</div>
       </div>
       <button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>
     </div>
-    <div id="site-position-map" class="rounded-lg border border-slate-200 bg-slate-100" style="height:480px"></div>
+    <iframe id="site-position-map" class="rounded-lg border border-slate-200 bg-slate-100" title="Position Google Maps du site" src="${escapeHTML(googleMapsEmbedUrl(query))}" style="width:100%;height:480px;border:0;display:block" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
     <div class="grid grid-2 gap-3 mt-3">
-      <div><label class="label">Latitude</label><input class="input" name="modal_latitude" value="${Number.isFinite(lat)?lat:""}" readonly/></div>
-      <div><label class="label">Longitude</label><input class="input" name="modal_longitude" value="${Number.isFinite(lng)?lng:""}" readonly/></div>
+      <div><label class="label">Latitude</label><input class="input" name="modal_latitude" value="${Number.isFinite(lat)?lat:""}" placeholder="Ex: 36.752887"/></div>
+      <div><label class="label">Longitude</label><input class="input" name="modal_longitude" value="${Number.isFinite(lng)?lng:""}" placeholder="Ex: 3.042048"/></div>
     </div>
-    <div id="site-position-fallback" class="hidden mt-3 p-3 rounded bg-amber-50 text-amber-800 text-xs">Carte non chargée. Saisissez les coordonnées manuellement ci-dessous.</div>
+    <div class="mt-3 flex justify-between gap-2 flex-wrap">
+      <a class="btn btn-secondary" href="${escapeHTML(googleMapsSearchUrl(query))}" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>
+      <button type="button" class="btn btn-ghost" onclick="refreshSitePositionGoogleMap()">Actualiser la carte</button>
+    </div>
     <div class="flex justify-end gap-2 mt-4">
       <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
       <button type="button" class="btn btn-primary" onclick="saveSitePositionFromModal()">Enregistrer position</button>
     </div>
   </div>`);
-  setTimeout(()=>initSitePositionMap(center),0);
 }
-async function initSitePositionMap(center){
-  const box=document.getElementById("site-position-map");if(!box)return;
-  try{
-    const L=await loadLeafletForSitePosition();
-    const map=L.map(box,{scrollWheelZoom:false}).setView([center.lat,center.lng],Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&center.lat!==28.0339?15:5);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
-    const siteIcon=sitePositionMarkerIcon(L);
-    let marker=null;
-    const setPoint=(latlng)=>{
-      const lat=+latlng.lat,lng=+latlng.lng;
-      const latInput=document.querySelector('.modal-bg [name="modal_latitude"]');
-      const lngInput=document.querySelector('.modal-bg [name="modal_longitude"]');
-      if(latInput)latInput.value=lat.toFixed(6);
-      if(lngInput)lngInput.value=lng.toFixed(6);
-      if(marker)marker.setLatLng(latlng);else marker=L.marker(latlng,{icon:siteIcon}).addTo(map);
-    };
-    if(Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&!(center.lat===28.0339&&center.lng===1.6596))setPoint(center);
-    map.on("click",e=>setPoint(e.latlng));
-    setTimeout(()=>map.invalidateSize(),120);
-  }catch(e){
-    const fb=document.getElementById("site-position-fallback");
-    if(fb)fb.classList.remove("hidden");
-    box.innerHTML=`<div class="p-6 text-sm text-slate-600">Carte indisponible. Vous pouvez saisir les coordonnées ci-dessous.</div>`;
-    document.querySelectorAll('.modal-bg [name="modal_latitude"],.modal-bg [name="modal_longitude"]').forEach(i=>i.removeAttribute("readonly"));
-  }
+function initSitePositionMap(){return}
+function refreshSitePositionGoogleMap(){
+  const frame=document.getElementById("site-position-map");if(!frame)return;
+  const lat=document.querySelector('.modal-bg [name="modal_latitude"]')?.value;
+  const lng=document.querySelector('.modal-bg [name="modal_longitude"]')?.value;
+  const a=parseFloat(lat),b=parseFloat(lng);
+  if(Number.isFinite(a)&&Number.isFinite(b))frame.src=googleMapsEmbedUrl(`${a},${b}`);
+  else toast("Saisissez latitude et longitude valides","error");
 }
 function saveSitePositionFromModal(){
   const lat=document.querySelector('.modal-bg [name="modal_latitude"]')?.value;
