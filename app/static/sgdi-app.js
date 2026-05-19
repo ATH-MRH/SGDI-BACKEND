@@ -7015,7 +7015,7 @@ async function initSitesDashboardMap(sites){
       try{window.__sgdiSitesDashboardMap.remove()}catch(_){}
     }
     window.__sgdiSitesDashboardSites=(sites||[]).filter(Boolean);
-    const map=L.map(box).setView([28.0339,1.6596],5);
+    const map=L.map(box,{scrollWheelZoom:false}).setView([28.0339,1.6596],5);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
     window.__sgdiSitesDashboardMap=map;
     window.__sgdiSitesDashboardMarkers=L.layerGroup().addTo(map);
@@ -7163,7 +7163,7 @@ async function initSitePositionMap(center){
   const box=document.getElementById("site-position-map");if(!box)return;
   try{
     const L=await loadLeafletForSitePosition();
-    const map=L.map(box).setView([center.lat,center.lng],Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&center.lat!==28.0339?15:5);
+    const map=L.map(box,{scrollWheelZoom:false}).setView([center.lat,center.lng],Number.isFinite(center.lat)&&Number.isFinite(center.lng)&&center.lat!==28.0339?15:5);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"&copy; OpenStreetMap"}).addTo(map);
     const siteIcon=sitePositionMarkerIcon(L);
     let marker=null;
