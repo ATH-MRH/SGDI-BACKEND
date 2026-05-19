@@ -1725,6 +1725,11 @@ function currentAllowedSocietes(){
   const clean=uniqueSocieteNames(list).filter(s=>SOCIETES.some(x=>normalizeSocieteName(x)===normalizeSocieteName(s))&&!isRemovedSociete(s));
   return clean.length?SOCIETES.filter(s=>clean.some(x=>normalizeSocieteName(x)===normalizeSocieteName(s))):SOCIETES.slice();
 }
+function hasExplicitSocieteRestriction(){
+  const u=currentUserRecord();
+  const list=Array.isArray(u?.societesAutorisees)?u.societesAutorisees:(Array.isArray(session?.societesAutorisees)?session.societesAutorisees:[]);
+  return uniqueSocieteNames(list).filter(s=>SOCIETES.some(x=>normalizeSocieteName(x)===normalizeSocieteName(s))&&!isRemovedSociete(s)).length>0;
+}
 function canUseSociete(societe){
   if(!societe)return false;
   return currentAllowedSocietes().some(s=>normalizeSocieteName(s)===normalizeSocieteName(societe));
@@ -8213,7 +8218,10 @@ function ficheAgentIsSortantArchive(a){
 }
 function renderFiches(view,sub){
   const socFilter=session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||"");
-  let baseList=db.agents.filter(a=>!ficheAgentIsSortantArchive(a));let title="Fiches de position — Toutes";
+  const allowedSocietes=currentAllowedSocietes();
+  const restrictedSocietes=hasExplicitSocieteRestriction();
+  const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
+  let baseList=db.agents.filter(a=>authorizedAgent(a)&&!ficheAgentIsSortantArchive(a));let title="Fiches de position — Toutes";
   if(sub==="maladie"){baseList=baseList.filter(a=>ficheAgentInMaladie(a));title="🤒 Fiches de position — En maladie"}
   else if(sub==="conge"){baseList=baseList.filter(a=>ficheAgentInConge(a));title="🏖 Fiches de position — En congé"}
   else if(sub==="suspendu"){baseList=baseList.filter(a=>a.statut==="suspendu");title="⏸ Fiches de position — Suspendu"}
@@ -8222,11 +8230,12 @@ function renderFiches(view,sub){
   else if(sub==="archivees"){baseList=baseList.filter(a=>ficheAgentIsSortantArchive(a));title="🗄 Fiches de position — Sortants / archivés"}
   else if(sub==="imprimer"){return renderFichesImpression(view)}
   else if(sub==="badge"){return renderBadgeModule(view)}
-  const list=socFilter?baseList.filter(a=>a.societe===socFilter):baseList;
-  const statsBase=socFilter?db.agents.filter(a=>a.societe===socFilter):db.agents;
+  const safeSocFilter=socFilter&&allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(socFilter))?socFilter:"";
+  const list=safeSocFilter?baseList.filter(a=>a.societe===safeSocFilter):baseList;
+  const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent);
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
   const withoutAffectation=activeBase.filter(a=>!(a.affectationCourante&&a.affectationCourante.siteId)).length;
-  const withoutDotation=agentsEnInstanceDotationForSoc(socFilter).length;
+  const withoutDotation=agentsEnInstanceDotationForSoc(safeSocFilter).length;
   const surveillerCount=statsBase.filter(a=>ficheAgentInMaladie(a)||ficheAgentInConge(a)||a.statut==="suspendu"||ficheAgentInAbandon(a)).length;
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const summaryCards=[
@@ -8247,7 +8256,7 @@ function renderFiches(view,sub){
     <div class="fp-head">
       <div>
         <h1>${title}</h1>
-        <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Synthèse opérationnelle des fiches de position"} · ${list.length} fiche(s) affichée(s)${socFilter?` · <span>${escapeHTML(socFilter)}</span>`:""}.</p>
+        <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Synthèse opérationnelle des fiches de position"} · ${list.length} fiche(s) affichée(s)${safeSocFilter?` · <span>${escapeHTML(safeSocFilter)}</span>`:""}.</p>
       </div>
       <div class="fp-head-actions">
         <a href="#/fiches/imprimer" class="btn fp-print-batch-btn text-sm">🖨 Impression en lot</a>
@@ -8270,12 +8279,20 @@ function renderFiches(view,sub){
         <div><label class="label">Recherche</label><input id="fp-q" class="input" placeholder="Nom, matricule..." oninput="filterFiches()"/></div>
       </div>
     </div>
-    ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucune fiche${socFilter?` pour ${escapeHTML(socFilter)}`:""}.</div>`:`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`}
+    ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucune fiche${safeSocFilter?` pour ${escapeHTML(safeSocFilter)}`:""}.</div>`:`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`}
   </div>`;
 }
-function setFpSociete(v){if(mySoc()){toast("Vous êtes sur "+mySoc()+". Utilisez Changer de société.","error");return}if(session?.transverse)sessionStorage.setItem(structureSocieteFilterKey(),v||"");else sessionStorage.setItem("fpSociete",v||"");renderView()}
+function setFpSociete(v){
+  if(mySoc()){toast("Vous êtes sur "+mySoc()+". Utilisez Changer de société.","error");return}
+  if(v&&!canUseSociete(v)){toast("Société non autorisée pour cet utilisateur","error");return}
+  if(session?.transverse)sessionStorage.setItem(structureSocieteFilterKey(),v||"");else sessionStorage.setItem("fpSociete",v||"");
+  renderView();
+}
 function fpSocieteBandHTML(baseList){
-  const socFilter=session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||"");
+  const allowedSocietes=currentAllowedSocietes();
+  if(allowedSocietes.length<=1)return"";
+  const rawFilter=session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||"");
+  const socFilter=rawFilter&&allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(rawFilter))?rawFilter:"";
   const imgs=loadSocieteImages();
   const countFor=s=>(baseList||[]).filter(a=>a.societe===s).length;
   const chip=(label,value,count,img,active)=>{
@@ -8292,7 +8309,7 @@ function fpSocieteBandHTML(baseList){
     </div>
     <div class="grid grid-5 gap-3">
       ${chip("Toutes les sociétés","",(baseList||[]).length,"",!socFilter)}
-      ${SOCIETES.map(s=>chip(s,s,countFor(s),imgs[s]||defaultSocieteLogo(s),socFilter===s)).join("")}
+      ${allowedSocietes.map(s=>chip(s,s,countFor(s),imgs[s]||defaultSocieteLogo(s),socFilter===s)).join("")}
     </div>
   </div>`;
 }
