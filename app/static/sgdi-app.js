@@ -8342,7 +8342,7 @@ function fichePositionCard(a){
       <a class="btn btn-primary text-xs" href="${ficheHref}" ${ficheClick?`onclick="${ficheClick}"`:""}>🪪 Ouvrir fiche</a>
       <button class="btn btn-secondary text-xs" onclick="openAgentDocumentsModal('${a.id}')">📄 Documents</button>
       <button class="btn btn-ghost text-xs" onclick="previewFiche('${a.id}')">👁 Aperçu</button>
-      <button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">🖨</button>
+      <button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">Imprimer</button>
       ${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="printFicheDotation('${a.id}')">Fiche dotation</button>`:""}
     </div>
   </div>`;
