@@ -1588,8 +1588,31 @@ function sgdiApplyActiveEmployeeStyles(root){
     pill.style.setProperty("font-weight","950","important");
   });
 }
+function sgdiShouldUppercaseInput(el){
+  if(!el||el.dataset.noUppercase==="1")return false;
+  const tag=(el.tagName||"").toLowerCase();
+  if(tag!=="input"&&tag!=="textarea")return false;
+  const type=String(el.getAttribute("type")||"text").toLowerCase();
+  if(["password","email","number","date","datetime-local","time","month","week","file","checkbox","radio","range","color","hidden","url","tel"].includes(type))return false;
+  const name=String(el.getAttribute("name")||"").toLowerCase();
+  if(/email|mail|password|pass|token|secret|jwt|url|photo|file|telephone|phone|tel/.test(name))return false;
+  return true;
+}
+function sgdiUppercaseInputValue(el){
+  if(!sgdiShouldUppercaseInput(el))return;
+  const before=String(el.value||"");
+  const after=before.toLocaleUpperCase("fr-FR");
+  if(before===after)return;
+  const start=el.selectionStart,end=el.selectionEnd;
+  el.value=after;
+  try{
+    if(typeof start==="number"&&typeof end==="number")el.setSelectionRange(start,end);
+  }catch(_){}
+}
 function uiBindInteractiveEvents(){
   if(document.body.dataset.uiInteractiveBound==="1")return;
+  document.body.addEventListener("input",e=>sgdiUppercaseInputValue(e.target));
+  document.body.addEventListener("change",e=>sgdiUppercaseInputValue(e.target));
   document.body.addEventListener("click",e=>{
     const btn=e.target.closest(".btn");
     if(btn&&!btn.disabled){
