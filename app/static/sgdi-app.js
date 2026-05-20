@@ -6154,7 +6154,7 @@ function suspensionDecisionHTML(a,draft){
       <li>Vu le contrat de travail à durée déterminée établi en faveur de <b>${nom}</b>, en qualité de ${poste} ;</li>
     </ul></section>
     <div class="susp-center"><b>DECIDE</b></div>
-    <section class="susp-article"><p><b class="u">Article 01 :</b> La relation de travail liant Monsieur <b>${nom}</b> à la <b>${soc}</b> est suspendue à compter du <b>${formatDate(draft.du)}</b>, pour une durée de <b>${draft.duree} jours</b>, soit jusqu'au <b>${formatDate(draft.au)}</b>, pour le motif suivant :</p>
+    <section class="susp-article"><p><b class="u">Article 01 :</b> La relation de travail liant Monsieur <b>${nom}</b> à la <b>${soc}</b> est suspendue à compter du <b>${formatDate(draft.du)}</b>, pour le motif suivant :</p>
       <div class="susp-motif-title">MOTIF DE LA SUSPENSION :</div><div class="susp-motif">${motif||"&nbsp;"}</div></section>
     <section class="susp-article"><p><b class="u">Article 02 :</b> L'intéressé est <b>tenu de se présenter</b> à notre siège situé au <b>76, rue Ahmed Sayeh, Bir Mourad Raïs, Alger</b> au plus tard le <b>${formatDate(draft.au)}</b>.</p><p>Dépassant la date indiquée l'intéressé sera considéré en situation d'absence irrégulière et d'abandon de poste.</p></section>
     <section class="susp-article"><p><b class="u">Article 03 :</b> Le Directeur des Ressources Humaines, le Responsable des Finances et Comptabilité et le Responsable des Opérations sont chargés chacun en ce qui le concerne de l'exécution de la présente Décision.</p></section>
@@ -6193,14 +6193,13 @@ function openEmployeeSuspensionModal(agentId){
 }
 async function confirmEmployeeSuspension(form){
   if(!canUseEmployeeActionWorkflows()){toast("Suspension non autorisée depuis ce module","error");return}
-  const fd=new FormData(form);
-  const a=findEmployeeByRef(fd.get("agentId"));if(!a){toast("Employé introuvable","error");return}
-  const du=String(fd.get("dateDebut")||today());
-  const duree=parseInt(fd.get("duree")||"15",10)||15;
-  const au=String(fd.get("dateFin")||addDays(du,duree));
-  const ref=String(fd.get("reference")||suspensionDecisionReference(a,du));
-  const motif=String(fd.get("motif")||"").trim();
+  const draft=employeeSuspensionDraftFromForm(form);
+  const a=draft.a;if(!a){toast("Employé introuvable","error");return}
+  const {du,duree,au,ref}=draft;
+  const motif=draft.motif;
   if(!motif){toast("Motif obligatoire","error");return}
+  const printWindow=window.open("","_blank","width=900,height=700");
+  if(printWindow)printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Préparation décision</title></head><body style="font-family:Arial;padding:24px">Préparation de la décision de suspension...</body></html>`);
   a.statut="suspendu";
   a.gestionEvents=a.gestionEvents||[];
   a.gestionEvents.push({type:"Suspension",du,au,motif,reference:ref,statut:"en_cours",dureeJours:duree,alert48h:true,alertAt:addDays(au,-2),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH",source:"rh-effectif"});
@@ -6208,8 +6207,13 @@ async function confirmEmployeeSuspension(form){
   try{
     const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
     Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
-  }catch(e){toast("Suspension non enregistrée PostgreSQL : "+(e.message||e),"error");return}
-  if(!(await saveDBAndWaitToast("Suspension non confirmée par PostgreSQL")))return;
+  }catch(e){if(printWindow)printWindow.close();toast("Suspension non enregistrée PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Suspension non confirmée par PostgreSQL"))){if(printWindow)printWindow.close();return}
+  if(printWindow){
+    printWindow.document.open();
+    printWindow.document.write(suspensionDecisionHTML(a,{...draft,a}).replace("</body>","<script>window.onload=()=>setTimeout(()=>window.print(),300)<\\/script></body>"));
+    printWindow.document.close();
+  }else toast("Suspension enregistrée, mais la fenêtre d'impression a été bloquée","warn");
   closeModal();toast("Employé suspendu jusqu'au "+formatDate(au),"success");renderView();
 }
 function employeeRowActionsButton(a){
