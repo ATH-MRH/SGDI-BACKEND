@@ -497,6 +497,14 @@
   .sgdi-maplibre-map{width:100%;height:100%;min-height:320px;position:relative;overflow:hidden;background:#e2e8f0}
   .sgdi-site-map-marker{width:30px;height:30px;border-radius:999px;border:3px solid #fff;background:#043970;box-shadow:0 7px 18px rgba(15,23,42,.32);display:grid;place-items:center;cursor:pointer}
   .sgdi-site-map-marker span{width:10px;height:10px;border-radius:999px;background:#facc15;display:block;box-shadow:0 0 0 3px rgba(250,204,21,.28)}
+  .site-map-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;font-size:12px;font-weight:850}
+  .site-map-status-ok,.site-map-status-warn,.site-map-status-muted{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;border:1px solid}
+  .site-map-status-ok{background:#dcfce7;color:#166534;border-color:#86efac}
+  .site-map-status-warn{background:#fff7ed;color:#9a3412;border-color:#fed7aa}
+  .site-map-status-muted{background:#f8fafc;color:#64748b;border-color:#e2e8f0}
+  .site-map-missing{display:flex;align-items:center;gap:5px;flex-wrap:wrap;width:100%;font-size:11px;font-weight:750;color:#64748b}
+  .site-map-missing button{border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:999px;padding:3px 8px;cursor:pointer}
+  .site-map-empty{border:1px dashed #cbd5e1;background:#f8fafc;border-radius:8px;padding:28px;text-align:center;color:#475569;font-size:13px}
   .site-complete-bulb{width:24px;height:24px;border-radius:999px;background:#dcfce7;color:#15803d;border:1px solid #86efac;display:inline-grid;place-items:center;font-size:14px;line-height:1;box-shadow:0 0 0 4px rgba(34,197,94,.12),0 0 14px rgba(34,197,94,.45);animation:siteCompleteGlow 1.8s ease-in-out infinite}
   @keyframes siteCompleteGlow{0%,100%{box-shadow:0 0 0 4px rgba(34,197,94,.10),0 0 10px rgba(34,197,94,.35)}50%{box-shadow:0 0 0 6px rgba(34,197,94,.18),0 0 18px rgba(34,197,94,.62)}}
   .maplibregl-popup-content{font:12px/1.35 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#0f172a;border-radius:8px;box-shadow:0 14px 34px rgba(15,23,42,.18)}

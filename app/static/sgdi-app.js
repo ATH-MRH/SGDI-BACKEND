@@ -7272,14 +7272,24 @@ function sgdiMapLibreMarkerHTML(site){
   el.innerHTML='<span></span>';
   return el;
 }
+function siteMapDashboardStatusHTML(sites){
+  const positioned=(sites||[]).filter(siteLatLng);
+  const missing=(sites||[]).filter(s=>!siteLatLng(s));
+  return `<div class="site-map-status">
+    <span class="site-map-status-ok">${positioned.length} site(s) positionné(s)</span>
+    <span class="${missing.length?"site-map-status-warn":"site-map-status-muted"}">${missing.length} sans position GPS</span>
+    ${missing.length?`<div class="site-map-missing">${missing.slice(0,6).map(s=>`<button type="button" onclick="navigate('sites/${siteEditRouteId(s)}')" title="Ajouter une position GPS">${escapeHTML(s.nom||s.indicatif||"Site")}</button>`).join("")}${missing.length>6?`<span>+ ${missing.length-6} autre(s)</span>`:""}</div>`:""}
+  </div>`;
+}
 function siteMapDashboardHTML(sites){
   sites=(sites||[]).filter(Boolean);
   if(!sites.length)return "";
   if(sgdiOverlayIsOpen())return "";
   window.__sgdiSitesDashboardData=sites;
-  const initial=sites.find(siteLatLng)||sites[0];
+  const positioned=sites.filter(siteLatLng);
+  const initial=positioned[0]||sites[0];
   const initialQuery=initial?siteMapQuery(initial):"Algérie";
-  const options=`<option value="__all__">Tous les sites</option>`+sites.map(s=>`<option value="${escapeHTML(String(s.id||s.backendId||""))}">${escapeHTML((s.nom||"Site")+" · "+[s.commune,s.wilaya].filter(Boolean).join(", "))}</option>`).join("");
+  const options=`<option value="__all__">Tous les sites positionnés</option>`+sites.map(s=>{const hasGps=!!siteLatLng(s);return`<option value="${escapeHTML(String(s.id||s.backendId||""))}">${escapeHTML((s.nom||"Site")+" · "+[s.commune,s.wilaya].filter(Boolean).join(", ")+(hasGps?"":" · GPS manquant"))}</option>`}).join("");
   return `<div class="card p-5 mb-5">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
       <div>
@@ -7293,9 +7303,10 @@ function siteMapDashboardHTML(sites){
         <a id="sites-map-open" class="btn btn-ghost" href="${escapeHTML(googleMapsSearchUrl(initialQuery))}" target="_blank" rel="noopener">Ouvrir Google Maps</a>
       </div>
     </div>
-    <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100" style="height:360px">
+    ${siteMapDashboardStatusHTML(sites)}
+    ${positioned.length?`<div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100" style="height:360px">
       <div id="sites-map-frame" class="sgdi-maplibre-map" role="region" aria-label="Carte interactive des sites"></div>
-    </div>
+    </div>`:`<div class="site-map-empty">Aucun site n'a encore de position GPS. Ouvre une fiche site puis utilise <b>Positionner site</b>.</div>`}
   </div>`;
 }
 function initSitesDashboardMap(){
@@ -7342,7 +7353,7 @@ async function updateSitesMap(siteId){
     if(map&&pos)map.flyTo({center:[pos.lng,pos.lat],zoom:14,essential:true});
   };
   if(String(siteId||"__all__")==="__all__"){
-    setMap("Algérie","Tous les sites");
+    setMap("Algérie","Tous les sites positionnés");
     const positioned=sgdiAllSitesForMap().map(s=>siteLatLng(s)).filter(Boolean);
     if(map&&positioned.length>1&&window.maplibregl){
       const bounds=new window.maplibregl.LngLatBounds();
@@ -7354,7 +7365,9 @@ async function updateSitesMap(siteId){
   const allSites=sgdiAllSitesForMap();
   const site=allSites.find(s=>String(s.id||"")===String(siteId)||String(s.backendId||"")===String(siteId));
   if(!site)return;
-  setMap(siteMapQuery(site),siteMapQuery(site),siteLatLng(site));
+  const pos=siteLatLng(site);
+  setMap(siteMapQuery(site),site.nom||siteMapQuery(site),pos);
+  if(!pos)toast("Ce site n'a pas encore de position GPS enregistrée.","info");
 }
 async function searchSitesMap(){
   const input=document.getElementById("sites-map-search");
