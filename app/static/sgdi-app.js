@@ -661,6 +661,19 @@ function employeeFromApi(emp){
     extra
   };
 }
+function employeeRouteId(a){
+  return encodeURIComponent(String(a?.id||a?.backendId||a?.matricule||a?.code||""));
+}
+function findEmployeeByRef(ref){
+  const lookup=decodeURIComponent(String(ref||"")).trim();
+  if(!lookup)return null;
+  return (db.agents||[]).find(x=>
+    String(x.id||"")===lookup||
+    String(x.backendId||"")===lookup||
+    String(x.matricule||"")===lookup||
+    String(x.code||"")===lookup
+  )||null;
+}
 function upsertServerEmployee(row){
   const a=employeeFromApi(row);
   if(!db)db={};
@@ -6020,7 +6033,7 @@ function employeeListRowHTML(a,filter){
   const deleteId=String(a.backendId||a.id||"");
   const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
   const checkedCell=isAdmin()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${a.id}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
 }
 async function effectifListServerHTML(filter){
   if(!sgdiAuthToken()||!effectifServerSupported(filter))return null;
@@ -6119,7 +6132,7 @@ function renderAgentDemandesSection(a){
   </div>`;
 }
 function renderAgentForm(view,id){
-  const a=db.agents.find(x=>x.id===id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
+  const a=findEmployeeByRef(id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
   const officialLocked=!!(a.fichePositionOfficielle&&a.locked);
   const officialUnlocked=officialLocked&&isAdmin()&&unlockedAgents.has(a.id);
   const locked=(officialLocked&&!officialUnlocked)||(a.locked&&!unlockedAgents.has(a.id)&&!isAdmin());
