@@ -6777,16 +6777,16 @@ async function saveAgent(id,options){
   if(!isAdminFichePositionContext()&&!opt.forceOfficialSave){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
   if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()){toast("Fiche officielle verrouillée : modification impossible","error");return false}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
-  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
-  if(a.dateRecrutement&&a.dureeContrat)a.dateFinContrat=contractEndDate(a.dateRecrutement,a.dureeContrat);
-  if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
-  a.habilitations=a.habilitations||{};
-  ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)a.habilitations[k]=r.value});
-  applyOkbaCodeIfNeeded(a,a.fonction||a.poste||a.affectationCourante?.poste);a.salaireNet=parseMoneyInput(a.salaireNet)||0;a.updatedAt=today();
+  const draft={...a,habilitations:{...(a.habilitations||{})}};
+  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
+  if(draft.dateRecrutement&&draft.dureeContrat)draft.dateFinContrat=contractEndDate(draft.dateRecrutement,draft.dureeContrat);
+  if(fd.get("photo")!==undefined)draft.photo=fd.get("photo")||null;
+  ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)draft.habilitations[k]=r.value});
+  applyOkbaCodeIfNeeded(draft,draft.fonction||draft.poste||draft.affectationCourante?.poste);draft.salaireNet=parseMoneyInput(draft.salaireNet)||0;draft.updatedAt=today();
   try{
-    const payload=employeeApiPayload(a);
-    const saved=a.backendId?await SGDI.employees.update(a.backendId,payload):await SGDI.employees.create(payload);
-    Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
+    const payload=employeeApiPayload(draft);
+    const saved=draft.backendId?await SGDI.employees.update(draft.backendId,payload):await SGDI.employees.create(payload);
+    Object.assign(a,employeeFromApi(saved),draft,{backendId:saved?.id||draft.backendId});
   }catch(e){
     toast("Fiche employé non enregistrée PostgreSQL : "+(e.message||e),"error");
     return false;
