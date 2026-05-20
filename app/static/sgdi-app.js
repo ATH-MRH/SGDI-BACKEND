@@ -109,7 +109,7 @@ const SESSION_KEY = "irongs_session_v1";
 const UNLOCK_SESSION_KEY = "irongs_unlocked_v1";
 const ADMIN_SYSTEM_UNLOCK_KEY = "sgdi_admin_system_unlocked_v1";
 const SGDI_API_TOKEN_KEY = "sgdi_api_token_v1";
-let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null;
+let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="";
 
 function normalizeSocieteName(name){
   return String(name||"").trim().replace(/\s+/g," ").toUpperCase();
@@ -3493,11 +3493,31 @@ function normalizeCentralPage(view){
   view.querySelectorAll("table").forEach(t=>t.classList.add("module-table-clean"));
   view.querySelectorAll(".card").forEach(c=>c.classList.add("module-card-clean"));
 }
+function sgdiScrollSnapshot(){
+  const view=document.getElementById("view");
+  return {
+    path:(location.hash||"#/dashboard").slice(2),
+    viewTop:view?view.scrollTop:0,
+    winX:window.scrollX||0,
+    winY:window.scrollY||0
+  };
+}
+function sgdiRestoreScroll(snapshot){
+  if(!snapshot)return;
+  requestAnimationFrame(()=>{
+    if(((location.hash||"#/dashboard").slice(2))!==snapshot.path)return;
+    const view=document.getElementById("view");
+    if(view)view.scrollTop=snapshot.viewTop||0;
+    window.scrollTo(snapshot.winX||0,snapshot.winY||0);
+  });
+}
 
 function renderView(){
   sanitizeCandidatesInDB();
   uiProgressStart();
   const path=(location.hash||"#/dashboard").slice(2);
+  const samePath=sgdiLastRenderedPath===path;
+  const scrollState=samePath?sgdiScrollSnapshot():null;
   const view=document.getElementById("view");
   const [root,sub,arg]=path.split("/");
   try{
@@ -3545,6 +3565,8 @@ function renderView(){
   uiEnhanceView();
   uiProgressDone();
   setTimeout(()=>applyLanguagePreference(view),0);
+  sgdiLastRenderedPath=path;
+  if(scrollState)sgdiRestoreScroll(scrollState);
 }
 window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
 function fpqAutoRefreshRelieveAlert(){
