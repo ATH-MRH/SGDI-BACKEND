@@ -3823,22 +3823,29 @@ function resetArchiveCandidateFilters(){
 function openAddCandidateForm(){
   navigate("reserve/nouveau");
 }
-function candidatImportActionsHTML(){
-  const bulk=reserveBulkDeleteMode();
-  return `<div class="flex gap-2 flex-wrap justify-end items-center"><label class="btn btn-ghost text-xs flex items-center gap-2" title="Afficher les cases de sélection pour supprimer plusieurs candidats"><input type="checkbox" ${bulk?"checked":""} onchange="setReserveBulkDeleteMode(this.checked)"/> Tout supprimer</label><button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-secondary recrutement-import-free-btn" onclick="openCandidateFreeExcelImport()">Excel libre</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+function candidatImportActionsHTML(mode="reserve"){
+  const bulk=candidateBulkDeleteMode(mode);
+  const bulkToggle=`<label class="btn btn-ghost text-xs flex items-center gap-2" title="Afficher les cases de sélection pour supprimer plusieurs candidats"><input type="checkbox" ${bulk?"checked":""} onchange="setCandidateBulkDeleteMode('${mode}',this.checked)"/> Tout supprimer</label>`;
+  if(mode==="new")return `<div class="flex gap-2 flex-wrap justify-end items-center">${bulkToggle}<button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
+  return `<div class="flex gap-2 flex-wrap justify-end items-center">${bulkToggle}<button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImport()">Importer Excel</button><button class="btn btn-secondary recrutement-import-free-btn" onclick="openCandidateFreeExcelImport()">Excel libre</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">Ajouter candidat</button></div>`;
 }
-function reserveBulkDeleteMode(){return sessionStorage.getItem("reserveBulkDeleteMode")==="1"}
-function setReserveBulkDeleteMode(v){sessionStorage.setItem("reserveBulkDeleteMode",v?"1":"0");renderView()}
-function reserveBulkSelectionHeaderHTML(mode){return mode==="reserve"&&reserveBulkDeleteMode()?`<th style="width:42px">Suppr.</th>`:""}
+function candidateBulkDeleteMode(mode){
+  if(mode!=="reserve"&&mode!=="new")return false;
+  return sessionStorage.getItem("candidateBulkDeleteMode:"+mode)==="1"||sessionStorage.getItem("reserveBulkDeleteMode")==="1"&&mode==="reserve";
+}
+function setCandidateBulkDeleteMode(mode,v){sessionStorage.setItem("candidateBulkDeleteMode:"+mode,v?"1":"0");if(mode==="reserve")sessionStorage.setItem("reserveBulkDeleteMode",v?"1":"0");renderView()}
+function reserveBulkDeleteMode(){return candidateBulkDeleteMode("reserve")}
+function setReserveBulkDeleteMode(v){setCandidateBulkDeleteMode("reserve",v)}
+function reserveBulkSelectionHeaderHTML(mode){return candidateBulkDeleteMode(mode)?`<th style="width:42px">Suppr.</th>`:""}
 function reserveBulkSelectionCellHTML(c,mode){
-  if(mode!=="reserve"||!reserveBulkDeleteMode())return "";
+  if(!candidateBulkDeleteMode(mode))return "";
   return `<td onclick="event.stopPropagation()" class="text-center"><input type="checkbox" data-reserve-delete-id="${escapeHTML(c.id)}" data-reserve-delete-backend="${escapeHTML(c.backendId||"")}"/></td>`;
 }
 function reserveBulkDeleteBarHTML(mode,count){
-  if(mode!=="reserve"||!reserveBulkDeleteMode())return "";
+  if(!candidateBulkDeleteMode(mode))return "";
   return `<div class="card p-3 mb-3 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border:1px solid #fed7aa">
     <div class="text-sm text-slate-700"><b>Mode suppression activé.</b> Cochez uniquement les candidats à supprimer.</div>
-    <div class="flex gap-2"><button type="button" class="btn btn-ghost text-xs" onclick="document.querySelectorAll('[data-reserve-delete-id]').forEach(x=>x.checked=true)">Tout cocher (${count||0})</button><button type="button" class="btn btn-ghost text-xs" onclick="document.querySelectorAll('[data-reserve-delete-id]').forEach(x=>x.checked=false)">Tout décocher</button><button type="button" class="btn btn-danger text-xs" onclick="deleteSelectedReserveCandidates()">Supprimer la sélection</button></div>
+    <div class="flex gap-2 items-center flex-wrap"><label class="btn btn-ghost text-xs flex items-center gap-2"><input type="checkbox" onchange="document.querySelectorAll('[data-reserve-delete-id]').forEach(x=>x.checked=this.checked)"/> Tout sélectionner (${count||0})</label><button type="button" class="btn btn-danger text-xs" onclick="deleteSelectedReserveCandidates()">Supprimer la sélection</button></div>
   </div>`;
 }
 function candidateExcelTemplateColumns(){
@@ -4183,7 +4190,7 @@ function upsertServerCandidate(row){
 function candidateListRowHTML(c,mode){
   const route=mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement";
   const archived=mode==="archive";
-  const bulk=mode==="reserve"&&reserveBulkDeleteMode();
+  const bulk=candidateBulkDeleteMode(mode);
   const rowClick=mode==="reserve"&&!bulk?` onclick="navigate('reserve/${jsString(c.id)}')" class="cursor-pointer hover:bg-slate-50"`:"";
   return `<tr data-searchable data-candidate-id="${escapeHTML(c.id)}" data-backend-id="${escapeHTML(c.backendId||"")}"${rowClick}>
     ${reserveBulkSelectionCellHTML(c,mode)}
@@ -4204,7 +4211,7 @@ async function renderRecrutementServer(view,mode){
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
   const page=recrutementCurrentPage(mode);
   const pageSize=25;
-  const addButton=mode==="reserve"?candidatImportActionsHTML():"";
+  const addButton=mode==="reserve"?candidatImportActionsHTML("reserve"):(mode==="new"?candidatImportActionsHTML("new"):"");
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div>`;
   try{
     const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});
@@ -4296,7 +4303,7 @@ function renderRecrutement(view,mode){
       <div class="card p-4"><h3 class="text-sm font-semibold mb-3">Top postes souhaités ${reserveSociete?`— ${escapeHTML(reserveSociete)}`:""}</h3>${topPostes.length===0?`<div class="text-xs text-slate-500 italic">Aucun candidat pour la société active.</div>`:topPostes.map(([p,n])=>{const pct=reserveStats.length?Math.round(n/reserveStats.length*100):0;return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span>${escapeHTML(p)}</span><span class="text-slate-500">${n} (${pct}%)</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div></div>`}).join("")}<div class="grid grid-2 mt-4 pt-3 border-t border-slate-200 text-xs"><div><span class="text-slate-500">Service national :</span> <b>${habiletes}</b> / ${reserveStats.length}</div><div><span class="text-slate-500">Ex-services :</span> <b>${exServices}</b> / ${reserveStats.length}</div></div></div>
     </div>`;
   }
-  const addButton=mode==="reserve"?candidatImportActionsHTML():"";
+  const addButton=mode==="reserve"?candidatImportActionsHTML("reserve"):(mode==="new"?candidatImportActionsHTML("new"):"");
   view.innerHTML=`<div class="flex items-center justify-between mb-6"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${statsHTML}
     ${archiveToolsHTML}
