@@ -7867,14 +7867,27 @@ function siteOpeningPVHTML(site){
   const eff=siteEffectifsNorm(site);
   const openDate=site.dateOuverture||today();
   const posteKey=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[’']/g," ").replace(/-/g," ").replace(/\s+/g," ").trim().toUpperCase();
-  const posteLabels=["CHEF DE SITE","CHEF DE GROUPE","CHEF DE POSTE","APS","A-P-S","AGENT D'ACCUEIL","AGENT D’ACCUEIL","AGENT D'ACCEUIL","AGENT D’ACCEUIL"];
-  const byNorm={};
-  Object.entries(site.postes||{}).forEach(([k,v])=>{byNorm[posteKey(k)]=v||{}});
-  const posteRow=label=>{
-    const v=byNorm[posteKey(label)]||{};
-    return `<tr><td>${escapeHTML(label)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||((+v.jour||0)+(+v.nuit||0))||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`;
+  const posteDisplay=label=>{
+    const key=posteKey(label);
+    if(["APS","A P S","AGENT DE PREVENTION ET DE SECURITE","AGENT PREVENTION SECURITE"].includes(key))return "AGENT DE PREVENTION ET DE SECURITE";
+    if(["AGENT D ACCUEIL","AGENT D ACCEUIL","AGENT ACCUEIL","AGENT ACCEUIL"].includes(key))return "AGENT D'ACCUEIL";
+    return String(label||"").trim().toUpperCase();
   };
-  const customRows=Object.entries(site.postes||{}).filter(([k])=>!posteLabels.some(x=>posteKey(x)===posteKey(k))).map(([k,v])=>`<tr><td>${escapeHTML(k)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`).join("");
+  const realisedMap={};
+  Object.entries(site.postes||{}).forEach(([label,v])=>{
+    const jour=+v?.jour||0,nuit=+v?.nuit||0,total=+v?.total||jour+nuit;
+    if(!jour&&!nuit&&!total)return;
+    const display=posteDisplay(label);
+    if(!realisedMap[display])realisedMap[display]={jour:0,nuit:0,total:0,rotationSystem:v?.rotationSystem||""};
+    realisedMap[display].jour+=jour;
+    realisedMap[display].nuit+=nuit;
+    realisedMap[display].total+=total;
+    realisedMap[display].rotationSystem=realisedMap[display].rotationSystem||v?.rotationSystem||"";
+  });
+  const realisedRows=Object.entries(realisedMap).map(([label,v])=>`<tr><td>${escapeHTML(label)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`).join("");
+  const realisedTotal=Object.values(realisedMap).reduce((sum,v)=>sum+(+v.total||0),0);
+  const realisedJour=Object.values(realisedMap).reduce((sum,v)=>sum+(+v.jour||0),0);
+  const realisedNuit=Object.values(realisedMap).reduce((sum,v)=>sum+(+v.nuit||0),0);
   const eqRows=(site.equipements||site.materiel||[]).map((m,i)=>`<tr><td>${i+1}</td><td>${escapeHTML(m.categorie||"")}</td><td>${escapeHTML(m.designation||m.article||"")}</td><td>${escapeHTML(String(m.quantite||""))}</td><td>${escapeHTML(m.etat||m.observation||"")}</td></tr>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(ref)}</title><style>
     body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;margin:0;padding:12mm;font-size:11px}.pv{max-width:190mm;margin:0 auto}
@@ -7887,9 +7900,9 @@ function siteOpeningPVHTML(site){
       <div class="head"><img class="logo" src="/static/sgdi-icon-192.png"/><div class="title"><b>PROCES VERBAL D'OUVERTURE DE SITE</b><span>Installation opérationnelle - moyens humains et matériels</span></div></div>
       <h2>Identification de l'ouverture</h2>
       <div class="grid"><div class="cell"><b>Référence</b>${escapeHTML(ref)}</div><div class="cell"><b>Date d'édition</b>${formatDate(today())}</div><div class="cell"><b>Dénomination du site</b>${escapeHTML(site.nom||"")}</div><div class="cell"><b>Indicatif</b>${escapeHTML(site.indicatif||"")}</div><div class="cell"><b>Date d'ouverture du site</b>${formatDate(openDate)||""}</div><div class="cell"><b>Site ouvert par</b>${escapeHTML(site.siteOuvertPar||"")}</div><div class="cell"><b>Client</b>${escapeHTML(site.client||"")}</div><div class="cell"><b>Adresse</b>${escapeHTML([site.adresse,site.commune,site.wilaya].filter(Boolean).join(" - "))}</div></div>
-      <h2>Effectif prévu à l'ouverture</h2>
-      <div class="cell" style="margin-bottom:6px"><b>Nombre total des effectifs</b>${eff.totalContractuel||0} agent(s) - Jour : ${eff.jour||0} / Nuit : ${eff.nuit||0}</div>
-      <table><thead><tr><th>Fonction</th><th>Jour</th><th>Nuit</th><th>Total</th><th>Observation</th></tr></thead><tbody>${posteLabels.slice(0,7).map(posteRow).join("")}${customRows}</tbody></table>
+      <h2>Effectif réalisé</h2>
+      <div class="cell" style="margin-bottom:6px"><b>Nombre total des effectifs</b>${realisedTotal||eff.totalContractuel||0} agent(s) - Jour : ${realisedJour||eff.jour||0} / Nuit : ${realisedNuit||eff.nuit||0}</div>
+      <table><thead><tr><th>Fonction</th><th>Jour</th><th>Nuit</th><th>Total</th><th>Observation</th></tr></thead><tbody>${realisedRows||`<tr><td colspan="5" class="num">Aucune fonction réalisée renseignée.</td></tr>`}</tbody></table>
       <h2>Équipement et matériel mis à disposition</h2>
       <table><thead><tr><th>N°</th><th>Magasin / catégorie</th><th>Désignation</th><th>Quantité</th><th>État / observation</th></tr></thead><tbody>${eqRows||`<tr><td colspan="5" class="num">Aucun matériel renseigné.</td></tr>`}</tbody></table>
       <div class="sign"><div>Responsable OPS<div class="box">Nom / cachet / signature</div></div><div>Chef de site<div class="box">Nom / signature</div></div><div>Client / représentant<div class="box">Cachet / signature</div></div></div>
