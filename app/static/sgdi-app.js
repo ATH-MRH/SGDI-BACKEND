@@ -1535,7 +1535,7 @@ function destroySitesDashboardMap(){
   window.__sgdiSitesDashboardSearchMarker=null;
   document.querySelectorAll("#sites-map-frame").forEach(el=>{try{el.remove()}catch(_){}});
 }
-function openModal(html){const sx=window.scrollX,sy=window.scrollY;document.getElementById("modal-host").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal p-6">${html}</div></div>`;stripCryptogrammes();sgdiSyncOverlayState();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
+function openModal(html){const sx=window.scrollX,sy=window.scrollY;const host=document.getElementById("modal-host");host.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal p-6">${html}</div></div>`;stripCryptogrammes();applyLanguagePreference(host);sgdiSyncOverlayState();requestAnimationFrame(()=>window.scrollTo(sx,sy))}
 function closeModal(){document.getElementById("modal-host").innerHTML="";sgdiSyncOverlayState()}
 function uiProgressStart(){const p=document.getElementById("ui-progress");if(!p)return;p.classList.remove("done");p.classList.add("active")}
 function uiProgressDone(){const p=document.getElementById("ui-progress");if(!p)return;p.classList.add("done");setTimeout(()=>p.classList.remove("active","done"),260)}
@@ -2391,7 +2391,7 @@ function sgdiLanguageSelectorHTML(){const m=sgdiLangMode();const btn=(v,l)=>`<bu
 function sgdiTranslateText(raw){
   if(!raw||!raw.trim())return raw;
   const mode=sgdiLangMode();
-  let out=raw;
+  let out=raw.replace(/[ÉéEe]conomiser/gi,"Enregistrer");
   [...SGDI_LANG_PAIRS].sort((a,b)=>b[0].length-a[0].length).forEach(([fr,ar])=>{
     const both=fr+' / '+ar;
     const target=mode==='ar'?ar:fr;
