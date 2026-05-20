@@ -7616,18 +7616,19 @@ function siteAffectationGroupesHTML(site){
   const agents=siteAgents.length?siteAgents:(db.agents||[]).filter(a=>a.statut==="actif").sort((a,b)=>(a.matricule||a.nom||"").localeCompare(b.matricule||b.nom||""));
   const map=site.groupesAffectation||{};
   if(!agents.length)return`<div class="grid grid-2 gap-3">${["A","B","C","D"].map(g=>`<div class="card p-4" style="background:#f8fafc;border:1px solid #e2e8f0"><div class="flex items-center justify-between mb-3"><h4 class="font-black text-lg">GROUPE ${g}</h4><span class="pill pill-gray">0</span></div><select class="select text-xs" disabled><option>Ajouter employé</option></select><div class="text-xs text-slate-500 italic mt-3">Aucun employé disponible.</div></div>`).join("")}</div>`;
-  const opts=agents.map(a=>`<option value="${a.id}">${escapeHTML((a.matricule||"")+" - "+(a.nom||"")+" "+(a.prenom||"")+" · "+(a.affectationCourante?.poste||""))}</option>`).join("");
+  const opts=agents.map(a=>`<option value="${escapeHTML(a.id)}" data-agent-key="${escapeHTML(siteGroupEmployeeKey(a))}">${escapeHTML((a.matricule||"")+" - "+(a.nom||"")+" "+(a.prenom||"")+" · "+(a.affectationCourante?.poste||""))}</option>`).join("");
   const groupBlock=g=>{const assigned=agents.filter(a=>map[a.id]===g||map[siteGroupEmployeeKey(a)]===g);return`<div class="card p-4" style="background:#f8fafc;border:1px solid #e2e8f0">
-    <div class="flex items-center justify-between mb-3"><h4 class="font-black text-lg">GROUPE ${g}</h4><span class="pill pill-gray">${assigned.length}</span></div>
-    <div class="flex gap-2 mb-2"><select class="select text-xs flex-1" id="grp_add_${g}" onchange="siteCheckEmployeeGroupWarning('${g}','${site.id}')"><option value="">Ajouter employé</option>${opts}</select><button type="button" class="btn btn-secondary text-xs" onclick="siteAddEmployeeToGroup('${g}','${site.id}')">Ajouter</button></div>
+    <div class="flex items-center justify-between mb-3"><h4 class="font-black text-lg">GROUPE ${g}</h4><span class="pill pill-gray" data-group-count="${g}">${assigned.length}</span></div>
+    <div class="flex gap-2 mb-2"><select class="select text-xs flex-1" id="grp_add_${g}" data-group-select="${g}" autocomplete="off" onchange="siteHandleGroupSelectChange('${g}','${site.id}')"><option value="" selected>Ajouter employé</option>${opts}</select><button type="button" class="btn btn-secondary text-xs" onclick="siteAddEmployeeToGroup('${g}','${site.id}')">Ajouter</button></div>
     <div id="grp_alert_${g}" class="hidden text-xs font-bold mb-3 p-2 rounded" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5"></div>
     <div id="grp_list_${g}" class="space-y-2">${assigned.length?assigned.map(a=>siteGroupEmployeeRow(a,g)).join(""):`<div class="text-xs text-slate-500 italic">Aucun employé.</div>`}</div>
   </div>`};
+  setTimeout(()=>siteRefreshGroupSelectOptions(),0);
   return`<div class="grid grid-2 gap-3">${["A","B","C","D"].map(groupBlock).join("")}</div><div class="text-xs text-slate-500 mt-2">Un employé ne peut appartenir qu’à un seul groupe. Les choix sont enregistrés avec le site.</div>`;
 }
 function siteGroupEmployeeRow(a,g){
   const key=siteGroupEmployeeKey(a);
-  return`<div class="flex items-center justify-between gap-2 p-2 rounded border border-slate-200 bg-white" data-group-row="${g}" data-agent-id="${escapeHTML(a.id)}" data-agent-key="${escapeHTML(key)}"><input type="hidden" name="grp_${escapeHTML(a.id)}" value="${g}" data-agent-key="${escapeHTML(key)}"/><div><div class="text-xs font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.affectationCourante?.poste||"")}</div></div><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('[data-group-row]').remove()">Retirer</button></div>`
+  return`<div class="flex items-center justify-between gap-2 p-2 rounded border border-slate-200 bg-white" data-group-row="${g}" data-agent-id="${escapeHTML(a.id)}" data-agent-key="${escapeHTML(key)}"><input type="hidden" name="grp_${escapeHTML(a.id)}" value="${g}" data-agent-key="${escapeHTML(key)}"/><div><div class="text-xs font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.affectationCourante?.poste||"")}</div></div><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('[data-group-row]').remove();siteUpdateGroupCounters();siteRefreshGroupSelectOptions()">Retirer</button></div>`
 }
 function siteEmployeeGroupWarning(id,g,siteId){
   const agent=(db.agents||[]).find(a=>a.id===id);if(!agent)return"";
@@ -7651,6 +7652,39 @@ function siteCheckEmployeeGroupWarning(g,siteId){
   const msg=sel.value?siteEmployeeGroupWarning(sel.value,g,siteId):"";
   if(msg){box.textContent=msg;box.classList.remove("hidden")}else{box.textContent="";box.classList.add("hidden")}
 }
+function siteRefreshGroupSelectOptions(){
+  const usedKeys=new Set([...document.querySelectorAll("[data-group-row][data-agent-key]")].map(row=>row.getAttribute("data-agent-key")).filter(Boolean));
+  document.querySelectorAll("select[data-group-select]").forEach(sel=>{
+    const ownKey=sel.selectedOptions&&sel.selectedOptions[0]?sel.selectedOptions[0].getAttribute("data-agent-key"):"";
+    sel.querySelectorAll("option[data-agent-key]").forEach(opt=>{
+      const key=opt.getAttribute("data-agent-key")||"";
+      const unavailable=usedKeys.has(key)&&key!==ownKey;
+      opt.disabled=unavailable;
+      opt.hidden=unavailable;
+    });
+  });
+}
+function siteUpdateGroupCounters(){
+  ["A","B","C","D"].forEach(g=>{
+    const n=document.querySelectorAll(`[data-group-row="${g}"]`).length;
+    document.querySelectorAll(`[data-group-count="${g}"]`).forEach(el=>{el.textContent=String(n)});
+    const list=document.getElementById("grp_list_"+g);
+    if(list&&!n)list.innerHTML=`<div class="text-xs text-slate-500 italic">Aucun employé.</div>`;
+  });
+}
+function siteHandleGroupSelectChange(g,siteId){
+  const sel=document.getElementById("grp_add_"+g);if(!sel)return;
+  const key=sel.selectedOptions&&sel.selectedOptions[0]?sel.selectedOptions[0].getAttribute("data-agent-key"):"";
+  if(key){
+    document.querySelectorAll("select[data-group-select]").forEach(other=>{
+      if(other===sel)return;
+      const otherKey=other.selectedOptions&&other.selectedOptions[0]?other.selectedOptions[0].getAttribute("data-agent-key"):"";
+      if(otherKey===key)other.value="";
+    });
+  }
+  siteCheckEmployeeGroupWarning(g,siteId);
+  siteRefreshGroupSelectOptions();
+}
 function siteAddEmployeeToGroup(g,siteId){
   const sel=document.getElementById("grp_add_"+g);if(!sel||!sel.value)return;
   const id=sel.value;
@@ -7664,6 +7698,8 @@ function siteAddEmployeeToGroup(g,siteId){
   sel.value="";
   if(warning)toast("Employé déplacé vers le groupe "+g,"info");
   siteCheckEmployeeGroupWarning(g,siteId);
+  siteUpdateGroupCounters();
+  siteRefreshGroupSelectOptions();
 }
 function sitePosteRowHTML(p,v){
   v=v||{total:0,jour:0,nuit:0,rotationSystem:""};
