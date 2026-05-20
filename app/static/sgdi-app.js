@@ -7808,12 +7808,31 @@ function siteDraftFromCurrentForm(id){
   const existing=(db.sites||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id))||{};
   if(!f)return existing;
   const fd=new FormData(f);
-  const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit");
+  const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit"),rotations=fd.getAll("poste_rotationSystem");
   let totalContractuel=0,totalJour=0,totalNuit=0;
+  const postes={};
   noms.forEach((nom,i)=>{
-    if(!String(nom||"").trim())return;
+    nom=String(nom||"").trim();
+    if(!nom)return;
     const jour=+jours[i]||0,nuit=+nuits[i]||0;
-    totalJour+=jour;totalNuit+=nuit;totalContractuel+=jour+nuit;
+    const rotationSystem=rotations[i]||"";
+    const total=sitePosteTotalCalc(jour,nuit,rotationSystem);
+    totalJour+=jour;totalNuit+=nuit;totalContractuel+=total;
+    postes[nom]={jour,nuit,total,rotationSystem};
+  });
+  const equipements=[];
+  f.querySelectorAll("#site-materiel-body .site-materiel-row").forEach(row=>{
+    const storeIds=[...(row.querySelector("[data-site-mat-magasins]")?.selectedOptions||[])].map(o=>String(o.value||"")).filter(Boolean);
+    const stores=(db.magasins||[]).filter(m=>storeIds.includes(String(m.id)));
+    const etat=(row.querySelector('[name="site_mat_etat"]')?.value||"").trim();
+    row.querySelectorAll("[data-site-mat-article]:checked").forEach(chk=>{
+      const article=(db.stockArticles||[]).find(a=>String(a.id)===String(chk.value));
+      if(!article)return;
+      const mag=(db.magasins||[]).find(m=>String(m.id)===String(article.magasinId))||stores[0];
+      const quantite=parseFloat(chk.closest("label")?.querySelector("[data-site-mat-qty]")?.value||"0")||0;
+      if(!quantite)return;
+      equipements.push({categorie:mag?.nom||article.categorie||"",designation:article.designation||article.sousCategorie||article.code||"Article",quantite,etat});
+    });
   });
   return {
     ...existing,
@@ -7830,6 +7849,8 @@ function siteDraftFromCurrentForm(id){
     siteOuvertPar:String(fd.get("siteOuvertPar")||existing.siteOuvertPar||"").trim(),
     client:String(fd.get("client")||existing.client||"").trim(),
     contact:{nom:fd.get("contact_nom")||existing.contact?.nom||"",fonction:fd.get("contact_fonction")||existing.contact?.fonction||"",telephone:fd.get("contact_tel")||existing.contact?.telephone||"",email:fd.get("contact_email")||existing.contact?.email||""},
+    postes:{...(existing.postes||{}),...postes},
+    equipements:equipements.length?equipements:(existing.equipements||existing.materiel||[]),
     effectifs:{...(existing.effectifs||{}),totalContractuel,jour:totalJour,nuit:totalNuit,groupes:+fd.get("eff_groupes")||existing.effectifs?.groupes||0,weekend:+fd.get("eff_weekend")||existing.effectifs?.weekend||0,feries:+fd.get("eff_feries")||existing.effectifs?.feries||0}
   };
 }
@@ -7837,35 +7858,32 @@ function siteOpeningPVHTML(site){
   const ref="PV-OUV-"+today().replaceAll("-","")+"-"+String(site.indicatif||site.id||"SITE").replace(/\W+/g,"").toUpperCase();
   const eff=siteEffectifsNorm(site);
   const openDate=site.dateOuverture||today();
-  const displayDate=formatDate(openDate)||"____/____/______";
+  const posteLabels=["CHEF DE SITE","CHEF DE GROUPE","CHEF DE POSTE","APS","A-P-S","AGENT D'ACCUEIL","AGENT D’ACCUEIL","AGENT D'ACCEUIL","AGENT D’ACCEUIL"];
+  const byNorm={};
+  Object.entries(site.postes||{}).forEach(([k,v])=>{byNorm[normalizeText(k).replace(/-/g," ")]=v||{}});
+  const posteRow=label=>{
+    const v=byNorm[normalizeText(label).replace(/-/g," ")]||{};
+    return `<tr><td>${escapeHTML(label)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||((+v.jour||0)+(+v.nuit||0))||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`;
+  };
+  const customRows=Object.entries(site.postes||{}).filter(([k])=>!posteLabels.some(x=>normalizeText(x).replace(/-/g," ")===normalizeText(k).replace(/-/g," "))).map(([k,v])=>`<tr><td>${escapeHTML(k)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`).join("");
+  const eqRows=(site.equipements||site.materiel||[]).map((m,i)=>`<tr><td>${i+1}</td><td>${escapeHTML(m.categorie||"")}</td><td>${escapeHTML(m.designation||m.article||"")}</td><td>${escapeHTML(String(m.quantite||""))}</td><td>${escapeHTML(m.etat||m.observation||"")}</td></tr>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(ref)}</title><style>
-    body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;margin:0;padding:12mm;font-size:12px}
-    .pv{max-width:190mm;margin:0 auto}.pv-head{border:2px solid #1f4e79;height:18mm;display:grid;grid-template-columns:24mm 1fr;align-items:center;padding:0 5mm}
-    .logo{width:18mm;height:18mm;object-fit:contain}.title{text-align:center;line-height:1.05}.title b{display:block;font-size:22px}.title span{font-size:11px}
-    .line-row{display:grid;grid-template-columns:1fr 1fr;gap:18mm;margin:4mm 0 6mm}.line-item{display:flex;align-items:end;gap:5mm}.line{border-bottom:1px solid #1f4e79;min-height:7mm;flex:1;padding:0 2mm;font-weight:700}
-    .sep{border-top:1px solid #9db5cc;margin:4mm 0}.person{display:grid;grid-template-columns:1.7fr 1fr;gap:8mm;margin:5mm 0}.field{display:flex;align-items:end;gap:4mm}.field label{white-space:nowrap}
-    .date-time{display:grid;grid-template-columns:1fr .7fr 1fr;margin:5mm 0;gap:8mm;align-items:end}.checks{border-top:2px solid #1f4e79;border-bottom:1px solid #1f4e79;padding:3mm 0;display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr;gap:8mm}
-    .box{display:inline-block;width:4mm;height:4mm;border:1px solid #1f4e79;margin-left:2mm;vertical-align:middle}.box.checked::after{content:"X";font-weight:900;font-size:10px;position:relative;left:1mm;top:-.5mm}
-    .site-row{display:grid;grid-template-columns:1fr 30mm;gap:8mm;margin:7mm 0 4mm}.pv-table{width:90mm;border-collapse:collapse}.pv-table th,.pv-table td{border:1px solid #7fa2c3;height:8mm;padding:2mm;text-align:center;font-size:10px}.pv-table td:first-child{text-align:left;width:26mm}
-    .bottom{display:grid;grid-template-columns:90mm 1fr;gap:18mm}.stamp{border:1px solid #b8c7d6;height:38mm;text-align:center;padding-top:8mm;font-size:11px}.stamp .cachet{margin-top:11mm}
-    @media print{@page{size:A4 landscape;margin:8mm}body{padding:0}.no-print{display:none!important}}
+    body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;margin:0;padding:12mm;font-size:11px}.pv{max-width:190mm;margin:0 auto}
+    .head{border:2px solid #043970;padding:7px 10px;display:grid;grid-template-columns:22mm 1fr;align-items:center}.logo{width:17mm;height:17mm;object-fit:contain}.title{text-align:center}.title b{display:block;font-size:22px}.title span{font-size:11px;font-weight:700}
+    h2{font-size:12px;color:#043970;text-transform:uppercase;border-bottom:1px solid #043970;margin:10px 0 6px;padding-bottom:3px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px}.cell{border:1px solid #b8c7d6;padding:6px}.cell b{display:block;font-size:9px;color:#475569;text-transform:uppercase;margin-bottom:2px}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #8aa8c5;padding:5px;font-size:10px}th{background:#e8f0f8;text-transform:uppercase}.num{text-align:center}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}.box{height:65px;border:1px solid #111827;margin-top:7px;text-align:center;padding-top:8px}
+    @media print{@page{size:A4 portrait;margin:9mm}body{padding:0}.no-print{display:none!important}}
   </style></head><body>
     <main class="pv">
-      <div class="pv-head"><img class="logo" src="/static/sgdi-icon-192.png"/><div class="title"><b>PROCES VERBAL</b><span>INSTALLATION, AUGMENTATION, DIMINUTION, FERMETURE</span></div></div>
-      <div class="line-row"><div class="line-item"><label>Réf</label><div class="line">${escapeHTML(ref)}</div></div><div class="line-item"><label>Date</label><div class="line">${escapeHTML(formatDate(today())||"")}</div></div></div>
-      <div class="sep"></div>
-      <div class="person"><div class="field"><label>Je soussigné M/Mme</label><div class="line">${escapeHTML(site.siteOuvertPar||"")}</div></div><div class="field"><label>Fonction :</label><div class="line"></div></div></div>
-      <div class="date-time"><div class="field"><label>Avoir procédé(e), ce jour le</label><div class="line">${escapeHTML(displayDate)}</div></div><div class="field"><label>à</label><div class="line"></div><label>h</label></div><div></div></div>
-      <div class="checks"><div>A : <span style="margin-left:10mm">L’installation</span><span class="box checked"></span></div><div>Augmentation <span class="box"></span></div><div>Diminution <span class="box"></span></div><div>Levée de dispositif <span class="box"></span></div></div>
-      <div class="site-row"><div class="field"><label>Site/Client</label><div class="line">${escapeHTML([site.nom,site.client].filter(Boolean).join(" / "))}</div></div><div class="field"><label>Indicatif</label><div class="line">${escapeHTML(site.indicatif||"")}</div></div></div>
-      <div class="bottom">
-        <table class="pv-table"><thead><tr><th></th><th>Jour</th><th>Nuit</th><th>Total</th><th>Observation</th></tr></thead><tbody>
-          <tr><td>Chef de Site</td><td></td><td></td><td></td><td></td></tr>
-          <tr><td>Chef de groupe</td><td></td><td></td><td></td><td></td></tr>
-          <tr><td>A-P-S</td><td>${eff.jour||""}</td><td>${eff.nuit||""}</td><td>${eff.totalContractuel||""}</td><td>${escapeHTML(site.type||"")}</td></tr>
-        </tbody></table>
-        <div class="stamp">Date : ____________/____________/____________<div class="cachet">Cachet/Signature</div></div>
-      </div>
+      <div class="head"><img class="logo" src="/static/sgdi-icon-192.png"/><div class="title"><b>PROCES VERBAL D'OUVERTURE DE SITE</b><span>Installation opérationnelle - moyens humains et matériels</span></div></div>
+      <h2>Identification de l'ouverture</h2>
+      <div class="grid"><div class="cell"><b>Référence</b>${escapeHTML(ref)}</div><div class="cell"><b>Date d'édition</b>${formatDate(today())}</div><div class="cell"><b>Dénomination du site</b>${escapeHTML(site.nom||"")}</div><div class="cell"><b>Indicatif</b>${escapeHTML(site.indicatif||"")}</div><div class="cell"><b>Date d'ouverture du site</b>${formatDate(openDate)||""}</div><div class="cell"><b>Site ouvert par</b>${escapeHTML(site.siteOuvertPar||"")}</div><div class="cell"><b>Client</b>${escapeHTML(site.client||"")}</div><div class="cell"><b>Adresse</b>${escapeHTML([site.adresse,site.commune,site.wilaya].filter(Boolean).join(" - "))}</div></div>
+      <h2>Effectif prévu à l'ouverture</h2>
+      <div class="cell" style="margin-bottom:6px"><b>Nombre total des effectifs</b>${eff.totalContractuel||0} agent(s) - Jour : ${eff.jour||0} / Nuit : ${eff.nuit||0}</div>
+      <table><thead><tr><th>Fonction</th><th>Jour</th><th>Nuit</th><th>Total</th><th>Observation</th></tr></thead><tbody>${posteLabels.slice(0,7).map(posteRow).join("")}${customRows}</tbody></table>
+      <h2>Équipement et matériel mis à disposition</h2>
+      <table><thead><tr><th>N°</th><th>Magasin / catégorie</th><th>Désignation</th><th>Quantité</th><th>État / observation</th></tr></thead><tbody>${eqRows||`<tr><td colspan="5" class="num">Aucun matériel renseigné.</td></tr>`}</tbody></table>
+      <div class="sign"><div>Responsable OPS<div class="box">Nom / cachet / signature</div></div><div>Chef de site<div class="box">Nom / signature</div></div><div>Client / représentant<div class="box">Cachet / signature</div></div></div>
     </main>
   </body></html>`;
 }
