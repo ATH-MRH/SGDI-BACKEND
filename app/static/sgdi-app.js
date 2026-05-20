@@ -7605,13 +7605,19 @@ function updateSiteRotationPreview(sys){
 function siteAgentsForGroupForm(siteId){
   return (db.agents||[]).filter(a=>a.statut==="actif"&&a.affectationCourante?.siteId===siteId).sort((a,b)=>(a.matricule||a.nom||"").localeCompare(b.matricule||b.nom||""));
 }
+function siteGroupEmployeeKey(a){
+  return String(a?.backendId||a?.matricule||a?.id||"").trim();
+}
+function siteCssEscape(v){
+  return window.CSS&&typeof CSS.escape==="function"?CSS.escape(String(v||"")):String(v||"").replace(/["\\]/g,"\\$&");
+}
 function siteAffectationGroupesHTML(site){
   const siteAgents=siteAgentsForGroupForm(site.id);
   const agents=siteAgents.length?siteAgents:(db.agents||[]).filter(a=>a.statut==="actif").sort((a,b)=>(a.matricule||a.nom||"").localeCompare(b.matricule||b.nom||""));
   const map=site.groupesAffectation||{};
   if(!agents.length)return`<div class="grid grid-2 gap-3">${["A","B","C","D"].map(g=>`<div class="card p-4" style="background:#f8fafc;border:1px solid #e2e8f0"><div class="flex items-center justify-between mb-3"><h4 class="font-black text-lg">GROUPE ${g}</h4><span class="pill pill-gray">0</span></div><select class="select text-xs" disabled><option>Ajouter employé</option></select><div class="text-xs text-slate-500 italic mt-3">Aucun employé disponible.</div></div>`).join("")}</div>`;
   const opts=agents.map(a=>`<option value="${a.id}">${escapeHTML((a.matricule||"")+" - "+(a.nom||"")+" "+(a.prenom||"")+" · "+(a.affectationCourante?.poste||""))}</option>`).join("");
-  const groupBlock=g=>{const assigned=agents.filter(a=>map[a.id]===g);return`<div class="card p-4" style="background:#f8fafc;border:1px solid #e2e8f0">
+  const groupBlock=g=>{const assigned=agents.filter(a=>map[a.id]===g||map[siteGroupEmployeeKey(a)]===g);return`<div class="card p-4" style="background:#f8fafc;border:1px solid #e2e8f0">
     <div class="flex items-center justify-between mb-3"><h4 class="font-black text-lg">GROUPE ${g}</h4><span class="pill pill-gray">${assigned.length}</span></div>
     <div class="flex gap-2 mb-2"><select class="select text-xs flex-1" id="grp_add_${g}" onchange="siteCheckEmployeeGroupWarning('${g}','${site.id}')"><option value="">Ajouter employé</option>${opts}</select><button type="button" class="btn btn-secondary text-xs" onclick="siteAddEmployeeToGroup('${g}','${site.id}')">Ajouter</button></div>
     <div id="grp_alert_${g}" class="hidden text-xs font-bold mb-3 p-2 rounded" style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5"></div>
@@ -7619,14 +7625,18 @@ function siteAffectationGroupesHTML(site){
   </div>`};
   return`<div class="grid grid-2 gap-3">${["A","B","C","D"].map(groupBlock).join("")}</div><div class="text-xs text-slate-500 mt-2">Un employé ne peut appartenir qu’à un seul groupe. Les choix sont enregistrés avec le site.</div>`;
 }
-function siteGroupEmployeeRow(a,g){return`<div class="flex items-center justify-between gap-2 p-2 rounded border border-slate-200 bg-white" data-group-row="${g}" data-agent-id="${a.id}"><input type="hidden" name="grp_${a.id}" value="${g}"/><div><div class="text-xs font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.affectationCourante?.poste||"")}</div></div><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('[data-group-row]').remove()">Retirer</button></div>`}
+function siteGroupEmployeeRow(a,g){
+  const key=siteGroupEmployeeKey(a);
+  return`<div class="flex items-center justify-between gap-2 p-2 rounded border border-slate-200 bg-white" data-group-row="${g}" data-agent-id="${escapeHTML(a.id)}" data-agent-key="${escapeHTML(key)}"><input type="hidden" name="grp_${escapeHTML(a.id)}" value="${g}" data-agent-key="${escapeHTML(key)}"/><div><div class="text-xs font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.affectationCourante?.poste||"")}</div></div><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('[data-group-row]').remove()">Retirer</button></div>`
+}
 function siteEmployeeGroupWarning(id,g,siteId){
   const agent=(db.agents||[]).find(a=>a.id===id);if(!agent)return"";
   const warnings=[];
-  const existing=document.querySelector(`[data-agent-id="${id}"]`);
+  const key=siteGroupEmployeeKey(agent);
+  const existing=document.querySelector(`[data-agent-key="${siteCssEscape(key)}"],[data-agent-id="${siteCssEscape(id)}"]`);
   if(existing){
     const oldGroup=existing.getAttribute("data-group-row")||"";
-    warnings.push(oldGroup===g?`Cet employé est déjà affecté au groupe ${g}.`:`Cet employé est déjà affecté au groupe ${oldGroup}.`);
+    warnings.push(oldGroup===g?`Cet employé est déjà affecté au groupe ${g}.`:`Cet employé sera déplacé du groupe ${oldGroup} vers le groupe ${g}.`);
   }
   const currentSiteId=agent.affectationCourante?.siteId||"";
   if(currentSiteId&&currentSiteId!==siteId){
@@ -7645,13 +7655,14 @@ function siteAddEmployeeToGroup(g,siteId){
   const sel=document.getElementById("grp_add_"+g);if(!sel||!sel.value)return;
   const id=sel.value;
   const warning=siteEmployeeGroupWarning(id,g,siteId);
-  if(warning&&!confirm(warning+"\n\nÊtes-vous sûr de vouloir continuer ?\n\nOK = Oui / Annuler = Annuler"))return;
-  document.querySelectorAll(`[data-agent-id="${id}"]`).forEach(el=>el.remove());
   const agent=(db.agents||[]).find(a=>a.id===id);if(!agent)return;
+  const key=siteGroupEmployeeKey(agent);
+  document.querySelectorAll(`[data-agent-key="${siteCssEscape(key)}"],[data-agent-id="${siteCssEscape(id)}"]`).forEach(el=>el.remove());
   const list=document.getElementById("grp_list_"+g);if(!list)return;
   if(list.textContent.includes("Aucun employé"))list.innerHTML="";
   list.insertAdjacentHTML("beforeend",siteGroupEmployeeRow(agent,g));
   sel.value="";
+  if(warning)toast("Employé déplacé vers le groupe "+g,"info");
   siteCheckEmployeeGroupWarning(g,siteId);
 }
 function sitePosteRowHTML(p,v){
@@ -8004,7 +8015,16 @@ async function saveSite(id){
   s.heureReleveNuit=fd.get("heureReleveNuit")||"";
   s.horairesReleves="";
   s.groupesAffectation={};
-  for(const [k,v] of fd.entries()){if(k.startsWith("grp_")&&v)s.groupesAffectation[k.slice(4)]=v}
+  const seenGroupKeys=new Set();
+  document.querySelectorAll("[data-group-row][data-agent-id]").forEach(row=>{
+    const agentId=row.getAttribute("data-agent-id")||"";
+    const key=row.getAttribute("data-agent-key")||agentId;
+    const group=row.getAttribute("data-group-row")||"";
+    if(!agentId||!group||seenGroupKeys.has(key))return;
+    seenGroupKeys.add(key);
+    s.groupesAffectation[agentId]=group;
+    if(key!==agentId)s.groupesAffectation[key]=group;
+  });
   s.rotationSystem=fd.get("rotationSystem")||"24/48";
   s.rotation=siteRotationFromSystem(s.rotationSystem);
   try{
