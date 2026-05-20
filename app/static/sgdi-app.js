@@ -2179,8 +2179,13 @@ function topbarStructureTabsHTML(){
   return `<div class="topbar-structure-tabs no-print">${visible.map(i=>`<button type="button" class="topbar-structure-btn ${session.transverse===i.key?"active":""}" title="${escapeHTML(i.label)}" onclick="${session.societe?`enterSocieteStructure('${i.key}')`:`enterTransverseModule('${i.key}')`}"><span>${escapeHTML(i.label)}</span></button>`).join("")}</div>`;
 }
 function drhWorkforceRibbonHTML(){
-  if(!session||session.transverse!=="drh"||!db)return"";
-  const ag=typeof drhAgentsList==="function"?drhAgentsList():(db.agents||[]);
+  if(!session||!db)return"";
+  const path=(location.hash||"").slice(2);
+  const isDrh=session.transverse==="drh";
+  const isOpsEffectif=session.transverse==="ops"&&path.startsWith("effectif");
+  if(!isDrh&&!isOpsEffectif)return"";
+  const scopeSoc=isDrh?(drhActiveSocieteFilter()||session?.societe||""):(currentStructureSocieteFilter()||session?.societe||"");
+  const ag=isDrh&&typeof drhAgentsList==="function"?drhAgentsList():(db.agents||[]).filter(a=>!scopeSoc||a.societe===scopeSoc);
   const agIds=new Set(ag.map(a=>a.id));
   const co=(db.conges||[]).filter(c=>agIds.has(c.agentId));
   const total=Math.max(1,ag.length);
