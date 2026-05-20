@@ -6717,6 +6717,10 @@ function openReaffectation(agentId){
   if(!isOpsFicheContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const hasC=a.affectationCourante&&a.affectationCourante.siteId;
+  if(hasC){
+    toast(`Employé déjà affecté au site ${a.affectationCourante.siteName||a.affectationCourante.siteId}. Retirez d'abord son affectation actuelle.`,"error");
+    return;
+  }
   openModal(`<h3 class="font-bold text-lg mb-4">Nouvelle affectation</h3><form onsubmit="event.preventDefault();confirmReaffectation('${agentId}')">
     <div class="grid grid-1">
       <div><label class="label">Dénomination site</label><select class="select" name="siteId" ><option value="">—</option>${db.sites.filter(s=>s.actif).map(s=>`<option value="${s.id}">${escapeHTML(s.nom)}${s.indicatif?` — ${escapeHTML(s.indicatif)}`:""}</option>`).join("")}</select></div>
@@ -6729,7 +6733,12 @@ function openReaffectation(agentId){
 }
 async function confirmReaffectation(agentId){
   const a=db.agents.find(x=>x.id===agentId);const fd=new FormData(document.querySelector(".modal-bg form"));
+  if(a?.affectationCourante?.siteId){
+    toast(`Employé déjà affecté au site ${a.affectationCourante.siteName||a.affectationCourante.siteId}. Affectation refusée.`,"error");
+    return;
+  }
   const siteId=fd.get("siteId");const site=db.sites.find(s=>s.id===siteId);
+  if(!siteId||!site){toast("Choisissez un site actif","error");return}
   if(a.affectationCourante&&a.affectationCourante.siteId){a.affectationsHistorique=a.affectationsHistorique||[];a.affectationsHistorique.push({...a.affectationCourante,dateFin:fd.get("dateDebut"),motifChangement:fd.get("motifChangement")||""})}
   const groupe=fd.get("groupe")||"";
   a.affectationCourante={siteId,siteName:site?.nom,clientName:site?.client,poste:a.affectationCourante?.poste||a.fonction||"",horaire:"Mixte",groupe,dateDebut:fd.get("dateDebut")};applyOkbaCodeIfNeeded(a,a.affectationCourante.poste||a.fonction);
@@ -7603,7 +7612,7 @@ function updateSiteRotationPreview(sys){
   if(box)box.innerHTML=siteRotationSummaryHTML(sys);
 }
 function siteAgentsForGroupForm(siteId){
-  return (db.agents||[]).filter(a=>a.statut==="actif"&&a.affectationCourante?.siteId===siteId).sort((a,b)=>(a.matricule||a.nom||"").localeCompare(b.matricule||b.nom||""));
+  return (db.agents||[]).filter(a=>a.statut==="actif"&&(!a.affectationCourante?.siteId||a.affectationCourante.siteId===siteId)).sort((a,b)=>(a.matricule||a.nom||"").localeCompare(b.matricule||b.nom||""));
 }
 function siteGroupEmployeeKey(a){
   return String(a?.backendId||a?.matricule||a?.id||"").trim();
