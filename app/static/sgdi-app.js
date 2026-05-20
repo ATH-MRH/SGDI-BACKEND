@@ -14222,6 +14222,11 @@ function renderAdminStorage(view){
           <div class="text-xs text-slate-600 mb-2">${agentsWithPhoto} agent(s) + ${candidatsWithPhoto} candidat(s) · ${photosTotalKB} Ko au total</div>
           <button class="btn btn-danger text-sm" onclick="cleanupActionRemoveAllPhotos()">Supprimer toutes les photos</button>
         </div>
+        <div class="card p-4" style="background:#fff1f2;border:1px solid #fecdd3">
+          <div class="font-bold mb-1">Réinitialisation RH</div>
+          <div class="text-xs text-slate-600 mb-2">${(db.agents||[]).length} employé(s) + ${(db.candidats||[]).length} candidat(s). Nettoie aussi les pointages, congés, demandes RH et affectations liées.</div>
+          <button class="btn btn-danger text-sm" onclick="cleanupActionResetRhPeople(this)">Supprimer candidats et employés</button>
+        </div>
         <div class="card p-4" style="background:#043970;border:1px solid #043970">
           <div class="font-bold mb-1">📅 Anciens pointages</div>
           <div class="text-xs text-slate-600 mb-2">${pointagesCount} pointage(s) · supprimer ceux > 12 mois</div>
@@ -14256,6 +14261,59 @@ function cleanupActionRemoveAllPhotos(){
   (db.agents||[]).forEach(a=>{if(a.photo){a.photo=null;n++}});
   (db.candidats||[]).forEach(c=>{if(c.photo){c.photo=null;n++}});
   if(saveDB())toast("✓ "+n+" photo(s) supprimée(s)","success");
+  renderView();
+}
+async function cleanupActionResetRhPeople(btn){
+  if(!isAdminSystemSession()){toast("Action réservée à l'administrateur système","error");return}
+  const agents=(db.agents||[]).slice();
+  const candidats=(db.candidats||[]).slice();
+  if(!agents.length&&!candidats.length){toast("Aucun candidat ni employé à supprimer","info");return}
+  const msg=`Supprimer définitivement TOUS les candidats et employés ?\n\n${agents.length} employé(s)\n${candidats.length} candidat(s)\n\nLes compteurs RH seront remis à zéro. Les pointages, congés, demandes RH, bulletins paie, affectations et liens OPS associés seront nettoyés.\n\nTapez REINITIALISER RH pour confirmer.`;
+  const ok=prompt(msg);
+  if(String(ok||"").trim().toUpperCase()!=="REINITIALISER RH"){toast("Réinitialisation annulée","info");return}
+  if(btn){btn.disabled=true;btn.textContent="Réinitialisation..."}
+  const failures=[];
+  for(const c of candidats){
+    try{await deleteCandidateFromPostgres(c)}catch(e){
+      const text=String(e&&e.message||e||"");
+      if(!/not found|introuvable|404/i.test(text))failures.push("Candidat "+(c.backendId||c.id||"")+" : "+text);
+    }
+  }
+  for(const a of agents){
+    const backendId=effectifEmployeeSqlId(a);
+    if(!backendId)continue;
+    try{await deleteAgentBackend(a)}catch(e){
+      const text=String(e&&e.message||e||"");
+      if(!/not found|introuvable|404/i.test(text))failures.push("Employé "+(a.backendId||a.id||"")+" : "+text);
+    }
+  }
+  if(failures.length){
+    if(btn){btn.disabled=false;btn.textContent="Supprimer candidats et employés"}
+    toast("Réinitialisation interrompue : "+failures.slice(0,3).join(" | "),"error");
+    return;
+  }
+  const agentRefs=new Set(agents.flatMap(a=>[a.id,a.backendId,a.matricule,a.code].map(v=>String(v||"").trim()).filter(Boolean)));
+  const refMatch=item=>item&&["agentId","employeeId","employee_id","beneficiaireAgentId","retourAgentId","matricule","code","remplaceAgentId"].some(k=>agentRefs.has(String(item[k]||"").trim()));
+  ["conges","contrats","avenants","pointages","pointageMensuel","feuillePresence","demandesPersonnel","demandesStructure","missions","siteInspections","stockMouvements","paieElements","paieBulletins","paieClotures"].forEach(collection=>{
+    if(Array.isArray(db[collection]))db[collection]=db[collection].filter(item=>!refMatch(item));
+  });
+  (db.sites||[]).forEach(site=>{
+    if(site.groupesAffectation&&typeof site.groupesAffectation==="object"){
+      Object.keys(site.groupesAffectation).forEach(k=>{if(agentRefs.has(String(k)))delete site.groupesAffectation[k]});
+    }
+  });
+  db.agents=[];
+  db.candidats=[];
+  if(db.feuillePresenceCloture)db.feuillePresenceCloture={};
+  if(db.settings&&Array.isArray(db.settings.unlockLog))db.settings.unlockLog=[];
+  unlockedAgents.clear();saveUnlocked();
+  if(!db.activityLog)db.activityLog=[];
+  db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:"Réinitialisation RH",details:"Suppression de tous les candidats et employés"});
+  if(!(await saveDBAndWaitToast("Réinitialisation RH non confirmée par PostgreSQL"))){
+    if(btn){btn.disabled=false;btn.textContent="Supprimer candidats et employés"}
+    return;
+  }
+  toast("Réinitialisation RH terminée : compteurs à zéro","success");
   renderView();
 }
 function cleanupActionTrimPointages(months){
