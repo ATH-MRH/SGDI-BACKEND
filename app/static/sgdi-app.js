@@ -7799,9 +7799,83 @@ function renderSiteForm(view,id){
       <table class="mb-2"><thead><tr><th>Magasin(s)</th><th>Article</th><th>État / observation</th><th></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table>
       <div class="text-xs text-slate-500">Cette section permet d’indiquer les besoins ou le matériel affecté au site.</div>
     </div>
-    <div class="card p-4 flex justify-end gap-2">${s.isNew?"":`<button type="button" class="btn btn-danger" onclick="deleteSite('${s.id}')">Supprimer</button>`}<button class="btn btn-primary">💾 Enregistrer</button></div>
+    <div class="card p-4 flex justify-end gap-2 flex-wrap">${s.isNew?"":`<button type="button" class="btn btn-danger" onclick="deleteSite('${s.id}')">Supprimer</button>`}<button type="button" class="btn btn-secondary" onclick="editSiteOpeningPV('${s.id}')">EDITER PV D'OUVERTURE DE SITE</button><button class="btn btn-primary">💾 Enregistrer</button></div>
   </form></div>`;
   setTimeout(updateSiteEffectifTotalContractuel,0);
+}
+function siteDraftFromCurrentForm(id){
+  const f=document.getElementById("site-form");
+  const existing=(db.sites||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id))||{};
+  if(!f)return existing;
+  const fd=new FormData(f);
+  const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit");
+  let totalContractuel=0,totalJour=0,totalNuit=0;
+  noms.forEach((nom,i)=>{
+    if(!String(nom||"").trim())return;
+    const jour=+jours[i]||0,nuit=+nuits[i]||0;
+    totalJour+=jour;totalNuit+=nuit;totalContractuel+=jour+nuit;
+  });
+  return {
+    ...existing,
+    id:existing.id||id,
+    nom:String(fd.get("nom")||existing.nom||"").trim(),
+    indicatif:String(fd.get("indicatif")||existing.indicatif||"").trim(),
+    adresse:String(fd.get("adresse")||existing.adresse||"").trim(),
+    commune:String(fd.get("commune")||existing.commune||"").trim(),
+    wilaya:String(fd.get("wilaya")||existing.wilaya||"").trim(),
+    type:String(fd.get("type")||existing.type||"").trim(),
+    latitude:String(fd.get("latitude")||existing.latitude||"").trim(),
+    longitude:String(fd.get("longitude")||existing.longitude||"").trim(),
+    dateOuverture:String(fd.get("dateOuverture")||existing.dateOuverture||"").trim(),
+    client:String(fd.get("client")||existing.client||"").trim(),
+    contact:{nom:fd.get("contact_nom")||existing.contact?.nom||"",fonction:fd.get("contact_fonction")||existing.contact?.fonction||"",telephone:fd.get("contact_tel")||existing.contact?.telephone||"",email:fd.get("contact_email")||existing.contact?.email||""},
+    effectifs:{...(existing.effectifs||{}),totalContractuel,jour:totalJour,nuit:totalNuit,groupes:+fd.get("eff_groupes")||existing.effectifs?.groupes||0,weekend:+fd.get("eff_weekend")||existing.effectifs?.weekend||0,feries:+fd.get("eff_feries")||existing.effectifs?.feries||0}
+  };
+}
+function siteOpeningPVHTML(site){
+  const ref="PV-OUV-"+today().replaceAll("-","")+"-"+String(site.indicatif||site.id||"SITE").replace(/\W+/g,"").toUpperCase();
+  const eff=siteEffectifsNorm(site);
+  const openDate=site.dateOuverture||today();
+  const displayDate=formatDate(openDate)||"____/____/______";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(ref)}</title><style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;margin:0;padding:12mm;font-size:12px}
+    .pv{max-width:190mm;margin:0 auto}.pv-head{border:2px solid #1f4e79;height:18mm;display:grid;grid-template-columns:24mm 1fr;align-items:center;padding:0 5mm}
+    .logo{width:18mm;height:18mm;object-fit:contain}.title{text-align:center;line-height:1.05}.title b{display:block;font-size:22px}.title span{font-size:11px}
+    .line-row{display:grid;grid-template-columns:1fr 1fr;gap:18mm;margin:4mm 0 6mm}.line-item{display:flex;align-items:end;gap:5mm}.line{border-bottom:1px solid #1f4e79;min-height:7mm;flex:1;padding:0 2mm;font-weight:700}
+    .sep{border-top:1px solid #9db5cc;margin:4mm 0}.person{display:grid;grid-template-columns:1.7fr 1fr;gap:8mm;margin:5mm 0}.field{display:flex;align-items:end;gap:4mm}.field label{white-space:nowrap}
+    .date-time{display:grid;grid-template-columns:1fr .7fr 1fr;margin:5mm 0;gap:8mm;align-items:end}.checks{border-top:2px solid #1f4e79;border-bottom:1px solid #1f4e79;padding:3mm 0;display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr;gap:8mm}
+    .box{display:inline-block;width:4mm;height:4mm;border:1px solid #1f4e79;margin-left:2mm;vertical-align:middle}.box.checked::after{content:"X";font-weight:900;font-size:10px;position:relative;left:1mm;top:-.5mm}
+    .site-row{display:grid;grid-template-columns:1fr 30mm;gap:8mm;margin:7mm 0 4mm}.pv-table{width:90mm;border-collapse:collapse}.pv-table th,.pv-table td{border:1px solid #7fa2c3;height:8mm;padding:2mm;text-align:center;font-size:10px}.pv-table td:first-child{text-align:left;width:26mm}
+    .bottom{display:grid;grid-template-columns:90mm 1fr;gap:18mm}.stamp{border:1px solid #b8c7d6;height:38mm;text-align:center;padding-top:8mm;font-size:11px}.stamp .cachet{margin-top:11mm}
+    @media print{@page{size:A4 landscape;margin:8mm}body{padding:0}.no-print{display:none!important}}
+  </style></head><body>
+    <main class="pv">
+      <div class="pv-head"><img class="logo" src="/static/sgdi-icon-192.png"/><div class="title"><b>PROCES VERBAL</b><span>INSTALLATION, AUGMENTATION, DIMINUTION, FERMETURE</span></div></div>
+      <div class="line-row"><div class="line-item"><label>Réf</label><div class="line">${escapeHTML(ref)}</div></div><div class="line-item"><label>Date</label><div class="line">${escapeHTML(formatDate(today())||"")}</div></div></div>
+      <div class="sep"></div>
+      <div class="person"><div class="field"><label>Je soussigné M/Mme</label><div class="line"></div></div><div class="field"><label>Fonction :</label><div class="line"></div></div></div>
+      <div class="date-time"><div class="field"><label>Avoir procédé(e), ce jour le</label><div class="line">${escapeHTML(displayDate)}</div></div><div class="field"><label>à</label><div class="line"></div><label>h</label></div><div></div></div>
+      <div class="checks"><div>A : <span style="margin-left:10mm">L’installation</span><span class="box checked"></span></div><div>Augmentation <span class="box"></span></div><div>Diminution <span class="box"></span></div><div>Levée de dispositif <span class="box"></span></div></div>
+      <div class="site-row"><div class="field"><label>Site/Client</label><div class="line">${escapeHTML([site.nom,site.client].filter(Boolean).join(" / "))}</div></div><div class="field"><label>Indicatif</label><div class="line">${escapeHTML(site.indicatif||"")}</div></div></div>
+      <div class="bottom">
+        <table class="pv-table"><thead><tr><th></th><th>Jour</th><th>Nuit</th><th>Total</th><th>Observation</th></tr></thead><tbody>
+          <tr><td>Chef de Site</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>Chef de groupe</td><td></td><td></td><td></td><td></td></tr>
+          <tr><td>A-P-S</td><td>${eff.jour||""}</td><td>${eff.nuit||""}</td><td>${eff.totalContractuel||""}</td><td>${escapeHTML(site.type||"")}</td></tr>
+        </tbody></table>
+        <div class="stamp">Date : ____________/____________/____________<div class="cachet">Cachet/Signature</div></div>
+      </div>
+    </main>
+  </body></html>`;
+}
+function editSiteOpeningPV(id){
+  const site=siteDraftFromCurrentForm(id);
+  if(!String(site.nom||"").trim()){toast("Saisissez la dénomination du site avant d'éditer le PV","error");return}
+  const html=siteOpeningPVHTML(site);
+  const w=window.open("","_blank","width=1000,height=800");
+  if(!w){toast("Ouverture bloquée par le navigateur","error");return}
+  w.document.write(html.replace("</body>","<script>window.onload=()=>setTimeout(()=>window.print(),300)<\\/script></body>"));
+  w.document.close();
 }
 async function deleteSite(id){
   const lookup=decodeURIComponent(String(id));
