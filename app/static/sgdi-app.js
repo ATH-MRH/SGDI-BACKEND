@@ -6079,6 +6079,26 @@ function runRhEffectifAction(action,agentId){
   const type=rhEffectifActionType(action);
   if(type)return openGestionModal(agentId,type);
 }
+function employeeRowActionsButton(a){
+  if(!canUseEmployeeActionWorkflows())return "";
+  return `<button type="button" class="btn btn-ghost text-lg leading-none px-2" title="Actions" aria-label="Actions employé" onclick="openEmployeeRowActions(event,'${escapeHTML(a.id)}')">...</button>`;
+}
+function closeEmployeeRowActions(){
+  document.getElementById("employee-row-actions-menu")?.remove();
+}
+function openEmployeeRowActions(event,agentId){
+  event.preventDefault();event.stopPropagation();
+  closeEmployeeRowActions();
+  const labels=[["suspendre","SUSPENDRE"],["convoquer","CONVOQUER"],["blacklister","BLACKLISTER"],["mise_en_demeure","MISE EN DEMEURE"],["periode_enc","PERIODE E-N-C"],["sanctionner","SANCTIONNER"],["fin_contrat","FIN DE CONTRAT"]];
+  const btn=event.currentTarget;
+  const rect=btn.getBoundingClientRect();
+  const menu=document.createElement("div");
+  menu.id="employee-row-actions-menu";
+  menu.style.cssText=`position:fixed;z-index:99999;min-width:210px;background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:6px;right:${Math.max(12,window.innerWidth-rect.right)}px;top:${Math.min(rect.bottom+6,window.innerHeight-320)}px`;
+  menu.innerHTML=labels.map(([k,l])=>`<button type="button" class="btn btn-ghost text-xs justify-start w-full" style="text-align:left;margin:2px 0" onclick="closeEmployeeRowActions();runRhEffectifAction('${k}','${escapeHTML(agentId)}')">${l}</button>`).join("");
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener("click",closeEmployeeRowActions,{once:true}),0);
+}
 function renderEffectifRecap(view){
   const current=sessionStorage.getItem("effectifStableFilter")||"actifs";
   renderEffectif(view,current,true);
@@ -6246,7 +6266,7 @@ function employeeListRowHTML(a,filter){
   const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
   const checkedCell=isAdminFichePositionContext()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
   const opsCells=isOpsEffectifContext()?`<td class="text-xs">${formatDate(a.dateNaissance)}</td><td class="text-xs font-bold">${ageFromDate(a.dateNaissance)??"—"}</td><td class="text-xs">${safe(a.situation)}</td>`:"";
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`:""}</tr>`;
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><div class="flex items-center justify-end gap-1"><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a>${employeeRowActionsButton(a)}</div></td>${filter==="instance_affectation"?`<td class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`:""}</tr>`;
 }
 async function effectifListServerHTML(filter){
   if(isOpsEffectifContext())return null;
