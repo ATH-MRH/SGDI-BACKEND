@@ -6120,8 +6120,19 @@ function updateSuspensionEndDate(){
   const end=addDays(start,days);
   f.dateFin.value=end;
   if(f.reference)f.reference.value=suspensionDecisionReference(findEmployeeByRef(f.agentId.value),start);
+  updateSuspensionConvocationState();
   const alert=f.querySelector("#suspension-alert-date");
   if(alert)alert.textContent="Alerte programmée le "+formatDate(addDays(end,-2))+" (48 heures avant la fin).";
+}
+function updateSuspensionConvocationState(){
+  const f=document.getElementById("employee-suspension-form");if(!f)return;
+  const checked=!!f.aConvoquer?.checked;
+  if(f.dateConvocation){
+    f.dateConvocation.disabled=!checked;
+    f.dateConvocation.classList.toggle("bg-slate-50",!checked);
+    if(checked&&!f.dateConvocation.value)f.dateConvocation.value=f.dateFin?.value||addDays(f.dateDebut?.value||today(),parseInt(f.duree?.value||"15",10)||15);
+    if(!checked)f.dateConvocation.value="";
+  }
 }
 function suspensionDecisionReference(a,dateDebut){
   const code=String(a?.matricule||"EMP").replace(/[^a-z0-9]/gi,"").toUpperCase()||"EMP";
@@ -6134,13 +6145,15 @@ function employeeSuspensionDraftFromForm(form){
   const duree=parseInt(fd.get("duree")||"15",10)||15;
   const au=String(fd.get("dateFin")||addDays(du,duree));
   const ref=String(fd.get("reference")||suspensionDecisionReference(a,du));
-  return {a,ref,du,duree,au,motif:String(fd.get("motif")||"").trim()};
+  const aConvoquer=fd.get("aConvoquer")==="on";
+  return {a,ref,du,duree,au,aConvoquer,dateConvocation:aConvoquer?String(fd.get("dateConvocation")||""):"",motif:String(fd.get("motif")||"").trim()};
 }
 function suspensionDecisionHTML(a,draft){
   const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase()||"____________________________");
   const poste=escapeHTML(a.affectationCourante?.poste||a.fonction||a.position||"Agent de Prévention et de Sécurité");
   const soc=escapeHTML(a.societe||"IRON GLOBAL SECURITE");
   const motif=escapeHTML(draft.motif||"").replace(/\n/g,"<br>");
+  const datePresentation=draft.aConvoquer&&draft.dateConvocation?draft.dateConvocation:draft.au;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(draft.ref||"DECISION DE SUSPENSION")}</title><style>
     @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.42}.susp-page{width:190mm;min-height:273mm;margin:0 auto;padding:8mm 7mm 6mm;position:relative}.susp-logo{width:41mm;height:41mm;object-fit:contain;display:block;margin:0 auto 9mm}.susp-title{text-align:center;font-size:22px;font-weight:900;letter-spacing:.3px;margin:0 0 13mm}.susp-rule{border-top:1.5px solid #f2b705;margin:0 0 5mm}.susp-meta{display:flex;justify-content:space-between;gap:12mm;padding:0 8mm 5mm;font-size:14px}.susp-meta b{font-weight:400}.susp-meta .line{display:inline-block;min-width:36mm;border-bottom:1px solid #111;height:15px;vertical-align:baseline}.susp-vu{border-top:1.5px solid #f2b705;padding:7mm 9mm 7mm;margin-bottom:8mm}.susp-vu ul{margin:0;padding-left:6mm}.susp-vu li{margin:1.5mm 0}.susp-center{display:flex;align-items:center;gap:16mm;margin:5mm 0 7mm}.susp-center:before,.susp-center:after{content:"";height:1px;background:#111;flex:1}.susp-center b{font-size:16px;letter-spacing:.4px}.susp-article{margin:0 0 6mm}.susp-article p{margin:0 0 3mm;text-align:justify}.susp-article b.u{text-decoration:underline}.susp-motif-title{font-weight:900;margin:7mm 0 3mm}.susp-motif{min-height:24mm;border:1px solid transparent;padding:1mm 0;font-weight:700}.susp-sign{margin-top:12mm;font-weight:900}.susp-footer{position:absolute;left:7mm;right:7mm;bottom:5mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:10px;line-height:1.2}@media print{.no-print{display:none!important}.susp-page{margin:0;box-shadow:none}}
   </style></head><body><main class="susp-page">
@@ -6156,7 +6169,7 @@ function suspensionDecisionHTML(a,draft){
     <div class="susp-center"><b>DECIDE</b></div>
     <section class="susp-article"><p><b class="u">Article 01 :</b> La relation de travail liant Monsieur <b>${nom}</b> à la <b>${soc}</b> est suspendue à compter du <b>${formatDate(draft.du)}</b>, pour le motif suivant :</p>
       <div class="susp-motif-title">MOTIF DE LA SUSPENSION :</div><div class="susp-motif">${motif||"&nbsp;"}</div></section>
-    <section class="susp-article"><p><b class="u">Article 02 :</b> L'intéressé est <b>tenu de se présenter</b> à notre siège situé au <b>76, rue Ahmed Sayeh, Bir Mourad Raïs, Alger</b> au plus tard le <b>${formatDate(draft.au)}</b>.</p><p>Dépassant la date indiquée l'intéressé sera considéré en situation d'absence irrégulière et d'abandon de poste.</p></section>
+    <section class="susp-article"><p><b class="u">Article 02 :</b> L'intéressé est <b>tenu de se présenter</b> à notre siège situé au <b>76, rue Ahmed Sayeh, Bir Mourad Raïs, Alger</b> au plus tard le <b>${formatDate(datePresentation)}</b>.</p><p>Dépassant la date indiquée l'intéressé sera considéré en situation d'absence irrégulière et d'abandon de poste.</p></section>
     <section class="susp-article"><p><b class="u">Article 03 :</b> Le Directeur des Ressources Humaines, le Responsable des Finances et Comptabilité et le Responsable des Opérations sont chargés chacun en ce qui le concerne de l'exécution de la présente Décision.</p></section>
     <div class="susp-sign">La Direction des Ressources Humaines</div>
     <footer class="susp-footer">Adresse : N° 76, boulevard Ahmed Sayeh, Cité les Sources, Bir Mourad Rais Alger<br>Contact : STD : +213 770 112 034 – Fax : 213 538 048 – E-mail : contact@irongs.com</footer>
@@ -6185,6 +6198,8 @@ function openEmployeeSuspensionModal(agentId){
         <div><label class="label">Durée de suspension</label><select class="select" name="duree" onchange="updateSuspensionEndDate()"><option value="15">15 jours</option><option value="30">30 jours</option></select></div>
         <div><label class="label">Date de fin de suspension</label><input class="input bg-slate-50" type="date" name="dateFin" readonly/></div>
         <div class="p-3 rounded-lg text-xs font-bold" style="background:#fff7ed;border:1px solid #fed7aa;color:#92400e"><div>ALERTE 48 HEURES AVANT FIN</div><div id="suspension-alert-date" class="mt-1"></div></div>
+        <label class="md:col-span-1 flex items-center gap-2 p-3 rounded-lg" style="border:1px solid #e2e8f0;background:#f8fafc"><input type="checkbox" name="aConvoquer" onchange="updateSuspensionConvocationState()" style="width:16px;height:16px"/> <span class="font-bold text-sm">A convoquer</span></label>
+        <div><label class="label">Date</label><input class="input bg-slate-50" type="date" name="dateConvocation" disabled/></div>
         <div class="md:col-span-2"><label class="label">Motif de la suspension</label><textarea class="textarea" name="motif" rows="4" required placeholder="Motif détaillé de la suspension..."></textarea></div>
       </div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeSuspensionDecisionFromForm(this.form)">Éditer / Imprimer décision</button><button class="btn btn-danger">Confirmer la suspension</button></div>
@@ -6198,11 +6213,12 @@ async function confirmEmployeeSuspension(form){
   const {du,duree,au,ref}=draft;
   const motif=draft.motif;
   if(!motif){toast("Motif obligatoire","error");return}
+  if(draft.aConvoquer&&!draft.dateConvocation){toast("Date de convocation obligatoire","error");return}
   const printWindow=window.open("","_blank","width=900,height=700");
   if(printWindow)printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Préparation décision</title></head><body style="font-family:Arial;padding:24px">Préparation de la décision de suspension...</body></html>`);
   a.statut="suspendu";
   a.gestionEvents=a.gestionEvents||[];
-  a.gestionEvents.push({type:"Suspension",du,au,motif,reference:ref,statut:"en_cours",dureeJours:duree,alert48h:true,alertAt:addDays(au,-2),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH",source:"rh-effectif"});
+  a.gestionEvents.push({type:"Suspension",du,au,motif,reference:ref,aConvoquer:draft.aConvoquer,dateConvocation:draft.dateConvocation,statut:"en_cours",dureeJours:duree,alert48h:true,alertAt:addDays(au,-2),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH",source:"rh-effectif"});
   a.updatedAt=today();
   try{
     const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
