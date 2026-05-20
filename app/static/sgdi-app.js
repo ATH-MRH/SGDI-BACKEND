@@ -3783,14 +3783,33 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
   const inp=document.getElementById(inputId);if(!inp||!inp.files[0])return;
   const f=inp.files[0];
   if(f.size>5*1024*1024){toast("Photo > 5 Mo · trop volumineuse","error");return}
+  const paintPhotoPreview=src=>{
+    const prev=document.getElementById(previewId);
+    if(!prev||!src)return;
+    prev.classList.remove("field-error-box");
+    prev.dataset.hasPhoto="1";
+    prev.textContent="Chargement...";
+    const img=new Image();
+    img.alt="";
+    img.style.width="100%";
+    img.style.height="100%";
+    img.style.objectFit="cover";
+    img.style.display="block";
+    img.style.background="#fff";
+    img.onload=()=>{prev.replaceChildren(img)};
+    img.onerror=()=>{
+      prev.dataset.hasPhoto="0";
+      prev.textContent="PHOTO";
+      if(typeof toast==="function")toast("Photo non lisible par le navigateur. Essaie un fichier JPG ou PNG.","error");
+    };
+    img.src=src;
+  };
   const afterPaint=()=>new Promise(resolve=>{
     const raf=window.requestAnimationFrame||((cb)=>setTimeout(cb,16));
     raf(()=>raf(resolve));
   });
   const setPreview=src=>{
-    const html=`<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;background:#fff"/>`;
-    const prev=document.getElementById(previewId);
-    if(prev){prev.classList.remove("field-error-box");prev.innerHTML=html;prev.dataset.hasPhoto="1"}
+    paintPhotoPreview(src);
     document.querySelector(`[data-remove-photo="${targetHidden}"]`)?.classList.remove("hidden");
   };
   let instantUrl="";
@@ -3799,8 +3818,8 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
   r.onload=async e=>{
     const raw=e.target.result;
     const targetEl=document.getElementById(targetHidden);
-    if(targetEl)targetEl.value=raw;
-    if(!instantUrl)setPreview(raw);
+    if(targetEl){targetEl.value=raw;targetEl.dispatchEvent(new Event("input",{bubbles:true}))}
+    setPreview(raw);
     await afterPaint();
     const compressed=await compressImage(raw,1000,0.9);
     const finalSize=Math.round(compressed.length/1024);
