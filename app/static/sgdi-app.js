@@ -6008,7 +6008,9 @@ function effectifBulkDeleteToolbarHTML(){
   </div>`;
 }
 function employeeListRowHTML(a,filter){
-  const checkedCell=isAdmin()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(a.id)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
+  const deleteId=String(a.backendId||a.id||"");
+  const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
+  const checkedCell=isAdmin()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
   return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${a.id}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
 }
 async function effectifListServerHTML(filter){
@@ -6605,13 +6607,21 @@ function agentDeleteLinkedRows(a){
 }
 function agentDeleteLocalCleanup(a){
   if(!a)return;
+  const localId=String(a.id||"");
+  const backendId=String(a.backendId||(/^\d+$/.test(localId)?localId:""));
   agentDeleteLinkedCollections().forEach(collection=>{db[collection]=(db[collection]||[]).filter(item=>!agentDeleteItemMatches(item,a))});
-  db.agents=(db.agents||[]).filter(x=>x.id!==a.id);
-  unlockedAgents.delete(a.id);
+  db.agents=(db.agents||[]).filter(x=>String(x.id||"")!==localId&&(!backendId||String(x.backendId||"")!==backendId));
+  if(localId)unlockedAgents.delete(localId);
+  if(backendId)unlockedAgents.delete(backendId);
 }
 async function deleteAgentBackend(a){
-  if(!a?.backendId)throw new Error("identifiant SQL absent");
-  await SGDI.employees.delete(a.backendId);
+  const backendId=effectifEmployeeSqlId(a);
+  if(!backendId)throw new Error("identifiant SQL absent");
+  await SGDI.employees.delete(backendId);
+}
+function effectifEmployeeSqlId(a){
+  const localId=String(a?.id||"");
+  return a?.backendId||(/^\d+$/.test(localId)?localId:"");
 }
 async function deleteAgent(id){
   if(!isAdmin()){toast("Suppression réservée à l'administrateur","error");return}
@@ -6628,8 +6638,26 @@ async function deleteAgent(id){
   toast("Fiche employé supprimée","success");
   navigate("fiches/toutes");
 }
+function selectedEffectifEmployeeInputs(){
+  return [...document.querySelectorAll("#effectif-list-zone .effectif-row-select:checked")];
+}
+function selectedEffectifEmployees(){
+  return selectedEffectifEmployeeInputs().map(input=>{
+    const row=input.closest("tr");
+    const localId=String(input.dataset.employeeId||row?.dataset.employeeId||"");
+    const backendId=String(input.dataset.backendId||row?.dataset.backendId||(/^\d+$/.test(String(input.value||""))?input.value:"")||"");
+    const value=String(input.value||"");
+    const agent=(db.agents||[]).find(a=>
+      (localId&&String(a.id||"")===localId)||
+      (backendId&&String(a.backendId||"")===backendId)||
+      (value&&(String(a.id||"")===value||String(a.backendId||"")===value))
+    );
+    if(agent)return agent;
+    return {id:localId||value||backendId,backendId,matricule:input.dataset.label||value,__label:input.dataset.label||value};
+  }).filter(a=>a&&(a.id||a.backendId));
+}
 function selectedEffectifEmployeeIds(){
-  return [...document.querySelectorAll("#effectif-list-zone .effectif-row-select:checked")].map(x=>x.value).filter(Boolean);
+  return selectedEffectifEmployees().map(a=>String(a.id||a.backendId||"")).filter(Boolean);
 }
 function updateEffectifBulkDeleteButton(){
   const ids=selectedEffectifEmployeeIds();
@@ -6652,13 +6680,12 @@ function toggleEffectifSelectAll(checked){
 }
 async function deleteSelectedEffectifEmployees(){
   if(!isAdmin()){toast("Suppression réservée à l'administrateur","error");return}
-  const ids=selectedEffectifEmployeeIds();
-  if(!ids.length){toast("Cochez au moins un employé","error");return}
-  const agents=ids.map(id=>(db.agents||[]).find(a=>a.id===id)).filter(Boolean);
-  const missingSql=agents.filter(a=>!a.backendId);
+  const agents=selectedEffectifEmployees();
+  if(!agents.length){toast("Cochez au moins un employé","error");return}
+  const missingSql=agents.filter(a=>!effectifEmployeeSqlId(a));
   if(missingSql.length){toast("Suppression refusée : "+missingSql.length+" employé(s) sans identifiant SQL","error");return}
   const linkedCount=agents.reduce((n,a)=>n+agentDeleteLinkedRows(a).length,0);
-  const sample=agents.slice(0,6).map(a=>"- "+[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ")).join("\n");
+  const sample=agents.slice(0,6).map(a=>"- "+(a.__label||[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ")||a.backendId||a.id)).join("\n");
   const more=agents.length>6?`\n... + ${agents.length-6} autre(s)`:"";
   const msg=`Supprimer définitivement ${agents.length} employé(s) sélectionné(s) ?\n\n${sample}${more}`+(linkedCount?`\n\n${linkedCount} ligne(s) liée(s) seront aussi supprimée(s).`:"")+"\n\nCette action est irréversible.";
   if(!confirm(msg))return;
