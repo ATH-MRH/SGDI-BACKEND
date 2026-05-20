@@ -2299,6 +2299,21 @@ function sgdiAlertVisibleItems(){
   (db.agents||[]).forEach(a=>{
     if(soc&&a.societe&&a.societe!==soc)return;
     if(!sgdiAlertModuleAllowed("drh"))return;
+    (a.gestionEvents||[]).filter(e=>e.type==="Suspension"&&e.statut==="en_cours"&&e.alert48h&&e.au).forEach(e=>{
+      const d=daysBetween(today(),e.au);
+      if(d<0||d>2)return;
+      sgdiAlertPush(rows,{
+        id:"suspension-end:"+(a.id||a.matricule)+":"+(e.createdAt||e.au),
+        module:"drh",
+        societe:a.societe||"",
+        title:"Fin de suspension proche",
+        message:`${(a.nom||"")+" "+(a.prenom||"")} · fin ${formatDate(e.au)} · J-${d}`,
+        meta:a.matricule||"",
+        route:"effectif/suspension",
+        severity:d===0?"critical":"warn",
+        type:"Suspension"
+      });
+    });
     if(!a.dateFinContrat)return;
     const d=daysBetween(today(),a.dateFinContrat);
     if(d>30)return;
@@ -6075,10 +6090,76 @@ function openRhEffectifActionModal(action){
 }
 function runRhEffectifAction(action,agentId){
   closeModal();
+  if(action==="suspendre")return openEmployeeSuspensionModal(agentId);
   if(action==="blacklister")return openBlackListModal(agentId);
   if(action==="sanctionner")return openSanctionModal(agentId);
   const type=rhEffectifActionType(action);
   if(type)return openGestionModal(agentId,type);
+}
+function employeeStatusPillHTML(a){
+  const st=String(a?.statut||"").toLowerCase();
+  const label=st==="suspendu"?"SUSPENDU":(a?.statut||"—");
+  const cls=st==="actif"?"pill-green":st==="suspendu"||st==="absent"?"pill-red":"pill-gray";
+  return `<span class="pill ${cls}">${escapeHTML(label)}</span>`;
+}
+function suspensionEmployeeOptions(selectedId){
+  const list=rhEffectifActionTargets();
+  return list.map(a=>{
+    const label=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim(),a.societe||""].filter(Boolean).join(" - ");
+    return `<option value="${escapeHTML(a.id)}" data-search="${escapeHTML(label.toLowerCase())}" ${String(a.id)===String(selectedId||"")?"selected":""}>${escapeHTML(label)}</option>`;
+  }).join("");
+}
+function filterSuspensionEmployeeOptions(q){
+  const needle=String(q||"").trim().toLowerCase();
+  document.querySelectorAll("#suspension-agent-select option").forEach(opt=>{opt.hidden=!!needle&&!String(opt.dataset.search||opt.textContent||"").toLowerCase().includes(needle)});
+}
+function updateSuspensionEndDate(){
+  const f=document.getElementById("employee-suspension-form");if(!f)return;
+  const start=f.dateDebut.value||today();
+  const days=parseInt(f.duree.value||"15",10)||15;
+  const end=addDays(start,days);
+  f.dateFin.value=end;
+  const alert=f.querySelector("#suspension-alert-date");
+  if(alert)alert.textContent="Alerte programmée le "+formatDate(addDays(end,-2))+" (48 heures avant la fin).";
+}
+function openEmployeeSuspensionModal(agentId){
+  if(!canUseEmployeeActionWorkflows()){toast("Suspension non autorisée depuis ce module","error");return}
+  const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];
+  if(!selected){toast("Aucun employé disponible","error");return}
+  openModal(`<h3 class="font-bold text-lg mb-3">SUSPENDRE UN EMPLOYÉ</h3>
+    <form id="employee-suspension-form" onsubmit="event.preventDefault();confirmEmployeeSuspension(this)">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="md:col-span-2"><label class="label">Recherche employé</label><input class="input" placeholder="Nom, prénom ou code..." oninput="filterSuspensionEmployeeOptions(this.value)"/></div>
+        <div class="md:col-span-2"><label class="label">Liste des employés</label><select id="suspension-agent-select" class="select" name="agentId" required>${suspensionEmployeeOptions(selected.id)}</select></div>
+        <div><label class="label">Date de suspension</label><input class="input" type="date" name="dateDebut" value="${today()}" onchange="updateSuspensionEndDate()" oninput="updateSuspensionEndDate()"/></div>
+        <div><label class="label">Durée de suspension</label><select class="select" name="duree" onchange="updateSuspensionEndDate()"><option value="15">15 jours</option><option value="30">30 jours</option></select></div>
+        <div><label class="label">Date de fin de suspension</label><input class="input bg-slate-50" type="date" name="dateFin" readonly/></div>
+        <div class="p-3 rounded-lg text-xs font-bold" style="background:#fff7ed;border:1px solid #fed7aa;color:#92400e"><div>ALERTE 48 HEURES AVANT FIN</div><div id="suspension-alert-date" class="mt-1"></div></div>
+        <div class="md:col-span-2"><label class="label">Motif de la suspension</label><textarea class="textarea" name="motif" rows="4" required placeholder="Motif détaillé de la suspension..."></textarea></div>
+      </div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger">Confirmer la suspension</button></div>
+    </form>`);
+  updateSuspensionEndDate();
+}
+async function confirmEmployeeSuspension(form){
+  if(!canUseEmployeeActionWorkflows()){toast("Suspension non autorisée depuis ce module","error");return}
+  const fd=new FormData(form);
+  const a=findEmployeeByRef(fd.get("agentId"));if(!a){toast("Employé introuvable","error");return}
+  const du=String(fd.get("dateDebut")||today());
+  const duree=parseInt(fd.get("duree")||"15",10)||15;
+  const au=String(fd.get("dateFin")||addDays(du,duree));
+  const motif=String(fd.get("motif")||"").trim();
+  if(!motif){toast("Motif obligatoire","error");return}
+  a.statut="suspendu";
+  a.gestionEvents=a.gestionEvents||[];
+  a.gestionEvents.push({type:"Suspension",du,au,motif,statut:"en_cours",dureeJours:duree,alert48h:true,alertAt:addDays(au,-2),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH",source:"rh-effectif"});
+  a.updatedAt=today();
+  try{
+    const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
+    Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
+  }catch(e){toast("Suspension non enregistrée PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast("Suspension non confirmée par PostgreSQL")))return;
+  closeModal();toast("Employé suspendu jusqu'au "+formatDate(au),"success");renderView();
 }
 function employeeRowActionsButton(a){
   if(!canUseEmployeeActionWorkflows())return "";
@@ -6267,7 +6348,7 @@ function employeeListRowHTML(a,filter){
   const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
   const checkedCell=isAdminFichePositionContext()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
   const opsCells=isOpsEffectifContext()?`<td class="text-xs">${formatDate(a.dateNaissance)}</td><td class="text-xs font-bold">${ageFromDate(a.dateNaissance)??"—"}</td><td class="text-xs">${safe(a.situation)}</td>`:"";
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><div class="flex items-center justify-end gap-1"><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a>${employeeRowActionsButton(a)}</div></td>${filter==="instance_affectation"?`<td class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`:""}</tr>`;
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td>${employeeStatusPillHTML(a)}</td><td><div class="flex items-center justify-end gap-1"><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a>${employeeRowActionsButton(a)}</div></td>${filter==="instance_affectation"?`<td class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`:""}</tr>`;
 }
 async function effectifListServerHTML(filter){
   if(isOpsEffectifContext())return null;
