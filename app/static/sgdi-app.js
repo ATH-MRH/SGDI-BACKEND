@@ -1835,6 +1835,7 @@ function isAdminSystemSession(){return isAdmin()&&session?.adminSystem===true}
 function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administrateur système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
 function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
+function isAdminFichePositionContext(){return isAdminSystemSession()&&String(location.hash||"").startsWith("#/admin/fiches")}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
 function isAdm1(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM1","ADMI1","ADMIN1"].includes(normalizeAccessCode(v)))}
 function isAdm2(){const u=currentUserRecord();return [session&&session.role,session&&session.niveau,u&&u.role,u&&u.niveau].some(v=>["ADM2","ADMI2","ADMIN2"].includes(normalizeAccessCode(v)))}
@@ -2896,6 +2897,7 @@ function renderSidebar(){
         {label:"FIL D'ACTUALITÉ",route:"admin/feed",count:(db.echanges||[]).length},
         {label:"HISTORIQUE MESSAGES",route:"admin/messages",count:(db.echanges||[]).filter(e=>e.type==="message"||e.attachments?.length).length},
         {label:"NIVEAUX D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
+        {label:"FICHE DE POSITION",route:"admin/fiches",count:(db.agents||[]).length},
         {label:"CONTRAT",route:"admin/contrats",count:((window.__adminContractTemplates||db.contractTemplates||[]).length||null)},
         {label:"JOURNAL D'ACTIVITÉ",route:"admin/log"},
         {label:"STOCKAGE POSTGRESQL",route:"admin/storage"}
@@ -6172,7 +6174,7 @@ function effectifPageStorageKey(filter){return "effectifPage:"+effectifModeToApi
 function effectifCurrentPage(filter){return Math.max(parseInt(sessionStorage.getItem(effectifPageStorageKey(filter))||"1",10)||1,1)}
 function setEffectifPage(filter,page){sessionStorage.setItem(effectifPageStorageKey(filter),String(Math.max(parseInt(page||1,10)||1,1)));renderView()}
 function effectifBulkDeleteToolbarHTML(){
-  if(!isAdmin())return "";
+  if(!isAdminFichePositionContext())return "";
   return `<div class="card p-3 mb-3 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border-color:#fed7aa">
     <label class="flex items-center gap-2 text-sm font-black text-slate-700">
       <input type="checkbox" id="effectif-select-all-toolbar" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/>
@@ -6184,9 +6186,9 @@ function effectifBulkDeleteToolbarHTML(){
 function employeeListRowHTML(a,filter){
   const deleteId=String(a.backendId||a.id||"");
   const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
-  const checkedCell=isAdmin()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
+  const checkedCell=isAdminFichePositionContext()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
   const opsCells=isOpsEffectifContext()?`<td class="text-xs">${formatDate(a.dateNaissance)}</td><td class="text-xs font-bold">${ageFromDate(a.dateNaissance)??"—"}</td><td class="text-xs">${safe(a.situation)}</td>`:"";
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><span class="text-xs text-slate-500">Verrouillé</span></td>`:""}</tr>`;
 }
 async function effectifListServerHTML(filter){
   if(isOpsEffectifContext())return null;
@@ -6200,7 +6202,7 @@ async function effectifListServerHTML(filter){
   const title=titleMap[filter]||"Effectif opérationnel";
   const pages=result.pages||1;
   const pagination=`<div class="flex items-center justify-between gap-2 p-3 border-t border-slate-100 text-sm"><div class="text-slate-500">${result.total||0} employé(s) · page ${result.page||1}/${pages}</div><div class="flex gap-2"><button class="btn btn-ghost text-xs" ${result.page<=1?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)-1})">Précédent</button><button class="btn btn-ghost text-xs" ${result.page>=pages?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)+1})">Suivant</button></div></div>`;
-  const selectHead=isAdmin()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
+  const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   return `<div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${result.total||0} employé(s)${soc?` · ${escapeHTML(soc)}`:" · sociétés autorisées"} · source PostgreSQL</p></div><div class="flex items-center gap-2"><span class="text-xs text-slate-500">Page serveur</span></div></div>
   ${effectifBulkDeleteToolbarHTML()}
   ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun agent.</div>`:`<div class="card overflow-hidden"><table><thead><tr>${selectHead}<th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}`;
@@ -6210,7 +6212,7 @@ function effectifListHTML(filter){
   const {list,title,soc,filterSource}=data;
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
   const opsHeaders=isOpsEffectifContext()?"<th>Naissance</th><th>Age</th><th>Situation</th>":"";
-  const selectHead=isAdmin()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
+  const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   return `<div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div><div class="flex items-center gap-2"><span class="text-xs text-slate-500">Tri :</span><select class="select" style="max-width:260px" onchange="setEffectifSort(this.value)">
     <option value="nom_asc" ${effectifSort==="nom_asc"?"selected":""}>Nom A → Z</option>
     <option value="nom_desc" ${effectifSort==="nom_desc"?"selected":""}>Nom Z → A</option>
@@ -6289,9 +6291,10 @@ function renderAgentDemandesSection(a){
 }
 function renderAgentForm(view,id){
   const a=findEmployeeByRef(id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
+  const adminFicheContext=isAdminFichePositionContext();
   const officialLocked=!!(a.fichePositionOfficielle&&a.locked);
-  const officialUnlocked=officialLocked&&isAdmin()&&unlockedAgents.has(a.id);
-  const locked=(officialLocked&&!officialUnlocked)||(a.locked&&!unlockedAgents.has(a.id)&&!isAdmin());
+  const officialUnlocked=officialLocked&&adminFicheContext;
+  const locked=!adminFicheContext;
   const essaiLeft=a.dateFinEssai?daysBetween(today(),a.dateFinEssai):null;
   let essaiBadge="";
   if(a.dateFinEssai){
@@ -6312,10 +6315,10 @@ function renderAgentForm(view,id){
   const situationBadge=`<span class="pill ${sitClass}" style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:6px 14px">${sitIcon} ${situation}</span>`;
   const operationnel=(situation==="actif");
   const codeColor=operationnel?"#16a34a":"#dc2626";
-  const showVerifications=isDrhFicheContext();
-  const showPointage=isOpsFicheContext();
-  const canEditSanctions=isDrhFicheContext();
-  const canEditAffectations=isOpsFicheContext();
+  const showVerifications=adminFicheContext||isDrhFicheContext();
+  const showPointage=adminFicheContext||isOpsFicheContext();
+  const canEditSanctions=adminFicheContext||isDrhFicheContext();
+  const canEditAffectations=adminFicheContext||isOpsFicheContext();
   const secMateriel=showVerifications?6:5;
   const secAffectation=showVerifications?7:6;
   const secSanctions=showVerifications?8:7;
@@ -6324,9 +6327,9 @@ function renderAgentForm(view,id){
   const anciennete=formatElapsedYMD(a.dateRecrutement);
   const dureeEssaiValue=parseInt(a.dureeEssai,10)||((a.dateRecrutement&&a.dateFinEssai)?Math.max(daysBetween(a.dateRecrutement,a.dateFinEssai),0):90);
   const aff=a.affectationCourante||{};
-  const drhTopActions=isDrhFicheContext()?`<div class="flex justify-end gap-2 mb-3">
-    <button type="button" class="btn text-xs" style="background:#f97316;border-color:#ea580c;color:#fff;font-weight:900" onclick="drhModifierFichePosition('${a.id}')">Modifier</button>
-    <button type="button" class="btn text-xs" style="background:#16a34a;border-color:#15803d;color:#fff;font-weight:900" onclick="drhValiderVerrouillerFichePosition('${a.id}')">Valider et verrouiller</button>
+  const drhTopActions=adminFicheContext?`<div class="flex justify-between items-center gap-2 mb-3 flex-wrap">
+    <button type="button" class="btn btn-ghost text-xs" onclick="navigate('admin/fiches')">← Retour fiches de position</button>
+    <button type="button" class="btn text-xs" style="background:#16a34a;border-color:#15803d;color:#fff;font-weight:900" onclick="drhValiderVerrouillerFichePosition('${a.id}')">Enregistrer et verrouiller</button>
   </div>`:"";
   view.innerHTML=`<div class="max-w-6xl mx-auto">
     ${drhTopActions}
@@ -6349,26 +6352,26 @@ function renderAgentForm(view,id){
       </div>
     </div>
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div class="flex items-center gap-2 flex-wrap">${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}${officialLocked?'<span class="pill pill-green">Fiche officielle</span>':""}${locked?'<span class="pill pill-gray">🔒 Verrouillée</span>':''}${!officialLocked&&!locked&&a.locked?'<span class="pill pill-amber">🔓 Déverrouillée (session)</span>':''}</div>
-      <div class="flex gap-2 items-start flex-wrap justify-end">${essaiBadge}<button class="btn btn-secondary text-xs" onclick="openAgentDocumentsModal('${a.id}')">📄 Documents</button>${isAdmin()?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">🖨 Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="printFicheDotation('${a.id}')">Imprimer fiche de dotation</button>`:""}${!officialLocked&&isAdmin()&&a.locked&&locked?`<button class="btn btn-secondary text-xs" onclick="unlockAgent('${a.id}')">🔓 Déverrouiller Admin</button>`:""}${!officialLocked&&isAdmin()&&(!locked||unlockedAgents.has(a.id))?`<button class="btn btn-secondary text-xs" onclick="lockAgent('${a.id}')">🔒 Verrouiller la fiche</button>`:""}<button class="btn btn-ghost" onclick="history.back()">← Retour</button></div>
+      <div class="flex items-center gap-2 flex-wrap">${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}</div>
+      <div class="flex gap-2 items-start flex-wrap justify-end">${essaiBadge}<button class="btn btn-secondary text-xs" onclick="openAgentDocumentsModal('${a.id}')">📄 Documents</button>${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn btn-ghost text-xs" onclick="printFiche('${a.id}')">🖨 Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="printFicheDotation('${a.id}')">Imprimer fiche de dotation</button>`:""}<button class="btn btn-ghost" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">← Retour</button></div>
     </div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${renderAgentDemandesSection(a)}
     <form id="agent-form" onsubmit="event.preventDefault();saveAgent('${a.id}')">
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">GESTION</div>
-        ${a.blacklist?`<div class="card p-3 mb-3" style="background:#1f2937;color:#fff;border:2px solid #000"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex items-center gap-2"><div style="font-size:24px">⛔</div><div><div class="text-xs uppercase tracking-wider font-black" style="color:#f87171">⛔ BLACK LIST</div><div class="text-xs">Inscrit le ${a.blacklistAt?new Date(a.blacklistAt).toLocaleDateString("fr-FR"):"?"} par <strong>${escapeHTML(a.blacklistBy||"?")}</strong></div>${a.blacklistMotif?`<div class="text-xs italic mt-1">Motif : ${escapeHTML(a.blacklistMotif)}</div>`:""}</div></div>${!locked||isAdmin()?`<button type="button" class="btn btn-secondary text-xs" onclick="removeBlackList('${a.id}')">↩ Retirer de la black list</button>`:""}</div></div>`:""}
-        <div class="grid grid-6 mb-4">
+        ${a.blacklist?`<div class="card p-3 mb-3" style="background:#1f2937;color:#fff;border:2px solid #000"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex items-center gap-2"><div style="font-size:24px">⛔</div><div><div class="text-xs uppercase tracking-wider font-black" style="color:#f87171">⛔ BLACK LIST</div><div class="text-xs">Inscrit le ${a.blacklistAt?new Date(a.blacklistAt).toLocaleDateString("fr-FR"):"?"} par <strong>${escapeHTML(a.blacklistBy||"?")}</strong></div>${a.blacklistMotif?`<div class="text-xs italic mt-1">Motif : ${escapeHTML(a.blacklistMotif)}</div>`:""}</div></div>${adminFicheContext?`<button type="button" class="btn btn-secondary text-xs" onclick="removeBlackList('${a.id}')">↩ Retirer de la black list</button>`:""}</div></div>`:""}
+        ${locked?`<div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600 mb-4">🔒 Gestion en lecture seule. Les modifications de fiche de position se font uniquement depuis Administration système.</div>`:`<div class="grid grid-6 mb-4">
           ${gestionButton(a,"Congé","🏖 Congés")}
           ${gestionButton(a,"Maladie","🤒 Maladies")}
           ${gestionButton(a,"Absence","❌ Absences")}
           ${gestionButton(a,"Suspension","⏸ Suspension")}
           <button type="button" class="btn btn-secondary justify-center relative" onclick="${canEditSanctions&&!locked?`openSanctionModal('${a.id}')`:`document.getElementById('sanctions-section')?.scrollIntoView({behavior:'smooth',block:'start'})`}">⚖ Sanction${(a.sanctions||[]).length>0?`<span class="gestion-badge">${(a.sanctions||[]).length}</span>`:""}</button>
           <button type="button" class="btn ${a.blacklist?"btn-danger":"btn-secondary"} justify-center relative" style="${a.blacklist?"background:#1f2937;border-color:#000;color:#fff":""}" onclick="openBlackListModal('${a.id}')">⛔ Black list${a.blacklist?`<span class="gestion-badge" style="background:#dc2626">●</span>`:""}</button>
-        </div>
+        </div>`}
         ${renderGestionHistorique(a)}
       </div>
       <div class="card p-5 mb-4"><div class="section-banner banner-amber">1. Identité</div><div class="grid grid-6">
-        <div class="col-span-2">${photoField(a.photo)}</div>
+        <div class="col-span-2">${locked?`<div class="candidate-photo-field flex items-start gap-4"><div class="candidate-photo-preview bg-white border border-slate-300 rounded-lg flex items-center justify-center text-5xl overflow-hidden">${a.photo?`<img src="${a.photo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;background:#fff"/>`:"👤"}</div></div>`:photoField(a.photo)}</div>
         <div class="col-span-2"><label class="label">Nom</label><input class="input" name="nom" value="${escapeHTML(a.nom)}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Prénom</label><input class="input" name="prenom" value="${escapeHTML(a.prenom)}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Naissance</label><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" ${locked?"disabled":""}/></div>
@@ -6410,7 +6413,7 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4"><div class="section-banner banner-green">${secAffectation}. Affectations sur site (historique)</div>${renderAffectationsHistorique(a,locked,canEditAffectations)}</div>
       <div id="sanctions-section" class="card p-5 mb-4"><div class="section-banner banner-red">${secSanctions}. Sanctions disciplinaires</div>${renderSanctions(a,locked,canEditSanctions)}</div>
       ${showPointage?`<div class="card p-5 mb-4"><div class="section-banner banner-blue">${secPointage}. Situation pointage</div>${renderAgentPointageSituation(a)}</div>`:""}
-      ${locked?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Modifications désactivées</div>`:""}
+      ${locked?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="sticky bottom-0 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="submit" class="btn btn-primary">Enregistrer les modifications</button></div>`}
     </form>
   </div>`;
 }
@@ -6419,7 +6422,7 @@ function renderAffectationsHistorique(a,locked,canEditAffectations){
   const cur=a.affectationCourante;const hist=a.affectationsHistorique||[];const all=[];
   hist.forEach((h,i)=>all.push({...h,label:`Affectation ${i+1}`,active:false}));
   if(cur&&cur.siteId)all.push({...cur,label:`Affectation ${all.length+1} (en cours)`,active:true});
-  return`<table class="mb-3"><thead><tr><th></th><th>Site</th><th>Poste</th><th>Du</th><th>Au</th><th>Motif</th></tr></thead><tbody>${all.length===0?`<tr><td colspan="6" class="text-center text-slate-500 p-3">Aucune.</td></tr>`:all.map(h=>`<tr><td class="font-semibold">${h.label}${h.active?' <span class="pill pill-green">Actuelle</span>':""}</td><td>${safe(h.siteName)}</td><td>${safe(h.poste)}</td><td class="text-xs">${formatDate(h.dateDebut)}</td><td class="text-xs">${h.dateFin?formatDate(h.dateFin):"—"}</td><td class="text-xs">${safe(h.motifChangement)}</td></tr>`).join("")}</tbody></table>${canEditAffectations?`<div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary text-xs" onclick="openReaffectation('${a.id}')">＋ Nouvelle affectation</button>${!locked?`<button type="button" class="btn btn-danger text-xs" onclick="openOpsSuspensionModal('${a.id}')">⏸ Suspendre</button><button type="button" class="btn btn-danger text-xs" style="background:#111827;border-color:#000;color:#fff" onclick="openBlackListModal('${a.id}')">⛔ Blacklist</button><button type="button" class="btn btn-secondary text-xs" onclick="openOpsConvocationModal('${a.id}')">✉ Convoquer</button>`:""}</div>`:`<div class="text-xs text-slate-500">Visualisation uniquement. Les nouvelles affectations sont réservées au module OPS.</div>`}`;
+  return`<table class="mb-3"><thead><tr><th></th><th>Site</th><th>Poste</th><th>Du</th><th>Au</th><th>Motif</th></tr></thead><tbody>${all.length===0?`<tr><td colspan="6" class="text-center text-slate-500 p-3">Aucune.</td></tr>`:all.map(h=>`<tr><td class="font-semibold">${h.label}${h.active?' <span class="pill pill-green">Actuelle</span>':""}</td><td>${safe(h.siteName)}</td><td>${safe(h.poste)}</td><td class="text-xs">${formatDate(h.dateDebut)}</td><td class="text-xs">${h.dateFin?formatDate(h.dateFin):"—"}</td><td class="text-xs">${safe(h.motifChangement)}</td></tr>`).join("")}</tbody></table>${canEditAffectations&&!locked?`<div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary text-xs" onclick="openReaffectation('${a.id}')">＋ Nouvelle affectation</button><button type="button" class="btn btn-danger text-xs" onclick="openOpsSuspensionModal('${a.id}')">⏸ Suspendre</button><button type="button" class="btn btn-danger text-xs" style="background:#111827;border-color:#000;color:#fff" onclick="openBlackListModal('${a.id}')">⛔ Blacklist</button><button type="button" class="btn btn-secondary text-xs" onclick="openOpsConvocationModal('${a.id}')">✉ Convoquer</button></div>`:`<div class="text-xs text-slate-500">Visualisation uniquement. Les affectations ne sont modifiables que depuis Administration système.</div>`}`;
 }
 
 const OPS_SUSPENSION_PIECES=["Compte rendu","Rapport d'incident","Convocation administrative","Autres"];
@@ -6611,9 +6614,10 @@ function gestionButton(a,type,label){
 function renderGestionHistorique(a){
   const evs=(a.gestionEvents||[]).slice().sort((x,y)=>String(y.du||y.createdAt||"").localeCompare(String(x.du||x.createdAt||"")));
   return`<h4 class="text-sm font-semibold text-slate-700 mb-2">Carrière de l'employé</h4>
-  <table><thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${evs.length===0?`<tr><td colspan="7" class="text-center text-slate-500 p-3">Aucun événement enregistré.</td></tr>`:evs.map((e,i)=>{const j=e.du&&e.au?daysBetween(e.du,e.au)+1:"—";return`<tr><td><span class="pill ${gestionPillClass(e.type)}">${gestionIcon(e.type)} ${e.type}</span></td><td class="text-xs">${formatDate(e.du)}</td><td class="text-xs">${formatDate(e.au)}</td><td>${j}</td><td class="text-xs">${escapeHTML((e.motif||"").slice(0,60))}</td><td><span class="pill ${e.statut==="en_cours"?"pill-amber":e.statut==="termine"?"pill-gray":"pill-green"}">${e.statut}</span></td><td>${!a.locked||unlockedAgents.has(a.id)||isAdmin()?`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="deleteGestionEvent('${a.id}',${i})">✕</button>`:""}</td></tr>`}).join("")}</tbody></table>`;
+  <table><thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${evs.length===0?`<tr><td colspan="7" class="text-center text-slate-500 p-3">Aucun événement enregistré.</td></tr>`:evs.map((e,i)=>{const j=e.du&&e.au?daysBetween(e.du,e.au)+1:"—";return`<tr><td><span class="pill ${gestionPillClass(e.type)}">${gestionIcon(e.type)} ${e.type}</span></td><td class="text-xs">${formatDate(e.du)}</td><td class="text-xs">${formatDate(e.au)}</td><td>${j}</td><td class="text-xs">${escapeHTML((e.motif||"").slice(0,60))}</td><td><span class="pill ${e.statut==="en_cours"?"pill-amber":e.statut==="termine"?"pill-gray":"pill-green"}">${e.statut}</span></td><td>${isAdminFichePositionContext()?`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="deleteGestionEvent('${a.id}',${i})">✕</button>`:""}</td></tr>`}).join("")}</tbody></table>`;
 }
 function openGestionModal(agentId,type){
+  if(!isAdminFichePositionContext()){toast("Gestion verrouillée : modification réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   openModal(`<h3 class="font-bold text-lg mb-4">${gestionIcon(type)} Nouvelle ${type.toLowerCase()} — ${escapeHTML(a.nom+" "+a.prenom)}</h3>
     <form onsubmit="event.preventDefault();confirmGestion('${agentId}','${type}')">
@@ -6627,6 +6631,7 @@ function openGestionModal(agentId,type){
     </form>`);
 }
 function confirmGestion(agentId,type){
+  if(!isAdminFichePositionContext()){toast("Gestion verrouillée : modification réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(document.querySelector(".modal-bg form"));
   a.gestionEvents=a.gestionEvents||[];
@@ -6644,6 +6649,7 @@ function confirmGestion(agentId,type){
   saveDB();closeModal();toast(`${type} enregistré(e)`,"success");renderView();
 }
 function deleteGestionEvent(agentId,idx){
+  if(!isAdminFichePositionContext()){toast("Suppression réservée à Administration système > Fiche de position","error");return}
   if(!confirm("Supprimer cet événement ?"))return;
   const a=db.agents.find(x=>x.id===agentId);a.gestionEvents.splice(idx,1);
   // If no more active suspension/absence, reset statut to actif
@@ -6754,7 +6760,8 @@ function applyAgentExcelRow(agentId,rows){
 async function saveAgent(id,options){
   const opt=options||{};
   const a=db.agents.find(x=>x.id===id);if(!a)return;
-  if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave){toast("Fiche officielle verrouillée : modification impossible","error");return false}
+  if(!isAdminFichePositionContext()&&!opt.forceOfficialSave){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
+  if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()){toast("Fiche officielle verrouillée : modification impossible","error");return false}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
   ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))a[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
   if(fd.get("photo")!==undefined)a.photo=fd.get("photo")||null;
@@ -6802,7 +6809,7 @@ function effectifEmployeeSqlId(a){
   return a?.backendId||(/^\d+$/.test(localId)?localId:"");
 }
 async function deleteAgent(id){
-  if(!isAdmin()){toast("Suppression réservée à l'administrateur","error");return}
+  if(!isAdminFichePositionContext()){toast("Suppression réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===id);if(!a){toast("Agent introuvable","error");return}
   const label=((a.matricule?`${a.matricule} · `:"")+(a.nom||"")+" "+(a.prenom||"")).trim();
   const linked=agentDeleteLinkedRows(a);
@@ -6814,7 +6821,7 @@ async function deleteAgent(id){
   agentDeleteLocalCleanup(a);saveUnlocked();
   if(!(await saveDBAndWaitToast("Suppression fiche employé non confirmée par PostgreSQL")))return;
   toast("Fiche employé supprimée","success");
-  navigate("fiches/toutes");
+  navigate("admin/fiches");
 }
 function selectedEffectifEmployeeInputs(){
   return [...document.querySelectorAll("#effectif-list-zone .effectif-row-select:checked")];
@@ -6857,7 +6864,7 @@ function toggleEffectifSelectAll(checked){
   updateEffectifBulkDeleteButton();
 }
 async function deleteSelectedEffectifEmployees(){
-  if(!isAdmin()){toast("Suppression réservée à l'administrateur","error");return}
+  if(!isAdminFichePositionContext()){toast("Suppression réservée à Administration système > Fiche de position","error");return}
   const agents=selectedEffectifEmployees();
   if(!agents.length){toast("Cochez au moins un employé","error");return}
   const missingSql=agents.filter(a=>!effectifEmployeeSqlId(a));
@@ -6883,7 +6890,8 @@ async function deleteSelectedEffectifEmployees(){
   renderView();
 }
 function openReaffectation(agentId){
-  if(!isOpsFicheContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
+  if(!isAdminFichePositionContext()){toast("Affectation verrouillée : modification réservée à Administration système > Fiche de position","error");return}
+  if(!isOpsFicheContext()&&!isAdminFichePositionContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const hasC=a.affectationCourante&&a.affectationCourante.siteId;
   if(hasC){
@@ -7061,6 +7069,7 @@ function sendBlackListAlertToDRH(a){
 
 /* ---- BLACK LIST ---- */
 function openBlackListModal(agentId){
+  if(!isAdminFichePositionContext()){toast("Black list verrouillée : modification réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(a.blacklist){
     openModal(`<h3 class="font-bold text-lg mb-2" style="color:#dc2626">⛔ Black list</h3>
@@ -7102,6 +7111,7 @@ async function confirmBlackList(agentId){
   closeModal();toast("⛔ Agent inscrit sur la black list","success");renderView();
 }
 async function removeBlackList(agentId){
+  if(!isAdminFichePositionContext()){toast("Retrait black list réservé à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(!confirm("Retirer "+a.nom+" "+a.prenom+" de la black list ?"))return;
   const motif=prompt("Motif du retrait (obligatoire) :","");if(motif===null||!motif.trim()){toast("Motif requis","error");return}
@@ -7122,7 +7132,7 @@ function relockAgent(agentId){unlockedAgents.delete(agentId);saveUnlocked();rend
 async function lockAgent(agentId){const a=db.agents.find(x=>x.id===agentId);if(a){a.locked=true;a.updatedAt=today();try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){toast("Verrouillage non enregistré PostgreSQL : "+(e.message||e),"error");return}}unlockedAgents.delete(agentId);saveUnlocked();if(!(await saveDBAndWaitToast("Verrouillage non confirmé par PostgreSQL")))return;toast("Fiche verrouillée","success");renderView()}
 async function unlockAgent(agentId){if(!isAdmin()){toast("Seul l'administrateur général peut déverrouiller","error");return}unlockedAgents.add(agentId);saveUnlocked();db.settings.unlockLog=db.settings.unlockLog||[];db.settings.unlockLog.unshift({date:new Date().toISOString(),user:session.username,role:"admin-direct",agentId});if(!(await saveDBAndWaitToast("Déverrouillage non confirmé par PostgreSQL")))return;toast("Fiche déverrouillée par l'administrateur général","success");renderView()}
 async function drhModifierFichePosition(agentId){
-  if(!isDrhFicheContext()){toast("Action réservée au module DRH","error");return}
+  if(!isAdminFichePositionContext()){toast("Modification réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(a.locked&&!isAdmin()){toast("Fiche verrouillée : modification réservée à ADM","error");return}
   if(a.locked){
@@ -7137,10 +7147,9 @@ async function drhModifierFichePosition(agentId){
   setTimeout(()=>document.querySelector("#agent-form input:not([disabled]), #agent-form select:not([disabled]), #agent-form textarea:not([disabled])")?.focus(),80);
 }
 async function drhValiderVerrouillerFichePosition(agentId){
-  if(!isDrhFicheContext()){toast("Action réservée au module DRH","error");return}
+  if(!isAdminFichePositionContext()){toast("Action réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
-  if(a.locked&&!unlockedAgents.has(agentId)&&!isAdmin()){toast("Fiche déjà verrouillée","error");return}
-  const ok=await saveAgent(agentId,{silent:true,forceOfficialSave:isAdmin()||unlockedAgents.has(agentId)});
+  const ok=await saveAgent(agentId,{silent:true,forceOfficialSave:true});
   if(!ok)return;
   a.fichePositionOfficielle=true;
   a.fichePositionOfficielleAt=a.fichePositionOfficielleAt||new Date().toISOString();
@@ -14327,6 +14336,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="droits")return renderAdminDroits(view);
   if(sub==="sections_candidat")return renderAdminCandidatSections(view);
   if(sub==="niveaux")return renderAdminNiveaux(view);
+  if(sub==="fiches")return arg?renderAgentForm(view,arg):renderAdminFichesPosition(view);
   if(sub==="contrats")return renderAdminContratsPersonnel(view);
   if(sub==="priorites")return renderAdminPriorites(view);
   if(sub==="alertes")return renderAdminAlertes(view);
@@ -14570,10 +14580,27 @@ function renderAdminDashboard(view){
     ${adminDashboardCard("4. Mots de passe accès","Configurer les accès SGDI, sociétés et structures dans une seule page.","admin/access","#dc2626","")}
     ${adminDashboardCard("5. Historique messages","Consulter les échanges, accusés, pièces jointes et traces utilisateurs.","admin/messages","#0f766e","")}
     ${adminDashboardCard("6. Synchronisation","Régler l'actualisation automatique des données entre tous les utilisateurs.","admin/sync","#0369a1","")}
-    ${adminDashboardCard("7. CONTRAT","Ajouter et gérer tous les modèles de contrat Word, clauses conditionnelles et contrats générés.","admin/contrats","#043970","")}
-    ${adminDashboardCard("8. Nettoyage & contrôle","Surveiller le stockage, corriger les données et nettoyer les anciens journaux.","admin/storage","#64748b","")}
+    ${adminDashboardCard("7. Fiche de position","Modifier, verrouiller ou supprimer les fiches uniquement depuis cette rubrique centrale.","admin/fiches","#0f766e","")}
+    ${adminDashboardCard("8. CONTRAT","Ajouter et gérer tous les modèles de contrat Word, clauses conditionnelles et contrats générés.","admin/contrats","#043970","")}
+    ${adminDashboardCard("9. Nettoyage & contrôle","Surveiller le stockage, corriger les données et nettoyer les anciens journaux.","admin/storage","#64748b","")}
   </div>
   <div class="card p-5"><h2 class="font-black text-lg mb-3">Guide rapide des fonctions</h2><div class="grid grid-3 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<button class="p-3 rounded-lg text-left" style="border:1px solid #e2e8f0;background:#f8fafc" onclick="navigate('admin/users')"><div class="font-black" style="color:${adminRoleColor(code)}">${code} · ${title}</div><div class="text-xs text-slate-500 mt-1">${desc}</div></button>`).join("")}</div></div>`;
+}
+function renderAdminFichesPosition(view){
+  const q=String(sessionStorage.getItem("adminFicheSearch")||"").toLowerCase();
+  const agents=(db.agents||[]).filter(a=>{
+    if(!q)return true;
+    return [a.matricule,a.nom,a.prenom,a.societe,a.affectationCourante?.siteName,a.fonction,a.position].some(v=>String(v||"").toLowerCase().includes(q));
+  });
+  const locked=agents.filter(a=>a.locked||a.fichePositionOfficielle).length;
+  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Fiche de position</h1><p class="text-sm text-slate-500 mt-1">Toutes les fiches sont verrouillées dans RH, OPS, Matériel et les autres modules. Les modifications et suppressions se font uniquement ici.</p></div>
+  <div class="grid grid-3 gap-3 mb-4">
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Fiches</div><div class="text-3xl font-black" style="color:#043970">${(db.agents||[]).length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Verrouillées</div><div class="text-3xl font-black text-emerald-700">${locked}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Affichées</div><div class="text-3xl font-black text-amber-700">${agents.length}</div></div>
+  </div>
+  <div class="card p-4 mb-4"><div class="grid grid-3 gap-3 items-end"><div class="col-span-2"><label class="label">Recherche</label><input class="input" value="${escapeHTML(q)}" placeholder="Nom, prénom, code, société, site..." oninput="sessionStorage.setItem('adminFicheSearch',this.value);renderView()"/></div><button class="btn btn-ghost" onclick="sessionStorage.removeItem('adminFicheSearch');renderView()">Réinitialiser</button></div></div>
+  <div class="card overflow-hidden">${agents.length?`<table><thead><tr><th>Code</th><th>Employé</th><th>Société</th><th>Affectation</th><th>Statut</th><th></th></tr></thead><tbody>${agents.map(a=>`<tr data-searchable><td class="font-mono font-bold text-amber-700">${safe(a.matricule)}</td><td><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.fonction||a.position||a.posteContrat)}</div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td><span class="pill ${a.locked||a.fichePositionOfficielle?"pill-green":"pill-amber"}">${a.locked||a.fichePositionOfficielle?"Verrouillée":"A verrouiller"}</span></td><td class="text-right"><button class="btn btn-primary text-xs" onclick="navigate('admin/fiches/${employeeRouteId(a)}')">Ouvrir / modifier</button></td></tr>`).join("")}</tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucune fiche trouvée.</div>`}</div>`;
 }
 function renderAdminSyncSettings(view){
   const cfg=sgdiAutoRefreshSettings();
