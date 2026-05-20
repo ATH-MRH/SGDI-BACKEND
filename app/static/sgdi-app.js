@@ -3869,8 +3869,8 @@ function candidateMarkImportedSectionsValidated(c){
 }
 function candidateBlankDraft(options){
   const opt=options||{};
-  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:!!opt.reserveDirect,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",dureeContrat:"",dateFinContrat:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
-  return opt.reserveDirect?candidateMarkImportedSectionsValidated(draft):draft;
+  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:false,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",dureeContrat:"",dateFinContrat:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
+  return opt.markImportedSections?candidateMarkImportedSectionsValidated(draft):draft;
 }
 function openCandidateExcelImport(){
   if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
@@ -3935,7 +3935,7 @@ function candidateExcelSmartEnhance(c,row){
 function candidateExcelMapRow(row,index,mode,options){
   const reserve=mode!=="new";
   const opt=options||{};
-  const c=candidateBlankDraft({reserveDirect:reserve});
+  const c=candidateBlankDraft({reserveDirect:reserve,markImportedSections:reserve});
   c.source="Import Excel";
   c.importedAt=new Date().toISOString();
   c.importRow=index+2;
