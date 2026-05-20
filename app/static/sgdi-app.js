@@ -6260,9 +6260,19 @@ function applyOpsEffectifSearchInPlace(v){
   const count=document.getElementById("ops-effectif-result-count");
   if(count)count.textContent=shown+" résultat(s) affiché(s)";
 }
+function opsEffectifEmployeeMatchesSearch(a,q){
+  if(!q)return true;
+  const hay=[
+    a.matricule,a.nom,a.prenom,a.telephone,a.societe,
+    a.fonction,a.position,a.affectationCourante?.poste,a.affectationCourante?.siteName,
+    a.dateRecrutement,a.dateNaissance,a.situation,a.statut
+  ].map(v=>String(v||"").toLowerCase()).join(" ");
+  return hay.includes(q);
+}
 function applyOpsEffectifFilters(list){
   if(!isOpsEffectifContext())return list;
   const f=opsEffectifFilters();
+  const q=String(f.q||"").trim().toLowerCase();
   const ageMin=parseInt(f.ageMin,10);
   const ageMax=parseInt(f.ageMax,10);
   return (list||[]).filter(a=>{
@@ -6280,8 +6290,14 @@ function applyOpsEffectifFilters(list){
     if(f.birthTo&&String(a.dateNaissance||"")>f.birthTo)return false;
     if(Number.isFinite(ageMin)&&(age===null||age<ageMin))return false;
     if(Number.isFinite(ageMax)&&(age===null||age>ageMax))return false;
+    if(!opsEffectifEmployeeMatchesSearch(a,q))return false;
     return true;
   });
+}
+function opsEffectifHeaderSearchHTML(){
+  if(!isOpsEffectifContext())return "";
+  const q=escapeHTML((opsEffectifFilters().q)||"");
+  return `<input class="input" style="width:320px;max-width:42vw" value="${q}" placeholder="Nom / Prénom / Code" oninput="setOpsEffectifSearch(this.value)"/>`;
 }
 function opsEffectifFiltersHTML(sourceList,filteredCount){
   if(!isOpsEffectifContext())return "";
@@ -6297,7 +6313,6 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
       <button type="button" class="btn btn-ghost text-xs" onclick="resetOpsEffectifFilters()">Réinitialiser</button>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-3">
-      <div class="xl:col-span-2"><label class="label">Nom / Prénom / Code</label><input class="input" value="${val("q")}" placeholder="Rechercher..." oninput="setOpsEffectifSearch(this.value)"/></div>
       <div class="xl:col-span-2"><label class="label">Site</label><select class="select" onchange="setOpsEffectifFilter('site',this.value)"><option value="">Tous les sites</option><option value="__none__" ${f.site==="__none__"?"selected":""}>Sans affectation</option>${sites.map(s=>`<option value="${escapeHTML(s.id)}" ${String(f.site||"")===String(s.id)?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`).join("")}</select></div>
       <div class="xl:col-span-2"><label class="label">Poste / fonction</label><select class="select" onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
       <div class="xl:col-span-2"><label class="label">Situation familiale</label><select class="select" onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
@@ -6373,7 +6388,7 @@ function effectifListHTML(filter){
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
   const opsHeaders=isOpsEffectifContext()?"<th>Naissance</th><th>Age</th><th>Situation</th>":"";
   const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
-  return `<div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div><div class="flex items-center gap-2"><span class="text-xs text-slate-500">Tri :</span><select class="select" style="max-width:260px" onchange="setEffectifSort(this.value)">
+  return `<div class="flex items-center justify-between gap-3 flex-wrap mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div><div class="flex items-center gap-2 flex-wrap">${opsEffectifHeaderSearchHTML()}<span class="text-xs text-slate-500">Tri :</span><select class="select" style="max-width:260px" onchange="setEffectifSort(this.value)">
     <option value="nom_asc" ${effectifSort==="nom_asc"?"selected":""}>Nom A → Z</option>
     <option value="nom_desc" ${effectifSort==="nom_desc"?"selected":""}>Nom Z → A</option>
     <option value="recrut_asc" ${effectifSort==="recrut_asc"?"selected":""}>Recrutement (ancien → récent)</option>
