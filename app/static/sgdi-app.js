@@ -6042,9 +6042,9 @@ function setOpsEffectifFilter(k,v){
   const f=opsEffectifFilters();
   f[k]=String(v||"");
   sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
-  renderView();
+  setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs");
 }
-function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");renderView()}
+function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs")}
 function applyOpsEffectifFilters(list){
   if(!isOpsEffectifContext())return list;
   const f=opsEffectifFilters();
@@ -6189,7 +6189,7 @@ function renderEffectif(view,filter,stableMode){
     toast("Lecture PostgreSQL effectifs refusée : "+(e.message||e),"error");
   });
 }
-function setEffectifSort(v){effectifSort=v;renderView()}
+function setEffectifSort(v){effectifSort=v;if(document.getElementById("effectif-list-zone"))setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs");else renderView()}
 function sortEffectif(list,k){const a=list.slice();switch(k){case"nom_asc":a.sort((x,y)=>(x.nom+x.prenom).localeCompare(y.nom+y.prenom));break;case"nom_desc":a.sort((x,y)=>(y.nom+y.prenom).localeCompare(x.nom+x.prenom));break;case"recrut_asc":a.sort((x,y)=>(x.dateRecrutement||"").localeCompare(y.dateRecrutement||""));break;case"recrut_desc":a.sort((x,y)=>(y.dateRecrutement||"").localeCompare(x.dateRecrutement||""));break;case"mat_asc":a.sort((x,y)=>(x.matricule||"").localeCompare(y.matricule||""));break;case"mat_desc":a.sort((x,y)=>(y.matricule||"").localeCompare(x.matricule||""));break}return a}
 function inRange(c){const d=today();return c.du<=d&&(!c.au||c.au>=d)}
 
