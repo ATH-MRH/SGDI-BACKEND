@@ -14600,7 +14600,61 @@ function renderAdminFichesPosition(view){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Affichées</div><div class="text-3xl font-black text-amber-700">${agents.length}</div></div>
   </div>
   <div class="card p-4 mb-4"><div class="grid grid-3 gap-3 items-end"><div class="col-span-2"><label class="label">Recherche</label><input class="input" value="${escapeHTML(q)}" placeholder="Nom, prénom, code, société, site..." oninput="sessionStorage.setItem('adminFicheSearch',this.value);renderView()"/></div><button class="btn btn-ghost" onclick="sessionStorage.removeItem('adminFicheSearch');renderView()">Réinitialiser</button></div></div>
-  <div class="card overflow-hidden">${agents.length?`<table><thead><tr><th>Code</th><th>Employé</th><th>Société</th><th>Affectation</th><th>Statut</th><th></th></tr></thead><tbody>${agents.map(a=>`<tr data-searchable><td class="font-mono font-bold text-amber-700">${safe(a.matricule)}</td><td><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.fonction||a.position||a.posteContrat)}</div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td><span class="pill ${a.locked||a.fichePositionOfficielle?"pill-green":"pill-amber"}">${a.locked||a.fichePositionOfficielle?"Verrouillée":"A verrouiller"}</span></td><td class="text-right"><button class="btn btn-primary text-xs" onclick="navigate('admin/fiches/${employeeRouteId(a)}')">Ouvrir / modifier</button></td></tr>`).join("")}</tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucune fiche trouvée.</div>`}</div>`;
+  ${agents.length?`<div class="card p-3 mb-4 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border-color:#fed7aa">
+    <label class="flex items-center gap-2 text-sm font-black text-slate-700"><input type="checkbox" onchange="adminToggleAllFichesPosition(this.checked)" style="width:16px;height:16px"/> Tout sélectionner (${agents.length})</label>
+    <button type="button" id="admin-fiches-delete-all-btn" class="btn btn-danger text-xs" onclick="adminDeleteSelectedFichesPosition()" disabled>Supprimer tout</button>
+  </div>`:""}
+  <div class="card overflow-hidden">${agents.length?`<table><thead><tr><th style="width:42px;text-align:center"><input type="checkbox" onchange="adminToggleAllFichesPosition(this.checked)" style="width:16px;height:16px"/></th><th>Code</th><th>Employé</th><th>Société</th><th>Affectation</th><th>Statut</th><th></th></tr></thead><tbody>${agents.map(a=>`<tr data-searchable><td class="text-center"><input type="checkbox" class="admin-fiche-select" value="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML([a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · "))}" onchange="adminUpdateDeleteFichesButton()" style="width:16px;height:16px"/></td><td class="font-mono font-bold text-amber-700">${safe(a.matricule)}</td><td><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.fonction||a.position||a.posteContrat)}</div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td><span class="pill ${a.locked||a.fichePositionOfficielle?"pill-green":"pill-amber"}">${a.locked||a.fichePositionOfficielle?"Verrouillée":"A verrouiller"}</span></td><td class="text-right"><button class="btn btn-primary text-xs" onclick="navigate('admin/fiches/${employeeRouteId(a)}')">Ouvrir / modifier</button></td></tr>`).join("")}</tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucune fiche trouvée.</div>`}</div>`;
+}
+function adminSelectedFichesPosition(){
+  return [...document.querySelectorAll(".admin-fiche-select:checked")].map(input=>{
+    const id=String(input.value||"");
+    const backendId=String(input.dataset.backendId||"");
+    const a=(db.agents||[]).find(x=>(id&&String(x.id||"")===id)||(backendId&&String(x.backendId||"")===backendId));
+    return a||null;
+  }).filter(Boolean);
+}
+function adminUpdateDeleteFichesButton(){
+  const selected=adminSelectedFichesPosition();
+  const btn=document.getElementById("admin-fiches-delete-all-btn");
+  if(btn){btn.disabled=!selected.length;btn.textContent=selected.length?`Supprimer tout (${selected.length})`:"Supprimer tout"}
+  const all=[...document.querySelectorAll(".admin-fiche-select")];
+  const checked=all.filter(x=>x.checked).length;
+  document.querySelectorAll('input[type="checkbox"]').forEach(input=>{
+    if(input.classList.contains("admin-fiche-select"))return;
+    if(input.getAttribute("onchange")!=="adminToggleAllFichesPosition(this.checked)")return;
+    input.checked=!!all.length&&checked===all.length;
+    input.indeterminate=checked>0&&checked<all.length;
+  });
+}
+function adminToggleAllFichesPosition(checked){
+  document.querySelectorAll(".admin-fiche-select").forEach(input=>{input.checked=!!checked});
+  adminUpdateDeleteFichesButton();
+}
+async function adminDeleteSelectedFichesPosition(){
+  if(!isAdminFichePositionContext()){toast("Suppression réservée à Administration système > Fiche de position","error");return}
+  const agents=adminSelectedFichesPosition();
+  if(!agents.length){toast("Cochez au moins une fiche à supprimer","error");return}
+  const missingSql=agents.filter(a=>!effectifEmployeeSqlId(a));
+  if(missingSql.length){toast("Suppression refusée : "+missingSql.length+" fiche(s) sans identifiant SQL","error");return}
+  const sample=agents.slice(0,8).map(a=>"- "+([a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ")||a.id)).join("\n");
+  const more=agents.length>8?`\n... + ${agents.length-8} autre(s)`:"";
+  const ok=prompt(`Supprimer définitivement ${agents.length} fiche(s) de position ?\n\n${sample}${more}\n\nCette action supprimera aussi les lignes liées. Tapez SUPPRIMER pour confirmer.`);
+  if(String(ok||"").trim().toUpperCase()!=="SUPPRIMER"){toast("Suppression annulée","info");return}
+  const btn=document.getElementById("admin-fiches-delete-all-btn");
+  if(btn){btn.disabled=true;btn.textContent="Suppression..."}
+  try{
+    for(const a of agents)await deleteAgentBackend(a);
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent=`Supprimer tout (${agents.length})`}
+    toast("Suppression interrompue : "+(e.message||e),"error");
+    return;
+  }
+  agents.forEach(agentDeleteLocalCleanup);
+  saveUnlocked();
+  if(!(await saveDBAndWaitToast("Suppression des fiches non confirmée par PostgreSQL")))return;
+  toast(`${agents.length} fiche(s) supprimée(s)`,"success");
+  renderView();
 }
 function renderAdminSyncSettings(view){
   const cfg=sgdiAutoRefreshSettings();
