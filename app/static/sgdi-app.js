@@ -6399,15 +6399,17 @@ function renderAgentForm(view,id){
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${renderAgentDemandesSection(a)}
     <form id="agent-form" onsubmit="event.preventDefault();saveAgent('${a.id}')">
-      <div class="card p-5 mb-4"><div class="section-banner banner-amber">GESTION</div>
+      <div class="card p-5 mb-4">
         ${a.blacklist?`<div class="card p-3 mb-3" style="background:#1f2937;color:#fff;border:2px solid #000"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex items-center gap-2"><div style="font-size:24px">⛔</div><div><div class="text-xs uppercase tracking-wider font-black" style="color:#f87171">⛔ BLACK LIST</div><div class="text-xs">Inscrit le ${a.blacklistAt?new Date(a.blacklistAt).toLocaleDateString("fr-FR"):"?"} par <strong>${escapeHTML(a.blacklistBy||"?")}</strong></div>${a.blacklistMotif?`<div class="text-xs italic mt-1">Motif : ${escapeHTML(a.blacklistMotif)}</div>`:""}</div></div>${adminFicheContext?`<button type="button" class="btn btn-secondary text-xs" onclick="removeBlackList('${a.id}')">↩ Retirer de la black list</button>`:""}</div></div>`:""}
-        ${locked?`<div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600 mb-4">🔒 Gestion en lecture seule. Les modifications de fiche de position se font uniquement depuis Administration système.</div>`:`<div class="grid grid-6 mb-4">
-          ${gestionButton(a,"Congé","🏖 Congés")}
-          ${gestionButton(a,"Maladie","🤒 Maladies")}
-          ${gestionButton(a,"Absence","❌ Absences")}
-          ${gestionButton(a,"Suspension","⏸ Suspension")}
-          <button type="button" class="btn btn-secondary justify-center relative" onclick="${canEditSanctions&&!locked?`openSanctionModal('${a.id}')`:`document.getElementById('sanctions-section')?.scrollIntoView({behavior:'smooth',block:'start'})`}">⚖ Sanction${(a.sanctions||[]).length>0?`<span class="gestion-badge">${(a.sanctions||[]).length}</span>`:""}</button>
-          <button type="button" class="btn ${a.blacklist?"btn-danger":"btn-secondary"} justify-center relative" style="${a.blacklist?"background:#1f2937;border-color:#000;color:#fff":""}" onclick="openBlackListModal('${a.id}')">⛔ Black list${a.blacklist?`<span class="gestion-badge" style="background:#dc2626">●</span>`:""}</button>
+        <div class="flex items-center justify-between gap-3 flex-wrap mb-3"><h3 class="text-sm font-black uppercase tracking-wider text-slate-700">Actions à faire</h3><span class="text-xs text-slate-500">${locked?"Lecture seule depuis ce module":"Administration système"}</span></div>
+        ${locked?`<div class="p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-600 mb-4">🔒 Actions verrouillées. Les modifications de fiche de position se font uniquement depuis Administration système.</div>`:`<div class="grid mb-4" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+          ${gestionButton(a,"Suspension","SUSPENDRE")}
+          <button type="button" class="btn btn-secondary justify-center relative" onclick="openOpsConvocationModal('${a.id}')">CONVOQUER</button>
+          <button type="button" class="btn ${a.blacklist?"btn-danger":"btn-secondary"} justify-center relative" style="${a.blacklist?"background:#1f2937;border-color:#000;color:#fff":""}" onclick="openBlackListModal('${a.id}')">BLACKLISTER${a.blacklist?`<span class="gestion-badge" style="background:#dc2626">●</span>`:""}</button>
+          ${gestionButton(a,"Mise en demeure","MISE EN DEMEURE")}
+          ${gestionButton(a,"Période E-N-C","PERIODE E-N-C")}
+          <button type="button" class="btn btn-secondary justify-center relative" onclick="${canEditSanctions&&!locked?`openSanctionModal('${a.id}')`:`document.getElementById('sanctions-section')?.scrollIntoView({behavior:'smooth',block:'start'})`}">SANCTIONNER${(a.sanctions||[]).length>0?`<span class="gestion-badge">${(a.sanctions||[]).length}</span>`:""}</button>
+          ${gestionButton(a,"Fin de contrat","FIN DE CONTRAT")}
         </div>`}
         ${renderGestionHistorique(a)}
       </div>
@@ -6622,8 +6624,8 @@ function renderAgentPointageSituation(a){
 }
 
 /* ---- GESTION (section 8) ---- */
-function gestionIcon(t){return{"Recrutement":"🧾","Dotation":"🎒","Affectation":"📍","Congé":"🏖","Maladie":"🤒","Absence":"❌","Suspension":"⏸"}[t]||""}
-function gestionPillClass(t){return{"Recrutement":"pill-green","Dotation":"pill-blue","Affectation":"pill-amber","Congé":"pill-blue","Maladie":"pill-amber","Absence":"pill-gray","Suspension":"pill-red"}[t]||"pill-gray"}
+function gestionIcon(t){return{"Recrutement":"🧾","Dotation":"🎒","Affectation":"📍","Congé":"🏖","Maladie":"🤒","Absence":"❌","Suspension":"⏸","Mise en demeure":"⚠","Période E-N-C":"⏳","Fin de contrat":"📄"}[t]||""}
+function gestionPillClass(t){return{"Recrutement":"pill-green","Dotation":"pill-blue","Affectation":"pill-amber","Congé":"pill-blue","Maladie":"pill-amber","Absence":"pill-gray","Suspension":"pill-red","Mise en demeure":"pill-amber","Période E-N-C":"pill-red","Fin de contrat":"pill-gray"}[t]||"pill-gray"}
 function gestionCount(a,type){return((a.gestionEvents||[]).filter(e=>e.type===type)).length}
 function addEmployeeCareerEvent(agent,type,data){
   if(!agent)return null;
@@ -6672,7 +6674,7 @@ function openGestionModal(agentId,type){
       <div class="flex gap-2 justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div>
     </form>`);
 }
-function confirmGestion(agentId,type){
+async function confirmGestion(agentId,type){
   if(!isAdminFichePositionContext()){toast("Gestion verrouillée : modification réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(document.querySelector(".modal-bg form"));
@@ -6688,7 +6690,13 @@ function confirmGestion(agentId,type){
   if(type==="Congé"||type==="Maladie"){
     db.conges.push({id:uid("cg"),agentId,type:type==="Congé"?"Annuel":"Maladie",du:ev.du,au:ev.au,motif:ev.motif,statut:ev.statut==="en_cours"?"approuve":ev.statut});
   }
-  saveDB();closeModal();toast(`${type} enregistré(e)`,"success");renderView();
+  try{
+    const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
+    Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
+  }
+  catch(e){toast(type+" non enregistré PostgreSQL : "+(e.message||e),"error");return}
+  if(!(await saveDBAndWaitToast(type+" non confirmé par PostgreSQL")))return;
+  closeModal();toast(`${type} enregistré(e)`,"success");renderView();
 }
 function deleteGestionEvent(agentId,idx){
   if(!isAdminFichePositionContext()){toast("Suppression réservée à Administration système > Fiche de position","error");return}
