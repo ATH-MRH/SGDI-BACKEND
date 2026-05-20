@@ -7807,7 +7807,7 @@ function renderSiteForm(view,id){
       <table class="mb-2"><thead><tr><th>Magasin(s)</th><th>Article</th><th>État / observation</th><th></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table>
       <div class="text-xs text-slate-500">Cette section permet d’indiquer les besoins ou le matériel affecté au site.</div>
     </div>
-    <div class="card p-4 flex justify-end gap-2 flex-wrap">${s.isNew?"":`<button type="button" class="btn btn-danger" onclick="deleteSite('${s.id}')">Supprimer</button>`}<button type="button" class="btn btn-secondary" onclick="editSiteOpeningPV('${s.id}')">EDITER PV D'OUVERTURE DE SITE</button><button class="btn btn-primary">💾 Enregistrer</button></div>
+    <div class="card p-4 flex justify-end gap-2 flex-wrap">${s.isNew?"":`<button type="button" class="btn btn-danger" onclick="deleteSite('${s.id}')">Supprimer</button>`}<button type="button" class="btn btn-secondary" onclick="editSiteOpeningPV('${s.id}')">Editer et Imprimer PV</button><button class="btn btn-primary">💾 Enregistrer</button></div>
   </form></div>`;
   setTimeout(updateSiteEffectifTotalContractuel,0);
 }
