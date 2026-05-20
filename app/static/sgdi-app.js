@@ -54,6 +54,7 @@ const DUREES_CONTRAT = [
   {value:"15d",label:"15 Jours"},
   ...Array.from({length:12},(_,i)=>({value:(i+1)+"m",label:String(i+1).padStart(2,"0")+" Mois"}))
 ];
+const AGENTS_12M_BULK_APPLY_KEY = "agents_12m_contracts_20260520";
 const TYPES_SITE = [
  "Bureaux","Centre commercial","Hôpital","Entrepôt","Aéroport","Résidentiel",
  "Industriel","Événementiel","Banque","Administration","Complexe hôtelier",
@@ -725,6 +726,7 @@ async function sgdiPullEmployees(options){
     const employees=await window.SGDI_API.employees.list();
     if(!Array.isArray(employees))return null;
     db.agents=employees.map(employeeFromApi);
+    await applyExistingAgents12MonthContracts();
     if(opt.render&&typeof render==="function")render();
     if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
     return db.agents;
@@ -5774,6 +5776,32 @@ function contractEndDate(start,duration){
   const d=new Date(start+"T00:00:00");
   d.setMonth(d.getMonth()+months);
   return d.toISOString().slice(0,10);
+}
+function agentIsActiveFor12MonthBulk(a){
+  const s=String(a?.statut||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+  return s==="actif"||s==="operationnel";
+}
+async function applyExistingAgents12MonthContracts(){
+  if(!db||!Array.isArray(db.agents)||!sgdiBackendShouldUse()||!sgdiAuthToken()||!window.SGDI_API?.employees?.update)return;
+  db.settings=db.settings||{};
+  if(db.settings[AGENTS_12M_BULK_APPLY_KEY])return;
+  const targets=db.agents.filter(agentIsActiveFor12MonthBulk);
+  if(!targets.length)return;
+  let saved=0;
+  try{
+    for(const a of targets){
+      const draft={...a,dureeContrat:"12m",updatedAt:today()};
+      if(draft.dateRecrutement)draft.dateFinContrat=contractEndDate(draft.dateRecrutement,draft.dureeContrat);
+      const savedRow=draft.backendId?await window.SGDI_API.employees.update(draft.backendId,employeeApiPayload(draft)):await window.SGDI_API.employees.create(employeeApiPayload(draft));
+      Object.assign(a,employeeFromApi(savedRow),draft,{backendId:savedRow?.id||draft.backendId});
+      saved++;
+    }
+    db.settings[AGENTS_12M_BULK_APPLY_KEY]={date:new Date().toISOString(),count:saved};
+    await saveDBAndWaitToast("Application des 12 mois aux employés non confirmée par PostgreSQL");
+    if(saved&&typeof toast==="function")toast(saved+" employé(s) mis à jour à 12 mois","success");
+  }catch(e){
+    toast("Application 12 mois employés refusée : "+(e.message||e),"error");
+  }
 }
 function updateContractEndDate(){
   const f=document.getElementById("contract-form");if(!f)return;
