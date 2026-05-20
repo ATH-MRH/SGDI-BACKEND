@@ -9235,10 +9235,15 @@ function renderMateriel(view,sub,arg){
   if(sub==="article-nouveau"){return renderStockArticleForm(view,null)}
   if(sub==="article-edit"&&arg){return renderStockArticleForm(view,arg)}
   if(sub==="mouvements"){return renderMatSimpleMouvements(view)}
+  if(sub==="alertes"){return renderStockProMain(view,"alertes")}
+  if(sub==="stats"||sub==="statistiques"){return renderStockProMain(view,"statistiques")}
+  if(sub==="entrees"){return renderStockProMain(view,"entrees")}
+  if(sub==="sorties"){return renderStockProMain(view,"sorties")}
+  if(sub==="attributions"){return renderStockProMain(view,"attributions")}
+  if(sub==="retours"){return renderStockProMain(view,"retours")}
   // Legacy unitaire routes (kept)
   if(sub==="nouveau"){return renderMaterielForm(view,null)}
   if(sub==="edit"&&arg){return renderMaterielForm(view,arg)}
-  if(sub==="stats"||sub==="statistiques"||sub==="alertes"||sub==="entrees"||sub==="sorties"||sub==="attributions"||sub==="retours"){return renderMatSimpleArticles(view)}
   // Default
   return renderMatSimpleDashboard(view);
 }
@@ -9336,8 +9341,55 @@ function agentsEnInstanceReversement(){
 }
 
 function matSimpleHeader(active){
-  // Navigation centralisée dans la barre latérale gauche.
-  return "";
+  const soc=matSimpleSocFilter();
+  const arts=matSimpleBySoc(db.stockArticles||[]);
+  const mags=matSimpleBySoc(db.magasins||[]);
+  const fours=matSimpleBySoc(db.fournisseurs||[]);
+  const mvts=matSimpleBySoc(db.stockMouvements||[]);
+  const dot=agentsEnInstanceDotationForSoc(soc).length;
+  const rev=agentsEnInstanceReversement().length;
+  const alerts=arts.filter(a=>{
+    const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
+    const seuil=parseFloat(a.seuilAlerte)||0;
+    return q<=0||(seuil&&q<=seuil);
+  }).length;
+  const tabs=[
+    ["dashboard","Cockpit","materiel/dashboard"],
+    ["articles","Catalogue","materiel/articles",arts.length],
+    ["magasins","Magasins","materiel/magasins",mags.length],
+    ["fournisseurs","Fournisseurs","materiel/fournisseurs",fours.length],
+    ["mouvements","Mouvements","materiel/mouvements",mvts.length],
+    ["dotation","Dotations","materiel/dotation",dot],
+    ["reversement","Reversements","materiel/reversement",rev],
+    ["alertes","Alertes","materiel/alertes",alerts],
+    ["statistiques","Stats","materiel/statistiques"]
+  ];
+  const socOptions=`<option value="">Toutes sociétés</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}`;
+  return `<section class="mat-erp-shell no-print mb-4">
+    <div class="mat-erp-head">
+      <div>
+        <div class="mat-erp-eyebrow">Mode ERP · Matériel & équipement</div>
+        <div class="mat-erp-title">Cycle achat, stock, dotation et reversement</div>
+      </div>
+      <div class="mat-erp-tools">
+        <select class="select mat-erp-soc" onchange="matSimpleSetSoc(this.value)" ${mySoc()?"disabled":""}>${socOptions}</select>
+        <button class="btn btn-success text-xs" onclick="stockOpenMvt('entree')">Entrée</button>
+        <button class="btn btn-secondary text-xs" style="background:#dc2626;color:#fff" onclick="stockOpenMvt('sortie')">Sortie</button>
+        <button class="btn btn-warn text-xs" onclick="navigate('materiel/article-nouveau')">Article</button>
+      </div>
+    </div>
+    <div class="mat-erp-flow">
+      <button type="button" onclick="navigate('materiel/fournisseurs')">1. Fournisseurs</button>
+      <button type="button" onclick="stockOpenMvt('entree')">2. Réception stock</button>
+      <button type="button" onclick="navigate('materiel/articles')">3. Inventaire</button>
+      <button type="button" onclick="navigate('materiel/dotation')">4. Dotation employé</button>
+      <button type="button" onclick="navigate('materiel/reversement')">5. Reversement</button>
+      <button type="button" onclick="navigate('materiel/alertes')">6. Contrôle</button>
+    </div>
+    <nav class="mat-erp-tabs">
+      ${tabs.map(([key,label,route,count])=>`<a href="#/${route}" class="${active===key?"active":""}">${label}${count!==undefined?`<span>${count}</span>`:""}</a>`).join("")}
+    </nav>
+  </section>`;
 }
 
 // ---- Helpers stock par magasin
@@ -10737,8 +10789,8 @@ function renderStockProMain(view,tab){
   const tabBar=`<div class="card p-1 mb-4 flex gap-1 flex-wrap" style="background:#f8fafc">${tabs.map(([k,l,d])=>`<a href="#/materiel/${k==="catalogue"?"inventaire":k}" class="flex-1 min-w-[140px] text-center py-2 px-3 rounded-md text-sm transition" style="${tab===k?`background:${headerColor};color:#fff;font-weight:700;box-shadow:0 4px 10px ${headerColor}55`:"color:#475569"}" title="${d}">${l}</a>`).join("")}</div>`;
   let body="";
   if(tab==="catalogue")body=renderStockCatalogueTab();
-  else if(tab==="entrees"||tab==="attributions")body=renderStockMvtTab("entree");
-  else if(tab==="sorties"||tab==="retours")body=renderStockMvtTab("sortie");
+  else if(tab==="entrees"||tab==="retours")body=renderStockMvtTab("entree");
+  else if(tab==="sorties"||tab==="attributions")body=renderStockMvtTab("sortie");
   else if(tab==="mouvements")body=renderStockMvtTab("all");
   else if(tab==="alertes")body=renderStockAlertesTab();
   else if(tab==="statistiques"||tab==="stats")body=renderStockStatistiquesTab();
