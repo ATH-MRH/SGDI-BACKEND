@@ -14637,10 +14637,6 @@ async function adminDeleteSelectedFichesPosition(){
   if(!agents.length){toast("Cochez au moins une fiche à supprimer","error");return}
   const missingSql=agents.filter(a=>!effectifEmployeeSqlId(a));
   if(missingSql.length){toast("Suppression refusée : "+missingSql.length+" fiche(s) sans identifiant SQL","error");return}
-  const sample=agents.slice(0,8).map(a=>"- "+([a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ")||a.id)).join("\n");
-  const more=agents.length>8?`\n... + ${agents.length-8} autre(s)`:"";
-  const ok=prompt(`Supprimer définitivement ${agents.length} fiche(s) de position ?\n\n${sample}${more}\n\nCette action supprimera aussi les lignes liées. Tapez SUPPRIMER pour confirmer.`);
-  if(String(ok||"").trim().toUpperCase()!=="SUPPRIMER"){toast("Suppression annulée","info");return}
   const btn=document.getElementById("admin-fiches-delete-all-btn");
   if(btn){btn.disabled=true;btn.textContent="Suppression..."}
   try{
