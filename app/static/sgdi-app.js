@@ -5950,7 +5950,7 @@ function setEffectifStableFilter(filter){
     card.style.borderColor=active?color:(color+"22");
     card.blur&&card.blur();
   });
-  if(zone)zone.innerHTML=effectifListHTML(filter);
+  if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone);updateEffectifBulkDeleteButton()}
   requestAnimationFrame(()=>{const v=document.getElementById("view");if(v)v.scrollTop=scrollTop});
   if(!zone&&view)renderEffectif(view,filter,true);
 }
@@ -5997,8 +5997,19 @@ function effectifServerSupported(filter){return ["actifs","absents","suspension"
 function effectifPageStorageKey(filter){return "effectifPage:"+effectifModeToApi(filter)+":"+(effectifSocieteFilter()||"")}
 function effectifCurrentPage(filter){return Math.max(parseInt(sessionStorage.getItem(effectifPageStorageKey(filter))||"1",10)||1,1)}
 function setEffectifPage(filter,page){sessionStorage.setItem(effectifPageStorageKey(filter),String(Math.max(parseInt(page||1,10)||1,1)));renderView()}
+function effectifBulkDeleteToolbarHTML(){
+  if(!isAdmin())return "";
+  return `<div class="card p-3 mb-3 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border-color:#fed7aa">
+    <label class="flex items-center gap-2 text-sm font-black text-slate-700">
+      <input type="checkbox" id="effectif-select-all-toolbar" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/>
+      Tout sélectionner
+    </label>
+    <button type="button" id="effectif-bulk-delete-btn" class="btn btn-danger text-xs" onclick="deleteSelectedEffectifEmployees()" disabled>Supprimer sélection</button>
+  </div>`;
+}
 function employeeListRowHTML(a,filter){
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}"><td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${a.id}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
+  const checkedCell=isAdmin()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(a.id)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${a.id}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
 }
 async function effectifListServerHTML(filter){
   if(!sgdiAuthToken()||!effectifServerSupported(filter))return null;
@@ -6011,13 +6022,16 @@ async function effectifListServerHTML(filter){
   const title=titleMap[filter]||"Effectif opérationnel";
   const pages=result.pages||1;
   const pagination=`<div class="flex items-center justify-between gap-2 p-3 border-t border-slate-100 text-sm"><div class="text-slate-500">${result.total||0} employé(s) · page ${result.page||1}/${pages}</div><div class="flex gap-2"><button class="btn btn-ghost text-xs" ${result.page<=1?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)-1})">Précédent</button><button class="btn btn-ghost text-xs" ${result.page>=pages?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)+1})">Suivant</button></div></div>`;
+  const selectHead=isAdmin()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   return `<div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${result.total||0} employé(s)${soc?` · ${escapeHTML(soc)}`:" · sociétés autorisées"} · source PostgreSQL</p></div><div class="flex items-center gap-2"><span class="text-xs text-slate-500">Page serveur</span></div></div>
-  ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun agent.</div>`:`<div class="card overflow-hidden"><table><thead><tr><th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}`;
+  ${effectifBulkDeleteToolbarHTML()}
+  ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun agent.</div>`:`<div class="card overflow-hidden"><table><thead><tr>${selectHead}<th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th></th></tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}`;
 }
 function effectifListHTML(filter){
   const data=effectifFilteredData(filter);
   const {list,title,soc}=data;
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
+  const selectHead=isAdmin()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   return `<div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div><div class="flex items-center gap-2"><span class="text-xs text-slate-500">Tri :</span><select class="select" style="max-width:260px" onchange="setEffectifSort(this.value)">
     <option value="nom_asc" ${effectifSort==="nom_asc"?"selected":""}>Nom A → Z</option>
     <option value="nom_desc" ${effectifSort==="nom_desc"?"selected":""}>Nom Z → A</option>
@@ -6026,9 +6040,10 @@ function effectifListHTML(filter){
     <option value="mat_asc" ${effectifSort==="mat_asc"?"selected":""}>Matricule ↑</option>
     <option value="mat_desc" ${effectifSort==="mat_desc"?"selected":""}>Matricule ↓</option>
   </select></div></div>
+  ${effectifBulkDeleteToolbarHTML()}
   ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun agent.</div>`:`<div class="card overflow-hidden"><table>
-    <thead><tr><th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th></th>${actionHeader}</tr></thead>
-    <tbody>${list.map(a=>`<tr data-searchable><td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML(a.prenom.slice(0,1))}</div><div><div class="font-semibold">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${a.statut}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${a.id}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`).join("")}</tbody></table></div>`}`;
+    <thead><tr>${selectHead}<th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th></th>${actionHeader}</tr></thead>
+    <tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table></div>`}`;
 }
 function renderEffectif(view,filter,stableMode){
   if(filter==="recap")return renderEffectifRecap(view);
@@ -6585,23 +6600,82 @@ function agentDeleteItemMatches(item,a){
   const fields=["agentId","employeeId","employee_id","beneficiaireAgentId","retourAgentId","matricule","code"];
   return fields.some(k=>refs.includes(String(item[k]||"").trim()));
 }
+function agentDeleteLinkedRows(a){
+  return agentDeleteLinkedCollections().flatMap(collection=>(db[collection]||[]).filter(item=>agentDeleteItemMatches(item,a)).map(item=>({collection,item})));
+}
+function agentDeleteLocalCleanup(a){
+  if(!a)return;
+  agentDeleteLinkedCollections().forEach(collection=>{db[collection]=(db[collection]||[]).filter(item=>!agentDeleteItemMatches(item,a))});
+  db.agents=(db.agents||[]).filter(x=>x.id!==a.id);
+  unlockedAgents.delete(a.id);
+}
+async function deleteAgentBackend(a){
+  if(!a?.backendId)throw new Error("identifiant SQL absent");
+  await SGDI.employees.delete(a.backendId);
+}
 async function deleteAgent(id){
   if(!isAdmin()){toast("Suppression réservée à l'administrateur","error");return}
   const a=db.agents.find(x=>x.id===id);if(!a){toast("Agent introuvable","error");return}
   const label=((a.matricule?`${a.matricule} · `:"")+(a.nom||"")+" "+(a.prenom||"")).trim();
-  const linked=agentDeleteLinkedCollections().flatMap(collection=>(db[collection]||[]).filter(item=>agentDeleteItemMatches(item,a)).map(item=>({collection,item})));
+  const linked=agentDeleteLinkedRows(a);
   const msg=`Supprimer définitivement la fiche employé ${label||"sélectionnée"} ?`+(linked.length?`\n\n${linked.length} ligne(s) liée(s) seront aussi supprimée(s).`:"")+"\n\nCette action est irréversible.";
   if(!confirm(msg))return;
   try{
-    if(!a.backendId){toast("Suppression directe refusée : identifiant SQL absent","error");return}
-    await SGDI.employees.delete(a.backendId);
+    await deleteAgentBackend(a);
   }catch(e){toast("Suppression base de donnée refusée : "+(e.message||e),"error");return}
-  agentDeleteLinkedCollections().forEach(collection=>{db[collection]=(db[collection]||[]).filter(item=>!agentDeleteItemMatches(item,a))});
-  db.agents=(db.agents||[]).filter(x=>x.id!==id);
-  unlockedAgents.delete(id);saveUnlocked();
+  agentDeleteLocalCleanup(a);saveUnlocked();
   if(!(await saveDBAndWaitToast("Suppression fiche employé non confirmée par PostgreSQL")))return;
   toast("Fiche employé supprimée","success");
   navigate("fiches/toutes");
+}
+function selectedEffectifEmployeeIds(){
+  return [...document.querySelectorAll("#effectif-list-zone .effectif-row-select:checked")].map(x=>x.value).filter(Boolean);
+}
+function updateEffectifBulkDeleteButton(){
+  const ids=selectedEffectifEmployeeIds();
+  const btn=document.getElementById("effectif-bulk-delete-btn");
+  if(btn){
+    btn.disabled=!ids.length;
+    btn.textContent=ids.length?`Supprimer sélection (${ids.length})`:"Supprimer sélection";
+  }
+  const all=[...document.querySelectorAll("#effectif-list-zone .effectif-row-select")];
+  const allChecked=all.length&&all.every(x=>x.checked);
+  document.querySelectorAll('#effectif-list-zone input[type="checkbox"]').forEach(input=>{
+    if(input.classList.contains("effectif-row-select"))return;
+    input.checked=!!allChecked;
+    input.indeterminate=!!ids.length&&!allChecked;
+  });
+}
+function toggleEffectifSelectAll(checked){
+  document.querySelectorAll("#effectif-list-zone .effectif-row-select").forEach(input=>{input.checked=!!checked});
+  updateEffectifBulkDeleteButton();
+}
+async function deleteSelectedEffectifEmployees(){
+  if(!isAdmin()){toast("Suppression réservée à l'administrateur","error");return}
+  const ids=selectedEffectifEmployeeIds();
+  if(!ids.length){toast("Cochez au moins un employé","error");return}
+  const agents=ids.map(id=>(db.agents||[]).find(a=>a.id===id)).filter(Boolean);
+  const missingSql=agents.filter(a=>!a.backendId);
+  if(missingSql.length){toast("Suppression refusée : "+missingSql.length+" employé(s) sans identifiant SQL","error");return}
+  const linkedCount=agents.reduce((n,a)=>n+agentDeleteLinkedRows(a).length,0);
+  const sample=agents.slice(0,6).map(a=>"- "+[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ")).join("\n");
+  const more=agents.length>6?`\n... + ${agents.length-6} autre(s)`:"";
+  const msg=`Supprimer définitivement ${agents.length} employé(s) sélectionné(s) ?\n\n${sample}${more}`+(linkedCount?`\n\n${linkedCount} ligne(s) liée(s) seront aussi supprimée(s).`:"")+"\n\nCette action est irréversible.";
+  if(!confirm(msg))return;
+  const btn=document.getElementById("effectif-bulk-delete-btn");
+  if(btn){btn.disabled=true;btn.textContent="Suppression..."}
+  try{
+    for(const a of agents)await deleteAgentBackend(a);
+  }catch(e){
+    toast("Suppression interrompue : "+(e.message||e),"error");
+    if(btn){btn.disabled=false;btn.textContent=`Supprimer sélection (${agents.length})`}
+    return;
+  }
+  agents.forEach(agentDeleteLocalCleanup);
+  saveUnlocked();
+  if(!(await saveDBAndWaitToast("Suppression groupée employés non confirmée par PostgreSQL")))return;
+  toast(`${agents.length} employé(s) supprimé(s)`,"success");
+  renderView();
 }
 function openReaffectation(agentId){
   if(!isOpsFicheContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
