@@ -1870,6 +1870,7 @@ function criticalActionName(el){
 }
 function criticalActionNeedsPassword(el){
   if(!el||criticalActionAuthorized.has(el)||!session||!session.username)return"";
+  if(isAdminSystemSession())return"";
   if(el.disabled||el.getAttribute("aria-disabled")==="true")return"";
   if(el.closest("[data-critical-auth], [data-no-critical-auth], #login-form, .login-admin-system-shortcut"))return"";
   if(el.closest("[data-section-action]"))return"";
@@ -14602,7 +14603,7 @@ function renderAdminFichesPosition(view){
   <div class="card p-4 mb-4"><div class="grid grid-3 gap-3 items-end"><div class="col-span-2"><label class="label">Recherche</label><input class="input" value="${escapeHTML(q)}" placeholder="Nom, prénom, code, société, site..." oninput="sessionStorage.setItem('adminFicheSearch',this.value);renderView()"/></div><button class="btn btn-ghost" onclick="sessionStorage.removeItem('adminFicheSearch');renderView()">Réinitialiser</button></div></div>
   ${agents.length?`<div class="card p-3 mb-4 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border-color:#fed7aa">
     <label class="flex items-center gap-2 text-sm font-black text-slate-700"><input type="checkbox" onchange="adminToggleAllFichesPosition(this.checked)" style="width:16px;height:16px"/> Tout sélectionner (${agents.length})</label>
-    <button type="button" id="admin-fiches-delete-all-btn" class="btn btn-danger text-xs" onclick="adminDeleteSelectedFichesPosition()" disabled>Supprimer tout</button>
+    <button type="button" id="admin-fiches-delete-all-btn" class="btn btn-danger text-xs" data-no-critical-auth="1" onclick="adminDeleteSelectedFichesPosition()" disabled>Supprimer tout</button>
   </div>`:""}
   <div class="card overflow-hidden">${agents.length?`<table><thead><tr><th style="width:42px;text-align:center"><input type="checkbox" onchange="adminToggleAllFichesPosition(this.checked)" style="width:16px;height:16px"/></th><th>Code</th><th>Employé</th><th>Société</th><th>Affectation</th><th>Statut</th><th></th></tr></thead><tbody>${agents.map(a=>`<tr data-searchable><td class="text-center"><input type="checkbox" class="admin-fiche-select" value="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML([a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · "))}" onchange="adminUpdateDeleteFichesButton()" style="width:16px;height:16px"/></td><td class="font-mono font-bold text-amber-700">${safe(a.matricule)}</td><td><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.fonction||a.position||a.posteContrat)}</div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td><span class="pill ${a.locked||a.fichePositionOfficielle?"pill-green":"pill-amber"}">${a.locked||a.fichePositionOfficielle?"Verrouillée":"A verrouiller"}</span></td><td class="text-right"><button class="btn btn-primary text-xs" onclick="navigate('admin/fiches/${employeeRouteId(a)}')">Ouvrir / modifier</button></td></tr>`).join("")}</tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucune fiche trouvée.</div>`}</div>`;
 }
