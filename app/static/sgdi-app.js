@@ -1519,6 +1519,9 @@ function sgdiMaskOverlayMaps(open){
   if(open)window.__sgdiOverlayMapMaskTimer=setTimeout(()=>sgdiMaskOverlayMaps(true),180);
 }
 function destroySitesDashboardMap(){
+  if(window.__sgdiSitesDashboardMap&&typeof window.__sgdiSitesDashboardMap.remove==="function"){
+    try{window.__sgdiSitesDashboardMap.remove()}catch(_){}
+  }
   window.__sgdiSitesDashboardMap=null;
   window.__sgdiSitesDashboardMarkers=null;
   window.__sgdiSitesDashboardSearchMarker=null;
@@ -1542,6 +1545,48 @@ function uiEnhanceView(){
   uiBindInteractiveEvents();
   uiAnimateNumbers(view||document);
   uiFocusFirstInvalid(view||document);
+  initSitesDashboardMap();
+  sgdiApplyActiveEmployeeStyles(view||document);
+  setTimeout(()=>sgdiApplyActiveEmployeeStyles(document),150);
+}
+function sgdiIsActiveText(text){
+  const s=String(text||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z]/g,"");
+  return s==="actif"||s==="active"||s==="operationnel";
+}
+function sgdiForceActiveEmployeeNode(card){
+  if(!card)return;
+  const pills=[...card.querySelectorAll(".pill,span")];
+  const statusEl=pills.find(el=>sgdiIsActiveText(el.textContent));
+  if(!statusEl)return;
+  card.dataset.status="actif";
+  const codeEl=card.querySelector(".fp-agent-matricule")||[...card.querySelectorAll(".font-mono")].find(el=>String(el.textContent||"").trim());
+  if(codeEl){
+    codeEl.style.setProperty("color","#047857","important");
+    codeEl.style.setProperty("font-weight","950","important");
+  }
+  statusEl.textContent="ACTIF";
+  statusEl.style.setProperty("background","#ecfdf5","important");
+  statusEl.style.setProperty("color","#047857","important");
+  statusEl.style.setProperty("border-color","#86efac","important");
+  statusEl.style.setProperty("text-transform","uppercase","important");
+  statusEl.style.setProperty("font-weight","950","important");
+  statusEl.style.setProperty("letter-spacing",".04em","important");
+}
+function sgdiApplyActiveEmployeeStyles(root){
+  root=root||document;
+  root.querySelectorAll(".fp-agent-card").forEach(sgdiForceActiveEmployeeNode);
+  root.querySelectorAll("tr").forEach(row=>{
+    const pill=[...row.querySelectorAll(".pill,span")].find(el=>sgdiIsActiveText(el.textContent));
+    if(!pill)return;
+    const code=row.querySelector("td .font-mono, .font-mono");
+    if(code)code.style.setProperty("color","#047857","important");
+    pill.textContent="ACTIF";
+    pill.style.setProperty("background","#ecfdf5","important");
+    pill.style.setProperty("color","#047857","important");
+    pill.style.setProperty("border-color","#86efac","important");
+    pill.style.setProperty("text-transform","uppercase","important");
+    pill.style.setProperty("font-weight","950","important");
+  });
 }
 function uiBindInteractiveEvents(){
   if(document.body.dataset.uiInteractiveBound==="1")return;
@@ -5968,11 +6013,11 @@ function renderEffectif(view,filter,stableMode){
   view.innerHTML=`${cards}<div id="effectif-list-zone"><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div></div>`;
   effectifListServerHTML(filter).then(html=>{
     const zone=document.getElementById("effectif-list-zone");
-    if(zone)zone.innerHTML=html||effectifListHTML(filter);
+    if(zone){zone.innerHTML=html||effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone)}
   }).catch(e=>{
     console.warn("Effectif PostgreSQL paginé indisponible",e);
     const zone=document.getElementById("effectif-list-zone");
-    if(zone)zone.innerHTML=effectifListHTML(filter);
+    if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone)}
     toast("Lecture PostgreSQL effectifs refusée : "+(e.message||e),"error");
   });
 }
@@ -7031,22 +7076,65 @@ function siteMapQuery(site){
   if(pos)return `${pos.lat},${pos.lng}`;
   return [site.nom,site.adresse,site.commune,site.wilaya,"Algérie"].map(v=>String(v||"").trim()).filter(Boolean).join(", ");
 }
-function siteMapUrl(site){
-  const q=siteMapQuery(site)||"Algérie";
-  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
-}
-function googleMapsEmbedUrl(query){
-  const q=String(query||"Algérie").trim()||"Algérie";
-  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed`;
-}
 function googleMapsSearchUrl(query){
   const q=String(query||"Algérie").trim()||"Algérie";
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+function loadMapLibre(){
+  if(window.maplibregl)return Promise.resolve(window.maplibregl);
+  if(window.__sgdiMapLibrePromise)return window.__sgdiMapLibrePromise;
+  window.__sgdiMapLibrePromise=new Promise((resolve,reject)=>{
+    if(!document.querySelector('link[data-sgdi-maplibre="1"]')){
+      const link=document.createElement("link");
+      link.rel="stylesheet";
+      link.href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
+      link.dataset.sgdiMaplibre="1";
+      document.head.appendChild(link);
+    }
+    const existing=document.querySelector('script[data-sgdi-maplibre="1"]');
+    if(existing){
+      existing.addEventListener("load",()=>resolve(window.maplibregl));
+      existing.addEventListener("error",()=>reject(new Error("Chargement MapLibre impossible")));
+      return;
+    }
+    const script=document.createElement("script");
+    script.src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
+    script.async=true;
+    script.dataset.sgdiMaplibre="1";
+    script.onload=()=>window.maplibregl?resolve(window.maplibregl):reject(new Error("MapLibre indisponible"));
+    script.onerror=()=>reject(new Error("Chargement MapLibre impossible"));
+    document.head.appendChild(script);
+  });
+  return window.__sgdiMapLibrePromise;
+}
+function sgdiMapLibreStyle(){
+  return {
+    version:8,
+    sources:{osm:{type:"raster",tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,attribution:"© OpenStreetMap contributors"}},
+    layers:[{id:"osm",type:"raster",source:"osm"}]
+  };
+}
+function sgdiAllSitesForMap(){
+  const byId=new Map();
+  [...(db.sites||[]),...(window.__sgdiSitesDashboardData||[])].forEach(s=>{
+    if(!s)return;
+    byId.set(String(s.id||s.backendId||s.nom||Math.random()),s);
+  });
+  return [...byId.values()];
+}
+function sgdiMapLibreMarkerHTML(site){
+  const el=document.createElement("button");
+  el.type="button";
+  el.className="sgdi-site-map-marker";
+  el.title=site?.nom||"Site";
+  el.innerHTML='<span></span>';
+  return el;
 }
 function siteMapDashboardHTML(sites){
   sites=(sites||[]).filter(Boolean);
   if(!sites.length)return "";
   if(sgdiOverlayIsOpen())return "";
+  window.__sgdiSitesDashboardData=sites;
   const initial=sites.find(siteLatLng)||sites[0];
   const initialQuery=initial?siteMapQuery(initial):"Algérie";
   const options=`<option value="__all__">Tous les sites</option>`+sites.map(s=>`<option value="${escapeHTML(String(s.id||s.backendId||""))}">${escapeHTML((s.nom||"Site")+" · "+[s.commune,s.wilaya].filter(Boolean).join(", "))}</option>`).join("");
@@ -7064,40 +7152,84 @@ function siteMapDashboardHTML(sites){
       </div>
     </div>
     <div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100" style="height:360px">
-      <iframe id="sites-map-frame" title="Carte Google Maps des sites" src="${escapeHTML(googleMapsEmbedUrl(initialQuery))}" style="width:100%;height:100%;border:0;display:block" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      <div id="sites-map-frame" class="sgdi-maplibre-map" role="region" aria-label="Carte interactive des sites"></div>
     </div>
   </div>`;
 }
-function initSitesDashboardMap(){return}
+function initSitesDashboardMap(){
+  const el=document.getElementById("sites-map-frame");
+  if(!el||el.dataset.sgdiMapReady==="1")return;
+  el.dataset.sgdiMapReady="1";
+  loadMapLibre().then(maplibregl=>{
+    if(!document.getElementById("sites-map-frame"))return;
+    const sites=sgdiAllSitesForMap().filter(s=>s&&s.actif!==false);
+    const positioned=sites.map(s=>({site:s,pos:siteLatLng(s)})).filter(x=>x.pos);
+    const center=positioned[0]?.pos||{lat:28.0339,lng:1.6596};
+    const map=new maplibregl.Map({container:"sites-map-frame",style:sgdiMapLibreStyle(),center:[center.lng,center.lat],zoom:positioned.length?6:4.2});
+    window.__sgdiSitesDashboardMap=map;
+    window.__sgdiSitesDashboardMarkers=[];
+    map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-left");
+    map.on("load",()=>{
+      const bounds=new maplibregl.LngLatBounds();
+      positioned.forEach(({site,pos})=>{
+        bounds.extend([pos.lng,pos.lat]);
+        const marker=new maplibregl.Marker({element:sgdiMapLibreMarkerHTML(site)})
+          .setLngLat([pos.lng,pos.lat])
+          .setPopup(new maplibregl.Popup({offset:18}).setHTML(`<b>${escapeHTML(site.nom||"Site")}</b><br>${escapeHTML([site.commune,site.wilaya].filter(Boolean).join(", ")||"")}`))
+          .addTo(map);
+        marker.__sgdiSiteId=String(site.id||site.backendId||"");
+        window.__sgdiSitesDashboardMarkers.push(marker);
+      });
+      if(positioned.length>1)map.fitBounds(bounds,{padding:54,maxZoom:11});
+      setTimeout(()=>{try{map.resize()}catch(_){}},100);
+    });
+  }).catch(e=>{
+    el.innerHTML=`<div class="p-5 text-sm text-red-700 font-semibold">Carte indisponible : ${escapeHTML(e.message||e)}</div>`;
+  });
+}
 function renderSitesMapMarkers(siteId){
   updateSitesMap(siteId);
 }
 async function updateSitesMap(siteId){
   const label=document.getElementById("sites-map-label");
-  const frame=document.getElementById("sites-map-frame");
   const open=document.getElementById("sites-map-open");
-  const setMap=(query,text)=>{
-    if(frame)frame.src=googleMapsEmbedUrl(query);
+  const map=window.__sgdiSitesDashboardMap;
+  const setMap=(query,text,pos)=>{
     if(open)open.href=googleMapsSearchUrl(query);
     if(label)label.textContent=text||query||"Google Maps";
+    if(map&&pos)map.flyTo({center:[pos.lng,pos.lat],zoom:14,essential:true});
   };
   if(String(siteId||"__all__")==="__all__"){
     setMap("Algérie","Tous les sites");
+    const positioned=sgdiAllSitesForMap().map(s=>siteLatLng(s)).filter(Boolean);
+    if(map&&positioned.length>1&&window.maplibregl){
+      const bounds=new window.maplibregl.LngLatBounds();
+      positioned.forEach(p=>bounds.extend([p.lng,p.lat]));
+      map.fitBounds(bounds,{padding:54,maxZoom:11});
+    }
     return;
   }
-  const allSites=[...(db.sites||[])];
+  const allSites=sgdiAllSitesForMap();
   const site=allSites.find(s=>String(s.id||"")===String(siteId)||String(s.backendId||"")===String(siteId));
   if(!site)return;
-  setMap(siteMapQuery(site),siteMapQuery(site));
+  setMap(siteMapQuery(site),siteMapQuery(site),siteLatLng(site));
 }
 async function searchSitesMap(){
   const input=document.getElementById("sites-map-search");
   const q=String(input?.value||"").trim();
   if(!q){toast("Saisissez un lieu à rechercher","error");return}
-  const frame=document.getElementById("sites-map-frame"),label=document.getElementById("sites-map-label"),open=document.getElementById("sites-map-open");
-  if(frame)frame.src=googleMapsEmbedUrl(q);
+  const label=document.getElementById("sites-map-label"),open=document.getElementById("sites-map-open");
   if(open)open.href=googleMapsSearchUrl(q);
   if(label)label.textContent=q;
+  const text=q.toLowerCase();
+  const site=sgdiAllSitesForMap().find(s=>[s.nom,s.indicatif,s.adresse,s.commune,s.wilaya].some(v=>String(v||"").toLowerCase().includes(text)));
+  const pos=siteLatLng(site);
+  if(site&&pos&&window.__sgdiSitesDashboardMap){
+    window.__sgdiSitesDashboardMap.flyTo({center:[pos.lng,pos.lat],zoom:14,essential:true});
+    if(label)label.textContent=siteMapQuery(site);
+    return;
+  }
+  toast("Aucun site positionné trouvé. Le bouton Google Maps ouvre la recherche externe.","info");
 }
 function sitePositionLabel(lat,lng){
   const a=parseFloat(lat),b=parseFloat(lng);
@@ -7114,34 +7246,65 @@ function openSitePositionModal(){
     <div class="flex items-start justify-between gap-3 mb-3">
       <div>
         <h3 class="font-black text-lg">Positionner site</h3>
-        <div class="text-xs text-slate-500">Vérifiez le site sur Google Maps, puis saisissez les coordonnées GPS à enregistrer.</div>
+        <div class="text-xs text-slate-500">Cliquez sur la carte ou déplacez le marqueur pour remplir les coordonnées GPS à enregistrer.</div>
       </div>
       <button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>
     </div>
-    <iframe id="site-position-map" class="rounded-lg border border-slate-200 bg-slate-100" title="Position Google Maps du site" src="${escapeHTML(googleMapsEmbedUrl(query))}" style="width:100%;height:480px;border:0;display:block" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    <div id="site-position-map" class="sgdi-maplibre-map rounded-lg border border-slate-200 bg-slate-100" data-lat="${Number.isFinite(lat)?lat:center.lat}" data-lng="${Number.isFinite(lng)?lng:center.lng}" style="height:480px"></div>
     <div class="grid grid-2 gap-3 mt-3">
       <div><label class="label">Latitude</label><input class="input" name="modal_latitude" value="${Number.isFinite(lat)?lat:""}" placeholder="Ex: 36.752887"/></div>
       <div><label class="label">Longitude</label><input class="input" name="modal_longitude" value="${Number.isFinite(lng)?lng:""}" placeholder="Ex: 3.042048"/></div>
     </div>
     <div class="mt-3 flex justify-between gap-2 flex-wrap">
       <a class="btn btn-secondary" href="${escapeHTML(googleMapsSearchUrl(query))}" target="_blank" rel="noopener">Ouvrir dans Google Maps</a>
-      <button type="button" class="btn btn-ghost" onclick="refreshSitePositionGoogleMap()">Actualiser la carte</button>
+      <button type="button" class="btn btn-ghost" onclick="refreshSitePositionMap()">Centrer sur les coordonnées</button>
     </div>
     <div class="flex justify-end gap-2 mt-4">
       <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
       <button type="button" class="btn btn-primary" onclick="saveSitePositionFromModal()">Enregistrer position</button>
     </div>
   </div>`);
+  initSitePositionMap();
 }
-function initSitePositionMap(){return}
-function refreshSitePositionGoogleMap(){
-  const frame=document.getElementById("site-position-map");if(!frame)return;
+function initSitePositionMap(){
+  const el=document.getElementById("site-position-map");
+  if(!el||el.dataset.sgdiMapReady==="1")return;
+  el.dataset.sgdiMapReady="1";
+  loadMapLibre().then(maplibregl=>{
+    if(!document.getElementById("site-position-map"))return;
+    const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);
+    const center=[Number.isFinite(lng)?lng:1.6596,Number.isFinite(lat)?lat:28.0339];
+    const map=new maplibregl.Map({container:"site-position-map",style:sgdiMapLibreStyle(),center,zoom:Number.isFinite(lat)&&Number.isFinite(lng)?14:5});
+    window.__sgdiSitePositionMap=map;
+    map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-left");
+    const marker=new maplibregl.Marker({draggable:true}).setLngLat(center).addTo(map);
+    window.__sgdiSitePositionMarker=marker;
+    const setInputs=lngLat=>{
+      const a=Number(lngLat.lat),b=Number(lngLat.lng);
+      const latInput=document.querySelector('.modal-bg [name="modal_latitude"]');
+      const lngInput=document.querySelector('.modal-bg [name="modal_longitude"]');
+      if(latInput)latInput.value=a.toFixed(6);
+      if(lngInput)lngInput.value=b.toFixed(6);
+    };
+    marker.on("dragend",()=>setInputs(marker.getLngLat()));
+    map.on("click",e=>{marker.setLngLat(e.lngLat);setInputs(e.lngLat)});
+    map.on("load",()=>setTimeout(()=>{try{map.resize()}catch(_){}},100));
+  }).catch(e=>{
+    el.innerHTML=`<div class="p-5 text-sm text-red-700 font-semibold">Carte indisponible : ${escapeHTML(e.message||e)}</div>`;
+  });
+}
+function refreshSitePositionMap(){
   const lat=document.querySelector('.modal-bg [name="modal_latitude"]')?.value;
   const lng=document.querySelector('.modal-bg [name="modal_longitude"]')?.value;
   const a=parseFloat(lat),b=parseFloat(lng);
-  if(Number.isFinite(a)&&Number.isFinite(b))frame.src=googleMapsEmbedUrl(`${a},${b}`);
+  const map=window.__sgdiSitePositionMap,marker=window.__sgdiSitePositionMarker;
+  if(Number.isFinite(a)&&Number.isFinite(b)&&map&&marker){
+    marker.setLngLat([b,a]);
+    map.flyTo({center:[b,a],zoom:14,essential:true});
+  }
   else toast("Saisissez latitude et longitude valides","error");
 }
+function refreshSitePositionGoogleMap(){refreshSitePositionMap()}
 function saveSitePositionFromModal(){
   const lat=document.querySelector('.modal-bg [name="modal_latitude"]')?.value;
   const lng=document.querySelector('.modal-bg [name="modal_longitude"]')?.value;
@@ -7156,6 +7319,31 @@ function saveSitePositionFromModal(){
   if(label)label.textContent=sitePositionLabel(a,b);
   closeModal();
   toast("Position du site prête à enregistrer","success");
+}
+function employeeStatusKey(value){
+  const s=String(value||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  if(["actif","active","operationnel","operational","en service"].includes(s))return"actif";
+  if(["conge","leave"].includes(s))return"congé";
+  if(["maladie","sick"].includes(s))return"maladie";
+  if(["suspendu","suspension","suspended"].includes(s))return"suspendu";
+  if(["absent","absence"].includes(s))return"absent";
+  if(["abandon","abandon de poste"].includes(s))return"abandon";
+  if(["sortant","archive","demissionne","licencie"].includes(s))return"sortant";
+  return s||"";
+}
+function employeeDisplayStatus(a){
+  a=a||{};
+  const congeActif=(db.conges||[]).find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
+  const abandon=typeof ficheAgentInAbandon==="function"&&ficheAgentInAbandon(a);
+  const base=employeeStatusKey(a.statut||a.status);
+  if(base==="suspendu")return{key:"suspendu",label:"SUSPENDU",pill:"pill-red",icon:"⏸"};
+  if(base==="absent")return{key:"absent",label:"ABSENT",pill:"pill-red",icon:"❌"};
+  if(abandon||base==="abandon")return{key:"abandon",label:"ABANDON",pill:"pill-red",icon:"🚫"};
+  if(congeActif&&congeActif.type==="Maladie")return{key:"maladie",label:"MALADIE",pill:"pill-amber",icon:"🤒"};
+  if(congeActif||base==="congé")return{key:"congé",label:"CONGÉ",pill:"pill-blue",icon:"🏖"};
+  if((typeof ficheAgentIsSortantArchive==="function"&&ficheAgentIsSortantArchive(a))||base==="sortant")return{key:"sortant",label:"SORTANT",pill:"pill-gray",icon:"🗄"};
+  if(base==="actif"||!base)return{key:"actif",label:"ACTIF",pill:"pill-green",icon:""};
+  return{key:base,label:String(base||"—").toUpperCase(),pill:"pill-gray",icon:"•"};
 }
 function siteDotationHTML(site){
   const rows=(site.equipements||site.materiel||[]).filter(x=>x&&(x.categorie||x.designation||x.quantite||x.etat));
@@ -8366,23 +8554,18 @@ function fpSocieteBandHTML(baseList){
   </div>`;
 }
 function fichePositionCard(a){
-  let situation="actif",sitClass="pill-green",sitIcon="✅";
-  const congeActif=db.conges.find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
-  const abandon=ficheAgentInAbandon(a);
-  if(a.statut==="suspendu"){situation="suspendu";sitClass="pill-red";sitIcon="⏸"}
-  else if(a.statut==="absent"){situation="absent";sitClass="pill-red";sitIcon="❌"}
-  else if(abandon){situation="abandon";sitClass="pill-red";sitIcon="🚫"}
-  else if(congeActif&&congeActif.type==="Maladie"){situation="maladie";sitClass="pill-amber";sitIcon="🤒"}
-  else if(congeActif){situation="congé";sitClass="pill-blue";sitIcon="🏖"}
-  else if(ficheAgentIsSortantArchive(a)){situation="sortant";sitClass="pill-gray";sitIcon="🗄"}
-  else if(a.statut!=="actif"){situation=a.statut||"—";sitClass="pill-gray";sitIcon="•"}
+  const status=employeeDisplayStatus(a);
   const aff=a.affectationCourante||{};
   const ficheHref=isMaterielFicheContext()?"#/materiel/fiche/"+a.id:"#/effectif/agent/"+a.id;
   const ficheClick=isMaterielFicheContext()?"setFicheContext('materiel')":"";
-  return`<div class="card p-4 fp-agent-card" data-row data-status="${escapeHTML(situation)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-poste="${escapeHTML(aff.poste||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
+  const isActive=status.key==="actif";
+  const codeStyle=isActive?"color:#047857!important":"color:#d97706";
+  const statusStyle=isActive?"background:#ecfdf5!important;color:#047857!important;border-color:#86efac!important;text-transform:uppercase!important;font-weight:950!important;letter-spacing:.04em!important":"font-size:10px!important;text-transform:uppercase;font-weight:900!important";
+  const statusText=isActive?"ACTIF":`${status.icon?status.icon+" ":""}${status.label}`;
+  return`<div class="card p-4 fp-agent-card" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-poste="${escapeHTML(aff.poste||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
     <div class="flex items-center gap-3 mb-3">
       <div class="avatar" style="width:56px;height:56px;font-size:18px">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div>
-      <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="font-mono text-lg font-black text-amber-600 leading-tight mt-1">${safe(a.matricule)}</div><div><span class="pill ${sitClass}" style="font-size:10px">${sitIcon} ${situation}</span></div></div>
+      <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule font-mono text-lg font-black leading-tight mt-1" style="${codeStyle}">${safe(a.matricule)}</div><div><span class="fp-agent-status pill ${status.pill}" style="${statusStyle}">${escapeHTML(statusText)}</span></div></div>
     </div>
     <div class="text-xs space-y-1 mb-3 text-slate-600">
       <div><span class="text-slate-400">Société :</span> ${safe(a.societe)}</div>
