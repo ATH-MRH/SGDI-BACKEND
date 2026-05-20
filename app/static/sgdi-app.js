@@ -4714,7 +4714,7 @@ function renderCandidatEtape1(c){
 	      </div>
       <div class="col-span-3"><label class="label">Nom du père *</label><input class="input" name="nomPere" value="${escapeHTML(c.nomPere||"")}" /></div>
       <div class="col-span-3"><label class="label">Nom de la mère *</label><input class="input" name="nomMere" value="${escapeHTML(c.nomMere||"")}" /></div>
-      <div class="col-span-3"><label class="label">Sexe *</label><select class="select" name="sexe" ><option ${c.sexe==="M"?"selected":""}>M</option><option ${c.sexe==="F"?"selected":""}>F</option></select></div>
+      <div class="col-span-3 candidate-field-5cm"><label class="label">Sexe *</label><select class="select" name="sexe" ><option ${c.sexe==="M"?"selected":""}>M</option><option ${c.sexe==="F"?"selected":""}>F</option></select></div>
       <div class="col-span-3"><label class="label">Situation familiale *</label><select class="select" name="situation" >${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${c.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
       <div class="col-span-3"><label class="label">Nombre d'enfant *</label><input class="input" type="number" min="0" name="nombreEnfants" value="${c.nombreEnfants??""}" placeholder="0" /></div>
       <div class="col-span-3"><label class="label">Source *</label><input class="input" name="source" value="${escapeHTML(c.source||"")}" placeholder="ANEM, LinkedIn, recommandation…" /></div>
