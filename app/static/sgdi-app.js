@@ -5317,7 +5317,7 @@ function renderContrats(view,mode){
       </div>
     </div>
     <div class="card overflow-hidden"><table>
-    <thead><tr><th>Agent</th><th>Matricule</th><th>Société</th><th>Type</th><th>Recrutement</th><th>Fin d'essai</th><th>Fin contrat</th><th>Salaire net</th><th>Statut</th></tr></thead>
+    <thead><tr><th>Agent</th><th>Code</th><th>Société</th><th>Type</th><th>Recrutement</th><th>Fin d'essai</th><th>Fin contrat</th><th>Salaire net</th><th>Statut</th></tr></thead>
     <tbody id="ct-tbody">${agents.length===0?`<tr><td colspan="9" class="text-center text-slate-500 p-6">Aucun agent.</td></tr>`:agents.map(a=>{
       let essaiCell="—";
       if(a.dateFinEssai){const d=daysBetween(today_,a.dateFinEssai);
