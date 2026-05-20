@@ -254,8 +254,9 @@ def upsert_assignment(db: Session, item: dict[str, Any]) -> dict[str, Any] | Non
 
 
 def site_to_item(row: Site) -> dict[str, Any]:
-    raw = row.equipment_plan.get("_legacy") if isinstance(row.equipment_plan, dict) else {}
-    item = dict(raw or {})
+    plan = row.equipment_plan if isinstance(row.equipment_plan, dict) else {}
+    raw = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
+    item = {**dict(raw or {}), **{k: v for k, v in plan.items() if k != "_legacy"}}
     item.update({"id": item.get("id") or str(row.id), "backendId": row.id, "nom": row.name, "name": row.name, "indicatif": row.indicatif, "client": row.client_name, "adresse": row.address, "commune": row.commune, "wilaya": row.wilaya, "type": row.site_type, "rotationSystem": row.rotation_system, "actif": bool(row.active), "effectifs": {"totalContractuel": row.contractual_staff, "jour": row.day_staff, "nuit": row.night_staff, "weekend": row.weekend_staff, "feries": row.holiday_staff, "groupes": row.groups_count}})
     return item
 
@@ -284,7 +285,7 @@ def upsert_site(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     row.holiday_staff = as_int(eff.get("feries")) or 0
     row.groups_count = as_int(eff.get("groupes")) or 0
     row.active = 1 if item.get("actif", item.get("active", True)) else 0
-    row.equipment_plan = {**(row.equipment_plan or {}), "_legacy": deepcopy(item)}
+    row.equipment_plan = {**(row.equipment_plan or {}), **deepcopy(item), "_legacy": deepcopy(item)}
     db.flush()
     return site_to_item(row)
 
