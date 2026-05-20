@@ -641,6 +641,7 @@
   .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   .col-span-2{grid-column:span 2}.col-span-3{grid-column:span 3}.col-span-4{grid-column:span 4}.col-span-6{grid-column:span 6}
   .candidate-inline-fields{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .candidate-id-inline-row{grid-column:1/-1;display:flex;align-items:flex-start;justify-content:flex-end;gap:12px;flex-wrap:wrap;width:100%}
   .candidate-field-4cm{width:4cm;max-width:100%}
   .candidate-field-5cm{width:5cm;max-width:100%}
   .candidate-field-7cm{width:7cm;max-width:100%}
