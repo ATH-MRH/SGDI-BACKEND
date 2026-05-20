@@ -6037,6 +6037,46 @@ function effectifRecapCardsHTML(activeFilter,showTitle,stable){
       <div class="text-4xl font-black mt-2" style="color:${r.color}">${r.count}</div>
     </a>`).join("")}</div>`;
 }
+function rhEffectifActionsHTML(){
+  const actions=[
+    ["suspendre","SUSPENDRE"],["convoquer","CONVOQUER"],["blacklister","BLACKLISTER"],["mise_en_demeure","MISE EN DEMEURE"],
+    ["periode_enc","PERIODE E-N-C"],["sanctionner","SANCTIONNER"],["fin_contrat","FIN DE CONTRAT"]
+  ];
+  return `<div class="mb-5"><h1 class="text-2xl font-bold">Effectifs</h1><p class="text-sm text-slate-500">Actions RH sur le personnel.</p></div>
+    <div class="card p-4 mb-5">
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        ${actions.map(([k,l])=>`<button type="button" class="btn btn-secondary justify-center" onclick="openRhEffectifActionModal('${k}')">${l}</button>`).join("")}
+      </div>
+    </div>`;
+}
+function rhEffectifActionLabel(action){
+  return {suspendre:"SUSPENDRE",convoquer:"CONVOQUER",blacklister:"BLACKLISTER",mise_en_demeure:"MISE EN DEMEURE",periode_enc:"PERIODE E-N-C",sanctionner:"SANCTIONNER",fin_contrat:"FIN DE CONTRAT"}[action]||"ACTION";
+}
+function rhEffectifActionType(action){
+  return {suspendre:"Suspension",convoquer:"Convocation",mise_en_demeure:"Mise en demeure",periode_enc:"Période E-N-C",fin_contrat:"Fin de contrat"}[action]||"";
+}
+function rhEffectifActionTargets(){
+  const soc=effectifSocieteFilter();
+  return (db.agents||[]).filter(a=>!soc||a.societe===soc).sort((a,b)=>((a.nom||"")+" "+(a.prenom||"")).localeCompare((b.nom||"")+" "+(b.prenom||"")));
+}
+function openRhEffectifActionModal(action){
+  const list=rhEffectifActionTargets();
+  if(!list.length){toast("Aucun employé disponible pour cette action","error");return}
+  const label=rhEffectifActionLabel(action);
+  openModal(`<h3 class="font-bold text-lg mb-3">${escapeHTML(label)}</h3>
+    <form onsubmit="event.preventDefault();runRhEffectifAction('${action}',this.agentId.value)">
+      <label class="label">Employé concerné</label>
+      <select class="select" name="agentId" required>${list.map(a=>`<option value="${escapeHTML(a.id)}">${escapeHTML((a.matricule||"")+" - "+((a.nom||"")+" "+(a.prenom||"")).trim())}</option>`).join("")}</select>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Continuer</button></div>
+    </form>`);
+}
+function runRhEffectifAction(action,agentId){
+  closeModal();
+  if(action==="blacklister")return openBlackListModal(agentId);
+  if(action==="sanctionner")return openSanctionModal(agentId);
+  const type=rhEffectifActionType(action);
+  if(type)return openGestionModal(agentId,type);
+}
 function renderEffectifRecap(view){
   const current=sessionStorage.getItem("effectifStableFilter")||"actifs";
   renderEffectif(view,current,true);
@@ -6081,6 +6121,9 @@ function effectifSocieteBandHTML(baseList){
 }
 function isOpsEffectifContext(){
   return session?.transverse==="ops"||sessionStorage.getItem("ficheContext")==="ops";
+}
+function canUseEmployeeActionWorkflows(){
+  return isAdminFichePositionContext()||isDrhModuleContext()||isDrhFicheContext();
 }
 function opsEffectifFilters(){
   try{return JSON.parse(sessionStorage.getItem("opsEffectifFilters")||"{}")||{}}catch(e){return{}}
@@ -6242,7 +6285,7 @@ function effectifListHTML(filter){
 }
 function renderEffectif(view,filter,stableMode){
   if(filter==="recap")return renderEffectifRecap(view);
-  const cards=(filter==="instance_affectation"||isOpsEffectifContext())?"":`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`;
+  const cards=(filter==="instance_affectation"||isOpsEffectifContext())?"":(isDrhModuleContext()?`<div id="effectif-actions-zone">${rhEffectifActionsHTML()}</div>`:`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`);
   view.innerHTML=`${cards}<div id="effectif-list-zone"><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div></div>`;
   effectifListServerHTML(filter).then(html=>{
     const zone=document.getElementById("effectif-list-zone");
@@ -6633,7 +6676,7 @@ function renderGestionHistorique(a){
   <table><thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${evs.length===0?`<tr><td colspan="7" class="text-center text-slate-500 p-3">Aucun événement enregistré.</td></tr>`:evs.map((e,i)=>{const j=e.du&&e.au?daysBetween(e.du,e.au)+1:"—";return`<tr><td><span class="pill ${gestionPillClass(e.type)}">${gestionIcon(e.type)} ${e.type}</span></td><td class="text-xs">${formatDate(e.du)}</td><td class="text-xs">${formatDate(e.au)}</td><td>${j}</td><td class="text-xs">${escapeHTML((e.motif||"").slice(0,60))}</td><td><span class="pill ${e.statut==="en_cours"?"pill-amber":e.statut==="termine"?"pill-gray":"pill-green"}">${e.statut}</span></td><td>${isAdminFichePositionContext()?`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="deleteGestionEvent('${a.id}',${i})">✕</button>`:""}</td></tr>`}).join("")}</tbody></table>`;
 }
 function openGestionModal(agentId,type){
-  if(!isAdminFichePositionContext()){toast("Gestion verrouillée : modification réservée à Administration système > Fiche de position","error");return}
+  if(!canUseEmployeeActionWorkflows()){toast("Action RH non autorisée depuis ce module","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   openModal(`<h3 class="font-bold text-lg mb-4">${gestionIcon(type)} Nouvelle ${type.toLowerCase()} — ${escapeHTML(a.nom+" "+a.prenom)}</h3>
     <form onsubmit="event.preventDefault();confirmGestion('${agentId}','${type}')">
@@ -6647,7 +6690,7 @@ function openGestionModal(agentId,type){
     </form>`);
 }
 async function confirmGestion(agentId,type){
-  if(!isAdminFichePositionContext()){toast("Gestion verrouillée : modification réservée à Administration système > Fiche de position","error");return}
+  if(!canUseEmployeeActionWorkflows()){toast("Action RH non autorisée depuis ce module","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(document.querySelector(".modal-bg form"));
   a.gestionEvents=a.gestionEvents||[];
@@ -7092,7 +7135,7 @@ function sendBlackListAlertToDRH(a){
 
 /* ---- BLACK LIST ---- */
 function openBlackListModal(agentId){
-  if(!isAdminFichePositionContext()){toast("Black list verrouillée : modification réservée à Administration système > Fiche de position","error");return}
+  if(!canUseEmployeeActionWorkflows()){toast("Black list non autorisée depuis ce module","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(a.blacklist){
     openModal(`<h3 class="font-bold text-lg mb-2" style="color:#dc2626">⛔ Black list</h3>
