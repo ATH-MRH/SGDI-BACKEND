@@ -4711,11 +4711,11 @@ function renderCandidatEtape1(c){
 	          <div><label class="label">Date de naissance *</label><input class="input" type="date" name="dateNaissance" max="${candidatBirthMaxDate()}" value="${c.dateNaissance||""}"  aria-describedby="date-naissance-alert" title="Le candidat doit avoir 20 ans révolus à la date d'enregistrement" oninput="validateCandidatBirthField(this)" onchange="validateCandidatBirthField(this)"/><div id="date-naissance-alert" class="text-[11px] text-slate-500 mt-1">Âge minimum requis : 20 ans révolus à la date d'enregistrement.</div></div>
 	          <div><label class="label">Lieu de naissance *</label><input class="input" name="lieuNaissance" value="${escapeHTML(c.lieuNaissance)}" /></div>
 	          <div class="candidate-field-5cm" style="grid-column:1"><label class="label">Sexe *</label><select class="select" name="sexe" ><option ${c.sexe==="M"?"selected":""}>M</option><option ${c.sexe==="F"?"selected":""}>F</option></select></div>
+	          <div class="candidate-field-7cm" style="grid-column:2"><label class="label">Situation familiale *</label><select class="select" name="situation" >${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${c.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
 	        </div>
 	      </div>
       <div class="col-span-3"><label class="label">Nom du père *</label><input class="input" name="nomPere" value="${escapeHTML(c.nomPere||"")}" /></div>
       <div class="col-span-3"><label class="label">Nom de la mère *</label><input class="input" name="nomMere" value="${escapeHTML(c.nomMere||"")}" /></div>
-      <div class="col-span-3"><label class="label">Situation familiale *</label><select class="select" name="situation" >${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${c.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
       <div class="col-span-3"><label class="label">Nombre d'enfant *</label><input class="input" type="number" min="0" name="nombreEnfants" value="${c.nombreEnfants??""}" placeholder="0" /></div>
       <div class="col-span-3"><label class="label">Source *</label><input class="input" name="source" value="${escapeHTML(c.source||"")}" placeholder="ANEM, LinkedIn, recommandation…" /></div>
       <div class="col-span-3"><label class="label">NIN (10 chiffres) *</label><input class="input" name="nin" value="${escapeHTML(c.nin||"")}" maxlength="10" pattern="[0-9]{10}" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" /></div>
