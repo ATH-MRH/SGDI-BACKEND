@@ -6005,6 +6005,72 @@ function effectifSocieteBandHTML(baseList){
     </div>
   </div>`;
 }
+function isOpsEffectifContext(){
+  return session?.transverse==="ops"||sessionStorage.getItem("ficheContext")==="ops";
+}
+function opsEffectifFilters(){
+  try{return JSON.parse(sessionStorage.getItem("opsEffectifFilters")||"{}")||{}}catch(e){return{}}
+}
+function setOpsEffectifFilter(k,v){
+  const f=opsEffectifFilters();
+  f[k]=String(v||"");
+  sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
+  renderView();
+}
+function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");renderView()}
+function applyOpsEffectifFilters(list){
+  if(!isOpsEffectifContext())return list;
+  const f=opsEffectifFilters();
+  const q=String(f.q||"").trim().toLowerCase();
+  const ageMin=parseInt(f.ageMin,10);
+  const ageMax=parseInt(f.ageMax,10);
+  return (list||[]).filter(a=>{
+    const siteId=String(a.affectationCourante?.siteId||"");
+    const siteName=String(a.affectationCourante?.siteName||"");
+    const poste=String(a.affectationCourante?.poste||a.fonction||a.position||"");
+    const full=[a.matricule,a.nom,a.prenom,a.telephone].join(" ").toLowerCase();
+    const age=ageFromDate(a.dateNaissance);
+    if(q&&!full.includes(q))return false;
+    if(f.site==="__none__"){if(siteId||siteName)return false}
+    else if(f.site&&siteId!==String(f.site))return false;
+    if(f.poste&&poste!==f.poste)return false;
+    if(f.situation&&String(a.situation||"")!==f.situation)return false;
+    if(f.recrutFrom&&String(a.dateRecrutement||"")<f.recrutFrom)return false;
+    if(f.recrutTo&&String(a.dateRecrutement||"")>f.recrutTo)return false;
+    if(f.birthFrom&&String(a.dateNaissance||"")<f.birthFrom)return false;
+    if(f.birthTo&&String(a.dateNaissance||"")>f.birthTo)return false;
+    if(Number.isFinite(ageMin)&&(age===null||age<ageMin))return false;
+    if(Number.isFinite(ageMax)&&(age===null||age>ageMax))return false;
+    return true;
+  });
+}
+function opsEffectifFiltersHTML(sourceList,filteredCount){
+  if(!isOpsEffectifContext())return "";
+  const f=opsEffectifFilters();
+  const soc=effectifSocieteFilter();
+  const sites=(db.sites||[]).filter(s=>siteMatchesSociete(s,soc)).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  const postes=[...new Set((sourceList||[]).map(a=>a.affectationCourante?.poste||a.fonction||a.position||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const situations=[...new Set((sourceList||[]).map(a=>a.situation||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const val=k=>escapeHTML(f[k]||"");
+  return `<div class="card p-4 mb-4" style="background:#f8fafc;border:1px solid #dbeafe">
+    <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+      <div><div class="text-xs font-black uppercase tracking-wider text-blue-800">Filtres OPS effectifs</div><div class="text-xs text-slate-500">${filteredCount} résultat(s) affiché(s)</div></div>
+      <button type="button" class="btn btn-ghost text-xs" onclick="resetOpsEffectifFilters()">Réinitialiser</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-3">
+      <div class="xl:col-span-2"><label class="label">Nom / Prénom / Code</label><input class="input" value="${val("q")}" placeholder="Rechercher..." onchange="setOpsEffectifFilter('q',this.value)"/></div>
+      <div class="xl:col-span-2"><label class="label">Site</label><select class="select" onchange="setOpsEffectifFilter('site',this.value)"><option value="">Tous les sites</option><option value="__none__" ${f.site==="__none__"?"selected":""}>Sans affectation</option>${sites.map(s=>`<option value="${escapeHTML(s.id)}" ${String(f.site||"")===String(s.id)?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`).join("")}</select></div>
+      <div class="xl:col-span-2"><label class="label">Poste / fonction</label><select class="select" onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
+      <div class="xl:col-span-2"><label class="label">Situation familiale</label><select class="select" onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
+      <div><label class="label">Recrutement du</label><input class="input" type="date" value="${val("recrutFrom")}" onchange="setOpsEffectifFilter('recrutFrom',this.value)"/></div>
+      <div><label class="label">Recrutement au</label><input class="input" type="date" value="${val("recrutTo")}" onchange="setOpsEffectifFilter('recrutTo',this.value)"/></div>
+      <div><label class="label">Naissance du</label><input class="input" type="date" value="${val("birthFrom")}" onchange="setOpsEffectifFilter('birthFrom',this.value)"/></div>
+      <div><label class="label">Naissance au</label><input class="input" type="date" value="${val("birthTo")}" onchange="setOpsEffectifFilter('birthTo',this.value)"/></div>
+      <div><label class="label">Age min</label><input class="input" type="number" min="0" value="${val("ageMin")}" onchange="setOpsEffectifFilter('ageMin',this.value)"/></div>
+      <div><label class="label">Age max</label><input class="input" type="number" min="0" value="${val("ageMax")}" onchange="setOpsEffectifFilter('ageMax',this.value)"/></div>
+    </div>
+  </div>`;
+}
 function effectifFilteredData(filter){
   let list=db.agents.slice();let title="Effectif opérationnel";
   if(filter==="conge"){title="Agents en congé";list=list.filter(a=>db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)))}
@@ -6018,8 +6084,10 @@ function effectifFilteredData(filter){
   const baseList=list.slice();
   const soc=effectifSocieteFilter();
   if(soc)list=list.filter(a=>a.societe===soc);
+  const filterSource=list.slice();
+  list=applyOpsEffectifFilters(list);
   list=sortEffectif(list,effectifSort);
-  return{list,title,soc,filter};
+  return{list,title,soc,filter,filterSource};
 }
 function effectifModeToApi(filter){return filter||"actifs"}
 function effectifServerSupported(filter){return ["actifs","absents","suspension","sortant","blacklist"].includes(filter||"actifs")}
@@ -6040,9 +6108,11 @@ function employeeListRowHTML(a,filter){
   const deleteId=String(a.backendId||a.id||"");
   const deleteLabel=[a.matricule||"",((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" · ");
   const checkedCell=isAdmin()?`<td class="text-center"><input type="checkbox" class="effectif-row-select" value="${escapeHTML(deleteId)}" data-employee-id="${escapeHTML(a.id||"")}" data-backend-id="${escapeHTML(a.backendId||"")}" data-label="${escapeHTML(deleteLabel)}" onchange="updateEffectifBulkDeleteButton()" style="width:16px;height:16px"/></td>`:"";
-  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
+  const opsCells=isOpsEffectifContext()?`<td class="text-xs">${formatDate(a.dateNaissance)}</td><td class="text-xs font-bold">${ageFromDate(a.dateNaissance)??"—"}</td><td class="text-xs">${safe(a.situation)}</td>`:"";
+  return `<tr data-searchable data-employee-id="${escapeHTML(a.id)}" data-backend-id="${escapeHTML(a.backendId||"")}">${checkedCell}<td class="font-mono font-bold text-amber-600">${safe(a.matricule)}</td><td><div class="flex items-center gap-2"><div class="avatar">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><div><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${safe(a.telephone)}</div></div></div></td><td class="text-xs">${safe(a.societe)}</td><td class="text-xs">${safe(a.affectationCourante?.poste||a.fonction||a.position)}</td><td class="text-xs">${safe(a.affectationCourante?.siteName)}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td>${opsCells}<td><span class="pill ${a.statut==="actif"?"pill-green":"pill-gray"}">${safe(a.statut)}</span></td><td><a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir →</a></td>${filter==="instance_affectation"?`<td class="text-right"><button class="btn btn-primary text-xs" onclick="openReaffectation('${a.id}')">Affecter</button></td>`:""}</tr>`;
 }
 async function effectifListServerHTML(filter){
+  if(isOpsEffectifContext())return null;
   if(!sgdiAuthToken()||!effectifServerSupported(filter))return null;
   const soc=effectifSocieteFilter();
   const page=effectifCurrentPage(filter);
@@ -6060,8 +6130,9 @@ async function effectifListServerHTML(filter){
 }
 function effectifListHTML(filter){
   const data=effectifFilteredData(filter);
-  const {list,title,soc}=data;
+  const {list,title,soc,filterSource}=data;
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
+  const opsHeaders=isOpsEffectifContext()?"<th>Naissance</th><th>Age</th><th>Situation</th>":"";
   const selectHead=isAdmin()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   return `<div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div><div class="flex items-center gap-2"><span class="text-xs text-slate-500">Tri :</span><select class="select" style="max-width:260px" onchange="setEffectifSort(this.value)">
     <option value="nom_asc" ${effectifSort==="nom_asc"?"selected":""}>Nom A → Z</option>
@@ -6071,9 +6142,10 @@ function effectifListHTML(filter){
     <option value="mat_asc" ${effectifSort==="mat_asc"?"selected":""}>Matricule ↑</option>
     <option value="mat_desc" ${effectifSort==="mat_desc"?"selected":""}>Matricule ↓</option>
   </select></div></div>
+  ${opsEffectifFiltersHTML(filterSource,list.length)}
   ${effectifBulkDeleteToolbarHTML()}
   ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun agent.</div>`:`<div class="card overflow-hidden"><table>
-    <thead><tr>${selectHead}<th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th></th>${actionHeader}</tr></thead>
+    <thead><tr>${selectHead}<th>Matricule</th><th>Agent</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th>${opsHeaders}<th>Statut</th><th></th>${actionHeader}</tr></thead>
     <tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table></div>`}`;
 }
 function renderEffectif(view,filter,stableMode){

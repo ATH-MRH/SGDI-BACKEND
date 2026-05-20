@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260520aj";
+const SGDI_CACHE = "sgdi-pwa-v20260520ak";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
