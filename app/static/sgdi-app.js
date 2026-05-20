@@ -6006,7 +6006,7 @@ function setEffectifStableFilter(filter){
     card.style.borderColor=active?color:(color+"22");
     card.blur&&card.blur();
   });
-  if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone);updateEffectifBulkDeleteButton()}
+  if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone);updateEffectifBulkDeleteButton();if(isOpsEffectifContext())applyOpsEffectifSearchInPlace(opsEffectifFilters().q)}
   requestAnimationFrame(()=>{const v=document.getElementById("view");if(v)v.scrollTop=scrollTop});
   if(!zone&&view)renderEffectif(view,filter,true);
 }
@@ -6047,22 +6047,35 @@ function setOpsEffectifFilter(k,v){
 let opsEffectifSearchTimer=null;
 function setOpsEffectifSearch(v){
   clearTimeout(opsEffectifSearchTimer);
-  opsEffectifSearchTimer=setTimeout(()=>setOpsEffectifFilter("q",v),160);
+  const f=opsEffectifFilters();
+  f.q=String(v||"");
+  sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
+  opsEffectifSearchTimer=setTimeout(()=>applyOpsEffectifSearchInPlace(v),80);
 }
 function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs")}
+function applyOpsEffectifSearchInPlace(v){
+  const q=String(v||"").trim().toLowerCase();
+  const rows=[...document.querySelectorAll("#effectif-list-zone tbody tr[data-searchable]")];
+  if(!rows.length)return;
+  let shown=0;
+  rows.forEach(row=>{
+    const ok=!q||(row.textContent||"").toLowerCase().includes(q);
+    row.style.display=ok?"":"none";
+    if(ok)shown++;
+  });
+  const count=document.getElementById("ops-effectif-result-count");
+  if(count)count.textContent=shown+" résultat(s) affiché(s)";
+}
 function applyOpsEffectifFilters(list){
   if(!isOpsEffectifContext())return list;
   const f=opsEffectifFilters();
-  const q=String(f.q||"").trim().toLowerCase();
   const ageMin=parseInt(f.ageMin,10);
   const ageMax=parseInt(f.ageMax,10);
   return (list||[]).filter(a=>{
     const siteId=String(a.affectationCourante?.siteId||"");
     const siteName=String(a.affectationCourante?.siteName||"");
     const poste=String(a.affectationCourante?.poste||a.fonction||a.position||"");
-    const full=[a.matricule,a.nom,a.prenom,a.telephone].join(" ").toLowerCase();
     const age=ageFromDate(a.dateNaissance);
-    if(q&&!full.includes(q))return false;
     if(f.site==="__none__"){if(siteId||siteName)return false}
     else if(f.site&&siteId!==String(f.site))return false;
     if(f.poste&&poste!==f.poste)return false;
@@ -6086,7 +6099,7 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
   const val=k=>escapeHTML(f[k]||"");
   return `<div class="card p-4 mb-4" style="background:#f8fafc;border:1px solid #dbeafe">
     <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-      <div><div class="text-xs font-black uppercase tracking-wider text-blue-800">Filtres OPS effectifs</div><div class="text-xs text-slate-500">${filteredCount} résultat(s) affiché(s)</div></div>
+      <div><div class="text-xs font-black uppercase tracking-wider text-blue-800">Filtres OPS effectifs</div><div id="ops-effectif-result-count" class="text-xs text-slate-500">${filteredCount} résultat(s) affiché(s)</div></div>
       <button type="button" class="btn btn-ghost text-xs" onclick="resetOpsEffectifFilters()">Réinitialiser</button>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-3">
@@ -6186,11 +6199,11 @@ function renderEffectif(view,filter,stableMode){
   view.innerHTML=`${cards}<div id="effectif-list-zone"><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div></div>`;
   effectifListServerHTML(filter).then(html=>{
     const zone=document.getElementById("effectif-list-zone");
-    if(zone){zone.innerHTML=html||effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone)}
+    if(zone){zone.innerHTML=html||effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone);if(isOpsEffectifContext())applyOpsEffectifSearchInPlace(opsEffectifFilters().q)}
   }).catch(e=>{
     console.warn("Effectif PostgreSQL paginé indisponible",e);
     const zone=document.getElementById("effectif-list-zone");
-    if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone)}
+    if(zone){zone.innerHTML=effectifListHTML(filter);sgdiApplyActiveEmployeeStyles(zone);if(isOpsEffectifContext())applyOpsEffectifSearchInPlace(opsEffectifFilters().q)}
     toast("Lecture PostgreSQL effectifs refusée : "+(e.message||e),"error");
   });
 }
