@@ -639,27 +639,29 @@ async function refreshDemandesPersonnelFromPostgres(options){
 }
 function employeeFromApi(emp){
   const extra=emp&&emp.extra&&typeof emp.extra==="object"?emp.extra:{};
+  const legacy=extra&&extra._legacy&&typeof extra._legacy==="object"?extra._legacy:{};
+  const data={...legacy,...extra};
   return {
-    ...extra,
-    id:extra.id||String(emp.id),
+    ...data,
+    id:data.id||String(emp.id),
     backendId:emp.id,
-    matricule:extra.matricule||emp.code||String(emp.id),
-    nom:extra.nom||emp.last_name||"",
-    prenom:extra.prenom||emp.first_name||"",
-    societe:extra.societe||emp.society||"",
-    statut:extra.statut||emp.status||"actif",
-    typeContrat:cleanContractType(extra.typeContrat||emp.contract_type||""),
-    email:extra.email||emp.email||"",
-    telephone:extra.telephone||emp.phone||"",
-    address:extra.address||emp.address||"",
-    position:extra.position||emp.position||"",
-    fonction:extra.fonction||emp.position||"",
-    dateFinContrat:extra.dateFinContrat||emp.contract_end_date||"",
-    dateFinEssai:extra.dateFinEssai||emp.trial_end_date||"",
-    dateNaissance:extra.dateNaissance||emp.birth_date||"",
-    dateRecrutement:extra.dateRecrutement||emp.recruit_date||"",
-    photo:extra.photo||"",
-    extra
+    matricule:data.matricule||emp.code||String(emp.id),
+    nom:data.nom||emp.last_name||"",
+    prenom:data.prenom||emp.first_name||"",
+    societe:data.societe||emp.society||"",
+    statut:data.statut||emp.status||"actif",
+    typeContrat:cleanContractType(data.typeContrat||emp.contract_type||""),
+    email:data.email||emp.email||"",
+    telephone:data.telephone||emp.phone||"",
+    address:data.address||emp.address||"",
+    position:data.position||emp.position||"",
+    fonction:data.fonction||emp.position||"",
+    dateFinContrat:data.dateFinContrat||emp.contract_end_date||"",
+    dateFinEssai:data.dateFinEssai||emp.trial_end_date||"",
+    dateNaissance:data.dateNaissance||emp.birth_date||"",
+    dateRecrutement:data.dateRecrutement||emp.recruit_date||"",
+    photo:data.photo||"",
+    extra:data
   };
 }
 function employeeRouteId(a){
