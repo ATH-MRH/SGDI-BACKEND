@@ -7858,14 +7858,15 @@ function siteOpeningPVHTML(site){
   const ref="PV-OUV-"+today().replaceAll("-","")+"-"+String(site.indicatif||site.id||"SITE").replace(/\W+/g,"").toUpperCase();
   const eff=siteEffectifsNorm(site);
   const openDate=site.dateOuverture||today();
+  const posteKey=v=>String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[’']/g," ").replace(/-/g," ").replace(/\s+/g," ").trim().toUpperCase();
   const posteLabels=["CHEF DE SITE","CHEF DE GROUPE","CHEF DE POSTE","APS","A-P-S","AGENT D'ACCUEIL","AGENT D’ACCUEIL","AGENT D'ACCEUIL","AGENT D’ACCEUIL"];
   const byNorm={};
-  Object.entries(site.postes||{}).forEach(([k,v])=>{byNorm[normalizeText(k).replace(/-/g," ")]=v||{}});
+  Object.entries(site.postes||{}).forEach(([k,v])=>{byNorm[posteKey(k)]=v||{}});
   const posteRow=label=>{
-    const v=byNorm[normalizeText(label).replace(/-/g," ")]||{};
+    const v=byNorm[posteKey(label)]||{};
     return `<tr><td>${escapeHTML(label)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||((+v.jour||0)+(+v.nuit||0))||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`;
   };
-  const customRows=Object.entries(site.postes||{}).filter(([k])=>!posteLabels.some(x=>normalizeText(x).replace(/-/g," ")===normalizeText(k).replace(/-/g," "))).map(([k,v])=>`<tr><td>${escapeHTML(k)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`).join("");
+  const customRows=Object.entries(site.postes||{}).filter(([k])=>!posteLabels.some(x=>posteKey(x)===posteKey(k))).map(([k,v])=>`<tr><td>${escapeHTML(k)}</td><td>${v.jour||""}</td><td>${v.nuit||""}</td><td>${v.total||""}</td><td>${escapeHTML(v.rotationSystem||"")}</td></tr>`).join("");
   const eqRows=(site.equipements||site.materiel||[]).map((m,i)=>`<tr><td>${i+1}</td><td>${escapeHTML(m.categorie||"")}</td><td>${escapeHTML(m.designation||m.article||"")}</td><td>${escapeHTML(String(m.quantite||""))}</td><td>${escapeHTML(m.etat||m.observation||"")}</td></tr>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(ref)}</title><style>
     body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;margin:0;padding:12mm;font-size:11px}.pv{max-width:190mm;margin:0 auto}
@@ -7888,13 +7889,18 @@ function siteOpeningPVHTML(site){
   </body></html>`;
 }
 function editSiteOpeningPV(id){
-  const site=siteDraftFromCurrentForm(id);
-  if(!String(site.nom||"").trim()){toast("Saisissez la dénomination du site avant d'éditer le PV","error");return}
-  const html=siteOpeningPVHTML(site);
-  const w=window.open("","_blank","width=1000,height=800");
-  if(!w){toast("Ouverture bloquée par le navigateur","error");return}
-  w.document.write(html.replace("</body>","<script>window.onload=()=>setTimeout(()=>window.print(),300)<\\/script></body>"));
-  w.document.close();
+  try{
+    const site=siteDraftFromCurrentForm(id);
+    if(!String(site.nom||"").trim()){toast("Saisissez la dénomination du site avant d'éditer le PV","error");return}
+    const w=window.open("","_blank","width=1000,height=800");
+    if(!w){toast("Ouverture bloquée par le navigateur","error");return}
+    const html=siteOpeningPVHTML(site);
+    w.document.write(html.replace("</body>","<script>window.onload=()=>setTimeout(()=>window.print(),300)<\\/script></body>"));
+    w.document.close();
+  }catch(e){
+    console.error("PV ouverture site impossible",e);
+    toast("PV impossible à générer : "+(e.message||e),"error");
+  }
 }
 async function deleteSite(id){
   const lookup=decodeURIComponent(String(id));
