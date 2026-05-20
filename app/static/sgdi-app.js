@@ -693,6 +693,7 @@ function employeeApiPayload(a){
   const extra={...a};
   delete extra.backendId;
   delete extra.extra;
+  extra._legacy={...(a.extra?._legacy||{}),...extra};
   return {
     code:String(a.matricule||a.code||"").trim()||nextMatricule(db.agents,a.societe),
     first_name:firstName,

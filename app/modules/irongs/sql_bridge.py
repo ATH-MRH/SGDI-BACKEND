@@ -139,6 +139,7 @@ def upsert_candidate(db: Session, item: dict[str, Any]) -> dict[str, Any]:
 def employee_to_item(row: Employee) -> dict[str, Any]:
     extra = row.extra if isinstance(row.extra, dict) else {}
     item = dict(extra.get("_legacy") or {})
+    item.update({key: deepcopy(value) for key, value in extra.items() if key != "_legacy"})
     item.update({
         "id": item.get("id") or str(row.id), "backendId": row.id,
         "matricule": row.code, "code": row.code, "nom": row.last_name, "prenom": row.first_name,
