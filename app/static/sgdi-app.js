@@ -2074,8 +2074,9 @@ function createRecruitmentWorkflowForEmployee(agent,candidate){
 }
 function workflowTasksCardHTML(module,title,emptyText){
   const rows=workflowTasksForModule(module);
+  const displayName=t=>String(t.candidateName||"Candidat").toUpperCase();
   return `<div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="mb-0 font-bold">${escapeHTML(title)}</h3><span class="pill ${rows.length?"pill-amber":"pill-green"}">${rows.length}</span></div>
-    ${rows.length?rows.slice(0,5).map(t=>`<a href="#/${escapeHTML(t.route||"dashboard")}" class="block p-2 rounded-lg bg-amber-50 mb-2" style="text-decoration:none;color:inherit"><div class="text-xs font-black text-amber-800">${escapeHTML(t.candidateName||"Candidat")}</div><div class="text-[11px] text-slate-600">${escapeHTML(t.title||"Tâche")} · ${escapeHTML(t.societe||"—")}</div></a>`).join(""):`<div class="text-sm text-emerald-700 font-semibold">${escapeHTML(emptyText||"Aucune tâche ouverte.")}</div>`}
+    ${rows.length?rows.slice(0,5).map(t=>`<a href="#/${escapeHTML(t.route||"dashboard")}" class="block p-2 rounded-lg bg-amber-50 mb-2" style="text-decoration:none;color:inherit"><div class="text-xs font-black text-amber-800">${escapeHTML(displayName(t))}</div><div class="text-[11px] text-slate-600">${escapeHTML(t.title||"Tâche")} · ${escapeHTML(t.societe||"—")}</div></a>`).join(""):`<div class="text-sm text-emerald-700 font-semibold">${escapeHTML(emptyText||"Aucune tâche ouverte.")}</div>`}
   </div>`;
 }
 function selectSocieteDirect(s){if(!canUseSociete(s)){toast("Société non autorisée pour cet utilisateur","error");return}session.societe=s;session.transverse=null;saveSession(session);try{sessionStorage.setItem("dashSociete",s);sessionStorage.setItem("fpSociete",s);sessionStorage.setItem("mtSociete",s)}catch(e){}toast("Société active : "+s,"success");location.hash="#/societe-portal";route()}
