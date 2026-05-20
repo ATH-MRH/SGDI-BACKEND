@@ -6177,7 +6177,7 @@ function effectifListHTML(filter){
 }
 function renderEffectif(view,filter,stableMode){
   if(filter==="recap")return renderEffectifRecap(view);
-  const cards=filter==="instance_affectation"?"":`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`;
+  const cards=(filter==="instance_affectation"||isOpsEffectifContext())?"":`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`;
   view.innerHTML=`${cards}<div id="effectif-list-zone"><div class="card p-8 text-center text-slate-500">Chargement PostgreSQL...</div></div>`;
   effectifListServerHTML(filter).then(html=>{
     const zone=document.getElementById("effectif-list-zone");
