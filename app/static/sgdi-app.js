@@ -6119,25 +6119,75 @@ function updateSuspensionEndDate(){
   const days=parseInt(f.duree.value||"15",10)||15;
   const end=addDays(start,days);
   f.dateFin.value=end;
+  if(f.reference)f.reference.value=suspensionDecisionReference(findEmployeeByRef(f.agentId.value),start);
   const alert=f.querySelector("#suspension-alert-date");
   if(alert)alert.textContent="Alerte programmée le "+formatDate(addDays(end,-2))+" (48 heures avant la fin).";
+}
+function suspensionDecisionReference(a,dateDebut){
+  const code=String(a?.matricule||"EMP").replace(/[^a-z0-9]/gi,"").toUpperCase()||"EMP";
+  return "DEC-SUSP-"+code+"-"+String(dateDebut||today()).replaceAll("-","");
+}
+function employeeSuspensionDraftFromForm(form){
+  const fd=new FormData(form);
+  const a=findEmployeeByRef(fd.get("agentId"));
+  const du=String(fd.get("dateDebut")||today());
+  const duree=parseInt(fd.get("duree")||"15",10)||15;
+  const au=String(fd.get("dateFin")||addDays(du,duree));
+  const ref=String(fd.get("reference")||suspensionDecisionReference(a,du));
+  return {a,ref,du,duree,au,motif:String(fd.get("motif")||"").trim()};
+}
+function suspensionDecisionHTML(a,draft){
+  const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase()||"____________________________");
+  const poste=escapeHTML(a.affectationCourante?.poste||a.fonction||a.position||"Agent de Prévention et de Sécurité");
+  const soc=escapeHTML(a.societe||"IRON GLOBAL SECURITE");
+  const motif=escapeHTML(draft.motif||"").replace(/\n/g,"<br>");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(draft.ref||"DECISION DE SUSPENSION")}</title><style>
+    @page{size:A4 portrait;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.42}.susp-page{width:190mm;min-height:273mm;margin:0 auto;padding:8mm 7mm 6mm;position:relative}.susp-logo{width:41mm;height:41mm;object-fit:contain;display:block;margin:0 auto 9mm}.susp-title{text-align:center;font-size:22px;font-weight:900;letter-spacing:.3px;margin:0 0 13mm}.susp-rule{border-top:1.5px solid #f2b705;margin:0 0 5mm}.susp-meta{display:flex;justify-content:space-between;gap:12mm;padding:0 8mm 5mm;font-size:14px}.susp-meta b{font-weight:400}.susp-meta .line{display:inline-block;min-width:36mm;border-bottom:1px solid #111;height:15px;vertical-align:baseline}.susp-vu{border-top:1.5px solid #f2b705;padding:7mm 9mm 7mm;margin-bottom:8mm}.susp-vu ul{margin:0;padding-left:6mm}.susp-vu li{margin:1.5mm 0}.susp-center{display:flex;align-items:center;gap:16mm;margin:5mm 0 7mm}.susp-center:before,.susp-center:after{content:"";height:1px;background:#111;flex:1}.susp-center b{font-size:16px;letter-spacing:.4px}.susp-article{margin:0 0 6mm}.susp-article p{margin:0 0 3mm;text-align:justify}.susp-article b.u{text-decoration:underline}.susp-motif-title{font-weight:900;margin:7mm 0 3mm}.susp-motif{min-height:24mm;border:1px solid transparent;padding:1mm 0;font-weight:700}.susp-sign{margin-top:12mm;font-weight:900}.susp-footer{position:absolute;left:7mm;right:7mm;bottom:5mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:10px;line-height:1.2}@media print{.no-print{display:none!important}.susp-page{margin:0;box-shadow:none}}
+  </style></head><body><main class="susp-page">
+    <img class="susp-logo" src="/static/iron-securite-logo.png" alt="IRON GLOBAL SECURITE">
+    <h1 class="susp-title">DECISION DE SUSPENSION</h1>
+    <div class="susp-rule"></div>
+    <div class="susp-meta"><div>Alger le : <span class="line">${formatDate(today())}</span></div><div>Réf. : <span class="line">${escapeHTML(draft.ref||"")}</span></div></div>
+    <section class="susp-vu"><ul>
+      <li>Vu les statuts constitutifs de la SARL <b>${soc}</b> ;</li>
+      <li>Vu la loi n° 90-11 du 21 avril 1990, modifiée et complétée, relative aux relations de travail ;</li>
+      <li>Vu le contrat de travail à durée déterminée établi en faveur de <b>${nom}</b>, en qualité de ${poste} ;</li>
+    </ul></section>
+    <div class="susp-center"><b>DECIDE</b></div>
+    <section class="susp-article"><p><b class="u">Article 01 :</b> La relation de travail liant Monsieur <b>${nom}</b> à la <b>${soc}</b> est suspendue à compter du <b>${formatDate(draft.du)}</b>, pour une durée de <b>${draft.duree} jours</b>, soit jusqu'au <b>${formatDate(draft.au)}</b>, pour le motif suivant :</p>
+      <div class="susp-motif-title">MOTIF DE LA SUSPENSION :</div><div class="susp-motif">${motif||"&nbsp;"}</div></section>
+    <section class="susp-article"><p><b class="u">Article 02 :</b> L'intéressé est <b>tenu de se présenter</b> à notre siège situé au <b>76, rue Ahmed Sayeh, Bir Mourad Raïs, Alger</b> au plus tard le <b>${formatDate(draft.au)}</b>.</p><p>Dépassant la date indiquée l'intéressé sera considéré en situation d'absence irrégulière et d'abandon de poste.</p></section>
+    <section class="susp-article"><p><b class="u">Article 03 :</b> Le Directeur des Ressources Humaines, le Responsable des Finances et Comptabilité et le Responsable des Opérations sont chargés chacun en ce qui le concerne de l'exécution de la présente Décision.</p></section>
+    <div class="susp-sign">La Direction des Ressources Humaines</div>
+    <footer class="susp-footer">Adresse : N° 76, boulevard Ahmed Sayeh, Cité les Sources, Bir Mourad Rais Alger<br>Contact : STD : +213 770 112 034 – Fax : 213 538 048 – E-mail : contact@irongs.com</footer>
+  </main></body></html>`;
+}
+function printEmployeeSuspensionDecisionFromForm(form){
+  const draft=employeeSuspensionDraftFromForm(form);
+  if(!draft.a){toast("Employé introuvable","error");return}
+  const w=window.open("","_blank","width=900,height=700");
+  if(!w){toast("Fenêtre d'impression bloquée par le navigateur","error");return}
+  w.document.write(suspensionDecisionHTML(draft.a,draft).replace("</body>","<script>window.onload=()=>setTimeout(()=>window.print(),300)<\\/script></body>"));
+  w.document.close();
 }
 function openEmployeeSuspensionModal(agentId){
   if(!canUseEmployeeActionWorkflows()){toast("Suspension non autorisée depuis ce module","error");return}
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];
   if(!selected){toast("Aucun employé disponible","error");return}
+  const ref=suspensionDecisionReference(selected,today());
   openModal(`<h3 class="font-bold text-lg mb-3">SUSPENDRE UN EMPLOYÉ</h3>
     <form id="employee-suspension-form" onsubmit="event.preventDefault();confirmEmployeeSuspension(this)">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="md:col-span-2"><label class="label">Recherche employé</label><input class="input" placeholder="Nom, prénom ou code..." oninput="filterSuspensionEmployeeOptions(this.value)"/></div>
-        <div class="md:col-span-2"><label class="label">Liste des employés</label><select id="suspension-agent-select" class="select" name="agentId" required>${suspensionEmployeeOptions(selected.id)}</select></div>
+        <div class="md:col-span-2"><label class="label">Liste des employés</label><select id="suspension-agent-select" class="select" name="agentId" required onchange="updateSuspensionEndDate()">${suspensionEmployeeOptions(selected.id)}</select></div>
+        <div class="md:col-span-2"><label class="label">Référence décision</label><input class="input bg-slate-50" name="reference" value="${escapeHTML(ref)}" readonly/></div>
         <div><label class="label">Date de suspension</label><input class="input" type="date" name="dateDebut" value="${today()}" onchange="updateSuspensionEndDate()" oninput="updateSuspensionEndDate()"/></div>
         <div><label class="label">Durée de suspension</label><select class="select" name="duree" onchange="updateSuspensionEndDate()"><option value="15">15 jours</option><option value="30">30 jours</option></select></div>
         <div><label class="label">Date de fin de suspension</label><input class="input bg-slate-50" type="date" name="dateFin" readonly/></div>
         <div class="p-3 rounded-lg text-xs font-bold" style="background:#fff7ed;border:1px solid #fed7aa;color:#92400e"><div>ALERTE 48 HEURES AVANT FIN</div><div id="suspension-alert-date" class="mt-1"></div></div>
         <div class="md:col-span-2"><label class="label">Motif de la suspension</label><textarea class="textarea" name="motif" rows="4" required placeholder="Motif détaillé de la suspension..."></textarea></div>
       </div>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger">Confirmer la suspension</button></div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeSuspensionDecisionFromForm(this.form)">Éditer / Imprimer décision</button><button class="btn btn-danger">Confirmer la suspension</button></div>
     </form>`);
   updateSuspensionEndDate();
 }
@@ -6148,11 +6198,12 @@ async function confirmEmployeeSuspension(form){
   const du=String(fd.get("dateDebut")||today());
   const duree=parseInt(fd.get("duree")||"15",10)||15;
   const au=String(fd.get("dateFin")||addDays(du,duree));
+  const ref=String(fd.get("reference")||suspensionDecisionReference(a,du));
   const motif=String(fd.get("motif")||"").trim();
   if(!motif){toast("Motif obligatoire","error");return}
   a.statut="suspendu";
   a.gestionEvents=a.gestionEvents||[];
-  a.gestionEvents.push({type:"Suspension",du,au,motif,statut:"en_cours",dureeJours:duree,alert48h:true,alertAt:addDays(au,-2),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH",source:"rh-effectif"});
+  a.gestionEvents.push({type:"Suspension",du,au,motif,reference:ref,statut:"en_cours",dureeJours:duree,alert48h:true,alertAt:addDays(au,-2),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH",source:"rh-effectif"});
   a.updatedAt=today();
   try{
     const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
