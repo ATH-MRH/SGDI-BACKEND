@@ -3925,7 +3925,7 @@ function candidateMarkImportedSectionsValidated(c){
 }
 function candidateBlankDraft(options){
   const opt=options||{};
-  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:false,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",dureeContrat:"",dateFinContrat:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
+  const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:false,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",numeroCnas:"",sexe:"M",situation:"Célibataire",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",dureeContrat:"",dateFinContrat:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
   return opt.markImportedSections?candidateMarkImportedSectionsValidated(draft):draft;
 }
 function openCandidateExcelImport(){
@@ -4714,11 +4714,12 @@ function renderCandidatEtape1(c){
 	      </div>
       <div class="col-span-3"><label class="label">Nom du père *</label><input class="input" name="nomPere" value="${escapeHTML(c.nomPere||"")}" /></div>
       <div class="col-span-3"><label class="label">Nom de la mère *</label><input class="input" name="nomMere" value="${escapeHTML(c.nomMere||"")}" /></div>
-      <div class="col-span-2"><label class="label">Sexe *</label><select class="select" name="sexe" ><option ${c.sexe==="M"?"selected":""}>M</option><option ${c.sexe==="F"?"selected":""}>F</option></select></div>
-      <div class="col-span-2"><label class="label">NIN (10 chiffres) *</label><input class="input" name="nin" value="${escapeHTML(c.nin||"")}" maxlength="10" pattern="[0-9]{10}" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" /></div>
-      <div class="col-span-2"><label class="label">Situation familiale *</label><select class="select" name="situation" >${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${c.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
+      <div class="col-span-3"><label class="label">Sexe *</label><select class="select" name="sexe" ><option ${c.sexe==="M"?"selected":""}>M</option><option ${c.sexe==="F"?"selected":""}>F</option></select></div>
+      <div class="col-span-3"><label class="label">Situation familiale *</label><select class="select" name="situation" >${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${c.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
       <div class="col-span-3"><label class="label">Nombre d'enfant *</label><input class="input" type="number" min="0" name="nombreEnfants" value="${c.nombreEnfants??""}" placeholder="0" /></div>
       <div class="col-span-3"><label class="label">Source *</label><input class="input" name="source" value="${escapeHTML(c.source||"")}" placeholder="ANEM, LinkedIn, recommandation…" /></div>
+      <div class="col-span-3"><label class="label">NIN (10 chiffres) *</label><input class="input" name="nin" value="${escapeHTML(c.nin||"")}" maxlength="10" pattern="[0-9]{10}" inputmode="numeric" oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,10)" /></div>
+      <div class="col-span-3"><label class="label">N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(c.numeroCnas||c.cnas||"")}" maxlength="13" pattern="[0-9]{10} [0-9]{2}" inputmode="numeric" placeholder="xxxxxxxxxx xx" oninput="let d=this.value.replace(/[^0-9]/g,'').slice(0,12);this.value=d.length>10?d.slice(0,10)+' '+d.slice(10):d" /></div>
     </div>
     <div class="mt-4"><label class="label">Langues parlées</label><div class="flex flex-wrap gap-3">${["Arabe","Français","Anglais","Kabyle","Espagnol","Allemand"].map(l=>`<label class="radio-pill"><input type="checkbox" name="lang_${l}" ${(c.langues||[]).includes(l)?"checked":""}/> ${l}</label>`).join("")}<label class="radio-pill"><input type="checkbox" id="lang-autre-check" ${c.langueAutre?"checked":""} onchange="document.getElementById('lang-autre-input').disabled=!this.checked"/> Autre</label><input id="lang-autre-input" class="input" style="max-width:200px" name="langueAutre" value="${escapeHTML(c.langueAutre||"")}" placeholder="Précisez" ${c.langueAutre?"":"disabled"}/></div></div>
   ${candidatSectionClose(c,"identification")}`:""}
@@ -4821,6 +4822,10 @@ function collectCandidatFormData(){
   fd.forEach((v,k)=>{if(k==="photo"){data.photo=v||null}else if(k.startsWith("hab_")||k.startsWith("lang_")||k.startsWith("doc_")||k.startsWith("exp_")||k.startsWith("verif")||k.startsWith("cv_")){}else{data[k]=typeof v==="string"?v.trim():v}});
   data.nom=String(fd.get("nom")||data.nom||"").trim();
   data.prenom=String(fd.get("prenom")||data.prenom||"").trim();
+  if(data.numeroCnas){
+    const cnasDigits=String(data.numeroCnas||"").replace(/[^0-9]/g,"").slice(0,12);
+    data.numeroCnas=cnasDigits.length>10?cnasDigits.slice(0,10)+" "+cnasDigits.slice(10):cnasDigits;
+  }
   normalizeCandidateIdentity(data);
   data.dateEntree=data.dateRecrutement||data.dateEntree||"";
   data.dateFinContrat=data.dateFinContrat||contractEndDate(data.dateRecrutement||data.dateEntree||"",data.dureeContrat||"");
@@ -4853,6 +4858,7 @@ function collectCandidatFormData(){
 function validateCandidatIdentification(data){
   markRequiredFields(document.getElementById("candidat-form"));
   if(data.nin&&!/^\d{10}$/.test(String(data.nin||""))){toast("Le NIN doit contenir exactement 10 chiffres","error");return false}
+  if(data.numeroCnas&&!/^\d{10} \d{2}$/.test(String(data.numeroCnas||""))){toast("Le N° CNAS doit respecter le format 10 chiffres espace 2 chiffres","error");return false}
   return true;
 }
 function candidatRequiredFieldsForSection(key){
@@ -5866,7 +5872,7 @@ function buildAgentFromContractCandidate(c,fd){
   const matricule=isOkbaFunction(posteContrat)?nextOkbaCode(db.agents):nextMatricule(db.agents,c.societe);
   const salaireNet=parseMoneyInput(contractValue(fd,"salaireNet",c.salaireNet||c.salairePrevu||""))||0;
   const agent={
-    id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,sexe:c.sexe,situation:c.situation,telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
+    id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,numeroCnas:c.numeroCnas||"",sexe:c.sexe,situation:c.situation,telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
     salairePrevu:parseMoneyInput(c.salairePrevu)||0,avisDecision:c.avisDecision||"",avisDate:c.avisDate||"",avisRecruteur:c.avisRecruteur||"",avisCommentaire:c.avisCommentaire||"",
     typeContrat:cleanContractType(contractValue(fd,"typeContrat",c.typeContrat||"")),dureeEssai,dureeContrat,dateFinContrat,salaireNet,banque:contractValue(fd,"banque",c.banque||""),iban:contractValue(fd,"iban",c.iban||""),
     dateRecrutement,dateFinEssai,
