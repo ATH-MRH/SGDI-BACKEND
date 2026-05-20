@@ -6044,6 +6044,11 @@ function setOpsEffectifFilter(k,v){
   sessionStorage.setItem("opsEffectifFilters",JSON.stringify(f));
   setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs");
 }
+let opsEffectifSearchTimer=null;
+function setOpsEffectifSearch(v){
+  clearTimeout(opsEffectifSearchTimer);
+  opsEffectifSearchTimer=setTimeout(()=>setOpsEffectifFilter("q",v),160);
+}
 function resetOpsEffectifFilters(){sessionStorage.removeItem("opsEffectifFilters");setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs")}
 function applyOpsEffectifFilters(list){
   if(!isOpsEffectifContext())return list;
@@ -6085,7 +6090,7 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
       <button type="button" class="btn btn-ghost text-xs" onclick="resetOpsEffectifFilters()">Réinitialiser</button>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-3">
-      <div class="xl:col-span-2"><label class="label">Nom / Prénom / Code</label><input class="input" value="${val("q")}" placeholder="Rechercher..." onchange="setOpsEffectifFilter('q',this.value)"/></div>
+      <div class="xl:col-span-2"><label class="label">Nom / Prénom / Code</label><input class="input" value="${val("q")}" placeholder="Rechercher..." oninput="setOpsEffectifSearch(this.value)"/></div>
       <div class="xl:col-span-2"><label class="label">Site</label><select class="select" onchange="setOpsEffectifFilter('site',this.value)"><option value="">Tous les sites</option><option value="__none__" ${f.site==="__none__"?"selected":""}>Sans affectation</option>${sites.map(s=>`<option value="${escapeHTML(s.id)}" ${String(f.site||"")===String(s.id)?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`).join("")}</select></div>
       <div class="xl:col-span-2"><label class="label">Poste / fonction</label><select class="select" onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
       <div class="xl:col-span-2"><label class="label">Situation familiale</label><select class="select" onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
