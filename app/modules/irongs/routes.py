@@ -10,6 +10,7 @@ from app.modules.irongs.schemas import CollectionOut, CollectionReplace, DbRepla
 from app.modules.irongs import service
 from app.modules.irongs.constants import CATEGORIES_PREST, POSTES, SOCIETES
 from app.modules.irongs.models import Position
+from app.modules.auth.routes import is_admin_role
 
 
 router = APIRouter(dependencies=[Depends(current_user)])
@@ -57,7 +58,7 @@ def list_positions(db: Session = Depends(get_db)) -> list[dict]:
 
 @router.post("/positions", status_code=201)
 def create_position(payload: PositionCreate, db: Session = Depends(get_db), user=Depends(current_user)) -> dict:
-    if user.role not in ("admin", "superadmin"):
+    if not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé administrateur")
     name = payload.name.strip()
     if not name:
@@ -73,7 +74,7 @@ def create_position(payload: PositionCreate, db: Session = Depends(get_db), user
 
 @router.delete("/positions/{position_id}", status_code=200)
 def delete_position(position_id: int, db: Session = Depends(get_db), user=Depends(current_user)) -> dict:
-    if user.role not in ("admin", "superadmin"):
+    if not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé administrateur")
     pos = db.get(Position, position_id)
     if not pos:
