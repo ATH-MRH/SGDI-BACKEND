@@ -25299,6 +25299,7 @@ async function opsImprimerOrdreMouvementCentral(btn){
 }
 async function opsValiderMultiOM(agentIds,form,date,opt={}){
   showOmSaveOverlay();
+  const saved=[];
   let ok=0,fail=0;
   for(const aid of agentIds){
     try{
@@ -25309,15 +25310,21 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
       fpqUpsertLocalPresenceLine(line);
       opsUpsertMovementHistory(movement);
       if(opt.print)opsPrintMovementDocument(movement,true);
+      saved.push({aid,patch});
       ok++;
     }catch(e){console.warn("OM multi échec",aid,e);fail++}
+  }
+  // Appliquer chaque affectation localement (met à jour db.agents[i].affectationCourante)
+  for(const {aid,patch} of saved){
+    await fpqApplyMovementAffectation(date,aid,patch).catch(e=>console.warn("Affectation locale",aid,e));
   }
   updateOmSaveOverlay(`${ok} OM enregistré(s)`,true);
   if(fail)toast(`${ok} OM validé(s), ${fail} échec(s)`,ok?"warning":"error");
   else toast(`${ok} ordre(s) de mouvement validé(s)`,"success");
   setTimeout(closeOmSaveOverlay,1800);
   window._sgdiSilentRibbon=true;
-  sgdiPullState({silent:true}).catch(()=>null).finally(()=>{window._sgdiSilentRibbon=false});
+  await sgdiPullState({silent:true}).catch(()=>null);
+  window._sgdiSilentRibbon=false;
   renderView();
 }
 function opsMovementGroupHTML(title,rows,field){
