@@ -23184,7 +23184,7 @@ async function renderAdminPostes(view){
     <tr>
       <td class="font-semibold">${escapeHTML(p.name||p)}</td>
       <td class="text-xs text-slate-400">${escapeHTML(p.society||"Toutes")}</td>
-      <td class="text-right"><button class="btn btn-danger text-xs" onclick="adminDeletePoste(${p.id||0},${JSON.stringify(p.name||p)})">Supprimer</button></td>
+      <td class="text-right"><button class="btn btn-danger text-xs" onclick="adminDeletePoste(${p.id||0},${JSON.stringify(p.name||p).replace(/"/g,'&quot;')})">Supprimer</button></td>
     </tr>`).join("");
   view.innerHTML=`
   <div class="mb-5 flex items-start justify-between gap-3 flex-wrap">
