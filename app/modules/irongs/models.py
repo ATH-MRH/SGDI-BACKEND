@@ -8,7 +8,8 @@ class Position(Base):
     __tablename__ = "positions"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(150), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(150), index=True)
+    society: Mapped[str | None] = mapped_column(String(150), index=True)
 
 
 class SgdiRecord(Base, TimestampMixin):

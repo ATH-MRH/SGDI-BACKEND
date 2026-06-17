@@ -20,7 +20,7 @@ def _get_postes(db: Session) -> list[str]:
     rows = db.query(Position).order_by(Position.name).all()
     if not rows:
         for name in POSTES:
-            db.add(Position(name=name))
+            db.add(Position(name=name, society=None))
         db.commit()
         rows = db.query(Position).order_by(Position.name).all()
     return [r.name for r in rows]
@@ -48,12 +48,16 @@ def bootstrap(db: Session = Depends(get_db), user=Depends(current_user)) -> dict
 
 class PositionCreate(BaseModel):
     name: str
+    society: str | None = None
 
 
 @router.get("/positions")
-def list_positions(db: Session = Depends(get_db)) -> list[dict]:
+def list_positions(society: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     _get_postes(db)  # seed if empty
-    return [{"id": r.id, "name": r.name} for r in db.query(Position).order_by(Position.name).all()]
+    q = db.query(Position).order_by(Position.society.nulls_first(), Position.name)
+    if society:
+        q = q.filter((Position.society == society) | (Position.society.is_(None)))
+    return [{"id": r.id, "name": r.name, "society": r.society} for r in q.all()]
 
 
 @router.post("/positions", status_code=201)
@@ -61,15 +65,16 @@ def create_position(payload: PositionCreate, db: Session = Depends(get_db), user
     if not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé administrateur")
     name = payload.name.strip()
+    society = payload.society.strip() if payload.society else None
     if not name:
         raise HTTPException(status_code=400, detail="Nom requis")
-    if db.query(Position).filter(Position.name == name).first():
-        raise HTTPException(status_code=409, detail="Poste déjà existant")
-    pos = Position(name=name)
+    if db.query(Position).filter(Position.name == name, Position.society == society).first():
+        raise HTTPException(status_code=409, detail="Poste déjà existant pour cette société")
+    pos = Position(name=name, society=society)
     db.add(pos)
     db.commit()
     db.refresh(pos)
-    return {"id": pos.id, "name": pos.name}
+    return {"id": pos.id, "name": pos.name, "society": pos.society}
 
 
 @router.delete("/positions/{position_id}", status_code=200)

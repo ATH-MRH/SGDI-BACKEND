@@ -561,7 +561,7 @@ async function sgdiPullState(options){
       }
       const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
       if(typeof normalizePostesInDB==="function")normalizePostesInDB();
-      try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=pr.map(p=>p.name||p)}catch(_){}
+      try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=[...new Set(pr.map(p=>p.name||p))]}catch(_){}
       const pruned=pruneEmptyCandidates();
       if(purged||pruned)sgdiBackendSave();
       if(opt.render&&typeof render==="function")render();
@@ -23171,12 +23171,19 @@ function renderAdminCandidats(view){
 }
 async function renderAdminPostes(view){
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé</h2><p>Cette page est réservée au compte Administration système.</p></div>`;return}
+  const selSoc=sessionStorage.getItem("adminPostesFilterSoc")||"";
   let allPostes=[];
-  try{allPostes=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});}catch(_){}
+  try{
+    const qs=selSoc?`?society=${encodeURIComponent(selSoc)}`:"";
+    allPostes=await sgdiApi(`/api/irongs/positions${qs}`,{method:"GET",legacy:false});
+  }catch(_){}
   if(Array.isArray(allPostes)&&allPostes.length)POSTES=allPostes.map(p=>p.name||p);
+  const societes=["IRON GLOBAL SOLUTION","IRON GLOBAL SÉCURITÉ","SWORD Corporation","SWORD Construction"];
+  const socOptions=`<option value="">Toutes les sociétés</option>`+societes.map(s=>`<option value="${escapeHTML(s)}" ${selSoc===s?"selected":""}>${escapeHTML(s)}</option>`).join("");
   const rows=allPostes.map(p=>`
     <tr>
       <td class="font-semibold">${escapeHTML(p.name||p)}</td>
+      <td class="text-xs text-slate-400">${escapeHTML(p.society||"Toutes")}</td>
       <td class="text-right"><button class="btn btn-danger text-xs" onclick="adminDeletePoste(${p.id||0},${JSON.stringify(p.name||p)})">Supprimer</button></td>
     </tr>`).join("");
   view.innerHTML=`
@@ -23188,15 +23195,26 @@ async function renderAdminPostes(view){
     </div>
     <button type="button" class="btn btn-ghost" onclick="navigate('admin/dashboard')">← Retour</button>
   </div>
+  <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
+    <label class="label mb-0">Filtrer par société :</label>
+    <select class="select" style="min-width:260px" onchange="sessionStorage.setItem('adminPostesFilterSoc',this.value);renderView()">${socOptions}</select>
+  </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
     <section class="card p-5">
       <h2 class="font-black text-lg mb-3">Liste des postes (${allPostes.length})</h2>
-      <table><thead><tr><th>Poste / Fonction</th><th></th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="2" class="text-center text-slate-500 p-4">Aucun poste défini</td></tr>`}</tbody></table>
+      <table><thead><tr><th>Poste / Fonction</th><th>Société</th><th></th></tr></thead>
+      <tbody>${rows||`<tr><td colspan="3" class="text-center text-slate-500 p-4">Aucun poste défini</td></tr>`}</tbody></table>
     </section>
     <section class="card p-5">
       <h2 class="font-black text-lg mb-3">Ajouter un poste</h2>
       <form onsubmit="adminAddPoste(event)">
+        <div class="mb-3">
+          <label class="label">Société</label>
+          <select id="admin-new-poste-soc" class="select">
+            <option value="">Toutes les sociétés (commun)</option>
+            ${societes.map(s=>`<option value="${escapeHTML(s)}" ${selSoc===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}
+          </select>
+        </div>
         <div class="mb-3">
           <label class="label">Nom du poste</label>
           <input id="admin-new-poste" class="input" type="text" placeholder="Ex: Agent de sécurité" required autocomplete="off">
@@ -23209,9 +23227,10 @@ async function renderAdminPostes(view){
 window.adminAddPoste=async function(e){
   e.preventDefault();
   const name=(document.getElementById("admin-new-poste")?.value||"").trim();
+  const society=(document.getElementById("admin-new-poste-soc")?.value||"").trim()||null;
   if(!name)return;
   try{
-    await sgdiApi("/api/irongs/positions",{method:"POST",body:{name},legacy:false});
+    await sgdiApi("/api/irongs/positions",{method:"POST",body:{name,society},legacy:false});
     const r=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});
     if(Array.isArray(r)&&r.length)POSTES=r.map(p=>p.name||p);
     toast("Poste ajouté","success");
