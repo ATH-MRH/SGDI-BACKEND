@@ -88,6 +88,10 @@ def ensure_schema_upgrades() -> None:
             columns = {col["name"] for col in inspector.get_columns("stores")}
             if "config" not in columns:
                 connection.execute(text("ALTER TABLE stores ADD COLUMN config JSON"))
+        if "positions" in tables:
+            columns = {col["name"] for col in inspector.get_columns("positions")}
+            if "society" not in columns:
+                connection.execute(text("ALTER TABLE positions ADD COLUMN society VARCHAR(150)"))
         if "daily_presence" in tables:
             columns = {col["name"] for col in inspector.get_columns("daily_presence")}
             daily_presence_columns = {
