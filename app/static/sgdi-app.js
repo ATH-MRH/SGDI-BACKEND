@@ -23638,6 +23638,7 @@ async function renderAdminSystemDashboard(view){
   <div class="grid grid-3 gap-4 mb-5">
     ${card("Gestion des effectifs","Règles opérationnelles, statuts, actions DRH/OPS et paramètres employés.","admin/effectifs","#043970",agents.length)}
     ${card("Fiche de position","Suppression, modification, contrats et verrouillage des fiches employés.","admin/fiches","#0f766e",agents.length)}
+    ${card("Postes / Fonctions","Gérez la liste des postes et fonctions disponibles dans les formulaires.","admin/postes","#0891b2",POSTES.length)}
     ${card("Sites","Modification et suppression des sites et informations associées.","sites/actifs","#1d4ed8",sitesCount)}
     ${card("Magasins","Maintenance magasins, rattachement société et suppression contrôlée.","admin/magasins","#ca8a04",magasins.length)}
     ${card("Articles","Catalogue matériel, stock, articles et suppressions contrôlées.","admin/articles","#7c3aed",articles.length)}
