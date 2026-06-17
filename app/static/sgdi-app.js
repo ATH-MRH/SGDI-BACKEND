@@ -25213,7 +25213,8 @@ function opsMovementEditorHTML(date,agentId,agents){
   const mkOption=a=>{
     const aff=agentLiveAffectation(a)||{};
     const isSelected=agentId&&(String(a.id)===String(agentId)||String(a.backendId||"")===String(agentId)||String(a.matricule||"")===String(agentId));
-    const label=`${((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase()} · ${a.matricule||"—"} · ${aff.siteName||"Non affecté"}`;
+    const poste=aff.poste||a.fonction||a.position||a.posteContrat||"";
+    const label=`${((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase()} · ${a.matricule||"—"}${poste?" · "+poste:""} · ${aff.siteName||"Non affecté"}`;
     return `<option value="${escapeHTML(a.id)}" ${isSelected?"selected":""}>${escapeHTML(label)}</option>`;
   };
   const initCount=agentId?1:0;
