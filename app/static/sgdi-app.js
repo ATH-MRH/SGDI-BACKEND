@@ -25208,11 +25208,14 @@ function opsMovementEditorHTML(date,agentId,agents){
   const sites=movementSitesForSociete(siteSociete);
   const remplacementAgents=(db.agents||[]).filter(x=>!siteSociete||normalizeSocieteName(x.societe)===normalizeSocieteName(siteSociete)).sort((x,y)=>((x.nom||"")+" "+(x.prenom||"")).localeCompare((y.nom||"")+" "+(y.prenom||"")));
   const numeroOrdre=nextOrdreMouvementNumero();
-  const agentRows=agents.map(a=>{
+  const nonAffectes=agents.filter(a=>!agentLiveAffectation(a)?.siteId);
+  const affectes=agents.filter(a=>!!agentLiveAffectation(a)?.siteId);
+  const mkOption=a=>{
     const aff=agentLiveAffectation(a)||{};
-    const isChecked=agentId&&(String(a.id)===String(agentId)||String(a.backendId||"")===String(agentId)||String(a.matricule||"")===String(agentId));
-    return `<label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer ops-mvt-agent-row" data-q="${escapeHTML(((a.nom||"")+" "+(a.prenom||"")+" "+(a.matricule||"")+" "+(a.societe||"")+" "+(aff.siteName||"")).toLowerCase())}"><input type="checkbox" class="ops-mvt-agent-cb" value="${escapeHTML(a.id)}" ${isChecked?"checked":""} onchange="opsMovementCbChange()" style="width:15px;height:15px;flex-shrink:0;cursor:pointer"/><span class="text-sm leading-tight"><span class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span><span class="text-xs text-slate-500"> · ${escapeHTML(a.matricule||"—")} · <span class="${aff.siteId?"text-emerald-600 font-medium":"text-slate-400"}">${escapeHTML(aff.siteName||"Sans affectation")}</span></span></span></label>`;
-  }).join("");
+    const isSelected=agentId&&(String(a.id)===String(agentId)||String(a.backendId||"")===String(agentId)||String(a.matricule||"")===String(agentId));
+    const label=`${((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase()} · ${a.matricule||"—"} · ${aff.siteName||"Non affecté"}`;
+    return `<option value="${escapeHTML(a.id)}" ${isSelected?"selected":""}>${escapeHTML(label)}</option>`;
+  };
   const initCount=agentId?1:0;
   return `<form class="card p-5 mb-5" data-ops-movement-form onsubmit="event.preventDefault()">
     <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
@@ -25233,10 +25236,11 @@ function opsMovementEditorHTML(date,agentId,agents){
             <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="opsMovementSelectAll(false)">Aucun</button>
           </div>
         </div>
-        <input type="text" id="ops-mvt-agent-search" class="input mb-1" placeholder="🔍 Nom, matricule, site, poste..." oninput="opsMovementFilterAgents(this.value)" autocomplete="off"/>
-        <div id="ops-mvt-agent-list" style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;padding:4px">
-          ${agentRows||`<div class="p-3 text-slate-500 text-sm text-center">Aucun employé disponible</div>`}
-        </div>
+        <select id="ops-mvt-agent-list" multiple class="select" style="height:200px;padding:2px" onchange="opsMovementCbChange()">
+          ${nonAffectes.length?`<optgroup label="— Non affectés (${nonAffectes.length}) —">${nonAffectes.map(mkOption).join("")}</optgroup>`:""}
+          ${affectes.length?`<optgroup label="— Affectés (${affectes.length}) —">${affectes.map(mkOption).join("")}</optgroup>`:""}
+        </select>
+        <div class="text-xs text-slate-400 mt-1">Ctrl+clic pour sélectionner plusieurs · Shift+clic pour une plage</div>
       </div>
       <div><label class="label">Nouvelle affectation *</label><select class="select" name="siteId" onchange="const o=this.form.querySelector('[data-autres-affectation]');if(o)o.style.display=this.value==='autres'?'block':'none'"><option value="">${sites.length?"— Choisir un site actif —":"— Aucun site actif pour cette société —"}</option>${sites.map(s=>`<option value="${s.id}">${escapeHTML(s.nom||s.intitule||"Site "+s.id)}${s.indicatif?` · ${escapeHTML(s.indicatif)}`:""}</option>`).join("")}<option value="autres">Autres</option></select></div>
       <div data-autres-affectation style="display:none"><label class="label">Préciser autre affectation</label><input class="input" name="autreAffectation" value="" placeholder="Préciser l'affectation"/></div>
@@ -25253,29 +25257,23 @@ function opsMovementEditorHTML(date,agentId,agents){
   </form>`;
 }
 function opsMovementCbChange(){
-  const n=(document.getElementById('ops-mvt-agent-list')?.querySelectorAll('.ops-mvt-agent-cb:checked')||[]).length;
+  const sel=document.getElementById('ops-mvt-agent-list');
+  const n=sel?sel.selectedOptions.length:0;
   const el=document.getElementById('ops-mvt-sel-count');
   if(el)el.textContent=n;
 }
 function opsMovementSelectAll(checked){
-  const list=document.getElementById('ops-mvt-agent-list');
-  if(!list)return;
-  list.querySelectorAll('.ops-mvt-agent-row').forEach(row=>{
-    if(row.style.display!=='none'){const cb=row.querySelector('.ops-mvt-agent-cb');if(cb)cb.checked=checked;}
-  });
+  const sel=document.getElementById('ops-mvt-agent-list');
+  if(!sel)return;
+  [...sel.options].forEach(o=>o.selected=checked);
   opsMovementCbChange();
 }
-function opsMovementFilterAgents(q){
-  const lq=q.toLowerCase().trim();
-  const list=document.getElementById('ops-mvt-agent-list');
-  if(!list)return;
-  list.querySelectorAll('.ops-mvt-agent-row').forEach(row=>{row.style.display=(!lq||(row.dataset.q||"").includes(lq))?"":"none";});
-}
+function opsMovementFilterAgents(){}
 function opsMovementCentralContext(btn){
   const form=btn?.closest?.("form[data-ops-movement-form]")||document.querySelector("form[data-ops-movement-form]");
   const date=form?.querySelector('[name="date"]')?.value||today();
-  const list=document.getElementById('ops-mvt-agent-list');
-  const agentIds=list?[...list.querySelectorAll('.ops-mvt-agent-cb:checked')].map(cb=>cb.value).filter(Boolean):[];
+  const sel=document.getElementById('ops-mvt-agent-list');
+  const agentIds=sel?[...sel.selectedOptions].map(o=>o.value).filter(Boolean):[];
   if(!form||!agentIds.length){toast("Sélectionnez au moins un employé avant de créer un mouvement","error");return null}
   const agentId=agentIds[0];
   const {f,patch}=fpqMovementPatchFromForm(date,agentId,form);
