@@ -1,0 +1,9 @@
+# GitHub Linguist classification
+#
+# The legacy static frontend bundle contains UI templates, inline markup and
+# generated-style glue code. It is still shipped and reviewed normally, but it
+# should not dominate repository language statistics for the backend ERP.
+app/static/sgdi-app.js linguist-generated=true
+app/static/app.js linguist-generated=true
+app/static/sgdi-inline-2.js linguist-generated=true
+app/static/sw.js linguist-generated=true

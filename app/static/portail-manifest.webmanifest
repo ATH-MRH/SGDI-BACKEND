@@ -1,0 +1,26 @@
+{
+  "name": "Portail RH IRONGS",
+  "short_name": "Portail RH",
+  "description": "Soumettez vos demandes RH en ligne",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f1f5f9",
+  "theme_color": "#1e40af",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/static/sgdi-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/sgdi-icon-192.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

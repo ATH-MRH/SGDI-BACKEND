@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>IRONGS BASE — Gestion RH Gardiennage</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<meta name="theme-color" content="#01112f">
+<script>
+  (function () {
+    if (location.hostname === "portail-rh.irongs.com" && location.pathname !== "/portail-rh") {
+      location.replace("/portail-rh");
+    }
+  })();
+</script>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SGDI">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/sgdi-icon-192.png">
+<link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
+<link rel="stylesheet" href="/static/tailwind.min.css">
+<script defer src="/static/xlsx.full.min.js"></script>
+<script defer src="/static/qrcode.min.js"></script>
+<script defer src="/static/html5-qrcode.min.js"></script>
+<link rel="stylesheet" href="/static/sgdi-app.css?v=20260615-blink-btn">
+</head>
+<body>
+<div id="ui-progress"></div>
+<div id="ui-save-state"><span class="ui-dot"></span><span id="ui-save-text">Synchronisation</span></div>
+<div id="app"></div>
+<div id="overlay-host"></div>
+<div id="toast-host" aria-live="polite"></div>
+<div id="modal-host"></div>
+<div id="atlas-ai-widget"></div>
+<script defer src="/static/sgdi-app.js?v=20260616-gps-column"></script>
+<script defer src="/static/erp-frontend.js?v=20260606-admin-employee-delete"></script>
+
+<script defer src="/static/sgdi-inline-2.js?v=20260606-static-cache-bypass"></script>
+</body>
+</html>

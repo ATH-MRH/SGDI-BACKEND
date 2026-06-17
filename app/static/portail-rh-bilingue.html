@@ -1,0 +1,3739 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Portail RH - Demandes du Personnel</title>
+<link rel="manifest" href="/portail-manifest.webmanifest" />
+<meta name="theme-color" content="#1e40af" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Portail RH" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="apple-touch-icon" href="/static/sgdi-icon-192.png" />
+<style>
+  :root {
+    --primary: #1e40af;
+    --primary-dark: #1e3a8a;
+    --primary-light: #dbeafe;
+    --accent: #0ea5e9;
+    --success: #16a34a;
+    --warning: #f59e0b;
+    --danger: #dc2626;
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --text: #0f172a;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 25px -5px rgba(0,0,0,0.08), 0 8px 10px -6px rgba(0,0,0,0.05);
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  /* ============ AUTH ============ */
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background:
+      radial-gradient(ellipse at top, rgba(30, 64, 175, 0.15), transparent 60%),
+      linear-gradient(180deg, #eef2ff 0%, #f1f5f9 100%);
+  }
+
+  .auth-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 460px;
+    overflow: hidden;
+  }
+
+  .language-switcher {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: rgba(255,255,255,0.18);
+    border-radius: 999px;
+    align-items: center;
+    position: relative;
+    z-index: 5;
+  }
+
+  .auth-header .language-switcher {
+    margin-bottom: 16px;
+  }
+
+  .language-switcher button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    border-radius: 999px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    opacity: 0.82;
+  }
+
+  .language-switcher button.active {
+    background: white;
+    color: var(--primary);
+    opacity: 1;
+    box-shadow: var(--shadow);
+  }
+
+  .auth-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 28px 28px 24px;
+    text-align: center;
+  }
+
+  .auth-logo {
+    width: 60px;
+    height: 60px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 16px;
+    margin: 0 auto 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    backdrop-filter: blur(10px);
+  }
+
+  .auth-header h1 {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+
+  .auth-header p {
+    margin: 6px 0 0;
+    opacity: 0.9;
+    font-size: 0.92rem;
+  }
+
+  .auth-body {
+    padding: 28px;
+  }
+
+  .auth-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    padding: 4px;
+    border-radius: 10px;
+    margin-bottom: 22px;
+  }
+
+  .auth-tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.15s;
+  }
+
+  .auth-tab.active {
+    background: white;
+    color: var(--primary);
+    box-shadow: var(--shadow);
+  }
+
+  .auth-form { display: none; }
+  .auth-form.active { display: block; }
+
+  .auth-footer {
+    text-align: center;
+    margin-top: 18px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .password-strength {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .password-strength-bar {
+    height: 100%;
+    width: 0;
+    transition: all 0.25s;
+  }
+  .ps-weak { background: var(--danger); }
+  .ps-medium { background: var(--warning); }
+  .ps-strong { background: var(--success); }
+
+  .strength-text { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+
+  /* ============ APP ============ */
+  header {
+    background: linear-gradient(140deg, #043970 0%, #0d6ecc 100%);
+    border-radius: 0 0 28px 28px;
+    box-shadow: 0 8px 32px rgba(4,57,112,.28);
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    color: white;
+  }
+
+  .container {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  .header-content {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 18px 0 22px;
+    position: relative;
+  }
+
+  .header-employee-photo {
+    width: 88px;
+    height: 104px;
+    border-radius: 12px;
+    background: rgba(255,255,255,.18);
+    border: 2px solid rgba(255,255,255,.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-weight: 700;
+    font-size: 2rem;
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .header-employee-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .header-name-block {
+    padding-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+
+  .header-name-block .name {
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: white;
+    line-height: 1.25;
+  }
+
+  @keyframes portalCodeBlink {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 3px rgba(34,197,94,0.22), 0 0 18px rgba(34,197,94,0.85); }
+    50% { opacity: 0.38; box-shadow: 0 0 0 1px rgba(34,197,94,0.1), 0 0 4px rgba(34,197,94,0.25); }
+  }
+
+  @keyframes portalCodeBlinkRed {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 3px rgba(239,68,68,0.24), 0 0 18px rgba(239,68,68,0.9); }
+    50% { opacity: 0.38; box-shadow: 0 0 0 1px rgba(239,68,68,0.1), 0 0 4px rgba(239,68,68,0.25); }
+  }
+
+  .header-code-badge {
+    display: inline-block;
+    padding: 2px 14px;
+    border-radius: 6px;
+    background: #16a34a;
+    color: white;
+    font-weight: 700;
+    font-size: 0.88rem;
+    letter-spacing: 1px;
+    border: none;
+    animation: portalCodeBlink 1s infinite;
+  }
+
+  .header-code-badge.suspended {
+    background: #dc2626;
+    animation-name: portalCodeBlinkRed;
+  }
+
+  .header-ddn {
+    font-size: .78rem;
+    color: rgba(255,255,255,.75);
+  }
+
+  .header-right-cluster {
+    margin-left: auto;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    align-self: flex-start;
+  }
+
+  .header-right-cluster .language-switcher button {
+    background: rgba(255,255,255,.12);
+    border: 1px solid rgba(255,255,255,.4);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 5px;
+    font-size: .72rem;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s;
+  }
+
+  .header-right-cluster .language-switcher button.active,
+  .header-right-cluster .language-switcher button:hover {
+    background: rgba(255,255,255,.28);
+  }
+
+  .verification-light {
+    display: none;
+  }
+
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.15);
+    padding: 6px 6px 6px 14px;
+    border-radius: 999px;
+    backdrop-filter: blur(10px);
+  }
+
+  .user-chip .avatar {
+    width: 42px;
+    height: 42px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    overflow: hidden;
+    border: 2px solid rgba(255,255,255,0.75);
+  }
+
+  .user-chip .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .user-chip .info { font-size: 0.9rem; line-height: 1.2; }
+  .user-chip .name { font-weight: 700; }
+  .user-chip .role { opacity: 0.92; font-size: 0.8rem; font-weight: 600; }
+
+  .btn {
+    border: none;
+    background: var(--primary);
+    color: white;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn-secondary { background: rgba(255,255,255,0.2); }
+  .btn-secondary:hover { background: rgba(255,255,255,0.3); }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-success { background: var(--success); }
+  .btn-success:hover { background: #15803d; }
+  .btn-danger { background: var(--danger); }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-ghost { background: transparent; color: var(--primary); padding: 8px 12px; }
+  .btn-ghost:hover { background: var(--primary-light); }
+  .btn-block { width: 100%; justify-content: center; padding: 14px 18px; font-size: 1rem; }
+
+  main { padding: 16px 0 60px; }
+
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 22px;
+    margin-bottom: 18px;
+  }
+
+  .card h2 {
+    margin: 0 0 16px;
+    font-size: 1.1rem;
+    color: var(--primary-dark);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card h2::before {
+    content: "";
+    width: 4px;
+    height: 22px;
+    background: var(--primary);
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+
+  label { font-size: 0.875rem; font-weight: 500; color: var(--text); }
+  label .req { color: var(--danger); }
+
+  input, select, textarea {
+    font: inherit;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    color: var(--text);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+  input:disabled, select:disabled { background: #f8fafc; color: var(--text-muted); cursor: not-allowed; }
+  textarea { resize: vertical; min-height: 90px; }
+
+  .input-group { position: relative; }
+  .input-group .toggle-pwd {
+    position: absolute;
+    right: 8px; top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+  }
+
+  .request-types {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+  .type-card {
+    border: 2px solid var(--border);
+    background: white;
+    border-radius: var(--radius);
+    padding: 18px 14px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.18s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+  }
+  .type-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .type-card.active { border-color: var(--primary); background: var(--primary-light); }
+  .type-card .icon {
+    font-size: 1.2rem;
+    width: 44px; height: 44px;
+    background: var(--primary-light); color: var(--primary);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+  }
+  .type-card.active .icon { background: var(--primary); color: white; }
+  .type-card .label { font-weight: 600; font-size: 0.95rem; }
+  .type-card .sub { font-size: 0.78rem; color: var(--text-muted); }
+
+  .request-form { display: none; animation: fadeIn 0.25s; }
+  .request-form.active { display: block; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-en-attente { background: #fef3c7; color: #92400e; }
+  .badge-traitee { background: #dcfce7; color: #166534; }
+  .badge-rejetee { background: #fee2e2; color: #991b1b; }
+
+  .history-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  .history-table th, .history-table td {
+    text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border);
+  }
+  .history-table th {
+    background: var(--bg); font-weight: 600; color: var(--text-muted);
+    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .history-table tr:hover td { background: #f8fafc; }
+
+  .empty-state {
+    text-align: center; padding: 30px 20px; color: var(--text-muted);
+  }
+
+  .toast {
+    position: fixed; bottom: 30px; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--success); color: white;
+    padding: 14px 22px; border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    opacity: 0; transition: all 0.3s;
+    z-index: 1000; font-weight: 500;
+    max-width: 90%;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  .toast.error { background: var(--danger); }
+
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: white; border-radius: 14px;
+    max-width: 640px; width: 100%; max-height: 90vh;
+    overflow-y: auto; box-shadow: var(--shadow-lg);
+    animation: slideUp 0.25s;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .modal-header {
+    padding: 18px 22px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-header h3 { margin: 0; }
+  .modal-body { padding: 22px; }
+  .modal-footer {
+    padding: 14px 22px; border-top: 1px solid var(--border);
+    display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+  }
+
+  .receipt {
+    background: #fefce8;
+    border: 1px dashed var(--warning);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .receipt-row {
+    display: flex; justify-content: space-between;
+    padding: 5px 0; border-bottom: 1px dashed rgba(0,0,0,0.08);
+  }
+  .receipt-row:last-child { border-bottom: none; }
+  .receipt-row .key { color: var(--text-muted); font-weight: 500; }
+  .receipt-row .val { font-weight: 600; text-align: right; max-width: 60%; }
+
+  .tabs {
+    display: flex; gap: 4px; border-bottom: 2px solid var(--border);
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .tab {
+    padding: 10px 18px; cursor: pointer; border: none; background: transparent;
+    font: inherit; font-weight: 500; color: var(--text-muted);
+    border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.15s;
+  }
+  .tab:hover { color: var(--primary); }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .info-banner {
+    background: var(--primary-light);
+    border-left: 4px solid var(--primary);
+    padding: 12px 16px; border-radius: 6px;
+    margin-bottom: 16px; font-size: 0.9rem;
+  }
+  .alert {
+    background: #fef2f2; border-left: 4px solid var(--danger);
+    color: #991b1b; padding: 10px 14px;
+    border-radius: 6px; font-size: 0.88rem; margin-bottom: 14px;
+    display: none;
+  }
+  .alert.show { display: block; }
+
+  .checkbox-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+  .checkbox-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px; background: var(--bg);
+    border-radius: 6px; cursor: pointer;
+  }
+  .checkbox-item input { width: auto; }
+
+  .hidden { display: none !important; }
+
+  body.lang-ar {
+    direction: rtl;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  }
+
+  body.lang-ar .history-table th,
+  body.lang-ar .history-table td {
+    text-align: right;
+  }
+
+  body.lang-ar .info-banner,
+  body.lang-ar .alert {
+    border-left: 0;
+    border-right: 4px solid var(--primary);
+  }
+
+  body.lang-ar .alert { border-right-color: var(--danger); }
+
+  body.lang-ar .card h2::before { order: 2; }
+  body.lang-ar .input-group .toggle-pwd { right: auto; left: 8px; }
+  body.lang-ar .receipt-row .val { text-align: left; }
+  body.lang-ar .toast { left: auto; right: 50%; transform: translateX(50%) translateY(100px); }
+  body.lang-ar .toast.show { transform: translateX(50%) translateY(0); }
+
+  @media (max-width: 640px) {
+    .grid { grid-template-columns: 1fr; }
+    .request-types { grid-template-columns: repeat(2, 1fr); }
+    .history-table th:nth-child(3), .history-table td:nth-child(3) { display: none; }
+  }
+
+  @media print {
+    body { background: white; }
+    header, .header-actions, .btn, .tabs, .request-types, .card:not(.print-card) { display: none !important; }
+  }
+
+  /* ======= HOME TAB ======= */
+  #appView.home-mode main > .container { display: none; }
+
+  /* home-card-deco used in header */
+  .home-card-deco {
+    background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.4);
+    color:white; padding:3px 10px; border-radius:5px;
+    font-size:.72rem; cursor:pointer; font-family:inherit; transition:background .15s;
+  }
+  .home-card-deco:hover { background:rgba(255,255,255,.28); }
+
+  /* Fingerprint scan area */
+  .fp-area {
+    background:white; display:flex; flex-direction:column;
+    align-items:center; padding:30px 20px 14px;
+  }
+  .fp-frame-wrap {
+    position:relative; width:180px; height:180px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .fp-corner { position:absolute; width:26px; height:26px; }
+  .fp-corner-tl { top:0; left:0; border-top:3px solid #ef4444; border-left:3px solid #ef4444; border-radius:4px 0 0 0; }
+  .fp-corner-tr { top:0; right:0; border-top:3px solid #ef4444; border-right:3px solid #ef4444; border-radius:0 4px 0 0; }
+  .fp-corner-bl { bottom:0; left:0; border-bottom:3px solid #ef4444; border-left:3px solid #ef4444; border-radius:0 0 0 4px; }
+  .fp-corner-br { bottom:0; right:0; border-bottom:3px solid #ef4444; border-right:3px solid #ef4444; border-radius:0 0 4px 0; }
+  .fp-icon-svg { width:120px; height:120px; transition:transform .12s; }
+  .fp-frame-wrap:active .fp-icon-svg { transform:scale(.9); }
+  .fp-hint { margin-top:12px; color:#64748b; font-size:.8rem; text-align:center; }
+
+  /* Home history */
+  .home-hist-wrap { background:white; border-top:1px solid #f1f5f9; }
+  .home-hist-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  .home-hist-table th {
+    background:#f8fafc; color:#64748b; font-weight:600;
+    padding:8px 10px; border-bottom:1px solid #e2e8f0;
+    text-transform:uppercase; font-size:.7rem; letter-spacing:.05em;
+  }
+  .home-hist-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; color:#334155; }
+  .home-hist-table tr:last-child td { border-bottom:none; }
+
+  /* Home nav */
+  .home-nav-wrap {
+    background:#f8fafc; border-top:1px solid #e2e8f0;
+    padding:14px 12px; display:flex; flex-direction:column; gap:9px;
+  }
+  .home-nav-item {
+    display:flex; align-items:center; justify-content:space-between;
+    background:white; border:1px solid #e2e8f0; border-radius:10px;
+    padding:13px 16px; cursor:pointer; font-size:.88rem; font-weight:500;
+    color:#1e293b; box-shadow:0 1px 3px rgba(0,0,0,.05);
+    transition:background .12s; font-family:inherit; width:100%; text-align:left;
+  }
+  .home-nav-item:hover { background:#f1f5f9; }
+  .home-nav-item-left { display:flex; align-items:center; gap:10px; }
+  .home-nav-arrow { color:#94a3b8; font-size:1.2rem; line-height:1; }
+
+  /* Back-to-home button in tab bar */
+  .tab-home-back {
+    padding:8px 14px; cursor:pointer; border:none; background:transparent;
+    font:inherit; font-weight:600; color:#043970; font-size:.85rem;
+    border-bottom:3px solid transparent; margin-bottom:-2px;
+    display:flex; align-items:center; gap:5px;
+  }
+  .tab-home-back:hover { background:#f1f5f9; border-radius:6px 6px 0 0; }
+
+  /* Portail mode: hide tabs bar */
+  #appView.portail-mode .tabs { display: none; }
+
+  /* PORTAIL RH big button (on pointage screen) */
+  .home-portal-btn {
+    background: white;
+    color: #043970;
+    border: 2.5px solid #043970;
+    font-size: 1.25rem;
+    font-weight: 700;
+    padding: 14px 48px;
+    border-radius: 10px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(4,57,112,.15);
+    transition: all .15s;
+    font-family: inherit;
+  }
+  .home-portal-btn:hover { background: #043970; color: white; }
+
+  /* Portail menu screen */
+  .portail-menu-title {
+    text-align: center;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #043970;
+    letter-spacing: 2px;
+    padding: 22px 0 14px;
+  }
+  .portail-nav-wrap { display:flex; flex-direction:column; gap:9px; padding:0 0 8px; }
+  .pnav-icon { font-size:1.2rem; }
+  .portail-back-pointer {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: .82rem;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 4px 8px;
+  }
+  .portail-back-pointer:hover { color: #043970; }
+
+  /* ===== RONDE ===== */
+  .ronde-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 18px 16px 10px;
+  }
+  .ronde-header-icon { font-size: 1.8rem; }
+  .ronde-header-title {
+    font-size: 1.1rem; font-weight: 800; letter-spacing: .06em;
+    color: #043970;
+  }
+  .ronde-progress-card {
+    background: linear-gradient(140deg, #043970 0%, #0d6ecc 100%);
+    border-radius: 16px; padding: 16px 18px; margin: 0 0 14px; color: white;
+  }
+  .ronde-progress-label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-weight: 700; font-size: .95rem; margin-bottom: 10px;
+  }
+  .ronde-statut-badge {
+    background: rgba(255,255,255,.2); border-radius: 20px;
+    padding: 2px 10px; font-size: .72rem; letter-spacing: .05em;
+  }
+  .ronde-progress-bar-wrap {
+    background: rgba(255,255,255,.2); border-radius: 99px; height: 8px;
+    overflow: hidden; margin-bottom: 6px;
+  }
+  .ronde-progress-bar {
+    background: #fff; height: 100%; border-radius: 99px;
+    transition: width .4s ease;
+  }
+  .ronde-progress-text { font-size: .78rem; opacity: .85; text-align: right; }
+  .ronde-cp-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 4px; border-bottom: 1px solid #f1f5f9;
+  }
+  .ronde-cp-item:last-child { border-bottom: none; }
+  .ronde-cp-status {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: .85rem;
+    border: 2px solid #e2e8f0; background: #f8fafc; color: #94a3b8;
+  }
+  .ronde-cp-status.done { background: #dcfce7; border-color: #16a34a; color: #16a34a; }
+  .ronde-cp-status.next { background: #dbeafe; border-color: #1d4ed8; color: #1d4ed8; }
+  .ronde-cp-name { font-size: .9rem; flex: 1; }
+  .ronde-cp-time { font-size: .75rem; color: #94a3b8; }
+  .info-banner {
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;
+    padding: 10px 14px; font-size: .82rem; color: #1e40af;
+  }
+  #ronde-scan-result.ok { color: #16a34a; font-weight: 700; }
+  #ronde-scan-result.err { color: #dc2626; font-weight: 700; }
+
+  /* ===== AUTH LINKS ===== */
+  .auth-link-btn {
+    background: none; border: none; color: #0d6ecc; font-size: .82rem;
+    cursor: pointer; font-family: inherit; padding: 0; text-decoration: underline;
+  }
+  .auth-link-btn:hover { color: #043970; }
+  .auth-form { display: none; }
+  .auth-form.active { display: block; }
+</style>
+<script src="/static/html5-qrcode.min.js" defer></script>
+</head>
+<body>
+
+<!-- ============================================ -->
+<!-- =============== AUTH SCREENS ================ -->
+<!-- ============================================ -->
+<div class="auth-wrap" id="authView">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="language-switcher" aria-label="Choix de langue">
+        <button type="button" class="active" data-lang-btn="fr" onclick="setLanguage('fr')">FR</button>
+        <button type="button" data-lang-btn="ar" onclick="setLanguage('ar')">AR</button>
+      </div>
+      <div class="auth-logo">RH</div>
+      <h1>Portail RH</h1>
+      <p>Espace dédié au personnel</p>
+    </div>
+    <div class="auth-body">
+
+      <div class="alert" id="authAlert"></div>
+
+      <!-- ===== LOGIN FORM ===== -->
+      <form class="auth-form active" id="form-login" onsubmit="event.preventDefault(); doLogin();">
+        <div class="field" style="margin-bottom:12px;">
+          <label>Identifiant (matricule)</label>
+          <input type="text" id="login-id" autocomplete="username" placeholder="A01" required />
+        </div>
+        <div class="field" style="margin-bottom:14px;">
+          <label>Mot de passe</label>
+          <div class="input-group">
+            <input type="password" id="login-pwd" autocomplete="current-password" placeholder="••••••••" required />
+            <button type="button" class="toggle-pwd" onclick="togglePwd('login-pwd', this)">Afficher</button>
+          </div>
+        </div>
+        <label class="checkbox-item" style="margin-bottom:16px; background:transparent; padding:0;">
+          <input type="checkbox" id="login-remember" /> Rester connecté
+        </label>
+        <button type="submit" class="btn btn-block" id="login-submit-btn">Se connecter</button>
+        <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:.82rem;">
+          <button type="button" class="auth-link-btn" onclick="showAuthForm('signup')">Créer un compte</button>
+          <button type="button" class="auth-link-btn" onclick="showAuthForm('reset')">Mot de passe oublié ?</button>
+        </div>
+      </form>
+
+      <!-- ===== SIGNUP FORM ===== -->
+      <form class="auth-form" id="form-signup" onsubmit="event.preventDefault(); doSignup();">
+        <h2 style="font-size:1rem;font-weight:700;color:#043970;margin-bottom:16px;text-align:center;">Créer mon compte</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div class="field">
+            <label>Nom</label>
+            <input type="text" id="su-nom" autocomplete="family-name" placeholder="DUPONT" required />
+          </div>
+          <div class="field">
+            <label>Prénom</label>
+            <input type="text" id="su-prenom" autocomplete="given-name" placeholder="Jean" required />
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Matricule / Code employé</label>
+          <input type="text" id="su-code" autocomplete="off" placeholder="A01" required />
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Date de naissance</label>
+          <input type="date" id="su-ddn" autocomplete="bday" required />
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Mot de passe</label>
+          <div class="input-group">
+            <input type="password" id="su-pwd" autocomplete="new-password" placeholder="Min. 6 caractères" required />
+            <button type="button" class="toggle-pwd" onclick="togglePwd('su-pwd', this)">Afficher</button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:16px;">
+          <label>Confirmer le mot de passe</label>
+          <input type="password" id="su-pwd2" autocomplete="new-password" placeholder="••••••••" required />
+        </div>
+        <button type="submit" class="btn btn-block">Créer mon compte</button>
+        <div style="text-align:center;margin-top:12px;font-size:.82rem;">
+          <button type="button" class="auth-link-btn" onclick="showAuthForm('login')">← Retour connexion</button>
+        </div>
+      </form>
+
+      <!-- ===== RESET PASSWORD FORM ===== -->
+      <form class="auth-form" id="form-reset" onsubmit="event.preventDefault(); doResetPassword();">
+        <h2 style="font-size:1rem;font-weight:700;color:#043970;margin-bottom:16px;text-align:center;">Réinitialiser le mot de passe</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+          <div class="field">
+            <label>Nom</label>
+            <input type="text" id="rst-nom" autocomplete="family-name" placeholder="DUPONT" required />
+          </div>
+          <div class="field">
+            <label>Prénom</label>
+            <input type="text" id="rst-prenom" autocomplete="given-name" placeholder="Jean" required />
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Matricule / Code employé</label>
+          <input type="text" id="rst-code" autocomplete="off" placeholder="A01" required />
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Date de naissance</label>
+          <input type="date" id="rst-ddn" autocomplete="bday" required />
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Nouveau mot de passe</label>
+          <div class="input-group">
+            <input type="password" id="rst-pwd" autocomplete="new-password" placeholder="Min. 6 caractères" required />
+            <button type="button" class="toggle-pwd" onclick="togglePwd('rst-pwd', this)">Afficher</button>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:16px;">
+          <label>Confirmer le mot de passe</label>
+          <input type="password" id="rst-pwd2" autocomplete="new-password" placeholder="••••••••" required />
+        </div>
+        <button type="submit" class="btn btn-block">Réinitialiser</button>
+        <div style="text-align:center;margin-top:12px;font-size:.82rem;">
+          <button type="button" class="auth-link-btn" onclick="showAuthForm('login')">← Retour connexion</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ================ APP SCREENS ================ -->
+<!-- ============================================ -->
+<div id="appView" class="hidden">
+
+  <header>
+    <div class="container header-content">
+      <div class="header-employee-photo" id="headerEmployeePhoto">--</div>
+      <div class="header-name-block">
+        <div class="name" id="userName">--</div>
+        <div class="header-code-badge" id="headerEmployeeCode">--</div>
+        <div class="header-ddn">DDN : <span id="headerDDN">--</span></div>
+      </div>
+      <div class="header-right-cluster">
+        <div class="language-switcher" aria-label="Choix de langue">
+          <button type="button" class="active" data-lang-btn="fr" onclick="setLanguage('fr')">FR</button>
+          <button type="button" data-lang-btn="ar" onclick="setLanguage('ar')">AR</button>
+        </div>
+        <button class="home-card-deco" onclick="logout()">Déco</button>
+      </div>
+      <span class="verification-light" id="accountVerifiedLight"></span>
+      <div id="userSite" style="display:none">--</div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ============ HOME / POINTAGE ============ -->
+    <div class="tab-content active" id="tab-home">
+
+      <!-- Fingerprint / tap to point -->
+      <div class="fp-area">
+        <div class="fp-frame-wrap" onclick="switchTab('pointage')" title="Pointer ma présence">
+          <span class="fp-corner fp-corner-tl"></span>
+          <span class="fp-corner fp-corner-tr"></span>
+          <span class="fp-corner fp-corner-bl"></span>
+          <span class="fp-corner fp-corner-br"></span>
+          <svg class="fp-icon-svg" viewBox="0 0 100 125" fill="none" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+            <path d="M50,52 C44,48 40,42 40,36 C40,28 44,22 50,22 C56,22 60,28 60,36 C60,42 56,48 50,52"/>
+            <path d="M33,66 C22,56 18,44 18,36 C18,16 32,4 50,4 C68,4 82,16 82,36 C82,44 78,56 67,66"/>
+            <path d="M14,80 C2,67 -2,52 2,36 C7,12 26,-2 50,-2 C74,-2 93,12 98,36 C102,52 98,67 86,80"/>
+            <path d="M33,70 C30,82 34,94 44,100"/>
+            <path d="M14,86 C10,100 16,112 28,118"/>
+            <path d="M67,70 C70,82 66,94 56,100"/>
+            <path d="M86,86 C90,100 84,112 72,118"/>
+            <path d="M44,108 C42,114 46,120 50,121 C54,120 58,114 56,108"/>
+          </svg>
+        </div>
+        <p class="fp-hint">Appuyez pour pointer votre présence</p>
+      </div>
+
+      <!-- Attendance history table -->
+      <div class="home-hist-wrap">
+        <table class="home-hist-table">
+          <thead>
+            <tr>
+              <th>DATE</th>
+              <th>H/A</th>
+              <th>H/D</th>
+              <th>SITE</th>
+              <th>GPS</th>
+            </tr>
+          </thead>
+          <tbody id="homeHistBody">
+            <tr><td colspan="5" style="text-align:center;padding:20px;color:#94a3b8;font-size:.8rem">Chargement...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Button to portal menu -->
+      <div style="padding:24px 16px 32px;text-align:center;">
+        <button class="home-portal-btn" onclick="switchTab('portail')">PORTAIL RH</button>
+      </div>
+
+    </div>
+    <!-- /tab-home -->
+
+    <div class="container">
+
+      <div class="tabs">
+        <button class="tab-home-back" onclick="switchTab('portail')" title="Retour portail">⌂ Portail</button>
+        <button class="tab" data-tab="nouvelle" onclick="switchTab('nouvelle')">Nouvelle demande</button>
+        <button class="tab" data-tab="reception" onclick="switchTab('reception')">Boîte de réception (<span id="inboxBadge">0</span>)</button>
+        <button class="tab" data-tab="historique" onclick="switchTab('historique')">Mes demandes (<span id="countBadge">0</span>)</button>
+      </div>
+
+      <!-- ============ PORTAIL MENU ============ -->
+      <div class="tab-content" id="tab-portail">
+        <div class="portail-menu-title">PORTAIL RH</div>
+        <div class="portail-nav-wrap">
+          <button class="home-nav-item" onclick="switchTab('nouvelle')">
+            <span class="home-nav-item-left"><span class="pnav-icon">✉</span> Nouvelle demande</span>
+            <span class="home-nav-arrow">›</span>
+          </button>
+          <button class="home-nav-item" onclick="switchTab('reception')">
+            <span class="home-nav-item-left"><span class="pnav-icon">📥</span> Boîte de réception <span id="inboxBadgeHome" style="background:#ef4444;color:white;border-radius:999px;padding:0 6px;font-size:.7rem;margin-left:4px;display:none"></span></span>
+            <span class="home-nav-arrow">›</span>
+          </button>
+          <button class="home-nav-item" onclick="switchTab('historique')">
+            <span class="home-nav-item-left"><span class="pnav-icon">📋</span> Mes demandes</span>
+            <span class="home-nav-arrow">›</span>
+          </button>
+          <button class="home-nav-item" onclick="switchTab('pointage')">
+            <span class="home-nav-item-left"><span class="pnav-icon">📍</span> Pointage (QR / GPS)</span>
+            <span class="home-nav-arrow">›</span>
+          </button>
+          <button class="home-nav-item" onclick="switchTab('ronde')">
+            <span class="home-nav-item-left"><span class="pnav-icon">🛡️</span> Contrôle de ronde</span>
+            <span class="home-nav-arrow">›</span>
+          </button>
+        </div>
+        <div style="text-align:center;padding:20px 0 8px;">
+          <button class="portail-back-pointer" onclick="switchTab('home')">← Retour pointage</button>
+        </div>
+      </div>
+
+      <!-- ============ RONDE ============ -->
+      <div class="tab-content" id="tab-ronde">
+        <div class="ronde-header">
+          <span class="ronde-header-icon">🛡️</span>
+          <span class="ronde-header-title">CONTRÔLE DE RONDE</span>
+        </div>
+
+        <!-- État: pas de ronde active -->
+        <div id="ronde-start-zone">
+          <div class="card">
+            <h2>Démarrer une ronde</h2>
+            <div class="field" style="margin-bottom:14px;">
+              <label>Circuit de ronde</label>
+              <select id="ronde-circuit-select" style="font-size:.95rem;">
+                <option value="">— Chargement... —</option>
+              </select>
+            </div>
+            <div id="ronde-circuit-info" class="info-banner" style="display:none;margin-bottom:14px;"></div>
+            <button class="btn btn-block" style="font-size:1rem;font-weight:700;letter-spacing:1px;" onclick="rondeStartExecution()">
+              🚀 DÉMARRER LA RONDE
+            </button>
+          </div>
+        </div>
+
+        <!-- État: ronde en cours -->
+        <div id="ronde-active-zone" style="display:none;">
+
+          <div class="ronde-progress-card">
+            <div class="ronde-progress-label">
+              <span id="ronde-circuit-label">—</span>
+              <span class="ronde-statut-badge" id="ronde-statut-badge">EN COURS</span>
+            </div>
+            <div class="ronde-progress-bar-wrap">
+              <div class="ronde-progress-bar" id="ronde-progress-bar" style="width:0%"></div>
+            </div>
+            <div class="ronde-progress-text" id="ronde-progress-text">0 / 0 checkpoints</div>
+          </div>
+
+          <!-- Prochain checkpoint -->
+          <div class="card" id="ronde-next-card" style="text-align:center;">
+            <div style="color:#64748b;font-size:.8rem;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Prochain checkpoint</div>
+            <div id="ronde-next-name" style="font-size:1.2rem;font-weight:700;color:#043970;margin-bottom:4px;">—</div>
+            <div id="ronde-next-desc" style="font-size:.82rem;color:#64748b;margin-bottom:14px;"></div>
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+              <button class="btn" id="ronde-scan-btn" onclick="rondeOpenQrScan()" style="font-weight:700;letter-spacing:.5px;">
+                📷 SCANNER QR CODE
+              </button>
+              <button class="btn btn-outline" onclick="rondeGpsScan()" style="font-weight:600;">
+                📍 VALIDER PAR GPS
+              </button>
+            </div>
+            <div id="ronde-qr-reader" style="margin-top:14px;border-radius:10px;overflow:hidden;max-width:340px;margin-left:auto;margin-right:auto;"></div>
+            <div id="ronde-scan-result" style="margin-top:8px;font-size:.9rem;"></div>
+          </div>
+
+          <!-- Liste des checkpoints -->
+          <div class="card">
+            <h2>Checkpoints</h2>
+            <div id="ronde-checkpoints-list"></div>
+          </div>
+
+          <!-- Terminer -->
+          <div style="padding:0 0 20px;display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-success btn-block" style="font-weight:700;letter-spacing:1px;" onclick="rondeEndExecution()">
+              ✅ TERMINER LA RONDE
+            </button>
+          </div>
+
+        </div>
+
+        <!-- État: ronde terminée -->
+        <div id="ronde-done-zone" style="display:none;text-align:center;padding:40px 20px;">
+          <div style="font-size:3rem;margin-bottom:12px;">✅</div>
+          <div style="font-size:1.4rem;font-weight:700;color:#16a34a;margin-bottom:6px;">RONDE TERMINÉE</div>
+          <div id="ronde-done-summary" style="color:#64748b;font-size:.9rem;margin-bottom:24px;"></div>
+          <button class="btn" onclick="rondeReset()">Nouvelle ronde</button>
+        </div>
+
+        <div id="ronde-msg" style="margin:10px 16px;"></div>
+      </div>
+
+      <!-- ============ NOUVELLE DEMANDE ============ -->
+      <div class="tab-content" id="tab-nouvelle">
+
+        <div class="card">
+          <h2>Type de demande</h2>
+          <div class="request-types" id="typeCards">
+            <button type="button" class="type-card" data-type="attestation">
+              <div class="icon">A</div>
+              <div class="label">Attestation de travail</div>
+              <div class="sub">Justificatif d'emploi</div>
+            </button>
+            <button type="button" class="type-card" data-type="fichePaie">
+              <div class="icon">F</div>
+              <div class="label">Fiche de paie</div>
+              <div class="sub">Bulletin de salaire</div>
+            </button>
+            <button type="button" class="type-card" data-type="reclamation">
+              <div class="icon">R</div>
+              <div class="label">Réclamation salaire</div>
+              <div class="sub">Anomalie de paie</div>
+            </button>
+            <button type="button" class="type-card" data-type="conges">
+              <div class="icon">C</div>
+              <div class="label">Congés / Absences</div>
+              <div class="sub">Demandes RH diverses</div>
+            </button>
+            <button type="button" class="type-card" data-type="pointage">
+              <div class="icon">P</div>
+              <div class="label">Pointage</div>
+              <div class="sub">Correction de pointage</div>
+            </button>
+            <button type="button" class="type-card" data-type="compteRendu">
+              <div class="icon">CR</div>
+              <div class="label">Compte rendu</div>
+              <div class="sub">Mission, incident, consigne</div>
+            </button>
+            <button type="button" class="type-card" data-type="documents">
+              <div class="icon">D</div>
+              <div class="label">Retrait documents</div>
+              <div class="sub">Paie, attestation, décision</div>
+            </button>
+          </div>
+        </div>
+
+        <div id="formContainer">
+
+          <div class="card request-form" id="form-attestation">
+            <h2>Détails - Attestation de travail</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Motif <span class="req">*</span></label>
+                <select id="att-motif">
+                  <option value="">— Sélectionner —</option>
+                  <option>Démarche bancaire</option>
+                  <option>Demande de visa</option>
+                  <option>Location / Contrat de bail</option>
+                  <option>Démarche administrative</option>
+                  <option>Demande de prêt</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Langue souhaitée <span class="req">*</span></label>
+                <select id="att-langue">
+                  <option>Français</option>
+                  <option>Arabe</option>
+                  <option>Bilingue (FR + AR)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Nombre d'exemplaires</label>
+                <input type="number" id="att-exemplaires" min="1" max="10" value="1" />
+              </div>
+              <div class="field">
+                <label>Destinataire (organisme)</label>
+                <input type="text" id="att-destinataire" placeholder="Banque, Ambassade..." />
+              </div>
+              <div class="field full">
+                <label>Précisions complémentaires</label>
+                <textarea id="att-precisions" placeholder="Mentions à inclure, dates, etc."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-fichePaie">
+            <h2>Détails - Fiche de paie</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Année <span class="req">*</span></label>
+                <select id="fp-annee"></select>
+              </div>
+              <div class="field">
+                <label>Format souhaité</label>
+                <select id="fp-format">
+                  <option>PDF par email</option>
+                  <option>Copie papier (à retirer)</option>
+                  <option>Les deux</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label>Mois concernés <span class="req">*</span></label>
+                <div class="checkbox-group" id="fp-mois">
+                  <label class="checkbox-item"><input type="checkbox" value="Janvier"> Janvier</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Février"> Février</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Mars"> Mars</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Avril"> Avril</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Mai"> Mai</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Juin"> Juin</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Juillet"> Juillet</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Août"> Août</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Septembre"> Septembre</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Octobre"> Octobre</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Novembre"> Novembre</label>
+                  <label class="checkbox-item"><input type="checkbox" value="Décembre"> Décembre</label>
+                </div>
+              </div>
+              <div class="field full">
+                <label>Commentaire</label>
+                <textarea id="fp-commentaire" placeholder="Précisions éventuelles"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-reclamation">
+            <h2>Détails - Réclamation salaire</h2>
+            <div class="info-banner">
+              Décrivez précisément l'anomalie. Vous pourrez fournir un justificatif au service RH.
+            </div>
+            <div class="grid">
+              <div class="field">
+                <label>Mois concerné <span class="req">*</span></label>
+                <input type="month" id="rec-mois" />
+              </div>
+              <div class="field">
+                <label>Type d'anomalie <span class="req">*</span></label>
+                <select id="rec-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Salaire non perçu</option>
+                  <option>Montant inférieur à la fiche</option>
+                  <option>Heures supplémentaires non payées</option>
+                  <option>Prime manquante</option>
+                  <option>Retenue injustifiée</option>
+                  <option>Erreur de calcul</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Montant attendu (DA)</label>
+                <input type="number" id="rec-attendu" step="0.01" placeholder="0.00" />
+              </div>
+              <div class="field">
+                <label>Montant reçu (DA)</label>
+                <input type="number" id="rec-recu" step="0.01" placeholder="0.00" />
+              </div>
+              <div class="field full">
+                <label>Description du problème <span class="req">*</span></label>
+                <textarea id="rec-description" placeholder="Expliquez en détail..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-conges">
+            <h2>Détails - Congés / Absences</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Type de demande <span class="req">*</span></label>
+                <select id="cg-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Congé annuel</option>
+                  <option>Congé maladie</option>
+                  <option>Congé maternité / paternité</option>
+                  <option>Congé exceptionnel (mariage, décès...)</option>
+                  <option>Congé sans solde</option>
+                  <option>Autorisation d'absence</option>
+                  <option>Justification d'absence</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Nombre de jours</label>
+                <input type="number" id="cg-jours" min="0" step="0.5" placeholder="Ex: 5" />
+              </div>
+              <div class="field">
+                <label>Date de début <span class="req">*</span></label>
+                <input type="date" id="cg-debut" />
+              </div>
+              <div class="field">
+                <label>Date de fin <span class="req">*</span></label>
+                <input type="date" id="cg-fin" />
+              </div>
+              <div class="field full">
+                <label>Motif / Justificatif</label>
+                <textarea id="cg-motif" placeholder="Précisez le motif..."></textarea>
+              </div>
+              <div class="field full">
+                <label>Personne contactée en cas d'urgence</label>
+                <input type="text" id="cg-remplacant" placeholder="Nom du collègue / responsable" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-pointage">
+            <h2>Détails - Correction de pointage</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Date concernée <span class="req">*</span></label>
+                <input type="date" id="pt-date" />
+              </div>
+              <div class="field">
+                <label>Type de problème <span class="req">*</span></label>
+                <select id="pt-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Oubli de badge entrée</option>
+                  <option>Oubli de badge sortie</option>
+                  <option>Badge non fonctionnel</option>
+                  <option>Erreur système</option>
+                  <option>Mission externe (pas de pointage)</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Heure d'arrivée réelle</label>
+                <input type="time" id="pt-arrivee" />
+              </div>
+              <div class="field">
+                <label>Heure de départ réelle</label>
+                <input type="time" id="pt-depart" />
+              </div>
+              <div class="field full">
+                <label>Description / Témoins <span class="req">*</span></label>
+                <textarea id="pt-description" placeholder="Décrivez la situation..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-compteRendu">
+            <h2>Détails - Compte rendu</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Nature du compte rendu <span class="req">*</span></label>
+                <select id="cr-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Compte rendu de mission</option>
+                  <option>Incident sur site</option>
+                  <option>Passation de consignes</option>
+                  <option>Observation client</option>
+                  <option>Équipement / tenue</option>
+                  <option>Autre</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Date / heure de l'événement <span class="req">*</span></label>
+                <input type="datetime-local" id="cr-date" />
+              </div>
+              <div class="field">
+                <label>Site concerné</label>
+                <input type="text" id="cr-site" placeholder="Site, poste ou client" />
+              </div>
+              <div class="field">
+                <label>Niveau d'urgence</label>
+                <select id="cr-urgence">
+                  <option>Normale</option>
+                  <option>Importante</option>
+                  <option>Urgente</option>
+                </select>
+              </div>
+              <div class="field full">
+                <label>Compte rendu <span class="req">*</span></label>
+                <textarea id="cr-description" placeholder="Décrivez les faits, personnes présentes, actions réalisées..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="card request-form" id="form-documents">
+            <h2>Détails - Retrait documents</h2>
+            <div class="grid">
+              <div class="field">
+                <label>Document demandé <span class="req">*</span></label>
+                <select id="doc-type">
+                  <option value="">— Sélectionner —</option>
+                  <option>Fiche de paie</option>
+                  <option>Attestation de travail</option>
+                  <option>Certificat de travail</option>
+                  <option>Décision d'affectation</option>
+                  <option>Solde de tout compte</option>
+                  <option>Autre document RH</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Période concernée</label>
+                <input type="month" id="doc-periode" />
+              </div>
+              <div class="field">
+                <label>Mode de retrait</label>
+                <select id="doc-retrait">
+                  <option>Disponible dans le portail</option>
+                  <option>Copie papier au bureau RH</option>
+                  <option>PDF par email</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Usage</label>
+                <input type="text" id="doc-usage" placeholder="Banque, administration, dossier personnel..." />
+              </div>
+              <div class="field full">
+                <label>Précisions</label>
+                <textarea id="doc-commentaire" placeholder="Ajoutez une précision si nécessaire"></textarea>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <button class="btn btn-success btn-block" id="submitBtn" onclick="submitRequest()" style="display:none;">
+          Soumettre la demande
+        </button>
+
+      </div>
+
+      <!-- ============ POINTAGE ============ -->
+      <div class="tab-content" id="tab-pointage">
+        <!-- QR Scan card -->
+        <div class="card" id="qr-scan-card">
+          <h2>Feuille Quotidienne de Pointage</h2>
+          <div class="info-banner" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af;">Scannez le QR code affiché sur la tablette du site. Votre présence du jour sera enregistrée automatiquement.</div>
+          <div id="qr-scan-result" style="margin-bottom:12px;"></div>
+          <div id="portal-qr-reader" style="border-radius:10px;overflow:hidden;max-width:360px;margin:0 auto 12px;"></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;">
+            <button type="button" id="qr-open-btn" onclick="portalStartQrScan()" style="width:148px;height:148px;border-radius:999px;border:0;background:#043970;color:#fff;font-weight:900;font-size:17px;box-shadow:0 18px 40px rgba(4,57,112,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;">Pointer<br>présence</button>
+            <button type="button" class="btn btn-outline" id="qr-stop-btn" onclick="portalStopQrScan()" style="display:none">✕ Fermer la caméra</button>
+          </div>
+        </div>
+        <!-- Manual fallback -->
+        <div class="card">
+          <h2>Pointage manuel (sans QR)</h2>
+          <div class="grid" style="align-items:end;">
+            <div class="field">
+              <label>Date</label>
+              <input type="date" id="pointage-date" readonly />
+            </div>
+            <div class="field">
+              <label>Heure</label>
+              <input type="time" id="pointage-heure" readonly />
+            </div>
+            <div class="field full">
+              <label>Observation</label>
+              <textarea id="pointage-note" placeholder="Observation éventuelle"></textarea>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+            <button type="button" id="btn-arrivee-gps" class="btn" onclick="submitPortalPointage('arrivee')">POINTER ARRIVEE</button>
+            <button type="button" id="btn-depart-gps" class="btn btn-outline" onclick="submitPortalPointage('depart')">POINTER DEPART</button>
+            <button type="button" class="btn btn-secondary" onclick="renderPointage()">Actualiser</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Historique pointage</h2>
+          <div id="pointageHistory" class="info-banner">Chargement...</div>
+        </div>
+      </div>
+
+      <!-- ============ DOCUMENTS ============ -->
+      <div class="tab-content" id="tab-documents">
+        <div class="card">
+          <h2>Mes documents</h2>
+          <div class="info-banner">
+            Les documents préparés par ATLAS apparaissent ici dès validation RH. Vous pouvez aussi demander un document depuis cette rubrique.
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+            <button class="btn" onclick="selectType('documents'); switchTab('nouvelle')">Demander un document</button>
+            <button class="btn btn-outline" onclick="renderDocuments(true)">Actualiser</button>
+          </div>
+          <div id="documentsList"></div>
+        </div>
+      </div>
+
+      <!-- ============ HISTORIQUE ============ -->
+      <div class="tab-content" id="tab-historique">
+        <div class="card">
+          <h2>Mes demandes</h2>
+          <div style="margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="text" id="searchHistory" placeholder="Rechercher..." style="flex:1; min-width:200px;" oninput="renderHistory()" />
+            <select id="filterType" style="width:auto;" onchange="renderHistory()">
+              <option value="">Tous les types</option>
+              <option value="attestation">Attestation</option>
+              <option value="fichePaie">Fiche de paie</option>
+              <option value="reclamation">Réclamation</option>
+              <option value="conges">Congés</option>
+              <option value="pointage">Pointage</option>
+              <option value="compteRendu">Compte rendu</option>
+              <option value="documents">Retrait documents</option>
+            </select>
+            <button class="btn btn-outline" onclick="exportHistory()">Exporter (CSV)</button>
+          </div>
+          <div id="historyList"></div>
+        </div>
+      </div>
+
+      <!-- ============ BOITE DE RECEPTION ============ -->
+      <div class="tab-content" id="tab-reception">
+        <div class="card">
+          <h2>Boîte de réception</h2>
+          <div class="info-banner">
+            Les réponses DRH, statuts de traitement et documents demandés apparaissent ici depuis la base PostgreSQL.
+          </div>
+          <div style="margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-outline" onclick="renderInbox(true)">Actualiser</button>
+            <span id="inboxStatus" style="color:var(--text-muted); font-size:0.9rem;"></span>
+          </div>
+          <div id="inboxList"></div>
+        </div>
+      </div>
+
+      <!-- ============ PROFIL ============ -->
+      <div class="tab-content" id="tab-profil">
+        <div class="card">
+          <h2>Informations personnelles</h2>
+          <div class="info-banner">
+            Le matricule ne peut pas être modifié. Pour toute correction, contactez le service RH.
+          </div>
+          <div class="grid">
+            <div class="field">
+              <label>Nom</label>
+              <input type="text" id="prof-nom" />
+            </div>
+            <div class="field">
+              <label>Prénom</label>
+              <input type="text" id="prof-prenom" />
+            </div>
+            <div class="field">
+              <label>Matricule</label>
+              <input type="text" id="prof-matricule" disabled />
+            </div>
+            <div class="field">
+              <label>Site</label>
+              <select id="prof-site">
+                <option>Siège</option>
+                <option>Site Alger</option>
+                <option>Site Oran</option>
+                <option>Site Constantine</option>
+                <option>Site Annaba</option>
+                <option>Site Hassi Messaoud</option>
+                <option>Site Bejaia</option>
+                <option>Site Setif</option>
+                <option>Autre</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Poste</label>
+              <input type="text" id="prof-poste" />
+            </div>
+            <div class="field">
+              <label>Département</label>
+              <input type="text" id="prof-departement" />
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="email" id="prof-email" />
+            </div>
+            <div class="field">
+              <label>Téléphone</label>
+              <input type="tel" id="prof-telephone" />
+            </div>
+          </div>
+          <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn" onclick="saveProfile()">Enregistrer les modifications</button>
+            <button class="btn btn-outline" onclick="openChangePassword()">Changer le mot de passe</button>
+          </div>
+        </div>
+
+        <div class="card" id="notif-card">
+          <h2>Notifications</h2>
+          <p style="color:var(--text-muted); font-size:0.9rem;" id="notif-status-text">Vérification en cours…</p>
+          <div style="margin-top:12px;">
+            <button class="btn" id="notif-toggle-btn" onclick="togglePushNotifications()" style="display:none">Activer les notifications</button>
+          </div>
+        </div>
+
+        <div class="card" style="border-top:3px solid var(--danger);">
+          <h2 style="color:var(--danger);">Zone de danger</h2>
+          <p style="color:var(--text-muted); font-size:0.9rem;">
+            Supprimer mon compte effacera définitivement mon profil et l'historique de mes demandes locales.
+          </p>
+          <button class="btn btn-danger" onclick="deleteAccount()">Supprimer mon compte</button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ============= MODALS ============= -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 style="color: var(--success);">Demande enregistrée</h3>
+      <button class="btn btn-ghost" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Fermer</button>
+      <button class="btn btn-outline" onclick="printReceipt()">Imprimer</button>
+      <button class="btn" onclick="downloadReceipt()">Télécharger (.txt)</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Détail de la demande</h3>
+      <button class="btn btn-ghost" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeDetail()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pwdModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Changer le mot de passe</h3>
+      <button class="btn btn-ghost" onclick="closePwdModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert" id="pwdAlert"></div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Mot de passe actuel</label>
+        <input type="password" id="cp-old" />
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Nouveau mot de passe</label>
+        <input type="password" id="cp-new" />
+      </div>
+      <div class="field">
+        <label>Confirmer le nouveau mot de passe</label>
+        <input type="password" id="cp-new2" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePwdModal()">Annuler</button>
+      <button class="btn" onclick="changePassword()">Mettre à jour</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /* ================================================== */
+  /* ================ CONSTANTES & STATE ================ */
+  /* ================================================== */
+  const SESSION_KEY = 'rh_session';
+  const SESSION_LOCAL_KEY = 'rh_session_local';
+  const SESSION_V2_KEY = 'rh_session_v2';
+  const REQUESTS_PREFIX = 'rh_requests_';
+
+  let currentUser = null;
+  let selectedType = null;
+  let lastReceipt = null;
+
+  const TYPE_LABELS = {
+    attestation: 'Attestation de travail',
+    fichePaie: 'Fiche de paie',
+    reclamation: 'Réclamation salaire',
+    conges: 'Congés / Absences',
+    pointage: 'Correction de pointage',
+    compteRendu: 'Compte rendu',
+    documents: 'Retrait documents'
+  };
+
+  const LANG_KEY = 'rh_lang';
+  let currentLang = localStorage.getItem(LANG_KEY) || 'fr';
+
+  const AR = {
+    'Portail RH': 'بوابة الموارد البشرية',
+    'Espace dédié au personnel': 'فضاء مخصص للموظفين',
+    'Se connecter': 'تسجيل الدخول',
+    'Créer un compte': 'إنشاء حساب',
+    'Code ou Email': 'الرمز أو البريد الإلكتروني',
+    'EMP-12345 ou nom@entreprise.com': 'EMP-12345 أو nom@entreprise.com',
+    'Mot de passe': 'كلمة المرور',
+    'Afficher': 'إظهار',
+    'Masquer': 'إخفاء',
+    'Faible': 'ضعيفة',
+    'Moyen': 'متوسطة',
+    'Fort': 'قوية',
+    'Rester connecté': 'البقاء متصلا',
+    'Pas encore de compte ?': 'ليس لديك حساب بعد؟',
+    'Nom': 'اللقب',
+    'Prénom': 'الاسم',
+    'Code': 'الرمز',
+    'Email professionnel': 'البريد الإلكتروني المهني',
+    'Téléphone': 'الهاتف',
+    'Site / Établissement': 'الموقع / المؤسسة',
+    '— Sélectionner —': '— اختر —',
+    'Siège': 'المقر',
+    'Site Alger': 'موقع الجزائر',
+    'Site Oran': 'موقع وهران',
+    'Site Constantine': 'موقع قسنطينة',
+    'Site Annaba': 'موقع عنابة',
+    'Site Hassi Messaoud': 'موقع حاسي مسعود',
+    'Site Bejaia': 'موقع بجاية',
+    'Site Setif': 'موقع سطيف',
+    'Autre': 'أخرى',
+    'Poste / Fonction': 'المنصب / الوظيفة',
+    'Département': 'القسم',
+    'Minimum 8 caractères': '8 أحرف على الأقل',
+    'Utilisez 8+ caractères avec lettres, chiffres et symboles': 'استعمل 8 أحرف أو أكثر مع حروف وأرقام ورموز',
+    'Confirmer le mot de passe': 'تأكيد كلمة المرور',
+    'Retapez votre mot de passe': 'أعد كتابة كلمة المرور',
+    "J'accepte que mes informations soient utilisées pour le traitement de mes demandes RH": 'أوافق على استعمال معلوماتي لمعالجة طلباتي لدى الموارد البشرية',
+    'Créer mon compte': 'إنشاء حسابي',
+    'Déjà un compte ?': 'لديك حساب؟',
+    'Portail RH - Demandes du Personnel': 'بوابة الموارد البشرية - طلبات الموظفين',
+    'Soumettez vos demandes en ligne': 'أرسل طلباتك عبر الإنترنت',
+    'Déconnexion': 'تسجيل الخروج',
+    'Nouvelle demande': 'طلب جديد',
+    'Mes demandes': 'طلباتي',
+    'Mes documents': 'وثائقي',
+    'Boîte de réception': 'صندوق الوارد',
+    'Mon profil': 'ملفي الشخصي',
+    'Les réponses DRH, statuts de traitement et documents demandés apparaissent ici depuis la base PostgreSQL.': 'تظهر هنا ردود الموارد البشرية وحالات المعالجة والوثائق المطلوبة من قاعدة PostgreSQL.',
+    'Actualiser': 'تحديث',
+    'Aucun message pour le moment.': 'لا توجد رسائل حاليا.',
+    'Réponse DRH': 'رد الموارد البشرية',
+    'Documents demandés': 'الوثائق المطلوبة',
+    'Actualisation...': 'جار التحديث...',
+    'Connexion PostgreSQL indisponible': 'الاتصال بقاعدة PostgreSQL غير متاح',
+    'Nouveau': 'جديد',
+    'En cours': 'قيد المعالجة',
+    'En attente': 'قيد الانتظار',
+    'Traitée': 'تمت المعالجة',
+    'Rejetée': 'مرفوضة',
+    'Reçu': 'تم الاستلام',
+    'Type de demande': 'نوع الطلب',
+    'Attestation de travail': 'شهادة عمل',
+    "Justificatif d'emploi": 'إثبات عمل',
+    'Fiche de paie': 'قسيمة الراتب',
+    'Bulletin de salaire': 'كشف الراتب',
+    'Réclamation salaire': 'شكوى الراتب',
+    'Anomalie de paie': 'خلل في الراتب',
+    'Congés / Absences': 'العطل / الغيابات',
+    'Demandes RH diverses': 'طلبات موارد بشرية متنوعة',
+    'Pointage': 'الحضور',
+    'Correction de pointage': 'تصحيح الحضور',
+    'Compte rendu': 'تقرير',
+    'Retrait documents': 'استلام الوثائق',
+    'Mission, incident, consigne': 'مهمة، حادث، تعليمات',
+    'Paie, attestation, décision': 'الأجر، شهادة، قرار',
+    'Documents disponibles': 'الوثائق المتاحة',
+    'Documents en préparation': 'وثائق قيد التحضير',
+    'Aucun document disponible pour le moment.': 'لا توجد وثائق متاحة حاليا.',
+    'Télécharger': 'تحميل',
+    'Demander un document': 'طلب وثيقة',
+    'Détails - Attestation de travail': 'التفاصيل - شهادة عمل',
+    'Motif': 'السبب',
+    'Démarche bancaire': 'إجراء بنكي',
+    'Demande de visa': 'طلب تأشيرة',
+    'Location / Contrat de bail': 'كراء / عقد إيجار',
+    'Démarche administrative': 'إجراء إداري',
+    'Demande de prêt': 'طلب قرض',
+    'Langue souhaitée': 'اللغة المطلوبة',
+    'Français': 'الفرنسية',
+    'Arabe': 'العربية',
+    'Bilingue (FR + AR)': 'ثنائي اللغة (فرنسي + عربي)',
+    "Nombre d'exemplaires": 'عدد النسخ',
+    'Destinataire (organisme)': 'الجهة المستقبلة',
+    'Banque, Ambassade...': 'بنك، سفارة...',
+    'Précisions complémentaires': 'توضيحات إضافية',
+    'Mentions à inclure, dates, etc.': 'ملاحظات يجب إدراجها، تواريخ، إلخ.',
+    'Détails - Fiche de paie': 'التفاصيل - قسيمة الراتب',
+    'Année': 'السنة',
+    'Format souhaité': 'الصيغة المطلوبة',
+    'PDF par email': 'PDF عبر البريد الإلكتروني',
+    'Copie papier (à retirer)': 'نسخة ورقية للاستلام',
+    'Les deux': 'كلاهما',
+    'Mois concernés': 'الأشهر المعنية',
+    'Janvier': 'جانفي',
+    'Février': 'فيفري',
+    'Mars': 'مارس',
+    'Avril': 'أفريل',
+    'Mai': 'ماي',
+    'Juin': 'جوان',
+    'Juillet': 'جويلية',
+    'Août': 'أوت',
+    'Septembre': 'سبتمبر',
+    'Octobre': 'أكتوبر',
+    'Novembre': 'نوفمبر',
+    'Décembre': 'ديسمبر',
+    'Commentaire': 'تعليق',
+    'Précisions éventuelles': 'توضيحات محتملة',
+    'Détails - Réclamation salaire': 'التفاصيل - شكوى الراتب',
+    "Décrivez précisément l'anomalie. Vous pourrez fournir un justificatif au service RH.": 'صف الخلل بدقة. يمكنك تقديم وثيقة إثبات لمصلحة الموارد البشرية.',
+    'Mois concerné': 'الشهر المعني',
+    "Type d'anomalie": 'نوع الخلل',
+    'Salaire non perçu': 'راتب غير مستلم',
+    'Montant inférieur à la fiche': 'مبلغ أقل من القسيمة',
+    'Heures supplémentaires non payées': 'ساعات إضافية غير مدفوعة',
+    'Prime manquante': 'منحة ناقصة',
+    'Retenue injustifiée': 'اقتطاع غير مبرر',
+    'Erreur de calcul': 'خطأ في الحساب',
+    'Montant attendu (DA)': 'المبلغ المتوقع (دج)',
+    'Montant reçu (DA)': 'المبلغ المستلم (دج)',
+    'Description du problème': 'وصف المشكلة',
+    'Expliquez en détail...': 'اشرح بالتفصيل...',
+    'Détails - Congés / Absences': 'التفاصيل - العطل / الغيابات',
+    'Type de demande': 'نوع الطلب',
+    'Congé annuel': 'عطلة سنوية',
+    'Congé maladie': 'عطلة مرضية',
+    'Congé maternité / paternité': 'عطلة أمومة / أبوة',
+    'Congé exceptionnel (mariage, décès...)': 'عطلة استثنائية (زواج، وفاة...)',
+    'Congé sans solde': 'عطلة بدون أجر',
+    "Autorisation d'absence": 'ترخيص غياب',
+    "Justification d'absence": 'تبرير غياب',
+    'Nombre de jours': 'عدد الأيام',
+    'Ex: 5': 'مثال: 5',
+    'Date de début': 'تاريخ البداية',
+    'Date de fin': 'تاريخ النهاية',
+    'Motif / Justificatif': 'السبب / التبرير',
+    'Précisez le motif...': 'حدد السبب...',
+    "Personne contactée en cas d'urgence": 'شخص يتم الاتصال به عند الضرورة',
+    'Nom du collègue / responsable': 'اسم الزميل / المسؤول',
+    'Détails - Correction de pointage': 'التفاصيل - تصحيح الحضور',
+    'Date concernée': 'التاريخ المعني',
+    'Type de problème': 'نوع المشكلة',
+    'Oubli de badge entrée': 'نسيان تسجيل الدخول',
+    'Oubli de badge sortie': 'نسيان تسجيل الخروج',
+    'Badge non fonctionnel': 'البطاقة لا تعمل',
+    'Erreur système': 'خطأ في النظام',
+    'Mission externe (pas de pointage)': 'مهمة خارجية (بدون حضور)',
+    "Heure d'arrivée réelle": 'وقت الوصول الفعلي',
+    'Heure de départ réelle': 'وقت المغادرة الفعلي',
+    'Description / Témoins': 'الوصف / الشهود',
+    'Décrivez la situation...': 'صف الوضعية...',
+    'Soumettre la demande': 'إرسال الطلب',
+    'Rechercher...': 'بحث...',
+    'Tous les types': 'كل الأنواع',
+    'Attestation': 'شهادة',
+    'Réclamation': 'شكوى',
+    'Congés': 'عطل',
+    'Exporter (CSV)': 'تصدير (CSV)',
+    'Informations personnelles': 'المعلومات الشخصية',
+    'Le matricule ne peut pas être modifié. Pour toute correction, contactez le service RH.': 'لا يمكن تعديل الرقم الوظيفي. لأي تصحيح، يرجى الاتصال بمصلحة الموارد البشرية.',
+    'Site': 'الموقع',
+    'Poste': 'المنصب',
+    'Email': 'البريد الإلكتروني',
+    'Enregistrer les modifications': 'حفظ التعديلات',
+    'Changer le mot de passe': 'تغيير كلمة المرور',
+    'Zone de danger': 'منطقة حساسة',
+    "Supprimer mon compte effacera définitivement mon profil et l'historique de mes demandes locales.": 'حذف حسابي سيحذف نهائيا ملفي وسجل طلباتي المحلية.',
+    'Supprimer mon compte': 'حذف حسابي',
+    'Demande enregistrée': 'تم تسجيل الطلب',
+    'Fermer': 'إغلاق',
+    'Imprimer': 'طباعة',
+    'Télécharger (.txt)': 'تحميل (.txt)',
+    'Détail de la demande': 'تفاصيل الطلب',
+    'Mot de passe actuel': 'كلمة المرور الحالية',
+    'Nouveau mot de passe': 'كلمة المرور الجديدة',
+    'Confirmer le nouveau mot de passe': 'تأكيد كلمة المرور الجديدة',
+    'Annuler': 'إلغاء',
+    'Mettre à jour': 'تحديث',
+    'Référence': 'المرجع',
+    'Type': 'النوع',
+    'Demandeur': 'صاحب الطلب',
+    'Matricule': 'الرقم الوظيفي',
+    'Date': 'التاريخ',
+    'Statut': 'الحالة',
+    'En attente': 'قيد الانتظار',
+    'Traitée': 'تمت المعالجة',
+    'Rejetée': 'مرفوضة',
+    'Détails': 'التفاصيل',
+    'Conservez la référence': 'احتفظ بالمرجع',
+    'Aucune demande pour le moment.': 'لا توجد طلبات حاليا.',
+    'Créez votre première demande dans l’onglet « Nouvelle demande ».': 'أنشئ أول طلب من تبويب «طلب جديد».',
+    'Aucun résultat.': 'لا توجد نتائج.',
+    'Voir': 'عرض',
+    'Suppr.': 'حذف',
+    'Réf.': 'المرجع',
+    'Veuillez remplir tous les champs obligatoires': 'يرجى ملء كل الحقول الإجبارية',
+    "Vous devez accepter l'utilisation de vos données pour continuer": 'يجب قبول استعمال بياناتك للمتابعة',
+    'Le mot de passe doit contenir au moins 8 caractères': 'يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل',
+    'Les mots de passe ne correspondent pas': 'كلمتا المرور غير متطابقتين',
+    'Email invalide': 'البريد الإلكتروني غير صالح',
+    'Ce code est déjà enregistré. Connectez-vous ou contactez la DRH.': 'هذا الرمز مسجل مسبقا. سجل الدخول أو اتصل بمديرية الموارد البشرية.',
+    'Cet email est déjà utilisé': 'هذا البريد الإلكتروني مستعمل مسبقا',
+    'Compte créé avec succès. Bienvenue !': 'تم إنشاء الحساب بنجاح. مرحبا بك!',
+    'Veuillez renseigner votre identifiant et votre mot de passe': 'يرجى إدخال المعرف وكلمة المرور',
+    'Identifiant ou mot de passe incorrect': 'المعرف أو كلمة المرور غير صحيحة',
+    'Mot de passe mis à jour': 'تم تحديث كلمة المرور',
+    'Champs obligatoires manquants': 'حقول إجبارية ناقصة',
+    'Profil mis à jour': 'تم تحديث الملف الشخصي',
+    'Compte supprimé': 'تم حذف الحساب',
+    'Sélectionnez un type de demande': 'اختر نوع الطلب',
+    'Sélectionnez au moins un mois': 'اختر شهرا واحدا على الأقل',
+    'Récépissé téléchargé': 'تم تحميل الوصل',
+    'Demande supprimée': 'تم حذف الطلب',
+    'Aucune demande à exporter': 'لا توجد طلبات للتصدير',
+    'Export CSV téléchargé': 'تم تحميل ملف CSV',
+    'Tous les champs sont requis': 'كل الحقول مطلوبة',
+    'Le nouveau mot de passe doit contenir au moins 8 caractères': 'يجب أن تحتوي كلمة المرور الجديدة على 8 أحرف على الأقل',
+    'Les nouveaux mots de passe ne correspondent pas': 'كلمتا المرور الجديدتان غير متطابقتين',
+    'Mot de passe actuel incorrect': 'كلمة المرور الحالية غير صحيحة'
+  };
+
+  const FR_BY_AR = Object.fromEntries(Object.entries(AR).map(([fr, ar]) => [ar, fr]));
+
+  function toFrenchSource(text) {
+    const raw = String(text ?? '');
+    const leading = raw.match(/^\s*/)[0];
+    const trailing = raw.match(/\s*$/)[0];
+    const clean = raw.replace(/\s+/g, ' ').trim();
+    return leading + (FR_BY_AR[clean] || clean) + trailing;
+  }
+
+  const TYPE_LABELS_AR = {
+    attestation: 'شهادة عمل',
+    fichePaie: 'قسيمة الراتب',
+    reclamation: 'شكوى الراتب',
+    conges: 'العطل / الغيابات',
+    pointage: 'تصحيح الحضور',
+    compteRendu: 'تقرير',
+    documents: 'استلام الوثائق'
+  };
+
+  function tr(text) {
+    const clean = String(text ?? '').replace(/\s+/g, ' ').trim();
+    return currentLang === 'ar' ? (AR[clean] || text) : text;
+  }
+
+  function getTypeLabel(type) {
+    return currentLang === 'ar' ? TYPE_LABELS_AR[type] : TYPE_LABELS[type];
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = currentLang === 'ar' ? 'ar' : 'fr';
+    document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+    document.body.classList.toggle('lang-ar', currentLang === 'ar');
+    document.title = currentLang === 'ar'
+      ? 'بوابة الموارد البشرية - طلبات الموظفين'
+      : 'Portail RH - Demandes du Personnel';
+
+    document.querySelectorAll('[data-lang-btn]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.langBtn === currentLang);
+    });
+
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        const parent = node.parentElement;
+        if (!parent || ['SCRIPT', 'STYLE', 'OPTION'].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+        return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach(node => {
+      if (!node._frText) node._frText = toFrenchSource(node.nodeValue);
+      else node._frText = toFrenchSource(node._frText);
+      const leading = node._frText.match(/^\s*/)[0];
+      const trailing = node._frText.match(/\s*$/)[0];
+      const core = node._frText.trim();
+      node.nodeValue = currentLang === 'ar' ? leading + tr(core) + trailing : node._frText;
+    });
+
+    document.querySelectorAll('body *').forEach(el => {
+      if (['SCRIPT', 'STYLE'].includes(el.tagName)) return;
+      if (el.placeholder !== undefined) {
+        if (!el.dataset.frPlaceholder) el.dataset.frPlaceholder = toFrenchSource(el.placeholder);
+        else el.dataset.frPlaceholder = toFrenchSource(el.dataset.frPlaceholder);
+        el.placeholder = currentLang === 'ar' ? tr(el.dataset.frPlaceholder) : el.dataset.frPlaceholder;
+      }
+      if (el.title) {
+        if (!el.dataset.frTitle) el.dataset.frTitle = toFrenchSource(el.title);
+        else el.dataset.frTitle = toFrenchSource(el.dataset.frTitle);
+        el.title = currentLang === 'ar' ? tr(el.dataset.frTitle) : el.dataset.frTitle;
+      }
+    });
+
+    document.querySelectorAll('option').forEach(opt => {
+      if (!opt.dataset.frText) opt.dataset.frText = toFrenchSource(opt.textContent);
+      else opt.dataset.frText = toFrenchSource(opt.dataset.frText);
+      if (!opt.hasAttribute('value')) opt.value = opt.dataset.frText;
+      opt.textContent = currentLang === 'ar' ? tr(opt.dataset.frText) : opt.dataset.frText;
+    });
+
+    const historyTab = document.querySelector('.tab[data-tab="historique"]');
+    const count = document.getElementById('countBadge')?.textContent || '0';
+    if (historyTab) {
+      historyTab.innerHTML = `${tr('Mes demandes')} (<span id="countBadge">${count}</span>)`;
+    }
+    const inboxTab = document.querySelector('.tab[data-tab="reception"]');
+    const inboxCount = document.getElementById('inboxBadge')?.textContent || '0';
+    if (inboxTab) {
+      inboxTab.innerHTML = `${tr('Boîte de réception')} (<span id="inboxBadge">${inboxCount}</span>)`;
+    }
+    if (currentUser) updateUserChip();
+  }
+
+  function setLanguage(lang) {
+    currentLang = lang;
+    localStorage.setItem(LANG_KEY, lang);
+    renderHistory();
+    if (document.getElementById('tab-documents')?.classList.contains('active')) renderDocuments(false);
+    applyLanguage();
+  }
+
+  /* ================================================== */
+  /* ================ HACHAGE MOT DE PASSE ============== */
+  /* ================================================== */
+  async function hashPassword(password, salt) {
+    if (!window.crypto || !crypto.subtle) {
+      return fallbackHashPassword(password, salt);
+    }
+    const data = new TextEncoder().encode(password + ':' + salt);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  function fallbackHashPassword(password, salt) {
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    const str = password + ':' + salt;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      h1 ^= c;
+      h1 = Math.imul(h1, 0x01000193) >>> 0;
+      h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+    }
+    return (h1.toString(16).padStart(8, '0') + h2.toString(16).padStart(8, '0')).repeat(4);
+  }
+
+  function generateSalt() {
+    if (window.crypto && crypto.getRandomValues) {
+      const arr = new Uint8Array(16);
+      crypto.getRandomValues(arr);
+      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    return String(Date.now()) + Math.random().toString(16).slice(2) + Math.random().toString(16).slice(2);
+  }
+
+  /* ================================================== */
+  /* ================ GESTION USERS ===================== */
+  /* ================================================== */
+  /* ================================================== */
+  /* ================ SESSION V2 ======================== */
+  /* ================================================== */
+  function setSessionV2(data, persistent) {
+    if (persistent) {
+      localStorage.setItem(SESSION_V2_KEY, JSON.stringify(data));
+      sessionStorage.removeItem(SESSION_V2_KEY);
+    } else {
+      sessionStorage.setItem(SESSION_V2_KEY, JSON.stringify(data));
+      localStorage.removeItem(SESSION_V2_KEY);
+    }
+  }
+
+  function getSessionV2() {
+    const s = sessionStorage.getItem(SESSION_V2_KEY) || localStorage.getItem(SESSION_V2_KEY);
+    return s ? JSON.parse(s) : null;
+  }
+
+  function clearSessionV2() {
+    sessionStorage.removeItem(SESSION_V2_KEY);
+    localStorage.removeItem(SESSION_V2_KEY);
+  }
+
+  /* ================================================== */
+  /* ================ AUTH UI =========================== */
+  /* ================================================== */
+  function switchAuth(name) {
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    const target = document.getElementById('form-' + name);
+    if (target) target.classList.add('active');
+    hideAlert();
+    applyLanguage();
+  }
+
+  function showAlert(msg) {
+    const a = document.getElementById('authAlert');
+    a.textContent = tr(msg);
+    a.classList.add('show');
+  }
+
+  function hideAlert() {
+    document.getElementById('authAlert').classList.remove('show');
+  }
+
+  function togglePwd(id, btn) {
+    const el = document.getElementById(id);
+    if (el.type === 'password') {
+      el.type = 'text';
+      btn.textContent = tr('Masquer');
+    } else {
+      el.type = 'password';
+      btn.textContent = tr('Afficher');
+    }
+  }
+
+  function checkStrength() {
+    const p = document.getElementById('reg-pwd').value;
+    let score = 0;
+    if (p.length >= 8) score++;
+    if (p.length >= 12) score++;
+    if (/[a-z]/.test(p) && /[A-Z]/.test(p)) score++;
+    if (/[0-9]/.test(p)) score++;
+    if (/[^a-zA-Z0-9]/.test(p)) score++;
+
+    const bar = document.getElementById('pwdBar');
+    const text = document.getElementById('pwdText');
+    bar.className = 'password-strength-bar';
+    if (p.length === 0) {
+      bar.style.width = '0';
+      text.textContent = tr('Utilisez 8+ caractères avec lettres, chiffres et symboles');
+    } else if (score <= 2) {
+      bar.style.width = '33%';
+      bar.classList.add('ps-weak');
+      text.textContent = tr('Faible');
+    } else if (score <= 3) {
+      bar.style.width = '66%';
+      bar.classList.add('ps-medium');
+      text.textContent = tr('Moyen');
+    } else {
+      bar.style.width = '100%';
+      bar.classList.add('ps-strong');
+      text.textContent = tr('Fort');
+    }
+  }
+
+  /* ================================================== */
+  /* ================ CONNEXION ========================= */
+  /* ================================================== */
+  function showAuthForm(name) {
+    document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+    const f = document.getElementById('form-' + name);
+    if (f) f.classList.add('active');
+    hideAlert();
+  }
+
+  async function doSignup() {
+    hideAlert();
+    const nom    = val('su-nom');
+    const prenom = val('su-prenom');
+    const code   = val('su-code');
+    const ddn    = val('su-ddn');
+    const pwd    = document.getElementById('su-pwd').value;
+    const pwd2   = document.getElementById('su-pwd2').value;
+    if (!nom || !prenom || !code || !ddn || !pwd) {
+      showAlert('Tous les champs sont obligatoires'); return;
+    }
+    if (pwd.length < 6) { showAlert('Mot de passe trop court (minimum 6 caractères)'); return; }
+    if (pwd !== pwd2)   { showAlert('Les mots de passe ne correspondent pas'); return; }
+
+    try {
+      const res = await fetch(location.origin + '/api/portal/self-register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nom, prenom, code: code.trim().toUpperCase(), dateNaissance: ddn, password: pwd }),
+      });
+      if (!res.ok) {
+        let detail = 'Erreur création de compte';
+        try { const p = await res.json(); detail = p.detail || detail; } catch (e) {}
+        showAlert(detail); return;
+      }
+      const data = await res.json();
+      const employee = data.employee || {};
+      const matricule = (employee.matricule || employee.code || code).toLowerCase();
+      setSessionV2({ matricule, profile: { ...employee, matricule, code: matricule }, portalToken: data.portal_token || '', since: Date.now() }, false);
+      enterApp(matricule);
+      toast('Compte créé ! Bienvenue ' + (employee.prenom || '') + ' !');
+    } catch (e) {
+      showAlert('Impossible de contacter le serveur.');
+    }
+  }
+
+  async function doResetPassword() {
+    hideAlert();
+    const nom    = val('rst-nom');
+    const prenom = val('rst-prenom');
+    const code   = val('rst-code');
+    const ddn    = val('rst-ddn');
+    const pwd    = document.getElementById('rst-pwd').value;
+    const pwd2   = document.getElementById('rst-pwd2').value;
+    if (!nom || !prenom || !code || !ddn || !pwd) {
+      showAlert('Tous les champs sont obligatoires'); return;
+    }
+    if (pwd.length < 6) { showAlert('Mot de passe trop court (minimum 6 caractères)'); return; }
+    if (pwd !== pwd2)   { showAlert('Les mots de passe ne correspondent pas'); return; }
+
+    try {
+      const res = await fetch(location.origin + '/api/portal/self-reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nom, prenom, code: code.trim().toUpperCase(), dateNaissance: ddn, password: pwd }),
+      });
+      if (!res.ok) {
+        let detail = 'Erreur réinitialisation';
+        try { const p = await res.json(); detail = p.detail || detail; } catch (e) {}
+        showAlert(detail); return;
+      }
+      showAlert('Mot de passe réinitialisé ! Vous pouvez maintenant vous connecter.');
+      // Switch back to login with the code pre-filled
+      document.getElementById('login-id').value = code.trim().toUpperCase();
+      showAuthForm('login');
+    } catch (e) {
+      showAlert('Impossible de contacter le serveur.');
+    }
+  }
+
+  async function doLogin() {
+    hideAlert();
+    const id = val('login-id');
+    const pwd = document.getElementById('login-pwd').value;
+    const remember = document.getElementById('login-remember').checked;
+
+    if (!id || !pwd) {
+      showAlert('Veuillez renseigner votre identifiant et votre mot de passe');
+      return;
+    }
+
+    const btn = document.getElementById('login-submit-btn');
+    if (btn) { btn.disabled = true; btn.textContent = tr('Connexion...'); }
+
+    try {
+      let res;
+      try {
+        res = await fetch(location.origin + '/api/portal/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: id.trim().toLowerCase(), password: pwd })
+        });
+      } catch (err) {
+        showAlert('Impossible de contacter le serveur. Vérifiez votre connexion.');
+        return;
+      }
+
+      if (!res.ok) {
+        let detail = 'Identifiant ou mot de passe incorrect';
+        try { const p = await res.json(); detail = p.detail || detail; } catch (e) {}
+        showAlert(detail);
+        return;
+      }
+
+      const data = await res.json();
+      const employee = data.employee || {};
+      const matricule = (employee.matricule || employee.code || id).toLowerCase();
+      const sessionData = {
+        matricule,
+        profile: {
+          ...employee,
+          code: employee.code || employee.matricule || matricule,
+          matricule: employee.matricule || employee.code || matricule,
+          site: toFrenchSource(employee.site || ''),
+        },
+        portalToken: data.portal_token || '',
+        since: Date.now()
+      };
+      setSessionV2(sessionData, remember);
+      enterApp(matricule);
+      toast(tr('Bienvenue') + ' ' + (employee.prenom || '') + ' !');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = tr('Se connecter'); }
+    }
+  }
+
+  function setSession(key, persistent) {
+    const session = { matricule: key, since: Date.now() };
+    if (persistent) {
+      localStorage.setItem(SESSION_LOCAL_KEY, JSON.stringify(session));
+      sessionStorage.removeItem(SESSION_KEY);
+    } else {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      localStorage.removeItem(SESSION_LOCAL_KEY);
+    }
+  }
+
+  function getSession() {
+    const s = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_LOCAL_KEY);
+    return s ? JSON.parse(s) : null;
+  }
+
+  function clearSession() {
+    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_LOCAL_KEY);
+    clearSessionV2();
+  }
+
+  function logout() {
+    if (!confirm('Voulez-vous vraiment vous déconnecter ?')) return;
+    clearSession();
+    currentUser = null;
+    document.getElementById('appView').classList.add('hidden');
+    document.getElementById('authView').classList.remove('hidden');
+    document.getElementById('form-login').reset();
+    switchAuth('login');
+  }
+
+  /* ================================================== */
+  /* ================ CHANGER MOT DE PASSE ============== */
+  /* ================================================== */
+  function openChangePassword() {
+    document.getElementById('cp-old').value = '';
+    document.getElementById('cp-new').value = '';
+    document.getElementById('cp-new2').value = '';
+    document.getElementById('pwdAlert').classList.remove('show');
+    document.getElementById('pwdModal').classList.add('show');
+  }
+  function closePwdModal() {
+    document.getElementById('pwdModal').classList.remove('show');
+  }
+  async function changePassword() {
+    const old = document.getElementById('cp-old').value;
+    const n1 = document.getElementById('cp-new').value;
+    const n2 = document.getElementById('cp-new2').value;
+    const a = document.getElementById('pwdAlert');
+    const showA = (msg) => { a.textContent = tr(msg); a.classList.add('show'); };
+
+    if (!old || !n1 || !n2) return showA('Tous les champs sont requis');
+    if (n1.length < 8) return showA('Le nouveau mot de passe doit contenir au moins 8 caractères');
+    if (n1 !== n2) return showA('Les nouveaux mots de passe ne correspondent pas');
+
+    try {
+      const res = await fetch(location.origin + '/api/portal/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...portalAuthHeaders() },
+        body: JSON.stringify({ oldPassword: old, newPassword: n1 })
+      });
+      if (!res.ok) {
+        let detail = 'Échec du changement de mot de passe';
+        try { const p = await res.json(); detail = p.detail || detail; } catch (e) {}
+        return showA(detail);
+      }
+      closePwdModal();
+      toast('Mot de passe mis à jour');
+    } catch (err) {
+      showA('Erreur réseau. Vérifiez votre connexion.');
+    }
+  }
+
+  /* ================================================== */
+  /* ================ PROFIL ============================ */
+  /* ================================================== */
+  function loadProfileForm() {
+    const p = currentUser.profile;
+    document.getElementById('prof-nom').value = p.nom || '';
+    document.getElementById('prof-prenom').value = p.prenom || '';
+    document.getElementById('prof-matricule').value = p.matricule || '';
+    document.getElementById('prof-site').value = toFrenchSource(p.site || '');
+    document.getElementById('prof-poste').value = p.poste || '';
+    document.getElementById('prof-departement').value = p.departement || '';
+    document.getElementById('prof-email').value = p.email || '';
+    document.getElementById('prof-telephone').value = p.telephone || '';
+  }
+
+  function saveProfile() {
+    const updated = {
+      ...currentUser.profile,
+      email: val('prof-email').toLowerCase(),
+      telephone: val('prof-telephone')
+    };
+    if (updated.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updated.email)) {
+      toast('Email invalide', true);
+      return;
+    }
+    const session = getSessionV2();
+    if (session) {
+      session.profile = updated;
+      setSessionV2(session, !!localStorage.getItem(SESSION_V2_KEY));
+    }
+    currentUser.profile = updated;
+    updateUserChip();
+    toast('Profil mis à jour');
+  }
+
+  function deleteAccount() {
+    if (!confirm('Voulez-vous effacer votre session locale et vous déconnecter ?')) return;
+    localStorage.removeItem(REQUESTS_PREFIX + (currentUser?.key || ''));
+    clearSession();
+    currentUser = null;
+    document.getElementById('appView').classList.add('hidden');
+    document.getElementById('authView').classList.remove('hidden');
+    switchAuth('login');
+    toast('Session effacée');
+  }
+
+  /* ================================================== */
+  /* ================ ENTRÉE DANS L'APP ================= */
+  /* ================================================== */
+  async function refreshCurrentUserFromPostgres() {
+    // No-op in new auth model — profile is loaded fresh at login from the backend
+  }
+
+  function enterApp(key) {
+    const session = getSessionV2();
+    if (!session || session.matricule !== key) {
+      clearSession();
+      document.getElementById('authView').classList.remove('hidden');
+      document.getElementById('appView').classList.add('hidden');
+      applyLanguage();
+      return;
+    }
+    const normalizedSite = toFrenchSource(session.profile.site || '');
+    if (normalizedSite !== session.profile.site) {
+      session.profile.site = normalizedSite;
+      setSessionV2(session, !!localStorage.getItem(SESSION_V2_KEY));
+    }
+    currentUser = { key, profile: session.profile, portalToken: session.portalToken || '' };
+
+    document.getElementById('authView').classList.add('hidden');
+    document.getElementById('appView').classList.remove('hidden');
+
+    // Init UI
+    initAppUI();
+    updateUserChip();
+    switchTab('home');
+    loadProfileForm();
+    renderHistory();
+    refreshCurrentUserFromPostgres().then(() => renderInbox(false, true));
+  }
+
+  function updateUserChip() {
+    const p = currentUser.profile;
+    const initials = (p.prenom?.[0] || '') + (p.nom?.[0] || '');
+    const verifiedLight = document.getElementById('accountVerifiedLight');
+    const headerPhoto = document.getElementById('headerEmployeePhoto');
+    const headerCode = document.getElementById('headerEmployeeCode');
+    const code = p.matricule || p.code || currentUser.key || '--';
+    const suspended = String(p.statut || '').toLowerCase().includes('suspend');
+    if (p.photo) {
+      if (headerPhoto) headerPhoto.innerHTML = `<img src="${escapeHtml(p.photo)}" alt="Photo ${escapeHtml(p.prenom || '')} ${escapeHtml(p.nom || '')}">`;
+    } else {
+      if (headerPhoto) headerPhoto.textContent = initials.toUpperCase() || '--';
+    }
+    document.getElementById('userName').textContent = `${p.prenom || ''} ${p.nom || ''}`.trim() || '--';
+    document.getElementById('userSite').textContent = suspended ? 'Situation : suspendu' : 'Compte employé';
+    if (headerCode) {
+      headerCode.textContent = code;
+      headerCode.classList.toggle('suspended', suspended);
+      headerCode.title = suspended ? 'Employé suspendu' : 'Code employé validé';
+    }
+    if (verifiedLight) {
+      verifiedLight.classList.toggle('on', p.verified === true);
+      verifiedLight.title = p.verified === true ? 'Compte validé par PostgreSQL' : 'Compte non validé par PostgreSQL';
+    }
+    const headerDDN = document.getElementById('headerDDN');
+    if (headerDDN) headerDDN.textContent = p.dateNaissance || '00/00/0000';
+  }
+
+  /* ================================================== */
+  /* ================ APP - INIT ======================== */
+  /* ================================================== */
+  function initAppUI() {
+    // Années pour fiche de paie
+    const annee = new Date().getFullYear();
+    const sel = document.getElementById('fp-annee');
+    if (!sel.options.length) {
+      for (let y = annee; y >= annee - 5; y--) {
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y;
+        sel.appendChild(opt);
+      }
+    }
+    document.querySelectorAll('.type-card').forEach(c => {
+      c.onclick = () => selectType(c.dataset.type);
+    });
+  }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    const appV = document.getElementById('appView');
+    if (name === 'home') {
+      appV?.classList.add('home-mode');
+      appV?.classList.remove('portail-mode');
+      renderHomeTab();
+    } else if (name === 'portail') {
+      appV?.classList.remove('home-mode');
+      appV?.classList.add('portail-mode');
+    } else {
+      appV?.classList.remove('home-mode');
+      appV?.classList.remove('portail-mode');
+    }
+    if (name === 'historique') renderHistory();
+    if (name === 'reception') renderInbox();
+    if (name === 'pointage') renderPointage();
+    if (name === 'documents') renderDocuments();
+    if (name === 'profil') { loadProfileForm(); updateNotifUI(); autoSubscribePush(); }
+    if (name === 'ronde') {
+      appV?.classList.add('portail-mode');
+      rondeInit();
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function renderHomeTab() {
+    const body = document.getElementById('homeHistBody');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#94a3b8;font-size:.8rem">Chargement...</td></tr>';
+    try {
+      const rows = await loadPortalPointages();
+      if (!rows || !rows.length) {
+        body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#94a3b8;font-size:.8rem">Aucun pointage enregistré</td></tr>';
+        return;
+      }
+      const byDate = {};
+      rows.forEach(p => {
+        const d = p.date || '?';
+        if (!byDate[d]) byDate[d] = { arrivee: null, depart: null, site: '', gps: false };
+        if ((p.action === 'arrivee' || p.action === 'presence') && !byDate[d].arrivee) {
+          byDate[d].arrivee = p.heure;
+          if (p.site) byDate[d].site = p.site;
+        }
+        if (p.action === 'depart') byDate[d].depart = p.heure;
+        if (!byDate[d].site && p.site) byDate[d].site = p.site;
+        if (p.position?.lat) byDate[d].gps = true;
+      });
+      const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a)).slice(0, 6);
+      body.innerHTML = dates.map(d => {
+        const r = byDate[d];
+        const gpsCell = r.gps ? '<span style="color:#16a34a;font-weight:700">✓</span>' : '<span style="color:#cbd5e1">—</span>';
+        const siteCell = r.site ? `<span style="font-size:.75rem">${escapeHtml(r.site)}</span>` : '<span style="color:#cbd5e1">—</span>';
+        return `<tr>
+          <td>${escapeHtml(d)}</td>
+          <td>${r.arrivee ? escapeHtml(r.arrivee) : '<span style="color:#cbd5e1">—</span>'}</td>
+          <td>${r.depart ? escapeHtml(r.depart) : '<span style="color:#cbd5e1">—</span>'}</td>
+          <td>${siteCell}</td>
+          <td>${gpsCell}</td>
+        </tr>`;
+      }).join('');
+    } catch (e) {
+      body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:16px;color:#ef4444;font-size:.8rem">Indisponible</td></tr>';
+    }
+  }
+
+  function selectType(type) {
+    selectedType = type;
+    document.querySelectorAll('.type-card').forEach(c => c.classList.toggle('active', c.dataset.type === type));
+    document.querySelectorAll('.request-form').forEach(f => f.classList.remove('active'));
+    document.getElementById('form-' + type).classList.add('active');
+    document.getElementById('submitBtn').style.display = 'flex';
+    setTimeout(() => {
+      document.getElementById('form-' + type).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+
+  /* ================================================== */
+  /* ================ DEMANDES ========================== */
+  /* ================================================== */
+  function getDetails(type) {
+    switch (type) {
+      case 'attestation':
+        return {
+          'Motif': val('att-motif'),
+          'Langue': val('att-langue'),
+          'Exemplaires': val('att-exemplaires'),
+          'Destinataire': val('att-destinataire'),
+          'Précisions': val('att-precisions')
+        };
+      case 'fichePaie':
+        const mois = Array.from(document.querySelectorAll('#fp-mois input:checked')).map(c => c.value);
+        return {
+          'Année': val('fp-annee'),
+          'Mois': mois.join(', '),
+          'Format': val('fp-format'),
+          'Commentaire': val('fp-commentaire')
+        };
+      case 'reclamation':
+        return {
+          'Mois concerné': val('rec-mois'),
+          'Type d\'anomalie': val('rec-type'),
+          'Montant attendu': val('rec-attendu') ? val('rec-attendu') + ' DA' : '',
+          'Montant reçu': val('rec-recu') ? val('rec-recu') + ' DA' : '',
+          'Description': val('rec-description')
+        };
+      case 'conges':
+        return {
+          'Type': val('cg-type'),
+          'Date début': val('cg-debut'),
+          'Date fin': val('cg-fin'),
+          'Nombre de jours': val('cg-jours'),
+          'Motif': val('cg-motif'),
+          'Contact d\'urgence': val('cg-remplacant')
+        };
+      case 'pointage':
+        return {
+          'Date': val('pt-date'),
+          'Type de problème': val('pt-type'),
+          'Heure arrivée réelle': val('pt-arrivee'),
+          'Heure départ réelle': val('pt-depart'),
+          'Description': val('pt-description')
+        };
+      case 'compteRendu':
+        return {
+          'Nature': val('cr-type'),
+          'Date événement': val('cr-date'),
+          'Site': val('cr-site'),
+          'Urgence': val('cr-urgence'),
+          'Compte rendu': val('cr-description')
+        };
+      case 'documents':
+        return {
+          'Document': val('doc-type'),
+          'Période': val('doc-periode'),
+          'Mode de retrait': val('doc-retrait'),
+          'Usage': val('doc-usage'),
+          'Précisions': val('doc-commentaire')
+        };
+    }
+  }
+
+  function validate() {
+    if (!selectedType) { toast('Sélectionnez un type de demande', true); return false; }
+    const checks = {
+      attestation: [['att-motif', 'Motif']],
+      fichePaie: [],
+      reclamation: [['rec-mois','Mois'],['rec-type','Type d\'anomalie'],['rec-description','Description']],
+      conges: [['cg-type','Type'],['cg-debut','Date de début'],['cg-fin','Date de fin']],
+      pointage: [['pt-date','Date'],['pt-type','Type de problème'],['pt-description','Description']],
+      compteRendu: [['cr-type','Nature'],['cr-date','Date événement'],['cr-description','Compte rendu']],
+      documents: [['doc-type','Document']]
+    };
+    for (const [id, label] of (checks[selectedType] || [])) {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) { toast('Champ requis: ' + label, true); el.focus(); return false; }
+    }
+    if (selectedType === 'fichePaie') {
+      if (document.querySelectorAll('#fp-mois input:checked').length === 0) {
+        toast('Sélectionnez au moins un mois', true); return false;
+      }
+    }
+    return true;
+  }
+
+  async function sendRequestToSgdi(record) {
+    const apiRoot = location.origin + '/api/portal/demandes';
+    const res = await fetch(apiRoot, {
+      method: 'POST',
+      headers: portalAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(record)
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(txt || 'Erreur envoi SGDI');
+    }
+    return res.json();
+  }
+
+  async function submitRequest() {
+    if (!validate()) return;
+    const details = getDetails(selectedType);
+    const now = new Date();
+    const ref = generateRef(selectedType);
+
+    const record = {
+      ref,
+      type: selectedType,
+      typeLabel: getTypeLabel(selectedType),
+      employee: { ...currentUser.profile },
+      details,
+      status: 'en-attente',
+      createdAt: now.toISOString(),
+      createdAtFormatted: now.toLocaleString('fr-FR')
+    };
+
+    const all = loadRequests();
+    all.unshift(record);
+    saveRequests(all);
+    try {
+      await sendRequestToSgdi(record);
+      record.sentToSgdi = true;
+      saveRequests(all);
+      toast('Demande envoyée à la DRH');
+    } catch (err) {
+      console.error(err);
+      record.sentToSgdi = false;
+      record.syncError = String(err.message || err);
+      saveRequests(all);
+      toast('Demande sauvegardée sur le téléphone, mais non reçue par la DRH. Redémarrez le serveur puis réessayez.', true);
+    }
+    lastReceipt = record;
+    showConfirm(record);
+    updateCount();
+    renderInbox(false, true);
+    applyLanguage();
+  }
+
+  function loadRequests() {
+    return JSON.parse(localStorage.getItem(REQUESTS_PREFIX + currentUser.key) || '[]');
+  }
+  function saveRequests(list) {
+    localStorage.setItem(REQUESTS_PREFIX + currentUser.key, JSON.stringify(list));
+  }
+
+  function portalToken() {
+    return currentUser?.portalToken || getSessionV2()?.portalToken || '';
+  }
+
+  function portalAuthHeaders(extra) {
+    const token = portalToken();
+    return {
+      ...(extra || {}),
+      ...(token ? { Authorization: 'Bearer ' + token } : {})
+    };
+  }
+
+  /* ================================================== */
+  /* ================ POINTAGE ========================== */
+  /* ================================================== */
+  function updatePointageClock() {
+    const now = new Date();
+    const d = document.getElementById('pointage-date');
+    const h = document.getElementById('pointage-heure');
+    if (d) d.value = now.toISOString().slice(0, 10);
+    if (h) h.value = now.toTimeString().slice(0, 5);
+  }
+
+  function getPortalPosition() {
+    return new Promise(resolve => {
+      if (!window.isSecureContext) return resolve({ error: 'insecure_context' });
+      if (!navigator.geolocation) return resolve({ error: 'geolocation_unavailable' });
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy
+        }),
+        err => resolve({ error: err && err.code === 1 ? 'permission_denied' : 'position_unavailable' }),
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
+      );
+    });
+  }
+
+  async function sendPortalPointage(record) {
+    const res = await fetch(location.origin + '/api/portal/pointages', {
+      method: 'POST',
+      headers: portalAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(record)
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(txt || 'Erreur pointage PostgreSQL');
+    }
+    return res.json();
+  }
+
+  async function loadPortalPointages() {
+    const code = currentUser?.profile?.matricule || currentUser?.profile?.code || currentUser?.key || '';
+    if (!code) return [];
+    const res = await fetch(location.origin + '/api/portal/pointages/' + encodeURIComponent(code), {
+      headers: portalAuthHeaders()
+    });
+    if (!res.ok) throw new Error('Historique pointage indisponible');
+    const payload = await res.json();
+    return Array.isArray(payload.data) ? payload.data : [];
+  }
+
+  function _updateArriveeBtn(rows) {
+    const btn = document.getElementById('btn-arrivee-gps');
+    if (!btn) return;
+    const cutoff = Date.now() - 12 * 60 * 60 * 1000;
+    const hasRecent = (rows || []).some(p => {
+      if (p.action !== 'arrivee' && p.action !== 'presence') return false;
+      const dt = new Date(`${p.date}T${p.heure}`);
+      return !isNaN(dt.getTime()) && dt.getTime() >= cutoff;
+    });
+    btn.disabled = hasRecent;
+    btn.style.opacity = hasRecent ? '0.45' : '';
+    btn.style.cursor = hasRecent ? 'not-allowed' : '';
+    btn.title = hasRecent ? 'Déjà pointé — disponible 12 h après le dernier pointage arrivée' : '';
+  }
+
+  async function renderPointage() {
+    updatePointageClock();
+    const zone = document.getElementById('pointageHistory');
+    if (!zone) return;
+    zone.textContent = 'Chargement...';
+    try {
+      const rows = await loadPortalPointages();
+      _updateArriveeBtn(rows);
+      if (!rows.length) {
+        zone.innerHTML = 'Aucun pointage enregistré.';
+        return;
+      }
+      zone.innerHTML = `<div style="overflow:auto;"><table class="history-table"><thead><tr><th>Date</th><th>Heure</th><th>Action</th><th>Site</th><th>Position</th></tr></thead><tbody>${rows.slice(0, 20).map(p => {
+        const gps = p.position && p.position.lat ? `${Number(p.position.lat).toFixed(5)}, ${Number(p.position.lng).toFixed(5)}` : '—';
+        const action = p.action === 'presence' ? 'Présent' : p.action === 'depart' ? 'Départ' : 'Arrivée';
+        return `<tr><td>${escapeHtml(p.date || '')}</td><td>${escapeHtml(p.heure || '')}</td><td><span class="badge badge-traite">${action}</span></td><td>${escapeHtml(p.site || '—')}</td><td>${escapeHtml(gps)}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+    } catch (err) {
+      console.error(err);
+      zone.innerHTML = '<span style="color:var(--danger);">Connexion PostgreSQL indisponible pour le pointage.</span>';
+    }
+  }
+
+  async function submitPortalPointage(action) {
+    updatePointageClock();
+    const now = new Date();
+    const ref = `PTG-${now.toISOString().slice(0,10).replaceAll('-', '')}-${Math.floor(Math.random() * 9000 + 1000)}`;
+    const record = {
+      ref,
+      action,
+      employee: { ...currentUser.profile },
+      date: document.getElementById('pointage-date').value,
+      heure: document.getElementById('pointage-heure').value,
+      note: val('pointage-note'),
+      createdAt: now.toISOString(),
+      position: await getPortalPosition()
+    };
+    if (record.position && record.position.error === 'permission_denied') {
+      toast('Localisation refusée. Autorisez la position dans les paramètres du navigateur.', true);
+      return;
+    }
+    // GPS non disponible (PC, timeout, insecure_context) → on pointe sans coordonnées
+    if (!record.position || record.position.error || !record.position.lat || !record.position.lng) {
+      record.position = { lat: null, lng: null, accuracy: null, source: 'manual' };
+    }
+    try {
+      await sendPortalPointage(record);
+      document.getElementById('pointage-note').value = '';
+      playPointageSound('success');
+      toast(action === 'depart' ? 'Pointage départ enregistré ✓' : 'Pointage arrivée enregistré ✓');
+      renderPointage();
+    } catch (err) {
+      console.error(err);
+      toast('Erreur pointage : ' + (err.message || 'Connexion indisponible'), true);
+    }
+  }
+
+  function generateRef(type) {
+    const prefix = { attestation: 'ATT', fichePaie: 'FP', reclamation: 'REC', conges: 'CG', pointage: 'PT', compteRendu: 'CR', documents: 'DOC' }[type];
+    const d = new Date();
+    const yymmdd = String(d.getFullYear()).slice(2) + pad(d.getMonth()+1) + pad(d.getDate());
+    const rand = Math.floor(Math.random() * 9000 + 1000);
+    return `${prefix}-${yymmdd}-${rand}`;
+  }
+
+  function showConfirm(record) {
+    const body = document.getElementById('modalBody');
+    let html = `
+      <div class="receipt">
+        <div style="text-align:center; font-size:1.1rem; font-weight:700; margin-bottom:10px;">
+          ${tr('Référence')}: ${record.ref}
+        </div>
+        <div class="receipt-row"><span class="key">${tr('Type')}</span><span class="val">${getTypeLabel(record.type)}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Demandeur')}</span><span class="val">${record.employee.prenom} ${record.employee.nom}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Matricule')}</span><span class="val">${record.employee.matricule}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Site')}</span><span class="val">${record.employee.site}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Date')}</span><span class="val">${record.createdAtFormatted}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Statut')}</span><span class="val"><span class="badge badge-en-attente">${tr('En attente')}</span></span></div>
+      </div>
+      <div style="margin-top:14px;"><strong>${tr('Détails')} :</strong>
+        <div style="margin-top:8px; font-size:0.9rem;">`;
+    for (const [k, v] of Object.entries(record.details)) {
+      if (v) html += `<div class="receipt-row"><span class="key">${k}</span><span class="val">${escapeHtml(v)}</span></div>`;
+    }
+    html += `</div></div>
+      <div class="info-banner" style="margin-top:14px;">
+        ${tr('Conservez la référence')} <strong>${record.ref}</strong>.
+      </div>`;
+    body.innerHTML = html;
+    document.getElementById('confirmModal').classList.add('show');
+  }
+
+  function closeModal() {
+    document.getElementById('confirmModal').classList.remove('show');
+    resetForm();
+  }
+  function printReceipt() { window.print(); }
+
+  function downloadReceipt() {
+    if (!lastReceipt) return;
+    const r = lastReceipt;
+    let txt = '═══════════════════════════════════════════════\n';
+    txt += '   RÉCÉPISSÉ - DEMANDE RH\n';
+    txt += '═══════════════════════════════════════════════\n\n';
+    txt += `Référence       : ${r.ref}\n`;
+    txt += `Type            : ${getTypeLabel(r.type)}\n`;
+    txt += `Date soumission : ${r.createdAtFormatted}\n`;
+    txt += `Statut          : En attente\n\n`;
+    txt += '— EMPLOYÉ —\n';
+    txt += `Nom             : ${r.employee.nom}\n`;
+    txt += `Prénom          : ${r.employee.prenom}\n`;
+    txt += `Matricule       : ${r.employee.matricule}\n`;
+    txt += `Site            : ${r.employee.site}\n`;
+    if (r.employee.poste) txt += `Poste           : ${r.employee.poste}\n`;
+    if (r.employee.departement) txt += `Département     : ${r.employee.departement}\n`;
+    txt += `Email           : ${r.employee.email}\n`;
+    txt += `Téléphone       : ${r.employee.telephone}\n\n`;
+    txt += '— DÉTAILS —\n';
+    for (const [k, v] of Object.entries(r.details)) {
+      if (v) txt += `${k.padEnd(16)}: ${v}\n`;
+    }
+    txt += '\n═══════════════════════════════════════════════\n';
+
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `Demande_${r.ref}.txt`; a.click();
+    URL.revokeObjectURL(url);
+    toast('Récépissé téléchargé');
+  }
+
+  function resetForm() {
+    document.querySelectorAll('.request-form').forEach(f => {
+      f.classList.remove('active');
+      f.querySelectorAll('input:not([type=checkbox]), textarea, select').forEach(el => {
+        if (el.id === 'att-exemplaires') el.value = 1;
+        else if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        else el.value = '';
+      });
+      f.querySelectorAll('input[type=checkbox]').forEach(el => el.checked = false);
+    });
+    document.querySelectorAll('.type-card').forEach(c => c.classList.remove('active'));
+    selectedType = null;
+    document.getElementById('submitBtn').style.display = 'none';
+  }
+
+  /* ================================================== */
+  /* ================ HISTORIQUE ======================== */
+  /* ================================================== */
+  function updateCount() {
+    document.getElementById('countBadge').textContent = loadRequests().length;
+  }
+  let inboxCache = [];
+  async function fetchInboxFromSgdi() {
+    const matricule = currentUser?.profile?.matricule || currentUser?.key || '';
+    if (!matricule) return [];
+    const res = await fetch(location.origin + '/api/portal/demandes/' + encodeURIComponent(matricule), {
+      headers: portalAuthHeaders()
+    });
+    if (!res.ok) throw new Error(await res.text().catch(() => 'Boîte de réception indisponible'));
+    const out = await res.json();
+    return Array.isArray(out.data) ? out.data : [];
+  }
+  function updateInboxBadge() {
+    const pending = inboxCache.filter(d => ['nouveau','en_cours'].includes(d.statut || 'nouveau')).length;
+    const el = document.getElementById('inboxBadge');
+    if (el) el.textContent = pending;
+  }
+  function statusLabel(statut) {
+    const s = statut || 'nouveau';
+    if (s === 'nouveau') return 'Nouveau';
+    if (s === 'en_cours') return 'En cours';
+    if (s === 'traite') return 'Traitée';
+    if (s === 'rejete') return 'Rejetée';
+    return s;
+  }
+  function statusBadgeClass(statut) {
+    const s = statut || 'nouveau';
+    if (s === 'traite') return 'badge-traitee';
+    if (s === 'rejete') return 'badge-rejetee';
+    return 'badge-en-attente';
+  }
+  function renderInboxRows() {
+    const list = document.getElementById('inboxList');
+    if (!list) return;
+    updateInboxBadge();
+    if (!inboxCache.length) {
+      list.innerHTML = `<div class="empty-state">${tr('Aucun message pour le moment.')}</div>`;
+      applyLanguage();
+      return;
+    }
+    list.innerHTML = inboxCache.map(d => {
+      const docs = Array.isArray(d.documentsDemandes) ? d.documentsDemandes : [];
+      const pieces = Array.isArray(d.pieces) ? d.pieces : [];
+      const hist = Array.isArray(d.historique) ? d.historique : [];
+      return `<div class="card" style="box-shadow:none; border:1px solid var(--border); margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+          <div>
+            <strong>${escapeHtml(d.objet || d.type || 'Demande RH')}</strong>
+            <div style="color:var(--text-muted); font-size:0.88rem;">${escapeHtml(d.ref || d.id || '')} · ${escapeHtml(d.date || (d.createdAt || '').slice(0,10))}</div>
+          </div>
+          <span class="badge ${statusBadgeClass(d.statut)}">${tr(statusLabel(d.statut))}</span>
+        </div>
+        ${d.reponse ? `<div class="info-banner" style="margin-top:12px;"><strong>${tr('Réponse DRH')} :</strong><br>${escapeHtml(d.reponse)}</div>` : ''}
+        ${pieces.length ? `<div style="margin-top:12px;"><strong>Documents reçus</strong><div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">${pieces.map((p,i) => `<a class="btn btn-outline" href="${p.data}" download="${escapeHtml(p.name || ('document-' + (i+1)))}">Télécharger ${escapeHtml(p.name || ('document ' + (i+1)))}</a>`).join('')}</div></div>` : ''}
+        ${docs.length ? `<div style="margin-top:12px;"><strong>${tr('Documents demandés')}</strong>${docs.map(x => `<div class="receipt-row"><span class="key">${escapeHtml(x.nom || 'Document')}</span><span class="val">${x.recu ? tr('Reçu') : tr('En attente')}</span></div>`).join('')}</div>` : ''}
+        ${hist.length ? `<div style="margin-top:12px; font-size:0.88rem; color:var(--text-muted);">${hist.slice(-3).map(h => `${escapeHtml((h.date || '').slice(0,16))} - ${escapeHtml(h.action || '')}${h.note ? ' : ' + escapeHtml(h.note) : ''}`).join('<br>')}</div>` : ''}
+      </div>`;
+    }).join('');
+    applyLanguage();
+  }
+  async function renderInbox(showToast, silent) {
+    const status = document.getElementById('inboxStatus');
+    if (status) status.textContent = tr('Actualisation...');
+    try {
+      inboxCache = await fetchInboxFromSgdi();
+      renderInboxRows();
+      if (status) status.textContent = inboxCache.length + ' message(s)';
+      if (showToast) toast('Boîte de réception actualisée');
+    } catch (err) {
+      console.error(err);
+      if (status) status.textContent = tr('Connexion PostgreSQL indisponible');
+      if (!silent) {
+        const list = document.getElementById('inboxList');
+        if (list) list.innerHTML = `<div class="empty-state">${tr('Connexion PostgreSQL indisponible')}</div>`;
+        toast('Connexion PostgreSQL indisponible', true);
+      }
+    }
+  }
+
+  async function renderDocuments(showToast) {
+    const list = document.getElementById('documentsList');
+    if (!list) return;
+    list.innerHTML = `<div class="info-banner">${tr('Actualisation...')}</div>`;
+    try {
+      inboxCache = await fetchInboxFromSgdi();
+      updateInboxBadge();
+      const docsReady = [];
+      const docsPending = [];
+      inboxCache.forEach(d => {
+        const ref = d.ref || d.id || '';
+        const title = d.objet || d.type || 'Document RH';
+        (Array.isArray(d.pieces) ? d.pieces : []).forEach((p, i) => docsReady.push({
+          ref,
+          title,
+          name: p.name || ('document-' + (i + 1)),
+          href: p.data || p.url || '#',
+          date: d.updatedAt || d.createdAt || d.date || ''
+        }));
+        (Array.isArray(d.documentsDemandes) ? d.documentsDemandes : []).forEach(x => {
+          if (!x.recu) docsPending.push({ ref, title: x.nom || title, date: d.updatedAt || d.createdAt || d.date || '' });
+        });
+      });
+      if (!docsReady.length && !docsPending.length) {
+        list.innerHTML = `<div class="empty-state">${tr('Aucun document disponible pour le moment.')}</div>`;
+        applyLanguage();
+        return;
+      }
+      list.innerHTML = `
+        ${docsReady.length ? `<h3 style="margin:0 0 10px;">${tr('Documents disponibles')}</h3>
+          <div style="display:grid; gap:10px; margin-bottom:18px;">${docsReady.map(d => `<div class="receipt-row" style="align-items:center;">
+            <span class="key"><strong>${escapeHtml(d.name)}</strong><br><small>${escapeHtml(d.ref)} · ${escapeHtml(String(d.date).slice(0,10))}</small></span>
+            <span class="val"><a class="btn btn-outline" href="${escapeHtml(d.href)}" download="${escapeHtml(d.name)}">${tr('Télécharger')}</a></span>
+          </div>`).join('')}</div>` : ''}
+        ${docsPending.length ? `<h3 style="margin:0 0 10px;">${tr('Documents en préparation')}</h3>
+          <div style="display:grid; gap:10px;">${docsPending.map(d => `<div class="receipt-row">
+            <span class="key"><strong>${escapeHtml(d.title)}</strong><br><small>${escapeHtml(d.ref)} · ${escapeHtml(String(d.date).slice(0,10))}</small></span>
+            <span class="val"><span class="badge badge-en-attente">${tr('En attente')}</span></span>
+          </div>`).join('')}</div>` : ''}
+      `;
+      if (showToast) toast('Documents actualisés');
+      applyLanguage();
+    } catch (err) {
+      console.error(err);
+      list.innerHTML = `<div class="empty-state">${tr('Connexion PostgreSQL indisponible')}</div>`;
+      if (showToast) toast('Connexion PostgreSQL indisponible', true);
+    }
+  }
+
+  function renderHistory() {
+    const all = loadRequests();
+    const search = (document.getElementById('searchHistory')?.value || '').toLowerCase();
+    const filter = document.getElementById('filterType')?.value || '';
+    const filtered = all.filter(r => {
+      if (filter && r.type !== filter) return false;
+      if (!search) return true;
+      const blob = (r.ref + ' ' + getTypeLabel(r.type) + ' ' + JSON.stringify(r.details)).toLowerCase();
+      return blob.includes(search);
+    });
+    const list = document.getElementById('historyList');
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state">
+        ${all.length === 0 ? `${tr('Aucune demande pour le moment.')}<br>${tr('Créez votre première demande dans l’onglet « Nouvelle demande ».')}` : tr('Aucun résultat.')}
+      </div>`;
+      updateCount();
+      applyLanguage();
+      return;
+    }
+    let html = `<div style="overflow-x:auto;"><table class="history-table">
+      <thead><tr><th>${tr('Réf.')}</th><th>${tr('Type')}</th><th>${tr('Date')}</th><th>${tr('Statut')}</th><th></th></tr></thead><tbody>`;
+    for (const r of filtered) {
+      html += `<tr>
+        <td><strong>${r.ref}</strong></td>
+        <td>${getTypeLabel(r.type)}</td>
+        <td>${r.createdAtFormatted}</td>
+        <td><span class="badge badge-${r.status}">${r.status === 'en-attente' ? tr('En attente') : r.status === 'traitee' ? tr('Traitée') : tr('Rejetée')}</span></td>
+        <td style="text-align:right;">
+          <button class="btn btn-ghost" onclick="showDetail('${r.ref}')">${tr('Voir')}</button>
+          <button class="btn btn-ghost" onclick="deleteRecord('${r.ref}')" style="color:var(--danger);">${tr('Suppr.')}</button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    list.innerHTML = html;
+    updateCount();
+    applyLanguage();
+  }
+
+  function showDetail(ref) {
+    const r = loadRequests().find(x => x.ref === ref);
+    if (!r) return;
+    let html = `
+      <div class="receipt">
+        <div class="receipt-row"><span class="key">${tr('Référence')}</span><span class="val">${r.ref}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Type')}</span><span class="val">${getTypeLabel(r.type)}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Date')}</span><span class="val">${r.createdAtFormatted}</span></div>
+        <div class="receipt-row"><span class="key">${tr('Statut')}</span><span class="val"><span class="badge badge-${r.status}">${r.status === 'en-attente' ? tr('En attente') : r.status === 'traitee' ? tr('Traitée') : tr('Rejetée')}</span></span></div>
+      </div>
+      <h4 style="margin:14px 0 6px;">${tr('Détails')}</h4><div style="font-size:0.9rem;">`;
+    for (const [k, v] of Object.entries(r.details)) {
+      if (v) html += `<div class="receipt-row"><span class="key">${k}</span><span class="val">${escapeHtml(v)}</span></div>`;
+    }
+    html += '</div>';
+    document.getElementById('detailBody').innerHTML = html;
+    document.getElementById('detailModal').classList.add('show');
+    applyLanguage();
+  }
+  function closeDetail() { document.getElementById('detailModal').classList.remove('show'); }
+
+  function deleteRecord(ref) {
+    if (!confirm('Supprimer cette demande de votre historique local ?')) return;
+    saveRequests(loadRequests().filter(r => r.ref !== ref));
+    renderHistory();
+    toast('Demande supprimée');
+  }
+
+  function exportHistory() {
+    const all = loadRequests();
+    if (all.length === 0) { toast('Aucune demande à exporter', true); return; }
+    const headers = ['Référence','Type','Date','Statut','Nom','Prénom','Matricule','Site','Email','Téléphone','Détails'];
+    const lines = [headers.join(';')];
+    for (const r of all) {
+      const det = Object.entries(r.details).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join(' | ');
+      const row = [
+        r.ref, getTypeLabel(r.type), r.createdAtFormatted, r.status,
+        r.employee.nom, r.employee.prenom, r.employee.matricule, r.employee.site,
+        r.employee.email, r.employee.telephone, det
+      ].map(s => '"' + String(s).replace(/"/g, '""') + '"').join(';');
+      lines.push(row);
+    }
+    const csv = '﻿' + lines.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `demandes_${currentUser.profile.matricule}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Export CSV téléchargé');
+  }
+
+  /* ================================================== */
+  /* ================ UTILITAIRES ======================= */
+  /* ================================================== */
+  function val(id) { return (document.getElementById(id)?.value || '').trim(); }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+  }
+  function toast(msg, isError) {
+    const t = document.getElementById('toast');
+    t.textContent = tr(msg);
+    t.classList.toggle('error', !!isError);
+    t.classList.add('show');
+    clearTimeout(t._t);
+    t._t = setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  /* ================================================== */
+  /* ================ CONTRÔLEUR DE RONDE ============= */
+  /* ================================================== */
+
+  let _rondeActiveId = null;
+  let _rondeQrScanner = null;
+  let _rondeCircuits = [];
+
+  function _rondeMat() {
+    return currentUser?.profile?.matricule || currentUser?.profile?.code || currentUser?.key || '';
+  }
+
+  async function _rondeFetch(url, opts) {
+    const res = await fetch(location.origin + url, {
+      ...opts,
+      headers: { ...(opts?.headers || {}), ...portalAuthHeaders() },
+    });
+    if (!res.ok) {
+      let detail = 'Erreur serveur';
+      try { const p = await res.json(); detail = p.detail || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
+  function rondeMsg(txt, type) {
+    const el = document.getElementById('ronde-msg');
+    if (!el) return;
+    el.innerHTML = txt
+      ? `<div class="alert ${type === 'err' ? 'alert-error' : 'alert-success'}">${escapeHtml(txt)}</div>`
+      : '';
+  }
+
+  async function rondeInit() {
+    rondeMsg('');
+    try {
+      const data = await _rondeFetch('/api/ronde/portal/circuits?matricule=' + encodeURIComponent(_rondeMat()));
+      _rondeCircuits = data.circuits || [];
+      const sel = document.getElementById('ronde-circuit-select');
+      if (sel) {
+        sel.innerHTML = _rondeCircuits.length
+          ? _rondeCircuits.map(c => `<option value="${c.id}">${escapeHtml(c.name)} — ${escapeHtml(c.site || '')}</option>`).join('')
+          : '<option value="">Aucun circuit disponible</option>';
+        sel.onchange = rondeShowCircuitInfo;
+        rondeShowCircuitInfo();
+      }
+      const active = await _rondeFetch('/api/ronde/portal/executions/active?matricule=' + encodeURIComponent(_rondeMat()));
+      if (active && active.execution) {
+        _rondeActiveId = active.execution.id;
+        rondeRenderActive(active);
+      } else {
+        _rondeActiveId = null;
+        rondeShowZone('start');
+      }
+    } catch (e) {
+      rondeMsg('Erreur de chargement des rondes : ' + (e.message || e), 'err');
+    }
+  }
+
+  function rondeShowZone(zone) {
+    document.getElementById('ronde-start-zone').style.display  = zone === 'start'  ? '' : 'none';
+    document.getElementById('ronde-active-zone').style.display = zone === 'active' ? '' : 'none';
+    document.getElementById('ronde-done-zone').style.display   = zone === 'done'   ? '' : 'none';
+  }
+
+  function rondeShowCircuitInfo() {
+    const sel = document.getElementById('ronde-circuit-select');
+    const info = document.getElementById('ronde-circuit-info');
+    if (!sel || !info) return;
+    const c = _rondeCircuits.find(x => x.id == sel.value);
+    if (c) {
+      info.style.display = '';
+      info.innerHTML = `🗓 ${c.total_checkpoints} checkpoint(s) · ⏱ ${c.duree_prevue_min} min estimées${c.description ? ' · ' + escapeHtml(c.description) : ''}`;
+    } else {
+      info.style.display = 'none';
+    }
+  }
+
+  async function rondeStartExecution() {
+    const sel = document.getElementById('ronde-circuit-select');
+    const circuitId = sel ? parseInt(sel.value) : null;
+    if (!circuitId) { rondeMsg('Veuillez sélectionner un circuit.', 'err'); return; }
+    const mat = _rondeMat();
+    const p = currentUser?.profile || {};
+    const guardName = [p.nom, p.prenom].filter(Boolean).join(' ') || p.nomPrenom || p.name || '';
+    try {
+      const res = await _rondeFetch('/api/ronde/portal/executions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matricule: mat, circuit_id: circuitId, guard_name: guardName }),
+      });
+      _rondeActiveId = res.execution.id;
+      const active = await _rondeFetch('/api/ronde/portal/executions/active?matricule=' + encodeURIComponent(mat));
+      rondeRenderActive(active);
+    } catch (e) {
+      rondeMsg(e.message || 'Erreur démarrage ronde', 'err');
+    }
+  }
+
+  function rondeRenderActive(data) {
+    rondeShowZone('active');
+    const exec = data.execution;
+    const remaining = data.remaining_checkpoints || [];
+    const scanned = exec.scanned_checkpoints || 0;
+    const total = exec.total_checkpoints || 1;
+    const pct = Math.round((scanned / total) * 100);
+
+    document.getElementById('ronde-circuit-label').textContent = exec.circuit_name || 'Ronde';
+    document.getElementById('ronde-progress-bar').style.width = pct + '%';
+    document.getElementById('ronde-progress-text').textContent = `${scanned} / ${total} checkpoint${total > 1 ? 's' : ''}`;
+
+    const next = remaining[0];
+    if (next) {
+      document.getElementById('ronde-next-card').style.display = '';
+      document.getElementById('ronde-next-name').textContent = next.name;
+      document.getElementById('ronde-next-desc').textContent = next.description || '';
+    } else {
+      document.getElementById('ronde-next-card').style.display = 'none';
+    }
+
+    const allCps = data.all_checkpoints || [];
+    const scannedIds = new Set((exec.scans || []).map(s => s.checkpoint_id));
+    const cpList = document.getElementById('ronde-checkpoints-list');
+    if (cpList) {
+      cpList.innerHTML = allCps.map(cp => {
+        const done = scannedIds.has(cp.id);
+        const isNext = !done && next && next.id === cp.id;
+        const scanInfo = done ? (exec.scans || []).find(s => s.checkpoint_id === cp.id) : null;
+        const time = scanInfo ? new Date(scanInfo.scanned_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+        return `<div class="ronde-cp-item">
+          <div class="ronde-cp-status ${done ? 'done' : isNext ? 'next' : ''}">${done ? '✓' : isNext ? '→' : cp.position}</div>
+          <div class="ronde-cp-name">${escapeHtml(cp.name)}</div>
+          <div class="ronde-cp-time">${time}</div>
+        </div>`;
+      }).join('');
+    }
+
+    document.getElementById('ronde-scan-result').textContent = '';
+    document.getElementById('ronde-scan-result').className = '';
+    if (_rondeQrScanner) { try { _rondeQrScanner.clear(); } catch (e) {} _rondeQrScanner = null; }
+    document.getElementById('ronde-qr-reader').innerHTML = '';
+  }
+
+  async function rondeRefresh() {
+    if (!_rondeActiveId) return;
+    try {
+      const active = await _rondeFetch('/api/ronde/portal/executions/active?matricule=' + encodeURIComponent(_rondeMat()));
+      if (active && active.execution) {
+        rondeRenderActive(active);
+      } else {
+        _rondeActiveId = null;
+        rondeShowZone('done');
+      }
+    } catch (e) { rondeMsg(e.message || 'Erreur', 'err'); }
+  }
+
+  function rondeOpenQrScan() {
+    const readerEl = document.getElementById('ronde-qr-reader');
+    if (!readerEl) return;
+    if (_rondeQrScanner) {
+      try { _rondeQrScanner.clear(); } catch (e) {}
+      _rondeQrScanner = null;
+      readerEl.innerHTML = '';
+      return;
+    }
+    if (!window.Html5QrcodeScanner) {
+      rondeSetScanResult('Scanner QR non disponible (lib non chargée)', 'err'); return;
+    }
+    _rondeQrScanner = new Html5QrcodeScanner('ronde-qr-reader', { fps: 10, qrbox: 220 });
+    _rondeQrScanner.render(async (decodedText) => {
+      try { _rondeQrScanner.clear(); } catch (e) {}
+      _rondeQrScanner = null;
+      readerEl.innerHTML = '';
+      await rondeSendScan({ qr_token: decodedText, scan_method: 'qr' });
+    }, (err) => { /* scan en attente */ });
+  }
+
+  async function rondeGpsScan() {
+    if (!navigator.geolocation) {
+      rondeSetScanResult('Géolocalisation non disponible', 'err'); return;
+    }
+    rondeSetScanResult('Localisation en cours...', '');
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      await rondeSendScan({
+        qr_token: null,
+        scan_method: 'gps',
+        gps_lat: pos.coords.latitude,
+        gps_lng: pos.coords.longitude,
+        gps_accuracy: pos.coords.accuracy,
+      });
+    }, (err) => {
+      rondeSetScanResult('Erreur GPS : ' + err.message, 'err');
+    }, { enableHighAccuracy: true, timeout: 12000 });
+  }
+
+  async function rondeSendScan(payload) {
+    if (!_rondeActiveId) return;
+    rondeSetScanResult('Validation...', '');
+    const mat = _rondeMat();
+    try {
+      const res = await _rondeFetch(`/api/ronde/portal/executions/${_rondeActiveId}/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matricule: mat, ...payload }),
+      });
+      rondeSetScanResult('✅ Checkpoint validé !', 'ok');
+      if (res.remaining_checkpoints && res.remaining_checkpoints.length === 0) {
+        rondeShowDone(res.execution);
+      } else {
+        rondeRenderActive(res);
+      }
+    } catch (e) {
+      rondeSetScanResult('❌ ' + (e.message || 'Erreur scan'), 'err');
+    }
+  }
+
+  function rondeSetScanResult(msg, cls) {
+    const el = document.getElementById('ronde-scan-result');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = cls || '';
+  }
+
+  async function rondeEndExecution() {
+    if (!_rondeActiveId) return;
+    if (!confirm('Terminer la ronde maintenant ?')) return;
+    try {
+      const res = await _rondeFetch(`/api/ronde/portal/executions/${_rondeActiveId}/end`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matricule: _rondeMat() }),
+      });
+      rondeShowDone(res.execution);
+    } catch (e) {
+      rondeMsg(e.message || 'Erreur fin de ronde', 'err');
+    }
+  }
+
+  function rondeShowDone(exec) {
+    if (_rondeQrScanner) { try { _rondeQrScanner.clear(); } catch (e) {} _rondeQrScanner = null; }
+    _rondeActiveId = null;
+    rondeShowZone('done');
+    const pct = exec ? Math.round(((exec.scanned_checkpoints || 0) / (exec.total_checkpoints || 1)) * 100) : 0;
+    let dur = '';
+    if (exec && exec.started_at && exec.ended_at) {
+      const mins = Math.round((new Date(exec.ended_at) - new Date(exec.started_at)) / 60000);
+      dur = ` · Durée : ${mins} min`;
+    }
+    document.getElementById('ronde-done-summary').textContent =
+      `${exec?.scanned_checkpoints || 0} / ${exec?.total_checkpoints || 0} checkpoints — Taux : ${pct}%${dur}`;
+  }
+
+  function rondeReset() {
+    _rondeActiveId = null;
+    rondeInit();
+  }
+
+  /* ================================================== */
+  /* ================ PWA / NOTIFICATIONS ============== */
+  /* ================================================== */
+
+  let _swReg = null;
+
+  async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      _swReg = await navigator.serviceWorker.register('/portail-sw.js', { scope: '/' });
+    } catch (e) { /* SW non critique */ }
+  }
+
+  function _urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+  }
+
+  async function updateNotifUI() {
+    const statusEl = document.getElementById('notif-status-text');
+    const btnEl = document.getElementById('notif-toggle-btn');
+    if (!statusEl || !btnEl) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      statusEl.textContent = 'Les notifications push ne sont pas supportées sur ce navigateur.';
+      btnEl.style.display = 'none';
+      return;
+    }
+    const perm = Notification.permission;
+    if (perm === 'denied') {
+      statusEl.textContent = 'Notifications bloquées. Autorisez-les dans les paramètres de votre navigateur.';
+      btnEl.style.display = 'none';
+      return;
+    }
+    const reg = _swReg || await navigator.serviceWorker.getRegistration('/');
+    if (!reg) { statusEl.textContent = 'Service worker non disponible.'; btnEl.style.display = 'none'; return; }
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      statusEl.textContent = 'Notifications activées ✓ Vous recevrez les alertes de votre service RH.';
+      btnEl.textContent = 'Désactiver les notifications';
+      btnEl.style.display = 'inline-block';
+    } else {
+      statusEl.textContent = 'Activez les notifications pour recevoir les réponses à vos demandes.';
+      btnEl.textContent = 'Activer les notifications';
+      btnEl.style.display = 'inline-block';
+    }
+  }
+
+  async function togglePushNotifications() {
+    const reg = _swReg || await navigator.serviceWorker.getRegistration('/');
+    if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await sub.unsubscribe();
+      try {
+        await fetch(location.origin + '/api/portal/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', ...portalAuthHeaders() },
+          body: JSON.stringify({ endpoint: sub.endpoint })
+        });
+      } catch (e) { /* best effort */ }
+      toast('Notifications désactivées');
+    } else {
+      try {
+        const r = await fetch(location.origin + '/api/portal/push/vapid-public-key');
+        if (!r.ok) { toast('Erreur serveur push', true); return; }
+        const { public_key } = await r.json();
+        const newSub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: _urlBase64ToUint8Array(public_key)
+        });
+        await fetch(location.origin + '/api/portal/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...portalAuthHeaders() },
+          body: JSON.stringify({ subscription: newSub.toJSON() })
+        });
+        toast('Notifications activées !');
+      } catch (e) {
+        toast('Impossible d\'activer les notifications : ' + (e.message || ''), true);
+      }
+    }
+    await updateNotifUI();
+  }
+
+  async function autoSubscribePush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const reg = _swReg || await navigator.serviceWorker.getRegistration('/');
+    if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    try {
+      await fetch(location.origin + '/api/portal/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...portalAuthHeaders() },
+        body: JSON.stringify({ subscription: sub.toJSON() })
+      });
+    } catch (e) { /* best effort */ }
+  }
+
+  /* ================================================== */
+  /* ================ DÉMARRAGE ========================= */
+  /* ================================================== */
+  function boot() {
+    applyLanguage();
+    registerServiceWorker();
+    const sessionV2 = getSessionV2();
+    if (sessionV2 && sessionV2.matricule) {
+      enterApp(sessionV2.matricule);
+      applyLanguage();
+      return;
+    }
+    clearSession();
+    document.getElementById('authView').classList.remove('hidden');
+    document.getElementById('appView').classList.add('hidden');
+    applyLanguage();
+  }
+
+  boot();
+
+  // ── QR Scan Portail ────────────────────────────────────────────────────────
+  let _portalQrScanner = null;
+  let _portalQrBusy = false;
+
+  async function portalStartQrScan() {
+    const reader = document.getElementById('portal-qr-reader');
+    if (!reader) return;
+    const openBtn = document.getElementById('qr-open-btn');
+    const stopBtn = document.getElementById('qr-stop-btn');
+    if (openBtn) openBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = '';
+    reader.innerHTML = '';
+    reader.style.minHeight = '300px';
+    portalShowQrResult('Ouverture de la caméra...', 'warning');
+    if (!window.Html5Qrcode) { setTimeout(portalStartQrScan, 500); return; }
+    try {
+      _portalQrBusy = false;
+      _portalQrScanner = new Html5Qrcode('portal-qr-reader');
+      await _portalQrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 12, qrbox: { width: 260, height: 260 }, aspectRatio: 1 },
+        portalOnQrScan,
+        () => {}
+      );
+    } catch (err) {
+      try {
+        if (_portalQrScanner) await _portalQrScanner.start(
+          { facingMode: 'user' },
+          { fps: 12, qrbox: { width: 260, height: 260 }, aspectRatio: 1 },
+          portalOnQrScan,
+          () => {}
+        );
+      } catch (fallbackErr) {
+        _portalQrScanner = null;
+        if (openBtn) openBtn.style.display = 'flex';
+        if (stopBtn) stopBtn.style.display = 'none';
+        portalShowQrResult('❌ Caméra indisponible ou autorisation refusée', 'error');
+      }
+    }
+  }
+
+  async function portalStopQrScan() {
+    if (_portalQrScanner) {
+      try {
+        if (typeof _portalQrScanner.stop === 'function') await _portalQrScanner.stop();
+      } catch (e) {}
+      try {
+        if (typeof _portalQrScanner.clear === 'function') _portalQrScanner.clear();
+      } catch (e) {}
+      _portalQrScanner = null;
+    }
+    _portalQrBusy = false;
+    const reader = document.getElementById('portal-qr-reader');
+    if (reader) { reader.innerHTML = ''; reader.style.minHeight = ''; }
+    const openBtn = document.getElementById('qr-open-btn');
+    const stopBtn = document.getElementById('qr-stop-btn');
+    if (openBtn) openBtn.style.display = 'flex';
+    if (stopBtn) stopBtn.style.display = 'none';
+  }
+
+  async function portalOnQrScan(decodedText) {
+    if (_portalQrBusy) return;
+    _portalQrBusy = true;
+    const token = decodedText.trim();
+    let slot, currentSlot;
+    if (token.includes('|')) {
+      const parts = token.split('|');
+      slot = parseInt(parts[1]);
+      currentSlot = Math.floor(Date.now() / 10000);
+    } else {
+      slot = parseInt(token);
+      currentSlot = Math.floor(Date.now() / 300000);
+    }
+    if (isNaN(slot)) {
+      portalShowQrResult('❌ QR non reconnu — scannez le QR affiché sur la tablette de présence', 'error');
+      _portalQrBusy = false;
+      return;
+    }
+    if (Math.abs(slot - currentSlot) > 1) {
+      portalShowQrResult('⏱ QR expiré — demandez un nouveau QR à l\'écran de la tablette', 'error');
+      _portalQrBusy = false;
+      return;
+    }
+    const session = getSessionV2();
+    if (!session || !session.matricule) { portalShowQrResult('⚠️ Session expirée — reconnectez-vous', 'error'); _portalQrBusy = false; return; }
+    try {
+      const res = await fetch(location.origin + '/api/portal/pointage-qr', {
+        method: 'POST',
+        headers: portalAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ token, matricule: session.matricule })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        portalShowQrResult('❌ ' + (err.detail || 'Pointage refusé'), 'error');
+        _portalQrBusy = false;
+        return;
+      }
+      const data = await res.json();
+      const heure = data.heure || new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      await portalStopQrScan();
+      const emp = data.employee || {};
+      const fullName = [emp.nom, emp.prenom].filter(Boolean).join(' ') || currentUser?.name || '';
+      const matricule = emp.matricule || session.matricule || '';
+      const site = data.site || data.record?.siteName || currentUser?.profile?.site || '—';
+      if (data.duplicate) {
+        playPointageSound('warning');
+        portalShowQrResult(`Déjà enregistré — ${fullName} · ${matricule} · ${site} · ${heure}`, 'warning');
+      } else {
+        playPointageSound('success');
+        portalShowQrResult(`PRÉSENT — ${fullName} · ${matricule} · ${site} · ${heure}`, 'success');
+      }
+      setTimeout(renderPointage, 800);
+    } catch (err) {
+      portalShowQrResult('❌ Erreur réseau — vérifiez votre connexion', 'error');
+      _portalQrBusy = false;
+    }
+  }
+
+  function portalShowQrResult(msg, type) {
+    const el = document.getElementById('qr-scan-result');
+    if (!el) return;
+    const bg = type === 'success' ? '#dcfce7' : type === 'warning' ? '#fef3c7' : '#fee2e2';
+    const color = type === 'success' ? '#166534' : type === 'warning' ? '#92400e' : '#991b1b';
+    el.innerHTML = `<div style="padding:12px 16px;border-radius:8px;font-weight:700;font-size:15px;background:${bg};color:${color};margin-bottom:8px;">${msg}</div>`;
+    setTimeout(() => { el.innerHTML = ''; }, 4000);
+  }
+
+  function playPointageSound(type) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (type === 'success') {
+        // Double bip montant : confirmation de présence
+        [[440, 0, 0.12], [660, 0.14, 0.18]].forEach(([freq, start, end]) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.type = 'sine'; osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0, ctx.currentTime + start);
+          gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + start + 0.02);
+          gain.gain.linearRampToValueAtTime(0, ctx.currentTime + end);
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + end + 0.01);
+        });
+      } else {
+        // Bip grave court : erreur ou doublon
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine'; osc.frequency.value = 220;
+        gain.gain.setValueAtTime(0.35, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.26);
+      }
+    } catch (e) {}
+  }
+</script>
+</body>
+</html>
