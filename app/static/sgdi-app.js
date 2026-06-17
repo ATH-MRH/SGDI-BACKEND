@@ -25201,68 +25201,125 @@ function opsFilterMovementAgentSelect(query){
   sel.innerHTML=`<option value="">${agents.length?"— Choisir employé —":"— Aucun résultat —"}</option>${agents.map(a=>opsMovementAgentOptionHTML(a,currentId)).join("")}`;
 }
 function opsMovementEditorHTML(date,agentId,agents){
-  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
-  const f=agentId?(fpqGet(date,agentId)||{}):{};
-  const positionActuelle=a?opsEmployeeCurrentPositionLabel(a):"";
   const motifs=["Affectation","Remplacement Absence","Remplacement Manque","Mission","Fixation","Remplacement Malade","Remplacement Abandon de poste"];
   const durees=["Provisoire","Définitif","Jusqu'à nouvel ordre"];
-  const siteSociete=canonicalSocieteName(a?.societe||currentStructureSocieteFilter()||effectifSocieteFilter()||session?.societe||"",societeConfig().custom||SOCIETES);
+  const soc=currentStructureSocieteFilter()||effectifSocieteFilter()||session?.societe||"";
+  const siteSociete=canonicalSocieteName(soc,societeConfig().custom||SOCIETES);
   const sites=movementSitesForSociete(siteSociete);
-  const remplacementAgents=(db.agents||[]).filter(x=>x.id!==agentId&&(!siteSociete||normalizeSocieteName(x.societe)===normalizeSocieteName(siteSociete))).sort((x,y)=>((x.nom||"")+" "+(x.prenom||"")).localeCompare((y.nom||"")+" "+(y.prenom||"")));
-  const otherSelected=f.siteId==="autres";
-  const motifCourant=f.mouvementMotif||f.mouvementType||"Affectation";
-  const remplaceSelected=fpqNeedsRemplaceAgent(motifCourant);
-  const remplaceLabel=fpqRemplaceAgentLabel(motifCourant);
-  const remplaceAgentId=f.remplaceAgentId||f.absentAgentId||f.maladeAgentId||f.abandonAgentId||"";
-  const numeroOrdre=f.ordreMouvementNumero||f.mouvementNumero||nextOrdreMouvementNumero();
+  const remplacementAgents=(db.agents||[]).filter(x=>!siteSociete||normalizeSocieteName(x.societe)===normalizeSocieteName(siteSociete)).sort((x,y)=>((x.nom||"")+" "+(x.prenom||"")).localeCompare((y.nom||"")+" "+(y.prenom||"")));
+  const numeroOrdre=nextOrdreMouvementNumero();
+  const agentRows=agents.map(a=>{
+    const aff=agentLiveAffectation(a)||{};
+    const isChecked=agentId&&(String(a.id)===String(agentId)||String(a.backendId||"")===String(agentId)||String(a.matricule||"")===String(agentId));
+    return `<label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer ops-mvt-agent-row" data-q="${escapeHTML(((a.nom||"")+" "+(a.prenom||"")+" "+(a.matricule||"")+" "+(a.societe||"")+" "+(aff.siteName||"")).toLowerCase())}"><input type="checkbox" class="ops-mvt-agent-cb" value="${escapeHTML(a.id)}" ${isChecked?"checked":""} onchange="opsMovementCbChange()" style="width:15px;height:15px;flex-shrink:0;cursor:pointer"/><span class="text-sm leading-tight"><span class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span><span class="text-xs text-slate-500"> · ${escapeHTML(a.matricule||"—")} · <span class="${aff.siteId?"text-emerald-600 font-medium":"text-slate-400"}">${escapeHTML(aff.siteName||"Sans affectation")}</span></span></span></label>`;
+  }).join("");
+  const initCount=agentId?1:0;
   return `<form class="card p-5 mb-5" data-ops-movement-form onsubmit="event.preventDefault()">
     <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
       <div>
         <h2 class="text-lg font-black uppercase">Ordre de mouvement</h2>
-        <div class="text-xs text-slate-500">${siteSociete?`Société : ${escapeHTML(siteSociete)}`:"Sélectionnez un employé pour afficher les sites de sa société."}</div>
+        <div class="text-xs text-slate-500">${siteSociete?`Société : ${escapeHTML(siteSociete)}`:"Configurez un filtre société pour afficher les sites disponibles."}</div>
       </div>
       <input type="hidden" name="date" value="${escapeHTML(date)}"/>
-      <input type="hidden" name="agentId" value="${escapeHTML(agentId||"")}"/>
       <input class="input font-mono font-bold" name="ordreMouvementNumero" value="${escapeHTML(numeroOrdre)}" readonly style="max-width:220px;background:#f8fafc;color:#043970"/>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <div><label class="label">Employé à affecter</label><input type="text" id="ops-mvt-agent-search" class="input mb-1" placeholder="🔍 Nom, prénom, matricule, site, poste, structure..." oninput="opsFilterMovementAgentSelect(this.value)" autocomplete="off"/><select id="ops-mvt-agent" class="select" name="agentSelect" onchange="opsSetMovementSelectedAgent(this.value)"><option value="">— Choisir employé —</option>${agents.map(a=>opsMovementAgentOptionHTML(a,agentId)).join("")}</select></div>
-      <div><label class="label">Position actuelle</label><input class="input" name="positionActuelle" value="${escapeHTML(positionActuelle)}" readonly style="background:#f8fafc"/></div>
-      <div><label class="label">Nouvelle affectation</label><select class="select" name="siteId" ${agentId?"":"disabled"} onchange="const o=this.form.querySelector('[data-autres-affectation]');if(o)o.style.display=this.value==='autres'?'block':'none'"><option value="">${!agentId?"— Choisir d'abord un employé —":sites.length?"— Choisir un site actif —":"— Aucun site actif pour cette société —"}</option>${sites.map(s=>`<option value="${s.id}" ${f.siteId===s.id?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site "+s.id)}${s.indicatif?` · ${escapeHTML(s.indicatif)}`:""}</option>`).join("")}<option value="autres" ${otherSelected?"selected":""}>Autres</option></select></div>
-      <div data-autres-affectation style="display:${otherSelected?"block":"none"}"><label class="label">Préciser autre affectation</label><input class="input" name="autreAffectation" value="${escapeHTML(f.autreAffectation||"")}" placeholder="Préciser l'affectation"/></div>
-      <div><label class="label">Motif du mouvement</label><select class="select" name="mouvementMotif" ${agentId?"":"disabled"} onchange="const box=this.form.querySelector('[data-remplace-agent]');const lbl=this.form.querySelector('[data-remplace-label]');const show=['Remplacement Absence','Remplacement Malade','Remplacement Abandon de poste'].includes(this.value);if(box)box.style.display=show?'block':'none';if(lbl)lbl.textContent=this.value==='Remplacement Malade'?'Employé malade':(this.value==='Remplacement Abandon de poste'?'Employé en abandon de poste':'Employé absent')">${motifs.map(x=>`<option ${motifCourant===x?"selected":""}>${x}</option>`).join("")}</select></div>
-      <div><label class="label">Durée du mouvement</label><select class="select" name="mouvementDuree" ${agentId?"":"disabled"}>${durees.map(x=>`<option ${f.mouvementDuree===x?"selected":""}>${x}</option>`).join("")}</select></div>
-      <div data-remplace-agent style="display:${remplaceSelected?"block":"none"}"><label class="label" data-remplace-label>${escapeHTML(remplaceLabel)}</label><select class="select" name="remplaceAgentId"><option value="">— Choisir l'employé concerné —</option>${remplacementAgents.map(x=>`<option value="${x.id}" ${remplaceAgentId===x.id?"selected":""}>${escapeHTML((x.matricule?x.matricule+" · ":"")+(x.nom||"")+" "+(x.prenom||""))}</option>`).join("")}</select></div>
-      <div class="md:col-span-3"><label class="label">Observation</label><textarea class="input" name="mouvementObs" rows="3" ${agentId?"":"disabled"} placeholder="Observation du mouvement...">${escapeHTML(f.mouvementObs||"")}</textarea></div>
+      <div class="md:col-span-3">
+        <div class="flex items-center justify-between mb-1">
+          <label class="label mb-0">Employé(s) à affecter</label>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500"><span id="ops-mvt-sel-count">${initCount}</span> sélectionné(s)</span>
+            <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="opsMovementSelectAll(true)">Tout</button>
+            <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="opsMovementSelectAll(false)">Aucun</button>
+          </div>
+        </div>
+        <input type="text" id="ops-mvt-agent-search" class="input mb-1" placeholder="🔍 Nom, matricule, site, poste..." oninput="opsMovementFilterAgents(this.value)" autocomplete="off"/>
+        <div id="ops-mvt-agent-list" style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;padding:4px">
+          ${agentRows||`<div class="p-3 text-slate-500 text-sm text-center">Aucun employé disponible</div>`}
+        </div>
+      </div>
+      <div><label class="label">Nouvelle affectation *</label><select class="select" name="siteId" onchange="const o=this.form.querySelector('[data-autres-affectation]');if(o)o.style.display=this.value==='autres'?'block':'none'"><option value="">${sites.length?"— Choisir un site actif —":"— Aucun site actif pour cette société —"}</option>${sites.map(s=>`<option value="${s.id}">${escapeHTML(s.nom||s.intitule||"Site "+s.id)}${s.indicatif?` · ${escapeHTML(s.indicatif)}`:""}</option>`).join("")}<option value="autres">Autres</option></select></div>
+      <div data-autres-affectation style="display:none"><label class="label">Préciser autre affectation</label><input class="input" name="autreAffectation" value="" placeholder="Préciser l'affectation"/></div>
+      <div><label class="label">Motif du mouvement</label><select class="select" name="mouvementMotif" onchange="const box=this.form.querySelector('[data-remplace-agent]');const lbl=this.form.querySelector('[data-remplace-label]');const show=['Remplacement Absence','Remplacement Malade','Remplacement Abandon de poste'].includes(this.value);if(box)box.style.display=show?'block':'none';if(lbl)lbl.textContent=this.value==='Remplacement Malade'?'Employé malade':(this.value==='Remplacement Abandon de poste'?'Employé en abandon de poste':'Employé absent')">${motifs.map(x=>`<option>${x}</option>`).join("")}</select></div>
+      <div><label class="label">Durée du mouvement</label><select class="select" name="mouvementDuree">${durees.map(x=>`<option>${x}</option>`).join("")}</select></div>
+      <div data-remplace-agent style="display:none"><label class="label" data-remplace-label>Employé absent</label><select class="select" name="remplaceAgentId"><option value="">— Choisir l'employé concerné —</option>${remplacementAgents.map(x=>`<option value="${x.id}">${escapeHTML((x.matricule?x.matricule+" · ":"")+(x.nom||"")+" "+(x.prenom||""))}</option>`).join("")}</select></div>
+      <div class="md:col-span-3"><label class="label">Observation</label><textarea class="input" name="mouvementObs" rows="3" placeholder="Observation du mouvement..."></textarea></div>
     </div>
     <div class="flex gap-2 justify-end mt-4 flex-wrap">
-      <button type="button" class="btn btn-secondary" ${agentId?"":"disabled"} onclick="opsEditerOrdreMouvementCentral(this)">Editer ordre OM</button>
-      <button type="button" class="btn btn-primary" ${agentId?"":"disabled"} onclick="opsValiderOrdreMouvementCentral(this)">Valider OM</button>
-      <button type="button" class="btn btn-ghost" ${agentId?"":"disabled"} onclick="opsImprimerOrdreMouvementCentral(this)">Imprimer OM</button>
+      <button type="button" class="btn btn-secondary" onclick="opsEditerOrdreMouvementCentral(this)">Editer OM</button>
+      <button type="button" class="btn btn-primary" onclick="opsValiderOrdreMouvementCentral(this)">Valider OM</button>
+      <button type="button" class="btn btn-ghost" onclick="opsImprimerOrdreMouvementCentral(this)">Imprimer OM</button>
     </div>
   </form>`;
+}
+function opsMovementCbChange(){
+  const n=(document.getElementById('ops-mvt-agent-list')?.querySelectorAll('.ops-mvt-agent-cb:checked')||[]).length;
+  const el=document.getElementById('ops-mvt-sel-count');
+  if(el)el.textContent=n;
+}
+function opsMovementSelectAll(checked){
+  const list=document.getElementById('ops-mvt-agent-list');
+  if(!list)return;
+  list.querySelectorAll('.ops-mvt-agent-row').forEach(row=>{
+    if(row.style.display!=='none'){const cb=row.querySelector('.ops-mvt-agent-cb');if(cb)cb.checked=checked;}
+  });
+  opsMovementCbChange();
+}
+function opsMovementFilterAgents(q){
+  const lq=q.toLowerCase().trim();
+  const list=document.getElementById('ops-mvt-agent-list');
+  if(!list)return;
+  list.querySelectorAll('.ops-mvt-agent-row').forEach(row=>{row.style.display=(!lq||(row.dataset.q||"").includes(lq))?"":"none";});
 }
 function opsMovementCentralContext(btn){
   const form=btn?.closest?.("form[data-ops-movement-form]")||document.querySelector("form[data-ops-movement-form]");
   const date=form?.querySelector('[name="date"]')?.value||today();
-  const agentId=form?.querySelector('[name="agentId"]')?.value||form?.querySelector('[name="agentSelect"]')?.value||"";
-  if(!form||!agentId){toast("Choisissez un employé avant de créer un mouvement","error");return null}
+  const list=document.getElementById('ops-mvt-agent-list');
+  const agentIds=list?[...list.querySelectorAll('.ops-mvt-agent-cb:checked')].map(cb=>cb.value).filter(Boolean):[];
+  if(!form||!agentIds.length){toast("Sélectionnez au moins un employé avant de créer un mouvement","error");return null}
+  const agentId=agentIds[0];
   const {f,patch}=fpqMovementPatchFromForm(date,agentId,form);
   if(!patch.siteId){toast("Choisissez une nouvelle affectation","error");return null}
   if(patch.siteId==="autres"&&!patch.autreAffectation){toast("Précisez l'autre affectation","error");return null}
-  return {form,date,agentId,f,patch};
+  return {form,date,agentId,agentIds,f,patch};
 }
 async function opsEditerOrdreMouvementCentral(btn){
   const ctx=opsMovementCentralContext(btn);if(!ctx)return;
+  if(ctx.agentIds.length>1){toast("Editer un seul OM à la fois — désélectionnez les autres employés","error");return}
   return fpqEditerOrdreMouvement(ctx.date,ctx.agentId,ctx.form);
 }
 async function opsValiderOrdreMouvementCentral(btn){
   const ctx=opsMovementCentralContext(btn);if(!ctx)return;
-  return fpqPersistOrdreMouvement(ctx.date,ctx.agentId,ctx.f,ctx.patch,{print:false,closeModal:false,message:"OM validé et archivé"});
+  if(ctx.agentIds.length===1)return fpqPersistOrdreMouvement(ctx.date,ctx.agentId,ctx.f,ctx.patch,{print:false,closeModal:false,message:"OM validé et archivé"});
+  return opsValiderMultiOM(ctx.agentIds,ctx.form,ctx.date,{print:false});
 }
 async function opsImprimerOrdreMouvementCentral(btn){
   const ctx=opsMovementCentralContext(btn);if(!ctx)return;
-  return fpqPersistOrdreMouvement(ctx.date,ctx.agentId,ctx.f,ctx.patch,{print:true,closeModal:false,message:"OM validé, archivé et prêt à imprimer"});
+  if(ctx.agentIds.length===1)return fpqPersistOrdreMouvement(ctx.date,ctx.agentId,ctx.f,ctx.patch,{print:true,closeModal:false,message:"OM validé, archivé et prêt à imprimer"});
+  return opsValiderMultiOM(ctx.agentIds,ctx.form,ctx.date,{print:true});
+}
+async function opsValiderMultiOM(agentIds,form,date,opt={}){
+  showOmSaveOverlay();
+  let ok=0,fail=0;
+  for(const aid of agentIds){
+    try{
+      const {f,patch}=fpqMovementPatchFromForm(date,aid,form);
+      const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId:aid,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
+      const line=result?.data?.item||result?.item||{...f,...patch,date,agentId:aid};
+      const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId:aid};
+      fpqUpsertLocalPresenceLine(line);
+      opsUpsertMovementHistory(movement);
+      if(opt.print)opsPrintMovementDocument(movement,true);
+      ok++;
+    }catch(e){console.warn("OM multi échec",aid,e);fail++}
+  }
+  updateOmSaveOverlay(`${ok} OM enregistré(s)`,true);
+  if(fail)toast(`${ok} OM validé(s), ${fail} échec(s)`,ok?"warning":"error");
+  else toast(`${ok} ordre(s) de mouvement validé(s)`,"success");
+  setTimeout(closeOmSaveOverlay,1800);
+  window._sgdiSilentRibbon=true;
+  sgdiPullState({silent:true}).catch(()=>null).finally(()=>{window._sgdiSilentRibbon=false});
+  renderView();
 }
 function opsMovementGroupHTML(title,rows,field){
   const map=new Map();
