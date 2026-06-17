@@ -4885,6 +4885,7 @@ function renderSidebar(){
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard"},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",count:drhAgents.length||null},
         {label:"FICHE DE POSITION",route:"admin/fiches",count:drhAgents.length||null},
+        {label:"POSTES / FONCTIONS",route:"admin/postes",count:POSTES.length||null},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],count:adminSitesActifs||null},
         {label:"MAGASINS",route:"admin/magasins",count:adminMagasinsCount||null},
         {label:"ARTICLES",route:"admin/articles",count:adminArticlesCount||null},
