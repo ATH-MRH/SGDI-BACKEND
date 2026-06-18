@@ -5775,16 +5775,20 @@ function renderView(){
     }
   }catch(e){console.error(e);view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold mb-2 text-red-700">Erreur</h2><pre class="text-xs text-red-700">${escapeHTML(e.message)}\n${escapeHTML(e.stack||"")}</pre></div>`}
   normalizeCentralPage(view);
-  filterDomBySearch();
-  stripCryptogrammes(view);
-  sgdiScrubInvalidCandidateFunctionArtifacts(view);
-  uiEnhanceView();
   uiProgressDone();
-  setTimeout(()=>{applyLanguagePreference(view);sgdiScrubInvalidCandidateFunctionArtifacts(view)},0);
   sgdiLastRenderedPath=path;
   if(sgdiNextScrollRestore){const next=sgdiNextScrollRestore;sgdiNextScrollRestore=null;sgdiRestoreScrollPosition(next)}
   else if(scrollState)sgdiRestoreScroll(scrollState);
-  else if(view&&resetScroll)requestAnimationFrame(()=>{view.scrollTop=0;window.scrollTo(window.scrollX||0,0)});
+  else if(view&&resetScroll){view.scrollTop=0;window.scrollTo(window.scrollX||0,0)}
+  // Traitement post-rendu différé : le navigateur peint d'abord la page,
+  // puis le post-traitement s'exécute — la navigation est perçue comme instantanée
+  requestAnimationFrame(()=>{
+    filterDomBySearch();
+    stripCryptogrammes(view);
+    sgdiScrubInvalidCandidateFunctionArtifacts(view);
+    uiEnhanceView();
+    setTimeout(()=>{applyLanguagePreference(view);sgdiScrubInvalidCandidateFunctionArtifacts(view)},0);
+  });
 }
 window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
 window.addEventListener("popstate",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
