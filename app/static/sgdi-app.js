@@ -25382,17 +25382,28 @@ async function ensureOpsMovementSqlSync(){
   if(!sgdiAuthToken()||!db)return false;
   const now=Date.now();
   if(window.__sgdiOpsMovementSqlSyncedAt&&now-window.__sgdiOpsMovementSqlSyncedAt<15000)return false;
-  await syncSitesFromPostgres();
-  if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées pour Mouvement",e));
+  await Promise.all([
+    syncSitesFromPostgres().catch(e=>console.warn("Sites PostgreSQL indisponibles",e)),
+    typeof syncAssignmentsFromPostgres==="function"?syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées",e)):Promise.resolve()
+  ]);
   window.__sgdiOpsMovementSqlSyncedAt=now;
   return true;
 }
 async function renderOpsMouvements(view){
+  // Affichage immédiat avec les données locales
+  _renderOpsMouvementsHTML(view);
+  // Sync en arrière-plan si nécessaire, puis rafraîchissement discret
   if(sgdiAuthToken()){
     const needsSync=!window.__sgdiOpsMovementSqlSyncedAt||Date.now()-window.__sgdiOpsMovementSqlSyncedAt>=15000;
-    if(needsSync)sgdiShowDataLoadingBar("Chargement des sites et mouvements...");
-    try{await ensureOpsMovementSqlSync()}catch(e){console.warn("Synchronisation Mouvement indisponible",e)}
+    if(needsSync){
+      try{
+        await ensureOpsMovementSqlSync();
+        if(document.body.contains(view))_renderOpsMouvementsHTML(view);
+      }catch(e){console.warn("Synchronisation Mouvement indisponible",e)}
+    }
   }
+}
+function _renderOpsMouvementsHTML(view){
   const soc=currentStructureSocieteFilter();
   const presetAgent=sessionStorage.getItem("opsMovementAgentId")||"";
   const period="all";
