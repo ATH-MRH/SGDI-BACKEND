@@ -142,8 +142,19 @@
   .sidebar-user .btn{background:transparent!important;border:1px solid #2c4a78!important;color:#fff!important;border-radius:8px!important;font-size:12px!important;font-weight:850!important;box-shadow:none!important}
   .sidebar-user .btn:hover{background:rgba(255,255,255,.07)!important;color:#ffd16a!important}
 
-
-
+  /* ── IRON GLOBAL SÉCURITÉ — sidebar noir corbeau ─────────────────────── */
+  body[data-soc="igs"] .sidebar{background:#0F1113!important;border-right-color:#252729!important}
+  body[data-soc="igs"] .sidebar-brand{background:#0A0B0D!important;border-color:#252729!important}
+  body[data-soc="igs"] .sidebar .card{background:#16181A!important;border-color:#2E3033!important}
+  body[data-soc="igs"] .sidebar .text-slate-500,body[data-soc="igs"] .sidebar .text-slate-400{color:#9CA3AF!important}
+  body[data-soc="igs"] .sidebar-back{border-top-color:#252729!important}
+  body[data-soc="igs"] .sidebar-back .btn{border-color:#3A3C40!important}
+  body[data-soc="igs"] .sidebar-user{background:#0A0B0D!important;border-top-color:#252729!important}
+  body[data-soc="igs"] .sidebar-user .avatar{background:#e5e7eb!important;color:#0F1113!important}
+  body[data-soc="igs"] .sidebar-user .btn{border-color:#3A3C40!important}
+  body[data-soc="igs"] .nav-count,body[data-soc="igs"] .nav-link .nav-count,body[data-soc="igs"] .sub-link .nav-count{color:#0F1113!important}
+  body[data-soc="igs"] .gestion-badge{border-color:#0F1113!important;color:#0F1113!important}
+  /* ─────────────────────────────────────────────────────────────────────── */
 
   html,body,#app,#view{overflow-anchor:none!important;scroll-behavior:auto!important}
   .sgdi-navigation-stable #sidebar-nav,.sgdi-navigation-stable #view{overflow-anchor:none!important;scroll-behavior:auto!important}
