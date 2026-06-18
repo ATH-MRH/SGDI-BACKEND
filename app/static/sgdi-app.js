@@ -11238,6 +11238,7 @@ function renderAgentForm(view,id){
     ["conges","Congés"],
     ["absences","Absences"],
     ["carriere","Carrière"],
+    ...(showPointage?[["pointage","Situation Pointage"]]:[]),
     ...(showVerifications?[["verifications","Documents archivés"]]:[]),
     ["materiel","Matériel"],
     ["affectation","Affectation"],
@@ -11324,6 +11325,7 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="conges" style="display:none"><div class="section-banner banner-blue">Congés</div>${renderAgentCongesPanel(a)}</div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="absences" style="display:none"><div class="section-banner banner-red">Absences</div>${renderAgentAbsencesPanel(a)}</div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="carriere" style="display:none"><div class="section-banner banner-green">Carrière</div>${renderGestionHistorique(a)}</div>
+      ${showPointage?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="pointage" style="display:none"><div class="section-banner banner-blue">Situation Pointage</div>${renderAgentPointageSituation(a)}</div>`:""}
       ${showVerifications?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="verifications" style="display:none"><div class="section-banner banner-blue">Documents archivés</div><div class="grid grid-3 text-sm">
         ${[["ActeNaissance","Acte de naissance"],["CertifResidence","Cert. résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce ID biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]].map(([k,l])=>{const ok=a.verifications?.["verif"+k];const d=a.documents?.[k];const btn=`<button type="button" class="btn ${d?"btn-primary":"btn-ghost"} text-xs" onclick="event.stopPropagation();viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')" title="${d?"Visualiser le document":"Aucun document archivé"}">Visualiser</button>`;return`<div class="flex items-center gap-3 p-2 bg-slate-100 rounded text-left hover:bg-slate-200 transition cursor-pointer" onclick="viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')">${btn}<span>${ok?"✅":"⬜"} ${l}</span></div>`}).join("")}
       </div></div>`:""}
@@ -11333,7 +11335,6 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="affectation" style="display:none"><div class="section-banner banner-green">Affectations sur site</div>${renderAffectationsHistorique(a,locked,canEditAffectations)}</div>
       <div id="sanctions-section" class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="sanctions" style="display:none"><div class="section-banner banner-red">Sanctions disciplinaires</div>${renderSanctions(a,locked,canEditSanctions)}</div>
       ${(adminFicheContext||isDrhFicheContext())?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="portail" style="display:none"><div class="section-banner banner-blue">Compte Portail RH</div><div id="portal-account-panel" class="mt-3" data-portal-matricule="${escapeHTML(a.matricule||"")}"><div class="text-slate-400 text-sm italic">Cliquez sur l'onglet pour charger.</div></div></div>`:""}
-      ${showPointage?`<div class="card p-5 mb-4"><div class="section-banner banner-blue">${secPointage}. Situation pointage</div>${renderAgentPointageSituation(a)}</div>`:""}
       ${locked?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="sticky bottom-0 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="submit" class="btn btn-primary">Enregistrer les modifications</button></div>`}
     </form>
   </div>`;
