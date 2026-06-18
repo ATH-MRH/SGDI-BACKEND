@@ -166,6 +166,46 @@ app.add_middleware(
 )
 
 
+class StaticCacheMiddleware:
+    """Ajoute Cache-Control long terme sur les fichiers statiques versionnés."""
+
+    _NO_CACHE_PATHS = {"/static/sw.js", "/static/index.html", "/static/manifest.webmanifest"}
+
+    def __init__(self, app):
+        self._app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self._app(scope, receive, send)
+            return
+
+        path: str = scope.get("path", "")
+        cacheable = (
+            path.startswith("/static/")
+            and path not in self._NO_CACHE_PATHS
+            and not path.endswith(".html")
+        )
+
+        if not cacheable:
+            await self._app(scope, receive, send)
+            return
+
+        async def patched_send(message):
+            if message["type"] == "http.response.start":
+                headers = [
+                    (k, v) for k, v in message.get("headers", [])
+                    if k.lower() != b"cache-control"
+                ]
+                headers.append((b"cache-control", b"public, max-age=31536000, immutable"))
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self._app(scope, receive, patched_send)
+
+
+app.add_middleware(StaticCacheMiddleware)
+
+
 def _fix_societe_name() -> None:
     """Corrige 'IRON GLOBAL SECURITE' → 'IRON GLOBAL SÉCURITÉ' dans toute la base."""
     OLD = "IRON GLOBAL SECURITE"
