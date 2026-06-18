@@ -524,11 +524,16 @@ def _find_portal_account(db: Session, matricule: str) -> dict[str, Any] | None:
 
 @router.get("/accounts")
 def list_portal_accounts(
+    societe: str | None = None,
     db: Session = Depends(get_db),
     admin: User = Depends(current_user),
 ) -> list[dict[str, Any]]:
     accounts = service.list_items(db, "portalAccounts")
-    return [{k: v for k, v in a.items() if k != "passwordHash"} for a in accounts if isinstance(a, dict)]
+    rows = [a for a in accounts if isinstance(a, dict)]
+    if societe:
+        s = _norm_text(societe)
+        rows = [a for a in rows if _norm_text(a.get("societe", "")) == s]
+    return [{k: v for k, v in a.items() if k != "passwordHash"} for a in rows]
 
 
 @router.post("/accounts", status_code=status.HTTP_201_CREATED)

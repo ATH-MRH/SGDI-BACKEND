@@ -15262,12 +15262,14 @@ function demandePersonnelResponseTemplates(d){
 }
 function _normKey(s){return String(s||"").trim().toLowerCase();}
 async function renderPortailComptes(view){
+  const _pcSoc=isDrhModuleContext()?(sessionStorage.getItem("drhSociete")||currentStructureSocieteFilter()||""):(currentStructureSocieteFilter()||"");
+  window._portalComptesSoc=_pcSoc;
   view.innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
         <button class="btn btn-ghost text-sm mb-1" onclick="navigate('portail')">← Portail RH</button>
         <h1 class="text-2xl font-black uppercase">Comptes Portail RH</h1>
-        <p class="text-sm text-slate-500" id="portal-comptes-subtitle">Chargement...</p>
+        <p class="text-sm text-slate-500" id="portal-comptes-subtitle">Chargement...${_pcSoc?` · ${escapeHTML(_pcSoc)}`:""}</p>
       </div>
     </div>
     <div class="card p-4 mb-4">
@@ -15295,11 +15297,14 @@ async function renderPortailComptes(view){
     </div>`;
   const token=sgdiAuthToken();
   try{
-    const accRes=await fetch("/api/portal/accounts",{headers:{Authorization:`Bearer ${token}`}});
+    const soc=window._portalComptesSoc||"";
+    const url="/api/portal/accounts"+(soc?"?societe="+encodeURIComponent(soc):"");
+    const accRes=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
     const allAccounts=accRes.ok?await accRes.json():[];
-    window._portalComptesRows=allAccounts.map(a=>({account:a}));
+    const filteredAccounts=allAccounts;
+    window._portalComptesRows=filteredAccounts.map(a=>({account:a}));
     const sub=document.getElementById("portal-comptes-subtitle");
-    if(sub)sub.textContent=`${allAccounts.length} compte(s) portail enregistré(s).`;
+    if(sub)sub.textContent=`${filteredAccounts.length} compte(s) portail${soc?` · ${escapeHTML(soc)}`:""}.`;
     portalComptesFilter();
   }catch(err){
     const tbody=document.getElementById("portal-comptes-body");
