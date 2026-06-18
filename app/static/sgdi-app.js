@@ -25305,6 +25305,22 @@ function opsMovementCentralContext(btn){
   if(patch.siteId==="autres"&&!patch.autreAffectation){toast("Précisez l'autre affectation","error");return null}
   return {form,date,agentId,agentIds,f,patch};
 }
+function opsApplyLocalMovementAffectation(date,agentId,patch){
+  const a=opsFindEmployee(agentId)||findEmployeeByRef(patch?.agentBackendId)||findEmployeeByRef(patch?.matricule);
+  if(!a||!patch)return;
+  const resolvedSite=opsFindSite(patch.siteId)||opsFindSite(patch.siteBackendId)||null;
+  const resolvedSiteId=resolvedSite?.id||patch.siteId||"";
+  const resolvedSiteName=resolvedSite?.nom||resolvedSite?.intitule||patch.siteName||"";
+  const resolvedClientName=resolvedSite?.client||patch.clientName||"";
+  if(!resolvedSiteId&&!resolvedSiteName)return;
+  const liveAff=agentLiveAffectation(a);
+  if(liveAff?.siteId&&liveAff.siteId!==resolvedSiteId){
+    a.affectationsHistorique=a.affectationsHistorique||[];
+    a.affectationsHistorique.push({...liveAff,dateFin:date,motifChangement:patch.mouvementMotif||"Ordre de mouvement"});
+  }
+  a.affectationCourante={...(a.affectationCourante||{}),siteId:resolvedSiteId,siteName:resolvedSiteName,clientName:resolvedClientName,poste:a.affectationCourante?.poste||a.fonction||a.position||"",horaire:a.affectationCourante?.horaire||"Mixte",dateDebut:date,natureMouvement:patch.mouvementMotif||"Affectation"};
+  addEmployeeCareerEvent(a,"Affectation",{date,motif:(patch.mouvementMotif||"Affectation")+" vers "+(resolvedSiteName||"site"),source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||""});
+}
 async function opsEditerOrdreMouvementCentral(btn){
   const ctx=opsMovementCentralContext(btn);if(!ctx)return;
   if(ctx.agentIds.length>1){toast("Editer un seul OM à la fois — désélectionnez les autres employés","error");return}
@@ -25335,27 +25351,14 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
   }));
   const saved=results.filter(r=>r.status==="fulfilled").map(r=>r.value);
   const ok=saved.length,fail=agentIds.length-ok;
-  // 2. Mise à jour locale immédiate de db.agents (sans appel API par agent)
-  for(const {aid,patch} of saved){
-    const a=opsFindEmployee(aid);if(!a)continue;
-    const resolvedSite=opsFindSite(patch.siteId)||opsFindSite(patch.siteBackendId)||null;
-    const resolvedSiteId=resolvedSite?.id||patch.siteId||"";
-    const resolvedSiteName=resolvedSite?.nom||resolvedSite?.intitule||patch.siteName||"";
-    const resolvedClientName=resolvedSite?.client||patch.clientName||"";
-    if(!resolvedSiteId&&!resolvedSiteName)continue;
-    const liveAff=agentLiveAffectation(a);
-    if(liveAff?.siteId&&liveAff.siteId!==resolvedSiteId){
-      a.affectationsHistorique=a.affectationsHistorique||[];
-      a.affectationsHistorique.push({...liveAff,dateFin:date,motifChangement:patch.mouvementMotif||"Ordre de mouvement"});
-    }
-    a.affectationCourante={...(a.affectationCourante||{}),siteId:resolvedSiteId,siteName:resolvedSiteName,clientName:resolvedClientName,poste:a.affectationCourante?.poste||a.fonction||a.position||"",horaire:a.affectationCourante?.horaire||"Mixte",dateDebut:date,natureMouvement:patch.mouvementMotif||"Affectation"};
-    addEmployeeCareerEvent(a,"Affectation",{date,motif:(patch.mouvementMotif||"Affectation")+" vers "+(resolvedSiteName||"site"),source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||""});
-  }
-  // 3. Feedback immédiat + re-render local
+  // 2. Mise à jour locale immédiate de db.agents
+  for(const {aid,patch} of saved)opsApplyLocalMovementAffectation(date,aid,patch);
+  // 3. Feedback immédiat + re-render local (sync bloqué pour éviter la race condition)
   updateOmSaveOverlay(ok+" OM enregistré(s)",true);
   if(fail)toast(ok+" OM validé(s), "+fail+" échec(s)",ok?"warning":"error");
   else toast(ok+" ordre(s) de mouvement validé(s)","success");
   setTimeout(closeOmSaveOverlay,1800);
+  window.__sgdiOpsMovementSqlSyncedAt=Date.now();
   renderView();
   // 4. Sync SQL en arrière-plan : crée les affectations PostgreSQL pour chaque agent
   window._sgdiSilentRibbon=true;
@@ -26397,7 +26400,11 @@ async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
     if(opt.print)opsPrintMovementDocument(movement,true);
     if(opt.closeModal!==false)closeModal();
     setTimeout(closeOmSaveOverlay,1800);
-    // Synchronisation et archivage en arrière-plan — flag empêche tout sursaut DOM
+    // Mise à jour locale immédiate + re-render de la liste agents
+    opsApplyLocalMovementAffectation(date,agentId,patch);
+    window.__sgdiOpsMovementSqlSyncedAt=Date.now();
+    renderView();
+    // Synchronisation et archivage en arrière-plan
     window._sgdiSilentRibbon=true;
     sgdiPullState({silent:true}).then(async()=>{
       const fresh=(db.opsMouvements||[]).find(x=>opsMovementKey(x)===opsMovementKey(movement))||(db.feuillePresence||[]).find(x=>String(x.id||"")===String(savedLine.id||""))||movement||savedLine;
@@ -26406,7 +26413,7 @@ async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
       const saved=(db.opsMouvements||[]).find(x=>opsMovementKey(x)===opsMovementKey(movement))||fresh;
       opsUpsertMovementHistory(saved);
       await opsArchiveMovementDocument(saved);
-    }).catch(e=>console.warn("Sync OM background:",e)).finally(()=>{window._sgdiSilentRibbon=false;});
+    }).catch(e=>console.warn("Sync OM background:",e)).finally(()=>{window._sgdiSilentRibbon=false;sgdiRefreshCountersNow({reason:"single-om"});});
     return true;
   }catch(e){closeOmSaveOverlay();toast("Mouvement refusé : "+(e.message||e),"error");return false}
 }
