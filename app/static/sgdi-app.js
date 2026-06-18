@@ -11204,6 +11204,10 @@ function renderAgentForm(view,id){
   const situationBadge=`<span class="pill ${sitClass} agent-active-status-pill" style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:6px 14px">${sitIcon} ${situation}</span>`;
   const operationnel=(situation==="actif");
   const codeColor=operationnel?"#16a34a":"#dc2626";
+  const recruitFuture=!!(a.dateRecrutement&&String(a.dateRecrutement)>today());
+  const isFormer=["ancien","sortant","archive","archivé","demissionne","démissionné","licencie","licencié"].includes(agentStatut);
+  const lifecycleStatus=recruitFuture?"futur":(isFormer?"ancien":"actif");
+  const lifecycleTabs=["futur","actif","ancien"].map(k=>`<button type="button" class="rh-erp-status-tab ${k==="futur"?"is-future":k==="ancien"?"is-old":""} ${lifecycleStatus===k?"is-active":""}">${k==="futur"?"Futur":k==="actif"?"Actif":"Ancien"}</button>`).join("");
   const showVerifications=adminFicheContext||isDrhFicheContext();
   const showPointage=adminFicheContext||isOpsFicheContext();
   const canEditSanctions=adminFicheContext||isDrhFicheContext();
@@ -11227,38 +11231,43 @@ function renderAgentForm(view,id){
     <button type="button" class="btn text-xs" style="background:#16a34a;border-color:#15803d;color:#fff;font-weight:900" onclick="drhValiderVerrouillerFichePosition('${a.id}')">Enregistrer et verrouiller</button>
   </div>`:"";
   const fpTabs=[
-    ["identite","IDENTITE"],
-    ["coordonnees","COORDONNÉES"],
-    ["habilitations","HABILITATION"],
-    ["contrat","CONTRAT"],
-    ...(showVerifications?[["verifications","VERIFICATION (ARCHIVES)"]]:[]),
-    ["materiel","MATERIEL ET EQUIPEMENT"],
-    ["affectation","AFFECTATION"],
-    ["sanctions","SANCTIONS DISCIPLINAIRES"],
-    ...(adminFicheContext||isDrhFicheContext()?[["portail","COMPTE PORTAIL RH"]]:[])
+    ["identite","Informations personnelles"],
+    ["coordonnees","Coordonnées / urgence"],
+    ["habilitations","Habilitations"],
+    ["contrat","RH / contrat"],
+    ...(showVerifications?[["verifications","Documents archivés"]]:[]),
+    ["materiel","Matériel"],
+    ["affectation","Affectation"],
+    ["sanctions","Sanctions"],
+    ...(adminFicheContext||isDrhFicheContext()?[["portail","Portail RH"]]:[])
   ];
   const ficheTopButtonStyle="height:40px;min-width:116px;padding:0 14px;border-radius:0!important;border:1px solid #d7dde8!important;background:linear-gradient(180deg,#ffffff,#eef4fb)!important;color:#082a53!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 3px 9px rgba(15,23,42,.08)!important;font-size:12px!important;font-weight:950!important;letter-spacing:.01em!important;line-height:1.08!important;text-align:center!important;justify-content:center!important";
-  view.innerHTML=`<div class="max-w-none mx-auto">
+  view.innerHTML=`<div class="max-w-none mx-auto rh-erp-page">
     ${drhTopActions}
-    <div style="background:#fff;border:1px solid #dbe4ef;border-radius:12px;padding:20px 24px;margin-bottom:12px;display:flex;gap:0;align-items:stretch;min-height:210px">
-      <div style="display:flex;gap:20px;align-items:center;flex:1;min-width:0">
-        <div class="flex items-center justify-center overflow-hidden flex-shrink-0" style="width:160px;height:210px;border-radius:16px;background:#f1f5f9;color:#b7b7b7;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:500">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;display:block"/>`:"Photo"}</div>
-        <div style="display:flex;flex-direction:column;gap:7px;font-family:Arial,Helvetica,sans-serif">
-          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Code :</span><span style="color:${codeColor};font-weight:900;font-size:18px;letter-spacing:.05em">${safe(a.matricule)||"—"}</span></div>
-          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Nom Prénom :</span><span style="color:#043970;font-weight:900;font-size:20px">${escapeHTML(a.nom+" "+a.prenom)}</span></div>
-          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Telephone :</span><span style="color:#043970;font-weight:700;font-size:16px">${safe(a.telephone)||"—"}</span></div>
-          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Age :</span><span style="color:#043970;font-weight:700;font-size:16px">${agentAge!==null?agentAge+" ans":"—"}</span></div>
-          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Recrutement :</span><span style="color:#043970;font-weight:700;font-size:16px">${formatDate(a.dateRecrutement)}${anciennete&&anciennete!=="—"?` <span style="font-size:13px;color:#64748b">(${anciennete})</span>`:""}</span></div>
-        </div>
+    <div class="rh-erp-toolbar">
+      <div class="rh-erp-title"><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
+      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div>
+    </div>
+    <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
+    <div class="rh-erp-profile-card">
+      <div class="rh-erp-photo">${a.photo?`<img src="${a.photo}" alt="">`:"Photo"}</div>
+      <div class="rh-erp-fields">
+        <div class="rh-erp-field"><b>Code</b><span style="color:${codeColor};font-weight:950">${safe(a.matricule)||"—"}</span></div>
+        <div class="rh-erp-field"><b>Nom</b><span>${escapeHTML(a.nom||"—")}</span></div>
+        <div class="rh-erp-field"><b>Prénom</b><span>${escapeHTML(a.prenom||"—")}</span></div>
+        <div class="rh-erp-field"><b>Téléphone</b><span>${safe(a.telephone)||"—"}</span></div>
+        <div class="rh-erp-field"><b>Âge</b><span>${agentAge!==null?agentAge+" ans":"—"}</span></div>
+        <div class="rh-erp-field"><b>Société</b><span>${safe(a.societe)||"—"}</span></div>
+        <div class="rh-erp-field"><b>Recrutement</b><span>${formatDate(a.dateRecrutement)}${anciennete&&anciennete!=="—"?` (${anciennete})`:""}</span></div>
+        <div class="rh-erp-field"><b>Catégorie</b><span>${safe(a.fonction||a.position||a.posteContrat)||"—"}</span></div>
       </div>
-      <div style="width:1px;background:#dbe4ef;margin:0 24px;flex-shrink:0"></div>
-      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;font-family:Arial,Helvetica,sans-serif;justify-content:space-between">
-        <div><div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:4px">Affectation :</div><div style="color:#043970;font-weight:900;font-size:22px;line-height:1.25">${escapeHTML(aff.siteName||"Sans affectation")}</div></div>
-        <div><div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:4px">Fin de contrat :</div><div style="font-weight:900;font-size:20px;color:${finContratColor}">${ficheContractEndDate?`${formatDate(ficheContractEndDate)}${finContratBadge}`:"—"}</div></div>
-        <div style="display:flex;flex-direction:column;gap:6px">${essaiBadge?`<div>${essaiBadge}</div>`:""}<div style="display:flex;gap:6px;flex-wrap:nowrap;align-items:center">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div></div>
+      <div class="rh-erp-side">
+        <div><div class="rh-erp-side-label">Affectation</div><div class="rh-erp-side-value">${escapeHTML(aff.siteName||"Sans affectation")}</div></div>
+        <div><div class="rh-erp-side-label">Fin de contrat</div><div class="rh-erp-side-value" style="color:${finContratColor}">${ficheContractEndDate?`${formatDate(ficheContractEndDate)}${finContratBadge}`:"—"}</div></div>
+        ${essaiBadge?`<div>${essaiBadge}</div>`:""}
       </div>
     </div>
-    <div class="flex items-center mb-4 flex-wrap gap-2">
+    <div class="rh-erp-chips">
       ${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}
     </div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
@@ -11270,21 +11279,22 @@ function renderAgentForm(view,id){
         ${employeeFicheRhActionsHTML(a)}
         ${renderGestionHistorique(a)}
       </div>
-      <div class="fp-tabs" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:8px;background:#f8fafc;border:1px solid #dbe4ef;border-radius:10px">
-        ${fpTabs.map(([k,l],i)=>`<button type="button" data-fp-tab="${k}" onclick="fichePositionSwitchTab('${k}')" style="height:38px;padding:0 14px;border-radius:8px;border:1px solid ${i===0?"#043970":"#cbd5e1"};background:${i===0?"#043970":"#fff"};color:${i===0?"#fff":"#043970"};font-size:12px;font-weight:900;letter-spacing:.02em">${l}</button>`).join("")}
+      <div class="fp-tabs rh-erp-tabs">
+        ${fpTabs.map(([k,l],i)=>`<button type="button" data-fp-tab="${k}" class="${i===0?"is-active":""}" onclick="fichePositionSwitchTab('${k}')">${l}</button>`).join("")}
       </div>
-      <div class="card p-5 mb-4" data-fp-tab-panel="identite"><div class="section-banner banner-amber">1. Identité</div><div class="grid grid-6">
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="identite"><div class="section-banner banner-amber">Informations personnelles</div><div class="grid grid-6">
         <div class="col-span-2"><label class="label">Nom</label><input class="input" name="nom" value="${escapeHTML(a.nom)}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Prénom</label><input class="input" name="prenom" value="${escapeHTML(a.prenom)}" ${locked?"disabled":""}/></div>
         <div class="col-span-2">${locked?`<div class="candidate-photo-field flex items-start gap-4"><div class="candidate-photo-preview bg-white border border-slate-300 rounded-lg flex items-center justify-center text-5xl overflow-hidden">${a.photo?`<img src="${a.photo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;background:#fff"/>`:"👤"}</div></div>`:photoField(a.photo)}</div>
         <div class="col-span-2"><label class="label">Naissance</label><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Lieu</label><input class="input" name="lieuNaissance" value="${escapeHTML(a.lieuNaissance||"")}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Sexe</label><select class="select" name="sexe" ${locked?"disabled":""}><option ${a.sexe==="M"?"selected":""}>M</option><option ${a.sexe==="F"?"selected":""}>F</option></select></div>
+        <div class="col-span-2"><label class="label">Situation familiale</label><select class="select" name="situation" ${locked?"disabled":""}>${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${a.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
         <div class="col-span-2"><label class="label">Père</label><input class="input" name="nomPere" value="${escapeHTML(a.nomPere||"")}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Mère</label><input class="input" name="nomMere" value="${escapeHTML(a.nomMere||"")}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">NIN</label><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" ${locked?"disabled":""}/></div>
       </div></div>
-      <div class="card p-5 mb-4" data-fp-tab-panel="coordonnees" style="display:none"><div class="section-banner banner-blue">2. Coordonnées</div><div class="grid grid-6">
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="coordonnees" style="display:none"><div class="section-banner banner-blue">Coordonnées / urgence</div><div class="grid grid-6">
         <div class="col-span-2"><label class="label">Téléphone</label><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Email</label><input class="input" name="email" value="${escapeHTML(a.email||"")}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(a.adresse||"")}" ${locked?"disabled":""}/></div>
@@ -11294,10 +11304,10 @@ function renderAgentForm(view,id){
         <div class="col-span-2"><label class="label">Lien</label><input class="input" name="contactUrgenceLien" value="${escapeHTML(a.contactUrgenceLien||"")}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Téléphone</label><input class="input" name="contactUrgenceTel" value="${escapeHTML(a.contactUrgenceTel||"")}" ${locked?"disabled":""}/></div>
       </div></div>
-      <div class="card p-5 mb-4" data-fp-tab-panel="habilitations" style="display:none"><div class="section-banner banner-green">3. Habilitations</div><div class="grid grid-2">
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="habilitations" style="display:none"><div class="section-banner banner-green">Habilitations</div><div class="grid grid-2">
         ${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>{const v=a.habilitations?.[k]||"non";return`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="ahab_${k}" value="oui" ${v==="oui"?"checked":""} ${locked?"disabled":""}/> Oui</label><label class="radio-pill"><input type="radio" name="ahab_${k}" value="non" ${v!=="oui"?"checked":""} ${locked?"disabled":""}/> Non</label></div></div>`}).join("")}
       </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></div>
-      <div class="card p-5 mb-4" data-fp-tab-panel="contrat" style="display:none"><div class="section-banner banner-amber">4. Contrat</div><div class="flex justify-end gap-2 flex-wrap mb-3">${adminFicheContext?`<button type="button" class="btn btn-primary text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">Ajouter / modifier contrat</button>`:""}<button type="button" class="btn btn-secondary text-xs" onclick="viewAgentOfficialContract('${a.id}')">Voir contrat officiel</button></div><div class="grid grid-6">
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><div class="section-banner banner-amber">RH / contrat</div><div class="flex justify-end gap-2 flex-wrap mb-3">${adminFicheContext?`<button type="button" class="btn btn-primary text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">Ajouter / modifier contrat</button>`:""}<button type="button" class="btn btn-secondary text-xs" onclick="viewAgentOfficialContract('${a.id}')">Voir contrat officiel</button></div><div class="grid grid-6">
         <div class="col-span-3"><label class="label">Type</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(ficheContractDocumentType)}" readonly/>${locked?"":`<input type="hidden" name="typeContrat" value="${escapeHTML(cleanContractType(a.typeContrat)||"CDD")}"/>`}</div>
         <div class="col-span-3"><label class="label">Salaire net</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(a.salaireNet||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Date début contrat</label><input class="input" type="date" name="dateRecrutement" value="${a.dateRecrutement||""}" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
@@ -11308,15 +11318,15 @@ function renderAgentForm(view,id){
         <div class="col-span-3"><label class="label">Banque</label><select class="select" name="banque" ${locked?"disabled":""}><option value="">— Choisir une banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">IBAN</label><input class="input" name="iban" value="${escapeHTML(a.iban||"")}" ${locked?"disabled":""}/></div>
       </div></div>
-      ${showVerifications?`<div class="card p-5 mb-4" data-fp-tab-panel="verifications" style="display:none"><div class="section-banner banner-blue">5. Vérifications (archivées)</div><div class="grid grid-3 text-sm">
+      ${showVerifications?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="verifications" style="display:none"><div class="section-banner banner-blue">Documents archivés</div><div class="grid grid-3 text-sm">
         ${[["ActeNaissance","Acte de naissance"],["CertifResidence","Cert. résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce ID biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]].map(([k,l])=>{const ok=a.verifications?.["verif"+k];const d=a.documents?.[k];const btn=`<button type="button" class="btn ${d?"btn-primary":"btn-ghost"} text-xs" onclick="event.stopPropagation();viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')" title="${d?"Visualiser le document":"Aucun document archivé"}">Visualiser</button>`;return`<div class="flex items-center gap-3 p-2 bg-slate-100 rounded text-left hover:bg-slate-200 transition cursor-pointer" onclick="viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')">${btn}<span>${ok?"✅":"⬜"} ${l}</span></div>`}).join("")}
       </div></div>`:""}
-      <div class="card p-5 mb-4" data-fp-tab-panel="materiel" style="display:none"><div class="section-banner banner-amber">${secMateriel}. Matériel & équipement</div>
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="materiel" style="display:none"><div class="section-banner banner-amber">Matériel & équipement</div>
         ${renderAgentMateriel(a,locked)}
       </div>
-      <div class="card p-5 mb-4" data-fp-tab-panel="affectation" style="display:none"><div class="section-banner banner-green">${secAffectation}. Affectations sur site (historique)</div>${renderAffectationsHistorique(a,locked,canEditAffectations)}</div>
-      <div id="sanctions-section" class="card p-5 mb-4" data-fp-tab-panel="sanctions" style="display:none"><div class="section-banner banner-red">${secSanctions}. Sanctions disciplinaires</div>${renderSanctions(a,locked,canEditSanctions)}</div>
-      ${(adminFicheContext||isDrhFicheContext())?`<div class="card p-5 mb-4" data-fp-tab-panel="portail" style="display:none"><div class="section-banner banner-blue">Compte Portail RH</div><div id="portal-account-panel" class="mt-3" data-portal-matricule="${escapeHTML(a.matricule||"")}"><div class="text-slate-400 text-sm italic">Cliquez sur l'onglet pour charger.</div></div></div>`:""}
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="affectation" style="display:none"><div class="section-banner banner-green">Affectations sur site</div>${renderAffectationsHistorique(a,locked,canEditAffectations)}</div>
+      <div id="sanctions-section" class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="sanctions" style="display:none"><div class="section-banner banner-red">Sanctions disciplinaires</div>${renderSanctions(a,locked,canEditSanctions)}</div>
+      ${(adminFicheContext||isDrhFicheContext())?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="portail" style="display:none"><div class="section-banner banner-blue">Compte Portail RH</div><div id="portal-account-panel" class="mt-3" data-portal-matricule="${escapeHTML(a.matricule||"")}"><div class="text-slate-400 text-sm italic">Cliquez sur l'onglet pour charger.</div></div></div>`:""}
       ${showPointage?`<div class="card p-5 mb-4"><div class="section-banner banner-blue">${secPointage}. Situation pointage</div>${renderAgentPointageSituation(a)}</div>`:""}
       ${locked?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="sticky bottom-0 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="submit" class="btn btn-primary">Enregistrer les modifications</button></div>`}
     </form>
@@ -11329,6 +11339,7 @@ function fichePositionSwitchTab(key){
   });
   document.querySelectorAll("[data-fp-tab]").forEach(btn=>{
     const active=btn.dataset.fpTab===key;
+    btn.classList.toggle("is-active",active);
     btn.style.background=active?"#043970":"#fff";
     btn.style.color=active?"#fff":"#043970";
     btn.style.borderColor=active?"#043970":"#cbd5e1";
@@ -11886,7 +11897,7 @@ async function saveAgent(id,options){
   if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()){toast("Fiche officielle verrouillée : modification impossible","error");return false}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
   const draft={...a,habilitations:{...(a.habilitations||{})}};
-  ["nom","prenom","dateNaissance","lieuNaissance","sexe","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
+  ["nom","prenom","dateNaissance","lieuNaissance","sexe","situation","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
   draft.dureeContrat=employeePositionContractDuration(draft);
   if(draft.dateRecrutement)draft.dateFinContrat=contractEndDate(draft.dateRecrutement,draft.dureeContrat);
   if(fd.get("photo")!==undefined)draft.photo=fd.get("photo")||null;

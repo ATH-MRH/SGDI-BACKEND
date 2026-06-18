@@ -1816,6 +1816,43 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
     -webkit-text-fill-color:#0f172a!important;
   }
 
+  /* ----- RH / EMPLOYEE ERP LAYOUT ----- */
+  .rh-erp-page{font-family:Arial,Helvetica,sans-serif;color:#0f172a}
+  .rh-erp-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .rh-erp-title{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .rh-erp-title strong{font-size:18px;font-weight:900;color:#0f172a}
+  .rh-erp-title span{font-size:13px;font-weight:800;color:#0360a8}
+  .rh-erp-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .rh-erp-status-tabs{display:flex;align-items:center;margin:0 0 10px;border:1px solid #d7e3f3;border-radius:6px;background:#fff;overflow:hidden;width:max-content;max-width:100%}
+  .rh-erp-status-tab{height:30px;padding:0 18px;border:0;border-right:1px solid #d7e3f3;background:#f8fbff;color:#64748b;font-size:12px;font-weight:900}
+  .rh-erp-status-tab:last-child{border-right:0}
+  .rh-erp-status-tab.is-active{background:#bbf7d0;color:#166534;clip-path:polygon(0 0,calc(100% - 12px) 0,100% 50%,calc(100% - 12px) 100%,0 100%,12px 50%)}
+  .rh-erp-status-tab.is-future.is-active{background:#e0f2fe;color:#075985}
+  .rh-erp-status-tab.is-old.is-active{background:#e2e8f0;color:#334155}
+  .rh-erp-profile-card{background:#fff;border:1px solid #d7e3f3;border-radius:6px;padding:14px;margin-bottom:12px;display:grid;grid-template-columns:86px minmax(0,1fr) minmax(280px,.85fr);gap:14px;align-items:stretch}
+  .rh-erp-photo{width:76px;height:76px;border:1px solid #dbe4ef;border-radius:4px;background:#f1f5f9;color:#94a3b8;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:12px;font-weight:800}
+  .rh-erp-photo img{width:100%;height:100%;object-fit:cover;display:block}
+  .rh-erp-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;align-content:start}
+  .rh-erp-field{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;align-items:center;min-height:26px}
+  .rh-erp-field b{font-size:11px;color:#5f718a;font-weight:900;text-align:right}
+  .rh-erp-field span{font-size:13px;color:#0f172a;font-weight:850;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rh-erp-side{border-left:1px solid #e2eaf5;padding-left:14px;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+  .rh-erp-side-label{font-size:11px;color:#5f718a;font-weight:900;margin-bottom:2px}
+  .rh-erp-side-value{font-size:16px;color:#043970;font-weight:950;line-height:1.25}
+  .rh-erp-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .rh-erp-tabs{display:flex;gap:0;align-items:center;flex-wrap:wrap;margin:0 0 12px;border-bottom:1px solid #d7e3f3;background:#fff}
+  .rh-erp-tabs [data-fp-tab]{height:38px;padding:0 18px;border:0!important;border-bottom:3px solid transparent!important;border-radius:0!important;background:#fff!important;color:#5f718a!important;font-size:12px!important;font-weight:950!important}
+  .rh-erp-tabs [data-fp-tab].is-active{border-bottom-color:#0360a8!important;color:#043970!important}
+  .rh-erp-panel{border:1px solid #b9d5f6!important;border-radius:6px!important;box-shadow:none!important}
+  .rh-erp-panel .section-banner{background:#fff!important;color:#0360a8!important;border-bottom:1px solid #d7e3f3;border-radius:0;margin:-20px -20px 14px;padding:10px 12px}
+  @media(max-width:900px){
+    .rh-erp-profile-card{grid-template-columns:1fr}
+    .rh-erp-photo{width:96px;height:96px}
+    .rh-erp-fields{grid-template-columns:1fr}
+    .rh-erp-side{border-left:0;border-top:1px solid #e2eaf5;padding-left:0;padding-top:12px}
+    .rh-erp-field{grid-template-columns:92px minmax(0,1fr)}
+  }
+
 
 /* ----- GLOBAL RESPONSIVE SAFETY LAYER ----- */
 *,*::before,*::after{box-sizing:border-box}
