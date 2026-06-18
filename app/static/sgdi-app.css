@@ -1845,12 +1845,36 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .rh-erp-tabs [data-fp-tab].is-active{border-bottom-color:#0360a8!important;color:#043970!important}
   .rh-erp-panel{border:1px solid #b9d5f6!important;border-radius:6px!important;box-shadow:none!important}
   .rh-erp-panel .section-banner{background:#fff!important;color:#0360a8!important;border-bottom:1px solid #d7e3f3;border-radius:0;margin:-20px -20px 14px;padding:10px 12px}
+  .rh-op-tabs{height:32px;display:flex;align-items:flex-end;gap:20px;border-bottom:1px solid #d7e3f3;margin:-12px -12px 14px;padding:0 6px;background:#fff}
+  .rh-op-tabs button{height:32px;border:0;background:transparent;color:#64748b;font-size:12px;font-weight:900;padding:0 2px;border-bottom:2px solid transparent}
+  .rh-op-tabs button.is-active{color:#1f6fb2;border-bottom-color:#1f6fb2}
+  .rh-op-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,1fr);gap:8px 10px}
+  .rh-op-box{border:2px solid #bfdbfe;border-radius:6px;padding:13px 12px 10px;background:#fff;min-width:0}
+  .rh-op-box legend{padding:0 8px;color:#1f6fb2;font-size:15px;font-weight:950}
+  .rh-op-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 18px}
+  .rh-op-box label{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;align-items:center;margin:0;min-width:0}
+  .rh-op-box label span{font-size:11px;color:#334155;font-weight:900;line-height:1.15}
+  .rh-op-box .input,.rh-op-box .select{height:25px!important;min-height:25px!important;padding:2px 8px!important;border-color:#cbd5e1!important;border-radius:4px!important;font-size:12px!important;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)!important}
+  .rh-op-box textarea.input{height:auto!important;min-height:80px!important;resize:vertical}
+  .rh-op-emergency{display:grid;gap:7px;align-content:start}
+  .rh-op-emergency .rh-op-note{grid-template-columns:1fr}
+  .rh-op-emergency .rh-op-note span{margin:4px 0 2px;color:#1f6fb2;font-size:13px}
+  .rh-op-family{grid-column:1/2}
+  .rh-op-family-head{display:grid;grid-template-columns:1fr 1fr 150px;gap:8px 12px;margin-bottom:6px}
+  .rh-op-family-head label{grid-template-columns:105px minmax(0,1fr)}
+  .rh-op-family-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+  .rh-op-family-table th{height:24px;padding:4px 8px;background:#dbe9f7;color:#334155;font-size:11px;font-weight:950;text-align:left}
+  .rh-op-family-table td{height:26px;border:1px solid #edf2f7;padding:3px 8px;color:#334155}
+  .rh-op-add-line{border:0;background:transparent;color:#1f6fb2;font-size:12px;font-weight:800;padding:0;cursor:default}
   @media(max-width:900px){
     .rh-erp-profile-card{grid-template-columns:1fr}
     .rh-erp-photo{width:96px;height:96px}
     .rh-erp-fields{grid-template-columns:1fr}
     .rh-erp-side{border-left:0;border-top:1px solid #e2eaf5;padding-left:0;padding-top:12px}
     .rh-erp-field{grid-template-columns:92px minmax(0,1fr)}
+    .rh-op-layout,.rh-op-grid,.rh-op-family-head{grid-template-columns:1fr}
+    .rh-op-family{grid-column:auto}
+    .rh-op-box label,.rh-op-family-head label{grid-template-columns:1fr}
   }
 
 

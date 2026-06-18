@@ -809,6 +809,12 @@ function employeeFromApi(emp){
     email:data.email||emp.email||"",
     telephone:data.telephone||emp.phone||"",
     nin:data.nin||emp.nin||"",
+    nationalite:data.nationalite||"",
+    civilite:data.civilite||"",
+    numeroPasseport:data.numeroPasseport||"",
+    noteUrgence:data.noteUrgence||"",
+    nombreEnfants:data.nombreEnfants??emp.children_count??0,
+    genreFamille:data.genreFamille||"",
     address:data.address||emp.address||"",
     position:data.position||emp.position||"",
     fonction:data.fonction||emp.position||"",
@@ -961,6 +967,7 @@ function employeeApiPayload(a){
     birth_date:a.dateNaissance||null,
     birth_place:a.lieuNaissance||null,
     family_status:a.situation||null,
+    children_count:parseInt(a.nombreEnfants??a.children_count??0,10)||0,
     phone:a.telephone||null,
     email:a.email||null,
     address:a.adresse||a.address||null,
@@ -11286,18 +11293,50 @@ function renderAgentForm(view,id){
       <div class="fp-tabs rh-erp-tabs">
         ${fpTabs.map(([k,l],i)=>`<button type="button" data-fp-tab="${k}" class="${i===0?"is-active":""}" onclick="fichePositionSwitchTab('${k}')">${l}</button>`).join("")}
       </div>
-      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="identite"><div class="section-banner banner-amber">Informations personnelles</div><div class="grid grid-6">
-        <div class="col-span-2"><label class="label">Nom</label><input class="input" name="nom" value="${escapeHTML(a.nom)}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Prénom</label><input class="input" name="prenom" value="${escapeHTML(a.prenom)}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2">${locked?`<div class="candidate-photo-field flex items-start gap-4"><div class="candidate-photo-preview bg-white border border-slate-300 rounded-lg flex items-center justify-center text-5xl overflow-hidden">${a.photo?`<img src="${a.photo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;background:#fff"/>`:"👤"}</div></div>`:photoField(a.photo)}</div>
-        <div class="col-span-2"><label class="label">Naissance</label><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Lieu</label><input class="input" name="lieuNaissance" value="${escapeHTML(a.lieuNaissance||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Sexe</label><select class="select" name="sexe" ${locked?"disabled":""}><option ${a.sexe==="M"?"selected":""}>M</option><option ${a.sexe==="F"?"selected":""}>F</option></select></div>
-        <div class="col-span-2"><label class="label">Situation familiale</label><select class="select" name="situation" ${locked?"disabled":""}>${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${a.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
-        <div class="col-span-2"><label class="label">Père</label><input class="input" name="nomPere" value="${escapeHTML(a.nomPere||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Mère</label><input class="input" name="nomMere" value="${escapeHTML(a.nomMere||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">NIN</label><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" ${locked?"disabled":""}/></div>
-      </div></div>
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="identite">
+        <div class="rh-op-tabs"><button type="button" class="is-active">Informations personnelles</button><button type="button">RH information</button></div>
+        <input type="hidden" name="nom" value="${escapeHTML(a.nom||"")}"/>
+        <input type="hidden" name="prenom" value="${escapeHTML(a.prenom||"")}"/>
+        <input type="hidden" name="photo" value="${escapeHTML(a.photo||"")}"/>
+        <div class="rh-op-layout">
+          <fieldset class="rh-op-box rh-op-personal">
+            <legend>Informations personnelles</legend>
+            <div class="rh-op-grid">
+              <label><span>Adresse</span><input class="input" name="adresse" value="${escapeHTML(a.adresse||a.address||"")}" ${locked?"disabled":""}/></label>
+              <label><span>Nationalité</span><select class="select" name="nationalite" ${locked?"disabled":""}>${["Algérie","France","Maroc","Tunisie","Autre"].map(n=>`<option value="${escapeHTML(n)}" ${(a.nationalite||"Algérie")===n?"selected":""}>${escapeHTML(n)}</option>`).join("")}</select></label>
+              <label><span>Email</span><input class="input" type="email" name="email" value="${escapeHTML(a.email||"")}" ${locked?"disabled":""}/></label>
+              <label><span>Civilité</span><select class="select" name="civilite" ${locked?"disabled":""}>${["Monsieur","Madame"].map(c=>`<option value="${escapeHTML(c)}" ${(a.civilite||"Monsieur")===c?"selected":""}>${escapeHTML(c)}</option>`).join("")}</select></label>
+              <label><span>Téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${locked?"disabled":""}/></label>
+              <label><span>Numéro d'identité</span><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" ${locked?"disabled":""}/></label>
+              <label><span>Compte bancaire</span><select class="select" name="banque" ${locked?"disabled":""}><option value="">—</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></label>
+              <label><span>Numéro du passeport</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${locked?"disabled":""}/></label>
+              <label><span>Lieu de naissance</span><input class="input" name="lieuNaissance" value="${escapeHTML(a.lieuNaissance||"")}" ${locked?"disabled":""}/></label>
+              <label><span>Date de naissance</span><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" ${locked?"disabled":""}/></label>
+              <label><span>Âge</span><input class="input bg-slate-50" value="${agentAge!==null?agentAge:""}" readonly/></label>
+              <label><span>Sexe</span><select class="select" name="sexe" ${locked?"disabled":""}><option value="M" ${a.sexe==="M"?"selected":""}>M</option><option value="F" ${a.sexe==="F"?"selected":""}>F</option></select></label>
+            </div>
+          </fieldset>
+          <fieldset class="rh-op-box rh-op-emergency">
+            <legend>Informations en cas de problèmes</legend>
+            <label><span>Nom du contact</span><input class="input" name="contactUrgenceNom" value="${escapeHTML(a.contactUrgenceNom||"")}" ${locked?"disabled":""}/></label>
+            <label><span>Relation avec le contact</span><input class="input" name="contactUrgenceLien" value="${escapeHTML(a.contactUrgenceLien||"")}" ${locked?"disabled":""}/></label>
+            <label><span>Téléphone du contact</span><input class="input" name="contactUrgenceTel" value="${escapeHTML(a.contactUrgenceTel||"")}" inputmode="tel" ${locked?"disabled":""}/></label>
+            <label class="rh-op-note"><span>Note spécifiques</span><textarea class="input" name="noteUrgence" rows="5" ${locked?"disabled":""}>${escapeHTML(a.noteUrgence||"")}</textarea></label>
+          </fieldset>
+          <fieldset class="rh-op-box rh-op-family">
+            <legend>Statut de la famille</legend>
+            <div class="rh-op-family-head">
+              <label><span>Situation familiale</span><select class="select" name="situation" ${locked?"disabled":""}>${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${a.situation===s?"selected":""}>${s}</option>`).join("")}</select></label>
+              <label><span>Genre</span><select class="select" name="genreFamille" ${locked?"disabled":""}>${["","Conjoint(e)","Parent","Autre"].map(g=>`<option value="${escapeHTML(g)}" ${(a.genreFamille||"")===g?"selected":""}>${g?escapeHTML(g):"—"}</option>`).join("")}</select></label>
+              <label><span>Nombre d'enfant</span><input class="input" type="number" min="0" name="nombreEnfants" value="${escapeHTML(a.nombreEnfants??a.children_count??0)}" ${locked?"disabled":""}/></label>
+            </div>
+            <table class="rh-op-family-table"><thead><tr><th>Nom</th><th>Prénom</th><th>Date de naissance</th><th>Âge</th><th>Commentaire</th></tr></thead><tbody>
+              <tr><td colspan="5"><button type="button" class="rh-op-add-line" disabled>Ajouter une ligne</button></td></tr>
+              ${Array.from({length:4}).map(()=>`<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>`).join("")}
+            </tbody></table>
+          </fieldset>
+        </div>
+      </div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="coordonnees" style="display:none"><div class="section-banner banner-blue">Coordonnées / urgence</div><div class="grid grid-6">
         <div class="col-span-2"><label class="label">Téléphone</label><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Email</label><input class="input" name="email" value="${escapeHTML(a.email||"")}" ${locked?"disabled":""}/></div>
@@ -11338,6 +11377,27 @@ function renderAgentForm(view,id){
       ${locked?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="sticky bottom-0 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="submit" class="btn btn-primary">Enregistrer les modifications</button></div>`}
     </form>
   </div>`;
+  setTimeout(bindAgentDuplicateFieldSync,0);
+}
+
+function syncAgentFormField(el){
+  if(!el||!el.name)return;
+  const form=el.closest("form");
+  if(!form)return;
+  form.querySelectorAll(`[name="${CSS.escape(el.name)}"]`).forEach(other=>{
+    if(other===el||other.disabled)return;
+    other.value=el.value;
+  });
+}
+function bindAgentDuplicateFieldSync(){
+  const form=document.getElementById("agent-form");
+  if(!form)return;
+  ["telephone","email","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","banque"].forEach(name=>{
+    form.querySelectorAll(`[name="${CSS.escape(name)}"]`).forEach(el=>{
+      el.addEventListener("input",()=>syncAgentFormField(el));
+      el.addEventListener("change",()=>syncAgentFormField(el));
+    });
+  });
 }
 
 function fichePositionSwitchTab(key){
@@ -11933,7 +11993,7 @@ async function saveAgent(id,options){
   if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()){toast("Fiche officielle verrouillée : modification impossible","error");return false}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
   const draft={...a,habilitations:{...(a.habilitations||{})}};
-  ["nom","prenom","dateNaissance","lieuNaissance","sexe","situation","nomPere","nomMere","nin","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
+  ["nom","prenom","dateNaissance","lieuNaissance","sexe","situation","nomPere","nomMere","nin","nationalite","civilite","numeroPasseport","noteUrgence","nombreEnfants","genreFamille","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
   draft.dureeContrat=employeePositionContractDuration(draft);
   if(draft.dateRecrutement)draft.dateFinContrat=contractEndDate(draft.dateRecrutement,draft.dureeContrat);
   if(fd.get("photo")!==undefined)draft.photo=fd.get("photo")||null;
