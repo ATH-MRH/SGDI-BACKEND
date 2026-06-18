@@ -3743,9 +3743,10 @@ function sgdiErpModuleCounters(module,scopeSoc){
   return sgdiErpStatsForScope(scopeSoc)?.[module]||null;
 }
 function materialPendingDotationCountForSoc(scopeSoc){
-  const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
-  const value=erpEmp?.without_equipment??erpEmp?.sans_dotation??erpEmp?.without_dotation;
-  return Number.isFinite(Number(value))?Number(value):agentsEnInstanceDotationForSoc(scopeSoc).length;
+  // Les stats serveur (without_equipment) ne lisent que la table EmployeeEquipment SQL
+  // et ignorent les dotations enregistrées en JSON (stockMouvements). On utilise
+  // toujours le calcul local pour avoir un chiffre cohérent avec la carte OPS.
+  return agentsEnInstanceDotationForSoc(scopeSoc).length;
 }
 function opsSitesActiveCount(){
   const ops=window.SGDI_SIDEBAR_STATS?.erp?.ops||window.SGDI_SIDEBAR_STATS?.ops?.sites||{};
@@ -17534,6 +17535,15 @@ function syncMaterialDotationsToEmployeesFromMovements(){
     const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId)||String(a.backendId||"")===String(m.articleId));
     syncMaterialDotationToEmployee(agent,m,article);
   });
+  // Met à jour la carte OPS dashboard et le bandeau si ouverts
+  requestAnimationFrame(()=>{
+    const card=document.getElementById("ops-dot-card-count");
+    if(card){
+      const soc=typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"";
+      card.textContent=agentsEnInstanceDotationForSoc(soc).length;
+    }
+    try{refreshModuleCountersRibbon();}catch(_){}
+  });
 }
 
 function syncLegacyMaterielFromStockMouvements(){
@@ -25536,7 +25546,7 @@ function renderOPS(view,sub,arg){
   <div class="grid grid-5 mb-6">
     <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif opérationnel</h3></div><div class="text-4xl font-bold">${affectes.length}</div><div class="text-xs text-slate-500 mt-1">${actifs.length} actif(s) · affectés</div></a>
     <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${instanceAffectation.length}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
-    <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotation.length?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div class="text-4xl font-bold text-red-700">${instanceDotation.length}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
+    <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotation.length?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div id="ops-dot-card-count" class="text-4xl font-bold text-red-700">${instanceDotation.length}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${sitesActifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
     <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position</h3></div><div class="text-4xl font-bold">${ag.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir toutes les fiches</div></a>
   </div>
