@@ -25324,20 +25324,20 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
   const saved=results.filter(r=>r.status==="fulfilled").map(r=>r.value);
   const ok=saved.length,fail=agentIds.length-ok;
   // 2. Mise à jour locale immédiate de db.agents (sans appel API par agent)
-  const fd=new FormData(form);
-  const siteId=String(fd.get("siteId")||"");
-  const site=opsFindSite(siteId);
-  if(site){
-    for(const {aid,patch} of saved){
-      const a=opsFindEmployee(aid);if(!a)continue;
-      const liveAff=agentLiveAffectation(a);
-      if(liveAff?.siteId&&liveAff.siteId!==siteId){
-        a.affectationsHistorique=a.affectationsHistorique||[];
-        a.affectationsHistorique.push({...liveAff,dateFin:date,motifChangement:patch.mouvementMotif||"Ordre de mouvement"});
-      }
-      a.affectationCourante={...(a.affectationCourante||{}),siteId:site.id,siteName:site.nom||"",clientName:site.client||"",poste:a.affectationCourante?.poste||a.fonction||a.position||"",horaire:a.affectationCourante?.horaire||"Mixte",dateDebut:date,natureMouvement:patch.mouvementMotif||"Affectation"};
-      addEmployeeCareerEvent(a,"Affectation",{date,motif:(patch.mouvementMotif||"Affectation")+" vers "+(site.nom||"site"),source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||""});
+  for(const {aid,patch} of saved){
+    const a=opsFindEmployee(aid);if(!a)continue;
+    const resolvedSite=opsFindSite(patch.siteId)||opsFindSite(patch.siteBackendId)||null;
+    const resolvedSiteId=resolvedSite?.id||patch.siteId||"";
+    const resolvedSiteName=resolvedSite?.nom||resolvedSite?.intitule||patch.siteName||"";
+    const resolvedClientName=resolvedSite?.client||patch.clientName||"";
+    if(!resolvedSiteId&&!resolvedSiteName)continue;
+    const liveAff=agentLiveAffectation(a);
+    if(liveAff?.siteId&&liveAff.siteId!==resolvedSiteId){
+      a.affectationsHistorique=a.affectationsHistorique||[];
+      a.affectationsHistorique.push({...liveAff,dateFin:date,motifChangement:patch.mouvementMotif||"Ordre de mouvement"});
     }
+    a.affectationCourante={...(a.affectationCourante||{}),siteId:resolvedSiteId,siteName:resolvedSiteName,clientName:resolvedClientName,poste:a.affectationCourante?.poste||a.fonction||a.position||"",horaire:a.affectationCourante?.horaire||"Mixte",dateDebut:date,natureMouvement:patch.mouvementMotif||"Affectation"};
+    addEmployeeCareerEvent(a,"Affectation",{date,motif:(patch.mouvementMotif||"Affectation")+" vers "+(resolvedSiteName||"site"),source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||""});
   }
   // 3. Feedback immédiat + re-render local
   updateOmSaveOverlay(ok+" OM enregistré(s)",true);
@@ -25345,11 +25345,17 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
   else toast(ok+" ordre(s) de mouvement validé(s)","success");
   setTimeout(closeOmSaveOverlay,1800);
   renderView();
-  // 4. Sauvegarde unique + sync en arrière-plan
+  // 4. Sync SQL en arrière-plan : crée les affectations PostgreSQL pour chaque agent
   window._sgdiSilentRibbon=true;
-  saveDB().catch(()=>null).finally(()=>{
-    sgdiPullState({silent:true}).catch(()=>null).finally(()=>{window._sgdiSilentRibbon=false;renderView();});
-  });
+  (async()=>{
+    try{
+      await sgdiPullState({silent:true});
+      for(const {aid,patch} of saved){
+        try{await fpqApplyMovementAffectation(date,aid,patch);}catch(e){console.warn("Affectation SQL agent",aid,e);}
+      }
+    }catch(e){console.warn("Sync multi-OM background:",e);}
+    finally{window._sgdiSilentRibbon=false;renderView();}
+  })();
 }
 function opsMovementGroupHTML(title,rows,field){
   const map=new Map();
@@ -26219,7 +26225,7 @@ function fpqOpenMouvement(date,agentId){
 function fpqMovementPatchFromForm(date,agentId,form){
   const fd=new FormData(form);
   const siteId=fd.get("siteId")||"";
-  const s=(db.sites||[]).find(x=>x.id===siteId);
+  const s=(db.sites||[]).find(x=>x.id===siteId||String(x.backendId||"")===String(siteId));
   const agent=(db.agents||[]).find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
   const autreAffectation=(fd.get("autreAffectation")||"").trim();
   const f=fpqEnsure(date,agentId);
