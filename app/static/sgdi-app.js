@@ -25356,7 +25356,7 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
         try{await fpqApplyMovementAffectation(date,aid,patch);}catch(e){console.warn("Affectation SQL agent",aid,e);}
       }
     }catch(e){console.warn("Sync multi-OM background:",e);}
-    finally{window._sgdiSilentRibbon=false;renderView();}
+    finally{window._sgdiSilentRibbon=false;sgdiRefreshCountersNow({reason:"multi-om"});}
   })();
 }
 function opsMovementGroupHTML(title,rows,field){
