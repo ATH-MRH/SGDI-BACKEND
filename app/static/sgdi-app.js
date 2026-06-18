@@ -25459,13 +25459,6 @@ function _renderOpsMouvementsHTML(view){
     </div>
   </div>
   ${opsMovementEditorHTML(today(),selectedMovementAgent,agents)}
-  <div class="grid grid-5 mb-5">
-    <div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Jour</div><div class="text-3xl font-black mt-1" style="color:#047857">${count("day")}</div></div>
-    <div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Semaine</div><div class="text-3xl font-black mt-1" style="color:#0ea5e9">${count("week")}</div></div>
-    <div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Mois</div><div class="text-3xl font-black mt-1" style="color:#043970">${count("month")}</div></div>
-    <div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Année</div><div class="text-3xl font-black mt-1" style="color:#7c3aed">${count("year")}</div></div>
-    <div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Résultat filtré</div><div class="text-3xl font-black mt-1" style="color:#111827">${rows.length}</div></div>
-  </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">${opsMovementSitesReferenceHTML(soc,rows)}${opsMovementGroupHTML("Par client",rows,opsMovementClientLabel)}</div>
   <div class="card overflow-hidden">
     <div class="flex items-center justify-between gap-3 p-4 flex-wrap" style="border-bottom:1px solid #e2e8f0;background:#fff">
