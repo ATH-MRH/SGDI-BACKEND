@@ -11246,7 +11246,7 @@ function renderAgentForm(view,id){
     ${drhTopActions}
     <div class="rh-erp-toolbar">
       <div class="rh-erp-title"><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
-      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div>
+      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div>
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
