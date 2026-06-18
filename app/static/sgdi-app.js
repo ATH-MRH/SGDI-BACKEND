@@ -562,7 +562,8 @@ async function sgdiPullState(options){
       }
       const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
       if(typeof normalizePostesInDB==="function")normalizePostesInDB();
-      try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=[...new Set(pr.map(p=>p.name||p))]}catch(_){}
+      const refreshPositions=async()=>{try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=[...new Set(pr.map(p=>p.name||p))]}catch(_){}};
+      if(opt.deferSql||opt.deferSecondary)setTimeout(refreshPositions,80);else await refreshPositions();
       const pruned=pruneEmptyCandidates();
       if(purged||pruned)sgdiBackendSave();
       if(opt.render&&typeof render==="function")render();
@@ -2748,8 +2749,8 @@ async function login(u,p,opt={}){
       const authUser=us?.user||us;
       session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
       saveSession(session);
-      setLoginBusy(true,"Chargement des données...");
-      const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
+      setLoginBusy(true,"Chargement de l'espace...");
+      const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true,deferSecondary:true}).catch(()=>null);
       if(!loaded){
         sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
         saveSession(null);
@@ -27337,6 +27338,15 @@ async function bootApp(){
   sgdiPurgeBrowserBusinessStorage();
   db=loadDB();
   session=loadSession();
+  const initialHash=String(location.hash||"");
+  if(/^#\/?login(?:$|[/?#])/.test(initialHash)){
+    sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+    session=null;
+    saveSession(null);
+    unlockedAgents=loadUnlocked();
+    renderLogin();
+    return;
+  }
   if(session&&isRemovedSociete(session.societe)){session.societe=null;saveSession(session)}
   if(session&&!sgdiAuthToken()){
     session=null;
