@@ -11231,26 +11231,26 @@ function renderAgentForm(view,id){
   const ficheTopButtonStyle="height:40px;min-width:116px;padding:0 14px;border-radius:0!important;border:1px solid #d7dde8!important;background:linear-gradient(180deg,#ffffff,#eef4fb)!important;color:#082a53!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 3px 9px rgba(15,23,42,.08)!important;font-size:12px!important;font-weight:950!important;letter-spacing:.01em!important;line-height:1.08!important;text-align:center!important;justify-content:center!important";
   view.innerHTML=`<div class="max-w-none mx-auto">
     ${drhTopActions}
-    <div class="mb-4 items-start" style="display:grid;grid-template-columns:228px minmax(0,1fr);gap:20px;min-height:252px">
-      <div style="display:flex;justify-content:flex-start">
-        <div class="flex items-center justify-center overflow-hidden mb-2" style="width:203px;height:252px;border-radius:20px;background:#fff;color:#b7b7b7;font-family:Arial,Helvetica,sans-serif;font-size:24px;font-weight:500">${a.photo?`<img src="${a.photo}" class="w-full h-full object-cover"/>`:"Photo"}</div>
+    <div style="background:#fff;border:1px solid #dbe4ef;border-radius:12px;padding:20px 24px;margin-bottom:12px;display:flex;gap:0;align-items:stretch;min-height:210px">
+      <div style="display:flex;gap:20px;align-items:center;flex:1;min-width:0">
+        <div class="flex items-center justify-center overflow-hidden flex-shrink-0" style="width:160px;height:210px;border-radius:16px;background:#f1f5f9;color:#b7b7b7;font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:500">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;display:block"/>`:"Photo"}</div>
+        <div style="display:flex;flex-direction:column;gap:7px;font-family:Arial,Helvetica,sans-serif">
+          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Code :</span><span style="color:${codeColor};font-weight:900;font-size:18px;letter-spacing:.05em">${safe(a.matricule)||"—"}</span></div>
+          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Nom Prénom :</span><span style="color:#043970;font-weight:900;font-size:20px">${escapeHTML(a.nom+" "+a.prenom)}</span></div>
+          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Telephone :</span><span style="color:#043970;font-weight:700;font-size:16px">${safe(a.telephone)||"—"}</span></div>
+          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Age :</span><span style="color:#043970;font-weight:700;font-size:16px">${agentAge!==null?agentAge+" ans":"—"}</span></div>
+          <div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:11px;color:#64748b;font-weight:700;min-width:88px;text-align:right">Recrutement :</span><span style="color:#043970;font-weight:700;font-size:16px">${formatDate(a.dateRecrutement)}${anciennete&&anciennete!=="—"?` <span style="font-size:13px;color:#64748b">(${anciennete})</span>`:""}</span></div>
+        </div>
       </div>
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:27px;font-weight:900;line-height:1.38;color:#0f172a;margin-top:47px;padding-top:0;align-self:start;display:grid;grid-template-columns:100px 390px 130px 420px;column-gap:14px;row-gap:1px;align-items:baseline;justify-content:start">
-        <span style="font-size:11px;text-align:right;font-weight:900">Nom Prénom :</span><span style="color:#043970">${escapeHTML(a.nom+" "+a.prenom)}</span>
-        <span style="font-size:11px;text-align:right;font-weight:900">Affectation :</span><span style="color:#043970">${escapeHTML(aff.siteName||"Sans affectation")}</span>
-        <span style="font-size:11px;text-align:right;font-weight:900">Code :</span><span style="color:${codeColor};letter-spacing:.05em">${safe(a.matricule)}</span>
-        <span></span><span></span>
-        <span style="font-size:11px;text-align:right;font-weight:900">Telephone :</span><span style="color:#043970">${safe(a.telephone)||"—"}</span>
-        <span></span><span></span>
-        <span style="font-size:11px;text-align:right;font-weight:900">Age :</span><span style="color:#043970">${agentAge!==null?agentAge+" ans":"—"}</span>
-        <span></span><span></span>
-        <span style="font-size:11px;text-align:right;font-weight:900">Recrutement :</span><span><span style="color:#043970">${formatDate(a.dateRecrutement)}</span>${anciennete&&anciennete!=="—"?` <span style="font-size:24px;color:#475569">(${anciennete})</span>`:""}</span>
-        <span style="font-size:11px;text-align:right;font-weight:900">Fin de contrat :</span><span style="color:${finContratColor};font-weight:900">${ficheContractEndDate?`${formatDate(ficheContractEndDate)}${finContratBadge}`:"—"}</span>
+      <div style="width:1px;background:#dbe4ef;margin:0 24px;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;font-family:Arial,Helvetica,sans-serif;justify-content:space-between">
+        <div><div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:4px">Affectation :</div><div style="color:#043970;font-weight:900;font-size:22px;line-height:1.25">${escapeHTML(aff.siteName||"Sans affectation")}</div></div>
+        <div><div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:4px">Fin de contrat :</div><div style="font-weight:900;font-size:20px;color:${finContratColor}">${ficheContractEndDate?`${formatDate(ficheContractEndDate)}${finContratBadge}`:"—"}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${essaiBadge}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div>
       </div>
     </div>
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div class="flex items-center gap-2 flex-wrap">${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}</div>
-      <div class="flex gap-2 items-start flex-wrap justify-end">${essaiBadge}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button>${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div>
+    <div class="flex items-center mb-4 flex-wrap gap-2">
+      ${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}
     </div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${isMaterielFicheContext()?"":renderAgentDemandesSection(a)}
