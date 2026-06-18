@@ -11262,7 +11262,7 @@ function renderAgentForm(view,id){
         <div class="rh-erp-field"><b>Catégorie</b><span>${safe(a.fonction||a.position||a.posteContrat)||"—"}</span></div>
       </div>
       <div class="rh-erp-side">
-        <div><div class="rh-erp-side-label">Affectation</div><div class="rh-erp-side-value">${escapeHTML(aff.siteName||"Sans affectation")}</div></div>
+        <div><div class="rh-erp-side-label">Affectation</div><div class="rh-erp-side-value" style="color:#047857">${escapeHTML(aff.siteName||"Sans affectation")}</div></div>
         <div><div class="rh-erp-side-label">Fin de contrat</div><div class="rh-erp-side-value" style="color:${finContratColor}">${ficheContractEndDate?`${formatDate(ficheContractEndDate)}${finContratBadge}`:"—"}</div></div>
         ${essaiBadge?`<div>${essaiBadge}</div>`:""}
       </div>
