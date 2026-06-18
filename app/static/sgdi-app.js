@@ -3780,7 +3780,7 @@ function agentLiveAffectation(a){
 }
 function agentHasLiveAffectation(a){
   const aff=agentLiveAffectation(a);
-  return !!(aff&&aff.siteId);
+  return !!(aff&&(aff.siteId||aff.siteName));
 }
 function agentIsOperational(a){
   return String(a?.statut||"").toLowerCase()==="actif"&&agentHasLiveAffectation(a);
@@ -25258,6 +25258,7 @@ function opsMovementEditorHTML(date,agentId,agents){
       <div data-autres-affectation style="display:none"><label class="label">Préciser autre affectation</label><input class="input" name="autreAffectation" value="" placeholder="Préciser l'affectation"/></div>
       <div><label class="label">Motif du mouvement</label><select class="select" name="mouvementMotif" onchange="const box=this.form.querySelector('[data-remplace-agent]');const lbl=this.form.querySelector('[data-remplace-label]');const show=['Remplacement Absence','Remplacement Malade','Remplacement Abandon de poste'].includes(this.value);if(box)box.style.display=show?'block':'none';if(lbl)lbl.textContent=this.value==='Remplacement Malade'?'Employé malade':(this.value==='Remplacement Abandon de poste'?'Employé en abandon de poste':'Employé absent')">${motifs.map(x=>`<option>${x}</option>`).join("")}</select></div>
       <div><label class="label">Durée du mouvement</label><select class="select" name="mouvementDuree">${durees.map(x=>`<option>${x}</option>`).join("")}</select></div>
+      <div><label class="label">Groupe</label><select class="select" name="groupe"><option value="">— Groupe —</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
       <div data-remplace-agent style="display:none"><label class="label" data-remplace-label>Employé absent</label><select class="select" name="remplaceAgentId"><option value="">— Choisir l'employé concerné —</option>${remplacementAgents.map(x=>`<option value="${x.id}">${escapeHTML((x.matricule?x.matricule+" · ":"")+(x.nom||"")+" "+(x.prenom||""))}</option>`).join("")}</select></div>
       <div class="md:col-span-3"><label class="label">Observation</label><textarea class="input" name="mouvementObs" rows="3" placeholder="Observation du mouvement..."></textarea></div>
     </div>
@@ -25349,6 +25350,7 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
   window._sgdiSilentRibbon=true;
   (async()=>{
     try{
+      await saveDB();
       await sgdiPullState({silent:true});
       for(const {aid,patch} of saved){
         try{await fpqApplyMovementAffectation(date,aid,patch);}catch(e){console.warn("Affectation SQL agent",aid,e);}
@@ -26233,7 +26235,7 @@ function fpqMovementPatchFromForm(date,agentId,form){
   const remplaceAgentId=fpqNeedsRemplaceAgent(motif)?(fd.get("remplaceAgentId")||""):"";
   const remplaceAgent=(db.agents||[]).find(x=>x.id===remplaceAgentId);
   const remplaceAgentName=remplaceAgent?((remplaceAgent.nom||"")+" "+(remplaceAgent.prenom||"")).trim():"";
-  const patch={employee_id:agent?.backendId||sqlBackendId(agentId)||null,agentBackendId:agent?.backendId||null,matricule:agent?.matricule||"",ordreMouvementNumero:fd.get("ordreMouvementNumero")||f.ordreMouvementNumero||nextOrdreMouvementNumero(),positionActuelle:fd.get("positionActuelle")||"",siteId,siteBackendId:s?.backendId||null,siteName:siteId==="autres"?(autreAffectation||"Autres"):(s?(s.nom||s.intitule||""):""),societe:f.societe||s?.societe||agent?.societe||"",autreAffectation:siteId==="autres"?autreAffectation:"",mouvementMotif:motif,mouvementType:motif,mouvementDuree:fd.get("mouvementDuree")||"",remplaceAgentId,remplaceAgentName,remplaceAgentCode:remplaceAgent?.matricule||"",absentAgentId:motif==="Remplacement Absence"?remplaceAgentId:"",absentAgentName:motif==="Remplacement Absence"?remplaceAgentName:"",maladeAgentId:motif==="Remplacement Malade"?remplaceAgentId:"",maladeAgentName:motif==="Remplacement Malade"?remplaceAgentName:"",abandonAgentId:motif==="Remplacement Abandon de poste"?remplaceAgentId:"",abandonEmployeCode:motif==="Remplacement Abandon de poste"?(remplaceAgent?.matricule||""):"",mouvementObs:fd.get("mouvementObs")||"",siteManual:true};
+  const patch={employee_id:agent?.backendId||sqlBackendId(agentId)||null,agentBackendId:agent?.backendId||null,matricule:agent?.matricule||"",ordreMouvementNumero:fd.get("ordreMouvementNumero")||f.ordreMouvementNumero||nextOrdreMouvementNumero(),positionActuelle:fd.get("positionActuelle")||"",siteId,siteBackendId:s?.backendId||null,siteName:siteId==="autres"?(autreAffectation||"Autres"):(s?(s.nom||s.intitule||""):""),societe:f.societe||s?.societe||agent?.societe||"",autreAffectation:siteId==="autres"?autreAffectation:"",mouvementMotif:motif,mouvementType:motif,mouvementDuree:fd.get("mouvementDuree")||"",groupe:fd.get("groupe")||"",remplaceAgentId,remplaceAgentName,remplaceAgentCode:remplaceAgent?.matricule||"",absentAgentId:motif==="Remplacement Absence"?remplaceAgentId:"",absentAgentName:motif==="Remplacement Absence"?remplaceAgentName:"",maladeAgentId:motif==="Remplacement Malade"?remplaceAgentId:"",maladeAgentName:motif==="Remplacement Malade"?remplaceAgentName:"",abandonAgentId:motif==="Remplacement Abandon de poste"?remplaceAgentId:"",abandonEmployeCode:motif==="Remplacement Abandon de poste"?(remplaceAgent?.matricule||""):"",mouvementObs:fd.get("mouvementObs")||"",siteManual:true};
   patch.mouvementNumero=patch.ordreMouvementNumero;
   return {f,patch};
 }
