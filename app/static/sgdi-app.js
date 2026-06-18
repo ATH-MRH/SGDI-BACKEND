@@ -25208,19 +25208,30 @@ function opsMovementEditorHTML(date,agentId,agents){
   const sites=movementSitesForSociete(siteSociete);
   const remplacementAgents=(db.agents||[]).filter(x=>!siteSociete||normalizeSocieteName(x.societe)===normalizeSocieteName(siteSociete)).sort((x,y)=>((x.nom||"")+" "+(x.prenom||"")).localeCompare((y.nom||"")+" "+(y.prenom||"")));
   const numeroOrdre=nextOrdreMouvementNumero();
-  const nonAffectes=agents.filter(a=>!agentLiveAffectation(a)?.siteId);
-  const affectes=agents.filter(a=>!!agentLiveAffectation(a)?.siteId);
+  // Pré-calcul unique des affectations : un seul scan opsMovementRows() pour toute la liste
+  const _mvtRows=opsMovementRows();
+  const _affMap=new Map();
+  agents.forEach(a=>{
+    const refs=new Set([a.id,a.backendId,a.matricule,a.code].map(v=>String(v||"").trim()).filter(Boolean));
+    const latest=_mvtRows.filter(f=>(refs.has(String(f.agentId||"").trim())||refs.has(String(f.agentBackendId||"").trim())||refs.has(String(f.matricule||"").trim())||refs.has(String(f.employee_id||"").trim()))&&(f.siteId||f.siteName||f.autreAffectation)).sort((x,y)=>String(opsMovementDateValue(y)||"").localeCompare(String(opsMovementDateValue(x)||"")))[0]||null;
+    const current=a?.affectationCourante||{};
+    let aff=current;
+    if(latest){const site=latest._site||(db.sites||[]).find(s=>String(s.id)===String(latest.siteId)||String(s.backendId||"")===String(latest.siteBackendId||""));const latestDate=opsMovementDateValue(latest)||"";const currentDate=String(current.dateDebut||"").slice(0,10);if(!current.siteName&&!current.siteId||latestDate&&(!currentDate||latestDate>=currentDate))aff={...current,siteId:site?.id||latest.siteId||current.siteId||"",siteName:site?.nom||site?.intitule||latest.siteName||latest.autreAffectation||current.siteName||"",clientName:site?.client||latest.clientName||current.clientName||"",groupe:latest.groupe||current.groupe||"",dateDebut:latestDate||current.dateDebut||""};}
+    _affMap.set(a.id,aff);
+  });
+  const nonAffectes=agents.filter(a=>{const aff=_affMap.get(a.id)||{};return!(aff.siteId||aff.siteName);});
+  const affectes=agents.filter(a=>{const aff=_affMap.get(a.id)||{};return!!(aff.siteId||aff.siteName);});
   const mkRow=a=>{
-    const aff=agentLiveAffectation(a)||{};
+    const aff=_affMap.get(a.id)||{};
     const isChecked=agentId&&(String(a.id)===String(agentId)||String(a.backendId||"")===String(agentId)||String(a.matricule||"")===String(agentId));
     const poste=aff.poste||a.fonction||a.position||a.posteContrat||"";
-    const affecte=!!aff.siteId;
+    const affecte=!!(aff.siteId||aff.siteName);
     const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
     const mat=escapeHTML(a.matricule||"—");
     const siteLbl=escapeHTML(aff.siteName||"Non affecté");
     const posteHTML=poste?(' · <b style="color:#0369a1;font-weight:600">'+escapeHTML(poste)+'</b>'):'';
     const siteStyle=affecte?'color:#15803d;font-weight:600':'color:#94a3b8';
-    return '<label class="ops-mvt-agent-row" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer" onmouseenter="this.style.background=\'#f8fafc\'" onmouseleave="this.style.background=\'\'">'
+    return '<label class="ops-mvt-agent-row">'
       +'<input type="checkbox" class="ops-mvt-agent-cb" value="'+escapeHTML(a.id)+'" '+(isChecked?'checked ':'')+' onchange="opsMovementCbChange()" style="width:16px;height:16px;min-width:16px;cursor:pointer;accent-color:#0369a1"/>'
       +'<span style="flex:1;font-size:13px;line-height:1.4">'
       +'<b>'+nom+'</b>'

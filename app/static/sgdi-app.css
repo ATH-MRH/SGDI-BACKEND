@@ -5247,3 +5247,7 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
   text-align:center!important;
   white-space:nowrap!important;
 }
+
+/* Mouvement — liste agents : hover géré par CSS pour éviter le layout thrashing au scroll */
+.ops-mvt-agent-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;}
+.ops-mvt-agent-row:hover{background:#f8fafc;}
