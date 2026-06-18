@@ -10053,8 +10053,8 @@ function drhEmployeeActionLabels(includeDetail=true){
 function employeeFicheRhActionsHTML(a){
   if(!a||!canUseEmployeeActionWorkflows())return `<div class="text-sm text-slate-500">Aucune action disponible depuis ce module.</div>`;
   const labels=isOpsFicheContext()?opsEmployeeActionLabels():drhEmployeeActionLabels(true);
-  const btnStyle="height:40px;min-width:0;padding:0 12px;border-radius:0!important;border:1px solid #d7dde8!important;background:linear-gradient(180deg,#ffffff,#eef4fb)!important;color:#082a53!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 3px 9px rgba(15,23,42,.08)!important;font-size:clamp(10px,.78vw,12px)!important;font-weight:950!important;letter-spacing:.01em!important;line-height:1.08!important;text-align:center!important;white-space:normal!important;overflow-wrap:anywhere!important;word-break:normal!important";
-  return `<div class="grid mb-4" style="grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:10px">
+  const btnStyle="height:34px;flex:1 1 0;min-width:0;padding:0 7px;border-radius:0!important;border:1px solid #d7dde8!important;background:linear-gradient(180deg,#ffffff,#eef4fb)!important;color:#082a53!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 2px 6px rgba(15,23,42,.07)!important;font-size:clamp(8.5px,.64vw,10.5px)!important;font-weight:950!important;letter-spacing:0!important;line-height:1.05!important;text-align:center!important;white-space:normal!important;overflow-wrap:normal!important;word-break:normal!important";
+  return `<div class="mb-4" style="display:flex;flex-wrap:nowrap;gap:6px;width:100%;overflow-x:auto;padding-bottom:2px">
     ${labels.map(([k,l])=>`<button type="button" class="btn justify-center relative" style="${btnStyle}" onclick="runRhEffectifAction('${k}','${escapeHTML(a.id)}')">${l}</button>`).join("")}
   </div>`;
 }
