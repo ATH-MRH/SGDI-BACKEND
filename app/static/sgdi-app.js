@@ -4877,6 +4877,7 @@ function renderSidebar(){
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"SITES",route:"sites/actifs",aliases:["sites"]},
         {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"]},
+        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length||null},
         {label:"OPS",route:"ops/dashboard",aliases:["ops"],gapBefore:true},
         {label:"FINANCES",route:"facturation/dashboard",aliases:["facturation"]},
         {label:"COMMERCIAL",route:"commercial/dashboard",aliases:["commercial"]},
@@ -25420,7 +25421,7 @@ async function renderOpsMouvements(view){
     if(needsSync){
       try{
         await ensureOpsMovementSqlSync();
-        if(document.body.contains(view)){
+        if(document.body.contains(view)&&/ops\/mouvements/.test(location.hash)){
           // Ne pas re-rendre si le formulaire OM est ouvert (protège le scroll et l'état du formulaire)
           const formOpen=!!view.querySelector('[data-ops-movement-form]');
           if(formOpen)sgdiRefreshCountersNow({reason:"mvt-sync"});
