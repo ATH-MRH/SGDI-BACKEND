@@ -11282,7 +11282,6 @@ function renderAgentForm(view,id){
         ${a.blacklist?`<div class="card p-3 mb-3" style="background:#1f2937;color:#fff;border:2px solid #000"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex items-center gap-2"><div style="font-size:24px">⛔</div><div><div class="text-xs uppercase tracking-wider font-black" style="color:#f87171">⛔ BLACK LIST</div><div class="text-xs">Inscrit le ${a.blacklistAt?new Date(a.blacklistAt).toLocaleDateString("fr-FR"):"?"} par <strong>${escapeHTML(a.blacklistBy||"?")}</strong></div>${a.blacklistMotif?`<div class="text-xs italic mt-1">Motif : ${escapeHTML(a.blacklistMotif)}</div>`:""}</div></div>${adminFicheContext?`<button type="button" class="btn btn-secondary text-xs" onclick="removeBlackList('${a.id}')">↩ Retirer de la black list</button>`:""}</div></div>`:""}
         <div class="flex items-center justify-between gap-3 flex-wrap mb-3"><h3 class="text-sm font-black uppercase tracking-wider text-slate-700">Actions à faire</h3><span class="text-xs text-slate-500">${locked?"Fiche en lecture seule · actions RH autorisées":"Administration système"}</span></div>
         ${employeeFicheRhActionsHTML(a)}
-        ${renderGestionHistorique(a)}
       </div>
       <div class="fp-tabs rh-erp-tabs">
         ${fpTabs.map(([k,l],i)=>`<button type="button" data-fp-tab="${k}" class="${i===0?"is-active":""}" onclick="fichePositionSwitchTab('${k}')">${l}</button>`).join("")}
