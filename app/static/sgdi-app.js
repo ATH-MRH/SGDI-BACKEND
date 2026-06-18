@@ -11253,12 +11253,12 @@ function renderAgentForm(view,id){
       <div class="rh-erp-photo">${a.photo?`<img src="${a.photo}" alt="">`:"Photo"}</div>
       <div class="rh-erp-fields">
         <div class="rh-erp-field"><b>Code</b><span style="color:${codeColor};font-weight:950">${safe(a.matricule)||"—"}</span></div>
-        <div class="rh-erp-field"><b>Âge</b><span>${agentAge!==null?agentAge+" ans":"—"}</span></div>
+        <div class="rh-erp-field"><b>Recrutement</b><span>${formatDate(a.dateRecrutement)}${anciennete&&anciennete!=="—"?` (${anciennete})`:""}</span></div>
         <div class="rh-erp-field"><b>Prénom</b><span>${escapeHTML(a.prenom||"—")}</span></div>
         <div class="rh-erp-field"><b>Téléphone</b><span>${safe(a.telephone)||"—"}</span></div>
         <div class="rh-erp-field"><b>Nom</b><span>${escapeHTML(a.nom||"—")}</span></div>
         <div class="rh-erp-field"><b>Société</b><span>${safe(a.societe)||"—"}</span></div>
-        <div class="rh-erp-field"><b>Recrutement</b><span>${formatDate(a.dateRecrutement)}${anciennete&&anciennete!=="—"?` (${anciennete})`:""}</span></div>
+        <div class="rh-erp-field"><b>Âge</b><span>${agentAge!==null?agentAge+" ans":"—"}</span></div>
         <div class="rh-erp-field"><b>Catégorie</b><span>${safe(a.fonction||a.position||a.posteContrat)||"—"}</span></div>
       </div>
       <div class="rh-erp-side">
