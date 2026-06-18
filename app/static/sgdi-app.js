@@ -16878,10 +16878,10 @@ async function renderMatSitesEnAttenteDotation(view){
     const sites=sitesEnAttenteDotationForSoc(soc);
     const actifs=(db.sites||[]).filter(s=>s&&s.actif!==false&&(!soc||siteMatchesSociete(s,soc)));
     const dotes=actifs.filter(siteHasDotationMateriel);
-    view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+    view.innerHTML=`${header}<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
     <div><h1 class="text-2xl font-bold" style="text-transform:uppercase">SITE EN ATTENTE DE DOTATION</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${soc?escapeHTML(soc):"Toutes les sociétés"} · Sites actifs sans dotation matériel/site enregistrée.</p></div>
     <div class="flex gap-2"><button class="btn btn-secondary text-sm" onclick="navigate('materiel/dashboard')">Tableau de bord</button></div>
-  </div>${header}
+  </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
     <div class="card p-4 ${sites.length?"ops-dot-counter-alert":""}"><div class="text-xs text-slate-500 uppercase">Sites en attente</div><div class="text-3xl font-black mt-1 text-red-700">${sites.length}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Sites dotés</div><div class="text-3xl font-black mt-1 text-emerald-700">${dotes.length}</div></div>
@@ -17437,6 +17437,7 @@ function dotationSelectPendingEmployee(id){
   toast("Employé sélectionné pour la dotation","success");
 }
 function renderMatSimpleDotation(view){
+  const header=matSimpleHeader("dotation");
   const soc=matSimpleSocFilter();
   const agentsPending=agentsEnInstanceDotationForSoc(soc);
   const agentOptions=agentsPending.slice().sort((a,b)=>`${a.nom||""} ${a.prenom||""}`.localeCompare(`${b.nom||""} ${b.prenom||""}`));
@@ -17446,7 +17447,7 @@ function renderMatSimpleDotation(view){
   const mags=dotationMagasinsForSoc(firstSoc);
   const realMagasins=matSimpleBySoc(db.magasins||[]);
   const lastAgent=selectedAgent?(db.agents||[]).find(a=>a.id===selectedAgent):null;
-  view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+  view.innerHTML=`${header}<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
     <div><h1 class="text-2xl font-black uppercase">NOUVELLE DOTATION</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes les sociétés"} · Dotation vers employé, site ou structure avec déduction automatique du magasin.</p></div>
     <div class="flex gap-2"><button class="btn btn-secondary text-sm" onclick="navigate('materiel/articles')">Articles</button><button class="btn btn-secondary text-sm" onclick="navigate('materiel/dashboard')">Tableau de bord</button><button class="btn btn-secondary text-sm" onclick="openBulkDotationModal(true)">Doter les non dotés</button><button class="btn btn-primary text-sm" onclick="openBulkDotationModal()">⚡ Doter en masse</button></div>
   </div>
@@ -17845,10 +17846,10 @@ function renderMatSimpleReversement(view){
   const soc=matSimpleSocFilter();
   const sortants=(db.agents||[]).filter(a=>isAgentSortant(a)&&(!soc||a.societe===soc));
   const totalValue=agents.reduce((s,a)=>s+agentReversementSituation(a.id).value,0);
-  view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
+  view.innerHTML=`${header}<div class="flex justify-between items-center mb-3 flex-wrap gap-2">
     <div><h1 class="text-2xl font-bold" style="text-transform:uppercase">ÉQUIPEMENT / MATÉRIEL EN INSTANCE DE REVERSEMENT</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${soc?escapeHTML(soc):"Toutes les sociétés"} · Tout employé sortant doit reverser l'ensemble de sa dotation</p></div>
     <div class="flex gap-2"><button class="btn btn-secondary text-sm" onclick="navigate('effectif/sortant')">Sortant</button><button class="btn btn-secondary text-sm" onclick="navigate('materiel/mouvements')">Mouvements</button></div>
-  </div>${header}
+  </div>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Employés à traiter</div><div class="text-3xl font-black mt-1 text-red-700">${agents.length}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Sortants total</div><div class="text-3xl font-black mt-1">${sortants.length}</div></div>
@@ -17988,13 +17989,13 @@ function renderMatSimpleInventaire(view){
     </tr>`).join("")||`<tr><td colspan="7" class="p-8 text-center text-slate-400">Aucun article dans l'inventaire.</td></tr>`}</tbody>
     <tfoot><tr style="background:#f8fafc;border-top:2px solid #cbd5e1"><td colspan="3" class="p-3 text-right font-bold">TOTAL</td><td class="p-3 text-center font-black text-emerald-700">${qty(totalStock)}</td><td class="p-3 text-center font-bold text-sky-700">+${qty(totalEntree)}</td><td class="p-3 text-center font-bold text-red-700">-${qty(totalSortie)}</td><td></td></tr></tfoot>
   </table></div>`;
-  view.innerHTML=titleBar+header+filters+kpi+magSummary+table;
+  view.innerHTML=header+titleBar+filters+kpi+magSummary+table;
 }
 
 function renderMatSimpleMouvements(view){
   const header=matSimpleHeader("mouvements");
   const body=renderStockMvtTab("all");
-  view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2"><div><h1 class="text-2xl font-bold">🔄 Mouvements stock</h1><p class="text-slate-500 text-sm">Historique général des entrées et sorties</p></div><div class="flex gap-2"><button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">📥 Nouvelle entrée</button><button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">📤 Nouvelle sortie</button></div></div>${header}${body}`;
+  view.innerHTML=`${header}<div class="flex justify-between items-center mb-3 flex-wrap gap-2"><div><h1 class="text-2xl font-bold">🔄 Mouvements stock</h1><p class="text-slate-500 text-sm">Historique général des entrées et sorties</p></div><div class="flex gap-2"><button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">📥 Nouvelle entrée</button><button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">📤 Nouvelle sortie</button></div></div>${body}`;
 }
 
 function serverItems(result){return result?.items||result?.data||[]}
@@ -18009,7 +18010,7 @@ async function renderMatSimpleArticlesServer(view){
   sgdiShowDataLoadingBar("Chargement des articles...");
   try{const result=await SGDI.stock.articlesPage({society:soc||undefined,page,page_size:25});const arts=serverItems(result).map(articleFromApi);if((result?.total??arts.length)===0)db.stockArticles=[];else{arts.forEach(a=>sgdiUpsertServerItem("stockArticles",a));const freshArtIds=new Set(arts.map(a=>String(a.backendId||"")));db.stockArticles=(db.stockArticles||[]).filter(a=>!a.backendId||(soc&&a.societe&&a.societe!==soc)||freshArtIds.has(String(a.backendId||"")))}
     const mags=db.magasins||[];const header=matSimpleHeader("articles");
-    view.innerHTML=`<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">ARTICLES</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??arts.length} article(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/article-nouveau')">Nouvel article</button></div>${header}<div class="card overflow-x-auto">${arts.length===0?`<div class="p-10 text-center text-slate-500">Aucun article.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Code</th><th class="p-3 text-left">Désignation</th><th class="p-3 text-left">Catégorie</th><th class="p-3 text-left">Magasin</th><th class="p-3 text-center">Stock</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${arts.map(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);const mag=mags.find(m=>m.id===a.magasinId);return `<tr class="border-t hover:bg-slate-50"><td class="p-3 font-mono text-xs">${escapeHTML(a.code||"—")}</td><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/article/${a.id}">${escapeHTML(a.designation||"—")}</a></td><td class="p-3 text-xs">${escapeHTML(a.categorie||"—")}</td><td class="p-3 text-xs">${escapeHTML(mag?.nom||"—")}</td><td class="p-3 text-center font-black">${qty(q)}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/article-edit/${a.id}')">Modifier</button></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-articles",soc||"all",result)}`;
+    view.innerHTML=`${header}<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">ARTICLES</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??arts.length} article(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/article-nouveau')">Nouvel article</button></div><div class="card overflow-x-auto">${arts.length===0?`<div class="p-10 text-center text-slate-500">Aucun article.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Code</th><th class="p-3 text-left">Désignation</th><th class="p-3 text-left">Catégorie</th><th class="p-3 text-left">Magasin</th><th class="p-3 text-center">Stock</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${arts.map(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);const mag=mags.find(m=>m.id===a.magasinId);return `<tr class="border-t hover:bg-slate-50"><td class="p-3 font-mono text-xs">${escapeHTML(a.code||"—")}</td><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/article/${a.id}">${escapeHTML(a.designation||"—")}</a></td><td class="p-3 text-xs">${escapeHTML(a.categorie||"—")}</td><td class="p-3 text-xs">${escapeHTML(mag?.nom||"—")}</td><td class="p-3 text-center font-black">${qty(q)}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/article-edit/${a.id}')">Modifier</button></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-articles",soc||"all",result)}`;
   }catch(e){console.warn("Articles serveur indisponibles",e);window.__sgdiMatArticlesLocalFallback=true;renderMatSimpleArticles(view)}
 }
 async function renderMatSimpleMagasinsServer(view){
@@ -18027,14 +18028,14 @@ async function renderMatSimpleMagasinsServer(view){
       db.stockArticles=(db.stockArticles||[]).filter(a=>!a.backendId||(soc&&a.societe&&a.societe!==soc)||freshArtIds.has(String(a.backendId||"")));
     }
     const mags=serverItems(result).map(storeFromApi);mags.forEach(m=>sgdiUpsertServerItem("magasins",m));const freshIds=new Set(mags.map(m=>String(m.backendId||"")));db.magasins=(db.magasins||[]).filter(m=>!m.backendId||(soc&&m.societe&&m.societe!==soc)||freshIds.has(String(m.backendId||"")));const header=matSimpleHeader("magasins");
-    view.innerHTML=`<div class="flex justify-between items-center mb-3 flex-wrap gap-2"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">MAGASINS</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??mags.length} magasin(s) · ${soc||"Toutes sociétés"}</p></div><div class="flex gap-2 flex-wrap"><button class="btn btn-secondary" onclick="openMagasinPickerModal('config')">⚙ Configurer</button><button class="btn btn-secondary" onclick="openMagasinPickerModal('edit')">✏ Modifier</button><button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">➕ Nouveau</button></div></div>${header}${mags.length===0?`<div class="card p-10 text-center text-slate-500">Aucun magasin.</div>`:`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${mags.map(m=>{const st=matSimpleStockMagasin(m.id);return `<div class="card p-5 cursor-pointer hover:shadow-lg transition" onclick="navigate('materiel/magasin/${m.id}')"><div class="flex gap-3 items-center mb-2"><div class="font-bold">${escapeHTML(m.nom||"—")}</div><div class="text-xs text-slate-500 font-mono">${escapeHTML(m.code||"")}</div></div><div class="text-xs text-slate-500 mb-2">${escapeHTML(m.responsable||"")}${m.telephone?` · ${escapeHTML(m.telephone)}`:""}</div><div class="grid grid-cols-2 gap-2 pt-3 border-t text-center"><div><div class="text-[9px] uppercase font-bold text-slate-500">Articles</div><div class="text-lg font-black">${st.nb}</div></div><div><div class="text-[9px] uppercase font-bold text-slate-500">Unités</div><div class="text-lg font-black text-emerald-700">${qty(st.qty)}</div></div></div></div>`}).join("")}</div>`}${sgdiServerPaginationHTML("mat-magasins",soc||"all",result)}`;
+    view.innerHTML=`${header}<div class="flex justify-between items-center mb-3 flex-wrap gap-2"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">MAGASINS</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??mags.length} magasin(s) · ${soc||"Toutes sociétés"}</p></div><div class="flex gap-2 flex-wrap"><button class="btn btn-secondary" onclick="openMagasinPickerModal('config')">⚙ Configurer</button><button class="btn btn-secondary" onclick="openMagasinPickerModal('edit')">✏ Modifier</button><button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">➕ Nouveau</button></div></div>${mags.length===0?`<div class="card p-10 text-center text-slate-500">Aucun magasin.</div>`:`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${mags.map(m=>{const st=matSimpleStockMagasin(m.id);return `<div class="card p-5 cursor-pointer hover:shadow-lg transition" onclick="navigate('materiel/magasin/${m.id}')"><div class="flex gap-3 items-center mb-2"><div class="font-bold">${escapeHTML(m.nom||"—")}</div><div class="text-xs text-slate-500 font-mono">${escapeHTML(m.code||"")}</div></div><div class="text-xs text-slate-500 mb-2">${escapeHTML(m.responsable||"")}${m.telephone?` · ${escapeHTML(m.telephone)}`:""}</div><div class="grid grid-cols-2 gap-2 pt-3 border-t text-center"><div><div class="text-[9px] uppercase font-bold text-slate-500">Articles</div><div class="text-lg font-black">${st.nb}</div></div><div><div class="text-[9px] uppercase font-bold text-slate-500">Unités</div><div class="text-lg font-black text-emerald-700">${qty(st.qty)}</div></div></div></div>`}).join("")}</div>`}${sgdiServerPaginationHTML("mat-magasins",soc||"all",result)}`;
   }catch(e){console.warn("Magasins serveur indisponibles",e);window.__sgdiMatMagasinsLocalFallback=true;renderMatSimpleMagasins(view)}
 }
 async function renderMatSimpleFournisseursServer(view){
   const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-fournisseurs",soc||"all");
   sgdiShowDataLoadingBar("Chargement des fournisseurs...");
   try{const result=await SGDI.stock.suppliersPage({society:soc||undefined,page,page_size:25});const fours=serverItems(result).map(supplierFromApi);fours.forEach(f=>sgdiUpsertServerItem("fournisseurs",f));const freshFourIds=new Set(fours.map(f=>String(f.backendId||"")));db.fournisseurs=(db.fournisseurs||[]).filter(f=>!f.backendId||(soc&&f.societe&&f.societe!==soc)||freshFourIds.has(String(f.backendId||"")));const header=matSimpleHeader("fournisseurs");
-    view.innerHTML=`<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">FOURNISSEURS</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??fours.length} fournisseur(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/fournisseur-nouveau')">Nouveau fournisseur</button></div>${header}<div class="card overflow-x-auto">${fours.length===0?`<div class="p-10 text-center text-slate-500">Aucun fournisseur.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Raison sociale</th><th class="p-3 text-left">RC / NIF</th><th class="p-3 text-left">Téléphone</th><th class="p-3 text-left">E-mail</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${fours.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/fournisseur/${f.id}">${escapeHTML(f.raisonSociale||"—")}</a></td><td class="p-3 text-xs font-mono">${escapeHTML(f.rc||"—")} ${f.nif?"/ "+escapeHTML(f.nif):""}</td><td class="p-3 text-xs">${escapeHTML(f.telephone||"—")}</td><td class="p-3 text-xs">${escapeHTML(f.email||"—")}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/fournisseur-edit/${f.id}')">Modifier</button></td></tr>`).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-fournisseurs",soc||"all",result)}`;
+    view.innerHTML=`${header}<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">FOURNISSEURS</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??fours.length} fournisseur(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/fournisseur-nouveau')">Nouveau fournisseur</button></div><div class="card overflow-x-auto">${fours.length===0?`<div class="p-10 text-center text-slate-500">Aucun fournisseur.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Raison sociale</th><th class="p-3 text-left">RC / NIF</th><th class="p-3 text-left">Téléphone</th><th class="p-3 text-left">E-mail</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${fours.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/fournisseur/${f.id}">${escapeHTML(f.raisonSociale||"—")}</a></td><td class="p-3 text-xs font-mono">${escapeHTML(f.rc||"—")} ${f.nif?"/ "+escapeHTML(f.nif):""}</td><td class="p-3 text-xs">${escapeHTML(f.telephone||"—")}</td><td class="p-3 text-xs">${escapeHTML(f.email||"—")}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/fournisseur-edit/${f.id}')">Modifier</button></td></tr>`).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-fournisseurs",soc||"all",result)}`;
   }catch(e){console.warn("Fournisseurs serveur indisponibles",e);window.__sgdiMatFournisseursLocalFallback=true;renderMatSimpleFournisseurs(view)}
 }
 // =====================================================================
@@ -18094,7 +18095,7 @@ function renderMatSimpleArticles(view){
           </div>
         </td>
       </tr>`}).join("")}</tbody></table></div>`;
-  view.innerHTML=titleBar+header+filters+tableHTML;
+  view.innerHTML=header+titleBar+filters+tableHTML;
 }
 function matSimpleFilterArticles(){
   const c=document.getElementById("mat-filt-cat")?.value||"";
@@ -18136,7 +18137,7 @@ function renderMatSimpleMagasins(view){
     <div class="text-[10px] text-slate-400 mt-2 text-center">Seuil bas : ${qty(st.seuilBas)} · Critique : ${qty(st.seuilCritique)}</div>
     ${st.alertes>0?`<div class="text-[10px] text-red-600 font-bold mt-2 text-center">⚠ ${st.alertes} alerte(s) stock</div>`:""}
   </div>`}).join("")}</div>`;
-  view.innerHTML=titleBar+header+body;
+  view.innerHTML=header+titleBar+body;
 }
 function renderMatSimpleMagasinForm(view,id){
   const isNew=!id;
@@ -18525,7 +18526,7 @@ function renderMatSimpleFournisseurs(view){
         </div>
       </td>
     </tr>`}).join("")}</tbody></table></div>`;
-  view.innerHTML=titleBar+header+body;
+  view.innerHTML=header+titleBar+body;
 }
 function renderMatSimpleFournisseurForm(view,id){
   const isNew=!id;
