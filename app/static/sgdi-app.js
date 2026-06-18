@@ -25215,7 +25215,18 @@ function opsMovementEditorHTML(date,agentId,agents){
     const isChecked=agentId&&(String(a.id)===String(agentId)||String(a.backendId||"")===String(agentId)||String(a.matricule||"")===String(agentId));
     const poste=aff.poste||a.fonction||a.position||a.posteContrat||"";
     const affecte=!!aff.siteId;
-    return `<label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer ops-mvt-agent-row"><input type="checkbox" class="ops-mvt-agent-cb" value="${escapeHTML(a.id)}" ${isChecked?"checked":""} onchange="opsMovementCbChange()" style="width:15px;height:15px;flex-shrink:0;cursor:pointer"/><span class="flex-1 min-w-0 text-sm leading-tight"><span class="font-semibold">${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</span><span class="text-xs text-slate-500"> · ${escapeHTML(a.matricule||"—")}${poste?` · <span style="color:#0369a1">${escapeHTML(poste)}</span>`:""} · <span class="${affecte?"font-medium":"text-slate-400"}" style="${affecte?"color:#15803d":""}">${escapeHTML(aff.siteName||"Non affecté")}</span></span></span></label>`;
+    const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
+    const mat=escapeHTML(a.matricule||"—");
+    const siteLbl=escapeHTML(aff.siteName||"Non affecté");
+    const posteHTML=poste?(' · <b style="color:#0369a1;font-weight:600">'+escapeHTML(poste)+'</b>'):'';
+    const siteStyle=affecte?'color:#15803d;font-weight:600':'color:#94a3b8';
+    return '<label class="ops-mvt-agent-row" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer" onmouseenter="this.style.background=\'#f8fafc\'" onmouseleave="this.style.background=\'\'">'
+      +'<input type="checkbox" class="ops-mvt-agent-cb" value="'+escapeHTML(a.id)+'" '+(isChecked?'checked ':'')+' onchange="opsMovementCbChange()" style="width:16px;height:16px;min-width:16px;cursor:pointer;accent-color:#0369a1"/>'
+      +'<span style="flex:1;font-size:13px;line-height:1.4">'
+      +'<b>'+nom+'</b>'
+      +' <span style="font-size:11px;color:#64748b">· '+mat+posteHTML+' · <span style="'+siteStyle+'">'+siteLbl+'</span></span>'
+      +'</span>'
+      +'</label>';
   };
   const initCount=agentId?1:0;
   return `<form class="card p-5 mb-5" data-ops-movement-form onsubmit="event.preventDefault()">
