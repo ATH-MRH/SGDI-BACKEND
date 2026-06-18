@@ -11235,6 +11235,9 @@ function renderAgentForm(view,id){
     ["coordonnees","Coordonnées / urgence"],
     ["habilitations","Habilitations"],
     ["contrat","RH / contrat"],
+    ["conges","Congés"],
+    ["absences","Absences"],
+    ["carriere","Carrière"],
     ...(showVerifications?[["verifications","Documents archivés"]]:[]),
     ["materiel","Matériel"],
     ["affectation","Affectation"],
@@ -11318,6 +11321,9 @@ function renderAgentForm(view,id){
         <div class="col-span-3"><label class="label">Banque</label><select class="select" name="banque" ${locked?"disabled":""}><option value="">— Choisir une banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></div>
         <div class="col-span-3"><label class="label">IBAN</label><input class="input" name="iban" value="${escapeHTML(a.iban||"")}" ${locked?"disabled":""}/></div>
       </div></div>
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="conges" style="display:none"><div class="section-banner banner-blue">Congés</div>${renderAgentCongesPanel(a)}</div>
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="absences" style="display:none"><div class="section-banner banner-red">Absences</div>${renderAgentAbsencesPanel(a)}</div>
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="carriere" style="display:none"><div class="section-banner banner-green">Carrière</div>${renderGestionHistorique(a)}</div>
       ${showVerifications?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="verifications" style="display:none"><div class="section-banner banner-blue">Documents archivés</div><div class="grid grid-3 text-sm">
         ${[["ActeNaissance","Acte de naissance"],["CertifResidence","Cert. résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce ID biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]].map(([k,l])=>{const ok=a.verifications?.["verif"+k];const d=a.documents?.[k];const btn=`<button type="button" class="btn ${d?"btn-primary":"btn-ghost"} text-xs" onclick="event.stopPropagation();viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')" title="${d?"Visualiser le document":"Aucun document archivé"}">Visualiser</button>`;return`<div class="flex items-center gap-3 p-2 bg-slate-100 rounded text-left hover:bg-slate-200 transition cursor-pointer" onclick="viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')">${btn}<span>${ok?"✅":"⬜"} ${l}</span></div>`}).join("")}
       </div></div>`:""}
@@ -11612,6 +11618,35 @@ function gestionButton(a,type,label){
   const action=(type==="Suspension"&&isOpsFicheContext())?`openOpsSuspensionModal(${JSON.stringify(String(a.id))})`:`openGestionModal(${JSON.stringify(String(a.id))},${JSON.stringify(String(type))})`;
   const title=(type==="Suspension"&&isOpsFicheContext())?"Demande de suspension à envoyer à la DRH":"";
   return`<button type="button" class="btn btn-secondary justify-center relative" title="${title}" onclick='${escapeHTML(action)}'>${label}${n>0?`<span class="gestion-badge">${n}</span>`:""}</button>`
+}
+function renderAgentCongesPanel(a){
+  const rows=(db.conges||[]).filter(c=>c.agentId===a.id&&c.type!=="Maladie").slice().sort((x,y)=>String(y.du||"").localeCompare(String(x.du||"")));
+  const total=rows.length;
+  const approved=rows.filter(c=>c.statut==="approuve").length;
+  const pending=rows.filter(c=>["instance","en_attente"].includes(c.statut||"")).length;
+  return `<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+    <div class="card p-3"><div class="text-xs text-slate-500 uppercase font-black">Total congés</div><div class="text-2xl font-black text-slate-800">${total}</div></div>
+    <div class="card p-3"><div class="text-xs text-slate-500 uppercase font-black">Approuvés</div><div class="text-2xl font-black text-emerald-700">${approved}</div></div>
+    <div class="card p-3"><div class="text-xs text-slate-500 uppercase font-black">En attente</div><div class="text-2xl font-black text-amber-700">${pending}</div></div>
+  </div>
+  <div class="overflow-x-auto"><table><thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Statut</th><th>Motif</th></tr></thead><tbody>
+    ${rows.length?rows.map(c=>`<tr><td class="font-semibold">${escapeHTML(c.type||"Congé")}</td><td class="text-xs">${formatDate(c.du)}</td><td class="text-xs">${formatDate(c.au)}</td><td>${c.du&&c.au?daysBetween(c.du,c.au)+1:"—"}</td><td><span class="pill ${c.statut==="approuve"?"pill-green":c.statut==="refuse"?"pill-red":"pill-amber"}">${escapeHTML(c.statut||"—")}</span></td><td class="text-xs">${escapeHTML(c.motif||"—")}</td></tr>`).join(""):`<tr><td colspan="6" class="text-center text-slate-500 p-4">Aucun congé enregistré.</td></tr>`}
+  </tbody></table></div>`;
+}
+function renderAgentAbsencesPanel(a){
+  const absenceEvents=(a.gestionEvents||[]).filter(e=>["Absence","Maladie","Suspension"].includes(e.type));
+  const maladieRows=(db.conges||[]).filter(c=>c.agentId===a.id&&c.type==="Maladie").map(c=>({type:"Maladie",du:c.du,au:c.au,motif:c.motif,statut:c.statut,source:"Congés"}));
+  const rows=[...absenceEvents.map(e=>({type:e.type,du:e.du,au:e.au,motif:e.motif,statut:e.statut,source:"Carrière"})),...maladieRows]
+    .sort((x,y)=>String(y.du||"").localeCompare(String(x.du||"")));
+  const active=rows.filter(r=>r.statut==="en_cours"||r.statut==="approuve"&&r.du&&inRange(r)).length;
+  return `<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+    <div class="card p-3"><div class="text-xs text-slate-500 uppercase font-black">Total absences</div><div class="text-2xl font-black text-slate-800">${rows.length}</div></div>
+    <div class="card p-3"><div class="text-xs text-slate-500 uppercase font-black">En cours</div><div class="text-2xl font-black text-red-700">${active}</div></div>
+    <div class="card p-3"><div class="text-xs text-slate-500 uppercase font-black">Maladie</div><div class="text-2xl font-black text-amber-700">${rows.filter(r=>r.type==="Maladie").length}</div></div>
+  </div>
+  <div class="overflow-x-auto"><table><thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Statut</th><th>Source</th><th>Motif</th></tr></thead><tbody>
+    ${rows.length?rows.map(r=>`<tr><td><span class="pill ${r.type==="Suspension"?"pill-red":r.type==="Maladie"?"pill-amber":"pill-gray"}">${escapeHTML(r.type||"Absence")}</span></td><td class="text-xs">${formatDate(r.du)}</td><td class="text-xs">${formatDate(r.au)}</td><td>${r.du&&r.au?daysBetween(r.du,r.au)+1:"—"}</td><td class="text-xs">${escapeHTML(r.statut||"—")}</td><td class="text-xs">${escapeHTML(r.source||"—")}</td><td class="text-xs">${escapeHTML(r.motif||"—")}</td></tr>`).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune absence enregistrée.</td></tr>`}
+  </tbody></table></div>`;
 }
 function gestionHistoriqueDisplayRows(a){
   const live=agentLiveAffectation(a)||{};
