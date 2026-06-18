@@ -25417,7 +25417,12 @@ async function renderOpsMouvements(view){
     if(needsSync){
       try{
         await ensureOpsMovementSqlSync();
-        if(document.body.contains(view))_renderOpsMouvementsHTML(view);
+        if(document.body.contains(view)){
+          // Ne pas re-rendre si le formulaire OM est ouvert (protège le scroll et l'état du formulaire)
+          const formOpen=!!view.querySelector('[data-ops-movement-form]');
+          if(formOpen)sgdiRefreshCountersNow({reason:"mvt-sync"});
+          else _renderOpsMouvementsHTML(view);
+        }
       }catch(e){console.warn("Synchronisation Mouvement indisponible",e)}
     }
   }
