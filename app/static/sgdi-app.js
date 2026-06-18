@@ -25310,33 +25310,46 @@ async function opsImprimerOrdreMouvementCentral(btn){
 }
 async function opsValiderMultiOM(agentIds,form,date,opt={}){
   showOmSaveOverlay();
-  const saved=[];
-  let ok=0,fail=0;
-  for(const aid of agentIds){
-    try{
-      const {f,patch}=fpqMovementPatchFromForm(date,aid,form);
-      const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId:aid,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
-      const line=result?.data?.item||result?.item||{...f,...patch,date,agentId:aid};
-      const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId:aid};
-      fpqUpsertLocalPresenceLine(line);
-      opsUpsertMovementHistory(movement);
-      if(opt.print)opsPrintMovementDocument(movement,true);
-      saved.push({aid,patch});
-      ok++;
-    }catch(e){console.warn("OM multi échec",aid,e);fail++}
+  // 1. Envoyer tous les OM en parallèle
+  const results=await Promise.allSettled(agentIds.map(async aid=>{
+    const {f,patch}=fpqMovementPatchFromForm(date,aid,form);
+    const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId:aid,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
+    const line=result?.data?.item||result?.item||{...f,...patch,date,agentId:aid};
+    const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId:aid};
+    fpqUpsertLocalPresenceLine(line);
+    opsUpsertMovementHistory(movement);
+    if(opt.print)opsPrintMovementDocument(movement,true);
+    return {aid,patch,movement};
+  }));
+  const saved=results.filter(r=>r.status==="fulfilled").map(r=>r.value);
+  const ok=saved.length,fail=agentIds.length-ok;
+  // 2. Mise à jour locale immédiate de db.agents (sans appel API par agent)
+  const fd=new FormData(form);
+  const siteId=String(fd.get("siteId")||"");
+  const site=opsFindSite(siteId);
+  if(site){
+    for(const {aid,patch} of saved){
+      const a=opsFindEmployee(aid);if(!a)continue;
+      const liveAff=agentLiveAffectation(a);
+      if(liveAff?.siteId&&liveAff.siteId!==siteId){
+        a.affectationsHistorique=a.affectationsHistorique||[];
+        a.affectationsHistorique.push({...liveAff,dateFin:date,motifChangement:patch.mouvementMotif||"Ordre de mouvement"});
+      }
+      a.affectationCourante={...(a.affectationCourante||{}),siteId:site.id,siteName:site.nom||"",clientName:site.client||"",poste:a.affectationCourante?.poste||a.fonction||a.position||"",horaire:a.affectationCourante?.horaire||"Mixte",dateDebut:date,natureMouvement:patch.mouvementMotif||"Affectation"};
+      addEmployeeCareerEvent(a,"Affectation",{date,motif:(patch.mouvementMotif||"Affectation")+" vers "+(site.nom||"site"),source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||""});
+    }
   }
-  // Appliquer chaque affectation localement (met à jour db.agents[i].affectationCourante)
-  for(const {aid,patch} of saved){
-    await fpqApplyMovementAffectation(date,aid,patch).catch(e=>console.warn("Affectation locale",aid,e));
-  }
-  updateOmSaveOverlay(`${ok} OM enregistré(s)`,true);
-  if(fail)toast(`${ok} OM validé(s), ${fail} échec(s)`,ok?"warning":"error");
-  else toast(`${ok} ordre(s) de mouvement validé(s)`,"success");
+  // 3. Feedback immédiat + re-render local
+  updateOmSaveOverlay(ok+" OM enregistré(s)",true);
+  if(fail)toast(ok+" OM validé(s), "+fail+" échec(s)",ok?"warning":"error");
+  else toast(ok+" ordre(s) de mouvement validé(s)","success");
   setTimeout(closeOmSaveOverlay,1800);
-  window._sgdiSilentRibbon=true;
-  await sgdiPullState({silent:true}).catch(()=>null);
-  window._sgdiSilentRibbon=false;
   renderView();
+  // 4. Sauvegarde unique + sync en arrière-plan
+  window._sgdiSilentRibbon=true;
+  saveDB().catch(()=>null).finally(()=>{
+    sgdiPullState({silent:true}).catch(()=>null).finally(()=>{window._sgdiSilentRibbon=false;renderView();});
+  });
 }
 function opsMovementGroupHTML(title,rows,field){
   const map=new Map();
