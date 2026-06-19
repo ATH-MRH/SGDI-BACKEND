@@ -15977,7 +15977,7 @@ function fichePositionCard(a){
   const statusText=isActive?"ACTIF":`${status.icon?status.icon+" ":""}${status.label}`;
   const lamps=fpAgentLampStatus(a);
   const lp=(cls,on,blink,ttl)=>`<span class="fp-status-lamp ${cls}${!on?" fp-lamp-off":""}${blink?" fp-lamp-blink":""}" title="${ttl}"></span>`;
-  const lampsHTML=`<div style="position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2">${lp("lamp-green",lamps.G.on,false,"Statut général OK")}${lp("lamp-orange",lamps.O.on,lamps.O.blink,"Alerte : sanction / absence / essai / contrat J-60")}${lp("lamp-red-fp",lamps.R.on,lamps.R.blink,"Danger : blacklist / dotation 12+ mois / contrat J-30")}${lp("lamp-blue",lamps.B.on,false,"Employé non doté")}</div>`;
+  const lampsHTML=`<div style="position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:2">${lp("lamp-green",lamps.G.on,false,"Statut général OK")}${lp("lamp-orange",lamps.O.on,lamps.O.blink,"Alerte : sanction / absence / essai / contrat J-60")}${lp("lamp-red-fp",lamps.R.on,lamps.R.blink,"Danger : blacklist / dotation 12+ mois / contrat J-30")}${lp("lamp-blue",lamps.B.on,false,"Employé non doté")}</div>`;
   const contractEnd=employeePositionContractEndDate(a);
   return`<div class="card p-4 fp-agent-card" style="position:relative" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-site-key="${escapeHTML(siteKey)}" data-poste="${escapeHTML(aff.poste||a.fonction||a.position||a.posteContrat||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
     ${lampsHTML}
