@@ -3684,6 +3684,33 @@ function workspaceTabsBarHTML(){
     <button type="button" class="ws-refresh-tab" onclick="window.refreshWorkspace()" title="Actualiser" aria-label="Actualiser">↻</button>
   </div>`;
 }
+function hexToIconBg(hex){
+  const m=String(hex||"#043970").replace("#","").match(/.{1,2}/g);
+  if(!m||m.length<3)return"rgba(4,57,112,0.12)";
+  return`rgba(${parseInt(m[0],16)},${parseInt(m[1],16)},${parseInt(m[2],16)},0.12)`;
+}
+function topbarCounterGlyph(label){
+  const L=String(label||"").toUpperCase();
+  if(L.includes("SITE"))return"🏢";
+  if(L.includes("OPÉR")||L.includes("OPER"))return"✅";
+  if(L.includes("DOTATION"))return"📦";
+  if(L.includes("AFFECTATION"))return"📍";
+  if(L.includes("CONGÉ")||L.includes("CONGE"))return"🌴";
+  if(L.includes("MALADIE"))return"🩺";
+  if(L.includes("ABSENT"))return"⚠️";
+  if(L.includes("SUSPENDU"))return"⏸️";
+  if(L.includes("BLACKLIST"))return"🚫";
+  if(L.includes("CANDIDAT")||L.includes("RÉSERVE")||L.includes("RESERVE"))return"👤";
+  if(L.includes("MISSION"))return"📋";
+  if(L.includes("COURRIER"))return"✉️";
+  if(L.includes("NOTE"))return"📝";
+  if(L.includes("ARCHIVE"))return"📁";
+  if(L.includes("PRÉSENT")||L.includes("PRESENT"))return"✓";
+  if(L.includes("FEUILLE"))return"📄";
+  if(L.includes("VALIDÉ")||L.includes("VALIDE"))return"✔️";
+  if(L.includes("INCIDENT"))return"⚡";
+  return"📊";
+}
 function moduleCounterItemHTML(item,total){
   const base=Math.max(1,item.pctBase??total??0);
   const pct=item.pct!==undefined?item.pct:Math.round((Number(item.value)||0)/base*100);
@@ -3692,10 +3719,17 @@ function moduleCounterItemHTML(item,total){
   const numericValue=Number(item.value)||0;
   const label=String(item.label||"");
   const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(pct+"%"));
+  const glyph=topbarCounterGlyph(label);
+  const iconBg=hexToIconBg(item.color||"#043970");
   return `<a href="${escapeHTML(href)}" class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")}" title="${escapeHTML(item.label)}">
-    <span class="module-counter-label drh-workforce-label">${escapeHTML(label)}</span>
-    <span class="module-counter-value drh-workforce-value">${escapeHTML(String(item.value??0))}</span>
-    <span class="module-counter-pct drh-workforce-pct">${escapeHTML(String(subText))}</span>
+    <div class="mc-icon-circle" style="background:${iconBg}">${glyph}</div>
+    <div class="mc-text-content">
+      <div class="module-counter-label drh-workforce-label">${escapeHTML(label)}</div>
+      <div class="mc-value-row">
+        <span class="module-counter-value drh-workforce-value">${escapeHTML(String(item.value??0))}</span>
+        <span class="module-counter-pct drh-workforce-pct">${escapeHTML(String(subText))}</span>
+      </div>
+    </div>
   </a>`;
 }
 function moduleCounterCurrentModule(){
