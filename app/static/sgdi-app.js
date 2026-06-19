@@ -2867,11 +2867,17 @@ function sgdiTokenPayload(){
     return JSON.parse(decodeURIComponent(escape(atob(padded))))||{};
   }catch(e){return{}}
 }
-async function ensureAdminSystemApiToken(){
-  if(!isAdminSystemSession()){toast("Suppression magasin réservée à Administration système","error");return false}
-  if(sgdiTokenPayload().admin_system===true)return true;
-  const password=prompt("Confirmez le mot de passe Administration système pour autoriser la suppression magasin :");
-  if(!password){toast("Suppression annulée","info");return false}
+function sgdiTokenIsStillValid(payload){
+  const exp=Number(payload?.exp||0);
+  return !exp||Date.now()<((exp-30)*1000);
+}
+async function ensureAdminSystemApiToken(actionLabel){
+  const action=actionLabel||"continuer";
+  if(!isAdminSystemSession()){toast("Action réservée à Administration système","error");return false}
+  const payload=sgdiTokenPayload();
+  if(payload.admin_system===true&&sgdiTokenIsStillValid(payload))return true;
+  const password=prompt("Confirmez le mot de passe Administration système pour "+action+" :");
+  if(!password){toast("Action annulée","info");return false}
   try{
     const us=await window.SGDI_API.auth.adminSystemLogin(password);
     const authUser=us?.user||us;
@@ -24562,6 +24568,7 @@ function syncUserAccessLevelWithRole(role){
 }
 async function confirmAdminUser(originalUsername){
   const f=document.querySelector(".modal-bg form");if(!f){toast("Formulaire introuvable","error");return}
+  if(isAdminSystemSession()&&!(await ensureAdminSystemApiToken("enregistrer un utilisateur"))){if(window._sgdiSaveOverlayShown)closeSaveOverlay();return}
   const fd=new FormData(f);
   const username=String(fd.get("username")||"").trim();const password=String(fd.get("password")||"");
   const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key)};
