@@ -18167,7 +18167,6 @@ async function renderMatSimpleFournisseursServer(view){
 // ARTICLES (table simple)
 // =====================================================================
 function renderMatSimpleArticles(view){
-  if(sgdiAuthToken()&&!window.__sgdiMatArticlesLocalFallback){renderMatSimpleArticlesServer(view);return}
   const soc=matSimpleSocFilter();
   const arts=matSimpleBySoc(db.stockArticles||[]);
   const mags=db.magasins||[];
@@ -18221,6 +18220,17 @@ function renderMatSimpleArticles(view){
         </td>
       </tr>`}).join("")}</tbody></table></div>`;
   view.innerHTML=header+titleBar+filters+tableHTML;
+  if(sgdiAuthToken()&&!window.__sgdiMatArticlesLocalFallback&&!window.__sgdiMatArticlesBgRefreshing){
+    window.__sgdiMatArticlesBgRefreshing=true;
+    const _h=location.hash;
+    SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:25}).then(result=>{
+      const arts=serverItems(result).map(articleFromApi);
+      if((result?.total??arts.length)===0){db.stockArticles=[];}
+      else{arts.forEach(a=>sgdiUpsertServerItem("stockArticles",a));const freshIds=new Set(arts.map(a=>String(a.backendId||"")));db.stockArticles=(db.stockArticles||[]).filter(a=>!a.backendId||(soc&&a.societe&&a.societe!==soc)||freshIds.has(String(a.backendId||"")));}
+      if(location.hash===_h){renderMatSimpleArticles(view);}
+      window.__sgdiMatArticlesBgRefreshing=false;
+    }).catch(e=>{window.__sgdiMatArticlesBgRefreshing=false;window.__sgdiMatArticlesLocalFallback=true;console.warn("Articles bg refresh:",e);});
+  }
 }
 function matSimpleFilterArticles(){
   const c=document.getElementById("mat-filt-cat")?.value||"";
@@ -18242,7 +18252,6 @@ function matSimpleClearFilters(){
 // MAGASINS
 // =====================================================================
 function renderMatSimpleMagasins(view){
-  if(sgdiAuthToken()&&!window.__sgdiMatMagasinsLocalFallback){renderMatSimpleMagasinsServer(view);return}
   const soc=matSimpleSocFilter();
   const mags=matSimpleBySoc(db.magasins||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   const header=matSimpleHeader("magasins");
@@ -18263,6 +18272,19 @@ function renderMatSimpleMagasins(view){
     ${st.alertes>0?`<div class="text-[10px] text-red-600 font-bold mt-2 text-center">⚠ ${st.alertes} alerte(s) stock</div>`:""}
   </div>`}).join("")}</div>`;
   view.innerHTML=header+titleBar+body;
+  if(sgdiAuthToken()&&!window.__sgdiMatMagasinsLocalFallback&&!window.__sgdiMatMagasinsBgRefreshing){
+    window.__sgdiMatMagasinsBgRefreshing=true;
+    const _h=location.hash;
+    Promise.all([
+      SGDI.stock.storesPage({society:soc||undefined,page:1,page_size:18}),
+      SGDI.stock.articles(soc?{society:soc}:{}).catch(()=>[])
+    ]).then(([result,articlesRes])=>{
+      if(Array.isArray(articlesRes)&&articlesRes.length){articlesRes.map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));const freshArtIds=new Set(articlesRes.map(r=>String(r.id||"")));db.stockArticles=(db.stockArticles||[]).filter(a=>!a.backendId||(soc&&a.societe&&a.societe!==soc)||freshArtIds.has(String(a.backendId||"")));}
+      const freshMags=serverItems(result).map(storeFromApi);freshMags.forEach(m=>sgdiUpsertServerItem("magasins",m));const freshIds=new Set(freshMags.map(m=>String(m.backendId||"")));db.magasins=(db.magasins||[]).filter(m=>!m.backendId||(soc&&m.societe&&m.societe!==soc)||freshIds.has(String(m.backendId||"")));
+      if(location.hash===_h){renderMatSimpleMagasins(view);}
+      window.__sgdiMatMagasinsBgRefreshing=false;
+    }).catch(e=>{window.__sgdiMatMagasinsBgRefreshing=false;window.__sgdiMatMagasinsLocalFallback=true;console.warn("Magasins bg refresh:",e);});
+  }
 }
 function renderMatSimpleMagasinForm(view,id){
   const isNew=!id;
@@ -18627,7 +18649,6 @@ async function renderMatSimpleMagasinDetail(view,id){
 // FOURNISSEURS
 // =====================================================================
 function renderMatSimpleFournisseurs(view){
-  if(sgdiAuthToken()&&!window.__sgdiMatFournisseursLocalFallback){renderMatSimpleFournisseursServer(view);return}
   const soc=matSimpleSocFilter();
   const fours=matSimpleBySoc(db.fournisseurs||[]).slice().sort((a,b)=>(a.raisonSociale||"").localeCompare(b.raisonSociale||""));
   const header=matSimpleHeader("fournisseurs");
@@ -18652,6 +18673,15 @@ function renderMatSimpleFournisseurs(view){
       </td>
     </tr>`}).join("")}</tbody></table></div>`;
   view.innerHTML=header+titleBar+body;
+  if(sgdiAuthToken()&&!window.__sgdiMatFournisseursLocalFallback&&!window.__sgdiMatFournisseursBgRefreshing){
+    window.__sgdiMatFournisseursBgRefreshing=true;
+    const _h=location.hash;
+    SGDI.stock.suppliersPage({society:soc||undefined,page:1,page_size:25}).then(result=>{
+      const fours=serverItems(result).map(supplierFromApi);fours.forEach(f=>sgdiUpsertServerItem("fournisseurs",f));const freshIds=new Set(fours.map(f=>String(f.backendId||"")));db.fournisseurs=(db.fournisseurs||[]).filter(f=>!f.backendId||(soc&&f.societe&&f.societe!==soc)||freshIds.has(String(f.backendId||"")));
+      if(location.hash===_h){renderMatSimpleFournisseurs(view);}
+      window.__sgdiMatFournisseursBgRefreshing=false;
+    }).catch(e=>{window.__sgdiMatFournisseursBgRefreshing=false;window.__sgdiMatFournisseursLocalFallback=true;console.warn("Fournisseurs bg refresh:",e);});
+  }
 }
 function renderMatSimpleFournisseurForm(view,id){
   const isNew=!id;
