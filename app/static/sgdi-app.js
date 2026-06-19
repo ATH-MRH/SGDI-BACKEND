@@ -3593,7 +3593,7 @@ function renderSocietePortal(){
         </div>`:`<div class="company-portal-logo-spacer" aria-hidden="true"></div>`}
       </section>
       <div class="company-portal-grid">
-        ${modules.map(m=>`<button type="button" class="company-portal-module" onclick="enterSocietePortalRoute('${m.key}','${m.route}')">${escapeHTML(m.label)}</button>`).join("")}
+        ${modules.map(m=>{const EXTRA={portail:{icon:"👤",color:"#0284c7"},admin:{icon:"⚙️",color:"#dc2626"}};const meta=MODULE_META[m.key]||EXTRA[m.key]||{icon:"📋",color:"#64748b"};const ibg=hexToIconBg(meta.color);return`<button type="button" class="company-portal-module" onclick="enterSocietePortalRoute('${m.key}','${m.route}')"><div class="cpm-icon" style="background:${ibg};color:${meta.color}">${meta.icon}</div><span class="cpm-label">${escapeHTML(m.label)}</span></button>`;}).join("")}
       </div>
       ${modules.length?``:`<div class="company-portal-foot text-red-700">Aucun module autorisé pour cette société.</div>`}
     </main>
