@@ -15880,9 +15880,9 @@ function renderFiches(view,sub){
       ${summaryCards.map(([label,note,desc,color,pct,route])=>`${route?`<a href="#/${route}" class="fp-summary-card" style="text-decoration:none;color:inherit">`:`<div class="fp-summary-card">`}<div><span>${label}</span><strong style="color:${color}">${note}</strong><small>${desc}</small></div><div class="fp-ring" style="--pct:${pct}%;--ring:${color}"><b>${pct}%</b></div>${route?`</a>`:`</div>`}`).join("")}
     </div>
     ${fpSocieteBandHTML(baseList,safeSocFilter)}
-    <div class="fp-filter-card">
-      <h3>Filtres complémentaires</h3>
-      <div class="grid grid-4 gap-3">
+    <fieldset class="rh-panel-fieldset" style="margin-bottom:16px">
+      <legend>Filtres complémentaires</legend>
+      <div class="grid grid-4 gap-3" style="margin-top:10px">
         <div><label class="label">Site</label><select id="fp-site" class="select" onchange="setFpFilter('site',this.value)"><option value="">Tous</option>${fpSites.map(s=>{const key=fpSiteFilterKeyForSite(s);return`<option value="${escapeHTML(key)}" ${fpFilter.site===key?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`}).join("")}</select></div>
         <div><label class="label">Poste</label><select id="fp-poste" class="select" onchange="setFpFilter('poste',this.value)"><option value="">Tous</option>${POSTES_SITE.map(p=>`<option ${fpFilter.poste===p?"selected":""}>${p}</option>`).join("")}</select></div>
         <div><label class="label">Statut</label><select id="fp-status" class="select" onchange="setFpFilter('status',this.value)"><option value="">Tous</option><option value="actif" ${fpFilter.status==="actif"?"selected":""}>Actif</option><option value="congé" ${fpFilter.status==="congé"?"selected":""}>Congé</option><option value="maladie" ${fpFilter.status==="maladie"?"selected":""}>Maladie</option><option value="suspendu" ${fpFilter.status==="suspendu"?"selected":""}>Suspendu</option><option value="absent" ${fpFilter.status==="absent"?"selected":""}>Absent</option><option value="abandon" ${fpFilter.status==="abandon"?"selected":""}>Abandon</option><option value="sortant" ${fpFilter.status==="sortant"?"selected":""}>Sortant / archivé</option></select></div>
@@ -15902,7 +15902,7 @@ function renderFiches(view,sub){
         <div><label class="label">Presentation</label><select class="select" onchange="setFpFilter('layout',this.value)"><option value="mosaique" ${fpFilter.layout!=="liste"?"selected":""}>Mosaique</option><option value="liste" ${fpFilter.layout==="liste"?"selected":""}>Liste</option></select></div>
         <div class="flex items-end"><button type="button" class="btn btn-ghost w-full text-xs" onclick="resetFpPositionFilters()">Réinitialiser</button></div>
       </div>
-    </div>
+    </fieldset>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucune fiche${safeSocFilter?` pour ${escapeHTML(safeSocFilter)}`:""}.</div>`:(fpFilter.layout==="liste"?fichePositionListHTML(list):`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`)}
   </div>`;
 }
@@ -15938,6 +15938,33 @@ function fpSocieteBandHTML(baseList,activeSociete=""){
     </div>
   </div>`;
 }
+function fpAgentLampStatus(a){
+  const td=today();
+  const G={on:false,blink:false},O={on:false,blink:false},R={on:false,blink:false},B={on:false};
+  const contractEnd=employeePositionContractEndDate(a);
+  const dCon=contractEnd?daysBetween(td,contractEnd):null;
+  if(dCon!==null&&dCon>=0&&dCon<=30){R.on=true;R.blink=true;}
+  else if(dCon!==null&&dCon>=0&&dCon<=60){O.on=true;}
+  if(a.dateFinEssai){const dE=daysBetween(td,a.dateFinEssai);if(dE>=0&&dE<=30){O.on=true;O.blink=true;}}
+  if(a.blacklist||a.blacklistContractBlocked||a.contractBlocked){R.on=true;}
+  if(Array.isArray(a.sanctions)&&a.sanctions.length>0){O.on=true;}
+  const absEvs=(a.gestionEvents||[]).filter(e=>["Absence","Maladie"].includes(e.type));
+  if(absEvs.length>5){O.on=true;}
+  const byMonth={};
+  absEvs.forEach(e=>{const m=(e.du||e.date||"").slice(0,7);if(m)byMonth[m]=(byMonth[m]||0)+1;});
+  const tmo=new Date(td);tmo.setMonth(tmo.getMonth()-2);const tmoStr=tmo.toISOString().slice(0,7);
+  for(const[m,c]of Object.entries(byMonth)){if(c>3&&m>=tmoStr){O.on=true;}}
+  const qm=Object.entries(byMonth).filter(([,c])=>c>=2).map(([m])=>m).sort();
+  let consec=0;for(let i=0;i<qm.length;i++){if(i===0){consec=1;continue;}const[py,pm]=qm[i-1].split("-").map(Number);const[cy,cm]=qm[i].split("-").map(Number);if(cy*12+cm===py*12+pm+1)consec++;else consec=1;if(consec>=3){R.on=true;break;}}
+  for(const ev of (a.gestionEvents||[]).filter(e=>["Absence","Maladie"].includes(e.type)&&e.statut==="en_cours"&&e.du)){if(daysBetween(ev.du,ev.au||td)>=3){R.on=true;break;}}
+  let dotMo=null;
+  try{const dRows=typeof agentDotationRows==="function"?agentDotationRows(a.id,{onlyActive:false}):[];if(dRows.length){const dates=dRows.map(r=>r.date||"").filter(Boolean).sort();const recent=dates[dates.length-1];if(recent){dotMo=(new Date(td)-new Date(recent))/(1000*60*60*24*30.44);}}}catch(_){}
+  if(dotMo!==null){if(dotMo>=12){R.on=true;R.blink=true;}else if(dotMo>=10){O.on=true;}}
+  if(!agentHasMaterialDotation(a)){B.on=true;}
+  const conOk=!contractEnd||(dCon!==null&&dCon>60);const dotOk=dotMo===null||dotMo<10;
+  if(conOk&&dotOk&&!O.on&&!R.on&&!B.on){G.on=true;}
+  return{G,O,R,B};
+}
 function fichePositionCard(a){
   const status=employeeDisplayStatus(a);
   const aff=agentLiveAffectation(a)||{};
@@ -15948,12 +15975,12 @@ function fichePositionCard(a){
   const codeStyle=isActive?"color:#047857!important":"color:#d97706";
   const statusStyle=isActive?"background:#ecfdf5!important;color:#047857!important;border-color:#86efac!important;text-transform:uppercase!important;font-weight:950!important;letter-spacing:.04em!important":"font-size:10px!important;text-transform:uppercase;font-weight:900!important";
   const statusText=isActive?"ACTIF":`${status.icon?status.icon+" ":""}${status.label}`;
-  const hasDotation=agentHasMaterialDotation(a);
-  const dotationIndicator=hasDotation
-    ?`<div title="Employé doté" style="position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:999px;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;box-shadow:0 0 0 4px #dcfce7">✓</div>`
-    :`<div title="Employé non doté" style="position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:999px;background:#dc2626;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;box-shadow:0 0 0 4px #fee2e2">!</div>`;
+  const lamps=fpAgentLampStatus(a);
+  const lp=(cls,on,blink,ttl)=>`<span class="fp-status-lamp ${cls}${!on?" fp-lamp-off":""}${blink?" fp-lamp-blink":""}" title="${ttl}"></span>`;
+  const lampsHTML=`<div style="position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:4px;z-index:2">${lp("lamp-green",lamps.G.on,false,"Statut général OK")}${lp("lamp-orange",lamps.O.on,lamps.O.blink,"Alerte : sanction / absence / essai / contrat J-60")}${lp("lamp-red-fp",lamps.R.on,lamps.R.blink,"Danger : blacklist / dotation 12+ mois / contrat J-30")}${lp("lamp-blue",lamps.B.on,false,"Employé non doté")}</div>`;
+  const contractEnd=employeePositionContractEndDate(a);
   return`<div class="card p-4 fp-agent-card" style="position:relative" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-site-key="${escapeHTML(siteKey)}" data-poste="${escapeHTML(aff.poste||a.fonction||a.position||a.posteContrat||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
-    ${dotationIndicator}
+    ${lampsHTML}
     <div class="flex items-center gap-3 mb-3">
       <div class="avatar" style="width:56px;height:56px;font-size:18px">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div>
       <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule font-mono text-lg font-black leading-tight mt-1" style="${codeStyle}">${safe(a.matricule)}</div><div><span class="fp-agent-status pill ${status.pill}" style="${statusStyle}">${escapeHTML(statusText)}</span></div></div>
@@ -15962,7 +15989,7 @@ function fichePositionCard(a){
       <div><span class="text-slate-400">Société :</span> ${safe(a.societe)}</div>
       <div><span class="text-slate-400">Poste :</span> ${safe(aff.poste)||"—"}</div>
       <div><span class="text-slate-400">Site :</span> ${safe(aff.siteName)||"—"}</div>
-      <div><span class="text-slate-400">Contrat :</span> ${safe(cleanContractType(a.typeContrat))} · depuis ${formatDate(a.dateRecrutement)}</div>
+      <div><span class="text-slate-400">Contrat :</span> ${safe(cleanContractType(a.typeContrat))} · Fin le ${formatDate(contractEnd||"")}</div>
     </div>
     <div class="fp-agent-actions">
       <a class="fp-card-action fp-card-action-main" href="${ficheHref}" ${ficheClick?`onclick="${ficheClick}"`:""}>Ouvrir fiche</a>
