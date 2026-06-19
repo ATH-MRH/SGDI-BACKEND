@@ -4354,7 +4354,7 @@ function render(){
 function openCreateSocieteModal(){
   if(!isAdm2()){toast("Création société réservée à l'administrateur ADM2","error");return}
   openModal(`<h3 class="font-bold text-lg mb-4">Créer une nouvelle société</h3>
-    <form onsubmit="event.preventDefault();confirmCreateSociete()">
+    <form data-no-critical-auth="1" onsubmit="event.preventDefault();confirmCreateSociete()">
       <div class="mb-3">
         <label class="label">Nom de la société *</label>
         <input class="input" name="nom"  autofocus placeholder="Ex. NOUVELLE SOCIETE"/>
@@ -4421,7 +4421,7 @@ function openEditSocieteModal(societe){
   const customImg=images[societe]||"";
   const img=customImg||defaultSocieteLogo(societe);
   openModal(`<h3 class="font-bold text-lg mb-4">Modifier la société</h3>
-    <form onsubmit="event.preventDefault();confirmEditSociete('${societe.replace(/'/g,"\\'")}')">
+    <form data-no-critical-auth="1" onsubmit="event.preventDefault();confirmEditSociete('${societe.replace(/'/g,"\\'")}')">
       <div class="mb-3">
         <label class="label">Nom de la société</label>
         <input class="input" name="nom" value="${escapeHTML(societe)}" ${isBase?"readonly":""}/>
@@ -24506,7 +24506,7 @@ function openAdminUserModal(username){
   const selectedRole=normalizeAdminUserRole(u.role);
   const selectedNiveau=u.niveau||(selectedRole==="ADM"?"H5":selectedRole==="ops"?"H3":selectedRole==="dispatch"?"H2":"H1");
   openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"➕ Nouvel utilisateur":"✏ Modifier "+escapeHTML(u.username)}</h3>
-    <form onsubmit="event.preventDefault();confirmAdminUserByKey('${encodeURIComponent(u.username||"")}')">
+    <form data-no-critical-auth="1" onsubmit="event.preventDefault();confirmAdminUserByKey('${encodeURIComponent(u.username||"")}')">
       <div class="grid grid-2 gap-3">
         <div><label class="label">Identifiant *</label><input class="input" name="username"  value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
