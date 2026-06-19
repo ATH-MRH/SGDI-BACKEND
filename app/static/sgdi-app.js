@@ -2885,7 +2885,7 @@ async function ensureAdminSystemApiToken(){
   }
 }
 function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function logout(){session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
+function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function isAdminFichePositionContext(){return isAdminGeneralSession()&&String(location.hash||"").startsWith("#/admin/fiches")}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
@@ -27571,6 +27571,19 @@ function renderPointageLegende(){
 }
 
 /* ---- INIT ---- */
+// ── Cache démarrage rapide ────────────────────────────────────────────────────
+const BOOT_CACHE_KEY="atlas_boot_cache";
+const BOOT_CACHE_TTL=7200000; // 2h
+const BOOT_CACHE_MAX=3*1024*1024; // 3 MB max
+function _bootCacheLoad(username){
+  try{const r=localStorage.getItem(BOOT_CACHE_KEY);if(!r)return null;const c=JSON.parse(r);if(c.u!==username)return null;if(Date.now()-c.t>BOOT_CACHE_TTL)return null;return c.d||null}catch(e){return null}
+}
+function _bootCacheSave(username,data){
+  try{const s=JSON.stringify(data);if(s.length>BOOT_CACHE_MAX)return;localStorage.setItem(BOOT_CACHE_KEY,JSON.stringify({u:username,t:Date.now(),d:data}))}catch(e){}
+}
+function _bootCacheClear(){try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function bootApp(){
   sgdiPurgeBrowserBusinessStorage();
   db=loadDB();
@@ -27580,18 +27593,34 @@ async function bootApp(){
     sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
     session=null;
     saveSession(null);
+    _bootCacheClear();
     unlockedAgents=loadUnlocked();
     renderLogin();
     return;
   }
   if(session&&isRemovedSociete(session.societe)){session.societe=null;saveSession(session)}
-  if(session&&!sgdiAuthToken()){
-    session=null;
-    saveSession(null);
-    location.hash="#/login";
-  }
+  if(session&&!sgdiAuthToken()){session=null;saveSession(null);_bootCacheClear();location.hash="#/login";}
   unlockedAgents=loadUnlocked();
   if(session&&sgdiAuthToken()){
+    // Tentative de rendu immédiat depuis le cache
+    const cached=_bootCacheLoad(session.username);
+    if(cached){
+      hydrateDB(cached);
+      sanitizeCandidatesInDB();
+      sgdiPostgresReady=true;
+      if(typeof loadCustomSocietes==="function")loadCustomSocietes();
+      if(session.societe&&!canUseSociete(session.societe)){session.societe=null;session.transverse=null;saveSession(session);location.hash="#/select-societe";}
+      const mhr=sgdiModuleHostDefaultRoute();
+      sgdiApplyModuleHostSession(true);
+      if(!location.hash)location.hash=mhr||(session.societe?"#/societe-portal":(session.transverse?"#/"+(session.transverse==="materiel"?"materiel/dashboard":session.transverse+"/dashboard"):"#/select-societe"));
+      route(); // ← rendu immédiat depuis le cache
+      // Resync en arrière-plan
+      sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{
+        if(loaded)_bootCacheSave(session?.username,db);
+      }).catch(()=>{});
+      return;
+    }
+    // Pas de cache : chargement initial avec barre de progression
     sgdiShowDataLoadingBar();
     const loaded=await sgdiPullState({silent:true,render:false,force:true,deferSql:true}).catch(()=>null);
     if(!loaded){
@@ -27604,12 +27633,8 @@ async function bootApp(){
       if(typeof toast==="function")toast("Session expirée : reconnectez-vous.","error");
       return;
     }
-    if(session.societe&&!canUseSociete(session.societe)){
-      session.societe=null;
-      session.transverse=null;
-      saveSession(session);
-      location.hash="#/select-societe";
-    }
+    _bootCacheSave(session?.username,db); // Sauvegarde pour les prochains chargements
+    if(session.societe&&!canUseSociete(session.societe)){session.societe=null;session.transverse=null;saveSession(session);location.hash="#/select-societe";}
   }
   const moduleHostRoute=session?sgdiModuleHostDefaultRoute():null;
   if(session)sgdiApplyModuleHostSession(true);
