@@ -1261,7 +1261,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
 .card.recruitment-stable-kpi .text-3xl{
   line-height:1.05!important;
 }
-.module-counters-ribbon .module-counter-item,.drh-workforce-ribbon .drh-workforce-item{height:auto!important;min-height:62px!important;padding:10px 12px!important;border-radius:7px!important;display:grid!important;overflow:hidden!important}
+.module-counters-ribbon .module-counter-item,.drh-workforce-ribbon .drh-workforce-item{height:68px!important;min-height:68px!important;padding:10px 14px!important;border-radius:12px!important;display:flex!important;flex-direction:row!important;align-items:center!important;gap:12px!important;overflow:hidden!important}
 @media(max-width:760px){.card.kpi-clickable,.dash-kpi,.kpi.kpi-clickable{height:auto!important;min-height:96px!important}}
 @media (max-width:980px){
   .mat-erp-head{flex-direction:column}
@@ -4796,49 +4796,62 @@ body:has(.company-portal) #app{
    ============================================================= */
 .module-counters-ribbon,
 .drh-workforce-ribbon{
-  min-height:60px!important;
-  height:60px!important;
-  grid-auto-columns:minmax(176px,176px)!important;
-  gap:7px!important;
-  padding:7px 8px!important;
-  background:#f6f8fb!important;
-  border-bottom:1px solid #d8e0ea!important;
-  box-shadow:0 2px 8px rgba(15,23,42,.045)!important;
+  min-height:88px!important;
+  height:auto!important;
+  grid-auto-columns:minmax(160px,1fr)!important;
+  gap:8px!important;
+  padding:10px 14px!important;
+  background:#f1f5f9!important;
+  border-bottom:1px solid #e2e8f0!important;
+  box-shadow:none!important;
 }
 .module-counters-ribbon .module-counter-item,
 .drh-workforce-ribbon .drh-workforce-item{
-  min-height:46px!important;
-  height:46px!important;
-  padding:7px 11px!important;
-  border-radius:6px!important;
+  min-height:68px!important;
+  height:68px!important;
+  padding:10px 14px!important;
+  border-radius:12px!important;
   background:#fff!important;
-  border:1px solid #dbe3ef!important;
-  border-left:3px solid var(--drh-color)!important;
-  box-shadow:none!important;
+  border:1px solid #e8edf3!important;
+  border-left:1px solid #e8edf3!important;
+  box-shadow:0 1px 4px rgba(15,23,42,.07)!important;
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  gap:12px!important;
 }
 .module-counters-ribbon .module-counter-item:hover,
 .drh-workforce-ribbon .drh-workforce-item:hover{
-  border-color:#b8c5d6!important;
-  box-shadow:0 4px 12px rgba(15,23,42,.07)!important;
+  border-color:#cbd5e1!important;
+  box-shadow:0 4px 14px rgba(15,23,42,.11)!important;
 }
 .module-counter-label,
 .drh-workforce-label{
-  font-size:9.4px!important;
-  letter-spacing:.025em!important;
-  color:#475569!important;
-  white-space:normal!important;
-  line-height:1.05!important;
-  overflow:visible!important;
-  text-overflow:clip!important;
+  font-size:10.5px!important;
+  font-weight:700!important;
+  color:#64748b!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  line-height:1.2!important;
+  letter-spacing:0!important;
 }
 .module-counter-value,
 .drh-workforce-value{
   font-size:20px!important;
+  font-weight:850!important;
+  color:#0f172a!important;
+  line-height:1.1!important;
+  grid-row:auto!important;
+  grid-column:auto!important;
 }
 .module-counter-pct,
 .drh-workforce-pct{
-  font-size:9.5px!important;
-  color:#94a3b8!important;
+  font-size:10px!important;
+  font-weight:700!important;
+  color:var(--drh-color)!important;
+  white-space:nowrap!important;
+  line-height:1.1!important;
 }
 .module-counter-item.is-zero,
 .drh-workforce-item.is-zero{
@@ -4846,18 +4859,8 @@ body:has(.company-portal) #app{
   background:#fbfcfe!important;
   opacity:1;
 }
-.module-counter-item.is-zero:hover,
-.drh-workforce-item.is-zero:hover{
-  opacity:1;
-}
-.module-counter-item.is-zero .module-counter-label,
-.drh-workforce-item.is-zero .drh-workforce-label,
 .module-counter-item.is-zero .module-counter-value,
 .drh-workforce-item.is-zero .drh-workforce-value{
-  color:#64748b!important;
-}
-.module-counter-item.is-zero .module-counter-pct,
-.drh-workforce-item.is-zero .drh-workforce-pct{
   color:#94a3b8!important;
 }
 #view .card{
