@@ -13110,9 +13110,33 @@ function loadMapLibre(){
 function sgdiMapLibreStyle(){
   return {
     version:8,
-    sources:{osm:{type:"raster",tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,attribution:"© OpenStreetMap contributors"}},
-    layers:[{id:"osm",type:"raster",source:"osm"}]
+    sources:{
+      osm:{type:"raster",tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,attribution:"© OpenStreetMap contributors"},
+      satellite:{type:"raster",tiles:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],tileSize:256,attribution:"© Esri"}
+    },
+    layers:[
+      {id:"osm",type:"raster",source:"osm"},
+      {id:"satellite",type:"raster",source:"satellite",layout:{visibility:"none"}}
+    ]
   };
+}
+class SgdiSatelliteControl{
+  onAdd(map){
+    this._map=map;this._satellite=false;
+    const c=document.createElement("div");c.className="maplibregl-ctrl maplibregl-ctrl-group";
+    const btn=document.createElement("button");btn.type="button";btn.title="Vue satellite";
+    btn.style.cssText="font-size:14px;width:29px;height:29px;display:flex;align-items:center;justify-content:center;background:#fff;border:none;cursor:pointer;";
+    btn.innerHTML="🛰";
+    btn.onclick=()=>{
+      this._satellite=!this._satellite;
+      map.setLayoutProperty("satellite","visibility",this._satellite?"visible":"none");
+      map.setLayoutProperty("osm","visibility",this._satellite?"none":"visible");
+      btn.innerHTML=this._satellite?"🗺":"🛰";
+      btn.title=this._satellite?"Vue plan (OSM)":"Vue satellite";
+    };
+    c.appendChild(btn);this._container=c;return c;
+  }
+  onRemove(){this._container?.parentNode?.removeChild(this._container);}
 }
 function sgdiAllSitesForMap(){
   const byId=new Map();
@@ -13186,10 +13210,11 @@ function initSitesDashboardMap(){
     const sites=sgdiAllSitesForMap().filter(s=>s&&s.actif!==false);
     const positioned=sites.map(s=>({site:s,pos:siteLatLng(s)})).filter(x=>x.pos);
     const center=positioned[0]?.pos||{lat:28.0339,lng:1.6596};
-    const map=new maplibregl.Map({container:"sites-map-frame",style:sgdiMapLibreStyle(),center:[center.lng,center.lat],zoom:positioned.length?6:4.2});
+    const map=new maplibregl.Map({container:"sites-map-frame",style:sgdiMapLibreStyle(),center:[center.lng,center.lat],zoom:positioned.length?6:4.2,scrollZoom:false});
     window.__sgdiSitesDashboardMap=map;
     window.__sgdiSitesDashboardMarkers=[];
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-left");
+    map.addControl(new SgdiSatelliteControl(),"top-left");
     map.on("load",()=>{
       try{map.resize()}catch(_){}
       const bounds=new maplibregl.LngLatBounds();
