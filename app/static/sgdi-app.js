@@ -11199,6 +11199,7 @@ function renderAgentForm(view,id){
   const officialLocked=!!(a.fichePositionOfficielle&&a.locked);
   const officialUnlocked=officialLocked&&adminFicheContext;
   const locked=!adminFicheContext;
+  const identiteEditable=!locked||isDrhFicheContext();
   const essaiLeft=a.dateFinEssai?daysBetween(today(),a.dateFinEssai):null;
   let essaiBadge="";
   if(a.dateFinEssai){
@@ -11307,37 +11308,37 @@ function renderAgentForm(view,id){
           <fieldset class="rh-op-box rh-op-personal">
             <legend>Informations personnelles</legend>
             <div class="rh-op-grid">
-              <label><span>Adresse</span><input class="input" name="adresse" value="${escapeHTML(a.adresse||a.address||"")}" ${locked?"disabled":""}/></label>
-              <label><span>Nationalité</span><select class="select" name="nationalite" ${locked?"disabled":""}>${["Algérie","France","Maroc","Tunisie","Autre"].map(n=>`<option value="${escapeHTML(n)}" ${(a.nationalite||"Algérie")===n?"selected":""}>${escapeHTML(n)}</option>`).join("")}</select></label>
-              <label><span>Email</span><input class="input" type="email" name="email" value="${escapeHTML(a.email||"")}" ${locked?"disabled":""}/></label>
-              <label><span>Civilité</span><select class="select" name="civilite" ${locked?"disabled":""}>${["Monsieur","Madame"].map(c=>`<option value="${escapeHTML(c)}" ${(a.civilite||"Monsieur")===c?"selected":""}>${escapeHTML(c)}</option>`).join("")}</select></label>
-              <label><span>Téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${locked?"disabled":""}/></label>
-              <label><span>Numéro d'identité</span><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" ${locked?"disabled":""}/></label>
-              <label><span>Compte bancaire</span><select class="select" name="banque" ${locked?"disabled":""}><option value="">—</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></label>
-              <label><span>Numéro du passeport</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${locked?"disabled":""}/></label>
-              <label><span>Lieu de naissance</span><input class="input" name="lieuNaissance" value="${escapeHTML(a.lieuNaissance||"")}" ${locked?"disabled":""}/></label>
-              <label><span>Date de naissance</span><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" ${locked?"disabled":""}/></label>
+              <label><span>Adresse</span><input class="input" name="adresse" value="${escapeHTML(a.adresse||a.address||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Nationalité</span><select class="select" name="nationalite" ${identiteEditable?"":"disabled"}>${["Algérie","France","Maroc","Tunisie","Autre"].map(n=>`<option value="${escapeHTML(n)}" ${(a.nationalite||"Algérie")===n?"selected":""}>${escapeHTML(n)}</option>`).join("")}</select></label>
+              <label><span>Email</span><input class="input" type="email" name="email" value="${escapeHTML(a.email||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Civilité</span><select class="select" name="civilite" ${identiteEditable?"":"disabled"}>${["Monsieur","Madame"].map(c=>`<option value="${escapeHTML(c)}" ${(a.civilite||"Monsieur")===c?"selected":""}>${escapeHTML(c)}</option>`).join("")}</select></label>
+              <label><span>Téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Numéro d'identité</span><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Compte bancaire</span><select class="select" name="banque" ${identiteEditable?"":"disabled"}><option value="">—</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></label>
+              <label><span>Numéro du passeport</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Lieu de naissance</span><input class="input" name="lieuNaissance" value="${escapeHTML(a.lieuNaissance||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Date de naissance</span><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" ${identiteEditable?"":"disabled"}/></label>
               <label><span>Âge</span><input class="input bg-slate-50" value="${agentAge!==null?agentAge:""}" readonly/></label>
-              <label><span>Sexe</span><select class="select" name="sexe" ${locked?"disabled":""}><option value="M" ${a.sexe==="M"?"selected":""}>M</option><option value="F" ${a.sexe==="F"?"selected":""}>F</option></select></label>
+              <label><span>Sexe</span><select class="select" name="sexe" ${identiteEditable?"":"disabled"}><option value="M" ${a.sexe==="M"?"selected":""}>M</option><option value="F" ${a.sexe==="F"?"selected":""}>F</option></select></label>
             </div>
           </fieldset>
           <fieldset class="rh-op-box rh-op-emergency">
             <legend>Informations en cas de problèmes</legend>
-            <label><span>Nom du contact</span><input class="input" name="contactUrgenceNom" value="${escapeHTML(a.contactUrgenceNom||"")}" ${locked?"disabled":""}/></label>
-            <label><span>Relation avec le contact</span><input class="input" name="contactUrgenceLien" value="${escapeHTML(a.contactUrgenceLien||"")}" ${locked?"disabled":""}/></label>
-            <label><span>Téléphone du contact</span><input class="input" name="contactUrgenceTel" value="${escapeHTML(a.contactUrgenceTel||"")}" inputmode="tel" ${locked?"disabled":""}/></label>
-            <label class="rh-op-note"><span>Note spécifiques</span><textarea class="input" name="noteUrgence" rows="5" ${locked?"disabled":""}>${escapeHTML(a.noteUrgence||"")}</textarea></label>
+            <label><span>Nom du contact</span><input class="input" name="contactUrgenceNom" value="${escapeHTML(a.contactUrgenceNom||"")}" ${identiteEditable?"":"disabled"}/></label>
+            <label><span>Relation avec le contact</span><input class="input" name="contactUrgenceLien" value="${escapeHTML(a.contactUrgenceLien||"")}" ${identiteEditable?"":"disabled"}/></label>
+            <label><span>Téléphone du contact</span><input class="input" name="contactUrgenceTel" value="${escapeHTML(a.contactUrgenceTel||"")}" inputmode="tel" ${identiteEditable?"":"disabled"}/></label>
+            <label class="rh-op-note"><span>Note spécifiques</span><textarea class="input" name="noteUrgence" rows="5" ${identiteEditable?"":"disabled"}>${escapeHTML(a.noteUrgence||"")}</textarea></label>
           </fieldset>
           <fieldset class="rh-op-box rh-op-family">
             <legend>Statut de la famille</legend>
             <div class="rh-op-family-head">
-              <label><span>Situation familiale</span><select class="select" name="situation" ${locked?"disabled":""}>${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${a.situation===s?"selected":""}>${s}</option>`).join("")}</select></label>
-              <label><span>Genre</span><select class="select" name="genreFamille" ${locked?"disabled":""}>${["","Conjoint(e)","Parent","Autre"].map(g=>`<option value="${escapeHTML(g)}" ${(a.genreFamille||"")===g?"selected":""}>${g?escapeHTML(g):"—"}</option>`).join("")}</select></label>
-              <label><span>Nombre d'enfant</span><input class="input" type="number" min="0" name="nombreEnfants" value="${escapeHTML(a.nombreEnfants??a.children_count??0)}" ${locked?"disabled":""}/></label>
+              <label><span>Situation familiale</span><select class="select" name="situation" ${identiteEditable?"":"disabled"}>${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${a.situation===s?"selected":""}>${s}</option>`).join("")}</select></label>
+              <label><span>Genre</span><select class="select" name="genreFamille" ${identiteEditable?"":"disabled"}>${["","Conjoint(e)","Parent","Autre"].map(g=>`<option value="${escapeHTML(g)}" ${(a.genreFamille||"")===g?"selected":""}>${g?escapeHTML(g):"—"}</option>`).join("")}</select></label>
+              <label><span>Nombre d'enfant</span><input class="input" type="number" min="0" name="nombreEnfants" value="${escapeHTML(String(a.nombreEnfants??a.children_count??0))}" ${identiteEditable?"":"disabled"}/></label>
             </div>
             <table class="rh-op-family-table"><thead><tr><th>Nom</th><th>Prénom</th><th>Date de naissance</th><th>Âge</th><th>Commentaire</th></tr></thead><tbody>
-              <tr><td colspan="5"><button type="button" class="rh-op-add-line" disabled>Ajouter une ligne</button></td></tr>
-              ${Array.from({length:4}).map(()=>`<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>`).join("")}
+              <tr><td colspan="5"><button type="button" class="rh-op-add-line" onclick="addFamilleRow()" ${identiteEditable?"":"disabled"}>Ajouter une ligne</button></td></tr>
+              ${(()=>{const rows=(a.famille||[]).filter(f=>f&&(f.nom||f.prenom||f.dateNaissance));const all=[...rows,...Array.from({length:Math.max(0,4-rows.length)}).map(()=>({}))];return all.map((f,i)=>`<tr data-famille-row="${i}"><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" name="famille_nom_${i}" value="${escapeHTML(f.nom||"")}" ${identiteEditable?"":"disabled"}/></td><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" name="famille_prenom_${i}" value="${escapeHTML(f.prenom||"")}" ${identiteEditable?"":"disabled"}/></td><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" type="date" name="famille_ddn_${i}" value="${f.dateNaissance||""}" ${identiteEditable?"":"disabled"}/></td><td style="text-align:center;font-size:11px">${f.dateNaissance?Math.floor(daysBetween(f.dateNaissance,today())/365):"&nbsp;"}</td><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" name="famille_commentaire_${i}" value="${escapeHTML(f.commentaire||"")}" ${identiteEditable?"":"disabled"}/></td></tr>`).join("")})()}
             </tbody></table>
           </fieldset>
         </div>
@@ -11379,11 +11380,21 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="affectation" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Affectations sur site</legend>${renderAffectationsHistorique(a,locked,canEditAffectations)}</fieldset></div>
       <div id="sanctions-section" class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="sanctions" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Sanctions disciplinaires</legend>${renderSanctions(a,locked,canEditSanctions)}</fieldset></div>
       ${(adminFicheContext||isDrhFicheContext())?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="portail" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Compte Portail RH</legend><div id="portal-account-panel" class="mt-3" data-portal-matricule="${escapeHTML(a.matricule||"")}"><div class="text-slate-400 text-sm italic">Cliquez sur l'onglet pour charger.</div></div></fieldset></div>`:""}
-      ${locked?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="sticky bottom-0 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="submit" class="btn btn-primary">Enregistrer les modifications</button></div>`}
+      ${locked&&!isDrhFicheContext()?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="sticky bottom-0 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="submit" class="btn btn-primary">Enregistrer les modifications</button></div>`}
     </form>
   </div>`;
   setTimeout(bindAgentDuplicateFieldSync,0);
 }
+window.addFamilleRow=function(){
+  const tbody=document.querySelector(".rh-op-family-table tbody");if(!tbody)return;
+  const existing=tbody.querySelectorAll("tr[data-famille-row]");
+  const idx=existing.length;
+  const s="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px";
+  const tr=document.createElement("tr");tr.setAttribute("data-famille-row",idx);
+  tr.innerHTML=`<td><input class="input" style="${s}" name="famille_nom_${idx}" value=""/></td><td><input class="input" style="${s}" name="famille_prenom_${idx}" value=""/></td><td><input class="input" style="${s}" type="date" name="famille_ddn_${idx}" value=""/></td><td style="text-align:center;font-size:11px">&nbsp;</td><td><input class="input" style="${s}" name="famille_commentaire_${idx}" value=""/></td>`;
+  tbody.appendChild(tr);
+  tr.querySelector("input").focus();
+};
 
 function syncAgentFormField(el){
   if(!el||!el.name)return;
@@ -11994,11 +12005,13 @@ function applyAgentExcelRow(agentId,rows){
 async function saveAgent(id,options){
   const opt=options||{};
   const a=db.agents.find(x=>x.id===id);if(!a)return;
-  if(!isAdminFichePositionContext()&&!opt.forceOfficialSave){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
+  if(!isAdminFichePositionContext()&&!isDrhFicheContext()&&!opt.forceOfficialSave){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
   if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()){toast("Fiche officielle verrouillée : modification impossible","error");return false}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
   const draft={...a,habilitations:{...(a.habilitations||{})}};
   ["nom","prenom","dateNaissance","lieuNaissance","sexe","situation","nomPere","nomMere","nin","nationalite","civilite","numeroPasseport","noteUrgence","nombreEnfants","genreFamille","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
+  const familleRows=[];let fi=0;while(fi<50){const nom=fd.get(`famille_nom_${fi}`);const prenom=fd.get(`famille_prenom_${fi}`);const ddn=fd.get(`famille_ddn_${fi}`);const com=fd.get(`famille_commentaire_${fi}`);if(nom===null&&prenom===null)break;if(nom||prenom||ddn)familleRows.push({nom:nom||"",prenom:prenom||"",dateNaissance:ddn||"",commentaire:com||""});fi++}
+  if(familleRows.length||draft.famille)draft.famille=familleRows;
   draft.dureeContrat=employeePositionContractDuration(draft);
   if(draft.dateRecrutement)draft.dateFinContrat=contractEndDate(draft.dateRecrutement,draft.dureeContrat);
   if(fd.get("photo")!==undefined)draft.photo=fd.get("photo")||null;
