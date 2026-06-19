@@ -4501,28 +4501,34 @@ async function confirmCreateSociete(){
 function renderSocieteSelector(){
   const selectableSocietes=currentAllowedSocietes();
   const userName=session?.nom||session?.username||"Utilisateur";
+  const imgs=typeof loadSocieteImages==="function"?loadSocieteImages():{};
+  const socCards=selectableSocietes.map(s=>{
+    const img=imgs[s]||defaultSocieteLogo(s);
+    const logo=img?`<img src="${img}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:#f1f5f9;padding:4px">`:`<div style="width:44px;height:44px;border-radius:8px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:22px">🏢</div>`;
+    return`<button type="button" class="sgdi-soc-card" onclick="pickSociete('${s.replace(/'/g,"\\'")}')">
+      ${logo}
+      <span class="sgdi-soc-card-label">${escapeHTML(s)}</span>
+    </button>`;
+  }).join("");
+  const adminAllBtn=isAdminGeneralSession()?`<button type="button" class="sgdi-soc-card sgdi-soc-card--all" onclick="pickAllSocietes()">
+    <div style="width:44px;height:44px;border-radius:8px;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:22px">🌐</div>
+    <span class="sgdi-soc-card-label">Toutes les sociétés</span>
+  </button>`:"";
   document.getElementById("app").innerHTML=`<div class="sgdi-societe-page">
     <main class="sgdi-societe-main">
       <div class="sgdi-societe-brand" aria-label="ATLAS"><span>ATLA</span><i>S</i></div>
       <div class="sgdi-societe-subtitle">ACCEDER A VOTRE ESPACE</div>
-      <section class="sgdi-societe-selector">
+      <section class="sgdi-societe-selector" style="width:auto;max-width:540px">
         <div class="sgdi-societe-selector-head">
           <span>Portail ATLAS</span>
           <strong>Choisissez votre société</strong>
         </div>
-        <div class="sgdi-societe-input-wrap">
-          <select id="societe-main-select" class="sgdi-societe-select" required onchange="if(this.value&&this.value!=='__ALL__')sgdiSpeakSociete(this.value)">
-            <option value="" selected>Sélectionner société</option>
-            ${isAdminGeneralSession()?`<option value="__ALL__">🌐 Toutes les sociétés — Situation générale</option><option disabled>──────────────────</option>`:""}
-            ${selectableSocietes.map(s=>`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`).join("")}
-          </select>
-          <button type="button" class="sgdi-societe-access" aria-label="Accéder" onclick="const s=document.getElementById('societe-main-select')?.value;if(s==='__ALL__')pickAllSocietes();else if(s)pickSociete(s);else toast('Choisissez une société','error')">OK</button>
-        </div>
+        <div class="sgdi-soc-cards-grid">${adminAllBtn}${socCards}</div>
       </section>
     </main>
     <div class="sgdi-societe-actions">
       <button type="button" class="sgdi-societe-logout" onclick="logout()">Déconnexion</button>
-      <button type="button" class="sgdi-societe-edit" onclick="openSelectSocieteToEditModal()">Modifier société</button>
+      ${isAdminGeneralSession()?`<button type="button" class="sgdi-societe-edit" onclick="openSelectSocieteToEditModal()">Modifier société</button>`:""}
     </div>
     <div class="sgdi-societe-bottom">
       <div class="sgdi-societe-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
