@@ -11300,7 +11300,6 @@ function renderAgentForm(view,id){
         ${fpTabs.map(([k,l],i)=>`<button type="button" data-fp-tab="${k}" class="${i===0?"is-active":""}" onclick="fichePositionSwitchTab('${k}')">${l}</button>`).join("")}
       </div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="identite">
-        <div class="rh-op-tabs"><button type="button" class="is-active">Informations personnelles</button><button type="button">RH information</button></div>
         <input type="hidden" name="nom" value="${escapeHTML(a.nom||"")}"/>
         <input type="hidden" name="prenom" value="${escapeHTML(a.prenom||"")}"/>
         <input type="hidden" name="photo" value="${escapeHTML(a.photo||"")}"/>
