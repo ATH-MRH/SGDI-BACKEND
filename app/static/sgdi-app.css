@@ -4639,6 +4639,12 @@ body:has(.company-portal) #app{
   border-radius:12px!important;
   font-weight:850!important;
 }
+.module-host-soc-card{
+  flex-direction:column!important;
+  min-height:110px!important;
+  gap:10px!important;
+  padding:16px 12px!important;
+}
 .module-host-drh .module-host-module:hover{border-color:#0f766e!important}
 .module-host-ops .module-host-module:hover{border-color:#1d4ed8!important}
 .module-host-materiel .module-host-module:hover{border-color:#b45309!important}

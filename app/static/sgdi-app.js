@@ -3540,7 +3540,7 @@ function renderModuleHostSocieteSelector(cfg){
         <div class="module-host-subtitle">Choisissez la société à gérer</div>
       </section>
       <div class="company-portal-grid module-host-grid">
-        ${societes.map(s=>`<button type="button" class="company-portal-module module-host-module" onclick="selectModuleHostSociete('${jsString(s)}')">${escapeHTML(s)}</button>`).join("")}
+        ${(()=>{const imgs=typeof loadSocieteImages==="function"?loadSocieteImages():{};return societes.map(s=>{const img=imgs[s]||defaultSocieteLogo(s);const logo=img?`<img src="${img}" alt="" style="width:44px;height:44px;object-fit:contain;border-radius:8px;background:#f1f5f9;padding:4px">`:`<div style="width:44px;height:44px;border-radius:8px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:22px">🏢</div>`;return`<button type="button" class="company-portal-module module-host-module module-host-soc-card" onclick="selectModuleHostSociete('${jsString(s)}')">${logo}<span class="sgdi-soc-card-label">${escapeHTML(s)}</span></button>`;}).join("")})()}
       </div>
       ${societes.length?``:`<div class="company-portal-foot text-red-700">Aucune société autorisée pour ce compte.</div>`}
     </main>
