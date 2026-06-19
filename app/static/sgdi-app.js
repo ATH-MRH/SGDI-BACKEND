@@ -4975,13 +4975,18 @@ function refreshModuleCountersRibbon(){
   const html=moduleCountersRibbonHTML();
   const old=document.querySelector(".module-counters-ribbon");
   if(old){
-    if(html)old.outerHTML=html;
-    else old.remove();
+    if(!html){old.remove();return;}
+    const tmp=document.createElement("div");tmp.innerHTML=html;
+    const newEl=tmp.firstElementChild;
+    if(!newEl)return;
+    const newInner=newEl.innerHTML;
+    const newStyle=newEl.getAttribute("style")||"";
+    if(old.innerHTML!==newInner){old.innerHTML=newInner;}
+    if((old.getAttribute("style")||"")!==newStyle){old.setAttribute("style",newStyle);}
     return;
   }
-  const main=document.querySelector(".sgdi-shell-body main");
   const view=document.getElementById("view");
-  if(main&&view&&html)view.insertAdjacentHTML("beforebegin",html);
+  if(view&&html)view.insertAdjacentHTML("beforebegin",html);
 }
 function syncSidebarActiveState(){
   const nav=document.getElementById("sidebar-nav");
