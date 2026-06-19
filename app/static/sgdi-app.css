@@ -443,6 +443,8 @@
   .banner-blue{background:var(--info-soft);color:#043970;border:1px solid #b9cce0}
   .banner-green{background:var(--success-soft);color:#0f172a;border:1px solid #cbd5e1}
   .banner-red{background:var(--danger-soft);color:#991b1b;border:1px solid #fecaca}
+  /* Fieldset-legend style global : tous les section-banner dans les cartes */
+  .card .section-banner:not(#banner-warn):not(#banner-ok){background:#fff!important;color:#1f6fb2!important;font-size:13px!important;font-weight:800!important;border:none!important;border-bottom:1.5px solid #bfdbfe!important;border-radius:0!important;margin:-20px -20px 14px!important;padding:9px 14px!important;letter-spacing:.03em!important;text-transform:none!important}
 
   /* ----- MODAL ----- */
   #modal-host{position:relative;z-index:10000}
