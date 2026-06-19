@@ -6126,6 +6126,26 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
   r.onerror=()=>{if(instantUrl)URL.revokeObjectURL(instantUrl)};
   r.readAsDataURL(f);
 }
+function openAgentPhotoUpload(agentId){
+  const inp=document.createElement("input");
+  inp.type="file";inp.accept="image/*";inp.style.display="none";
+  inp.onchange=()=>{
+    const file=inp.files[0];if(!file)return;
+    if(file.size>3*1024*1024){toast("Photo trop lourde (max 3 Mo)","error");return;}
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const src=e.target.result;
+      const zone=document.getElementById("rh-erp-photo-"+agentId);
+      if(zone)zone.innerHTML=`<img src="${src}" style="width:100%;height:100%;object-fit:cover;display:block;"><div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
+      const hidden=document.querySelector("#agent-form [name='photo']");
+      if(hidden){hidden.value=src;hidden.dispatchEvent(new Event("change",{bubbles:true}));}
+    };
+    reader.readAsDataURL(file);
+    document.body.removeChild(inp);
+  };
+  document.body.appendChild(inp);inp.click();
+}
+window.openAgentPhotoUpload=openAgentPhotoUpload;
 function removePhoto(targetHidden,previewId){const h=document.getElementById(targetHidden);if(h){h.value="";h.dispatchEvent(new Event("change",{bubbles:true}))}const p=document.getElementById(previewId);if(p){p.style.backgroundImage="";p.innerHTML="👤";p.dataset.hasPhoto="0";p.classList.remove("field-error-box")}}
 function photoField(currentPhoto,hiddenName="photo"){const id=Math.random().toString(36).slice(2,8);return`<div class="photo-field-wrap"><input type="hidden" id="photo-hidden-${id}" name="${hiddenName}" value="${currentPhoto||""}"/><input id="photo-input-${id}" type="file" accept="image/*" class="hidden" onchange="handlePhotoUpload('photo-input-${id}','photo-hidden-${id}','photo-preview-${id}')"/><div class="photo-clickzone" onclick="document.getElementById('photo-input-${id}').click()" title="Cliquer pour ${currentPhoto?"changer":"ajouter"} la photo"><div id="photo-preview-${id}" class="photo-preview-inner" data-has-photo="${currentPhoto?"1":"0"}">${currentPhoto?`<img src="${currentPhoto}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;"/>`:`<svg viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.4" width="32" height="32"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>`}</div><div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div></div>${currentPhoto?`<button type="button" class="photo-remove-badge" data-remove-photo="photo-hidden-${id}" onclick="removePhoto('photo-hidden-${id}','photo-preview-${id}')" title="Retirer la photo">×</button>`:""}<div class="photo-hint">JPG · PNG</div></div>`}
 function handleDocUpload(key,inputId,holderId){const inp=document.getElementById(inputId);if(!inp||!inp.files[0])return;const f=inp.files[0];if(f.size>5*1024*1024){toast("Fichier > 5 Mo","error");return}const r=new FileReader();r.onload=e=>{const urlI=document.querySelector(`[name="doc_${key}_url"]`);const nmI=document.querySelector(`[name="doc_${key}_name"]`);const vc=document.querySelector(`[name="verif${key}"]`);if(urlI)urlI.value=e.target.result;if(nmI)nmI.value=f.name;if(vc){vc.checked=true;vc.dispatchEvent(new Event("change",{bubbles:true}))}document.getElementById(holderId).innerHTML=`<div class="text-xs text-emerald-600">✅ ${escapeHTML(f.name)}</div><button type="button" class="btn btn-ghost text-xs mt-1" onclick="viewDoc('${e.target.result}','${escapeHTML(f.name)}')">👁 Voir</button><button type="button" class="btn btn-ghost text-xs mt-1 text-red-600" onclick="removeDoc('${key}','${holderId}')">✕ Retirer</button>`;toast(`Pièce "${key}" téléversée`,"success")};r.readAsDataURL(f)}
@@ -11301,7 +11321,12 @@ function renderAgentForm(view,id){
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
-      <div class="rh-erp-photo">${a.photo?`<img src="${a.photo}" alt="">`:"Photo"}</div>
+      <div class="rh-erp-photo" id="rh-erp-photo-${escapeHTML(a.id)}" onclick="openAgentPhotoUpload('${escapeHTML(a.id)}')" title="Cliquer pour ${a.photo?"modifier":"ajouter"} la photo">
+        ${a.photo
+          ?`<img src="${a.photo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">`
+          :`<div style="display:flex;flex-direction:column;align-items:center;gap:6px;color:#94a3b8"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" width="34" height="34"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span style="font-size:10px;font-weight:700;letter-spacing:.04em">PHOTO</span></div>`}
+        <div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+      </div>
       <div class="rh-erp-fields">
         <div class="rh-erp-field"><b>Code</b><span style="color:${codeColor};font-weight:950">${safe(a.matricule)||"—"}</span></div>
         <div class="rh-erp-field"><b>Recrutement</b><span>${formatDate(a.dateRecrutement)}${anciennete&&anciennete!=="—"?` (${anciennete})`:""}</span></div>
