@@ -1856,6 +1856,8 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .rh-op-box label span{font-size:11px;color:#334155;font-weight:900;line-height:1.15}
   .rh-op-box .input,.rh-op-box .select{height:25px!important;min-height:25px!important;padding:2px 8px!important;border-color:#cbd5e1!important;border-radius:4px!important;font-size:12px!important;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)!important}
   .rh-op-box textarea.input{height:auto!important;min-height:80px!important;resize:vertical}
+  .rh-panel-fieldset{border:1.5px solid #bfdbfe;border-radius:7px;padding:10px 14px 14px;background:#fff;min-width:0;width:100%;box-sizing:border-box}
+  .rh-panel-fieldset>legend{padding:0 6px;color:#1f6fb2;font-size:13px;font-weight:800;letter-spacing:.02em}
   .rh-op-emergency{display:grid;gap:7px;align-content:start}
   .rh-op-emergency .rh-op-note{grid-template-columns:1fr}
   .rh-op-emergency .rh-op-note span{margin:4px 0 2px;color:#1f6fb2;font-size:13px}
