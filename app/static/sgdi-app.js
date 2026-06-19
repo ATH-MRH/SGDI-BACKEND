@@ -4011,7 +4011,7 @@ function moduleCountersRibbonHTML(){
 function dialogueTopbarButtonHTML(){
   if(!session)return"";
   const unread=dialogueIncomingUnreadItems().length;
-  return `<button type="button" data-no-lang="1" class="topbar-dialogue-btn no-print ${unread?"has-unread":""}" onclick="dialogueToggle(true)" title="Messages"><svg class="sgdi-mail-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" ry="2"></rect><path d="M4 7l8 6 8-6"></path></svg>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
+  return `<button type="button" data-no-lang="1" class="topbar-dialogue-btn no-print ${unread?"has-unread":""}" onclick="dialogueToggle(true)" title="Messages" aria-label="Messages">${unread?`<span class="badge">${unread}</span>`:""}</button>`;
 }
 function notificationVisibleTasks(){
   if(!session)return[];
@@ -4206,7 +4206,7 @@ function notificationTopbarButtonHTML(){
   const unread=notificationUnreadTasks().length;
   const mod=sgdiCurrentAlertModule();
   const label=mod?`Alertes ${sgdiAlertModuleLabel(mod)}`:"Alertes";
-  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="${escapeHTML(label)}"><svg class="sgdi-alert-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3L22 20H2L12 3Z"></path><path d="M12 9v5"></path><circle cx="12" cy="17" r=".8"></circle></svg>${unread?`<span class="badge">${unread}</span>`:""}</button>`;
+  return `<button type="button" data-no-lang="1" class="topbar-notification-btn no-print ${unread?"has-alert":""}" onclick="notificationToggle(true)" title="${escapeHTML(label)}" aria-label="${escapeHTML(label)}">${unread?`<span class="badge">${unread}</span>`:""}</button>`;
 }
 function societeStructureBarHTML(){return "";}
 

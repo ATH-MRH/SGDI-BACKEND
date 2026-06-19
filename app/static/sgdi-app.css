@@ -197,6 +197,7 @@
   .sgdi-lang-choice span{display:none!important}
   .sgdi-lang-choice .btn{height:30px!important;min-width:32px!important;border-radius:999px!important;padding:0 9px!important}
   .topbar-dialogue-btn{height:34px;border:0;background:var(--sgdi-btn-yellow);color:var(--sgdi-btn-text);border:2px solid var(--sgdi-btn-border,#facc15);border-radius:999px;padding:0 12px;font-size:11px!important;font-weight:950;display:inline-flex;align-items:center;gap:7px;box-shadow:0 6px 14px rgba(15,23,42,.14);cursor:pointer;white-space:nowrap;position:relative}
+  .sgdi-topbar svg,.topbar-dialogue-btn svg,.topbar-notification-btn svg,.sgdi-mail-icon,.sgdi-alert-icon{display:none!important;visibility:hidden!important;width:0!important;height:0!important}
   .topbar-dialogue-btn:hover{background:var(--sgdi-btn-yellow-hover);color:var(--sgdi-btn-text);border-color:var(--sgdi-btn-border,#facc15)}
   .topbar-dialogue-btn.has-unread{animation:dialogueTopbarBlink .85s infinite;box-shadow:0 0 0 3px rgba(220,38,38,.18),0 8px 18px rgba(220,38,38,.28)}
   .topbar-dialogue-btn.has-unread:before{content:"";position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:999px;background:#dc2626;border:2px solid #fff;box-shadow:0 0 0 4px rgba(220,38,38,.18)}
