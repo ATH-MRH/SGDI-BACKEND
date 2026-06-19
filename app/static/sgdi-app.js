@@ -3430,6 +3430,22 @@ function sgdiModuleHostConfigs(){
         {label:"MOUVEMENTS",route:"materiel/mouvements"}
       ]
     },
+    facturation:{
+      key:"facturation",
+      title:"Portail COMPTA",
+      context:"Finances & comptabilité",
+      homeRoute:"facturation/dashboard",
+      sections:[
+        {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
+        {label:"DEVIS",route:"facturation/devis"},
+        {label:"FACTURES",route:"facturation/factures"},
+        {label:"PAIEMENTS",route:"facturation/paiements"},
+        {label:"AVANCES",route:"facturation/avances"},
+        {label:"AVOIRS",route:"facturation/avoirs"},
+        {label:"CAISSE",route:"facturation/caisse"},
+        {label:"SITUATION FINANCIÈRE",route:"facturation/situation"}
+      ]
+    },
     admin:{
       key:"admin",
       title:"Administration système",
