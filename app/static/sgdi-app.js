@@ -11160,31 +11160,37 @@ function demandePersonnelStatusPill(statut){
 }
 function renderAgentDemandesSection(a){
   const rows=agentDemandesPersonnel(a);
-  const open=rows.filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
-  const done=rows.filter(d=>(d.statut||"")==="traite").length;
-  const recent=rows.slice(0,5);
-  return `<div class="card p-5 mb-4">
-    <div class="section-banner banner-blue">Demande/Réclamation</div>
-    <div class="grid grid-4 mb-4">
-      <div class="p-3 rounded-lg bg-slate-50"><div class="text-xs text-slate-500">Total</div><div class="text-2xl font-black text-slate-800">${rows.length}</div></div>
-      <div class="p-3 rounded-lg bg-amber-50"><div class="text-xs text-amber-700">Nouvelles</div><div class="text-2xl font-black text-amber-700">${rows.filter(d=>(d.statut||"nouveau")==="nouveau").length}</div></div>
-      <div class="p-3 rounded-lg bg-sky-50"><div class="text-xs text-sky-700">En cours</div><div class="text-2xl font-black text-sky-700">${rows.filter(d=>(d.statut||"")==="en_cours").length}</div></div>
-      <div class="p-3 rounded-lg bg-emerald-50"><div class="text-xs text-emerald-700">Traitées</div><div class="text-2xl font-black text-emerald-700">${done}</div></div>
+  const nouvelles=rows.filter(d=>(d.statut||"nouveau")==="nouveau").length;
+  const enCours=rows.filter(d=>(d.statut||"")==="en_cours").length;
+  const traites=rows.filter(d=>(d.statut||"")==="traite").length;
+  const open=nouvelles+enCours;
+  return `<div style="border:1px solid #dde3ef;border-radius:10px;overflow:hidden;margin-bottom:16px;background:#fff">
+    <div style="background:#eef2f8;padding:7px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #dde3ef">
+      <span style="font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.12em;color:#3b4a6b">DEMANDE</span>
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="color:#8a9bbf"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </div>
-    ${recent.length?`<div class="overflow-hidden rounded-lg border border-slate-200"><table>
-      <thead><tr><th>Date</th><th>Type</th><th>Objet</th><th>Statut</th><th>Réponse</th></tr></thead>
-      <tbody>${recent.map(d=>`<tr>
-        <td class="text-xs">${formatDate((d.date||d.createdAt||"").slice(0,10))}</td>
-        <td class="text-xs font-semibold">${escapeHTML(demandePersonnelTypeLabel(d))}</td>
-        <td class="text-xs">${escapeHTML(d.objet||d.message||"—")}</td>
-        <td>${demandePersonnelStatusPill(d.statut)}</td>
-        <td class="text-xs">${d.reponse?escapeHTML(d.reponse):"—"}</td>
-      </tr>`).join("")}</tbody>
-    </table></div>`:`<div class="p-4 rounded-lg bg-slate-50 text-sm text-slate-500">Aucune demande ou réclamation enregistrée pour cet employé.</div>`}
-    <div class="mt-4 flex justify-between items-center gap-2 flex-wrap">
-      <div class="text-xs text-slate-500">${open} demande(s) ouverte(s) pour le code ${escapeHTML(a.matricule||"—")}.</div>
-      <button type="button" class="btn btn-secondary text-xs" onclick="navigate('demandes_personnel/dashboard')">Ouvrir réception demandes</button>
+    <div style="padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex:1;flex-wrap:wrap">
+        <div style="flex:1;min-width:68px;background:#dbeafe;border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:9px;color:#1e40af;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Total</div>
+          <div style="font-size:20px;font-weight:900;color:#1e3a8a;line-height:1">${rows.length}</div>
+        </div>
+        <div style="flex:1;min-width:68px;background:#fce7f3;border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:9px;color:#9d174d;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Nouvelles</div>
+          <div style="font-size:20px;font-weight:900;color:#831843;line-height:1">${nouvelles}</div>
+        </div>
+        <div style="flex:1;min-width:68px;background:#fef9c3;border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:9px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">En cours</div>
+          <div style="font-size:20px;font-weight:900;color:#78350f;line-height:1">${enCours}</div>
+        </div>
+        <div style="flex:1;min-width:68px;background:#cffafe;border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:9px;color:#155e75;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Traités</div>
+          <div style="font-size:20px;font-weight:900;color:#164e63;line-height:1">${traites}</div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary text-xs" onclick="navigate('demandes_personnel/dashboard')" style="white-space:nowrap;flex-shrink:0">Ouvrir réception demandes</button>
     </div>
+    ${open>0?`<div style="font-size:11px;color:#64748b;padding:6px 14px 8px;border-top:1px solid #eef2f8">${open} demande(s) ouverte(s) · matricule ${escapeHTML(a.matricule||"—")}</div>`:""}
   </div>`;
 }
 function renderAgentForm(view,id){
