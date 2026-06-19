@@ -3657,9 +3657,14 @@ window.refreshWorkspace=refreshWorkspace;
 function workspaceTabsBarHTML(){
   if(!session)return"";
   const visible=structureTopbarItems();
+  const quickLaunchHTML=`<div class="ws-quicklaunch-group">
+    <a class="ws-quicklaunch-btn" href="ms-word:" title="Microsoft Word"><span class="ws-ql-icon" style="background:#2b579a">W</span></a>
+    <a class="ws-quicklaunch-btn" href="ms-excel:" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></a>
+    <a class="ws-quicklaunch-btn" href="calculator:" title="Calculatrice"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></a>
+  </div>`;
   if(visible.length<=1)return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
-    <div class="ws-tab-actions">${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}</div>
+    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}</div>
     <button type="button" class="ws-refresh-tab" onclick="window.refreshWorkspace()" title="Actualiser" aria-label="Actualiser">↻</button>
   </div>`;
   const activeKey=String(session.transverse||"");
@@ -3680,7 +3685,7 @@ function workspaceTabsBarHTML(){
   }).join("");
   return `<div class="ws-browser-chrome no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar">${tabs}</div>
-    <div class="ws-tab-actions">${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}</div>
+    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}</div>
     <button type="button" class="ws-refresh-tab" onclick="window.refreshWorkspace()" title="Actualiser" aria-label="Actualiser">↻</button>
   </div>`;
 }
