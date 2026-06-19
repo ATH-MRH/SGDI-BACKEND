@@ -18319,9 +18319,10 @@ function renderMatSimpleArticles(view){
     <tbody>${filtered.map(a=>{
       const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
       const seuil=parseFloat(a.seuilAlerte)||0;
-      const etat=q<=0?{c:"#dc2626",bg:"#fef2f2",l:"🔴 Rupture"}:(seuil&&q<=seuil?{c:"#043970",bg:"#043970",l:"🟡 Bas"}:{c:"#16a34a",bg:"#043970",l:"✓ OK"});
+      const etat=q<=0?{c:"#dc2626",bg:"#fef2f2",l:"🔴 Rupture"}:(seuil&&q<=seuil?{c:"#b45309",bg:"#fffbeb",l:"🟡 Alerte"}:{c:"#16a34a",bg:"#f0fdf4",l:"✓ OK"});
+      const rowBg=q<=0?"#fef2f2":(seuil&&q<=seuil?"#fffbeb":"");
       const mag=mags.find(m=>m.id===a.magasinId);
-      return`<tr class="border-t hover:bg-slate-50">
+      return`<tr class="border-t hover:bg-slate-50" style="${rowBg?"background:"+rowBg:""}">`+`
         <td class="p-3 font-mono text-xs">${escapeHTML(a.code||"—")}</td>
         <td class="p-3"><a class="font-bold text-amber-700 hover:underline" href="#/materiel/article/${a.id}">${escapeHTML(a.designation||"—")}</a><div class="text-[10px] text-slate-400">${escapeHTML(a.marque||"")}${a.modele?" · "+escapeHTML(a.modele):""}</div></td>
         <td class="p-3 text-xs">${escapeHTML(a.categorie||"—")}</td>
