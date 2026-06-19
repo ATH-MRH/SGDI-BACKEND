@@ -11293,6 +11293,7 @@ function renderAgentForm(view,id){
   const finContratBadge=ficheContractEndDate&&finContratDays!==null?`<span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;margin-left:10px;border-radius:999px;background:${finContratDays<0?"#fee2e2":finContratDays<=30?"#fee2e2":"#eaf2fb"};color:${finContratDays<=30?"#b91c1c":"#043970"};font-size:13px;font-weight:950;vertical-align:middle">${finContratDays<0?`Expiré J+${Math.abs(finContratDays)}`:`J-${finContratDays}`}</span>`:"";
   const dureeEssaiValue=parseInt(a.dureeEssai,10)||((a.dateRecrutement&&a.dateFinEssai)?Math.max(daysBetween(a.dateRecrutement,a.dateFinEssai),0):90);
   const aff=opsEmployeeLiveAffectation(a);
+  const retourOnclick=adminFicheContext?"navigate('admin/fiches')":"history.back()";
   const drhTopActions=adminFicheContext?`<div class="flex justify-between items-center gap-2 mb-3 flex-wrap">
     <button type="button" class="btn btn-ghost text-xs" onclick="navigate('admin/fiches')">← Retour fiches de position</button>
     <button type="button" class="btn text-xs" style="background:#16a34a;border-color:#15803d;color:#fff;font-weight:900" onclick="drhValiderVerrouillerFichePosition('${a.id}')">Enregistrer et verrouiller</button>
@@ -11317,7 +11318,7 @@ function renderAgentForm(view,id){
     ${drhTopActions}
     <div class="rh-erp-toolbar">
       <div class="rh-erp-title"><strong style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;display:block;margin-bottom:2px">FICHE DE POSITION</strong><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
-      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div>
+      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button><button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button></div>
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
