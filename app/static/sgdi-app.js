@@ -4724,7 +4724,7 @@ function sidebarRouteActive(path,route){return path===route||path.startsWith(rou
 function renderSidebar(){
   // Applique le thème de société sur <body data-soc="..."> pour le CSS sidebar
   const _themeSoc=session?.societe||(typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"");
-  document.body.dataset.soc=/securit/i.test(_themeSoc||"")?"igs":"";
+  document.body.dataset.soc=/s[eé]curit/i.test(_themeSoc||"")?"igs":"";
   // Met à jour le tab actif dans la barre workspace tabs
   const wsBar=document.getElementById("ws-tabs-bar");
   if(wsBar){
