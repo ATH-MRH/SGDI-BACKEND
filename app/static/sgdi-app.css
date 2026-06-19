@@ -1040,7 +1040,8 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .candidate-actions-row .btn{width:auto;min-height:36px}
   .candidate-section-card{position:relative;padding:0;margin-bottom:14px;overflow:visible}
   .candidate-section-card.candidate-section-attention{box-shadow:0 0 0 3px rgba(245,158,11,.28),0 18px 34px rgba(15,23,42,.10)!important}
-  .candidate-section-card.candidate-section-attention .candidate-section-head{background:#fffbeb!important;border-bottom-color:#fbbf24!important}
+  .candidate-section-card.candidate-section-attention .rh-panel-fieldset{border-color:#fbbf24!important}
+  .candidate-section-card.candidate-section-attention .rh-panel-fieldset>legend{color:#b45309!important}
   .candidate-section-card[data-locked="1"] .input:disabled,
   .candidate-section-card[data-locked="1"] .select:disabled,
   .candidate-section-card[data-locked="1"] .textarea:disabled{
@@ -1069,12 +1070,14 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
     font-weight:900;
     box-shadow:0 0 0 3px rgba(220,38,38,.18)!important;
   }
-  .candidate-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);background:#f8fafc;color:var(--text)}
-  .candidate-section-head h2{font-size:14px;line-height:1.25;margin:2px 0 0;font-weight:900;color:var(--text)}
+  .candidate-section-meta-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 6px}
   .candidate-section-kicker{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-mute);font-weight:900}
-  .candidate-section-state{flex-shrink:0}
-  .candidate-section-card>.grid,.candidate-section-card>.mt-4:not(.candidate-section-footer){padding:16px}
-  .candidate-section-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);background:#f8fafc;padding:10px 16px}
+  .candidate-section-card .rh-panel-fieldset{margin:0 12px 0!important;border-color:#bfdbfe!important}
+  .candidate-section-card .rh-panel-fieldset>legend{color:#1f6fb2!important;font-size:13px!important;font-weight:900!important}
+  .candidate-section-card .rh-panel-fieldset>.grid,
+  .candidate-section-card .rh-panel-fieldset>.mt-4,
+  .candidate-section-card .rh-panel-fieldset>#exp-rows{margin-top:10px}
+  .candidate-section-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--border);background:#f8fafc;padding:10px 16px;margin-top:10px}
   .candidate-section-card.current .candidate-section-footer{display:none}
   .candidate-global-section-footer{
     position:sticky;

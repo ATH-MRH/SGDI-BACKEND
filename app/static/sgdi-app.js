@@ -7475,22 +7475,20 @@ function candidatSectionOpen(c,key,bannerClass,title){
   const current=candidatCurrentSectionKey(c)===key;
   const v=candidatSectionValidations(c)[key];
   return `<div class="card candidate-section-card ${current?"current":""} ${locked?"opacity-80":""}" id="section-${key}" data-candidat-section="${key}" data-locked="${locked?"1":"0"}">
-    <div class="candidate-section-head ${bannerClass}">
-      <div>
-        <div class="candidate-section-kicker">Section ${candidatSectionIndex(key)+1}</div>
-        <h2>${title}</h2>
-      </div>
-      <div class="candidate-section-state">
-        ${v?`<span class="pill pill-green">Validée ${v.by?`par ${escapeHTML(v.by)}`:""}</span>`:(current?`<span class="pill pill-amber">À valider</span>`:`<span class="pill pill-gray">En attente</span>`)}
-      </div>
-    </div>`;
+    <div class="candidate-section-meta-row">
+      <span class="candidate-section-kicker">Section ${candidatSectionIndex(key)+1}</span>
+      ${v?`<span class="pill pill-green">Validée ${v.by?`par ${escapeHTML(v.by)}`:""}</span>`:(current?`<span class="pill pill-amber">À valider</span>`:`<span class="pill pill-gray">En attente</span>`)}
+    </div>
+    <fieldset class="rh-panel-fieldset" style="margin:0 0 0 0">
+      <legend>${title}</legend>`;
 }
 function candidatSectionClose(c,key){
   if(!candidatSectionAvailable(c,key))return "";
   const valid=candidatSectionIsValidated(c,key);
   const canUnlock=candidatCanUnlockSections();
   const meta=candidatSectionValidations(c)[key];
-  return `<div class="candidate-section-footer">
+  return `</fieldset>
+    <div class="candidate-section-footer">
       <div class="candidate-section-actions">
         ${valid&&canUnlock?`<button type="button" class="btn btn-ghost text-xs" data-section-action="1" onclick="unlockCandidatSection('${escapeHTML(c.id)}','${key}')">Déverrouiller</button>`:""}
       </div>
