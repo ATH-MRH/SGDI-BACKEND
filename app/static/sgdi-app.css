@@ -631,6 +631,11 @@
   .site-map-empty{border:1px dashed #cbd5e1;background:#f8fafc;border-radius:8px;padding:28px;text-align:center;color:#475569;font-size:13px}
   .site-complete-bulb{width:24px;height:24px;border-radius:999px;background:#dcfce7;color:#15803d;border:1px solid #86efac;display:inline-grid;place-items:center;font-size:14px;line-height:1;box-shadow:0 0 0 4px rgba(34,197,94,.12),0 0 14px rgba(34,197,94,.45);animation:siteCompleteGlow 1.8s ease-in-out infinite}
   @keyframes siteCompleteGlow{0%,100%{box-shadow:0 0 0 4px rgba(34,197,94,.10),0 0 10px rgba(34,197,94,.35)}50%{box-shadow:0 0 0 6px rgba(34,197,94,.18),0 0 18px rgba(34,197,94,.62)}}
+  .site-status-lamp{width:22px;height:22px;border-radius:50%;display:inline-block;flex-shrink:0;vertical-align:middle}
+  .site-status-lamp.lamp-green{background:radial-gradient(circle at 35% 30%,#86efac 0%,#16a34a 60%,#14532d 100%);box-shadow:0 0 0 3px rgba(22,163,74,.20),0 0 10px rgba(22,163,74,.55)}
+  .site-status-lamp.lamp-red{background:radial-gradient(circle at 35% 30%,#fca5a5 0%,#dc2626 60%,#7f1d1d 100%);box-shadow:0 0 0 3px rgba(220,38,38,.20),0 0 10px rgba(220,38,38,.55);animation:lampBlink 1s ease-in-out infinite}
+  .site-status-lamp.lamp-gray{background:radial-gradient(circle at 35% 30%,#e2e8f0 0%,#94a3b8 60%,#475569 100%);box-shadow:0 0 0 3px rgba(148,163,184,.15)}
+  @keyframes lampBlink{0%,100%{opacity:1;box-shadow:0 0 0 3px rgba(220,38,38,.20),0 0 10px rgba(220,38,38,.55)}50%{opacity:.25;box-shadow:none}}
   .maplibregl-popup-content{font:12px/1.35 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#0f172a;border-radius:8px;box-shadow:0 14px 34px rgba(15,23,42,.18)}
 body.sgdi-overlay-open #sites-map-frame,
 body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibility:hidden!important;pointer-events:none!important}
