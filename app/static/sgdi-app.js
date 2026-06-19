@@ -11316,7 +11316,7 @@ function renderAgentForm(view,id){
   view.innerHTML=`<div class="max-w-none mx-auto rh-erp-page">
     ${drhTopActions}
     <div class="rh-erp-toolbar">
-      <div class="rh-erp-title"><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
+      <div class="rh-erp-title"><strong style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;display:block;margin-bottom:2px">FICHE DE POSITION</strong><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
       <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${adminFicheContext?"navigate('admin/fiches')":"history.back()"}">Retour</button></div>
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
