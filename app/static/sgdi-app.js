@@ -3461,7 +3461,7 @@ function sgdiModuleHostConfigs(){
     },
     facturation:{
       key:"facturation",
-      title:"Portail COMPTA",
+      title:"Portail Finances & Comptabilité",
       context:"Finances & comptabilité",
       homeRoute:"facturation/dashboard",
       sections:[
@@ -3514,10 +3514,12 @@ function sgdiModuleHostConfig(){
   const host=String(location.hostname||"").toLowerCase();
   const configs=sgdiModuleHostConfigs();
   const first=host?host.split(".")[0]:"";
+  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation"};
+  const configKey=hostAliases[first]||first;
   // Domaine dédié (ex: drh.sgdi.com, facturation.sgdi.com)
   if(host&&first!=="localhost"&&host!=="127.0.0.1"&&host!=="0.0.0.0"&&host!=="::1"&&first!=="sgdi"&&first!=="www"&&first!=="atlas"){
     if(first==="administrateur"||first==="general")return configs.admin||null;
-    return configs[first]||null;
+    return configs[configKey]||null;
   }
   // Domaine principal ou localhost : détecter les utilisateurs mono-structure
   if(session){
@@ -26244,7 +26246,7 @@ function normalizeStructureList(list){const out=[];(Array.isArray(list)?list:[])
 function adminStructureLabel(key){const k=normalizeStructureKey(key);const x=ADMIN_STRUCTURES.find(s=>s.key===k);return x?x.label:String(key||"").toUpperCase()}
 function userAllowedStructures(user){return normalizeStructureList(user&&user.structuresAutorisees)}
 function currentAllowedStructures(){return userAllowedStructures(currentUserRecord()||session)}
-function canAccessModuleHostKey(key){const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&allowed.length>0&&(allowed.includes(normalized)||(normalized==="paie"&&allowed.includes("drh")))}
+function canAccessModuleHostKey(key){const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||allowed.includes(normalized)||(normalized==="paie"&&allowed.includes("drh")))}
 function canAccessStructureKey(key){if(isAdmin())return true;const allowed=currentAllowedStructures();const normalized=normalizeStructureKey(key);return !allowed.length||allowed.includes(normalized)||(normalized==="paie"&&allowed.includes("drh"))}
 function adminAccessBaseRole(role){const r=String(role||"").trim();const u=r.toUpperCase();if(u.startsWith("AG"))return"agent";if(u.startsWith("CAD")||u==="RH")return"ops";if(u.startsWith("SUP"))return"dispatch";if(u.startsWith("ADM")||u==="ADMIN")return"admin";return r.toLowerCase()}
 function normalizeAdminUserRole(role){const b=adminAccessBaseRole(role);if(b==="admin")return"ADM";if(b==="dispatch")return"dispatch";if(b==="ops"||b==="rh")return"ops";return"agent"}
