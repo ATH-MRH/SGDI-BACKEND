@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,6 +41,14 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def require_postgresql_in_production(self) -> "Settings":
+        if self.app_env.strip().lower() in {"production", "prod"}:
+            database_url = self.database_url.strip().lower()
+            if not database_url.startswith(("postgresql://", "postgresql+psycopg2://", "postgres://")):
+                raise ValueError("DATABASE_URL doit cibler PostgreSQL en production")
+        return self
 
 
 @lru_cache
