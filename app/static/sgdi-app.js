@@ -23079,7 +23079,6 @@ function renderCommDashboard(view){
   const contratsExpires=clients.filter(c=>c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)<0);
   const contratsFin30=clients.filter(c=>{if(!c.dateFinContrat)return false;const d=daysBetween(today(),c.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
-  const commercialWorkflowCard=workflowTasksCardHTML("commercial","Informations recrutement","Aucune information recrutement à traiter.");
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">COMMERCIAL - TABLEAU DE BORD</h1>
     <p class="text-slate-500 text-sm mb-4">${mySoc()||"Toutes sociétés"}</p>
     ${commTabs("dashboard")}
@@ -23093,7 +23092,6 @@ function renderCommDashboard(view){
       </div>
       ${contratsAlerte.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${contratsAlerte.slice(0,6).map(c=>{const d=daysBetween(today(),c.dateFinContrat);return`<div class="p-3 rounded-lg text-sm" style="background:#fff;border:1px solid #fecaca"><div class="flex justify-between gap-2"><b>${escapeHTML(c.nom||c.raisonSociale||"Client")}</b><span class="pill ${d<0?"pill-red":"pill-amber"}">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(c.societe||"—")} · Fin contrat : ${formatDate(c.dateFinContrat)}${c.prestationsServices?` · ${escapeHTML(c.prestationsServices)}`:""}</div></div>`}).join("")}</div>${contratsAlerte.length>6?`<div class="text-xs text-red-700 mt-2 font-semibold">+ ${contratsAlerte.length-6} autre(s) client(s) en alerte.</div>`:""}`:`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat client dans les 30 jours.</div>`}
     </div>
-    <div class="mb-4">${commercialWorkflowCard}</div>
     <div class="grid grid-4 mb-4">
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Prospects</div><div class="text-2xl font-bold mt-1 text-blue-600">${prospects.length}</div><div class="text-xs text-slate-400 mt-1">${prospects.filter(p=>p.statut==="nouveau").length} nouveaux</div></div>
       <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Clients actifs</div><div class="text-2xl font-bold mt-1 text-emerald-600">${clients.filter(c=>c.statut!=="inactif").length}</div><div class="text-xs text-slate-400 mt-1">${clients.length} au total · ${contratsFin30.length} alerte(s)</div></div>
@@ -25115,7 +25113,14 @@ function devisCalcCoutInserer(){
 }
 
 function renderCommCatalogue(view){
-  const list=bySoc(db.catalogue||[]).slice();
+  const rawList=bySoc(db.catalogue||[]).slice();
+  const seenPrestations=new Set();
+  const list=rawList.filter(p=>{
+    const key=[p.societe,p.code,p.designation].map(v=>String(v||"").trim().toLowerCase()).join("|");
+    if(seenPrestations.has(key))return false;
+    seenPrestations.add(key);
+    return true;
+  });
   const CATS_SEC=["Gardiennage","Sécurité incendie","Sécurité électronique","Sécurité événementielle","Ronde et surveillance","Escorte / Transport de fonds","Agent d'accueil","Maître chien","Conseil et audit sécurité","Autre"];
   const byCat={};CATS_SEC.forEach(k=>byCat[k]=[]);list.forEach(p=>{const k=p.categorie||"Autre";if(!byCat[k])byCat[k]=[];byCat[k].push(p);});
   const catBlocks=Object.entries(byCat).filter(([,ps])=>ps.length>0).map(([cat,ps])=>`
@@ -25129,19 +25134,19 @@ function renderCommCatalogue(view){
           <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0">Code</th>
           <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0">Désignation</th>
           <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0">Description</th>
-          <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0;width:100px">Unité</th>
+          <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0;width:120px">Unité</th>
           <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0;width:130px">Prix HT</th>
-          <th style="border-bottom:1px solid #e2e8f0;width:80px"></th>
+          <th style="padding:8px 12px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border-bottom:1px solid #e2e8f0;width:190px">Actions</th>
         </tr></thead>
         <tbody>${ps.map(p=>`<tr style="border-bottom:1px solid #f1f5f9" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
           <td style="padding:8px 12px;font-family:monospace;font-size:11px;color:#64748b">${escapeHTML(p.code||"")}</td>
           <td style="padding:8px 12px;font-weight:700;color:#0f172a">${escapeHTML(p.designation||"")}</td>
-          <td style="padding:8px 12px;font-size:12px;color:#475569;max-width:300px">${escapeHTML((p.description||"").slice(0,80))}${(p.description||"").length>80?"…":""}</td>
-          <td style="padding:8px 12px;text-align:center"><span class="pill pill-indigo" style="font-size:10px">${escapeHTML(p.unite||"—")}</span></td>
-          <td style="padding:8px 12px;text-align:right;font-weight:800;color:#043970">${money(p.prixHT)}</td>
+          <td style="padding:8px 12px;font-size:12px;color:#475569;max-width:300px">${p.description?`${escapeHTML(p.description.slice(0,80))}${p.description.length>80?"…":""}`:`<span style="color:#94a3b8;font-style:italic">Non renseignée</span>`}</td>
+          <td style="padding:8px 12px;text-align:center"><span class="pill pill-indigo" style="font-size:10px;white-space:nowrap">${escapeHTML(p.unite||"—")}</span></td>
+          <td style="padding:8px 12px;text-align:right;font-weight:800;color:#043970;white-space:nowrap">${Number(p.prixHT)>0?money(p.prixHT):`<span style="color:#dc2626;font-size:11px">Non renseigné</span>`}</td>
           <td style="padding:8px 12px;text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end">
             <button class="btn btn-ghost text-xs" onclick="openCataloguePrestModal('${p.id}')">Modifier</button>
-            <button class="btn btn-ghost text-xs" style="color:#dc2626" onclick="deletePrest('${p.id}')">✕</button>
+            <button class="btn btn-danger text-xs" onclick="deletePrest('${p.id}')">Supprimer</button>
           </div></td>
         </tr>`).join("")}</tbody>
       </table>
@@ -25185,8 +25190,8 @@ function openCataloguePrestModal(id){
           <select class="select" name="unite" style="margin-top:4px">${UNITES.map(u=>`<option value="${escapeHTML(u)}" ${(p?.unite||"Agent / mois")===u?"selected":""}>${escapeHTML(u)}</option>`).join("")}</select>
         </label>
       </div>
-      <label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#334155">Prix HT (DZD)</span><input class="input" type="number" min="0" step="0.01" name="prixHT" value="${p?.prixHT||""}" placeholder="0,00" style="margin-top:4px;width:100%"/></label>
-      <label style="display:block;margin-bottom:16px"><span style="font-size:12px;font-weight:700;color:#334155">Description</span><textarea class="input" name="description" rows="3" style="margin-top:4px;width:100%" placeholder="Détails de la prestation, conditions, périmètre d'intervention...">${escapeHTML(p?.description||"")}</textarea></label>
+      <label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#334155">Prix HT (DZD) *</span><input class="input" type="number" min="0.01" step="0.01" name="prixHT" value="${p?.prixHT||""}" placeholder="0,00" required style="margin-top:4px;width:100%"/></label>
+      <label style="display:block;margin-bottom:16px"><span style="font-size:12px;font-weight:700;color:#334155">Description *</span><textarea class="input" name="description" rows="3" required style="margin-top:4px;width:100%" placeholder="Détails de la prestation, conditions, périmètre d'intervention...">${escapeHTML(p?.description||"")}</textarea></label>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
         <button class="btn btn-primary">${isEdit?"Enregistrer les modifications":"Créer la prestation"}</button>
@@ -25196,17 +25201,23 @@ function openCataloguePrestModal(id){
 async function confirmPrest(id){
   const fd=new FormData(document.querySelector(".modal-bg form"));
   if(!fd.get("designation")){toast("Désignation requise","error");return;}
+  if(!(parseFloat(fd.get("prixHT"))>0)){toast("Le prix HT doit être supérieur à zéro","error");return;}
+  if(!String(fd.get("description")||"").trim()){toast("Description requise","error");return;}
   db.catalogue=db.catalogue||[];
   let p=id?db.catalogue.find(x=>x.id===id):null;
   const isEdit=!!p;
+  const societe=fd.get("societe")||mySoc();
+  const designation=String(fd.get("designation")||"").trim();
+  const duplicate=db.catalogue.find(x=>x.id!==id&&String(x.societe||"")===String(societe||"")&&String(x.designation||"").trim().toLowerCase()===designation.toLowerCase());
+  if(duplicate){toast("Cette prestation existe déjà ("+(duplicate.code||"code inconnu")+")","error");return;}
   if(!p){p={id:uid("ct"),createdAt:new Date().toISOString()};db.catalogue.push(p)}
-  p.code=fd.get("code")||p.code||nextPrestCode();
-  p.societe=fd.get("societe")||mySoc();
-  p.designation=fd.get("designation")||"";
+  p.code=isEdit?(p.code||fd.get("code")||nextPrestCode()):nextPrestCode();
+  p.societe=societe;
+  p.designation=designation;
   p.categorie=fd.get("categorie")||"Gardiennage";
   p.unite=fd.get("unite")||"Agent / mois";
   p.prixHT=parseFloat(fd.get("prixHT"))||0;
-  p.description=fd.get("description")||"";
+  p.description=String(fd.get("description")||"").trim();
   p.updatedAt=new Date().toISOString();
   try{await sgdiApi("/api/irongs/collections/catalogue",{method:"PUT",body:{data:db.catalogue},legacy:false});}catch(e){toast("Erreur de sauvegarde : "+(e.message||e),"error");return;}
   closeModal();toast(isEdit?"Prestation modifiée":"Prestation créée","success");renderView();
