@@ -52,6 +52,12 @@ sgdi.irongs.com
 drh.irongs.com
 ops.irongs.com
 materiel.irongs.com
+finances.irongs.com
+comptabilite.irongs.com
+facturation.irongs.com
+commercial.irongs.com
 ```
 
-`sgdi.irongs.com` garde le portail global, tandis que les sous-domaines modules ouvrent leur portail dédié.
+`sgdi.irongs.com` garde le portail global. `finances.irongs.com` et
+`comptabilite.irongs.com` ouvrent Finances & Comptabilité, tandis que
+`facturation.irongs.com` ouvre exclusivement le module Facturation.

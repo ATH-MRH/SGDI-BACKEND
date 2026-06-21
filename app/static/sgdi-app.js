@@ -3515,7 +3515,7 @@ function sgdiModuleHostConfig(){
   const host=String(location.hostname||"").toLowerCase();
   const configs=sgdiModuleHostConfigs();
   const first=host?host.split(".")[0]:"";
-  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation"};
+  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",facturation:"facmod"};
   const configKey=hostAliases[first]||first;
   // Domaine dédié (ex: drh.sgdi.com, facturation.sgdi.com)
   if(host&&first!=="localhost"&&host!=="127.0.0.1"&&host!=="0.0.0.0"&&host!=="::1"&&first!=="sgdi"&&first!=="www"&&first!=="atlas"){
