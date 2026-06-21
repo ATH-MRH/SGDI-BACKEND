@@ -1708,6 +1708,7 @@ async function sgdiRefreshAdminMaterialNow(options={}){
 function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()||"Client",legal_name:c.raisonSociale||c.legal_name||null,society:c.societe||c.society||null,structure:c.structure||null,status:c.statut||c.status||"actif",contact_name:c.contact||c.contact_name||null,contact_position:c.fonction||c.contact_position||null,phone:c.tel||c.phone||null,email:c.email||null,address:c.adresse||c.address||null,nif:c.nif||null,rc:c.rc||null,services:c.prestationsServices||c.services||null,contract_start:sqlDate(c.dateDebutContrat),contract_duration:c.dureeContrat||null,contract_end:sqlDate(c.dateFinContrat),notes:c.notes||null,data:{...c}}}
 function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||""}}
 async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWrite();const bid=c.backendId&&Number.isInteger(Number(c.backendId))&&Number(c.backendId)>0?Number(c.backendId):null;const saved=bid?await SGDI.commercial.updateClient(bid,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
+async function updateExistingClientToPostgres(c){if(!c)throw new Error("Client existant introuvable");sgdiRequireServerWrite();const rawId=c.backendId||(/^[1-9]\d*$/.test(String(c.id||""))?c.id:null);const bid=rawId&&Number.isInteger(Number(rawId))&&Number(rawId)>0?Number(rawId):null;if(!bid)throw new Error("Identifiant PostgreSQL du client manquant : rechargez la liste des clients");const saved=await SGDI.commercial.updateClient(bid,clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
 let sgdiSqlSyncInProgress=null;
 async function sgdiBackgroundSqlSync(options){
@@ -23703,17 +23704,17 @@ function techSitePanelHTML(si,s,pfx='ts'){
     </fieldset>
   </div>`;
 }
-async function saveClientInPlace(){
+async function saveClientInPlace(options={}){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
   if(!form)return false;
-  const id=form.getAttribute("onsubmit")?.match(/confirmClient\('([^']*)'\)/)?.[1]||"";
+  const id=form.dataset.clientId||form.getAttribute("onsubmit")?.match(/confirmClient\('([^']*)'\)/)?.[1]||"";
   prospSyncHidden("prosp");
   prospSyncHidden("negos");
   techSitesSyncHidden();
   ctsSitesSyncHidden();
   clientChampsLibresSync();
   window.__clientNoNavigate=true;
-  try{return await confirmClient(id)}
+  try{return await confirmClient(id,options)}
   finally{window.__clientNoNavigate=false}
 }
 async function clientLockIdentification(){
@@ -23772,7 +23773,9 @@ async function clientValiderContrat(){
   const chk=document.getElementById("contrat-valide-chk");
   const wasChecked=!!chk?.checked;
   if(chk){chk.checked=true;}
-  if(!(await saveClientInPlace())){if(chk)chk.checked=wasChecked;return;}
+  const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
+  if(!form?.dataset.clientId){if(chk)chk.checked=wasChecked;toast("Enregistrez d'abord le nouveau client avant de valider son contrat","error");return;}
+  if(!(await saveClientInPlace({requireExisting:true}))){if(chk)chk.checked=wasChecked;return;}
   clientSitesMirror("cts");
   clientLockContrat();
   toast("Contrat enregistré","success");
@@ -23856,7 +23859,7 @@ function sgdiTabSwitch(id,idx){
 }
 function openClientModal(id){
   if(session?.transverse==="facmod"||session?.transverse==="facturation"){toast("Modification clients non autorisée dans ce module","error");return;}
-  const c=(db.clients||[]).find(x=>x.id===id);
+  const c=(db.clients||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id));
   const isEdit=!!c;
   if(c?.nom)pageTabSetLabel(c.nom);
   const selectedSoc=c?.societe||mySoc();
@@ -24005,7 +24008,7 @@ function openClientModal(id){
         </div>
         <div style="display:flex;gap:8px">
           <button type="button" id="btn-contrat-modifier" class="btn btn-ghost" style="border:1.5px solid #0f2d5a;color:#0f2d5a;font-weight:700;display:none" onclick="clientUnlockContrat()">Modifier</button>
-          <button type="button" id="btn-contrat-valider" class="btn btn-primary" style="background:#16a34a;border-color:#16a34a" onclick="clientValiderContrat()">Valider le contrat</button>
+          <button type="button" id="btn-contrat-valider" class="btn btn-primary" style="background:#16a34a;border-color:#16a34a" onclick="clientValiderContrat()" ${isEdit?"":"disabled title=\"Enregistrez d'abord le client\""}>Valider le contrat</button>
         </div>
       </div>
     </div>
@@ -24015,7 +24018,7 @@ function openClientModal(id){
     </div>
   `)+`</div>`;
   const view=document.getElementById("view");
-  view.innerHTML=`<form data-no-critical-auth="1" onsubmit="event.preventDefault();confirmClient('${id||""}')">
+  view.innerHTML=`<form data-no-critical-auth="1" data-client-id="${escapeHTML(c?.id||id||"")}" data-client-backend-id="${escapeHTML(c?.backendId||"")}" onsubmit="event.preventDefault();confirmClient('${id||""}')">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e2e8f0">
       <h2 style="font-size:18px;font-weight:800;color:#0f2d5a;margin:0">${isEdit?"CLIENT : "+escapeHTML((c?.nom||"").toUpperCase()):"Nouveau client"}</h2>
       ${isEdit?`<div style="display:flex;align-items:center;gap:8px">
@@ -24071,7 +24074,7 @@ function openClientModal(id){
   prospInitReunions("negos",(c?.negos_reunions)||[]);
   if(c?.tech_valide)requestAnimationFrame(()=>techLockDonneesTechniques());
 }
-async function confirmClient(id){
+async function confirmClient(id,options={}){
   prospSyncHidden("prosp");
   prospSyncHidden("negos");
   techSitesSyncHidden();
@@ -24083,7 +24086,12 @@ async function confirmClient(id){
   try{negos_reunions=JSON.parse(fd.get("negos_reunions")||"[]")}catch(e){}
   try{lignesFacturation=JSON.parse(fd.get("lignesFacturation")||"[]")}catch(e){}
   try{champsLibres=JSON.parse(fd.get("champsLibres")||"[]")}catch(e){}
-  let c=id?db.clients.find(x=>x.id===id):null;const isEdit=!!c;if(!c){c={id:uid("cl"),createdBy:session.username,createdAt:new Date().toISOString()};db.clients.push(c)}
+  let c=id?db.clients.find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id)):null;
+  const isEdit=!!c;
+  if(options.requireExisting&&!c){toast("Mise à jour refusée : client existant introuvable","error");return false}
+  if(!c){c={id:uid("cl"),createdBy:session.username,createdAt:new Date().toISOString()};db.clients.push(c)}
+  const formBackendId=(document.querySelector("#view form")||document.querySelector(".modal-bg form"))?.dataset.clientBackendId;
+  if(isEdit&&!c.backendId&&formBackendId)c.backendId=formBackendId;
   const contratValide=!!fd.get("contratValide");
   const contratValideLe=contratValide&&!c?.contratValideLe?today():(c?.contratValideLe||"");
   let tech_sites=[],cts_sites=[];
@@ -24093,7 +24101,7 @@ async function confirmClient(id){
   if(hasContractSites)tech_sites=cts_sites;
   const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
   Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
-  try{await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
+  try{if(options.requireExisting)await updateExistingClientToPostgres(c);else await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");
     const afterRoute=session?.transverse==="facturation"?"facturation/clients":"commercial/clients";
@@ -24101,7 +24109,7 @@ async function confirmClient(id){
   }else{
     if(!isEdit&&c.id){
       const frm=document.querySelector("#view form")||document.querySelector(".modal-bg form");
-      if(frm){const s=frm.getAttribute("onsubmit")||"";frm.setAttribute("onsubmit",s.replace(/confirmClient\(''\)/,`confirmClient('${c.id}')`))}
+      if(frm){const s=frm.getAttribute("onsubmit")||"";frm.setAttribute("onsubmit",s.replace(/confirmClient\(''\)/,`confirmClient('${c.id}')`));frm.dataset.clientId=c.id||"";frm.dataset.clientBackendId=c.backendId||"";const validateButton=document.getElementById("btn-contrat-valider");if(validateButton){validateButton.disabled=false;validateButton.removeAttribute("title")}}
     }
     toast(isEdit?"Client modifié":"Client créé","success");
   }
