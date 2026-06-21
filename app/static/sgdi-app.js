@@ -21808,32 +21808,49 @@ function renderFacturation(view,sub,arg){
   if(sub==="structures")return renderFactStructures(view);
   renderFactDashboard(view);
 }
-function renderFactClients(view){
-  const list=bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+async function renderFactClients(view){
+  const soc=mySoc();const page=sgdiServerCurrentPage("fact-clients",soc||"all");
+  sgdiShowDataLoadingBar("Chargement des clients...");
+  let list=[];let result=null;
+  try{
+    result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25});
+    list=serverItems(result).map(clientFromApi);
+    list.forEach(c=>sgdiUpsertServerItem("clients",c));
+  }catch(e){
+    list=bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  }
+  const rows=list.map(c=>{
+    const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;
+    const alert=d!==null&&d<=30;
+    const finCell=c.dateFinContrat?'<span class="pill '+(d<0?"pill-red":d<=30?"pill-amber":"pill-green")+'">'+formatDate(c.dateFinContrat)+(d<0?" · expiré":d<=30?" · J-"+d:"")+'</span>':"—";
+    const ht=(c.lignesFacturation||[]).reduce((s,l)=>s+(Number(l.prixUnitaire)||0)*(Number(l.qte)||1),0);
+    const ttc=ht*1.19;
+    const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+clientSiteEffectif(site),0);
+    const nbrSite=clientNbrSites(c);
+    return '<tr data-searchable style="'+(alert?"background:#fff7ed;":"")+'cursor:pointer" onclick="openClientModal(\''+c.id+'\',true)">'+
+      '<td class="font-semibold" style="color:#1d4ed8">'+escapeHTML(c.nom||"")+'</td>'+
+      '<td class="text-xs">'+escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")+'</td>'+
+      '<td class="text-xs">'+escapeHTML(c.contact||"")+'</td>'+
+      '<td class="text-xs">'+escapeHTML(c.tel||"")+'</td>'+
+      '<td class="text-xs">'+escapeHTML(c.wilaya||"—")+'</td>'+
+      '<td class="font-bold" style="text-align:center">'+nbrSite+'</td>'+
+      '<td class="font-bold" style="text-align:center;color:#043970">'+totalEffectif+'</td>'+
+      '<td class="font-mono font-bold" style="text-align:right;white-space:nowrap;color:#043970">'+(ttc>0?formatDZD(ttc):"—")+'</td>'+
+      '<td class="text-xs">'+finCell+'</td>'+
+      '<td><span class="pill '+(c.statut==="actif"?"pill-green":"pill-gray")+'">'+safe(c.statut)+'</span></td>'+
+      '</tr>';
+  }).join("");
+  const total=result?.total??list.length;
   view.innerHTML=factTabs("clients")+
-    '<div class="flex justify-between items-center mb-3"><div style="display:flex;align-items:center;gap:12px"><h1 class="text-2xl font-bold">Clients</h1><span style="background:#0f2d5a;color:#fff;font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px">'+list.length+'</span></div></div>'+
+    '<div class="flex justify-between items-center mb-3"><div style="display:flex;align-items:center;gap:12px"><h1 class="text-2xl font-bold">Clients</h1><span style="background:#0f2d5a;color:#fff;font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px">'+total+'</span></div></div>'+
     '<div class="card overflow-x-auto">'+
     (list.length===0?'<div class="p-10 text-center text-slate-500">Aucun client.</div>':
-    '<table><thead><tr><th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th><th style="text-align:right">Montant TTC</th><th>Fin contrat</th><th>Statut</th></tr></thead><tbody>'+
-    list.map(c=>{
-      const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;
-      const alert=d!==null&&d<=30;
-      const finCell=c.dateFinContrat?'<span class="pill '+(d<0?"pill-red":d<=30?"pill-amber":"pill-green")+'">'+formatDate(c.dateFinContrat)+(d<0?" · expiré":d<=30?" · J-"+d:"")+'</span>':"—";
-      const totalHT=(c.lignesFacturation||[]).reduce((sum,line)=>sum+(Number(line.prixUnitaire)||0)*(Number(line.qte)||1),0);
-      const montantTTC=totalHT*1.19;
-      return '<tr data-searchable style="'+(alert?"background:#fff7ed;":"")+'cursor:pointer" onclick="openClientModal(\''+c.id+'\',true)">'+
-        '<td class="font-semibold" style="color:#1d4ed8">'+escapeHTML(c.nom||"")+'</td>'+
-        '<td class="text-xs">'+escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")+'</td>'+
-        '<td class="text-xs">'+escapeHTML(c.contact||"")+'</td>'+
-        '<td class="text-xs">'+escapeHTML(c.tel||"")+'</td>'+
-        '<td class="text-xs">'+escapeHTML(c.wilaya||"—")+'</td>'+
-        '<td class="font-mono font-bold" style="text-align:right;white-space:nowrap;color:#043970">'+(montantTTC>0?formatDZD(montantTTC):"—")+'</td>'+
-        '<td class="text-xs">'+finCell+'</td>'+
-        '<td><span class="pill '+(c.statut==="actif"?"pill-green":"pill-gray")+'">'+safe(c.statut)+'</span></td>'+
-        '</tr>';
-    }).join("")+
-    '</tbody></table>')+
-    '</div>';
+    '<table><thead><tr>'+
+    '<th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th>'+
+    '<th style="text-align:center">Nbr site</th><th style="text-align:center">Total eff.</th>'+
+    '<th style="text-align:right">Montant TTC</th><th>Fin contrat</th><th>Statut</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table>')+
+    '</div>'+(result?sgdiServerPaginationHTML("fact-clients",soc||"all",result):"");
 }
 function factureEditorOpen(id){window.__factureEditId=id||"new";navigate("facturation/factures");}
 function factureEditorClose(){delete window.__factureEditId;navigate("facturation/factures");}
