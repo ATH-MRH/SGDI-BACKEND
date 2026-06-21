@@ -3406,6 +3406,7 @@ function sgdiModuleHostConfigs(){
 	        {label:"CONTRATS",route:"contrats/dashboard"},
 	        {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap"},
+        {label:"CONGÉS",route:"drh/conges"},
         {label:"SOCIAL",route:"drh/social"},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard"}
       ]
@@ -4926,7 +4927,6 @@ function renderSidebar(){
     const drhRecrutementCandidats=drhCandidates.length;
     const drhAContractualiser=drhCandidates.filter(candidateCanGoToContract).length;
     const drhSocialAlertes=drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a)));
-    const drhCongesInstance=(db.conges||[]).filter(c=>c.statut==="instance"&&(!drhSoc||(db.agents||[]).find(a=>a.id===c.agentId&&a.societe===drhSoc))).length;
     const drhIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,drhSoc)).length;
 
     // Compteurs OPS
@@ -4956,7 +4956,8 @@ function renderSidebar(){
         {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],count:drhAContractualiser||null},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"]},
-        {label:"SOCIAL",route:"drh/social",aliases:["drh/social","conges"],count:drhSocialAlertes.length||drhCongesInstance||null},
+        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"]},
+        {label:"SOCIAL",route:"drh/social",aliases:["drh/social","conges"],count:drhSocialAlertes.length||null},
         {label:"PAIE",route:"paie/dashboard",aliases:["paie"]},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length}
@@ -25360,6 +25361,7 @@ function renderCommStats(view){
 function drhTabs(active){return ""}
 function renderDRH(view,sub,arg){
   if(sub==="dashboard")return renderDRHDashboard(view);
+  if(sub==="conges")return renderDRHCongesPersonnel(view);
   if(sub==="social")return renderDRHSocial(view,arg);
   if(sub==="stats")return renderDRHStats(view);
   if(sub==="stats_societe")return renderDRHStatsSociete(view);
@@ -25369,6 +25371,49 @@ function renderDRH(view,sub,arg){
   if(sub==="stats_salaire")return renderDRHStatsSalaire(view);
   if(sub==="stats_affectation")return renderDRHStatsAffectation(view);
   renderDRHDashboard(view);
+}
+function drhLeaveCalendarDate(value){
+  const raw=String(value||"").slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;
+  const [y,m,d]=raw.split("-").map(Number);
+  const date=new Date(Date.UTC(y,m-1,d));
+  return date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d?date:null;
+}
+function drhLeaveAddMonths(date,count){
+  const y=date.getUTCFullYear(),m=date.getUTCMonth()+count,d=date.getUTCDate();
+  const last=new Date(Date.UTC(y,m+1,0)).getUTCDate();
+  return new Date(Date.UTC(y,m,Math.min(d,last)));
+}
+function drhLeaveEntitlement(dateRecrutement,asOf=today()){
+  const start=drhLeaveCalendarDate(dateRecrutement),end=drhLeaveCalendarDate(asOf);
+  if(!start||!end||end<start)return 0;
+  let months=(end.getUTCFullYear()-start.getUTCFullYear())*12+(end.getUTCMonth()-start.getUTCMonth());
+  let anchor=drhLeaveAddMonths(start,months);
+  if(anchor>end){months--;anchor=drhLeaveAddMonths(start,months)}
+  const next=drhLeaveAddMonths(start,months+1);
+  const period=Math.max(1,(next-anchor)/86400000);
+  const partial=Math.max(0,(end-anchor)/86400000)/period;
+  return Math.round((months+partial)*2.5*100)/100;
+}
+function filterDrhCongesPersonnel(value){
+  const q=String(value||"").trim().toLowerCase();
+  document.querySelectorAll("#drh-conges-personnel tbody tr[data-searchable]").forEach(row=>row.style.display=!q||String(row.dataset.q||"").includes(q)?"":"none");
+}
+function renderDRHCongesPersonnel(view){
+  const soc=drhActiveSocieteFilter();
+  const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
+  const rows=agents.map(a=>{
+    const name=((a.nom||"")+" "+(a.prenom||"")).trim();
+    const code=a.matricule||a.code||"";
+    const recruited=a.dateRecrutement||a.dateEntree||"";
+    const contractEnd=employeePositionContractEndDate(a);
+    const entitlement=recruited?drhLeaveEntitlement(recruited):null;
+    const q=[name,code,recruited,contractEnd].join(" ").toLowerCase();
+    return `<tr data-searchable data-q="${escapeHTML(q)}"><td class="font-semibold"><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td></tr>`;
+  }).join("");
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-black">CONGÉS</h1><p class="text-sm text-slate-500">Droits acquis du personnel · 2,5 jours par mois depuis la date de recrutement${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""}.</p></div><span class="pill pill-blue">${agents.length} personne(s)</span></div>
+    <div class="card p-4 mb-4"><input class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div>
+    <div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th></tr></thead><tbody>${rows||`<tr><td colspan="5" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
 }
 function drhBars(entries,color){
   const max=Math.max(1,...entries.map(e=>e[1]));
