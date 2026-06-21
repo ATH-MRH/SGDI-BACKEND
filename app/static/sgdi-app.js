@@ -3483,7 +3483,7 @@ function sgdiModuleHostConfigs(){
       skipPortal:true,
       sections:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
-        {label:"CLIENTS",route:"facturation/clients"},
+        {label:"CLIENT",route:"commercial/clients"},
         {label:"FACTURES",route:"facturation/factures"},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES",route:"facturation/avances"},
@@ -4382,7 +4382,7 @@ function render(){
     const root=h.split("/")[0];
     const allowedByMod={
       facturation:["facturation","incidents","demandes_structure"],
-      facmod:["facturation","incidents","demandes_structure"],
+      facmod:["facturation","commercial","incidents","demandes_structure"],
       commercial:["commercial","incidents","demandes_structure"],
       secretariat:["secretariat","incidents","demandes_structure"],
       materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure"],
@@ -4999,7 +4999,7 @@ function renderSidebar(){
       ],
       facmod:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
-        {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],count:comClients},
+        {label:"CLIENT",route:"commercial/clients",aliases:["commercial/clients"],count:comClients},
         {label:"FACTURES",route:"facturation/factures",count:factFactures},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES CLIENTS",route:"facturation/avances"},
@@ -23203,7 +23203,7 @@ async function renderCommClientsServer(view,options={}){
     const list=serverItems(result).map(clientFromApi);
     list.forEach(c=>sgdiUpsertServerItem("clients",c));
     if(!document.body.contains(view)||!String(location.hash||"").startsWith("#/commercial/clients"))return;
-    const _factReadOnly=session?.transverse==="facmod"||session?.transverse==="facturation";
+    const _factReadOnly=session?.transverse==="facturation";
     view.innerHTML=`<div class="flex justify-between items-center mb-2"><div style="display:flex;align-items:center;gap:12px"><h1 class="text-2xl font-bold">Clients</h1><span style="background:#0f2d5a;color:#fff;font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px">${result?.total??list.length}</span></div>${_factReadOnly?"":`<button class="btn btn-primary" onclick="openClientModal()">Créer client</button>`}</div>
     ${commTabs("clients")}
     <div class="card overflow-x-auto">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun client.</div>`:`<table id="clients-table"><thead><tr>${[["nom","Nom"],["prestation","Prestation fournie"],["contact","Contact"],["tel","Tel"],["wilaya","Wilaya"],["nbrsite","Nbr site","center"],["nbr","Total eff.","center"],["montant","Montant TTC","right"],["fin","Fin contrat"],["statut","Statut"]].map(([col,label,align])=>`<th style="cursor:pointer;user-select:none;white-space:nowrap${align?";text-align:"+align:""}" onclick="clientTableSort('${col}')" id="clients-th-${col}">${label} <span id="clients-sort-${col}" style="font-size:10px;color:#94a3b8"></span></th>`).join("")}<th style="width:56px;text-align:center">Actions</th></tr></thead><tbody id="clients-tbody">${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";const ht=(c.lignesFacturation||[]).reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);const ttc=ht*1.19;const montantCell=ht>0?formatDZD(ttc):"—";const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+clientSiteEffectif(site),0);const nbrSite=clientNbrSites(c);return `<tr data-searchable data-nom="${escapeHTML(c.nom||"").toLowerCase()}" data-prestation="${escapeHTML((c.prestationsServices||"").split("\n")[0]||"").toLowerCase()}" data-contact="${escapeHTML(c.contact||"").toLowerCase()}" data-tel="${escapeHTML(c.tel||"").toLowerCase()}" data-wilaya="${escapeHTML(c.wilaya||"").toLowerCase()}" data-nbr="${totalEffectif}" data-nbrsite="${nbrSite}" data-montant="${ht}" data-fin="${c.dateFinContrat||""}" data-statut="${escapeHTML(c.statut||"").toLowerCase()}" style="${alert?"background:#fff7ed;":""}cursor:pointer" onclick="openClientModal('${c.id}',${_factReadOnly})" ><td class="font-semibold" style="color:#1d4ed8">${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${escapeHTML(c.wilaya||"—")}</td><td class="font-bold" style="text-align:center">${nbrSite}</td><td class="font-bold" style="text-align:center;color:#043970">${totalEffectif}</td><td class="text-xs font-mono" style="white-space:nowrap;text-align:right;padding-right:16px">${escapeHTML(montantCell)}</td><td class="text-xs">${finCell}</td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td><td style="text-align:center"><button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();sgdiClientRowMenu(this,'${jsString(c.id)}')">⋯</button></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("comm-clients",soc||"all",result)}`;
@@ -23212,7 +23212,7 @@ async function renderCommClientsServer(view,options={}){
 function renderCommClients(view){
   const refreshFromServer=!!sgdiAuthToken()&&!window.__sgdiCommClientsLocalFallback;
   const list=bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
-  const _factRO=session?.transverse==="facmod"||session?.transverse==="facturation";
+  const _factRO=session?.transverse==="facturation";
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">🤝 Clients</h1><p class="text-slate-500 text-sm">${list.length} clients</p></div>${_factRO?"":`<button class="btn btn-primary" onclick="openClientModal()">Créer client</button>`}</div>
     ${commTabs("clients")}
     <div class="card overflow-x-auto">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun client.</div>`:`<table><thead><tr><th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th><th style="text-align:center">Nbr site</th><th style="text-align:center">Total eff.</th><th>Fin contrat</th><th>Statut</th><th style="width:56px;text-align:center">Actions</th></tr></thead><tbody>${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";const nbrSite=clientNbrSites(c);const totalEffectif=(c.tech_sites||[]).reduce((sum,site)=>sum+clientSiteEffectif(site),0);return`<tr data-searchable style="${alert?"background:#fff7ed;":""}cursor:pointer" onclick="openClientModal('${c.id}',${_factRO})"><td class="font-semibold" style="color:#1d4ed8">${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${escapeHTML(c.wilaya||"—")}</td><td class="font-bold" style="text-align:center">${nbrSite}</td><td class="font-bold" style="text-align:center;color:#043970">${totalEffectif}</td><td class="text-xs">${finCell}</td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td><td style="text-align:center"><button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();sgdiClientRowMenu(this,'${jsString(c.id)}')">⋯</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
@@ -23887,7 +23887,7 @@ function sgdiTabSwitch(id,idx){
   document.querySelectorAll(`[id^="${id}-panel-"]`).forEach((p,i)=>p.style.display=i===idx?"block":"none");
 }
 function openClientModal(id,readOnly=false){
-  if(!readOnly&&(session?.transverse==="facmod"||session?.transverse==="facturation")){toast("Modification clients non autorisée dans ce module","error");return;}
+  if(!readOnly&&session?.transverse==="facturation"){toast("Modification clients non autorisée dans ce module","error");return;}
   const c=(db.clients||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id));
   const isEdit=!!c;
   if(c?.nom)pageTabSetLabel(c.nom);
