@@ -21811,19 +21811,22 @@ function renderFacturation(view,sub,arg){
 function renderFactClients(view){
   const list=bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   view.innerHTML=factTabs("clients")+
-    '<div class="card overflow-hidden">'+
+    '<div class="card overflow-x-auto">'+
     (list.length===0?'<div class="p-10 text-center text-slate-500">Aucun client.</div>':
-    '<table><thead><tr><th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th><th>Fin contrat</th><th>Statut</th></tr></thead><tbody>'+
+    '<table><thead><tr><th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th><th style="text-align:right">Montant TTC</th><th>Fin contrat</th><th>Statut</th></tr></thead><tbody>'+
     list.map(c=>{
       const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;
       const alert=d!==null&&d<=30;
       const finCell=c.dateFinContrat?'<span class="pill '+(d<0?"pill-red":d<=30?"pill-amber":"pill-green")+'">'+formatDate(c.dateFinContrat)+(d<0?" · expiré":d<=30?" · J-"+d:"")+'</span>':"—";
+      const totalHT=(c.lignesFacturation||[]).reduce((sum,line)=>sum+(Number(line.prixUnitaire)||0)*(Number(line.qte)||1),0);
+      const montantTTC=totalHT*1.19;
       return '<tr data-searchable style="'+(alert?"background:#fff7ed":"")+'">'+
         '<td class="font-semibold" style="color:#0f172a">'+escapeHTML(c.nom||"")+'</td>'+
         '<td class="text-xs">'+escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")+'</td>'+
         '<td class="text-xs">'+escapeHTML(c.contact||"")+'</td>'+
         '<td class="text-xs">'+escapeHTML(c.tel||"")+'</td>'+
         '<td class="text-xs">'+escapeHTML(c.wilaya||"—")+'</td>'+
+        '<td class="font-mono font-bold" style="text-align:right;white-space:nowrap;color:#043970">'+(montantTTC>0?formatDZD(montantTTC):"—")+'</td>'+
         '<td class="text-xs">'+finCell+'</td>'+
         '<td><span class="pill '+(c.statut==="actif"?"pill-green":"pill-gray")+'">'+safe(c.statut)+'</span></td>'+
         '</tr>';
