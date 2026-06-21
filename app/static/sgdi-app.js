@@ -3200,6 +3200,7 @@ function globalSocieteBandPick(s){
   pickSociete(s);
 }
 function bySoc(arr,key="societe"){const s=mySoc();return s?arr.filter(x=>x&&x[key]===s):arr}
+function clientNbrSites(client){return Math.max(parseInt(client?.tech_nbrSite)||0,Array.isArray(client?.tech_sites)?client.tech_sites.length:0)}
 function myAgents(){return bySoc(db.agents)}
 function mySites(){const s=mySoc();if(!s)return db.sites;const ids=new Set(myAgents().map(a=>agentLiveAffectation(a)?.siteId).filter(Boolean));return db.sites.filter(st=>ids.has(st.id))}
 function myCandidats(){return bySoc(db.candidats)}
@@ -4063,7 +4064,7 @@ function moduleCountersRibbonHTML(){
     const clients=(db.clients||[]).filter(c=>!scopeSoc||c.societe===scopeSoc);
     const opps=(db.opportunites||[]).filter(o=>!scopeSoc||o.societe===scopeSoc);
     const visites=(db.visites||[]).filter(v=>!scopeSoc||v.societe===scopeSoc);
-    const nbrSiteTotal=clients.reduce((s,c)=>s+(parseInt(c.tech_nbrSite)||0),0);
+    const nbrSiteTotal=clients.reduce((s,c)=>s+clientNbrSites(c),0);
     const calcEff=st=>{const g=parseInt(st.nbrGroupe)||0,j=parseInt(st.nbrJour)||0,n=parseInt(st.nbrNuit)||0;return parseInt(st.totalEffectif)||g*n+(j-n>0?j-n:0);};
     const totalEmployes=clients.reduce((s,c)=>(c.tech_sites||[]).reduce((a,st)=>a+calcEff(st),s),0);
     return moduleCountersRibbon([
@@ -23176,7 +23177,7 @@ async function renderCommClientsServer(view){
     const _factReadOnly=session?.transverse==="facmod"||session?.transverse==="facturation";
     view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">Clients</h1><p class="text-slate-500 text-sm">${result?.total??list.length} clients</p></div>${_factReadOnly?"":`<button class="btn btn-primary" onclick="openClientModal()">Créer client</button>`}</div>
     ${commTabs("clients")}
-    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun client.</div>`:`<table id="clients-table"><thead><tr>${[["nom","Nom"],["prestation","Prestation fournie"],["contact","Contact"],["tel","Tel"],["wilaya","Wilaya"],["montant","Montant TTC","right"],["fin","Fin contrat"],["statut","Statut"]].map(([col,label,align])=>`<th style="cursor:pointer;user-select:none;white-space:nowrap${align?";text-align:"+align:""}" onclick="clientTableSort('${col}')" id="clients-th-${col}">${label} <span id="clients-sort-${col}" style="font-size:10px;color:#94a3b8"></span></th>`).join("")}</tr></thead><tbody id="clients-tbody">${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";const ht=(c.lignesFacturation||[]).reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);const ttc=ht*1.19;const montantCell=ht>0?formatDZD(ttc):"—";const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+(parseInt(site.totalEffectif)||0),0);const nbrSite=parseInt(c.tech_nbrSite)||0;return `<tr data-searchable data-nom="${escapeHTML(c.nom||"").toLowerCase()}" data-prestation="${escapeHTML((c.prestationsServices||"").split("\n")[0]||"").toLowerCase()}" data-contact="${escapeHTML(c.contact||"").toLowerCase()}" data-tel="${escapeHTML(c.tel||"").toLowerCase()}" data-wilaya="${escapeHTML(c.wilaya||"").toLowerCase()}" data-nbr="${totalEffectif}" data-nbrsite="${nbrSite}" data-montant="${ht}" data-fin="${c.dateFinContrat||""}" data-statut="${escapeHTML(c.statut||"").toLowerCase()}" style="${alert?"background:#fff7ed":""}"><td class="font-semibold" style="${_factReadOnly?"color:#0f172a":"cursor:pointer;color:#1d4ed8"}" ${_factReadOnly?"":"onclick=\"openClientModal('"+c.id+"')\""}>${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${escapeHTML(c.wilaya||"—")}</td><td class="text-xs font-mono" style="white-space:nowrap;text-align:right;padding-right:16px">${escapeHTML(montantCell)}</td><td class="text-xs">${finCell}</td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("comm-clients",soc||"all",result)}`;
+    <div class="card overflow-hidden">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun client.</div>`:`<table id="clients-table"><thead><tr>${[["nom","Nom"],["prestation","Prestation fournie"],["contact","Contact"],["tel","Tel"],["wilaya","Wilaya"],["montant","Montant TTC","right"],["fin","Fin contrat"],["statut","Statut"]].map(([col,label,align])=>`<th style="cursor:pointer;user-select:none;white-space:nowrap${align?";text-align:"+align:""}" onclick="clientTableSort('${col}')" id="clients-th-${col}">${label} <span id="clients-sort-${col}" style="font-size:10px;color:#94a3b8"></span></th>`).join("")}</tr></thead><tbody id="clients-tbody">${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";const ht=(c.lignesFacturation||[]).reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);const ttc=ht*1.19;const montantCell=ht>0?formatDZD(ttc):"—";const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+(parseInt(site.totalEffectif)||0),0);const nbrSite=clientNbrSites(c);return `<tr data-searchable data-nom="${escapeHTML(c.nom||"").toLowerCase()}" data-prestation="${escapeHTML((c.prestationsServices||"").split("\n")[0]||"").toLowerCase()}" data-contact="${escapeHTML(c.contact||"").toLowerCase()}" data-tel="${escapeHTML(c.tel||"").toLowerCase()}" data-wilaya="${escapeHTML(c.wilaya||"").toLowerCase()}" data-nbr="${totalEffectif}" data-nbrsite="${nbrSite}" data-montant="${ht}" data-fin="${c.dateFinContrat||""}" data-statut="${escapeHTML(c.statut||"").toLowerCase()}" style="${alert?"background:#fff7ed":""}"><td class="font-semibold" style="${_factReadOnly?"color:#0f172a":"cursor:pointer;color:#1d4ed8"}" ${_factReadOnly?"":"onclick=\"openClientModal('"+c.id+"')\""}>${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${escapeHTML(c.wilaya||"—")}</td><td class="text-xs font-mono" style="white-space:nowrap;text-align:right;padding-right:16px">${escapeHTML(montantCell)}</td><td class="text-xs">${finCell}</td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("comm-clients",soc||"all",result)}`;
   }catch(e){console.warn("Clients serveur indisponibles",e);window.__sgdiCommClientsLocalFallback=true;renderCommClients(view)}
 }
 function renderCommClients(view){
@@ -23673,7 +23674,7 @@ function techSitePanelHTML(si,s,pfx='ts'){
 }
 async function saveClientInPlace(){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
-  if(!form)return;
+  if(!form)return false;
   const id=form.getAttribute("onsubmit")?.match(/confirmClient\('([^']*)'\)/)?.[1]||"";
   prospSyncHidden("prosp");
   prospSyncHidden("negos");
@@ -23681,8 +23682,8 @@ async function saveClientInPlace(){
   ctsSitesSyncHidden();
   clientChampsLibresSync();
   window.__clientNoNavigate=true;
-  await confirmClient(id);
-  window.__clientNoNavigate=false;
+  try{return await confirmClient(id)}
+  finally{window.__clientNoNavigate=false}
 }
 async function clientLockIdentification(){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
@@ -23691,7 +23692,7 @@ async function clientLockIdentification(){
   if(!section)return;
   const invalid=section.querySelector("input:not([type=hidden]):invalid,select:invalid,textarea:invalid");
   if(invalid){invalid.reportValidity();return;}
-  await saveClientInPlace();
+  if(!(await saveClientInPlace()))return;
   section.querySelectorAll("input:not([type=hidden]),textarea").forEach(el=>{
     el.setAttribute("readonly","");
     el.style.background="#f1f5f9";
@@ -23734,9 +23735,13 @@ function clientUnlockIdentification(){
   if(btnM)btnM.style.display="none";
 }
 async function clientValiderContrat(){
+  const section=document.getElementById("client-contrat-fields");
+  const invalid=section?.querySelector("input:invalid,select:invalid,textarea:invalid");
+  if(invalid){invalid.reportValidity();return;}
   const chk=document.getElementById("contrat-valide-chk");
+  const wasChecked=!!chk?.checked;
   if(chk){chk.checked=true;}
-  await saveClientInPlace();
+  if(!(await saveClientInPlace())){if(chk)chk.checked=wasChecked;return;}
   clientLockContrat();
   toast("Contrat enregistré","success");
 }
@@ -23880,7 +23885,7 @@ function openClientModal(id){
     <button type="button" class="btn btn-ghost" style="padding:8px 18px;font-size:12px;font-weight:700;border:1.5px solid #7c3aed;color:#7c3aed" onclick="clientCreerAvenant('${id||""}')">Créer avenant</button>
   </div>`+(()=>{
     const sites=c?.tech_sites||[];
-    const nbrSite=parseInt(c?.tech_nbrSite)||0;
+    const nbrSite=clientNbrSites(c);
     if(!nbrSite)return'';
     const calcEff=st=>{const g=parseInt(st.nbrGroupe)||0,j=parseInt(st.nbrJour)||0,n=parseInt(st.nbrNuit)||0;return parseInt(st.totalEffectif)||g*n+(j-n>0?j-n:0);};
     const totalGlobal=sites.slice(0,nbrSite).reduce((s,st)=>s+calcEff(st),0);
@@ -23940,7 +23945,7 @@ function openClientModal(id){
       <div id="client-lignes-total" style="margin-top:10px;text-align:right">${(()=>{const lignes=c?.lignesFacturation||[];if(!lignes.length)return"";const totalQte=lignes.reduce((s,l)=>s+(parseFloat(l.qte)||1),0);const ht=lignes.reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);const tva=ht*0.19;const ttc=ht+tva;return clientLignesTotalHTML(totalQte,ht,tva,ttc)})()} </div>
     </div>
     ${(()=>{
-      const ctsNbr=parseInt(c?.tech_nbrSite)||0;
+      const ctsNbr=clientNbrSites(c);
       const ctsSites=c?.tech_sites||[];
       const nbrOpts=Array.from({length:20},(_,i)=>i+1).map(n=>`<option value="${n}"${ctsNbr===n?' selected':''}>${String(n).padStart(2,'0')}</option>`).join('');
       const nbrSel=`<label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="ct_nbrSite" onchange="ctsSitesRerender(this.value)" style="width:100px"><option value="">—</option>${nbrOpts}</select></label>`;
@@ -23988,7 +23993,7 @@ function openClientModal(id){
       {label:"Information",content:tabIdentification},
       {label:"Contrat",content:tabContrat},
       {label:"Données techniques",content:(()=>{
-        const nbrSite=parseInt(c?.tech_nbrSite)||0;
+        const nbrSite=clientNbrSites(c);
         const sites=c?.tech_sites||[];
         const sitePanels=nbrSite>0?Array.from({length:nbrSite},(_,si)=>techSitePanelHTML(si,sites[si]||{})).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
         const siteTabBtns=Array.from({length:nbrSite},(_,si)=>techSiteTabBtnHTML(si,'ts',si===0)).join("");
@@ -24049,9 +24054,11 @@ async function confirmClient(id){
   let tech_sites=[],cts_sites=[];
   try{tech_sites=JSON.parse(fd.get("tech_sites")||"[]")}catch(e){}
   try{cts_sites=JSON.parse(fd.get("cts_sites")||"[]")}catch(e){}
-  if(cts_sites.length)tech_sites=cts_sites;
-  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:parseInt(fd.get("tech_nbrSite")||"0")||0,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
-  try{await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return}
+  const hasContractSites=fd.get("ct_nbrSite")!==null;
+  if(hasContractSites)tech_sites=cts_sites;
+  const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
+  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
+  try{await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");
     const afterRoute=session?.transverse==="facturation"?"facturation/clients":"commercial/clients";
@@ -24063,6 +24070,7 @@ async function confirmClient(id){
     }
     toast(isEdit?"Client modifié":"Client créé","success");
   }
+  return true;
 }
 let _clientSortCol="",_clientSortAsc=true;
 function clientTableSort(col){
