@@ -54,7 +54,9 @@ def clients_page(society: str | None = None, status: str | None = None, q: str |
         stmt = stmt.where(Client.society.in_(allowed))
     if status:
         stmt = stmt.where(Client.status == status)
-    return paginate_statement(db, stmt, model=Client, search_fields=[Client.name, Client.legal_name, Client.society, Client.structure, Client.contact_name, Client.phone, Client.email, Client.services], q=q, page=page, page_size=page_size)
+    result = paginate_statement(db, stmt, model=Client, search_fields=[Client.name, Client.legal_name, Client.society, Client.structure, Client.contact_name, Client.phone, Client.email, Client.services], q=q, page=page, page_size=page_size)
+    result["items"] = [ClientOut.model_validate(item) for item in result["items"]]
+    return result
 
 
 @router.get("/clients", response_model=list[ClientOut])

@@ -21810,6 +21810,7 @@ function renderFacturation(view,sub,arg){
 }
 async function renderFactClients(view){
   const soc=mySoc();const page=sgdiServerCurrentPage("fact-clients",soc||"all");
+  view.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:14px">Chargement des clients...</div>';
   sgdiShowDataLoadingBar("Chargement des clients...");
   let list=[];let result=null;
   try{
@@ -23195,6 +23196,7 @@ async function convertProspect(id){
 }
 async function renderCommClientsServer(view){
   const soc=mySoc();const page=sgdiServerCurrentPage("comm-clients",soc||"all");
+  view.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:14px">Chargement des clients...</div>';
   sgdiShowDataLoadingBar("Chargement des clients...");
   try{
     const result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25});
