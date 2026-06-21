@@ -347,26 +347,59 @@ def simple_raw(row: Any) -> dict[str, Any]:
     return item
 
 
+def client_to_item(row: Client) -> dict[str, Any]:
+    raw = row.data if isinstance(row.data, dict) else {}
+    legacy = raw.get("_legacy") if isinstance(raw.get("_legacy"), dict) else {}
+    item = {**deepcopy(legacy), **{key: deepcopy(value) for key, value in raw.items() if key != "_legacy"}}
+    item.update({
+        "id": item.get("id") or str(row.id),
+        "backendId": row.id,
+        "nom": item.get("nom") or row.name or "",
+        "raisonSociale": item.get("raisonSociale") or row.legal_name or "",
+        "societe": item.get("societe") or row.society or "",
+        "structure": item.get("structure") or row.structure or "",
+        "statut": item.get("statut") or row.status or "actif",
+        "contact": item.get("contact") or row.contact_name or "",
+        "fonction": item.get("fonction") or row.contact_position or "",
+        "tel": item.get("tel") or item.get("phone") or row.phone or "",
+        "email": item.get("email") or row.email or "",
+        "adresse": item.get("adresse") or row.address or "",
+        "nif": item.get("nif") or row.nif or "",
+        "rc": item.get("rc") or row.rc or "",
+        "prestationsServices": item.get("prestationsServices") or row.services or "",
+        "dateDebutContrat": item.get("dateDebutContrat") or date_out(row.contract_start),
+        "dureeContrat": item.get("dureeContrat") or row.contract_duration or "",
+        "dateFinContrat": item.get("dateFinContrat") or date_out(row.contract_end),
+        "notes": item.get("notes") or row.notes or "",
+    })
+    return item
+
+
 def upsert_client(db: Session, item: dict[str, Any]) -> dict[str, Any]:
-    row = db.get(Client, as_int(item.get("backendId")) or 0)
+    row = db.get(Client, as_int(item.get("backendId") or item.get("id")) or 0)
     if not row:
         row = Client(name=str(item.get("nom") or item.get("raisonSociale") or "Client"))
         db.add(row)
     row.name = str(item.get("nom") or item.get("raisonSociale") or row.name)
-    row.legal_name = item.get("raisonSociale")
-    row.society = item.get("societe")
-    row.structure = item.get("structure")
-    row.status = item.get("statut") or "actif"
-    row.phone = item.get("tel") or item.get("phone")
-    row.email = item.get("email")
-    row.address = item.get("adresse")
-    row.nif = item.get("nif")
-    row.rc = item.get("rc")
-    row.data = {**(row.data or {}), "_legacy": deepcopy(item)}
+    row.legal_name = item.get("raisonSociale", row.legal_name)
+    row.society = item.get("societe", row.society)
+    row.structure = item.get("structure", row.structure)
+    row.status = item.get("statut") or row.status or "actif"
+    row.contact_name = item.get("contact", row.contact_name)
+    row.contact_position = item.get("fonction", row.contact_position)
+    row.phone = item.get("tel", item.get("phone", row.phone))
+    row.email = item.get("email", row.email)
+    row.address = item.get("adresse", row.address)
+    row.nif = item.get("nif", row.nif)
+    row.rc = item.get("rc", row.rc)
+    row.services = item.get("prestationsServices", row.services)
+    row.contract_start = as_date(item.get("dateDebutContrat")) if "dateDebutContrat" in item else row.contract_start
+    row.contract_duration = item.get("dureeContrat", row.contract_duration)
+    row.contract_end = as_date(item.get("dateFinContrat")) if "dateFinContrat" in item else row.contract_end
+    row.notes = item.get("notes", row.notes)
+    row.data = {**(row.data or {}), **deepcopy(item)}
     db.flush()
-    out = simple_raw(row)
-    out.update({"nom": row.name, "raisonSociale": row.legal_name, "societe": row.society, "statut": row.status})
-    return out
+    return client_to_item(row)
 
 
 def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: str) -> dict[str, Any]:
@@ -632,7 +665,7 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name == "candidats": return [candidate_to_item(r) for r in db.execute(select(Candidate).order_by(Candidate.id)).scalars().all()]
     if name in {"agents", "employees"}: return [employee_to_item(r) for r in db.execute(select(Employee).order_by(Employee.id)).scalars().all()]
     if name == "sites": return [site_to_item(r) for r in db.execute(select(Site).order_by(Site.id)).scalars().all()]
-    if name == "clients": return [simple_raw(r) | {"nom": r.name, "raisonSociale": r.legal_name, "societe": r.society, "statut": r.status} for r in db.execute(select(Client).order_by(Client.id)).scalars().all()]
+    if name == "clients": return [client_to_item(r) for r in db.execute(select(Client).order_by(Client.id)).scalars().all()]
     if name == "feuillePresence": return [presence_to_item(r) for r in db.execute(select(DailyPresence).order_by(DailyPresence.id)).scalars().all() if (r.data or {}).get("collection") != "pointages"]
     if name in FINANCE_MODELS: return [simple_raw(r) for r in db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()]
     if name in STOCK_MODELS: return [stock_raw(r) for r in db.execute(select(STOCK_MODELS[name]).order_by(STOCK_MODELS[name].id)).scalars().all()]
