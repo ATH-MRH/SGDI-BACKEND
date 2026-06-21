@@ -267,7 +267,7 @@ h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; }
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  border-radius: var(--radius);
+  border-radius: 999px;
   font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
@@ -278,17 +278,19 @@ h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; }
 }
 .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
-.btn-sm { padding: 6px 9px; font-size: 12px; }
-.btn-primary { background: var(--primary); color: #fff; font-weight: 600; border-color: var(--primary); box-shadow: 0 2px 4px rgba(4,57,112,.25); }
+.btn-sm { padding: 6px 9px; font-size: 12px; border-radius: 999px; }
+.btn-primary { background: var(--primary); color: #fff; font-weight: 600; border-color: var(--primary); border-radius: 999px; box-shadow: 0 2px 4px rgba(4,57,112,.25); }
 .btn-primary:hover { background: var(--primary-strong); }
-.btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border); border-radius: 999px; }
 .btn-secondary:hover { background: #e2e8f0; border-color: var(--border-strong); }
-.btn-ghost { background: transparent; color: var(--text-soft); border-color: var(--border); }
+.btn-ghost { background: transparent; color: var(--text-soft); border-color: var(--border); border-radius: 999px; }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
-.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); box-shadow: 0 2px 4px rgba(220,38,38,.25); }
+.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); border-radius: 999px; box-shadow: 0 2px 4px rgba(220,38,38,.25); }
 .btn-danger:hover { background: #991b1b; }
-.btn-success { background: var(--success); color: #fff; border-color: var(--success); box-shadow: 0 2px 4px rgba(5,150,105,.25); }
-.btn-success:hover { background: #043970; }
+.btn-success { background: var(--success); color: #fff; border-color: var(--success); border-radius: 999px; box-shadow: 0 2px 4px rgba(5,150,105,.25); }
+.btn-success:hover { background: #047857; }
+.btn-warn { background: var(--warn); color: #fff; border-color: var(--warn); border-radius: 999px; }
+.btn-warn:hover { background: #c2410c; }
 .btn[disabled] { opacity: .45; cursor: not-allowed; transform: none !important; }
 
 /* ----- FORMS ----- */
