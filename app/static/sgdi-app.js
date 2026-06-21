@@ -3201,6 +3201,7 @@ function globalSocieteBandPick(s){
 }
 function bySoc(arr,key="societe"){const s=mySoc();return s?arr.filter(x=>x&&x[key]===s):arr}
 function clientNbrSites(client){return Math.max(parseInt(client?.tech_nbrSite)||0,Array.isArray(client?.tech_sites)?client.tech_sites.length:0)}
+function clientSiteEffectif(site){const saved=parseInt(site?.totalEffectif)||0;if(saved>0)return saved;const g=parseInt(site?.nbrGroupe)||0,j=parseInt(site?.nbrJour)||0,n=parseInt(site?.nbrNuit)||0;return g*n+Math.max(0,j-n)}
 function myAgents(){return bySoc(db.agents)}
 function mySites(){const s=mySoc();if(!s)return db.sites;const ids=new Set(myAgents().map(a=>agentLiveAffectation(a)?.siteId).filter(Boolean));return db.sites.filter(st=>ids.has(st.id))}
 function myCandidats(){return bySoc(db.candidats)}
@@ -4065,8 +4066,7 @@ function moduleCountersRibbonHTML(){
     const opps=(db.opportunites||[]).filter(o=>!scopeSoc||o.societe===scopeSoc);
     const visites=(db.visites||[]).filter(v=>!scopeSoc||v.societe===scopeSoc);
     const nbrSiteTotal=clients.reduce((s,c)=>s+clientNbrSites(c),0);
-    const calcEff=st=>{const g=parseInt(st.nbrGroupe)||0,j=parseInt(st.nbrJour)||0,n=parseInt(st.nbrNuit)||0;return parseInt(st.totalEffectif)||g*n+(j-n>0?j-n:0);};
-    const totalEmployes=clients.reduce((s,c)=>(c.tech_sites||[]).reduce((a,st)=>a+calcEff(st),s),0);
+    const totalEmployes=clients.reduce((s,c)=>(c.tech_sites||[]).reduce((a,st)=>a+clientSiteEffectif(st),s),0);
     return moduleCountersRibbon([
       {label:"PROSPECTS",value:prospects.length,color:"#0ea5e9",route:"commercial/prospects"},
       {label:"CLIENTS ACTIFS",value:clients.filter(c=>c.statut!=="inactif").length,color:"#047857",route:"commercial/clients",pctBase:Math.max(1,clients.length)},
@@ -23363,6 +23363,7 @@ async function confirmClientTechOnly(){
     tech_sites,tech_valide:true,updatedAt:new Date().toISOString()
   });
   try{await persistClientToPostgres(c)}catch(e){toast("Sauvegarde impossible : "+(e.message||e),"error");return;}
+  clientSitesMirror("ts");
   toast("Données techniques enregistrées","success");
   techLockDonneesTechniques();
 }
@@ -23543,14 +23544,37 @@ function clientSitesResize(pfx,val){
   let sites=[];try{sites=JSON.parse(hidden?.value||"[]")}catch(e){}
   sites=sites.slice(0,n);
   while(sites.length<n)sites.push({});
-  if(hidden)hidden.value=JSON.stringify(sites);
+  clientSitesRender(pfx,sites);
+  clientSitesRender(isContract?"ts":"cts",sites);
+}
+function clientSitesRender(pfx,sites){
+  const isContract=pfx==="cts";
+  const rows=Array.isArray(sites)?sites:[];
+  const contractModifier=document.getElementById("btn-contrat-modifier");
+  const techModifier=document.getElementById("btn-tech-modifier");
+  const relockContract=isContract&&contractModifier&&getComputedStyle(contractModifier).display!=="none";
+  const relockTech=!isContract&&techModifier&&getComputedStyle(techModifier).display!=="none";
+  const hidden=document.getElementById(isContract?"cts-sites-json":"tech-sites-json");
+  if(hidden)hidden.value=JSON.stringify(rows);
+  const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
+  const select=form?.querySelector(`[name='${isContract?"ct_nbrSite":"tech_nbrSite"}']`);
+  if(select)select.value=rows.length?String(rows.length):"";
   const container=document.getElementById(isContract?"cts-sites-container":"tech-sites-container");
   if(!container)return;
   const tabsEl=container.querySelector(isContract?".cts-tabs":".ts-tabs");
   const panelsEl=container.querySelector(isContract?".cts-panels":".ts-panels");
-  if(tabsEl)tabsEl.innerHTML=sites.map((_,si)=>techSiteTabBtnHTML(si,pfx,si===0)).join("");
-  if(panelsEl)panelsEl.innerHTML=sites.length?sites.map((site,si)=>techSitePanelHTML(si,site,pfx)).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Ajoutez un site pour commencer.</p>";
+  if(tabsEl)tabsEl.innerHTML=rows.map((_,si)=>techSiteTabBtnHTML(si,pfx,si===0)).join("");
+  if(panelsEl)panelsEl.innerHTML=rows.length?rows.map((site,si)=>techSitePanelHTML(si,site,pfx)).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Ajoutez un site pour commencer.</p>";
   if(!isContract)techRecapUpdate();
+  if(relockContract)clientLockContrat();
+  if(relockTech)techLockDonneesTechniques();
+}
+function clientSitesMirror(sourcePfx){
+  const isContract=sourcePfx==="cts";
+  if(isContract)ctsSitesSyncHidden();else techSitesSyncHidden();
+  const hidden=document.getElementById(isContract?"cts-sites-json":"tech-sites-json");
+  let sites=[];try{sites=JSON.parse(hidden?.value||"[]")}catch(e){}
+  clientSitesRender(isContract?"ts":"cts",sites);
 }
 function clientSiteAdd(pfx){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
@@ -23568,28 +23592,19 @@ function techSiteTabBtnHTML(si,pfx,active){
   const fn=pfx==='cts'?`ctsSiteTab(${si})`:`techSiteTab(${si})`;
   const bdr=active?'#1d4ed8':'transparent';
   const col=active?'#1d4ed8':'#64748b';
-  return `<button type="button" id="${pfx}-tab-${si}" onclick="${fn}" style="padding:5px 14px;font-size:12px;font-weight:700;background:none;border:none;border-bottom:2px solid ${bdr};color:${col};cursor:pointer;display:inline-flex;align-items:center;gap:4px">Site ${si+1}<span onclick="event.stopPropagation();techSiteRemove(${si},'${pfx}')" style="font-size:10px;color:#94a3b8;font-weight:900;cursor:pointer;margin-left:2px" title="Supprimer">×</span></button>`;
+  return `<button type="button" class="client-site-tab" id="${pfx}-tab-${si}" onclick="${fn}" style="padding:5px 14px;font-size:12px;font-weight:700;background:none;border:none;border-bottom:2px solid ${bdr};color:${col};cursor:pointer;display:inline-flex;align-items:center;gap:4px">Site ${si+1}<span class="client-site-remove" onclick="event.stopPropagation();techSiteRemove(${si},'${pfx}')" style="font-size:10px;color:#94a3b8;font-weight:900;cursor:pointer;margin-left:2px" title="Supprimer">×</span></button>`;
 }
 function techSiteRemove(si,pfx){
   pfx=pfx||'ts';
   if(pfx==='cts')ctsSitesSyncHidden();else techSitesSyncHidden();
   const hidId=pfx==='cts'?'cts-sites-json':'tech-sites-json';
-  const nbrName=pfx==='cts'?'ct_nbrSite':'tech_nbrSite';
-  const ctnId=pfx==='cts'?'cts-sites-container':'tech-sites-container';
   const hidden=document.getElementById(hidId);
   if(!hidden)return;
   let sites=[];try{sites=JSON.parse(hidden.value||'[]')}catch(e){}
   sites.splice(si,1);
   const newN=sites.length;
-  const form=document.querySelector('#view form')||document.querySelector('.modal-bg form');
-  if(form){const sel=form.querySelector(`[name='${nbrName}']`);if(sel)sel.value=newN||'';}
-  const ctn=document.getElementById(ctnId);
-  if(!ctn)return;
-  const tabsEl=ctn.querySelector(`.${pfx}-tabs`);
-  const panelsEl=ctn.querySelector(`.${pfx}-panels`);
-  if(tabsEl)tabsEl.innerHTML=Array.from({length:newN},(_,i)=>techSiteTabBtnHTML(i,pfx,i===0)).join('');
-  if(panelsEl)panelsEl.innerHTML=newN>0?Array.from({length:newN},(_,i)=>techSitePanelHTML(i,sites[i]||{},pfx)).join(''):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
-  hidden.value=JSON.stringify(sites);
+  clientSitesRender(pfx,sites);
+  clientSitesRender(pfx==='cts'?'ts':'cts',sites);
   if(newN>0)techSiteTab(0,pfx);
 }
 function techSitePanelHTML(si,s,pfx='ts'){
@@ -23598,7 +23613,7 @@ function techSitePanelHTML(si,s,pfx='ts'){
   const POSTES_SEC=["Security Manager","Superviseur","Chef de site","Chef de groupe","Chef de poste","Chef d'équipe","Agent de Prévention et de Sécurité (APS)","Maître Chien","Agent d'accueil/F","Contrôleur"];
   const materiel=s.materiel||[];
   const g=s.nbrGroupe||0,j=s.nbrJour||0,n=s.nbrNuit||0;
-  const teff=g*n+(j-n>0?j-n:0);
+  const teff=clientSiteEffectif(s);
   // Support ancien format (postes objet) + nouveau format (postes_list tableau)
   let postes_list=s.postes_list||[];
   if(!postes_list.length&&s.postes){
@@ -23758,6 +23773,7 @@ async function clientValiderContrat(){
   const wasChecked=!!chk?.checked;
   if(chk){chk.checked=true;}
   if(!(await saveClientInPlace())){if(chk)chk.checked=wasChecked;return;}
+  clientSitesMirror("cts");
   clientLockContrat();
   toast("Contrat enregistré","success");
 }
@@ -23766,7 +23782,8 @@ function clientLockContrat(){
   if(!section)return;
   section.querySelectorAll("input:not([type=hidden]):not(#contrat-valide-chk),textarea").forEach(el=>{el.setAttribute("readonly","");el.style.background="#f1f5f9";el.style.color="#64748b";el.style.cursor="not-allowed";});
   section.querySelectorAll("select").forEach(el=>{el.style.pointerEvents="none";el.style.background="#f1f5f9";el.style.color="#64748b";});
-  section.querySelectorAll("button:not(#btn-contrat-modifier):not(#btn-contrat-valider)").forEach(el=>{el.style.display="none";});
+  section.querySelectorAll("button:not(#btn-contrat-modifier):not(#btn-contrat-valider):not(.client-site-tab)").forEach(el=>{el.style.display="none";});
+  section.querySelectorAll(".client-site-remove").forEach(el=>{el.style.display="none";});
   const btnV=document.getElementById("btn-contrat-valider");const btnM=document.getElementById("btn-contrat-modifier");
   if(btnV)btnV.style.display="none";if(btnM)btnM.style.display="";
 }
@@ -23776,6 +23793,7 @@ function clientUnlockContrat(){
   section.querySelectorAll("input:not([type=hidden]):not(#contrat-valide-chk),textarea").forEach(el=>{el.removeAttribute("readonly");el.style.background="";el.style.color="";el.style.cursor="";});
   section.querySelectorAll("select").forEach(el=>{el.style.pointerEvents="";el.style.background="";el.style.color="";});
   section.querySelectorAll("button:not(#btn-contrat-modifier):not(#btn-contrat-valider)").forEach(el=>{el.style.display="";});
+  section.querySelectorAll(".client-site-remove").forEach(el=>{el.style.display="";});
   const btnV=document.getElementById("btn-contrat-valider");const btnM=document.getElementById("btn-contrat-modifier");
   if(btnV)btnV.style.display="";if(btnM)btnM.style.display="none";
 }
@@ -23825,6 +23843,9 @@ function sgdiTabsHTML(tabs,activeIdx=0){
   return`<div style="border-bottom:1px solid #e2e8f0"><div role="tablist" style="display:flex;gap:2px">${btns}</div></div>${panels}`;
 }
 function sgdiTabSwitch(id,idx){
+  const currentPanel=[...document.querySelectorAll(`[id^="${id}-panel-"]`)].find(panel=>panel.style.display!=="none");
+  if(currentPanel?.querySelector("#cts-sites-container"))clientSitesMirror("cts");
+  else if(currentPanel?.querySelector("#tech-sites-container"))clientSitesMirror("ts");
   document.querySelectorAll(`[id^="${id}-tab-"]`).forEach((btn,i)=>{
     const a=i===idx;
     btn.setAttribute("aria-selected",a);
@@ -23903,10 +23924,9 @@ function openClientModal(id){
     const sites=c?.tech_sites||[];
     const nbrSite=clientNbrSites(c);
     if(!nbrSite)return'';
-    const calcEff=st=>{const g=parseInt(st.nbrGroupe)||0,j=parseInt(st.nbrJour)||0,n=parseInt(st.nbrNuit)||0;return parseInt(st.totalEffectif)||g*n+(j-n>0?j-n:0);};
-    const totalGlobal=sites.slice(0,nbrSite).reduce((s,st)=>s+calcEff(st),0);
+    const totalGlobal=sites.slice(0,nbrSite).reduce((s,st)=>s+clientSiteEffectif(st),0);
     const recapRows=sites.slice(0,nbrSite).map((st,si)=>{
-      const teff=calcEff(st);
+      const teff=clientSiteEffectif(st);
       const pct=totalGlobal>0?Math.round(teff/totalGlobal*100):0;
       return'<tr>'
         +'<td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:700;color:#1d4ed8;font-size:13px">Site '+(si+1)+(st.denomination?' — '+escapeHTML(st.denomination):'')+'</td>'
@@ -24017,10 +24037,9 @@ function openClientModal(id){
         const nbrSiteSelect='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;margin:0"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="tech_nbrSite" onchange="techSitesRerender(this.value)" style="width:100px"><option value="">—</option>'+nbrSiteOpts+'</select></label><button type="button" class="btn btn-primary text-xs" onclick="clientSiteAdd(\'ts\')">+ Ajouter un site</button></div>';
         const hiddenSites='<input type="hidden" id="tech-sites-json" name="tech_sites" value="'+escapeHTML(JSON.stringify(sites))+'"/>';
         const sitesFbox=fbox("Sites",hiddenSites+nbrSiteSelect+'<div id="tech-sites-container"><div class="ts-tabs" style="display:flex;gap:2px;border-bottom:1px solid #e2e8f0;margin-bottom:2px">'+siteTabBtns+'</div><div class="ts-panels">'+sitePanels+'</div></div>');
-        const calcEff=st=>{const g=parseInt(st.nbrGroupe)||0,j=parseInt(st.nbrJour)||0,n=parseInt(st.nbrNuit)||0;return parseInt(st.totalEffectif)||g*n+(j-n>0?j-n:0);};
-        const totalEffectifGlobal=sites.reduce((s,st)=>s+calcEff(st),0);
+        const totalEffectifGlobal=sites.reduce((s,st)=>s+clientSiteEffectif(st),0);
         const recapRows=nbrSite>0?sites.map((st,si)=>{
-          const teff=calcEff(st);
+          const teff=clientSiteEffectif(st);
           const pct=totalEffectifGlobal>0?Math.round(teff/totalEffectifGlobal*100):0;
           return '<tr>'
             +'<td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:700;color:#1d4ed8;font-size:12px">Site '+(si+1)+(st.denomination?' — '+escapeHTML(st.denomination):'')+'</td>'
