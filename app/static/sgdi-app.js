@@ -23390,14 +23390,7 @@ function techRecapUpdate(){
   if(totalEl)totalEl.textContent=total;
 }
 function techSitesRerender(val){
-  const n=parseInt(val)||0;
-  const container=document.getElementById("tech-sites-container");
-  if(!container)return;
-  const tabsEl=container.querySelector(".ts-tabs");
-  const panelsEl=container.querySelector(".ts-panels");
-  if(tabsEl)tabsEl.innerHTML=n>0?Array.from({length:n},(_,si)=>techSiteTabBtnHTML(si,'ts',si===0)).join(""):"";
-  if(panelsEl)panelsEl.innerHTML=n>0?Array.from({length:n},(_,si)=>techSitePanelHTML(si,{},'ts')).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
-  techRecapUpdate();
+  clientSitesResize("ts",val);
 }
 function techSiteTab(si,pfx='ts'){
   document.querySelectorAll(`[id^='${pfx}-panel-']`).forEach((p,i)=>p.style.display=i===si?"block":"none");
@@ -23512,13 +23505,7 @@ function clientMaterielRemove(btn,si,pfx='ts'){
 }
 function ctsSiteTab(si){techSiteTab(si,'cts');}
 function ctsSitesRerender(val){
-  const n=parseInt(val)||0;
-  const container=document.getElementById("cts-sites-container");
-  if(!container)return;
-  const tabsEl=container.querySelector(".cts-tabs");
-  const panelsEl=container.querySelector(".cts-panels");
-  if(tabsEl)tabsEl.innerHTML=n>0?Array.from({length:n},(_,si)=>techSiteTabBtnHTML(si,'cts',si===0)).join(""):"";
-  if(panelsEl)panelsEl.innerHTML=n>0?Array.from({length:n},(_,si)=>techSitePanelHTML(si,{},'cts')).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
+  clientSitesResize("cts",val);
 }
 function ctsSitesSyncHidden(){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
@@ -23547,6 +23534,35 @@ function ctsSitesSyncHidden(){
   });
   const h=document.getElementById("cts-sites-json");
   if(h)h.value=JSON.stringify(sites);
+}
+function clientSitesResize(pfx,val){
+  const isContract=pfx==="cts";
+  const n=Math.max(0,Math.min(20,parseInt(val)||0));
+  if(isContract)ctsSitesSyncHidden();else techSitesSyncHidden();
+  const hidden=document.getElementById(isContract?"cts-sites-json":"tech-sites-json");
+  let sites=[];try{sites=JSON.parse(hidden?.value||"[]")}catch(e){}
+  sites=sites.slice(0,n);
+  while(sites.length<n)sites.push({});
+  if(hidden)hidden.value=JSON.stringify(sites);
+  const container=document.getElementById(isContract?"cts-sites-container":"tech-sites-container");
+  if(!container)return;
+  const tabsEl=container.querySelector(isContract?".cts-tabs":".ts-tabs");
+  const panelsEl=container.querySelector(isContract?".cts-panels":".ts-panels");
+  if(tabsEl)tabsEl.innerHTML=sites.map((_,si)=>techSiteTabBtnHTML(si,pfx,si===0)).join("");
+  if(panelsEl)panelsEl.innerHTML=sites.length?sites.map((site,si)=>techSitePanelHTML(si,site,pfx)).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Ajoutez un site pour commencer.</p>";
+  if(!isContract)techRecapUpdate();
+}
+function clientSiteAdd(pfx){
+  const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
+  if(!form)return;
+  const name=pfx==="cts"?"ct_nbrSite":"tech_nbrSite";
+  const select=form.querySelector(`[name='${name}']`);
+  const current=parseInt(select?.value)||0;
+  if(current>=20){toast("Maximum de 20 sites atteint","warn");return;}
+  const next=current+1;
+  if(select)select.value=String(next);
+  clientSitesResize(pfx,next);
+  techSiteTab(next-1,pfx);
 }
 function techSiteTabBtnHTML(si,pfx,active){
   const fn=pfx==='cts'?`ctsSiteTab(${si})`:`techSiteTab(${si})`;
@@ -23948,7 +23964,7 @@ function openClientModal(id){
       const ctsNbr=clientNbrSites(c);
       const ctsSites=c?.tech_sites||[];
       const nbrOpts=Array.from({length:20},(_,i)=>i+1).map(n=>`<option value="${n}"${ctsNbr===n?' selected':''}>${String(n).padStart(2,'0')}</option>`).join('');
-      const nbrSel=`<label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="ct_nbrSite" onchange="ctsSitesRerender(this.value)" style="width:100px"><option value="">—</option>${nbrOpts}</select></label>`;
+      const nbrSel=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;margin:0"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="ct_nbrSite" onchange="ctsSitesRerender(this.value)" style="width:100px"><option value="">—</option>${nbrOpts}</select></label><button type="button" class="btn btn-primary text-xs" onclick="clientSiteAdd('cts')">+ Ajouter un site</button></div>`;
       const tabBtns=Array.from({length:ctsNbr},(_,si)=>techSiteTabBtnHTML(si,'cts',si===0)).join('');
       const panels=ctsNbr>0?Array.from({length:ctsNbr},(_,si)=>techSitePanelHTML(si,ctsSites[si]||{},'cts')).join(''):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
       return `<div style="margin-top:12px"><span style="font-size:11px;color:#334155;font-weight:900;display:block;margin-bottom:6px">Sites</span><input type="hidden" id="cts-sites-json" name="cts_sites" value="${escapeHTML(JSON.stringify(ctsSites))}"/>${nbrSel}<div id="cts-sites-container"><div class="cts-tabs" style="display:flex;gap:2px;border-bottom:1px solid #e2e8f0;margin-bottom:2px">${tabBtns}</div><div class="cts-panels">${panels}</div></div></div>`;
@@ -23998,7 +24014,7 @@ function openClientModal(id){
         const sitePanels=nbrSite>0?Array.from({length:nbrSite},(_,si)=>techSitePanelHTML(si,sites[si]||{})).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
         const siteTabBtns=Array.from({length:nbrSite},(_,si)=>techSiteTabBtnHTML(si,'ts',si===0)).join("");
         const nbrSiteOpts=Array.from({length:20},(_,i)=>i+1).map(n=>'<option value="'+n+'"'+(nbrSite===n?' selected':'')+'>'+String(n).padStart(2,"0")+'</option>').join("");
-        const nbrSiteSelect='<label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="tech_nbrSite" onchange="techSitesRerender(this.value)" style="width:100px"><option value="">—</option>'+nbrSiteOpts+'</select></label>';
+        const nbrSiteSelect='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;margin:0"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="tech_nbrSite" onchange="techSitesRerender(this.value)" style="width:100px"><option value="">—</option>'+nbrSiteOpts+'</select></label><button type="button" class="btn btn-primary text-xs" onclick="clientSiteAdd(\'ts\')">+ Ajouter un site</button></div>';
         const hiddenSites='<input type="hidden" id="tech-sites-json" name="tech_sites" value="'+escapeHTML(JSON.stringify(sites))+'"/>';
         const sitesFbox=fbox("Sites",hiddenSites+nbrSiteSelect+'<div id="tech-sites-container"><div class="ts-tabs" style="display:flex;gap:2px;border-bottom:1px solid #e2e8f0;margin-bottom:2px">'+siteTabBtns+'</div><div class="ts-panels">'+sitePanels+'</div></div>');
         const calcEff=st=>{const g=parseInt(st.nbrGroupe)||0,j=parseInt(st.nbrJour)||0,n=parseInt(st.nbrNuit)||0;return parseInt(st.totalEffectif)||g*n+(j-n>0?j-n:0);};
