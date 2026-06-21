@@ -3466,6 +3466,7 @@ function sgdiModuleHostConfigs(){
       homeRoute:"facturation/dashboard",
       sections:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
+        {label:"CLIENTS",route:"facturation/clients"},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES",route:"facturation/avances"},
         {label:"AVOIRS",route:"facturation/avoirs"},
@@ -4795,7 +4796,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
     ],
     facturation:[
-      ["TABLEAU DE BORD","facturation/dashboard"],["CLIENT","commercial/clients"],["DEVIS","facturation/devis"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
+      ["TABLEAU DE BORD","facturation/dashboard"],["CLIENTS","facturation/clients"],["DEVIS","facturation/devis"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
     ],
     commercial:[
       ["TABLEAU DE BORD","commercial/dashboard"],["CLIENT","commercial/clients"],["PROSPECTS","commercial/prospects"],["OPPORTUNITÉS","commercial/opportunites"],["VISITES / SUIVI","commercial/visites"],["CATALOGUE PRESTATIONS","commercial/catalogue"],["TARIFICATION","commercial/tarifs"],["STATISTIQUES","commercial/stats"]
@@ -4988,6 +4989,7 @@ function renderSidebar(){
       ],
       facturation:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
+        {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],count:comClients},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES CLIENTS",route:"facturation/avances"},
         {label:"AVOIRS",route:"facturation/avoirs"},
