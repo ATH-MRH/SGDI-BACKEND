@@ -12,8 +12,15 @@ depends_on = None
 
 
 def upgrade():
-    op.execute("ALTER TABLE positions ADD COLUMN IF NOT EXISTS society VARCHAR(150)")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_positions_society ON positions(society)")
+    inspector = sa.inspect(op.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("positions")}
+    if "society" not in columns:
+        op.add_column("positions", sa.Column("society", sa.String(length=150), nullable=True))
+
+    inspector = sa.inspect(op.get_bind())
+    indexes = {index["name"] for index in inspector.get_indexes("positions")}
+    if "idx_positions_society" not in indexes:
+        op.create_index("idx_positions_society", "positions", ["society"])
 
 
 def downgrade():

@@ -13,8 +13,13 @@ branch_labels = None
 depends_on = None
 
 
+def _create_table_if_missing(name: str, *columns: sa.Column) -> None:
+    if not sa.inspect(op.get_bind()).has_table(name):
+        op.create_table(name, *columns)
+
+
 def upgrade() -> None:
-    op.create_table(
+    _create_table_if_missing(
         "invoices",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("external_id", sa.String(120), unique=True, index=True),
@@ -30,7 +35,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime()),
     )
-    op.create_table(
+    _create_table_if_missing(
         "payments",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("external_id", sa.String(120), unique=True, index=True),
@@ -46,7 +51,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime()),
     )
-    op.create_table(
+    _create_table_if_missing(
         "advances",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("external_id", sa.String(120), unique=True, index=True),
@@ -59,7 +64,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime()),
     )
-    op.create_table(
+    _create_table_if_missing(
         "credit_notes",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("external_id", sa.String(120), unique=True, index=True),
@@ -73,7 +78,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime()),
     )
-    op.create_table(
+    _create_table_if_missing(
         "cash_entries",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("external_id", sa.String(120), unique=True, index=True),

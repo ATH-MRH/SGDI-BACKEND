@@ -16,8 +16,13 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _create_table_if_missing(name: str, *columns: sa.Column) -> None:
+    if not sa.inspect(op.get_bind()).has_table(name):
+        op.create_table(name, *columns)
+
+
 def upgrade() -> None:
-    op.create_table(
+    _create_table_if_missing(
         "contract_templates",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
         sa.Column("code", sa.String(length=80), nullable=False, unique=True, index=True),
@@ -35,7 +40,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
     )
-    op.create_table(
+    _create_table_if_missing(
         "contract_conditional_clauses",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
         sa.Column("template_id", sa.Integer(), sa.ForeignKey("contract_templates.id", ondelete="CASCADE"), nullable=True, index=True),
@@ -49,7 +54,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
     )
-    op.create_table(
+    _create_table_if_missing(
         "generated_contracts",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
         sa.Column("employee_id", sa.Integer(), sa.ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True),
