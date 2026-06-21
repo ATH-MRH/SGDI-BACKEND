@@ -23194,14 +23194,15 @@ async function convertProspect(id){
     renderView();
   }catch(e){toast("Conversion refusée : "+(e.message||e),"error")}
 }
-async function renderCommClientsServer(view){
+async function renderCommClientsServer(view,options={}){
   const soc=mySoc();const page=sgdiServerCurrentPage("comm-clients",soc||"all");
-  view.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:14px">Chargement des clients...</div>';
+  if(!options.preserveContent)view.innerHTML='<div style="padding:40px;text-align:center;color:#94a3b8;font-size:14px">Chargement des clients...</div>';
   sgdiShowDataLoadingBar("Chargement des clients...");
   try{
     const result=await SGDI.commercial.clientsPage({society:soc||undefined,page,page_size:25});
     const list=serverItems(result).map(clientFromApi);
     list.forEach(c=>sgdiUpsertServerItem("clients",c));
+    if(!document.body.contains(view)||!String(location.hash||"").startsWith("#/commercial/clients"))return;
     const _factReadOnly=session?.transverse==="facmod"||session?.transverse==="facturation";
     view.innerHTML=`<div class="flex justify-between items-center mb-2"><div style="display:flex;align-items:center;gap:12px"><h1 class="text-2xl font-bold">Clients</h1><span style="background:#0f2d5a;color:#fff;font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px">${result?.total??list.length}</span></div>${_factReadOnly?"":`<button class="btn btn-primary" onclick="openClientModal()">Créer client</button>`}</div>
     ${commTabs("clients")}
@@ -23209,12 +23210,13 @@ async function renderCommClientsServer(view){
   }catch(e){console.warn("Clients serveur indisponibles",e);window.__sgdiCommClientsLocalFallback=true;renderCommClients(view)}
 }
 function renderCommClients(view){
-  if(sgdiAuthToken()&&!window.__sgdiCommClientsLocalFallback){renderCommClientsServer(view);return}
+  const refreshFromServer=!!sgdiAuthToken()&&!window.__sgdiCommClientsLocalFallback;
   const list=bySoc(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   const _factRO=session?.transverse==="facmod"||session?.transverse==="facturation";
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">🤝 Clients</h1><p class="text-slate-500 text-sm">${list.length} clients</p></div>${_factRO?"":`<button class="btn btn-primary" onclick="openClientModal()">Créer client</button>`}</div>
     ${commTabs("clients")}
     <div class="card overflow-x-auto">${list.length===0?`<div class="p-10 text-center text-slate-500">Aucun client.</div>`:`<table><thead><tr><th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th><th style="text-align:center">Nbr site</th><th style="text-align:center">Total eff.</th><th>Fin contrat</th><th>Statut</th><th style="width:56px;text-align:center">Actions</th></tr></thead><tbody>${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";const nbrSite=clientNbrSites(c);const totalEffectif=(c.tech_sites||[]).reduce((sum,site)=>sum+clientSiteEffectif(site),0);return`<tr data-searchable style="${alert?"background:#fff7ed;":""}cursor:pointer" onclick="openClientModal('${c.id}',${_factRO})"><td class="font-semibold" style="color:#1d4ed8">${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${escapeHTML(c.wilaya||"—")}</td><td class="font-bold" style="text-align:center">${nbrSite}</td><td class="font-bold" style="text-align:center;color:#043970">${totalEffectif}</td><td class="text-xs">${finCell}</td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td><td style="text-align:center"><button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();sgdiClientRowMenu(this,'${jsString(c.id)}')">⋯</button></td></tr>`}).join("")}</tbody></table>`}</div>`;
+  if(refreshFromServer)renderCommClientsServer(view,{preserveContent:list.length>0});
 }
 function commPrestationsForSociete(societe){
   const soc=String(societe||"").trim();
