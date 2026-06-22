@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
@@ -666,7 +666,9 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name in {"agents", "employees"}: return [employee_to_item(r) for r in db.execute(select(Employee).order_by(Employee.id)).scalars().all()]
     if name == "sites": return [site_to_item(r) for r in db.execute(select(Site).order_by(Site.id)).scalars().all()]
     if name == "clients": return [client_to_item(r) for r in db.execute(select(Client).order_by(Client.id)).scalars().all()]
-    if name == "feuillePresence": return [presence_to_item(r) for r in db.execute(select(DailyPresence).order_by(DailyPresence.id)).scalars().all() if (r.data or {}).get("collection") != "pointages"]
+    if name == "feuillePresence":
+        cutoff = date.today() - timedelta(days=365)
+        return [presence_to_item(r) for r in db.execute(select(DailyPresence).where(DailyPresence.presence_date >= cutoff).order_by(DailyPresence.id)).scalars().all() if (r.data or {}).get("collection") != "pointages"]
     if name in FINANCE_MODELS: return [simple_raw(r) for r in db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()]
     if name in STOCK_MODELS: return [stock_raw(r) for r in db.execute(select(STOCK_MODELS[name]).order_by(STOCK_MODELS[name].id)).scalars().all()]
     if name in {"assignments", "affectations"}: return [assignment_to_item(r) for r in db.execute(select(Assignment).order_by(Assignment.id)).scalars().all()]

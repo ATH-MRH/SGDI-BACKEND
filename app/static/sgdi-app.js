@@ -2759,6 +2759,22 @@ async function login(u,p,opt={}){
       const authUser=us?.user||us;
       session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
       saveSession(session);
+      // Tentative de rendu immédiat depuis le cache (même utilisateur, < 2h)
+      const loginCached=_bootCacheLoad(session.username);
+      if(loginCached&&!opt.adminSystem){
+        setLoginBusy(true,"Ouverture...");
+        hydrateDB(loginCached);
+        sanitizeCandidatesInDB();
+        sgdiPostgresReady=true;
+        if(typeof loadCustomSocietes==="function")loadCustomSocietes();
+        const localUserC=(db.users||[]).find(x=>x.username===session.username);
+        if(localUserC){session={...session,role:localUserC.role||session.role,niveau:localUserC.niveau||session.niveau,nom:localUserC.nom||session.nom,societesAutorisees:Array.isArray(localUserC.societesAutorisees)?localUserC.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUserC.structuresAutorisees)?localUserC.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+        showDailyValidationCodeIfNeeded();
+        sgdiSpeakWelcome();
+        location.hash="#/select-societe";route();
+        sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(()=>{});
+        return;
+      }
       setLoginBusy(true,"Chargement de l'espace...");
       const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true,deferSecondary:true}).catch(()=>null);
       if(!loaded){
@@ -2771,6 +2787,7 @@ async function login(u,p,opt={}){
       }
       const localUser=(db.users||[]).find(x=>x.username===session.username);
       if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+      _bootCacheSave(session?.username,db);
       if(opt.adminSystem){setLoginBusy(false);toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       showDailyValidationCodeIfNeeded();
       sgdiSpeakWelcome();
@@ -13428,9 +13445,11 @@ function siteMapDashboardHTML(sites){
         <div id="sites-map-label" class="text-xs text-slate-500">Tous les sites</div>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <input id="sites-map-search" class="input" style="width:260px" placeholder="Rechercher un lieu..." onkeydown="if(event.key==='Enter'){event.preventDefault();searchSitesMap()}"/>
-        <button type="button" class="btn btn-secondary" onclick="searchSitesMap()">Rechercher</button>
-        <select id="sites-map-select" class="select" style="max-width:360px" onchange="updateSitesMap(this.value)">${options}</select>
+        <div style="position:relative">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none">🔍</span>
+          <input id="sites-map-filter" type="search" class="input" style="padding-left:32px;width:280px" placeholder="Nom du site, wilaya, client..." oninput="siteMapSearchFilter(this.value)"/>
+        </div>
+        <select id="sites-map-select" class="select" style="max-width:320px" onchange="updateSitesMap(this.value)">${options}</select>
         <a id="sites-map-open" class="btn btn-ghost" href="${escapeHTML(googleMapsSearchUrl(initialQuery))}" target="_blank" rel="noopener">Ouvrir Google Maps</a>
       </div>
     </div>
@@ -13523,6 +13542,44 @@ async function searchSitesMap(){
     return;
   }
   toast("Aucun site positionné trouvé. Le bouton Google Maps ouvre la recherche externe.","info");
+}
+function siteMapSearchFilter(q){
+  q=(q||"").toLowerCase().trim();
+  const sel=document.getElementById("sites-map-select");
+  const label=document.getElementById("sites-map-label");
+  if(!sel)return;
+  const allSites=window.__sgdiSitesDashboardData||[];
+  let matched=[];
+  Array.from(sel.options).forEach(opt=>{
+    if(opt.value==="__all__"){opt.style.display="";return}
+    if(!q){opt.style.display="";return}
+    const site=allSites.find(s=>String(s.id||s.backendId||"")===opt.value);
+    const fields=[site?.nom,site?.indicatif,site?.wilaya,site?.commune,site?.client,site?.clientNom,site?.adresse];
+    const match=fields.some(v=>String(v||"").toLowerCase().includes(q));
+    opt.style.display=match?"":"none";
+    if(match)matched.push(site);
+  });
+  if(!q){
+    sel.value="__all__";
+    if(label)label.textContent="Tous les sites";
+    return;
+  }
+  if(matched.length===1){
+    sel.value=String(matched[0]?.id||matched[0]?.backendId||"__all__");
+    updateSitesMap(sel.value);
+  }else if(matched.length>1){
+    sel.value="__all__";
+    if(label)label.textContent=matched.length+" site(s) trouvé(s)";
+    const map=window.__sgdiSitesDashboardMap;
+    if(map&&window.maplibregl){
+      const bounds=new window.maplibregl.LngLatBounds();
+      let hasBounds=false;
+      matched.forEach(s=>{const p=siteLatLng(s);if(p){bounds.extend([p.lng,p.lat]);hasBounds=true}});
+      if(hasBounds)map.fitBounds(bounds,{padding:60,maxZoom:11});
+    }
+  }else{
+    if(label)label.textContent="Aucun résultat";
+  }
 }
 function sitePositionLabel(lat,lng){
   const a=parseFloat(lat),b=parseFloat(lng);
