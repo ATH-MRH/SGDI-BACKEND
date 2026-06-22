@@ -29749,6 +29749,8 @@ function showOmSaveOverlay(){
   el.id="om-save-overlay";
   el.innerHTML=`<style>@keyframes om-spin{to{transform:rotate(360deg)}}</style><div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9998;background:rgba(15,23,42,0.25);backdrop-filter:blur(2px)"><div style="background:#fff;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,0.22);padding:36px 52px;display:flex;flex-direction:column;align-items:center;gap:18px;min-width:240px;border:1px solid #e2e8f0"><div id="om-save-icon" style="width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#043970;border-radius:50%;animation:om-spin 0.7s linear infinite"></div><div id="om-save-msg" style="font-size:15px;font-weight:800;color:#043970;letter-spacing:0.02em;text-align:center">Enregistrement en cours...</div></div></div>`;
   document.body.appendChild(el);
+  clearTimeout(window._omSaveOverlayTimer);
+  window._omSaveOverlayTimer=setTimeout(()=>{closeOmSaveOverlay();toast("Délai d'enregistrement dépassé — vérifiez la connexion serveur","error")},30000);
 }
 function updateOmSaveOverlay(msg,success){
   const msgEl=document.getElementById("om-save-msg");
@@ -29756,7 +29758,7 @@ function updateOmSaveOverlay(msg,success){
   if(msgEl){msgEl.textContent=msg;if(success)msgEl.style.color="#16a34a"}
   if(iconEl&&success){iconEl.style.animation="none";iconEl.style.border="none";iconEl.style.background="#dcfce7";iconEl.style.display="flex";iconEl.style.alignItems="center";iconEl.style.justifyContent="center";iconEl.innerHTML=`<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 11l5.5 5.5 8.5-9" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
 }
-function closeOmSaveOverlay(){const el=document.getElementById("om-save-overlay");if(el)el.remove()}
+function closeOmSaveOverlay(){clearTimeout(window._omSaveOverlayTimer);const el=document.getElementById("om-save-overlay");if(el)el.remove()}
 async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
   showOmSaveOverlay();
   try{
