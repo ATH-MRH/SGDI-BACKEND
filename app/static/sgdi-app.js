@@ -6716,12 +6716,13 @@ function candidateExcelTemplateHelpRows(){
   const help=["Obligatoire. Nom de famille du candidat.","Obligatoire. Prénom du candidat.","Format conseillé : jj/mm/aaaa ou aaaa-mm-jj.","Commune ou ville de naissance.","Identité du père.","Identité de la mère.","Numéro d'identification nationale si disponible.","M ou F.","Célibataire, Marié(e), Divorcé(e), Veuf(ve).","Numéro de téléphone principal.","Adresse email.","Adresse complète.","Commune de résidence.","Wilaya de résidence.","Fonction ou poste cible.","Format conseillé : jj/mm/aaaa ou aaaa-mm-jj.","Société autorisée dans SGDI.","Montant net prévu. Exemple : 30000 ou 30 000,00.","Favorable, Défavorable, Instance.","Date de l'avis recruteur.","Nom du recruteur.","Observations libres.","Taille en centimètres.","Pointure chaussure.","XS, S, M, L, XL, XXL.","Oui ou Non.","Arme, corps ou précision utile.","Oui ou Non.","Discipline sportive.","Nom du contact d'urgence.","Téléphone du contact d'urgence.","Lien de parenté ou relation.","Exemple : Arabe; Français; Anglais.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non.","Oui ou Non."];
   return candidateExcelTemplateColumns().map((h,i)=>[h,help[i]||""]);
 }
-function downloadCandidateExcelTemplate(){
+async function sgdiEnsureXLSX(){if(typeof window.sgdiLoadXLSX==="function")await window.sgdiLoadXLSX();return typeof XLSX!=="undefined"}
+async function downloadCandidateExcelTemplate(){
   const headers=candidateExcelTemplateColumns();
   const example=candidateExcelTemplateExample();
   const blankRows=Array.from({length:48},()=>headers.map(()=>""));
   const fileName="MODELE_IMPORT_CANDIDATS_SGDI.xlsx";
-  if(typeof XLSX!=="undefined"){
+  if(await sgdiEnsureXLSX()){
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.aoa_to_sheet([headers,example,...blankRows]);
     ws["!cols"]=headers.map(h=>({wch:Math.max(14,Math.min(28,String(h).length+4))}));
@@ -6759,29 +6760,29 @@ function candidateBlankDraft(options){
   const draft={id:newTempCandidateId(),statut:opt.reserveDirect?"reserve":"nouvelle",reserveDirect:!!opt.reserveDirect,fichePositionValidee:false,photo:null,nom:"",prenom:"",dateNaissance:"",lieuNaissance:"",nomPere:"",nomMere:"",nin:"",numeroCnas:"",sexe:"M",situation:"Célibataire",groupeSanguin:"",taille:"",pointure:"",tailleChemise:"M",exServices:"Non",exServicesPrecision:"",sport:"Non",sportPrecision:"",telephone:"",email:"",adresse:"",commune:"",wilaya:"",contactUrgenceNom:"",contactUrgenceTel:"",contactUrgenceLien:"",posteSouhaite:"",dateRecrutement:"",dateEntree:"",dureeContrat:"",dateFinContrat:"",societe:"",salairePrevu:"",avisDecision:"",avisDate:"",avisRecruteur:"",avisCommentaire:"",source:"",cvFile:null,notes:"",habilitations:{enqueteHabilitation:"non",serviceNational:"non",diplomeSecourisme:"non",diplomeAntiIncendie:"non"},langues:[],langueAutre:"",experience:[],verifActeNaissance:false,verifCertifResidence:false,verifCasierJudiciaire:false,verifAptitudeMedicale:false,verifBulletinANEM:false,verifChequeBarre:false,verifPieceIdentite:false,verifFicheFamiliale:false,verifFicheIndividuelle:false,documents:{},createdAt:today(),isNew:true};
   return opt.markImportedSections?candidateMarkImportedSectionsValidated(draft):draft;
 }
-function openCandidateExcelImport(){
-  if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
+async function openCandidateExcelImport(){
+  if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
   const input=document.createElement("input");
   input.type="file";input.accept=".xlsx,.xls,.csv";
   input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file,{free:false})};
   input.click();
 }
-function openCandidateFreeExcelImport(){
-  if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
+async function openCandidateFreeExcelImport(){
+  if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
   const input=document.createElement("input");
   input.type="file";input.accept=".xlsx,.xls,.csv";
   input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file,{free:true})};
   input.click();
 }
-function openCandidateExcelImportNew(){
-  if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
+async function openCandidateExcelImportNew(){
+  if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
   const input=document.createElement("input");
   input.type="file";input.accept=".xlsx,.xls,.csv";
   input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file,{free:false,targetMode:"new"})};
   input.click();
 }
-function openCandidateFreeExcelImportNew(){
-  if(typeof XLSX==="undefined"){toast("Lecteur Excel indisponible. Vérifiez la connexion au CDN SheetJS.","error");return}
+async function openCandidateFreeExcelImportNew(){
+  if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
   const input=document.createElement("input");
   input.type="file";input.accept=".xlsx,.xls,.csv";
   input.onchange=()=>{const file=input.files&&input.files[0];if(file)readCandidateExcelFile(file,{free:true,targetMode:"new"})};
@@ -6969,7 +6970,8 @@ function candidateImportLabel(item){
   const name=String(((c&&c.nom)||"")+" "+((c&&c.prenom)||"")).trim()||"Candidat sans nom";
   return `${item&&item.row?`Ligne ${item.row} - `:""}${name}`;
 }
-function readCandidateExcelFile(file,options){
+async function readCandidateExcelFile(file,options){
+  if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
   const opt=options||{};
   const reader=new FileReader();
   reader.onload=e=>{

@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import asyncio
 import html
@@ -821,8 +822,40 @@ def irongs_events_stream(ticket: str | None = None, token: str | None = None):
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
+def _file_hash(path: Path, length: int = 10) -> str:
+    try:
+        return hashlib.md5(path.read_bytes()).hexdigest()[:length]
+    except Exception:
+        return "0"
+
+
+_INDEX_TEMPLATE: str | None = None
+_INDEX_VERSIONS: dict[str, str] = {}
+
+
+def _build_index_html() -> str:
+    global _INDEX_TEMPLATE, _INDEX_VERSIONS
+    content = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    versions = {
+        "sgdi-app.js": _file_hash(STATIC_DIR / "sgdi-app.js"),
+        "sgdi-app.css": _file_hash(STATIC_DIR / "sgdi-app.css"),
+        "erp-frontend.js": _file_hash(STATIC_DIR / "erp-frontend.js"),
+        "sgdi-inline-2.js": _file_hash(STATIC_DIR / "sgdi-inline-2.js"),
+    }
+    import re
+    def replace_v(m: re.Match) -> str:
+        filename = m.group(1)
+        h = versions.get(filename)
+        if h:
+            return f'/static/{filename}?v={h}'
+        return m.group(0)
+    content = re.sub(r'/static/([\w\-]+\.(?:js|css))\?v=[^"\'>\s]+', replace_v, content)
+    _INDEX_VERSIONS = versions
+    return content
+
+
 @app.get("/", include_in_schema=False)
-def frontend(request: Request) -> FileResponse:
+def frontend(request: Request) -> HTMLResponse:
     host = request.headers.get("host", "").split(":")[0].lower()
     if host == "portail-rh.irongs.com":
         return FileResponse(
@@ -830,7 +863,8 @@ def frontend(request: Request) -> FileResponse:
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )
-    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache, max-age=0"})
+    content = _build_index_html()
+    return HTMLResponse(content, headers={"Cache-Control": "no-cache, max-age=0"})
 
 
 @app.get("/sw.js", include_in_schema=False)

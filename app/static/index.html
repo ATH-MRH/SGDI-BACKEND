@@ -20,9 +20,12 @@
 <link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
 <link rel="stylesheet" href="/static/tailwind.min.css?v=1">
 <link rel="stylesheet" href="/static/sgdi-app.css?v=20260619-admin-user-create">
-<script defer src="/static/xlsx.full.min.js?v=1"></script>
-<script defer src="/static/qrcode.min.js?v=1"></script>
-<script defer src="/static/html5-qrcode.min.js?v=1"></script>
+<script>
+// Lazy-load heavy libraries only when needed
+window.sgdiLoadXLSX=function(){return window._xlsxLoaded?Promise.resolve():new Promise((res,rej)=>{if(window.XLSX){window._xlsxLoaded=true;return res()}const s=document.createElement('script');s.src='/static/xlsx.full.min.js?v=1';s.onload=()=>{window._xlsxLoaded=true;res()};s.onerror=rej;document.head.appendChild(s)})};
+window.sgdiLoadQRLib=function(){return window._qrLoaded?Promise.resolve():new Promise((res,rej)=>{if(window.QRCode){window._qrLoaded=true;return res()}const s=document.createElement('script');s.src='/static/qrcode.min.js?v=1';s.onload=()=>{window._qrLoaded=true;res()};s.onerror=rej;document.head.appendChild(s)})};
+window.sgdiLoadHtml5QR=function(){return window._h5qrLoaded?Promise.resolve():new Promise((res,rej)=>{if(window.Html5Qrcode){window._h5qrLoaded=true;return res()}const s=document.createElement('script');s.src='/static/html5-qrcode.min.js?v=1';s.onload=()=>{window._h5qrLoaded=true;res()};s.onerror=rej;document.head.appendChild(s)})};
+</script>
 </head>
 <body>
 <div id="ui-progress"></div>
