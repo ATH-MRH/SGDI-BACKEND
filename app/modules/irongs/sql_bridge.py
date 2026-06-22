@@ -16,6 +16,14 @@ from app.modules.materiel.models import StockArticle, StockMovement, Store, Supp
 from app.modules.ops.models import Assignment, DailyPresence, Incident, OpsMovement, Site
 from app.core.photo_storage import normalize_photo_fields
 
+def _strip_embedded_base64(item: dict[str, Any]) -> dict[str, Any]:
+    """Remove base64-encoded blobs from bulk list responses — served as file URLs after first save."""
+    for key, val in list(item.items()):
+        if isinstance(val, str) and len(val) > 500 and (val.startswith("data:") or (not val.startswith(("/", "http")) and "base64" in val[:100])):
+            item[key] = ""
+    return item
+
+
 SQL_COLLECTIONS = {
     "candidats", "agents", "employees", "sites", "assignments", "affectations", "feuillePresence",
     "clients", "magasins", "fournisseurs", "stockArticles", "stockMouvements",
@@ -142,7 +150,7 @@ def site_by_ref(db: Session, value: Any):
 
 def candidate_to_item(row: Candidate) -> dict[str, Any]:
     data = row.data if isinstance(row.data, dict) else {}
-    item = dict(data or {})
+    item = _strip_embedded_base64(dict(data or {}))
     item.update({
         "id": item.get("id") or str(row.id),
         "backendId": row.id,
@@ -186,7 +194,7 @@ def upsert_candidate(db: Session, item: dict[str, Any]) -> dict[str, Any]:
 
 def employee_to_item(row: Employee) -> dict[str, Any]:
     extra = row.extra if isinstance(row.extra, dict) else {}
-    item = dict(extra.get("_legacy") or {})
+    item = _strip_embedded_base64(dict(extra.get("_legacy") or {}))
     item.update({key: deepcopy(value) for key, value in extra.items() if key != "_legacy"})
     item.update({
         "id": item.get("id") or str(row.id), "backendId": row.id,
@@ -667,13 +675,17 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name == "sites": return [site_to_item(r) for r in db.execute(select(Site).order_by(Site.id)).scalars().all()]
     if name == "clients": return [client_to_item(r) for r in db.execute(select(Client).order_by(Client.id)).scalars().all()]
     if name == "feuillePresence":
-        cutoff = date.today() - timedelta(days=365)
+        cutoff = date.today() - timedelta(days=90)
         return [presence_to_item(r) for r in db.execute(select(DailyPresence).where(DailyPresence.presence_date >= cutoff).order_by(DailyPresence.id)).scalars().all() if (r.data or {}).get("collection") != "pointages"]
     if name in FINANCE_MODELS: return [simple_raw(r) for r in db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()]
     if name in STOCK_MODELS: return [stock_raw(r) for r in db.execute(select(STOCK_MODELS[name]).order_by(STOCK_MODELS[name].id)).scalars().all()]
     if name in {"assignments", "affectations"}: return [assignment_to_item(r) for r in db.execute(select(Assignment).order_by(Assignment.id)).scalars().all()]
-    if name == "opsMouvements": return [ops_movement_to_item(r) for r in db.execute(select(OpsMovement).order_by(OpsMovement.movement_date.desc(), OpsMovement.id.desc())).scalars().all()]
-    if name == "incidents": return [incident_to_item(r) for r in db.execute(select(Incident).order_by(Incident.incident_date.desc(), Incident.id.desc())).scalars().all()]
+    if name == "opsMouvements":
+        cutoff = date.today() - timedelta(days=180)
+        return [ops_movement_to_item(r) for r in db.execute(select(OpsMovement).where(OpsMovement.movement_date >= cutoff).order_by(OpsMovement.movement_date.desc(), OpsMovement.id.desc())).scalars().all()]
+    if name == "incidents":
+        cutoff = date.today() - timedelta(days=180)
+        return [incident_to_item(r) for r in db.execute(select(Incident).where(Incident.incident_date >= cutoff).order_by(Incident.incident_date.desc(), Incident.id.desc())).scalars().all()]
     if name == "contrats": return [contract_to_item(r) for r in db.execute(select(Contract).order_by(Contract.id)).scalars().all()]
     raise HTTPException(status_code=400, detail=f"Collection SQL non prise en charge: {name}")
 
