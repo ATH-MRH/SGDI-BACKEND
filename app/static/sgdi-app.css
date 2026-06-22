@@ -542,9 +542,11 @@
   .dash-mini-row:last-child{border-bottom:none}
   .dash-bar{height:9px;background:#e2e8f0;border-radius:999px;overflow:hidden}
   .dash-bar span{display:block;height:100%;background:#043970;border-radius:999px}
-  .dash-status-dot{width:8px;height:8px;border-radius:999px;background:#16a34a;display:inline-block}
-  .dash-status-dot.warn{background:#ca8a04}
-  .dash-status-dot.danger{background:#dc2626}
+  .dash-status-dot{width:9px;height:9px;border-radius:999px;background:#16a34a;display:inline-block;cursor:help;position:relative}
+  .dash-status-dot.warn{background:#ca8a04;animation:dash-dot-warn 2.4s ease-in-out infinite}
+  .dash-status-dot.danger{background:#dc2626;animation:dash-dot-danger 0.9s ease-in-out infinite}
+  @keyframes dash-dot-warn{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(202,138,4,0.5)}60%{opacity:0.6;box-shadow:0 0 0 4px rgba(202,138,4,0)}}
+  @keyframes dash-dot-danger{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(220,38,38,0.6)}50%{opacity:0.25;box-shadow:0 0 0 5px rgba(220,38,38,0)}}
   @media(max-width:1180px){.dash-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-layout{grid-template-columns:1fr}.dash-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:720px){.dash-kpi-grid,.dash-module-grid{grid-template-columns:1fr}}
 

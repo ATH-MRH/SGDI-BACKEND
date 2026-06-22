@@ -6200,8 +6200,10 @@ function renderDashboard(view){
 }
 function dashboardKpi(label,value,sub,route,status){
   const dot=status==="danger"?"danger":status==="warn"?"warn":"";
+  const dotLabel=dot==="danger"?"Alerte":dot==="warn"?"Attention":"OK";
+  const tooltip=dotLabel+(sub?` — ${sub}`:"");
   return`<a class="dash-kpi" href="#/${route}" data-searchable>
-    <div class="flex items-center justify-between"><div class="label">${escapeHTML(label)}</div><span class="dash-status-dot ${dot}"></span></div>
+    <div class="flex items-center justify-between"><div class="label">${escapeHTML(label)}</div><span class="dash-status-dot ${dot}" title="${escapeHTML(tooltip)}"></span></div>
     <div class="value">${escapeHTML(value)}</div>
     <div class="sub">${escapeHTML(sub||"")}</div>
   </a>`;
