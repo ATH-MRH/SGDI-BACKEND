@@ -28581,7 +28581,8 @@ function opsMovementEditorHTML(date,agentId,agents){
     const siteLbl=escapeHTML(aff.siteName||"Non affecté");
     const posteHTML=poste?(' · <b style="color:#0369a1;font-weight:600">'+escapeHTML(poste)+'</b>'):'';
     const siteStyle=affecte?'color:#15803d;font-weight:600':'color:#94a3b8';
-    return '<label class="ops-mvt-agent-row">'
+    const searchKey=((a.nom||"")+" "+(a.prenom||"")+" "+(a.matricule||a.code||"")+" "+(aff.siteName||"")).toLowerCase();
+    return '<label class="ops-mvt-agent-row" data-search="'+searchKey.replace(/"/g,"'")+'">'
       +'<input type="checkbox" class="ops-mvt-agent-cb" value="'+escapeHTML(a.id)+'" '+(isChecked?'checked ':'')+' onchange="opsMovementCbChange()" style="width:16px;height:16px;min-width:16px;cursor:pointer;accent-color:#0369a1"/>'
       +'<span style="flex:1;font-size:13px;line-height:1.4">'
       +'<b>'+nom+'</b>'
@@ -28601,6 +28602,12 @@ function opsMovementEditorHTML(date,agentId,agents){
     </div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div class="md:col-span-3">
+        <div style="display:flex;justify-content:center;margin-bottom:10px">
+          <div style="position:relative;width:100%;max-width:480px">
+            <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none">🔍</span>
+            <input id="ops-mvt-search" type="search" class="input" placeholder="Rechercher par nom, prénom, code, affectation…" style="padding-left:32px;width:100%;box-sizing:border-box" oninput="opsMovementFilterAgents()"/>
+          </div>
+        </div>
         <div class="flex items-center justify-between mb-1">
           <label class="label mb-0">Employé(s) à affecter</label>
           <div class="flex items-center gap-2">
@@ -28610,8 +28617,8 @@ function opsMovementEditorHTML(date,agentId,agents){
           </div>
         </div>
         <div id="ops-mvt-agent-list" style="max-height:220px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;padding:4px">
-          ${nonAffectes.length?`<div class="px-2 py-1 text-xs font-black uppercase text-slate-400 tracking-wide">Non affectés (${nonAffectes.length})</div>${nonAffectes.map(mkRow).join("")}`:""}
-          ${affectes.length?`<div class="px-2 py-1 text-xs font-black uppercase text-slate-400 tracking-wide${nonAffectes.length?" mt-1":""}" style="border-top:${nonAffectes.length?"1px solid #e2e8f0":"none"}">Affectés (${affectes.length})</div>${affectes.map(mkRow).join("")}`:""}
+          ${nonAffectes.length?`<div data-section-header class="px-2 py-1 text-xs font-black uppercase text-slate-400 tracking-wide">Non affectés (${nonAffectes.length})</div>${nonAffectes.map(mkRow).join("")}`:""}
+          ${affectes.length?`<div data-section-header class="px-2 py-1 text-xs font-black uppercase text-slate-400 tracking-wide${nonAffectes.length?" mt-1":""}" style="border-top:${nonAffectes.length?"1px solid #e2e8f0":"none"}">Affectés (${affectes.length})</div>${affectes.map(mkRow).join("")}`:""}
           ${!agents.length?`<div class="p-3 text-slate-500 text-sm text-center">Aucun employé disponible</div>`:""}
         </div>
       </div>
@@ -28642,7 +28649,21 @@ function opsMovementSelectAll(checked){
   list.querySelectorAll('.ops-mvt-agent-cb').forEach(cb=>cb.checked=checked);
   opsMovementCbChange();
 }
-function opsMovementFilterAgents(){}
+function opsMovementFilterAgents(){
+  const q=(document.getElementById('ops-mvt-search')?.value||'').toLowerCase().trim();
+  const list=document.getElementById('ops-mvt-agent-list');
+  if(!list)return;
+  list.querySelectorAll('.ops-mvt-agent-row').forEach(row=>{
+    row.style.display=(!q||(row.dataset.search||'').includes(q))?'':'none';
+  });
+  // Masque les headers de section si aucun agent visible dans leur groupe
+  list.querySelectorAll('[data-section-header]').forEach(header=>{
+    let next=header.nextElementSibling;let hasVisible=false;
+    while(next&&!next.dataset.sectionHeader){if(next.classList.contains('ops-mvt-agent-row')&&next.style.display!=='none')hasVisible=true;next=next.nextElementSibling;}
+    header.style.display=hasVisible?'':'none';
+  });
+  opsMovementCbChange();
+}
 function opsMovementCentralContext(btn){
   const form=btn?.closest?.("form[data-ops-movement-form]")||document.querySelector("form[data-ops-movement-form]");
   const date=form?.querySelector('[name="date"]')?.value||today();
