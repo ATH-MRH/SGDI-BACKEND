@@ -282,6 +282,11 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
     return scoped
 
 
+_COLLECTION_ROW_LIMITS: dict[str, int] = {
+    "activityLog": 200,
+    "notificationLog": 200,
+}
+
 def get_database(db: Session, user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
     ensure_material_schema(db)
     rows = db.execute(select(SgdiRecord).order_by(SgdiRecord.collection.asc(), SgdiRecord.position.asc(), SgdiRecord.id.asc())).scalars().all()
@@ -297,7 +302,9 @@ def get_database(db: Session, user: Any | None = None) -> dict[str, list[Any] | 
         if len(items) == 1 and items[0].kind == "object" and items[0].item_id == OBJECT_ITEM_ID:
             result[name] = deepcopy(items[0].data) if isinstance(items[0].data, dict) else {}
         else:
-            result[name] = [deepcopy(row.data) for row in items if row.kind == "item"]
+            limit = _COLLECTION_ROW_LIMITS.get(name)
+            rows_to_use = items[-limit:] if limit and len(items) > limit else items
+            result[name] = [deepcopy(row.data) for row in rows_to_use if row.kind == "item"]
     for name in sorted(sql_bridge.SQL_COLLECTIONS):
         result[name] = sql_bridge.list_collection(db, name)
     return scope_database_for_user(result, user)

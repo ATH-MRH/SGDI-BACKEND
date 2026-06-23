@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import inspect, text
+from sqlalchemy import delete, func, inspect, select, text
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -66,6 +66,35 @@ def serve_index_html_static():
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
+
+_COLLECTION_KEEP_LAST: dict[str, int] = {"activityLog": 200, "notificationLog": 200}
+
+def _purge_oversized_collections() -> None:
+    from app.modules.irongs.models import SgdiRecord
+    from sqlalchemy import func
+    with SessionLocal() as db:
+        for collection, keep in _COLLECTION_KEEP_LAST.items():
+            try:
+                total = db.execute(
+                    select(func.count()).where(SgdiRecord.collection == collection, SgdiRecord.kind == "item")
+                ).scalar() or 0
+                if total > keep:
+                    cutoff_id = db.execute(
+                        select(SgdiRecord.id)
+                        .where(SgdiRecord.collection == collection, SgdiRecord.kind == "item")
+                        .order_by(SgdiRecord.id.desc())
+                        .offset(keep)
+                        .limit(1)
+                    ).scalar()
+                    if cutoff_id:
+                        deleted = db.execute(
+                            delete(SgdiRecord).where(SgdiRecord.collection == collection, SgdiRecord.id <= cutoff_id)
+                        ).rowcount
+                        db.commit()
+                        logger.info("Purge %s : %d entrées supprimées (gardé les %d dernières)", collection, deleted, keep)
+            except Exception as e:
+                db.rollback()
+                logger.warning("Purge %s échouée: %s", collection, e)
 
 def ensure_schema_upgrades() -> None:
     inspector = inspect(engine)
@@ -328,6 +357,7 @@ def on_startup() -> None:
             logger.info("Compte fac01 créé")
         db.commit()
     logger.info("Compte administrateur vérifié")
+    _purge_oversized_collections()
     start_contract_email_alert_scheduler()
 
 

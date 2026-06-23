@@ -548,7 +548,7 @@ async function sgdiPullState(options){
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   if(sgdiDirty&&!opt.force)return db;
   try{
-    const _dbCtrl=new AbortController();const _dbTimer=setTimeout(()=>_dbCtrl.abort(),45000);
+    const _dbCtrl=new AbortController();const _dbTimer=setTimeout(()=>_dbCtrl.abort(),120000);
     let remote;try{remote=await sgdiApi("/api/irongs/db",{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
     if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
       window.__SGDI_BACKEND_ENABLED__=true;
