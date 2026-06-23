@@ -800,7 +800,9 @@ function normalizeEmployeeStatusValue(value){
   return String(value||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[\s-]+/g,"_");
 }
 function employeeResolvedStatus(emp,data){
-  const canonical=String(emp?.status||"").trim(),legacy=String(data?.statut||data?.status||"").trim();
+  // `extra.status` appartient parfois à un sous-workflow (contrat, fiche, etc.) :
+  // seul `extra.statut` représente le statut RH historique de l'employé.
+  const canonical=String(emp?.status||"").trim(),legacy=String(data?.statut||"").trim();
   const canonicalKey=normalizeEmployeeStatusValue(canonical),legacyKey=normalizeEmployeeStatusValue(legacy);
   if(EMPLOYEE_FORMER_STATUS_KEYS.has(canonicalKey))return canonical;
   if(EMPLOYEE_FORMER_STATUS_KEYS.has(legacyKey))return legacy;
@@ -3970,7 +3972,8 @@ function employeeIsFormer(a,asOf=today()){
   if(!a)return false;
   if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a)))return true;
   const exitDate=String(a.dateSortie||a.departAt||"").slice(0,10);
-  return !!(a.finRelationAt&&(!exitDate||(/^\d{4}-\d{2}-\d{2}$/.test(exitDate)&&exitDate<=asOf)));
+  if(/^\d{4}-\d{2}-\d{2}$/.test(exitDate)&&exitDate<=asOf)return true;
+  return !!(a.finRelationAt&&!exitDate);
 }
 function employeeIsActive(a){
   return !employeeIsFormer(a)&&["actif","active","en_service","operationnel","operational"].includes(employeeStatusKey(a));
