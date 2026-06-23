@@ -3447,10 +3447,9 @@ function sgdiModuleHostConfigs(){
 	        {label:"TABLEAU DE BORD",route:"drh/dashboard"},
 	        {label:"RECRUTEMENT / CANDIDATS",route:"recrutement/candidats"},
 	        {label:"CONTRATS",route:"contrats/dashboard"},
-	        {label:"FICHE DE POSITION",route:"fiches"},
+        {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap"},
         {label:"CONGÉS",route:"drh/conges"},
-        {label:"SOCIAL",route:"drh/social"},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard"}
       ]
     },
@@ -5046,7 +5045,6 @@ function renderSidebar(){
     const drhCandidatsActifs=drhCandidates.filter(c=>candidatIsReserve(c)).length;
     const drhRecrutementCandidats=drhCandidates.length;
     const drhAContractualiser=drhCandidates.filter(candidateCanGoToContract).length;
-    const drhSocialAlertes=drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a)));
     const drhIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,drhSoc)).length;
 
     // Compteurs OPS
@@ -5076,8 +5074,6 @@ function renderSidebar(){
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"]},
         {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"]},
-        {label:"SOCIAL",route:"drh/social",aliases:["drh/social","conges"],count:drhSocialAlertes.length||null},
-        {label:"PAIE",route:"paie/dashboard",aliases:["paie"]},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()}
