@@ -1732,7 +1732,13 @@ async function sgdiBackgroundSqlSync(options){
     if(purged||pruned)sgdiBackendSave();
     if(opt.render&&typeof render==="function")render();
     return !syncErrors.length;
-  })().finally(()=>{sgdiSqlSyncInProgress=null});
+  })().finally(()=>{
+    sgdiSqlSyncInProgress=null;
+    requestAnimationFrame(()=>{
+      try{renderSidebar()}catch(_e){}
+      try{refreshModuleCountersRibbon()}catch(_e){}
+    });
+  });
   return sgdiSqlSyncInProgress;
 }
 async function syncSqlModulesFromPostgres(){
@@ -3896,11 +3902,18 @@ function sgdiErpEmployeeCounters(scopeSoc){
 function sgdiErpModuleCounters(module,scopeSoc){
   return sgdiErpStatsForScope(scopeSoc)?.[module]||null;
 }
+const sgdiPendingDotationCountCache=new Map();
 function materialPendingDotationCountForSoc(scopeSoc){
   // Les stats serveur (without_equipment) ne lisent que la table EmployeeEquipment SQL
   // et ignorent les dotations enregistrées en JSON (stockMouvements). On utilise
   // toujours le calcul local pour avoir un chiffre cohérent avec la carte OPS.
-  return agentsEnInstanceDotationForSoc(scopeSoc).length;
+  // Pendant la synchronisation SQL, les employés arrivent avant les mouvements de
+  // dotation. Conserver le dernier total complet évite un faux +1 transitoire.
+  const key=normalizeSocieteName(scopeSoc||"__all__");
+  if(typeof sgdiSqlSyncInProgress!=="undefined"&&sgdiSqlSyncInProgress&&sgdiPendingDotationCountCache.has(key))return sgdiPendingDotationCountCache.get(key);
+  const count=agentsEnInstanceDotationForSoc(scopeSoc).length;
+  sgdiPendingDotationCountCache.set(key,count);
+  return count;
 }
 function opsSitesActiveCount(){
   const ops=window.SGDI_SIDEBAR_STATS?.erp?.ops||window.SGDI_SIDEBAR_STATS?.ops?.sites||{};
