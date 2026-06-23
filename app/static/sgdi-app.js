@@ -2533,7 +2533,7 @@ function sgdiStructureVoiceLabel(mod){
 }
 function sgdiSpeakStructureChosen(mod,label){
   const structure=label||sgdiStructureVoiceLabel(mod);
-  _sgdiSpeakText("Vous avez choisi "+structure+". Je suis ATLAS, votre assistante intelligente. Je reste disponible dans l'icône en bas à droite. Je vous laisse maintenant.");
+  _sgdiSpeakText("Vous avez choisi "+structure+". Je suis ATLAS, votre assistante intelligente. Je vous laisse maintenant.");
 }
 function sgdiSpeakStructureChosenAfterRoute(mod,label){
   sgdiSpeakStructureChosen(mod,label);
@@ -31393,17 +31393,7 @@ try{
   let aiTyping=false;
 
   function aiMount(){
-    let host=document.getElementById("atlas-ai-widget");
-    if(!host){
-      host=document.createElement("div");
-      host.id="atlas-ai-widget";
-      document.body.appendChild(host);
-    }
-    if(!host)return;
-    host.innerHTML=`
-      <button class="ai-fab" id="ai-fab" onclick="aiToggle()" title="Assistant ATLAS IA" aria-label="Ouvrir l'assistant">
-        🤖<span class="ai-fab-notif" id="ai-notif"></span>
-      </button>`;
+    document.getElementById("atlas-ai-widget")?.remove();
   }
 
   window.aiToggle=function(){
