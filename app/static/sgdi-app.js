@@ -3856,11 +3856,11 @@ function moduleCounterItemHTML(item,total){
   const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(pct+"%"));
   const glyph=topbarCounterGlyph(label);
   const iconBg=hexToIconBg(item.color||"#043970");
-  return `<a href="${escapeHTML(href)}" class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:flex-start!important;height:auto!important;min-height:68px!important;overflow:visible!important;padding:10px 14px!important" title="${escapeHTML(item.label)}">
+  return `<a href="${escapeHTML(href)}" class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;height:auto!important;min-height:68px!important;overflow:visible!important;padding:10px 14px!important" title="${escapeHTML(item.label)}">
     <div style="font-size:9px;font-weight:700;color:#64748b;line-height:1.3;white-space:normal;word-break:break-word;margin-bottom:4px">${escapeHTML(label)}</div>
-    <div style="display:flex;align-items:baseline;gap:4px">
-      <span style="font-size:20px;font-weight:850;color:${escapeHTML(item.color||"#043970")};line-height:1">${escapeHTML(String(item.value??0))}</span>
-      <span style="font-size:10px;font-weight:700;color:${escapeHTML(item.color||"#043970")}">${escapeHTML(String(subText))}</span>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px;width:100%">
+      <span style="font-size:24px;font-weight:950;color:${escapeHTML(item.color||"#043970")};line-height:1;font-variant-numeric:tabular-nums">${escapeHTML(String(item.value??0))}</span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:34px;padding:3px 7px;border-radius:999px;background:${iconBg};font-size:10px;font-weight:900;color:${escapeHTML(item.color||"#043970")};line-height:1.1;white-space:nowrap">${escapeHTML(String(subText))}</span>
     </div>
   </a>`;
 }
@@ -4012,6 +4012,7 @@ function moduleCountersRibbonHTML(){
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
     const total=Math.max(1,erpEmp?.total??ag.length);
     const actifs=ag.filter(agentIsOperational).length;
+    const activeHeadcount=ag.filter(employeeIsActive).length;
     const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
     const sansAffectation=ag.filter(agentNeedsAffectation).length;
     const attentePv=ag.filter(agentNeedsInstallationPV).length;
@@ -4032,7 +4033,7 @@ function moduleCountersRibbonHTML(){
     ]:[];
     return moduleCountersRibbon([
       ...(session.transverse==="ops"?[opsSiteCounter]:[]),
-      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/operationnels",pctBase:total},
+      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/operationnels",pctBase:Math.max(1,activeHeadcount)},
       ...prepCounters,
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
       {label:"EFF. MALADIE",value:enMaladie,color:"#c2410c",route:"effectif/maladie",pctBase:total},
@@ -4050,6 +4051,7 @@ function moduleCountersRibbonHTML(){
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
     const total=Math.max(1,erpEmp?.total??ag.length);
     const actifs=ag.filter(agentIsOperational).length;
+    const activeHeadcount=ag.filter(employeeIsActive).length;
     const sansAffectation=ag.filter(agentNeedsAffectation).length;
     const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
     const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
@@ -4066,7 +4068,7 @@ function moduleCountersRibbonHTML(){
     ]:[];
     return moduleCountersRibbon([
       {label:"NBR SITE",value:opsSitesActiveCount()??sitesActifs.length,color:"#043970",route:"sites/actifs",sub:"site(s)"},
-      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/operationnels",pctBase:total},
+      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/operationnels",pctBase:Math.max(1,activeHeadcount)},
       ...prepCounters,
       {label:"MISSION EN COURS",value:missionEnCours,color:"#043970",route:"ops/missions",pctBase:missionTotal},
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
