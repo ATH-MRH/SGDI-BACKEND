@@ -16481,7 +16481,7 @@ function fichePositionCard(a){
     ${lampsHTML}
     <div class="flex items-center gap-3 mb-3">
       <div class="avatar" style="width:56px;height:56px;font-size:18px">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div>
-      <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule font-mono text-lg font-black leading-tight mt-1" style="${codeStyle}">${safe(a.matricule)}</div><div><span class="fp-agent-status pill ${status.pill}" style="${statusStyle}">${escapeHTML(statusText)}</span></div></div>
+      <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule font-mono text-lg font-black leading-tight mt-1" style="${codeStyle}">${safe(a.matricule)}</div></div>
     </div>
     <div class="text-xs space-y-1 mb-3 text-slate-600">
       <div><span class="text-slate-400">Société :</span> ${safe(a.societe)}</div>
@@ -16489,10 +16489,13 @@ function fichePositionCard(a){
       <div><span class="text-slate-400">Site :</span> ${safe(aff.siteName)||"—"}</div>
       <div><span class="text-slate-400">Contrat :</span> ${safe(cleanContractType(a.typeContrat))} · Fin le ${formatDate(contractEnd||"")}</div>
     </div>
-    <div class="fp-agent-actions">
-      <a class="fp-card-action fp-card-action-main" href="${ficheHref}" ${ficheClick?`onclick="${ficheClick}"`:""}>Ouvrir fiche</a>
-      <button type="button" class="fp-card-action fp-card-action-secondary" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>
-      ${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}
+    <div class="fp-agent-actions" style="justify-content:space-between;flex-wrap:nowrap">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <a class="fp-card-action fp-card-action-main" href="${ficheHref}" ${ficheClick?`onclick="${ficheClick}"`:""}>Ouvrir fiche</a>
+        <button type="button" class="fp-card-action fp-card-action-secondary" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>
+        ${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}
+      </div>
+      <span class="fp-agent-status pill ${status.pill}" style="${statusStyle};flex:0 0 auto;align-self:flex-end">${escapeHTML(statusText)}</span>
     </div>
   </div>`;
 }
