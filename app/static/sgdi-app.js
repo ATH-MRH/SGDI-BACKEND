@@ -3975,10 +3975,7 @@ function employeeIsFormer(a,asOf=today()){
   return !!(a.finRelationAt&&!exitDate);
 }
 function employeeIsActive(a){
-  return !employeeIsFormer(a)&&["actif","active","en_service","operationnel","operational"].includes(employeeStatusKey(a));
-}
-function employeeIsInActiveWorkforce(a){
-  return !!a&&!employeeIsFormer(a);
+  return !employeeIsFormer(a)&&["actif","active"].includes(employeeStatusKey(a));
 }
 function agentIsOperational(a){
   return employeeIsActive(a);
@@ -29485,7 +29482,6 @@ function renderOPS(view,sub,arg){
   const sites=(db.sites||[]).filter(s=>s&&siteBelongsToPrimarySociete(s,soc));
   const pts=(db.pointages||[]).filter(p=>!soc||((db.agents||[]).find(a=>a.id===p.agentId)?.societe===soc)||p.societe===soc);
   const actifs=ag.filter(employeeIsActive);
-  const activeWorkforce=ag.filter(employeeIsInActiveWorkforce);
   const instanceAffectation=actifs.filter(agentNeedsAffectation);
   const instanceDotationCount=materialPendingDotationCountForSoc(soc);
   const sitesActifs=sites.filter(s=>s.actif!==false);
@@ -29520,7 +29516,7 @@ function renderOPS(view,sub,arg){
     <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${instanceAffectation.length}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
     <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotationCount?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div id="ops-dot-card-count" class="text-4xl font-bold text-red-700">${instanceDotationCount}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${sitesActifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
-    <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position actives</h3></div><div class="text-4xl font-bold">${activeWorkforce.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les fiches actives</div></a>
+    <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position actives</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les fiches actives</div></a>
   </div>
   <div class="grid grid-3 mb-6">
     <div class="card p-5"><h3 class="mb-3">🕒 Pointage du mois</h3><div class="text-xs text-slate-500 mb-3 capitalize">${now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div><div class="grid grid-cols-3 gap-2"><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-emerald-700">P</div><div class="text-xl font-black text-emerald-700">${totP}</div></div><div class="card p-2 text-center" style="background:#fee2e2"><div class="text-[10px] font-semibold text-red-700">A</div><div class="text-xl font-black text-red-700">${totA}</div></div><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-amber-700">M</div><div class="text-xl font-black text-amber-700">${totM}</div></div></div></div>
