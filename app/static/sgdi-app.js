@@ -6699,7 +6699,8 @@ function employeeDocumentSignatureControls(meta,label="Valider document"){
   </section><script>window.SGDI_ARCHIVE_META=${metaJson};
   (function(){
     const accept=document.getElementById("sgdi-doc-accept"),start=document.getElementById("sgdi-doc-start"),validate=document.getElementById("sgdi-doc-validate"),validateInline=document.getElementById("sgdi-doc-validate-inline"),finalValidate=document.getElementById("sgdi-doc-final-validate"),printBtn=document.getElementById("sgdi-doc-print"),closeBtn=document.getElementById("sgdi-doc-close"),panel=document.getElementById("sgdi-doc-signature-panel"),canvas=document.getElementById("sgdi-doc-signature-canvas"),clear=document.getElementById("sgdi-doc-clear-signature"),state=document.getElementById("sgdi-doc-state");
-    if(!accept||!start||!validate||!panel||!canvas)return;
+    if(!accept||!start||!validate||!panel||!canvas||window.__SGDI_DOC_SIGNATURE_READY__)return;
+    window.__SGDI_DOC_SIGNATURE_READY__=true;
     const twoStep=!!(window.SGDI_ARCHIVE_META&&window.SGDI_ARCHIVE_META.twoStepValidation);
     const ctx=canvas.getContext("2d");let drawing=false,last=null,signed=false,signatureData="";
     function setBtn(btn,on){if(!btn)return;btn.disabled=!on;btn.style.opacity=on?"1":".45";}
@@ -6727,6 +6728,34 @@ function employeeDocumentSignatureControls(meta,label="Valider document"){
 }
 function prepareEmployeeDocumentForValidation(html,meta,label){
   return String(html||"").replace("<body>","<body>"+employeeDocumentSignatureControls(meta,label));
+}
+function initializeEmployeeDocumentSignatureWindow(docWindow,meta){
+  if(!docWindow||docWindow.closed||docWindow.__SGDI_DOC_SIGNATURE_READY__)return false;
+  const d=docWindow.document;
+  const accept=d.getElementById("sgdi-doc-accept"),start=d.getElementById("sgdi-doc-start"),validate=d.getElementById("sgdi-doc-validate"),validateInline=d.getElementById("sgdi-doc-validate-inline"),finalValidate=d.getElementById("sgdi-doc-final-validate"),printBtn=d.getElementById("sgdi-doc-print"),closeBtn=d.getElementById("sgdi-doc-close"),panel=d.getElementById("sgdi-doc-signature-panel"),canvas=d.getElementById("sgdi-doc-signature-canvas"),clear=d.getElementById("sgdi-doc-clear-signature"),state=d.getElementById("sgdi-doc-state");
+  if(!accept||!start||!validate||!panel||!canvas||!clear)return false;
+  docWindow.__SGDI_DOC_SIGNATURE_READY__=true;
+  docWindow.SGDI_ARCHIVE_META=meta||docWindow.SGDI_ARCHIVE_META||{};
+  const twoStep=!!docWindow.SGDI_ARCHIVE_META.twoStepValidation;
+  const ctx=canvas.getContext("2d");let drawing=false,last=null,signed=false,signatureData="";
+  const setBtn=(btn,on)=>{if(!btn)return;btn.disabled=!on;btn.style.opacity=on?"1":".45";btn.style.cursor=on?"pointer":"not-allowed";};
+  function sizeCanvas(){const r=canvas.getBoundingClientRect(),ratio=Math.max(docWindow.devicePixelRatio||1,1);canvas.width=Math.max(1,Math.floor(r.width*ratio));canvas.height=Math.max(1,Math.floor(r.height*ratio));ctx.setTransform(ratio,0,0,ratio,0,0);ctx.lineWidth=2.8;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#0f172a";ctx.fillStyle="#fff";ctx.fillRect(0,0,r.width,r.height)}
+  function point(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+  function finish(){signed=true;signatureData=canvas.toDataURL("image/png");setBtn(validate,true);setBtn(validateInline,true);if(state){state.textContent=twoStep?"Signature enregistrée. Validez la signature.":"Signature enregistrée. Vous pouvez valider.";state.style.color="#047857"}}
+  function attachSignature(){if(!signatureData||d.getElementById("sgdi-doc-signed-output"))return;const main=d.querySelector("main")||d.body,box=d.createElement("div");box.id="sgdi-doc-signed-output";box.style.cssText="margin-top:10mm;display:grid;grid-template-columns:1fr 1fr;gap:18mm;font-family:Arial,Helvetica,sans-serif";box.innerHTML='<div style="border-top:1px solid #111;padding-top:2mm;text-align:center;font-weight:900">Signature<br><img src="'+signatureData+'" style="max-width:48mm;max-height:18mm;object-fit:contain;margin-top:2mm"></div><div style="border-top:1px solid #111;padding-top:2mm;text-align:center;font-weight:900">Cachet / Direction</div>';main.appendChild(box)}
+  accept.addEventListener("change",()=>{setBtn(start,accept.checked);if(state){state.textContent=accept.checked?"Cliquez sur Signer.":"Cochez la validation.";state.style.color="#64748b"}});
+  start.addEventListener("click",()=>{panel.hidden=false;accept.disabled=true;setBtn(start,false);docWindow.setTimeout(sizeCanvas,50)});
+  canvas.addEventListener("pointerdown",e=>{drawing=true;last=point(e);canvas.setPointerCapture(e.pointerId)});
+  canvas.addEventListener("pointermove",e=>{if(!drawing||!last)return;const p=point(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p});
+  canvas.addEventListener("pointerup",e=>{if(drawing){drawing=false;last=null;finish()}try{canvas.releasePointerCapture(e.pointerId)}catch(_e){}});
+  canvas.addEventListener("pointerleave",()=>{if(drawing){drawing=false;last=null;finish()}});
+  clear.addEventListener("click",()=>{sizeCanvas();signed=false;signatureData="";setBtn(validate,false);setBtn(validateInline,false);setBtn(finalValidate,false);setBtn(printBtn,false);d.getElementById("sgdi-doc-signed-output")?.remove();if(state){state.textContent="Signature effacée. Signez à nouveau.";state.style.color="#64748b"}});
+  function validateSignatureOnly(){if(!signed)return;attachSignature();setBtn(validate,false);setBtn(validateInline,false);setBtn(finalValidate,true);if(state){state.textContent="Signature validée. Validez maintenant la fiche pour l'archiver.";state.style.color="#047857"}}
+  async function archiveSignedDocument(){if(!signed)return;attachSignature();setBtn(validate,false);setBtn(validateInline,false);setBtn(finalValidate,false);if(state)state.textContent="Archivage en cours...";let ok=false;try{ok=await archiveEmployeeDocumentFromWindow(docWindow,docWindow.SGDI_ARCHIVE_META||{})}catch(e){console.error(e)}if(!ok){setBtn(finalValidate,true);if(!twoStep){setBtn(validate,true);setBtn(validateInline,true)}if(state){state.textContent="Archivage impossible. Vérifiez la session serveur puis réessayez.";state.style.color="#dc2626"}return}setBtn(printBtn,true);if(!twoStep&&docWindow.SGDI_ARCHIVE_META.printAfterArchive!==false)docWindow.print();if(state){state.textContent="Document validé, archivé et prêt à imprimer.";state.style.color="#047857"}}
+  const validateSignedDocument=()=>twoStep?validateSignatureOnly():archiveSignedDocument();
+  validate.addEventListener("click",validateSignedDocument);validateInline?.addEventListener("click",validateSignedDocument);finalValidate?.addEventListener("click",archiveSignedDocument);printBtn?.addEventListener("click",()=>docWindow.print());closeBtn?.addEventListener("click",()=>docWindow.close());
+  setBtn(start,accept.checked);setBtn(validate,false);setBtn(validateInline,false);setBtn(finalValidate,false);setBtn(printBtn,false);
+  return true;
 }
 function docUploadField(key,label,eu,en){const id=Math.random().toString(36).slice(2,8);const h=`doch-${id}`;const inner=eu?`<div class="text-xs text-emerald-600">✅ ${escapeHTML(en||"fichier")}</div><button type="button" class="btn btn-ghost text-xs mt-1" onclick="viewDoc('${eu}','${escapeHTML(en||"fichier")}')">👁 Voir</button><button type="button" class="btn btn-ghost text-xs mt-1 text-red-600" onclick="removeDoc('${key}','${h}')">✕ Retirer</button>`:`<input id="docinp-${id}" type="file" accept="image/*,.pdf" class="hidden" onchange="handleDocUpload('${key}','docinp-${id}','${h}')"/><button type="button" class="btn btn-secondary text-xs" onclick="document.getElementById('docinp-${id}').click()">📤 Téléverser</button>`;return`<input type="hidden" name="doc_${key}_url" value="${eu||""}"/><input type="hidden" name="doc_${key}_name" value="${en||""}"/><div id="${h}">${inner}</div>`}
 function handleCvUpload(inputId){const inp=document.getElementById(inputId);if(!inp||!inp.files[0])return;const f=inp.files[0];if(f.size>5*1024*1024){toast("CV > 5 Mo","error");return}const r=new FileReader();r.onload=e=>{document.querySelector('[name="cv_url"]').value=e.target.result;document.querySelector('[name="cv_name"]').value=f.name;document.getElementById("cv-holder").innerHTML=`<div class="text-xs text-emerald-600">✅ ${escapeHTML(f.name)}</div><div class="flex gap-2 mt-1"><button type="button" class="btn btn-ghost text-xs" onclick="viewDoc('${e.target.result}','${escapeHTML(f.name)}')">👁 Voir</button><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="removeCv()">✕ Retirer</button></div>`};r.readAsDataURL(f)}
@@ -17011,13 +17040,15 @@ function openFicheDotationValidationWindow(agentId){
   if(!rows.length){toast("Aucune dotation active à valider pour cet employé","error");return}
   const w=window.open("","_blank","width=1000,height=820");
   if(!w){toast("Fenêtre fiche de dotation bloquée par le navigateur","error");return}
+  const archiveMeta=ficheDotationArchiveMeta(agentId);
   const html=prepareEmployeeDocumentForValidation(
     ficheDotationDocumentHTML(agentId),
-    ficheDotationArchiveMeta(agentId),
+    archiveMeta,
     "Valider signature"
   );
   w.document.write(html);
   w.document.close();
+  setTimeout(()=>initializeEmployeeDocumentSignatureWindow(w,archiveMeta),100);
 }
 function openAttribuerToAgentModal(agentId){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
