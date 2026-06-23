@@ -542,6 +542,7 @@ function sgdiFireAndForgetSave(){
   sgdiDirty=true;
   sgdiBackendSave();
 }
+let _sgdiLastPullError="";
 async function sgdiPullState(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
@@ -574,6 +575,8 @@ async function sgdiPullState(options){
       return db;
     }
   }catch(e){
+    _sgdiLastPullError=e.message||String(e);
+    console.error("[SGDI] sgdiPullState echec:",e);
     if(!opt.silent&&typeof toast==="function")toast("Backend indisponible : "+(e.message||e),"error");
   }
   return null;
@@ -2784,7 +2787,8 @@ async function login(u,p,opt={}){
         session=null;
         sgdiPostgresReady=false;
         setLoginBusy(false);
-        toast("Connexion refusée : données non chargées","error");return;
+        const _why=_sgdiLastPullError?" — "+_sgdiLastPullError:"";
+        toast("Connexion refusée : données non chargées"+_why,"error");return;
       }
       const localUser=(db.users||[]).find(x=>x.username===session.username);
       if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
