@@ -6484,6 +6484,7 @@ async function archiveEmployeeDocumentFromWindow(docWindow,meta){
   }
   const clone=docWindow.document.documentElement.cloneNode(true);
   clone.querySelectorAll(".no-print,script").forEach(el=>el.remove());
+  clone.querySelectorAll("img[src^='data:']").forEach(img=>{img.setAttribute("src","/static/sgdi-icon-192.png")});
   const html="<!doctype html>\n"+clone.outerHTML;
   return archiveEmployeeGeneratedDocument(meta.agentId||meta.employeeBackendId||meta.matricule,{...meta,html});
 }
