@@ -3964,18 +3964,18 @@ function agentHasLiveAffectation(a){
   const aff=agentLiveAffectation(a);
   return !!(aff&&(aff.siteId||aff.siteName));
 }
-function employeeStatusKey(a){
+function employeeLifecycleStatusKey(a){
   return normalizeEmployeeStatusValue(a?.statut||a?.status||"");
 }
 function employeeIsFormer(a,asOf=today()){
   if(!a)return false;
-  if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a)))return true;
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeLifecycleStatusKey(a)))return true;
   const exitDate=String(a.dateSortie||a.departAt||"").slice(0,10);
   if(/^\d{4}-\d{2}-\d{2}$/.test(exitDate)&&exitDate<=asOf)return true;
   return !!(a.finRelationAt&&!exitDate);
 }
 function employeeIsActive(a){
-  return !employeeIsFormer(a)&&["actif","active"].includes(employeeStatusKey(a));
+  return !employeeIsFormer(a)&&["actif","active"].includes(employeeLifecycleStatusKey(a));
 }
 function agentIsOperational(a){
   return employeeIsActive(a);
