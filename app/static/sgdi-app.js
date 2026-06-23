@@ -6468,7 +6468,6 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
     const mapped=employeeFromApi(saved);
     Object.assign(a,mapped,{...a,documents:{...(mapped.documents||{}),...(a.documents||{}),[key]:entry},backendId:saved?.id||a.backendId});
   }catch(e){toast("Document non archivé : "+(e.message||e),"error");return false}
-  sgdiFireAndForgetSave();
   const fresh=(db.agents||[]).find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(a.backendId||""));
   if(fresh){
     fresh.documents={...(fresh.documents||{}),[key]:entry};
