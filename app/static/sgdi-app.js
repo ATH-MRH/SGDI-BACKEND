@@ -3981,7 +3981,7 @@ function employeeIsInActiveWorkforce(a){
   return !!a&&!employeeIsFormer(a);
 }
 function agentIsOperational(a){
-  return employeeIsActive(a)&&agentHasLiveAffectation(a);
+  return employeeIsActive(a);
 }
 function agentNeedsDotation(a){
   const cfg=effectifConfigSettings();
@@ -29513,7 +29513,7 @@ function renderOPS(view,sub,arg){
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">TABLEAU DE BORD</h1>
   <p class="text-slate-500 text-sm mb-4">OPS · Pointage, fiches de position, sites · ${soc?escapeHTML(soc):"Toutes sociétés"}</p>
   <div class="grid grid-5 mb-6">
-    <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif opérationnel</h3></div><div class="text-4xl font-bold">${affectes.length}</div><div class="text-xs text-slate-500 mt-1">${actifs.length} actif(s) · affectés</div></a>
+    <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif opérationnel</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">Employés actifs · ${affectes.length} affecté(s)</div></a>
     <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${instanceAffectation.length}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
     <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotationCount?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div id="ops-dot-card-count" class="text-4xl font-bold text-red-700">${instanceDotationCount}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${sitesActifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
