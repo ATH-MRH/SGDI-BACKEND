@@ -26663,8 +26663,8 @@ function renderDRHDashboard(view){
       ${drhKpi("Réserve",candReserve,"En attente de recrutement","#/reserve","#0284c7","R")}
       ${drhKpi("Archivés",candArchives,`${candPct(candArchives)}% du vivier`,"#/candidats_archives","#475569","A")}
       ${drhKpi("Demandes",demandesPersonnel,"Personnel à traiter","#/demandes_personnel/dashboard","#0891b2","D")}
-      ${drhKpi("Social",socialAlertes,"CNAS / Chifa à traiter","#/drh/social","#7c3aed","S")}
       ${drhKpi("Congés attente",congesAttente,"Validation DRH","#/conges","#d97706","C")}
+      ${drhKpi("Sortants",sortants,"Éléments sortants","#/effectif/sortants","#dc2626","S")}
     </div>
     <div class="dashboard-compact-band-grid mb-4">
       <div class="card dashboard-compact-band dashboard-ratio-band"><h3>Ratios RH</h3>
