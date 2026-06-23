@@ -795,6 +795,19 @@ async function refreshDemandesPersonnelFromPostgres(options){
   }
   return null;
 }
+const EMPLOYEE_FORMER_STATUS_KEYS=new Set(["sortant","demissionne","licencie","archive","archivee","ancien","fin_contrat","fin_de_contrat","fin_relation","fin_de_relation"]);
+function normalizeEmployeeStatusValue(value){
+  return String(value||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[\s-]+/g,"_");
+}
+function employeeResolvedStatus(emp,data){
+  const canonical=String(emp?.status||"").trim(),legacy=String(data?.statut||data?.status||"").trim();
+  const canonicalKey=normalizeEmployeeStatusValue(canonical),legacyKey=normalizeEmployeeStatusValue(legacy);
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(canonicalKey))return canonical;
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(legacyKey))return legacy;
+  const exitDate=String(data?.dateSortie||data?.departAt||"").slice(0,10);
+  if(data?.finRelationAt&&(!exitDate||exitDate<=today()))return "sortant";
+  return legacy||canonical||"actif";
+}
 function employeeFromApi(emp){
   const extra=emp&&emp.extra&&typeof emp.extra==="object"?emp.extra:{};
   const legacy=extra&&extra._legacy&&typeof extra._legacy==="object"?extra._legacy:{};
@@ -809,9 +822,7 @@ function employeeFromApi(emp){
     nom:data.nom||emp.last_name||"",
     prenom:data.prenom||emp.first_name||"",
     societe:data.societe||emp.society||"",
-    // La colonne PostgreSQL est la source de vérité. Le JSON legacy peut encore
-    // contenir "actif" après une fin de relation et ne doit jamais la remplacer.
-    statut:emp.status||data.statut||"actif",
+    statut:employeeResolvedStatus(emp,data),
     typeContrat:cleanContractType(data.typeContrat)||cleanContractType(emp.contract_type)||"CDD",
     email:data.email||emp.email||"",
     telephone:data.telephone||emp.phone||"",
@@ -3953,18 +3964,16 @@ function agentHasLiveAffectation(a){
   return !!(aff&&(aff.siteId||aff.siteName));
 }
 function employeeStatusKey(a){
-  return String(a?.statut||a?.status||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[\s-]+/g,"_");
+  return normalizeEmployeeStatusValue(a?.statut||a?.status||"");
 }
 function employeeIsFormer(a,asOf=today()){
   if(!a)return false;
-  const former=new Set(["sortant","demissionne","licencie","archive","archivee","ancien","fin_contrat","fin_de_contrat","fin_relation","fin_de_relation"]);
-  if(former.has(employeeStatusKey(a)))return true;
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a)))return true;
   const exitDate=String(a.dateSortie||a.departAt||"").slice(0,10);
-  if(exitDate&&/^\d{4}-\d{2}-\d{2}$/.test(exitDate)&&exitDate<=asOf)return true;
-  return !!(a.finRelationAt&&!exitDate);
+  return !!(a.finRelationAt&&(!exitDate||(/^\d{4}-\d{2}-\d{2}$/.test(exitDate)&&exitDate<=asOf)));
 }
 function employeeIsActive(a){
-  return !employeeIsFormer(a)&&["actif","active"].includes(employeeStatusKey(a));
+  return !employeeIsFormer(a)&&["actif","active","en_service","operationnel","operational"].includes(employeeStatusKey(a));
 }
 function employeeIsInActiveWorkforce(a){
   return !!a&&!employeeIsFormer(a);
