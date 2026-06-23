@@ -1,7 +1,7 @@
 {
-  "name": "SGDI",
-  "short_name": "SGDI",
-  "description": "Plateforme SGDI - gestion opérationnelle et RH",
+  "name": "ATLAS",
+  "short_name": "ATLAS",
+  "description": "Plateforme ATLAS - gestion opérationnelle et RH",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

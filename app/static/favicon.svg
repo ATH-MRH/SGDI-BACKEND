@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#043970"/>
-  <text x="32" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="900" fill="#fff">SG</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="ATLAS">
+  <rect width="40" height="40" rx="11" fill="#0d0e12"/>
+  <path d="M11.5 30.5 L20 9.5 L28.5 30.5" fill="none" stroke="#ffffff" stroke-width="3.3" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M15 23.2 H25" fill="none" stroke="#e11225" stroke-width="3.3" stroke-linecap="round"/>
 </svg>
