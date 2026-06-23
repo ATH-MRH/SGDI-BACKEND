@@ -809,7 +809,9 @@ function employeeFromApi(emp){
     nom:data.nom||emp.last_name||"",
     prenom:data.prenom||emp.first_name||"",
     societe:data.societe||emp.society||"",
-    statut:data.statut||emp.status||"actif",
+    // La colonne PostgreSQL est la source de vérité. Le JSON legacy peut encore
+    // contenir "actif" après une fin de relation et ne doit jamais la remplacer.
+    statut:emp.status||data.statut||"actif",
     typeContrat:cleanContractType(data.typeContrat)||cleanContractType(emp.contract_type)||"CDD",
     email:data.email||emp.email||"",
     telephone:data.telephone||emp.phone||"",
@@ -3950,20 +3952,37 @@ function agentHasLiveAffectation(a){
   const aff=agentLiveAffectation(a);
   return !!(aff&&(aff.siteId||aff.siteName));
 }
+function employeeStatusKey(a){
+  return String(a?.statut||a?.status||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[\s-]+/g,"_");
+}
+function employeeIsFormer(a,asOf=today()){
+  if(!a)return false;
+  const former=new Set(["sortant","demissionne","licencie","archive","archivee","ancien","fin_contrat","fin_de_contrat","fin_relation","fin_de_relation"]);
+  if(former.has(employeeStatusKey(a)))return true;
+  const exitDate=String(a.dateSortie||a.departAt||"").slice(0,10);
+  if(exitDate&&/^\d{4}-\d{2}-\d{2}$/.test(exitDate)&&exitDate<=asOf)return true;
+  return !!(a.finRelationAt&&!exitDate);
+}
+function employeeIsActive(a){
+  return !employeeIsFormer(a)&&["actif","active"].includes(employeeStatusKey(a));
+}
+function employeeIsInActiveWorkforce(a){
+  return !!a&&!employeeIsFormer(a);
+}
 function agentIsOperational(a){
-  return String(a?.statut||"").toLowerCase()==="actif"&&agentHasLiveAffectation(a);
+  return employeeIsActive(a)&&agentHasLiveAffectation(a);
 }
 function agentNeedsDotation(a){
   const cfg=effectifConfigSettings();
-  return !!cfg.operationalRequiresDotation&&String(a?.statut||"").toLowerCase()==="actif"&&!agentHasMaterialDotation(a);
+  return !!cfg.operationalRequiresDotation&&employeeIsActive(a)&&!agentHasMaterialDotation(a);
 }
 function agentNeedsAffectation(a){
   const cfg=effectifConfigSettings();
-  return !!cfg.operationalRequiresAffectation&&String(a?.statut||"").toLowerCase()==="actif"&&!agentHasLiveAffectation(a);
+  return !!cfg.operationalRequiresAffectation&&employeeIsActive(a)&&!agentHasLiveAffectation(a);
 }
 function agentNeedsInstallationPV(a){
   const cfg=effectifConfigSettings();
-  return !!cfg.operationalRequiresPvInstallation&&String(a?.statut||"").toLowerCase()==="actif"&&!agentNeedsDotation(a)&&!agentNeedsAffectation(a)&&!agentHasInstallationPV(a);
+  return !!cfg.operationalRequiresPvInstallation&&employeeIsActive(a)&&!agentNeedsDotation(a)&&!agentNeedsAffectation(a)&&!agentHasInstallationPV(a);
 }
 function moduleCountersRibbonHTML(){
   if(!session||!db)return"";
@@ -3973,7 +3992,7 @@ function moduleCountersRibbonHTML(){
   const module=session.transverse||sgdiCurrentAlertModule()||root;
   const scopeSoc=(module==="drh"?(typeof drhActiveSocieteFilter==="function"&&drhActiveSocieteFilter()):(typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter()))||session?.societe||(typeof mySoc==="function"?mySoc():"")||"";
   const allAgents=(db.agents||[]).filter(a=>!scopeSoc||a.societe===scopeSoc);
-  const activeAgents=allAgents.filter(a=>a.statut==="actif");
+  const activeAgents=allAgents.filter(employeeIsActive);
   const sites=siteOpsSitesForScope(scopeSoc);
   const sitesActifs=sites;
   const todayRows=(db.feuillePresence||[]).filter(f=>f.date===today()&&(!scopeSoc||f.societe===scopeSoc));
@@ -5019,7 +5038,6 @@ function renderSidebar(){
     const drhIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,drhSoc)).length;
 
     // Compteurs OPS
-    const opsAgentsActifs=srvEmp?.operational_active??agents.filter(a=>a.statut==="actif").length;
     const opsSitesActifs=opsSitesActiveCount()??(db.sites||[]).filter(s=>s.actif!==false&&s.active!==0).length;
     const adminSitesActifs=(db.sites||[]).filter(s=>s.actif!==false&&s.active!==0&&adminDataMatchesSociete(s)).length;
     const adminMagasinsCount=(db.magasins||[]).filter(adminDataMatchesSociete).length;
@@ -16243,7 +16261,7 @@ function ficheAgentInAbandon(a){
   return st.includes("abandon")||events;
 }
 function ficheAgentIsSortantArchive(a){
-  return a&&["sortant","demissionne","licencie","archive"].includes(a.statut);
+  return employeeIsFormer(a);
 }
 function fpFilters(){
   return {
@@ -16326,7 +16344,7 @@ function renderFiches(view,sub){
   const fpSites=fpUniqueSiteOptions(safeSocFilter);
   const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent);
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
-  const activeEmployees=statsBase.filter(a=>a.statut==="actif").length;
+  const activeEmployees=statsBase.filter(employeeIsActive).length;
   const withoutAffectation=activeBase.filter(agentNeedsAffectation).length;
   const withoutDotation=materialPendingDotationCountForSoc(safeSocFilter);
   const dotationToReplace=activeBase.filter(agentHasDotationToReplace).length;
@@ -17286,12 +17304,11 @@ function agentHasDotationToReplace(aOrId){
   });
 }
 function matAgentIsActive(a){
-  const s=String(a?.statut||a?.status||"actif").toLowerCase();
-  return ["actif","active"].includes(s);
+  return employeeIsActive(a);
 }
 function matAgentMatchesSoc(a,soc){
   if(!soc)return true;
-  return !a?.societe||normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
+  return !!a?.societe&&normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
 }
 function agentDotationCount(agentId){
   const a=findEmployeeByRef(agentId);
@@ -17360,7 +17377,7 @@ function sitesEnAttenteDotationForSoc(soc){
 function sitesEnAttenteDotation(){
   return sitesEnAttenteDotationForSoc(matSimpleSocFilter());
 }
-function isAgentSortant(a){return a&&["sortant","demissionne","licencie","archive"].includes(a.statut)}
+function isAgentSortant(a){return employeeIsFormer(a)}
 function agentReversementSituation(agentId){
   const legacy=(db.materiel||[]).filter(m=>m.agentId===agentId&&m.statut==="attribue");
   const mvts=db.stockMouvements||[];
@@ -29456,9 +29473,10 @@ function renderOPS(view,sub,arg){
   const ag=(db.agents||[]).filter(a=>!soc||a.societe===soc);
   const sites=(db.sites||[]).filter(s=>s&&siteBelongsToPrimarySociete(s,soc));
   const pts=(db.pointages||[]).filter(p=>!soc||((db.agents||[]).find(a=>a.id===p.agentId)?.societe===soc)||p.societe===soc);
-  const actifs=ag.filter(a=>a.statut==="actif");
+  const actifs=ag.filter(employeeIsActive);
+  const activeWorkforce=ag.filter(employeeIsInActiveWorkforce);
   const instanceAffectation=actifs.filter(agentNeedsAffectation);
-  const instanceDotation=agentsEnInstanceDotationForSoc(soc);
+  const instanceDotationCount=materialPendingDotationCountForSoc(soc);
   const sitesActifs=sites.filter(s=>s.actif!==false);
   const now=new Date();const curYM=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const ptsCur=pts.filter(p=>p.periode===curYM);
@@ -29489,9 +29507,9 @@ function renderOPS(view,sub,arg){
   <div class="grid grid-5 mb-6">
     <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif opérationnel</h3></div><div class="text-4xl font-bold">${affectes.length}</div><div class="text-xs text-slate-500 mt-1">${actifs.length} actif(s) · affectés</div></a>
     <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${instanceAffectation.length}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
-    <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotation.length?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div id="ops-dot-card-count" class="text-4xl font-bold text-red-700">${instanceDotation.length}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
+    <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotationCount?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div id="ops-dot-card-count" class="text-4xl font-bold text-red-700">${instanceDotationCount}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${sitesActifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
-    <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position</h3></div><div class="text-4xl font-bold">${ag.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir toutes les fiches</div></a>
+    <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position actives</h3></div><div class="text-4xl font-bold">${activeWorkforce.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les fiches actives</div></a>
   </div>
   <div class="grid grid-3 mb-6">
     <div class="card p-5"><h3 class="mb-3">🕒 Pointage du mois</h3><div class="text-xs text-slate-500 mb-3 capitalize">${now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div><div class="grid grid-cols-3 gap-2"><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-emerald-700">P</div><div class="text-xl font-black text-emerald-700">${totP}</div></div><div class="card p-2 text-center" style="background:#fee2e2"><div class="text-[10px] font-semibold text-red-700">A</div><div class="text-xl font-black text-red-700">${totA}</div></div><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-amber-700">M</div><div class="text-xl font-black text-amber-700">${totM}</div></div></div></div>
@@ -29510,7 +29528,7 @@ function renderOPS(view,sub,arg){
       <h3 class="mb-3">⚠️ Opérations à traiter</h3>
       <div class="space-y-2">
         <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-orange-50 text-sm" style="text-decoration:none;color:inherit"><span>Employés sans affectation</span><b class="text-orange-700">${instanceAffectation.length}</b></a>
-        <a href="#/ops/instance_dotation" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm ${instanceDotation.length?"ops-dot-row-alert":""}" style="text-decoration:none;color:inherit"><span>Employés en instance de dotation</span><b class="text-red-700">${instanceDotation.length}</b></a>
+        <a href="#/ops/instance_dotation" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm ${instanceDotationCount?"ops-dot-row-alert":""}" style="text-decoration:none;color:inherit"><span>Employés en instance de dotation</span><b class="text-red-700">${instanceDotationCount}</b></a>
         <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-amber-50 text-sm" style="text-decoration:none;color:inherit"><span>Fiches validées à traiter</span><b class="text-amber-700">${opsWorkflowTasks.length}</b></a>
         <a href="#/sites/actifs" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 text-sm" style="text-decoration:none;color:inherit"><span>Sites actifs sans effectif</span><b>${sitesSansEffectif.length}</b></a>
         <a href="#/pointage/feuille" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm" style="text-decoration:none;color:inherit"><span>Feuilles non clôturées</span><b class="text-red-700">${feuillesNonCloturees}</b></a>
@@ -29555,7 +29573,7 @@ function renderOPS(view,sub,arg){
 function renderOpsInstanceDotation(view){
   const soc=currentStructureSocieteFilter();
   const agents=agentsEnInstanceDotationForSoc(soc);
-  const actifs=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));
+  const actifs=(db.agents||[]).filter(a=>employeeIsActive(a)&&(!soc||a.societe===soc));
   view.innerHTML=`<div class="flex justify-between items-center mb-4 flex-wrap gap-3">
     <div><h1 class="text-2xl font-black uppercase">EMPLOYÉS EN INSTANCE DE DOTATION</h1><p class="text-slate-500 text-sm">${soc?escapeHTML(soc):"Toutes sociétés"} · Suivi OPS uniquement. La dotation est réservée au module Matériel.</p></div>
     <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="navigate('ops/dashboard')">← Tableau de bord</button></div>
