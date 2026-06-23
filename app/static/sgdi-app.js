@@ -4281,6 +4281,60 @@ function sgdiAlertVisibleItems(){
       });
     });
   }
+  if(sgdiAlertModuleAllowed("drh")){
+    (db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt).forEach(a=>{
+      const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+      const mat=a.matricule||a.code||"";
+      const pending=drhMedPendingCount(a);
+      if(!pending)return;
+      const medType=!a.finRelationMed1SentAt?"MED n°1":!a.finRelationMed2SentAt?"MED n°2":"Lettre gendarmerie";
+      sgdiAlertPush(rows,{
+        id:"med-drh:"+(a.id||mat),
+        module:"drh",
+        societe:a.societe||"",
+        title:medType+" à émettre — "+nom,
+        message:nom+" ("+(mat||"?")+") : "+medType+" à rédiger et transmettre (dotation non reversée).",
+        meta:mat,
+        route:"drh/mise_en_demeure",
+        severity:"critical",
+        type:"Mise en demeure",
+        createdAt:a.finRelationMed2SentAt||a.finRelationMed1SentAt||a.finRelationAt||""
+      });
+    });
+  }
+  (db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt).forEach(a=>{
+    const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+    const ds=formatDate(a.dateSortie||"");
+    const mat=a.matricule||a.code||"";
+    if(sgdiAlertModuleAllowed("ops")){
+      sgdiAlertPush(rows,{
+        id:"sortant-ops:"+(a.id||mat),
+        module:"ops",
+        societe:a.societe||"",
+        title:"Employé SORTANT — "+nom,
+        message:nom+" ("+(mat||"?")+") ne fait plus partie de la société depuis le "+ds+". Mettre fin à toute affectation opérationnelle.",
+        meta:mat,
+        route:"effectif/actifs",
+        severity:"critical",
+        type:"Sortant",
+        createdAt:a.finRelationAt||""
+      });
+    }
+    if(sgdiAlertModuleAllowed("materiel")){
+      sgdiAlertPush(rows,{
+        id:"sortant-materiel:"+(a.id||mat),
+        module:"materiel",
+        societe:a.societe||"",
+        title:"DOTATION À RÉCUPÉRER — "+nom,
+        message:nom+" ("+(mat||"?")+") est SORTANT depuis le "+ds+". Toute la dotation doit être reversée au magasin.",
+        meta:mat,
+        route:"materiel/dotation",
+        severity:"critical",
+        type:"Dotation",
+        createdAt:a.finRelationAt||""
+      });
+    }
+  });
   return rows.sort((a,b)=>sgdiAlertSeverityRank(a.severity)-sgdiAlertSeverityRank(b.severity)||String(b.createdAt||"").localeCompare(String(a.createdAt||""))||String(a.module+a.title).localeCompare(String(b.module+b.title)));
 }
 function notificationReadStorageKey(){return "sgdiNotificationRead:"+(session?.username||"anonymous")}
@@ -4978,7 +5032,8 @@ function renderSidebar(){
         {label:"SOCIAL",route:"drh/social",aliases:["drh/social","conges"],count:drhSocialAlertes.length||null},
         {label:"PAIE",route:"paie/dashboard",aliases:["paie"]},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
-        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length}
+        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()}
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard"},
@@ -10805,8 +10860,16 @@ function updateIntegrationReference(){
   const f=document.getElementById("employee-integration-form");if(!f)return;
   if(f.reference)f.reference.value=rhDecisionReference("INT",findEmployeeByRef(f.agentId.value),f.dateDecision.value||today());
 }
+function canUserReactiverSortant(){
+  const u=(db.users||[]).find(x=>x.username===session?.username);
+  return !!(u&&u.peutReactiverSortant);
+}
 function openEmployeeIntegrationModal(agentId){
   if(!canUseEmployeeActionWorkflows()){toast("Intégration non autorisée depuis ce module","error");return}
+  const _check=findEmployeeByRef(agentId);
+  if(_check&&String(_check.statut||"").toLowerCase()==="sortant"&&!canUserReactiverSortant()){
+    toast("Réactivation d'un employé SORTANT non autorisée. Habilitation requise (Administration → Utilisateurs).","error");return;
+  }
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];if(!selected){toast("Aucun employé disponible","error");return}
   openModal(`<div class="flex items-start justify-between gap-3 mb-3 flex-wrap"><h3 class="font-bold text-lg">REINTEGRER</h3><div style="min-width:240px"><label class="label">Référence décision</label><input class="input bg-slate-50" name="reference" form="employee-integration-form" value="${escapeHTML(rhDecisionReference("INT",selected,today()))}" readonly/></div></div>
     <form id="employee-integration-form" onsubmit="event.preventDefault();confirmEmployeeIntegration(this)">
@@ -10827,7 +10890,13 @@ async function confirmEmployeeIntegration(form){
   const printWindow=window.open("","_blank","width=900,height=700");
   if(printWindow)printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Préparation intégration</title></head><body style="font-family:Arial;padding:24px">Préparation de la décision...</body></html>`);
   try{
-    (a.gestionEvents||[]).forEach(e=>{if(e.statut==="en_cours"&&(e.type==="Suspension"||e.type==="Absence"))e.statut="termine"});
+    (a.gestionEvents||[]).forEach(e=>{if(e.statut==="en_cours"&&(e.type==="Suspension"||e.type==="Absence"||e.type==="Fin de contrat"))e.statut="termine"});
+    if(String(a.statut||"").toLowerCase()==="sortant"){
+      a.dateSortie=null;a.finRelationAt=null;a.finRelationDotationReversee=null;
+      a.stcCongeReliquat=null;a.stcDeductionReforme=null;
+      a.finRelationMed1SentAt=null;a.finRelationMed2SentAt=null;a.finRelationGendarmerieSentAt=null;
+      a.finRelationReversementAt=null;a.finRelationReversementDate=null;
+    }
     await persistEmployeeRhDecision(a,{type:"Intégration",du:draft.dateDecision,au:draft.dateDecision,motif:draft.motif,observation:draft.observation,details:draft.observation,reference:draft.reference,statut:"termine"},{status:"actif"});
   }catch(e){if(printWindow)printWindow.close();toast("Intégration non enregistrée : "+(e.message||e),"error");return}
   if(!(await saveDBAndWaitToast("Intégration non confirmée"))){if(printWindow)printWindow.close();return}
@@ -10978,7 +11047,57 @@ async function confirmEmployeeFinRelation(form){
   catch(e){if(printWindow)printWindow.close();toast("Fin de relation non enregistrée : "+(e.message||e),"error");return}
   if(!(await saveDBAndWaitToast("Fin de relation non confirmée"))){if(printWindow)printWindow.close();return}
   if(printWindow)printRhDecisionWindow(a,{...draft,a},printWindow);else toast("Fin de relation enregistrée, mais l'impression a été bloquée","warn");
-  closeModal();toast("Fin de relation enregistrée","success");renderView();
+  closeModal();toast("Fin de relation enregistrée","success");renderView();onEmployeeFinRelation(a,draft);
+}
+function calculateStcCongeReliquat(a,dateEffet){
+  const dateRec=a.dateRecrutement||a.dateEntree||"";
+  if(!dateRec)return null;
+  const totalAcquis=drhLeaveEntitlement(dateRec,dateEffet);
+  const pris=(db.conges||[])
+    .filter(c=>c.agentId===a.id&&c.type!=="Maladie"&&c.statut==="approuve")
+    .reduce((s,c)=>s+(parseInt(c.joursConge)||(c.du&&c.au?daysBetween(c.du,c.au)+1:0)),0);
+  return Math.max(0,Math.round((totalAcquis-pris)*100)/100);
+}
+async function onEmployeeFinRelation(a,draft){
+  const congeReliquat=calculateStcCongeReliquat(a,draft.dateEffet);
+  a.stcCongeReliquat=congeReliquat;
+  a.finRelationAt=new Date().toISOString();
+  a.finRelationDotationReversee=false;
+  try{if(a.backendId)await SGDI.employees.update(a.backendId,employeeApiPayload(a));}
+  catch(e){console.warn("finRelation STC save failed",e);}
+  showFinRelationSummaryModal(a,draft,congeReliquat);
+}
+function showFinRelationSummaryModal(a,draft,congeReliquat){
+  const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const dateRec=a.dateRecrutement||a.dateEntree||"";
+  const totalAcquis=dateRec?drhLeaveEntitlement(dateRec,draft.dateEffet):null;
+  const prisDays=totalAcquis!==null&&congeReliquat!==null?Math.round((totalAcquis-congeReliquat)*100)/100:null;
+  openModal(`<div style="max-width:500px">
+    <div style="background:#7f1d1d;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0;font-weight:900;font-size:15px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:22px">🔴</span> Fin de relation enregistrée
+    </div>
+    <div style="padding:22px">
+      <p style="font-weight:700;font-size:15px;margin:0 0 16px">${escapeHTML(nom)} — <span style="color:#991b1b">SORTANT</span> depuis le <b>${formatDate(draft.dateEffet)}</b></p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:14px">
+        <div style="font-weight:900;color:#043970;text-transform:uppercase;font-size:11px;margin-bottom:10px">Solde Tout Compte — Reliquat Congés</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div style="text-align:center"><div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:700;margin-bottom:4px">Acquis</div>
+            <div style="font-size:24px;font-weight:900;color:#043970">${totalAcquis!==null?totalAcquis:"—"}</div><div style="font-size:10px;color:#94a3b8">jours</div></div>
+          <div style="text-align:center"><div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:700;margin-bottom:4px">Pris</div>
+            <div style="font-size:24px;font-weight:900;color:#64748b">${prisDays!==null?prisDays:"—"}</div><div style="font-size:10px;color:#94a3b8">jours</div></div>
+          <div style="text-align:center"><div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:700;margin-bottom:4px">Reliquat</div>
+            <div style="font-size:24px;font-weight:900;color:#16a34a">${congeReliquat!==null?congeReliquat:"—"}</div><div style="font-size:10px;color:#94a3b8">jours</div></div>
+        </div>
+        <p style="margin:10px 0 0;font-size:11px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:8px">Reste du STC (prime, préavis, indemnités...) à saisir manuellement.</p>
+      </div>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px;margin-bottom:18px;font-size:13px">
+        <b style="color:#c2410c">Alertes envoyées :</b><br>
+        <span style="display:block;margin-top:4px">• <b>OPS</b> : ${escapeHTML(nom)} ne fait plus partie de la société</span>
+        <span style="display:block;margin-top:2px">• <b>MATÉRIEL</b> : reversement de la dotation requis</span>
+      </div>
+      <div style="text-align:right"><button class="btn" onclick="closeModal()">Fermer</button></div>
+    </div>
+  </div>`);
 }
 function employeeRowActionsButton(a){
   if(isDrhModuleContext())return "";
@@ -11018,7 +11137,8 @@ function openEmployeeStatusActions(event,agentId,actionContext){
   closeEmployeeRowActions();
   const a=findEmployeeByRef(agentId);
   const isContractContext=actionContext==="contracts";
-  const canIntegrer=String(a?.statut||"").toLowerCase()==="suspendu";
+  const isSortant=String(a?.statut||"").toLowerCase()==="sortant";
+  const canIntegrer=String(a?.statut||"").toLowerCase()==="suspendu"||(isSortant&&canUserReactiverSortant());
   const labels=isContractContext?[["nouveau_contrat","NOUVEAU CONTRAT"],["avenant","NOUVEAU AVENANT"]]:isOpsEffectifContext()?opsEmployeeActionLabels():[["detail","DETAIL"],["conge","CONGÉ"],["rec_periode_essai","REC/PERIODE D'ESSAI"],["suspendre","SUSPENDRE"],["convoquer","CONVOQUER"],["mise_en_demeure","MISE EN DEMEURE"],["sanctionner","SANCTIONNER"],["avenant","AVENANT"],["nouveau_contrat","NOUVEAU CONTRAT"],["fin_contrat","FIN DE RELATION DE TRAVAIL"],["integrer","REINTEGRER"]];
   const btn=event.currentTarget;
   const rect=btn.getBoundingClientRect();
@@ -11028,7 +11148,8 @@ function openEmployeeStatusActions(event,agentId,actionContext){
   menu.innerHTML=`<div class="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">${isContractContext?"Action contrat":isOpsEffectifContext()?"Action OPS":"Action RH"}</div>`+labels.map(([k,l])=>{
     const disabled=k==="integrer"&&!canIntegrer;
     const extra=disabled?"opacity:.45;cursor:not-allowed;filter:grayscale(1);":"";
-    const click=disabled?`onclick="event.preventDefault();toast('Intégration active uniquement pour un employé suspendu','warn')"`:`onclick="runRhEffectifAction('${k}','${escapeHTML(agentId)}')"`;
+    const disabledMsg=k==="integrer"&&isSortant&&!canUserReactiverSortant()?"Réactivation SORTANT non autorisée — habilitation requise":"Intégration active uniquement pour un employé suspendu";
+    const click=disabled?`onclick="event.preventDefault();toast('${disabledMsg}','warn')"`:`onclick="runRhEffectifAction('${k}','${escapeHTML(agentId)}')"`;
     return `<button type="button" class="btn btn-ghost text-xs justify-start w-full" ${disabled?"aria-disabled=\"true\"":""} style="text-align:left;margin:2px 0;${rhEffectifActionStyle(k)};${extra}" ${click}>${l}</button>`;
   }).join("");
   document.body.appendChild(menu);
@@ -12968,7 +13089,7 @@ function ficheStatusInfo(a){
   const congeActif=(db.conges||[]).find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
   const st=String(a?.statut||"").toLowerCase();
   if(a.blacklist)return{label:"Black list",alert:"Agent inscrit sur la black list. Vérifier la référence et le motif avant toute décision RH."};
-  if(ficheAgentIsSortantArchive(a))return{label:"Sortant / archivé",alert:"Cette fiche appartient à un agent sorti du cycle actif."};
+  if(ficheAgentIsSortantArchive(a)||st==="sortant"){const ds=a.dateSortie?formatDate(a.dateSortie):"";const rev=a.finRelationDotationReversee?"✓ Dotation reversée le "+formatDate(a.finRelationReversementDate||""):"⚠ Dotation non reversée";let stcInfo="";if(a.stcCongeReliquat!=null)stcInfo+=" — Reliquat congés : "+a.stcCongeReliquat+" j";if(a.stcDeductionReforme)stcInfo+=" — Déduction réformé : "+money(a.stcDeductionReforme);return{label:"SORTANT"+(ds?" · "+ds:""),alert:"Cet employé est sorti du cycle actif."+(ds?" Date de sortie : "+ds+".":" ")+"\n"+rev+stcInfo};}
   if(ficheAgentInAbandon(a))return{label:"Abandon de poste",alert:"Situation sensible : abandon de poste détecté dans les événements de gestion."};
   if(st==="suspendu")return{label:"Suspendu",alert:"Agent suspendu. Les actions opérationnelles doivent être validées par la DRH."};
   if(congeActif&&congeActif.type==="Maladie")return{label:"En maladie",alert:`Maladie approuvée du ${formatDate(congeActif.du)} au ${formatDate(congeActif.au)}.`};
@@ -16958,6 +17079,29 @@ function renderMaterielStats(view){
       </table>
     </div>`;
 }
+function sgdiCheckSortantDotationAlert(){
+  if(!sgdiAlertModuleAllowed("materiel"))return;
+  const soc=currentStructureSocieteFilter()||mySoc()||"";
+  const sortants=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||!a.societe||a.societe===soc));
+  if(!sortants.length)return;
+  const key="sgdi-sortant-dot-alerted:"+sortants.map(a=>a.id||a.matricule).sort().join(",");
+  try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,"1");}catch(e){}
+  const list=sortants.map(a=>`<li style="margin:5px 0"><b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</b> (${escapeHTML(a.matricule||a.code||"")}) — Sortant depuis le ${formatDate(a.dateSortie||"")}</li>`).join("");
+  openModal(`<div style="max-width:520px">
+    <div style="background:#7f1d1d;color:#fff;padding:16px 18px;border-radius:8px 8px 0 0;font-weight:900;font-size:16px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:26px">⚠️</span> ALERTE — DOTATION À RÉCUPÉRER
+    </div>
+    <div style="padding:22px">
+      <p style="font-weight:700;margin:0 0 14px;color:#991b1b;font-size:14px">Les employé(s) suivant(s) sont SORTANTS et n'ont pas encore reversé leur dotation :</p>
+      <ul style="margin:0 0 16px;padding-left:20px;color:#1e293b;font-size:13px">${list}</ul>
+      <p style="font-size:12px;color:#64748b;margin:0 0 18px">Procéder au reversement dans <b>MATÉRIEL → Employé en attente de dotation</b>.</p>
+      <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-danger" onclick="closeModal();location.hash='#/materiel/dotation'">Voir les dotations</button>
+        <button class="btn" onclick="closeModal()">Fermer</button>
+      </div>
+    </div>
+  </div>`);
+}
 function renderMateriel(view,sub,arg){
   if(!db.materiel)db.materiel=[];
   if(!db.magasins)db.magasins=[];
@@ -16967,7 +17111,7 @@ function renderMateriel(view,sub,arg){
   if(!db.fournisseurs)db.fournisseurs=[];
   matNormalizeRelations();
   // Simple module routes (new architecture)
-  if(!sub||sub==="dashboard"){return renderMatSimpleDashboard(view)}
+  if(!sub||sub==="dashboard"){renderMatSimpleDashboard(view);setTimeout(sgdiCheckSortantDotationAlert,0);return}
   if(sub==="fiches"){try{sessionStorage.setItem("ficheContext","materiel")}catch(e){}return renderFiches(view,"toutes")}
   if(sub==="fiche"&&arg){try{sessionStorage.setItem("ficheContext","materiel")}catch(e){}return renderAgentForm(view,arg)}
   if(sub==="inventaire"){return renderMatSimpleInventaire(view)}
@@ -18342,7 +18486,7 @@ function renderMatSimpleReversement(view){
       <td><div class="font-bold">${s.count} article(s)</div><div class="text-[10px] text-slate-500">${s.legacy.length} ancien stock · ${s.stock.length} dotation(s) stock</div></td>
       <td class="font-bold text-right">${money(s.value)}</td>
       <td class="text-xs">${detail.map(x=>`<div>${escapeHTML(x)}</div>`).join("")}${s.count>4?`<div class="text-slate-400">+ ${s.count-4} autre(s)</div>`:""}</td>
-      <td><div class="flex gap-1 flex-wrap justify-end"><a class="btn btn-ghost text-xs" href="#/materiel/fiche/${a.id}" onclick="setFicheContext('materiel')">Fiche</a><button class="btn btn-primary text-xs" onclick="reverseAllDotation('${a.id}')">Reverser tout</button></div></td>
+      <td><div class="flex gap-1 flex-wrap justify-end"><a class="btn btn-ghost text-xs" href="#/materiel/fiche/${a.id}" onclick="setFicheContext('materiel')">Fiche</a><button class="btn btn-primary text-xs" onclick="openReversementModal('${a.id}')">Saisir reversement</button></div></td>
     </tr>`}).join("")}</tbody></table>
   </div>`;
 }
@@ -18403,6 +18547,224 @@ async function reverseAllDotation(agentId){
   renderSidebar();renderView();
 }
 
+function openReversementModal(agentId){
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
+  const sit=agentReversementSituation(agentId);
+  const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const allRows=[
+    ...sit.legacy.map((m,i)=>({key:"leg_"+i,designation:m.designation||m.code||"Article",code:m.code||"",qte:1,pu:parseFloat(m.prix)||0,valeur:parseFloat(m.prix)||0,unite:"",type:"legacy",ref:m})),
+    ...sit.stock.map((r,i)=>({key:"stk_"+i,designation:r.designation,code:r.code,qte:r.qteRestante,pu:r.prixUnitaire,valeur:r.valeur,unite:r.unite,type:"stock",ref:r}))
+  ];
+  if(!allRows.length){toast("Aucune dotation à reverser pour cet employé","info");return}
+  const etatOpts=["Neuf","Bon","Réformé"].map(e=>`<option value="${e}">${e}</option>`).join("");
+  const rows=allRows.map((r,i)=>`<tr>
+    <td class="text-xs font-mono">${escapeHTML(r.code||"—")}</td>
+    <td>${escapeHTML(r.designation)}</td>
+    <td class="text-center font-bold">${qty(r.qte)} ${escapeHTML(r.unite||"")}</td>
+    <td class="text-right">${money(r.pu)}</td>
+    <td class="text-right font-bold reversement-valeur" data-pu="${r.pu}" data-qte="${r.qte}">${money(r.valeur)}</td>
+    <td><select class="select text-sm reversement-etat" name="etat_${i}" data-idx="${i}" data-key="${r.key}" data-valeur="${r.valeur}" onchange="reversementUpdateReforme(this)">
+      <option value="Bon" selected>Bon</option><option value="Neuf">Neuf</option><option value="Réformé">Réformé</option>
+    </select></td>
+  </tr>`).join("");
+  openModal(`<div style="max-width:680px">
+    <div style="background:#043970;color:#fff;padding:14px 18px;border-radius:8px 8px 0 0;font-weight:900;font-size:15px">
+      FICHE DE REVERSEMENT — ${escapeHTML(nom)}
+    </div>
+    <div style="padding:18px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+        <div><label class="label text-xs">Date de reversement</label><input type="date" class="input" id="rev-date" value="${today()}"></div>
+        <div style="display:flex;align-items:flex-end"><div class="card p-3 w-full" style="background:#fef2f2;border:1px solid #fecaca">
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:700;margin-bottom:4px">Total Réformé à déduire du STC</div>
+          <div id="rev-reforme-total" style="font-size:22px;font-weight:900;color:#991b1b">0 DA</div>
+        </div></div>
+      </div>
+      <div class="overflow-x-auto" style="max-height:340px;overflow-y:auto">
+        <table><thead><tr><th>Code</th><th>Article</th><th>Qté</th><th>PU</th><th>Valeur</th><th>État</th></tr></thead>
+        <tbody id="rev-rows">${rows}</tbody></table>
+      </div>
+      <div style="margin-top:16px;text-align:right;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Annuler</button>
+        <button class="btn btn-secondary" onclick="printFicheReversementModal('${agentId}')">Imprimer fiche</button>
+        <button class="btn btn-danger" onclick="validerReversementDotation('${agentId}')">Valider le reversement</button>
+      </div>
+    </div>
+  </div>`);
+}
+function reversementUpdateReforme(sel){
+  let total=0;
+  document.querySelectorAll(".reversement-etat").forEach(s=>{
+    if(s.value==="Réformé")total+=parseFloat(s.dataset.valeur||0)||0;
+  });
+  const el=document.getElementById("rev-reforme-total");
+  if(el)el.textContent=money(total);
+}
+function reversementGetLines(agentId){
+  const sit=agentReversementSituation(agentId);
+  const allRows=[
+    ...sit.legacy.map((m,i)=>({key:"leg_"+i,designation:m.designation||m.code||"Article",code:m.code||"",qte:1,pu:parseFloat(m.prix)||0,valeur:parseFloat(m.prix)||0,unite:"",type:"legacy",ref:m})),
+    ...sit.stock.map((r,i)=>({key:"stk_"+i,designation:r.designation,code:r.code,qte:r.qteRestante,pu:r.prixUnitaire,valeur:r.valeur,unite:r.unite,type:"stock",ref:r}))
+  ];
+  const etats={};
+  document.querySelectorAll(".reversement-etat").forEach(s=>{etats[s.dataset.key]=s.value});
+  return allRows.map(r=>({...r,etat:etats[r.key]||"Bon"}));
+}
+async function validerReversementDotation(agentId){
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
+  const dateRev=document.getElementById("rev-date")?.value||today();
+  const lines=reversementGetLines(agentId);
+  if(!lines.length){toast("Aucune dotation à reverser","error");return}
+  const nom=`${a.nom||""} ${a.prenom||""}${a.matricule?" · "+a.matricule:""}`.trim();
+  const reformeTotal=lines.filter(l=>l.etat==="Réformé").reduce((s,l)=>s+l.valeur,0);
+  const d=dateRev||today();
+
+  // 1. Reverser les articles legacy
+  const sit=agentReversementSituation(agentId);
+  const linesByKey={};lines.forEach(l=>linesByKey[l.key]=l);
+  sit.legacy.forEach((m,i)=>{
+    const line=linesByKey["leg_"+i];
+    m.dateRetour=d;m.statut="en_stock";m.agentId=null;
+    m.etatReversement=line?.etat||"Bon";
+    m.notes=[m.notes,"Reversement "+nom+` [${line?.etat||"Bon"}]`].filter(Boolean).join(" · ");
+  });
+
+  // 2. Reverser les articles stock PostgreSQL (ou local)
+  let pgOk=0;let pgErr=0;
+  if(a.backendId&&sgdiAuthToken()&&sgdiBackendShouldUse()){
+    try{
+      const equipments=await SGDI.stock.employeeEquipment(a.backendId);
+      const attribues=(equipments||[]).filter(e=>e.status==="attribue");
+      for(let i=0;i<attribues.length;i++){
+        const eq=attribues[i];
+        const line=linesByKey["stk_"+i];
+        try{
+          await SGDI.stock.returnEquipment(eq.id,{return_date:d,return_reason:"Reversement sortant ["+( line?.etat||"Bon")+"]"});
+          pgOk++;
+        }catch(e){console.warn("Reversement eq #"+eq.id,e);pgErr++;}
+      }
+      const freshArticles=await SGDI.stock.articles({}).catch(()=>null);
+      if(freshArticles)db.stockArticles=freshArticles.map(articleFromApi);
+      const freshMvts=await SGDI.stock.movements().catch(()=>null);
+      if(freshMvts)db.stockMouvements=freshMvts.map(movementFromApi);
+    }catch(e){toast("Chargement équipements échoué : "+(e.message||e),"error");}
+  }else{
+    sit.stock.forEach((r,i)=>{
+      const line=linesByKey["stk_"+i];
+      db.stockMouvements=db.stockMouvements||[];
+      db.stockMouvements.push({
+        id:uid("mvt"),articleId:r.articleId,type:"retour",date:d,quantite:r.qteRestante,
+        prixUnitaire:r.prixUnitaire||0,motif:"Retour employé sortant",retourAgentId:agentId,retourAgentNom:nom,
+        etatReversement:line?.etat||"Bon",notes:"Reversement sortant ["+( line?.etat||"Bon")+"]",
+        userId:session?.username||"",createdAt:new Date().toISOString()
+      });
+    });
+  }
+
+  // 3. Mettre à jour l'employé
+  a.finRelationDotationReversee=true;
+  a.finRelationReversementAt=new Date().toISOString();
+  a.finRelationReversementDate=d;
+  a.finRelationReversementArticles=lines.map(l=>({code:l.code,designation:l.designation,qte:l.qte,pu:l.pu,valeur:l.valeur,unite:l.unite,etat:l.etat}));
+  if(reformeTotal>0){a.stcDeductionReforme=reformeTotal;}
+  try{if(a.backendId)await SGDI.employees.update(a.backendId,employeeApiPayload(a));}
+  catch(e){console.warn("Reversement employee save failed",e);}
+
+  saveDB();
+  closeModal();
+  toast(pgErr?`Reversement enregistré avec ${pgErr} erreur(s).`:"Reversement validé — fiche transmise à la DRH.","success");
+  if(typeof logActivity==="function")logActivity("Reversement validé",nom+" · "+lines.length+" article(s)"+(reformeTotal?` · Réformé : ${money(reformeTotal)}`:""));
+  renderSidebar();renderView();
+  // Générer la fiche de reversement pour impression
+  setTimeout(()=>openFicheReversementPrint(a,lines,d,reformeTotal),300);
+}
+function printFicheReversementModal(agentId){
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
+  const dateRev=document.getElementById("rev-date")?.value||today();
+  const lines=reversementGetLines(agentId);
+  const reformeTotal=lines.filter(l=>l.etat==="Réformé").reduce((s,l)=>s+l.valeur,0);
+  openFicheReversementPrint(a,lines,dateRev,reformeTotal);
+}
+function openFicheReversementPrint(a,lines,dateRev,reformeTotal){
+  const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const ref="FR-"+(a.matricule||a.id||"SGDI")+"-"+String(dateRev||today()).replaceAll("-","");
+  const rowsHtml=lines.map((l,i)=>`<tr>
+    <td class="text-center">${i+1}</td>
+    <td class="mono">${escapeHTML(l.code||"—")}</td>
+    <td>${escapeHTML(l.designation)}</td>
+    <td class="text-center">${qty(l.qte)} ${escapeHTML(l.unite||"")}</td>
+    <td class="text-right">${money(l.pu)}</td>
+    <td class="text-right">${money(l.valeur)}</td>
+    <td class="text-center ${l.etat==="Réformé"?"reforme":""}">${escapeHTML(l.etat)}</td>
+  </tr>`).join("");
+  const totalValeur=lines.reduce((s,l)=>s+l.valeur,0);
+  const stcConge=a.stcCongeReliquat!=null?a.stcCongeReliquat+"":"—";
+  const html=`<!doctype html><html><head><meta charset="utf-8">
+<title>Fiche de Reversement — ${escapeHTML(nom)}</title>
+<style>
+@page{size:A4 portrait;margin:15mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.4}
+.doc{width:180mm;margin:0 auto}
+.actions{position:sticky;top:0;display:flex;justify-content:flex-end;padding:8px 0;background:#fff;border-bottom:1px solid #e2e8f0;margin-bottom:6mm;gap:8px}
+.actions button{border:0;border-radius:8px;background:#043970;color:#fff;font:700 13px Arial;padding:8px 16px;cursor:pointer}
+.logo{width:34mm;height:34mm;object-fit:contain;display:block;margin:0 auto 6mm}
+.title{text-align:center;font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:.3px;margin:0 0 8mm}
+.rule{border-top:2px solid #f2b705;margin:0 0 5mm}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:3mm 8mm;border:1px solid #d7dde8;padding:5mm;border-radius:4px;margin-bottom:7mm}
+.meta-k{font-size:10px;text-transform:uppercase;font-weight:900;color:#334155}
+.meta-v{font-weight:700}
+.ref-block{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5mm;color:#475569}
+table{width:100%;border-collapse:collapse;margin-bottom:6mm}
+th,td{border:1px solid #d7dde8;padding:2.5mm;text-align:left;font-size:12px}
+th{background:#edf4fb;color:#043970;font-size:10px;text-transform:uppercase;font-weight:900}
+.text-right{text-align:right}.text-center{text-align:center}.mono{font-family:monospace}
+.reforme{color:#991b1b;font-weight:900}
+.total-row{background:#f8fafc;font-weight:900}
+.stc-box{border:1.5px solid #f2b705;background:#fffbeb;padding:5mm;border-radius:4px;margin-bottom:7mm}
+.stc-box b{color:#b45309}
+.stc-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5mm;text-align:center;margin-top:3mm}
+.stc-cell .label{font-size:10px;text-transform:uppercase;font-weight:700;color:#64748b;margin-bottom:2mm}
+.stc-cell .val{font-size:20px;font-weight:900;color:#043970}
+.stc-cell .val.red{color:#991b1b}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:20mm;margin-top:14mm}
+.sign{border-top:1.5px solid #111;padding-top:3mm;text-align:center;font-weight:900;font-size:12px}
+.footer{text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9px;color:#475569;margin-top:10mm}
+@media print{.actions{display:none!important}.doc{width:auto}}
+</style></head><body>
+<div class="actions no-print"><button onclick="window.print()">Imprimer</button><button onclick="window.close()" style="background:#64748b">Fermer</button></div>
+<div class="doc">
+  <img class="logo" src="/static/sgdi-icon-192.png" alt="logo">
+  <div class="title">Fiche de Reversement de Dotation</div>
+  <div class="rule"></div>
+  <div class="ref-block"><span><b>Réf :</b> ${escapeHTML(ref)}</span><span><b>Date :</b> ${formatDate(dateRev)}</span></div>
+  <div class="meta">
+    <div><div class="meta-k">Nom et Prénom</div><div class="meta-v">${escapeHTML(nom)}</div></div>
+    <div><div class="meta-k">Matricule</div><div class="meta-v">${escapeHTML(a.matricule||"—")}</div></div>
+    <div><div class="meta-k">Société</div><div class="meta-v">${escapeHTML(a.societe||"—")}</div></div>
+    <div><div class="meta-k">Date de sortie</div><div class="meta-v">${formatDate(a.dateSortie||"")}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Code</th><th>Désignation</th><th class="text-center">Qté</th><th class="text-right">PU</th><th class="text-right">Valeur</th><th class="text-center">État</th></tr></thead>
+    <tbody>${rowsHtml}
+    <tr class="total-row"><td colspan="5" class="text-right">TOTAL DOTATION</td><td class="text-right">${money(totalValeur)}</td><td></td></tr>
+    ${reformeTotal>0?`<tr class="total-row reforme"><td colspan="5" class="text-right">TOTAL RÉFORMÉ (à déduire du STC)</td><td class="text-right">${money(reformeTotal)}</td><td></td></tr>`:""}
+    </tbody>
+  </table>
+  ${reformeTotal>0||stcConge!=="—"?`<div class="stc-box">
+    <b>Solde Tout Compte — Récapitulatif congés</b>
+    <div class="stc-grid">
+      <div class="stc-cell"><div class="label">Reliquat congés</div><div class="val">${stcConge} j</div></div>
+      <div class="stc-cell"><div class="label">Déduction réformé</div><div class="val red">${reformeTotal>0?money(reformeTotal):"—"}</div></div>
+      <div class="stc-cell"><div class="label">Note</div><div style="font-size:11px;color:#64748b;margin-top:4px">Reste du STC à<br>calculer manuellement</div></div>
+    </div>
+  </div>`:""}
+  <div class="signs">
+    <div class="sign">RESPONSABLE MATÉRIEL<div class="label" style="font-size:11px;font-weight:400;margin-top:8mm">Date et signature</div></div>
+    <div class="sign">DIRECTION DES RESSOURCES HUMAINES<div class="label" style="font-size:11px;font-weight:400;margin-top:8mm">Date et signature</div></div>
+  </div>
+  <div class="footer">IRONGS — Fiche de Reversement de Dotation · ${escapeHTML(ref)} · Généré le ${formatDate(today())}</div>
+</div></body></html>`;
+  const w=window.open("","_blank","width=900,height=700");
+  if(w){w.document.write(html);w.document.close();}else{toast("Impression bloquée par le navigateur","warn");}
+}
 // =====================================================================
 // INVENTAIRE GENERAL
 // =====================================================================
@@ -25426,10 +25788,122 @@ function renderCommStats(view){
 
 /* ============ DRH MODULE (transverse) ============ */
 function drhTabs(active){return ""}
+function drhMedDaysSince(isoStr){
+  if(!isoStr)return null;
+  const d=isoStr.slice(0,10);
+  return daysBetween(d,today());
+}
+function drhMedPendingCount(a){
+  if(!a||!a.finRelationAt||a.finRelationDotationReversee)return 0;
+  let n=0;
+  const daysSinceSortie=drhMedDaysSince(a.finRelationAt);
+  if(daysSinceSortie>=3&&!a.finRelationMed1SentAt)n++;
+  if(a.finRelationMed1SentAt&&drhMedDaysSince(a.finRelationMed1SentAt)>=7&&!a.finRelationMed2SentAt)n++;
+  if(a.finRelationMed2SentAt&&drhMedDaysSince(a.finRelationMed2SentAt)>=7&&!a.finRelationGendarmerieSentAt)n++;
+  return n;
+}
+function renderDRHMiseEnDemeure(view){
+  const soc=drhActiveSocieteFilter();
+  const sortants=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||!a.societe||a.societe===soc));
+  const allDone=(db.agents||[]).filter(a=>a.statut==="sortant"&&a.finRelationDotationReversee&&a.finRelationAt&&(!soc||!a.societe||a.societe===soc));
+  const pendingCount=sortants.reduce((n,a)=>n+drhMedPendingCount(a),0);
+  const rows=sortants.map(a=>{
+    const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+    const daysSince=drhMedDaysSince(a.finRelationAt)||0;
+    const med1Due=daysSince>=3&&!a.finRelationMed1SentAt;
+    const med2Due=a.finRelationMed1SentAt&&drhMedDaysSince(a.finRelationMed1SentAt)>=7&&!a.finRelationMed2SentAt;
+    const genDue=a.finRelationMed2SentAt&&drhMedDaysSince(a.finRelationMed2SentAt)>=7&&!a.finRelationGendarmerieSentAt;
+    const sent1=a.finRelationMed1SentAt?`<span class="pill pill-green text-xs">MED1 envoyée le ${formatDate(a.finRelationMed1SentAt.slice(0,10))}</span>`:``;
+    const sent2=a.finRelationMed2SentAt?`<span class="pill pill-green text-xs">MED2 envoyée le ${formatDate(a.finRelationMed2SentAt.slice(0,10))}</span>`:``;
+    const sentG=a.finRelationGendarmerieSentAt?`<span class="pill pill-blue text-xs">Gendarmerie le ${formatDate(a.finRelationGendarmerieSentAt.slice(0,10))}</span>`:``;
+    const btns=[];
+    if(med1Due)btns.push(`<button class="btn btn-danger text-xs" onclick="genMed(event,'${a.id}',1)">Émettre MED n°1</button>`);
+    if(med2Due)btns.push(`<button class="btn btn-danger text-xs" onclick="genMed(event,'${a.id}',2)">Émettre MED n°2</button>`);
+    if(genDue)btns.push(`<button class="btn btn-danger text-xs" onclick="genMed(event,'${a.id}',3)">Lettre Gendarmerie</button>`);
+    if(!med1Due&&!med2Due&&!genDue&&!a.finRelationMed1SentAt){
+      const jRestants=3-daysSince;
+      btns.push(`<span class="text-xs text-slate-400">MED1 disponible dans ${jRestants} j</span>`);
+    }
+    return `<tr>
+      <td><div class="font-semibold">${escapeHTML(nom)}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(a.matricule||"—")}</div></td>
+      <td class="text-xs">${escapeHTML(a.societe||"—")}</td>
+      <td class="text-xs">${formatDate(a.dateSortie||"")}</td>
+      <td class="text-xs text-center">${daysSince} j</td>
+      <td><div class="flex flex-col gap-1">${sent1}${sent2}${sentG}</div></td>
+      <td><div class="flex gap-1 flex-wrap">${btns.join("")}</div></td>
+    </tr>`;
+  }).join("");
+  const doneRows=allDone.length?`<div class="card p-4 mt-4"><div class="font-black text-sm text-slate-500 mb-2">DOSSIERS CLÔTURÉS (dotation reversée)</div><table><thead><tr><th>Employé</th><th>Sortie</th><th>Reversement</th></tr></thead><tbody>${allDone.map(a=>`<tr><td>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</td><td class="text-xs">${formatDate(a.dateSortie||"")}</td><td class="text-xs">${formatDate(a.finRelationReversementDate||"")}</td></tr>`).join("")}</tbody></table></div>`:"";
+  view.innerHTML=`<div class="flex justify-between items-start gap-3 mb-4 flex-wrap">
+    <div><h1 class="text-2xl font-black">MISE EN DEMEURE</h1>
+    <p class="text-sm text-slate-500">Documents automatiques — Fin de relation de travail · Dotation non reversée</p></div>
+    <div class="flex gap-2">
+      ${pendingCount?`<span class="pill pill-red">${pendingCount} action(s) requise(s)</span>`:`<span class="pill pill-green">Aucune action requise</span>`}
+    </div>
+  </div>
+  <div class="card p-4 mb-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">
+    <b>Procédure :</b> MED n°1 (72h après sortie) → MED n°2 (J+7) → Lettre Brigade de Gendarmerie (J+14). Chaque document est généré automatiquement dès l'échéance atteinte.
+  </div>
+  ${sortants.length===0?`<div class="card p-8 text-center text-slate-500">Aucun dossier en instance de mise en demeure.</div>`:
+  `<div class="card overflow-x-auto"><table><thead><tr><th>Employé</th><th>Société</th><th>Date sortie</th><th class="text-center">Jours écoulés</th><th>Documents émis</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`}
+  ${doneRows}`;
+}
+async function genMed(evt,agentId,num){
+  evt&&evt.stopPropagation();
+  const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
+  const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const now=new Date().toISOString();
+  if(num===1){a.finRelationMed1SentAt=now;a.finRelationMed1Date=today();}
+  else if(num===2){a.finRelationMed2SentAt=now;a.finRelationMed2Date=today();}
+  else{a.finRelationGendarmerieSentAt=now;a.finRelationGendramerieDate=today();}
+  try{if(a.backendId)await SGDI.employees.update(a.backendId,employeeApiPayload(a));}
+  catch(e){console.warn("genMed save failed",e);}
+  saveDB();
+  openMedPrintWindow(a,num);
+  renderSidebar();renderView();
+}
+function openMedPrintWindow(a,num){
+  const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const dateDoc=today();
+  const ref="MED"+num+"-"+(a.matricule||a.id||"SGDI")+"-"+dateDoc.replaceAll("-","");
+  const isBrigade=num===3;
+  const titre=isBrigade?"LETTRE ADRESSÉE À LA BRIGADE DE GENDARMERIE":("MISE EN DEMEURE N°"+num);
+  const objet=isBrigade
+    ?`Monsieur le Commandant de Brigade,\n\nNous avons l'honneur de porter à votre connaissance que Monsieur/Madame <b>${escapeHTML(nom)}</b>, titulaire du matricule <b>${escapeHTML(a.matricule||"—")}</b>, anciennement employé(e) de notre société, a fait l'objet d'une décision de fin de contrat le <b>${formatDate(a.dateSortie||"")}</b>.\n\nMalgré deux mises en demeure successives, en date du <b>${formatDate(a.finRelationMed1Date||"")}</b> et du <b>${formatDate(a.finRelationMed2Date||"")}</b>, l'intéressé(e) n'a pas procédé au reversement de la dotation matérielle qui lui a été attribuée dans le cadre de ses fonctions, estimée à <b>${a.stcDeductionReforme?money(a.stcDeductionReforme):"un montant à déterminer"}</b>.\n\nNous sollicitons votre intervention afin de récupérer le matériel de la société et prendre les mesures légales qui s'imposent.`
+    :`Par la présente, nous mettons en demeure Monsieur/Madame <b>${escapeHTML(nom)}</b>, matricule <b>${escapeHTML(a.matricule||"—")}</b>, ex-employé(e) de notre société, de procéder au reversement de l'intégralité de la dotation matérielle mise à sa disposition dans le cadre de ses fonctions.\n\nDans le cas où il ne serait pas procédé audit reversement dans un délai de <b>7 (sept) jours</b> à compter de la date de la présente, nous nous verrions dans l'obligation de saisir les autorités compétentes pour le recouvrement du matériel et des sommes dues.`;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${titre}</title>
+<style>@page{size:A4 portrait;margin:20mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:"Times New Roman",Times,serif;font-size:13.5px;line-height:1.6}
+.actions{position:sticky;top:0;display:flex;gap:8px;justify-content:flex-end;padding:8px;background:#fff;border-bottom:1px solid #e2e8f0;margin-bottom:8mm}
+.actions button{border:0;border-radius:8px;background:#043970;color:#fff;font:700 13px Arial;padding:8px 16px;cursor:pointer}
+.doc{width:170mm;margin:0 auto}
+.logo{width:30mm;height:30mm;object-fit:contain;display:block;margin:0 auto 6mm}
+.ref{text-align:right;font-size:11px;font-family:Arial,sans-serif;margin-bottom:8mm;color:#475569}
+.title{text-align:center;font-size:17px;font-weight:900;text-transform:uppercase;letter-spacing:.2px;font-family:Arial,sans-serif;margin:0 0 8mm;text-decoration:underline}
+.objet{margin:0 0 8mm;font-family:Arial,sans-serif;font-size:12px}<b>.objet b{font-family:inherit}</b>
+.body{text-align:justify;margin-bottom:8mm}
+.sign{margin-top:18mm;text-align:right;font-weight:900;font-family:Arial,sans-serif}
+.footer{border-top:1px solid #d7dde8;margin-top:10mm;padding-top:3mm;text-align:center;font-size:9px;font-family:Arial,sans-serif;color:#475569}
+@media print{.actions{display:none!important}}
+</style></head><body>
+<div class="actions no-print"><button onclick="window.print()">Imprimer</button><button onclick="window.close()" style="background:#64748b">Fermer</button></div>
+<div class="doc">
+  <img class="logo" src="/static/sgdi-icon-192.png" alt="logo">
+  <div class="ref"><b>Réf :</b> ${escapeHTML(ref)}<br><b>Date :</b> ${formatDate(dateDoc)}</div>
+  ${isBrigade?`<div class="objet"><b>À Monsieur le Commandant de Brigade de Gendarmerie</b></div>`:`<div class="objet"><b>À l'attention de :</b> ${escapeHTML(nom)}<br><b>Ancien matricule :</b> ${escapeHTML(a.matricule||"—")}</div>`}
+  <div class="title">${titre}</div>
+  <div class="body"><p>${objet}</p>
+  <p>Veuillez agréer, ${isBrigade?"Monsieur le Commandant,":"Monsieur/Madame,"} l'expression de nos sincères salutations.</p></div>
+  <div class="sign">La Direction Générale</div>
+  <div class="footer">${escapeHTML(a.societe||"SGDI")} — ${titre} · ${escapeHTML(ref)} · ${formatDate(dateDoc)}</div>
+</div></body></html>`;
+  const w=window.open("","_blank","width=860,height=700");
+  if(w){w.document.write(html);w.document.close();}else{toast("Impression bloquée par le navigateur","warn");}
+}
 function renderDRH(view,sub,arg){
   if(sub==="dashboard")return renderDRHDashboard(view);
   if(sub==="conges")return renderDRHCongesPersonnel(view);
   if(sub==="social")return renderDRHSocial(view,arg);
+  if(sub==="mise_en_demeure")return renderDRHMiseEnDemeure(view);
   if(sub==="stats")return renderDRHStats(view);
   if(sub==="stats_societe")return renderDRHStatsSociete(view);
   if(sub==="stats_theme")return renderDRHStatsTheme(view);
@@ -27626,6 +28100,7 @@ function openAdminUserModal(username){
         <div><label class="label">Niveau d'habilitation *</label><select class="input" name="niveau"  onchange="previewUserAccessLevel(this.value)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
+        <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #fecaca;background:#fef2f2"><input type="checkbox" name="peutReactiverSortant" ${u.peutReactiverSortant?"checked":""}/> Peut réactiver un employé SORTANT</label>
       </div>
       <label class="label mt-3">Périmètre sociétés autorisées (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${SOCIETES.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/>${escapeHTML(s)}</label>`).join("")}</div>
@@ -27654,7 +28129,7 @@ async function confirmAdminUser(originalUsername){
   if(isAdminSystemSession()&&!(await ensureAdminSystemApiToken("enregistrer un utilisateur"))){if(window._sgdiSaveOverlayShown)closeSaveOverlay();return}
   const fd=new FormData(f);
   const username=String(fd.get("username")||"").trim();const password=String(fd.get("password")||"");
-  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key)};
+  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key)};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
