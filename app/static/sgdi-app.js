@@ -5075,7 +5075,8 @@ function renderSidebar(){
         {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"]},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()}
+        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:(()=>{const soc=drhActiveSocieteFilter();return (db.agents||[]).filter(a=>a.statut==="sortant"&&(!soc||a.societe===soc)).length||null})()}
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard"},
@@ -5089,6 +5090,7 @@ function renderSidebar(){
         {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],count:agents.filter(a=>a.statut==="absent").length||null},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:agents.filter(a=>a.statut==="suspendu").length||null},
         {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:agents.filter(a=>a.statut==="sortant").length||null},
         {label:"SUPERVISION SITE",route:"ops/supervision",aliases:["ops/supervision"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
       ],
@@ -6084,7 +6086,7 @@ function renderView(){
         else if(sub)renderContractualisation(view,sub);
         else renderContratsDashboard(view);
         break;
-      case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else renderEffectif(view,sub||"actifs");break;
+      case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else if(sub==="sortants")renderElementsSortants(view);else renderEffectif(view,sub||"actifs");break;
       case"agents":if(sub)renderAgentForm(view,sub);else renderEffectif(view,"actifs");break;
       case"fiches":renderFiches(view,sub||"toutes");break;
       case"badge":if(sub==="verify"&&arg)renderBadgeVerify(view,arg);else renderFiches(view,"badge");break;
@@ -25980,6 +25982,48 @@ function openMedPrintWindow(a,num){
 </div></body></html>`;
   const w=window.open("","_blank","width=860,height=700");
   if(w){w.document.write(html);w.document.close();}else{toast("Impression bloquée par le navigateur","warn");}
+}
+function renderElementsSortants(view){
+  const isDrh=isDrhModuleContext();
+  const isOps=isOpsEffectifContext();
+  const soc=isDrh?drhActiveSocieteFilter():(currentStructureSocieteFilter()||mySoc()||"");
+  const sortants=(db.agents||[]).filter(a=>a.statut==="sortant"&&(!soc||!a.societe||a.societe===soc));
+  const rows=sortants.map(a=>{
+    const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
+    const mat=escapeHTML(a.matricule||a.code||"—");
+    const soc_=escapeHTML(a.societe||"");
+    const ds=a.dateSortie?formatDate(a.dateSortie):"—";
+    const dotRev=a.finRelationDotationReversee
+      ?`<span class="badge" style="background:#dcfce7;color:#166534">✓ Reversée</span>`
+      :`<span class="badge" style="background:#fee2e2;color:#991b1b">⚠ En attente</span>`;
+    const stc=a.stcCongeReliquat!=null?`${a.stcCongeReliquat} j`:"—";
+    const ded=a.stcDeductionReforme?`-${money(a.stcDeductionReforme)}`:"";
+    const med=isDrh?(()=>{
+      if(!a.finRelationAt)return"—";
+      const p=drhMedPendingCount(a);
+      if(!p&&a.finRelationGendarmerieSentAt)return`<span class="badge" style="background:#dcfce7;color:#166534">Clôturé</span>`;
+      if(!p)return`<span class="text-xs text-slate-400">—</span>`;
+      const t=!a.finRelationMed1SentAt?"MED n°1":!a.finRelationMed2SentAt?"MED n°2":"Lettre gend.";
+      return`<span class="badge" style="background:#fef3c7;color:#92400e">${t}</span>`;
+    })():"";
+    const openLink=`<a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}" onclick="setFicheContext('${isDrh?"drh":"ops"}')">Ouvrir →</a>`;
+    const drhCols=isDrh?`<td>${dotRev}</td><td class="text-xs text-center">${stc}${ded?`<br><span class="text-red-600 text-xs">${ded}</span>`:""}</td><td>${med}</td>`:"";
+    const opsCols=isOps?`<td class="text-xs">${escapeHTML(a.fonction||a.poste||"—")}</td>`:"";
+    return`<tr><td><div class="font-semibold text-sm">${nom}</div><div class="text-xs text-slate-400">${mat}</div></td><td class="text-xs">${soc_}</td><td class="text-xs">${ds}</td>${drhCols}${opsCols}<td>${openLink}</td></tr>`;
+  });
+  const thDrh=isDrh?`<th>Dotation</th><th>STC congés</th><th>MED</th>`:"";
+  const thOps=isOps?`<th>Poste</th>`:"";
+  view.innerHTML=`<div class="effectif-page">
+    <div class="${isDrh?"drh-effectif-list-header":"card p-4 mb-4 flex items-center justify-between gap-3 flex-wrap"}">
+      <div><h1 class="text-2xl font-black">ÉLÉMENTS SORTANTS</h1><p class="text-xs text-slate-400 mt-0.5">${sortants.length} employé(s) sortant${soc?` · ${escapeHTML(soc)}`:""}</p></div>
+    </div>
+    ${sortants.length===0
+      ?`<div class="card p-10 text-center text-slate-500">Aucun employé SORTANT.</div>`
+      :`<div class="card overflow-hidden"><table class="effectif-table">
+        <thead><tr><th>Employé</th><th>Société</th><th>Date sortie</th>${thDrh}${thOps}<th>Action</th></tr></thead>
+        <tbody>${rows.join("")}</tbody>
+      </table></div>`}
+  </div>`;
 }
 function renderDRH(view,sub,arg){
   if(sub==="dashboard")return renderDRHDashboard(view);
