@@ -16,11 +16,17 @@ from app.modules.materiel.models import StockArticle, StockMovement, Store, Supp
 from app.modules.ops.models import Assignment, DailyPresence, Incident, OpsMovement, Site
 from app.core.photo_storage import normalize_photo_fields
 
-def _strip_embedded_base64(item: dict[str, Any]) -> dict[str, Any]:
-    """Remove base64-encoded blobs from bulk list responses — served as file URLs after first save."""
+def _strip_embedded_base64(item: dict[str, Any], _depth: int = 0) -> dict[str, Any]:
+    """Remove base64-encoded blobs recursively (photos, data: URLs in archived docs, etc.)."""
     for key, val in list(item.items()):
         if isinstance(val, str) and len(val) > 500 and (val.startswith("data:") or (not val.startswith(("/", "http")) and "base64" in val[:100])):
             item[key] = ""
+        elif isinstance(val, dict) and _depth < 4:
+            _strip_embedded_base64(val, _depth + 1)
+        elif isinstance(val, list) and _depth < 3:
+            for el in val:
+                if isinstance(el, dict):
+                    _strip_embedded_base64(el, _depth + 1)
     return item
 
 

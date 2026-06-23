@@ -6521,8 +6521,15 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
   a.updatedAt=today();
   try{
     const payload=employeeApiPayload(a);
-    payload.extra={...(payload.extra||{}),documents:{...(a.documents||{})}};
-    if(payload.extra._legacy)payload.extra._legacy={...(payload.extra._legacy||{}),documents:{...(a.documents||{})}};
+    const docsForSave={};
+    Object.entries(a.documents||{}).forEach(([k,d])=>{
+      if(!d)return;
+      const dClean={...d};
+      if(typeof dClean.url==="string"&&dClean.url.startsWith("data:"))delete dClean.url;
+      docsForSave[k]=dClean;
+    });
+    payload.extra={...(payload.extra||{}),documents:docsForSave};
+    if(payload.extra._legacy)payload.extra._legacy={...(payload.extra._legacy||{}),documents:docsForSave};
     const saved=a.backendId?await SGDI.employees.update(a.backendId,payload):await SGDI.employees.create(payload);
     const mapped=employeeFromApi(saved);
     Object.assign(a,mapped,{...a,documents:{...(mapped.documents||{}),...(a.documents||{}),[key]:entry},backendId:saved?.id||a.backendId});
