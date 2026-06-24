@@ -4081,7 +4081,8 @@ function moduleCountersRibbonHTML(){
     const actifs=ag.filter(agentIsOperational).length;
     const activeHeadcount=ag.filter(employeeIsActive).length;
     const sansAffectation=ag.filter(agentNeedsAffectation).length;
-    const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
+    const dotSoc=scopeSoc||(typeof drhActiveSocieteFilter==="function"?drhActiveSocieteFilter():"")||"";
+    const sansDotation=materialPendingDotationCountForSoc(dotSoc);
     const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
     const missionEnCours=(db.missions||[]).filter(m=>(!scopeSoc||m.societe===scopeSoc)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
     const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
@@ -17602,8 +17603,7 @@ function matAgentMatchesSoc(a,soc){
   return !!a?.societe&&normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
 }
 function matDotationScopedActiveAgents(soc){
-  const source=isDrhModuleContext()&&typeof drhAgentsList==="function"?drhAgentsList():(db.agents||[]);
-  return source.filter(a=>matAgentIsActive(a)&&matAgentMatchesSoc(a,soc));
+  return (db.agents||[]).filter(a=>matAgentIsActive(a)&&matAgentMatchesSoc(a,soc));
 }
 function agentDotationCount(agentId){
   const a=findEmployeeByRef(agentId);
