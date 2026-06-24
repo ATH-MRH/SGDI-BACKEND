@@ -17895,7 +17895,14 @@ function renderMatSimpleDashboard(view){
 }
 
 async function renderMatSimpleDashboardServer(view){
-  renderMatSimpleDashboard(view);
+  // Premier chargement de session : on attend les données serveur pour éviter
+  // un flash de données périmées qui saute vers l'état réel.
+  if(window.__sgdiMatDataSynced){
+    renderMatSimpleDashboard(view);
+  }else{
+    const header=matSimpleHeader("dashboard");
+    view.innerHTML=`${header}<div style="display:flex;align-items:center;justify-content:center;min-height:220px;color:#94a3b8"><div style="text-align:center"><div style="font-size:28px;margin-bottom:10px;opacity:.5">⏳</div><div style="font-weight:700;font-size:14px">Chargement du tableau de bord…</div></div></div>`;
+  }
   if(window.__sgdiMatDashboardRefreshing)return;
   window.__sgdiMatDashboardRefreshing=true;
   try{
@@ -17907,10 +17914,12 @@ async function renderMatSimpleDashboardServer(view){
     db.magasins=(stores||[]).map(storeFromApi);
     db.stockArticles=(articles||[]).map(articleFromApi);
     db.stockMouvements=(movements||[]).map(movementFromApi);
+    window.__sgdiMatDataSynced=true;
     if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements();
     if(String(location.hash||"")==="#/materiel"||String(location.hash||"").startsWith("#/materiel/dashboard"))renderMatSimpleDashboard(view);
   }catch(e){
     console.warn("Tableau de bord matériel serveur indisponible",e);
+    if(!window.__sgdiMatDataSynced)renderMatSimpleDashboard(view);
   }finally{
     window.__sgdiMatDashboardRefreshing=false;
   }
