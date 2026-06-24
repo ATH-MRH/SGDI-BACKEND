@@ -4040,7 +4040,7 @@ function moduleCountersRibbonHTML(){
     const total=Math.max(1,erpEmp?.total??ag.length);
     const actifs=ag.filter(agentIsOperational).length;
     const activeHeadcount=ag.filter(employeeIsActive).length;
-    const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
+    const sansDotation=ag.filter(employeeNeedsMaterialDotation).length;
     const sansAffectation=ag.filter(agentNeedsAffectation).length;
     const attentePv=ag.filter(agentNeedsInstallationPV).length;
     const enConge=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
@@ -4080,7 +4080,7 @@ function moduleCountersRibbonHTML(){
     const actifs=ag.filter(agentIsOperational).length;
     const activeHeadcount=ag.filter(employeeIsActive).length;
     const sansAffectation=ag.filter(agentNeedsAffectation).length;
-    const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
+    const sansDotation=ag.filter(employeeNeedsMaterialDotation).length;
     const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
     const missionEnCours=(db.missions||[]).filter(m=>(!scopeSoc||m.societe===scopeSoc)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
     const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
@@ -17784,8 +17784,7 @@ function renderMatSimpleDashboard(view){
   const mags=matSimpleBySoc(db.magasins||[]);
   const fours=matSimpleBySoc(db.fournisseurs||[]);
   const mvts=matSimpleBySoc(db.stockMouvements||[]);
-  const _dotScopeSoc=(session?.transverse?currentStructureSocieteFilter():mySoc())||"";
-  const employeesEnInstanceDotationCount=materialPendingDotationCountForSoc(_dotScopeSoc);
+  const employeesEnInstanceDotationCount=(db.agents||[]).filter(employeeNeedsMaterialDotation).length;
   let totalQty=0,totalVal=0,nbAlertes=0,nbRupture=0;
   arts.forEach(a=>{
     const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
