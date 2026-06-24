@@ -3744,9 +3744,13 @@ function structureTopbarItems(){
     {key:"commercial",label:"COMMERCIAL",roles:["rh","admin"]},
     {key:"secretariat",label:"SECRETARIAT",roles:["rh","dispatch","admin"]}
   ];
-  if(isAdmin())return items;
+  const active=normalizeStructureKey(session?.transverse||"");
+  if(active){
+    const current=items.find(i=>i.key===active);
+    return current?[current]:[];
+  }
   const allowed=currentAllowedStructures();
-  if(allowed.length)return items.filter(i=>allowed.includes(i.key)||(["commercial","facturation"].includes(i.key)&&canAccess(i.key)));
+  if(allowed.length)return items.filter(i=>allowed.includes(i.key));
   const role=adminAccessBaseRole(session?.role||"agent");
   return items.filter(i=>i.roles.includes(role));
 }
@@ -3797,7 +3801,7 @@ function workspaceTabsBarHTML(){
     <a class="ws-quicklaunch-btn" href="ms-excel:" onclick="event.stopPropagation();window.location.href='ms-excel:';return false" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></a>
     <a class="ws-quicklaunch-btn" href="calculator:" onclick="event.stopPropagation();window.location.href='calculator:';return false" title="Calculatrice"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></a>
   </div>`;
-  if(visible.length<=1)return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
+  if(visible.length===0)return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
     <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}</div>
     <button type="button" class="ws-refresh-tab" onclick="window.refreshWorkspace()" title="Actualiser" aria-label="Actualiser">↻</button>
