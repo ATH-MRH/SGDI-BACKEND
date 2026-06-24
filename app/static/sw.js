@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260624-active-structure-tab";
+const SGDI_CACHE = "sgdi-pwa-v20260624-bulk-dotation-wizard";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

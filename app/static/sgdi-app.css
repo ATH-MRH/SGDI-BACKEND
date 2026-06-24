@@ -5668,6 +5668,23 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 #sgdi-edit-fab.unlocked{background:#16a34a;box-shadow:0 4px 16px rgba(22,163,74,.35)}
 #sgdi-edit-fab.unlocked:hover{background:#15803d}
 
+/* Assistant de dotation groupée */
+.modal:has(.bulk-dot-wizard){width:min(1080px,94vw)!important;max-width:1080px!important;padding:0!important;overflow:hidden!important}
+.bulk-dot-wizard{background:#fff;color:#172033;max-height:min(84vh,820px);display:flex;flex-direction:column}
+.bulk-dot-head{padding:20px 24px 14px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid #e5ebf1}
+.bulk-dot-head h3{font-size:21px;font-weight:950;margin:3px 0 0}.bulk-dot-close{width:34px;height:34px;border:0;border-radius:50%;background:#f1f5f9;color:#475569;font-size:23px;cursor:pointer}
+.bulk-dot-steps{display:grid;grid-template-columns:repeat(3,1fr);padding:14px 24px;background:#f8fafc;border-bottom:1px solid #e5ebf1}
+.bulk-dot-steps>div{display:flex;align-items:center;gap:8px;color:#94a3b8;font-size:12px;font-weight:800;position:relative}.bulk-dot-steps>div:not(:last-child)::after{content:"";height:1px;background:#dbe3ec;position:absolute;left:40px;right:12px;bottom:-7px}
+.bulk-dot-steps span{width:25px;height:25px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:#e2e8f0;color:#64748b}.bulk-dot-steps .active{color:#043970}.bulk-dot-steps .active span{background:#043970;color:#fff}.bulk-dot-steps .done{color:#047857}.bulk-dot-steps .done span{background:#16a34a;color:#fff}
+.bulk-dot-toolbar{padding:12px 24px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}.bulk-dot-toolbar>div{margin-right:auto;font-size:13px}.bulk-dot-toolbar .input{width:240px;height:36px!important}
+.bulk-dot-table{margin:0 24px;border:1px solid #e1e8ef;border-radius:10px;overflow:auto;max-height:430px}.bulk-dot-table table{margin:0}.bulk-dot-table th{position:sticky;top:0;z-index:1;background:#f3f6f9!important;color:#526277!important;font-size:10px!important;text-transform:uppercase;letter-spacing:.06em}.bulk-dot-table td{padding:9px 11px!important;font-size:12px}.bulk-dot-table td small{display:block;color:#8492a6;margin-top:2px}.bulk-dot-table input[type="checkbox"]{width:16px;height:16px}.bulk-dot-table .input,.bulk-dot-table .select{height:34px!important;font-size:12px!important}.bulk-dot-table td:nth-last-child(-n+2) .input{min-width:78px}
+.bulk-dot-notice,.bulk-dot-confirm{margin:16px 24px 12px;padding:12px 14px;border-radius:9px;background:#eff6ff;color:#1e3a5f;font-size:13px;border:1px solid #dbeafe}.bulk-dot-form{padding:14px 24px 0;display:grid;grid-template-columns:1fr 2fr;gap:12px}.bulk-dot-form label{display:block;font-size:11px;font-weight:800;color:#64748b;margin-bottom:5px}
+.bulk-dot-actions{padding:16px 24px 20px;display:flex;justify-content:flex-end;gap:9px;border-top:1px solid #edf1f5;margin-top:16px}.bulk-dot-actions .btn[disabled]{opacity:.45;cursor:not-allowed}
+.bulk-dot-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px 24px 12px}.bulk-dot-summary>div{background:#f8fafc;border:1px solid #e3e9ef;border-radius:9px;padding:11px}.bulk-dot-summary span{display:block;color:#718096;font-size:10px;text-transform:uppercase;font-weight:800}.bulk-dot-summary strong{font-size:18px;color:#0f294d}
+.bulk-dot-alert{margin:12px 24px 0;padding:11px 14px;border-radius:8px;font-size:12px}.bulk-dot-alert.danger{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}.bulk-dot-alert.warning{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
+.bulk-dot-progress{margin:12px 24px}.bulk-dot-progress>div:last-child{height:7px;border-radius:99px;background:#e2e8f0;overflow:hidden;margin-top:6px}.bulk-dot-progress span{display:block;height:100%;width:0;background:#16a34a;transition:width .2s}
+@media(max-width:760px){.bulk-dot-summary{grid-template-columns:1fr 1fr}.bulk-dot-form{grid-template-columns:1fr}.bulk-dot-toolbar .input{width:100%}.bulk-dot-steps{padding-inline:14px}.bulk-dot-steps>div{font-size:10px}.bulk-dot-table{margin-inline:12px}.bulk-dot-actions{padding-inline:12px}}
+
 /* Fiches de position : sélecteur mosaïque/liste isolé des styles globaux */
 #view .fp-filter-footer .fp-display-controls{
   flex:0 0 auto;

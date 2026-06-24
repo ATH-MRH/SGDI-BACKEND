@@ -3880,7 +3880,8 @@ function moduleCounterItemHTML(item,total){
   const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(pct+"%"));
   const glyph=topbarCounterGlyph(label);
   const iconBg=hexToIconBg(item.color||"#043970");
-  return `<a href="${escapeHTML(href)}" class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;height:auto!important;min-height:68px!important;overflow:visible!important;padding:10px 14px!important" title="${escapeHTML(item.label)}">
+  const click=item.showAllPeriods?` onclick="sessionStorage.setItem('stkPeriode','all');if(location.hash===this.hash){event.preventDefault();renderView()}"`:"";
+  return `<a href="${escapeHTML(href)}"${click} class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;height:auto!important;min-height:68px!important;overflow:visible!important;padding:10px 14px!important" title="${escapeHTML(item.label)}">
     <div style="font-size:9px;font-weight:700;color:#64748b;line-height:1.3;white-space:normal;word-break:break-word;margin-bottom:4px">${escapeHTML(label)}</div>
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px;width:100%">
       <span style="font-size:24px;font-weight:950;color:${escapeHTML(item.color||"#043970")};line-height:1;font-variant-numeric:tabular-nums">${escapeHTML(String(item.value??0))}</span>
@@ -3945,10 +3946,9 @@ function materialPendingDotationCountForSoc(scopeSoc){
   // Les stats serveur (without_equipment) ne lisent que la table EmployeeEquipment SQL
   // et ignorent les dotations enregistrées en JSON (stockMouvements). On utilise
   // toujours le calcul local pour avoir un chiffre cohérent avec la carte OPS.
-  // Pendant la synchronisation SQL, les employés arrivent avant les mouvements de
-  // dotation. Conserver le dernier total complet évite un faux +1 transitoire.
+  // Recalculer à chaque affichage garantit la même valeur dans le ruban, la barre
+  // latérale, le tableau de bord et la liste des employés à doter.
   const key=normalizeSocieteName(scopeSoc||"__all__");
-  if(typeof sgdiSqlSyncInProgress!=="undefined"&&sgdiSqlSyncInProgress&&sgdiPendingDotationCountCache.has(key))return sgdiPendingDotationCountCache.get(key);
   const count=agentsEnInstanceDotationForSoc(scopeSoc).length;
   sgdiPendingDotationCountCache.set(key,count);
   return count;
@@ -4040,7 +4040,7 @@ function moduleCountersRibbonHTML(){
     const total=Math.max(1,erpEmp?.total??ag.length);
     const actifs=ag.filter(agentIsOperational).length;
     const activeHeadcount=ag.filter(employeeIsActive).length;
-    const sansDotation=ag.filter(employeeNeedsMaterialDotation).length;
+    const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
     const sansAffectation=ag.filter(agentNeedsAffectation).length;
     const attentePv=ag.filter(agentNeedsInstallationPV).length;
     const enConge=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
@@ -4080,7 +4080,7 @@ function moduleCountersRibbonHTML(){
     const actifs=ag.filter(agentIsOperational).length;
     const activeHeadcount=ag.filter(employeeIsActive).length;
     const sansAffectation=ag.filter(agentNeedsAffectation).length;
-    const sansDotation=ag.filter(employeeNeedsMaterialDotation).length;
+    const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
     const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
     const missionEnCours=(db.missions||[]).filter(m=>(!scopeSoc||m.societe===scopeSoc)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
     const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
@@ -4138,7 +4138,7 @@ function moduleCountersRibbonHTML(){
       {label:"STOCK CRITIQUE",value:(k.enAlerte||0)+(k.enRupture||0),color:"#dc2626",route:"materiel/articles"},
       {label:"MAGASINS",value:erpMat?.stores_total??(db.magasins||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length,color:"#0ea5e9",route:"materiel/magasins"},
       {label:"FOURNISSEURS",value:(db.fournisseurs||[]).filter(f=>!scopeSoc||f.societe===scopeSoc).length,color:"#7c3aed",route:"materiel/fournisseurs"},
-      {label:"MOUVEMENTS",value:erpMat?.movements_total??(db.stockMouvements||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length,color:"#f59e0b",route:"materiel/mouvements"},
+      {label:"MOUVEMENTS",value:erpMat?.movements_total??(db.stockMouvements||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length,color:"#f59e0b",route:"materiel/mouvements",showAllPeriods:true},
       {label:"DOTATIONS",value:materialPendingDotationCountForSoc(scopeSoc),color:"#047857",route:"materiel/dotation"}
     ]);
   }
@@ -17488,7 +17488,7 @@ function renderMateriel(view,sub,arg){
   if(sub==="article"&&arg){return renderStockArticleDetail(view,arg)}
   if(sub==="article-nouveau"){return renderStockArticleForm(view,null)}
   if(sub==="article-edit"&&arg){return renderStockArticleForm(view,arg)}
-  if(sub==="mouvements"){return renderMatSimpleMouvements(view)}
+  if(sub==="mouvements"){return sgdiAuthToken()?renderMatSimpleMouvementsServer(view):renderMatSimpleMouvements(view)}
   if(sub==="alertes"){return renderStockProMain(view,"alertes")}
   if(sub==="stats"||sub==="statistiques"){return renderStockProMain(view,"statistiques")}
   if(sub==="entrees"){return renderStockProMain(view,"entrees")}
@@ -17784,7 +17784,7 @@ function renderMatSimpleDashboard(view){
   const mags=matSimpleBySoc(db.magasins||[]);
   const fours=matSimpleBySoc(db.fournisseurs||[]);
   const mvts=matSimpleBySoc(db.stockMouvements||[]);
-  const employeesEnInstanceDotationCount=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&employeeNeedsMaterialDotation(a)).length;
+  const employeesEnInstanceDotationCount=materialPendingDotationCountForSoc(soc);
   let totalQty=0,totalVal=0,nbAlertes=0,nbRupture=0;
   arts.forEach(a=>{
     const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
@@ -18335,12 +18335,80 @@ function openBulkDotationModal(nonDotesOnly){
   const soc=matSimpleSocFilter();
   const allAgents=nonDotesOnly?agentsEnInstanceDotationForSoc(soc):matDotationScopedActiveAgents(soc);
   const articles=matSimpleBySoc(db.stockArticles||[]).filter(a=>a.actif!==false&&a.actif!==0);
-  const artOptions=articles.map(a=>`<option value="${escapeHTML(String(a.id))}">${escapeHTML(a.designation||a.code||"Article")} · ${escapeHTML(a.categorie||"")} (stock: ${a.stockInitial??"?"})</option>`).join("");
-  const kitDefault=[{label:"Tenue bleu chemise",qty:2},{label:"Tenue bleu pantalon",qty:2},{label:"Rangers",qty:1},{label:"Parkas",qty:1},{label:"Ceinture",qty:1}];
-  const rows=kitDefault.map((item,i)=>`<tr><td class="py-2 pr-3 text-sm font-semibold text-slate-700 whitespace-nowrap">${escapeHTML(item.label)}</td><td class="py-2 pr-3"><select id="bulk-art-${i}" class="select text-sm"><option value="">— Choisir article —</option>${artOptions}</select></td><td class="py-2"><input type="number" id="bulk-qty-${i}" class="input text-sm" style="width:70px" value="${item.qty}" min="1"/></td></tr>`).join("");
-  const title=nonDotesOnly?"Doter les employés non dotés":"Dotation en masse";
-  const desc=nonDotesOnly?`<strong>${allAgents.length}</strong> employé(s) <u>sans dotation</u> recevront chacun le kit ci-dessous.`:`<strong>${allAgents.length}</strong> employé(s) actif(s) recevront chacun le kit d'équipements ci-dessous.`;
-  openModal(`<div style="min-width:520px"><h3 class="font-black text-lg mb-1">⚡ ${escapeHTML(title)}</h3><p class="text-sm text-slate-500 mb-4">${desc}</p><div class="overflow-x-auto mb-4"><table class="w-full"><thead><tr class="text-xs text-slate-500 uppercase border-b"><th class="pb-2 text-left pr-3">Article kit</th><th class="pb-2 text-left pr-3">Article catalogue</th><th class="pb-2 text-left">Qté</th></tr></thead><tbody>${rows}</tbody></table></div><div class="grid grid-cols-2 gap-3 mb-4"><div><label class="label text-xs">Date dotation</label><input type="date" id="bulk-date" class="input" value="${today()}"/></div><div><label class="label text-xs">Motif</label><input type="text" id="bulk-motif" class="input" value="${nonDotesOnly?"Dotation initiale":"Dotation initiale"}"/></div></div><div id="bulk-progress" style="display:none" class="mb-4"><div class="text-sm text-slate-600 mb-1" id="bulk-progress-label">Traitement en cours…</div><div class="w-full rounded-full h-2" style="background:#e2e8f0"><div id="bulk-progress-bar" class="h-2 rounded-full" style="width:0%;background:#2563eb;transition:width .2s"></div></div></div><div class="flex justify-end gap-2 mt-2"><button class="btn btn-secondary" onclick="closeModal()">Annuler</button><button class="btn btn-primary" id="bulk-run-btn" onclick="executeBulkDotation(${kitDefault.length},${!!nonDotesOnly})">Lancer — ${allAgents.length} agents</button></div></div>`);
+  window._bulkDotationWizard={
+    nonDotesOnly:!!nonDotesOnly,soc,agents:allAgents,articles,
+    selected:new Set(allAgents.map(a=>String(a.id))),variants:{},date:today(),motif:"Dotation initiale",
+    kit:[
+      {label:"Tenue bleu chemise",articleId:"",qty:2,variantType:"taille"},
+      {label:"Tenue bleu pantalon",articleId:"",qty:2,variantType:"taille"},
+      {label:"Rangers",articleId:"",qty:1,variantType:"pointure"},
+      {label:"Parkas",articleId:"",qty:1,variantType:"taille"},
+      {label:"Ceinture",articleId:"",qty:1,variantType:"aucune"}
+    ]
+  };
+  bulkDotationWizardOpen(1);
+}
+function bulkDotationWizardState(){return window._bulkDotationWizard||null}
+function bulkDotationWizardSteps(step){
+  return `<div class="bulk-dot-steps">${[[1,"Employés"],[2,"Composition du kit"],[3,"Vérification"]].map(([n,l])=>`<div class="${step===n?"active":step>n?"done":""}"><span>${step>n?"✓":n}</span>${escapeHTML(l)}</div>`).join("")}</div>`;
+}
+function bulkDotationWizardOpen(step){
+  const s=bulkDotationWizardState();if(!s)return;
+  const title=s.nonDotesOnly?"Doter les employés non dotés":"Dotation en masse";
+  const body=step===1?bulkDotationEmployeesStepHTML(s):step===2?bulkDotationKitStepHTML(s):bulkDotationReviewStepHTML(s);
+  openModal(`<div class="bulk-dot-wizard"><div class="bulk-dot-head"><div><div class="text-xs font-black uppercase tracking-widest text-slate-400">Assistant sécurisé</div><h3>${escapeHTML(title)}</h3></div><button type="button" class="bulk-dot-close" onclick="closeModal()" aria-label="Fermer">×</button></div>${bulkDotationWizardSteps(step)}${body}</div>`);
+}
+function bulkDotationEmployeesStepHTML(s){
+  const rows=s.agents.map(a=>{const id=String(a.id),v=s.variants[id]||{},checked=s.selected.has(id);const aff=agentLiveAffectation(a)||{};return `<tr data-bulk-agent-row data-q="${escapeHTML(((a.nom||"")+" "+(a.prenom||"")+" "+(a.matricule||"")+" "+(a.societe||"")).toLowerCase())}"><td><input type="checkbox" ${checked?"checked":""} onchange="bulkDotationToggleAgent('${jsString(id)}',this.checked)"/></td><td><b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</b><small>${escapeHTML(a.matricule||"—")}</small></td><td>${escapeHTML(a.societe||"—")}</td><td>${escapeHTML(aff.poste||a.fonction||"—")}</td><td><input class="input" value="${escapeHTML(v.taille||"")}" placeholder="M, L…" oninput="bulkDotationSetVariant('${jsString(id)}','taille',this.value)"/></td><td><input class="input" value="${escapeHTML(v.pointure||"")}" placeholder="40, 41…" oninput="bulkDotationSetVariant('${jsString(id)}','pointure',this.value)"/></td></tr>`}).join("");
+  return `<div class="bulk-dot-toolbar"><div><strong id="bulk-selected-count">${s.selected.size}</strong> employé(s) sélectionné(s)</div><input class="input" placeholder="Rechercher un employé…" oninput="bulkDotationFilterEmployees(this.value)"/><button class="btn btn-secondary" onclick="bulkDotationToggleAll(true)">Tout sélectionner</button><button class="btn btn-ghost" onclick="bulkDotationToggleAll(false)">Tout désélectionner</button></div><div class="bulk-dot-table"><table><thead><tr><th></th><th>Employé</th><th>Société</th><th>Poste</th><th>Taille</th><th>Pointure</th></tr></thead><tbody>${rows||`<tr><td colspan="6" class="text-center p-8 text-slate-500">Aucun employé concerné.</td></tr>`}</tbody></table></div><div class="bulk-dot-actions"><button class="btn btn-secondary" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="bulkDotationGoKit()" ${s.selected.size?"":"disabled"}>Continuer vers le kit →</button></div>`;
+}
+function bulkDotationToggleAgent(id,checked){const s=bulkDotationWizardState();if(!s)return;if(checked)s.selected.add(String(id));else s.selected.delete(String(id));const el=document.getElementById("bulk-selected-count");if(el)el.textContent=s.selected.size}
+function bulkDotationSetVariant(id,key,value){const s=bulkDotationWizardState();if(!s)return;s.variants[id]=s.variants[id]||{};s.variants[id][key]=String(value||"").trim()}
+function bulkDotationFilterEmployees(value){const q=String(value||"").trim().toLowerCase();document.querySelectorAll("[data-bulk-agent-row]").forEach(row=>row.style.display=!q||String(row.dataset.q||"").includes(q)?"":"none")}
+function bulkDotationToggleAll(checked){const s=bulkDotationWizardState();if(!s)return;s.selected=checked?new Set(s.agents.map(a=>String(a.id))):new Set();bulkDotationWizardOpen(1)}
+function bulkDotationGoKit(){const s=bulkDotationWizardState();if(!s||!s.selected.size){toast("Sélectionnez au moins un employé","error");return}bulkDotationWizardOpen(2)}
+function bulkDotationAvailableStock(article){return Math.max(0,Number(typeof dotationStockDisponible==="function"?dotationStockDisponible(article):stockGetActuel(article.id))||0)}
+function bulkDotationKitStepHTML(s){
+  const opts=s.articles.map(a=>`<option value="${escapeHTML(String(a.id))}">${escapeHTML(a.designation||a.code||"Article")} · stock ${qty(bulkDotationAvailableStock(a))}</option>`).join("");
+  const rows=s.kit.map((item,i)=>`<tr><td><b>${escapeHTML(item.label)}</b></td><td><select id="bulk-wiz-art-${i}" class="select" onchange="bulkDotationArticleChanged(${i},this.value)"><option value="">— Choisir dans le catalogue —</option>${opts}</select></td><td><input id="bulk-wiz-qty-${i}" class="input" type="number" min="1" step="1" value="${item.qty}" onchange="bulkDotationKitValue(${i},'qty',this.value)"/></td><td><select class="select" onchange="bulkDotationKitValue(${i},'variantType',this.value)"><option value="aucune" ${item.variantType==="aucune"?"selected":""}>Aucune</option><option value="taille" ${item.variantType==="taille"?"selected":""}>Taille employé</option><option value="pointure" ${item.variantType==="pointure"?"selected":""}>Pointure employé</option></select></td><td id="bulk-wiz-stock-${i}" class="text-xs text-slate-500">—</td></tr>`).join("");
+  setTimeout(()=>s.kit.forEach((item,i)=>{const el=document.getElementById(`bulk-wiz-art-${i}`);if(el){el.value=item.articleId||"";bulkDotationArticleChanged(i,el.value)}}),0);
+  return `<div class="bulk-dot-notice"><b>${s.selected.size} employé(s)</b> recevront chaque article du kit. Les quantités totales seront contrôlées avant validation.</div><div class="bulk-dot-table"><table><thead><tr><th>Élément du kit</th><th>Article catalogue</th><th>Qté / employé</th><th>Donnée individuelle</th><th>Stock</th></tr></thead><tbody>${rows}</tbody></table></div><div class="bulk-dot-form"><div><label>Date de dotation</label><input id="bulk-wiz-date" class="input" type="date" value="${escapeHTML(s.date)}"/></div><div><label>Motif</label><input id="bulk-wiz-motif" class="input" value="${escapeHTML(s.motif)}"/></div></div><div class="bulk-dot-actions"><button class="btn btn-secondary" onclick="bulkDotationWizardOpen(1)">← Employés</button><button class="btn btn-primary" onclick="bulkDotationGoReview()">Vérifier la dotation →</button></div>`;
+}
+function bulkDotationKitValue(i,key,value){const s=bulkDotationWizardState();if(!s||!s.kit[i])return;s.kit[i][key]=key==="qty"?(parseFloat(value)||0):value}
+function bulkDotationArticleChanged(i,value){const s=bulkDotationWizardState();if(!s||!s.kit[i])return;s.kit[i].articleId=value;const a=s.articles.find(x=>String(x.id)===String(value));const el=document.getElementById(`bulk-wiz-stock-${i}`);if(el)el.innerHTML=a?`Disponible : <b>${qty(bulkDotationAvailableStock(a))}</b>`:"—"}
+function bulkDotationGoReview(){
+  const s=bulkDotationWizardState();if(!s)return;
+  s.date=document.getElementById("bulk-wiz-date")?.value||today();s.motif=(document.getElementById("bulk-wiz-motif")?.value||"").trim();
+  const missing=s.kit.findIndex(x=>!x.articleId||!(Number(x.qty)>0));
+  if(missing>=0){toast(`Complétez l'article et la quantité de la ligne ${missing+1}`,"error");return}
+  bulkDotationWizardOpen(3);
+}
+function bulkDotationReviewData(s){
+  const totals=new Map();
+  s.kit.forEach(item=>{const current=totals.get(String(item.articleId))||0;totals.set(String(item.articleId),current+s.selected.size*Number(item.qty||0))});
+  const missingVariants=[];
+  s.selected.forEach(id=>s.kit.forEach(item=>{if(item.variantType!=="aucune"&&!String(s.variants[id]?.[item.variantType]||"").trim())missingVariants.push({id,type:item.variantType})}));
+  const shortages=[];
+  totals.forEach((required,id)=>{const a=s.articles.find(x=>String(x.id)===id);const available=a?bulkDotationAvailableStock(a):0;if(required>available)shortages.push({id,required,available,article:a})});
+  return{totals,missingVariants,shortages,lines:s.selected.size*s.kit.length};
+}
+function bulkDotationReviewStepHTML(s){
+  const review=bulkDotationReviewData(s);
+  const rows=s.kit.map(item=>{const a=s.articles.find(x=>String(x.id)===String(item.articleId));const required=s.selected.size*Number(item.qty||0);const available=a?bulkDotationAvailableStock(a):0;const ok=(review.totals.get(String(item.articleId))||0)<=available;return `<tr><td><b>${escapeHTML(item.label)}</b></td><td>${escapeHTML(a?.designation||a?.code||"Article")}</td><td>${qty(item.qty)}</td><td><b>${qty(required)}</b></td><td>${qty(available)}</td><td><span class="pill ${ok?"pill-green":"pill-red"}">${ok?"Disponible":"Insuffisant"}</span></td></tr>`}).join("");
+  const blocked=review.shortages.length||review.missingVariants.length;
+  return `<div class="bulk-dot-summary"><div><span>Employés</span><strong>${s.selected.size}</strong></div><div><span>Articles du kit</span><strong>${s.kit.length}</strong></div><div><span>Lignes créées</span><strong>${review.lines}</strong></div><div><span>Date</span><strong>${formatDate(s.date)}</strong></div></div><div class="bulk-dot-table"><table><thead><tr><th>Élément</th><th>Article</th><th>Qté / employé</th><th>Total requis</th><th>Stock disponible</th><th>Contrôle</th></tr></thead><tbody>${rows}</tbody></table></div>${review.shortages.length?`<div class="bulk-dot-alert danger"><b>Stock insuffisant.</b> Corrigez le kit ou réapprovisionnez le stock avant de continuer.</div>`:""}${review.missingVariants.length?`<div class="bulk-dot-alert warning"><b>${review.missingVariants.length} taille(s) ou pointure(s) manquante(s).</b> Revenez à l’étape Employés pour compléter les informations.</div>`:""}<div class="bulk-dot-confirm"><b>Motif :</b> ${escapeHTML(s.motif||"Dotation initiale")}<br/>Cette opération créera <b>${review.lines} lignes de dotation</b> pour <b>${s.selected.size} employés</b>.</div><div id="bulk-progress" style="display:none" class="bulk-dot-progress"><div id="bulk-progress-label">Préparation…</div><div><span id="bulk-progress-bar"></span></div></div><div class="bulk-dot-actions"><button class="btn btn-secondary" onclick="bulkDotationWizardOpen(2)">← Modifier le kit</button><button class="btn btn-primary" id="bulk-run-btn" onclick="executeBulkDotationWizard()" ${blocked?"disabled":""}>Confirmer ${review.lines} lignes de dotation</button></div>`;
+}
+async function executeBulkDotationWizard(){
+  const s=bulkDotationWizardState();if(!s)return;const review=bulkDotationReviewData(s);
+  if(review.shortages.length||review.missingVariants.length){toast("Corrigez les alertes avant de confirmer","error");return}
+  if(!confirm(`Confirmer ${review.lines} lignes de dotation pour ${s.selected.size} employés ?`))return;
+  const agents=s.agents.filter(a=>s.selected.has(String(a.id)));const btn=document.getElementById("bulk-run-btn");if(btn)btn.disabled=true;
+  const progress=document.getElementById("bulk-progress");if(progress)progress.style.display="block";
+  let done=0,errors=0;
+  for(const agent of agents){for(const item of s.kit){try{const variant=s.variants[String(agent.id)]||{};await persistDotationToPostgres({agentId:agent.id,employeeBackendId:agent.backendId||null,articleId:item.articleId,quantite:item.qty,cibleType:"employee",date:s.date,motif:s.motif||"Dotation initiale",taille:item.variantType==="taille"?(variant.taille||""):"",pointure:item.variantType==="pointure"?(variant.pointure||""):""})}catch(e){errors++;console.warn("Dotation groupée",agent.id,item.articleId,e)}done++;const pct=Math.round(done/review.lines*100);const bar=document.getElementById("bulk-progress-bar"),label=document.getElementById("bulk-progress-label");if(bar)bar.style.width=pct+"%";if(label)label.textContent=`${done}/${review.lines} lignes traitées`}}
+  closeModal();window._bulkDotationWizard=null;
+  if(errors)toast(`Dotation terminée avec ${errors} erreur(s).`,"warning");else toast(`Dotation réussie : ${review.lines} lignes pour ${agents.length} employés.`,"success");
+  try{await syncMaterielFromPostgres()}catch(e){}renderSidebar();renderView();
 }
 async function executeBulkDotation(kitSize,nonDotesOnly){
   const soc=matSimpleSocFilter();
@@ -19195,6 +19263,18 @@ function renderMatSimpleMouvements(view){
   const header=matSimpleHeader("mouvements");
   const body=renderStockMvtTab("all");
   view.innerHTML=`${header}<div class="flex justify-between items-center mb-3 flex-wrap gap-2"><div><h1 class="text-2xl font-bold">🔄 Mouvements stock</h1><p class="text-slate-500 text-sm">Historique général des entrées et sorties</p></div><div class="flex gap-2"><button class="btn btn-success text-sm" onclick="stockOpenMvt('entree')">📥 Nouvelle entrée</button><button class="btn btn-secondary text-sm" onclick="stockOpenMvt('sortie')" style="background:#dc2626;color:#fff">📤 Nouvelle sortie</button></div></div>${body}`;
+}
+
+async function renderMatSimpleMouvementsServer(view){
+  renderMatSimpleMouvements(view);
+  try{
+    const rows=await SGDI.stock.movements();
+    db.stockMouvements=(rows||[]).map(movementFromApi);
+    if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements();
+    if(String(location.hash||"").startsWith("#/materiel/mouvements"))renderMatSimpleMouvements(view);
+  }catch(e){
+    console.warn("Mouvements serveur indisponibles",e);
+  }
 }
 
 function serverItems(result){return result?.items||result?.data||[]}
