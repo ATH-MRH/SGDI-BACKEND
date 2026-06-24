@@ -230,14 +230,18 @@ def _filter_rows_for_scope(
 
 
 def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], user: Any | None) -> dict[str, list[Any] | dict[str, Any]]:
+    # Perf : copie SUPERFICIELLE (dict) au lieu de deepcopy. Les filtres
+    # (_filter_echanges_for_user, _filter_rows_for_scope) ne modifient jamais les
+    # lignes : ils reconstruisent des listes de références. Évite un deepcopy de
+    # ~30 Mo par requête /api/irongs/db (génération 49s -> quelques secondes).
     if _snapshot_unrestricted(user):
-        scoped_unrestricted = deepcopy(snapshot)
+        scoped_unrestricted = dict(snapshot)
         echanges = scoped_unrestricted.get("echanges")
         if isinstance(echanges, list):
             scoped_unrestricted["echanges"] = _filter_echanges_for_user(echanges, user)
         return scoped_unrestricted
     allowed_societies = _user_allowed_societies(user)
-    scoped: dict[str, list[Any] | dict[str, Any]] = deepcopy(snapshot)
+    scoped: dict[str, list[Any] | dict[str, Any]] = dict(snapshot)
 
     allowed_agent_refs: set[str] = set()
     for name in ("agents", "employees"):
@@ -302,13 +306,16 @@ def get_database(db: Session, user: Any | None = None) -> dict[str, list[Any] | 
             continue
         grouped.setdefault(row.collection, []).append(row)
     result: dict[str, list[Any] | dict[str, Any]] = {}
+    # Perf : pas de deepcopy ici — scope_database_for_user() applique déjà une
+    # copie superficielle et ne mute jamais les lignes. On référence directement
+    # row.data (lecture seule, sérialisé puis jeté). Évite un 2e parcours coûteux.
     for name, items in grouped.items():
         if len(items) == 1 and items[0].kind == "object" and items[0].item_id == OBJECT_ITEM_ID:
-            result[name] = deepcopy(items[0].data) if isinstance(items[0].data, dict) else {}
+            result[name] = items[0].data if isinstance(items[0].data, dict) else {}
         else:
             limit = _COLLECTION_ROW_LIMITS.get(name)
             rows_to_use = items[-limit:] if limit and len(items) > limit else items
-            result[name] = [deepcopy(row.data) for row in rows_to_use if row.kind == "item"]
+            result[name] = [row.data for row in rows_to_use if row.kind == "item"]
     for name in sorted(sql_bridge.SQL_COLLECTIONS):
         result[name] = sql_bridge.list_collection(db, name)
     return scope_database_for_user(result, user)
