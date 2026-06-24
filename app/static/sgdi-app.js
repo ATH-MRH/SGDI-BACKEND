@@ -17784,7 +17784,8 @@ function renderMatSimpleDashboard(view){
   const mags=matSimpleBySoc(db.magasins||[]);
   const fours=matSimpleBySoc(db.fournisseurs||[]);
   const mvts=matSimpleBySoc(db.stockMouvements||[]);
-  const employeesEnInstanceDotationCount=materialPendingDotationCountForSoc(soc);
+  const _dotScopeSoc=(session?.transverse?currentStructureSocieteFilter():mySoc())||"";
+  const employeesEnInstanceDotationCount=materialPendingDotationCountForSoc(_dotScopeSoc);
   let totalQty=0,totalVal=0,nbAlertes=0,nbRupture=0;
   arts.forEach(a=>{
     const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
