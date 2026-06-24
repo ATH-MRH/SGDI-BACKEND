@@ -3077,6 +3077,20 @@ table{width:100%;max-width:100%}
   align-items:center!important;
   line-height:1!important;
 }
+
+/* Statuts employés : code couleur unique dans toutes les vues */
+#view .employee-status-pill{
+  border:0!important;
+  color:#fff!important;
+  font-weight:950!important;
+  text-transform:uppercase!important;
+  letter-spacing:.035em!important;
+  box-shadow:none!important;
+}
+#view .employee-status-actif{background:#16a34a!important;color:#fff!important}
+#view .employee-status-sortant{background:#dc2626!important;color:#fff!important}
+#view .employee-status-suspendu{background:#f97316!important;color:#fff!important}
+#view .employee-status-blacklist{background:#111827!important;color:#fff!important}
 #view .effectif-table .effectif-open-cell{
   text-align:center;
   white-space:nowrap;
