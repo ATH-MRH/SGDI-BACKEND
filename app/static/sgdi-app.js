@@ -17844,12 +17844,49 @@ function renderMatSimpleDashboard(view){
     <button class="btn btn-secondary" onclick="navigate('materiel/article-nouveau')">Nouvel article</button>
     ${isAdminGeneralSession()||isAdminSystemSession()?`<button class="btn" style="background:#7c3aed;color:#fff" onclick="lancerDotationInitiale()">⚡ Dotation initiale</button>`:""}
   </div>`;
+  const magasinsList=mags.slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||"","fr"));
+  const magasinsSection=`<section class="mb-5" aria-labelledby="materiel-dashboard-magasins">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <div>
+        <h2 id="materiel-dashboard-magasins" class="font-black text-lg" style="color:#0f172a">Magasins</h2>
+        <div class="text-xs text-slate-500">${magasinsList.length} magasin(s)${soc?` · ${escapeHTML(soc)}`:""}</div>
+      </div>
+      <a href="#/materiel/magasins" class="btn btn-secondary text-sm">Voir tous les magasins</a>
+    </div>
+    ${magasinsList.length?`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      ${magasinsList.map(m=>{
+        const st=matSimpleStockMagasin(m.id);
+        const color=String(m.color||m.config?.color||MAT_SIMPLE_HEADER_COLOR);
+        return `<a href="#/materiel/magasin/${encodeURIComponent(m.id)}" class="card p-4" style="display:block;text-decoration:none;border-left:4px solid ${escapeHTML(color)};transition:transform .15s ease,box-shadow .15s ease">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <span aria-hidden="true" style="font-size:25px;line-height:1">${escapeHTML(m.icon||"🏬")}</span>
+              <div class="min-w-0">
+                <div class="font-black truncate" style="color:#0f172a">${escapeHTML(m.nom||"Magasin")}</div>
+                <div class="text-xs text-slate-500 truncate">${escapeHTML([m.code,m.societe].filter(Boolean).join(" · ")||"Toutes sociétés")}</div>
+              </div>
+            </div>
+            ${st.alertes?`<span style="background:#fef2f2;color:#dc2626;border-radius:999px;padding:2px 7px;font-size:10px;font-weight:800;white-space:nowrap">${st.alertes} alerte(s)</span>`:""}
+          </div>
+          <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t text-center">
+            <div><div class="font-black" style="color:#043970">${st.nb}</div><div class="text-[10px] uppercase text-slate-500">Articles</div></div>
+            <div><div class="font-black" style="color:#043970">${qty(st.qty)}</div><div class="text-[10px] uppercase text-slate-500">Unités</div></div>
+            <div><div class="font-black" style="color:#043970">${money(st.val)}</div><div class="text-[10px] uppercase text-slate-500">Valeur</div></div>
+          </div>
+        </a>`;
+      }).join("")}
+    </div>`:`<div class="card p-6 text-center text-slate-500">
+      <div class="text-2xl mb-2" aria-hidden="true">🏬</div>
+      <div class="font-bold text-slate-700">Aucun magasin à afficher</div>
+      <a href="#/materiel/magasin-nouveau" class="btn btn-primary text-sm mt-3">Créer un magasin</a>
+    </div>`}
+  </section>`;
   const alertsList=(nbRupture+nbAlertes)>0?`<div class="card p-4 mb-5" style="border-left:3px solid #dc2626">
     <div class="font-bold text-sm mb-2" style="color:#dc2626">Articles en alerte</div>
     ${arts.filter(a=>{const q=stockGetActuel?stockGetActuel(a.id):0;return q<=0}).slice(0,8).map(a=>`<div class="flex justify-between py-1 border-b text-sm"><a href="#/materiel/article/${a.id}" style="color:#dc2626;font-weight:600">${escapeHTML(a.designation||a.code)}</a><span style="color:#dc2626;font-size:11px;font-weight:700">RUPTURE</span></div>`).join("")}
     ${arts.filter(a=>{const q=stockGetActuel?stockGetActuel(a.id):0;const s=parseFloat(a.seuilAlerte)||0;return q>0&&s&&q<=s}).slice(0,8).map(a=>{const q=stockGetActuel(a.id);return`<div class="flex justify-between py-1 border-b text-sm"><a href="#/materiel/article/${a.id}" style="color:#b45309;font-weight:600">${escapeHTML(a.designation||a.code)}</a><span style="color:#b45309;font-size:11px">${qty(q)} / ${qty(a.seuilAlerte)}</span></div>`}).join("")}
   </div>`:"";
-  view.innerHTML=`${header}<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:16px"><div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.08em">Matériel & équipement</div><div style="font-size:20px;font-weight:900;color:#0f172a">TABLEAU DE BORD ${alertsBadge}</div></div></div>${kpi}${actions}${alertsList}`;
+  view.innerHTML=`${header}<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:16px"><div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.08em">Matériel & équipement</div><div style="font-size:20px;font-weight:900;color:#0f172a">TABLEAU DE BORD ${alertsBadge}</div></div></div>${kpi}${actions}${magasinsSection}${alertsList}`;
 }
 
 async function renderMatSitesEnAttenteDotation(view){
