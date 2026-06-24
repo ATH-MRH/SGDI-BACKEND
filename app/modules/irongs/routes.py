@@ -129,8 +129,11 @@ def list_items(name: str, db: Session = Depends(get_db), user=Depends(current_us
 
 @router.post("/collections/{name}/items")
 def create_item(name: str, payload: ItemPayload, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
-    service.ensure_item_allowed_for_user(payload.data, user, name)
-    return service.create_item(db, name, payload.data)
+    data = dict(payload.data)
+    if name == "echanges" and data.get("type") == "message":
+        data["from"] = user.username
+    service.ensure_item_allowed_for_user(data, user, name)
+    return service.create_item(db, name, data)
 
 
 @router.get("/collections/{name}/items/{item_id}")

@@ -1,5 +1,6 @@
 """Tests de sécurité : portal token, isolation société, accès non autorisé."""
 import pytest
+from types import SimpleNamespace
 
 
 def test_portal_rh_mobile_page_served(client):
@@ -7,6 +8,47 @@ def test_portal_rh_mobile_page_served(client):
     assert resp.status_code == 200
     assert "Portail RH - Demandes du Personnel" in resp.text
     assert "Réclamation salaire" in resp.text
+
+
+def test_private_message_visibility_ignores_username_case_and_spaces():
+    from app.modules.irongs import service
+
+    message = {"type": "message", "from": " GRH-01 ", "to": "OPS2"}
+    assert service._message_visible_to_user(message, SimpleNamespace(username="grh-01"))
+    assert service._message_visible_to_user(message, SimpleNamespace(username=" ops2 "))
+    assert not service._message_visible_to_user(message, SimpleNamespace(username="AUTRE"))
+
+
+def test_message_recipient_list_is_normalized():
+    from app.modules.irongs import service
+
+    message = {"type": "message", "from": "GRH-01", "to": [" OPS2 "], "recipients": ["Ops3"]}
+    assert service._message_participants(message) == {"grh-01", "ops2", "ops3"}
+
+
+def test_message_creation_forces_authenticated_sender(client, db):
+    from app.core.security import create_access_token, hash_password
+    from app.modules.auth.models import User
+
+    user = User(
+        username="GRH-01",
+        full_name="Gestionnaire RH",
+        password_hash=hash_password("secret-test"),
+        role="adm",
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    token = create_access_token(subject=str(user.id))
+
+    response = client.post(
+        "/api/irongs/collections/echanges/items",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"data": {"id": "msg-auth-sender", "type": "message", "from": "OPS2", "to": "ops2", "message": "Test"}},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["from"] == "GRH-01"
 
 
 def test_portal_rh_access_page_served(client):

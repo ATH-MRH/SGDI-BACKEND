@@ -97,6 +97,10 @@ def _user_username(user: Any | None) -> str:
     return str(getattr(user, "username", "") or "").strip()
 
 
+def _username_key(value: Any) -> str:
+    return str(value or "").strip().casefold()
+
+
 def _snapshot_unrestricted(user: Any | None) -> bool:
     if user is None:
         return False
@@ -108,20 +112,20 @@ def _message_participants(item: dict[str, Any]) -> set[str]:
     for field in ("from", "to"):
         value = item.get(field)
         if isinstance(value, str) and value.strip() and value.strip().lower() != "all":
-            participants.add(value.strip())
+            participants.add(_username_key(value))
         elif isinstance(value, list):
-            participants.update(str(v).strip() for v in value if str(v or "").strip())
+            participants.update(_username_key(v) for v in value if _username_key(v))
     for field in ("recipients", "destinataires"):
         value = item.get(field)
         if isinstance(value, list):
-            participants.update(str(v).strip() for v in value if str(v or "").strip())
+            participants.update(_username_key(v) for v in value if _username_key(v))
     return {p for p in participants if p}
 
 
 def _message_visible_to_user(item: dict[str, Any], user: Any | None) -> bool:
     if user is None:
         return True
-    username = _user_username(user)
+    username = _username_key(_user_username(user))
     if not username:
         return False
     if str(item.get("to") or "").strip().lower() == "all":

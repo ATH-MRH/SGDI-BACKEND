@@ -5487,10 +5487,13 @@ function dialogueToggle(open){
   render();
   sgdiSyncOverlayState();
 }
+function dialogueUsernameKey(value){return String(value||"").trim().toLocaleLowerCase()}
+function dialogueSameUser(a,b){const left=dialogueUsernameKey(a),right=dialogueUsernameKey(b);return !!left&&left===right}
+function dialogueUserListIncludes(values,username){return Array.isArray(values)&&values.some(value=>dialogueSameUser(value,username))}
 function dialogueIncomingUnreadItems(){
   if(!session)return[];
   const u=session.username;
-  return (db.echanges||[]).filter(m=>!m.workflowTaskType&&m.type==="message"&&m.to!=="all"&&!dialogueMessageArchived(m)&&m.from!==u&&m.to===u&&(!m.luPar||!m.luPar.includes(u)));
+  return (db.echanges||[]).filter(m=>!m.workflowTaskType&&m.type==="message"&&dialogueUsernameKey(m.to)!=="all"&&!dialogueMessageArchived(m)&&!dialogueSameUser(m.from,u)&&dialogueSameUser(m.to,u)&&!dialogueUserListIncludes(m.luPar,u));
 }
 function dialoguePlaySound(){
   try{
@@ -5519,9 +5522,9 @@ function dialogueMarkReceived(){
   if(!session||!db||!db.echanges)return;
   const u=session.username;let changed=false;
   dialogueVisibleItems().forEach(m=>{
-    if(dialogueMessageArchived(m)||m.from===u)return;
+    if(dialogueMessageArchived(m)||dialogueSameUser(m.from,u))return;
     if(!m.receivedBy)m.receivedBy=[];
-    if(!m.receivedBy.includes(u)){m.receivedBy.push(u);changed=true}
+    if(!dialogueUserListIncludes(m.receivedBy,u)){m.receivedBy.push(u);changed=true}
   });
   if(changed)saveDB();
 }
@@ -5547,9 +5550,9 @@ function dialogueFileChanged(input){
   if(n)n.textContent=f?'Pièce jointe : '+f.name:'Aucune pièce jointe';
 }
 function dialogueMessageStatus(m){
-  if(!session||!m||m.from!==session.username)return"";
-  if((m.luPar||[]).includes(m.to))return '<div class="chat-status read">✓✓ Lu</div>';
-  if((m.receivedBy||[]).includes(m.to))return '<div class="chat-status received">✓✓ Reçu</div>';
+  if(!session||!m||!dialogueSameUser(m.from,session.username))return"";
+  if(dialogueUserListIncludes(m.luPar,m.to))return '<div class="chat-status read">✓✓ Lu</div>';
+  if(dialogueUserListIncludes(m.receivedBy,m.to))return '<div class="chat-status received">✓✓ Reçu</div>';
   return '<div class="chat-status sent">✓ Envoyé</div>';
 }
 function dialogueFolder(){
@@ -5557,7 +5560,7 @@ function dialogueFolder(){
   if(v==="inbox"||v==="sent")return"all";
   return ["all","unread","archived"].includes(v)?v:"all";
 }
-function dialogueMessageArchived(m){return !!(session&&m&&Array.isArray(m.archivedBy)&&m.archivedBy.includes(session.username))}
+function dialogueMessageArchived(m){return !!(session&&m&&dialogueUserListIncludes(m.archivedBy,session.username))}
 function dialogueFolderItems(folder){
   const u=session?.username||"";
   const f=folder||dialogueFolder();
@@ -5565,16 +5568,16 @@ function dialogueFolderItems(folder){
     const archived=dialogueMessageArchived(m);
     if(f==="archived")return archived;
     if(archived)return false;
-    if(f==="unread")return m.to===u&&(!m.luPar||!m.luPar.includes(u));
-    return m.from===u||m.to===u;
+    if(f==="unread")return dialogueSameUser(m.to,u)&&!dialogueUserListIncludes(m.luPar,u);
+    return dialogueSameUser(m.from,u)||dialogueSameUser(m.to,u);
   });
 }
 function dialogueFolderCounts(){
   const u=session?.username||"";
   const all=dialogueVisibleItems();
   return {
-    all:all.filter(m=>!dialogueMessageArchived(m)&&(m.from===u||m.to===u)).length,
-    unread:all.filter(m=>!dialogueMessageArchived(m)&&m.to===u&&(!m.luPar||!m.luPar.includes(u))).length,
+    all:all.filter(m=>!dialogueMessageArchived(m)&&(dialogueSameUser(m.from,u)||dialogueSameUser(m.to,u))).length,
+    unread:all.filter(m=>!dialogueMessageArchived(m)&&dialogueSameUser(m.to,u)&&!dialogueUserListIncludes(m.luPar,u)).length,
     archived:all.filter(m=>dialogueMessageArchived(m)).length
   };
 }
@@ -5605,8 +5608,8 @@ function dialogueArchivePeer(peer,restore){
   let changed=false;
   dialogueThreadItems(peer).forEach(m=>{
     if(!m.archivedBy)m.archivedBy=[];
-    const has=m.archivedBy.includes(u);
-    if(restore&&has){m.archivedBy=m.archivedBy.filter(x=>x!==u);changed=true}
+    const has=dialogueUserListIncludes(m.archivedBy,u);
+    if(restore&&has){m.archivedBy=m.archivedBy.filter(x=>!dialogueSameUser(x,u));changed=true}
     if(!restore&&!has){m.archivedBy.push(u);changed=true}
   });
   if(changed){saveDB();toast(restore?"Conversation restaurée":"Conversation archivée","success")}
@@ -5619,20 +5622,20 @@ function dialogueSelectedRecipientChips(form){
   const values=[...form.querySelectorAll('input[name="to"]:checked')].map(i=>i.value);
   const users=db.users||[];
   box.innerHTML=values.length?values.map(v=>{
-    const u=users.find(x=>x.username===v);
+    const u=users.find(x=>dialogueSameUser(x.username,v));
     return '<span class="dialogue-recipient-chip">'+escapeHTML(u?(u.nom||u.username):v)+'</span>';
   }).join(''):'Aucun destinataire sélectionné';
 }
 function dialogueVisibleItems(){
   const all=(db.echanges||[]).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const messages=all.filter(m=>!m.workflowTaskType&&m.type==="message"&&m.to!=="all");
+  const messages=all.filter(m=>!m.workflowTaskType&&m.type==="message"&&dialogueUsernameKey(m.to)!=="all");
   const u=session?session.username:"";
-  return messages.filter(m=>m.from===u||m.to===u);
+  return messages.filter(m=>dialogueSameUser(m.from,u)||dialogueSameUser(m.to,u));
 }
 function dialoguePeerKey(m){
   if(!session||!m)return"admin";
   const u=session.username;
-  return m.from===u?(m.to||"admin"):(m.from||"admin");
+  return dialogueSameUser(m.from,u)?(m.to||"admin"):(m.from||"admin");
 }
 function dialogueSelectedPeer(){
   if(sessionStorage.getItem("dialogueCompose")==="1")return "";
@@ -5643,15 +5646,15 @@ function dialogueSelectedPeer(){
 }
 function dialogueSetPeer(peer){sessionStorage.setItem("dialogueCompose","0");sessionStorage.setItem("dialoguePeer",peer||"");dialogueMarkRead(peer);dialogueCheckNewMessages();render()}
 function dialogueConversationUsers(folder){
-  const users=(db.users||[]).filter(u=>u.username!==session?.username);
+  const users=(db.users||[]).filter(u=>!dialogueSameUser(u.username,session?.username));
   const map=new Map();
   dialogueFolderItems(folder).forEach(m=>{
     const key=dialoguePeerKey(m);
-    const user=users.find(u=>u.username===key);
+    const user=users.find(u=>dialogueSameUser(u.username,key));
     if(!map.has(key))map.set(key,{key,label:user?(user.nom||user.username):(key==="admin"?"Administrateur":key),sub:user?String(user.role||"").toUpperCase():"Conversation",unread:0,lastDate:m.date||""});
     const row=map.get(key);
     if(new Date(m.date||0)>new Date(row.lastDate||0))row.lastDate=m.date||"";
-    if(m.to===session.username&&(!m.luPar||!m.luPar.includes(session.username)))row.unread++;
+    if(dialogueSameUser(m.to,session.username)&&!dialogueUserListIncludes(m.luPar,session.username))row.unread++;
   });
   return [...map.values()].sort((a,b)=>((b.unread||0)-(a.unread||0))||(new Date(b.lastDate||0)-new Date(a.lastDate||0))||String(a.label).localeCompare(String(b.label)));
 }
@@ -5663,7 +5666,7 @@ function dialogueThreadItems(peer){
     const archived=dialogueMessageArchived(m);
     if(folder==="archived"&&!archived)return false;
     if(folder!=="archived"&&archived)return false;
-    return (m.from===u&&m.to===peer)||(m.from===peer&&m.to===u);
+    return (dialogueSameUser(m.from,u)&&dialogueSameUser(m.to,peer))||(dialogueSameUser(m.from,peer)&&dialogueSameUser(m.to,u));
   }).sort((a,b)=>new Date(a.date)-new Date(b.date));
 }
 function dialogueMarkRead(peer){
@@ -5672,23 +5675,23 @@ function dialogueMarkRead(peer){
   const target=peer||sessionStorage.getItem("dialoguePeer")||dialogueSelectedPeer();
   const items=target?dialogueThreadItems(target):dialogueVisibleItems();
   let changed=false;
-  items.forEach(m=>{if(!m.luPar)m.luPar=[];if(!m.luPar.includes(u)){m.luPar.push(u);changed=true}});
+  items.forEach(m=>{if(!m.luPar)m.luPar=[];if(!dialogueUserListIncludes(m.luPar,u)){m.luPar.push(u);changed=true}});
   if(changed)saveDB();
 }
 function dialogueUsersOptions(selected){
-  const users=(db.users||[]).filter(u=>u.username!==session.username);
-  const opts=users.map(u=>'<option value="'+escapeHTML(u.username)+'" '+(selected===u.username?'selected':'')+'>'+escapeHTML(u.nom||u.username)+' · '+escapeHTML(u.role||'')+'</option>').join('');
+  const users=(db.users||[]).filter(u=>!dialogueSameUser(u.username,session.username));
+  const opts=users.map(u=>'<option value="'+escapeHTML(u.username)+'" '+(dialogueSameUser(selected,u.username)?'selected':'')+'>'+escapeHTML(u.nom||u.username)+' · '+escapeHTML(u.role||'')+'</option>').join('');
   return '<select class="select" name="to">'+opts+'</select>';
 }
 function dialogueRecipientsHTML(selected){
-  const users=(db.users||[]).filter(u=>u.username!==session.username);
+  const users=(db.users||[]).filter(u=>!dialogueSameUser(u.username,session.username));
   if(!users.length)return '<div class="dialogue-recipients"><span class="text-xs text-slate-500">Aucun destinataire disponible</span></div><div class="dialogue-selected-recipients" data-dialogue-selected>Aucun destinataire sélectionné</div>';
   const list='<div class="dialogue-recipients" aria-label="Destinataires">'+users.map(u=>{
-    const checked=u.username===selected?' checked':'';
+    const checked=dialogueSameUser(u.username,selected)?' checked':'';
     const label=(u.nom||u.username)+(u.role?' · '+u.role:'');
     return '<label class="dialogue-recipient"><input type="checkbox" name="to" value="'+escapeHTML(u.username)+'"'+checked+' onchange="dialogueSelectedRecipientChips(this.form)"><span>'+escapeHTML(label)+'</span></label>';
   }).join('')+'</div>';
-  const selectedUsers=users.filter(u=>u.username===selected);
+  const selectedUsers=users.filter(u=>dialogueSameUser(u.username,selected));
   const chips=selectedUsers.length?selectedUsers.map(u=>'<span class="dialogue-recipient-chip">'+escapeHTML(u.nom||u.username)+'</span>').join(''):'Aucun destinataire sélectionné';
   return list+'<div class="dialogue-selected-recipients" data-dialogue-selected>'+chips+'</div>';
 }
@@ -5733,8 +5736,8 @@ function feedRowsHTML(peer){
   const items=dialogueThreadItems(selected);
   if(!items.length)return '<div class="text-center text-xs text-slate-500 mt-8">Aucun message. Lancez la conversation.</div>';
   return items.map(m=>{
-    const mine=m.from===session.username;
-    const from=(db.users||[]).find(u=>u.username===m.from);
+    const mine=dialogueSameUser(m.from,session.username);
+    const from=(db.users||[]).find(u=>dialogueSameUser(u.username,m.from));
     return '<div class="chat-bubble '+(mine?'mine':'theirs')+'">'+(m.sujet?'<div class="font-bold mb-1">'+escapeHTML(m.sujet)+'</div>':'')+'<div>'+escapeHTML(m.message||'')+'</div><div class="chat-meta">'+escapeHTML(mine?'Moi':(from?from.nom:m.from||'—'))+' · '+new Date(m.date).toLocaleString('fr-FR')+'</div>'+dialogueAttachmentHTML(m)+dialogueMessageStatus(m)+'</div>';
   }).join('');
 }
@@ -5754,22 +5757,33 @@ function refreshRealtimeFeed(){
 async function dialogueSend(form){
   const fd=new FormData(form);
   const msg=(fd.get("message")||"").toString().trim();
-  const recipients=[...new Set(fd.getAll("to").map(v=>String(v||"").trim()).filter(v=>v&&v!=="all"&&v!==session.username))];
+  const recipients=[...new Map(fd.getAll("to").map(v=>String(v||"").trim()).filter(v=>v&&dialogueUsernameKey(v)!=="all"&&!dialogueSameUser(v,session.username)).map(v=>[dialogueUsernameKey(v),v])).values()];
   if(!recipients.length){toast("Choisissez au moins un utilisateur destinataire","error");return}
   const attachmentFile=form.attachment&&form.attachment.files?form.attachment.files[0]:null;
   let attachment=null;
   try{attachment=await dialogueReadAttachment(attachmentFile)}catch(e){toast(e.message||String(e),"error");return}
   if(!msg&&!attachment){toast("Message ou pièce jointe obligatoire","error");return}
-  if(!db.echanges)db.echanges=[];
   const createdAt=new Date().toISOString();
-  recipients.forEach(to=>db.echanges.push({id:uid("ech"),date:createdAt,from:session.username,to,sujet:"",importance:"Normal",message:msg,attachments:attachment?[attachment]:[],obligation:"",droit:"",conduite:"",receivedBy:[],luPar:[session.username],type:"message"}));
+  const messages=recipients.map(to=>({id:uid("ech"),date:createdAt,from:String(session.username||"").trim(),to,sujet:"",importance:"Normal",message:msg,attachments:attachment?[attachment]:[],obligation:"",droit:"",conduite:"",receivedBy:[],luPar:[session.username],type:"message"}));
+  const sendButton=form.querySelector('button.dialogue-send');
+  if(sendButton)sendButton.disabled=true;
+  let results;
+  try{
+    results=await Promise.allSettled(messages.map(item=>sgdiApi("/irongs/collections/echanges/items",{method:"POST",body:{data:item},legacy:false})));
+  }finally{
+    if(sendButton)sendButton.disabled=false;
+  }
+  const saved=results.flatMap((result,index)=>result.status==="fulfilled"?[result.value||messages[index]]:[]);
+  if(!db.echanges)db.echanges=[];
+  db.echanges.push(...saved);
   if(db.echanges.length>800)db.echanges=db.echanges.slice(-800);
-  saveDB();
+  const failures=results.length-saved.length;
+  if(failures){toast(saved.length?`${saved.length} message(s) enregistré(s), ${failures} envoi(s) échoué(s)`:"Message non enregistré sur le serveur","error");if(!saved.length)return}
   sessionStorage.setItem("dialogueOpen","1");
   sessionStorage.setItem("dialogueCompose","0");
   sessionStorage.setItem("dialoguePeer",recipients[0]);
   form.reset();
-  toast(recipients.length>1?"Message envoyé à "+recipients.length+" utilisateurs":"Message envoyé","success");
+  if(!failures)toast(saved.length>1?"Message envoyé à "+saved.length+" utilisateurs":"Message envoyé","success");
   render();
   setTimeout(()=>{const b=document.getElementById("dialogue-body");if(b)b.scrollTop=b.scrollHeight},50);
 }
@@ -5779,9 +5793,9 @@ function addFeedFormHTML(){return dialogueComposerHTML(dialogueSelectedPeer())}
 function openFeedDetail(id){
   const m=(db.echanges||[]).find(x=>x.id===id);
   if(!m){toast("Evénement introuvable","error");return}
-  const from=(db.users||[]).find(u=>u.username===m.from);
-  const to=(db.users||[]).find(u=>u.username===m.to);
-  const toLabel=m.to==="all"?"Fil général":(to?to.nom:m.to||"Administrateur");
+  const from=(db.users||[]).find(u=>dialogueSameUser(u.username,m.from));
+  const to=(db.users||[]).find(u=>dialogueSameUser(u.username,m.to));
+  const toLabel=dialogueUsernameKey(m.to)==="all"?"Fil général":(to?to.nom:m.to||"Administrateur");
   openModal(`<h3 class="font-bold text-lg mb-3">Détail du fil d'actualité</h3>
     <div class="space-y-3 text-sm">
       <div class="grid grid-2">
