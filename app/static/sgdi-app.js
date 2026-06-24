@@ -17466,7 +17466,12 @@ function renderMateriel(view,sub,arg){
   if(!db.fournisseurs)db.fournisseurs=[];
   matNormalizeRelations();
   // Simple module routes (new architecture)
-  if(!sub||sub==="dashboard"){renderMatSimpleDashboard(view);setTimeout(sgdiCheckSortantDotationAlert,0);return}
+  if(!sub||sub==="dashboard"){
+    if(sgdiAuthToken())renderMatSimpleDashboardServer(view);
+    else renderMatSimpleDashboard(view);
+    setTimeout(sgdiCheckSortantDotationAlert,0);
+    return;
+  }
   if(sub==="fiches"){try{sessionStorage.setItem("ficheContext","materiel")}catch(e){}return renderFiches(view,"toutes")}
   if(sub==="fiche"&&arg){try{sessionStorage.setItem("ficheContext","materiel")}catch(e){}return renderAgentForm(view,arg)}
   if(sub==="inventaire"){return renderMatSimpleInventaire(view)}
@@ -17545,7 +17550,7 @@ function matSimpleSocFilter(){
   return (session?.transverse?currentStructureSocieteFilter():mySoc())||mySoc()||sessionStorage.getItem("mtSociete")||"";
 }
 function matSimpleSetSoc(v){if(mySoc()){toast("Vous êtes sur "+mySoc()+". Utilisez Changer de société.","error");return}sessionStorage.setItem("mtSociete",v||"");render()}
-function matSimpleBySoc(arr){const s=matSimpleSocFilter();return s?arr.filter(x=>x.societe===s||!x.societe):arr.slice()}
+function matSimpleBySoc(arr){const s=matSimpleSocFilter();return s?arr.filter(x=>!x.societe||normalizeSocieteName(x.societe)===normalizeSocieteName(s)):arr.slice()}
 function agentRefMatches(value,a){
   if(!a||value===undefined||value===null||value==="")return false;
   const v=String(value);
@@ -17887,6 +17892,28 @@ function renderMatSimpleDashboard(view){
     ${arts.filter(a=>{const q=stockGetActuel?stockGetActuel(a.id):0;const s=parseFloat(a.seuilAlerte)||0;return q>0&&s&&q<=s}).slice(0,8).map(a=>{const q=stockGetActuel(a.id);return`<div class="flex justify-between py-1 border-b text-sm"><a href="#/materiel/article/${a.id}" style="color:#b45309;font-weight:600">${escapeHTML(a.designation||a.code)}</a><span style="color:#b45309;font-size:11px">${qty(q)} / ${qty(a.seuilAlerte)}</span></div>`}).join("")}
   </div>`:"";
   view.innerHTML=`${header}<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:16px"><div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.08em">Matériel & équipement</div><div style="font-size:20px;font-weight:900;color:#0f172a">TABLEAU DE BORD ${alertsBadge}</div></div></div>${kpi}${actions}${magasinsSection}${alertsList}`;
+}
+
+async function renderMatSimpleDashboardServer(view){
+  renderMatSimpleDashboard(view);
+  if(window.__sgdiMatDashboardRefreshing)return;
+  window.__sgdiMatDashboardRefreshing=true;
+  try{
+    const [stores,articles,movements]=await Promise.all([
+      SGDI.stock.stores(),
+      SGDI.stock.articles(),
+      SGDI.stock.movements()
+    ]);
+    db.magasins=(stores||[]).map(storeFromApi);
+    db.stockArticles=(articles||[]).map(articleFromApi);
+    db.stockMouvements=(movements||[]).map(movementFromApi);
+    if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements();
+    if(String(location.hash||"")==="#/materiel"||String(location.hash||"").startsWith("#/materiel/dashboard"))renderMatSimpleDashboard(view);
+  }catch(e){
+    console.warn("Tableau de bord matériel serveur indisponible",e);
+  }finally{
+    window.__sgdiMatDashboardRefreshing=false;
+  }
 }
 
 async function renderMatSitesEnAttenteDotation(view){
