@@ -5654,6 +5654,72 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 #sgdi-edit-fab.unlocked{background:#16a34a;box-shadow:0 4px 16px rgba(22,163,74,.35)}
 #sgdi-edit-fab.unlocked:hover{background:#15803d}
 
+/* Fiches de position : sélecteur mosaïque/liste isolé des styles globaux */
+#view .fp-filter-footer .fp-display-controls{
+  flex:0 0 auto;
+  flex-wrap:nowrap;
+}
+#view .fp-filter-footer .fp-layout-switch{
+  width:76px!important;
+  min-width:76px!important;
+  max-width:76px!important;
+  height:36px!important;
+  padding:3px!important;
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:3px!important;
+  flex:0 0 76px!important;
+  border:1px solid #d7e0ea!important;
+  border-radius:10px!important;
+  background:#fff!important;
+}
+#view .fp-filter-footer .fp-layout-switch button{
+  width:32px!important;
+  min-width:32px!important;
+  max-width:32px!important;
+  height:28px!important;
+  min-height:28px!important;
+  margin:0!important;
+  padding:0!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:none!important;
+  border:0!important;
+  border-radius:7px!important;
+  background:transparent!important;
+  color:#718096!important;
+  box-shadow:none!important;
+}
+#view .fp-filter-footer .fp-layout-switch button.active{
+  background:#e7f0f9!important;
+  color:#073d77!important;
+}
+#view .fp-filter-footer .fp-layout-switch button:hover{
+  background:#f0f4f8!important;
+  color:#073d77!important;
+}
+#view .fp-filter-footer .fp-layout-switch svg{
+  width:17px!important;
+  height:17px!important;
+  overflow:visible;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.6;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+#view .fp-filter-footer .fp-layout-switch svg rect{
+  fill:currentColor;
+  stroke:none;
+}
+#view .fp-filter-footer .fp-reset-btn{
+  width:auto!important;
+  min-width:118px!important;
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+}
+
 /* ── Nav-guard dialog ───────────────────────────────────── */
 #sgdi-nav-guard{
   position:fixed;inset:0;z-index:9995;display:flex;

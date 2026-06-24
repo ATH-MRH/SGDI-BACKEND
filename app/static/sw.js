@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260624-visible-commercial-billing-tabs";
+const SGDI_CACHE = "sgdi-pwa-v20260624-fp-layout-controls";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
