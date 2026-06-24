@@ -589,6 +589,21 @@ let sgdiEventsSource=null;
 let sgdiSseRetryDelay=5000;
 let sgdiEventsLastPull=0;
 let sgdiLastUserNavigationAt=0;
+let sgdiAppVersion=null;
+async function sgdiCheckAppVersion(){
+  try{
+    const r=await fetch("/api/version",{cache:"no-store"});
+    if(!r.ok)return;
+    const data=await r.json();
+    const v=data&&data.version;
+    if(!v)return;
+    if(!sgdiAppVersion){sgdiAppVersion=v;return;}
+    if(sgdiAppVersion!==v){
+      const b=document.getElementById("update-banner");
+      if(b)b.style.display="block";
+    }
+  }catch(_){}
+}
 function sgdiMarkUserNavigation(){sgdiLastUserNavigationAt=Date.now()}
 function sgdiAutoRefreshSettings(){
   if(!db)db={settings:{}};
@@ -688,6 +703,7 @@ function sgdiScheduleAutoRefresh(){
   sgdiStartAutoSave();
   const cfg=sgdiAutoRefreshSettings();
   if(!cfg.enabled)return;
+  sgdiCheckAppVersion();
   sgdiAutoRefreshTimer=setInterval(async()=>{
     if(sgdiAutoRefreshRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||sgdiDirty)return;
     if(document.hidden)return;
@@ -697,6 +713,7 @@ function sgdiScheduleAutoRefresh(){
       const navStamp=sgdiLastUserNavigationAt;
       await sgdiPullState({silent:true,render:false,auto:true});
       await sgdiRefreshCountersNow({reason:"auto"});
+      await sgdiCheckAppVersion();
       if(sgdiLastUserNavigationAt!==navStamp)return;
       if(location.hash!==currentHash)location.hash=currentHash;
     }catch(e){
@@ -28353,6 +28370,9 @@ async function adminDeleteUser(username){
   db.users=db.users.filter(x=>String(x.username||"").toLowerCase()!==username.toLowerCase());
   try{const cache=userPermissionCache();delete cache[username];Object.keys(cache).forEach(k=>{if(k.toLowerCase()===username.toLowerCase())delete cache[k]})}catch(e){}
   logActivity("Suppression utilisateur",username);
+  try{await sgdiLoadAuthState()}catch(e){}
+  const stillThere=(db.users||[]).some(x=>String(x.username||"").toLowerCase()===username.toLowerCase());
+  if(stillThere){toast("Suppression échouée : l'utilisateur est toujours présent en base de données","error");render();return;}
   saveDB();
   toast(pgDeleted?"Utilisateur supprimé":"Utilisateur supprimé localement, déjà absent de PostgreSQL","success");
   render();

@@ -64,6 +64,15 @@ def serve_sgdi_app_css():
 def serve_index_html_static():
     return FileResponse(STATIC_DIR / "index.html", headers=_NO_CACHE)
 
+@app.get("/api/version", include_in_schema=False)
+def app_version():
+    js_file = STATIC_DIR / "sgdi-app.js"
+    try:
+        h = hashlib.md5(js_file.read_bytes()).hexdigest()[:12]
+    except Exception:
+        h = "unknown"
+    return {"version": h}
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
 
