@@ -5335,11 +5335,6 @@ function sgdiEnterViewMode(silent){
 }
 function sgdiExitViewMode(){
   const view=document.getElementById("view");
-  const hasBusinessLock=view&&Array.from(view.querySelectorAll(".pill-gray,.pill-blue,.section-banner")).some(el=>/lecture seule|verrouill/i.test(el.textContent||""));
-  if(hasBusinessLock){
-    toast("Cette fiche est verrouillée. Pour la modifier, allez dans Administration système ou contactez un administrateur.","error");
-    return;
-  }
   sgdiViewModeActive=false;
   document.body.classList.remove("sgdi-view-mode");
   if(view){
