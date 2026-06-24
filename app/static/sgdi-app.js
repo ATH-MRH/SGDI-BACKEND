@@ -12631,8 +12631,9 @@ function applyAgentExcelRow(agentId,rows){
 async function saveAgent(id,options){
   const opt=options||{};
   const a=db.agents.find(x=>x.id===id);if(!a)return;
-  if(!isAdminFichePositionContext()&&!isDrhFicheContext()&&!opt.forceOfficialSave){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
-  if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()){toast("Fiche officielle verrouillée : modification impossible","error");return false}
+  const formUnlocked=!sgdiViewModeActive;
+  if(!isAdminFichePositionContext()&&!isDrhFicheContext()&&!opt.forceOfficialSave&&!formUnlocked){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
+  if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()&&!formUnlocked){toast("Fiche officielle verrouillée : modification impossible","error");return false}
   const f=document.getElementById("agent-form");const fd=new FormData(f);
   const draft={...a,habilitations:{...(a.habilitations||{})}};
   ["nom","prenom","dateNaissance","lieuNaissance","sexe","situation","nomPere","nomMere","nin","nationalite","civilite","numeroPasseport","noteUrgence","nombreEnfants","genreFamille","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
@@ -12791,7 +12792,7 @@ async function deleteSelectedEffectifEmployees(){
   renderView();
 }
 function openReaffectation(agentId){
-  if(!isAdminFichePositionContext()){toast("Affectation verrouillée : modification réservée à Administration système > Fiche de position","error");return}
+  if(!isAdminFichePositionContext()&&sgdiViewModeActive){toast("Affectation verrouillée : modification réservée à Administration système > Fiche de position","error");return}
   if(!isOpsFicheContext()&&!isAdminFichePositionContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const current=agentLiveAffectation(a);
@@ -13258,7 +13259,7 @@ async function unlockAgent(agentId){if(!isAdmin()){toast("Seul l'administrateur 
 async function drhModifierFichePosition(agentId){
   if(!isAdminFichePositionContext()){toast("Modification réservée à Administration système > Fiche de position","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
-  if(a.locked&&!isAdmin()){toast("Fiche verrouillée : modification réservée à ADM","error");return}
+  if(a.locked&&!isAdmin()&&sgdiViewModeActive){toast("Fiche verrouillée : modification réservée à ADM","error");return}
   if(a.locked){
     unlockedAgents.add(agentId);
     saveUnlocked();
@@ -14003,7 +14004,7 @@ async function saveSitePositionOnly(siteId,lat,lng){
   const lookup=decodeURIComponent(String(siteId||""));
   const site=(db.sites||[]).find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);
   if(!site){toast("Enregistrez d'abord la fiche site avant d'enregistrer sa position","error");return false}
-  if(!siteCanEditFromCurrentModule(site)){toast("Fiche site verrouillée : modification réservée à Administration système","error");return false}
+  if(!siteCanEditFromCurrentModule(site)&&sgdiViewModeActive){toast("Fiche site verrouillée : modification réservée à Administration système","error");return false}
   const a=parseFloat(lat),b=parseFloat(lng);
   if(!Number.isFinite(a)||!Number.isFinite(b)){toast("Coordonnées GPS invalides","error");return false}
   const lockState={
@@ -15505,7 +15506,7 @@ async function saveSite(id){
   const scopeSociete=siteSafeSociete({societe:currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||session?.societe||""})||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||session?.societe||"";
   const lookup=decodeURIComponent(String(id||""));
   let s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);
-  if(s&&!siteCanEditFromCurrentModule(s)){
+  if(s&&!siteCanEditFromCurrentModule(s)&&sgdiViewModeActive){
     toast("Fiche site verrouillée : modification réservée à Administration système","error");
     return;
   }
