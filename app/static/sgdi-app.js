@@ -4574,7 +4574,7 @@ function render(){
     ${dialogueBoxHTML()}
   </div>`;
   renderSidebar();
-  sgdiEnterViewMode();
+  sgdiEnterViewMode(true);
   renderView();
   renderOverlayHost();
   sgdiSyncOverlayState();
@@ -5312,7 +5312,18 @@ function pageTabSetLabel(label){
 }
 // ─────────────────────────────────────────────────────────────────────────────
 /* ── View-mode / Edit-mode ───────────────────────────────── */
-function sgdiEnterViewMode(){
+function _sgdiCurrentPageLabel(){
+  const view=document.getElementById("view");
+  const h1=view&&view.querySelector("h1,h2");
+  const title=h1?h1.textContent.trim().slice(0,80):"";
+  const hash=(location.hash||"").replace(/^#\/?/,"").split("/").slice(0,2).join("/");
+  return title||(hash||"page inconnue");
+}
+function sgdiEnterViewMode(silent){
+  if(!sgdiViewModeActive&&!silent&&session){
+    const page=_sgdiCurrentPageLabel();
+    if(typeof logActivity==="function")logActivity("Verrouillage formulaire",page);
+  }
   sgdiViewModeActive=true;
   document.body.classList.add("sgdi-view-mode");
   _sgdiUpdateEditFab();
@@ -5327,6 +5338,10 @@ function sgdiExitViewMode(){
   sgdiViewModeActive=false;
   document.body.classList.remove("sgdi-view-mode");
   _sgdiUpdateEditFab();
+  if(session&&typeof logActivity==="function"){
+    const page=_sgdiCurrentPageLabel();
+    logActivity("Déverrouillage formulaire",page);
+  }
 }
 function _sgdiUpdateEditFab(){
   const fab=document.getElementById("sgdi-edit-fab");
@@ -5380,7 +5395,7 @@ function _sgdiNavGuardDiscard(){
   if(el)el.remove();
   _sgdiNavGuardPendingRoute=null;
   sgdiFormHasUnsavedChanges=false;
-  sgdiEnterViewMode();
+  sgdiEnterViewMode(true);
   _sgdiDoNavigate(r);
 }
 async function _sgdiNavGuardSave(){
@@ -5393,7 +5408,7 @@ async function _sgdiNavGuardSave(){
   if(saveBtn&&!saveBtn.disabled){saveBtn.click();await new Promise(res=>setTimeout(res,600));}
   else if(typeof saveDB==="function"){saveDB();await new Promise(res=>setTimeout(res,400));}
   sgdiFormHasUnsavedChanges=false;
-  sgdiEnterViewMode();
+  sgdiEnterViewMode(true);
   _sgdiDoNavigate(r);
 }
 function _sgdiDoNavigate(r){
@@ -5418,7 +5433,7 @@ document.addEventListener("change",e=>{
 function navigate(r){
   if(sgdiFormHasUnsavedChanges&&!sgdiViewModeActive){_sgdiNavGuardShow(r);return}
   sgdiFormHasUnsavedChanges=false;
-  sgdiEnterViewMode();
+  sgdiEnterViewMode(true);
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
   try{
     sgdiMarkUserNavigation();
@@ -6274,7 +6289,7 @@ function renderView(){
     setTimeout(()=>{applyLanguagePreference(view);sgdiScrubInvalidCandidateFunctionArtifacts(view)},0);
   });
 }
-window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;sgdiEnterViewMode();render()});
+window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;sgdiEnterViewMode(true);render()});
 window.addEventListener("popstate",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;
