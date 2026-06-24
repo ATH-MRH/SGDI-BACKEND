@@ -5472,3 +5472,46 @@ button.btn,a.btn{
   border-radius:0;flex-shrink:0;transition:color .15s;
 }
 .ptab-add:hover{color:#043970;background:#e2e8f0}
+
+/* ── View-mode lock ─────────────────────────────────────── */
+body.sgdi-view-mode #view input:not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([data-no-lock]):not([readonly]),
+body.sgdi-view-mode #view select:not([data-no-lock]),
+body.sgdi-view-mode #view textarea:not([data-no-lock]){
+  pointer-events:none!important;
+  background:#f8fafc!important;
+  border-color:#e2e8f0!important;
+  color:#374151!important;
+  cursor:default!important;
+  box-shadow:none!important;
+  user-select:none!important;
+}
+
+/* ── Edit FAB ───────────────────────────────────────────── */
+#sgdi-edit-fab{
+  position:fixed;bottom:80px;right:20px;z-index:300;
+  background:#043970;color:#fff;border:none;border-radius:999px;
+  padding:0 18px 0 13px;height:42px;font-size:13px;font-weight:700;
+  cursor:pointer;box-shadow:0 4px 16px rgba(4,57,112,.38);
+  display:none;align-items:center;gap:8px;transition:background .15s,transform .1s;
+  white-space:nowrap;
+}
+#sgdi-edit-fab.visible{display:flex}
+#sgdi-edit-fab:hover{background:#062d5a;transform:translateY(-1px)}
+#sgdi-edit-fab.unlocked{background:#16a34a;box-shadow:0 4px 16px rgba(22,163,74,.35)}
+#sgdi-edit-fab.unlocked:hover{background:#15803d}
+
+/* ── Nav-guard dialog ───────────────────────────────────── */
+#sgdi-nav-guard{
+  position:fixed;inset:0;z-index:9995;display:flex;
+  align-items:center;justify-content:center;
+  background:rgba(15,23,42,.45);
+}
+.sgdi-nav-guard-box{
+  background:#fff;border-radius:16px;
+  box-shadow:0 16px 48px rgba(0,0,0,.22);
+  padding:28px 32px;min-width:320px;max-width:440px;
+  display:flex;flex-direction:column;gap:18px;
+}
+.sgdi-nav-guard-title{font-size:16px;font-weight:800;color:#0f172a}
+.sgdi-nav-guard-msg{font-size:14px;color:#475569;line-height:1.5}
+.sgdi-nav-guard-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}

@@ -135,6 +135,7 @@ const UNLOCK_SESSION_KEY = "irongs_unlocked_v1";
 const ADMIN_SYSTEM_UNLOCK_KEY = "sgdi_admin_system_unlocked_v1";
 const SGDI_API_TOKEN_KEY = "sgdi_api_token_v1";
 let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:0,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null;
+let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPendingRoute=null;
 const sgdiRuntimeCandidateAliases={};
 const sgdiRuntimePendingCandidates=new Map();
 
@@ -500,6 +501,7 @@ function sgdiBackendSave(){
     window.__SGDI_BACKEND_ENABLED__=true;
     sgdiPostgresReady=true;
     sgdiDirty=false;
+    sgdiFormHasUnsavedChanges=false;
     window.__sgdiLastLocalSaveAt=Date.now();
     uiSaveState("Sauvegardé","success");
     sgdiPublishDataChange("legacy-save");
@@ -4572,9 +4574,11 @@ function render(){
     ${dialogueBoxHTML()}
   </div>`;
   renderSidebar();
+  sgdiEnterViewMode();
   renderView();
   renderOverlayHost();
   sgdiSyncOverlayState();
+  sgdiInitEditFab();
   setTimeout(()=>applyLanguagePreference(),0);
 }
 /* =============================================================
@@ -5307,7 +5311,108 @@ function pageTabSetLabel(label){
   if(t){t.label=label;pageTabsRender();}
 }
 // ─────────────────────────────────────────────────────────────────────────────
+/* ── View-mode / Edit-mode ───────────────────────────────── */
+function sgdiEnterViewMode(){
+  sgdiViewModeActive=true;
+  document.body.classList.add("sgdi-view-mode");
+  _sgdiUpdateEditFab();
+}
+function sgdiExitViewMode(){
+  sgdiViewModeActive=false;
+  document.body.classList.remove("sgdi-view-mode");
+  _sgdiUpdateEditFab();
+}
+function _sgdiUpdateEditFab(){
+  const fab=document.getElementById("sgdi-edit-fab");
+  if(!fab)return;
+  if(!session){fab.classList.remove("visible");return}
+  fab.classList.add("visible");
+  if(sgdiViewModeActive){
+    fab.classList.remove("unlocked");
+    fab.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Modifier`;
+    fab.onclick=()=>sgdiExitViewMode();
+    fab.title="Déverrouiller le formulaire";
+  }else{
+    fab.classList.add("unlocked");
+    fab.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>Verrouiller`;
+    fab.onclick=()=>sgdiEnterViewMode();
+    fab.title="Verrouiller le formulaire";
+  }
+}
+function sgdiInitEditFab(){
+  if(document.getElementById("sgdi-edit-fab"))return;
+  const fab=document.createElement("button");
+  fab.id="sgdi-edit-fab";
+  fab.type="button";
+  document.body.appendChild(fab);
+  _sgdiUpdateEditFab();
+}
+function _sgdiNavGuardShow(pendingRoute){
+  if(document.getElementById("sgdi-nav-guard"))return;
+  _sgdiNavGuardPendingRoute=pendingRoute;
+  const el=document.createElement("div");
+  el.id="sgdi-nav-guard";
+  el.innerHTML=`<div class="sgdi-nav-guard-box">
+    <div class="sgdi-nav-guard-title">Modifications non enregistrées</div>
+    <div class="sgdi-nav-guard-msg">Vous avez des modifications en cours. Voulez-vous les enregistrer avant de quitter cette page ?</div>
+    <div class="sgdi-nav-guard-actions">
+      <button class="btn btn-ghost" onclick="_sgdiNavGuardCancel()">Rester</button>
+      <button class="btn btn-ghost text-red-600" onclick="_sgdiNavGuardDiscard()">Ignorer</button>
+      <button class="btn btn-primary" onclick="_sgdiNavGuardSave()">Enregistrer et quitter</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+}
+function _sgdiNavGuardCancel(){
+  const el=document.getElementById("sgdi-nav-guard");
+  if(el)el.remove();
+  _sgdiNavGuardPendingRoute=null;
+}
+function _sgdiNavGuardDiscard(){
+  const r=_sgdiNavGuardPendingRoute;
+  const el=document.getElementById("sgdi-nav-guard");
+  if(el)el.remove();
+  _sgdiNavGuardPendingRoute=null;
+  sgdiFormHasUnsavedChanges=false;
+  sgdiEnterViewMode();
+  _sgdiDoNavigate(r);
+}
+async function _sgdiNavGuardSave(){
+  const r=_sgdiNavGuardPendingRoute;
+  const el=document.getElementById("sgdi-nav-guard");
+  if(el)el.remove();
+  _sgdiNavGuardPendingRoute=null;
+  const view=document.getElementById("view");
+  const saveBtn=view&&(Array.from(view.querySelectorAll("button,input[type='submit']")).find(b=>/enregistr/i.test(b.textContent||b.value||"")));
+  if(saveBtn&&!saveBtn.disabled){saveBtn.click();await new Promise(res=>setTimeout(res,600));}
+  else if(typeof saveDB==="function"){saveDB();await new Promise(res=>setTimeout(res,400));}
+  sgdiFormHasUnsavedChanges=false;
+  sgdiEnterViewMode();
+  _sgdiDoNavigate(r);
+}
+function _sgdiDoNavigate(r){
+  if(!r)return;
+  const target="#/"+String(r||"").replace(/^#?\/?/,"");
+  if(document.getElementById("view")&&document.getElementById("sidebar-nav")){
+    history.pushState(null,"",target);
+    sgdiResetViewScroll=true;
+    syncSidebarActiveState&&syncSidebarActiveState();
+    refreshModuleCountersRibbon&&refreshModuleCountersRibbon();
+    renderView();
+  }else{location.hash=target;}
+}
+document.addEventListener("input",e=>{
+  if(!sgdiViewModeActive&&session&&e.target.closest("#view"))sgdiFormHasUnsavedChanges=true;
+},{passive:true});
+document.addEventListener("change",e=>{
+  if(!sgdiViewModeActive&&session&&e.target.closest("#view"))sgdiFormHasUnsavedChanges=true;
+},{passive:true});
+/* ─────────────────────────────────────────────────────────── */
+
 function navigate(r){
+  if(sgdiFormHasUnsavedChanges&&!sgdiViewModeActive){_sgdiNavGuardShow(r);return}
+  sgdiFormHasUnsavedChanges=false;
+  sgdiEnterViewMode();
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
   try{
     sgdiMarkUserNavigation();
@@ -6163,7 +6268,7 @@ function renderView(){
     setTimeout(()=>{applyLanguagePreference(view);sgdiScrubInvalidCandidateFunctionArtifacts(view)},0);
   });
 }
-window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
+window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;sgdiEnterViewMode();render()});
 window.addEventListener("popstate",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;
