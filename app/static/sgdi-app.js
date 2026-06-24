@@ -2370,9 +2370,9 @@ function sgdiForceActiveEmployeeNode(card){
     codeEl.style.setProperty("font-weight","950","important");
   }
   statusEl.textContent="ACTIF";
-  statusEl.style.setProperty("background","#ecfdf5","important");
-  statusEl.style.setProperty("color","#047857","important");
-  statusEl.style.setProperty("border-color","#86efac","important");
+  statusEl.style.setProperty("background","#16a34a","important");
+  statusEl.style.setProperty("color","#ffffff","important");
+  statusEl.style.setProperty("border-color","#16a34a","important");
   statusEl.style.setProperty("text-transform","uppercase","important");
   statusEl.style.setProperty("font-weight","950","important");
   statusEl.style.setProperty("letter-spacing",".04em","important");
@@ -2386,9 +2386,9 @@ function sgdiApplyActiveEmployeeStyles(root){
     const code=row.querySelector("td .font-mono, .font-mono");
     if(code)code.style.setProperty("color","#047857","important");
     pill.textContent="ACTIF";
-    pill.style.setProperty("background","#ecfdf5","important");
-    pill.style.setProperty("color","#047857","important");
-    pill.style.setProperty("border-color","#86efac","important");
+    pill.style.setProperty("background","#16a34a","important");
+    pill.style.setProperty("color","#ffffff","important");
+    pill.style.setProperty("border-color","#16a34a","important");
     pill.style.setProperty("text-transform","uppercase","important");
     pill.style.setProperty("font-weight","950","important");
   });
@@ -4006,7 +4006,10 @@ function agentIsOperational(a){
 }
 function agentNeedsDotation(a){
   const cfg=effectifConfigSettings();
-  return !!cfg.operationalRequiresDotation&&employeeIsActive(a)&&!agentHasMaterialDotation(a);
+  return !!cfg.operationalRequiresDotation&&employeeNeedsMaterialDotation(a);
+}
+function employeeNeedsMaterialDotation(a){
+  return employeeIsActive(a)&&!agentHasMaterialDotation(a);
 }
 function agentNeedsAffectation(a){
   const cfg=effectifConfigSettings();
@@ -10684,9 +10687,11 @@ function rhEffectifActionStyle(action){
   return `color:${c[0]};background:${c[1]};border:1px solid ${c[2]};font-weight:900`;
 }
 function employeeStatusPillHTML(a,forceActions,actionContext){
-  const st=String(a?.statut||"").toLowerCase();
-  const label=st==="suspendu"?"SUSPENDU":String(a?.statut||"—").toUpperCase();
-  const cls=st==="actif"?"pill-green":st==="suspendu"||st==="absent"?"pill-red":"pill-gray";
+  const blacklisted=!!(a?.blacklist||a?.blacklistContractBlocked||a?.contractBlocked);
+  const st=employeeStatusKey(a?.statut||a?.status);
+  const key=blacklisted?"blacklist":st;
+  const label=key==="blacklist"?"BLACKLIST":key==="sortant"?"SORTANT":String(key||"—").toUpperCase();
+  const cls=["actif","sortant","suspendu","blacklist"].includes(key)?`employee-status-pill employee-status-${key}`:key==="absent"||key==="abandon"?"pill-red":"pill-gray";
   if((forceActions||isDrhModuleContext()||isOpsEffectifContext())&&canUseEmployeeActionWorkflows()){
     const title=isOpsEffectifContext()?"Actions OPS":"Changer le statut / action RH";
     return `<button type="button" class="pill ${cls}" style="border:0;cursor:pointer" title="${title}" onclick="openEmployeeStatusActions(event,'${escapeHTML(a.id)}','${escapeHTML(actionContext||"")}')">${escapeHTML(label)}</button>`;
@@ -11703,7 +11708,7 @@ function employeeHasContractForPreparation(a){
 function employeePreparationBlockers(a){
   const blockers=[];
   if(!employeeHasContractForPreparation(a))blockers.push({key:"contrat",label:"Contrat",route:"contrats/nouveau_contrat",action:"Créer contrat",color:"#dc2626"});
-  if(agentNeedsDotation(a))blockers.push({key:"dotation",label:"Dotation",route:"materiel/dotation",action:"Doter",color:"#0ea5e9"});
+  if(employeeNeedsMaterialDotation(a))blockers.push({key:"dotation",label:"Dotation",route:"materiel/dotation",action:"Doter",color:"#0ea5e9"});
   if(agentNeedsAffectation(a))blockers.push({key:"affectation",label:"Affectation",route:"effectif/instance_affectation",action:"Affecter",color:"#f59e0b"});
   if(!agentNeedsDotation(a)&&!agentNeedsAffectation(a)&&!agentHasInstallationPV(a))blockers.push({key:"pv",label:"PV installation",route:"agents/"+employeeRouteId(a),action:"Ouvrir fiche",color:"#7c3aed"});
   return blockers;
@@ -11718,8 +11723,10 @@ function operationalPreparationFilterKey(filter){
   return {preparation_contrat:"contrat",preparation_dotation:"dotation",preparation_affectation:"affectation",preparation_pv:"pv",pv:"pv",dotation:"dotation",affectation:"affectation",contrat:"contrat"}[filter]||"";
 }
 function localOperationalPreparationData(filter){
-  const soc=effectifSocieteFilter();
-  const all=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase()));
+  const drhScope=isDrhModuleContext();
+  const soc=drhScope&&typeof drhActiveSocieteFilter==="function"?drhActiveSocieteFilter():effectifSocieteFilter();
+  const source=drhScope&&typeof drhAgentsList==="function"?drhAgentsList():(db.agents||[]);
+  const all=source.filter(a=>(!soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc))&&!employeeIsFormer(a));
   const rows=all.map(a=>({a,blockers:employeePreparationBlockers(a)})).filter(r=>r.blockers.length);
   const filterKey=operationalPreparationFilterKey(filter);
   const visibleRows=filterKey?rows.filter(r=>r.blockers.some(b=>b.key===filterKey)):rows;
@@ -11742,10 +11749,11 @@ function operationalPreparationHTML(data,source){
   ${items.length?`<div class="card overflow-hidden"><table><thead><tr><th>Employé</th><th>Société</th><th>Poste</th><th>Site</th><th>Blocage</th></tr></thead><tbody>${items.map(row=>{const blockers=row.blockers||[];return `<tr data-searchable><td><div class="font-bold">${escapeHTML(row.name||"—")}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(row.code||"—")}</div></td><td class="text-xs">${escapeHTML(row.society||"—")}</td><td class="text-xs">${escapeHTML(row.position||"—")}</td><td class="text-xs">${escapeHTML(row.site||"Sans affectation")}</td><td>${blockers.map(b=>`<span class="pill" style="background:${operationalPreparationColor(b.key)}18;color:${operationalPreparationColor(b.key)};font-weight:900;margin:2px">${escapeHTML(b.label)}</span>`).join(" ")}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="card p-10 text-center text-slate-500">Tous les employés de ce périmètre sont prêts ou déjà opérationnels.</div>`}`;
 }
 function renderOperationalPreparation(view,filter){
-  const soc=effectifSocieteFilter();
-  sgdiShowDataLoadingBar();
+  const localData=localOperationalPreparationData(filter);
+  const soc=localData.society||"";
   const fallback=()=>{view.innerHTML=operationalPreparationHTML(localOperationalPreparationData(filter),"local")};
-  if(!window.SGDI_API?.erp?.operationalPreparation){fallback();return}
+  fallback();
+  if(!window.SGDI_API?.erp?.operationalPreparation)return;
   window.SGDI_API.erp.operationalPreparation(soc?{society:soc}:{}).then(()=>{view.innerHTML=operationalPreparationHTML(localOperationalPreparationData(filter),"PostgreSQL")}).catch(e=>{console.warn("Préparation opérationnelle PostgreSQL indisponible",e);fallback();toast("Lecture ERP PostgreSQL indisponible : "+(e.message||e),"warn")});
 }
 
@@ -14255,13 +14263,14 @@ function employeeDisplayStatus(a){
   const congeActif=(db.conges||[]).find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
   const abandon=typeof ficheAgentInAbandon==="function"&&ficheAgentInAbandon(a);
   const base=employeeStatusKey(a.statut||a.status);
-  if(base==="suspendu")return{key:"suspendu",label:"SUSPENDU",pill:"pill-red",icon:"⏸"};
+  if(a.blacklist||a.blacklistContractBlocked||a.contractBlocked)return{key:"blacklist",label:"BLACKLIST",pill:"employee-status-pill employee-status-blacklist",icon:""};
+  if(base==="suspendu")return{key:"suspendu",label:"SUSPENDU",pill:"employee-status-pill employee-status-suspendu",icon:""};
   if(base==="absent")return{key:"absent",label:"ABSENT",pill:"pill-red",icon:"❌"};
   if(abandon||base==="abandon")return{key:"abandon",label:"ABANDON",pill:"pill-red",icon:"🚫"};
   if(congeActif&&congeActif.type==="Maladie")return{key:"maladie",label:"MALADIE",pill:"pill-amber",icon:"🤒"};
   if(congeActif||base==="congé")return{key:"congé",label:"CONGÉ",pill:"pill-blue",icon:"🏖"};
-  if((typeof ficheAgentIsSortantArchive==="function"&&ficheAgentIsSortantArchive(a))||base==="sortant")return{key:"sortant",label:"SORTANT",pill:"pill-gray",icon:"🗄"};
-  if(base==="actif"||!base)return{key:"actif",label:"ACTIF",pill:"pill-green",icon:""};
+  if((typeof ficheAgentIsSortantArchive==="function"&&ficheAgentIsSortantArchive(a))||base==="sortant")return{key:"sortant",label:"SORTANT",pill:"employee-status-pill employee-status-sortant",icon:""};
+  if(base==="actif"||!base)return{key:"actif",label:"ACTIF",pill:"employee-status-pill employee-status-actif",icon:""};
   return{key:base,label:String(base||"—").toUpperCase(),pill:"pill-gray",icon:"•"};
 }
 function siteDotationHTML(site){
@@ -16733,7 +16742,7 @@ function fichePositionCard(a){
   const ficheClick=isMaterielFicheContext()?"setFicheContext('materiel')":"";
   const isActive=status.key==="actif";
   const codeStyle=isActive?"color:#047857!important":"color:#d97706";
-  const statusStyle=isActive?"background:#ecfdf5!important;color:#047857!important;border-color:#86efac!important;text-transform:uppercase!important;font-weight:950!important;letter-spacing:.04em!important":"font-size:10px!important;text-transform:uppercase;font-weight:900!important";
+  const statusStyle="font-size:10px!important;text-transform:uppercase;font-weight:950!important;letter-spacing:.04em!important";
   const statusText=isActive?"ACTIF":`${status.icon?status.icon+" ":""}${status.label}`;
   const lamps=fpAgentLampStatus(a);
   const lp=(cls,on,blink,ttl)=>`<span class="fp-status-lamp ${cls}${!on?" fp-lamp-off":""}${blink?" fp-lamp-blink":""}" title="${ttl}"></span>`;
@@ -17532,6 +17541,7 @@ function matNormalizeRelations(){
   }catch(err){console.warn("matNormalizeRelations",err)}
 }
 function matSimpleSocFilter(){
+  if(isDrhModuleContext()&&typeof drhActiveSocieteFilter==="function")return drhActiveSocieteFilter();
   return (session?.transverse?currentStructureSocieteFilter():mySoc())||mySoc()||sessionStorage.getItem("mtSociete")||"";
 }
 function matSimpleSetSoc(v){if(mySoc()){toast("Vous êtes sur "+mySoc()+". Utilisez Changer de société.","error");return}sessionStorage.setItem("mtSociete",v||"");render()}
@@ -17583,12 +17593,16 @@ function matAgentMatchesSoc(a,soc){
   if(!soc)return true;
   return !!a?.societe&&normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
 }
+function matDotationScopedActiveAgents(soc){
+  const source=isDrhModuleContext()&&typeof drhAgentsList==="function"?drhAgentsList():(db.agents||[]);
+  return source.filter(a=>matAgentIsActive(a)&&matAgentMatchesSoc(a,soc));
+}
 function agentDotationCount(agentId){
   const a=findEmployeeByRef(agentId);
   return (db.stockMouvements||[]).filter(m=>typeof stockMvtIsOut==="function"&&stockMvtIsOut(m.type)&&stockMovementBelongsToAgent(m,a||agentId)).length;
 }
 function agentsEnInstanceDotationForSoc(soc){
-  return (db.agents||[]).filter(a=>matAgentIsActive(a)&&matAgentMatchesSoc(a,soc)&&!agentHasMaterialDotation(a));
+  return matDotationScopedActiveAgents(soc).filter(a=>!agentHasMaterialDotation(a));
 }
 function agentsEnInstanceDotation(){
   return agentsEnInstanceDotationForSoc(matSimpleSocFilter());
@@ -17606,7 +17620,7 @@ function dotationSearchAgent(query){
   const q=norm(query);
   const filter=document.getElementById("dotf-dotes")?.checked?"dotes":document.getElementById("dotf-tout")?.checked?"tout":"nondotes";
   const soc=matSimpleSocFilter();
-  const active=(db.agents||[]).filter(a=>matAgentIsActive(a)&&matAgentMatchesSoc(a,soc));
+  const active=matDotationScopedActiveAgents(soc);
   let filtered;
   if(filter==="dotes")filtered=active.filter(agentHasMaterialDotation);
   else if(filter==="nondotes")filtered=active.filter(a=>!agentHasMaterialDotation(a));
@@ -18319,7 +18333,7 @@ async function confirmerDotationInitiale(kitSize){
 }
 function openBulkDotationModal(nonDotesOnly){
   const soc=matSimpleSocFilter();
-  const allAgents=nonDotesOnly?agentsEnInstanceDotationForSoc(soc):(db.agents||[]).filter(a=>matAgentIsActive(a)&&matAgentMatchesSoc(a,soc));
+  const allAgents=nonDotesOnly?agentsEnInstanceDotationForSoc(soc):matDotationScopedActiveAgents(soc);
   const articles=matSimpleBySoc(db.stockArticles||[]).filter(a=>a.actif!==false&&a.actif!==0);
   const artOptions=articles.map(a=>`<option value="${escapeHTML(String(a.id))}">${escapeHTML(a.designation||a.code||"Article")} · ${escapeHTML(a.categorie||"")} (stock: ${a.stockInitial??"?"})</option>`).join("");
   const kitDefault=[{label:"Tenue bleu chemise",qty:2},{label:"Tenue bleu pantalon",qty:2},{label:"Rangers",qty:1},{label:"Parkas",qty:1},{label:"Ceinture",qty:1}];
@@ -18330,7 +18344,7 @@ function openBulkDotationModal(nonDotesOnly){
 }
 async function executeBulkDotation(kitSize,nonDotesOnly){
   const soc=matSimpleSocFilter();
-  const allAgents=nonDotesOnly?agentsEnInstanceDotationForSoc(soc):(db.agents||[]).filter(a=>matAgentIsActive(a)&&matAgentMatchesSoc(a,soc));
+  const allAgents=nonDotesOnly?agentsEnInstanceDotationForSoc(soc):matDotationScopedActiveAgents(soc);
   const dateVal=document.getElementById("bulk-date")?.value||today();
   const motifVal=document.getElementById("bulk-motif")?.value||"Dotation initiale";
   const kit=[];
