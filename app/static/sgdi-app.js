@@ -66,9 +66,9 @@ function cleanContractType(v){
   return known||"";
 }
 const DUREES_CONTRAT = [
-  {value:"7d",label:"07 Jours"},
-  {value:"15d",label:"15 Jours"},
-  ...Array.from({length:12},(_,i)=>({value:(i+1)+"m",label:String(i+1).padStart(2,"0")+" Mois"}))
+  {value:"7d",label:"7 jours"},
+  {value:"15d",label:"15 jours"},
+  ...Array.from({length:12},(_,i)=>({value:(i+1)+"m",label:(i+1)+" mois"}))
 ];
 const PERIODES_ESSAI_CONTRAT = [
   {value:"15d",label:"15 jours"},
@@ -898,7 +898,7 @@ function normalizeEmployeeCodesInDB(options){
 function normalizeEmployeeNin(value){return String(value||"").replace(/\D/g,"").trim()}
 function validEmployeeNinOrNull(value){
   const nin=normalizeEmployeeNin(value);
-  return /^\d{10}$/.test(nin)?nin:null;
+  return /^(?:\d{10}|\d{18})$/.test(nin)?nin:null;
 }
 function findEmployeeByNinLocal(nin){
   const key=normalizeEmployeeNin(nin);
@@ -3740,12 +3740,13 @@ function structureTopbarItems(){
     {key:"drh",label:"DRH",roles:["rh","admin"]},
     {key:"ops",label:"OPS",roles:["rh","dispatch","admin"]},
     {key:"materiel",label:"MATÉRIEL",roles:["rh","dispatch","admin"]},
-    {key:"facturation",label:"FINANCES",roles:["rh","admin"]},
+    {key:"facturation",label:"FACTURATION",roles:["rh","admin"]},
     {key:"commercial",label:"COMMERCIAL",roles:["rh","admin"]},
     {key:"secretariat",label:"SECRETARIAT",roles:["rh","dispatch","admin"]}
   ];
+  if(isAdmin())return items;
   const allowed=currentAllowedStructures();
-  if(allowed.length)return items.filter(i=>allowed.includes(i.key));
+  if(allowed.length)return items.filter(i=>allowed.includes(i.key)||(["commercial","facturation"].includes(i.key)&&canAccess(i.key)));
   const role=adminAccessBaseRole(session?.role||"agent");
   return items.filter(i=>i.roles.includes(role));
 }
@@ -3753,7 +3754,7 @@ const MODULE_META={
   drh:     {icon:"👥", label:"DRH",         color:"#2563eb"},
   ops:     {icon:"📍", label:"OPS",         color:"#0891b2"},
   materiel:{icon:"🎒", label:"MATÉRIEL",    color:"#059669"},
-  facturation:{icon:"💰",label:"FINANCES",  color:"#d97706"},
+  facturation:{icon:"💰",label:"FACTURATION",color:"#d97706"},
   paie:{icon:"$",label:"PAIE",  color:"#0f766e"},
   commercial: {icon:"🤝",label:"COMMERCIAL",color:"#7c3aed"},
   secretariat:{icon:"✉️", label:"SECRÉTARIAT",color:"#475569"},
@@ -6686,6 +6687,11 @@ function viewAgentArchivedDoc(agentId,key,label){
   const d=a&&a.documents&&a.documents[key];
   if(!d||!d.url){toast(`Aucun document archivé : ${label}`,"error");return}
   viewDoc(d.url,d.name||label);
+}
+function openAgentDocumentUpload(agentId,key,label){
+  const input=document.createElement("input");input.type="file";input.accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
+  input.onchange=()=>{const file=input.files&&input.files[0];if(!file)return;if(file.size>5*1024*1024){toast("Document trop volumineux (maximum 5 Mo)","error");return}const reader=new FileReader();reader.onload=async()=>{const a=findEmployeeByRef(agentId);if(!a)return;const oldDocuments={...(a.documents||{})},oldVerifications={...(a.verifications||{})};a.documents={...oldDocuments,[key]:{url:String(reader.result||""),name:file.name,title:label,status:"reçu",uploadedAt:new Date().toISOString(),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH"}};a.verifications={...oldVerifications,["verif"+key]:true};try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){a.documents=oldDocuments;a.verifications=oldVerifications;toast("Document non enregistré : "+(e.message||e),"error");return}if(!(await saveDBAndWaitToast("Archivage du document non confirmé")))return;toast("Document ajouté au dossier","success");renderView()};reader.readAsDataURL(file)};
+  input.click();
 }
 function employeeDocumentSafeKey(prefix,reference){
   return String(prefix||"doc").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")+"_"+String(reference||Date.now()).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
@@ -11813,6 +11819,24 @@ function renderAgentDemandesSection(a){
     ${open>0?`<div style="font-size:11px;color:#64748b;padding:6px 14px 8px;border-top:1px solid #eef2f8">${open} demande(s) ouverte(s) · matricule ${escapeHTML(a.matricule||"—")}</div>`:""}
   </div>`;
 }
+const AGENT_COMPLETENESS_FIELDS=[
+  ["matricule","Matricule"],["nom","Nom"],["prenom","Prénom"],["societe","Société"],
+  ["telephone","Téléphone"],["adresse","Adresse"],["dateNaissance","Date de naissance"],["lieuNaissance","Lieu de naissance"],
+  ["nin","NIN"],["numeroCnas","N° sécurité sociale"],["commune","Commune"],["wilaya","Wilaya"],["banque","Compte bancaire"],["numeroCompte","N° de compte"],["situation","Situation familiale"],["dateRecrutement","Date de recrutement"],
+  ["typeContrat","Type de contrat"],["fonction","Poste"],["contactUrgenceNom","Contact d'urgence"],["contactUrgenceTel","Téléphone d'urgence"]
+];
+function agentCompleteness(data){
+  const missing=AGENT_COMPLETENESS_FIELDS.filter(([key])=>!String(data?.[key]??"").trim()).map(([,label])=>label);
+  return{pct:Math.round(((AGENT_COMPLETENESS_FIELDS.length-missing.length)/AGENT_COMPLETENESS_FIELDS.length)*100),missing};
+}
+function agentCompletenessHTML(a){
+  const c=agentCompleteness(a);const tone=c.pct>=85?"good":c.pct>=60?"medium":"low";
+  return`<div class="rh-completeness ${tone}" id="agent-completeness" data-agent-id="${escapeHTML(a.id||"")}"><div class="rh-completeness-ring" style="--complete:${c.pct*3.6}deg"><strong>${c.pct}%</strong></div><div class="rh-completeness-copy"><div><strong>Complétude de la fiche</strong><span>${AGENT_COMPLETENESS_FIELDS.length-c.missing.length}/${AGENT_COMPLETENESS_FIELDS.length} informations renseignées</span></div><div class="rh-completeness-track"><i style="width:${c.pct}%"></i></div><small>${c.missing.length?`À compléter : ${escapeHTML(c.missing.slice(0,3).join(", "))}${c.missing.length>3?` et ${c.missing.length-3} autre(s)`:""}`:"Toutes les informations essentielles sont renseignées."}</small></div></div>`;
+}
+function agentModificationHistoryHTML(a){
+  const rows=(a.modificationHistory||[]).slice(0,8);
+  return`<details class="rh-change-history"><summary><span><b>Historique des modifications</b><small>${rows.length?`${rows.length} dernière(s) entrée(s)`:"Aucune modification enregistrée"}</small></span><span class="rh-history-chevron">⌄</span></summary>${rows.length?`<div class="rh-history-list">${rows.map(entry=>`<div class="rh-history-row"><div class="rh-history-dot"></div><div><strong>${escapeHTML(entry.user||"Utilisateur")}</strong><span>${escapeHTML((entry.fields||[]).join(", ")||"Mise à jour de la fiche")}</span></div><time>${entry.at?new Date(entry.at).toLocaleString("fr-FR"):"—"}</time></div>`).join("")}</div>`:`<div class="rh-history-empty">Les prochaines modifications apparaîtront ici.</div>`}</details>`;
+}
 function renderAgentForm(view,id){
   const a=findEmployeeByRef(id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
   const adminFicheContext=isAdminFichePositionContext();
@@ -11868,7 +11892,6 @@ function renderAgentForm(view,id){
   </div>`:"";
   const fpTabs=[
     ["identite","Informations personnelles"],
-    ["coordonnees","Coordonnées / urgence"],
     ["habilitations","Habilitations"],
     ["contrat","RH / contrat"],
     ["conges","Congés"],
@@ -11915,6 +11938,7 @@ function renderAgentForm(view,id){
     <div class="rh-erp-chips">
       ${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}
     </div>
+    <div class="rh-insight-grid">${agentCompletenessHTML(a)}${agentModificationHistoryHTML(a)}</div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${isMaterielFicheContext()?"":renderAgentDemandesSection(a)}
     <form id="agent-form" onsubmit="event.preventDefault();saveAgent('${a.id}')">
@@ -11935,17 +11959,21 @@ function renderAgentForm(view,id){
             <legend>Informations personnelles</legend>
             <div class="rh-op-grid">
               <label><span>Adresse</span><input class="input" name="adresse" value="${escapeHTML(a.adresse||a.address||"")}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Nationalité</span><select class="select" name="nationalite" ${identiteEditable?"":"disabled"}>${["Algérie","France","Maroc","Tunisie","Autre"].map(n=>`<option value="${escapeHTML(n)}" ${(a.nationalite||"Algérie")===n?"selected":""}>${escapeHTML(n)}</option>`).join("")}</select></label>
+              <span class="rh-op-grid-spacer" aria-hidden="true"></span>
+              <label><span>Commune</span><input class="input" name="commune" value="${escapeHTML(a.commune||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>NIN <small>(identification nationale)</small></span><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" inputmode="numeric" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Wilaya</span><select class="select" name="wilaya" ${identiteEditable?"":"disabled"}><option value="">— Choisir —</option>${WILAYAS.map(w=>`<option ${a.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></label>
+              <label><span>N° SS <small>(C/Chiffa)</small></span><input class="input" name="numeroCnas" value="${escapeHTML(a.numeroCnas||"")}" inputmode="numeric" ${identiteEditable?"":"disabled"}/></label>
+              <label class="rh-phone-field"><span>Numéro de téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>N° PP/CIN</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${identiteEditable?"":"disabled"}/></label>
               <label><span>Email</span><input class="input" type="email" name="email" value="${escapeHTML(a.email||"")}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Civilité</span><select class="select" name="civilite" ${identiteEditable?"":"disabled"}>${["Monsieur","Madame"].map(c=>`<option value="${escapeHTML(c)}" ${(a.civilite||"Monsieur")===c?"selected":""}>${escapeHTML(c)}</option>`).join("")}</select></label>
-              <label><span>Téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Numéro d'identité</span><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Compte bancaire</span><select class="select" name="banque" ${identiteEditable?"":"disabled"}><option value="">—</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></label>
-              <label><span>Numéro du passeport</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Lieu de naissance</span><input class="input" name="lieuNaissance" value="${escapeHTML(a.lieuNaissance||"")}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Date de naissance</span><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Âge</span><input class="input bg-slate-50" value="${agentAge!==null?agentAge:""}" readonly/></label>
+              <label><span>Compte bancaire</span><select class="select" name="banque" ${identiteEditable?"":"disabled"}><option value="">— Choisir la banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></label>
+              <label><span>Date de naissance</span><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" oninput="updateAgentBirthAge(this)" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>N° Compte</span><input class="input" name="numeroCompte" value="${escapeHTML(a.numeroCompte||a.iban||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Âge</span><input class="input bg-slate-50 rh-agent-age" value="${agentAge!==null?agentAge:""}" readonly/></label>
               <label><span>Sexe</span><select class="select" name="sexe" ${identiteEditable?"":"disabled"}><option value="M" ${a.sexe==="M"?"selected":""}>M</option><option value="F" ${a.sexe==="F"?"selected":""}>F</option></select></label>
+              <label><span>Lieu de naissance</span><input class="input" name="lieuNaissance" value="${escapeHTML(a.lieuNaissance||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <span class="rh-op-grid-spacer" aria-hidden="true"></span>
             </div>
           </fieldset>
           <fieldset class="rh-op-box rh-op-emergency">
@@ -11959,68 +11987,117 @@ function renderAgentForm(view,id){
             <legend>Statut de la famille</legend>
             <div class="rh-op-family-head">
               <label><span>Situation familiale</span><select class="select" name="situation" ${identiteEditable?"":"disabled"}>${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${a.situation===s?"selected":""}>${s}</option>`).join("")}</select></label>
-              <label><span>Genre</span><select class="select" name="genreFamille" ${identiteEditable?"":"disabled"}>${["","Conjoint(e)","Parent","Autre"].map(g=>`<option value="${escapeHTML(g)}" ${(a.genreFamille||"")===g?"selected":""}>${g?escapeHTML(g):"—"}</option>`).join("")}</select></label>
               <label><span>Nombre d'enfant</span><input class="input" type="number" min="0" name="nombreEnfants" value="${escapeHTML(String(a.nombreEnfants??a.children_count??0))}" ${identiteEditable?"":"disabled"}/></label>
             </div>
-            <table class="rh-op-family-table"><thead><tr><th>Nom</th><th>Prénom</th><th>Date de naissance</th><th>Âge</th><th>Commentaire</th></tr></thead><tbody>
-              <tr><td colspan="5"><button type="button" class="rh-op-add-line" onclick="addFamilleRow()" ${identiteEditable?"":"disabled"}>Ajouter une ligne</button></td></tr>
-              ${(()=>{const rows=(a.famille||[]).filter(f=>f&&(f.nom||f.prenom||f.dateNaissance));const all=[...rows,...Array.from({length:Math.max(0,4-rows.length)}).map(()=>({}))];return all.map((f,i)=>`<tr data-famille-row="${i}"><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" name="famille_nom_${i}" value="${escapeHTML(f.nom||"")}" ${identiteEditable?"":"disabled"}/></td><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" name="famille_prenom_${i}" value="${escapeHTML(f.prenom||"")}" ${identiteEditable?"":"disabled"}/></td><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" type="date" name="famille_ddn_${i}" value="${f.dateNaissance||""}" ${identiteEditable?"":"disabled"}/></td><td style="text-align:center;font-size:11px">${f.dateNaissance?Math.floor(daysBetween(f.dateNaissance,today())/365):"&nbsp;"}</td><td><input class="input" style="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px" name="famille_commentaire_${i}" value="${escapeHTML(f.commentaire||"")}" ${identiteEditable?"":"disabled"}/></td></tr>`).join("")})()}
+            <table class="rh-op-family-table"><thead><tr><th>Nom</th><th>Prénom</th><th>Date de naissance</th><th>Âge</th><th>Commentaire</th><th class="rh-op-action-col">Action</th></tr></thead><tbody>
+              <tr class="rh-op-family-toolbar"><td colspan="6"><button type="button" class="rh-op-add-line" onclick="addFamilleRow()" ${identiteEditable?"":"disabled"}><span>＋</span> Ajouter un membre</button></td></tr>
+              ${(()=>{const rows=(a.famille||[]).filter(f=>f&&(f.nom||f.prenom||f.dateNaissance));const all=[...rows,...Array.from({length:Math.max(0,4-rows.length)}).map(()=>({}))];return all.map((f,i)=>`<tr data-famille-row="${i}"><td><input class="input" name="famille_nom_${i}" value="${escapeHTML(f.nom||"")}" ${identiteEditable?"":"disabled"}/></td><td><input class="input" name="famille_prenom_${i}" value="${escapeHTML(f.prenom||"")}" ${identiteEditable?"":"disabled"}/></td><td><input class="input" type="date" name="famille_ddn_${i}" value="${f.dateNaissance||""}" oninput="updateFamilleRowAge(this)" ${identiteEditable?"":"disabled"}/></td><td class="rh-op-family-age">${f.dateNaissance?Math.floor(daysBetween(f.dateNaissance,today())/365)+" ans":"—"}</td><td><input class="input" name="famille_commentaire_${i}" value="${escapeHTML(f.commentaire||"")}" ${identiteEditable?"":"disabled"}/></td><td class="rh-op-family-action"><button type="button" class="rh-op-delete-line" onclick="removeFamilleRow(this)" title="Supprimer ce membre" ${identiteEditable?"":"disabled"}>×</button></td></tr>`).join("")})()}
             </tbody></table>
           </fieldset>
         </div>
       </div>
-      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="coordonnees" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Coordonnées / urgence</legend><div class="grid grid-6" style="margin-top:10px">
-        <div class="col-span-2"><label class="label">Téléphone</label><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Email</label><input class="input" name="email" value="${escapeHTML(a.email||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(a.adresse||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(a.commune||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Wilaya</label><select class="select" name="wilaya" ${locked?"disabled":""}><option value="">—</option>${WILAYAS.map(w=>`<option ${a.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div>
-        <div class="col-span-2"><label class="label">Contact urgence</label><input class="input" name="contactUrgenceNom" value="${escapeHTML(a.contactUrgenceNom||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Lien</label><input class="input" name="contactUrgenceLien" value="${escapeHTML(a.contactUrgenceLien||"")}" ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Téléphone</label><input class="input" name="contactUrgenceTel" value="${escapeHTML(a.contactUrgenceTel||"")}" ${locked?"disabled":""}/></div>
-      </div></fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="habilitations" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Habilitations</legend><div class="grid grid-2" style="margin-top:10px">
         ${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>{const v=a.habilitations?.[k]||"non";return`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="ahab_${k}" value="oui" ${v==="oui"?"checked":""} ${locked?"disabled":""}/> Oui</label><label class="radio-pill"><input type="radio" name="ahab_${k}" value="non" ${v!=="oui"?"checked":""} ${locked?"disabled":""}/> Non</label></div></div>`}).join("")}
       </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></fieldset></div>
-      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><fieldset class="rh-panel-fieldset"><legend>RH / contrat</legend><div class="flex justify-end gap-2 flex-wrap mb-3" style="margin-top:10px">${adminFicheContext?`<button type="button" class="btn btn-primary text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">Ajouter / modifier contrat</button>`:(isDrhFicheContext()?`<button type="button" class="btn btn-primary text-xs" onclick="openDrhContractModal('${a.id}')">✏ Modifier contrat</button>`:"")}<button type="button" class="btn btn-secondary text-xs" onclick="openAvenantModal('general')">+ Créer avenant</button><button type="button" class="btn btn-primary text-xs" onclick="openContratsCreateContract()">+ Créer contrat</button></div><div class="grid grid-6">
-        <div class="col-span-3"><label class="label">Type</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(ficheContractDocumentType)}" readonly/>${locked?"":`<input type="hidden" name="typeContrat" value="${escapeHTML(cleanContractType(a.typeContrat)||"CDD")}"/>`}</div>
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><fieldset class="rh-panel-fieldset rh-contract-fieldset"><legend>RH / contrat</legend><div class="rh-contract-toolbar"><span>Gestion du contrat de l’employé</span><div class="rh-contract-actions">${adminFicheContext?`<button type="button" class="btn text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">✏ Modifier</button>`:(isDrhFicheContext()?`<button type="button" class="btn text-xs" onclick="openDrhContractModal('${a.id}')">✏ Modifier</button>`:"")}<button type="button" class="btn text-xs" onclick="openAvenantModal('general')">＋ Avenant</button><button type="button" class="btn text-xs" onclick="openContratsCreateContract()">＋ Contrat</button></div></div><div class="grid grid-6 rh-contract-grid">
+        <div class="col-span-3"><label class="label">Type de contrat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(cleanContractType(a.typeContrat)||ficheContractDocumentType||"CDD")}" readonly/>${locked?"":`<input type="hidden" name="typeContrat" value="${escapeHTML(cleanContractType(a.typeContrat)||"CDD")}"/>`}</div>
         <div class="col-span-3"><label class="label">Salaire net</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(a.salaireNet||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)" ${locked?"disabled":""}/></div>
         <div class="col-span-2"><label class="label">Date début contrat</label><input class="input" type="date" name="dateRecrutement" value="${a.dateRecrutement||""}" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
         <div class="col-span-2"><label class="label">Durée du contrat</label><select class="select" name="dureeContrat" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()">${contratDureeOptions(ficheContractDuration)}</select></div>
         <div class="col-span-2"><label class="label">Fin de contrat</label><input class="input bg-slate-50" type="date" name="dateFinContrat" value="${ficheContractEndDate||""}" readonly ${locked?"disabled":""}/></div>
-        <div class="col-span-2"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${dureeEssaiValue}" min="0" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
-        <div class="col-span-2"><label class="label">Fin essai</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${a.dateFinEssai||""}" readonly ${locked?"disabled":""}/></div>
-        <div class="col-span-3"><label class="label">Banque</label><select class="select" name="banque" ${locked?"disabled":""}><option value="">— Choisir une banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></div>
-        <div class="col-span-3"><label class="label">IBAN</label><input class="input" name="iban" value="${escapeHTML(a.iban||"")}" ${locked?"disabled":""}/></div>
+        <div class="col-span-3"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${dureeEssaiValue}" min="0" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
+        <div class="col-span-3"><label class="label">Fin essai</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${a.dateFinEssai||""}" readonly ${locked?"disabled":""}/></div>
       </div>${(()=>{const contrats=(db.contratsPersonnel||[]).filter(c=>contractRecordMatchesAgent(c,a)&&c.workflowKind==="nouveau_contrat").sort((x,y)=>String(y.start_date||y.dateDebut||y.createdAt||"").localeCompare(String(x.start_date||x.dateDebut||x.createdAt||"")));const avenants=(db.avenants||[]).filter(av=>contractRecordMatchesAgent(av,a)).sort((x,y)=>String(y.dateAvenant||y.date||y.createdAt||"").localeCompare(String(x.dateAvenant||x.date||x.createdAt||"")));if(!contrats.length&&!avenants.length)return"";const rows=[...contrats.map(c=>{const debut=c.start_date||c.dateDebut||c.dateRecrutement||"";const fin=c.end_date||c.dateFinContrat||"";const duree=c.contract_duration||c.dureeContrat||"";const type=escapeHTML(c.contract_type||c.typeContrat||"CDD");const sal=c.salary_net||c.salaireNet||"";const ref=escapeHTML(c.reference||c.workflow_id||"—");const statut=c.workflow_status||c.statut||"";const statutBadge=statut==="valide"||statut==="signe"?`<span class="badge" style="background:#dcfce7;color:#166534">Signé</span>`:statut==="brouillon"?`<span class="badge" style="background:#fef3c7;color:#92400e">Brouillon</span>`:`<span class="badge" style="background:#f1f5f9;color:#475569">${escapeHTML(statut||"—")}</span>`;return`<tr><td class="text-xs font-mono">${ref}</td><td class="text-xs font-semibold">${type}</td><td class="text-xs">${debut?formatDate(debut):"—"}</td><td class="text-xs">${duree||"—"}</td><td class="text-xs">${fin?formatDate(fin):"—"}</td><td class="text-xs">${sal?money(sal):"—"}</td><td>${statutBadge}</td></tr>`}),...avenants.map(av=>{const date=av.dateAvenant||av.date||"";const type=`Avenant ${escapeHTML(av.type||av.typeAvenant||"")}`;const ref=escapeHTML(av.numero||av.reference||av.id||"—");return`<tr style="background:#f8fafc"><td class="text-xs font-mono">${ref}</td><td class="text-xs text-slate-500 italic">${type}</td><td class="text-xs">${date?formatDate(date):"—"}</td><td class="text-xs" colspan="3">—</td><td><span class="badge" style="background:#ede9fe;color:#5b21b6">Avenant</span></td></tr>`})];return`<div class="mt-5"><h4 class="font-bold text-sm mb-2 text-slate-700">Historique des contrats</h4><div class="overflow-x-auto rounded border border-slate-200"><table class="w-full text-sm"><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Référence</th><th class="px-3 py-2 text-left">Type</th><th class="px-3 py-2 text-left">Début</th><th class="px-3 py-2 text-left">Durée</th><th class="px-3 py-2 text-left">Fin</th><th class="px-3 py-2 text-left">Salaire net</th><th class="px-3 py-2 text-left">Statut</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div>`})()}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="conges" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Congés</legend>${renderAgentCongesPanel(a)}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="absences" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Absences</legend>${renderAgentAbsencesPanel(a)}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="carriere" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Carrière</legend>${renderGestionHistorique(a)}</fieldset></div>
       ${showPointage?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="pointage" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Situation Pointage</legend>${renderAgentPointageSituation(a)}</fieldset></div>`:""}
-      ${showVerifications?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="verifications" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Documents archivés</legend><div class="grid grid-3 text-sm" style="margin-top:10px">
-        ${[["ActeNaissance","Acte de naissance"],["CertifResidence","Cert. résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce ID biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]].map(([k,l])=>{const ok=a.verifications?.["verif"+k];const d=a.documents?.[k];const btn=`<button type="button" class="btn ${d?"btn-primary":"btn-ghost"} text-xs" onclick="event.stopPropagation();viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')" title="${d?"Visualiser le document":"Aucun document archivé"}">Visualiser</button>`;return`<div class="flex items-center gap-3 p-2 bg-slate-100 rounded text-left hover:bg-slate-200 transition cursor-pointer" onclick="viewAgentArchivedDoc('${a.id}','${k}','${escapeHTML(l)}')">${btn}<span>${ok?"✅":"⬜"} ${l}</span></div>`}).join("")}
-      </div></fieldset></div>`:""}
+      ${showVerifications?(()=>{const docs=[["ActeNaissance","Acte de naissance"],["CertifResidence","Certificat de résidence"],["CasierJudiciaire","Casier judiciaire"],["AptitudeMedicale","Aptitude médicale"],["BulletinANEM","Bulletin ANEM"],["ChequeBarre","Chèque barré"],["PieceIdentite","Pièce ID biométrique"],["FicheFamiliale","Fiche familiale"],["FicheIndividuelle","Fiche individuelle"]];const archived=docs.filter(([key])=>a.documents?.[key]?.url).length;const docIcon='<svg viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></svg>';return`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="verifications" style="display:none"><fieldset class="rh-panel-fieldset rh-documents-fieldset"><legend>Documents archivés</legend><div class="rh-docs-summary"><div><strong>${archived}/${docs.length}</strong><span>documents archivés</span></div><div class="rh-docs-progress"><i style="width:${Math.round(archived/docs.length*100)}%"></i></div></div><div class="rh-docs-grid">${docs.map(([key,label])=>{const d=a.documents?.[key],available=!!d?.url,date=d?.uploadedAt||d?.createdAt||d?.date||"";return`<article class="rh-doc-card ${available?"is-available":"is-missing"}"><div class="rh-doc-icon">${docIcon}</div><div class="rh-doc-copy"><strong title="${escapeHTML(label)}">${escapeHTML(label)}</strong><span class="rh-doc-status">${available?"Archivé":"Manquant"}</span><small>${available?(date?`Ajouté le ${formatDate(date)}`:"Document disponible"):"Document à fournir"}</small></div>${available?`<button type="button" class="rh-doc-action rh-doc-view" onclick="viewAgentArchivedDoc('${a.id}','${key}','${escapeHTML(label)}')" title="Visualiser ${escapeHTML(label)}"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg></button>`:`<button type="button" class="rh-doc-action rh-doc-add" onclick="openAgentDocumentUpload('${a.id}','${key}','${escapeHTML(label)}')">＋ Ajouter</button>`}</article>`}).join("")}</div></fieldset></div>`})():""}
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="materiel" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Matériel & équipement</legend>
         ${renderAgentMateriel(a,locked)}
       </fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="affectation" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Affectations sur site</legend>${renderAffectationsHistorique(a,locked,canEditAffectations)}</fieldset></div>
       <div id="sanctions-section" class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="sanctions" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Sanctions disciplinaires</legend>${renderSanctions(a,locked,canEditSanctions)}</fieldset></div>
       ${(adminFicheContext||isDrhFicheContext())?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="portail" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Compte Portail RH</legend><div id="portal-account-panel" class="mt-3" data-portal-matricule="${escapeHTML(a.matricule||"")}"><div class="text-slate-400 text-sm italic">Cliquez sur l'onglet pour charger.</div></div></fieldset></div>`:""}
-      ${locked&&!isDrhFicheContext()?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="sticky bottom-0 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="submit" class="btn btn-primary">Enregistrer les modifications</button></div>`}
+      ${locked&&!isDrhFicheContext()?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="rh-save-bar"><div class="rh-save-state" id="agent-save-state"><span></span>Aucune modification</div><div class="rh-save-actions"><button type="button" class="rh-save-cancel" onclick="resetAgentFormChanges()" disabled>Annuler</button><button type="submit" class="rh-save-submit" disabled><span>✓</span> Enregistrer les modifications</button></div></div>`}
     </form>
   </div>`;
-  setTimeout(bindAgentDuplicateFieldSync,0);
+  setTimeout(()=>{bindAgentDuplicateFieldSync();bindAgentFormDirtyState()},0);
 }
 window.addFamilleRow=function(){
   const tbody=document.querySelector(".rh-op-family-table tbody");if(!tbody)return;
   const existing=tbody.querySelectorAll("tr[data-famille-row]");
   const idx=existing.length;
-  const s="width:100%;height:22px;font-size:11px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px";
   const tr=document.createElement("tr");tr.setAttribute("data-famille-row",idx);
-  tr.innerHTML=`<td><input class="input" style="${s}" name="famille_nom_${idx}" value=""/></td><td><input class="input" style="${s}" name="famille_prenom_${idx}" value=""/></td><td><input class="input" style="${s}" type="date" name="famille_ddn_${idx}" value=""/></td><td style="text-align:center;font-size:11px">&nbsp;</td><td><input class="input" style="${s}" name="famille_commentaire_${idx}" value=""/></td>`;
+  tr.innerHTML=`<td><input class="input" name="famille_nom_${idx}" value=""/></td><td><input class="input" name="famille_prenom_${idx}" value=""/></td><td><input class="input" type="date" name="famille_ddn_${idx}" value="" oninput="updateFamilleRowAge(this)"/></td><td class="rh-op-family-age">—</td><td><input class="input" name="famille_commentaire_${idx}" value=""/></td><td class="rh-op-family-action"><button type="button" class="rh-op-delete-line" onclick="removeFamilleRow(this)" title="Supprimer ce membre">×</button></td>`;
   tbody.appendChild(tr);
+  markAgentFormDirty();
   tr.querySelector("input").focus();
 };
+window.updateFamilleRowAge=function(input){
+  const cell=input?.closest("tr")?.querySelector(".rh-op-family-age");if(!cell)return;
+  const age=input.value?Math.floor(daysBetween(input.value,today())/365):null;
+  cell.textContent=age!==null&&age>=0?`${age} ans`:"—";
+};
+window.updateAgentBirthAge=function(input){
+  const output=input?.closest(".rh-op-grid")?.querySelector(".rh-agent-age");if(!output)return;
+  const age=input.value?ageFromDate(input.value):null;
+  output.value=age===null||age===undefined?"":age;
+};
+window.removeFamilleRow=function(button){
+  button?.closest("tr[data-famille-row]")?.remove();
+  document.querySelectorAll(".rh-op-family-table tr[data-famille-row]").forEach((row,idx)=>{
+    row.dataset.familleRow=idx;
+    [["famille_nom_","input[name^='famille_nom_']"],["famille_prenom_","input[name^='famille_prenom_']"],["famille_ddn_","input[name^='famille_ddn_']"],["famille_commentaire_","input[name^='famille_commentaire_']"]].forEach(([prefix,selector])=>{const el=row.querySelector(selector);if(el)el.name=prefix+idx});
+  });
+  markAgentFormDirty();
+};
+
+function markAgentFormDirty(){
+  const form=document.getElementById("agent-form");if(!form)return;
+  form.dataset.dirty="true";
+  const state=document.getElementById("agent-save-state");if(state){state.classList.add("is-dirty");state.innerHTML="<span></span>Modifications non enregistrées"}
+  form.querySelector(".rh-save-submit")?.removeAttribute("disabled");
+  form.querySelector(".rh-save-cancel")?.removeAttribute("disabled");
+  updateAgentCompletenessFromForm();
+}
+function updateAgentCompletenessFromForm(){
+  const form=document.getElementById("agent-form"),box=document.getElementById("agent-completeness");if(!form||!box)return;
+  const a=findEmployeeByRef(box.dataset.agentId)||{},fd=new FormData(form),data={...a};
+  AGENT_COMPLETENESS_FIELDS.forEach(([key])=>{if(fd.has(key))data[key]=fd.get(key)});
+  const c=agentCompleteness(data),tone=c.pct>=85?"good":c.pct>=60?"medium":"low";
+  box.className=`rh-completeness ${tone}`;
+  const ring=box.querySelector(".rh-completeness-ring"),pct=ring?.querySelector("strong"),copy=box.querySelector(".rh-completeness-copy");
+  if(ring)ring.style.setProperty("--complete",`${c.pct*3.6}deg`);if(pct)pct.textContent=`${c.pct}%`;
+  const count=copy?.querySelector("div>span"),bar=copy?.querySelector(".rh-completeness-track i"),small=copy?.querySelector("small");
+  if(count)count.textContent=`${AGENT_COMPLETENESS_FIELDS.length-c.missing.length}/${AGENT_COMPLETENESS_FIELDS.length} informations renseignées`;
+  if(bar)bar.style.width=`${c.pct}%`;
+  if(small)small.textContent=c.missing.length?`À compléter : ${c.missing.slice(0,3).join(", ")}${c.missing.length>3?` et ${c.missing.length-3} autre(s)`:""}`:"Toutes les informations essentielles sont renseignées.";
+}
+function clearAgentFormErrors(form){
+  form.querySelectorAll(".rh-field-error").forEach(el=>el.remove());
+  form.querySelectorAll("[aria-invalid='true']").forEach(el=>{el.removeAttribute("aria-invalid");el.classList.remove("rh-input-invalid")});
+}
+function validateAgentForm(form){
+  clearAgentFormErrors(form);const errors=[];
+  const add=(name,message)=>{const el=form.querySelector(`[name="${name}"]:not([type='hidden'])`);if(!el)return;el.setAttribute("aria-invalid","true");el.classList.add("rh-input-invalid");const msg=document.createElement("small");msg.className="rh-field-error";msg.textContent=message;el.closest("label")?.appendChild(msg);errors.push(el)};
+  const value=name=>String(form.querySelector(`[name="${name}"]:not([type='hidden'])`)?.value||"").trim();
+  const email=value("email");if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))add("email","Adresse email non valide");
+  [["telephone","Téléphone"],["contactUrgenceTel","Téléphone du contact"]].forEach(([name,label])=>{const raw=value(name),digits=raw.replace(/\D/g,"");if(raw&&(digits.length<9||digits.length>10))add(name,`${label} : 9 à 10 chiffres attendus`)});
+  const nin=value("nin").replace(/\D/g,"");if(value("nin")&&![10,18].includes(nin.length))add("nin","Le NIN doit contenir 10 ou 18 chiffres");
+  const birth=value("dateNaissance");if(birth&&birth>today())add("dateNaissance","La date de naissance ne peut pas être future");
+  const start=value("dateRecrutement"),end=value("dateFinContrat");if(start&&end&&end<start)add("dateFinContrat","La fin du contrat doit être postérieure au début");
+  if(errors.length){const tab=errors[0].closest("[data-fp-tab-panel]")?.dataset.fpTabPanel||"identite";fichePositionSwitchTab(tab);errors[0].focus();toast(`${errors.length} information(s) à corriger avant l'enregistrement`,"error");return false}
+  return true;
+}
+function bindAgentFormDirtyState(){
+  const form=document.getElementById("agent-form");if(!form)return;
+  form.querySelectorAll("input:not([type='hidden']),select,textarea").forEach(el=>{
+    el.addEventListener("input",markAgentFormDirty);
+    el.addEventListener("change",markAgentFormDirty);
+  });
+}
+window.resetAgentFormChanges=function(){renderView()};
 
 function syncAgentFormField(el){
   if(!el||!el.name)return;
@@ -12034,7 +12111,7 @@ function syncAgentFormField(el){
 function bindAgentDuplicateFieldSync(){
   const form=document.getElementById("agent-form");
   if(!form)return;
-  ["telephone","email","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","banque"].forEach(name=>{
+  ["telephone","email","adresse","commune","wilaya","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","banque"].forEach(name=>{
     form.querySelectorAll(`[name="${CSS.escape(name)}"]`).forEach(el=>{
       el.addEventListener("input",()=>syncAgentFormField(el));
       el.addEventListener("change",()=>syncAgentFormField(el));
@@ -12634,9 +12711,11 @@ async function saveAgent(id,options){
   const formUnlocked=!sgdiViewModeActive;
   if(!isAdminFichePositionContext()&&!isDrhFicheContext()&&!opt.forceOfficialSave&&!formUnlocked){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
   if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()&&!formUnlocked){toast("Fiche officielle verrouillée : modification impossible","error");return false}
-  const f=document.getElementById("agent-form");const fd=new FormData(f);
+  const f=document.getElementById("agent-form");
+  if(!f||!validateAgentForm(f))return false;
+  const fd=new FormData(f);
   const draft={...a,habilitations:{...(a.habilitations||{})}};
-  ["nom","prenom","dateNaissance","lieuNaissance","sexe","situation","nomPere","nomMere","nin","nationalite","civilite","numeroPasseport","noteUrgence","nombreEnfants","genreFamille","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
+  ["nom","prenom","dateNaissance","lieuNaissance","sexe","situation","nomPere","nomMere","nin","numeroCnas","nationalite","civilite","numeroPasseport","noteUrgence","nombreEnfants","genreFamille","telephone","email","wilaya","commune","adresse","contactUrgenceNom","contactUrgenceLien","contactUrgenceTel","typeContrat","salaireNet","dateRecrutement","dureeContrat","dureeEssai","dateFinEssai","dateFinContrat","banque","numeroCompte","iban"].forEach(k=>{if(fd.has(k))draft[k]=k==="typeContrat"?cleanContractType(fd.get(k)):fd.get(k)});
   const familleRows=[];let fi=0;while(fi<50){const nom=fd.get(`famille_nom_${fi}`);const prenom=fd.get(`famille_prenom_${fi}`);const ddn=fd.get(`famille_ddn_${fi}`);const com=fd.get(`famille_commentaire_${fi}`);if(nom===null&&prenom===null)break;if(nom||prenom||ddn)familleRows.push({nom:nom||"",prenom:prenom||"",dateNaissance:ddn||"",commentaire:com||""});fi++}
   if(familleRows.length||draft.famille)draft.famille=familleRows;
   draft.dureeContrat=employeePositionContractDuration(draft);
@@ -12644,6 +12723,9 @@ async function saveAgent(id,options){
   if(fd.get("photo")!==undefined)draft.photo=fd.get("photo")||null;
   ["enqueteHabilitation","serviceNational","diplomeSecourisme","diplomeAntiIncendie"].forEach(k=>{const r=f.querySelector(`[name="ahab_${k}"]:checked`);if(r)draft.habilitations[k]=r.value});
   draft.salaireNet=parseMoneyInput(draft.salaireNet)||0;draft.updatedAt=today();
+  const historyLabels={nom:"Nom",prenom:"Prénom",dateNaissance:"Date de naissance",lieuNaissance:"Lieu de naissance",sexe:"Sexe",situation:"Situation familiale",nin:"NIN",numeroCnas:"N° sécurité sociale",nationalite:"Nationalité",civilite:"Civilité",numeroPasseport:"Passeport",telephone:"Téléphone",email:"Email",adresse:"Adresse",commune:"Commune",wilaya:"Wilaya",contactUrgenceNom:"Contact d'urgence",contactUrgenceLien:"Lien du contact",contactUrgenceTel:"Téléphone d'urgence",noteUrgence:"Notes d'urgence",nombreEnfants:"Nombre d'enfants",genreFamille:"Genre familial",typeContrat:"Type de contrat",salaireNet:"Salaire",dateRecrutement:"Date de recrutement",dureeContrat:"Durée du contrat",dateFinContrat:"Fin du contrat",banque:"Compte bancaire",numeroCompte:"N° de compte",iban:"IBAN",famille:"Composition familiale",habilitations:"Habilitations"};
+  const changedFields=Object.keys(historyLabels).filter(key=>JSON.stringify(a[key]??null)!==JSON.stringify(draft[key]??null)).map(key=>historyLabels[key]);
+  if(changedFields.length)draft.modificationHistory=[{at:new Date().toISOString(),user:session?.username||"Utilisateur",fields:changedFields},...(a.modificationHistory||[])].slice(0,30);
   try{
     const payload=employeeApiPayload(draft);
     const saved=draft.backendId?await SGDI.employees.update(draft.backendId,payload):await SGDI.employees.create(payload);
@@ -12653,6 +12735,11 @@ async function saveAgent(id,options){
     return false;
   }
   if(!(await saveDBAndWaitToast("Fiche employé non confirmée")))return false;
+  f.dataset.dirty="false";
+  const saveState=document.getElementById("agent-save-state");
+  if(saveState){saveState.classList.remove("is-dirty");saveState.classList.add("is-saved");saveState.innerHTML="<span></span>Modifications enregistrées"}
+  f.querySelector(".rh-save-submit")?.setAttribute("disabled","");
+  f.querySelector(".rh-save-cancel")?.setAttribute("disabled","");
   if(!opt.silent)toast("Fiche enregistrée","success");
   return true;
 }
@@ -15843,7 +15930,15 @@ function demandePersonnelIsAlert(d){
 }
 function demandePersonnelStatusPill(st){
   const map={nouveau:"pill-blue",en_cours:"pill-amber",traite:"pill-green",rejete:"pill-red",annule:"pill-gray"};
-  return`<span class="pill ${map[st]||"pill-gray"}">${escapeHTML(st||"nouveau")}</span>`;
+  return`<span class="pill ${map[st]||"pill-gray"}">${escapeHTML(demandePersonnelStatusLabel(st))}</span>`;
+}
+function demandePersonnelStatusLabel(st){return({nouveau:"Nouvelle",en_cours:"En cours",traite:"Traitée",rejete:"Rejetée",annule:"Annulée"})[st]||"Nouvelle"}
+function demandePersonnelSlaInfo(d){
+  if(!d||["traite","rejete","annule"].includes(d.statut))return null;
+  const start=new Date(d.createdAt||d.date||Date.now()).getTime();
+  const deadline=d.deadlineAt?new Date(d.deadlineAt).getTime():start+48*3600000;
+  const left=Math.round((deadline-Date.now())/3600000),late=left<0;
+  return{late,label:late?`Retard ${Math.abs(left)} h`:left<24?`${left} h restantes`:`${Math.ceil(left/24)} j restants`};
 }
 function demandePersonnelFileInputHTML(){
   return`<input class="input" type="file" name="piece" accept="image/*,.pdf,.doc,.docx" onchange="const f=this.files&&this.files[0];const n=this.closest('form').querySelector('[data-file-name]');if(n)n.textContent=f?f.name:'Aucun fichier choisi'"/><div class="text-xs text-slate-500 mt-1" data-file-name>Aucun fichier choisi</div>`;
@@ -16015,7 +16110,7 @@ async function submitPortailPersonnel(form){
     const a=demandePersonnelCurrentAgent();
     const fd=new FormData(form);
     const piece=await readSmallFile(form.piece.files&&form.piece.files[0]);
-    const d={id:uid("dp"),date:today(),createdAt:new Date().toISOString(),createdBy:session?.username||"",agentId:a?.id||session?.agentId||"",agentName:a?((a.nom||"")+" "+(a.prenom||"")).trim():(session?.nom||""),matricule:a?.matricule||"",societe:a?.societe||mySoc()||"",type:fd.get("type")||"Demande",categorie:fd.get("categorie")||"",urgence:fd.get("urgence")||"normale",objet:(fd.get("objet")||"").toString().trim(),message:(fd.get("message")||"").toString().trim(),statut:"nouveau",pieces:piece?[piece]:[],documentsDemandes:[],historique:[{date:new Date().toISOString(),user:session?.username||"",action:"Création",note:"Demande envoyée via portail mobile"}]};
+    const d={id:uid("dp"),date:today(),createdAt:new Date().toISOString(),createdBy:session?.username||"",agentId:a?.id||session?.agentId||"",agentName:a?((a.nom||"")+" "+(a.prenom||"")).trim():(session?.nom||""),matricule:a?.matricule||"",societe:a?.societe||mySoc()||"",type:fd.get("type")||"Demande",categorie:fd.get("categorie")||"",urgence:fd.get("urgence")||"normale",objet:(fd.get("objet")||"").toString().trim(),message:(fd.get("message")||"").toString().trim(),statut:"nouveau",pieces:piece?[{...piece,source:"Employé"}]:[],documentsDemandes:[],historique:[{date:new Date().toISOString(),user:session?.username||"",action:"Création",note:"Demande envoyée via portail mobile"}]};
     ensureDemandesPersonnel().push(d);
     if(!(await saveDBAndWaitToast("Demande personnel non confirmée")))return;
     toast("Demande envoyée à la DRH","success");renderSidebar();renderView();
@@ -16024,16 +16119,17 @@ async function submitPortailPersonnel(form){
 function demandePersonnelCardHTML(d,personnel){
   const alert=demandePersonnelIsAlert(d);
   const docs=(d.documentsDemandes||[]);
+  const sla=demandePersonnelSlaInfo(d);
   return`<div class="card p-4 mb-3" style="border-left:4px solid ${alert?"#dc2626":d.statut==="traite"?"#16a34a":"#0360a8"}">
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div><div class="font-bold">${escapeHTML(d.objet||"Sans objet")}</div><div class="text-xs text-slate-500">${formatDate(d.date||d.createdAt)} · ${escapeHTML(d.type||"")} · ${escapeHTML(d.categorie||"")}</div></div>
-      <div class="flex gap-2 items-center">${demandePersonnelStatusPill(d.statut)}${alert?`<span class="pill pill-red">Alerte</span>`:""}</div>
+      <div class="flex gap-2 items-center">${sla?`<span class="pill ${sla.late?"pill-red":"pill-gray"}">${escapeHTML(sla.label)}</span>`:""}${demandePersonnelStatusPill(d.statut)}${alert?`<span class="pill pill-red">Alerte</span>`:""}</div>
     </div>
     <div class="text-sm text-slate-700 mt-2">${escapeHTML(d.message||"")}</div>
     ${suspensionDemandStatusHTML(d)}
     ${d.reponse?`<div class="mt-3 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse DRH :</b> ${escapeHTML(d.reponse)}</div>`:""}
     ${docs.length?`<div class="mt-3 text-sm"><b>Documents demandés :</b>${docs.map((x,i)=>`<div class="flex items-center justify-between gap-2 py-1 border-b border-slate-100"><span>${escapeHTML(x.nom||"Document")} ${x.recu?`<span class="pill pill-green">reçu</span>`:`<span class="pill pill-red">à envoyer</span>`}</span>${personnel&&!x.recu?`<button class="btn btn-secondary text-xs" onclick="openUploadDocumentDemande('${d.id}',${i})">Envoyer</button>`:""}</div>`).join("")}</div>`:""}
-    ${(d.pieces||[]).length?`<div class="mt-3 flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">Pièce ${i+1}</a>`).join("")}</div>`:""}
+    ${(d.pieces||[]).length?`<div class="mt-3 flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">${escapeHTML(p.source||"Employé")} · ${escapeHTML(p.name||`Pièce ${i+1}`)}</a>`).join("")}</div>`:""}
     ${!personnel?`<div class="mt-3 flex gap-2 flex-wrap">${suspensionDemandActionsHTML(d)}${convocationDemandActionsHTML(d)}<button class="btn btn-secondary text-xs" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter</button><button class="btn btn-ghost text-xs" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander document</button></div>`:""}
   </div>`;
 }
@@ -16042,6 +16138,12 @@ function demandePersonnelSelectedId(){return sessionStorage.getItem("demandePers
 function selectDemandePersonnel(id){sessionStorage.setItem("demandePersonnelSelected",id||"");renderView()}
 function selectDemandePersonnelEmployee(key){sessionStorage.setItem("demandePersonnelEmployeeSelected",key||"");renderView()}
 function setDemandesPersonnelFilter(k,v){sessionStorage.setItem("dp_"+k,v||"");renderView()}
+let demandesPersonnelSearchTimer=null;
+function setDemandesPersonnelSearch(value){
+  sessionStorage.setItem("dp_q",value||"");
+  clearTimeout(demandesPersonnelSearchTimer);
+  demandesPersonnelSearchTimer=setTimeout(()=>renderView(),250);
+}
 function demandePersonnelDetailHTML(d){
   if(!d)return`<div class="card p-8 text-center text-slate-500">Sélectionnez une demande pour voir le détail.</div>`;
   const original=d.payloadOriginal||{};
@@ -16063,7 +16165,7 @@ function demandePersonnelDetailHTML(d){
     ${Object.keys(details).length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Détails du portail</h3>${Object.entries(details).filter(([,v])=>v).map(([k,v])=>`<div class="flex justify-between gap-3 py-1 border-b border-slate-100 text-sm"><span class="text-slate-500">${escapeHTML(k)}</span><b class="text-right">${escapeHTML(String(v))}</b></div>`).join("")}</div>`:""}
     ${d.reponse?`<div class="mb-4 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse DRH :</b><br>${escapeHTML(d.reponse)}</div>`:""}
     ${docs.length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Documents demandés</h3>${docs.map(x=>`<div class="flex justify-between py-1 border-b text-sm"><span>${escapeHTML(x.nom||"Document")}</span>${x.recu?`<span class="pill pill-green">Reçu</span>`:`<span class="pill pill-red">En attente</span>`}</div>`).join("")}</div>`:""}
-    ${(d.pieces||[]).length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Pièces jointes</h3><div class="flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">Télécharger ${i+1}</a>`).join("")}</div></div>`:""}
+    ${(d.pieces||[]).length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Pièces jointes</h3><div class="flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">${escapeHTML(p.source||"Employé")} · ${escapeHTML(p.name||`Pièce ${i+1}`)}</a>`).join("")}</div></div>`:""}
     <div class="flex gap-2 flex-wrap">${suspensionDemandActionsHTML(d)}${convocationDemandActionsHTML(d)}<button class="btn btn-secondary text-sm" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter</button><button class="btn btn-ghost text-sm" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander document</button></div>
   </div>`;
 }
@@ -16231,47 +16333,21 @@ function renderDemandesPersonnel(view,sub,arg){
   if(selectedEmployeeKey)sessionStorage.setItem("demandePersonnelEmployeeSelected",selectedEmployeeKey);
   const selectedGroup=employeeGroups.find(g=>g.key===selectedEmployeeKey)||null;
   const selectedItems=selectedGroup?(selectedGroup.items||[]).slice().sort((a,b)=>String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||""))):[];
-  const open=all.filter(d=>["nouveau","en_cours"].includes(d.statut)).length;
+  let selectedId=sessionStorage.getItem("demandePersonnelSelected")||"";
+  if(!selectedItems.some(d=>String(d.id)===String(selectedId)))selectedId=String(selectedItems[0]?.id||"");
+  if(selectedId)sessionStorage.setItem("demandePersonnelSelected",selectedId);
+  const selectedDemand=selectedItems.find(d=>String(d.id)===String(selectedId))||null;
   const alerts=all.filter(d=>demandePersonnelIsAlert(d)).length;
   const done=all.filter(d=>d.statut==="traite").length;
   const types=[...new Set(all.map(d=>demandePersonnelTypeLabel(d)).filter(Boolean))];
-  const row=g=>{const active=g.key===selectedEmployeeKey;const hasAlert=(g.items||[]).some(d=>demandePersonnelIsAlert(d));const docs=(g.items||[]).filter(d=>(d.documentsDemandes||[]).some(x=>!x.recu)).length;return`<button type="button" onclick="selectDemandePersonnelEmployee('${jsString(g.key)}')" class="card p-4 text-left w-full transition" style="${active?"border:2px solid #0360a8;background:#e0f2fe":"border:1px solid #e2e8f0"}">
-    <div class="flex items-start justify-between gap-2"><div><div class="font-black">${escapeHTML(g.name||"—")}</div><div class="text-xs text-slate-500">${escapeHTML(g.matricule||"Sans matricule")} · ${escapeHTML(g.societe||"")} · dernière: ${formatDate(g.lastDate)}</div></div><span class="pill pill-gray">${g.total}</span></div>
-    <div class="mt-3 grid grid-cols-3 gap-2 text-center">
-      <div class="rounded bg-sky-50 p-2"><div class="text-[10px] text-slate-500">Nouvelles</div><b class="text-sky-700">${g.nouveau}</b></div>
-      <div class="rounded bg-amber-50 p-2"><div class="text-[10px] text-slate-500">En cours</div><b class="text-amber-700">${g.enCours}</b></div>
-      <div class="rounded bg-emerald-50 p-2"><div class="text-[10px] text-slate-500">Traitées</div><b class="text-emerald-700">${g.traite}</b></div>
-    </div>
-    <div class="mt-2 flex gap-1 flex-wrap"><span class="pill pill-gray">${escapeHTML(g.lastType||"Historique")}</span>${hasAlert?`<span class="pill pill-red">Alerte</span>`:""}${docs?`<span class="pill pill-amber">${docs} doc. attendu(s)</span>`:""}</div>
-  </button>`};
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
-    <div><h1 class="text-2xl font-bold sentence-case-title">Réception demandes & réclamations</h1><p class="text-sm text-slate-500">${all.length} demande(s) · ${employeeGroups.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" toutes sociétés"} · source portail RH mobile.</p></div>
+  const employeeRow=g=>{const active=g.key===selectedEmployeeKey,alert=(g.items||[]).some(d=>demandePersonnelIsAlert(d)),pending=g.nouveau+g.enCours;return`<button type="button" class="dp-clean-employee ${active?"is-active":""}" onclick="selectDemandePersonnelEmployee('${jsString(g.key)}')"><span class="dp-clean-avatar">${escapeHTML((g.name||"?").trim().slice(0,1).toUpperCase())}</span><span class="dp-clean-employee-copy"><strong>${escapeHTML(g.name||"—")}</strong><small>${escapeHTML(g.matricule||"Sans matricule")} · ${escapeHTML(g.societe||"")}</small></span><span class="dp-clean-employee-meta"><b>${g.total}</b>${pending?`<small>${pending} ouverte(s)</small>`:""}${alert?`<i>Alerte</i>`:""}</span></button>`};
+  const timelineItem=d=>{const active=String(d.id)===String(selectedId),alert=demandePersonnelIsAlert(d);return`<button type="button" class="dp-clean-timeline-item ${active?"is-active":""}" onclick="selectDemandePersonnel('${jsString(d.id)}')"><span>${formatDate(d.createdAt||d.date)}</span><strong>${escapeHTML(d.objet||demandePersonnelTypeLabel(d)||"Demande")}</strong><small>${demandePersonnelStatusLabel(d.statut)}${alert?" · Alerte":""}</small></button>`};
+  view.innerHTML=`<div class="dp-clean-page"><div class="dp-clean-header">
+    <div><h1 class="text-2xl font-bold sentence-case-title">Réception demandes & réclamations</h1><p class="text-sm text-slate-500">${list.length}${list.length!==all.length?` sur ${all.length}`:""} demande(s) affichée(s) · ${employeeGroups.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" toutes sociétés"}.</p></div>
     <a class="btn portal-open-btn text-sm" href="#/portail">Ouvrir portail</a>
   </div>
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-    <button class="card p-4 text-left" onclick="setDemandesPersonnelFilter('statut','')"><div class="text-xs text-slate-500">Total reçu</div><div class="text-3xl font-black">${all.length}</div></button>
-    <button class="card p-4 text-left" onclick="setDemandesPersonnelFilter('statut','nouveau')"><div class="text-xs text-slate-500">Nouvelles</div><div class="text-3xl font-black text-sky-700">${all.filter(d=>(d.statut||"nouveau")==="nouveau").length}</div></button>
-    <a class="card p-4 block" href="#/demandes_personnel/alertes"><div class="text-xs text-slate-500">Alertes</div><div class="text-3xl font-black text-red-700">${alerts}</div></a>
-    <button class="card p-4 text-left" onclick="setDemandesPersonnelFilter('statut','traite')"><div class="text-xs text-slate-500">Traitées</div><div class="text-3xl font-black text-emerald-700">${done}</div></button>
-  </div>
-  <div class="card p-4 mb-4">
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-      <input class="input" placeholder="Recherche nom, matricule, objet..." value="${escapeHTML(q)}" oninput="setDemandesPersonnelFilter('q',this.value)"/>
-      <select class="select" onchange="setDemandesPersonnelFilter('statut',this.value)"><option value="">Tous statuts</option>${["nouveau","en_cours","traite","rejete"].map(s=>`<option value="${s}" ${statut===s?"selected":""}>${s}</option>`).join("")}</select>
-      <select class="select" onchange="setDemandesPersonnelFilter('type',this.value)"><option value="">Tous types</option>${types.map(t=>`<option ${type===t?"selected":""}>${escapeHTML(t)}</option>`).join("")}</select>
-      <button class="btn btn-ghost" onclick="sessionStorage.removeItem('dp_q');sessionStorage.removeItem('dp_statut');sessionStorage.removeItem('dp_type');renderView()">Réinitialiser</button>
-    </div>
-  </div>
-  <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
-    <div class="xl:col-span-2 space-y-3">${employeeGroups.map(row).join("")||`<div class="card p-8 text-center text-slate-500">Aucun employé.</div>`}</div>
-    <div class="xl:col-span-3">${selectedGroup?`<div class="card p-5 mb-4">
-      <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div><h2 class="text-xl font-black">${escapeHTML(selectedGroup.name||"—")}</h2><p class="text-sm text-slate-500">${escapeHTML(selectedGroup.matricule||"Sans matricule")} · ${escapeHTML(selectedGroup.societe||"")} · ${selectedGroup.total} demande(s)</p></div>
-        <button class="btn btn-secondary text-xs" onclick="openPortailEmployeHistory('${jsString(selectedGroup.key)}')">Ouvrir en fenêtre</button>
-      </div>
-    </div>
-    ${selectedItems.map(d=>demandePersonnelCardHTML(d,false)).join("")}`:`<div class="card p-8 text-center text-slate-500">Sélectionnez un employé pour voir son historique.</div>`}</div>
-  </div>`;
+  <section class="dp-clean-card dp-clean-controls"><div class="dp-clean-stats"><button onclick="setDemandesPersonnelFilter('statut','')"><strong>${all.length}</strong><span>Total</span></button><button onclick="setDemandesPersonnelFilter('statut','nouveau')"><strong>${all.filter(d=>(d.statut||"nouveau")==="nouveau").length}</strong><span>Nouvelles</span></button><a href="#/demandes_personnel/alertes"><strong>${alerts}</strong><span>Alertes</span></a><button onclick="setDemandesPersonnelFilter('statut','traite')"><strong>${done}</strong><span>Traitées</span></button></div><div class="dp-clean-filters"><input class="input" placeholder="Rechercher une demande..." value="${escapeHTML(q)}" oninput="setDemandesPersonnelSearch(this.value)"/><select class="select" onchange="setDemandesPersonnelFilter('statut',this.value)"><option value="">Tous statuts</option>${["nouveau","en_cours","traite","rejete"].map(s=>`<option value="${s}" ${statut===s?"selected":""}>${demandePersonnelStatusLabel(s)}</option>`).join("")}</select><select class="select" onchange="setDemandesPersonnelFilter('type',this.value)"><option value="">Tous types</option>${types.map(t=>`<option ${type===t?"selected":""}>${escapeHTML(t)}</option>`).join("")}</select><button class="btn btn-secondary" onclick="sessionStorage.removeItem('dp_q');sessionStorage.removeItem('dp_statut');sessionStorage.removeItem('dp_type');renderView()">Réinitialiser</button></div></section>
+  <div class="dp-clean-workspace"><section class="dp-clean-card dp-clean-employees"><header><strong>Employés</strong><span>${employeeGroups.length}</span></header><div class="dp-clean-employee-list">${employeeGroups.map(employeeRow).join("")||`<div class="dp-clean-empty">Aucun employé.</div>`}</div></section><section class="dp-clean-card dp-clean-requests">${selectedGroup?`<header class="dp-clean-request-header"><div><strong>${escapeHTML(selectedGroup.name||"—")}</strong><span>${escapeHTML(selectedGroup.matricule||"Sans matricule")} · ${selectedGroup.total} demande(s)</span></div><button class="btn btn-secondary text-xs" onclick="openPortailEmployeHistory('${jsString(selectedGroup.key)}')">Historique complet</button></header><div class="dp-clean-timeline">${selectedItems.map(timelineItem).join("")}</div><div class="dp-clean-detail">${selectedDemand?demandePersonnelDetailHTML(selectedDemand):`<div class="dp-clean-empty">Sélectionnez une demande.</div>`}</div>`:`<div class="dp-clean-empty">Sélectionnez un employé.</div>`}</section></div></div>`;
 }
 function openTraiterDemandePersonnel(id){
   const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
@@ -16287,7 +16363,7 @@ function openTraiterDemandePersonnel(id){
     <div class="flex items-center justify-end gap-2 flex-wrap">
       <span class="text-xs text-slate-500" data-traitement-doc-name></span>
       <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-      <button type="button" class="btn btn-secondary" onclick="this.form.traitementDoc.click()">Télécharger doc</button>
+      <button type="button" class="btn btn-secondary" onclick="this.form.traitementDoc.click()">Joindre un document</button>
       <button class="btn btn-primary">Enregistrer</button>
     </div></form>`);
 }
@@ -16296,7 +16372,8 @@ async function saveTraitementDemandePersonnel(id,form){
   const pred=Array.from(form.querySelectorAll('input[name="reponsesPred"]:checked')).map(x=>x.value.trim()).filter(Boolean);
   const libre=(form.reponse.value||"").trim();
   const file=form.traitementDoc?.files&&form.traitementDoc.files[0]?await readSmallFile(form.traitementDoc.files[0]):null;
-  if(file){d.pieces=d.pieces||[];d.pieces.push(file)}
+  if(form.statut.value==="traite"&&!pred.length&&!libre){toast("Ajoutez une réponse avant de marquer la demande comme traitée","error");return}
+  if(file){d.pieces=d.pieces||[];d.pieces.push({...file,source:"DRH"})}
   d.statut=form.statut.value;d.reponsesPredifinies=pred;d.reponseLibre=libre;d.reponse=[...pred,libre].filter(Boolean).join("\n\n");d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";
   d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse envoyée",note:d.statut});
   if(!(await saveDBAndWaitToast("Traitement demande non confirmé")))return;
@@ -16326,7 +16403,7 @@ async function saveUploadDocumentDemande(id,index,form){
     const file=await readSmallFile(form.piece.files&&form.piece.files[0]);if(!file){toast("Choisissez un fichier","error");return}
     const doc=d.documentsDemandes&&d.documentsDemandes[index];if(!doc)return;
     doc.recu=true;doc.recuLe=new Date().toISOString();doc.fichier=file;
-    d.pieces=d.pieces||[];d.pieces.push(file);d.updatedAt=new Date().toISOString();
+    d.pieces=d.pieces||[];d.pieces.push({...file,source:"Employé"});d.updatedAt=new Date().toISOString();
     if(!(await saveDBAndWaitToast("Envoi document non confirmé")))return;
     closeModal();toast("Document envoyé","success");renderView();
   }catch(e){toast(e.message||String(e),"error")}
@@ -16527,49 +16604,61 @@ function renderFiches(view,sub){
   const dotationToReplace=activeBase.filter(agentHasDotationToReplace).length;
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const summaryCards=[
-    ["Employés actifs",activeEmployees,"Présents dans l'effectif","#166534",ratio(activeEmployees,activeBase.length),"effectif/actifs"],
-    ["Sans affectation",withoutAffectation,"Site non renseigné","#b45309",ratio(withoutAffectation,activeBase.length),"effectif/instance_affectation"],
-    ["Sans dotation",withoutDotation,"Dotation matériel non enregistrée","#dc2626",ratio(withoutDotation,activeBase.length),"materiel/dotation"],
-    ["Dotation à remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,activeBase.length),"materiel/dotation"]
+    ["Employés actifs",activeEmployees,"Dans l'effectif","#15803d",ratio(activeEmployees,activeBase.length),"effectif/actifs","users"],
+    ["Sans affectation",withoutAffectation,"Site à renseigner","#d97706",ratio(withoutAffectation,activeBase.length),"effectif/instance_affectation","pin"],
+    ["Sans dotation",withoutDotation,"Matériel à attribuer","#dc2626",ratio(withoutDotation,activeBase.length),"materiel/dotation","box"],
+    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,activeBase.length),"materiel/dotation","refresh"]
   ];
+  const metricIcon=type=>({
+    users:'<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    pin:'<svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+    box:'<svg viewBox="0 0 24 24"><path d="m21 8-9 5-9-5 9-5 9 5Z"/><path d="m3 8 9 5 9-5v8l-9 5-9-5V8Z"/><path d="M12 13v8"/></svg>',
+    refresh:'<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a9 9 0 1 0 2 8"/></svg>'
+  }[type]||'');
+  const activeAdvancedFilters=[fpFilter.recruitFrom,fpFilter.recruitTo,fpFilter.ageMin,fpFilter.ageMax].filter(Boolean).length;
   view.innerHTML=`<div class="fp-page">
     <div class="fp-head">
       <div>
         <h1>${title}</h1>
-        <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Synthèse opérationnelle des fiches de position"} · ${list.length} fiche(s) affichée(s)${safeSocFilter?` · <span>${escapeHTML(safeSocFilter)}</span>`:""}.</p>
+        <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Consultez et gérez les fiches de vos employés"}${safeSocFilter?` · <span>${escapeHTML(safeSocFilter)}</span>`:""}</p>
       </div>
       <div class="fp-head-actions">
-        <a href="#/fiches/imprimer" class="btn fp-print-batch-btn text-sm">🖨 Impression en lot</a>
-        <a href="#/fiches/badge" class="btn fp-badge-btn text-sm">🏷 BADGE</a>
+        <a href="#/fiches/imprimer" class="fp-head-action fp-head-action-secondary"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span>Imprimer</span></a>
+        <a href="#/fiches/badge" class="fp-head-action fp-head-action-primary"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.7-1.5 1.7-2 3-2s2.3.5 3 2M15 10h3M15 14h3"/></svg><span>Badges</span></a>
       </div>
     </div>
     <div class="fp-summary-grid">
-      ${summaryCards.map(([label,note,desc,color,pct,route])=>`${route?`<a href="#/${route}" class="fp-summary-card" style="text-decoration:none;color:inherit">`:`<div class="fp-summary-card">`}<div><span>${label}</span><strong style="color:${color}">${note}</strong><small>${desc}</small></div><div class="fp-ring" style="--pct:${pct}%;--ring:${color}"><b>${pct}%</b></div>${route?`</a>`:`</div>`}`).join("")}
+      ${summaryCards.map(([label,note,desc,color,pct,route,icon])=>`${route?`<a href="#/${route}" class="fp-summary-card" style="--metric-color:${color};text-decoration:none;color:inherit">`:`<div class="fp-summary-card" style="--metric-color:${color}">`}<div class="fp-metric-icon">${metricIcon(icon)}</div><div class="fp-metric-copy"><span>${label}</span><strong>${note}</strong><small>${desc}</small></div><span class="fp-metric-trend">${pct}%</span>${route?`</a>`:`</div>`}`).join("")}
     </div>
     ${fpSocieteBandHTML(baseList,safeSocFilter)}
-    <fieldset class="rh-panel-fieldset" style="margin-bottom:16px">
-      <legend>Filtres complémentaires</legend>
-      <div class="grid grid-4 gap-3" style="margin-top:10px">
-        <div><label class="label">Site</label><select id="fp-site" class="select" onchange="setFpFilter('site',this.value)"><option value="">Tous</option>${fpSites.map(s=>{const key=fpSiteFilterKeyForSite(s);return`<option value="${escapeHTML(key)}" ${fpFilter.site===key?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`}).join("")}</select></div>
-        <div><label class="label">Poste</label><select id="fp-poste" class="select" onchange="setFpFilter('poste',this.value)"><option value="">Tous</option>${POSTES_SITE.map(p=>`<option ${fpFilter.poste===p?"selected":""}>${p}</option>`).join("")}</select></div>
-        <div><label class="label">Statut</label><select id="fp-status" class="select" onchange="setFpFilter('status',this.value)"><option value="">Tous</option><option value="actif" ${fpFilter.status==="actif"?"selected":""}>Actif</option><option value="congé" ${fpFilter.status==="congé"?"selected":""}>Congé</option><option value="maladie" ${fpFilter.status==="maladie"?"selected":""}>Maladie</option><option value="suspendu" ${fpFilter.status==="suspendu"?"selected":""}>Suspendu</option><option value="absent" ${fpFilter.status==="absent"?"selected":""}>Absent</option><option value="abandon" ${fpFilter.status==="abandon"?"selected":""}>Abandon</option><option value="sortant" ${fpFilter.status==="sortant"?"selected":""}>Sortant / archivé</option></select></div>
-        <div><label class="label">Recherche</label><input id="fp-q" class="input" value="${escapeHTML(fpFilter.q)}" placeholder="Nom, matricule..." oninput="filterFiches()"/></div>
-        <div><label class="label">Recrutement du</label><input class="input" type="date" value="${escapeHTML(fpFilter.recruitFrom)}" onchange="setFpFilter('recruitFrom',this.value)"/></div>
-        <div><label class="label">Recrutement au</label><input class="input" type="date" value="${escapeHTML(fpFilter.recruitTo)}" onchange="setFpFilter('recruitTo',this.value)"/></div>
-        <div><label class="label">Age min</label><input class="input" type="number" min="0" max="100" value="${escapeHTML(fpFilter.ageMin)}" placeholder="ex: 25" onchange="setFpFilter('ageMin',this.value)"/></div>
-        <div><label class="label">Age max</label><input class="input" type="number" min="0" max="100" value="${escapeHTML(fpFilter.ageMax)}" placeholder="ex: 45" onchange="setFpFilter('ageMax',this.value)"/></div>
-        <div class="col-span-2"><label class="label">Ordre</label><select class="select" onchange="setFpFilter('sort',this.value)">
+    <section class="fp-filter-panel">
+      <div class="fp-filter-main">
+        <div class="fp-search-field"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="fp-q" value="${escapeHTML(fpFilter.q)}" placeholder="Rechercher par nom ou matricule…" oninput="filterFiches()"/></div>
+        <div class="fp-quick-filter"><label>Site</label><select id="fp-site" onchange="setFpFilter('site',this.value)"><option value="">Tous les sites</option>${fpSites.map(s=>{const key=fpSiteFilterKeyForSite(s);return`<option value="${escapeHTML(key)}" ${fpFilter.site===key?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`}).join("")}</select></div>
+        <div class="fp-quick-filter"><label>Poste</label><select id="fp-poste" onchange="setFpFilter('poste',this.value)"><option value="">Tous les postes</option>${POSTES_SITE.map(p=>`<option ${fpFilter.poste===p?"selected":""}>${p}</option>`).join("")}</select></div>
+        <div class="fp-quick-filter"><label>Statut</label><select id="fp-status" onchange="setFpFilter('status',this.value)"><option value="">Tous les statuts</option><option value="actif" ${fpFilter.status==="actif"?"selected":""}>Actif</option><option value="congé" ${fpFilter.status==="congé"?"selected":""}>Congé</option><option value="maladie" ${fpFilter.status==="maladie"?"selected":""}>Maladie</option><option value="suspendu" ${fpFilter.status==="suspendu"?"selected":""}>Suspendu</option><option value="absent" ${fpFilter.status==="absent"?"selected":""}>Absent</option><option value="abandon" ${fpFilter.status==="abandon"?"selected":""}>Abandon</option><option value="sortant" ${fpFilter.status==="sortant"?"selected":""}>Sortant / archivé</option></select></div>
+      </div>
+      <details class="fp-advanced" ${activeAdvancedFilters?"open":""}>
+        <summary><span><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Plus de filtres${activeAdvancedFilters?` <b>${activeAdvancedFilters}</b>`:""}</span><span class="fp-chevron">⌄</span></summary>
+        <div class="fp-advanced-grid">
+          <div><label>Recrutement du</label><input type="date" value="${escapeHTML(fpFilter.recruitFrom)}" onchange="setFpFilter('recruitFrom',this.value)"/></div>
+          <div><label>Recrutement au</label><input type="date" value="${escapeHTML(fpFilter.recruitTo)}" onchange="setFpFilter('recruitTo',this.value)"/></div>
+          <div><label>Âge minimum</label><input type="number" min="0" max="100" value="${escapeHTML(fpFilter.ageMin)}" placeholder="25" onchange="setFpFilter('ageMin',this.value)"/></div>
+          <div><label>Âge maximum</label><input type="number" min="0" max="100" value="${escapeHTML(fpFilter.ageMax)}" placeholder="45" onchange="setFpFilter('ageMax',this.value)"/></div>
+        </div>
+      </details>
+      <div class="fp-filter-footer">
+        <div class="fp-result-count"><strong>${list.length}</strong> fiche${list.length!==1?"s":""} affichée${list.length!==1?"s":""}</div>
+        <div class="fp-display-controls"><label>Trier par</label><select onchange="setFpFilter('sort',this.value)">
           <option value="alpha_asc" ${fpFilter.sort==="alpha_asc"?"selected":""}>Alphabetique A-Z</option>
           <option value="alpha_desc" ${fpFilter.sort==="alpha_desc"?"selected":""}>Alphabetique Z-A</option>
           <option value="recruit_desc" ${fpFilter.sort==="recruit_desc"?"selected":""}>Recrutement recent d'abord</option>
           <option value="recruit_asc" ${fpFilter.sort==="recruit_asc"?"selected":""}>Recrutement ancien d'abord</option>
           <option value="age_asc" ${fpFilter.sort==="age_asc"?"selected":""}>Age croissant</option>
           <option value="age_desc" ${fpFilter.sort==="age_desc"?"selected":""}>Age decroissant</option>
-        </select></div>
-        <div><label class="label">Presentation</label><select class="select" onchange="setFpFilter('layout',this.value)"><option value="mosaique" ${fpFilter.layout!=="liste"?"selected":""}>Mosaique</option><option value="liste" ${fpFilter.layout==="liste"?"selected":""}>Liste</option></select></div>
-        <div class="flex items-end"><button type="button" class="btn btn-ghost w-full text-xs" onclick="resetFpPositionFilters()">Réinitialiser</button></div>
+        </select><div class="fp-layout-switch"><button type="button" class="${fpFilter.layout!=="liste"?"active":""}" onclick="setFpFilter('layout','mosaique')" title="Affichage en mosaïque">▦</button><button type="button" class="${fpFilter.layout==="liste"?"active":""}" onclick="setFpFilter('layout','liste')" title="Affichage en liste">☷</button></div><button type="button" class="fp-reset-btn" onclick="resetFpPositionFilters()">Réinitialiser</button></div>
       </div>
-    </fieldset>
+    </section>
     ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucune fiche${safeSocFilter?` pour ${escapeHTML(safeSocFilter)}`:""}.</div>`:(fpFilter.layout==="liste"?fichePositionListHTML(list):`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`)}
   </div>`;
 }

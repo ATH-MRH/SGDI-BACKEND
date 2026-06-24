@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260623-fastload";
+const SGDI_CACHE = "sgdi-pwa-v20260624-visible-commercial-billing-tabs";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
