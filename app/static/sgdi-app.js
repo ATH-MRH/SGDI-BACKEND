@@ -30413,16 +30413,14 @@ function showSaveOverlay(){
   const el=document.createElement("div");
   el.id="sgdi-save-overlay";
   el.innerHTML=`<style>@keyframes sgdi-spin{to{transform:rotate(360deg)}}</style>
-    <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9997;background:rgba(15,23,42,0.25);backdrop-filter:blur(2px)">
-      <div style="background:#fff;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,0.22);padding:36px 52px;display:flex;flex-direction:column;align-items:center;gap:14px;min-width:280px;border:1px solid #e2e8f0">
-        <div id="sgdi-save-icon" style="width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#043970;border-radius:50%;animation:sgdi-spin 0.7s linear infinite"></div>
-        <div id="sgdi-save-msg" style="font-size:15px;font-weight:800;color:#043970;letter-spacing:0.02em;text-align:center">Enregistrement en cours...</div>
-        <div style="width:100%">
-          <div style="height:8px;width:100%;border-radius:999px;background:#e2e8f0;overflow:hidden">
-            <div id="sgdi-save-bar" style="height:100%;border-radius:999px;background:#043970;width:0%;transition:width 0.4s ease"></div>
-          </div>
-          <div id="sgdi-save-pct" style="font-size:11px;color:#64748b;text-align:right;margin-top:4px">0%</div>
+    <div style="position:fixed;top:0;left:0;right:0;z-index:9997;pointer-events:none">
+      <div style="background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(0,0,0,0.10);padding:8px 20px;display:flex;align-items:center;gap:12px;pointer-events:auto">
+        <div id="sgdi-save-icon" style="width:18px;height:18px;border:3px solid #e2e8f0;border-top-color:#043970;border-radius:50%;animation:sgdi-spin 0.7s linear infinite;flex-shrink:0"></div>
+        <div id="sgdi-save-msg" style="font-size:13px;font-weight:700;color:#043970;white-space:nowrap">Enregistrement en cours...</div>
+        <div style="flex:1;height:6px;border-radius:999px;background:#e2e8f0;overflow:hidden;min-width:80px">
+          <div id="sgdi-save-bar" style="height:100%;border-radius:999px;background:#043970;width:0%;transition:width 0.4s ease"></div>
         </div>
+        <div id="sgdi-save-pct" style="font-size:11px;color:#64748b;white-space:nowrap">0%</div>
       </div>
     </div>`;
   document.body.appendChild(el);
@@ -30474,7 +30472,7 @@ function showOmSaveOverlay(){
   closeOmSaveOverlay();
   const el=document.createElement("div");
   el.id="om-save-overlay";
-  el.innerHTML=`<style>@keyframes om-spin{to{transform:rotate(360deg)}}</style><div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9998;background:rgba(15,23,42,0.25);backdrop-filter:blur(2px)"><div style="background:#fff;border-radius:20px;box-shadow:0 12px 48px rgba(0,0,0,0.22);padding:36px 52px;display:flex;flex-direction:column;align-items:center;gap:18px;min-width:240px;border:1px solid #e2e8f0"><div id="om-save-icon" style="width:40px;height:40px;border:4px solid #e2e8f0;border-top-color:#043970;border-radius:50%;animation:om-spin 0.7s linear infinite"></div><div id="om-save-msg" style="font-size:15px;font-weight:800;color:#043970;letter-spacing:0.02em;text-align:center">Enregistrement en cours...</div></div></div>`;
+  el.innerHTML=`<style>@keyframes om-spin{to{transform:rotate(360deg)}}</style><div style="position:fixed;top:0;left:0;right:0;z-index:9998;pointer-events:none"><div style="background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(0,0,0,0.10);padding:8px 20px;display:flex;align-items:center;gap:12px;pointer-events:auto"><div id="om-save-icon" style="width:18px;height:18px;border:3px solid #e2e8f0;border-top-color:#043970;border-radius:50%;animation:om-spin 0.7s linear infinite;flex-shrink:0"></div><div id="om-save-msg" style="font-size:13px;font-weight:700;color:#043970;white-space:nowrap">Enregistrement en cours...</div></div></div>`;
   document.body.appendChild(el);
   clearTimeout(window._omSaveOverlayTimer);
   window._omSaveOverlayTimer=setTimeout(()=>{closeOmSaveOverlay();toast("Délai d'enregistrement dépassé — vérifiez la connexion serveur","error")},30000);
@@ -30483,7 +30481,7 @@ function updateOmSaveOverlay(msg,success){
   const msgEl=document.getElementById("om-save-msg");
   const iconEl=document.getElementById("om-save-icon");
   if(msgEl){msgEl.textContent=msg;if(success)msgEl.style.color="#16a34a"}
-  if(iconEl&&success){iconEl.style.animation="none";iconEl.style.border="none";iconEl.style.background="#dcfce7";iconEl.style.display="flex";iconEl.style.alignItems="center";iconEl.style.justifyContent="center";iconEl.innerHTML=`<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M4 11l5.5 5.5 8.5-9" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+  if(iconEl&&success){iconEl.style.animation="none";iconEl.style.border="3px solid #16a34a";iconEl.style.borderTopColor="#16a34a";iconEl.style.background="#dcfce7"}
 }
 function closeOmSaveOverlay(){clearTimeout(window._omSaveOverlayTimer);const el=document.getElementById("om-save-overlay");if(el)el.remove()}
 async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
