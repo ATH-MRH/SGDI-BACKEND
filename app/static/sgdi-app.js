@@ -3190,7 +3190,7 @@ function incidentMatchesSociete(incident,soc){
 function defaultAccessMap(){
   const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],"SECRETARIAT GÉNÉRAL":["rh","dispatch","admin"],"POINTAGE":["rh","dispatch","admin"],"PORTAIL RH":["rh","dispatch","agent","admin"],"ADMINISTRATEUR GÉNÉRAL":["admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],badge:["rh","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],secretariat:["rh","dispatch","admin"],drh:["rh","admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],portail:["rh","dispatch","agent","admin"],parametres:["admin"],admin:["admin"]};
   map["ADMINISTRATION SYSTEME"]=map["ADMINISTRATEUR GÉNÉRAL"];
-  ["materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/dotation","materiel/sites-dotation","materiel/reversement"].forEach(k=>map[k]=map.materiel);
+  ["materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement"].forEach(k=>map[k]=map.materiel);
   ["facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation"].forEach(k=>map[k]=map.facturation);
   ["commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/devis","commercial/catalogue","commercial/tarifs","commercial/stats"].forEach(k=>map[k]=map.commercial);
   ["secretariat/courriers","secretariat/notes","secretariat/archives"].forEach(k=>map[k]=map.secretariat);
@@ -3501,7 +3501,8 @@ function sgdiModuleHostConfigs(){
         {label:"TABLEAU DE BORD",route:"materiel/dashboard"},
         {label:"CATALOGUE",route:"materiel/articles"},
         {label:"DOTATIONS",route:"materiel/dotation"},
-        {label:"MOUVEMENTS",route:"materiel/mouvements"}
+        {label:"MOUVEMENTS",route:"materiel/mouvements"},
+        {label:"ALERTES",route:"materiel/alertes"}
       ]
     },
     commercial:{
@@ -4941,7 +4942,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
-      ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
+      ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
     ],
     facturation:[
       ["TABLEAU DE BORD","facturation/dashboard"],["CLIENTS","facturation/clients"],["DEVIS","facturation/devis"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
@@ -5084,6 +5085,7 @@ function renderSidebar(){
     const matArticles=srvMat?.articles_active??(db.stockArticles||[]).filter(a=>dataMatchesSociete(a,soc)).length;
     const matMagasins=(db.magasins||[]).filter(m=>dataMatchesSociete(m,soc)).length;
     const matFournisseurs=(db.fournisseurs||[]).filter(f=>dataMatchesSociete(f,soc)).length;
+    const matAlertes=(db.stockArticles||[]).filter(a=>dataMatchesSociete(a,soc)&&stockGetEtat(a).code!=="ok").length;
 
     // Compteurs FACTURATION (filtrés par société)
     const factDevis=soc?(db.devis||[]).filter(d=>!d.societe||d.societe===soc).length:(db.devis||[]).length;
@@ -5128,6 +5130,7 @@ function renderSidebar(){
         {label:"ARTICLES",route:"materiel/articles",count:matArticles},
         {label:"MAGASINS",route:"materiel/magasins",count:matMagasins},
         {label:"FOURNISSEURS",route:"materiel/fournisseurs",count:matFournisseurs},
+        {label:"ALERTES",route:"materiel/alertes",count:matAlertes||null},
         {label:"SITES",route:"sites/actifs",aliases:["sites"]},
         {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",count:siteDotationCount},
         {label:"EMPLOYÉ EN ATTENTE DE DOTATION",route:"materiel/dotation",count:dotationCount},
@@ -17494,7 +17497,7 @@ function renderMateriel(view,sub,arg){
   if(sub==="article-nouveau"){return renderStockArticleForm(view,null)}
   if(sub==="article-edit"&&arg){return renderStockArticleForm(view,arg)}
   if(sub==="mouvements"){return sgdiAuthToken()?renderMatSimpleMouvementsServer(view):renderMatSimpleMouvements(view)}
-  if(sub==="alertes"){return renderStockProMain(view,"alertes")}
+  if(sub==="alertes"){return sgdiAuthToken()?renderMatSimpleAlertesServer(view):renderMatSimpleAlertes(view)}
   if(sub==="stats"||sub==="statistiques"){return renderStockProMain(view,"statistiques")}
   if(sub==="entrees"){return renderStockProMain(view,"entrees")}
   if(sub==="sorties"){return renderStockProMain(view,"sorties")}
@@ -17718,16 +17721,13 @@ function matSimpleHeader(active){
   const mvts=matSimpleBySoc(db.stockMouvements||[]);
   const dot=materialPendingDotationCountForSoc(soc);
   const rev=agentsEnInstanceReversement().length;
-  const alerts=arts.filter(a=>{
-    const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
-    const seuil=parseFloat(a.seuilAlerte)||0;
-    return q<=0||(seuil&&q<=seuil);
-  }).length;
+  const alerts=arts.filter(a=>stockGetEtat(a).code!=="ok").length;
   const tabs=[
     ["dashboard","Tableau de bord","materiel/dashboard"],
     ["articles","Catalogue","materiel/articles",arts.length],
     ["dotation","Dotations","materiel/dotation",dot||undefined],
-    ["mouvements","Mouvements","materiel/mouvements"]
+    ["mouvements","Mouvements","materiel/mouvements"],
+    ["alertes","Alertes","materiel/alertes",alerts||undefined]
   ];
   const socOptions=`<option value="">Toutes sociétés</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}`;
   return `<nav class="no-print mb-4" style="display:flex;align-items:center;gap:0;border-bottom:2px solid #e2e8f0;background:#fff">
@@ -17795,9 +17795,9 @@ function renderMatSimpleDashboard(view){
     const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
     totalQty+=q;
     totalVal+=q*(parseFloat(a.prixUnitaire)||0);
-    const seuil=parseFloat(a.seuilAlerte)||0;
-    if(q<=0)nbRupture++;
-    else if(seuil&&q<=seuil)nbAlertes++;
+    const etat=stockGetEtat(a);
+    if(etat.code==="rupture")nbRupture++;
+    else if(etat.code==="alerte"||etat.code==="min")nbAlertes++;
   });
   const now=new Date();
   const m30=new Date(now);m30.setDate(m30.getDate()-30);
@@ -17889,7 +17889,7 @@ function renderMatSimpleDashboard(view){
   const alertsList=(nbRupture+nbAlertes)>0?`<div class="card p-4 mb-5" style="border-left:3px solid #dc2626">
     <div class="font-bold text-sm mb-2" style="color:#dc2626">Articles en alerte</div>
     ${arts.filter(a=>{const q=stockGetActuel?stockGetActuel(a.id):0;return q<=0}).slice(0,8).map(a=>`<div class="flex justify-between py-1 border-b text-sm"><a href="#/materiel/article/${a.id}" style="color:#dc2626;font-weight:600">${escapeHTML(a.designation||a.code)}</a><span style="color:#dc2626;font-size:11px;font-weight:700">RUPTURE</span></div>`).join("")}
-    ${arts.filter(a=>{const q=stockGetActuel?stockGetActuel(a.id):0;const s=parseFloat(a.seuilAlerte)||0;return q>0&&s&&q<=s}).slice(0,8).map(a=>{const q=stockGetActuel(a.id);return`<div class="flex justify-between py-1 border-b text-sm"><a href="#/materiel/article/${a.id}" style="color:#b45309;font-weight:600">${escapeHTML(a.designation||a.code)}</a><span style="color:#b45309;font-size:11px">${qty(q)} / ${qty(a.seuilAlerte)}</span></div>`}).join("")}
+    ${arts.filter(a=>{const e=stockGetEtat(a);return e.code==="alerte"||e.code==="min"}).slice(0,8).map(a=>{const q=stockGetActuel(a.id);const threshold=parseFloat(a.seuilAlerte)||parseFloat(a.stockMin)||0;return`<div class="flex justify-between py-1 border-b text-sm"><a href="#/materiel/article/${a.id}" style="color:#b45309;font-weight:600">${escapeHTML(a.designation||a.code)}</a><span style="color:#b45309;font-size:11px">${qty(q)} / ${qty(threshold)}</span></div>`}).join("")}
   </div>`:"";
   view.innerHTML=`${header}<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:16px"><div><div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.08em">Matériel & équipement</div><div style="font-size:20px;font-weight:900;color:#0f172a">TABLEAU DE BORD ${alertsBadge}</div></div></div>${kpi}${actions}${magasinsSection}${alertsList}`;
 }
@@ -19399,11 +19399,10 @@ function renderMatSimpleArticles(view){
     if(filtCat&&a.categorie!==filtCat)return false;
     if(filtMag&&(a.magasinId||"")!==filtMag)return false;
     if(filtEtat){
-      const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):0;
-      const seuil=parseFloat(a.seuilAlerte)||0;
-      if(filtEtat==="rupture"&&q>0)return false;
-      if(filtEtat==="alerte"&&!(seuil&&q>0&&q<=seuil))return false;
-      if(filtEtat==="ok"&&!(q>(seuil||0)))return false;
+      const etat=stockGetEtat(a).code;
+      if(filtEtat==="rupture"&&etat!=="rupture")return false;
+      if(filtEtat==="alerte"&&etat!=="alerte"&&etat!=="min")return false;
+      if(filtEtat==="ok"&&etat!=="ok")return false;
     }
     return true;
   });
@@ -19420,9 +19419,9 @@ function renderMatSimpleArticles(view){
     <thead style="background:#043970"><tr><th class="p-3 text-left">Code</th><th class="p-3 text-left">Désignation</th><th class="p-3 text-left">Catégorie</th><th class="p-3 text-left">Magasin</th><th class="p-3 text-center">Stock</th><th class="p-3 text-right">P.U.</th><th class="p-3 text-center">État</th><th class="p-3 text-right">Actions</th></tr></thead>
     <tbody>${filtered.map(a=>{
       const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
-      const seuil=parseFloat(a.seuilAlerte)||0;
-      const etat=q<=0?{c:"#dc2626",bg:"#fef2f2",l:"🔴 Rupture"}:(seuil&&q<=seuil?{c:"#b45309",bg:"#fffbeb",l:"🟡 Alerte"}:{c:"#16a34a",bg:"#f0fdf4",l:"✓ OK"});
-      const rowBg=q<=0?"#fef2f2":(seuil&&q<=seuil?"#fffbeb":"");
+      const stockEtat=stockGetEtat(a);
+      const etat=stockEtat.code==="rupture"?{c:"#dc2626",bg:"#fef2f2",l:"🔴 Rupture"}:((stockEtat.code==="alerte"||stockEtat.code==="min")?{c:"#b45309",bg:"#fffbeb",l:"🟡 Alerte"}:{c:"#16a34a",bg:"#f0fdf4",l:"✓ OK"});
+      const rowBg=stockEtat.code==="rupture"?"#fef2f2":((stockEtat.code==="alerte"||stockEtat.code==="min")?"#fffbeb":"");
       const mag=mags.find(m=>m.id===a.magasinId);
       return`<tr class="border-t hover:bg-slate-50" style="${rowBg?"background:"+rowBg:""}">`+`
         <td class="p-3 font-mono text-xs">${escapeHTML(a.code||"—")}</td>
@@ -20349,15 +20348,15 @@ function stockGetEtat(article){
   const seuil=parseFloat(article.seuilAlerte)||0;
   const min=parseFloat(article.stockMin)||0;
   if(q<=0)return{code:"rupture",label:"Rupture",color:"#dc2626",bg:"#fef2f2"};
-  if(seuil>0&&q<=seuil)return{code:"alerte",label:"Stock bas",color:"#043970",bg:"#043970"};
-  if(min>0&&q<min)return{code:"min",label:"Sous minimum",color:"#ca8a04",bg:"#fefce8"};
-  return{code:"ok",label:"OK",color:"#16a34a",bg:"#043970"};
+  if(seuil>0&&q<=seuil)return{code:"alerte",label:"Stock bas",color:"#b45309",bg:"#fffbeb"};
+  if(min>0&&q<=min)return{code:"min",label:"Sous minimum",color:"#ca8a04",bg:"#fefce8"};
+  return{code:"ok",label:"OK",color:"#16a34a",bg:"#f0fdf4"};
 }
-function stockGetSocFilter(){return session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("mtSociete")||"")}
+function stockGetSocFilter(){return matSimpleSocFilter()}
 function stockArticlesFiltered(){
   const soc=stockGetSocFilter();
   let arts=(db.stockArticles||[]).slice();
-  if(soc)arts=arts.filter(a=>a.societe===soc);
+  if(soc)arts=arts.filter(a=>!a.societe||normalizeSocieteName(a.societe)===normalizeSocieteName(soc));
   return arts;
 }
 function stockMouvementsFiltered(){
@@ -20407,8 +20406,41 @@ function stockMvtTypeLabel(t){return{entree:"Entrée",achat:"Nouvelle acquisitio
 function stockMvtTypeColor(t){return{entree:"#16a34a",achat:"#16a34a",retour:"#043970",retour_employe:"#043970",retour_site:"#043970",regularisation_entree:"#16a34a",sortie:"#dc2626",perte:"#043970",casse:"#7c2d12",ajustement:"#7c3aed",nouvelle_dotation:"#dc2626",renouvellement_dotation:"#043970",dotation_pret:"#7c3aed",reforme:"#475569"}[t]||"#64748b"}
 function stockMvtTypeIcon(t){return ""}
 
+function renderMatSimpleAlertes(view){
+  const soc=matSimpleSocFilter();
+  const kpi=stockSummaryKPI();
+  view.innerHTML=`${matSimpleHeader("alertes")}
+    <div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
+      <div>
+        <h1 class="text-2xl font-black uppercase">Alertes stock</h1>
+        <p class="text-sm text-slate-500">${soc?escapeHTML(soc):"Toutes les sociétés"} · Ruptures, stocks bas, articles dormants et surstocks.</p>
+      </div>
+      <button class="btn btn-primary" onclick="stockOpenMvt('entree')">+ Entrée stock</button>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Articles suivis</div><div class="text-2xl font-black">${kpi.totalArticles}</div></div>
+      <div class="card p-4" style="border-top:4px solid #dc2626"><div class="text-xs uppercase font-bold text-slate-500">Ruptures</div><div class="text-2xl font-black text-red-700">${kpi.enRupture}</div></div>
+      <div class="card p-4" style="border-top:4px solid #d97706"><div class="text-xs uppercase font-bold text-slate-500">Stocks bas</div><div class="text-2xl font-black text-amber-700">${kpi.enAlerte}</div></div>
+      <div class="card p-4" style="border-top:4px solid #16a34a"><div class="text-xs uppercase font-bold text-slate-500">Situation normale</div><div class="text-2xl font-black text-emerald-700">${Math.max(0,kpi.totalArticles-kpi.enRupture-kpi.enAlerte)}</div></div>
+    </div>
+    ${renderStockAlertesTab()}`;
+}
+
+async function renderMatSimpleAlertesServer(view){
+  renderMatSimpleAlertes(view);
+  if(window.__sgdiMatAlertesRefreshing)return;
+  window.__sgdiMatAlertesRefreshing=true;
+  try{
+    await syncMaterielFromPostgres();
+    if(String(location.hash||"").startsWith("#/materiel/alertes"))renderMatSimpleAlertes(view);
+  }catch(e){
+    console.warn("Alertes matériel serveur indisponibles",e);
+  }finally{
+    window.__sgdiMatAlertesRefreshing=false;
+  }
+}
+
 function renderStockProMain(view,tab){
-  return renderMatSimpleArticles(view);
   const soc=stockGetSocFilter();
   tab=tab||"catalogue";
   const kpi=stockSummaryKPI();
@@ -20670,12 +20702,12 @@ function renderStockAlertesTab(){
       <h3 class="font-bold text-red-700 mb-3 flex items-center gap-2"><span style="font-size:24px">✕</span> Ruptures de stock <span class="pill" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca">${ruptures.length}</span></h3>
       ${renderList(ruptures,"✓ Aucune rupture — situation normale.",{color:"#dc2626",bg:"#fef2f2"})}
     </div>
-    <div class="card p-4" style="border-top:4px solid #043970">
-      <h3 class="font-bold mb-3 flex items-center gap-2" style="color:#043970"><span style="font-size:24px">⚠</span> Stocks bas / sous minimum <span class="pill" style="background:#043970;color:#043970;border:1px solid #fed7aa">${alertes.length}</span></h3>
-      ${renderList(alertes,"✓ Aucun stock bas.",{color:"#043970",bg:"#043970"})}
+    <div class="card p-4" style="border-top:4px solid #d97706">
+      <h3 class="font-bold mb-3 flex items-center gap-2" style="color:#b45309"><span style="font-size:24px">⚠</span> Stocks bas / sous minimum <span class="pill" style="background:#fffbeb;color:#b45309;border:1px solid #fed7aa">${alertes.length}</span></h3>
+      ${renderList(alertes,"✓ Aucun stock bas.",{color:"#b45309",bg:"#fffbeb"})}
     </div>
     <div class="card p-4" style="border-top:4px solid #ca8a04">
-      <h3 class="font-bold mb-3 flex items-center gap-2" style="color:#ca8a04"><span style="font-size:24px">💤</span> Articles dormants (>90 jours) <span class="pill" style="background:#fefce8;color:#ca8a04;border:1px solid #043970">${dormants.length}</span></h3>
+      <h3 class="font-bold mb-3 flex items-center gap-2" style="color:#ca8a04"><span style="font-size:24px">💤</span> Articles dormants (>90 jours) <span class="pill" style="background:#fefce8;color:#ca8a04;border:1px solid #fde68a">${dormants.length}</span></h3>
       ${renderList(dormants,"Aucun article dormant.",{color:"#ca8a04",bg:"#fefce8"})}
     </div>
     <div class="card p-4" style="border-top:4px solid #7c3aed">
@@ -27373,7 +27405,7 @@ const ADMIN_MODULES=[
   "DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL",
   "dashboard","dossiers","recrutement","reserve","candidats_archives","drh/social","demandes_personnel","demandes_structure",
   "contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports",
-  "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/dotation","materiel/sites-dotation","materiel/reversement",
+  "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement",
   "facturation","facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
   "commercial","commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats",
   "secretariat","secretariat/courriers","secretariat/notes","secretariat/archives",
@@ -27386,7 +27418,7 @@ function adminAccessModuleLabel(module){
     "DRH":"DRH","OPS":"OPS","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
     dashboard:"Tableau de bord",dossiers:"Dossiers",recrutement:"Recrutement",reserve:"Réserve",candidats_archives:"Candidats archivés","drh/social":"Social DRH",demandes_personnel:"Demandes personnel",demandes_structure:"Demandes structure",
     contrats:"Contrats",a_contractualiser:"À contractualiser",effectif:"Effectifs",agents:"Agents",fiches:"Fiches de position",badge:"Badges",sites:"Sites",incidents:"Incidents",conges:"Congés",paie:"Paie",rapports:"Rapports",
-    materiel:"Tableau de bord matériel","materiel/articles":"Articles","materiel/magasins":"Magasins","materiel/fournisseurs":"Fournisseurs","materiel/dotation":"Dotation employés","materiel/sites-dotation":"Dotation sites","materiel/reversement":"Reversement",
+    materiel:"Tableau de bord matériel","materiel/articles":"Articles","materiel/magasins":"Magasins","materiel/fournisseurs":"Fournisseurs","materiel/alertes":"Alertes stock","materiel/dotation":"Dotation employés","materiel/sites-dotation":"Dotation sites","materiel/reversement":"Reversement",
     facturation:"Tableau de bord finances","facturation/devis":"Devis","facturation/factures":"Factures","facturation/paiements":"Paiements","facturation/avances":"Avances","facturation/avoirs":"Avoirs","facturation/caisse":"Caisse","facturation/situation":"Situation client",
     commercial:"Tableau de bord commercial","commercial/prospects":"Prospects","commercial/clients":"Clients","commercial/opportunites":"Opportunités","commercial/visites":"Visites","commercial/catalogue":"Catalogue","commercial/tarifs":"Tarifs","commercial/stats":"Statistiques commerciales",
     secretariat:"Tableau de bord secrétariat","secretariat/courriers":"Courriers","secretariat/notes":"Notes","secretariat/archives":"Archives",
