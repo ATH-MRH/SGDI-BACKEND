@@ -5326,6 +5326,11 @@ function sgdiEnterViewMode(silent){
   }
   sgdiViewModeActive=true;
   document.body.classList.add("sgdi-view-mode");
+  const view=document.getElementById("view");
+  if(view){
+    view.querySelectorAll("[data-sgdi-was-disabled]").forEach(el=>{el.setAttribute("disabled","");delete el.dataset.sgdiWasDisabled});
+    view.querySelectorAll("[data-sgdi-was-readonly]").forEach(el=>{el.setAttribute("readonly","");delete el.dataset.sgdiWasReadonly});
+  }
   _sgdiUpdateEditFab();
 }
 function sgdiExitViewMode(){
@@ -5337,6 +5342,12 @@ function sgdiExitViewMode(){
   }
   sgdiViewModeActive=false;
   document.body.classList.remove("sgdi-view-mode");
+  if(view){
+    view.querySelectorAll("input:not([data-no-lock]):not([type='button']):not([type='submit']):not([type='checkbox']):not([type='radio']),select:not([data-no-lock]),textarea:not([data-no-lock])").forEach(el=>{
+      if(el.disabled){el.dataset.sgdiWasDisabled="1";el.removeAttribute("disabled")}
+      if(el.readOnly){el.dataset.sgdiWasReadonly="1";el.removeAttribute("readonly")}
+    });
+  }
   _sgdiUpdateEditFab();
   if(session&&typeof logActivity==="function"){
     const page=_sgdiCurrentPageLabel();
