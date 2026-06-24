@@ -17767,8 +17767,8 @@ function matSimpleStockMagasin(magasinId){
     const q=stockGetActuel?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);
     totalQty+=q;
     totalVal+=q*(parseFloat(a.prixUnitaire)||0);
-    const seuil=parseFloat(a.seuilAlerte)||0;
-    if(cfg.alertesActives&&((seuil&&q<=seuil)||(!seuil&&q<=cfg.seuilBas)))nbAlertes++;
+    const etat=typeof stockGetEtat==="function"?stockGetEtat(a):{code:q<=0?"rupture":"ok"};
+    if(etat.code!=="ok")nbAlertes++;
   });
   return{nb:arts.length,qty:totalQty,val:totalVal,alertes:nbAlertes,stockArticles:arts.length,magasinArticles:0,seuilBas:cfg.seuilBas,seuilCritique:cfg.seuilCritique};
 }
