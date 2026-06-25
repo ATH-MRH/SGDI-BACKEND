@@ -10260,7 +10260,8 @@ function drumClick(id,idx){
   const opts=_drumOpts[id]||[];if(opts[idx])sel.value=opts[idx].value;
   drumRender(id);applyContratFilters();
 }
-function drumWheel(e,id){e.preventDefault();drumStep(id,e.deltaY>0?1:-1);}
+const _drumWheelLast={};
+function drumWheel(e,id){e.preventDefault();const now=Date.now();if(now-(_drumWheelLast[id]||0)<250)return;_drumWheelLast[id]=now;drumStep(id,e.deltaY>0?1:-1);}
 function drumRender(id){
   const sel=document.getElementById(id);if(!sel)return;
   const opts=_drumOpts[id]||[];const idx=Math.max(0,opts.findIndex(o=>o.value===sel.value));
