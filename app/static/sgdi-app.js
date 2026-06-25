@@ -10239,7 +10239,7 @@ const _drumOpts={};
 function ensureDrumCSS(){
   if(document.getElementById("sgdi-drum-css"))return;
   const s=document.createElement("style");s.id="sgdi-drum-css";
-  s.textContent=`.sgdi-drum{display:inline-flex;flex-direction:column;align-items:center;width:100%;gap:1px;position:relative}.drum-btn{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:10px;line-height:1;padding:3px 0;width:100%;text-align:center;border-radius:4px;transition:background .1s}.drum-btn:hover{background:#f1f5f9;color:#0f172a}.drum-win{width:100%;border-radius:8px;border:1px solid #e2e8f0;background:#fff;overflow:hidden}.drum-cell{height:30px;line-height:30px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;transition:background .1s}.drum-empty{height:30px}.drum-sel{font-weight:700;color:#043970;background:#eff6ff;font-size:13px}.drum-adj{color:#94a3b8;font-size:11px}.drum-adj:hover{background:#f8fafc;color:#334155}`;
+  s.textContent=`.sgdi-drum{display:inline-flex;flex-direction:column;align-items:center;width:160px;gap:1px;position:relative}.drum-btn{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:10px;line-height:1;padding:3px 0;width:100%;text-align:center;border-radius:4px;transition:background .1s}.drum-btn:hover{background:#f1f5f9;color:#0f172a}.drum-win{width:100%;border-radius:8px;border:1px solid #e2e8f0;background:#fff;overflow:hidden;cursor:ns-resize}.drum-cell{height:30px;line-height:30px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;transition:background .1s}.drum-empty{height:30px}.drum-sel{font-weight:700;color:#043970;background:#eff6ff;font-size:13px}.drum-adj{color:#94a3b8;font-size:11px}.drum-adj:hover{background:#f8fafc;color:#334155}`;
   document.head.appendChild(s);
 }
 function drumPickerHTML(id,opts,selected){
@@ -10247,7 +10247,7 @@ function drumPickerHTML(id,opts,selected){
   const idx=Math.max(0,opts.findIndex(o=>o.value===(selected||"")));
   const cells=[-1,0,1].map(d=>{const i=idx+d;if(i<0||i>=opts.length)return`<div class="drum-empty"></div>`;const cls=d===0?"drum-cell drum-sel":"drum-cell drum-adj";return`<div class="${cls}" onclick="drumClick('${id}',${i})">${escapeHTML(opts[i].label)}</div>`;}).join("");
   const selOpts=opts.map(o=>`<option value="${escapeHTML(o.value)}"${o.value===(selected||"")?" selected":""}>${escapeHTML(o.label)}</option>`).join("");
-  return`<div class="sgdi-drum" id="${id}-wrap"><button type="button" class="drum-btn" onclick="drumStep('${id}',-1)">▲</button><div class="drum-win" id="${id}-win">${cells}</div><button type="button" class="drum-btn" onclick="drumStep('${id}',+1)">▼</button><select id="${id}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" tabindex="-1">${selOpts}</select></div>`;
+  return`<div class="sgdi-drum" id="${id}-wrap"><button type="button" class="drum-btn" onclick="drumStep('${id}',-1)">▲</button><div class="drum-win" id="${id}-win" onwheel="drumWheel(event,'${id}')">${cells}</div><button type="button" class="drum-btn" onclick="drumStep('${id}',+1)">▼</button><select id="${id}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" tabindex="-1">${selOpts}</select></div>`;
 }
 function drumStep(id,dir){
   const sel=document.getElementById(id);if(!sel)return;
@@ -10260,6 +10260,7 @@ function drumClick(id,idx){
   const opts=_drumOpts[id]||[];if(opts[idx])sel.value=opts[idx].value;
   drumRender(id);applyContratFilters();
 }
+function drumWheel(e,id){e.preventDefault();drumStep(id,e.deltaY>0?1:-1);}
 function drumRender(id){
   const sel=document.getElementById(id);if(!sel)return;
   const opts=_drumOpts[id]||[];const idx=Math.max(0,opts.findIndex(o=>o.value===sel.value));
