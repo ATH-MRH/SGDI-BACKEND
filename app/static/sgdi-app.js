@@ -19,6 +19,31 @@ const WILAYAS = [
  "52 - Béni Abbès","53 - In Salah","54 - In Guezzam","55 - Touggourt","56 - Djanet",
  "57 - El M'Ghair","58 - El Meniaa"
 ];
+function wilayaCodeFromValue(value){
+  const raw=String(value||"").trim();
+  const m=raw.match(/^(\d{1,2})\b/);
+  if(m)return m[1].padStart(2,"0");
+  const norm=raw.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const found=WILAYAS.find(w=>w.replace(/^\d{1,2}\s*-\s*/,"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()===norm);
+  return found?String(found.match(/^(\d{1,2})/)?.[1]||"").padStart(2,"0"):"";
+}
+function communesForWilaya(value){
+  const code=wilayaCodeFromValue(value);
+  const map=window.ALGERIA_COMMUNES_BY_WILAYA_CODE||{};
+  return code&&Array.isArray(map[code])?map[code]:[];
+}
+function communeOptionsHTML(wilaya,selected){
+  const list=communesForWilaya(wilaya);
+  const current=String(selected||"").trim();
+  const hasCurrent=current&&list.some(c=>c.localeCompare(current,"fr",{sensitivity:"base"})===0);
+  return `<option value="">${list.length?"— Choisir la commune —":"— Choisir d'abord la wilaya —"}</option>${current&&!hasCurrent?`<option selected>${escapeHTML(current)}</option>`:""}${list.map(c=>`<option ${current&&c.localeCompare(current,"fr",{sensitivity:"base"})===0?"selected":""}>${escapeHTML(c)}</option>`).join("")}`;
+}
+function updateCommuneSelectForWilaya(wilayaSelect,communeName){
+  const form=wilayaSelect?.form||wilayaSelect?.closest("form")||document;
+  const commune=form.querySelector(`[name="${communeName||"commune"}"]`);
+  if(!commune||commune.tagName!=="SELECT")return;
+  commune.innerHTML=communeOptionsHTML(wilayaSelect.value,commune.value);
+}
 let POSTES = [
  "Agent administratif","Agent d'entretien","Agent de bureau","Agent de prévention et de sécurité",
  "Agent polyvalent","Cariste","Chauffeur","Chef d'équipe","Chef de groupe","Chef de poste",
@@ -12105,9 +12130,9 @@ function renderAgentForm(view,id){
             <div class="rh-op-grid">
               <label><span>Adresse</span><input class="input" name="adresse" value="${escapeHTML(a.adresse||a.address||"")}" ${identiteEditable?"":"disabled"}/></label>
               <span class="rh-op-grid-spacer" aria-hidden="true"></span>
-              <label><span>Commune</span><input class="input" name="commune" value="${escapeHTML(a.commune||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Commune</span><select class="select" name="commune" ${identiteEditable?"":"disabled"}>${communeOptionsHTML(a.wilaya,a.commune||"")}</select></label>
               <label><span>NIN <small>(identification nationale)</small></span><input class="input" name="nin" value="${escapeHTML(a.nin||"")}" inputmode="numeric" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Wilaya</span><select class="select" name="wilaya" ${identiteEditable?"":"disabled"}><option value="">— Choisir —</option>${WILAYAS.map(w=>`<option ${a.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></label>
+              <label><span>Wilaya</span><select class="select" name="wilaya" onchange="updateCommuneSelectForWilaya(this,'commune')" ${identiteEditable?"":"disabled"}><option value="">— Choisir —</option>${WILAYAS.map(w=>`<option ${a.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></label>
               <label><span>N° SS <small>(C/Chiffa)</small></span><input class="input" name="numeroCnas" value="${escapeHTML(a.numeroCnas||"")}" inputmode="numeric" ${identiteEditable?"":"disabled"}/></label>
               <label class="rh-phone-field"><span>Numéro de téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${identiteEditable?"":"disabled"}/></label>
               <label><span>N° PP/CIN</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${identiteEditable?"":"disabled"}/></label>
