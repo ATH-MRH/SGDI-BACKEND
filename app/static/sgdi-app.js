@@ -1043,7 +1043,7 @@ async function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   try{
-    const employees=await window.SGDI_API.employees.list();
+    const employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
     if(!Array.isArray(employees))return null;
     db.agents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
     normalizeEmployeeCodesInDB();
@@ -1109,7 +1109,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:()=>sgdiApi("/drh/employees",{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
+  employees:{list:(params)=>sgdiApi("/drh/employees"+sgdiQuery(params),{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
@@ -1152,6 +1152,40 @@ window.SGDI_API={
   sync:{pull:sgdiPullState,push:()=>sgdiBackendSave(),repair:()=>{const r=sgdiAutoRepairDB();if(r.length)sgdiBackendSave();return r}}
 };
 window.SGDI=window.SGDI_API;
+let sgdiEmployeesDisplayLoading=false;
+function sgdiBackendEmployeeTotalForDisplay(scopeSoc){
+  const erpEmp=typeof sgdiErpEmployeeCounters==="function"?sgdiErpEmployeeCounters(scopeSoc):null;
+  return Number(erpEmp?.total||erpEmp?.non_archived||erpEmp?.by_status?.actif||erpEmp?.by_status?.active||0)||0;
+}
+function sgdiDisplayActiveEmployees(erpEmp,fallback){
+  const operational=Number(erpEmp?.operational_active);
+  const byStatusActive=Number(erpEmp?.by_status?.actif??erpEmp?.by_status?.active);
+  const nonArchived=Number(erpEmp?.non_archived);
+  if(Number.isFinite(operational)&&operational>0)return operational;
+  if(Number.isFinite(byStatusActive))return byStatusActive;
+  if(Number.isFinite(nonArchived))return nonArchived;
+  return fallback;
+}
+function sgdiEnsureEmployeesForDisplay(options){
+  const opt=options||{};
+  if(sgdiEmployeesDisplayLoading||!sgdiBackendShouldUse()||!sgdiAuthToken()||!window.SGDI_API?.employees?.list)return null;
+  const scopeSoc=opt.society||"";
+  const localCount=(db.agents||[]).filter(a=>!scopeSoc||a.societe===scopeSoc).length;
+  const backendCount=sgdiBackendEmployeeTotalForDisplay(scopeSoc);
+  if(localCount>0||(!opt.force&&backendCount<=0))return null;
+  sgdiEmployeesDisplayLoading=true;
+  return sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
+    const count=(rows||[]).filter(a=>!scopeSoc||a.societe===scopeSoc).length;
+    if(count>0){
+      if(typeof renderView==="function")renderView();
+      else if(typeof render==="function")render();
+    }
+    return rows;
+  }).catch(e=>{
+    console.warn("Chargement employés backend pour affichage indisponible",e);
+    return null;
+  }).finally(()=>{sgdiEmployeesDisplayLoading=false});
+}
 async function sgdiRunLegacyAction(action,payload){
   const out=await SGDI.actions.run(action,payload||{});
   if(out&&out.data&&typeof out.data==="object"){
@@ -1225,6 +1259,7 @@ async function sgdiRefreshSidebarStats(society){
     const stats=await window.SGDI_API.ui.sidebarStats(activeSociety?{society:activeSociety}:{});
     window.SGDI_SIDEBAR_STATS=stats;
     sgdiRememberSidebarStats(stats);
+    sgdiEnsureEmployeesForDisplay({society:activeSociety});
     window.dispatchEvent(new CustomEvent("sgdi:sidebar-stats",{detail:stats}));
     return stats;
   }catch(error){
@@ -4099,7 +4134,7 @@ function moduleCountersRibbonHTML(){
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
     const erpDrh=sgdiErpModuleCounters("drh",scopeSoc);
     const total=Math.max(1,erpEmp?.total??ag.length);
-    const actifs=erpEmp?.operational_active??ag.filter(agentIsOperational).length;
+    const actifs=sgdiDisplayActiveEmployees(erpEmp,ag.filter(agentIsOperational).length);
     const activeHeadcount=erpEmp?.non_archived??ag.filter(employeeIsActive).length;
     const sansDotation=erpEmp?.without_equipment??materialPendingDotationCountForSoc(scopeSoc);
     const sansAffectation=erpEmp?.without_assignment??ag.filter(agentNeedsAffectation).length;
@@ -4138,7 +4173,7 @@ function moduleCountersRibbonHTML(){
     const co=(db.conges||[]).filter(c=>agIds.has(c.agentId));
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
     const total=Math.max(1,erpEmp?.total??ag.length);
-    const actifs=erpEmp?.operational_active??ag.filter(agentIsOperational).length;
+    const actifs=sgdiDisplayActiveEmployees(erpEmp,ag.filter(agentIsOperational).length);
     const activeHeadcount=erpEmp?.non_archived??ag.filter(employeeIsActive).length;
     const sansAffectation=erpEmp?.without_assignment??ag.filter(agentNeedsAffectation).length;
     const dotSoc=scopeSoc||(typeof drhActiveSocieteFilter==="function"?drhActiveSocieteFilter():"")||"";
@@ -26791,6 +26826,7 @@ function renderElementsSortants(view){
   </div>`;
 }
 function renderDRH(view,sub,arg){
+  sgdiEnsureEmployeesForDisplay({society:drhActiveSocieteFilter(),force:true});
   if(sub==="dashboard")return renderDRHDashboard(view);
   if(sub==="conges")return renderDRHCongesPersonnel(view);
   if(sub==="social")return renderDRHSocial(view,arg);
@@ -27341,6 +27377,7 @@ function drhSiteBucketsFromAgents(agents,sites=db.sites||[]){
 }
 function renderDRHDashboard(view){
   const selSoc=drhActiveSocieteFilter();
+  sgdiEnsureEmployeesForDisplay({society:selSoc,force:true});
   const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];
   const ag=drhAgentsList();
   const ca=drhCandidatesList();
@@ -27378,7 +27415,7 @@ function renderDRHDashboard(view){
   const srvDrh=sgdiErpModuleCounters("drh",selSoc);
   const srvOps=sgdiErpModuleCounters("ops",selSoc);
   const dashEmployees=srvEmp?.total??ag.length;
-  const dashActifs=srvEmp?.operational_active??actifs;
+  const dashActifs=sgdiDisplayActiveEmployees(srvEmp,actifs);
   const dashConge=srvEmp?.leave_current??enConge;
   const dashMaladie=srvEmp?.sick_leave_current??enMaladie;
   const dashAbsents=srvEmp?.absent??absents;
