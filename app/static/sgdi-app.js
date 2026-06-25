@@ -32,6 +32,7 @@ const SOCIETES = [];
 const REMOVED_SOCIETES = [];
 const TYPES_CONTRAT = ["CDD"];
 const BANQUES_ALGERIE = [
+  "CCP",
   "Banque Extérieure d'Algérie (BEA)",
   "Banque Nationale d'Algérie (BNA)",
   "Crédit Populaire d'Algérie (CPA)",
