@@ -22622,16 +22622,20 @@ function irgSalaireAlgerie(netImposable,cfg){
 function calcPaieAgent(a,ym){
   const cfg=paieConfig();
   paieEnsure();
+  const period=ym||sessionStorage.getItem("paieMois")||today().slice(0,7);
   const salaireNetContractuel=Number(a.salaireNet||0)||0;
   const brutBase=paieBaseBruteForAgent(a);
   const primeNuit=a.affectationCourante?.horaire==="Nuit"?Number(cfg.primeNuit||0):0;
+  const joursAbsencePaie=paiePointageAbsenceDays(a,period);
+  const retenueAbsencePointage=Math.max(0,Math.round(joursAbsencePaie*(Number(cfg.retenueAbsenceJour||0)||0)));
   const fixedElements=[
     {code:"BASE",libelle:"Salaire de base",type:"gain",imposable:true,cotisable:true,montant:brutBase},
     {code:"PN",libelle:"Prime de nuit",type:"gain",imposable:true,cotisable:true,montant:primeNuit},
     {code:"PANIER",libelle:"Prime panier",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primePanier||0)},
-    {code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primeTransport||0)}
+    {code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primeTransport||0)},
+    {code:"ABS",libelle:`Retenue absence pointage (${joursAbsencePaie} j)`,type:"retenue",imposable:false,cotisable:false,montant:retenueAbsencePointage,auto:true}
   ].filter(x=>Number(x.montant||0)>0);
-  const variableElements=paieElementsFor(a.id,ym||sessionStorage.getItem("paieMois")||today().slice(0,7)).map(e=>{
+  const variableElements=paieElementsFor(a.id,period).map(e=>{
     const r=(db.paieRubriques||[]).find(x=>x.id===e.rubriqueId)||{};
     return{code:r.code||"",libelle:r.libelle||"Rubrique",type:r.type||"gain",imposable:r.imposable!==false,cotisable:r.cotisable!==false,montant:Number(e.montant||0),note:e.note||""};
   }).filter(x=>x.montant>0);
@@ -22654,7 +22658,13 @@ function calcPaieAgent(a,ym){
   const cnasPatronal=Math.round(brutCotisable*(Number(cfg.tauxCnasPatronal||0)/100));
   const oeuvresSociales=Math.round(brutCotisable*(Number(cfg.tauxOeuvresSociales||0)/100));
   const coutEmployeur=gains+cnasPatronal+oeuvresSociales;
-  return{salaireNetContractuel,brutBase,primeNuit,primes,gains,absences:retenuesRubriques,retenuesRubriques,elements,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
+  return{salaireNetContractuel,brutBase,primeNuit,primes,gains,joursAbsencePaie,retenueAbsencePointage,absences:retenuesRubriques,retenuesRubriques,elements,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
+}
+function paiePointageAbsenceDays(a,ym){
+  try{
+    const sh=ptGetSheet(a?.id,ym);
+    return typeof ptAbsencePayrollDays==="function"?ptAbsencePayrollDays(sh):0;
+  }catch(e){return 0}
 }
 function paieNetFromBase(base,cfg){
   const brut=Math.max(0,Number(base)||0);
@@ -22905,7 +22915,7 @@ function renderPaieAgent(view,agentId){
     </form>
     <div class="card p-4">
       <h2 class="font-black text-lg mb-3">Résumé calcul</h2>
-      ${[["Primes",c.primes],["CNAS salarié",c.cnasSalarie],["Base IRG",c.baseIRG],["IRG",c.irg],["CNAS patronal",c.cnasPatronal],["Coût employeur",c.coutEmployeur]].map(([k,v])=>`<div class="flex justify-between py-2 border-b border-slate-100 text-sm"><span class="text-slate-500">${escapeHTML(k)}</span><b>${money(v||0)}</b></div>`).join("")}
+      ${[["Jours abs. pointage",qty(c.joursAbsencePaie||0)],["Retenue absence",money(c.retenueAbsencePointage||0)],["Primes",money(c.primes)],["CNAS salarié",money(c.cnasSalarie)],["Base IRG",money(c.baseIRG)],["IRG",money(c.irg)],["CNAS patronal",money(c.cnasPatronal)],["Coût employeur",money(c.coutEmployeur)]].map(([k,v])=>`<div class="flex justify-between py-2 border-b border-slate-100 text-sm"><span class="text-slate-500">${escapeHTML(k)}</span><b>${v}</b></div>`).join("")}
     </div>
   </div>
   <div class="card overflow-hidden mt-4"><div class="p-4 flex items-center justify-between gap-2"><div><h2 class="font-black">Éléments variables du mois</h2><div class="text-xs text-slate-500">Primes, retenues, rappels, panier, transport.</div></div><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${jsString(a.id)}')" ${closed?"disabled":""}>Modifier éléments</button></div>${paieAgentElementsTableHTML(a.id,ym)}</div>`;
@@ -23095,6 +23105,7 @@ function renderPaie(view,sub,arg){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CNAS salarié ${qty(cfg.tauxCnasSalarie)}%</div><div class="text-2xl font-black text-red-700">${money(sum("cnasSalarie"))}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CNAS patronal ${qty(cfg.tauxCnasPatronal)}%</div><div class="text-2xl font-black text-orange-700">${money(sum("cnasPatronal"))}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">IRG retenu</div><div class="text-2xl font-black text-purple-700">${money(sum("irg"))}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Jours abs. pointage</div><div class="text-2xl font-black text-red-700">${qty(sum("joursAbsencePaie"))}</div><div class="text-[10px] text-slate-500">A inclut AB</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Alertes SNMG</div><div class="text-2xl font-black ${anomalies.length?"text-red-700":"text-emerald-700"}">${anomalies.length}</div></div>
   </div>
   ${anomalies.length?`<div class="card p-4 mb-4" style="background:#fef2f2;border:2px solid #dc2626"><div class="font-black text-red-700 mb-2">Alerte SNMG</div><div class="text-sm text-red-700">${anomalies.length} agent(s) ont un brut cotisable inférieur au SNMG ${money(cfg.snmg)}.</div></div>`:""}
@@ -30986,7 +30997,29 @@ function ptDaysInMonth(ym){const [y,m]=ym.split("-").map(Number);return new Date
 function ptKey(year,month){return year+"-"+String(month).padStart(2,"0")}
 function ptGetSheet(agentId,ym){if(!db.pointages)db.pointages=[];return db.pointages.find(p=>p.agentId===agentId&&p.periode===ym)}
 function ptEnsureSheet(agentId,ym){let s=ptGetSheet(agentId,ym);if(!s){const ag=db.agents.find(a=>a.id===agentId);s={id:uid("pt"),agentId,periode:ym,societe:ag?ag.societe:"",days:{},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.pointages.push(s)}return s}
-function ptSetCell(agentId,ym,day,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];s.updatedAt=new Date().toISOString();saveDB()}
+function ptCodeAbsencePayrollValue(code){const c=String(code||"").toUpperCase();if(c==="A"||c==="AB"||c==="A1")return 1;if(c==="A2")return 2;if(c==="A3")return 3;return 0}
+function ptIsAbsencePayrollCode(code){return ptCodeAbsencePayrollValue(code)>0}
+function ptAbsencePayrollDays(sheet){if(!sheet)return 0;return Object.values(sheet.days||{}).reduce((s,c)=>s+ptCodeAbsencePayrollValue(c),0)}
+function ptNormalizeAbandonDePoste(sheet){
+  if(!sheet||sheet.valide||!sheet.days)return false;
+  const days=Object.keys(sheet.days).map(Number).filter(Boolean).sort((a,b)=>a-b);
+  let changed=false;
+  days.forEach(d=>{
+    const k=String(d).padStart(2,"0"),k1=String(d-1).padStart(2,"0"),k2=String(d-2).padStart(2,"0");
+    if(ptIsAbsencePayrollCode(sheet.days[k])&&ptIsAbsencePayrollCode(sheet.days[k1])&&ptIsAbsencePayrollCode(sheet.days[k2])&&sheet.days[k]!=="AB"){
+      sheet.days[k]="AB";
+      changed=true;
+    }
+  });
+  if(changed)sheet.updatedAt=new Date().toISOString();
+  return changed;
+}
+function ptNormalizeAbandonsForMonth(ym,soc){
+  let changed=false;
+  pointageOperationalAgents(soc).forEach(a=>{const sh=ptGetSheet(a.id,ym);if(ptNormalizeAbandonDePoste(sh))changed=true});
+  return changed;
+}
+function ptSetCell(agentId,ym,day,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();saveDB()}
 function ptPresenceAgentId(f){
   const refs=[f?.agentId,f?.agentBackendId,f?.employee_id,f?.matricule].map(x=>String(x||"")).filter(Boolean);
   const a=(db.agents||[]).find(ag=>refs.includes(String(ag.id||""))||refs.includes(String(ag.backendId||""))||refs.includes(String(ag.matricule||"")));
@@ -31002,7 +31035,7 @@ function ptApplyPresenceLine(f){
   if(!code)return false;
   if(s.days[day]&&!s.fpqSync[day])return false;
   if(s.days[day]===code&&s.fpqSync[day]===f.id)return false;
-  s.days[day]=code;s.fpqSync[day]=f.id||true;s.updatedAt=new Date().toISOString();
+  s.days[day]=code;s.fpqSync[day]=f.id||true;ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();
   return true;
 }
 function ptRemovePresenceLine(f){
@@ -31015,6 +31048,7 @@ function ptRemovePresenceLine(f){
 function ptSyncFeuillePresenceMonth(ym){
   let changed=false;
   (db.feuillePresence||[]).filter(f=>f.date&&f.date.slice(0,7)===ym).forEach(f=>{if(ptApplyPresenceLine(f))changed=true});
+  if(ptNormalizeAbandonsForMonth(ym,ptCurrentSoc()))changed=true;
   return changed;
 }
 async function ptValiderSheet(agentId,ym){
@@ -31695,7 +31729,7 @@ function renderPointageDashboard(isDrh){
   const baseCodes=["P","A","M","S","C","R","AB"];
   const totalBase=baseCodes.reduce((s,k)=>s+(tot[k]||0),0);
   const totalPresent=(tot.P||0)+(tot.F1||0)+(tot.F2||0)+(tot.F3||0)+(tot["P/F1"]||0)+(tot["P/F2"]||0)+(tot["P/F3"]||0);
-  const totalAbsent=(tot.A||0)+(tot.A1||0)+(tot.A2||0)+(tot.A3||0)+(tot.AB||0);
+  const totalAbsent=(tot.A||0)+(tot.A1||0)+(tot.A2*2||0)+(tot.A3*3||0)+(tot.AB||0);
   const totalAll=Object.values(tot).reduce((a,b)=>a+b,0);
   const tauxP=totalAll?Math.round(totalPresent*100/totalAll):0;
   const tauxA=totalAll?Math.round(totalAbsent*100/totalAll):0;
@@ -31981,7 +32015,7 @@ function renderPointageSaisie(){
     const sheet=ptGetSheet(a.id,ym);
     const isValide=!!(sheet&&sheet.valide);
     const cells=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();return ptCellHTML(a.id,ym,d,(sheet?.days||{})[String(d).padStart(2,"0")],wd===5||wd===6);}).join("");
-    const nP=ptCount(sheet,"P");const nA=ptCount(sheet,"A");const nM=ptCount(sheet,"M");const nS=ptCount(sheet,"S");const nC=ptCount(sheet,"C");const nR=ptCount(sheet,"R");const nFx=["F1","F2","F3","P/F1","P/F2","P/F3"].reduce((s,k)=>s+ptCount(sheet,k),0);const nAx=["AB","A1","A2","A3"].reduce((s,k)=>s+ptCount(sheet,k),0);
+    const nP=ptCount(sheet,"P");const nA=ptAbsencePayrollDays(sheet);const nM=ptCount(sheet,"M");const nS=ptCount(sheet,"S");const nC=ptCount(sheet,"C");const nR=ptCount(sheet,"R");const nFx=["F1","F2","F3","P/F1","P/F2","P/F3"].reduce((s,k)=>s+ptCount(sheet,k),0);const nAx=["AB","A2","A3"].reduce((s,k)=>s+ptCount(sheet,k),0);
     const valideTitle=isValide?`✓ Validé par ${escapeHTML(sheet.valideBy||"?")} le ${sheet.valideAt?new Date(sheet.valideAt).toLocaleString("fr-FR"):""}`:"";
     const validBtn=isValide?`<button class="btn btn-ghost text-[10px]" style="color:#dc2626" title="Déverrouiller" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔓</button>`:`<button class="btn btn-primary text-[10px]" style="background:#043970;border-color:#043970" title="Valider le pointage" onclick="ptValiderSheet('${a.id}','${ym}')">✅ Valider</button>`;
     const lockBadge=isValide?`<span class="pill" style="background:#043970;color:#fff;font-size:9px;padding:1px 5px" title="${valideTitle}">🔒 VALIDÉ</span>`:"";
@@ -31995,7 +32029,7 @@ function renderPointageSaisie(){
       <td class="pt-summary-cell px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af">${nC}</td>
       <td class="pt-summary-cell px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155">${nR}</td>
       <td class="pt-summary-cell px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#fef9c3;color:#b45309" title="F1+F2+F3+P/F1+P/F2+P/F3">${nFx||"·"}</td>
-      <td class="pt-summary-cell px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d" title="AB+A1+A2+A3">${nAx||"·"}</td>
+      <td class="pt-summary-cell px-2 text-center text-xs font-bold" style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d" title="AB+A2+A3 déjà inclus dans A paie">${nAx||"·"}</td>
       ${isDrh?"":`<td class="px-1 text-center" style="border:1px solid #e2e8f0;white-space:nowrap">
         ${isValide?"":`<button class="btn btn-primary text-[10px]" style="background:#043970;border-color:#043970" title="Valider le pointage" onclick="ptValiderSheet('${a.id}','${ym}')">✅ Valider</button>`}
       </td>`}
@@ -32006,12 +32040,13 @@ function renderPointageSaisie(){
   return filterBar+`<div class="card p-3 mb-3" style="background:linear-gradient(90deg,#043970,#fff)"><div class="flex items-center justify-between flex-wrap gap-2"><div class="text-sm"><span class="font-bold text-emerald-700">${totValide}</span> / <span class="font-bold">${filtered.length}</span> pointages validés pour cette période</div><div class="text-[11px] text-slate-500">Statut de validation</div></div></div>
   <div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Tableau de pointage — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
     <div style="overflow-x:auto;max-width:100%"><table class="w-full text-xs pointage-month-grid" style="border-collapse:collapse${isDrh?";pointer-events:none":""}">
-      <thead><tr style="background:#f1f5f9"><th class="text-left px-2 py-2 text-[11px] font-bold" style="border:1px solid #e2e8f0;position:sticky;left:0;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap">Agent</th>${dayHeaders}<th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534">P</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b">A</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e">M</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6">S</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af">C</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155">R</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fef9c3;color:#b45309" title="F1+F2+F3+P/F1+P/F2+P/F3 (présent)">Fx</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d" title="AB+A1+A2+A3 (absent)">Ax/AB</th>${isDrh?"":`<th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;width:130px">Actions</th>`}</tr></thead>
+      <thead><tr style="background:#f1f5f9"><th class="text-left px-2 py-2 text-[11px] font-bold" style="border:1px solid #e2e8f0;position:sticky;left:0;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap">Agent</th>${dayHeaders}<th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534">P</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b" title="Absence paie : A + AB + A1 + A2×2 + A3×3">A</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e">M</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6">S</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af">C</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155">R</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fef9c3;color:#b45309" title="F1+F2+F3+P/F1+P/F2+P/F3 (présent)">Fx</th><th class="pt-summary-cell text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d" title="AB+A2+A3 déjà inclus dans A paie">Ax/AB</th>${isDrh?"":`<th class="text-center text-[10px] font-bold" style="border:1px solid #e2e8f0;width:130px">Actions</th>`}</tr></thead>
       <tbody>${rows}</tbody>
     </table></div></div>`;
 }
 function renderPointageSaisieAuto(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
+  const abandonChanged=ptNormalizeAbandonsForMonth(ym,soc);if(abandonChanged)saveDB();
   const ag=pointageOperationalAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
@@ -32052,7 +32087,7 @@ function renderPointageSaisieAuto(){
       const fpqCode=sheetCode?"":f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"")||"";
       const code=sheetCode||fpqCode;
       if(POINTAGE_CODES[code]?.isPresent)nP++;
-      else if(code==="A"||code==="A1")nA++;else if(code==="A2")nA+=2;else if(code==="A3")nA+=3;
+      else if(ptIsAbsencePayrollCode(code))nA+=ptCodeAbsencePayrollValue(code);
       else if(code==="M")nM++;else if(code==="S")nS++;else if(code==="C")nC++;else if(code==="R")nR++;
       const ci=POINTAGE_CODES[code];const bg=ci?ci.bg:(we?"#dbeafe":"");const fg=ci?ci.color:(we?"#1e40af":"#94a3b8");
       return`<td style="border:1px solid #e2e8f0;padding:0;width:24px;min-width:24px;max-width:24px;background:${bg};text-align:center;color:${fg};font-weight:800;font-family:ui-monospace,monospace;font-size:8px;line-height:11px">${code||"·"}</td>`;
@@ -32137,12 +32172,12 @@ function renderPointageSociete(){
     const ag=pointageOperationalAgents(s);
     const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
     const tot={P:0,A:0,M:0,S:0,C:0,R:0,AB:0,F1:0,F2:0,F3:0,"P/F1":0,"P/F2":0,"P/F3":0,A1:0,A2:0,A3:0};sheets.forEach(sh=>{Object.values(sh.days||{}).forEach(v=>{if(tot[v]!==undefined)tot[v]++})});
-    const totFx=tot.F1+tot.F2+tot.F3+tot["P/F1"]+tot["P/F2"]+tot["P/F3"];const totAx=tot.AB+tot.A1+tot.A2+tot.A3;
+    const totFx=tot.F1+tot.F2+tot.F3+tot["P/F1"]+tot["P/F2"]+tot["P/F3"];const totAbs=tot.A+tot.AB+tot.A1+(tot.A2*2)+(tot.A3*3);const totAx=tot.AB+tot.A2+tot.A3;
     const totalCells=ag.length*days;const renseigne=sheets.reduce((acc,sh)=>acc+Object.keys(sh.days||{}).length,0);const tx=totalCells?Math.round(renseigne*100/totalCells):0;
-    return`<tr class="border-t"><td class="p-3 font-bold">${escapeHTML(s)}</td><td class="p-3 text-center">${ag.length}</td><td class="p-3 text-center font-bold text-emerald-600">${tot.P}</td><td class="p-3 text-center font-bold text-red-600">${tot.A}</td><td class="p-3 text-center font-bold text-amber-600">${tot.M}</td><td class="p-3 text-center font-bold text-violet-600">${tot.S}</td><td class="p-3 text-center font-bold text-sky-600">${tot.C}</td><td class="p-3 text-center font-bold text-slate-600">${tot.R}</td><td class="p-3 text-center font-bold" style="color:#b45309">${totFx||"·"}</td><td class="p-3 text-center font-bold" style="color:#7f1d1d">${totAx||"·"}</td><td class="p-3 text-center"><span class="pill ${tx>=80?"pill-green":(tx>=50?"pill-amber":"pill-red")}">${tx}%</span></td></tr>`;
+    return`<tr class="border-t"><td class="p-3 font-bold">${escapeHTML(s)}</td><td class="p-3 text-center">${ag.length}</td><td class="p-3 text-center font-bold text-emerald-600">${tot.P}</td><td class="p-3 text-center font-bold text-red-600">${totAbs}</td><td class="p-3 text-center font-bold text-amber-600">${tot.M}</td><td class="p-3 text-center font-bold text-violet-600">${tot.S}</td><td class="p-3 text-center font-bold text-sky-600">${tot.C}</td><td class="p-3 text-center font-bold text-slate-600">${tot.R}</td><td class="p-3 text-center font-bold" style="color:#b45309">${totFx||"·"}</td><td class="p-3 text-center font-bold" style="color:#7f1d1d">${totAx||"·"}</td><td class="p-3 text-center"><span class="pill ${tx>=80?"pill-green":(tx>=50?"pill-amber":"pill-red")}">${tx}%</span></td></tr>`;
   }).join("");
   return filterBar+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Récapitulatif mensuel par société — ${new Date(...ym.split("-").map((v,i)=>i?v-1:+v),1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div>
-    <table class="w-full text-sm"><thead><tr style="background:#f1f5f9"><th class="text-left p-3">Société</th><th class="p-3 text-center">Effectif</th><th class="p-3 text-center text-emerald-700">P</th><th class="p-3 text-center text-red-700">A</th><th class="p-3 text-center text-amber-700">M</th><th class="p-3 text-center text-violet-700">S</th><th class="p-3 text-center text-sky-700">C</th><th class="p-3 text-center text-slate-700">R</th><th class="p-3 text-center" style="color:#b45309" title="F1+F2+F3+P/F1+P/F2+P/F3">Fx</th><th class="p-3 text-center" style="color:#7f1d1d" title="AB+A1+A2+A3">Ax/AB</th><th class="p-3 text-center">Couverture</th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="w-full text-sm"><thead><tr style="background:#f1f5f9"><th class="text-left p-3">Société</th><th class="p-3 text-center">Effectif</th><th class="p-3 text-center text-emerald-700">P</th><th class="p-3 text-center text-red-700" title="Absence paie : A + AB + A1 + A2×2 + A3×3">A</th><th class="p-3 text-center text-amber-700">M</th><th class="p-3 text-center text-violet-700">S</th><th class="p-3 text-center text-sky-700">C</th><th class="p-3 text-center text-slate-700">R</th><th class="p-3 text-center" style="color:#b45309" title="F1+F2+F3+P/F1+P/F2+P/F3">Fx</th><th class="p-3 text-center" style="color:#7f1d1d" title="AB+A2+A3 déjà inclus dans A paie">Ax/AB</th><th class="p-3 text-center">Couverture</th></tr></thead><tbody>${rows}</tbody></table>
   </div>`;
 }
 function renderPointageStats(){
@@ -32156,7 +32191,7 @@ function renderPointageStats(){
   ag.forEach(a=>{const sh=ptGetSheet(a.id,ym);if(sh)Object.values(sh.days||{}).forEach(v=>{if(tot[v]!==undefined)tot[v]++})});
   const totSum=Object.values(tot).reduce((a,b)=>a+b,0);
   const totalPresent=tot.P+tot.F1+tot.F2+tot.F3+tot["P/F1"]+tot["P/F2"]+tot["P/F3"];
-  const totalAbsent=tot.A+tot.AB+tot.A1+tot.A2+tot.A3;
+  const totalAbsent=tot.A+tot.AB+tot.A1+(tot.A2*2)+(tot.A3*3);
   const days=ptDaysInMonth(ym);const expected=ag.length*days;const tauxPresence=expected?Math.round(totalPresent*100/expected):0;const tauxAbs=expected?Math.round((totalAbsent+tot.M)*100/expected):0;
   const cards=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Effectif</div><div class="text-3xl font-black text-cyan-600">${ag.length}</div></div>
@@ -32168,10 +32203,10 @@ function renderPointageStats(){
   const breakdown=`<div class="card p-2 mb-4"><div class="text-sm font-semibold mb-2 px-2">Répartition des codes</div>
     <table class="w-full text-sm"><thead><tr style="background:#f1f5f9"><th class="text-left p-3">Code</th><th class="p-3 text-center">Total jours</th><th class="p-3">Distribution</th><th class="p-3 text-right">%</th></tr></thead><tbody>${codeRows}</tbody></table>
   </div>`;
-  const top=ag.map(a=>{const sh=ptGetSheet(a.id,ym);const c={P:ptCount(sh,"P"),A:ptCount(sh,"A"),M:ptCount(sh,"M"),S:ptCount(sh,"S"),C:ptCount(sh,"C"),R:ptCount(sh,"R"),Fx:["F1","F2","F3","P/F1","P/F2","P/F3"].reduce((s,k)=>s+ptCount(sh,k),0),Ax:["AB","A1","A2","A3"].reduce((s,k)=>s+ptCount(sh,k),0)};return{a,c,abs:c.A+c.M+c.Ax}}).sort((x,y)=>y.abs-x.abs).slice(0,10);
+  const top=ag.map(a=>{const sh=ptGetSheet(a.id,ym);const c={P:ptCount(sh,"P"),A:ptAbsencePayrollDays(sh),M:ptCount(sh,"M"),S:ptCount(sh,"S"),C:ptCount(sh,"C"),R:ptCount(sh,"R"),Fx:["F1","F2","F3","P/F1","P/F2","P/F3"].reduce((s,k)=>s+ptCount(sh,k),0),Ax:["AB","A2","A3"].reduce((s,k)=>s+ptCount(sh,k),0)};return{a,c,abs:c.A+c.M}}).sort((x,y)=>y.abs-x.abs).slice(0,10);
   const topRows=top.filter(t=>t.abs>0).map(({a,c,abs})=>`<tr class="border-t"><td class="p-3 font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))} <span class="font-mono text-[10px] px-1.5 py-0.5 rounded ml-1" style="background:#04397015;color:#043970">${escapeHTML(a.matricule||"—")}</span></td><td class="p-3 text-xs text-slate-500">${escapeHTML(a.societe||"")}</td><td class="p-3 text-center text-emerald-600">${c.P+(c.Fx?`<span style="color:#b45309">+${c.Fx}</span>`:"")}</td><td class="p-3 text-center text-red-600 font-bold">${c.A}</td><td class="p-3 text-center text-amber-600 font-bold">${c.M}</td><td class="p-3 text-center" style="color:#7f1d1d;font-weight:700">${c.Ax||"·"}</td><td class="p-3 text-center font-black text-red-700">${abs}</td></tr>`).join("")||`<tr><td class="p-6 text-center text-slate-400" colspan="7">Aucune absence enregistrée sur la période.</td></tr>`;
-  const topCard=`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">🚨 Top 10 absences (A + M + Ax/AB)</div>
-    <table class="w-full text-sm"><thead><tr style="background:#f1f5f9"><th class="text-left p-3">Agent</th><th class="text-left p-3">Société</th><th class="p-3 text-center text-emerald-700">P (+Fx)</th><th class="p-3 text-center text-red-700">A</th><th class="p-3 text-center text-amber-700">M</th><th class="p-3 text-center" style="color:#7f1d1d">Ax/AB</th><th class="p-3 text-center">Total abs.</th></tr></thead><tbody>${topRows}</tbody></table>
+  const topCard=`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">🚨 Top 10 absences (A paie + M)</div>
+    <table class="w-full text-sm"><thead><tr style="background:#f1f5f9"><th class="text-left p-3">Agent</th><th class="text-left p-3">Société</th><th class="p-3 text-center text-emerald-700">P (+Fx)</th><th class="p-3 text-center text-red-700" title="A + AB + A1 + A2×2 + A3×3">A paie</th><th class="p-3 text-center text-amber-700">M</th><th class="p-3 text-center" style="color:#7f1d1d" title="AB+A2+A3 déjà inclus dans A paie">Ax/AB</th><th class="p-3 text-center">Total abs.</th></tr></thead><tbody>${topRows}</tbody></table>
   </div>`;
   return filterBar+cards+breakdown+topCard;
 }
@@ -32189,6 +32224,7 @@ function renderPointageLegende(){
     ["P/F3","Maintenu en poste","L'employé est en poste « P » et est maintenu. La journée est comptée <strong>4 jours</strong> (+3).","#6ee7b7","#064e3b"],
   ].map(([k,titre,desc,bg,col])=>`<tr class="border-t"><td class="p-4 text-center font-mono text-xl font-black" style="background:${bg};color:${col};width:80px">${k}</td><td class="p-4"><div class="font-bold mb-1">${titre}</div><div class="text-sm text-slate-600">${desc}</div></td></tr>`).join("");
   const aRows=[
+    ["AB","Abandon de poste","Déclenché automatiquement quand <strong>3 absences sont consécutives</strong>. En paie, AB est comptabilisé comme <strong>1 jour d'absence A</strong>.","#fee2e2","#991b1b"],
     ["A1","Absent 1 jour","L'employé est absent de son poste. Comptabilisé comme <strong>1 jour d'absence</strong>.","#fecaca","#b91c1c"],
     ["A2","Absent 2 jours","L'employé est absent de son poste. Comptabilisé comme <strong>2 jours d'absence</strong>.","#fca5a5","#991b1b"],
     ["A3","Absent 3 jours","L'employé est absent de son poste. Comptabilisé comme <strong>3 jours d'absence</strong>.","#f87171","#7f1d1d"],
@@ -32207,12 +32243,12 @@ function renderPointageLegende(){
     <table class="w-full text-sm"><thead><tr style="background:#f1f5f9"><th class="text-center p-3">Code</th><th class="text-left p-3">Règle de comptage</th></tr></thead><tbody>${pfRows}</tbody></table>
   </div>
   <div class="card p-5 mb-4">
-    <h3 class="font-bold text-lg mb-1">Codes A1 / A2 / A3 — Absence multiple</h3>
-    <p class="text-sm text-slate-500 mb-3">À utiliser quand l'absence couvre <strong>plusieurs jours</strong> comptabilisés sur une seule saisie.</p>
+    <h3 class="font-bold text-lg mb-1">Codes AB / A1 / A2 / A3 — Absences paie</h3>
+    <p class="text-sm text-slate-500 mb-3"><strong>AB = A dans le calcul de la paie</strong>. Après 3 absences consécutives, le 3e jour est transformé en AB automatiquement.</p>
     <table class="w-full text-sm"><thead><tr style="background:#f1f5f9"><th class="text-center p-3">Code</th><th class="text-left p-3">Règle de comptage</th></tr></thead><tbody>${aRows}</tbody></table>
   </div>
   <div class="card p-5"><h3 class="font-bold mb-3">Modes de saisie</h3>
-    <ul class="text-sm space-y-2 list-disc pl-5"><li><strong>Clic gauche</strong> sur une case : cycle des codes de base (·→P→A→M→S→C→R)</li><li><strong>Clic droit</strong> sur une case : saisir n'importe quel code (F1, F2, F3, P/F1, P/F2, P/F3, A1, A2, A3…)</li><li>Les samedis et dimanches sont mis en évidence en bleu</li><li>Sauvegarde automatique dans PostgreSQL</li></ul>
+    <ul class="text-sm space-y-2 list-disc pl-5"><li><strong>Clic gauche</strong> sur une case : cycle des codes de base (·→P→A→M→S→C→R)</li><li><strong>Clic droit</strong> sur une case : saisir n'importe quel code (AB, F1, F2, F3, P/F1, P/F2, P/F3, A1, A2, A3…)</li><li>Les samedis et dimanches sont mis en évidence en bleu</li><li>Sauvegarde automatique dans PostgreSQL</li></ul>
   </div>`;
 }
 
