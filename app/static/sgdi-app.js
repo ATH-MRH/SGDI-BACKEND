@@ -1667,7 +1667,7 @@ function stockArticleBelongsToStore(a,storeOrId){
   const store=typeof storeOrId==="object"?storeOrId:(db.magasins||[]).find(m=>String(m.id)===String(storeOrId)||String(m.backendId||"")===String(storeOrId));
   const refs=new Set([store?.id,store?.backendId,storeOrId].map(v=>String(v||"")).filter(Boolean));
   if(refs.size&&[a?.magasinId,a?.store_id,a?.storeBackendId,a?.magasinBackendId,a?.attributs?.raw?.magasinId,a?.attributs?.raw?.storeBackendId].some(v=>refs.has(String(v||""))))return true;
-  const storeLabels=[store?.nom,store?.typeMagasin,store?.config?.typeMagasin,store?.theme,typeof storeOrId==="string"&&storeOrId.startsWith("default:")?storeOrId.replace(/^default:/,""):""].map(dotationNorm).filter(Boolean);
+  const storeLabels=[store?.nom,store?.typeMagasin,store?.config?.typeMagasin,store?.theme].map(dotationNorm).filter(Boolean);
   if(!storeLabels.length)return false;
   const articleLabels=[a?.magasin,a?.categorie,a?.category,a?.typeMagasin,a?.attributs?.raw?.magasin,a?.attributs?.raw?.categorie,a?.attributs?.raw?.typeMagasin].map(dotationNorm).filter(Boolean);
   return articleLabels.some(label=>storeLabels.some(storeLabel=>label===storeLabel||label.includes(storeLabel)||storeLabel.includes(label)));
@@ -16204,17 +16204,75 @@ function demandePersonnelResponseTemplates(d){
   return [...new Set(base)];
 }
 function _normKey(s){return String(s||"").trim().toLowerCase();}
+let portalComptesLoadSeq=0;
+function portalComptesCanManage(){
+  return isAdminGeneralSession()||isAdminSystemSession()||canAccess("demandes_personnel")||String(session?.transverse||"")==="drh";
+}
+function portalComptesNorm(v){return typeof normalizeSocieteName==="function"?normalizeSocieteName(v):String(v||"").trim().toUpperCase()}
+function portalComptesEmployeeMatricule(a){return String(a?.matricule||a?.code||a?.employee_code||a?.id||"").trim()}
+function portalComptesEmployeeName(a){return [a?.nom||a?.last_name,a?.prenom||a?.first_name].filter(Boolean).join(" ").trim()||a?.full_name||a?.name||"—"}
+function portalComptesEmployeeSociete(a){return a?.societe||a?.society||a?.company||""}
+function portalComptesAccountKey(a){return portalComptesNorm(a?.matricule||a?.username||a?.id||"")}
+function portalComptesEmployeeKey(a){return portalComptesNorm(portalComptesEmployeeMatricule(a))}
+async function portalComptesFetchJSON(url,options){
+  const controller=typeof AbortController!=="undefined"?new AbortController():null;
+  const timeout=setTimeout(()=>{try{controller?.abort()}catch(e){}},12000);
+  try{
+    const res=await fetch(url,{cache:"no-store",...(options||{}),signal:controller?.signal,headers:{Authorization:`Bearer ${sgdiAuthToken()}`,...((options&&options.headers)||{})}});
+    const raw=await res.text().catch(()=>"");
+    let out=null;try{out=raw?JSON.parse(raw):null}catch(e){}
+    if(!res.ok){
+      const detail=out?.detail||out?.message||out?.error||raw||`Erreur API ${res.status}`;
+      if(typeof sgdiIsAuthFailure==="function"&&sgdiIsAuthFailure(res.status,detail)&&typeof sgdiHandleAuthFailure==="function")sgdiHandleAuthFailure("Session expirée ou token invalide. Veuillez vous reconnecter.");
+      throw new Error(Array.isArray(detail)?detail.map(d=>d.msg||JSON.stringify(d)).join(", "):String(detail));
+    }
+    return out||[];
+  }catch(e){
+    if(e&&e.name==="AbortError")throw new Error("Délai dépassé : l'API comptes portail ne répond pas.");
+    throw e;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+function portalComptesBuildRows(accounts,employees,soc){
+  const byAcc=new Map();
+  (accounts||[]).filter(a=>a&&typeof a==="object").forEach(a=>byAcc.set(portalComptesAccountKey(a),a));
+  const s=portalComptesNorm(soc);
+  const rows=[];
+  const seen=new Set();
+  (employees||[]).filter(a=>a&&typeof a==="object").forEach(emp=>{
+    const matricule=portalComptesEmployeeMatricule(emp);
+    const key=portalComptesEmployeeKey(emp);
+    const empSoc=portalComptesEmployeeSociete(emp);
+    if(!matricule||!key)return;
+    if(s&&empSoc&&portalComptesNorm(empSoc)!==s)return;
+    const account=byAcc.get(key)||null;
+    rows.push({employee:emp,account,matricule,key,nom:portalComptesEmployeeName(emp),societe:empSoc||account?.societe||""});
+    seen.add(key);
+  });
+  byAcc.forEach((account,key)=>{
+    if(seen.has(key))return;
+    if(s&&account?.societe&&portalComptesNorm(account.societe)!==s)return;
+    rows.push({employee:null,account,matricule:account?.matricule||account?.username||"",key,nom:[account?.nom,account?.prenom].filter(Boolean).join(" ").trim()||account?.username||"—",societe:account?.societe||""});
+  });
+  return rows.sort((a,b)=>String(a.societe||"").localeCompare(String(b.societe||""))||String(a.nom||"").localeCompare(String(b.nom||""))||String(a.matricule||"").localeCompare(String(b.matricule||"")));
+}
 async function renderPortailComptes(view){
   const _pcSoc=isDrhModuleContext()?(sessionStorage.getItem("drhSociete")||currentStructureSocieteFilter()||""):(currentStructureSocieteFilter()||"");
   window._portalComptesSoc=_pcSoc;
+  window._portalComptesRows=[];
+  const loadSeq=++portalComptesLoadSeq;
+  const canManage=portalComptesCanManage();
   view.innerHTML=`
     <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
       <div>
         <button class="btn btn-ghost text-sm mb-1" onclick="navigate('portail')">← Portail RH</button>
         <h1 class="text-2xl font-black uppercase">Comptes Portail RH</h1>
-        <p class="text-sm text-slate-500" id="portal-comptes-subtitle">Chargement...${_pcSoc?` · ${escapeHTML(_pcSoc)}`:""}</p>
+        <p class="text-sm text-slate-500" id="portal-comptes-subtitle">Chargement des employés et comptes...${_pcSoc?` · ${escapeHTML(_pcSoc)}`:""}</p>
       </div>
+      <button class="btn btn-secondary text-sm" onclick="renderPortailComptes(document.getElementById('view'))">Rafraîchir</button>
     </div>
+    ${canManage?"":`<div class="card p-4 mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm">Lecture seule : la gestion des comptes portail est réservée à la DRH / administration.</div>`}
     <div class="card p-4 mb-4">
       <h2 class="font-bold mb-3">Créer un nouveau compte</h2>
       <form onsubmit="event.preventDefault();portalComptesCreateNew(this)" class="flex gap-2 flex-wrap items-end">
@@ -16226,12 +16284,19 @@ async function renderPortailComptes(view){
           <label class="text-xs text-slate-500 block mb-1">Mot de passe</label>
           <input type="password" name="password" class="input text-sm" placeholder="Min. 6 caractères" required minlength="6" style="width:170px" />
         </div>
-        <button type="submit" class="btn btn-primary">Créer le compte</button>
+        <button type="submit" class="btn btn-primary" ${canManage?"":"disabled"}>Créer le compte</button>
+        <div class="text-xs text-slate-500">Astuce : utilisez le bouton “Créer” dans la ligne d'un employé sans compte.</div>
       </form>
     </div>
     <div class="card overflow-hidden">
       <div class="p-3 border-b flex gap-2 items-center">
-        <input class="input flex-1 text-sm" id="portal-comptes-search" placeholder="Rechercher matricule, nom..." oninput="portalComptesFilter()" />
+        <input class="input flex-1 text-sm" id="portal-comptes-search" placeholder="Rechercher matricule, nom, société..." oninput="portalComptesFilter()" />
+        <select class="select text-sm" id="portal-comptes-status" onchange="portalComptesFilter()" style="max-width:180px">
+          <option value="">Tous les statuts</option>
+          <option value="active">Comptes actifs</option>
+          <option value="missing">Sans compte</option>
+          <option value="disabled">Désactivés</option>
+        </select>
       </div>
       <table id="portal-comptes-table">
         <thead><tr><th>Matricule</th><th>Nom & Prénom</th><th>Société</th><th class="text-center">Statut</th><th class="text-right">Action</th></tr></thead>
@@ -16239,47 +16304,80 @@ async function renderPortailComptes(view){
       </table>
     </div>`;
   const token=sgdiAuthToken();
+  if(!token){
+    const tbody=document.getElementById("portal-comptes-body");
+    if(tbody)tbody.innerHTML=`<tr><td colspan="5" class="text-red-600 p-4">Session PostgreSQL expirée : reconnectez-vous.</td></tr>`;
+    return;
+  }
   try{
     const soc=window._portalComptesSoc||"";
     const url="/api/portal/accounts"+(soc?"?societe="+encodeURIComponent(soc):"");
-    const accRes=await fetch(url,{headers:{Authorization:`Bearer ${token}`}});
-    const allAccounts=accRes.ok?await accRes.json():[];
-    const filteredAccounts=allAccounts;
-    window._portalComptesRows=filteredAccounts.map(a=>({account:a}));
+    const [allAccounts,employeesRes]=await Promise.all([
+      portalComptesFetchJSON(url),
+      (window.SGDI?.employees?.list?window.SGDI.employees.list():Promise.resolve(db.agents||[])).catch(e=>{console.warn("Employés portail indisponibles",e);return db.agents||[]})
+    ]);
+    if(loadSeq!==portalComptesLoadSeq)return;
+    const employees=(Array.isArray(employeesRes)?employeesRes:[]).map(e=>e&&e.backendId?e:(typeof employeeFromApi==="function"?employeeFromApi(e):e)).filter(Boolean);
+    if(employees.length){db.agents=dedupeEmployeesByBackendId([...(db.agents||[]),...employees]);normalizeEmployeeCodesInDB();}
+    const rows=portalComptesBuildRows(Array.isArray(allAccounts)?allAccounts:[],employees.length?employees:(db.agents||[]),soc);
+    window._portalComptesRows=rows;
     const sub=document.getElementById("portal-comptes-subtitle");
-    if(sub)sub.textContent=`${filteredAccounts.length} compte(s) portail${soc?` · ${escapeHTML(soc)}`:""}.`;
+    const active=rows.filter(r=>r.account&&r.account.active!==false).length;
+    const missing=rows.filter(r=>!r.account&&r.employee).length;
+    if(sub)sub.textContent=`${rows.length} employé(s) / compte(s) · ${active} actif(s) · ${missing} sans compte${soc?` · ${soc}`:""}.`;
     portalComptesFilter();
   }catch(err){
+    if(loadSeq!==portalComptesLoadSeq)return;
+    const sub=document.getElementById("portal-comptes-subtitle");
+    if(sub)sub.textContent=`Erreur de chargement${_pcSoc?` · ${_pcSoc}`:""}`;
     const tbody=document.getElementById("portal-comptes-body");
-    if(tbody)tbody.innerHTML=`<tr><td colspan="5" class="text-red-600 p-4">Erreur : ${escapeHTML(err.message||"")}</td></tr>`;
+    if(tbody)tbody.innerHTML=`<tr><td colspan="5" class="text-red-600 p-4">Erreur : ${escapeHTML(err.message||"Impossible de charger les comptes portail")}</td></tr>`;
   }
 }
 
 function portalComptesFilter(){
   const q=(document.getElementById("portal-comptes-search")?.value||"").toLowerCase();
+  const status=document.getElementById("portal-comptes-status")?.value||"";
   const rows=window._portalComptesRows||[];
-  const filtered=q?rows.filter(({account:a})=>[a.matricule,a.nom,a.prenom,a.username,a.societe].join(" ").toLowerCase().includes(q)):rows;
+  let filtered=q?rows.filter(r=>[r.matricule,r.nom,r.societe,r.account?.username,r.account?.nom,r.account?.prenom].join(" ").toLowerCase().includes(q)):rows.slice();
+  if(status==="active")filtered=filtered.filter(r=>r.account&&r.account.active!==false);
+  if(status==="missing")filtered=filtered.filter(r=>!r.account&&r.employee);
+  if(status==="disabled")filtered=filtered.filter(r=>r.account&&r.account.active===false);
   const tbody=document.getElementById("portal-comptes-body");
   if(!tbody)return;
-  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="5" class="text-center text-slate-400 p-4">${(window._portalComptesRows||[]).length===0?"Aucun compte portail créé.":"Aucun résultat."}</td></tr>`;return}
-  tbody.innerHTML=filtered.map(({account:acc})=>{
-    const m=escapeHTML(acc.matricule||"");
-    const nom=escapeHTML([acc.nom,acc.prenom].filter(Boolean).join(" ")||acc.username||"—");
-    const soc=escapeHTML(acc.societe||"—");
-    const badge=`<span class="pill ${acc.active?"pill-green":"pill-red"}">${acc.active?"Actif":"Désactivé"}</span>`;
-    const action=`<div class="flex gap-1 justify-end flex-wrap">
-      <form onsubmit="event.preventDefault();portalComptesResetPwd('${m}',this)" class="flex gap-1">
+  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="5" class="text-center text-slate-400 p-4">${(window._portalComptesRows||[]).length===0?"Aucun employé ni compte portail trouvé.":"Aucun résultat."}</td></tr>`;return}
+  const canManage=portalComptesCanManage();
+  tbody.innerHTML=filtered.map(r=>{
+    const acc=r.account||{};
+    const mRaw=String(r.matricule||acc.matricule||acc.username||"").trim();
+    const m=escapeHTML(mRaw);
+    const nom=escapeHTML(r.nom||[acc.nom,acc.prenom].filter(Boolean).join(" ")||acc.username||"—");
+    const soc=escapeHTML(r.societe||acc.societe||"—");
+    const hasAccount=!!(r.account&&(acc.matricule||acc.username||acc.id));
+    const badge=hasAccount
+      ?`<span class="pill ${acc.active!==false?"pill-green":"pill-red"}">${acc.active!==false?"Actif":"Désactivé"}</span>`
+      :`<span class="pill pill-amber">Sans compte</span>`;
+    const action=!canManage?`<span class="text-xs text-slate-400">Lecture seule</span>`:(hasAccount?`<div class="flex gap-1 justify-end flex-wrap">
+      <form onsubmit="event.preventDefault();portalComptesResetPwd('${jsString(mRaw)}',this)" class="flex gap-1">
         <input type="password" name="password" class="input text-xs" placeholder="Nouveau mdp" required minlength="6" style="width:130px" />
         <button type="submit" class="btn btn-secondary text-xs">Réinit. MDP</button>
       </form>
-      <button class="btn btn-primary text-xs" onclick="portalComptesNotify('${m}')">Notifier</button>
-      <button class="btn btn-danger text-xs" onclick="portalComptesDelete('${m}')">Supprimer</button>
-    </div>`;
+      <button class="btn btn-primary text-xs" onclick="portalComptesNotify('${jsString(mRaw)}')">Notifier</button>
+      <button class="btn btn-danger text-xs" onclick="portalComptesDelete('${jsString(mRaw)}')">Supprimer</button>
+    </div>`:`<button class="btn btn-primary text-xs" onclick="portalComptesQuickCreate('${jsString(mRaw)}')">Créer</button>`);
     return`<tr><td class="font-mono font-bold text-xs">${m}</td><td class="font-semibold">${nom}</td><td class="text-xs text-slate-500">${soc}</td><td class="text-center">${badge}</td><td>${action}</td></tr>`;
   }).join("");
 }
 
+function portalComptesQuickCreate(matricule){
+  const pwd=prompt(`Mot de passe initial pour ${matricule} :`, "");
+  if(pwd===null)return;
+  const password=String(pwd||"");
+  if(password.length<6){toast("Mot de passe trop court (minimum 6 caractères)","error");return}
+  portalComptesCreatePayload({matricule,password});
+}
 async function portalComptesCreateNew(form){
+  if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
   const token=sgdiAuthToken();
   const matricule=form.querySelector('[name="matricule"]').value.trim().toUpperCase();
   const password=form.querySelector('[name="password"]').value;
@@ -16287,15 +16385,25 @@ async function portalComptesCreateNew(form){
   const btn=form.querySelector('button[type="submit"]');
   if(btn){btn.disabled=true;btn.textContent="Création...";}
   try{
-    const res=await fetch("/api/portal/accounts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({matricule,password})});
-    if(res.ok){toast("Compte créé","success");form.reset();renderPortailComptes(document.getElementById("view"))}
-    else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur","error")}
+    await portalComptesCreatePayload({matricule,password},false);
+    form.reset();
   }catch(err){toast("Erreur réseau","error")}
   finally{if(btn){btn.disabled=false;btn.textContent="Créer le compte";}}
+}
+async function portalComptesCreatePayload(payload,showNetworkToast=true){
+  if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
+  const token=sgdiAuthToken();
+  try{
+    const res=await fetch("/api/portal/accounts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify(payload)});
+    if(res.ok){toast("Compte créé","success");renderPortailComptes(document.getElementById("view"));return}
+    const err=await res.json().catch(()=>({}));
+    toast(err.detail||"Erreur création compte","error");
+  }catch(err){if(showNetworkToast)toast("Erreur réseau","error");else throw err}
 }
 
 
 async function portalComptesResetPwd(matricule,form){
+  if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
   const token=sgdiAuthToken();
   const password=form.querySelector('[name="password"]').value;
   try{
@@ -16306,6 +16414,7 @@ async function portalComptesResetPwd(matricule,form){
 }
 
 async function portalComptesDelete(matricule){
+  if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
   if(!confirm(`Supprimer le compte portail de ${matricule} ?`))return;
   const token=sgdiAuthToken();
   try{
@@ -17961,13 +18070,16 @@ async function renderMatSimpleDotationServer(view){
   // Render immediately from local data (articles + employees refresh in background)
   renderMatSimpleDotation(view);
   const soc=matSimpleSocFilter();
+  const needsMvts=!window.__sgdiMatDataSynced||!(db.stockMouvements||[]).length;
   Promise.all([
     SGDI.stock.articles(soc?{society:soc}:{}).catch(()=>[]),
     SGDI.employees.list().catch(()=>[]),
-  ]).then(([articlesRes,employeesRes])=>{
+    needsMvts?SGDI.stock.movements().catch(()=>[]):Promise.resolve(null),
+  ]).then(([articlesRes,employeesRes,mvtsRes])=>{
     let changed=false;
     if(articlesRes.length){db.stockArticles=articlesRes.map(articleFromApi);changed=true}
     if(employeesRes.length){employeesRes.forEach(e=>upsertServerEmployee(e));changed=true}
+    if(mvtsRes&&mvtsRes.length){db.stockMouvements=mvtsRes.map(movementFromApi);window.__sgdiMatDataSynced=true;changed=true;if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements()}
     if(typeof sgdiRefreshCountersNow==="function")sgdiRefreshCountersNow({reason:"materiel-dotation"});
     if(changed&&String(location.hash||"").includes("dotation"))renderMatSimpleDotation(view);
   }).catch(e=>console.warn("Dotation : rafraîchissement arrière-plan impossible",e));
@@ -17982,19 +18094,19 @@ function dotationMagasinLabel(m){
   return type&&type!==nom?`${type} - ${nom}`:nom;
 }
 function dotationMagasinsForSoc(soc){
-  const cats=["HABILLEMENT","TRANSMISSION/COMMUNICATION","MATÉRIEL SPÉCIFIQUE","PROTECTION","OUTILLAGE","FOURNITURE"];
-  return cats.map(n=>({id:"default:"+n,nom:n,typeMagasin:n,societe:"",isDefault:true}));
+  const s=soc||matSimpleSocFilter()||"";
+  return (db.magasins||[]).filter(m=>!s||!m.societe||normalizeSocieteName(m.societe)===normalizeSocieteName(s));
 }
 function dotationNorm(v){
   return String(v||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
 }
 function dotationArticlesForMagasin(magasinId,soc){
   if(!magasinId)return[];
-  const mag=(db.magasins||[]).find(m=>String(m.id)===String(magasinId)||String(m.backendId||"")===String(magasinId))
-    ||(String(magasinId).startsWith("default:")?{id:magasinId,nom:String(magasinId).replace(/^default:/,""),typeMagasin:String(magasinId).replace(/^default:/,""),isDefault:true}:null);
+  const mag=(db.magasins||[]).find(m=>String(m.id)===String(magasinId)||String(m.backendId||"")===String(magasinId));
+  if(!mag)return[];
   return (db.stockArticles||[]).filter(a=>{
     if(soc&&a.societe&&normalizeSocieteName(a.societe)!==normalizeSocieteName(soc))return false;
-    return stockArticleBelongsToStore(a,mag||magasinId);
+    return stockArticleBelongsToStore(a,mag);
   }).sort((a,b)=>(a.designation||"").localeCompare(b.designation||""));
 }
 function dotationCodeSerieOptions(a){
