@@ -1748,10 +1748,31 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
     border-radius:7px;
     background:#f8fafc;
     padding:8px 9px;
+    text-align:left;
+  }
+  .contract-metric-click{
+    width:100%;
+    appearance:none;
+    cursor:pointer;
+    transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease,background .12s ease;
+  }
+  .contract-metric-click:hover{
+    transform:translateY(-1px);
+    border-color:#93c5fd;
+    background:#eff6ff;
+    box-shadow:0 10px 22px rgba(15,23,42,.10);
+  }
+  .contract-metric-click:focus-visible{
+    outline:3px solid rgba(37,99,235,.25);
+    outline-offset:2px;
   }
   .contract-metric.is-alert{
     background:#fff7f7;
     border-color:#fecaca;
+  }
+  .contract-metric-click.is-alert:hover{
+    background:#fff1f2;
+    border-color:#fca5a5;
   }
   .contract-metric span{
     display:block;

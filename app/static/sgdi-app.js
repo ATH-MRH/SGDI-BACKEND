@@ -8877,10 +8877,10 @@ function renderContratsDashboard(view){
   const cddExpire=agents.filter(a=>{const end=employeePositionContractEndDate(a);return cleanContractType(a.typeContrat)==="CDD"&&end&&daysBetween(today_,end)<0}).length;
   const cdd30=agents.filter(a=>{const end=employeePositionContractEndDate(a);if(cleanContractType(a.typeContrat)!=="CDD"||!end)return false;const d=daysBetween(today_,end);return d>=0&&d<=30}).length;
   const cdd90=agents.filter(a=>{const end=employeePositionContractEndDate(a);if(cleanContractType(a.typeContrat)!=="CDD"||!end)return false;const d=daysBetween(today_,end);return d>=0&&d<=90}).length;
-  const contractMetric=(label,value,color,urgent)=>`<div class="contract-metric ${urgent&&value>0?"is-alert":""}">
+  const contractMetric=(label,value,color,urgent,action)=>`<button type="button" class="contract-metric contract-metric-click ${urgent&&value>0?"is-alert":""}" onclick="${escapeHTML(action||"resetContratFilters()")}" title="Afficher le détail">
     <span>${escapeHTML(label)}</span>
     <strong style="color:${urgent&&value>0?"#dc2626":color}">${value}</strong>
-  </div>`;
+  </button>`;
   const contractGroup=(title,items,alert)=>`<section class="contract-summary-group ${alert?"is-alert":""}">
     <h3>${escapeHTML(title)}</h3>
     <div class="contract-summary-metrics">${items.join("")}</div>
@@ -8893,32 +8893,32 @@ function renderContratsDashboard(view){
     </div>
     <div class="contract-summary-panel">
       ${contractGroup("Effectif",[
-        contractMetric("Total",agents.length,"#043970"),
-        contractMetric("CDI",cdi,"#0369a1"),
-        contractMetric("CDD",cdd,"#7c3aed"),
-        autre>0?contractMetric("Autre",autre,"#64748b"):""
+        contractMetric("Total",agents.length,"#043970",false,"setContratQuickFilter('all')"),
+        contractMetric("CDI",cdi,"#0369a1",false,"setContratQuickFilter('type:cdi')"),
+        contractMetric("CDD",cdd,"#7c3aed",false,"setContratQuickFilter('type:cdd')"),
+        autre>0?contractMetric("Autre",autre,"#64748b",false,"setContratQuickFilter('type:autre')"):""
       ],false)}
       ${contractGroup("Alertes contrat",[
-        contractMetric("Total ≤ 90j",cdd90+essai90,"#dc2626",true),
-        contractMetric("CDD",cdd90,"#dc2626",true),
-        contractMetric("Essai",essai90,"#dc2626",true)
+        contractMetric("Total ≤ 90j",cdd90+essai90,"#dc2626",true,"setContratQuickFilter('alert90')"),
+        contractMetric("CDD",cdd90,"#dc2626",true,"setContratQuickFilter('cdd90')"),
+        contractMetric("Essai",essai90,"#dc2626",true,"setContratQuickFilter('essai90')")
       ],cdd90+essai90>0)}
       ${contractGroup("Période d'essai",[
-        contractMetric("En cours",essaiEnCours,"#0369a1"),
-        contractMetric("≤ 30j",essai30,"#dc2626",true),
-        contractMetric("≤ 90j",essai90,"#f59e0b",true),
-        contractMetric("Terminés",essaiExpire,"#64748b")
+        contractMetric("En cours",essaiEnCours,"#0369a1",false,"setContratQuickFilter('essai')"),
+        contractMetric("≤ 30j",essai30,"#dc2626",true,"setContratQuickFilter('essai30')"),
+        contractMetric("≤ 90j",essai90,"#f59e0b",true,"setContratQuickFilter('essai90')"),
+        contractMetric("Terminés",essaiExpire,"#64748b",false,"setContratQuickFilter('essaiExpired')")
       ],false)}
       ${contractGroup("Fin CDD",[
-        contractMetric("Expirés",cddExpire,"#dc2626",true),
-        contractMetric("≤ 30j",cdd30,"#f59e0b",true),
-        contractMetric("≤ 90j",cdd90,"#ca8a04")
+        contractMetric("Expirés",cddExpire,"#dc2626",true,"setContratQuickFilter('cddExpired')"),
+        contractMetric("≤ 30j",cdd30,"#f59e0b",true,"setContratQuickFilter('cdd30')"),
+        contractMetric("≤ 90j",cdd90,"#ca8a04",false,"setContratQuickFilter('cdd90')")
       ],cddExpire+cdd30+cdd90>0)}
       ${contractGroup("Renouvellement",[
-        contractMetric("CDD expirés",cddExpire,"#dc2626",true),
-        contractMetric("À contract.",toContract.length,"#043970"),
-        contractMetric("Avenants",avenants.length,"#7c3aed"),
-        contractMetric("Signés",signedAvenants.length,"#16a34a")
+        contractMetric("CDD expirés",cddExpire,"#dc2626",true,"setContratQuickFilter('cddExpired')"),
+        contractMetric("À contract.",toContract.length,"#043970",false,"navigate('contrats/a_contractualiser')"),
+        contractMetric("Avenants",avenants.length,"#7c3aed",false,"navigate('contrats/avenants')"),
+        contractMetric("Signés",signedAvenants.length,"#16a34a",false,"navigate('contrats/avenants')")
       ],false)}
     </div>
     ${contractSituationListHTML(agents,today_,{title:"Liste des contrats",subtitle:`${agents.length} agent(s) avec situation contrat${socFilter?` · ${socFilter}`:""}`})}`;
@@ -9062,9 +9062,10 @@ function contractSituationRowsHTML(agents,today_){
     const contractEnd=employeePositionContractEndDate(a);
     const contratCell=employeePositionContractEndPillHTML(a,today_);
     const documentType=employeeContractDocumentType(a);
+    const contractKind=cleanContractType(a.typeContrat)||"AUTRE";
     const tCl=documentType.startsWith("Avenant")?"pill-blue":documentType.endsWith("+")?"pill-amber":"pill-green";
     const fullName=((a.nom||"")+" "+(a.prenom||"")).trim();
-    return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${contractEnd||""}" data-typecontrat="${escapeHTML(documentType)}" data-q="${escapeHTML((fullName+" "+employeeCode).toLowerCase())}" data-searchable><td data-sort="${escapeHTML(fullName)}"><a class="font-semibold hover:underline uppercase" href="#/effectif/agent/${a.id}">${escapeHTML(fullName.toUpperCase())}</a></td><td class="font-mono text-xs font-black" data-sort="${escapeHTML(employeeCode)}">${safe(employeeCode)}</td><td data-sort="${escapeHTML(a.societe||"")}"><span class="pill pill-indigo">${safe(a.societe)}</span></td><td data-sort="${escapeHTML(documentType)}"><span class="pill ${tCl}">${safe(documentType)}</span></td><td class="text-xs" data-sort="${escapeHTML(a.dateRecrutement||"")}">${formatDate(a.dateRecrutement)}</td><td class="text-xs" data-sort="${escapeHTML(a.dateFinEssai||"")}">${essaiCell}</td><td class="text-xs" data-sort="${escapeHTML(contractEnd||"")}">${contratCell}</td><td data-sort="${Number(a.salaireNet)||0}">${a.salaireNet?money(a.salaireNet):"—"}</td><td data-sort="${escapeHTML(a.statut||"")}">${employeeStatusPillHTML(a,true,"contracts")}</td></tr>`;
+    return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${contractEnd||""}" data-contractkind="${escapeHTML(contractKind)}" data-typecontrat="${escapeHTML(documentType)}" data-q="${escapeHTML((fullName+" "+employeeCode).toLowerCase())}" data-searchable><td data-sort="${escapeHTML(fullName)}"><a class="font-semibold hover:underline uppercase" href="#/effectif/agent/${a.id}">${escapeHTML(fullName.toUpperCase())}</a></td><td class="font-mono text-xs font-black" data-sort="${escapeHTML(employeeCode)}">${safe(employeeCode)}</td><td data-sort="${escapeHTML(a.societe||"")}"><span class="pill pill-indigo">${safe(a.societe)}</span></td><td data-sort="${escapeHTML(documentType)}"><span class="pill ${tCl}">${safe(documentType)}</span></td><td class="text-xs" data-sort="${escapeHTML(a.dateRecrutement||"")}">${formatDate(a.dateRecrutement)}</td><td class="text-xs" data-sort="${escapeHTML(a.dateFinEssai||"")}">${essaiCell}</td><td class="text-xs" data-sort="${escapeHTML(contractEnd||"")}">${contratCell}</td><td data-sort="${Number(a.salaireNet)||0}">${a.salaireNet?money(a.salaireNet):"—"}</td><td data-sort="${escapeHTML(a.statut||"")}">${employeeStatusPillHTML(a,true,"contracts")}</td></tr>`;
   }).join("");
 }
 function contractSituationListHTML(agents,today_,options){
@@ -10185,18 +10186,35 @@ function applyContratFilters(){
   const fe=document.getElementById("flt-essai")?.value||"";
   const fc=document.getElementById("flt-contrat")?.value||"";
   const fs=(document.getElementById("flt-search")?.value||"").toLowerCase().trim();
+  const quick=String(window.__contractQuickFilter||"");
   const t=today();
   const rows=document.querySelectorAll("#ct-tbody tr[data-row]");
   let shown=0;
   rows.forEach(r=>{
     const e=r.dataset.finessai||"";
     const c=r.dataset.fincontrat||"";
+    const contractKind=String(r.dataset.contractkind||"").toUpperCase();
+    const eDays=e?daysBetween(t,e):null;
+    const cDays=c?daysBetween(t,c):null;
     let ok=true;
     if(fs&&!(r.dataset.q||"").includes(fs))ok=false;
+    if(ok&&quick){
+      if(quick==="type:cdi")ok=contractKind==="CDI";
+      else if(quick==="type:cdd")ok=contractKind==="CDD";
+      else if(quick==="type:autre")ok=contractKind!=="CDI"&&contractKind!=="CDD";
+      else if(quick==="alert90")ok=((contractKind==="CDD"&&cDays!==null&&cDays>=0&&cDays<=90)||(eDays!==null&&eDays>=0&&eDays<=90));
+      else if(quick==="essai")ok=eDays!==null&&eDays>=0;
+      else if(quick==="essai30")ok=eDays!==null&&eDays>=0&&eDays<=30;
+      else if(quick==="essai90")ok=eDays!==null&&eDays>=0&&eDays<=90;
+      else if(quick==="essaiExpired")ok=eDays!==null&&eDays<0;
+      else if(quick==="cddExpired")ok=contractKind==="CDD"&&cDays!==null&&cDays<0;
+      else if(quick==="cdd30")ok=contractKind==="CDD"&&cDays!==null&&cDays>=0&&cDays<=30;
+      else if(quick==="cdd90")ok=contractKind==="CDD"&&cDays!==null&&cDays>=0&&cDays<=90;
+    }
     if(ok&&fe){
       if(fe==="none"){if(e)ok=false}
       else if(!e)ok=false;
-      else{const d=daysBetween(t,e);
+      else{const d=eDays;
         if(fe==="passed"&&d>=0)ok=false;
         else if(fe==="upcoming"&&d<0)ok=false;
         else if(fe==="30"&&!(d>=0&&d<=30))ok=false;
@@ -10207,7 +10225,7 @@ function applyContratFilters(){
     if(ok&&fc){
       if(fc==="none"){if(c)ok=false}
       else if(!c)ok=false;
-      else{const d=daysBetween(t,c);
+      else{const d=cDays;
         if(fc==="passed"&&d>=0)ok=false;
         else if(fc==="upcoming"&&d<0)ok=false;
         else if(fc==="30"&&!(d>=0&&d<=30))ok=false;
@@ -10220,15 +10238,27 @@ function applyContratFilters(){
   });
   const sh=document.getElementById("ct-shown");if(sh)sh.textContent=shown;
 }
-function resetContratFilters(){["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});applyContratFilters()}
+function resetContratFilters(){window.__contractQuickFilter="";document.querySelectorAll(".contract-metric-click.is-selected").forEach(el=>el.classList.remove("is-selected"));["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});applyContratFilters()}
 function setContratQuickFilter(type){
   resetContratFilters();
+  if(type==="all"){
+    applyContratFilters();
+    const table=document.getElementById("ct-tbody");if(table)table.scrollIntoView({behavior:"smooth",block:"start"});
+    return;
+  }
+  window.__contractQuickFilter=type;
   if(type==="essai"){
     const e=document.getElementById("flt-essai");if(e)e.value="upcoming";
   }else if(type==="essai30"||type==="essai90"){
     const e=document.getElementById("flt-essai");if(e)e.value=type==="essai30"?"30":"90";
   }else if(type==="cdd"){
     const c=document.getElementById("flt-contrat");if(c)c.value="90";
+  }else if(type==="cdd30"||type==="cdd90"){
+    const c=document.getElementById("flt-contrat");if(c)c.value=type==="cdd30"?"30":"90";
+  }else if(type==="cddExpired"){
+    const c=document.getElementById("flt-contrat");if(c)c.value="passed";
+  }else if(type==="essaiExpired"){
+    const e=document.getElementById("flt-essai");if(e)e.value="passed";
   }
   applyContratFilters();
   const table=document.getElementById("ct-tbody");if(table)table.scrollIntoView({behavior:"smooth",block:"start"});
