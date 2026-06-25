@@ -9129,10 +9129,10 @@ function contractSituationListHTML(agents,today_,options){
       <div class="text-xs text-slate-500"><span id="ct-shown">${agents.length}</span> / ${agents.length} agents affichés</div>
     </div>
     <div class="p-4 border-b border-slate-100">
-      <div class="grid grid-3 gap-3 items-end">
+      <div class="flex items-end gap-4">
         <div><label class="label">Fin d'essai</label>${drumPickerHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
         <div><label class="label">Fin de contrat</label>${drumPickerHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
-        <div><button type="button" class="btn btn-ghost w-full" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
+        <div class="pb-1"><button type="button" class="btn btn-ghost" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
       </div>
     </div>
     <div class="overflow-x-auto"><table>
@@ -9182,10 +9182,10 @@ function renderContrats(view,mode){
     <div class="card p-4 mb-4">
       <div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-sm">🔎 Filtres</h3><div class="text-xs text-slate-500"><span id="ct-shown">${agents.length}</span> / ${agents.length} agents affichés</div></div>
       <div class="mb-3"><input id="flt-search" type="search" class="input w-full" placeholder="Rechercher par nom, prénom ou matricule…" oninput="applyContratFilters()"/></div>
-      <div class="grid grid-3 gap-3 mb-3 items-end">
+      <div class="flex items-end gap-4 mb-3">
         <div><label class="label">Fin d'essai</label>${drumPickerHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
         <div><label class="label">Fin de contrat</label>${drumPickerHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
-        <div><button type="button" class="btn btn-ghost w-full" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
+        <div class="pb-1"><button type="button" class="btn btn-ghost" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
       </div>
     </div>
     <div class="card overflow-hidden"><table>
