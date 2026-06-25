@@ -566,7 +566,10 @@ async function sgdiPullState(options){
     let remote;try{remote=await sgdiApi(snapshotPath,{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
     if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
       window.__SGDI_BACKEND_ENABLED__=true;
+      const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents"];
+      const _prevSQL=opt.light&&db?Object.fromEntries(_sqlKeys.filter(k=>Array.isArray(db[k])&&db[k].length).map(k=>[k,db[k]])):null;
       hydrateDB(remote);
+      if(_prevSQL){for(const[k,v]of Object.entries(_prevSQL)){if(!(db[k]||[]).length)db[k]=v;}}
       sanitizeCandidatesInDB();
       sgdiPostgresReady=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
