@@ -5084,7 +5084,7 @@ function sidebarPinnedDefaultOrder(module){
 function adminSidebarOrganizerDefaults(){
   return {
     drh:[
-      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["DEMANDES PERSONNEL","demandes_personnel/dashboard"]
+      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["DEMANDES PERSONNEL","demandes_personnel/dashboard"]
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
@@ -5266,7 +5266,7 @@ function renderSidebar(){
         {label:"MISSIONS",route:"ops/missions"},
         {label:"MOUVEMENT",route:"ops/mouvements",aliases:["ops/mouvements"]},
         {label:"CONGÉS",route:"conges",aliases:["conges"]},
-        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],count:agents.filter(a=>a.statut==="absent").length||null},
+        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length||null})()},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:agents.filter(a=>a.statut==="suspendu").length||null},
         {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:agents.filter(a=>a.statut==="sortant").length||null},
@@ -12917,10 +12917,12 @@ async function confirmGestion(agentId,type){
     if(ev.au)a.dateFinEssai=ev.au;
   }
   a.gestionEvents.push(ev);
-  // Update agent status based on type if currently "en_cours"
-  if(ev.statut==="en_cours"){
-    if(type==="Absence")a.statut="absent";
-    else if(type==="Suspension")a.statut="suspendu";
+  // Update agent status based on event type and date coverage
+  if(type==="Absence"){
+    const du=ev.du||"";const au=ev.au||"";const td=today();
+    if((!du||du<=td)&&(!au||au>=td))a.statut="absent";
+  }else if(type==="Suspension"&&ev.statut==="en_cours"){
+    a.statut="suspendu";
   }
   // Also create a conge if type is Congé or Maladie
   if(type==="Congé"||type==="Maladie"){
@@ -13491,7 +13493,7 @@ function sanctionDraftFromForm(agentId,form){
   const dateReprise=dateMiseAPiedFin&&joursMiseAPied?addDays(dateMiseAPiedFin,1):"";
   const reference=String(fd.get("reference")||rhDecisionReference("SAN",a,dateDecision));
   const motif=[type,faute].filter(Boolean).join(" - ");
-  const details=[site?`Site : ${site.nom}`:"",fd.get("indicatif")?`Indicatif : ${fd.get("indicatif")}`:"",joursMiseAPied?`Mise à pied : ${joursMiseAPied} jour(s), du ${formatDate(dateMiseAPiedDebut)} au ${formatDate(dateMiseAPiedFin)}`:"",dateReprise?`Reprise prévue : ${formatDate(dateReprise)}`:"",observation?`Observation : ${observation}`:""].filter(Boolean).join("\n");
+  const details=[joursMiseAPied?`Mise à pied : ${joursMiseAPied} jour(s), du ${formatDate(dateMiseAPiedDebut)} au ${formatDate(dateMiseAPiedFin)}`:"",dateReprise?`Reprise prévue : ${formatDate(dateReprise)}`:"",observation?`Observation : ${observation}`:""].filter(Boolean).join("\n");
   return {a,title:"DECISION DE SANCTION DISCIPLINAIRE",reference,dateDecision,dateEffet:type==="Mise à pied"?dateMiseAPiedDebut:dateDebut,motif,details,motifTitle:"Faute et sanction retenues",intro:"La Direction des Ressources Humaines notifie à l'employé(e) concerné(e) la sanction disciplinaire indiquée ci-dessous.",closing:"La présente décision sera versée au dossier administratif de l'employé(e).",siteId,site,indicatif:fd.get("indicatif")||"",type:"sanction",sanctionType:type,faute,observation,joursMiseAPied,dateDebut,dateMiseAPiedDebut,dateMiseAPiedFin,dateReprise,dateInfraction:fd.get("dateInfraction")||dateDecision,noSignature:true};
 }
 async function confirmSanction(agentId,form){
@@ -27087,6 +27089,74 @@ function renderElementsSortants(view){
       </table></div>`}
   </div>`;
 }
+function renderDRHReversementEnAttente(view){
+  const soc=drhActiveSocieteFilter();
+  const now=new Date();
+  const agents=(db.agents||[]).filter(a=>{
+    if(!EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||"")))return false;
+    if(a.finRelationDotationReversee)return false;
+    const dotation=a.dotation||a.dotationCourante;
+    if(!dotation&&!(a.dotations&&a.dotations.length))return false;
+    if(soc&&a.societe!==soc)return false;
+    return true;
+  });
+  function elapsedH(a){return a.finRelationAt?Math.floor((now-new Date(a.finRelationAt))/3600000):null;}
+  const alerte72=agents.filter(a=>elapsedH(a)!==null&&elapsedH(a)>=72);
+  const enCours=agents.filter(a=>elapsedH(a)===null||elapsedH(a)<72);
+  function row(a){
+    const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase());
+    const mat=escapeHTML(a.matricule||"—");
+    const h=elapsedH(a);
+    const is72=h!==null&&h>=72;
+    const delaiLabel=h===null?"—":is72
+      ?`<span class="pill pill-red text-xs font-black" style="animation:fpLampBlink 0.9s ease-in-out infinite">⚠ +${h}h</span>`
+      :`<span class="pill pill-amber text-xs">${h}h</span>`;
+    const dateSortie=escapeHTML(formatDate(a.dateSortie||a.finRelationAt||""));
+    const motif=escapeHTML(a.finRelationMotif||"—");
+    const dotationDesc=(()=>{
+      const d=a.dotation||a.dotationCourante;
+      if(d&&typeof d==="object"){
+        const items=Array.isArray(d.articles)?d.articles:Array.isArray(d.items)?d.items:[];
+        if(items.length)return escapeHTML(items.map(i=>i.designation||i.nom||i.label||"").filter(Boolean).join(", "));
+        return escapeHTML(d.description||d.label||JSON.stringify(d).slice(0,60));
+      }
+      if(a.dotations&&a.dotations.length){
+        return escapeHTML(a.dotations.map(d2=>d2.designation||d2.nom||d2.label||"").filter(Boolean).slice(0,3).join(", "));
+      }
+      return "—";
+    })();
+    const rowStyle=is72?' style="background:#fef2f2;color:#991b1b;font-weight:700"':'';
+    return`<tr${rowStyle}><td class="px-3 py-2"><a class="font-semibold hover:underline" href="#/effectif/agent/${a.id}">${nom}</a></td><td class="px-3 py-2 font-mono text-xs text-amber-600">${mat}</td><td class="px-3 py-2 text-xs">${escapeHTML(a.societe||"—")}</td><td class="px-3 py-2 text-xs">${dateSortie}</td><td class="px-3 py-2 text-xs">${motif}</td><td class="px-3 py-2 text-xs">${dotationDesc}</td><td class="px-3 py-2 text-center">${delaiLabel}</td><td class="px-3 py-2"><button class="btn btn-ghost text-xs" onclick="markDotationReversee('${a.id}')">Marquer reversée</button></td></tr>`;
+  }
+  view.innerHTML=`<div class="max-w-5xl mx-auto px-2 py-4">
+    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+      <h1 class="text-xl font-black uppercase">Reversements en attente</h1>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-slate-700">${agents.length}</div><div class="text-xs text-slate-500 mt-1">Total en attente</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-amber-600">${enCours.length}</div><div class="text-xs text-slate-500 mt-1">En attente (&lt; 72h)</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black ${alerte72.length?"text-red-600":"text-green-600"}" ${alerte72.length?'style="animation:fpLampBlink 0.9s ease-in-out infinite"':""}>${alerte72.length}</div><div class="text-xs text-slate-500 mt-1">⚠ Alerte +72h</div></div>
+    </div>
+    ${alerte72.length?`<div class="p-3 mb-4 rounded-lg text-sm font-bold" style="background:#fef2f2;color:#991b1b;border:2px solid #dc2626;animation:fpLampBlink 0.9s ease-in-out infinite">⚠ ${alerte72.length} employé(s) n'ont pas reversé leur dotation depuis plus de 72 heures.</div>`:""}
+    ${agents.length?`<div class="card overflow-hidden"><table class="w-full text-sm"><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2">Code</th><th class="px-3 py-2">Société</th><th class="px-3 py-2">Date sortie</th><th class="px-3 py-2">Motif</th><th class="px-3 py-2">Dotation</th><th class="px-3 py-2 text-center">Délai</th><th class="px-3 py-2">Action</th></tr></thead><tbody>${agents.sort((a,b)=>(elapsedH(b)||0)-(elapsedH(a)||0)).map(row).join("")}</tbody></table></div>`:`<div class="card p-8 text-center text-slate-400 italic">Aucun reversement en attente.</div>`}
+  </div>`;
+}
+function markDotationReversee(agentId){
+  const a=db.agents.find(x=>x.id===agentId);if(!a){toast("Employé introuvable","error");return}
+  openModal(`<h3 class="font-bold text-lg mb-3">Confirmer le reversement</h3>
+    <p class="text-sm text-slate-600 mb-4">Confirmer que <b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</b> a reversé sa dotation ?</p>
+    <div class="flex gap-2 justify-end">
+      <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-success" onclick="confirmMarkDotationReversee('${agentId}')">Confirmer le reversement</button>
+    </div>`);
+}
+async function confirmMarkDotationReversee(agentId){
+  const a=db.agents.find(x=>x.id===agentId);if(!a)return;
+  a.finRelationDotationReversee=true;a.finRelationDotationReverseeAt=new Date().toISOString();a.updatedAt=today();
+  try{if(a.backendId)await SGDI.employees.update(a.backendId,employeeApiPayload(a));}catch(e){toast("Mise à jour non confirmée","error")}
+  if(!(await saveDBAndWaitToast("Reversement non enregistré")))return;
+  closeModal();toast("Reversement confirmé","success");renderView();
+}
 function renderDRHPeriodeEssai(view){
   const soc=drhActiveSocieteFilter();
   const today_=today();
@@ -27129,6 +27199,7 @@ function renderDRH(view,sub,arg){
   if(sub==="social")return renderDRHSocial(view,arg);
   if(sub==="mise_en_demeure")return renderDRHMiseEnDemeure(view);
   if(sub==="essai")return renderDRHPeriodeEssai(view);
+  if(sub==="reversement")return renderDRHReversementEnAttente(view);
   if(sub==="stats")return renderDRHStats(view);
   if(sub==="stats_societe")return renderDRHStatsSociete(view);
   if(sub==="stats_theme")return renderDRHStatsTheme(view);
