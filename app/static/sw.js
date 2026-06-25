@@ -1,8 +1,15 @@
-const SGDI_CACHE = "sgdi-pwa-v20260624-bulk-dotation-employee-select";
+const SGDI_CACHE = "sgdi-pwa-v20260625-local-frontend-cache";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
+  "/static/tailwind.min.css",
+  "/static/sgdi-app.css",
+  "/static/sgdi-app.js",
+  "/static/erp-frontend.js",
+  "/static/sgdi-inline-2.js",
+  "/static/favicon.svg",
   "/static/iron-solution-logo.png",
+  "/static/iron-securite-logo.png",
   "/static/sgdi-icon-192.png",
   "/static/sgdi-icon-512.png"
 ];
@@ -14,6 +21,16 @@ self.addEventListener("activate", event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== SGDI_CACHE).map(k => caches.delete(k)))));
   self.clients.claim();
 });
+
+self.addEventListener("message", event => {
+  const data = event.data || {};
+  if (data.type === "SKIP_WAITING") self.skipWaiting();
+  if (data.type === "PRECACHE_URLS" && Array.isArray(data.urls)) {
+    const urls = data.urls.filter(u => typeof u === "string" && u.startsWith("/"));
+    event.waitUntil(caches.open(SGDI_CACHE).then(cache => cache.addAll([...new Set(urls)]).catch(() => null)));
+  }
+});
+
 self.addEventListener("fetch", event => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -50,17 +67,19 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // 3) Navigation / HTML : RÉSEAU D'ABORD (toujours la dernière version de l'app),
-  //    repli sur le cache si hors-ligne.
+  // 3) Navigation / HTML : LOCAL D'ABORD pour démarrer comme une app installée.
+  //    Le réseau met le cache à jour en arrière-plan; les données restent servies
+  //    exclusivement par les appels API ci-dessus.
   if (req.mode === "navigate" || url.pathname.endsWith(".html") || url.pathname === "/") {
     event.respondWith(
-      fetch(req, { cache: "reload" })
-        .then(res => {
+      caches.match(req).then(cached => {
+        const refresh = fetch(req, { cache: "reload" }).then(res => {
           const copy = res.clone();
           caches.open(SGDI_CACHE).then(cache => cache.put(req, copy)).catch(() => null);
           return res;
-        })
-        .catch(() => caches.match(req).then(cached => cached || caches.match("/")))
+        }).catch(() => null);
+        return cached || refresh.then(res => res || caches.match("/"));
+      })
     );
     return;
   }
