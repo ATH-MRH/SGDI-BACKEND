@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -90,8 +90,12 @@ def delete_position(position_id: int, db: Session = Depends(get_db), user=Depend
 
 
 @router.get("/db")
-def get_db_snapshot(db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
-    return service.get_database(db, user)
+def get_db_snapshot(
+    light: bool = Query(False, description="Retourne le snapshot legacy sans reconstruire les collections SQL lourdes"),
+    db: Session = Depends(get_db),
+    user=Depends(current_user),
+) -> dict[str, Any]:
+    return service.get_database(db, user, include_sql=not light)
 
 
 @router.put("/db")
@@ -108,8 +112,7 @@ def post_db_snapshot(payload: dict[str, Any], db: Session = Depends(get_db), use
 @router.get("/collections/{name}", response_model=CollectionOut)
 def get_collection(name: str, db: Session = Depends(get_db), user=Depends(current_user)):
     data = service.get_collection(db, name)
-    scoped = service.get_database(db, user)
-    return {"name": name, "data": scoped.get(name, [] if isinstance(data, list) else {})}
+    return {"name": name, "data": service.scope_collection_for_user(name, data, user)}
 
 
 @router.put("/collections/{name}", response_model=CollectionOut)
@@ -122,8 +125,7 @@ def replace_collection(name: str, payload: CollectionReplace, db: Session = Depe
 @router.get("/collections/{name}/items")
 def list_items(name: str, db: Session = Depends(get_db), user=Depends(current_user)) -> list[Any]:
     data = service.list_items(db, name)
-    scoped = service.get_database(db, user)
-    value = scoped.get(name, [])
+    value = service.scope_collection_for_user(name, data, user)
     return value if isinstance(value, list) else []
 
 
@@ -139,8 +141,7 @@ def create_item(name: str, payload: ItemPayload, db: Session = Depends(get_db), 
 @router.get("/collections/{name}/items/{item_id}")
 def get_item(name: str, item_id: str, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     item = service.get_item(db, name, item_id)
-    scoped = service.get_database(db, user)
-    rows = scoped.get(name, [])
+    rows = service.scope_collection_for_user(name, service.list_items(db, name), user)
     if not isinstance(rows, list) or not any(isinstance(row, dict) and str(row.get("id")) == str(item.get("id")) for row in rows):
         raise HTTPException(status_code=404, detail="Élément introuvable")
     return item

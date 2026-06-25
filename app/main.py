@@ -4,6 +4,7 @@ import asyncio
 import html
 import json
 import socket
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -75,6 +76,17 @@ def app_version():
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
+
+
+@app.middleware("http")
+async def log_slow_requests(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    response.headers["X-Process-Time-ms"] = str(elapsed_ms)
+    if elapsed_ms >= 800 and not request.url.path.startswith("/static/"):
+        logger.warning("Requête lente: %s %s -> %sms", request.method, request.url.path, elapsed_ms)
+    return response
 
 _COLLECTION_KEEP_LAST: dict[str, int] = {"activityLog": 200, "notificationLog": 200}
 

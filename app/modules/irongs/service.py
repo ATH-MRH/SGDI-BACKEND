@@ -290,12 +290,46 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
     return scoped
 
 
+def scope_collection_for_user(
+    name: str,
+    value: list[Any] | dict[str, Any],
+    user: Any | None,
+) -> list[Any] | dict[str, Any]:
+    """Filtre une seule collection sans reconstruire tout /api/irongs/db."""
+    if _snapshot_unrestricted(user):
+        if name == "echanges" and isinstance(value, list):
+            return _filter_echanges_for_user(value, user)
+        return value
+    if name == "users" and isinstance(value, list):
+        current_username = str(getattr(user, "username", "") or "")
+        return [row for row in value if isinstance(row, dict) and row.get("username") == current_username]
+    if name == "echanges" and isinstance(value, list):
+        return _filter_echanges_for_user(value, user)
+    if not isinstance(value, list):
+        return value
+    if name not in SENSITIVE_SOCIETY_COLLECTIONS:
+        return value
+    allowed_societies = _user_allowed_societies(user)
+    return _filter_rows_for_scope(
+        value,
+        allowed_societies,
+        allowed_agent_refs=set(),
+        allowed_site_refs=set(),
+        keep_unscoped=False,
+    )
+
+
 _COLLECTION_ROW_LIMITS: dict[str, int] = {
     "activityLog": 200,
     "notificationLog": 200,
 }
 
-def get_database(db: Session, user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
+def get_database(
+    db: Session,
+    user: Any | None = None,
+    *,
+    include_sql: bool = True,
+) -> dict[str, list[Any] | dict[str, Any]]:
     ensure_material_schema(db)
     rows = db.execute(select(SgdiRecord).order_by(SgdiRecord.collection.asc(), SgdiRecord.position.asc(), SgdiRecord.id.asc())).scalars().all()
     grouped: dict[str, list[SgdiRecord]] = {}
@@ -316,8 +350,17 @@ def get_database(db: Session, user: Any | None = None) -> dict[str, list[Any] | 
             limit = _COLLECTION_ROW_LIMITS.get(name)
             rows_to_use = items[-limit:] if limit and len(items) > limit else items
             result[name] = [row.data for row in rows_to_use if row.kind == "item"]
-    for name in sorted(sql_bridge.SQL_COLLECTIONS):
-        result[name] = sql_bridge.list_collection(db, name)
+    if include_sql:
+        for name in sorted(sql_bridge.SQL_COLLECTIONS):
+            result[name] = sql_bridge.list_collection(db, name)
+    else:
+        # Mode léger pour l'ouverture de session et les synchronisations
+        # automatiques : les collections SQL ont déjà des endpoints dédiés
+        # paginés. Éviter leur reconstruction ici supprime le plus gros coût
+        # de /api/irongs/db sans casser le format historique attendu par le
+        # frontend.
+        for name in sorted(sql_bridge.SQL_COLLECTIONS):
+            result[name] = []
     return scope_database_for_user(result, user)
 
 
@@ -341,7 +384,7 @@ def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]
         _replace_collection_no_commit(db, name, data)
     db.commit()
     logger.info("Base SGDI sauvegardée: tables SQL métier + sgdi_records résiduel")
-    return get_database(db, user)
+    return {"ok": True, "saved": True}
 
 
 def get_collection(db: Session, name: str) -> list[Any] | dict[str, Any]:
