@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260625-local-frontend-cache";
+const SGDI_CACHE = "sgdi-pwa-v20260625-login-fast-refresh";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
@@ -67,18 +67,22 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // 3) Navigation / HTML : LOCAL D'ABORD pour démarrer comme une app installée.
-  //    Le réseau met le cache à jour en arrière-plan; les données restent servies
-  //    exclusivement par les appels API ci-dessus.
+  // 3) Navigation / HTML : RÉSEAU D'ABORD avec timeout court.
+  //    Important : le HTML contient les hashes des fichiers JS/CSS. Si on le sert
+  //    toujours depuis le cache, le navigateur peut rester bloqué sur une ancienne
+  //    version du frontend. Les assets restent cache-first ensuite.
   if (req.mode === "navigate" || url.pathname.endsWith(".html") || url.pathname === "/") {
     event.respondWith(
-      caches.match(req).then(cached => {
-        const refresh = fetch(req, { cache: "reload" }).then(res => {
+      caches.open(SGDI_CACHE).then(cache => {
+        const network = fetch(req, { cache: "reload" }).then(res => {
           const copy = res.clone();
-          caches.open(SGDI_CACHE).then(cache => cache.put(req, copy)).catch(() => null);
+          cache.put(req, copy).catch(() => null);
           return res;
-        }).catch(() => null);
-        return cached || refresh.then(res => res || caches.match("/"));
+        });
+        const fallback = new Promise(resolve => {
+          setTimeout(() => resolve(caches.match(req).then(cached => cached || caches.match("/"))), 1200);
+        });
+        return Promise.race([network, fallback]).catch(() => caches.match(req).then(cached => cached || caches.match("/")));
       })
     );
     return;
