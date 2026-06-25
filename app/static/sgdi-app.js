@@ -7029,12 +7029,11 @@ async function saveAndArchiveEmployeeContractFromWindow(docWindow,meta){
 function employeeDocumentSignatureControls(meta,label="Valider document"){
   const metaJson=JSON.stringify(meta||{}).replace(/<\//g,"<\\/");
   if(meta&&meta.noSignature){
-    const showPrintButton=!!meta.showPrintButton;
-    const printLabel=escapeHTML(meta.printButtonLabel||"Imprimer");
+    const printLabel=escapeHTML(meta.printButtonLabel||"🖨 Imprimer");
     return `<section class="no-print sgdi-doc-sign-controls" style="position:sticky;top:0;z-index:999;background:#fff;border-bottom:1px solid #dbe3ef;box-shadow:0 8px 24px rgba(15,23,42,.12);padding:12px 18px;font-family:Arial,Helvetica,sans-serif">
       <div style="max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div><div style="font-weight:900;color:#043970">Validation du document</div><div id="sgdi-doc-state" style="font-size:12px;color:#64748b;margin-top:2px">Cliquez sur Valider doc pour archiver ce document dans le dossier de l'employé.</div></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="sgdi-doc-validate" type="button" style="border:0;border-radius:8px;background:#047857;color:#fff;padding:9px 16px;font-weight:900;cursor:pointer">${escapeHTML(label||"Valider doc")}</button>${showPrintButton?`<button id="sgdi-doc-print" type="button" disabled style="border:0;border-radius:8px;background:#111827;color:#fff;padding:9px 16px;font-weight:900;cursor:pointer;opacity:.45">${printLabel}</button>`:""}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="sgdi-doc-validate" type="button" style="border:0;border-radius:8px;background:#047857;color:#fff;padding:9px 16px;font-weight:900;cursor:pointer">${escapeHTML(label||"Valider doc")}</button><button id="sgdi-doc-print" type="button" style="border:0;border-radius:8px;background:#111827;color:#fff;padding:9px 16px;font-weight:900;cursor:pointer">${printLabel}</button><button id="sgdi-doc-close" type="button" style="border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;padding:9px 16px;font-weight:900;cursor:pointer">Fermer</button></div>
       </div>
     </section><script>window.SGDI_ARCHIVE_META=${metaJson};
     (function(){
@@ -7044,16 +7043,15 @@ function employeeDocumentSignatureControls(meta,label="Valider document"){
         validate.disabled=true;validate.style.opacity=".55";if(state){state.textContent="Archivage en cours...";state.style.color="#64748b";}
         let ok=false;try{if(window.opener&&window.opener.archiveEmployeeDocumentFromWindow)ok=await window.opener.archiveEmployeeDocumentFromWindow(window,window.SGDI_ARCHIVE_META||{});}catch(e){console.error(e)}
         if(!ok){validate.disabled=false;validate.style.opacity="1";if(state){state.textContent="Archivage impossible. Vérifiez la session serveur puis réessayez.";state.style.color="#dc2626";}return;}
-        if(printBtn){printBtn.disabled=false;printBtn.style.opacity="1";}
         if(state){state.textContent="Document validé et archivé dans le dossier de l'employé.";state.style.color="#047857";}
       });
       if(printBtn)printBtn.addEventListener("click",()=>window.print());
+      const closeBtn=document.getElementById("sgdi-doc-close");if(closeBtn)closeBtn.addEventListener("click",()=>window.close());
     })();<\/script>`;
   }
   const twoStep = !!(meta&&meta.twoStepValidation);
-  const showPrintButton = twoStep||!!(meta&&meta.showPrintButton);
   const finalLabel = escapeHTML((meta&&meta.finalValidationLabel)||"Valider la fiche");
-  const printLabel = escapeHTML((meta&&meta.printButtonLabel)||"Imprimer");
+  const printLabel = escapeHTML((meta&&meta.printButtonLabel)||"🖨 Imprimer");
   const closeButton = meta&&meta.showCloseButton?`<button id="sgdi-doc-close" type="button" style="border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;padding:9px 14px;font-weight:800;cursor:pointer">${escapeHTML(meta.closeButtonLabel||"Fermer")}</button>`:"";
   return `<section class="no-print sgdi-doc-sign-controls" style="position:sticky;top:0;z-index:999;background:#fff;border-bottom:1px solid #dbe3ef;box-shadow:0 8px 24px rgba(15,23,42,.12);padding:12px 18px;font-family:Arial,Helvetica,sans-serif">
     <div style="max-width:980px;margin:0 auto;display:grid;gap:10px">
@@ -7064,7 +7062,7 @@ function employeeDocumentSignatureControls(meta,label="Valider document"){
         <canvas id="sgdi-doc-signature-canvas" style="width:100%;height:220px;background:#fff;border:1px dashed #94a3b8;border-radius:8px;touch-action:none;display:block"></canvas>
         <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><button id="sgdi-doc-clear-signature" type="button" style="border:1px solid #cbd5e1;border-radius:8px;background:#fff;padding:7px 11px;font-weight:700">Effacer signature</button><span id="sgdi-doc-state" style="font-size:12px;color:#64748b">Cochez, signez, puis validez.</span><button id="sgdi-doc-validate-inline" type="button" disabled style="border:0;border-radius:8px;background:#047857;color:#fff;padding:8px 13px;font-weight:800;cursor:pointer;opacity:.45">${twoStep?"Valider signature":"Valider après signature"}</button></div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="sgdi-doc-start" disabled style="border:0;border-radius:8px;background:#043970;color:#fff;padding:9px 14px;font-weight:800;cursor:pointer;opacity:.45">Signer</button><button id="sgdi-doc-validate" disabled style="border:0;border-radius:8px;background:#047857;color:#fff;padding:9px 14px;font-weight:800;cursor:pointer;opacity:.45">${escapeHTML(label)}</button>${twoStep?`<button id="sgdi-doc-final-validate" disabled style="border:0;border-radius:8px;background:#0f766e;color:#fff;padding:9px 14px;font-weight:900;cursor:pointer;opacity:.45">${finalLabel}</button>`:""}${showPrintButton?`<button id="sgdi-doc-print" disabled style="border:0;border-radius:8px;background:#111827;color:#fff;padding:9px 14px;font-weight:900;cursor:pointer;opacity:.45">${printLabel}</button>`:""}${closeButton}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="sgdi-doc-start" disabled style="border:0;border-radius:8px;background:#043970;color:#fff;padding:9px 14px;font-weight:800;cursor:pointer;opacity:.45">Signer</button><button id="sgdi-doc-validate" disabled style="border:0;border-radius:8px;background:#047857;color:#fff;padding:9px 14px;font-weight:800;cursor:pointer;opacity:.45">${escapeHTML(label)}</button>${twoStep?`<button id="sgdi-doc-final-validate" disabled style="border:0;border-radius:8px;background:#0f766e;color:#fff;padding:9px 14px;font-weight:900;cursor:pointer;opacity:.45">${finalLabel}</button>`:""}<button id="sgdi-doc-print" type="button" style="border:0;border-radius:8px;background:#111827;color:#fff;padding:9px 14px;font-weight:900;cursor:pointer">${printLabel}</button><button id="sgdi-doc-close" type="button" style="border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;padding:9px 14px;font-weight:900;cursor:pointer">Fermer</button></div>
     </div>
   </section><script>window.SGDI_ARCHIVE_META=${metaJson};
   (function(){
@@ -7093,7 +7091,7 @@ function employeeDocumentSignatureControls(meta,label="Valider document"){
     if(finalValidate)finalValidate.addEventListener("click",archiveSignedDocument);
     if(printBtn)printBtn.addEventListener("click",()=>window.print());
     if(closeBtn)closeBtn.addEventListener("click",()=>window.close());
-    setBtn(start,false);setBtn(validate,false);setBtn(validateInline,false);setBtn(finalValidate,false);setBtn(printBtn,false);
+    setBtn(start,false);setBtn(validate,false);setBtn(validateInline,false);setBtn(finalValidate,false);
   })();<\/script>`;
 }
 function prepareEmployeeDocumentForValidation(html,meta,label){
@@ -10997,7 +10995,7 @@ function openEmployeeSuspensionModal(agentId){
         <div><label class="label">Date</label><input class="input bg-slate-50" type="date" name="dateConvocation" disabled/></div>
         <div class="md:col-span-2"><label class="label">Motif de la suspension</label><div class="grid grid-cols-1 md:grid-cols-3 gap-2">${SUSPENSION_MOTIFS.map(m=>`<label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #e2e8f0;background:#f8fafc"><input type="checkbox" name="motifsSuspension" value="${escapeHTML(m)}" style="width:16px;height:16px"/> <span>${escapeHTML(m)}</span></label>`).join("")}</div></div>
       </div>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeSuspensionDecisionFromForm(this.form)">Éditer / Imprimer décision</button></div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-primary" onclick="confirmEmployeeSuspension(this.form)">Éditer / Imprimer décision</button></div>
     </form>`);
   updateSuspensionEndDate();
 }
@@ -11626,7 +11624,7 @@ function openEmployeeFinRelationModal(agentId){
         <div class="md:col-span-2"><label class="label">Observation</label><textarea class="textarea" name="observation" rows="4"></textarea></div>
         <div class="md:col-span-2" data-fin-relation-message style="display:none;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;border-radius:8px;padding:10px 12px;font-size:13px;font-weight:800"></div>
       </div>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="editFinRelationDraftFromControl(this)">Éditer</button><button type="button" class="btn btn-danger" onclick="confirmFinRelationFromControl(this)">Confirmer et imprimer</button></div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="editFinRelationDraftFromControl(this)">Éditer / Imprimer</button><button type="button" class="btn btn-danger" onclick="confirmFinRelationFromControl(this)">Confirmer</button></div>
     </form>`);
 }
 async function confirmEmployeeFinRelation(form){
