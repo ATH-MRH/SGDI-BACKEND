@@ -30729,7 +30729,7 @@ function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.soc
 function ptCurrentSearch(){return sessionStorage.getItem("ptSearch")||""}
 function setPtMonth(v){sessionStorage.setItem("ptMonth",v||"");renderView()}
 function setPtSociete(v){sessionStorage.setItem("ptSociete",v||"");renderView()}
-function setPtSearch(v){sessionStorage.setItem("ptSearch",v||"");renderView()}
+function setPtSearch(v){sessionStorage.setItem("ptSearch",v||"");renderView();requestAnimationFrame(()=>{const el=document.getElementById("pt-search-input");if(el){const len=el.value.length;el.focus();try{el.setSelectionRange(len,len)}catch(_){}}})}
 function ptFilterAgents(agents){
   const q=(ptCurrentSearch()||"").toLowerCase().trim();
   if(!q)return agents;
