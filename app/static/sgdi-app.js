@@ -30969,11 +30969,18 @@ function ptSearchBarHTML(placeholder){
   </div>`;
 }
 function pointageOperationalAgents(soc){
-  return (db.agents||[])
+  const list=(db.agents||[])
     .filter(a=>!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase()))
     .filter(a=>!soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc))
     .filter(agentIsOperational)
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
+  if(list.length){
+    window.__pointageStableAgentsBySoc=window.__pointageStableAgentsBySoc||{};
+    window.__pointageStableAgentsBySoc[normalizeSocieteName(soc||"__all__")]=list;
+    return list;
+  }
+  const cached=window.__pointageStableAgentsBySoc?.[normalizeSocieteName(soc||"__all__")];
+  return Array.isArray(cached)?cached:[];
 }
 function ptDaysInMonth(ym){const [y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate()}
 function ptKey(year,month){return year+"-"+String(month).padStart(2,"0")}
@@ -31927,6 +31934,7 @@ function renderPointage(view,sub,arg){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="qr")ptStopQrTabletTimer();
   if(sub!=="feuille")fpqStopLiveRefresh();
+  sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:true});
   const isDrh=session?.transverse==="drh";
   if(isDrh&&(sub==="saisie"||sub==="dashboard"))sub="auto";
   if(sub==="scan")sub="feuille";
@@ -32065,7 +32073,6 @@ function renderPointageSaisieAuto(){
       <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:22px;text-align:center;font-size:8px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:22px;text-align:center;font-size:8px">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:22px;text-align:center;font-size:8px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:22px;text-align:center;font-size:8px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:22px;text-align:center;font-size:8px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:22px;text-align:center;font-size:8px">R</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
-  setTimeout(()=>{if(document.getElementById("pt-auto-table"))ptAutoSaisieRefresh();},120);
   return filterBar+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Saisie automatique — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
     <div style="overflow-x:auto;max-width:100%;pointer-events:none;user-select:none">${tableHTML}</div></div>`;
 }
@@ -32076,12 +32083,14 @@ async function ptAutoSaisieRefresh(){
   const btn=document.getElementById("pt-auto-refresh-btn");
   if(btn){btn.disabled=true;btn.textContent="…";}
   try{
+    await sgdiPullEmployees({silent:true}).catch(()=>null);
     const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
     const data=Array.isArray(res)?res:(res?.data||[]);
-    if(data.length){db.feuillePresence=data;saveDB();}
+    if(Array.isArray(data))db.feuillePresence=data;
     const scrollY=window.scrollY;
     renderView();
     requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+    if(typeof toast==="function")toast("Pointage actualisé","success");
   }catch(e){toast("Actualisation indisponible","error");}
   finally{_ptAutoSaisieRefreshing=false;if(btn){btn.disabled=false;btn.textContent="↺ Actualiser";}}
 }
