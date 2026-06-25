@@ -108,6 +108,7 @@ def _apply_legacy_fallbacks(db: Session, erp: dict[str, Any], society: str | Non
         employees.update({
             "total": len(agents),
             "non_archived": len(non_archived),
+            "active": len(active_rows),
             "operational_active": len(active_rows),
             "preparation": 0,
             "without_contract": 0,
@@ -169,7 +170,7 @@ def build_sidebar_stats(db: Session, user: User, society: str | None = None) -> 
             },
             "effectifs": {
                 "total": erp["employees"]["total"],
-                "actifs": erp["employees"]["operational_active"],
+                "actifs": erp["employees"].get("active", erp["employees"].get("non_archived", erp["employees"]["operational_active"])),
                 "en_preparation": erp["employees"]["preparation"],
                 "sans_contrat": erp["employees"]["without_contract"],
                 "sans_dotation": erp["employees"]["without_equipment"],

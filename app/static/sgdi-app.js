@@ -1155,15 +1155,17 @@ window.SGDI=window.SGDI_API;
 let sgdiEmployeesDisplayLoading=false;
 function sgdiBackendEmployeeTotalForDisplay(scopeSoc){
   const erpEmp=typeof sgdiErpEmployeeCounters==="function"?sgdiErpEmployeeCounters(scopeSoc):null;
-  return Number(erpEmp?.total||erpEmp?.non_archived||erpEmp?.by_status?.actif||erpEmp?.by_status?.active||0)||0;
+  return Number(erpEmp?.total||erpEmp?.active||erpEmp?.non_archived||erpEmp?.by_status?.actif||erpEmp?.by_status?.active||0)||0;
 }
 function sgdiDisplayActiveEmployees(erpEmp,fallback){
-  const operational=Number(erpEmp?.operational_active);
+  const active=Number(erpEmp?.active);
   const byStatusActive=Number(erpEmp?.by_status?.actif??erpEmp?.by_status?.active);
   const nonArchived=Number(erpEmp?.non_archived);
-  if(Number.isFinite(operational)&&operational>0)return operational;
+  if(Number.isFinite(active))return active;
   if(Number.isFinite(byStatusActive))return byStatusActive;
   if(Number.isFinite(nonArchived))return nonArchived;
+  const operational=Number(erpEmp?.operational_active);
+  if(Number.isFinite(operational))return operational;
   return fallback;
 }
 function sgdiEnsureEmployeesForDisplay(options){

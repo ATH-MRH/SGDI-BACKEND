@@ -266,6 +266,11 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
         key = str(employee.status or "").strip().lower()
         if key:
             status_counts[key] = status_counts.get(key, 0) + 1
+    active_employee_count = sum(
+        1
+        for employee in employees
+        if str(employee.status or "").strip().lower() not in EXIT_STATUSES
+    )
 
     leaves_stmt = (
         select(Leave)
@@ -365,7 +370,8 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
     return {
         "employees": {
             "total": len(employees),
-            "non_archived": _count(db, active_employee_stmt),
+            "non_archived": active_employee_count,
+            "active": status_counts.get("actif", active_employee_count),
             "operational_active": by_state.get("actif_operationnel", 0),
             "preparation": by_state.get("en_preparation_operationnelle", 0),
             "without_contract": missing_steps["contrat"],
