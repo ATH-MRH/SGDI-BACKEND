@@ -9,6 +9,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from app.core.config import settings
+
 logger = logging.getLogger("sgdi.photos")
 UPLOADS_ROOT = Path(os.getenv("SGDI_UPLOADS_DIR", "/app/uploads"))
 PHOTOS_DIR = UPLOADS_ROOT / "photos"
@@ -54,6 +56,9 @@ def save_base64_photo(value: str, item: dict[str, Any] | None = None, fallback: 
         logger.warning("Photo Base64 invalide ignoree: %s", exc)
         return ""
     if not content:
+        return ""
+    if len(content) > settings.max_photo_upload_bytes:
+        logger.warning("Photo Base64 ignoree: taille %s octets > limite %s", len(content), settings.max_photo_upload_bytes)
         return ""
     ensure_upload_dirs()
     name = _candidate_photo_name(item, fallback)

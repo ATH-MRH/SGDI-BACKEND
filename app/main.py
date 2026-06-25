@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import logging
 import asyncio
 import html
@@ -208,13 +209,22 @@ def ensure_schema_upgrades() -> None:
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def _cors_origins() -> list[str]:
+    raw = settings.cors_allowed_origins
+    if raw is None and settings.app_env.strip().lower() not in {"production", "prod"}:
+        raw = "http://localhost:8000,http://127.0.0.1:8000,http://localhost:5173,http://127.0.0.1:5173"
+    return [origin.strip() for origin in str(raw or "").split(",") if origin.strip()]
+
+
+_CORS_ORIGINS = _cors_origins()
+if _CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_CORS_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 
 
 class StaticCacheMiddleware:
@@ -336,13 +346,13 @@ def on_startup() -> None:
     ensure_upload_dirs()
     Base.metadata.create_all(bind=engine)
     ensure_schema_upgrades()
-    _fix_societe_name()
     logger.info("Tables PostgreSQL vérifiées/créées")
     with SessionLocal() as db:
-        irongs_service.cleanup_base64_photos(db)
-        cleaned_drh = drh_service.cleanup_base64_photos(db)
-        if cleaned_drh:
-            logger.info("Photos Base64 nettoyées dans les tables DRH: %s ligne(s)", cleaned_drh)
+        if settings.startup_maintenance_enabled:
+            irongs_service.cleanup_base64_photos(db)
+            cleaned_drh = drh_service.cleanup_base64_photos(db)
+            if cleaned_drh:
+                logger.info("Photos Base64 nettoyées dans les tables DRH: %s ligne(s)", cleaned_drh)
         admin_username = (settings.admin_initial_username or settings.admin_system_username or "").strip()
         admin = db.query(User).filter(User.username == admin_username).one_or_none() if admin_username else None
         if admin is None and admin_username and settings.admin_initial_password:
@@ -378,7 +388,9 @@ def on_startup() -> None:
             logger.info("Compte fac01 créé")
         db.commit()
     logger.info("Compte administrateur vérifié")
-    _purge_oversized_collections()
+    if settings.startup_maintenance_enabled:
+        _fix_societe_name()
+        _purge_oversized_collections()
     start_contract_email_alert_scheduler()
 
 
@@ -424,6 +436,10 @@ def _portal_mobile_urls(request: Request) -> list[str]:
     for ip in _local_ipv4_addresses():
         urls.append(f"{scheme}://{ip}{port_part}/portail-rh")
     return list(dict.fromkeys(urls))
+
+
+def _is_admin_role(role: str | None) -> bool:
+    return str(role or "").strip().upper() in {"ADMIN", "ADM", "ADM1", "ADM2"}
 
 
 @app.get("/portail-sw.js", include_in_schema=False)
@@ -495,6 +511,8 @@ renderQR({json.dumps(primary)});
 
 @app.get("/health/db")
 def database_health(user: User = Depends(current_user)) -> dict:
+    if not _is_admin_role(user.role):
+        raise HTTPException(status_code=403, detail="Accès administrateur requis")
     with engine.connect() as connection:
         tables = sorted(inspect(connection).get_table_names())
         migration = None
@@ -553,13 +571,48 @@ def _public_employee_badge_data(employee_ref: str) -> dict:
     }
 
 
+def _public_employee_token(kind: str, employee_ref: str) -> str:
+    payload = f"{kind}:{str(employee_ref or '').strip()}".encode("utf-8")
+    return hmac.new(settings.jwt_secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()[:32]
+
+
+def _require_public_employee_token(kind: str, employee_ref: str, token: str | None) -> None:
+    if not settings.public_employee_pages_require_token:
+        return
+    expected = _public_employee_token(kind, employee_ref)
+    if not token or not hmac.compare_digest(str(token), expected):
+        raise HTTPException(status_code=404, detail="Lien public invalide")
+
+
+@app.get("/api/public-links/employee/{employee_ref}", include_in_schema=False)
+def public_employee_links(employee_ref: str, request: Request, user: User = Depends(current_user)) -> dict[str, str]:
+    """Génère les liens publics signés pour QR badge/dotation."""
+    ref = str(employee_ref or "").strip()
+    if not ref:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    employee_data = _public_employee_badge_data(ref)
+    allowed_societies = user.authorized_societies if isinstance(user.authorized_societies, list) else []
+    if allowed_societies and employee_data.get("societe") not in allowed_societies:
+        raise HTTPException(status_code=403, detail="Société non autorisée")
+    base = str(request.base_url).rstrip("/")
+    badge_token = _public_employee_token("badge", ref)
+    dotation_token = _public_employee_token("dotation", ref)
+    return {
+        "badge_api": f"{base}/api/public/badge/{quote(ref, safe='')}?t={badge_token}",
+        "badge_page": f"{base}/public/badge/{quote(ref, safe='')}?t={badge_token}",
+        "dotation_page": f"{base}/public/dotation/{quote(ref, safe='')}?t={dotation_token}",
+    }
+
+
 @app.get("/api/public/badge/{employee_ref}", include_in_schema=False)
-def public_employee_badge(employee_ref: str) -> dict:
+def public_employee_badge(employee_ref: str, t: str | None = None) -> dict:
+    _require_public_employee_token("badge", employee_ref, t)
     return _public_employee_badge_data(employee_ref)
 
 
 @app.get("/public/badge/{employee_ref}", include_in_schema=False)
-def public_employee_badge_page(employee_ref: str, request: Request) -> HTMLResponse:
+def public_employee_badge_page(employee_ref: str, request: Request, t: str | None = None) -> HTMLResponse:
+    _require_public_employee_token("badge", employee_ref, t)
     data = _public_employee_badge_data(employee_ref)
     raw_nom = str(data.get("nom") or "").strip()
     raw_prenom = str(data.get("prenom") or "").strip()
@@ -603,7 +656,8 @@ body{{margin:0;min-height:100vh;font-family:Arial,Helvetica,sans-serif;backgroun
 
 
 @app.get("/public/dotation/{employee_ref}", include_in_schema=False)
-def public_employee_dotation_page(employee_ref: str, request: Request) -> HTMLResponse:
+def public_employee_dotation_page(employee_ref: str, request: Request, t: str | None = None) -> HTMLResponse:
+    _require_public_employee_token("dotation", employee_ref, t)
     ref = str(employee_ref or "").strip()
     if not ref:
         raise HTTPException(status_code=404, detail="Employé introuvable")
@@ -823,6 +877,21 @@ def _events_signature() -> str:
         return "|".join(parts)
 
 
+_EVENTS_SIGNATURE_CACHE: dict[str, object] = {"value": "", "at": 0.0}
+
+
+def _events_signature_cached(ttl_seconds: float = 5.0) -> str:
+    now = time.monotonic()
+    cached_at = float(_EVENTS_SIGNATURE_CACHE.get("at") or 0.0)
+    cached_value = str(_EVENTS_SIGNATURE_CACHE.get("value") or "")
+    if cached_value and now - cached_at < ttl_seconds:
+        return cached_value
+    value = _events_signature()
+    _EVENTS_SIGNATURE_CACHE["value"] = value
+    _EVENTS_SIGNATURE_CACHE["at"] = now
+    return value
+
+
 @app.get("/api/irongs/events/ticket", include_in_schema=False)
 def irongs_events_ticket(authorization: str | None = Header(default=None)):
     """Échange le JWT normal contre un ticket SSE valable 60 secondes."""
@@ -861,7 +930,7 @@ def irongs_events_stream(ticket: str | None = None, token: str | None = None):
     async def stream():
         last = None
         while True:
-            sig = _events_signature()
+            sig = _events_signature_cached()
             if sig != last:
                 last = sig
                 yield "event: sgdi-change\n"

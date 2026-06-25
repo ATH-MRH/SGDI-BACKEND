@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_prefix: str = "/api"
     allow_public_registration: bool = False
+    cors_allowed_origins: str | None = None
+    startup_maintenance_enabled: bool = False
+    public_employee_pages_require_token: bool = True
+    max_photo_upload_bytes: int = 5_000_000
     admin_system_password: str | None = None
     admin_system_username: str | None = None
     admin_initial_username: str | None = None

@@ -378,12 +378,27 @@ def bulk_dotation_articles(db: Session = Depends(get_db), user: User = Depends(c
 
 
 @router.post("/admin/bulk-dotation-initiale")
-def bulk_dotation_initiale(payload: dict, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def bulk_dotation_initiale(
+    payload: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+    token_payload: dict = Depends(current_token_payload),
+):
     """Efface toutes les dotations et applique le kit choisi à tous les employés actifs.
     payload: { kit: [{article_id: int, quantity: float}] }
     """
-    if not is_admin_role(user.role):
-        raise HTTPException(status_code=403, detail="Accès administrateur requis")
+    _ensure_admin_system_user(user, token_payload)
+    if payload.get("confirmation") != "APPLIQUER DOTATION INITIALE":
+        raise HTTPException(status_code=422, detail="Confirmation obligatoire: APPLIQUER DOTATION INITIALE")
+
+    target_society = str(payload.get("society") or payload.get("societe") or "").strip()
+    allowed = _allowed_societies(user)
+    if not target_society:
+        if len(allowed) == 1:
+            target_society = allowed[0]
+        else:
+            raise HTTPException(status_code=422, detail="Société cible obligatoire pour une dotation initiale massive")
+    _ensure_society_allowed(user, target_society)
 
     kit_items = payload.get("kit", [])
     if not kit_items:
@@ -396,19 +411,42 @@ def bulk_dotation_initiale(payload: dict, db: Session = Depends(get_db), user: U
         article = db.get(StockArticle, art_id)
         if not article:
             raise HTTPException(status_code=422, detail=f"Article ID {art_id} introuvable.")
+        if article.society and article.society != target_society:
+            raise HTTPException(status_code=422, detail=f"Article {article.designation} hors société cible.")
         resolved.append((article, qty))
 
     employees = db.execute(
-        select(Employee).where(Employee.status.in_(["actif", "active", "Actif", "Active"]))
+        select(Employee).where(
+            Employee.status.in_(["actif", "active", "Actif", "Active"]),
+            Employee.society == target_society,
+        )
     ).scalars().all()
 
     if not employees:
         raise HTTPException(status_code=422, detail="Aucun employé actif trouvé.")
 
-    # Effacer toutes les dotations existantes (les 3 tables)
-    db.execute(delete(EmployeeEquipment))
-    db.execute(delete(MaterialAssignment))
-    db.execute(delete(StockMovement).where(StockMovement.movement_type == "nouvelle_dotation"))
+    employee_ids = [emp.id for emp in employees]
+    article_ids = [article.id for article, _qty in resolved]
+    # Effacer uniquement la dotation initiale de la société cible / kit cible.
+    db.execute(
+        delete(EmployeeEquipment).where(
+            EmployeeEquipment.employee_id.in_(employee_ids),
+            EmployeeEquipment.article_id.in_(article_ids),
+        )
+    )
+    db.execute(
+        delete(MaterialAssignment).where(
+            MaterialAssignment.employee_id.in_(employee_ids),
+            MaterialAssignment.article_id.in_(article_ids),
+        )
+    )
+    db.execute(
+        delete(StockMovement).where(
+            StockMovement.movement_type == "nouvelle_dotation",
+            StockMovement.employee_id.in_(employee_ids),
+            StockMovement.article_id.in_(article_ids),
+        )
+    )
     db.flush()
 
     today = date.today()
@@ -431,4 +469,4 @@ def bulk_dotation_initiale(payload: dict, db: Session = Depends(get_db), user: U
                 errors += 1
 
     db.commit()
-    return {"status": "ok", "employees": len(employees), "dotations_creees": created, "erreurs": errors}
+    return {"status": "ok", "society": target_society, "employees": len(employees), "dotations_creees": created, "erreurs": errors}
