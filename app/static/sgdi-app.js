@@ -4169,7 +4169,7 @@ function moduleCountersRibbonHTML(){
     const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
     const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
     const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=erpEmp?.absent??ag.filter(a=>a.statut==="absent").length;
+    const absents=Math.max(erpEmp?.absent??0,ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&e.statut==="en_cours"&&(!e.au||e.au>=today()))).length);
     const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
     const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
     const reserveCandidates=erpDrh?.candidates_reserve??(db.candidats||[]).filter(c=>(!scopeSoc||c.societe===scopeSoc)&&c.statut==="reserve").length;
@@ -4211,7 +4211,7 @@ function moduleCountersRibbonHTML(){
     const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
     const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
     const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=erpEmp?.absent??ag.filter(a=>a.statut==="absent").length;
+    const absents=Math.max(erpEmp?.absent??0,ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&e.statut==="en_cours"&&(!e.au||e.au>=today()))).length);
     const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
     const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
     const prepCounters=effectifConfigSettings().showPreparationCounters?[
@@ -4480,6 +4480,12 @@ function sgdiAlertVisibleItems(){
       });
     });
   }
+  const today__=today();
+  (db.agents||[]).filter(a=>a.dateFinEssai&&daysBetween(today__,a.dateFinEssai)>=0&&!agentHasPortailAccount(a)).forEach(a=>{
+    const nom=((a.nom||"")+" "+(a.prenom||"")).trim();const mat=a.matricule||a.code||"";const d=daysBetween(today__,a.dateFinEssai);
+    if(sgdiAlertModuleAllowed("drh"))sgdiAlertPush(rows,{id:"portail-essai-drh:"+(a.id||mat),module:"drh",societe:a.societe||"",title:"Sans compte Portail — "+nom,message:nom+" ("+mat+") est en période d'essai (J-"+d+") sans compte Portail RH — notifications ENC non disponibles.",meta:mat,route:"drh/essai",severity:d<=30?"critical":"warning",type:"Portail manquant",createdAt:a.dateRecrutement||""});
+    if(sgdiAlertModuleAllowed("ops"))sgdiAlertPush(rows,{id:"portail-essai-ops:"+(a.id||mat),module:"ops",societe:a.societe||"",title:"Sans compte Portail — "+nom,message:nom+" ("+mat+") n'a pas de compte Portail RH. Période d'essai : J-"+d+".",meta:mat,route:"drh/essai",severity:"warning",type:"Portail manquant",createdAt:a.dateRecrutement||""});
+  });
   if(sgdiAlertModuleAllowed("drh")){
     (db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt).forEach(a=>{
       const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
@@ -4505,15 +4511,18 @@ function sgdiAlertVisibleItems(){
     const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
     const ds=formatDate(a.dateSortie||"");
     const mat=a.matricule||a.code||"";
+    const elapsed=((new Date()-new Date(a.finRelationAt))/3600000);
+    const is72h=elapsed>=72;
+    const heures=Math.floor(elapsed);
     if(sgdiAlertModuleAllowed("ops")){
       sgdiAlertPush(rows,{
         id:"sortant-ops:"+(a.id||mat),
         module:"ops",
         societe:a.societe||"",
-        title:"Employé SORTANT — "+nom,
-        message:nom+" ("+(mat||"?")+") ne fait plus partie de la société depuis le "+ds+". Mettre fin à toute affectation opérationnelle.",
+        title:(is72h?"⚠ ALERTE DOTATION — ":"Employé SORTANT — ")+nom,
+        message:nom+" ("+(mat||"?")+") ne fait plus partie de la société depuis le "+ds+(is72h?". DOTATION NON REVERSÉE DEPUIS "+heures+"H — ALERTE ESCALADÉE.":". Mettre fin à toute affectation opérationnelle."),
         meta:mat,
-        route:"effectif/actifs",
+        route:"effectif/sortants",
         severity:"critical",
         type:"Sortant",
         createdAt:a.finRelationAt||""
@@ -4524,12 +4533,26 @@ function sgdiAlertVisibleItems(){
         id:"sortant-materiel:"+(a.id||mat),
         module:"materiel",
         societe:a.societe||"",
-        title:"DOTATION À RÉCUPÉRER — "+nom,
-        message:nom+" ("+(mat||"?")+") est SORTANT depuis le "+ds+". Toute la dotation doit être reversée au magasin.",
+        title:(is72h?"⚠ ALERTE +72H — ":"DOTATION À RÉCUPÉRER — ")+nom,
+        message:nom+" ("+(mat||"?")+") est SORTANT depuis le "+ds+(is72h?". DOTATION NON REVERSÉE DEPUIS "+heures+"H — Reversement immédiat requis.":". Toute la dotation doit être reversée au magasin."),
         meta:mat,
-        route:"materiel/dotation",
+        route:"materiel/reversement",
         severity:"critical",
         type:"Dotation",
+        createdAt:a.finRelationAt||""
+      });
+    }
+    if(is72h&&sgdiAlertModuleAllowed("drh")){
+      sgdiAlertPush(rows,{
+        id:"sortant-drh-72h:"+(a.id||mat),
+        module:"drh",
+        societe:a.societe||"",
+        title:"⚠ ALERTE DOTATION +72H — "+nom,
+        message:nom+" ("+(mat||"?")+") est SORTANT depuis le "+ds+" et la dotation n'a pas été reversée depuis "+heures+"h. Action DRH requise.",
+        meta:mat,
+        route:"effectif/sortants",
+        severity:"critical",
+        type:"Alerte dotation 72h",
         createdAt:a.finRelationAt||""
       });
     }
@@ -5061,7 +5084,7 @@ function sidebarPinnedDefaultOrder(module){
 function adminSidebarOrganizerDefaults(){
   return {
     drh:[
-      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS","contrats/dashboard"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["DEMANDES PERSONNEL","demandes_personnel/dashboard"]
+      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["DEMANDES PERSONNEL","demandes_personnel/dashboard"]
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
@@ -6532,6 +6555,7 @@ function renderDashboard(view){
   const nbIncidentsOpen=(db.incidents||[]).filter(i=>i.statut==="en_cours").length;
   const nbCongesPending=(db.conges||[]).filter(c=>c.statut==="en_attente").length;
   const nbFinEssai30=db.agents.filter(a=>matchSoc(a)&&a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&daysBetween(today(),a.dateFinEssai)<=90).length;
+  const nbSansPortailEssai=db.agents.filter(a=>matchSoc(a)&&a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&!agentHasPortailAccount(a)).length;
   const finContrats30=agentsSoc.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90});
   const clientsAlerte=(db.clients||[]).filter(c=>(!filter||c.societe===filter)&&c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)<=30);
   const stockKpi=typeof stockSummaryKPI==="function"?stockSummaryKPI():{enRupture:0,enAlerte:0,totalArticles:(db.stockArticles||[]).length,totalValeur:0};
@@ -6549,7 +6573,8 @@ function renderDashboard(view){
   const alerts=[
     {n:nbIncidentsOpen,title:"Evènements en cours",text:"Main courante et incidents ouverts",route:"incidents",type:nbIncidentsOpen?"danger":"info"},
     {n:nbCongesPending,title:"Congés en attente",text:"Demandes à valider ou refuser",route:"conges",type:nbCongesPending?"warn":"info"},
-    {n:nbFinEssai30,title:"Fin période d'essai",text:"Échéances dans les 90 jours",route:"contrats/situation",type:nbFinEssai30?"warn":"info"},
+    {n:nbFinEssai30,title:"Fin période d'essai",text:"Échéances dans les 90 jours",route:"drh/essai",type:nbFinEssai30?"warn":"info"},
+    {n:nbSansPortailEssai,title:"Essai sans compte portail",text:"Employés en essai sans accès portail RH",route:"drh/essai",type:nbSansPortailEssai?"warn":"info"},
     {n:finContrats30.length,title:"Fin contrats personnel",text:"Contrats à renouveler ou clôturer",route:"effectif/actifs",type:finContrats30.length?"danger":"info"},
     {n:clientsAlerte.length,title:"Fin contrats clients",text:"Alertes commerciales à 30 jours",route:"commercial/clients",type:clientsAlerte.length?"warn":"info"},
     {n:(stockKpi.enRupture||0)+(stockKpi.enAlerte||0),title:"Stock critique",text:"Rupture ou stock bas",route:"materiel/articles",type:((stockKpi.enRupture||0)+(stockKpi.enAlerte||0))?"danger":"info"}
@@ -6898,6 +6923,7 @@ async function archiveEmployeeDocumentFromWindow(docWindow,meta){
   const html="<!doctype html>\n"+clone.outerHTML;
   return archiveEmployeeGeneratedDocument(meta.agentId||meta.employeeBackendId||meta.matricule,{...meta,html});
 }
+window.archiveEmployeeDocumentFromWindow=archiveEmployeeDocumentFromWindow;
 async function persistEmployeeContractRecord(a,draft){
   const employeeId=sqlBackendId(a?.backendId);
   if(!employeeId)throw new Error("Employé PostgreSQL introuvable pour enregistrer le contrat");
@@ -10817,6 +10843,7 @@ function runRhEffectifAction(action,agentId){
   if(action==="convoquer")return openEmployeeConvocationModal(agentId);
   if(action==="blacklister")return openBlackListModal(agentId);
   if(action==="mise_en_demeure")return openEmployeeMiseEnDemeureModal(agentId);
+  if(action==="periode_enc")return openPeriodeEncModal(agentId);
   if(action==="sanctionner")return openSanctionModal(agentId);
   if(action==="avenant")return openAvenantModal("general",agentId);
   if(action==="nouveau_contrat")return openEmployeeNewContractModal(agentId);
@@ -10945,8 +10972,10 @@ function suspensionDecisionHTML(a,draft){
 function printEmployeeSuspensionDecisionFromForm(form){
   const draft=employeeSuspensionDraftFromForm(form);
   if(!draft.a){toast("Employé introuvable","error");return}
-  const w=window.open("","_blank","width=900,height=700");
-  if(!w){toast("Fenêtre d'impression bloquée par le navigateur","error");return}
+  const sw=screen.width||1280,sh=screen.height||800,ww=Math.min(960,sw-80),wh=Math.min(820,sh-80);
+  const left=Math.round((sw-ww)/2),top=Math.round((sh-wh)/2);
+  const w=window.open("","sgdi_susp_"+Date.now(),"popup=yes,width="+ww+",height="+wh+",left="+left+",top="+top+",scrollbars=yes,resizable=yes");
+  if(!w){toast("Fenêtre bloquée par le navigateur — autorisez les popups pour ce site","error");return}
   w.document.write(prepareEmployeeDocumentForValidation(suspensionDecisionHTML(draft.a,draft),{agentId:draft.a.id,title:"Décision de suspension",category:"Décisions RH",type:"suspension",reference:draft.ref||"",date:draft.du||today()},"Valider décision"));
   w.document.close();
 }
@@ -10968,7 +10997,7 @@ function openEmployeeSuspensionModal(agentId){
         <div><label class="label">Date</label><input class="input bg-slate-50" type="date" name="dateConvocation" disabled/></div>
         <div class="md:col-span-2"><label class="label">Motif de la suspension</label><div class="grid grid-cols-1 md:grid-cols-3 gap-2">${SUSPENSION_MOTIFS.map(m=>`<label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #e2e8f0;background:#f8fafc"><input type="checkbox" name="motifsSuspension" value="${escapeHTML(m)}" style="width:16px;height:16px"/> <span>${escapeHTML(m)}</span></label>`).join("")}</div></div>
       </div>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeSuspensionDecisionFromForm(this.form)">Éditer / Imprimer décision</button><button class="btn btn-danger">Confirmer la suspension</button></div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeSuspensionDecisionFromForm(this.form)">Éditer / Imprimer décision</button></div>
     </form>`);
   updateSuspensionEndDate();
 }
@@ -11117,14 +11146,18 @@ function rhDecisionReference(prefix,a,date){
 function trialRenewalReference(a,date){
   return rhDecisionReference("REC-ESSAI",a,date||today());
 }
+function trialDecisionCommonStyle(){
+  return`@page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#f4f6f8;color:#111;font-family:"Times New Roman",Times,serif;font-size:13.5px;line-height:1.38}.trial-doc{width:190mm;min-height:277mm;margin:0 auto;background:#fff;padding:6mm 8mm 14mm;position:relative;overflow:hidden}.trial-logo{width:32mm;height:32mm;object-fit:contain;display:block;margin:0 auto 4mm}.trial-title{text-align:center;font-weight:900;font-size:21px;margin:4mm 0 0;letter-spacing:.4px}.trial-subtitle{text-align:center;font-weight:900;font-size:17px;margin:1mm 0 9mm;text-decoration:underline}.trial-meta{display:flex;justify-content:space-between;gap:14mm;margin:0 0 8mm;font-size:13.5px}.trial-vu{margin:0 0 7mm}.trial-vu p{margin:0 0 2mm;text-align:justify}.trial-decide{display:flex;align-items:center;gap:16mm;margin:8mm 0 7mm}.trial-decide:before,.trial-decide:after{content:"";height:1px;background:#111;flex:1}.trial-decide b{font-size:16px;letter-spacing:.5px}.trial-article{margin:0 0 5mm;text-align:justify}.trial-article b.u{text-decoration:underline}.trial-motif{min-height:14mm;margin-top:2.5mm;font-weight:700}.trial-signs{display:grid;grid-template-columns:1fr 1fr;gap:14mm;margin-top:14mm}.trial-sign-box{border:1px solid #111;min-height:30mm;padding:4mm;text-align:center;font-weight:900}.trial-sign-box .line{margin-top:10mm;font-weight:400}.trial-inst-sign{border:1px solid #111;min-height:30mm;padding:4mm;text-align:center;font-weight:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm}.trial-inst-sign .inst-title{font-size:12px;font-weight:900;text-transform:uppercase}.trial-inst-sign .inst-date{font-size:11px;font-weight:400;margin-top:2mm}.trial-inst-sign .inst-stamp{margin-top:5mm;border-top:1px solid #111;padding-top:2mm;font-size:11px;font-weight:400;min-width:44mm;text-align:center}.trial-footer{position:absolute;left:8mm;right:8mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9px;line-height:1.18;font-family:Arial,Helvetica,sans-serif}@media print{html,body{width:auto;min-height:auto;background:#fff}.no-print{display:none!important}.trial-doc{width:190mm;min-height:277mm;margin:0;padding:6mm 8mm 14mm;overflow:hidden}}`;
+}
+function trialInstitutionalSignBox(date){
+  return`<div class="trial-inst-sign"><div class="inst-title">La Direction des Ressources Humaines</div><div class="inst-date">Alger, le ${formatDate(date||today())}</div><div class="inst-stamp">Pour la Direction Générale</div></div>`;
+}
 function trialRenewalDecisionHTML(a,d){
   const info=rhDecisionBaseInfo(a);
   const motif=escapeHTML(d.motif||"Reconduction de la période d'essai").replace(/\n/g,"<br>");
   const duree=d.dureeReconduction?String(d.dureeReconduction).padStart(2,"0")+" mois":"";
   const archiveMeta={agentId:a.id,title:"Décision de renouvellement période d'essai",category:"Décisions RH",type:"rec_periode_essai",reference:d.reference||"",date:d.dateDecision||today()};
-  return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"DECISION RECONDUCTION PERIODE ESSAI")}</title><style>
-    @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#f4f6f8;color:#111;font-family:"Times New Roman",Times,serif;font-size:13.5px;line-height:1.38}.trial-actions{position:sticky;top:0;z-index:5;display:flex;justify-content:flex-end;padding:10px 14px;background:#f4f6f8;border-bottom:1px solid #d7dee8}.trial-actions button{border:0;border-radius:8px;background:#073763;color:#fff;font:700 14px Arial,Helvetica,sans-serif;padding:10px 18px;cursor:pointer;box-shadow:0 5px 14px rgba(7,55,99,.22)}.trial-doc{width:190mm;min-height:277mm;margin:0 auto;background:#fff;padding:6mm 8mm 14mm;position:relative;overflow:hidden}.trial-logo{width:32mm;height:32mm;object-fit:contain;display:block;margin:0 auto 4mm}.trial-title{text-align:center;font-weight:900;font-size:21px;margin:4mm 0 0;letter-spacing:.4px}.trial-subtitle{text-align:center;font-weight:900;font-size:17px;margin:1mm 0 9mm;text-decoration:underline}.trial-meta{display:flex;justify-content:space-between;gap:14mm;margin:0 0 8mm;font-size:13.5px}.trial-vu{margin:0 0 7mm}.trial-vu p{margin:0 0 2mm;text-align:justify}.trial-decide{display:flex;align-items:center;gap:16mm;margin:8mm 0 7mm}.trial-decide:before,.trial-decide:after{content:"";height:1px;background:#111;flex:1}.trial-decide b{font-size:16px;letter-spacing:.5px}.trial-article{margin:0 0 5mm;text-align:justify}.trial-article b.u{text-decoration:underline}.trial-motif{min-height:14mm;margin-top:2.5mm;font-weight:700}.trial-signs{display:grid;grid-template-columns:1fr 1fr;gap:14mm;margin-top:14mm}.trial-sign-box{border:1px solid #111;min-height:30mm;padding:4mm;text-align:center;font-weight:900}.trial-sign-box .line{margin-top:10mm;font-weight:400}.trial-footer{position:absolute;left:8mm;right:8mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9px;line-height:1.18;font-family:Arial,Helvetica,sans-serif}@media print{html,body{width:auto;min-height:auto;background:#fff}.no-print{display:none!important}.trial-doc{width:190mm;min-height:277mm;margin:0;padding:6mm 8mm 14mm;overflow:hidden}}
-  </style></head><body><main class="trial-doc">
+  return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"DECISION RECONDUCTION PERIODE ESSAI")}</title><style>${trialDecisionCommonStyle()}</style></head><body><main class="trial-doc">
     <img class="trial-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
     <div class="trial-title">DECISION</div>
     <div class="trial-subtitle">RENOUVELLEMENT DE LA PERIODE D'ESSAI</div>
@@ -11137,9 +11170,146 @@ function trialRenewalDecisionHTML(a,d){
     <div class="trial-decide"><b>DECIDE</b></div>
     <section class="trial-article"><p><b class="u">Article 01 :</b> Il est procédé à la reconduction de la période d'essai pour <b>M/Mme ${info.nom}</b> à la SARL <b>${escapeHTML(info.societe||"IRON GLOBAL SÉCURITÉ")}</b>, à compter du <b>${formatDate(d.du)}</b>${d.au?` jusqu'au <b>${formatDate(d.au)}</b>`:""}${duree?` pour une durée de <b>${escapeHTML(duree)}</b>`:""}, pour le motif suivant :</p><div class="trial-motif">${motif||"&nbsp;"}</div></section>
     <section class="trial-article"><p><b class="u">Article 02 :</b> Le Directeur des Ressources Humaines, le Responsable des Finances et Comptabilité et le Responsable des Opérations sont chargés chacun en ce qui le concerne de l'exécution de la présente Décision.</p></section>
-    <div class="trial-signs"><div class="trial-sign-box">NOTIFICATION DE L'INTERESSE<div class="line">Signature __________________</div></div><div class="trial-sign-box">LA DIRECTION GENERALE</div></div>
+    <div class="trial-signs"><div class="trial-sign-box">NOTIFICATION DE L'INTERESSÉ(E)<div class="line">Signature __________________</div><div style="margin-top:3mm;font-size:11px;font-weight:400">Reçu le : ___________________</div></div>${trialInstitutionalSignBox(d.dateDecision)}</div>
     <footer class="trial-footer">Adresse : N° 76, boulevard Ahmed Sayeh, Cité les Sources, Bir Mourad Rais Alger<br>Contact : STD : +213 770 112 034 – Fax : 213 538 048 – E-mail : contact@irongs.com</footer>
   </main></body></html>`,archiveMeta,"Valider décision");
+}
+function periodeEncDecisionHTML(a,d){
+  const info=rhDecisionBaseInfo(a);
+  const motif=escapeHTML(d.motif||"Période d'essai non concluante").replace(/\n/g,"<br>");
+  const archiveMeta={agentId:a.id,title:"Décision — Période d'essai non concluante",category:"Décisions RH",type:"periode_enc",reference:d.reference||"",date:d.dateDecision||today()};
+  return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"DECISION PERIODE ESSAI NON CONCLUANTE")}</title><style>${trialDecisionCommonStyle()}</style></head><body><main class="trial-doc">
+    <img class="trial-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    <div class="trial-title">DECISION</div>
+    <div class="trial-subtitle">FIN DE CONTRAT — PERIODE D'ESSAI NON CONCLUANTE</div>
+    <div class="trial-meta"><div>Alger le : <b>${formatDate(d.dateDecision||today())}</b></div><div>Réf. : <b>${escapeHTML(d.reference||"")}</b></div></div>
+    <section class="trial-vu">
+      <p>Vu les statuts constitutifs de la SARL <b>${escapeHTML(info.societe||"IRON GLOBAL SÉCURITÉ")}</b> ;</p>
+      <p>Vu la loi n° 90-11 du 21 avril 1990, modifiée et complétée, relative aux relations de travail, notamment ses articles relatifs à la période d'essai ;</p>
+      <p>Vu le contrat de travail à durée déterminée établi en faveur de <b>${info.nom}</b>, en qualité de <b>${info.fonction}</b>, à compter du <b>${formatDate(d.dateDebut||a.dateRecrutement||"")}</b> ;</p>
+      <p>Vu la période d'essai fixée jusqu'au <b>${formatDate(d.dateFinEssai||a.dateFinEssai||today())}</b> ;</p>
+    </section>
+    <div class="trial-decide"><b>DECIDE</b></div>
+    <section class="trial-article"><p><b class="u">Article 01 :</b> Il est mis fin à la relation de travail de <b>M/Mme ${info.nom}</b> avec la SARL <b>${escapeHTML(info.societe||"IRON GLOBAL SÉCURITÉ")}</b>, à compter du <b>${formatDate(d.dateEffet||today())}</b>, pour le motif suivant :</p><div class="trial-motif">${motif}</div></section>
+    <section class="trial-article"><p><b class="u">Article 02 :</b> L'intéressé(e) est invité(e) à procéder à la passation des consignes et au reversement de la dotation matérielle dans un délai de <b>72 heures</b> à compter de la notification de la présente décision.</p></section>
+    <section class="trial-article"><p><b class="u">Article 03 :</b> Le Directeur des Ressources Humaines, le Responsable des Finances et Comptabilité et le Responsable des Opérations sont chargés chacun en ce qui le concerne de l'exécution de la présente Décision.</p></section>
+    <div class="trial-signs"><div class="trial-sign-box">NOTIFICATION DE L'INTERESSÉ(E)<div class="line">Signature __________________</div><div style="margin-top:3mm;font-size:11px;font-weight:400">Reçu le : ___________________</div></div>${trialInstitutionalSignBox(d.dateDecision)}</div>
+    <footer class="trial-footer">Adresse : N° 76, boulevard Ahmed Sayeh, Cité les Sources, Bir Mourad Rais Alger<br>Contact : STD : +213 770 112 034 – Fax : 213 538 048 – E-mail : contact@irongs.com</footer>
+  </main></body></html>`,archiveMeta,"Valider décision");
+}
+function renderTrialPeriodRecap(a){
+  const today_=today();
+  const essaiEvents=(a.gestionEvents||[]).filter(e=>e.type==="Période d'essai"||e.type==="Période E-N-C").sort((x,y)=>String(y.du||y.createdAt||"").localeCompare(String(x.du||x.createdAt||"")));
+  const daysLeft=a.dateFinEssai?daysBetween(today_,a.dateFinEssai):null;
+  const essaiExpire=daysLeft!==null&&daysLeft<0;
+  const statColor=essaiExpire?"#991b1b":daysLeft!==null&&daysLeft<=30?"#b45309":"#047857";
+  const statBg=essaiExpire?"#fef2f2":daysLeft!==null&&daysLeft<=30?"#fffbeb":"#ecfdf5";
+  const statLabel=a.dateFinEssai?(essaiExpire?`Expirée le ${formatDate(a.dateFinEssai)} (J+${Math.abs(daysLeft)})`:`En cours — fin le ${formatDate(a.dateFinEssai)} · J-${daysLeft}`):null;
+  const encEvent=essaiEvents.find(e=>e.type==="Période E-N-C");
+  return`<div class="mt-5"><div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+    <h4 class="font-bold text-sm text-slate-700">Récapitulatif Période d'essai</h4>
+    ${a.dateFinEssai&&statLabel?`<span class="pill text-xs font-bold" style="background:${statBg};color:${statColor};border:1px solid ${statColor}55">${statLabel}</span>`:""}
+  </div>
+  ${encEvent?`<div class="p-3 rounded-lg text-sm font-bold mb-3" style="background:#fef2f2;color:#991b1b;border:1px solid #fecaca">Décision E-N-C émise le ${formatDate(encEvent.du||encEvent.createdAt)} · Réf. ${escapeHTML(encEvent.reference||"—")}</div>`:""}
+  <div class="overflow-x-auto rounded border border-slate-200">
+    <table class="w-full text-sm"><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Type</th><th class="px-3 py-2 text-left">Décision</th><th class="px-3 py-2 text-left">Nouvelle fin essai</th><th class="px-3 py-2 text-left">Motif</th><th class="px-3 py-2 text-left">Référence</th></tr></thead>
+    <tbody>${essaiEvents.length?essaiEvents.map(e=>{const isEnc=e.type==="Période E-N-C";return`<tr${isEnc?' style="background:#fef2f2"':''}><td class="px-3 py-2 text-xs font-semibold">${escapeHTML(e.type)}</td><td class="px-3 py-2 text-xs">${formatDate(e.du||e.createdAt)}</td><td class="px-3 py-2 text-xs">${e.au?formatDate(e.au):"—"}</td><td class="px-3 py-2 text-xs">${escapeHTML(e.motif||"—")}</td><td class="px-3 py-2 text-xs font-mono">${escapeHTML(e.reference||"—")}</td></tr>`}).join(""):`<tr><td colspan="5" class="px-3 py-3 text-center text-slate-400 text-xs italic">Aucun événement de période d'essai enregistré.</td></tr>`}</tbody>
+    </table>
+  </div></div>`;
+}
+function findPortailUserForAgent(agentId){
+  return (db.users||[]).find(u=>u.agentId&&(String(u.agentId)===String(agentId)||(u.backendId&&String(u.backendId)===String(agentId))));
+}
+function agentHasPortailAccount(a){
+  return !!findPortailUserForAgent(a?.id);
+}
+function sendDocumentToAgentPortail(a,subject,message){
+  const portailUser=findPortailUserForAgent(a?.id);
+  if(!portailUser?.username)return false;
+  if(!db.echanges)db.echanges=[];
+  db.echanges.push({id:uid("ech"),date:new Date().toISOString(),from:session?.username||"DRH",to:portailUser.username,sujet:subject,importance:"Élevée",message,attachments:[],receivedBy:[],luPar:[session?.username||"DRH"],type:"message"});
+  return true;
+}
+function openPeriodeEncModal(agentId){
+  if(!canUseEmployeeActionWorkflows()){toast("Action RH non autorisée depuis ce module","error");return}
+  const a=findEmployeeByRef(agentId);if(!a){toast("Employé introuvable","error");return}
+  const dateFinEssai=a.dateFinEssai||"";
+  const daysLeft=dateFinEssai?daysBetween(today(),dateFinEssai):null;
+  const trialExpired=daysLeft!==null&&daysLeft<0;
+  const trialFar=daysLeft!==null&&daysLeft>90;
+  const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
+  const warningBlock=trialExpired
+    ?`<div class="p-3 rounded-lg text-sm font-bold" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca">⚠ La période d'essai a expiré le ${formatDate(dateFinEssai)}. Une décision ENC ne peut plus être émise au-delà de la fin d'essai.</div>`
+    :trialFar
+      ?`<div class="p-3 rounded-lg text-sm" style="background:#fffbeb;color:#92400e;border:1px solid #fde68a">⚠ Il reste encore ${daysLeft} jours de période d'essai. La décision ENC peut être émise à tout moment avant la fin d'essai.</div>`
+      :dateFinEssai
+        ?`<div class="p-3 rounded-lg text-sm font-bold" style="background:#fef9c3;color:#854d0e;border:1px solid #fde047">Fin d'essai le ${formatDate(dateFinEssai)} — ${daysLeft!==null?daysLeft+" j restants":"—"}.</div>`
+        :`<div class="p-3 rounded-lg text-sm" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1">Aucune date de fin d'essai renseignée.</div>`;
+  openModal(`<h3 class="font-bold text-lg mb-1">PERIODE D'ESSAI NON CONCLUANTE</h3>
+    <p class="text-sm text-slate-500 mb-3">${nom} · ${escapeHTML(a.matricule||"—")}</p>
+    ${warningBlock}
+    <form onsubmit="event.preventDefault();confirmPeriodeEnc('${escapeHTML(String(agentId))}')" class="mt-4">
+      <div class="grid grid-1 gap-3">
+        <div><label class="label">Date d'effet de la fin de contrat</label><input class="input" type="date" name="dateEffet" value="${today()}"/></div>
+        <div><label class="label">Motif complémentaire (optionnel)</label><textarea class="textarea" rows="2" name="motif" placeholder="Insuffisance professionnelle, inadaptation au poste…"></textarea></div>
+      </div>
+      <div class="flex gap-2 justify-end mt-4 flex-wrap">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+        ${trialExpired?`<span class="text-xs text-red-600 italic self-center">Décision bloquée — essai expiré</span>`:`<button class="btn btn-danger">Confirmer décision ENC</button>`}
+      </div>
+    </form>`);
+}
+async function confirmPeriodeEnc(agentId){
+  if(!canUseEmployeeActionWorkflows()){toast("Action RH non autorisée","error");return}
+  const a=findEmployeeByRef(agentId);if(!a){toast("Employé introuvable","error");return}
+  const fd=new FormData(document.querySelector(".modal-bg form"));
+  const dateEffet=String(fd.get("dateEffet")||today());
+  const motifSaisi=String(fd.get("motif")||"").trim();
+  const motif=motifSaisi||"Période d'essai non concluante";
+  const dateDecision=today();
+  const reference=rhDecisionReference("ENC",a,dateDecision);
+  const d={dateDecision,reference,dateEffet,dateDebut:a.dateRecrutement||"",dateFinEssai:a.dateFinEssai||"",motif};
+  const docHTML=periodeEncDecisionHTML(a,d);
+  a.gestionEvents=a.gestionEvents||[];
+  a.gestionEvents.push({type:"Période E-N-C",du:dateDecision,au:dateEffet,motif,statut:"termine",reference,createdAt:dateDecision});
+  a.statut="sortant";a.dateSortie=dateEffet;a.finRelationAt=new Date().toISOString();a.finRelationMotif="Période d'essai non concluante";a.finRelationDotationReversee=false;
+  try{
+    const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
+    Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
+  }catch(e){toast("Mise à jour employé non confirmée : "+(e.message||e),"error");return}
+  await archiveEmployeeGeneratedDocument(a.id,{title:"Décision — Période d'essai non concluante",category:"Décisions RH",type:"periode_enc",reference,date:dateDecision,html:periodeEncBodyHTML(a,d)});
+  if(!(await saveDBAndWaitToast("Décision ENC non confirmée")))return;
+  const portailSent=sendDocumentToAgentPortail(a,reference,"Décision de fin de contrat (P-E-N-C) ref. "+reference+" — voir votre dossier.");
+  closeModal();
+  toast("Décision ENC enregistrée et archivée"+(portailSent?" · notifié sur le portail":""),"success");
+  const sw=screen.width||1280,sh=screen.height||800,ww=Math.min(960,sw-80),wh=Math.min(820,sh-80);
+  const left=Math.round((sw-ww)/2),top=Math.round((sh-wh)/2);
+  const w=window.open("","sgdi_enc_"+Date.now(),"popup=yes,width="+ww+",height="+wh+",left="+left+",top="+top+",scrollbars=yes,resizable=yes");
+  if(w){w.document.write(docHTML);w.document.close()}
+  else toast("Fenêtre bloquée — autorisez les popups","warn");
+  renderView();
+}
+function periodeEncBodyHTML(a,d){
+  const info=rhDecisionBaseInfo(a);
+  const motif=escapeHTML(d.motif||"Période d'essai non concluante").replace(/\n/g,"<br>");
+  return`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"ENC")}</title><style>${trialDecisionCommonStyle()}</style></head><body><main class="trial-doc">
+    <img class="trial-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    <div class="trial-title">DECISION</div>
+    <div class="trial-subtitle">FIN DE CONTRAT — PERIODE D'ESSAI NON CONCLUANTE</div>
+    <div class="trial-meta"><div>Alger le : <b>${formatDate(d.dateDecision||today())}</b></div><div>Réf. : <b>${escapeHTML(d.reference||"")}</b></div></div>
+    <section class="trial-vu">
+      <p>Vu les statuts constitutifs de la SARL <b>${escapeHTML(info.societe||"IRON GLOBAL SÉCURITÉ")}</b> ;</p>
+      <p>Vu la loi n° 90-11 du 21 avril 1990, modifiée et complétée, relative aux relations de travail ;</p>
+      <p>Vu le contrat de travail à durée déterminée établi en faveur de <b>${info.nom}</b>, en qualité de <b>${info.fonction}</b>, à compter du <b>${formatDate(d.dateDebut||a.dateRecrutement||"")}</b> ;</p>
+      <p>Vu la période d'essai fixée jusqu'au <b>${formatDate(d.dateFinEssai||a.dateFinEssai||today())}</b> ;</p>
+    </section>
+    <div class="trial-decide"><b>DECIDE</b></div>
+    <section class="trial-article"><p><b class="u">Article 01 :</b> Il est mis fin à la relation de travail de <b>M/Mme ${info.nom}</b> avec la SARL <b>${escapeHTML(info.societe||"IRON GLOBAL SÉCURITÉ")}</b>, à compter du <b>${formatDate(d.dateEffet||today())}</b>, pour le motif suivant :</p><div class="trial-motif">${motif}</div></section>
+    <section class="trial-article"><p><b class="u">Article 02 :</b> L'intéressé(e) est invité(e) à procéder à la passation des consignes et au reversement de la dotation matérielle dans un délai de <b>72 heures</b> à compter de la notification de la présente décision.</p></section>
+    <section class="trial-article"><p><b class="u">Article 03 :</b> Le Directeur des Ressources Humaines, le Responsable des Finances et Comptabilité et le Responsable des Opérations sont chargés chacun en ce qui le concerne de l'exécution de la présente Décision.</p></section>
+    <div class="trial-signs"><div class="trial-sign-box">NOTIFICATION DE L'INTERESSÉ(E)<div class="line">Signature __________________</div><div style="margin-top:3mm;font-size:11px;font-weight:400">Reçu le : ___________________</div></div>${trialInstitutionalSignBox(d.dateDecision)}</div>
+    <footer class="trial-footer">Adresse : N° 76, boulevard Ahmed Sayeh, Cité les Sources, Bir Mourad Rais Alger<br>Contact : STD : +213 770 112 034 – Fax : 213 538 048 – E-mail : contact@irongs.com</footer>
+  </main></body></html>`;
 }
 function trialRenewalDraftFromForm(agentId,form){
   const a=findEmployeeByRef(agentId);
@@ -11151,8 +11321,10 @@ function trialRenewalDraftFromForm(agentId,form){
 function printTrialRenewalDecisionFromForm(agentId,form){
   const draft=trialRenewalDraftFromForm(agentId,form);
   if(!draft.a){toast("Employé introuvable","error");return}
-  const w=window.open("","_blank","width=900,height=700");
-  if(!w){toast("Fenêtre d'impression bloquée","error");return}
+  const sw=screen.width||1280,sh=screen.height||800,ww=Math.min(960,sw-80),wh=Math.min(820,sh-80);
+  const left=Math.round((sw-ww)/2),top=Math.round((sh-wh)/2);
+  const w=window.open("","sgdi_rec_"+Date.now(),"popup=yes,width="+ww+",height="+wh+",left="+left+",top="+top+",scrollbars=yes,resizable=yes");
+  if(!w){toast("Fenêtre bloquée — autorisez les popups","error");return}
   w.document.write(trialRenewalDecisionHTML(draft.a,draft));
   w.document.close();
 }
@@ -11767,7 +11939,7 @@ function effectifFilteredData(filter){
   if(filter==="operationnels"){title="Effectif opérationnel";list=list.filter(agentIsOperational)}
   else if(filter==="conge"){title="Agents en congé";list=list.filter(a=>db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)))}
   else if(filter==="maladie"){title="Agents en maladie";list=list.filter(a=>db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c)))}
-  else if(filter==="absents"){title="Agents en absence";list=list.filter(a=>a.statut==="absent")}
+  else if(filter==="absents"){title="Agents en absence";list=list.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&e.statut==="en_cours"&&(!e.au||e.au>=today())))}
   else if(filter==="suspension"){title="Agents suspendus";list=list.filter(a=>a.statut==="suspendu")}
   else if(filter==="instance_affectation"){title="Employés en attente d'affectation";list=list.filter(agentNeedsAffectation)}
   else if(filter==="sortant"){title="Sortant";list=list.filter(a=>["sortant","demissionne","licencie"].includes(a.statut))}
@@ -12106,7 +12278,7 @@ function renderAgentForm(view,id){
       </div>
     </div>
     <div class="rh-erp-chips">
-      ${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}
+      ${situationBadge}${a.blacklist?'<span class="pill" style="background:#1f2937;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.05em">⛔ BLACK LIST</span>':''}${isSortantDotation72hAlert(a)?'<span class="pill" style="background:#dc2626;color:#fff;font-weight:900;padding:6px 16px;letter-spacing:.06em;animation:fpLampBlink 0.9s ease-in-out infinite">⚠ ALERTE — DOTATION NON REVERSÉE +72H</span>':''}${(isDrhFicheContext()||adminFicheContext)&&!agentHasPortailAccount(a)?'<span class="pill" style="background:#f59e0b;color:#fff;font-weight:800;padding:6px 14px;letter-spacing:.04em">⚠ SANS COMPTE PORTAIL</span>':''}<span class="pill pill-green">Fiche officielle verrouillée</span>${locked?'<span class="pill pill-gray">🔒 Lecture seule</span>':'<span class="pill pill-amber">Administration système · Modification autorisée</span>'}
     </div>
     <div class="rh-insight-grid">${agentCompletenessHTML(a)}${agentModificationHistoryHTML(a)}</div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
@@ -12177,7 +12349,7 @@ function renderAgentForm(view,id){
         <div class="col-span-2"><label class="label">Fin de contrat</label><input class="input bg-slate-50" type="date" name="dateFinContrat" value="${ficheContractEndDate||""}" readonly ${locked?"disabled":""}/></div>
         <div class="col-span-3"><label class="label">Durée période d'essai (jours)</label><input class="input" type="number" name="dureeEssai" value="${dureeEssaiValue}" min="0" ${locked?"disabled":""} onchange="updateAgentTrialEndDate()" oninput="updateAgentTrialEndDate()"/></div>
         <div class="col-span-3"><label class="label">Fin essai</label><input class="input bg-slate-50" type="date" name="dateFinEssai" value="${a.dateFinEssai||""}" readonly ${locked?"disabled":""}/></div>
-      </div>${(()=>{const contrats=(db.contratsPersonnel||[]).filter(c=>contractRecordMatchesAgent(c,a)&&c.workflowKind==="nouveau_contrat").sort((x,y)=>String(y.start_date||y.dateDebut||y.createdAt||"").localeCompare(String(x.start_date||x.dateDebut||x.createdAt||"")));const avenants=(db.avenants||[]).filter(av=>contractRecordMatchesAgent(av,a)).sort((x,y)=>String(y.dateAvenant||y.date||y.createdAt||"").localeCompare(String(x.dateAvenant||x.date||x.createdAt||"")));if(!contrats.length&&!avenants.length)return"";const rows=[...contrats.map(c=>{const debut=c.start_date||c.dateDebut||c.dateRecrutement||"";const fin=c.end_date||c.dateFinContrat||"";const duree=c.contract_duration||c.dureeContrat||"";const type=escapeHTML(c.contract_type||c.typeContrat||"CDD");const sal=c.salary_net||c.salaireNet||"";const ref=escapeHTML(c.reference||c.workflow_id||"—");const statut=c.workflow_status||c.statut||"";const statutBadge=statut==="valide"||statut==="signe"?`<span class="badge" style="background:#dcfce7;color:#166534">Signé</span>`:statut==="brouillon"?`<span class="badge" style="background:#fef3c7;color:#92400e">Brouillon</span>`:`<span class="badge" style="background:#f1f5f9;color:#475569">${escapeHTML(statut||"—")}</span>`;return`<tr><td class="text-xs font-mono">${ref}</td><td class="text-xs font-semibold">${type}</td><td class="text-xs">${debut?formatDate(debut):"—"}</td><td class="text-xs">${duree||"—"}</td><td class="text-xs">${fin?formatDate(fin):"—"}</td><td class="text-xs">${sal?money(sal):"—"}</td><td>${statutBadge}</td></tr>`}),...avenants.map(av=>{const date=av.dateAvenant||av.date||"";const type=`Avenant ${escapeHTML(av.type||av.typeAvenant||"")}`;const ref=escapeHTML(av.numero||av.reference||av.id||"—");return`<tr style="background:#f8fafc"><td class="text-xs font-mono">${ref}</td><td class="text-xs text-slate-500 italic">${type}</td><td class="text-xs">${date?formatDate(date):"—"}</td><td class="text-xs" colspan="3">—</td><td><span class="badge" style="background:#ede9fe;color:#5b21b6">Avenant</span></td></tr>`})];return`<div class="mt-5"><h4 class="font-bold text-sm mb-2 text-slate-700">Historique des contrats</h4><div class="overflow-x-auto rounded border border-slate-200"><table class="w-full text-sm"><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Référence</th><th class="px-3 py-2 text-left">Type</th><th class="px-3 py-2 text-left">Début</th><th class="px-3 py-2 text-left">Durée</th><th class="px-3 py-2 text-left">Fin</th><th class="px-3 py-2 text-left">Salaire net</th><th class="px-3 py-2 text-left">Statut</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div>`})()}</fieldset></div>
+      </div>${(()=>{const contrats=(db.contratsPersonnel||[]).filter(c=>contractRecordMatchesAgent(c,a)&&c.workflowKind==="nouveau_contrat").sort((x,y)=>String(y.start_date||y.dateDebut||y.createdAt||"").localeCompare(String(x.start_date||x.dateDebut||x.createdAt||"")));const avenants=(db.avenants||[]).filter(av=>contractRecordMatchesAgent(av,a)).sort((x,y)=>String(y.dateAvenant||y.date||y.createdAt||"").localeCompare(String(x.dateAvenant||x.date||x.createdAt||"")));if(!contrats.length&&!avenants.length)return"";const rows=[...contrats.map(c=>{const debut=c.start_date||c.dateDebut||c.dateRecrutement||"";const fin=c.end_date||c.dateFinContrat||"";const duree=c.contract_duration||c.dureeContrat||"";const type=escapeHTML(c.contract_type||c.typeContrat||"CDD");const sal=c.salary_net||c.salaireNet||"";const ref=escapeHTML(c.reference||c.workflow_id||"—");const statut=c.workflow_status||c.statut||"";const statutBadge=statut==="valide"||statut==="signe"?`<span class="badge" style="background:#dcfce7;color:#166534">Signé</span>`:statut==="brouillon"?`<span class="badge" style="background:#fef3c7;color:#92400e">Brouillon</span>`:`<span class="badge" style="background:#f1f5f9;color:#475569">${escapeHTML(statut||"—")}</span>`;return`<tr><td class="text-xs font-mono">${ref}</td><td class="text-xs font-semibold">${type}</td><td class="text-xs">${debut?formatDate(debut):"—"}</td><td class="text-xs">${duree||"—"}</td><td class="text-xs">${fin?formatDate(fin):"—"}</td><td class="text-xs">${sal?money(sal):"—"}</td><td>${statutBadge}</td></tr>`}),...avenants.map(av=>{const date=av.dateAvenant||av.date||"";const type=`Avenant ${escapeHTML(av.type||av.typeAvenant||"")}`;const ref=escapeHTML(av.numero||av.reference||av.id||"—");return`<tr style="background:#f8fafc"><td class="text-xs font-mono">${ref}</td><td class="text-xs text-slate-500 italic">${type}</td><td class="text-xs">${date?formatDate(date):"—"}</td><td class="text-xs" colspan="3">—</td><td><span class="badge" style="background:#ede9fe;color:#5b21b6">Avenant</span></td></tr>`})];return`<div class="mt-5"><h4 class="font-bold text-sm mb-2 text-slate-700">Historique des contrats</h4><div class="overflow-x-auto rounded border border-slate-200"><table class="w-full text-sm"><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Référence</th><th class="px-3 py-2 text-left">Type</th><th class="px-3 py-2 text-left">Début</th><th class="px-3 py-2 text-left">Durée</th><th class="px-3 py-2 text-left">Fin</th><th class="px-3 py-2 text-left">Salaire net</th><th class="px-3 py-2 text-left">Statut</th></tr></thead><tbody>${rows.join("")}</tbody></table></div></div>`})()}${renderTrialPeriodRecap(a)}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="conges" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Congés</legend>${renderAgentCongesPanel(a)}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="absences" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Absences</legend>${renderAgentAbsencesPanel(a)}</fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="carriere" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Carrière</legend>${renderGestionHistorique(a)}</fieldset></div>
@@ -12763,6 +12935,16 @@ async function confirmGestion(agentId,type){
   catch(e){toast(type+" non enregistré : "+(e.message||e),"error");return}
   if(!(await saveDBAndWaitToast(type+" non confirmé")))return;
   closeModal();toast(`${type} enregistré(e)`,"success");renderView();
+  if(type==="Période d'essai"){
+    const recDoc=trialRenewalDecisionHTML(a,{dateDecision:ev.du||today(),reference:trialRenewalReference(a,ev.du||today()),du:ev.du,au:ev.au,dureeReconduction:ev.dureeReconduction,motif:ev.motif});
+    const recBodyHTML=recDoc.replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<style[^>]*>[\s\S]*?<\/style>/gi,"").replace(/<[^>]+>/g," ").trim();
+    await archiveEmployeeGeneratedDocument(a.id,{title:"Décision de renouvellement période d'essai",category:"Décisions RH",type:"rec_periode_essai",reference:trialRenewalReference(a,ev.du||today()),date:ev.du||today(),html:recDoc});
+    sendDocumentToAgentPortail(a,trialRenewalReference(a,ev.du||today()),"Décision de renouvellement de votre période d'essai — archivée dans votre dossier.");
+    const sw=screen.width||1280,sh=screen.height||800,ww=Math.min(960,sw-80),wh=Math.min(820,sh-80);
+    const left=Math.round((sw-ww)/2),top=Math.round((sh-wh)/2);
+    const pw=window.open("","sgdi_rec_"+Date.now(),"popup=yes,width="+ww+",height="+wh+",left="+left+",top="+top+",scrollbars=yes,resizable=yes");
+    if(pw){pw.document.write(recDoc);pw.document.close()}
+  }
 }
 function deleteGestionEvent(agentId,idx){
   if(!isAdminFichePositionContext()){toast("Suppression réservée à Administration système > Fiche de position","error");return}
@@ -13052,6 +13234,7 @@ function openReaffectation(agentId){
   if(!isAdminFichePositionContext()&&sgdiViewModeActive){toast("Affectation verrouillée : modification réservée à Administration système > Fiche de position","error");return}
   if(!isOpsFicheContext()&&!isAdminFichePositionContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||""))){toast("Affectation impossible — cet employé est sortant de la société","error");return}
   const current=agentLiveAffectation(a);
   const hasC=current&&current.siteId;
   if(hasC){
@@ -13079,6 +13262,7 @@ function opsFindSite(ref){
 function openOpsMutationModal(agentId){
   if(!canUseOpsEmployeeActionWorkflows()){toast("Affectation réservée au module OPS","error");return}
   const a=opsFindEmployee(agentId);if(!a){toast("Employé introuvable","error");return}
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||""))){toast("Affectation impossible — cet employé est sortant de la société","error");return}
   const soc=effectifSocieteFilter()||a.societe||currentStructureSocieteFilter()||"";
   const sites=(db.sites||[]).filter(s=>s&&s.actif!==false&&(!soc||siteMatchesSociete(s,soc))).sort((x,y)=>(x.nom||"").localeCompare(y.nom||""));
   const current=agentLiveAffectation(a);
@@ -13174,6 +13358,7 @@ async function persistSqlAssignment(employeeBackendId,siteBackendId,groupe,dateD
 }
 async function confirmOpsMutation(agentId,form){
   const a=opsFindEmployee(agentId);if(!a)return;
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||""))){toast("Affectation impossible — cet employé est sortant de la société","error");return}
   const fd=new FormData(form);const siteId=String(fd.get("siteId")||"");const site=opsFindSite(siteId);
   if(!site){toast("Choisissez un site","error");return}
   const dateDebut=String(fd.get("dateDebut")||today());
@@ -13219,7 +13404,10 @@ async function confirmOpsDotationRequest(agentId,form){
   closeModal();toast("Demande transmise à Matériel","success");renderView();
 }
 async function confirmReaffectation(agentId){
-  const a=db.agents.find(x=>x.id===agentId);const fd=new FormData(document.querySelector(".modal-bg form"));
+  const a=db.agents.find(x=>x.id===agentId);
+  if(!a)return;
+  if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||""))){toast("Affectation impossible — cet employé est sortant de la société","error");return}
+  const fd=new FormData(document.querySelector(".modal-bg form"));
   const liveAff=agentLiveAffectation(a);
   if(liveAff?.siteId){
     toast(`Employé déjà affecté au site ${liveAff.siteName||liveAff.siteId}. Affectation refusée.`,"error");
@@ -13589,6 +13777,11 @@ function ficheCell(label,value){return`<div class="fiche-cell"><b>${escapeHTML(l
 function ficheRows(rows,emptyCols){
   if(!rows||!rows.length)return`<tr><td colspan="${emptyCols||6}" style="text-align:center;color:#64748b">Aucune donnée.</td></tr>`;
   return rows.join("");
+}
+function isSortantDotation72hAlert(a){
+  if(!a||a.finRelationDotationReversee||!a.finRelationAt)return false;
+  if(!EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||"")))return false;
+  return((new Date()-new Date(a.finRelationAt))/3600000)>=72;
 }
 function ficheStatusInfo(a){
   const congeActif=(db.conges||[]).find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
@@ -17541,14 +17734,16 @@ function renderAgentMateriel(a,locked){
   const stockValue=totalValue;
   const canEdit=!locked||isAdmin();
   const ficheDotationBtn=isMaterielFicheContext()?`<button type="button" class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:"";
-  return`<div class="grid grid-3 mb-3">
+  const alert72h=isSortantDotation72hAlert(a);
+  const alertBanner=alert72h?`<div class="p-3 mb-3 rounded-lg font-bold text-sm" style="background:#fef2f2;border:2px solid #dc2626;color:#991b1b;animation:fpLampBlink 0.9s ease-in-out infinite">⚠ ALERTE : dotation non reversée depuis plus de 72 heures — reversement immédiat requis</div>`:"";
+  return`${alertBanner}<div class="grid grid-3 mb-3">
     <div class="bg-slate-50 p-3 rounded border border-slate-200"><div class="text-xs text-slate-500 uppercase">Articles attribués</div><div class="text-2xl font-bold mt-1">${rows.length}</div><div class="text-[11px] text-slate-500 mt-1">${rows.length} dotation(s)</div></div>
     <div class="bg-slate-50 p-3 rounded border border-slate-200"><div class="text-xs text-slate-500 uppercase">Catégories</div><div class="text-sm mt-1 flex flex-wrap gap-1">${allCats.map(c=>`<span class="pill pill-indigo">${escapeHTML(c)}</span>`).join("")||"—"}</div></div>
     <div class="bg-slate-50 p-3 rounded border border-slate-200"><div class="text-xs text-slate-500 uppercase">Valeur dotation</div><div class="text-2xl font-black mt-1">${money(totalValue)}</div><div class="text-[11px] text-slate-500 mt-1">Source PostgreSQL uniquement</div></div>
   </div>
   <div class="card p-3 mb-3">
     <div class="flex justify-between items-center mb-2 flex-wrap gap-2"><h4 class="font-bold text-sm">Détail de la dotation</h4><div class="flex gap-2 flex-wrap">${ficheDotationBtn}<a href="#/materiel/mouvements" class="text-xs text-amber-600 hover:underline">Voir mouvements →</a></div></div>
-    <div class="overflow-x-auto"><table><thead><tr><th>Date dotation</th><th>Code</th><th>Article</th><th>Qté</th><th>Prix unitaire</th><th>Valeur exacte</th><th>Motif</th><th>N° bon</th><th>Date reversement</th><th>Motif reversement</th></tr></thead><tbody>${rows.length===0?`<tr><td colspan="10" class="text-center text-slate-500 p-3">Aucune dotation enregistrée.</td></tr>`:rows.map(r=>`<tr><td class="text-xs">${formatDate(r.date)}</td><td class="font-mono text-xs">${escapeHTML(r.code||"—")}</td><td>${r.articleId?`<a class="font-semibold hover:underline" href="#/materiel/article/${r.articleId}">${escapeHTML(r.article)}</a>`:`<span class="font-semibold">${escapeHTML(r.article||"—")}</span>`}<div class="text-[10px] text-slate-500">${escapeHTML(r.categorie||"—")}</div></td><td class="font-bold text-center">${qty(r.qte)} <span class="text-[10px] text-slate-400">${escapeHTML(r.unite||"")}</span></td><td class="text-right text-xs">${money(r.pu)}</td><td class="text-right font-bold">${money(r.valeur)}</td><td class="text-xs">${escapeHTML(r.motif||"—")}</td><td class="font-mono text-xs">${escapeHTML(r.bon||"—")}</td><td class="text-xs">${r.dateReversement||"—"}</td><td class="text-xs">${escapeHTML(r.motifReversement||"—")}</td></tr>`).join("")}</tbody></table></div>
+    <div class="overflow-x-auto"><table><thead><tr><th>Date dotation</th><th>Code</th><th>Article</th><th>Qté</th><th>Prix unitaire</th><th>Valeur exacte</th><th>Motif</th><th>N° bon</th><th>Date reversement</th><th>Motif reversement</th></tr></thead><tbody>${rows.length===0?`<tr><td colspan="10" class="text-center text-slate-500 p-3">Aucune dotation enregistrée.</td></tr>`:rows.map(r=>{const rowAlert=alert72h&&!r.dateReversement;return`<tr${rowAlert?' style="background:#fef2f2;color:#991b1b;font-weight:700"':''}><td class="text-xs">${formatDate(r.date)}</td><td class="font-mono text-xs">${escapeHTML(r.code||"—")}</td><td>${r.articleId?`<a class="font-semibold hover:underline" href="#/materiel/article/${r.articleId}">${escapeHTML(r.article)}</a>`:`<span class="font-semibold">${escapeHTML(r.article||"—")}</span>`}<div class="text-[10px] ${rowAlert?"text-red-400":"text-slate-500"}">${escapeHTML(r.categorie||"—")}</div></td><td class="font-bold text-center">${qty(r.qte)} <span class="text-[10px] ${rowAlert?"text-red-300":"text-slate-400"}">${escapeHTML(r.unite||"")}</span></td><td class="text-right text-xs">${money(r.pu)}</td><td class="text-right font-bold">${money(r.valeur)}</td><td class="text-xs">${escapeHTML(r.motif||"—")}</td><td class="font-mono text-xs">${escapeHTML(r.bon||"—")}</td><td class="text-xs">${r.dateReversement||"—"}</td><td class="text-xs">${escapeHTML(r.motifReversement||"—")}</td></tr>`}).join("")}</tbody></table></div>
   </div>`;
 }
 function agentDotationRows(agentId,opts){
@@ -26894,12 +27089,48 @@ function renderElementsSortants(view){
       </table></div>`}
   </div>`;
 }
+function renderDRHPeriodeEssai(view){
+  const soc=drhActiveSocieteFilter();
+  const today_=today();
+  const agents=(db.agents||[]).filter(a=>a.dateFinEssai&&(!soc||a.societe===soc));
+  const enCours=agents.filter(a=>daysBetween(today_,a.dateFinEssai)>=0).sort((a,b)=>String(a.dateFinEssai).localeCompare(String(b.dateFinEssai)));
+  const expires30=enCours.filter(a=>daysBetween(today_,a.dateFinEssai)<=30);
+  const expires90=enCours.filter(a=>daysBetween(today_,a.dateFinEssai)<=90);
+  const expired=agents.filter(a=>daysBetween(today_,a.dateFinEssai)<0).sort((a,b)=>String(b.dateFinEssai).localeCompare(String(a.dateFinEssai)));
+  const sansPortail=enCours.filter(a=>!agentHasPortailAccount(a));
+  function essaiRow(a){
+    const d=daysBetween(today_,a.dateFinEssai);
+    const dLabel=d<0?`<span class="pill pill-gray text-xs">Expirée J+${Math.abs(d)}</span>`:d<=30?`<span class="pill pill-red text-xs">J-${d}</span>`:d<=90?`<span class="pill pill-amber text-xs">J-${d}</span>`:`<span class="pill pill-green text-xs">J-${d}</span>`;
+    const hasPortail=agentHasPortailAccount(a);
+    const enc=(a.gestionEvents||[]).some(e=>e.type==="Période E-N-C");
+    const rec=(a.gestionEvents||[]).filter(e=>e.type==="Période d'essai").length;
+    const name=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase());
+    return`<tr data-searchable><td><a class="font-semibold hover:underline" href="#/effectif/agent/${a.id}">${name}</a></td><td class="font-mono text-xs text-amber-600">${escapeHTML(a.matricule||"—")}</td><td class="text-xs">${escapeHTML(a.societe||"—")}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td class="text-xs">${formatDate(a.dateFinEssai)}</td><td>${dLabel}</td><td class="text-center">${rec||"—"}</td><td class="text-center">${enc?'<span class="pill pill-red text-xs">ENC</span>':"—"}</td><td class="text-center">${hasPortail?'<span class="pill pill-green text-xs">✓</span>':'<span class="pill pill-amber text-xs">⚠</span>'}</td><td><div class="flex gap-1"><button class="btn btn-ghost text-xs" onclick="openPeriodeEncModal('${a.id}')">ENC</button><button class="btn btn-ghost text-xs" onclick="runRhEffectifAction('rec_periode_essai','${a.id}')">Reconduire</button></div></td></tr>`;
+  }
+  view.innerHTML=`<div class="max-w-5xl mx-auto px-2 py-4">
+    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+      <h1 class="text-xl font-black uppercase">Période d'essai</h1>
+      <a href="#/contrats/dashboard" class="btn btn-ghost text-xs">← Contrats</a>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-blue-700">${enCours.length}</div><div class="text-xs text-slate-500 mt-1">En cours</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-amber-600">${expires90.length}</div><div class="text-xs text-slate-500 mt-1">Fin dans 90 j</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-red-600">${expires30.length}</div><div class="text-xs text-slate-500 mt-1">Fin dans 30 j</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black ${sansPortail.length?"text-amber-600":"text-green-600"}">${sansPortail.length}</div><div class="text-xs text-slate-500 mt-1">Sans compte portail</div></div>
+    </div>
+    ${sansPortail.length?`<div class="p-3 mb-4 rounded-lg text-sm font-bold" style="background:#fffbeb;color:#92400e;border:1px solid #fde68a">⚠ ${sansPortail.length} employé(s) en période d'essai sans compte Portail RH — notifications automatiques non disponibles.</div>`:""}
+    <h3 class="font-bold text-sm mb-2 uppercase text-slate-600">En cours (${enCours.length})</h3>
+    <div class="card overflow-hidden mb-6"><table data-searchable-table><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2">Code</th><th class="px-3 py-2">Société</th><th class="px-3 py-2">Recrutement</th><th class="px-3 py-2">Fin essai</th><th class="px-3 py-2">Délai</th><th class="px-3 py-2 text-center">Reconductions</th><th class="px-3 py-2 text-center">ENC</th><th class="px-3 py-2 text-center">Portail</th><th class="px-3 py-2">Actions</th></tr></thead><tbody>${enCours.length?enCours.map(essaiRow).join(""):`<tr><td colspan="10" class="text-center p-4 text-slate-400 italic">Aucune période d'essai en cours.</td></tr>`}</tbody></table></div>
+    ${expired.length?`<h3 class="font-bold text-sm mb-2 uppercase text-slate-600">Expirées (${expired.length})</h3><div class="card overflow-hidden"><table><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2">Code</th><th class="px-3 py-2">Société</th><th class="px-3 py-2">Recrutement</th><th class="px-3 py-2">Fin essai</th><th class="px-3 py-2">Délai</th><th class="px-3 py-2 text-center">Reconductions</th><th class="px-3 py-2 text-center">ENC</th><th class="px-3 py-2 text-center">Portail</th><th class="px-3 py-2">Actions</th></tr></thead><tbody>${expired.slice(0,20).map(essaiRow).join("")}</tbody></table></div>`:""}
+  </div>`;
+}
 function renderDRH(view,sub,arg){
   sgdiEnsureEmployeesForDisplay({society:drhActiveSocieteFilter(),force:true});
   if(sub==="dashboard")return renderDRHDashboard(view);
   if(sub==="conges")return renderDRHCongesPersonnel(view);
   if(sub==="social")return renderDRHSocial(view,arg);
   if(sub==="mise_en_demeure")return renderDRHMiseEnDemeure(view);
+  if(sub==="essai")return renderDRHPeriodeEssai(view);
   if(sub==="stats")return renderDRHStats(view);
   if(sub==="stats_societe")return renderDRHStatsSociete(view);
   if(sub==="stats_theme")return renderDRHStatsTheme(view);
