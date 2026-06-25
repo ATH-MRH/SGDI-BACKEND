@@ -1137,7 +1137,7 @@ window.SGDI_API={
     list:(params)=>sgdiApi("/ops/assignments"+sgdiQuery(params),{legacy:false}),
     create:(payload)=>sgdiApi("/ops/assignments",{method:"POST",body:payload,legacy:false})
   },
-  stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),storesPage:(params)=>sgdiApi("/materiel/stores/page"+sgdiQuery(params),{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),suppliersPage:(params)=>sgdiApi("/materiel/suppliers/page"+sgdiQuery(params),{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),articles:(params)=>sgdiApi("/materiel/articles"+sgdiQuery(params),{legacy:false}),articlesPage:(params)=>sgdiApi("/materiel/articles/page"+sgdiQuery(params),{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),movementsPage:(params)=>sgdiApi("/materiel/movements/page"+sgdiQuery(params),{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),createDotation:(payload)=>sgdiApi("/materiel/dotations",{method:"POST",body:payload,legacy:false}),
+  stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),storesPage:(params)=>sgdiApi("/materiel/stores/page"+sgdiQuery(params),{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),suppliersPage:(params)=>sgdiApi("/materiel/suppliers/page"+sgdiQuery(params),{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),alerts:(params)=>sgdiApi("/materiel/alerts"+sgdiQuery(params),{legacy:false}),articles:(params)=>sgdiApi("/materiel/articles"+sgdiQuery(params),{legacy:false}),articlesPage:(params)=>sgdiApi("/materiel/articles/page"+sgdiQuery(params),{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),movementsPage:(params)=>sgdiApi("/materiel/movements/page"+sgdiQuery(params),{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),createDotation:(payload)=>sgdiApi("/materiel/dotations",{method:"POST",body:payload,legacy:false}),
   employeeEquipment:(employeeId)=>sgdiApi("/materiel/employees/"+encodeURIComponent(employeeId)+"/equipment",{legacy:false}),
   returnEquipment:(equipmentId,payload)=>sgdiApi("/materiel/equipment/"+encodeURIComponent(equipmentId)+"/return",{method:"POST",body:payload,legacy:false}),
   reversementsPending:()=>sgdiApi("/materiel/reversements/pending",{legacy:false})},
@@ -20607,6 +20607,76 @@ function stockMvtTypeLabel(t){return{entree:"Entrée",achat:"Nouvelle acquisitio
 function stockMvtTypeColor(t){return{entree:"#16a34a",achat:"#16a34a",retour:"#043970",retour_employe:"#043970",retour_site:"#043970",regularisation_entree:"#16a34a",sortie:"#dc2626",perte:"#043970",casse:"#7c2d12",ajustement:"#7c3aed",nouvelle_dotation:"#dc2626",renouvellement_dotation:"#043970",dotation_pret:"#7c3aed",reforme:"#475569"}[t]||"#64748b"}
 function stockMvtTypeIcon(t){return ""}
 
+function renderStockAlertesServerTab(data){
+  const d=data&&typeof data==="object"?data:{};
+  const groups=[
+    ["ruptures","✕","Ruptures de stock","✓ Aucune rupture — situation normale.",{color:"#dc2626",bg:"#fef2f2",pillBg:"#fef2f2",pillBorder:"#fecaca"}],
+    ["alertes","⚠","Stocks bas / sous minimum","✓ Aucun stock bas.",{color:"#b45309",bg:"#fffbeb",pillBg:"#fffbeb",pillBorder:"#fed7aa"}],
+    ["dormants","💤","Articles dormants (>90 jours)","Aucun article dormant.",{color:"#ca8a04",bg:"#fefce8",pillBg:"#fefce8",pillBorder:"#fde68a"}],
+    ["surstock","📦","Surstock (> max)","Aucun surstock détecté.",{color:"#7c3aed",bg:"#f5f3ff",pillBg:"#f5f3ff",pillBorder:"#ddd6fe"}]
+  ];
+  const renderList=(list,emptyMsg,scheme)=>{
+    list=Array.isArray(list)?list:[];
+    if(!list.length)return`<div class="text-center text-sm text-slate-500 py-6">${emptyMsg}</div>`;
+    return`<div class="space-y-2">${list.map(a=>{
+      const etat=a.etat||{};
+      const q=parseFloat(a.stock)||0;
+      const seuil=parseFloat(a.seuilAlerte)||0;
+      const min=parseFloat(a.stockMin)||0;
+      const max=parseFloat(a.stockMax)||0;
+      return`<div class="card p-3 hover:shadow transition" style="border-left:4px solid ${scheme.color};background:${scheme.bg}">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-mono text-xs text-slate-500">${safe(a.code)}</span>
+              <a class="font-bold hover:underline" href="#/materiel/article/${a.id}">${escapeHTML(a.designation||"—")}</a>
+              ${a.categorie?`<span class="pill" style="background:#f1f5f9;color:#475569;font-size:10px;border:1px solid #cbd5e1">${escapeHTML(a.categorie)}</span>`:""}
+              <span class="text-[11px]" style="color:#64748b">${escapeHTML(a.societe||"—")}</span>
+            </div>
+            <div class="text-xs text-slate-600 mt-1">Stock : <b style="color:${scheme.color}">${qty(q)} ${escapeHTML(a.unite||"")}</b>${seuil?` · Seuil : ${qty(seuil)}`:""}${min?` · Min : ${qty(min)}`:""}${max?` · Max : ${qty(max)}`:""}${a.magasin?` · 🏬 ${escapeHTML(a.magasin)}`:""}${a.lastMovementDate?` · Dernier mouvement : ${formatDate(a.lastMovementDate)}`:""}</div>
+            ${etat.label?`<div class="mt-1"><span class="pill" style="background:${etat.bg||scheme.pillBg};color:${etat.color||scheme.color};border:1px solid ${(etat.color||scheme.color)}55;font-size:10px">${escapeHTML(etat.label)}</span></div>`:""}
+          </div>
+          <div class="flex gap-1">
+            <button class="btn btn-success text-xs" onclick="stockOpenMvt('entree','${a.id}')">📥 Entrée</button>
+            <a class="btn btn-ghost text-xs" href="#/materiel/article/${a.id}">👁</a>
+          </div>
+        </div>
+      </div>`;
+    }).join("")}</div>`;
+  };
+  return`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${groups.map(([key,icon,title,empty,scheme])=>{
+    const list=Array.isArray(d[key])?d[key]:[];
+    return`<div class="card p-4" style="border-top:4px solid ${scheme.color}">
+      <h3 class="font-bold mb-3 flex items-center gap-2" style="color:${scheme.color}"><span style="font-size:24px">${icon}</span> ${title} <span class="pill" style="background:${scheme.pillBg};color:${scheme.color};border:1px solid ${scheme.pillBorder}">${list.length}</span></h3>
+      ${renderList(list,empty,scheme)}
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function renderMatSimpleAlertesFromServer(view,data){
+  const soc=matSimpleSocFilter();
+  const s=data?.summary||{};
+  const total=s.totalArticles??0;
+  const ruptures=s.ruptures??0;
+  const alertes=s.alertes??0;
+  const ok=s.ok??Math.max(0,total-ruptures-alertes);
+  view.innerHTML=`${matSimpleHeader("alertes")}
+    <div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
+      <div>
+        <h1 class="text-2xl font-black uppercase">Alertes stock</h1>
+        <p class="text-sm text-slate-500">${soc?escapeHTML(soc):"Toutes les sociétés"} · Données serveur stables · ruptures, stocks bas, articles dormants et surstocks.</p>
+      </div>
+      <button class="btn btn-primary" onclick="stockOpenMvt('entree')">+ Entrée stock</button>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Articles suivis</div><div class="text-2xl font-black">${total}</div></div>
+      <div class="card p-4" style="border-top:4px solid #dc2626"><div class="text-xs uppercase font-bold text-slate-500">Ruptures</div><div class="text-2xl font-black text-red-700">${ruptures}</div></div>
+      <div class="card p-4" style="border-top:4px solid #d97706"><div class="text-xs uppercase font-bold text-slate-500">Stocks bas</div><div class="text-2xl font-black text-amber-700">${alertes}</div></div>
+      <div class="card p-4" style="border-top:4px solid #16a34a"><div class="text-xs uppercase font-bold text-slate-500">Situation normale</div><div class="text-2xl font-black text-emerald-700">${ok}</div></div>
+    </div>
+    ${renderStockAlertesServerTab(data)}`;
+}
+
 function renderMatSimpleAlertes(view){
   const soc=matSimpleSocFilter();
   const kpi=stockSummaryKPI();
@@ -20628,14 +20698,15 @@ function renderMatSimpleAlertes(view){
 }
 
 async function renderMatSimpleAlertesServer(view){
-  renderMatSimpleAlertes(view);
+  view.innerHTML=`${matSimpleHeader("alertes")}<div style="display:flex;align-items:center;justify-content:center;min-height:220px;color:#94a3b8"><div style="text-align:center"><div style="font-size:28px;margin-bottom:10px;opacity:.5">⏳</div><div style="font-weight:700;font-size:14px">Chargement des alertes serveur…</div></div></div>`;
   if(window.__sgdiMatAlertesRefreshing)return;
   window.__sgdiMatAlertesRefreshing=true;
   try{
-    await syncMaterielFromPostgres();
-    if(String(location.hash||"").startsWith("#/materiel/alertes"))renderMatSimpleAlertes(view);
+    const data=await SGDI.stock.alerts({society:matSimpleSocFilter()||undefined});
+    if(String(location.hash||"").startsWith("#/materiel/alertes"))renderMatSimpleAlertesFromServer(view,data);
   }catch(e){
     console.warn("Alertes matériel serveur indisponibles",e);
+    renderMatSimpleAlertes(view);
   }finally{
     window.__sgdiMatAlertesRefreshing=false;
   }

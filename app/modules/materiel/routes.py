@@ -131,6 +131,12 @@ def materiel_dashboard(db: Session = Depends(get_db), user: User = Depends(curre
     return service.dashboard(db, _allowed_societies(user))
 
 
+@router.get("/alerts")
+def materiel_alerts(society: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    effective_society = _effective_society_filter(user, society)
+    return service.stock_alerts(db, _allowed_societies(user), effective_society)
+
+
 @router.get("/stores/page")
 def stores_page(society: str | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db), user: User = Depends(current_user)):
     service.ensure_store_schema(db)

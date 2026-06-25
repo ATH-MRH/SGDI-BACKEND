@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Type
 
 from fastapi import HTTPException
@@ -252,6 +252,126 @@ def dashboard(db: Session, allowed_societies: list[str] | None = None):
         "suppliers": db.execute(select(func.count()).select_from(suppliers_stmt.subquery())).scalar() or 0,
         "low_stock_alerts": low_stock_alerts,
         "active_employee_dotations": active_dotations,
+    }
+
+
+def _article_raw(article: StockArticle) -> dict[str, Any]:
+    attrs = article.attributes if isinstance(article.attributes, dict) else {}
+    raw = attrs.get("raw") if isinstance(attrs.get("raw"), dict) else {}
+    return raw or {}
+
+
+def _article_thresholds(article: StockArticle) -> tuple[float, float, float]:
+    raw = _article_raw(article)
+
+    def num(*values: Any) -> float:
+        for value in values:
+            try:
+                if value not in (None, "", "None", "undefined", "null"):
+                    return float(str(value).replace(" ", "").replace(",", "."))
+            except (TypeError, ValueError):
+                continue
+        return 0.0
+
+    seuil = num(raw.get("seuilAlerte"), raw.get("seuil_stock_bas"), raw.get("alert_threshold"))
+    minimum = num(article.min_quantity, raw.get("stockMin"), raw.get("min_quantity"))
+    maximum = num(raw.get("stockMax"), raw.get("max_quantity"), raw.get("stock_max"))
+    return seuil, minimum, maximum
+
+
+def _stock_alert_state(article: StockArticle) -> dict[str, str]:
+    quantity = float(article.quantity or 0)
+    seuil, minimum, _maximum = _article_thresholds(article)
+    if quantity <= 0:
+        return {"code": "rupture", "label": "Rupture", "severity": "critical", "color": "#dc2626", "bg": "#fef2f2"}
+    if seuil > 0 and quantity <= seuil:
+        return {"code": "alerte", "label": "Stock bas", "severity": "warn", "color": "#b45309", "bg": "#fffbeb"}
+    if minimum > 0 and quantity <= minimum:
+        return {"code": "min", "label": "Sous minimum", "severity": "warn", "color": "#ca8a04", "bg": "#fefce8"}
+    return {"code": "ok", "label": "OK", "severity": "info", "color": "#16a34a", "bg": "#f0fdf4"}
+
+
+def _stock_alert_item(article: StockArticle, stores_by_id: dict[int, Store], last_movement: date | None = None) -> dict[str, Any]:
+    raw = _article_raw(article)
+    seuil, minimum, maximum = _article_thresholds(article)
+    store = stores_by_id.get(article.store_id or 0)
+    state = _stock_alert_state(article)
+    return {
+        "id": str(article.id),
+        "backendId": article.id,
+        "code": article.code or "",
+        "designation": article.designation or "",
+        "categorie": article.category or raw.get("categorie") or "",
+        "sousCategorie": article.sub_category or raw.get("sousCategorie") or "",
+        "societe": article.society or raw.get("societe") or "",
+        "magasin": store.name if store else "",
+        "magasinId": str(article.store_id or ""),
+        "unite": article.unit or "Pièce",
+        "stock": float(article.quantity or 0),
+        "prixUnitaire": float(article.unit_price or article.purchase_cost or 0),
+        "seuilAlerte": seuil,
+        "stockMin": minimum,
+        "stockMax": maximum,
+        "etat": state,
+        "lastMovementDate": last_movement.isoformat() if last_movement else "",
+    }
+
+
+def stock_alerts(db: Session, allowed_societies: list[str] | None = None, society: str | None = None) -> dict[str, Any]:
+    """Source serveur stable pour l'écran Matériel > Alertes."""
+    ensure_material_schema(db)
+    allowed = [s for s in (allowed_societies or []) if s]
+    stmt = select(StockArticle).where(StockArticle.active == 1)
+    if society:
+        stmt = stmt.where(StockArticle.society == society)
+    elif allowed:
+        stmt = stmt.where(StockArticle.society.in_(allowed))
+    articles = db.execute(stmt.order_by(StockArticle.designation.asc(), StockArticle.id.asc())).scalars().all()
+    article_ids = [a.id for a in articles]
+    stores_by_id = {
+        store.id: store
+        for store in db.execute(select(Store)).scalars().all()
+    }
+    last_movement_by_article: dict[int, date] = {}
+    if article_ids:
+        rows = db.execute(
+            select(StockMovement.article_id, func.max(StockMovement.movement_date))
+            .where(StockMovement.article_id.in_(article_ids))
+            .group_by(StockMovement.article_id)
+        ).all()
+        last_movement_by_article = {int(article_id): last_date for article_id, last_date in rows if last_date}
+
+    cutoff = date.today() - timedelta(days=90)
+    ruptures: list[dict[str, Any]] = []
+    alertes: list[dict[str, Any]] = []
+    dormants: list[dict[str, Any]] = []
+    surstock: list[dict[str, Any]] = []
+    for article in articles:
+        last_movement = last_movement_by_article.get(article.id)
+        item = _stock_alert_item(article, stores_by_id, last_movement)
+        state_code = item["etat"]["code"]
+        if state_code == "rupture":
+            ruptures.append(item)
+        elif state_code in {"alerte", "min"}:
+            alertes.append(item)
+        if item["stock"] > 0 and (last_movement is None or last_movement < cutoff):
+            dormants.append(item)
+        if item["stockMax"] > 0 and item["stock"] > item["stockMax"]:
+            surstock.append(item)
+
+    return {
+        "summary": {
+            "totalArticles": len(articles),
+            "ruptures": len(ruptures),
+            "alertes": len(alertes),
+            "dormants": len(dormants),
+            "surstock": len(surstock),
+            "ok": max(0, len(articles) - len(ruptures) - len(alertes)),
+        },
+        "ruptures": ruptures,
+        "alertes": alertes,
+        "dormants": dormants,
+        "surstock": surstock,
     }
 
 
