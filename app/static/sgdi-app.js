@@ -1271,6 +1271,7 @@ window.addEventListener("sgdi:sidebar-stats",()=>{
   try{
     const hash=String(location.hash||"");
     if(hash==="#/materiel"||hash.startsWith("#/materiel/dashboard"))renderView();
+    if(hash==="#/drh"||hash.startsWith("#/drh/dashboard")||hash==="#/dashboard")renderView();
   }catch(e){}
 });
 function userPermissionCache(){
@@ -27373,6 +27374,21 @@ function renderDRHDashboard(view){
   const contratsFin30=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(employeePositionContractEndDate(a)||"").localeCompare(String(employeePositionContractEndDate(b)||"")));
   const candPct=n=>Math.round((n/candTotal)*100);
+  const srvEmp=sgdiErpEmployeeCounters(selSoc);
+  const srvDrh=sgdiErpModuleCounters("drh",selSoc);
+  const srvOps=sgdiErpModuleCounters("ops",selSoc);
+  const dashEmployees=srvEmp?.total??ag.length;
+  const dashActifs=srvEmp?.operational_active??actifs;
+  const dashConge=srvEmp?.leave_current??enConge;
+  const dashMaladie=srvEmp?.sick_leave_current??enMaladie;
+  const dashAbsents=srvEmp?.absent??absents;
+  const dashSusp=srvEmp?.suspended??susp;
+  const dashCandTotal=srvDrh?.candidates_total??(candNouv+candReserve);
+  const dashCandReserve=srvDrh?.candidates_reserve??candReserve;
+  const dashSites=srvOps?.sites_active??srvOps?.sites_total??sites;
+  const dashIncidents=srvOps?.events_open??incidentsOuverts;
+  const dashBase=Math.max(1,dashEmployees);
+  const dashCandPct=n=>Math.round((n/Math.max(1,srvDrh?.candidates_total??candTotal))*100);
   const progressRow=(label,value,total,color)=>`<div class="dashboard-compact-progress">
       <div class="flex justify-between text-sm mb-1"><span class="font-semibold">${escapeHTML(label)}</span><span class="text-slate-500">${value} / ${total} · ${total?Math.round(value/total*100):0}%</span></div>
       <div class="dashboard-compact-bar"><span style="width:${total?Math.round(value/total*100):0}%;background:${color}"></span></div>
@@ -27418,25 +27434,25 @@ function renderDRHDashboard(view){
   const showPayrollCounters=typeof isAdminSystemSession==="function"&&isAdminSystemSession();
   const drhKpi=(label,value,sub,route,color,icon)=>`<a href="${route}" class="drh-erp-kpi" style="--kpi-color:${color};text-decoration:none"><span class="drh-erp-kpi-icon">${icon}</span><span class="drh-erp-kpi-copy"><span class="drh-erp-kpi-label">${escapeHTML(label)}</span><strong>${value}</strong><small>${escapeHTML(sub)}</small></span></a>`;
   view.innerHTML=`<div class="drh-erp-head">
-      <div><h1>Synthèse générale</h1><p>${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${ag.length} employés · ${candReserve} candidats · ${sites} sites</p></div>
-      <div class="drh-erp-head-pills"><span>${actifs} actifs</span><span>${incidentsOuverts} incidents ouverts</span></div>
+      <div><h1>Synthèse générale</h1><p>${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${dashEmployees} employés · ${dashCandReserve} candidats · ${dashSites} sites</p></div>
+      <div class="drh-erp-head-pills"><span>${dashActifs} actifs</span><span>${dashIncidents} incidents ouverts</span></div>
     </div>
     ${drhTabs("dashboard")}
     <div class="drh-erp-kpi-grid mb-4">
-      ${drhKpi("Recrutement / candidats",candNouv+candReserve,"Dossiers actifs","#/recrutement/candidats","#4f46e5","R")}
-      ${drhKpi("Réserve",candReserve,"En attente de recrutement","#/reserve","#0284c7","R")}
-      ${drhKpi("Archivés",candArchives,`${candPct(candArchives)}% du vivier`,"#/candidats_archives","#475569","A")}
+      ${drhKpi("Recrutement / candidats",dashCandTotal,"Dossiers actifs","#/recrutement/candidats","#4f46e5","R")}
+      ${drhKpi("Réserve",dashCandReserve,"En attente de recrutement","#/reserve","#0284c7","R")}
+      ${drhKpi("Archivés",candArchives,`${dashCandPct(candArchives)}% du vivier`,"#/candidats_archives","#475569","A")}
       ${drhKpi("Demandes",demandesPersonnel,"Personnel à traiter","#/demandes_personnel/dashboard","#0891b2","D")}
       ${drhKpi("Congés attente",congesAttente,"Validation DRH","#/conges","#d97706","C")}
       ${drhKpi("Sortants",sortants,"Éléments sortants","#/effectif/sortants","#dc2626","S")}
     </div>
     <div class="dashboard-compact-band-grid mb-4">
       <div class="card dashboard-compact-band dashboard-ratio-band"><h3>Ratios RH</h3>
-        ${progressRow("Actifs RH",actifs,ag.length,"#047857")}
-        ${progressRow("Congés",enConge,actifsBase,"#f59e0b")}
-        ${progressRow("Maladies",enMaladie,actifsBase,"#c2410c")}
-        ${progressRow("Absences",absents,actifsBase,"#dc2626")}
-        ${progressRow("Suspensions",susp,actifsBase,"#7c3aed")}
+        ${progressRow("Actifs RH",dashActifs,dashEmployees,"#047857")}
+        ${progressRow("Congés",dashConge,dashBase,"#f59e0b")}
+        ${progressRow("Maladies",dashMaladie,dashBase,"#c2410c")}
+        ${progressRow("Absences",dashAbsents,dashBase,"#dc2626")}
+        ${progressRow("Suspensions",dashSusp,dashBase,"#7c3aed")}
       </div>
       <div class="card dashboard-compact-band dashboard-chart-band"><h3>Courbe recrutement / départ</h3>${chart(recrutements,departs)}
         <div class="dashboard-compact-legend"><span><b style="color:#047857">●</b> Recrutements</span><span><b style="color:#dc2626">●</b> Départs</span></div>
@@ -27444,7 +27460,7 @@ function renderDRHDashboard(view){
       ${showPayrollCounters?`<div class="card p-5"><h3 class="font-bold mb-3">Masse salariale</h3>
         <div class="text-3xl font-black text-slate-900">${money(masseSalaires)}</div>
         <div class="text-xs text-slate-500 mt-1">Moyenne active : ${money(salaireMoyen)} · ${salaires.length} salaire(s) renseigné(s)</div>
-        <div class="grid grid-2 mt-4 text-sm"><div class="p-3 rounded bg-slate-50"><b>${sites}</b><br><span class="text-slate-500">Sites couverts</span></div><div class="p-3 rounded bg-slate-50"><b>${incidentsOuverts}</b><br><span class="text-slate-500">Incidents ouverts</span></div></div>
+        <div class="grid grid-2 mt-4 text-sm"><div class="p-3 rounded bg-slate-50"><b>${dashSites}</b><br><span class="text-slate-500">Sites couverts</span></div><div class="p-3 rounded bg-slate-50"><b>${dashIncidents}</b><br><span class="text-slate-500">Incidents ouverts</span></div></div>
       </div>`:""}
     </div>
     <div class="mb-4">
