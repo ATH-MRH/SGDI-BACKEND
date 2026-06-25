@@ -10235,32 +10235,40 @@ function startContractFromReserve(id){
     SGDI.drh.marquerContractualisation(c.backendId).catch(()=>{});
   }
 }
-const _drumOpts={};
+const _drumOpts={};const _drumCallbacks={};const _drumWheelLast={};
 function ensureDrumCSS(){
   if(document.getElementById("sgdi-drum-css"))return;
   const s=document.createElement("style");s.id="sgdi-drum-css";
-  s.textContent=`.sgdi-drum{display:inline-flex;flex-direction:column;align-items:center;width:160px;gap:1px;position:relative}.drum-btn{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:10px;line-height:1;padding:3px 0;width:100%;text-align:center;border-radius:4px;transition:background .1s}.drum-btn:hover{background:#f1f5f9;color:#0f172a}.drum-win{width:100%;border-radius:8px;border:1px solid #e2e8f0;background:#fff;overflow:hidden;cursor:ns-resize}.drum-cell{height:30px;line-height:30px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;transition:background .1s}.drum-empty{height:30px}.drum-sel{font-weight:700;color:#043970;background:#eff6ff;font-size:13px}.drum-adj{color:#94a3b8;font-size:11px}.drum-adj:hover{background:#f8fafc;color:#334155}`;
+  s.textContent=`.sgdi-drum{display:inline-flex;flex-direction:column;align-items:center;width:100px;gap:1px;position:relative}.drum-btn{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:10px;line-height:1;padding:3px 0;width:100%;text-align:center;border-radius:4px;transition:background .1s}.drum-btn:hover{background:#f1f5f9;color:#0f172a}.drum-win{width:100%;border-radius:8px;border:1px solid #e2e8f0;background:#fff;overflow:hidden;cursor:ns-resize}.drum-cell{height:30px;line-height:30px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;transition:background .1s}.drum-empty{height:30px}.drum-sel{font-weight:700;color:#043970;background:#eff6ff;font-size:13px}.drum-adj{color:#94a3b8;font-size:11px}.drum-adj:hover{background:#f8fafc;color:#334155}.drum-multi{display:flex;align-items:flex-start;gap:4px}.drum-multi-col{display:flex;flex-direction:column;align-items:center;gap:2px}.drum-multi-label{font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em}`;
   document.head.appendChild(s);
 }
-function drumPickerHTML(id,opts,selected){
-  _drumOpts[id]=opts;ensureDrumCSS();
+function drumPickerHTML(id,opts,selected,cb){
+  _drumOpts[id]=opts;if(cb)_drumCallbacks[id]=cb;ensureDrumCSS();
   const idx=Math.max(0,opts.findIndex(o=>o.value===(selected||"")));
   const cells=[-1,0,1].map(d=>{const i=idx+d;if(i<0||i>=opts.length)return`<div class="drum-empty"></div>`;const cls=d===0?"drum-cell drum-sel":"drum-cell drum-adj";return`<div class="${cls}" onclick="drumClick('${id}',${i})">${escapeHTML(opts[i].label)}</div>`;}).join("");
   const selOpts=opts.map(o=>`<option value="${escapeHTML(o.value)}"${o.value===(selected||"")?" selected":""}>${escapeHTML(o.label)}</option>`).join("");
   return`<div class="sgdi-drum" id="${id}-wrap"><button type="button" class="drum-btn" onclick="drumStep('${id}',-1)">▲</button><div class="drum-win" id="${id}-win" onwheel="drumWheel(event,'${id}')">${cells}</div><button type="button" class="drum-btn" onclick="drumStep('${id}',+1)">▼</button><select id="${id}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" tabindex="-1">${selOpts}</select></div>`;
 }
+function drumMultiHTML(cols){
+  ensureDrumCSS();
+  return`<div class="drum-multi">${cols.map(c=>`<div class="drum-multi-col">${c.label?`<span class="drum-multi-label">${escapeHTML(c.label)}</span>`:""}${drumPickerHTML(c.id,c.opts,c.selected||"",c.cb||"")}</div>`).join("")}</div>`;
+}
+function drumFireChange(id){
+  const cb=_drumCallbacks[id];
+  if(cb&&typeof window[cb]==="function")window[cb]();
+  else if(typeof applyContratFilters==="function")applyContratFilters();
+}
 function drumStep(id,dir){
   const sel=document.getElementById(id);if(!sel)return;
   const opts=_drumOpts[id]||[];const cur=Math.max(0,opts.findIndex(o=>o.value===sel.value));
   const next=Math.max(0,Math.min(opts.length-1,cur+dir));
-  sel.value=opts[next].value;drumRender(id);applyContratFilters();
+  sel.value=opts[next].value;drumRender(id);drumFireChange(id);
 }
 function drumClick(id,idx){
   const sel=document.getElementById(id);if(!sel)return;
   const opts=_drumOpts[id]||[];if(opts[idx])sel.value=opts[idx].value;
-  drumRender(id);applyContratFilters();
+  drumRender(id);drumFireChange(id);
 }
-const _drumWheelLast={};
 function drumWheel(e,id){e.preventDefault();const now=Date.now();if(now-(_drumWheelLast[id]||0)<250)return;_drumWheelLast[id]=now;drumStep(id,e.deltaY>0?1:-1);}
 function drumRender(id){
   const sel=document.getElementById(id);if(!sel)return;
@@ -10268,6 +10276,21 @@ function drumRender(id){
   const win=document.getElementById(id+"-win");if(!win)return;
   win.innerHTML=[-1,0,1].map(d=>{const i=idx+d;if(i<0||i>=opts.length)return`<div class="drum-empty"></div>`;const cls=d===0?"drum-cell drum-sel":"drum-cell drum-adj";return`<div class="${cls}" onclick="drumClick('${id}',${i})">${escapeHTML(opts[i].label)}</div>`;}).join("");
 }
+function drumPtMonthSync(){
+  const m=document.getElementById("pt-drum-mo")?.value||"";
+  const y=document.getElementById("pt-drum-yr")?.value||"";
+  if(m&&y)setPtMonth(y+"-"+m);
+}
+function drumFpqDateSync(){
+  const d=document.getElementById("fpq-drum-day")?.value||"";
+  const m=document.getElementById("fpq-drum-mo")?.value||"";
+  const y=document.getElementById("fpq-drum-yr")?.value||"";
+  if(d&&m&&y){const maxD=new Date(parseInt(y),parseInt(m),0).getDate();const safeD=Math.min(parseInt(d),maxD);setFpqDate(y+"-"+m+"-"+String(safeD).padStart(2,"0"));}
+}
+function drumMonthOpts(){return[{value:"01",label:"Janvier"},{value:"02",label:"Février"},{value:"03",label:"Mars"},{value:"04",label:"Avril"},{value:"05",label:"Mai"},{value:"06",label:"Juin"},{value:"07",label:"Juillet"},{value:"08",label:"Août"},{value:"09",label:"Septembre"},{value:"10",label:"Octobre"},{value:"11",label:"Novembre"},{value:"12",label:"Décembre"}]}
+function drumYearOpts(n){const y=new Date().getFullYear();return Array.from({length:n||6},(_,i)=>({value:String(y-2+i),label:String(y-2+i)}))}
+function drumDayOpts(){return Array.from({length:31},(_,i)=>({value:String(i+1).padStart(2,"0"),label:String(i+1).padStart(2,"0")}))}
+
 function applyContratFilters(){
   const fe=document.getElementById("flt-essai")?.value||"";
   const fc=document.getElementById("flt-contrat")?.value||"";
@@ -32400,7 +32423,7 @@ function renderFeuillePresentQR(){
       <p class="text-sm text-slate-500 capitalize">${escapeHTML(dateLabel)}</p>
     </div>
     <div class="flex gap-2 flex-wrap items-end">
-      <div><label class="label">Date</label><input type="date" class="input text-xs" value="${date}" onchange="setFpqDate(this.value);renderView()"/></div>
+      <div>${(()=>{const[dy,dm,dd]=date.split("-");return drumMultiHTML([{id:"fpq-drum-day",label:"Jour",opts:drumDayOpts(),selected:dd||"01",cb:"drumFpqDateSync"},{id:"fpq-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:dm||"01",cb:"drumFpqDateSync"},{id:"fpq-drum-yr",label:"Année",opts:drumYearOpts(4),selected:dy||String(new Date().getFullYear()),cb:"drumFpqDateSync"}]);})()}</div>
       ${ptSearchBarHTML("Rechercher nom, matricule…")}
       <button class="btn btn-ghost text-xs" onclick="fpqLiveRefresh()" title="Recharger les données depuis le serveur">↺ Actualiser</button>
       <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
@@ -32454,7 +32477,7 @@ function renderPointageSaisie(){
   const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const date=new Date(yr,mo-1,d);const wd=date.getDay();const we=wd===5||wd===6;return`<th class="text-center text-[10px] font-bold ${we?"text-blue-700 bg-blue-100":"text-slate-600"}" style="border:1px solid #e2e8f0;padding:4px 0;width:28px;min-width:28px;max-width:28px">${String(d).padStart(2,"0")}</th>`}).join("");
   const legende=Object.entries(POINTAGE_CODES).map(([k,v])=>`<span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold" style="background:${v.bg};color:${v.color}"><span class="font-mono font-black">${k}</span>${v.label}</span>`).join(" ");
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
-    <input type="month" class="input text-xs" value="${ym}" onchange="setPtMonth(this.value)" title="Mois" style="max-width:140px"/>
+    ${drumMultiHTML([{id:"pt-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:String(mo).padStart(2,"0"),cb:"drumPtMonthSync"},{id:"pt-drum-yr",label:"Année",opts:drumYearOpts(6),selected:String(yr),cb:"drumPtMonthSync"}])}
     ${ptSearchBarHTML()}
     <div class="flex-1"></div>
     ${isDrh?"":`<button class="btn btn-primary text-xs" style="background:#043970;border-color:#043970" onclick="ptValiderTous('${ym}','${soc.replace(/'/g,"\\'")}')">✅ Valider tous les pointages</button>
