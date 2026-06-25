@@ -16214,6 +16214,7 @@ function portalComptesEmployeeName(a){return [a?.nom||a?.last_name,a?.prenom||a?
 function portalComptesEmployeeSociete(a){return a?.societe||a?.society||a?.company||""}
 function portalComptesAccountKey(a){return portalComptesNorm(a?.matricule||a?.username||a?.id||"")}
 function portalComptesEmployeeKey(a){return portalComptesNorm(portalComptesEmployeeMatricule(a))}
+function portalComptesCurrentSoc(){return window._portalComptesSoc||""}
 async function portalComptesFetchJSON(url,options){
   const controller=typeof AbortController!=="undefined"?new AbortController():null;
   const timeout=setTimeout(()=>{try{controller?.abort()}catch(e){}},12000);
@@ -16233,6 +16234,16 @@ async function portalComptesFetchJSON(url,options){
   }finally{
     clearTimeout(timeout);
   }
+}
+async function portalComptesFetchEmployees(soc){
+  if(window.SGDI?.employees?.page){
+    const result=await window.SGDI.employees.page({mode:"all",society:soc||undefined,page:1,page_size:100});
+    const items=Array.isArray(result?.items)?result.items:[];
+    window._portalComptesEmployeesTotal=Number(result?.total||items.length)||items.length;
+    return items;
+  }
+  window._portalComptesEmployeesTotal=(db.agents||[]).length;
+  return db.agents||[];
 }
 function portalComptesBuildRows(accounts,employees,soc){
   const byAcc=new Map();
@@ -16314,7 +16325,7 @@ async function renderPortailComptes(view){
     const url="/api/portal/accounts"+(soc?"?societe="+encodeURIComponent(soc):"");
     const [allAccounts,employeesRes]=await Promise.all([
       portalComptesFetchJSON(url),
-      (window.SGDI?.employees?.list?window.SGDI.employees.list():Promise.resolve(db.agents||[])).catch(e=>{console.warn("Employés portail indisponibles",e);return db.agents||[]})
+      portalComptesFetchEmployees(soc).catch(e=>{console.warn("Employés portail indisponibles",e);window._portalComptesEmployeesTotal=(db.agents||[]).length;return db.agents||[]})
     ]);
     if(loadSeq!==portalComptesLoadSeq)return;
     const employees=(Array.isArray(employeesRes)?employeesRes:[]).map(e=>e&&e.backendId?e:(typeof employeeFromApi==="function"?employeeFromApi(e):e)).filter(Boolean);
@@ -16324,7 +16335,9 @@ async function renderPortailComptes(view){
     const sub=document.getElementById("portal-comptes-subtitle");
     const active=rows.filter(r=>r.account&&r.account.active!==false).length;
     const missing=rows.filter(r=>!r.account&&r.employee).length;
-    if(sub)sub.textContent=`${rows.length} employé(s) / compte(s) · ${active} actif(s) · ${missing} sans compte${soc?` · ${soc}`:""}.`;
+    const total=window._portalComptesEmployeesTotal||rows.length;
+    const shown=total>rows.length?`${rows.length} affiché(s) sur ${total}`:`${rows.length} employé(s) / compte(s)`;
+    if(sub)sub.textContent=`${shown} · ${active} actif(s) · ${missing} sans compte${soc?` · ${soc}`:""}.`;
     portalComptesFilter();
   }catch(err){
     if(loadSeq!==portalComptesLoadSeq)return;
@@ -16376,6 +16389,34 @@ function portalComptesQuickCreate(matricule){
   if(password.length<6){toast("Mot de passe trop court (minimum 6 caractères)","error");return}
   portalComptesCreatePayload({matricule,password});
 }
+function portalComptesUpsertAccount(account){
+  const rows=window._portalComptesRows||[];
+  const key=portalComptesAccountKey(account);
+  if(!key)return;
+  let row=rows.find(r=>r.key===key);
+  if(row){
+    row.account=account;
+    row.matricule=row.matricule||account.matricule||account.username||"";
+    row.nom=row.nom&&row.nom!=="—"?row.nom:([account.nom,account.prenom].filter(Boolean).join(" ").trim()||account.username||"—");
+    row.societe=row.societe||account.societe||"";
+  }else{
+    rows.unshift({employee:null,account,matricule:account.matricule||account.username||"",key,nom:[account.nom,account.prenom].filter(Boolean).join(" ").trim()||account.username||"—",societe:account.societe||""});
+  }
+  window._portalComptesRows=rows;
+  portalComptesRefreshSubtitle();
+  portalComptesFilter();
+}
+function portalComptesRefreshSubtitle(){
+  const rows=window._portalComptesRows||[];
+  const soc=portalComptesCurrentSoc();
+  const sub=document.getElementById("portal-comptes-subtitle");
+  if(!sub)return;
+  const active=rows.filter(r=>r.account&&r.account.active!==false).length;
+  const missing=rows.filter(r=>!r.account&&r.employee).length;
+  const total=window._portalComptesEmployeesTotal||rows.length;
+  const shown=total>rows.length?`${rows.length} affiché(s) sur ${total}`:`${rows.length} employé(s) / compte(s)`;
+  sub.textContent=`${shown} · ${active} actif(s) · ${missing} sans compte${soc?` · ${soc}`:""}.`;
+}
 async function portalComptesCreateNew(form){
   if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
   const token=sgdiAuthToken();
@@ -16385,8 +16426,8 @@ async function portalComptesCreateNew(form){
   const btn=form.querySelector('button[type="submit"]');
   if(btn){btn.disabled=true;btn.textContent="Création...";}
   try{
-    await portalComptesCreatePayload({matricule,password},false);
-    form.reset();
+    const ok=await portalComptesCreatePayload({matricule,password},false);
+    if(ok)form.reset();
   }catch(err){toast("Erreur réseau","error")}
   finally{if(btn){btn.disabled=false;btn.textContent="Créer le compte";}}
 }
@@ -16395,10 +16436,17 @@ async function portalComptesCreatePayload(payload,showNetworkToast=true){
   const token=sgdiAuthToken();
   try{
     const res=await fetch("/api/portal/accounts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify(payload)});
-    if(res.ok){toast("Compte créé","success");renderPortailComptes(document.getElementById("view"));return}
+    if(res.ok){
+      const account=await res.json().catch(()=>null);
+      if(account)portalComptesUpsertAccount(account);
+      else portalComptesRefreshSubtitle();
+      toast("Compte créé","success");
+      return true;
+    }
     const err=await res.json().catch(()=>({}));
     toast(err.detail||"Erreur création compte","error");
   }catch(err){if(showNetworkToast)toast("Erreur réseau","error");else throw err}
+  return false;
 }
 
 
@@ -16419,7 +16467,13 @@ async function portalComptesDelete(matricule){
   const token=sgdiAuthToken();
   try{
     const res=await fetch(`/api/portal/accounts/${encodeURIComponent(matricule)}`,{method:"DELETE",headers:{Authorization:`Bearer ${token}`}});
-    if(res.ok){toast("Compte supprimé","success");renderPortailComptes(document.getElementById("view"))}
+    if(res.ok){
+      const key=portalComptesNorm(matricule);
+      (window._portalComptesRows||[]).forEach(r=>{if(r.key===key)r.account=null});
+      portalComptesRefreshSubtitle();
+      portalComptesFilter();
+      toast("Compte supprimé","success");
+    }
     else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur","error")}
   }catch(err){toast("Erreur réseau","error")}
 }
