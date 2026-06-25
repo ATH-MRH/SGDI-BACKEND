@@ -471,6 +471,8 @@ function sgdiRequireServerWrite(){
   return true;
 }
 let sgdiSaveQueue=Promise.resolve();
+let sgdiSaveInFlight=false;
+let sgdiSaveAgain=false;
 const SQL_OWNED_COLLECTIONS=new Set(["candidats","agents","employees","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs","assignments","affectations"]);
 function sgdiLegacySnapshot(){
   const source=db&&typeof db==="object"?db:{};
@@ -489,31 +491,40 @@ function sgdiBackendSave(){
     uiSaveState("Sauvegarde refusée","error");
     return false;
   }
-  const payload=JSON.stringify({data:sgdiLegacySnapshot()});
   const url=sgdiApiUrl("/api/irongs/db",false);
+  if(sgdiSaveInFlight){sgdiSaveAgain=true;uiSaveState("Synchronisation en attente...","");return true}
+  sgdiSaveInFlight=true;
   sgdiSaveQueue=sgdiSaveQueue.catch(()=>{}).then(async()=>{
-    const res=await fetch(url,{method:"PUT",headers:sgdiAuthHeaders(),body:payload,cache:"no-store"});
-    const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
-    if(!res.ok||out.ok===false){
-      const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
-      throw new Error(out.error||detail||out.message||("Erreur API "+res.status));
-    }
-    window.__SGDI_BACKEND_ENABLED__=true;
-    sgdiPostgresReady=true;
-    sgdiDirty=false;
-    sgdiFormHasUnsavedChanges=false;
-    window.__sgdiLastLocalSaveAt=Date.now();
+    let last=null;
+    do{
+      sgdiSaveAgain=false;
+      const payload=JSON.stringify({data:sgdiLegacySnapshot()});
+      const res=await fetch(url,{method:"PUT",headers:sgdiAuthHeaders(),body:payload,cache:"no-store"});
+      const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
+      if(!res.ok||out.ok===false){
+        const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
+        throw new Error(out.error||detail||out.message||("Erreur API "+res.status));
+      }
+      last=out.data===undefined?out:out.data;
+      window.__SGDI_BACKEND_ENABLED__=true;
+      sgdiPostgresReady=true;
+      sgdiDirty=false;
+      sgdiFormHasUnsavedChanges=false;
+      window.__sgdiLastLocalSaveAt=Date.now();
+      sgdiPublishDataChange("legacy-save");
+    }while(sgdiSaveAgain);
     uiSaveState("Sauvegardé","success");
-    sgdiPublishDataChange("legacy-save");
     sgdiRefreshCountersNow({reason:"save"});
     if(window._sgdiSaveOverlayShown){updateSaveOverlay("Enregistrement terminé",true);setTimeout(closeSaveOverlay,1600);}
-    return out.data===undefined?out:out.data;
+    return last;
   }).catch(e=>{
     const msg="Erreur de sauvegarde : "+(e.message||e);
     sgdiServerOnlyFailure(msg);
     uiSaveState("Sauvegarde échouée","error");
     if(window._sgdiSaveOverlayShown)closeSaveOverlay();
     return null;
+  }).finally(()=>{
+    sgdiSaveInFlight=false;
   });
   return true;
 }
@@ -1731,7 +1742,25 @@ function dotationApiPayload(m){
   return{employee_id:targetType==="employee"?employeeId:null,site_id:targetType==="site"?sqlRelationId(db.sites,m.siteId||m.cibleId):null,target_type:targetType,target_label:m.cibleNom||m.beneficiaireNom||null,structure:targetType==="structure"?(m.structure||m.cibleNom||""):null,article_id:articleId,quantity:sqlNum(m.quantite),dotation_date:sqlDate(m.date)||today(),dotation_reason:m.motif||"Nouvelle dotation",voucher_number:m.numeroBon||null,unit_price:sqlNum(m.prixUnitaire),item_state:m.etatArticle||"neuf",useful_life_months:sqlNum(m.dureeVieMois),size_breakdown:{repartitionTailles:m.repartitionTailles||{},raw:m}}
 }
 async function persistDotationToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=dotationApiPayload(m);if(payload.target_type==="employee"&&!payload.employee_id)throw new Error("Employé PostgreSQL manquant pour la dotation");if(payload.target_type==="site"&&!payload.site_id)throw new Error("Site PostgreSQL manquant pour la dotation");if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour la dotation");const saved=await SGDI.stock.createDotation(payload);m.backendId=saved.movement_id||m.backendId;m.equipmentBackendId=saved.id||m.equipmentBackendId;const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));if(article)await reloadArticleFromPostgres(article);return saved}
-async function syncMaterielFromPostgres(){if(!sgdiAuthToken()||!db)return;try{const stores=await SGDI.stock.stores();db.magasins=(stores||[]).map(storeFromApi);const suppliers=await SGDI.stock.suppliers();db.fournisseurs=(suppliers||[]).map(supplierFromApi);const articles=await SGDI.stock.articles();db.stockArticles=(articles||[]).map(articleFromApi);const mvts=await SGDI.stock.movements();db.stockMouvements=(mvts||[]).map(movementFromApi);if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements()}catch(e){console.warn("Matériel PostgreSQL indisponible",e);throw e}}
+async function syncMaterielFromPostgres(options){
+  if(!sgdiAuthToken()||!db)return;
+  const opt=options||{},soc=opt.society||(typeof matSimpleSocFilter==="function"?matSimpleSocFilter():"")||"";
+  try{
+    const [storesRes,suppliersRes,articlesRes,mvtsRes]=await Promise.all([
+      (SGDI.stock.storesPage&&!opt.full?SGDI.stock.storesPage({society:soc||undefined,page:1,page_size:100}):SGDI.stock.stores()),
+      (SGDI.stock.suppliersPage&&!opt.full?SGDI.stock.suppliersPage({society:soc||undefined,page:1,page_size:100}):SGDI.stock.suppliers()),
+      (SGDI.stock.articlesPage&&!opt.full?SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:100}):SGDI.stock.articles(soc?{society:soc}:{})),
+      (SGDI.stock.movementsPage&&!opt.full?SGDI.stock.movementsPage({page:1,page_size:100}):SGDI.stock.movements())
+    ]);
+    const stores=serverItems(storesRes);const suppliers=serverItems(suppliersRes);const articles=serverItems(articlesRes);const mvts=serverItems(mvtsRes);
+    stores.map(storeFromApi).forEach(m=>sgdiUpsertServerItem("magasins",m));
+    suppliers.map(supplierFromApi).forEach(f=>sgdiUpsertServerItem("fournisseurs",f));
+    articles.map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));
+    mvts.map(movementFromApi).forEach(m=>sgdiUpsertServerItem("stockMouvements",m));
+    if(opt.full){db.magasins=stores.map(storeFromApi);db.fournisseurs=suppliers.map(supplierFromApi);db.stockArticles=articles.map(articleFromApi);db.stockMouvements=mvts.map(movementFromApi)}
+    if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements()
+  }catch(e){console.warn("Matériel PostgreSQL indisponible",e);throw e}
+}
 async function sgdiRefreshAdminMaterialNow(options={}){
   if(!isAdminSystemSession())return;
   try{
@@ -18069,14 +18098,15 @@ async function renderMatSimpleDashboardServer(view){
   if(window.__sgdiMatDashboardRefreshing)return;
   window.__sgdiMatDashboardRefreshing=true;
   try{
-    const [stores,articles,movements]=await Promise.all([
-      SGDI.stock.stores(),
-      SGDI.stock.articles(),
-      SGDI.stock.movements()
+    const soc=matSimpleSocFilter();
+    const [storesRes,articlesRes,movementsRes]=await Promise.all([
+      SGDI.stock.storesPage?SGDI.stock.storesPage({society:soc||undefined,page:1,page_size:100}):SGDI.stock.stores(),
+      SGDI.stock.articlesPage?SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:100}):SGDI.stock.articles(soc?{society:soc}:{}),
+      SGDI.stock.movementsPage?SGDI.stock.movementsPage({page:1,page_size:100}):SGDI.stock.movements()
     ]);
-    db.magasins=(stores||[]).map(storeFromApi);
-    db.stockArticles=(articles||[]).map(articleFromApi);
-    db.stockMouvements=(movements||[]).map(movementFromApi);
+    serverItems(storesRes).map(storeFromApi).forEach(m=>sgdiUpsertServerItem("magasins",m));
+    serverItems(articlesRes).map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));
+    serverItems(movementsRes).map(movementFromApi).forEach(m=>sgdiUpsertServerItem("stockMouvements",m));
     window.__sgdiMatDataSynced=true;
     if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements();
     if(String(location.hash||"")==="#/materiel"||String(location.hash||"").startsWith("#/materiel/dashboard"))renderMatSimpleDashboard(view);
@@ -18126,9 +18156,9 @@ async function renderMatSimpleDotationServer(view){
   const soc=matSimpleSocFilter();
   const needsMvts=!window.__sgdiMatDataSynced||!(db.stockMouvements||[]).length;
   Promise.all([
-    SGDI.stock.articles(soc?{society:soc}:{}).catch(()=>[]),
-    SGDI.employees.list().catch(()=>[]),
-    needsMvts?SGDI.stock.movements().catch(()=>[]):Promise.resolve(null),
+    (SGDI.stock.articlesPage?SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:100}).then(serverItems):SGDI.stock.articles(soc?{society:soc}:{})).catch(()=>[]),
+    (SGDI.employees.page?SGDI.employees.page({mode:"all",society:soc||undefined,page:1,page_size:100}).then(r=>r?.items||[]):SGDI.employees.list()).catch(()=>[]),
+    needsMvts?(SGDI.stock.movementsPage?SGDI.stock.movementsPage({page:1,page_size:100}).then(serverItems):SGDI.stock.movements()).catch(()=>[]):Promise.resolve(null),
   ]).then(([articlesRes,employeesRes,mvtsRes])=>{
     let changed=false;
     if(articlesRes.length){db.stockArticles=articlesRes.map(articleFromApi);changed=true}
@@ -19509,7 +19539,8 @@ function renderMatSimpleMouvements(view){
 async function renderMatSimpleMouvementsServer(view){
   renderMatSimpleMouvements(view);
   try{
-    const rows=await SGDI.stock.movements();
+    const result=SGDI.stock.movementsPage?await SGDI.stock.movementsPage({page:1,page_size:100}):await SGDI.stock.movements();
+    const rows=serverItems(result);
     db.stockMouvements=(rows||[]).map(movementFromApi);
     if(typeof syncMaterialDotationsToEmployeesFromMovements==="function")syncMaterialDotationsToEmployeesFromMovements();
     if(String(location.hash||"").startsWith("#/materiel/mouvements"))renderMatSimpleMouvements(view);
@@ -19518,11 +19549,12 @@ async function renderMatSimpleMouvementsServer(view){
   }
 }
 
-function serverItems(result){return result?.items||result?.data||[]}
+function serverItems(result){return Array.isArray(result)?result:(result?.items||result?.data||[])}
 async function refreshStockArticlesFromPostgres(soc){
   if(!sgdiAuthToken()||!window.SGDI?.stock?.articles)return db.stockArticles||[];
-  const rows=await SGDI.stock.articles(soc?{society:soc}:{});
-  db.stockArticles=(rows||[]).map(articleFromApi);
+  const result=window.SGDI?.stock?.articlesPage?await SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:100}):await SGDI.stock.articles(soc?{society:soc}:{});
+  const rows=serverItems(result);
+  rows.map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));
   return db.stockArticles;
 }
 async function renderMatSimpleArticlesServer(view){
@@ -19540,7 +19572,7 @@ async function renderMatSimpleMagasinsServer(view){
     // Charge magasins ET articles en parallèle pour que les KPIs soient corrects
     const [result,articlesRes]=await Promise.all([
       SGDI.stock.storesPage({society:soc||undefined,page,page_size:18}),
-      SGDI.stock.articles(soc?{society:soc}:{}).catch(()=>[])
+      (SGDI.stock.articlesPage?SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:100}).then(serverItems):SGDI.stock.articles(soc?{society:soc}:{})).catch(()=>[])
     ]);
     if(Array.isArray(articlesRes)&&articlesRes.length){
       articlesRes.map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));
@@ -19672,7 +19704,7 @@ function renderMatSimpleMagasins(view){
     const _h=location.hash;
     Promise.all([
       SGDI.stock.storesPage({society:soc||undefined,page:1,page_size:18}),
-      SGDI.stock.articles(soc?{society:soc}:{}).catch(()=>[])
+      (SGDI.stock.articlesPage?SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:100}).then(serverItems):SGDI.stock.articles(soc?{society:soc}:{})).catch(()=>[])
     ]).then(([result,articlesRes])=>{
       if(Array.isArray(articlesRes)&&articlesRes.length){articlesRes.map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));const freshArtIds=new Set(articlesRes.map(r=>String(r.id||"")));db.stockArticles=(db.stockArticles||[]).filter(a=>!a.backendId||(soc&&a.societe&&a.societe!==soc)||freshArtIds.has(String(a.backendId||"")));}
       const freshMags=serverItems(result).map(storeFromApi);freshMags.forEach(m=>sgdiUpsertServerItem("magasins",m));const freshIds=new Set(freshMags.map(m=>String(m.backendId||"")));db.magasins=(db.magasins||[]).filter(m=>!m.backendId||(soc&&m.societe&&m.societe!==soc)||freshIds.has(String(m.backendId||"")));
