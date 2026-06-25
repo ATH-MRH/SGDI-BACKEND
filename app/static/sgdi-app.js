@@ -2848,20 +2848,13 @@ async function login(u,p,opt={}){
         sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(()=>{});
         return;
       }
-      setLoginBusy(true,"Chargement de l'espace...");
-      const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true,deferSecondary:true}).catch(()=>null);
-      if(!loaded){
-        sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
-        saveSession(null);
-        session=null;
-        sgdiPostgresReady=false;
-        setLoginBusy(false);
-        const _why=_sgdiLastPullError?" — "+_sgdiLastPullError:"";
-        toast("Connexion refusée : données non chargées"+_why,"error");return;
-      }
+      setLoginBusy(true,"Ouverture...");
+      sgdiPostgresReady=true;
+      if(typeof loadCustomSocietes==="function")loadCustomSocietes();
+      db=db||loadDB();
+      sgdiPullState({render:true,silent:true,force:true,deferSql:true,deferSecondary:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(e=>console.warn("Synchronisation post-connexion différée",e));
       const localUser=(db.users||[]).find(x=>x.username===session.username);
       if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
-      _bootCacheSave(session?.username,db);
       if(opt.adminSystem){setLoginBusy(false);toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       showDailyValidationCodeIfNeeded();
       sgdiSpeakWelcome();
@@ -32042,20 +32035,14 @@ async function bootApp(){
       }).catch(()=>{});
       return;
     }
-    // Pas de cache : chargement initial avec barre de progression
-    sgdiShowDataLoadingBar();
-    const loaded=await sgdiPullState({silent:true,render:false,force:true,deferSql:true}).catch(()=>null);
-    if(!loaded){
-      sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
-      session=null;
-      saveSession(null);
-      sgdiPostgresReady=false;
-      location.hash="#/login";
-      renderLogin();
-      if(typeof toast==="function")toast("Session expirée : reconnectez-vous.","error");
-      return;
-    }
-    _bootCacheSave(session?.username,db); // Sauvegarde pour les prochains chargements
+    // Pas de cache : ouverture immédiate, puis chargement données en arrière-plan.
+    sgdiPostgresReady=true;
+    db=db||loadDB();
+    sgdiShowDataLoadingBar("Synchronisation des données...");
+    sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{
+      if(loaded)_bootCacheSave(session?.username,db);
+      sgdiHideDataLoadingBar();
+    }).catch(()=>sgdiHideDataLoadingBar());
     if(session.societe&&!canUseSociete(session.societe)){session.societe=null;session.transverse=null;saveSession(session);location.hash="#/select-societe";}
   }
   const moduleHostRoute=session?sgdiModuleHostDefaultRoute():null;
