@@ -612,6 +612,7 @@ async function sgdiPullState(options){
       if(opt.deferSql||opt.deferSecondary)setTimeout(refreshPositions,80);else await refreshPositions();
       const pruned=pruneEmptyCandidates();
       if(purged||pruned)sgdiBackendSave();
+      if(typeof ptAutoArchiveOldDays==="function")ptAutoArchiveOldDays();
       if(opt.render&&typeof render==="function")render();
       sgdiRefreshCountersNow({reason:"pull"});
       if(!opt.silent&&typeof toast==="function")toast("Données chargées depuis le backend","success");
@@ -774,6 +775,7 @@ function saveAdminAutoRefreshSettings(form){
   if(saveDB())toast("Paramètres d'actualisation enregistrés","success");
   renderView();
 }
+setInterval(()=>{if(typeof ptAutoArchiveOldDays==="function"&&session)ptAutoArchiveOldDays()},3600000);
 let demandesPersonnelRefreshing=false;
 let demandesPersonnelKnownIds=null;
 let demandesPersonnelLastOpenCount=0;
@@ -4169,7 +4171,7 @@ function moduleCountersRibbonHTML(){
     const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
     const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
     const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=Math.max(erpEmp?.absent??0,ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&e.statut==="en_cours"&&(!e.au||e.au>=today()))).length);
+    const absents=(()=>{const td=today();const local=ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length;return Math.max(erpEmp?.absent??0,local);})();
     const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
     const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
     const reserveCandidates=erpDrh?.candidates_reserve??(db.candidats||[]).filter(c=>(!scopeSoc||c.societe===scopeSoc)&&c.statut==="reserve").length;
@@ -4211,7 +4213,7 @@ function moduleCountersRibbonHTML(){
     const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
     const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
     const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=Math.max(erpEmp?.absent??0,ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&e.statut==="en_cours"&&(!e.au||e.au>=today()))).length);
+    const absents=(()=>{const td=today();const local=ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length;return Math.max(erpEmp?.absent??0,local);})();
     const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
     const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
     const prepCounters=effectifConfigSettings().showPreparationCounters?[
@@ -5102,7 +5104,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","secretariat/dashboard"],["COURRIERS","secretariat/courriers"],["NOTES INTERNES","secretariat/notes"],["ARCHIVES","secretariat/archives"],["MAIN COURANTE","incidents/dashboard"]
     ],
     pointage:[
-      ["TABLEAU DE BORD POINTAGE","pointage/dashboard"],["RÉCAP PAR AGENT","pointage/recap"],["RÉCAP PAR SOCIÉTÉ","pointage/societe"],["STATISTIQUES","pointage/stats"],["LÉGENDE & CODES","pointage/legende"]
+      ["TABLEAU DE BORD POINTAGE","pointage/dashboard"],["RÉCAP PAR AGENT","pointage/recap"],["RÉCAP PAR SOCIÉTÉ","pointage/societe"],["STATISTIQUES","pointage/stats"],["LÉGENDE & CODES","pointage/legende"],["ARCHIVES POINTAGE","pointage/archives"]
     ],
     paie:[
       ["TABLEAU DE BORD PAIE","paie/dashboard"],["EFFECTIF PAIE","effectif/recap"]
@@ -5266,7 +5268,7 @@ function renderSidebar(){
         {label:"MISSIONS",route:"ops/missions"},
         {label:"MOUVEMENT",route:"ops/mouvements",aliases:["ops/mouvements"]},
         {label:"CONGÉS",route:"conges",aliases:["conges"]},
-        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length||null})()},
+        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length||null})()},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:agents.filter(a=>a.statut==="suspendu").length||null},
         {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:agents.filter(a=>a.statut==="sortant").length||null},
@@ -5328,7 +5330,8 @@ function renderSidebar(){
         {label:"RÉCAP PAR AGENT",route:"pointage/recap"},
         {label:"RÉCAP PAR SOCIÉTÉ",route:"pointage/societe"},
         {label:"STATISTIQUES",route:"pointage/stats"},
-        {label:"LÉGENDE & CODES",route:"pointage/legende"}
+        {label:"LÉGENDE & CODES",route:"pointage/legende"},
+        {label:"ARCHIVES POINTAGE",route:"pointage/archives"}
       ],
       paie:[
         {label:"TABLEAU DE BORD PAIE",route:"paie/dashboard",aliases:["paie"]},
@@ -9126,10 +9129,10 @@ function contractSituationListHTML(agents,today_,options){
       <div class="text-xs text-slate-500"><span id="ct-shown">${agents.length}</span> / ${agents.length} agents affichés</div>
     </div>
     <div class="p-4 border-b border-slate-100">
-      <div class="grid grid-3 gap-3">
-        <div><label class="label">Fin d'essai — préréglage</label><select id="flt-essai" class="select" onchange="applyContratFilters()"><option value="">Tous</option><option value="passed">Terminée</option><option value="upcoming">À venir (toutes)</option><option value="30">≤ 30 jours</option><option value="60">≤ 60 jours</option><option value="90">≤ 90 jours</option><option value="none">Sans date</option></select></div>
-        <div><label class="label">Fin de contrat — préréglage</label><select id="flt-contrat" class="select" onchange="applyContratFilters()"><option value="">Tous</option><option value="passed">Expiré</option><option value="upcoming">À venir (tous)</option><option value="30">≤ 30 jours</option><option value="60">≤ 60 jours</option><option value="90">≤ 90 jours</option><option value="none">Sans date</option></select></div>
-        <div class="flex items-end"><button type="button" class="btn btn-ghost w-full" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
+      <div class="grid grid-3 gap-3 items-end">
+        <div><label class="label">Fin d'essai</label>${drumPickerHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
+        <div><label class="label">Fin de contrat</label>${drumPickerHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
+        <div><button type="button" class="btn btn-ghost w-full" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
       </div>
     </div>
     <div class="overflow-x-auto"><table>
@@ -9179,10 +9182,10 @@ function renderContrats(view,mode){
     <div class="card p-4 mb-4">
       <div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-sm">🔎 Filtres</h3><div class="text-xs text-slate-500"><span id="ct-shown">${agents.length}</span> / ${agents.length} agents affichés</div></div>
       <div class="mb-3"><input id="flt-search" type="search" class="input w-full" placeholder="Rechercher par nom, prénom ou matricule…" oninput="applyContratFilters()"/></div>
-      <div class="grid grid-3 gap-3 mb-3">
-        <div><label class="label">Fin d'essai — préréglage</label><select id="flt-essai" class="select" onchange="applyContratFilters()"><option value="">Tous</option><option value="passed">Terminée</option><option value="upcoming">À venir (toutes)</option><option value="30">≤ 30 jours</option><option value="60">≤ 60 jours</option><option value="90">≤ 90 jours</option><option value="none">Sans date</option></select></div>
-        <div><label class="label">Fin de contrat — préréglage</label><select id="flt-contrat" class="select" onchange="applyContratFilters()"><option value="">Tous</option><option value="passed">Expiré</option><option value="upcoming">À venir (tous)</option><option value="30">≤ 30 jours</option><option value="60">≤ 60 jours</option><option value="90">≤ 90 jours</option><option value="none">Sans date</option></select></div>
-        <div class="flex items-end"><button type="button" class="btn btn-ghost w-full" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
+      <div class="grid grid-3 gap-3 mb-3 items-end">
+        <div><label class="label">Fin d'essai</label>${drumPickerHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
+        <div><label class="label">Fin de contrat</label>${drumPickerHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
+        <div><button type="button" class="btn btn-ghost w-full" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
       </div>
     </div>
     <div class="card overflow-hidden"><table>
@@ -10232,6 +10235,37 @@ function startContractFromReserve(id){
     SGDI.drh.marquerContractualisation(c.backendId).catch(()=>{});
   }
 }
+const _drumOpts={};
+function ensureDrumCSS(){
+  if(document.getElementById("sgdi-drum-css"))return;
+  const s=document.createElement("style");s.id="sgdi-drum-css";
+  s.textContent=`.sgdi-drum{display:inline-flex;flex-direction:column;align-items:center;width:100%;gap:1px;position:relative}.drum-btn{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:10px;line-height:1;padding:3px 0;width:100%;text-align:center;border-radius:4px;transition:background .1s}.drum-btn:hover{background:#f1f5f9;color:#0f172a}.drum-win{width:100%;border-radius:8px;border:1px solid #e2e8f0;background:#fff;overflow:hidden}.drum-cell{height:30px;line-height:30px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;transition:background .1s}.drum-empty{height:30px}.drum-sel{font-weight:700;color:#043970;background:#eff6ff;font-size:13px}.drum-adj{color:#94a3b8;font-size:11px}.drum-adj:hover{background:#f8fafc;color:#334155}`;
+  document.head.appendChild(s);
+}
+function drumPickerHTML(id,opts,selected){
+  _drumOpts[id]=opts;ensureDrumCSS();
+  const idx=Math.max(0,opts.findIndex(o=>o.value===(selected||"")));
+  const cells=[-1,0,1].map(d=>{const i=idx+d;if(i<0||i>=opts.length)return`<div class="drum-empty"></div>`;const cls=d===0?"drum-cell drum-sel":"drum-cell drum-adj";return`<div class="${cls}" onclick="drumClick('${id}',${i})">${escapeHTML(opts[i].label)}</div>`;}).join("");
+  const selOpts=opts.map(o=>`<option value="${escapeHTML(o.value)}"${o.value===(selected||"")?" selected":""}>${escapeHTML(o.label)}</option>`).join("");
+  return`<div class="sgdi-drum" id="${id}-wrap"><button type="button" class="drum-btn" onclick="drumStep('${id}',-1)">▲</button><div class="drum-win" id="${id}-win">${cells}</div><button type="button" class="drum-btn" onclick="drumStep('${id}',+1)">▼</button><select id="${id}" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0" tabindex="-1">${selOpts}</select></div>`;
+}
+function drumStep(id,dir){
+  const sel=document.getElementById(id);if(!sel)return;
+  const opts=_drumOpts[id]||[];const cur=Math.max(0,opts.findIndex(o=>o.value===sel.value));
+  const next=Math.max(0,Math.min(opts.length-1,cur+dir));
+  sel.value=opts[next].value;drumRender(id);applyContratFilters();
+}
+function drumClick(id,idx){
+  const sel=document.getElementById(id);if(!sel)return;
+  const opts=_drumOpts[id]||[];if(opts[idx])sel.value=opts[idx].value;
+  drumRender(id);applyContratFilters();
+}
+function drumRender(id){
+  const sel=document.getElementById(id);if(!sel)return;
+  const opts=_drumOpts[id]||[];const idx=Math.max(0,opts.findIndex(o=>o.value===sel.value));
+  const win=document.getElementById(id+"-win");if(!win)return;
+  win.innerHTML=[-1,0,1].map(d=>{const i=idx+d;if(i<0||i>=opts.length)return`<div class="drum-empty"></div>`;const cls=d===0?"drum-cell drum-sel":"drum-cell drum-adj";return`<div class="${cls}" onclick="drumClick('${id}',${i})">${escapeHTML(opts[i].label)}</div>`;}).join("");
+}
 function applyContratFilters(){
   const fe=document.getElementById("flt-essai")?.value||"";
   const fc=document.getElementById("flt-contrat")?.value||"";
@@ -10288,7 +10322,7 @@ function applyContratFilters(){
   });
   const sh=document.getElementById("ct-shown");if(sh)sh.textContent=shown;
 }
-function resetContratFilters(){window.__contractQuickFilter="";document.querySelectorAll(".contract-metric-click.is-selected").forEach(el=>el.classList.remove("is-selected"));["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});applyContratFilters()}
+function resetContratFilters(){window.__contractQuickFilter="";document.querySelectorAll(".contract-metric-click.is-selected").forEach(el=>el.classList.remove("is-selected"));["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});drumRender("flt-essai");drumRender("flt-contrat");applyContratFilters()}
 function setContratQuickFilter(type){
   resetContratFilters();
   if(type==="all"){
@@ -10310,7 +10344,7 @@ function setContratQuickFilter(type){
   }else if(type==="essaiExpired"){
     const e=document.getElementById("flt-essai");if(e)e.value="passed";
   }
-  applyContratFilters();
+  drumRender("flt-essai");drumRender("flt-contrat");applyContratFilters();
   const table=document.getElementById("ct-tbody");if(table)table.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
@@ -11937,7 +11971,7 @@ function effectifFilteredData(filter){
   if(filter==="operationnels"){title="Effectif opérationnel";list=list.filter(agentIsOperational)}
   else if(filter==="conge"){title="Agents en congé";list=list.filter(a=>db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)))}
   else if(filter==="maladie"){title="Agents en maladie";list=list.filter(a=>db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c)))}
-  else if(filter==="absents"){title="Agents en absence";list=list.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&e.statut==="en_cours"&&(!e.au||e.au>=today())))}
+  else if(filter==="absents"){const td=today();title="Agents en absence";list=list.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td)))}
   else if(filter==="suspension"){title="Agents suspendus";list=list.filter(a=>a.statut==="suspendu")}
   else if(filter==="instance_affectation"){title="Employés en attente d'affectation";list=list.filter(agentNeedsAffectation)}
   else if(filter==="sortant"){title="Sortant";list=list.filter(a=>["sortant","demissionne","licencie"].includes(a.statut))}
@@ -12085,13 +12119,79 @@ function renderOperationalPreparation(view,filter){
   window.SGDI_API.erp.operationalPreparation(soc?{society:soc}:{}).then(()=>{view.innerHTML=operationalPreparationHTML(localOperationalPreparationData(filter),"PostgreSQL")}).catch(e=>{console.warn("Préparation opérationnelle PostgreSQL indisponible",e);fallback();toast("Lecture ERP PostgreSQL indisponible : "+(e.message||e),"warn")});
 }
 
+function absencesRecapHTML(){
+  const soc=effectifSocieteFilter()||drhActiveSocieteFilter()||"";
+  const agents=(db.agents||[]).filter(a=>!soc||a.societe===soc);
+  // Collect all absence events from gestionEvents
+  const events=[];
+  agents.forEach(a=>{
+    (a.gestionEvents||[]).forEach(e=>{
+      if(e.type!=="Absence")return;
+      const du=String(e.du||"").slice(0,10);
+      if(!du)return;
+      const au=String(e.au||"").slice(0,10)||du;
+      events.push({agentId:a.id,nom:((a.nom||"")+" "+(a.prenom||"")).trim(),matricule:a.matricule||"",societe:a.societe||"",du,au,motif:e.motif||""});
+    });
+  });
+  const td=today();
+  const thisYear=td.slice(0,4);
+  const thisMonth=td.slice(0,7);
+  // Helper: does an event cover a given date?
+  function covers(e,d){return e.du<=d&&e.au>=d;}
+  // --- Par jour (30 derniers jours) ---
+  const days=[];for(let i=29;i>=0;i--){const d=addDays(td,-i);days.push(d);}
+  const byDay=days.map(d=>({d,count:events.filter(e=>covers(e,d)).length}));
+  const maxDay=Math.max(1,...byDay.map(x=>x.count));
+  // --- Par mois (12 derniers mois) ---
+  const months=[];for(let i=11;i>=0;i--){const dt=new Date(td);dt.setMonth(dt.getMonth()-i);months.push(dt.toISOString().slice(0,7));}
+  const byMonth=months.map(m=>({m,count:events.filter(e=>e.du.slice(0,7)<=m&&e.au.slice(0,7)>=m).length}));
+  const maxMonth=Math.max(1,...byMonth.map(x=>x.count));
+  // --- Par année ---
+  const years=[...new Set(events.map(e=>e.du.slice(0,4)).filter(Boolean))].sort().reverse().slice(0,5);
+  if(!years.includes(thisYear))years.unshift(thisYear);
+  const byYear=years.map(y=>({y,count:events.filter(e=>e.du.slice(0,4)<=y&&e.au.slice(0,4)>=y).length}));
+  // KPIs
+  const today_count=events.filter(e=>covers(e,td)).length;
+  const month_count=events.filter(e=>e.du.slice(0,7)<=thisMonth&&e.au.slice(0,7)>=thisMonth).length;
+  const year_count=events.filter(e=>e.du.slice(0,4)<=thisYear&&e.au.slice(0,4)>=thisYear).length;
+  // Bar helper
+  function bar(val,max,color){const pct=Math.round(val/Math.max(1,max)*100);return`<div style="height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color};border-radius:3px"></div></div>`;}
+  const MOIS_COURTS=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+  return`<div class="mb-5">
+    <h2 class="text-lg font-black uppercase mb-3">Récapitulatif des absences</h2>
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-red-600">${today_count}</div><div class="text-xs text-slate-500 mt-1">Absent(s) aujourd'hui</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-amber-600">${month_count}</div><div class="text-xs text-slate-500 mt-1">Ce mois (${MOIS_COURTS[parseInt(thisMonth.slice(5,7))-1]} ${thisYear})</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-slate-700">${year_count}</div><div class="text-xs text-slate-500 mt-1">Cette année (${thisYear})</div></div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+      <div class="card p-4">
+        <div class="font-bold text-sm mb-3 uppercase text-slate-600">Par jour — 30 derniers jours</div>
+        <div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-slate-400 uppercase text-left"><th class="pb-1 pr-2">Date</th><th class="pb-1 pr-2 text-center">Nb</th><th class="pb-1 w-full">Tendance</th></tr></thead><tbody>
+          ${byDay.filter(x=>x.count>0||x.d===td).map(x=>`<tr><td class="pr-2 py-1 font-mono whitespace-nowrap${x.d===td?" font-black text-red-600":""}">${x.d===td?"Aujourd'hui":formatDate(x.d)}</td><td class="pr-2 py-1 text-center font-bold${x.count>0?" text-red-600":""}">${x.count||"—"}</td><td class="py-1 min-w-[80px]">${x.count?bar(x.count,maxDay,"#dc2626"):""}</td></tr>`).join("")||`<tr><td colspan="3" class="text-center text-slate-400 py-3 italic">Aucune absence sur 30 jours</td></tr>`}
+        </tbody></table></div>
+      </div>
+      <div class="card p-4">
+        <div class="font-bold text-sm mb-3 uppercase text-slate-600">Par mois — 12 derniers mois</div>
+        <table class="w-full text-xs"><thead><tr class="text-slate-400 uppercase text-left"><th class="pb-1 pr-2">Mois</th><th class="pb-1 pr-2 text-center">Nb</th><th class="pb-1 w-full">Tendance</th></tr></thead><tbody>
+          ${byMonth.map(x=>`<tr><td class="pr-2 py-1 font-mono whitespace-nowrap${x.m===thisMonth?" font-black text-amber-600":""}">${MOIS_COURTS[parseInt(x.m.slice(5,7))-1]} ${x.m.slice(0,4)}</td><td class="pr-2 py-1 text-center font-bold${x.count>0?" text-amber-700":""}">${x.count||"—"}</td><td class="py-1 min-w-[80px]">${x.count?bar(x.count,maxMonth,"#d97706"):""}</td></tr>`).join("")}
+        </tbody></table>
+      </div>
+    </div>
+    <div class="card p-4 mb-5">
+      <div class="font-bold text-sm mb-3 uppercase text-slate-600">Par année</div>
+      <div class="flex gap-6 flex-wrap">${byYear.map(x=>`<div class="text-center min-w-[60px]"><div class="text-xl font-black${x.y===thisYear?" text-slate-800":" text-slate-500"}">${x.count}</div><div class="text-xs text-slate-400 mt-1">${x.y}</div></div>`).join("")||`<div class="text-slate-400 italic text-sm">Aucune donnée</div>`}</div>
+    </div>
+  </div>`;
+}
 function renderEffectif(view,filter,stableMode){
   if(filter==="recap")return renderEffectifRecap(view);
   if(String(filter||"").startsWith("preparation"))return renderOperationalPreparation(view,filter);
   const cards=(filter==="instance_affectation"||isOpsEffectifContext()||isDrhModuleContext())?"":`<div id="effectif-cards-zone">${effectifRecapCardsHTML(filter,true,true)}</div>`;
+  const absRecap=filter==="absents"?`<div id="absences-recap-zone">${absencesRecapHTML()}</div>`:"";
   // Affiche immédiatement les données locales (stale-while-revalidate)
   const localHTML=effectifListHTML(filter);
-  view.innerHTML=`${cards}<div id="effectif-list-zone">${localHTML}</div>`;
+  view.innerHTML=`${cards}${absRecap}<div id="effectif-list-zone">${localHTML}</div>`;
   sgdiApplyActiveEmployeeStyles(view);
   applyEffectifSearchInPlace(effectifSearchValue(filter));
   // Remplace silencieusement par les données serveur quand elles arrivent
@@ -31433,13 +31533,65 @@ function fpqSyncAffectation(f,agent){
 function fpqEnsure(date,agentId){let f=fpqGet(date,agentId);const a=db.agents.find(x=>x.id===agentId);if(!f){f={id:uid("fpq"),date,agentId,heureArrivee:"",heureDepart:"",heureReleve:"",observations:"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.feuillePresence.push(f)}if(!f.siteManual&&!f.valide)fpqSyncAffectation(f,a);return f}
 function fpqIsCloture(date){if(!db.feuillePresenceCloture)db.feuillePresenceCloture={};return !!db.feuillePresenceCloture[date]}
 function fpqClotureInfo(date){if(!db.feuillePresenceCloture)return null;return db.feuillePresenceCloture[date]||null}
+function fpqIsArchived(date){return !!(db.feuillePresenceArchive&&db.feuillePresenceArchive[date])}
+function fpqGuardArchive(date){if(fpqIsArchived(date)){toast("📦 Feuille du "+formatDate(date)+" archivée automatiquement — aucune modification n'est possible","error");return true}return false}
 function fpqGuardCloture(date){if(fpqIsCloture(date)){toast("🔒 Feuille du "+formatDate(date)+" clôturée · déclôturez d'abord","error");return true}return false}
 function fpqGuardLine(date,agentId){const f=fpqGet(date,agentId);if(f&&f.valide){toast("🔒 Ligne validée · déverrouillez avant modification","error");return true}return false}
-async function fpqSetField(date,agentId,field,value){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
-async function fpqSetRowField(rowId,field,value){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date:f.date,agentId:f.agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
-async function fpqSetSite(date,agentId,siteId){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const s=db.sites.find(x=>x.id===siteId);try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{siteId:siteId||"",siteName:s?(s.nom||s.intitule||""):"",siteManual:true}}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Affectation refusée : "+(e.message||e),"error");renderView()}}
-async function fpqDelete(date,agentId){if(fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{data:{date,agentId}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
-async function fpqDeleteRow(rowId){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{item_id:rowId,data:{}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+function ptAutoArchiveOldDays(){
+  if(!db||!session)return;
+  const td=today();
+  if(!db.feuillePresenceArchive)db.feuillePresenceArchive={};
+  if(!db.feuillePresenceCloture)db.feuillePresenceCloture={};
+  const dates=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(d=>d&&d<td))];
+  let changed=false;
+  dates.forEach(d=>{
+    if(db.feuillePresenceArchive[d])return;
+    const count=(db.feuillePresence||[]).filter(f=>f.date===d).length;
+    db.feuillePresenceArchive[d]={archivedAt:new Date().toISOString(),archivedBy:"system",lignesCount:count};
+    if(!db.feuillePresenceCloture[d])db.feuillePresenceCloture[d]={closedAt:new Date().toISOString(),closedBy:"system-archive"};
+    changed=true;
+  });
+  if(changed)saveDB();
+}
+function renderPointageArchives(){
+  if(!db.feuillePresenceArchive)db.feuillePresenceArchive={};
+  const entries=Object.entries(db.feuillePresenceArchive).sort((a,b)=>b[0].localeCompare(a[0]));
+  const byMonth={};
+  entries.forEach(([d,info])=>{const m=d.slice(0,7);if(!byMonth[m])byMonth[m]=[];byMonth[m].push([d,info]);});
+  const months=Object.keys(byMonth).sort((a,b)=>b.localeCompare(a));
+  const MOIS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  return`<div class="max-w-3xl mx-auto">
+    <div class="flex items-center gap-3 mb-4 p-3 rounded-lg" style="background:#f0fdf4;border:1px solid #bbf7d0">
+      <span style="font-size:22px">📦</span>
+      <div><div class="font-bold text-sm text-emerald-800">Archive automatique activée</div><div class="text-xs text-emerald-700">Chaque jour précédent est archivé automatiquement en arrière-plan. Les données archivées sont en lecture seule et ne peuvent pas être modifiées.</div></div>
+    </div>
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-slate-700">${entries.length}</div><div class="text-xs text-slate-500 mt-1">Jours archivés</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-slate-700">${months.length}</div><div class="text-xs text-slate-500 mt-1">Mois couverts</div></div>
+      <div class="card p-4 text-center"><div class="text-2xl font-black text-slate-700">${entries.reduce((n,[,i])=>n+(i.lignesCount||0),0)}</div><div class="text-xs text-slate-500 mt-1">Lignes archivées</div></div>
+    </div>
+    ${months.length?months.map(m=>{
+      const [yr,mo]=m.split("-").map(Number);
+      const label=MOIS[mo-1]+" "+yr;
+      const rows=byMonth[m];
+      const total=rows.reduce((n,[,i])=>n+(i.lignesCount||0),0);
+      return`<div class="card overflow-hidden mb-4">
+        <div class="flex items-center justify-between px-4 py-3 border-b" style="background:#f8fafc">
+          <div class="font-bold text-sm">${label}</div>
+          <div class="text-xs text-slate-500">${rows.length} jour(s) · ${total} lignes</div>
+        </div>
+        <table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 uppercase bg-slate-50"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-center">Lignes</th><th class="px-3 py-2 text-left">Archivé le</th><th class="px-3 py-2">Accès</th></tr></thead>
+        <tbody>${rows.map(([d,info])=>`<tr><td class="px-3 py-2 font-mono text-xs">${formatDate(d)}</td><td class="px-3 py-2 text-center font-bold">${info.lignesCount||0}</td><td class="px-3 py-2 text-xs text-slate-500">${info.archivedAt?new Date(info.archivedAt).toLocaleString("fr-FR"):"-"}</td><td class="px-3 py-2 text-center"><a class="btn btn-ghost text-xs" href="#/pointage/feuille?date=${d}" onclick="setFpqDate('${d}');navigate('pointage/feuille')">👁 Voir</a></td></tr>`).join("")}</tbody>
+        </table>
+      </div>`;
+    }).join(""):`<div class="card p-8 text-center text-slate-400 italic">Aucune archive disponible.</div>`}
+  </div>`;
+}
+async function fpqSetField(date,agentId,field,value){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
+async function fpqSetRowField(rowId,field,value){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date:f.date,agentId:f.agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
+async function fpqSetSite(date,agentId,siteId){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const s=db.sites.find(x=>x.id===siteId);try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{siteId:siteId||"",siteName:s?(s.nom||s.intitule||""):"",siteManual:true}}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Affectation refusée : "+(e.message||e),"error");renderView()}}
+async function fpqDelete(date,agentId){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{data:{date,agentId}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+async function fpqDeleteRow(rowId){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{item_id:rowId,data:{}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
 function fpqNeedsRemplaceAgent(motif){return["Remplacement Absence","Remplacement Malade","Remplacement Abandon de poste"].includes(motif)}
 function fpqRemplaceAgentLabel(motif){if(motif==="Remplacement Malade")return"Employé malade";if(motif==="Remplacement Abandon de poste")return"Employé en abandon de poste";return"Employé absent"}
 function nextOrdreMouvementNumero(){
@@ -31450,7 +31602,7 @@ function nextOrdreMouvementNumero(){
   return `OD/OPS/${y}/${String(next).padStart(4,"0")}`;
 }
 function fpqOpenMouvement(date,agentId){
-  if(fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;
+  if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;
   const f=fpqEnsure(date,agentId);const a=(db.agents||[]).find(x=>x.id===agentId);
   const positionActuelle=opsEmployeeCurrentPositionLabel(a);
   const motifs=["Affectation","Remplacement Absence","Remplacement Manque","Mission","Fixation","Remplacement Malade","Remplacement Abandon de poste"];
@@ -31713,7 +31865,7 @@ async function fpqSaveMouvement(date,agentId){
   return fpqPersistOrdreMouvement(date,agentId,f,patch,{print:true,message:"Mouvement enregistré, archivé et prêt à imprimer"});
 }
 async function fpqValiderLigne(date,agentId){
-  if(fpqGuardCloture(date))return;
+  if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const f=fpqEnsure(date,agentId);
   if(!f.siteId){toast("Site obligatoire avant validation","error");return}
   try{
@@ -31734,7 +31886,7 @@ async function fpqDevaliderLigne(date,agentId){
 }
 async function fpqCloturerJournee(date){if(!date)date=fpqCurrentDate();if(fpqIsCloture(date)){toast("Déjà clôturée","info");return}const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);if(!lignes.length){if(!confirm("Aucune ligne saisie pour le "+formatDate(date)+".\nClôturer la feuille à zéro quand même ?"))return}else{const incomplets=lignes.filter(f=>!f.heureArrivee).length;const msg="Clôturer définitivement la feuille du "+formatDate(date)+" ?\n\n• "+lignes.length+" ligne(s) au total\n"+(incomplets?"• ⚠ "+incomplets+" ligne(s) incomplète(s) (situation manquante)\n":"")+"\nLes lignes ne pourront plus être modifiées sans déclôture.";if(!confirm(msg))return}try{await sgdiRunLegacyAction("close-presence-day",{data:{date}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Clôture feuille de présence","Date: "+formatDate(date)+" · "+lignes.length+" ligne(s)");toast("Feuille clôturée par le backend","success");renderView()}catch(e){toast("Clôture refusée : "+(e.message||e),"error")}}
 function fpqDeclôturerJournee(date){return fpqDecloturerJournee(date)}
-async function fpqDecloturerJournee(date){if(!date)date=fpqCurrentDate();if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}try{await sgdiRunLegacyAction("reopen-presence-day",{data:{date,motif:motif.trim()}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("Feuille déclôturée par le backend","success");renderView()}catch(e){toast("Déclôture refusée : "+(e.message||e),"error")}}
+async function fpqDecloturerJournee(date){if(!date)date=fpqCurrentDate();if(fpqGuardArchive(date))return;if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}try{await sgdiRunLegacyAction("reopen-presence-day",{data:{date,motif:motif.trim()}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("Feuille déclôturée par le backend","success");renderView()}catch(e){toast("Déclôture refusée : "+(e.message||e),"error")}}
 function fpqClotureBannerHTML(){if(!db||!session)return"";if(session.transverse!=="ops")return"";if(typeof canAccess==="function"&&!canAccess("ops"))return"";const today=new Date().toISOString().slice(0,10);const allDates=new Set();(db.feuillePresence||[]).forEach(f=>allDates.add(f.date));allDates.add(today);const c=db.feuillePresenceCloture||{};const pending=[...allDates].filter(d=>!c[d]).sort((a,b)=>b.localeCompare(a));if(!pending.length)return"";const todayPending=pending.includes(today);const oldPending=pending.filter(d=>d!==today).sort((a,b)=>b.localeCompare(a));const todayCount=(db.feuillePresence||[]).filter(f=>f.date===today).length;const oldList=oldPending.slice(0,5).map(d=>{const cnt=(db.feuillePresence||[]).filter(f=>f.date===d).length;return`<button class="text-[11px] px-2 py-0.5 rounded-full font-bold" style="background:#fff;color:#b91c1c;border:1px solid #fca5a5" onclick="setFpqDate('${d}');navigate('pointage/feuille')">📅 ${formatDate(d)} · ${cnt} ligne${cnt>1?"s":""}</button>`}).join(" ");const moreOld=oldPending.length>5?` <span class="text-[11px] text-red-700 font-semibold">+ ${oldPending.length-5} autre(s)…</span>`:"";const todayLabel=new Date(today).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});const bg=todayPending&&!oldPending.length?"linear-gradient(90deg,#043970,#043970)":"linear-gradient(90deg,#fee2e2,#fecaca)";const border=todayPending&&!oldPending.length?"#043970":"#dc2626";const titleColor=todayPending&&!oldPending.length?"#043970":"#991b1b";const subColor=todayPending&&!oldPending.length?"#043970":"#7f1d1d";return`<div class="no-print mx-4 mt-3 p-4 rounded-lg shadow-lg fpq-banner-pulse" style="background:${bg};border:3px solid ${border}">
     <div class="flex items-center justify-between gap-3 flex-wrap">
       <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -31755,9 +31907,9 @@ function fpqClotureBannerHTML(){if(!db||!session)return"";if(session.transverse!
       </div>
     </div>
   </div>`}
-function fpqClearAll(date,soc){if(fpqGuardCloture(date))return;if(!confirm("Effacer toute la feuille du "+formatDate(date)+" ?"))return;const removed=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||f.societe===soc));removed.forEach(f=>ptRemovePresenceLine(f));const before=(db.feuillePresence||[]).length;db.feuillePresence=(db.feuillePresence||[]).filter(f=>{if(f.date!==date)return true;if(soc&&f.societe!==soc)return true;return false});saveDB();toast((before-db.feuillePresence.length)+" ligne(s) supprimée(s)","success");renderView()}
+function fpqClearAll(date,soc){if(fpqGuardArchive(date)||fpqGuardCloture(date))return;if(!confirm("Effacer toute la feuille du "+formatDate(date)+" ?"))return;const removed=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||f.societe===soc));removed.forEach(f=>ptRemovePresenceLine(f));const before=(db.feuillePresence||[]).length;db.feuillePresence=(db.feuillePresence||[]).filter(f=>{if(f.date!==date)return true;if(soc&&f.societe!==soc)return true;return false});saveDB();toast((before-db.feuillePresence.length)+" ligne(s) supprimée(s)","success");renderView()}
 function fpqSupprimerFeuille(date){
-  if(fpqGuardCloture(date))return;
+  if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);
   if(!lignes.length){toast("Aucune feuille à supprimer pour cette date","info");return}
   if(!confirm("Supprimer définitivement toute la feuille de présence du "+formatDate(date)+" ?\n\n"+lignes.length+" ligne(s) seront supprimée(s)."))return;
@@ -31898,7 +32050,7 @@ function fpqLineOrder(f){
   return Number.isFinite(created)?created:999999;
 }
 function fpqGenerateAuto(date,soc,siteId){
-  if(fpqGuardCloture(date))return;
+  if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const selectedSite=siteId?(db.sites||[]).find(s=>String(s.id)===String(siteId)||String(s.backendId||"")===String(siteId)):null;
   const sites=(db.sites||[]).filter(s=>s.actif!==false&&siteBelongsToPrimarySociete(s,soc)&&(!selectedSite||siteMatchesReference(selectedSite,{siteId:s.id,siteBackendId:s.backendId,siteName:s.nom||s.intitule})));
   if(!sites.length){toast("Aucun site actif pour ce filtre","error");return}
@@ -31965,7 +32117,7 @@ function fpqApsAgentsForPrise(date,currentId){
 }
 async function fpqAssignVacantAgent(rowId,agentId){
   const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f||!agentId)return;
-  if(fpqGuardCloture(f.date))return;
+  if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date))return;
   if((db.feuillePresence||[]).some(x=>x.date===f.date&&x.agentId===agentId&&x.id!==rowId)){toast("Cet employé figure déjà sur la feuille","error");renderView();return}
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
   const patch={presenceOrder:fpqLineOrder(f),agentId,vacant:false,siteManual:true,poste:a.affectationCourante?.poste||a.fonction||"APS",societe:f.societe||a.societe||""};
@@ -32285,6 +32437,7 @@ function renderPointage(view,sub,arg){
   else if(sub==="societe")body=renderPointageSociete();
   else if(sub==="stats")body=renderPointageStats();
   else if(sub==="legende")body=renderPointageLegende();
+  else if(sub==="archives")body=renderPointageArchives();
   else body=isDrh?renderPointageSaisieAuto():renderPointageSaisie();
   view.innerHTML=head+body;
 }
