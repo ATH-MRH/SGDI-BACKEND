@@ -43,6 +43,7 @@ def build_sidebar_stats(db: Session, user: User, society: str | None = None) -> 
         "drh": {
             "recrutement": {
                 "total": erp["drh"]["candidates_total"],
+                "reserve": erp["drh"].get("candidates_reserve", 0),
                 "nouveaux": legacy.get("candidats", 0),
                 "archives": 0,
             },
@@ -54,6 +55,11 @@ def build_sidebar_stats(db: Session, user: User, society: str | None = None) -> 
                 "sans_dotation": erp["employees"]["without_equipment"],
                 "sans_affectation": erp["employees"]["without_assignment"],
                 "sans_pv_installation": erp["employees"]["without_installation_pv"],
+                "conge": erp["employees"].get("leave_current", 0),
+                "maladie": erp["employees"].get("sick_leave_current", 0),
+                "absent": erp["employees"].get("absent", 0),
+                "suspendu": erp["employees"].get("suspended", 0),
+                "blacklist": erp["employees"].get("blacklisted", 0),
             },
         },
         "ops": {

@@ -1196,7 +1196,23 @@ function sgdiUpsertServerItem(listName,item){
   else list.push(item);
   return idx>=0?list[idx]:item;
 }
-window.SGDI_SIDEBAR_STATS=null;
+const SGDI_SIDEBAR_STATS_CACHE_KEY="sgdi_sidebar_stats_last_v1";
+function sgdiLoadCachedSidebarStats(){
+  try{
+    const raw=sessionStorage.getItem(SGDI_SIDEBAR_STATS_CACHE_KEY)||localStorage.getItem(SGDI_SIDEBAR_STATS_CACHE_KEY);
+    const parsed=raw?JSON.parse(raw):null;
+    return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:null;
+  }catch(e){return null}
+}
+function sgdiRememberSidebarStats(stats){
+  if(!stats||typeof stats!=="object"||Array.isArray(stats))return;
+  try{
+    const payload=JSON.stringify(stats);
+    sessionStorage.setItem(SGDI_SIDEBAR_STATS_CACHE_KEY,payload);
+    localStorage.setItem(SGDI_SIDEBAR_STATS_CACHE_KEY,payload);
+  }catch(e){}
+}
+window.SGDI_SIDEBAR_STATS=sgdiLoadCachedSidebarStats();
 function sgdiActiveStatsSociety(){
   try{
     return (typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter())||session?.societe||(typeof mySoc==="function"&&mySoc())||"";
@@ -1208,6 +1224,7 @@ async function sgdiRefreshSidebarStats(society){
     const activeSociety=society!==undefined?society:sgdiActiveStatsSociety();
     const stats=await window.SGDI_API.ui.sidebarStats(activeSociety?{society:activeSociety}:{});
     window.SGDI_SIDEBAR_STATS=stats;
+    sgdiRememberSidebarStats(stats);
     window.dispatchEvent(new CustomEvent("sgdi:sidebar-stats",{detail:stats}));
     return stats;
   }catch(error){
@@ -4064,19 +4081,20 @@ function moduleCountersRibbonHTML(){
     const agIds=new Set(ag.map(a=>a.id));
     const co=(db.conges||[]).filter(c=>agIds.has(c.agentId));
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
+    const erpDrh=sgdiErpModuleCounters("drh",scopeSoc);
     const total=Math.max(1,erpEmp?.total??ag.length);
-    const actifs=ag.filter(agentIsOperational).length;
-    const activeHeadcount=ag.filter(employeeIsActive).length;
-    const sansDotation=materialPendingDotationCountForSoc(scopeSoc);
-    const sansAffectation=ag.filter(agentNeedsAffectation).length;
-    const attentePv=ag.filter(agentNeedsInstallationPV).length;
-    const enConge=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
-    const enMaladie=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=ag.filter(a=>a.statut==="absent").length;
-    const susp=ag.filter(a=>a.statut==="suspendu").length;
-    const blacklist=ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
-    const reserveCandidates=(db.candidats||[]).filter(c=>(!scopeSoc||c.societe===scopeSoc)&&c.statut==="reserve").length;
-    const reserveTotal=Math.max(1,(db.candidats||[]).filter(c=>!scopeSoc||c.societe===scopeSoc).length);
+    const actifs=erpEmp?.operational_active??ag.filter(agentIsOperational).length;
+    const activeHeadcount=erpEmp?.non_archived??ag.filter(employeeIsActive).length;
+    const sansDotation=erpEmp?.without_equipment??materialPendingDotationCountForSoc(scopeSoc);
+    const sansAffectation=erpEmp?.without_assignment??ag.filter(agentNeedsAffectation).length;
+    const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
+    const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
+    const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
+    const absents=erpEmp?.absent??ag.filter(a=>a.statut==="absent").length;
+    const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
+    const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
+    const reserveCandidates=erpDrh?.candidates_reserve??(db.candidats||[]).filter(c=>(!scopeSoc||c.societe===scopeSoc)&&c.statut==="reserve").length;
+    const reserveTotal=Math.max(1,erpDrh?.candidates_total??(db.candidats||[]).filter(c=>!scopeSoc||c.societe===scopeSoc).length);
     const missionEnCours=(db.missions||[]).filter(m=>(!scopeSoc||m.societe===scopeSoc)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
     const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
     const dotationRoute=session.transverse==="ops"?"ops/instance_dotation":"materiel/dotation";
@@ -4104,19 +4122,19 @@ function moduleCountersRibbonHTML(){
     const co=(db.conges||[]).filter(c=>agIds.has(c.agentId));
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
     const total=Math.max(1,erpEmp?.total??ag.length);
-    const actifs=ag.filter(agentIsOperational).length;
-    const activeHeadcount=ag.filter(employeeIsActive).length;
-    const sansAffectation=ag.filter(agentNeedsAffectation).length;
+    const actifs=erpEmp?.operational_active??ag.filter(agentIsOperational).length;
+    const activeHeadcount=erpEmp?.non_archived??ag.filter(employeeIsActive).length;
+    const sansAffectation=erpEmp?.without_assignment??ag.filter(agentNeedsAffectation).length;
     const dotSoc=scopeSoc||(typeof drhActiveSocieteFilter==="function"?drhActiveSocieteFilter():"")||"";
-    const sansDotation=materialPendingDotationCountForSoc(dotSoc);
+    const sansDotation=erpEmp?.without_equipment??materialPendingDotationCountForSoc(dotSoc);
     const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
     const missionEnCours=(db.missions||[]).filter(m=>(!scopeSoc||m.societe===scopeSoc)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
     const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
-    const enConge=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
-    const enMaladie=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=ag.filter(a=>a.statut==="absent").length;
-    const susp=ag.filter(a=>a.statut==="suspendu").length;
-    const blacklist=ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
+    const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
+    const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
+    const absents=erpEmp?.absent??ag.filter(a=>a.statut==="absent").length;
+    const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
+    const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
     const prepCounters=effectifConfigSettings().showPreparationCounters?[
       {label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total},
       {label:"SANS DOTATION",value:sansDotation,color:"#0ea5e9",route:"effectif/preparation_dotation",pctBase:total}
@@ -4159,15 +4177,16 @@ function moduleCountersRibbonHTML(){
   }
   if(module==="materiel"){
     const erpMat=sgdiErpModuleCounters("materiel",scopeSoc);
+    const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
     const k=typeof stockSummaryKPI==="function"?stockSummaryKPI():{totalArticles:(db.stockArticles||[]).length,enAlerte:0,enRupture:0};
     const articles=(db.stockArticles||[]).filter(a=>!scopeSoc||a.societe===scopeSoc||a.society===scopeSoc);
     return moduleCountersRibbon([
       {label:"ARTICLES",value:erpMat?.articles_active??(articles.length||k.totalArticles||0),color:"#043970",route:"materiel/articles"},
-      {label:"STOCK CRITIQUE",value:(k.enAlerte||0)+(k.enRupture||0),color:"#dc2626",route:"materiel/articles"},
+      {label:"STOCK CRITIQUE",value:erpMat?.stock_alerts_total??((k.enAlerte||0)+(k.enRupture||0)),color:"#dc2626",route:"materiel/articles"},
       {label:"MAGASINS",value:erpMat?.stores_total??(db.magasins||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length,color:"#0ea5e9",route:"materiel/magasins"},
-      {label:"FOURNISSEURS",value:(db.fournisseurs||[]).filter(f=>!scopeSoc||f.societe===scopeSoc).length,color:"#7c3aed",route:"materiel/fournisseurs"},
+      {label:"FOURNISSEURS",value:erpMat?.suppliers_total??(db.fournisseurs||[]).filter(f=>!scopeSoc||f.societe===scopeSoc).length,color:"#7c3aed",route:"materiel/fournisseurs"},
       {label:"MOUVEMENTS",value:erpMat?.movements_total??(db.stockMouvements||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length,color:"#f59e0b",route:"materiel/mouvements",showAllPeriods:true},
-      {label:"DOTATIONS",value:materialPendingDotationCountForSoc(scopeSoc),color:"#047857",route:"materiel/dotation"}
+      {label:"DOTATIONS",value:erpEmp?.without_equipment??materialPendingDotationCountForSoc(scopeSoc),color:"#047857",route:"materiel/dotation"}
     ]);
   }
   if(module==="facturation"){
@@ -5097,9 +5116,9 @@ function renderSidebar(){
     const srvDrh=srv?.drh;
 
     // Compteurs DRH
-    const drhTotalAgents=srvEmp?.total??(drhAgents.filter(a=>!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase())).length);
-    const drhCandidatsActifs=drhCandidates.filter(c=>candidatIsReserve(c)).length;
-    const drhRecrutementCandidats=drhCandidates.length;
+    const drhTotalAgents=srvEmp?.non_archived??srvEmp?.total??(drhAgents.filter(a=>!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase())).length);
+    const drhCandidatsActifs=srvDrh?.recrutement?.reserve??srv?.erp?.drh?.candidates_reserve??drhCandidates.filter(c=>candidatIsReserve(c)).length;
+    const drhRecrutementCandidats=srvDrh?.recrutement?.total??srv?.erp?.drh?.candidates_total??drhCandidates.length;
     const drhAContractualiser=drhCandidates.filter(candidateCanGoToContract).length;
     const drhIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,drhSoc)).length;
 
@@ -5110,9 +5129,9 @@ function renderSidebar(){
     const adminArticlesCount=(db.stockArticles||[]).filter(adminDataMatchesSociete).length;
     // Compteurs MATÉRIEL (filtrés par société)
     const matArticles=srvMat?.articles_active??(db.stockArticles||[]).filter(a=>dataMatchesSociete(a,soc)).length;
-    const matMagasins=(db.magasins||[]).filter(m=>dataMatchesSociete(m,soc)).length;
-    const matFournisseurs=(db.fournisseurs||[]).filter(f=>dataMatchesSociete(f,soc)).length;
-    const matAlertes=(db.stockArticles||[]).filter(a=>dataMatchesSociete(a,soc)&&stockGetEtat(a).code!=="ok").length;
+    const matMagasins=srvMat?.stores_total??(db.magasins||[]).filter(m=>dataMatchesSociete(m,soc)).length;
+    const matFournisseurs=srvMat?.suppliers_total??(db.fournisseurs||[]).filter(f=>dataMatchesSociete(f,soc)).length;
+    const matAlertes=srvMat?.stock_alerts_total??(db.stockArticles||[]).filter(a=>dataMatchesSociete(a,soc)&&stockGetEtat(a).code!=="ok").length;
 
     // Compteurs FACTURATION (filtrés par société)
     const factDevis=soc?(db.devis||[]).filter(d=>!d.societe||d.societe===soc).length:(db.devis||[]).length;

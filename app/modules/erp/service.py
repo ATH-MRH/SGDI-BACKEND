@@ -8,8 +8,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
-from app.modules.drh.models import Candidate, Contract, Employee
-from app.modules.materiel.models import EmployeeEquipment, StockArticle, StockMovement, Store
+from app.modules.drh.models import Candidate, Contract, Employee, Leave
+from app.modules.materiel.models import EmployeeEquipment, StockArticle, StockMovement, Store, Supplier
 from app.modules.ops.models import Assignment, DailyPresence, Event, Site
 
 EXIT_STATUSES = {"sortant", "demissionne", "licencie", "archive", "blackliste"}
@@ -255,6 +255,38 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
     active_employee_stmt = employee_stmt.where(~func.lower(Employee.status).in_(EXIT_STATUSES))
     employees = db.execute(employee_stmt).scalars().all()
     employee_ids = {employee.id for employee in employees}
+    today = _today()
+    active_employee_ids = {
+        employee.id
+        for employee in employees
+        if str(employee.status or "").strip().lower() not in EXIT_STATUSES
+    }
+    status_counts: dict[str, int] = {}
+    for employee in employees:
+        key = str(employee.status or "").strip().lower()
+        if key:
+            status_counts[key] = status_counts.get(key, 0) + 1
+
+    leaves_stmt = (
+        select(Leave)
+        .where(Leave.status == "approuve")
+        .where(Leave.start_date <= today)
+        .where(Leave.end_date >= today)
+    )
+    if active_employee_ids:
+        leaves_stmt = leaves_stmt.where(Leave.employee_id.in_(active_employee_ids))
+    elif societies := effective_societies(user, society):
+        leaves_stmt = leaves_stmt.where(False)
+    current_leaves = db.execute(leaves_stmt).scalars().all()
+    leave_count = 0
+    sick_leave_count = 0
+    for leave in current_leaves:
+        kind = str(leave.leave_type or "").strip().lower()
+        if "malad" in kind:
+            sick_leave_count += 1
+        else:
+            leave_count += 1
+
     states = employee_operational_states(db, user, society)
     by_state: dict[str, int] = {}
     missing_steps = {"contrat": 0, "dotation": 0, "affectation": 0, "pv_installation": 0}
@@ -274,16 +306,38 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
     site_condition = site_scope_condition(user, society)
     if site_condition is not None:
         site_stmt = site_stmt.where(site_condition)
+    scoped_sites = db.execute(site_stmt).scalars().all()
+    scoped_site_ids = {site.id for site in scoped_sites}
 
     store_stmt = select(Store)
     store_condition = store_scope_condition(user, society)
     if store_condition is not None:
         store_stmt = store_stmt.where(store_condition)
 
-    article_stmt = select(StockArticle).where(StockArticle.active == 1)
+    supplier_stmt = select(Supplier)
     societies = effective_societies(user, society)
     if societies:
+        supplier_stmt = supplier_stmt.where(or_(Supplier.society.in_(societies), Supplier.society.is_(None), Supplier.society == ""))
+
+    article_stmt = select(StockArticle).where(StockArticle.active == 1)
+    if societies:
         article_stmt = article_stmt.where(StockArticle.society.in_(societies))
+    articles = db.execute(article_stmt).scalars().all()
+    article_ids = {article.id for article in articles}
+    stock_ruptures = 0
+    stock_low = 0
+    for article in articles:
+        quantity = float(article.quantity or 0)
+        min_quantity = float(article.min_quantity or 0)
+        raw = article.attributes.get("raw") if isinstance(article.attributes, dict) and isinstance(article.attributes.get("raw"), dict) else {}
+        try:
+            threshold = float(str(raw.get("seuilAlerte") or raw.get("seuil_stock_bas") or raw.get("alert_threshold") or 0).replace(" ", "").replace(",", "."))
+        except (TypeError, ValueError):
+            threshold = 0
+        if quantity <= 0:
+            stock_ruptures += 1
+        elif (threshold > 0 and quantity <= threshold) or (min_quantity > 0 and quantity <= min_quantity):
+            stock_low += 1
 
     candidate_stmt = select(Candidate)
     if societies:
@@ -296,6 +350,18 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
     elif societies:
         presence_stmt = presence_stmt.where(False)
 
+    events_stmt = select(Event).where(Event.status != "clos")
+    if employee_ids or scoped_site_ids:
+        events_stmt = events_stmt.where(or_(Event.employee_id.in_(employee_ids or {-1}), Event.site_id.in_(scoped_site_ids or {-1})))
+    elif societies:
+        events_stmt = events_stmt.where(False)
+
+    movement_stmt = select(StockMovement)
+    if article_ids:
+        movement_stmt = movement_stmt.where(StockMovement.article_id.in_(article_ids))
+    elif societies:
+        movement_stmt = movement_stmt.where(False)
+
     return {
         "employees": {
             "total": len(employees),
@@ -306,24 +372,35 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
             "without_equipment": missing_steps["dotation"],
             "without_assignment": missing_steps["affectation"],
             "without_installation_pv": missing_steps["pv_installation"],
+            "leave_current": leave_count,
+            "sick_leave_current": sick_leave_count,
+            "absent": status_counts.get("absent", 0),
+            "suspended": status_counts.get("suspendu", 0),
+            "blacklisted": status_counts.get("blackliste", 0) + status_counts.get("blacklist", 0),
             "by_state": by_state,
+            "by_status": status_counts,
         },
         "drh": {
             "candidates_total": _active_candidate_count(candidate_rows),
+            "candidates_reserve": sum(1 for row in candidate_rows if str(row.status or "").strip().lower() in {"reserve", "réserve"}),
             "contracts_active": contracts_active,
         },
         "ops": {
-            "sites_total": _count(db, site_stmt),
-            "sites_active": _count(db, site_stmt.where(Site.active == 1) if site_condition is not None else select(Site).where(Site.active == 1)),
+            "sites_total": len(scoped_sites),
+            "sites_active": sum(1 for site in scoped_sites if site.active == 1),
             "assignments_active": assignments_active,
             "presence_today": _count(db, presence_stmt),
-            "events_open": _count(db, select(Event).where(Event.status != "clos")),
+            "events_open": _count(db, events_stmt),
         },
         "materiel": {
             "stores_total": _count(db, store_stmt),
-            "articles_active": _count(db, article_stmt),
+            "suppliers_total": _count(db, supplier_stmt),
+            "articles_active": len(articles),
+            "stock_ruptures": stock_ruptures,
+            "stock_low": stock_low,
+            "stock_alerts_total": stock_ruptures + stock_low,
             "employee_dotations_active": equipped_employees,
-            "movements_total": _count(db, select(StockMovement)),
+            "movements_total": _count(db, movement_stmt),
         },
     }
 
