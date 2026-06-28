@@ -14791,7 +14791,7 @@ function siteIsOperationalByOpeningDate(site){
 }
 function siteStaffingBalanceKpiHTML(manqueGlobal,surplusGlobal){
   if(surplusGlobal>0){
-    return `<button type="button" onclick="filterSitesSituation('surplus')" class="p-4 rounded-lg bg-white border border-orange-400 text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec sureffectif"><div class="text-xs uppercase font-bold text-orange-700">Sureffectif</div><div class="text-3xl font-black mt-1 text-orange-700">${surplusGlobal}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Réalisé - contractuel</div></button>`;
+    return `<button type="button" onclick="filterSitesSituation('surplus')" class="p-4 rounded-lg bg-white border border-orange-400 text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec effectif surplus"><div class="text-xs uppercase font-bold text-orange-700">Effectif surplus</div><div class="text-3xl font-black mt-1 text-orange-700">${surplusGlobal}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Réalisé - contractuel</div></button>`;
   }
   return `<button type="button" onclick="filterSitesSituation('manque')" class="p-4 rounded-lg bg-white border ${manqueGlobal>0?"border-red-400":"border-slate-200"} text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec manque d'effectif"><div class="text-xs uppercase font-bold ${manqueGlobal>0?"text-red-700":"text-slate-500"}">Manque d'effectif</div><div class="text-3xl font-black mt-1 ${manqueGlobal>0?"text-red-700":"text-emerald-700"}">${manqueGlobal}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Contractuel - réalisé</div></button>`;
 }
@@ -14854,7 +14854,7 @@ function filterSitesSituation(mode){
   const info=document.getElementById("sites-filter-info");
   if(info){
     if(mode==="all"){info.classList.add("hidden");info.innerHTML="";}
-    else{info.classList.remove("hidden");info.innerHTML=`Filtre actif : ${mode==="operationnel"?"sites opérationnels":mode==="instance"?"sites en instance d'affectation":mode==="contractuel"?"sites avec effectif contractuel":mode==="realise"?"sites avec effectif réalisé":mode==="surplus"?"sites avec sureffectif":"sites avec manque d'effectif"} · ${shown} site(s) affiché(s) <button class="btn btn-ghost text-xs ml-3" onclick="filterSitesSituation('all')">Réinitialiser</button>`;}
+    else{info.classList.remove("hidden");info.innerHTML=`Filtre actif : ${mode==="operationnel"?"sites opérationnels":mode==="instance"?"sites en instance d'affectation":mode==="contractuel"?"sites avec effectif contractuel":mode==="realise"?"sites avec effectif réalisé":mode==="surplus"?"sites avec effectif surplus":"sites avec manque d'effectif"} · ${shown} site(s) affiché(s) <button class="btn btn-ghost text-xs ml-3" onclick="filterSitesSituation('all')">Réinitialiser</button>`;}
   }
 }
 function siteMovementHistoryHTML(site){
