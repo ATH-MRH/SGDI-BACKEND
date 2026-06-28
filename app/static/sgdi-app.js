@@ -17268,16 +17268,17 @@ function renderFiches(view,sub){
     refresh:'<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a9 9 0 1 0 2 8"/></svg>'
   }[type]||'');
   const activeAdvancedFilters=[fpFilter.recruitFrom,fpFilter.recruitTo,fpFilter.ageMin,fpFilter.ageMax].filter(Boolean).length;
+  const showFichePrintBadgeActions=session?.transverse!=="ops";
   view.innerHTML=`<div class="fp-page">
     <div class="fp-head">
       <div>
         <h1>${title}</h1>
         <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Consultez et gérez les fiches de vos employés"}${safeSocFilter?` · <span>${escapeHTML(safeSocFilter)}</span>`:""}</p>
       </div>
-      <div class="fp-head-actions">
+      ${showFichePrintBadgeActions?`<div class="fp-head-actions">
         <a href="#/fiches/imprimer" class="fp-head-action fp-head-action-secondary"><svg viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span>Imprimer</span></a>
         <a href="#/fiches/badge" class="fp-head-action fp-head-action-primary"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.7-1.5 1.7-2 3-2s2.3.5 3 2M15 10h3M15 14h3"/></svg><span>Badges</span></a>
-      </div>
+      </div>`:""}
     </div>
     <div class="fp-summary-grid">
       ${summaryCards.map(([label,note,desc,color,pct,route,icon])=>`${route?`<a href="#/${route}" class="fp-summary-card" style="--metric-color:${color};text-decoration:none;color:inherit">`:`<div class="fp-summary-card" style="--metric-color:${color}">`}<div class="fp-metric-icon">${metricIcon(icon)}</div><div class="fp-metric-copy"><span>${label}</span><strong>${note}</strong><small>${desc}</small></div><span class="fp-metric-trend">${pct}%</span>${route?`</a>`:`</div>`}`).join("")}
