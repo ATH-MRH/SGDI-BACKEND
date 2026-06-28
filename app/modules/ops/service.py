@@ -146,11 +146,14 @@ def site_situation(db: Session, site_id: int):
             )
     realized = len(assignments)
     missing = max((site.contractual_staff or 0) - realized, 0)
+    surplus = max(realized - (site.contractual_staff or 0), 0)
     return {
         "site": site,
         "contractual_staff": site.contractual_staff,
         "realized_staff": realized,
         "missing_staff": missing,
+        "surplus_staff": surplus,
+        "operational_site": site_is_operational(site),
         "by_group": by_group,
     }
 
@@ -158,7 +161,7 @@ def site_situation(db: Session, site_id: int):
 def general_sites_situation(db: Session):
     sites = db.execute(select(Site)).scalars().all()
     if not sites:
-        return {"active_sites": 0, "instance_assignment_sites": 0, "operational_sites": 0, "contractual_staff": 0, "realized_staff": 0, "missing_staff": 0, "sites": []}
+        return {"active_sites": 0, "instance_assignment_sites": 0, "operational_sites": 0, "contractual_staff": 0, "realized_staff": 0, "missing_staff": 0, "surplus_staff": 0, "sites": []}
 
     site_ids = [s.id for s in sites]
     assignments = db.execute(select(Assignment).where(Assignment.active == 1, Assignment.site_id.in_(site_ids))).scalars().all()
@@ -183,6 +186,7 @@ def general_sites_situation(db: Session):
         site_assignments = by_site.get(s.id, [])
         realized = len(site_assignments)
         missing = max((s.contractual_staff or 0) - realized, 0)
+        surplus = max(realized - (s.contractual_staff or 0), 0)
         by_group: dict[str, list] = {}
         for a in db.execute(select(Assignment).where(Assignment.site_id == s.id, Assignment.active == 1)).scalars().all():
             grp = a.group_code or "A"
@@ -193,7 +197,7 @@ def general_sites_situation(db: Session):
                     "code": emp.code, "name": f"{emp.last_name} {emp.first_name}",
                     "position": a.position or emp.position, "start_date": a.start_date,
                 })
-        rows.append({"site": s, "contractual_staff": s.contractual_staff, "realized_staff": realized, "missing_staff": missing, "by_group": by_group})
+        rows.append({"site": s, "contractual_staff": s.contractual_staff, "realized_staff": realized, "missing_staff": missing, "surplus_staff": surplus, "operational_site": site_is_operational(s), "by_group": by_group})
 
     return {
         "active_sites": sum(1 for s in sites if s.active),
@@ -202,6 +206,7 @@ def general_sites_situation(db: Session):
         "contractual_staff": sum(r["contractual_staff"] or 0 for r in rows),
         "realized_staff": sum(r["realized_staff"] for r in rows),
         "missing_staff": sum(r["missing_staff"] for r in rows),
+        "surplus_staff": sum(r["surplus_staff"] for r in rows),
         "sites": rows,
     }
 

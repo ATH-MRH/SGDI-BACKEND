@@ -145,6 +145,7 @@ def _recompute_situation_totals(rows: list) -> dict:
         "contractual_staff": sum(r["contractual_staff"] or 0 for r in rows),
         "realized_staff": sum(r["realized_staff"] for r in rows),
         "missing_staff": sum(r["missing_staff"] for r in rows),
+        "surplus_staff": sum(r.get("surplus_staff", max((r.get("realized_staff") or 0) - (r.get("contractual_staff") or 0), 0)) for r in rows),
         "sites": rows,
     }
 
