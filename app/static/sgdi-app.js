@@ -1697,8 +1697,8 @@ async function backfillLegacyAssignmentsToPostgres(){
     const employeeId=sqlBackendId(a.backendId);
     if(!employeeId||activeSql.has(String(employeeId))||String(a.statut||"").toLowerCase()!=="actif")continue;
     const aff=typeof opsEmployeeLiveAffectation==="function"?opsEmployeeLiveAffectation(a):(a.affectationCourante||{});
-    if(!aff?.siteId)continue;
-    const site=(db.sites||[]).find(s=>String(s.id)===String(aff.siteId)||String(s.backendId||"")===String(aff.siteBackendId||aff.site_id||""));
+    if(!(aff?.siteId||aff?.siteBackendId||aff?.site_id||aff?.siteName))continue;
+    const site=(db.sites||[]).find(s=>siteMatchesReference(s,{...aff,siteId:aff.siteId,siteBackendId:aff.siteBackendId,site_id:aff.site_id}));
     const siteId=sqlBackendId(aff.siteBackendId||site?.backendId);
     if(!siteId)continue;
     try{
@@ -14198,19 +14198,22 @@ async function renderSitesServer(view){
   const globalQ=sessionStorage.getItem("sitesGlobalSearch")||"";
   sgdiShowDataLoadingBar("Chargement des sites...");
   try{
-    const [result,mapRowsRaw,globalSearchRaw,situationData,statsData]=await Promise.all([
+    const [result,mapRowsRaw,globalSearchRaw,statsData]=await Promise.all([
       SGDI.sites.page({society:soc||undefined,page,page_size:12}),
       SGDI.sites.list({society:soc||undefined}).catch(()=>[]),
       globalQ?SGDI.sites.page({society:soc||undefined,q:globalQ,page:1,page_size:50}).catch(()=>null):Promise.resolve(null),
-      session?.transverse!=="materiel"?SGDI.sites.situation(soc?{society:soc}:undefined).catch(()=>null):Promise.resolve(null),
       session?.transverse!=="materiel"&&window.SGDI_API?.ui?.sidebarStats?window.SGDI_API.ui.sidebarStats(soc?{society:soc}:{}).catch(()=>null):Promise.resolve(null)
     ]);
     if(statsData)window.SGDI_SIDEBAR_STATS=statsData;
-    if(session?.transverse!=="materiel"&&!situationData)throw new Error("Situation sites PostgreSQL indisponible");
     const rows=(result?.items||result?.data||[]).map(siteFromApi);
     const mapRows=(Array.isArray(mapRowsRaw)?mapRowsRaw:[]).map(siteFromApi);
     const globalSearchRows=(globalSearchRaw?.items||globalSearchRaw?.data||[]).map(siteFromApi);
     [...rows,...mapRows,...globalSearchRows].forEach(site=>sgdiUpsertServerItem("sites",site));
+    if(session?.transverse!=="materiel"&&typeof syncAssignmentsFromPostgres==="function"){
+      await syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées avant situation sites",e));
+    }
+    const situationData=session?.transverse!=="materiel"?await SGDI.sites.situation(soc?{society:soc}:undefined).catch(()=>null):null;
+    if(session?.transverse!=="materiel"&&!situationData)throw new Error("Situation sites PostgreSQL indisponible");
     const sites=siteOpsSitesForScope(soc,mapRows.length?mapRows:rows,{onlyExtra:true,includeInactive:true});
     const mapSites=siteOpsSitesForScope(soc,mapRows,{onlyExtra:true});
     const situationBySite=siteBackendSituationMap(situationData);
