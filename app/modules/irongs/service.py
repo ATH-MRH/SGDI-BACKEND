@@ -793,6 +793,68 @@ def _presence_line_upsert(db: Session, data: dict[str, Any]) -> dict[str, Any]:
     return _replace_and_success(db, "feuillePresence", lines, {"item": line})
 
 
+def _presence_bulk_import(db: Session, data: dict[str, Any], user: Any | None) -> dict[str, Any]:
+    _require_admin_action(user)
+    items = data.get("items")
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=422, detail="Aucune ligne de pointage à importer")
+    mode = str(data.get("mode") or "replace").strip().lower()
+    if mode not in {"replace", "skip"}:
+        mode = "replace"
+    closures = _collection_object(db, "feuillePresenceCloture")
+    lines = _collection_list(db, "feuillePresence")
+    imported = skipped = errors = replaced = created = 0
+    samples: list[dict[str, Any]] = []
+    now = _now_iso()
+    actor = _actor_name(user)
+    for pos, raw in enumerate(items):
+        if not isinstance(raw, dict):
+            skipped += 1
+            continue
+        date_value = str(raw.get("date") or "").strip()
+        agent_id = str(raw.get("agentId") or "").strip()
+        if not date_value or not agent_id:
+            errors += 1
+            if len(samples) < 20:
+                samples.append({"row": pos + 1, "error": "Date ou agent manquant"})
+            continue
+        if closures.get(date_value):
+            skipped += 1
+            if len(samples) < 20:
+                samples.append({"row": pos + 1, "date": date_value, "agentId": agent_id, "error": "Feuille clôturée"})
+            continue
+        line = next((row for row in lines if str(row.get("date")) == date_value and str(row.get("agentId")) == agent_id), None)
+        if line and line.get("valide"):
+            skipped += 1
+            if len(samples) < 20:
+                samples.append({"row": pos + 1, "date": date_value, "agentId": agent_id, "error": "Ligne validée"})
+            continue
+        if line and mode == "skip":
+            skipped += 1
+            continue
+        if not line:
+            line = {"id": raw.get("id") or f"fpq_{date_value}_{agent_id}", "date": date_value, "agentId": agent_id, "createdAt": now}
+            lines.append(line)
+            created += 1
+        else:
+            replaced += 1
+        patch = dict(raw.get("patch") or {})
+        patch.pop("valide", None)
+        patch.pop("valideBy", None)
+        patch.pop("valideAt", None)
+        line.update(patch)
+        line["date"] = date_value
+        line["agentId"] = agent_id
+        line["updatedAt"] = now
+        line["importSource"] = data.get("source") or "excel_pointage"
+        line["importedAt"] = now
+        line["importedBy"] = actor
+        imported += 1
+    if imported:
+        replace_collection(db, "feuillePresence", lines)
+    return {"status": "success", "data": {"imported": imported, "created": created, "replaced": replaced, "skipped": skipped, "errors": errors, "samples": samples}}
+
+
 def _movement_history_key(item: dict[str, Any]) -> str:
     ref = str(item.get("ordreMouvementNumero") or item.get("mouvementNumero") or "").strip()
     if ref:
@@ -995,6 +1057,8 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         return _presence_day_close(db, str(data.get("date") or ""), False, user, data.get("motif"))
     if action == "upsert-presence-line":
         return _presence_line_upsert(db, data)
+    if action == "import-presence-lines":
+        return _presence_bulk_import(db, data, user)
     if action == "delete-presence-line":
         return _presence_line_delete(db, item_id, data)
     if action == "save-presence-movement":
