@@ -31406,7 +31406,6 @@ const POINTAGE_CODES={
   C:{label:"Congé",color:"#1e40af",bg:"#dbeafe"},
   R:{label:"Récupération",color:"#64748b",bg:"#e2e8f0"},
   AB:{label:"Abandon de poste",color:"#991b1b",bg:"#fee2e2"},
-  AID:{label:"Aïd / jour férié",color:"#0f766e",bg:"#ccfbf1"},
   F1:{label:"Récup. travaillée +1 jour",color:"#b45309",bg:"#fef9c3",isPresent:true},
   F2:{label:"Récup. travaillée +2 jours",color:"#92400e",bg:"#fde68a",isPresent:true},
   F3:{label:"Récup. travaillée +3 jours",color:"#78350f",bg:"#fcd34d",isPresent:true},
@@ -31417,7 +31416,7 @@ const POINTAGE_CODES={
   A2:{label:"Absent 2 jours",color:"#991b1b",bg:"#fca5a5"},
   A3:{label:"Absent 3 jours",color:"#7f1d1d",bg:"#f87171"}
 };
-const FPQ_PRESENCE_OPTIONS=[["P","PRESENT"],["A","ABSENT"],["R","RECUPERATION"],["M","MALADIE"],["C","CONGE"],["S","SUSPENDU"],["AB","ABANDON DE POSTE"],["AID","AÏD / JOUR FÉRIÉ"],["F1","RÉCUP TRAVAILLÉE +1J"],["F2","RÉCUP TRAVAILLÉE +2J"],["F3","RÉCUP TRAVAILLÉE +3J"],["P/F1","MAINTENU EN POSTE +2J"],["P/F2","MAINTENU EN POSTE +3J"],["P/F3","MAINTENU EN POSTE +4J"],["A1","ABSENT 1 JOUR"],["A2","ABSENT 2 JOURS"],["A3","ABSENT 3 JOURS"]];
+const FPQ_PRESENCE_OPTIONS=[["P","PRESENT"],["A","ABSENT"],["R","RECUPERATION"],["M","MALADIE"],["C","CONGE"],["S","SUSPENDU"],["AB","ABANDON DE POSTE"],["F1","RÉCUP TRAVAILLÉE +1J"],["F2","RÉCUP TRAVAILLÉE +2J"],["F3","RÉCUP TRAVAILLÉE +3J"],["P/F1","MAINTENU EN POSTE +2J"],["P/F2","MAINTENU EN POSTE +3J"],["P/F3","MAINTENU EN POSTE +4J"],["A1","ABSENT 1 JOUR"],["A2","ABSENT 2 JOURS"],["A3","ABSENT 3 JOURS"]];
 function fpqPresenceCode(value){const v=String(value||"").toUpperCase();return POINTAGE_CODES[v]?v:""}
 function fpqPresenceOptions(value){const cur=fpqPresenceCode(value);return`<option value="">—</option>${FPQ_PRESENCE_OPTIONS.map(([k,l])=>`<option value="${k}" ${cur===k?"selected":""}>${k} = ${l}</option>`).join("")}`}
 function fpqPresenceSelectStyle(value){
@@ -31425,7 +31424,6 @@ function fpqPresenceSelectStyle(value){
   if(v==="P")return"min-width:145px;background:#dcfce7;color:#166534;border-color:#22c55e;font-weight:800";
   if(["A","AB"].includes(v))return"min-width:145px;background:#fee2e2;color:#991b1b;border-color:#ef4444;font-weight:800";
   if(v==="R")return"min-width:145px;background:#e2e8f0;color:#334155;border-color:#94a3b8;font-weight:800";
-  if(v==="AID")return"min-width:145px;background:#ccfbf1;color:#0f766e;border-color:#14b8a6;font-weight:800";
   if(v==="M")return"min-width:145px;background:#fef3c7;color:#92400e;border-color:#c2410c;font-weight:800";
   if(v==="C")return"min-width:145px;background:#dbeafe;color:#1e40af;border-color:#3b82f6;font-weight:800";
   if(v==="S")return"min-width:145px;background:#ede9fe;color:#5b21b6;border-color:#8b5cf6;font-weight:800";
@@ -31536,166 +31534,6 @@ function ptSyncFeuillePresenceMonth(ym){
   (db.feuillePresence||[]).filter(f=>f.date&&f.date.slice(0,7)===ym).forEach(f=>{if(ptApplyPresenceLine(f))changed=true});
   if(ptNormalizeAbandonsForMonth(ym,ptCurrentSoc()))changed=true;
   return changed;
-}
-function ptImportNameKey(value){
-  return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]+/g," ").trim().replace(/\s+/g," ");
-}
-function ptImportAgentAliases(agent){
-  const nom=agent?.nom||"",prenom=agent?.prenom||"",mat=agent?.matricule||"";
-  return [nom+" "+prenom,prenom+" "+nom,nom,mat].map(ptImportNameKey).filter(Boolean);
-}
-function ptImportFindAgent(name){
-  const key=ptImportNameKey(name);
-  if(!key)return null;
-  const agents=db.agents||[];
-  let found=agents.find(a=>ptImportAgentAliases(a).includes(key));
-  if(found)return found;
-  const parts=key.split(" ").filter(Boolean);
-  if(parts.length>=2){
-    const scored=agents.map(a=>{
-      const aliases=ptImportAgentAliases(a);
-      const score=Math.max(0,...aliases.map(alias=>parts.filter(p=>alias.includes(p)).length));
-      return {agent:a,score};
-    }).filter(x=>x.score>=Math.min(2,parts.length)).sort((a,b)=>b.score-a.score);
-    if(scored.length===1||scored[0]?.score>scored[1]?.score)return scored[0].agent;
-  }
-  return null;
-}
-function ptImportExcelDate(value){
-  if(value instanceof Date&&!isNaN(value))return value.toISOString().slice(0,10);
-  if(typeof value==="number"&&window.XLSX?.SSF?.parse_date_code){
-    const d=XLSX.SSF.parse_date_code(value);
-    if(d?.y&&d?.m&&d?.d)return `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;
-  }
-  const raw=String(value||"").trim();
-  const m=raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)||raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if(!m)return "";
-  if(m[1].length===4)return `${m[1]}-${String(m[2]).padStart(2,"0")}-${String(m[3]).padStart(2,"0")}`;
-  return `${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
-}
-function ptImportNormalizeCode(value){
-  const raw=String(value||"").trim().toUpperCase().replace(/\s+/g,"");
-  if(!raw||raw==="/")return "";
-  const aliases={PRESENT:"P",PRÉSENT:"P",ABS:"A",ABSENT:"A",REC:"R",REPOS:"R",RECUP:"R",RÉCUP:"R",RECUPERATION:"R",RÉCUPÉRATION:"R",MALADIE:"M",MALADE:"M",CONGE:"C",CONGÉ:"C",SUSPENDU:"S",AÏD:"AID",EID:"AID",FERIE:"AID",FÉRIÉ:"AID"};
-  const code=aliases[raw]||raw;
-  return POINTAGE_CODES[code]?code:"";
-}
-function ptImportBuildRowsFromAOA(aoa,fileName){
-  const header=(aoa||[])[0]||[];
-  const dateCols=header.map((v,i)=>({i,date:ptImportExcelDate(v)})).filter(x=>x.date);
-  const people=[];
-  const unknownCodes=new Set();
-  const unmatched=[];
-  const rows=[];
-  const perAgentAbsence={};
-  for(let r=1;r<(aoa||[]).length;r++){
-    const line=aoa[r]||[];
-    const name=String(line[1]||"").trim();
-    if(!name)continue;
-    const poste=String(line[2]||"").trim();
-    const agent=ptImportFindAgent(name);
-    people.push({row:r+1,name,poste,agent});
-    if(!agent){unmatched.push({row:r+1,name,poste});continue;}
-    perAgentAbsence[agent.id]=0;
-    dateCols.forEach(({i,date})=>{
-      const raw=String(line[i]||"").trim();
-      const code=ptImportNormalizeCode(raw);
-      if(raw&&!code&&raw!=="/")unknownCodes.add(raw);
-      if(!code)return;
-      let finalCode=code;
-      if(code==="A"){
-        perAgentAbsence[agent.id]=(perAgentAbsence[agent.id]||0)+1;
-        if(perAgentAbsence[agent.id]>=3)finalCode="AB";
-      }else if(code==="AB"){
-        perAgentAbsence[agent.id]=(perAgentAbsence[agent.id]||0)+1;
-      }else{
-        perAgentAbsence[agent.id]=0;
-      }
-      const aff=fpqAffectationInfo(agent);
-      rows.push({
-        date,
-        agentId:agent.id,
-        patch:{
-          agentBackendId:agent.backendId||agent.employee_id||"",
-          employee_id:agent.backendId||agent.employee_id||"",
-          matricule:agent.matricule||"",
-          heureArrivee:finalCode,
-          code:finalCode,
-          poste:poste||aff.poste||agent.fonction||"",
-          societe:agent.societe||aff.societe||"",
-          siteId:aff.siteId||"",
-          siteBackendId:aff.siteBackendId||"",
-          siteName:aff.siteName||"",
-          observations:`Import Excel ${fileName||""}${raw&&raw!==finalCode?` · source ${raw}`:""}`.trim()
-        }
-      });
-    });
-  }
-  return {dateCols,people,unmatched,unknownCodes:[...unknownCodes],rows,fileName};
-}
-async function openPointageExcelImport(){
-  if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
-  const input=document.createElement("input");
-  input.type="file";input.accept=".xlsx,.xls,.csv";
-  input.onchange=()=>{const file=input.files&&input.files[0];if(file)readPointageExcelFile(file)};
-  input.click();
-}
-function readPointageExcelFile(file){
-  const reader=new FileReader();
-  reader.onload=()=>{
-    try{
-      const wb=XLSX.read(new Uint8Array(reader.result),{type:"array",cellDates:true});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
-      const result=ptImportBuildRowsFromAOA(aoa,file.name);
-      window.__ptImportPreview=result;
-      openPointageImportPreview(result);
-    }catch(e){toast("Lecture Excel impossible : "+(e.message||e),"error")}
-  };
-  reader.readAsArrayBuffer(file);
-}
-function openPointageImportPreview(result){
-  const dates=result.dateCols.map(x=>x.date);
-  const from=dates[0]||"—",to=dates[dates.length-1]||"—";
-  const okPeople=result.people.filter(p=>p.agent).length;
-  const sample=result.rows.slice(0,12).map(r=>{
-    const a=(db.agents||[]).find(x=>x.id===r.agentId)||{};
-    return `<tr><td>${escapeHTML(r.date)}</td><td>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</td><td>${escapeHTML(r.patch.poste||"")}</td><td class="font-black">${escapeHTML(r.patch.code)}</td></tr>`;
-  }).join("");
-  openModal(`<h3 class="font-black text-lg mb-2">Importer pointage Excel</h3>
-    <p class="text-sm text-slate-500 mb-4">${escapeHTML(result.fileName||"Fichier Excel")} · période ${escapeHTML(from)} → ${escapeHTML(to)}</p>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-      <div class="card p-3 text-center"><div class="text-2xl font-black">${result.people.length}</div><div class="text-xs text-slate-500">Employés Excel</div></div>
-      <div class="card p-3 text-center"><div class="text-2xl font-black text-emerald-700">${okPeople}</div><div class="text-xs text-slate-500">Reconnus ATLAS</div></div>
-      <div class="card p-3 text-center"><div class="text-2xl font-black text-red-700">${result.unmatched.length}</div><div class="text-xs text-slate-500">Non reconnus</div></div>
-      <div class="card p-3 text-center"><div class="text-2xl font-black text-blue-700">${result.rows.length}</div><div class="text-xs text-slate-500">Lignes à écrire</div></div>
-    </div>
-    ${result.unknownCodes.length?`<div class="p-3 rounded-lg mb-3 text-sm" style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412"><b>Codes ignorés :</b> ${escapeHTML(result.unknownCodes.join(", "))}</div>`:""}
-    ${result.unmatched.length?`<div class="p-3 rounded-lg mb-3 text-sm" style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b"><b>Employés non reconnus :</b><br>${result.unmatched.slice(0,10).map(x=>`${escapeHTML(x.name)} (${escapeHTML(x.poste||"")})`).join("<br>")}${result.unmatched.length>10?"<br>…":""}</div>`:""}
-    <div class="card overflow-hidden mb-4"><table class="w-full text-xs"><thead><tr><th>Date</th><th>Employé</th><th>Poste</th><th>Code</th></tr></thead><tbody>${sample||`<tr><td colspan="4" class="text-center text-slate-500 p-4">Aucune ligne prête à importer.</td></tr>`}</tbody></table></div>
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <label class="text-xs flex items-center gap-2"><input type="checkbox" id="pt-import-skip-existing"/> Ne pas remplacer les lignes existantes</label>
-      <div class="flex gap-2"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" ${result.rows.length?"":"disabled"} onclick="confirmPointageExcelImport()">Valider l'import</button></div>
-    </div>`);
-}
-async function confirmPointageExcelImport(){
-  const preview=window.__ptImportPreview;
-  if(!preview||!preview.rows?.length){toast("Aucune ligne à importer","error");return}
-  const mode=document.getElementById("pt-import-skip-existing")?.checked?"skip":"replace";
-  if(!confirm(`Importer ${preview.rows.length} ligne(s) dans PostgreSQL ?`))return;
-  try{
-    uiProgressStart();
-    const out=await sgdiRunLegacyAction("import-presence-lines",{data:{items:preview.rows,mode,source:preview.fileName||"excel_pointage"}});
-    await sgdiPullState({silent:true,render:false,force:true,light:true});
-    closeModal();
-    const d=out?.data||{};
-    toast(`Import terminé : ${d.imported||0} ligne(s), ${d.skipped||0} ignorée(s)`,"success");
-    renderView();
-  }catch(e){
-    toast("Import refusé : "+(e.message||e),"error");
-  }finally{
-    uiProgressDone();
-  }
 }
 async function ptValiderSheet(agentId,ym){
   try{
@@ -32763,7 +32601,6 @@ function renderPointageSaisieAuto(){
     <div style="flex:1;min-width:180px;max-width:320px"><label class="label">Recherche</label>${ptSearchBarHTML()}</div>
     <div class="flex-1"></div>
     <div class="flex gap-2">
-      <button class="btn btn-secondary text-xs" onclick="openPointageExcelImport()">⬆ Importer Excel</button>
       <button class="btn btn-primary text-xs" id="pt-auto-refresh-btn" onclick="ptAutoSaisieRefresh()">↺ Actualiser</button>
       <button class="btn btn-secondary text-xs" onclick="ptAutoApercu()">🔍 Aperçu</button>
       <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
