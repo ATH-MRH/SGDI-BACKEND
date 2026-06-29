@@ -31633,15 +31633,11 @@ function ptImportBuildRowsFromAOA(aoa,fileName){
   }
   return {dateCols,people,unmatched,unknownCodes:[...unknownCodes],rows,fileName};
 }
-function openPointageExcelImport(){
+async function openPointageExcelImport(){
+  if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
   const input=document.createElement("input");
   input.type="file";input.accept=".xlsx,.xls,.csv";
-  input.onchange=async()=>{
-    const file=input.files&&input.files[0];
-    if(!file)return;
-    if(!await sgdiEnsureXLSX()){toast("Lecteur Excel indisponible","error");return}
-    readPointageExcelFile(file);
-  };
+  input.onchange=()=>{const file=input.files&&input.files[0];if(file)readPointageExcelFile(file)};
   input.click();
 }
 function readPointageExcelFile(file){
@@ -31701,9 +31697,6 @@ async function confirmPointageExcelImport(){
     uiProgressDone();
   }
 }
-window.openPointageExcelImport=openPointageExcelImport;
-window.readPointageExcelFile=readPointageExcelFile;
-window.confirmPointageExcelImport=confirmPointageExcelImport;
 async function ptValiderSheet(agentId,ym){
   try{
     await sgdiRunLegacyAction("validate-pointage",{data:{agentId,periode:ym}});
