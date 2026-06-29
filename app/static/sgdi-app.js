@@ -342,10 +342,54 @@ function sgdiIsMutatingMethod(method){
 function sgdiCurrentModuleKey(){
   return String((location.hash||"").replace(/^#\/?/,"").split("/")[0]||"dashboard");
 }
-function sgdiCanRenderRealtimeUpdate(){
-  if(document.querySelector(".modal-bg"))return false;
-  const tag=(document.activeElement&&document.activeElement.tagName)||"";
-  return !["INPUT","TEXTAREA","SELECT"].includes(tag);
+function sgdiUserHasActiveInput(){
+  const el=document.activeElement;
+  if(!el)return false;
+  const tag=String(el.tagName||"").toUpperCase();
+  return ["INPUT","TEXTAREA","SELECT"].includes(tag)||!!el.closest?.("[contenteditable='true']");
+}
+function sgdiHasUnsavedUserWork(){
+  if(document.querySelector(".modal-bg"))return true;
+  if(sgdiDirty||sgdiSaveInFlight||sgdiSaveAgain||sgdiFormHasUnsavedChanges)return true;
+  if(sgdiUserHasActiveInput())return true;
+  if(document.querySelector("form[data-dirty='1'],[data-dirty='1']"))return true;
+  if(document.querySelector(".rh-save-submit:not(:disabled),.rh-save-cancel:not(:disabled)"))return true;
+  return false;
+}
+let sgdiRefreshNotice=false;
+let sgdiRefreshNoticeReason="";
+let sgdiRefreshNoticeAt=0;
+function sgdiRefreshNoticeLabel(){
+  return sgdiRefreshNoticeReason||"Nouvelles données disponibles";
+}
+function sgdiMarkRefreshAvailable(reason){
+  sgdiRefreshNotice=true;
+  sgdiRefreshNoticeReason=reason||"Nouvelles données disponibles";
+  sgdiRefreshNoticeAt=Date.now();
+  sgdiRenderRefreshNotice();
+  if(typeof toast==="function"&&!document.hidden)toast(sgdiRefreshNoticeLabel()+" — cliquez sur ↻ pour actualiser.","info");
+}
+function sgdiClearRefreshAvailable(){
+  sgdiRefreshNotice=false;
+  sgdiRefreshNoticeReason="";
+  sgdiRefreshNoticeAt=0;
+  sgdiRenderRefreshNotice();
+}
+function sgdiRenderRefreshNotice(){
+  try{
+    document.querySelectorAll("[data-sgdi-refresh-notice]").forEach(el=>{
+      el.textContent=sgdiRefreshNotice?sgdiRefreshNoticeLabel():"";
+      el.style.display=sgdiRefreshNotice?"inline-flex":"none";
+    });
+    document.querySelectorAll(".ws-refresh-tab").forEach(btn=>{
+      btn.classList.toggle("has-update",!!sgdiRefreshNotice);
+      btn.title=sgdiRefreshNotice?sgdiRefreshNoticeLabel()+" — actualiser":"Actualiser";
+      btn.setAttribute("aria-label",btn.title);
+    });
+  }catch(e){}
+}
+function sgdiRefreshNoticeHTML(){
+  return `<span class="sgdi-refresh-notice" data-sgdi-refresh-notice style="${sgdiRefreshNotice?"":"display:none"}">${escapeHTML(sgdiRefreshNoticeLabel())}</span>`;
 }
 function sgdiPublishDataChange(reason){
   const event={source:SGDI_REALTIME_CLIENT_ID,reason:reason||"change",module:sgdiCurrentModuleKey(),at:Date.now()};
@@ -364,14 +408,8 @@ function sgdiScheduleRealtimePull(event){
 async function sgdiRunRealtimePull(event){
   if(sgdiRealtimePullRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||sgdiDirty)return;
   sgdiRealtimePullRunning=true;
-  const currentHash=location.hash;
-  const navStamp=sgdiLastUserNavigationAt;
   try{
-    await sgdiPullState({silent:true,render:false,force:true,auto:true});
-    await sgdiRefreshCountersNow({reason:"realtime-"+(event?.module||"change")});
-    if(sgdiLastUserNavigationAt!==navStamp)return;
-    if(location.hash!==currentHash)location.hash=currentHash;
-    if(sgdiCanRenderRealtimeUpdate()&&typeof render==="function")render();
+    sgdiMarkRefreshAvailable("Nouvelles données enregistrées");
   }catch(e){
     console.warn("Synchronisation temps réel SGDI échouée",e);
   }finally{
@@ -390,7 +428,7 @@ window.addEventListener("storage",event=>{
   if(event.key!==SGDI_REALTIME_STORAGE_KEY||!event.newValue)return;
   try{sgdiScheduleRealtimePull(JSON.parse(event.newValue))}catch(e){}
 });
-window.addEventListener("focus",()=>{if(session&&sgdiAuthToken()&&sgdiPostgresReady&&!sgdiDirty)sgdiRunRealtimePull({source:"focus",module:"focus"})});
+window.addEventListener("focus",()=>{if(session&&sgdiAuthToken()&&sgdiPostgresReady&&!sgdiDirty)sgdiCheckRemoteChanges()});
 sgdiInstallRealtimeBridge();
 function sgdiIsAuthFailure(status,message){
   return status===401||/token invalide|token manquant|session .*expir|unauthorized|not authenticated/i.test(String(message||""));
@@ -634,6 +672,7 @@ let sgdiSseRetryDelay=5000;
 let sgdiEventsLastPull=0;
 let sgdiLastUserNavigationAt=0;
 let sgdiAppVersion=null;
+let sgdiLastRemoteStatsSignature="";
 async function sgdiCheckAppVersion(){
   try{
     const r=await fetch("/api/version",{cache:"no-store"});
@@ -649,6 +688,29 @@ async function sgdiCheckAppVersion(){
   }catch(_){}
 }
 function sgdiMarkUserNavigation(){sgdiLastUserNavigationAt=Date.now()}
+function sgdiStatsSignature(stats){
+  try{return JSON.stringify(stats||{})}catch(e){return""}
+}
+async function sgdiCheckRemoteChanges(){
+  if(sgdiAutoRefreshRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||document.hidden)return null;
+  if(!window.SGDI_API?.ui?.sidebarStats)return null;
+  sgdiAutoRefreshRunning=true;
+  try{
+    const society=sgdiActiveStatsSociety();
+    const stats=await window.SGDI_API.ui.sidebarStats(society?{society}:{});
+    const signature=sgdiStatsSignature(stats);
+    const current=sgdiStatsSignature(window.SGDI_SIDEBAR_STATS);
+    if(signature&&!sgdiLastRemoteStatsSignature)sgdiLastRemoteStatsSignature=current||signature;
+    if(signature&&current&&signature!==current)sgdiMarkRefreshAvailable("Nouvelles données disponibles");
+    await sgdiCheckAppVersion();
+    return stats;
+  }catch(e){
+    console.warn("Vérification des nouvelles données SGDI échouée",e);
+    return null;
+  }finally{
+    sgdiAutoRefreshRunning=false;
+  }
+}
 function sgdiAutoRefreshSettings(){
   if(!db)db={settings:{}};
   if(!db.settings||typeof db.settings!=="object")db.settings={};
@@ -672,16 +734,8 @@ async function sgdiStartEventStream(){
       const now=Date.now();
       if(now-sgdiEventsLastPull<5000)return;
       sgdiEventsLastPull=now;
-      const currentHash=location.hash;
-      const navStamp=sgdiLastUserNavigationAt;
       try{
-        await sgdiPullState({silent:true,render:false,auto:true});
-        await sgdiRefreshCountersNow({reason:"event"});
-        if(sgdiLastUserNavigationAt!==navStamp)return;
-        if(location.hash!==currentHash)location.hash=currentHash;
-        if(Date.now()-(window.__sgdiLastLocalSaveAt||0)<6000)return;
-        if(document.querySelector("form[data-ops-movement-form]"))return;
-        if(typeof render==="function")render();
+        sgdiMarkRefreshAvailable("Nouvelles données enregistrées");
       }catch(e){console.warn("Alerte temps réel SGDI non synchronisée",e)}
     });
     sgdiEventsSource.onopen=()=>{sgdiSseRetryDelay=5000};
@@ -714,17 +768,17 @@ function sgdiStartMessageRefresh(){
     sgdiMessageRefreshRunning=true;
     try{
       const before=dialogueMessagesSignature();
-      const currentHash=location.hash;
-      const navStamp=sgdiLastUserNavigationAt;
-      await sgdiPullState({silent:true,render:false,force:true,auto:true});
-      await sgdiRefreshCountersNow({reason:"messages"});
-      if(sgdiLastUserNavigationAt!==navStamp)return;
-      if(location.hash!==currentHash)location.hash=currentHash;
-      const after=dialogueMessagesSignature();
+      const remote=await sgdiApi("/api/irongs/db?light=1",{method:"GET",legacy:false});
+      const previous=db;
+      let after=before;
+      try{
+        db={...db,dialogue:remote?.dialogue||db.dialogue,messages:remote?.messages||db.messages};
+        after=dialogueMessagesSignature();
+      }finally{
+        db=previous;
+      }
       if(before!==after){
-        dialogueCheckNewMessages();
-        if(dialogueIsOpen())refreshRealtimeFeed();
-        if(sgdiMessageRefreshCanRender()&&!document.querySelector("form[data-ops-movement-form]"))render();
+        sgdiMarkRefreshAvailable("Nouveaux messages disponibles");
       }
     }catch(e){
       console.warn("Actualisation messagerie SGDI échouée",e);
@@ -749,22 +803,8 @@ function sgdiScheduleAutoRefresh(){
   if(!cfg.enabled)return;
   sgdiCheckAppVersion();
   sgdiAutoRefreshTimer=setInterval(async()=>{
-    if(sgdiAutoRefreshRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||sgdiDirty)return;
-    if(document.hidden)return;
-    sgdiAutoRefreshRunning=true;
-    try{
-      const currentHash=location.hash;
-      const navStamp=sgdiLastUserNavigationAt;
-      await sgdiPullState({silent:true,render:false,auto:true});
-      await sgdiRefreshCountersNow({reason:"auto"});
-      await sgdiCheckAppVersion();
-      if(sgdiLastUserNavigationAt!==navStamp)return;
-      if(location.hash!==currentHash)location.hash=currentHash;
-    }catch(e){
-      console.warn("Actualisation automatique SGDI échouée",e);
-    }finally{
-      sgdiAutoRefreshRunning=false;
-    }
+    if(sgdiHasUnsavedUserWork())return;
+    await sgdiCheckRemoteChanges();
   },cfg.intervalSeconds*1000);
 }
 function saveAdminAutoRefreshSettings(form){
@@ -842,8 +882,8 @@ async function refreshDemandesPersonnelFromPostgres(options){
       demandesPersonnelKnownIds=new Set(data.map(d=>String(d.id||d.ref||"")).filter(Boolean));
       demandesPersonnelLastOpenCount=demandePersonnelOpenCount();
       renderSidebar();
-      const h=(location.hash||"").slice(2);
-      if(opt.render||h.startsWith("demandes_personnel"))renderView();
+      if(opt.render)renderView();
+      else sgdiMarkRefreshAvailable("Nouvelles demandes personnel disponibles");
       if((newIds.length||demandePersonnelOpenCount()>previousOpen)&&!opt.mute){
         playDemandePersonnelSound();
         if(typeof toast==="function")toast("Nouvelle demande personnel reçue","info");
@@ -3895,6 +3935,10 @@ function topbarStructureTabsHTML(){return""}  // Déplacé dans workspaceTabsBar
 async function refreshWorkspace(){
   const btn=document.querySelector(".ws-refresh-tab");
   try{
+    if(sgdiHasUnsavedUserWork()){
+      const ok=confirm("Une saisie ou une fenêtre est en cours. Actualiser maintenant peut remplacer l'affichage en cours.\n\nVoulez-vous actualiser quand même ?");
+      if(!ok)return;
+    }
     if(btn){
       btn.disabled=true;
       btn.classList.add("is-refreshing");
@@ -3904,6 +3948,7 @@ async function refreshWorkspace(){
     const loaded=await sgdiPullState({silent:true,render:false,force:true});
     if(!loaded)throw new Error("PostgreSQL indisponible");
     await sgdiRefreshCountersNow({reason:"manual"});
+    sgdiClearRefreshAvailable();
     render();
     if(typeof toast==="function")toast("Données actualisées","success");
   }catch(e){
@@ -3928,8 +3973,8 @@ function workspaceTabsBarHTML(){
   </div>`;
   if(visible.length===0)return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
-    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}</div>
-    <button type="button" class="ws-refresh-tab" onclick="window.refreshWorkspace()" title="Actualiser" aria-label="Actualiser">↻</button>
+    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}</div>
+    <button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button>
   </div>`;
   const activeKey=String(session.transverse||"");
   const tabs=visible.map(i=>{
@@ -3949,8 +3994,8 @@ function workspaceTabsBarHTML(){
   }).join("");
   return `<div class="ws-browser-chrome no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar">${tabs}</div>
-    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}</div>
-    <button type="button" class="ws-refresh-tab" onclick="window.refreshWorkspace()" title="Actualiser" aria-label="Actualiser">↻</button>
+    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}</div>
+    <button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button>
   </div>`;
 }
 function hexToIconBg(hex){
@@ -32366,8 +32411,8 @@ async function fpqLiveRefresh(){
 }
 function fpqStartLiveRefresh(){
   fpqStopLiveRefresh();
-  fpqLiveRefresh(); // fetch immediately on tab open
-  _fpqLiveTimer=setInterval(fpqLiveRefresh,30000);
+  const dot=document.getElementById("fpq-live-dot");
+  if(dot)dot.style.background="#64748b";
 }
 function fpqStopLiveRefresh(){clearInterval(_fpqLiveTimer);_fpqLiveTimer=null;}
 

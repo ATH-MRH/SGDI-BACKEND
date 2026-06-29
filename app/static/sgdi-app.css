@@ -4627,6 +4627,22 @@ body:has(.company-portal) #app{
   gap:5px;
   padding:0 7px;
 }
+.sgdi-refresh-notice{
+  align-items:center;
+  max-width:245px;
+  min-height:26px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:rgba(251,191,36,.22);
+  border:1px solid rgba(245,158,11,.42);
+  color:#7c2d12;
+  font-size:11px;
+  font-weight:900;
+  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
 .ws-browser-chrome .topbar-dialogue-btn,
 .ws-browser-chrome .topbar-notification-btn{
   width:34px!important;
@@ -4677,6 +4693,15 @@ body:has(.company-portal) #app{
   cursor:pointer;
 }
 .ws-refresh-tab:hover{background:rgba(255,255,255,.24);color:#17355f}
+.ws-refresh-tab.has-update{
+  background:#f59e0b;
+  color:#fff;
+  box-shadow:0 0 0 3px rgba(245,158,11,.18);
+}
+.ws-refresh-tab.has-update:hover{
+  background:#d97706;
+  color:#fff;
+}
 .ws-refresh-tab:disabled{
   cursor:wait;
   opacity:.78;
