@@ -5850,3 +5850,49 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 .sgdi-nav-guard-title{font-size:16px;font-weight:800;color:#0f172a}
 .sgdi-nav-guard-msg{font-size:14px;color:#475569;line-height:1.5}
 .sgdi-nav-guard-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+
+/* ── Sidebar masquable ─────────────────────────────────── */
+.sgdi-sidebar-toggle{
+  width:38px!important;
+  min-width:38px!important;
+  height:34px!important;
+  min-height:34px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border:1px solid rgba(255,255,255,.28)!important;
+  border-radius:10px!important;
+  background:rgba(255,255,255,.08)!important;
+  color:#fff!important;
+  box-shadow:none!important;
+  cursor:pointer!important;
+  font-size:20px!important;
+  font-weight:950!important;
+  line-height:1!important;
+  padding:0!important;
+}
+.sgdi-sidebar-toggle:hover,
+.sgdi-sidebar-toggle.is-collapsed{
+  background:#124f8f!important;
+  border-color:#7fb5ee!important;
+  color:#fff!important;
+}
+.sgdi-shell.sgdi-sidebar-collapsed .sidebar{
+  display:none!important;
+}
+.sgdi-shell.sgdi-sidebar-collapsed .sgdi-shell-body{
+  grid-template-columns:1fr!important;
+}
+.sgdi-shell.sgdi-sidebar-collapsed #view{
+  width:100%!important;
+  max-width:none!important;
+}
+@media(max-width:760px){
+  .sgdi-sidebar-toggle{
+    width:34px!important;
+    min-width:34px!important;
+    height:30px!important;
+    min-height:30px!important;
+    font-size:18px!important;
+  }
+}
