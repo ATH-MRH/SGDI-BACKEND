@@ -3066,33 +3066,42 @@ table{width:100%;max-width:100%}
 #view .effectif-table th{
   white-space:nowrap;
 }
-.effectif-sort-head{
+#view .effectif-table th .effectif-sort-head{
   width:100%;
-  display:inline-flex;
-  align-items:center;
-  justify-content:flex-start;
-  gap:6px;
-  border:0;
-  background:transparent;
-  color:inherit;
-  font:inherit;
-  letter-spacing:inherit;
-  text-transform:inherit;
-  cursor:pointer;
-  padding:0;
-  text-align:left;
+  min-height:0!important;
+  height:auto!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:6px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:inherit!important;
+  font:inherit!important;
+  letter-spacing:inherit!important;
+  text-transform:inherit!important;
+  cursor:pointer!important;
+  padding:0!important;
+  margin:0!important;
+  text-align:left!important;
+  white-space:nowrap!important;
 }
-.effectif-sort-head span{
-  color:#94a3b8;
-  font-size:10px;
-  line-height:1;
+#view .effectif-table th .effectif-sort-head span{
+  color:#94a3b8!important;
+  font-size:10px!important;
+  line-height:1!important;
 }
-.effectif-sort-head:hover,
-.effectif-sort-head.is-active{
-  color:#043970;
+#view .effectif-table th .effectif-sort-head:hover,
+#view .effectif-table th .effectif-sort-head.is-active{
+  color:#043970!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
 }
-.effectif-sort-head.is-active span{
-  color:#043970;
+#view .effectif-table th .effectif-sort-head.is-active span{
+  color:#043970!important;
 }
 #view .effectif-table td{
   white-space:normal;
