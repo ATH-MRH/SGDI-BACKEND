@@ -3066,6 +3066,34 @@ table{width:100%;max-width:100%}
 #view .effectif-table th{
   white-space:nowrap;
 }
+.effectif-sort-head{
+  width:100%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:6px;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  letter-spacing:inherit;
+  text-transform:inherit;
+  cursor:pointer;
+  padding:0;
+  text-align:left;
+}
+.effectif-sort-head span{
+  color:#94a3b8;
+  font-size:10px;
+  line-height:1;
+}
+.effectif-sort-head:hover,
+.effectif-sort-head.is-active{
+  color:#043970;
+}
+.effectif-sort-head.is-active span{
+  color:#043970;
+}
 #view .effectif-table td{
   white-space:normal;
 }

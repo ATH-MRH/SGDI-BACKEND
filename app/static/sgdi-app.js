@@ -12070,6 +12070,31 @@ function effectifBulkDeleteToolbarHTML(){
     <button type="button" id="effectif-bulk-delete-btn" class="btn btn-danger text-xs" onclick="deleteSelectedEffectifEmployees()" disabled>Supprimer sélection</button>
   </div>`;
 }
+const EFFECTIF_SORT_COLUMNS={
+  employe:{asc:"nom_asc",desc:"nom_desc"},
+  code:{asc:"mat_asc",desc:"mat_desc"},
+  societe:{asc:"societe_asc",desc:"societe_desc"},
+  poste:{asc:"poste_asc",desc:"poste_desc"},
+  site:{asc:"site_asc",desc:"site_desc"},
+  recrut:{asc:"recrut_asc",desc:"recrut_desc"},
+  statut:{asc:"statut_asc",desc:"statut_desc"},
+  naissance:{asc:"naissance_asc",desc:"naissance_desc"},
+  age:{asc:"age_asc",desc:"age_desc"},
+  situation:{asc:"situation_asc",desc:"situation_desc"}
+};
+function effectifSortHeaderHTML(key,label,extraClass){
+  const cfg=EFFECTIF_SORT_COLUMNS[key];
+  if(!cfg)return `<th${extraClass?` class="${extraClass}"`:""}>${escapeHTML(label)}</th>`;
+  const activeAsc=effectifSort===cfg.asc,activeDesc=effectifSort===cfg.desc;
+  const indicator=activeAsc?"▲":activeDesc?"▼":"↕";
+  const next=activeAsc?cfg.desc:cfg.asc;
+  return `<th${extraClass?` class="${extraClass}"`:""}><button type="button" class="effectif-sort-head ${activeAsc||activeDesc?"is-active":""}" onclick="setEffectifSort('${next}')" title="Trier par ${escapeHTML(label)}">${escapeHTML(label)} <span>${indicator}</span></button></th>`;
+}
+function effectifTableHeadersHTML(options){
+  const opt=options||{};
+  const opsHeaders=opt.ops?effectifSortHeaderHTML("naissance","Naissance")+effectifSortHeaderHTML("age","Age")+effectifSortHeaderHTML("situation","Situation"):"";
+  return `${effectifSortHeaderHTML("employe","Employé")}${effectifSortHeaderHTML("code","Code")}${effectifSortHeaderHTML("societe","Société")}${effectifSortHeaderHTML("poste","Poste")}${effectifSortHeaderHTML("site","Site")}${effectifSortHeaderHTML("recrut","Recrut.")}${opsHeaders}${effectifSortHeaderHTML("statut","Statut")}<th>Action</th>${opt.actionHeader||""}`;
+}
 function employeeListRowHTML(a,filter){
   const aff=agentLiveAffectation(a);
   const deleteId=String(a.backendId||a.id||"");
@@ -12094,13 +12119,12 @@ async function effectifListServerHTML(filter){
   return `<div class="effectif-page"><div class="drh-effectif-list-header"><div class="drh-effectif-title-block"><h1 class="text-2xl font-bold effectif-page-title">${title}</h1><p class="text-sm text-slate-500">${result.total||0} employé(s)${soc?` · ${escapeHTML(soc)}`:" · sociétés autorisées"}</p></div><div class="drh-effectif-search-slot">${effectifHeaderSearchHTML(filter)}</div><div class="drh-effectif-header-spacer"></div></div>
   ${isDrhModuleContext()&&filter!=="instance_affectation"?drhEffectifActionsBarHTML():""}
   ${effectifBulkDeleteToolbarHTML()}
-  ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun employé.</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table"><colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%"><col style="width:108px"><col style="width:128px"></colgroup><thead><tr>${selectHead}<th>Employé</th><th>Code</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th><th>Statut</th><th>Action</th></tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}</div>`;
+  ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun employé.</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table"><colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%"><col style="width:108px"><col style="width:128px"></colgroup><thead><tr>${selectHead}${effectifTableHeadersHTML()}</tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}</div>`;
 }
 function effectifListHTML(filter){
   const data=effectifFilteredData(filter);
   const {list,title,soc,filterSource}=data;
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
-  const opsHeaders=isOpsEffectifContext()?"<th>Naissance</th><th>Age</th><th>Situation</th>":"";
   const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   const sortHTML=`<select class="select" onchange="setEffectifSort(this.value)">
     <option value="nom_asc" ${effectifSort==="nom_asc"?"selected":""}>Nom A → Z</option>
@@ -12127,7 +12151,7 @@ function effectifListHTML(filter){
   ${effectifBulkDeleteToolbarHTML()}
   ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun employé.</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
     <colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%">${isOpsEffectifContext()?`<col style="width:8%"><col style="width:6%"><col style="width:8%">`:""}<col style="width:82px"><col style="width:96px">${actionHeader?`<col style="width:92px">`:""}</colgroup>
-    <thead><tr>${selectHead}<th>Employé</th><th>Code</th><th>Société</th><th>Poste</th><th>Site</th><th>Recrut.</th>${opsHeaders}<th>Statut</th><th>Action</th>${actionHeader}</tr></thead>
+    <thead><tr>${selectHead}${effectifTableHeadersHTML({ops:isOpsEffectifContext(),actionHeader})}</tr></thead>
     <tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table></div>`}</div>`;
 }
 
@@ -12276,7 +12300,36 @@ function renderEffectif(view,filter,stableMode){
   });
 }
 function setEffectifSort(v){effectifSort=v;if(document.getElementById("effectif-list-zone"))setEffectifStableFilter(sessionStorage.getItem("effectifStableFilter")||"actifs");else renderView()}
-function sortEffectif(list,k){const a=list.slice();switch(k){case"nom_asc":a.sort((x,y)=>(x.nom+x.prenom).localeCompare(y.nom+y.prenom));break;case"nom_desc":a.sort((x,y)=>(y.nom+y.prenom).localeCompare(x.nom+x.prenom));break;case"recrut_asc":a.sort((x,y)=>(x.dateRecrutement||"").localeCompare(y.dateRecrutement||""));break;case"recrut_desc":a.sort((x,y)=>(y.dateRecrutement||"").localeCompare(x.dateRecrutement||""));break;case"mat_asc":a.sort((x,y)=>(x.matricule||"").localeCompare(y.matricule||""));break;case"mat_desc":a.sort((x,y)=>(y.matricule||"").localeCompare(x.matricule||""));break}return a}
+function sortEffectif(list,k){
+  const a=list.slice();
+  const text=v=>String(v||"").toLocaleLowerCase("fr");
+  const cmp=(x,y,fn)=>text(fn(x)).localeCompare(text(fn(y)),"fr",{numeric:true,sensitivity:"base"});
+  const aff=a=>agentLiveAffectation(a)||{};
+  const by={
+    nom_asc:(x,y)=>cmp(x,y,z=>(z.nom||"")+" "+(z.prenom||"")),
+    nom_desc:(x,y)=>cmp(y,x,z=>(z.nom||"")+" "+(z.prenom||"")),
+    recrut_asc:(x,y)=>cmp(x,y,z=>z.dateRecrutement||""),
+    recrut_desc:(x,y)=>cmp(y,x,z=>z.dateRecrutement||""),
+    mat_asc:(x,y)=>cmp(x,y,z=>z.matricule||""),
+    mat_desc:(x,y)=>cmp(y,x,z=>z.matricule||""),
+    societe_asc:(x,y)=>cmp(x,y,z=>z.societe||""),
+    societe_desc:(x,y)=>cmp(y,x,z=>z.societe||""),
+    poste_asc:(x,y)=>cmp(x,y,z=>aff(z).poste||z.affectationCourante?.poste||z.fonction||z.position||""),
+    poste_desc:(x,y)=>cmp(y,x,z=>aff(z).poste||z.affectationCourante?.poste||z.fonction||z.position||""),
+    site_asc:(x,y)=>cmp(x,y,z=>aff(z).siteName||""),
+    site_desc:(x,y)=>cmp(y,x,z=>aff(z).siteName||""),
+    statut_asc:(x,y)=>cmp(x,y,z=>z.statut||""),
+    statut_desc:(x,y)=>cmp(y,x,z=>z.statut||""),
+    naissance_asc:(x,y)=>cmp(x,y,z=>z.dateNaissance||""),
+    naissance_desc:(x,y)=>cmp(y,x,z=>z.dateNaissance||""),
+    age_asc:(x,y)=>(ageFromDate(x.dateNaissance)??999)-(ageFromDate(y.dateNaissance)??999),
+    age_desc:(x,y)=>(ageFromDate(y.dateNaissance)??-1)-(ageFromDate(x.dateNaissance)??-1),
+    situation_asc:(x,y)=>cmp(x,y,z=>z.situation||""),
+    situation_desc:(x,y)=>cmp(y,x,z=>z.situation||"")
+  };
+  if(by[k])a.sort(by[k]);
+  return a;
+}
 function inRange(c){const d=today();return c.du<=d&&(!c.au||c.au>=d)}
 
 /* ---- AGENT FORM ---- */
