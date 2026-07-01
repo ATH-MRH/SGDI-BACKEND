@@ -28169,22 +28169,6 @@ function renderDRHDashboard(view){
         <div class="grid grid-2 mt-4 text-sm"><div class="p-3 rounded bg-slate-50"><b>${dashSites}</b><br><span class="text-slate-500">Sites couverts</span></div><div class="p-3 rounded bg-slate-50"><b>${dashIncidents}</b><br><span class="text-slate-500">Incidents ouverts</span></div></div>
       </div>`:""}
     </div>
-    <div class="mb-4">
-      <h3 class="font-bold mb-3">Courbes par rubrique</h3>
-      <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
-        ${miniCurve("Effectif",ag.length,seriesEffectif,"#043970","#/effectif/actifs")}
-        ${miniCurve("Congés",enConge,seriesConges,"#f59e0b","#/conges")}
-        ${miniCurve("Maladies",enMaladie,seriesMaladies,"#c2410c","#/effectif/maladie")}
-        ${miniCurve("Absences",absents,seriesAbsences,"#dc2626","#/effectif/absents")}
-        ${miniCurve("Suspensions",susp,seriesSuspensions,"#7c3aed","#/effectif/suspension")}
-        ${miniCurve("Candidats",candReserve,seriesCandidats,"#4f46e5","#/reserve")}
-        ${miniCurve("Demandes",demandesPersonnel,seriesDemandes,"#0891b2","#/demandes_personnel/dashboard")}
-        ${miniCurve("Incidents",incidentsOuverts,seriesIncidents,"#be123c","#/incidents/site")}
-        ${miniCurve("Contrats",contratsAlerte.length,seriesContrats,"#0f172a","#/contrats/situation")}
-        ${miniCurve("Sites",sites,seriesSites,"#047857","#/sites/actifs")}
-        ${showPayrollCounters?miniCurve("Masse salariale",money(masseSalaires),seriesMasse,"#0f766e","#/paie"):""}
-      </div>
-    </div>
     <div class="card p-5 mb-6" style="border-left:5px solid ${contratsAlerte.length?"#dc2626":"#047857"};background:${contratsAlerte.length?"#fef2f2":"#f0fdf4"}">
       <div class="flex items-center justify-between gap-3 mb-3">
         <div>
