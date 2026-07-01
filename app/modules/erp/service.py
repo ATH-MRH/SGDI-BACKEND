@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import unicodedata
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -12,14 +13,31 @@ from app.modules.drh.models import Candidate, Contract, Employee, Leave
 from app.modules.materiel.models import EmployeeEquipment, StockArticle, StockMovement, Store, Supplier
 from app.modules.ops.models import Assignment, DailyPresence, Event, Site
 
-EXIT_STATUSES = {"sortant", "demissionne", "licencie", "archive", "blackliste"}
-BLOCKING_STATUSES = {"suspendu", "maladie", "conge", "absent", "blackliste"}
+EXIT_STATUSES = {"sortant", "demissionne", "licencie", "archive", "blackliste", "blacklist", "blacklisted"}
+BLOCKING_STATUSES = {"suspendu", "suspended", "maladie", "conge", "absent", "absence", "blackliste", "blacklist", "blacklisted"}
 CANDIDATE_RECRUITED_STATUSES = {
-    "embauche", "embauché", "embauchee", "embauchée",
-    "recrute", "recruté", "recrutee", "recrutée",
-    "employe", "employé", "employee",
+    "embauche", "embauchee",
+    "recrute", "recrutee",
+    "employe", "employee",
 }
-CANDIDATE_ARCHIVED_STATUSES = {"archive", "archived", "archivé", "archivee", "archivée"}
+CANDIDATE_ARCHIVED_STATUSES = {"archive", "archived", "archivee"}
+OPEN_EVENT_EXCLUDED_STATUSES = {
+    "clos", "cloture", "clôture", "cloture", "clôturé", "cloturee", "clôturée",
+    "closed", "termine", "terminé", "terminee", "terminée", "archive", "archivé",
+}
+
+
+def _status_key(value: Any) -> str:
+    text = str(value or "").strip().casefold()
+    return "".join(
+        char for char in unicodedata.normalize("NFKD", text)
+        if not unicodedata.combining(char)
+    )
+
+
+def _sum_statuses(counts: dict[str, int], *aliases: str) -> int:
+    keys = {_status_key(alias) for alias in aliases}
+    return sum(int(value or 0) for key, value in counts.items() if key in keys)
 
 
 @dataclass(frozen=True)
@@ -94,9 +112,9 @@ def _active_candidate_count(rows: list[Candidate]) -> int:
     for row in rows:
         data = row.data if isinstance(row.data, dict) else {}
         statuses = {
-            str(row.status or "").strip().lower(),
-            str(data.get("statut") or "").strip().lower(),
-            str(data.get("status") or "").strip().lower(),
+            _status_key(row.status),
+            _status_key(data.get("statut")),
+            _status_key(data.get("status")),
         }
         archived = bool(
             statuses & CANDIDATE_ARCHIVED_STATUSES
@@ -120,32 +138,47 @@ def _today() -> date:
     return date.today()
 
 
-def _active_contract_employee_ids(db: Session) -> set[int]:
+def _active_contract_employee_ids(db: Session, employee_ids: set[int] | None = None) -> set[int]:
     today = _today()
-    rows = db.execute(
+    stmt = (
         select(Contract.employee_id)
         .where(Contract.status == "actif")
         .where(or_(Contract.end_date.is_(None), Contract.end_date >= today))
-    ).all()
+    )
+    if employee_ids is not None:
+        if not employee_ids:
+            return set()
+        stmt = stmt.where(Contract.employee_id.in_(employee_ids))
+    rows = db.execute(stmt).all()
     return {int(row[0]) for row in rows if row[0] is not None}
 
 
-def _active_assignment_employee_ids(db: Session) -> set[int]:
+def _active_assignment_employee_ids(db: Session, employee_ids: set[int] | None = None) -> set[int]:
     today = _today()
-    rows = db.execute(
+    stmt = (
         select(Assignment.employee_id)
         .where(Assignment.active == 1)
         .where(or_(Assignment.end_date.is_(None), Assignment.end_date >= today))
-    ).all()
+    )
+    if employee_ids is not None:
+        if not employee_ids:
+            return set()
+        stmt = stmt.where(Assignment.employee_id.in_(employee_ids))
+    rows = db.execute(stmt).all()
     return {int(row[0]) for row in rows if row[0] is not None}
 
 
-def _equipped_employee_ids(db: Session) -> set[int]:
-    rows = db.execute(
+def _equipped_employee_ids(db: Session, employee_ids: set[int] | None = None) -> set[int]:
+    stmt = (
         select(EmployeeEquipment.employee_id)
         .where(EmployeeEquipment.status == "attribue")
         .group_by(EmployeeEquipment.employee_id)
-    ).all()
+    )
+    if employee_ids is not None:
+        if not employee_ids:
+            return set()
+        stmt = stmt.where(EmployeeEquipment.employee_id.in_(employee_ids))
+    rows = db.execute(stmt).all()
     return {int(row[0]) for row in rows if row[0] is not None}
 
 
@@ -196,7 +229,7 @@ def employee_operational_state(
     active_assignment_ids: set[int] | None = None,
     equipped_ids: set[int] | None = None,
 ) -> EmployeeOperationalState:
-    raw_status = (employee.status or "").strip().lower()
+    raw_status = _status_key(employee.status)
     has_contract = employee.id in (active_contract_ids or set())
     has_assignment = employee.id in (active_assignment_ids or set())
     has_equipment = employee.id in (equipped_ids or set()) or _is_no_equipment_validated(employee)
@@ -236,9 +269,10 @@ def employee_operational_state(
 
 def employee_operational_states(db: Session, user: User | None = None, society: str | None = None) -> list[EmployeeOperationalState]:
     employees = db.execute(_employee_base_stmt(user, society)).scalars().all()
-    contract_ids = _active_contract_employee_ids(db)
-    assignment_ids = _active_assignment_employee_ids(db)
-    equipped_ids = _equipped_employee_ids(db)
+    employee_ids = {employee.id for employee in employees}
+    contract_ids = _active_contract_employee_ids(db, employee_ids)
+    assignment_ids = _active_assignment_employee_ids(db, employee_ids)
+    equipped_ids = _equipped_employee_ids(db, employee_ids)
     return [
         employee_operational_state(
             employee,
@@ -252,24 +286,23 @@ def employee_operational_states(db: Session, user: User | None = None, society: 
 
 def build_erp_counters(db: Session, user: User | None = None, society: str | None = None) -> dict[str, Any]:
     employee_stmt = _employee_base_stmt(user, society)
-    active_employee_stmt = employee_stmt.where(~func.lower(Employee.status).in_(EXIT_STATUSES))
     employees = db.execute(employee_stmt).scalars().all()
     employee_ids = {employee.id for employee in employees}
     today = _today()
     active_employee_ids = {
         employee.id
         for employee in employees
-        if str(employee.status or "").strip().lower() not in EXIT_STATUSES
+        if _status_key(employee.status) not in EXIT_STATUSES
     }
     status_counts: dict[str, int] = {}
     for employee in employees:
-        key = str(employee.status or "").strip().lower()
+        key = _status_key(employee.status)
         if key:
             status_counts[key] = status_counts.get(key, 0) + 1
     active_employee_count = sum(
         1
         for employee in employees
-        if str(employee.status or "").strip().lower() not in EXIT_STATUSES
+        if _status_key(employee.status) not in EXIT_STATUSES
     )
 
     leaves_stmt = (
@@ -354,8 +387,33 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
         presence_stmt = presence_stmt.where(DailyPresence.employee_id.in_(employee_ids))
     elif societies:
         presence_stmt = presence_stmt.where(False)
+    present_statuses = {"present", "presente", "p"}
+    absent_statuses = {"absent", "absence", "a", "ab", "abandon"}
+    presence_rows_today = db.execute(presence_stmt).scalars().all()
+    presence_present_today = 0
+    presence_absent_today = 0
+    for row in presence_rows_today:
+        data = row.data if isinstance(row.data, dict) else {}
+        keys = {
+            _status_key(row.status),
+            _status_key(data.get("status")),
+            _status_key(data.get("statut")),
+            _status_key(data.get("code")),
+        }
+        if keys & absent_statuses:
+            presence_absent_today += 1
+        elif keys & present_statuses:
+            presence_present_today += 1
 
-    events_stmt = select(Event).where(Event.status != "clos")
+    month_start = today.replace(day=1)
+    month_stmt = select(DailyPresence).where(DailyPresence.presence_date >= month_start).where(DailyPresence.presence_date <= today)
+    if employee_ids:
+        month_stmt = month_stmt.where(DailyPresence.employee_id.in_(employee_ids))
+    elif societies:
+        month_stmt = month_stmt.where(False)
+    validated_month_stmt = month_stmt.where(DailyPresence.closed_at.is_not(None))
+
+    events_stmt = select(Event).where(or_(Event.status.is_(None), ~func.lower(Event.status).in_(OPEN_EVENT_EXCLUDED_STATUSES)))
     if employee_ids or scoped_site_ids:
         events_stmt = events_stmt.where(or_(Event.employee_id.in_(employee_ids or {-1}), Event.site_id.in_(scoped_site_ids or {-1})))
     elif societies:
@@ -371,7 +429,7 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
         "employees": {
             "total": len(employees),
             "non_archived": active_employee_count,
-            "active": status_counts.get("actif", active_employee_count),
+            "active": active_employee_count,
             "operational_active": by_state.get("actif_operationnel", 0),
             "preparation": by_state.get("en_preparation_operationnelle", 0),
             "without_contract": missing_steps["contrat"],
@@ -380,22 +438,26 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
             "without_installation_pv": missing_steps["pv_installation"],
             "leave_current": leave_count,
             "sick_leave_current": sick_leave_count,
-            "absent": status_counts.get("absent", 0),
-            "suspended": status_counts.get("suspendu", 0),
-            "blacklisted": status_counts.get("blackliste", 0) + status_counts.get("blacklist", 0),
+            "absent": _sum_statuses(status_counts, "absent", "absence"),
+            "suspended": _sum_statuses(status_counts, "suspendu", "suspendue", "suspended"),
+            "blacklisted": _sum_statuses(status_counts, "blackliste", "blacklisté", "blacklist", "blacklisted"),
             "by_state": by_state,
             "by_status": status_counts,
         },
         "drh": {
             "candidates_total": _active_candidate_count(candidate_rows),
-            "candidates_reserve": sum(1 for row in candidate_rows if str(row.status or "").strip().lower() in {"reserve", "réserve"}),
+            "candidates_reserve": sum(1 for row in candidate_rows if _status_key(row.status) in {"reserve", "reserved"}),
             "contracts_active": contracts_active,
         },
         "ops": {
             "sites_total": len(scoped_sites),
             "sites_active": sum(1 for site in scoped_sites if site.active == 1),
             "assignments_active": assignments_active,
-            "presence_today": _count(db, presence_stmt),
+            "presence_today": len(presence_rows_today),
+            "presence_present_today": presence_present_today,
+            "presence_absent_today": presence_absent_today,
+            "presence_month": _count(db, month_stmt),
+            "presence_validated_month": _count(db, validated_month_stmt),
             "events_open": _count(db, events_stmt),
         },
         "materiel": {
@@ -423,14 +485,15 @@ def _employee_extra_values(employee: Employee) -> dict[str, Any]:
 
 def operational_preparation_rows(db: Session, user: User | None = None, society: str | None = None) -> dict[str, Any]:
     employees = db.execute(_employee_base_stmt(user, society).order_by(Employee.last_name, Employee.first_name, Employee.id)).scalars().all()
-    contract_ids = _active_contract_employee_ids(db)
-    assignment_ids = _active_assignment_employee_ids(db)
-    equipped_ids = _equipped_employee_ids(db)
+    employee_ids = {employee.id for employee in employees}
+    contract_ids = _active_contract_employee_ids(db, employee_ids)
+    assignment_ids = _active_assignment_employee_ids(db, employee_ids)
+    equipped_ids = _equipped_employee_ids(db, employee_ids)
     rows: list[dict[str, Any]] = []
     counters = {"contrat": 0, "dotation": 0, "affectation": 0, "pv_installation": 0}
 
     for employee in employees:
-        raw_status = (employee.status or "").strip().lower()
+        raw_status = _status_key(employee.status)
         if raw_status in EXIT_STATUSES:
             continue
         state = employee_operational_state(

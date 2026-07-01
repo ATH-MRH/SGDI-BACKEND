@@ -4040,12 +4040,18 @@ function topbarCounterGlyph(label){
   if(L.includes("SITUATION"))return"📈";
   return"📊";
 }
+function counterNumericValue(value){
+  if(typeof value==="number")return Number.isFinite(value)?value:0;
+  const raw=String(value??"").replace(/\s/g,"").replace(",",".").replace(/[^\d.-]/g,"");
+  const n=Number(raw);
+  return Number.isFinite(n)?n:0;
+}
 function moduleCounterItemHTML(item,total){
-  const base=Math.max(1,item.pctBase??total??0);
-  const pct=item.pct!==undefined?item.pct:Math.round((Number(item.value)||0)/base*100);
+  const numericValue=counterNumericValue(item.value);
+  const base=Math.max(1,counterNumericValue(item.pctBase??total??0));
+  const pct=item.pct!==undefined?counterNumericValue(item.pct):Math.round(numericValue/base*100);
   const route=item.route||"#";
   const href=route.startsWith("#")?route:"#/"+route.replace(/^\/+/,"");
-  const numericValue=Number(item.value)||0;
   const label=String(item.label||"");
   const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(pct+"%"));
   const glyph=topbarCounterGlyph(label);
@@ -4092,17 +4098,22 @@ function moduleCountersRibbon(items){
   const visibleItems=(items||[]).filter(item=>!hiddenCounterLabels.has(String(item?.label||"").trim().toUpperCase()));
   if(!visibleItems.length)return"";
   const ordered=applyCounterOrder(moduleCounterCurrentModule(),visibleItems);
-  const total=ordered.reduce((s,x)=>s+(Number(x.value)||0),0);
+  const total=ordered.reduce((s,x)=>s+counterNumericValue(x.value),0);
   return `<div class="module-counters-ribbon drh-workforce-ribbon no-print" style="--ribbon-count:${Math.min(Math.max(ordered.length,1),12)};height:auto!important;min-height:68px!important;overflow-y:visible!important" data-no-lang="1">${ordered.map(i=>moduleCounterItemHTML(i,total)).join("")}</div>`;
 }
-function sgdiErpStatsForScope(scopeSoc){
+function sgdiBackendStatsForScope(scopeSoc){
   const stats=window.SGDI_SIDEBAR_STATS;
-  if(!stats||!stats.erp)return null;
+  if(!stats||typeof stats!=="object")return null;
   const active=String(stats.scope?.active_society||"").trim();
   const scope=String(scopeSoc||"").trim();
   if(scope&&active&&active!==scope)return null;
   if(scope&&!active)return null;
   if(!scope&&active)return null;
+  return stats;
+}
+function sgdiErpStatsForScope(scopeSoc){
+  const stats=sgdiBackendStatsForScope(scopeSoc);
+  if(!stats||!stats.erp)return null;
   return stats.erp;
 }
 function sgdiErpEmployeeCounters(scopeSoc){
@@ -4110,6 +4121,9 @@ function sgdiErpEmployeeCounters(scopeSoc){
 }
 function sgdiErpModuleCounters(module,scopeSoc){
   return sgdiErpStatsForScope(scopeSoc)?.[module]||null;
+}
+function sgdiBackendModuleCounters(module,scopeSoc){
+  return sgdiBackendStatsForScope(scopeSoc)?.[module]||null;
 }
 const sgdiPendingDotationCountCache=new Map();
 function materialPendingDotationCountForSoc(scopeSoc){
@@ -4196,35 +4210,26 @@ function moduleCountersRibbonHTML(){
   if(root==="fiches"||root==="badge")return"";
   const module=session.transverse||sgdiCurrentAlertModule()||root;
   const scopeSoc=(module==="drh"?(typeof drhActiveSocieteFilter==="function"&&drhActiveSocieteFilter()):(typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter()))||session?.societe||(typeof mySoc==="function"?mySoc():"")||"";
-  const allAgents=(db.agents||[]).filter(a=>!scopeSoc||a.societe===scopeSoc);
-  const activeAgents=allAgents.filter(employeeIsActive);
-  const sites=siteOpsSitesForScope(scopeSoc);
-  const sitesActifs=sites;
-  const todayRows=(db.feuillePresence||[]).filter(f=>f.date===today()&&(!scopeSoc||f.societe===scopeSoc));
-  const incidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&(!scopeSoc||i.societe===scopeSoc||sites.some(s=>s.id===i.siteId)));
   if(module==="drh"||(session.transverse==="ops"&&root==="effectif")){
-    const ag=module==="drh"&&typeof drhAgentsList==="function"?drhAgentsList():allAgents;
-    const agIds=new Set(ag.map(a=>a.id));
-    const co=(db.conges||[]).filter(c=>agIds.has(c.agentId));
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
     const erpDrh=sgdiErpModuleCounters("drh",scopeSoc);
-    const total=Math.max(1,erpEmp?.total??ag.length);
-    const actifs=sgdiDisplayActiveEmployees(erpEmp,ag.filter(agentIsOperational).length);
-    const activeHeadcount=erpEmp?.non_archived??ag.filter(employeeIsActive).length;
-    const sansDotation=erpEmp?.without_equipment??materialPendingDotationCountForSoc(scopeSoc);
-    const sansAffectation=erpEmp?.without_assignment??ag.filter(agentNeedsAffectation).length;
-    const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
-    const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
-    const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=(()=>{const td=today();const local=ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length;return Math.max(erpEmp?.absent??0,local);})();
-    const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
-    const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
-    const reserveCandidates=erpDrh?.candidates_reserve??(db.candidats||[]).filter(c=>(!scopeSoc||c.societe===scopeSoc)&&c.statut==="reserve").length;
-    const reserveTotal=Math.max(1,erpDrh?.candidates_total??(db.candidats||[]).filter(c=>!scopeSoc||c.societe===scopeSoc).length);
-    const missionEnCours=(db.missions||[]).filter(m=>(!scopeSoc||m.societe===scopeSoc)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
-    const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
-    const dotationRoute=session.transverse==="ops"?"ops/instance_dotation":"materiel/dotation";
-    const opsSiteCounter={label:"NBR SITE",value:opsSitesActiveCount()??sitesActifs.length,color:"#043970",route:"sites/actifs",sub:"site(s)"};
+    const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
+    if(!erpEmp||!erpDrh||!erpOps)return"";
+    const total=Math.max(1,counterNumericValue(erpEmp.total));
+    const actifs=counterNumericValue(erpEmp.active);
+    const activeHeadcount=counterNumericValue(erpEmp.non_archived||erpEmp.active||erpEmp.total);
+    const sansDotation=counterNumericValue(erpEmp.without_equipment);
+    const sansAffectation=counterNumericValue(erpEmp.without_assignment);
+    const enConge=counterNumericValue(erpEmp.leave_current);
+    const enMaladie=counterNumericValue(erpEmp.sick_leave_current);
+    const absents=counterNumericValue(erpEmp.absent);
+    const susp=counterNumericValue(erpEmp.suspended);
+    const blacklist=counterNumericValue(erpEmp.blacklisted);
+    const reserveCandidates=counterNumericValue(erpDrh.candidates_reserve);
+    const reserveTotal=Math.max(1,counterNumericValue(erpDrh.candidates_total));
+    const missionEnCours=counterNumericValue(erpOps.missions_current);
+    const missionTotal=Math.max(1,missionEnCours);
+    const opsSiteCounter={label:"NBR SITE",value:counterNumericValue(erpOps.sites_active),color:"#043970",route:"sites/actifs",sub:"site(s)"};
     const prepCounters=effectifConfigSettings().showPreparationCounters?[
       {label:"SANS DOTATION",value:sansDotation,color:"#0ea5e9",route:"effectif/preparation_dotation",pctBase:total},
       {label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total}
@@ -4243,30 +4248,27 @@ function moduleCountersRibbonHTML(){
     ]);
   }
   if(module==="ops"){
-    const ag=allAgents;
-    const agIds=new Set(ag.map(a=>a.id));
-    const co=(db.conges||[]).filter(c=>agIds.has(c.agentId));
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
-    const total=Math.max(1,erpEmp?.total??ag.length);
-    const actifs=sgdiDisplayActiveEmployees(erpEmp,ag.filter(agentIsOperational).length);
-    const activeHeadcount=erpEmp?.non_archived??ag.filter(employeeIsActive).length;
-    const sansAffectation=erpEmp?.without_assignment??ag.filter(agentNeedsAffectation).length;
-    const dotSoc=scopeSoc||(typeof drhActiveSocieteFilter==="function"?drhActiveSocieteFilter():"")||"";
-    const sansDotation=erpEmp?.without_equipment??materialPendingDotationCountForSoc(dotSoc);
-    const attentePv=erpEmp?.without_installation_pv??ag.filter(agentNeedsInstallationPV).length;
-    const missionEnCours=(db.missions||[]).filter(m=>(!scopeSoc||m.societe===scopeSoc)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
-    const missionTotal=Math.max(1,(db.missions||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length);
-    const enConge=erpEmp?.leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
-    const enMaladie=erpEmp?.sick_leave_current??ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-    const absents=(()=>{const td=today();const local=ag.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length;return Math.max(erpEmp?.absent??0,local);})();
-    const susp=erpEmp?.suspended??ag.filter(a=>a.statut==="suspendu").length;
-    const blacklist=erpEmp?.blacklisted??ag.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
+    const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
+    if(!erpEmp||!erpOps)return"";
+    const total=Math.max(1,counterNumericValue(erpEmp.total));
+    const actifs=counterNumericValue(erpEmp.active);
+    const activeHeadcount=counterNumericValue(erpEmp.non_archived||erpEmp.active||erpEmp.total);
+    const sansAffectation=counterNumericValue(erpEmp.without_assignment);
+    const sansDotation=counterNumericValue(erpEmp.without_equipment);
+    const missionEnCours=counterNumericValue(erpOps.missions_current);
+    const missionTotal=Math.max(1,missionEnCours);
+    const enConge=counterNumericValue(erpEmp.leave_current);
+    const enMaladie=counterNumericValue(erpEmp.sick_leave_current);
+    const absents=counterNumericValue(erpEmp.absent);
+    const susp=counterNumericValue(erpEmp.suspended);
+    const blacklist=counterNumericValue(erpEmp.blacklisted);
     const prepCounters=effectifConfigSettings().showPreparationCounters?[
       {label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total},
       {label:"SANS DOTATION",value:sansDotation,color:"#0ea5e9",route:"effectif/preparation_dotation",pctBase:total}
     ]:[];
     return moduleCountersRibbon([
-      {label:"NBR SITE",value:opsSitesActiveCount()??sitesActifs.length,color:"#043970",route:"sites/actifs",sub:"site(s)"},
+      {label:"NBR SITE",value:counterNumericValue(erpOps.sites_active),color:"#043970",route:"sites/actifs",sub:"site(s)"},
       {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/operationnels",pctBase:Math.max(1,activeHeadcount)},
       ...prepCounters,
       {label:"MISSION EN COURS",value:missionEnCours,color:"#043970",route:"ops/missions",pctBase:missionTotal},
@@ -4278,84 +4280,76 @@ function moduleCountersRibbonHTML(){
     ]);
   }
   if(module==="secretariat"){
-    const courriers=(db.secretariatCourriers||[]).filter(c=>!scopeSoc||c.societe===scopeSoc);
-    const notes=(db.secretariatNotes||[]).filter(n=>!scopeSoc||n.societe===scopeSoc);
-    const archives=courriers.filter(c=>c.archive||c.statut==="archive");
-    const ouverts=courriers.filter(c=>!c.archive&&c.statut!=="archive");
+    const sec=sgdiBackendModuleCounters("secretariat",scopeSoc);
+    if(!sec)return"";
     return moduleCountersRibbon([
-      {label:"COURRIERS",value:courriers.length,color:"#043970",route:"secretariat/courriers"},
-      {label:"EN COURS",value:ouverts.length,color:"#f59e0b",route:"secretariat/courriers",pctBase:Math.max(1,courriers.length)},
-      {label:"NOTES INTERNES",value:notes.length,color:"#0f766e",route:"secretariat/notes"},
-      {label:"ARCHIVES",value:archives.length,color:"#64748b",route:"secretariat/archives",pctBase:Math.max(1,courriers.length)}
+      {label:"COURRIERS",value:counterNumericValue(sec.courriers_total),color:"#043970",route:"secretariat/courriers"},
+      {label:"EN COURS",value:counterNumericValue(sec.courriers_open),color:"#f59e0b",route:"secretariat/courriers",pctBase:Math.max(1,counterNumericValue(sec.courriers_total))},
+      {label:"NOTES INTERNES",value:counterNumericValue(sec.notes_total),color:"#0f766e",route:"secretariat/notes"},
+      {label:"ARCHIVES",value:counterNumericValue(sec.archives_total),color:"#64748b",route:"secretariat/archives",pctBase:Math.max(1,counterNumericValue(sec.courriers_total))}
     ]);
   }
   if(module==="pointage"){
-    const present=todayRows.filter(f=>["present","Présent","P"].includes(f.status||f.statut||f.code)).length;
-    const absent=todayRows.filter(f=>["absence","Absent","A"].includes(f.status||f.statut||f.code)).length;
-    const valide=(db.pointages||[]).filter(p=>!scopeSoc||p.societe===scopeSoc).filter(p=>p.valide||p.valideAt).length;
+    const pt=sgdiBackendModuleCounters("pointage",scopeSoc);
+    if(!pt)return"";
+    const rowsToday=counterNumericValue(pt.presence_today);
     return moduleCountersRibbon([
-      {label:"FEUILLE JOUR",value:todayRows.length,color:"#043970",route:"pointage/feuille",pctBase:Math.max(1,activeAgents.length)},
-      {label:"PRÉSENTS",value:present,color:"#047857",route:"pointage/feuille",pctBase:Math.max(1,todayRows.length)},
-      {label:"ABSENTS",value:absent,color:"#dc2626",route:"pointage/feuille",pctBase:Math.max(1,todayRows.length)},
-      {label:"SAISIE MENSUELLE",value:(db.pointages||[]).filter(p=>!scopeSoc||p.societe===scopeSoc).length,color:"#0ea5e9",route:"pointage/saisie"},
-      {label:"VALIDÉS",value:valide,color:"#7c3aed",route:"pointage/recap"}
+      {label:"FEUILLE JOUR",value:rowsToday,color:"#043970",route:"pointage/feuille",pctBase:Math.max(1,rowsToday)},
+      {label:"PRÉSENTS",value:counterNumericValue(pt.present_today),color:"#047857",route:"pointage/feuille",pctBase:Math.max(1,rowsToday)},
+      {label:"ABSENTS",value:counterNumericValue(pt.absent_today),color:"#dc2626",route:"pointage/feuille",pctBase:Math.max(1,rowsToday)},
+      {label:"SAISIE MENSUELLE",value:counterNumericValue(pt.monthly_rows),color:"#0ea5e9",route:"pointage/saisie"},
+      {label:"VALIDÉS",value:counterNumericValue(pt.validated_month),color:"#7c3aed",route:"pointage/recap"}
     ]);
   }
   if(module==="materiel"){
     const erpMat=sgdiErpModuleCounters("materiel",scopeSoc);
     const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
-    const k=typeof stockSummaryKPI==="function"?stockSummaryKPI():{totalArticles:(db.stockArticles||[]).length,enAlerte:0,enRupture:0};
-    const articles=(db.stockArticles||[]).filter(a=>!scopeSoc||a.societe===scopeSoc||a.society===scopeSoc);
+    if(!erpMat||!erpEmp)return"";
     return moduleCountersRibbon([
-      {label:"ARTICLES",value:erpMat?.articles_active??(articles.length||k.totalArticles||0),color:"#043970",route:"materiel/articles"},
-      {label:"STOCK CRITIQUE",value:erpMat?.stock_alerts_total??((k.enAlerte||0)+(k.enRupture||0)),color:"#dc2626",route:"materiel/articles"},
-      {label:"MAGASINS",value:erpMat?.stores_total??(db.magasins||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length,color:"#0ea5e9",route:"materiel/magasins"},
-      {label:"FOURNISSEURS",value:erpMat?.suppliers_total??(db.fournisseurs||[]).filter(f=>!scopeSoc||f.societe===scopeSoc).length,color:"#7c3aed",route:"materiel/fournisseurs"},
-      {label:"MOUVEMENTS",value:erpMat?.movements_total??(db.stockMouvements||[]).filter(m=>!scopeSoc||m.societe===scopeSoc).length,color:"#f59e0b",route:"materiel/mouvements",showAllPeriods:true},
-      {label:"DOTATIONS",value:erpEmp?.without_equipment??materialPendingDotationCountForSoc(scopeSoc),color:"#047857",route:"materiel/dotation"}
+      {label:"ARTICLES",value:counterNumericValue(erpMat.articles_active),color:"#043970",route:"materiel/articles"},
+      {label:"STOCK CRITIQUE",value:counterNumericValue(erpMat.stock_alerts_total),color:"#dc2626",route:"materiel/articles"},
+      {label:"MAGASINS",value:counterNumericValue(erpMat.stores_total),color:"#0ea5e9",route:"materiel/magasins"},
+      {label:"FOURNISSEURS",value:counterNumericValue(erpMat.suppliers_total),color:"#7c3aed",route:"materiel/fournisseurs"},
+      {label:"MOUVEMENTS",value:counterNumericValue(erpMat.movements_total),color:"#f59e0b",route:"materiel/mouvements",showAllPeriods:true},
+      {label:"DOTATIONS",value:counterNumericValue(erpEmp.without_equipment),color:"#047857",route:"materiel/dotation"}
     ]);
   }
   if(module==="facturation"){
-    const factures=(db.factures||[]).filter(f=>!scopeSoc||f.societe===scopeSoc);
-    const devis=(db.devis||[]).filter(d=>!scopeSoc||d.societe===scopeSoc);
-    const factIds=new Set(factures.map(f=>f.id));
-    const paiements=(db.paiements||[]).filter(p=>factIds.has(p.factureId));
-    const echues=typeof factureStatutPaye==="function"?factures.filter(f=>factureStatutPaye(f).statut==="echue"):[];
+    const fin=sgdiBackendModuleCounters("facturation",scopeSoc);
+    if(!fin)return"";
     return moduleCountersRibbon([
-      {label:"FACTURES",value:factures.length,color:"#043970",route:"facturation/factures"},
-      {label:"PAIEMENTS",value:paiements.length,color:"#047857",route:"facturation/paiements"},
-      {label:"FACTURES ÉCHUES",value:echues.length,color:"#dc2626",route:"facturation/factures"},
-      {label:"AVANCES",value:(db.avances||[]).filter(a=>!scopeSoc||a.societe===scopeSoc).length,color:"#7c3aed",route:"facturation/avances"},
-      {label:"CAISSE",value:(db.caisse||[]).filter(c=>!scopeSoc||c.societe===scopeSoc).length,color:"#f59e0b",route:"facturation/caisse"}
+      {label:"DEVIS",value:counterNumericValue(fin.quotes_total),color:"#0ea5e9",route:"facturation/devis"},
+      {label:"FACTURES",value:counterNumericValue(fin.invoices_total),color:"#043970",route:"facturation/factures"},
+      {label:"PAIEMENTS",value:counterNumericValue(fin.payments_total),color:"#047857",route:"facturation/paiements"},
+      {label:"FACTURES ÉCHUES",value:counterNumericValue(fin.overdue_invoices),color:"#dc2626",route:"facturation/factures"},
+      {label:"AVANCES",value:counterNumericValue(fin.advances_total),color:"#7c3aed",route:"facturation/avances"},
+      {label:"CAISSE",value:counterNumericValue(fin.cash_entries_total),color:"#f59e0b",route:"facturation/caisse"}
     ]);
   }
   if(module==="commercial"){
-    const prospects=(db.prospects||[]).filter(p=>!scopeSoc||p.societe===scopeSoc);
-    const clients=(db.clients||[]).filter(c=>!scopeSoc||c.societe===scopeSoc);
-    const opps=(db.opportunites||[]).filter(o=>!scopeSoc||o.societe===scopeSoc);
-    const visites=(db.visites||[]).filter(v=>!scopeSoc||v.societe===scopeSoc);
-    const nbrSiteTotal=clients.reduce((s,c)=>s+clientNbrSites(c),0);
-    const totalEmployes=clients.reduce((s,c)=>(c.tech_sites||[]).reduce((a,st)=>a+clientSiteEffectif(st),s),0);
+    const com=sgdiBackendModuleCounters("commercial",scopeSoc);
+    if(!com)return"";
     return moduleCountersRibbon([
-      {label:"PROSPECTS",value:prospects.length,color:"#0ea5e9",route:"commercial/prospects"},
-      {label:"CLIENTS ACTIFS",value:clients.filter(c=>c.statut!=="inactif").length,color:"#047857",route:"commercial/clients",pctBase:Math.max(1,clients.length)},
-      {label:"NBR SITE",value:nbrSiteTotal,color:"#0f766e",route:"commercial/clients"},
-      {label:"TOTAL EMPLOYÉS",value:totalEmployes,color:"#7c3aed",route:"commercial/clients"},
-      {label:"OPPORTUNITÉS",value:opps.filter(o=>!["gagnee","perdue"].includes(o.etape)).length,color:"#f59e0b",route:"commercial/opportunites"},
-      {label:"VISITES",value:visites.length,color:"#7c3aed",route:"commercial/visites"},
-      {label:"CONTRATS 30J",value:clients.filter(c=>c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)>=0&&daysBetween(today(),c.dateFinContrat)<=30).length,color:"#dc2626",route:"commercial/clients"},
-      {label:"TARIFS",value:(db.catalogue||[]).filter(c=>!scopeSoc||c.societe===scopeSoc).length,color:"#111827",route:"commercial/tarifs"}
+      {label:"PROSPECTS",value:counterNumericValue(com.prospects),color:"#0ea5e9",route:"commercial/prospects"},
+      {label:"CLIENTS ACTIFS",value:counterNumericValue(com.clients_active),color:"#047857",route:"commercial/clients",pctBase:Math.max(1,counterNumericValue(com.clients_total))},
+      {label:"NBR SITE",value:counterNumericValue(com.sites_total),color:"#0f766e",route:"commercial/clients"},
+      {label:"TOTAL EMPLOYÉS",value:counterNumericValue(com.employees_total),color:"#7c3aed",route:"commercial/clients"},
+      {label:"OPPORTUNITÉS",value:counterNumericValue(com.opportunities_open),color:"#f59e0b",route:"commercial/opportunites"},
+      {label:"VISITES",value:counterNumericValue(com.visits_total),color:"#7c3aed",route:"commercial/visites"},
+      {label:"CONTRATS 30J",value:counterNumericValue(com.contracts_30d),color:"#dc2626",route:"commercial/clients"},
+      {label:"TARIFS",value:counterNumericValue(com.tarifs_total),color:"#111827",route:"commercial/tarifs"}
     ]);
   }
   if(module==="admin"){
-    const users=(db.users||db.settings?.users||[]).length;
+    const admin=sgdiBackendModuleCounters("admin",scopeSoc);
+    if(!admin)return"";
     return moduleCountersRibbon([
-      {label:"UTILISATEURS",value:users,color:"#043970",route:"admin/users"},
-      {label:"SOCIÉTÉS",value:SOCIETES.length,color:"#047857",route:"admin/societes"},
-      {label:"DROITS",value:Object.keys(db.settings?.accessRules||{}).length,color:"#7c3aed",route:"admin/access"},
-      {label:"ALERTES",value:notificationVisibleTasks().length,color:"#dc2626",route:"admin/dashboard"},
-      {label:"MESSAGES",value:(db.messages||db.dialogueMessages||[]).length,color:"#0ea5e9",route:"admin/messages"},
-      {label:"JOURNAL",value:(db.settings?.unlockLog||[]).length,color:"#f59e0b",route:"parametres/log"}
+      {label:"UTILISATEURS",value:counterNumericValue(admin.utilisateurs),color:"#043970",route:"admin/users"},
+      {label:"SOCIÉTÉS",value:counterNumericValue(admin.societies_total),color:"#047857",route:"admin/societes"},
+      {label:"DROITS",value:counterNumericValue(admin.access_rules),color:"#7c3aed",route:"admin/access"},
+      {label:"ALERTES",value:counterNumericValue(admin.alerts),color:"#dc2626",route:"admin/dashboard"},
+      {label:"MESSAGES",value:counterNumericValue(admin.messages),color:"#0ea5e9",route:"admin/messages"},
+      {label:"JOURNAL",value:counterNumericValue(admin.journal),color:"#f59e0b",route:"parametres/log"}
     ]);
   }
   return"";
