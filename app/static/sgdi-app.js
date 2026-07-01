@@ -299,6 +299,23 @@ function saveSocieteDescriptions(desc){saveSocieteConfig({descriptions:desc||{}}
 function defaultSocieteLogo(s){
   return "";
 }
+function sgdiDocumentSociete(input){
+  const cfg=societeConfig();
+  const raw=input||(typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"")||(typeof effectifSocieteFilter==="function"?effectifSocieteFilter():"")||(typeof drhActiveSocieteFilter==="function"?drhActiveSocieteFilter():"")||session?.societe||(typeof mySoc==="function"?mySoc():"")||"";
+  if(typeof canonicalSocieteName==="function"){
+    return canonicalSocieteName(raw,cfg.custom||SOCIETES)||raw||"";
+  }
+  return raw||"";
+}
+function sgdiDocumentLogo(input){
+  const soc=sgdiDocumentSociete(input);
+  const images=typeof loadSocieteImages==="function"?loadSocieteImages():{};
+  return (soc&&images[soc])||(soc&&defaultSocieteLogo(soc))||SGDI_IRON_LOGO_SRC||"/static/sgdi-icon-192.png";
+}
+function sgdiDocumentLogoHTML(societe,cls="sgdi-doc-logo"){
+  const soc=sgdiDocumentSociete(societe);
+  return `<img class="${escapeHTML(cls)}" src="${escapeHTML(sgdiDocumentLogo(soc))}" alt="${escapeHTML(soc||"Logo société")}">`;
+}
 loadCustomSocietes();
 
 function sgdiApiRoot(){
@@ -7030,7 +7047,6 @@ async function archiveEmployeeDocumentFromWindow(docWindow,meta){
   }
   const clone=docWindow.document.documentElement.cloneNode(true);
   clone.querySelectorAll(".no-print,script").forEach(el=>el.remove());
-  clone.querySelectorAll("img[src^='data:']").forEach(img=>{img.setAttribute("src","/static/sgdi-icon-192.png")});
   const html="<!doctype html>\n"+clone.outerHTML;
   return archiveEmployeeGeneratedDocument(meta.agentId||meta.employeeBackendId||meta.matricule,{...meta,html});
 }
@@ -9639,7 +9655,7 @@ function directContractA4HTML(p){
   return `<div class="contract-a4" style="width:210mm;min-height:297mm;margin:0 auto;background:#fff;color:#111827;font-family:Arial,Helvetica,sans-serif;padding:18mm 17mm;box-shadow:0 10px 35px rgba(15,23,42,.18);font-size:12px;line-height:1.55">
     <div style="border:1px solid #f59e0b;background:#fffbeb;color:#92400e;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-weight:700">Fiche interne de vérification. Cette page n'est pas le contrat officiel. Le contrat imprimable est le fichier Word généré avec le modèle sélectionné.</div>
     <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #043970;padding-bottom:10px;margin-bottom:16px">
-      <div style="display:flex;align-items:center;gap:12px"><img src="/static/sgdi-icon-192.png" style="width:58px;height:58px;object-fit:contain"/><div><div style="font-size:22px;font-weight:900;color:#043970;letter-spacing:.04em">FICHE DE CONTRÔLE CONTRAT</div><div style="font-size:11px;text-transform:uppercase;color:#475569">${escapeHTML(p.contract_type||"Contrat")}</div></div></div>
+      <div style="display:flex;align-items:center;gap:12px"><img src="${escapeHTML(sgdiDocumentLogo(p.society))}" style="width:58px;height:58px;object-fit:contain"/><div><div style="font-size:22px;font-weight:900;color:#043970;letter-spacing:.04em">FICHE DE CONTRÔLE CONTRAT</div><div style="font-size:11px;text-transform:uppercase;color:#475569">${escapeHTML(p.contract_type||"Contrat")}</div></div></div>
       <div style="text-align:right;font-size:11px"><b>Réf.</b> ${escapeHTML(ref)}<br/><b>Date</b> ${formatDate(today())}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -9960,7 +9976,7 @@ function apsContractDocumentHTML(a,d){
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"CONTRAT APS")}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif}.aps-contract{width:190mm;margin:0 auto;padding:4mm 6mm 8mm;font-size:10.8px;line-height:1.26}.aps-top{display:grid;grid-template-columns:30mm 1fr 36mm;align-items:center;border-bottom:2px solid #043970;padding-bottom:3mm;margin-bottom:5mm}.aps-logo{width:25mm;height:25mm;object-fit:contain}.aps-title{text-align:center}.aps-title h1{margin:0;font-size:19px;color:#043970;letter-spacing:.3px}.aps-title div{font-size:10px;color:#334155;font-weight:800;text-transform:uppercase}.aps-ref{text-align:right;font-size:9px;line-height:1.45}.aps-parties{display:grid;grid-template-columns:1fr 1fr;gap:6mm;border-top:1.5px solid #f2b705;border-bottom:1.5px solid #f2b705;padding:4mm 0;margin-bottom:4mm}.aps-party h2{font-size:12px;margin:0 0 2mm;color:#043970;text-transform:uppercase}.aps-party p{margin:0 0 1.4mm}.aps-center{text-align:center;font-size:13px;font-weight:900;margin:5mm 0;text-transform:uppercase}.aps-article{break-inside:avoid;margin:0 0 3mm;text-align:justify}.aps-article h3{font-size:11.5px;margin:0 0 1.2mm;color:#043970;text-transform:uppercase}.aps-article p{margin:0 0 1.5mm}.aps-article ul{margin:1mm 0 1.5mm 5mm;padding-left:4mm}.aps-article li{margin:.6mm 0}.aps-sign{display:grid;grid-template-columns:1fr 1fr;gap:24mm;margin-top:10mm}.aps-sign div{height:25mm;border-top:1px solid #111;text-align:center;padding-top:2mm;font-weight:900}.aps-footer{border-top:1.5px solid #f2b705;margin-top:7mm;padding-top:1.5mm;text-align:center;font-size:8.5px;color:#334155}@media print{.no-print{display:none!important}.aps-contract{width:auto;margin:0;padding:0;font-size:10.4px}.aps-article{break-inside:avoid}.aps-top{margin-top:0}}
   </style></head><body><main class="aps-contract">
-    <header class="aps-top"><img class="aps-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ"><div class="aps-title"><h1>CONTRAT DE TRAVAIL</h1><div><b>${escapeHTML(d.typeContrat||"CDD")}</b> · Agent de Prévention et de Sécurité</div></div><div class="aps-ref"><b>Réf.</b> <b>${escapeHTML(d.reference||"")}</b><br><b>Date</b> <b>${formatDate(d.dateDecision||today())}</b></div></header>
+    <header class="aps-top">${sgdiDocumentLogoHTML(a.societe||d.societe,"aps-logo")}<div class="aps-title"><h1>CONTRAT DE TRAVAIL</h1><div><b>${escapeHTML(d.typeContrat||"CDD")}</b> · Agent de Prévention et de Sécurité</div></div><div class="aps-ref"><b>Réf.</b> <b>${escapeHTML(d.reference||"")}</b><br><b>Date</b> <b>${formatDate(d.dateDecision||today())}</b></div></header>
     <section class="aps-parties">
       <div class="aps-party"><h2>Entre :</h2><p><b>${soc}</b></p><p>Adresse: Avenue Ahmed Sayeh Lot N°76 B Les Sources Bir Mourad Rais</p><p>Représentée par M. MERAH Athmane, agissant en qualité de gérant.</p><p>Ci-après désigné « Employeur »</p><p>D'une part,</p></div>
       <div class="aps-party"><h2>Et,</h2><p>Nom : <b>${nom}</b></p><p>Prénom : <b>${prenom}</b></p><p>Date et lieu de naissance : <b>${birth}</b></p><p>Adresse 1 : <b>${adresse}</b></p><p>N° pièce d'identité : <b>${pieceIdentite}</b></p><p>N° identité National : <b>${nin}</b>${cnas?`</p><p>N° CNAS : <b>${cnas}</b>`:""}</p><p>Ci-après désigné « Employé »</p><p>D'autre part,</p></div>
@@ -11116,7 +11132,7 @@ function suspensionDecisionHTML(a,draft){
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(draft.ref||"DECISION DE SUSPENSION")}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.36}.susp-page{width:190mm;height:277mm;margin:0 auto;padding:6mm 7mm 14mm;position:relative;overflow:hidden}.susp-logo{width:37mm;height:37mm;object-fit:contain;display:block;margin:0 auto 7mm}.susp-title{text-align:center;font-size:21px;font-weight:900;letter-spacing:.2px;margin:0 0 10mm}.susp-rule{border-top:1.5px solid #f2b705;margin:0 0 4mm}.susp-meta{display:flex;justify-content:space-between;gap:10mm;padding:0 8mm 4mm;font-size:13.5px}.susp-meta b{font-weight:400}.susp-meta .line{display:inline-block;min-width:36mm;height:14px;vertical-align:baseline}.susp-vu{border-top:1.5px solid #f2b705;padding:6mm 9mm 6mm;margin-bottom:6mm}.susp-vu ul{margin:0;padding-left:6mm}.susp-vu li{margin:1.2mm 0}.susp-center{display:flex;align-items:center;gap:16mm;margin:4mm 0 6mm}.susp-center:before,.susp-center:after{content:"";height:1px;background:#111;flex:1}.susp-center b{font-size:16px;letter-spacing:.4px}.susp-article{margin:0 0 5mm}.susp-article p{margin:0 0 2.5mm;text-align:justify}.susp-article b.u{text-decoration:underline}.susp-motif-title{font-weight:900;margin:5mm 0 2mm}.susp-motif{min-height:18mm;border:1px solid transparent;padding:1mm 0;font-weight:700}.susp-sign{margin-top:10mm;font-weight:900}.susp-footer{position:absolute;left:7mm;right:7mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9.5px;line-height:1.18}@media print{html,body{width:auto;min-height:auto}.no-print{display:none!important}.susp-page{width:auto;height:277mm;margin:0;box-shadow:none;page-break-after:avoid}}
   </style></head><body><main class="susp-page">
-    <img class="susp-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    ${sgdiDocumentLogoHTML(a.societe,"susp-logo")}
     <h1 class="susp-title">DECISION DE SUSPENSION</h1>
     <div class="susp-rule"></div>
     <div class="susp-meta"><div>Alger le : <span class="line">${formatDate(today())}</span></div><div>Réf. : <span class="line">${escapeHTML(draft.ref||"")}</span></div></div>
@@ -11235,7 +11251,7 @@ function convocationOfficialHTML(a,draft){
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(draft.ref||"CONVOCATION")}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.38}.conv-page{width:190mm;height:277mm;margin:0 auto;padding:7mm 8mm 14mm;position:relative;overflow:hidden}.conv-logo{width:37mm;height:37mm;object-fit:contain;display:block;margin:0 auto 8mm}.conv-title{text-align:center;font-size:23px;font-weight:900;letter-spacing:.4px;margin:0 0 11mm}.conv-rule{border-top:1.5px solid #f2b705;margin:0 0 4mm}.conv-meta{display:flex;justify-content:space-between;gap:10mm;padding:0 8mm 5mm;font-size:13.5px}.conv-meta .line{display:inline-block;min-width:36mm;height:14px;vertical-align:baseline}.conv-box{border-top:1.5px solid #f2b705;padding:7mm 8mm 6mm;margin-bottom:8mm}.conv-grid{display:grid;grid-template-columns:34mm 1fr;gap:2.5mm 5mm}.conv-k{font-weight:900;color:#334155;text-transform:uppercase;font-size:11px}.conv-v{font-weight:700}.conv-body{font-size:14px;text-align:justify;margin:8mm 2mm 0}.conv-body p{margin:0 0 5mm}.conv-motif-title{font-weight:900;margin:8mm 0 2.5mm}.conv-motif{min-height:24mm;font-weight:700}.conv-sign{margin-top:18mm;font-weight:900}.conv-footer{position:absolute;left:8mm;right:8mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9.5px;line-height:1.18}@media print{html,body{width:auto;min-height:auto}.no-print{display:none!important}.conv-page{width:auto;height:277mm;margin:0;box-shadow:none;page-break-after:avoid}}
   </style></head><body><main class="conv-page">
-    <img class="conv-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    ${sgdiDocumentLogoHTML(a.societe,"conv-logo")}
     <h1 class="conv-title">CONVOCATION</h1>
     <div class="conv-rule"></div>
     <div class="conv-meta"><div>Alger le : <span class="line">${formatDate(today())}</span></div><div>Réf. : <span class="line">${escapeHTML(draft.ref||"")}</span></div></div>
@@ -11323,7 +11339,7 @@ function trialRenewalDecisionHTML(a,d){
   const duree=d.dureeReconduction?String(d.dureeReconduction).padStart(2,"0")+" mois":"";
   const archiveMeta={agentId:a.id,title:"Décision de renouvellement période d'essai",category:"Décisions RH",type:"rec_periode_essai",reference:d.reference||"",date:d.dateDecision||today()};
   return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"DECISION RECONDUCTION PERIODE ESSAI")}</title><style>${trialDecisionCommonStyle()}</style></head><body><main class="trial-doc">
-    <img class="trial-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    ${sgdiDocumentLogoHTML(info.societe||a.societe,"trial-logo")}
     <div class="trial-title">DECISION</div>
     <div class="trial-subtitle">RENOUVELLEMENT DE LA PERIODE D'ESSAI</div>
     <div class="trial-meta"><div>Alger le : <b>${formatDate(d.dateDecision||today())}</b></div><div>Réf. : <b>${escapeHTML(d.reference||"")}</b></div></div>
@@ -11344,7 +11360,7 @@ function periodeEncDecisionHTML(a,d){
   const motif=escapeHTML(d.motif||"Période d'essai non concluante").replace(/\n/g,"<br>");
   const archiveMeta={agentId:a.id,title:"Décision — Période d'essai non concluante",category:"Décisions RH",type:"periode_enc",reference:d.reference||"",date:d.dateDecision||today()};
   return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"DECISION PERIODE ESSAI NON CONCLUANTE")}</title><style>${trialDecisionCommonStyle()}</style></head><body><main class="trial-doc">
-    <img class="trial-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    ${sgdiDocumentLogoHTML(info.societe||a.societe,"trial-logo")}
     <div class="trial-title">DECISION</div>
     <div class="trial-subtitle">FIN DE CONTRAT — PERIODE D'ESSAI NON CONCLUANTE</div>
     <div class="trial-meta"><div>Alger le : <b>${formatDate(d.dateDecision||today())}</b></div><div>Réf. : <b>${escapeHTML(d.reference||"")}</b></div></div>
@@ -11458,7 +11474,7 @@ function periodeEncBodyHTML(a,d){
   const info=rhDecisionBaseInfo(a);
   const motif=escapeHTML(d.motif||"Période d'essai non concluante").replace(/\n/g,"<br>");
   return`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"ENC")}</title><style>${trialDecisionCommonStyle()}</style></head><body><main class="trial-doc">
-    <img class="trial-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    ${sgdiDocumentLogoHTML(info.societe||a.societe,"trial-logo")}
     <div class="trial-title">DECISION</div>
     <div class="trial-subtitle">FIN DE CONTRAT — PERIODE D'ESSAI NON CONCLUANTE</div>
     <div class="trial-meta"><div>Alger le : <b>${formatDate(d.dateDecision||today())}</b></div><div>Réf. : <b>${escapeHTML(d.reference||"")}</b></div></div>
@@ -11533,19 +11549,19 @@ function rhDecisionDocumentHTML(a,d){
   const legalBlock=d.type==="fin_relation"?`
       <div class="rh-section-title">Vu</div>
       <ul class="rh-vu">
-        <li>Vu les statuts constitutifs de la SARL IRON GLOBAL SECURITE ;</li>
+        <li>Vu les statuts constitutifs de la SARL ${i.societe||"—"} ;</li>
         <li>Vu la loi n° 90-11 du 21 avril 1990, modifiée et complétée, relative aux relations de travail ;</li>
         <li>Vu le contrat de travail à durée déterminée établi en faveur de ${i.nom}, en qualité de ${i.fonction} ;</li>
       </ul>
       <div class="rh-decide">DECIDE</div>
-      <p><b>Article 01 :</b> Il est mis fin à la relation de travail de M/Mme ${i.nom} à la SARL IRON GLOBAL SECURITE, à compter du ${formatDate(d.dateEffet||today())}, pour le motif suivant :</p>
+      <p><b>Article 01 :</b> Il est mis fin à la relation de travail de M/Mme ${i.nom} à la SARL ${i.societe||"—"}, à compter du ${formatDate(d.dateEffet||today())}, pour le motif suivant :</p>
       <div class="rh-details">${motif||"&nbsp;"}</div>
       <p><b>Article 02 :</b> Le Directeur des Ressources Humaines, le Responsable des Finances et Comptabilité et le Responsable des Opérations sont chargés chacun en ce qui le concerne de l'exécution de la présente décision.</p>
       <div style="margin-top:40mm;font-weight:900;text-align:right">La Direction Générale</div>`:"";
   return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||d.title||"DECISION RH")}</title><style>
     @page{size:A4 portrait;margin:15mm 15mm 20mm 15mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.38}.rh-doc{width:180mm;min-height:257mm;height:auto;margin:0 auto;padding:6mm 6mm 20mm;position:relative}.rh-logo{width:37mm;height:37mm;object-fit:contain;display:block;margin:0 auto 8mm}.rh-title{text-align:center;font-size:22px;font-weight:900;letter-spacing:.3px;margin:0 0 10mm;text-transform:uppercase}.rh-rule{border-top:1.5px solid #f2b705;margin:0 0 4mm}.rh-meta{display:flex;justify-content:space-between;gap:10mm;padding:0 8mm 5mm}.rh-meta .line{display:inline-block;min-width:36mm;height:14px;vertical-align:baseline}.rh-box{border-top:1.5px solid #f2b705;padding:7mm 8mm 6mm;margin-bottom:7mm}.rh-grid{display:grid;grid-template-columns:34mm 1fr;gap:2.5mm 5mm}.rh-k{font-weight:900;color:#334155;text-transform:uppercase;font-size:11px}.rh-v{font-weight:700}.rh-body{font-size:14px;text-align:justify;margin:8mm 2mm 0}.rh-body p{margin:0 0 5mm}.rh-vu{margin:0 0 6mm;padding-left:7mm}.rh-vu li{margin:1.5mm 0}.rh-decide{text-align:center;font-size:17px;font-weight:900;letter-spacing:.08em;margin:7mm 0 6mm}.rh-section-title{font-weight:900;margin:7mm 0 2.5mm;text-transform:uppercase}.rh-details{min-height:22mm;font-weight:700}.rh-sign{margin-top:16mm;font-weight:900}.rh-footer{position:absolute;left:8mm;right:8mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9.5px;line-height:1.18}@media print{html,body{width:auto;min-height:auto}.no-print{display:none!important}.rh-doc{width:auto;height:277mm;margin:0;box-shadow:none;page-break-after:avoid}}
   </style></head><body><main class="rh-doc">
-    <img class="rh-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    ${sgdiDocumentLogoHTML(i.societe||a.societe,"rh-logo")}
     <h1 class="rh-title">${escapeHTML(d.title||"DECISION RH")}</h1>
     <div class="rh-rule"></div>
     <div class="rh-meta"><div>Alger le : <span class="line">${formatDate(d.dateDecision||today())}</span></div><div>Réf. : <span class="line">${escapeHTML(d.reference||"")}</span></div></div>
@@ -13123,7 +13139,7 @@ function leaveTitleHTML(a,d){
   return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"TITRE DE CONGE")}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#f4f6f8;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13.5px;line-height:1.38}.leave-actions{position:sticky;top:0;z-index:5;display:flex;justify-content:flex-end;padding:10px 14px;background:#f4f6f8;border-bottom:1px solid #d7dee8}.leave-actions button{border:0;border-radius:8px;background:#073763;color:#fff;font:700 14px Arial,Helvetica,sans-serif;padding:10px 18px;cursor:pointer}.leave-doc{width:190mm;min-height:277mm;margin:0 auto;background:#fff;padding:7mm 8mm 14mm;position:relative;overflow:hidden}.leave-logo{width:34mm;height:34mm;object-fit:contain;display:block;margin:0 auto 7mm}.leave-title{text-align:center;font-size:23px;font-weight:900;letter-spacing:.4px;margin:0 0 9mm;text-transform:uppercase}.leave-rule{border-top:1.5px solid #f2b705;margin:0 0 4mm}.leave-meta{display:flex;justify-content:space-between;gap:10mm;padding:0 8mm 5mm}.leave-box{border-top:1.5px solid #f2b705;padding:7mm 8mm 6mm;margin-bottom:8mm}.leave-grid{display:grid;grid-template-columns:38mm 1fr;gap:2.5mm 5mm}.leave-k{font-weight:900;color:#334155;text-transform:uppercase;font-size:11px}.leave-v{font-weight:700}.leave-body{font-size:14px;text-align:justify;margin:8mm 2mm 0}.leave-body p{margin:0 0 5mm}.leave-important{border:1.5px solid #f2b705;background:#fffbeb;padding:4mm 5mm;margin:5mm 0;font-weight:700}.leave-important b{font-weight:900}.leave-period{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5mm;margin:8mm 0}.leave-period div{border:1px solid #cbd5e1;padding:4mm;text-align:center}.leave-period b{display:block;text-transform:uppercase;font-size:11px;color:#334155;margin-bottom:2mm}.leave-signs{display:grid;grid-template-columns:1fr 1fr;gap:16mm;margin-top:18mm}.leave-sign{border-top:1px solid #111;padding-top:2mm;text-align:center;font-weight:900}.leave-footer{position:absolute;left:8mm;right:8mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9px;line-height:1.18}@media print{html,body{width:auto;min-height:auto;background:#fff}.no-print{display:none!important}.leave-doc{width:190mm;min-height:277mm;margin:0;padding:7mm 8mm 14mm}}
   </style></head><body><main class="leave-doc">
-    <img class="leave-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ">
+    ${sgdiDocumentLogoHTML(i.societe||a.societe,"leave-logo")}
     <h1 class="leave-title">TITRE DE CONGE</h1>
     <div class="leave-rule"></div>
     <div class="leave-meta"><div>Alger le : <b>${formatDate(d.dateDecision||today())}</b></div><div>Réf. : <b>${escapeHTML(d.reference||"")}</b></div></div>
@@ -13608,7 +13624,7 @@ function opsAssignmentDocumentHTML(draft,type,opt={}){
   const html=`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(title)}</title><style>
     @page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:12px}.op-doc{width:277mm;margin:0 auto;padding:5mm 6mm}.op-head{position:relative;min-height:22mm;margin-left:0;display:flex;align-items:center;justify-content:center}.op-logo{position:absolute;left:0;top:-3mm;width:26mm;height:26mm;object-fit:contain}.op-title{text-align:center;line-height:1.05}.op-title b{display:block;font-size:23px}.op-title span{font-size:18px}.op-row{display:grid;grid-template-columns:1.7fr .85fr;gap:2mm;margin-top:2mm}.op-row-2{display:grid;grid-template-columns:1fr 1fr;gap:2mm;margin-top:2mm}.op-wide{grid-column:1/2}.op-ref{display:grid;grid-template-columns:1fr 1fr;gap:130mm;margin-top:3mm}.op-small{border:1.8px solid #043970;border-radius:5px;padding:6px 7px}.op-motif{display:grid;grid-template-columns:2.2fr 1fr;gap:2mm;margin-top:2mm}.op-motif-box{border:1.8px solid #043970;border-radius:5px;padding:6px 7px;min-height:30px}.op-body{display:grid;grid-template-columns:1fr 1fr;margin-top:2mm;border:1.8px solid #043970}.op-cell{min-height:35mm;padding:7px;border-right:1.8px solid #043970}.op-cell:last-child{border-right:0}.op-lines{line-height:1.75}.op-dots{border-bottom:1px dotted #555;min-height:18px}.op-sign-grid{display:grid;grid-template-columns:1fr 1fr;border:1.8px solid #043970;border-top:0}.op-sign{height:31mm;text-align:center;font-weight:800;padding-top:4mm;border-right:1.8px solid #043970}.op-sign:last-child{border-right:0}.op-bottom{border-bottom:2px solid #043970;margin-top:3mm}@media print{.no-print{display:none!important}.op-doc{width:auto;margin:0;padding:0}}
   </style></head><body><main class="op-doc">
-    <div class="op-head"><img class="op-logo" src="${SGDI_IRON_SOLUTION_LOGO_SRC}" alt="IRON GLOBAL SOLUTION"/><div class="op-title"><b>${escapeHTML(title)}</b><span>PERSONNEL</span></div></div>
+    <div class="op-head">${sgdiDocumentLogoHTML(a.societe||draft.societe,"op-logo")}<div class="op-title"><b>${escapeHTML(title)}</b><span>PERSONNEL</span></div></div>
     <div class="op-ref"><div class="op-small">Réf : <b>${escapeHTML(reference)}</b></div><div class="op-small">Date : <b>${formatDate(today())}</b></div></div>
     <div class="op-row">${opsAssignmentLine("Nom Prénom",full,true)}${opsAssignmentLine("Code employé",employeeCode)}</div>
     <div class="op-row">${opsAssignmentLine("Fonction",poste,true)}${opsAssignmentLine("Groupe",draft.groupe)}</div>
@@ -15581,7 +15597,7 @@ function siteBulletinInformationHTML(draft){
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(draft.reference)}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:12px}.bi{max-width:190mm;margin:0 auto;padding:8mm}.head{display:grid;grid-template-columns:30mm 1fr 42mm;gap:8mm;align-items:center;border-bottom:2px solid #043970;padding-bottom:4mm}.logo{width:27mm;height:27mm;object-fit:contain}.title{text-align:center}.title b{display:block;font-size:22px;color:#043970;letter-spacing:.04em}.title span{font-size:12px;font-weight:800;color:#64748b}.ref{font-size:11px;text-align:right;line-height:1.7}.grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-top:5mm}.box{border:1px solid #cbd5e1;border-radius:4px;padding:3mm;min-height:14mm}.box b{display:block;color:#043970;font-size:10px;text-transform:uppercase;margin-bottom:1.5mm}.wide{grid-column:1/-1}.level{display:inline-block;border-radius:999px;padding:2mm 5mm;font-weight:900;color:#fff;background:#043970}.level.high{background:#dc2626}.level.mid{background:#d97706}.text{white-space:pre-wrap;line-height:1.55;font-size:12.5px}.emp{width:100%;border-collapse:collapse;margin-top:2mm}.emp th,.emp td{border:1px solid #dbe3ef;padding:2mm;text-align:left}.emp th{background:#edf4fb;color:#043970;font-size:10px;text-transform:uppercase}.sign{display:grid;grid-template-columns:1fr 1fr;gap:18mm;margin-top:12mm}.sign div{border-top:1px solid #111;text-align:center;padding-top:2mm;font-weight:900}@media print{.no-print{display:none!important}.bi{padding:0}}
   </style></head><body><main class="bi">
-    <div class="head"><img class="logo" src="${SGDI_IRON_SOLUTION_LOGO_SRC}" alt="IRON GLOBAL SOLUTION"/><div class="title"><b>BULLETIN D'INFORMATION</b><span>Événement site / rapport opérationnel</span></div><div class="ref">Réf : <b>${escapeHTML(draft.reference)}</b><br/>Établi le : <b>${escapeHTML(formatDate(String(draft.reportAt).slice(0,10)))} ${escapeHTML(String(draft.reportAt).slice(11,16))}</b></div></div>
+    <div class="head">${sgdiDocumentLogoHTML(site.societe||site.company||draft.societe,"logo")}<div class="title"><b>BULLETIN D'INFORMATION</b><span>Événement site / rapport opérationnel</span></div><div class="ref">Réf : <b>${escapeHTML(draft.reference)}</b><br/>Établi le : <b>${escapeHTML(formatDate(String(draft.reportAt).slice(0,10)))} ${escapeHTML(String(draft.reportAt).slice(11,16))}</b></div></div>
     <section class="grid">
       <div class="box"><b>Site</b>${escapeHTML(site.nom||"Site")}<br><small>${escapeHTML(site.indicatif||"—")} · ${escapeHTML(site.client||"Sans client")}</small></div>
       <div class="box"><b>Niveau de l'événement</b><span class="level ${String(draft.niveau).toLowerCase().includes("elev")?"high":String(draft.niveau).toLowerCase().includes("moy")?"mid":""}">${escapeHTML(draft.niveau)}</span></div>
@@ -15797,7 +15813,7 @@ function siteCompteRenduDocHTML(draft){
   return`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(draft.numero)}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:12px}.cr{max-width:190mm;margin:0 auto;padding:8mm}.head{display:grid;grid-template-columns:30mm 1fr 46mm;gap:8mm;align-items:center;border-bottom:2px solid #043970;padding-bottom:4mm}.logo{width:27mm;height:27mm;object-fit:contain}.title{text-align:center}.title b{display:block;font-size:20px;color:#043970;letter-spacing:.03em}.title span{font-size:11px;font-weight:800;color:#64748b}.ref{font-size:11px;text-align:right;line-height:1.8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-top:5mm}.box{border:1px solid #cbd5e1;border-radius:4px;padding:3mm;min-height:14mm}.box b{display:block;color:#043970;font-size:10px;text-transform:uppercase;margin-bottom:1.5mm}.wide{grid-column:1/-1}.imp{display:inline-block;border-radius:999px;padding:2mm 5mm;font-weight:900;color:#fff}.text{white-space:pre-wrap;line-height:1.55;font-size:12.5px}.emp{width:100%;border-collapse:collapse;margin-top:2mm}.emp th,.emp td{border:1px solid #dbe3ef;padding:2mm;text-align:left}.emp th{background:#edf4fb;color:#043970;font-size:10px;text-transform:uppercase}.sign{display:grid;grid-template-columns:1fr 1fr;gap:18mm;margin-top:14mm}.sign div{border-top:1px solid #111;text-align:center;padding-top:2mm;font-weight:900}@media print{.no-print{display:none!important}.cr{padding:0}}
   </style></head><body><main class="cr">
-    <div class="head"><img class="logo" src="${SGDI_IRON_SOLUTION_LOGO_SRC}" alt="IRON GLOBAL SOLUTION"/><div class="title"><b>COMPTE RENDU D'ÉVÉNEMENT</b><span>Rapport opérationnel</span></div><div class="ref">N° : <b>${escapeHTML(draft.numero)}</b><br/>Date : <b>${escapeHTML(formatDate(draft.date))}</b></div></div>
+    <div class="head">${sgdiDocumentLogoHTML(site.societe||site.company||draft.societe,"logo")}<div class="title"><b>COMPTE RENDU D'ÉVÉNEMENT</b><span>Rapport opérationnel</span></div><div class="ref">N° : <b>${escapeHTML(draft.numero)}</b><br/>Date : <b>${escapeHTML(formatDate(draft.date))}</b></div></div>
     <section class="grid">
       <div class="box"><b>Site(s) concerné(s)</b>${sites.map(s=>`<div>${escapeHTML(s.nom||"—")} <small style="color:#64748b">${s.indicatif?"("+escapeHTML(s.indicatif)+")":""}</small></div>`).join("")}</div>
       <div class="box"><b>Importance</b><span class="imp" style="background:${impColor}">${escapeHTML(draft.importance||"Normale")}</span></div>
@@ -16041,7 +16057,7 @@ function siteOpeningPVHTML(site){
     @page{size:A4 portrait;margin:8mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;margin:0;padding:7mm;font-size:11px}.pv{max-width:190mm;margin:0 auto;border:1.5px solid #043970;padding:6mm 7mm 8mm}.pv-head{display:grid;grid-template-columns:34mm 1fr;align-items:center;padding:0 0 3mm;margin-bottom:3mm}.logo{width:30mm;height:30mm;object-fit:contain}.title{text-align:center}.title b{display:block;font-size:22px}.line-row{display:grid;grid-template-columns:1fr 1fr;gap:20mm;border-bottom:1px solid #b8c7d6;padding:2.4mm 0}.inline{display:flex;align-items:end;gap:3mm}.fill{border-bottom:1px solid #043970;min-height:6mm;flex:1;padding:0 2mm;font-weight:800}.check-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm;border-top:1.5px solid #043970;border-bottom:1px solid #043970;margin:4mm 0;padding:3mm 0}.box-check{display:inline-block;width:4mm;height:4mm;border:1.4px solid #043970;margin-left:2mm;vertical-align:middle}.checked:after{content:"X";font-weight:900;position:relative;left:.7mm;top:-.5mm}.site-line{display:grid;grid-template-columns:1fr 30mm;gap:10mm;margin:4mm 0}.staff{margin-top:5mm;table-layout:fixed;border-collapse:collapse;width:100%}.staff col:nth-child(1){width:31mm}.staff col:nth-child(2){width:28mm}.staff col:nth-child(3){width:24mm}.staff col:nth-child(4){width:22mm}.staff col:nth-child(5){width:22mm}.staff col:nth-child(6){width:24mm}.staff th,.staff td{border:1px solid #d9d9d9;height:7mm;padding:1.2mm 1.4mm;font-size:10.5px;line-height:1.1}.staff .staff-title-row td{background:#fff;color:#2f5597;font-weight:900;text-align:left;border-top:1px solid #d9d9d9}.staff .staff-head th{background:#ddebf7;color:#1f6fb2;font-weight:900;text-align:center}.staff .staff-head th:first-child{background:#ddebf7}.staff .row-label{background:#ddebf7;color:#1f6fb2;font-weight:900;text-align:left;white-space:nowrap}.staff tbody td{text-align:center}.staff tbody td:nth-child(2){text-align:left;font-weight:700}.sign{display:grid;grid-template-columns:1fr 1fr;gap:16mm;margin-top:8mm}.sign div{height:24mm;border-top:1px solid #111;text-align:center;padding-top:2mm;font-weight:900}@media print{body{padding:0}.pv{border:0;padding:0}.no-print{display:none!important}}
   </style></head><body>
     <main class="pv">
-      <div class="pv-head"><img class="logo" src="${SGDI_IRON_SOLUTION_LOGO_SRC}" alt="IRON GLOBAL SOLUTION"><div class="title"><b>PROCES VERBAL</b></div></div>
+      <div class="pv-head">${sgdiDocumentLogoHTML(site.societe||site.company,"logo")}<div class="title"><b>PROCES VERBAL</b></div></div>
       <div class="line-row"><div class="inline"><span>Réf</span><span class="fill">${escapeHTML(ref)}</span></div><div class="inline"><span>Date</span><span class="fill">${escapeHTML(fullDate)}</span></div></div>
       <div class="line-row"><div class="inline"><span>Je soussigné M/Mme</span><span class="fill">${escapeHTML(site.siteOuvertPar||session?.nom||session?.username||"")}</span></div><div class="inline"><span>Fonction</span><span class="fill">${escapeHTML(session?.fonction||"")}</span></div></div>
       <div class="line-row"><div class="inline"><span>Avoir procédé(e), ce jour le</span><span class="fill">${escapeHTML(fullDate)}</span></div><div class="inline"><span>à</span><span class="fill">${escapeHTML(site.heureReleveJour||"")} h</span></div></div>
@@ -18098,7 +18114,7 @@ function ficheDotationHTML(agentId,opts){
   return`<div class="dotation-print">
     <div class="doc-head">
       <div class="doc-brand">
-        <img class="dotation-logo" src="${SGDI_IRON_LOGO_SRC}" alt="IRON GLOBAL SÉCURITÉ"/>
+        ${sgdiDocumentLogoHTML(a.societe,"dotation-logo")}
         <div><h1>FICHE DE DOTATION INDIVIDUELLE</h1><div class="muted">${escapeHTML(a.societe||"")} · Matériel & Équipement</div></div>
       </div>
       <div class="doc-ref"><div>${escapeHTML(bon)}</div><small>${formatDate(today())}</small></div>
@@ -20049,7 +20065,7 @@ th{background:#edf4fb;color:#043970;font-size:10px;text-transform:uppercase;font
 </style></head><body>
 <div class="actions no-print"><button onclick="window.print()">Imprimer</button><button onclick="window.close()" style="background:#64748b">Fermer</button></div>
 <div class="doc">
-  <img class="logo" src="/static/sgdi-icon-192.png" alt="logo">
+  ${sgdiDocumentLogoHTML(a.societe,"logo")}
   <div class="title">Fiche de Reversement de Dotation</div>
   <div class="rule"></div>
   <div class="ref-block"><span><b>Réf :</b> ${escapeHTML(ref)}</span><span><b>Date :</b> ${formatDate(dateRev)}</span></div>
@@ -27335,7 +27351,7 @@ function openMedPrintWindow(a,num){
 </style></head><body>
 <div class="actions no-print"><button onclick="window.print()">Imprimer</button><button onclick="window.close()" style="background:#64748b">Fermer</button></div>
 <div class="doc">
-  <img class="logo" src="/static/sgdi-icon-192.png" alt="logo">
+  ${sgdiDocumentLogoHTML(a.societe,"logo")}
   <div class="ref"><b>Réf :</b> ${escapeHTML(ref)}<br><b>Date :</b> ${formatDate(dateDoc)}</div>
   ${isBrigade?`<div class="objet"><b>À Monsieur le Commandant de Brigade de Gendarmerie</b></div>`:`<div class="objet"><b>À l'attention de :</b> ${escapeHTML(nom)}<br><b>Ancien matricule :</b> ${escapeHTML(a.matricule||"—")}</div>`}
   <div class="title">${titre}</div>
@@ -27840,6 +27856,7 @@ function socialPrintStyles(){
     *{box-sizing:border-box}
     body{font-family:Arial,Helvetica,sans-serif;color:#111827;margin:0;background:#fff;font-size:12px}
     .doc{max-width:190mm;margin:0 auto}
+    .doc-logo{width:30mm;height:30mm;object-fit:contain;display:block;margin:0 auto 8px}
     .head{border:2px solid #111827;padding:10px;text-align:center;margin-bottom:12px}
     .head h1{font-size:18px;margin:4px 0 2px;text-transform:uppercase}
     .head p{margin:0;color:#475569;font-size:11px}
@@ -27860,10 +27877,12 @@ function socialPrintStyles(){
     @media print{.toolbar{display:none}.doc{max-width:none}}
   </style>`;
 }
-function socialOpenPrint(title,body){
+function socialOpenPrint(title,body,societe){
   const w=window.open("","_blank","width=980,height=760");
   if(!w){toast("Fenêtre d'impression bloquée par le navigateur","error");return}
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(title)}</title>${socialPrintStyles()}</head><body><div class="toolbar"><button onclick="window.print()">Imprimer</button><button onclick="window.close()">Fermer</button></div>${body}</body></html>`);
+  const logo=sgdiDocumentLogoHTML(societe,"doc-logo");
+  const normalized=String(body||"").includes('class="doc"')?String(body||"").replace(/(<main[^>]*class="[^"]*\bdoc\b[^"]*"[^>]*>)/,`$1${logo}`):`<main class="doc">${logo}${body||""}</main>`;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(title)}</title>${socialPrintStyles()}</head><body><div class="toolbar"><button onclick="window.print()">Imprimer</button><button onclick="window.close()">Fermer</button></div>${normalized}</body></html>`);
   w.document.close();
 }
 function socialAgentField(label,value){return`<div class="field"><b>${escapeHTML(label)}</b>${escapeHTML(value||"—")}</div>`}
@@ -27900,7 +27919,7 @@ function printSocialCnasAffiliation(id){
     <div class="sign"><div class="box">Signature du déclarant</div><div class="box">Cachet de la structure</div></div>
     <div class="note">Références officielles : IM.03, IM.13, IM.10 et portail de télédéclaration CNAS.</div>
   </main>`;
-  socialOpenPrint("SECU.01 "+(a.matricule||a.nom||""),body);
+  socialOpenPrint("SECU.01 "+(a.matricule||a.nom||""),body,soc);
 }
 function printSocialCnasDeclarationActivite(){
   const soc=drhActiveSocieteFilter()||currentStructureSocieteFilter()||mySoc()||"";
@@ -27923,7 +27942,7 @@ function printSocialCnasDeclarationActivite(){
     <div class="sign"><div class="box">Le déclarant</div><div class="box">Cachet de la structure</div></div>
     <div class="note">SGDI utilise les données de la société active et de l'effectif. Joindre les SECU.01 selon la procédure CNAS.</div>
   </main>`;
-  socialOpenPrint("IM.03 CNAS "+soc,body);
+  socialOpenPrint("IM.03 CNAS "+soc,body,soc);
 }
 function printSocialCnasTempsPartiel(id){
   const a=(db.agents||[]).find(x=>String(x.id)===String(id));if(!a){toast("Employé introuvable","error");return}
@@ -27953,7 +27972,7 @@ function printSocialCnasTempsPartiel(id){
     <div class="sign"><div class="box">Signature du déclarant</div><div class="box">Cachet de la structure</div></div>
     <div class="note">Document préparatoire SGDI. Toute donnée manquante doit être complétée avant dépôt CNAS.</div>
   </main>`;
-  socialOpenPrint("IM.10 CNAS "+(a.matricule||a.nom||""),body);
+  socialOpenPrint("IM.10 CNAS "+(a.matricule||a.nom||""),body,a.societe);
 }
 function printSocialCnasListe(){
   const soc=drhActiveSocieteFilter();
@@ -27968,7 +27987,7 @@ function printSocialCnasListe(){
     <div class="sign"><div class="box">Signature du déclarant</div><div class="box">Cachet de la structure</div></div>
     <div class="note">Document préparatoire SGDI. Le dépôt doit être vérifié avec l'imprimé officiel IM.13 et la plateforme CNAS.</div>
   </main>`;
-  socialOpenPrint("Liste nominative CNAS",body);
+  socialOpenPrint("Liste nominative CNAS",body,soc);
 }
 const DRH_NO_SOCIETE="__sans_societe__";
 function drhSocieteValue(v){return v===DRH_NO_SOCIETE?"":String(v||"")}
@@ -31220,7 +31239,7 @@ function opsMissionDocumentHTML(m){
   return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${ref}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.34}.om-doc{width:190mm;height:277mm;margin:0 auto;padding:6mm 9mm 12mm;position:relative;overflow:hidden}.om-logo{width:30mm;height:30mm;object-fit:contain;display:block;margin:0 auto 5mm}.om-head{display:flex;justify-content:space-between;gap:10mm;font-size:12.5px;margin-bottom:7mm}.om-head b{font-weight:900}.om-title{text-align:center;font-size:23px;font-weight:900;letter-spacing:.4px;margin:0 0 7mm;text-transform:uppercase}.om-rule{border-top:1.5px solid #f2b705;margin:0 0 6mm}.om-grid{display:grid;grid-template-columns:52mm 1fr;gap:2.4mm 5mm;border:1px solid #d7dde8;padding:5mm;margin-bottom:6mm}.om-k{font-size:10.5px;text-transform:uppercase;font-weight:900;color:#334155}.om-v{font-weight:800}.om-section{margin-top:5.5mm}.om-section h2{font-size:12.5px;margin:0 0 2mm;text-transform:uppercase;color:#043970}.om-box{min-height:21mm;border:1px solid #d7dde8;padding:3.5mm;white-space:pre-wrap;font-weight:700}.om-footer{position:absolute;left:9mm;right:9mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9.2px;color:#475569}@media print{html,body{width:auto;min-height:auto}.no-print{display:none!important}.om-doc{width:auto;height:277mm;margin:0;box-shadow:none;page-break-after:avoid}}
   </style></head><body><main class="om-doc">
-    <img class="om-logo" src="${SGDI_IRON_SOLUTION_LOGO_SRC}" alt="IRON GLOBAL SOLUTION">
+    ${sgdiDocumentLogoHTML(a.societe||m.societe,"om-logo")}
     <div class="om-head"><div>Alger le : <b>${formatDate(m.date||today())}</b></div><div>Réf. : <b>${ref}</b></div></div>
     <h1 class="om-title">ORDRE DE MISSION</h1><div class="om-rule"></div>
     <div class="om-grid">${rows.map(([k,v])=>`<div class="om-k">${k}</div><div class="om-v">${v}</div>`).join("")}</div>
