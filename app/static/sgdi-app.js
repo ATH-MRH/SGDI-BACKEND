@@ -27424,7 +27424,7 @@ function renderElementsSortants(view){
   const rows=sortants.map(a=>{
     const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
     const mat=escapeHTML(a.matricule||a.code||"—");
-    const soc_=escapeHTML(a.societe||"");
+    const soc_=!isDrh?escapeHTML(a.societe||""):"";
     const ds=a.dateSortie?formatDate(a.dateSortie):"—";
     const dotRev=a.finRelationDotationReversee
       ?`<span class="badge" style="background:#dcfce7;color:#166534">✓ Reversée</span>`
@@ -27442,10 +27442,11 @@ function renderElementsSortants(view){
     const openLink=`<a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}" onclick="setFicheContext('${isDrh?"drh":"ops"}')">Ouvrir →</a>`;
     const drhCols=isDrh?`<td>${dotRev}</td><td class="text-xs text-center">${stc}${ded?`<br><span class="text-red-600 text-xs">${ded}</span>`:""}</td><td>${med}</td>`:"";
     const opsCols=isOps?`<td class="text-xs">${escapeHTML(a.fonction||a.poste||"—")}</td>`:"";
-    return`<tr><td><div class="font-semibold text-sm">${nom}</div><div class="text-xs text-slate-400">${mat}</div></td><td class="text-xs">${soc_}</td><td class="text-xs">${ds}</td>${drhCols}${opsCols}<td>${openLink}</td></tr>`;
+    return`<tr><td><div class="font-semibold text-sm">${nom}</div><div class="text-xs text-slate-400">${mat}</div></td>${isDrh?"":`<td class="text-xs">${soc_}</td>`}<td class="text-xs">${ds}</td>${drhCols}${opsCols}<td>${openLink}</td></tr>`;
   });
   const thDrh=isDrh?`<th>Dotation</th><th>STC congés</th><th>MED</th>`:"";
   const thOps=isOps?`<th>Poste</th>`:"";
+  const thSociete=isDrh?"":`<th>Société</th>`;
   view.innerHTML=`<div class="effectif-page">
     <div class="${isDrh?"drh-effectif-list-header":"card p-4 mb-4 flex items-center justify-between gap-3 flex-wrap"}">
       <div><h1 class="text-2xl font-black">ÉLÉMENTS SORTANTS</h1><p class="text-xs text-slate-400 mt-0.5">${sortants.length} employé(s) sortant${soc?` · ${escapeHTML(soc)}`:""}</p></div>
@@ -27453,7 +27454,7 @@ function renderElementsSortants(view){
     ${sortants.length===0
       ?`<div class="card p-10 text-center text-slate-500">Aucun employé SORTANT.</div>`
       :`<div class="card overflow-hidden"><table class="effectif-table">
-        <thead><tr><th>Employé</th><th>Société</th><th>Date sortie</th>${thDrh}${thOps}<th>Action</th></tr></thead>
+        <thead><tr><th>Employé</th>${thSociete}<th>Date sortie</th>${thDrh}${thOps}<th>Action</th></tr></thead>
         <tbody>${rows.join("")}</tbody>
       </table></div>`}
   </div>`;
