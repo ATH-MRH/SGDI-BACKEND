@@ -31763,7 +31763,7 @@ function ptAutoArchiveOldDays(){
     if(db.feuillePresenceArchive[d])return;
     const count=(db.feuillePresence||[]).filter(f=>f.date===d).length;
     db.feuillePresenceArchive[d]={archivedAt:new Date().toISOString(),archivedBy:"system",lignesCount:count};
-    if(!db.feuillePresenceCloture[d])db.feuillePresenceCloture[d]={closedAt:new Date().toISOString(),closedBy:"system-archive"};
+    if(!db.feuillePresenceCloture[d])db.feuillePresenceCloture[d]={at:new Date().toISOString(),by:"system-archive",count};
     changed=true;
   });
   if(changed)saveDB();

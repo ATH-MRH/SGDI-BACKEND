@@ -432,6 +432,8 @@ def _validate_legacy_collection(name: str, data: list[Any] | dict[str, Any] | An
         for day, info in data.items():
             if not str(day or "").strip():
                 raise HTTPException(status_code=422, detail="Date de clôture invalide")
+            info = _normalize_presence_closure(str(day), info)
+            data[day] = info
             if not isinstance(info, dict) or not info.get("by") or not info.get("at"):
                 raise HTTPException(status_code=422, detail="Clôture de présence invalide")
 
@@ -545,6 +547,19 @@ def _actor_name(user: Any | None) -> str:
 
 def _actor_role(user: Any | None) -> str:
     return str(getattr(user, "role", "") or "").strip().lower()
+
+
+def _normalize_presence_closure(day: str, info: Any) -> dict[str, Any]:
+    if isinstance(info, dict):
+        normalized = dict(info)
+        if not normalized.get("by"):
+            normalized["by"] = normalized.get("closedBy") or normalized.get("archivedBy") or normalized.get("user") or "system"
+        if not normalized.get("at"):
+            normalized["at"] = normalized.get("closedAt") or normalized.get("archivedAt") or normalized.get("date") or _now_iso()
+        return normalized
+    if info:
+        return {"by": "legacy", "at": _now_iso()}
+    return {}
 
 
 def _require_admin_action(user: Any | None) -> None:
