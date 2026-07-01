@@ -27281,6 +27281,9 @@ function renderDRHMiseEnDemeure(view){
     const sent2=a.finRelationMed2SentAt?`<span class="pill pill-green text-xs">MED2 envoyée le ${formatDate(a.finRelationMed2SentAt.slice(0,10))}</span>`:``;
     const sentG=a.finRelationGendarmerieSentAt?`<span class="pill pill-blue text-xs">Gendarmerie le ${formatDate(a.finRelationGendarmerieSentAt.slice(0,10))}</span>`:``;
     const btns=[];
+    if(a.finRelationMed1SentAt)btns.push(`<button class="btn btn-secondary text-xs" onclick="viewMed(event,'${a.id}',1)">Voir MED1</button>`);
+    if(a.finRelationMed2SentAt)btns.push(`<button class="btn btn-secondary text-xs" onclick="viewMed(event,'${a.id}',2)">Voir MED2</button>`);
+    if(a.finRelationGendarmerieSentAt)btns.push(`<button class="btn btn-secondary text-xs" onclick="viewMed(event,'${a.id}',3)">Voir Gendarmerie</button>`);
     if(med1Due)btns.push(`<button class="btn btn-danger text-xs" onclick="genMed(event,'${a.id}',1)">Émettre MED n°1</button>`);
     if(med2Due)btns.push(`<button class="btn btn-danger text-xs" onclick="genMed(event,'${a.id}',2)">Émettre MED n°2</button>`);
     if(genDue)btns.push(`<button class="btn btn-danger text-xs" onclick="genMed(event,'${a.id}',3)">Lettre Gendarmerie</button>`);
@@ -27326,9 +27329,18 @@ async function genMed(evt,agentId,num){
   openMedPrintWindow(a,num);
   renderSidebar();renderView();
 }
-function openMedPrintWindow(a,num){
+function viewMed(evt,agentId,num){
+  evt&&evt.stopPropagation();
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId));
+  if(!a)return toast("Dossier introuvable","error");
+  const sentAt=num===1?a.finRelationMed1SentAt:num===2?a.finRelationMed2SentAt:a.finRelationGendarmerieSentAt;
+  if(!sentAt)return toast("Document non émis","warn");
+  openMedPrintWindow(a,num,{date:String(sentAt).slice(0,10)});
+}
+function openMedPrintWindow(a,num,opt={}){
   const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
-  const dateDoc=today();
+  const emittedAt=num===1?a.finRelationMed1SentAt:num===2?a.finRelationMed2SentAt:a.finRelationGendarmerieSentAt;
+  const dateDoc=opt.date||String(emittedAt||"").slice(0,10)||today();
   const ref="MED"+num+"-"+(a.matricule||a.id||"SGDI")+"-"+dateDoc.replaceAll("-","");
   const isBrigade=num===3;
   const titre=isBrigade?"LETTRE ADRESSÉE À LA BRIGADE DE GENDARMERIE":("MISE EN DEMEURE N°"+num);
