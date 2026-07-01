@@ -4136,6 +4136,45 @@ function sgdiErpStatsForScope(scopeSoc){
 function sgdiErpEmployeeCounters(scopeSoc){
   return sgdiErpStatsForScope(scopeSoc)?.employees||null;
 }
+function sgdiUnifiedEmployeeCounters(scopeSoc){
+  const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
+  if(erpEmp&&typeof erpEmp==="object"){
+    const total=counterNumericValue(erpEmp.total);
+    const active=counterNumericValue(erpEmp.active);
+    const activeHeadcount=counterNumericValue(erpEmp.non_archived??erpEmp.active??erpEmp.total);
+    return {
+      source:"backend",
+      total,
+      active,
+      activeHeadcount:activeHeadcount||active||total,
+      withoutEquipment:counterNumericValue(erpEmp.without_equipment),
+      withoutAssignment:counterNumericValue(erpEmp.without_assignment),
+      leaveCurrent:counterNumericValue(erpEmp.leave_current),
+      sickLeaveCurrent:counterNumericValue(erpEmp.sick_leave_current),
+      absent:counterNumericValue(erpEmp.absent),
+      suspended:counterNumericValue(erpEmp.suspended),
+      blacklisted:counterNumericValue(erpEmp.blacklisted)
+    };
+  }
+  const scopeNorm=normalizeSocieteName(scopeSoc||"");
+  const agents=(db?.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a.societe||"")===scopeNorm);
+  const nonArchived=agents.filter(a=>!ficheAgentIsSortantArchive(a));
+  const activeAgents=agents.filter(employeeIsActive);
+  const statusCount=key=>activeAgents.filter(a=>employeeLifecycleStatusKey(a)===key).length;
+  return {
+    source:"local-fallback",
+    total:agents.length,
+    active:activeAgents.length,
+    activeHeadcount:nonArchived.length||activeAgents.length||agents.length,
+    withoutEquipment:materialPendingDotationCountForSoc(scopeSoc),
+    withoutAssignment:activeAgents.filter(agentNeedsAffectation).length,
+    leaveCurrent:activeAgents.filter(a=>ficheAgentInConge(a)).length,
+    sickLeaveCurrent:activeAgents.filter(a=>ficheAgentInMaladie(a)).length,
+    absent:statusCount("absent"),
+    suspended:statusCount("suspendu"),
+    blacklisted:statusCount("blacklist")
+  };
+}
 function sgdiErpModuleCounters(module,scopeSoc){
   return sgdiErpStatsForScope(scopeSoc)?.[module]||null;
 }
@@ -4228,20 +4267,20 @@ function moduleCountersRibbonHTML(){
   const module=session.transverse||sgdiCurrentAlertModule()||root;
   const scopeSoc=(module==="drh"?(typeof drhActiveSocieteFilter==="function"&&drhActiveSocieteFilter()):(typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter()))||session?.societe||(typeof mySoc==="function"?mySoc():"")||"";
   if(module==="drh"||(session.transverse==="ops"&&root==="effectif")){
-    const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
+    const empCounters=sgdiUnifiedEmployeeCounters(scopeSoc);
     const erpDrh=sgdiErpModuleCounters("drh",scopeSoc);
     const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
-    if(!erpEmp||!erpDrh||!erpOps)return"";
-    const total=Math.max(1,counterNumericValue(erpEmp.total));
-    const actifs=counterNumericValue(erpEmp.active);
-    const activeHeadcount=counterNumericValue(erpEmp.non_archived||erpEmp.active||erpEmp.total);
-    const sansDotation=counterNumericValue(erpEmp.without_equipment);
-    const sansAffectation=counterNumericValue(erpEmp.without_assignment);
-    const enConge=counterNumericValue(erpEmp.leave_current);
-    const enMaladie=counterNumericValue(erpEmp.sick_leave_current);
-    const absents=counterNumericValue(erpEmp.absent);
-    const susp=counterNumericValue(erpEmp.suspended);
-    const blacklist=counterNumericValue(erpEmp.blacklisted);
+    if(!empCounters||!erpDrh||!erpOps)return"";
+    const total=Math.max(1,counterNumericValue(empCounters.total));
+    const actifs=counterNumericValue(empCounters.active);
+    const activeHeadcount=counterNumericValue(empCounters.activeHeadcount);
+    const sansDotation=counterNumericValue(empCounters.withoutEquipment);
+    const sansAffectation=counterNumericValue(empCounters.withoutAssignment);
+    const enConge=counterNumericValue(empCounters.leaveCurrent);
+    const enMaladie=counterNumericValue(empCounters.sickLeaveCurrent);
+    const absents=counterNumericValue(empCounters.absent);
+    const susp=counterNumericValue(empCounters.suspended);
+    const blacklist=counterNumericValue(empCounters.blacklisted);
     const reserveCandidates=counterNumericValue(erpDrh.candidates_reserve);
     const reserveTotal=Math.max(1,counterNumericValue(erpDrh.candidates_total));
     const missionEnCours=counterNumericValue(erpOps.missions_current);
@@ -4265,21 +4304,21 @@ function moduleCountersRibbonHTML(){
     ]);
   }
   if(module==="ops"){
-    const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
+    const empCounters=sgdiUnifiedEmployeeCounters(scopeSoc);
     const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
-    if(!erpEmp||!erpOps)return"";
-    const total=Math.max(1,counterNumericValue(erpEmp.total));
-    const actifs=counterNumericValue(erpEmp.active);
-    const activeHeadcount=counterNumericValue(erpEmp.non_archived||erpEmp.active||erpEmp.total);
-    const sansAffectation=counterNumericValue(erpEmp.without_assignment);
-    const sansDotation=counterNumericValue(erpEmp.without_equipment);
+    if(!empCounters||!erpOps)return"";
+    const total=Math.max(1,counterNumericValue(empCounters.total));
+    const actifs=counterNumericValue(empCounters.active);
+    const activeHeadcount=counterNumericValue(empCounters.activeHeadcount);
+    const sansAffectation=counterNumericValue(empCounters.withoutAssignment);
+    const sansDotation=counterNumericValue(empCounters.withoutEquipment);
     const missionEnCours=counterNumericValue(erpOps.missions_current);
     const missionTotal=Math.max(1,missionEnCours);
-    const enConge=counterNumericValue(erpEmp.leave_current);
-    const enMaladie=counterNumericValue(erpEmp.sick_leave_current);
-    const absents=counterNumericValue(erpEmp.absent);
-    const susp=counterNumericValue(erpEmp.suspended);
-    const blacklist=counterNumericValue(erpEmp.blacklisted);
+    const enConge=counterNumericValue(empCounters.leaveCurrent);
+    const enMaladie=counterNumericValue(empCounters.sickLeaveCurrent);
+    const absents=counterNumericValue(empCounters.absent);
+    const susp=counterNumericValue(empCounters.suspended);
+    const blacklist=counterNumericValue(empCounters.blacklisted);
     const prepCounters=effectifConfigSettings().showPreparationCounters?[
       {label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total},
       {label:"SANS DOTATION",value:sansDotation,color:"#0ea5e9",route:"effectif/preparation_dotation",pctBase:total}
@@ -17440,16 +17479,18 @@ function renderFiches(view,sub){
   const fpSites=fpUniqueSiteOptions(safeSocFilter);
   const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent);
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
-  const activeEmployees=statsBase.filter(employeeIsActive).length;
-  const withoutAffectation=activeBase.filter(agentNeedsAffectation).length;
-  const withoutDotation=materialPendingDotationCountForSoc(safeSocFilter);
+  const employeeCounters=sgdiUnifiedEmployeeCounters(safeSocFilter);
+  const counterRatioBase=Math.max(1,counterNumericValue(employeeCounters.activeHeadcount)||activeBase.length);
+  const activeEmployees=counterNumericValue(employeeCounters.active);
+  const withoutAffectation=counterNumericValue(employeeCounters.withoutAssignment);
+  const withoutDotation=counterNumericValue(employeeCounters.withoutEquipment);
   const dotationToReplace=activeBase.filter(agentHasDotationToReplace).length;
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const summaryCards=[
-    ["Employés actifs",activeEmployees,"Dans l'effectif","#15803d",ratio(activeEmployees,activeBase.length),"effectif/actifs","users"],
-    ["Sans affectation",withoutAffectation,"Site à renseigner","#d97706",ratio(withoutAffectation,activeBase.length),"effectif/instance_affectation","pin"],
-    ["Sans dotation",withoutDotation,"Matériel à attribuer","#dc2626",ratio(withoutDotation,activeBase.length),"materiel/dotation","box"],
-    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,activeBase.length),"materiel/dotation","refresh"]
+    ["Employés actifs",activeEmployees,"Dans l'effectif","#15803d",ratio(activeEmployees,counterRatioBase),"effectif/actifs","users"],
+    ["Sans affectation",withoutAffectation,"Site à renseigner","#d97706",ratio(withoutAffectation,counterRatioBase),"effectif/preparation_affectation","pin"],
+    ["Sans dotation",withoutDotation,"Matériel à attribuer","#dc2626",ratio(withoutDotation,counterRatioBase),"materiel/dotation","box"],
+    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,counterRatioBase),"materiel/dotation","refresh"]
   ];
   const metricIcon=type=>({
     users:'<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
