@@ -3981,36 +3981,14 @@ async function refreshWorkspace(){
 window.refreshWorkspace=refreshWorkspace;
 function workspaceTabsBarHTML(){
   if(!session)return"";
-  const visible=structureTopbarItems();
   const quickLaunchHTML=`<div class="ws-quicklaunch-group">
     <a class="ws-quicklaunch-btn" href="ms-word:" onclick="event.stopPropagation();window.location.href='ms-word:';return false" title="Microsoft Word"><span class="ws-ql-icon" style="background:#2b579a">W</span></a>
     <a class="ws-quicklaunch-btn" href="ms-outlook:" onclick="event.stopPropagation();window.location.href='ms-outlook:';return false" title="Calendrier Outlook"><span class="ws-ql-icon" style="background:#0078d4;font-size:13px">📅</span></a>
     <a class="ws-quicklaunch-btn" href="ms-excel:" onclick="event.stopPropagation();window.location.href='ms-excel:';return false" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></a>
     <a class="ws-quicklaunch-btn" href="calculator:" onclick="event.stopPropagation();window.location.href='calculator:';return false" title="Calculatrice"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></a>
   </div>`;
-  if(visible.length===0)return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
+  return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
-    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}</div>
-    <button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button>
-  </div>`;
-  const activeKey=String(session.transverse||"");
-  const tabs=visible.map(i=>{
-    const meta=MODULE_META[i.key]||{icon:"•",label:i.label,color:"#043970"};
-    const isActive=activeKey===i.key;
-    const target=i.key==="materiel"?"materiel/dashboard":(i.key==="pointage"?"pointage/dashboard":(i.key==="ops"?"ops/dashboard":i.key+"/dashboard"));
-    const onclick=`event.preventDefault();window.switchWorkspaceModule('${i.key}')`;
-    return `<a href="#/${target}"
-      class="ws-tab ${isActive?"ws-tab--active":""}"
-      style="${isActive?`--ws-tab-color:${meta.color}`:"--ws-tab-color:#94a3b8"}"
-      onclick="${onclick}"
-      title="${escapeHTML(meta.label)}"
-    >
-      <span class="ws-tab-favicon">${meta.icon}</span>
-      <span class="ws-tab-label">${escapeHTML(meta.label)}</span>
-    </a>`;
-  }).join("");
-  return `<div class="ws-browser-chrome no-print" data-no-lang="1">
-    <div class="ws-tabs-bar" id="ws-tabs-bar">${tabs}</div>
     <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}</div>
     <button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button>
   </div>`;

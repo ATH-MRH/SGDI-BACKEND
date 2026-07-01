@@ -4570,6 +4570,12 @@ body:has(.company-portal) #app{
   overflow-y:hidden;
   scrollbar-width:none;
 }
+.ws-browser-chrome--actions-only{
+  justify-content:flex-end;
+}
+.ws-browser-chrome--actions-only .ws-tabs-bar{
+  display:none;
+}
 .ws-tabs-bar::-webkit-scrollbar{display:none}
 .ws-tab{
   position:relative;
