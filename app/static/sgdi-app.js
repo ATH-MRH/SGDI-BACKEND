@@ -4693,16 +4693,38 @@ function applyLanguagePreference(root){
 }
 
 /* ---- SHELL ---- */
+function sgdiIsMobileViewport(){
+  try{return window.matchMedia&&window.matchMedia("(max-width: 767px)").matches}catch(e){return false}
+}
+function sgdiMobileSidebarOpen(){
+  try{return sessionStorage.getItem("sgdiMobileSidebarOpen")==="1"}catch(e){return false}
+}
 function sgdiSidebarCollapsed(){
+  if(sgdiIsMobileViewport())return !sgdiMobileSidebarOpen();
   try{return localStorage.getItem("sgdiSidebarCollapsed")==="1"}catch(e){return false}
 }
 function sgdiSidebarToggleTitle(){
+  if(sgdiIsMobileViewport())return sgdiMobileSidebarOpen()?"Fermer le menu latéral":"Ouvrir le menu latéral";
   return sgdiSidebarCollapsed()?"Afficher le menu latéral":"Masquer le menu latéral";
 }
 function sgdiSidebarToggleIcon(){
   return sgdiSidebarCollapsed()?"☰":"☰";
 }
 function toggleSgdiSidebar(){
+  if(sgdiIsMobileViewport()){
+    const next=!sgdiMobileSidebarOpen();
+    try{sessionStorage.setItem("sgdiMobileSidebarOpen",next?"1":"0")}catch(e){}
+    document.querySelectorAll(".sgdi-shell").forEach(el=>{
+      el.classList.toggle("sgdi-mobile-sidebar-open",next);
+      el.classList.toggle("sgdi-sidebar-collapsed",!next);
+    });
+    document.querySelectorAll(".sgdi-sidebar-toggle").forEach(btn=>{
+      btn.title=sgdiSidebarToggleTitle();
+      btn.setAttribute("aria-label",sgdiSidebarToggleTitle());
+      btn.classList.toggle("is-collapsed",!next);
+    });
+    return;
+  }
   const next=!sgdiSidebarCollapsed();
   try{localStorage.setItem("sgdiSidebarCollapsed",next?"1":"0")}catch(e){}
   document.querySelectorAll(".sgdi-shell").forEach(el=>el.classList.toggle("sgdi-sidebar-collapsed",next));
@@ -4713,6 +4735,28 @@ function toggleSgdiSidebar(){
   });
 }
 window.toggleSgdiSidebar=toggleSgdiSidebar;
+function closeSgdiMobileSidebar(){
+  if(!sgdiIsMobileViewport())return;
+  try{sessionStorage.setItem("sgdiMobileSidebarOpen","0")}catch(e){}
+  document.querySelectorAll(".sgdi-shell").forEach(el=>{
+    el.classList.remove("sgdi-mobile-sidebar-open");
+    el.classList.add("sgdi-sidebar-collapsed");
+  });
+  document.querySelectorAll(".sgdi-sidebar-toggle").forEach(btn=>{
+    btn.title=sgdiSidebarToggleTitle();
+    btn.setAttribute("aria-label",sgdiSidebarToggleTitle());
+    btn.classList.add("is-collapsed");
+  });
+}
+window.closeSgdiMobileSidebar=closeSgdiMobileSidebar;
+document.addEventListener("click",(event)=>{
+  if(!sgdiIsMobileViewport())return;
+  const target=event.target;
+  if(target?.closest?.(".sgdi-sidebar-backdrop")){closeSgdiMobileSidebar();return;}
+  if(target?.closest?.(".sidebar .nav-link,.sidebar .sub-link,.sidebar .nav-group")){
+    setTimeout(()=>closeSgdiMobileSidebar(),120);
+  }
+});
 function render(){
   sanitizeCandidatesInDB();
   if(!session)renderOverlayHost();
@@ -4761,7 +4805,10 @@ function render(){
   const socColor=isTrans?transColors[session.transverse]:(socColors[session.societe]||"#64748b");
   const headerTitle=isTrans?transLabels[session.transverse]:session.societe;
   const headerSub=isTrans?(session.societe?`Société active : ${session.societe}`:transDescs[session.transverse]):"Société active";
-  app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col ${sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":""}">
+  const shellSidebarClass=sgdiIsMobileViewport()
+    ?(sgdiMobileSidebarOpen()?"sgdi-mobile-sidebar-open":"sgdi-sidebar-collapsed")
+    :(sgdiSidebarCollapsed()?"sgdi-sidebar-collapsed":"");
+  app.innerHTML=`<div class="sgdi-shell h-screen flex flex-col ${shellSidebarClass}">
     <div class="sgdi-topbar flex items-center justify-between px-4 py-2 no-print" style="background:#011b3f;border-bottom:1px solid #062b5f;gap:12px">
       <div class="sgdi-topbar-left ${isTrans?"sgdi-topbar-left-module":""} flex items-center gap-3 shrink-0">
         <button type="button" class="sgdi-sidebar-toggle ${sgdiSidebarCollapsed()?"is-collapsed":""}" onclick="toggleSgdiSidebar()" title="${sgdiSidebarToggleTitle()}" aria-label="${sgdiSidebarToggleTitle()}"><span aria-hidden="true">${sgdiSidebarToggleIcon()}</span></button>
@@ -4784,6 +4831,7 @@ function render(){
           <button class="btn btn-ghost w-full justify-center" onclick="logout()">Se déconnecter</button>
         </div>
       </aside>
+      <button type="button" class="sgdi-sidebar-backdrop no-print" onclick="closeSgdiMobileSidebar()" aria-label="Fermer le menu"></button>
       <main class="flex-1 flex flex-col overflow-hidden min-w-0">
         ${workspaceTabsBarHTML()}
         ${moduleCountersRibbonHTML()}
