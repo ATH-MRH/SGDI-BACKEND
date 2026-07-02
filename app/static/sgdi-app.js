@@ -6990,11 +6990,34 @@ function candidateDocumentsArchive(c){
 function normalizeCandidateStoredDocument(key,doc,c){
   return candidateDocumentArchiveEntry(key,doc,c)||doc;
 }
+function employeeArchivedDocumentUrl(d){
+  if(!d)return"";
+  if(d.url)return d.url;
+  if(d.data)return d.data;
+  if(d.fileData)return d.fileData;
+  const html=d.html||d.contentHtml||d.bodyHtml||d.content;
+  if(html)return"data:text/html;charset=utf-8,"+encodeURIComponent(String(html));
+  return"";
+}
 function viewAgentArchivedDoc(agentId,key,label){
-  const a=findEmployeeByRef(agentId)||db.agents.find(x=>x.id===agentId);
-  const d=a&&a.documents&&a.documents[key];
-  if(!d||!d.url){toast(`Aucun document archivé : ${label}`,"error");return}
-  viewDoc(d.url,d.name||label);
+  const a=findEmployeeByRef(agentId)||db.agents.find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
+  const docs={...(a?.extra?._legacy?.documents||{}),...(a?.extra?.documents||{}),...(a?.documents||{})};
+  const d=docs[key];
+  const url=employeeArchivedDocumentUrl(d);
+  if(!d){toast(`Document introuvable : ${label}`,"error");return}
+  if(!url){
+    openModal(`<h3 class="font-black text-lg mb-2">Document référencé sans fichier ouvrable</h3>
+      <p class="text-sm text-slate-600 mb-3">Ce document existe dans les archives, mais son contenu n'a pas été conservé dans PostgreSQL lors de l'ancien archivage.</p>
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+        <div><b>Document :</b> ${escapeHTML(d.title||label||key)}</div>
+        <div><b>Référence :</b> ${escapeHTML(d.reference||"—")}</div>
+        <div><b>Date :</b> ${formatDate(d.date||d.createdAt||d.uploadedAt)}</div>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">Les nouveaux documents seront désormais archivés avec leur fichier ouvrable.</p>
+      <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
+    return;
+  }
+  viewDoc(url,d.name||label);
 }
 function openAgentDocumentUpload(agentId,key,label){
   const input=document.createElement("input");input.type="file";input.accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
@@ -7082,6 +7105,7 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
   const html=String(doc.html||"");
   const entry={
     url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),
+    html,
     name:doc.name||employeeDocumentFileName(title,reference),
     title,
     reference,
@@ -7097,12 +7121,7 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
   try{
     const payload=employeeApiPayload(a);
     const docsForSave={};
-    Object.entries(a.documents||{}).forEach(([k,d])=>{
-      if(!d)return;
-      const dClean={...d};
-      if(typeof dClean.url==="string"&&dClean.url.startsWith("data:"))delete dClean.url;
-      docsForSave[k]=dClean;
-    });
+    Object.entries(a.documents||{}).forEach(([k,d])=>{if(d)docsForSave[k]={...d}});
     payload.extra={...(payload.extra||{}),documents:docsForSave};
     if(payload.extra._legacy)payload.extra._legacy={...(payload.extra._legacy||{}),documents:docsForSave};
     const saved=a.backendId?await SGDI.employees.update(a.backendId,payload):await SGDI.employees.create(payload);
