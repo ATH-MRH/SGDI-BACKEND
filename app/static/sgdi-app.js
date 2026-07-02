@@ -7023,9 +7023,19 @@ function employeeDocumentsArchiveRows(scopeSoc){
 function documentsArchivesTotalCount(){
   return employeeDocumentsArchiveRows().length;
 }
+function updateDocsArchiveSearch(value){
+  sessionStorage.setItem("docsArchiveQ",String(value||""));
+  clearTimeout(window._docsArchiveSearchTimer);
+  window._docsArchiveSearchTimer=setTimeout(()=>renderView(),160);
+}
+function clearDocsArchiveSearch(){
+  sessionStorage.removeItem("docsArchiveQ");
+  renderView();
+}
 function renderDocumentsArchives(view,sub,arg){
   const soc=currentStructureSocieteFilter()||mySoc()||"";
-  const q=String(sessionStorage.getItem("docsArchiveQ")||"").toLowerCase().trim();
+  const qRaw=String(sessionStorage.getItem("docsArchiveQ")||"");
+  const q=qRaw.toLowerCase().trim();
   const rows=employeeDocumentsArchiveRows(soc).filter(row=>{
     if(!q)return true;
     const a=row.agent,d=row.doc;
@@ -7039,7 +7049,15 @@ function renderDocumentsArchives(view,sub,arg){
   });
   const groups=[...byAgent.values()];
   view.innerHTML=`<div class="module-page-header"><div class="module-page-header-copy"><h1>Documents / Archives</h1><p>Documents archivés par employé${soc?` · ${escapeHTML(soc)}`:""}.</p></div></div>
-    <div class="card p-4 mb-4"><input class="input" placeholder="Rechercher employé, matricule, document..." value="${escapeHTML(q)}" oninput="sessionStorage.setItem('docsArchiveQ',this.value);renderView()"/></div>
+    <div class="docs-archive-search-card card mb-4">
+      <label class="docs-archive-search-label" for="docsArchiveSearchInput">Recherche archives</label>
+      <div class="docs-archive-search-box">
+        <span aria-hidden="true" class="docs-archive-search-ico">⌕</span>
+        <input id="docsArchiveSearchInput" class="docs-archive-search-input" placeholder="Nom, prénom, matricule, société ou document..." value="${escapeHTML(qRaw)}" oninput="updateDocsArchiveSearch(this.value)" autocomplete="off"/>
+        ${qRaw?`<button type="button" class="docs-archive-search-clear" onclick="clearDocsArchiveSearch()" aria-label="Effacer la recherche">×</button>`:""}
+      </div>
+      <div class="docs-archive-search-meta">${rows.length} document(s) trouvé(s) · ${groups.length} employé(s)</div>
+    </div>
     ${groups.length?groups.map(({agent,docs})=>`<section class="card p-4 mb-3 docs-archive-group">
       <div class="docs-archive-head"><div><h3>${escapeHTML(((agent.nom||"")+" "+(agent.prenom||"")).trim()||"Employé")}</h3><p>${escapeHTML(agent.matricule||"—")} · ${escapeHTML(agent.societe||"—")} · ${docs.length} document(s)</p></div><a class="docs-title-link" href="#/agents/${employeeRouteId(agent)}">Ouvrir fiche</a></div>
       <div class="docs-archive-list">${docs.map(({key,doc,date,title})=>`<div class="docs-archive-row">
