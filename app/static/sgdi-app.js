@@ -384,7 +384,6 @@ function sgdiMarkRefreshAvailable(reason){
   sgdiRefreshNoticeReason=reason||"Nouvelles données disponibles";
   sgdiRefreshNoticeAt=Date.now();
   sgdiRenderRefreshNotice();
-  if(typeof toast==="function"&&!document.hidden)toast(sgdiRefreshNoticeLabel()+" — cliquez sur ↻ pour actualiser.","info");
 }
 function sgdiClearRefreshAvailable(){
   sgdiRefreshNotice=false;
@@ -406,7 +405,7 @@ function sgdiRenderRefreshNotice(){
   }catch(e){}
 }
 function sgdiRefreshNoticeHTML(){
-  return `<span class="sgdi-refresh-notice" data-sgdi-refresh-notice style="${sgdiRefreshNotice?"":"display:none"}">${escapeHTML(sgdiRefreshNoticeLabel())}</span>`;
+  return "";
 }
 function sgdiPublishDataChange(reason){
   const event={source:SGDI_REALTIME_CLIENT_ID,reason:reason||"change",module:sgdiCurrentModuleKey(),at:Date.now()};
