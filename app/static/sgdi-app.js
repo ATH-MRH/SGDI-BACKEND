@@ -6999,21 +6999,58 @@ function employeeArchivedDocumentUrl(d){
   if(html)return"data:text/html;charset=utf-8,"+encodeURIComponent(String(html));
   return"";
 }
-function viewAgentArchivedDoc(agentId,key,label){
+function rebuildEmployeeArchivedDocumentHTML(a,d,key,label){
+  const hay=[key,label,d?.title,d?.type,d?.category,d?.reference].map(x=>String(x||"").toLowerCase()).join(" ");
+  if(hay.includes("suspension")&&typeof suspensionDecisionHTML==="function"){
+    const ev=(a.gestionEvents||[]).find(e=>{
+      const type=String(e?.type||"").toLowerCase();
+      return type.includes("suspension")&&(!d?.reference||String(e.reference||"")===String(d.reference||"")||String(e.du||"").slice(0,10)===String(d.date||"").slice(0,10));
+    })||{};
+    const du=String(ev.du||d?.date||d?.createdAt||today()).slice(0,10);
+    const duree=parseInt(ev.dureeJours||ev.duree||15,10)||15;
+    const au=String(ev.au||ev.dateFin||addDays(du,duree)).slice(0,10);
+    return suspensionDecisionHTML(a,{a,ref:d?.reference||suspensionDecisionReference(a,du),du,duree,au,aConvoquer:!!ev.aConvoquer,dateConvocation:ev.dateConvocation||"",motif:ev.motif||d?.motif||""});
+  }
+  return"";
+}
+async function persistEmployeeArchivedDocumentContent(a,key,entry){
+  if(!a||!key||!entry||!sgdiAuthToken())return false;
+  a.documents={...(a.documents||{}),[key]:entry};
+  const payload=employeeApiPayload(a);
+  const docsForSave={...(a.documents||{})};
+  payload.extra={...(payload.extra||{}),documents:docsForSave};
+  payload.extra._legacy={...(payload.extra._legacy||{}),documents:docsForSave};
+  const saved=a.backendId?await SGDI.employees.update(a.backendId,payload):await SGDI.employees.create(payload);
+  const mapped=employeeFromApi(saved);
+  Object.assign(a,mapped,{...a,documents:{...(mapped.documents||{}),...(a.documents||{}),[key]:entry},backendId:saved?.id||a.backendId});
+  return true;
+}
+async function viewAgentArchivedDoc(agentId,key,label){
   const a=findEmployeeByRef(agentId)||db.agents.find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
   const docs={...(a?.extra?._legacy?.documents||{}),...(a?.extra?.documents||{}),...(a?.documents||{})};
   const d=docs[key];
-  const url=employeeArchivedDocumentUrl(d);
+  let url=employeeArchivedDocumentUrl(d);
   if(!d){toast(`Document introuvable : ${label}`,"error");return}
   if(!url){
-    openModal(`<h3 class="font-black text-lg mb-2">Document référencé sans fichier ouvrable</h3>
-      <p class="text-sm text-slate-600 mb-3">Ce document existe dans les archives, mais son contenu n'a pas été conservé dans PostgreSQL lors de l'ancien archivage.</p>
+    const rebuilt=rebuildEmployeeArchivedDocumentHTML(a,d,key,label);
+    if(rebuilt){
+      d.html=rebuilt;
+      d.url="data:text/html;charset=utf-8,"+encodeURIComponent(rebuilt);
+      d.rebuiltAt=new Date().toISOString();
+      d.rebuiltBy=session?.username||"SGDI";
+      url=d.url;
+      try{await persistEmployeeArchivedDocumentContent(a,key,d);toast("Document reconstruit et archivé dans PostgreSQL","success")}catch(e){toast("Document reconstruit mais non confirmé PostgreSQL : "+(e.message||e),"warn")}
+    }
+  }
+  if(!url){
+    openModal(`<h3 class="font-black text-lg mb-2">Archive incomplète à régénérer</h3>
+      <p class="text-sm text-slate-600 mb-3">Ce document a une référence dans PostgreSQL, mais le fichier ouvrable est absent. ATLAS ne doit plus créer ce type d'archive : les nouveaux documents sont désormais bloqués tant que le contenu complet n'est pas sauvegardé.</p>
       <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
         <div><b>Document :</b> ${escapeHTML(d.title||label||key)}</div>
         <div><b>Référence :</b> ${escapeHTML(d.reference||"—")}</div>
         <div><b>Date :</b> ${formatDate(d.date||d.createdAt||d.uploadedAt)}</div>
       </div>
-      <p class="text-xs text-slate-500 mt-3">Les nouveaux documents seront désormais archivés avec leur fichier ouvrable.</p>
+      <p class="text-xs text-slate-500 mt-3">Action requise : régénérer ce document depuis son module d'origine pour l'enregistrer complet dans PostgreSQL.</p>
       <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
     return;
   }
@@ -7120,6 +7157,10 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
   const title=doc.title||"Document RH";
   const key=doc.key||employeeDocumentSafeKey(doc.type||doc.category||title,reference);
   const html=String(doc.html||"");
+  if(!html.trim()){
+    toast("Archivage refusé : contenu du document obligatoire pour PostgreSQL","error");
+    return false;
+  }
   const entry={
     url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),
     html,
@@ -15625,8 +15666,9 @@ function siteArchivedDocumentsHTML(site){
 function viewSiteArchivedDoc(siteId,key,label){
   const site=findSiteByRef(siteId);
   const d=site&&((site.documentsArchive&&site.documentsArchive[key])||(site.documents&&site.documents[key]));
-  if(!d||!d.url){toast(`Aucun document archivé : ${label}`,"error");return}
-  viewDoc(d.url,d.name||label);
+  const url=employeeArchivedDocumentUrl(d);
+  if(!d||!url){toast(`Archive site incomplète à régénérer : ${label}`,"error");return}
+  viewDoc(url,d.name||label);
 }
 function openSiteDocumentsModal(siteId){
   const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
@@ -15807,7 +15849,8 @@ async function archiveSiteBulletinFromWindow(docWindow,meta){
   const key=employeeDocumentSafeKey("bulletin_information",reference);
   const employeeIds=(meta.employeeIds||[]).map(String).filter(Boolean);
   const employees=employeeIds.map(id=>findEmployeeByRef(id)||(db.agents||[]).find(a=>String(a.id)===id||String(a.backendId||"")===id)).filter(Boolean);
-  const entry={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),name:employeeDocumentFileName("BULLETIN D'INFORMATION",reference),title:"BULLETIN D'INFORMATION",reference,category:"Sites",type:"bulletin_information",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"OPS",generated:true};
+  if(!String(html||"").trim()){toast("Archivage refusé : contenu du document obligatoire pour PostgreSQL","error");return false}
+  const entry={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),html,name:employeeDocumentFileName("BULLETIN D'INFORMATION",reference),title:"BULLETIN D'INFORMATION",reference,category:"Sites",type:"bulletin_information",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"OPS",generated:true};
   site.documents=site.documents||{};
   site.documents[key]=entry;
   site.bulletinsInformation=Array.isArray(site.bulletinsInformation)?site.bulletinsInformation:[];
@@ -15999,7 +16042,8 @@ async function archiveSiteCompteRenduFromWindow(docWindow,meta){
   const html="<!doctype html>\n"+clone.outerHTML;
   const numero=meta.numero||("CR-"+today().replaceAll("-",""));
   const key=employeeDocumentSafeKey("compte_rendu",numero);
-  const entry={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),name:employeeDocumentFileName("COMPTE RENDU",numero),title:"COMPTE RENDU D'ÉVÉNEMENT",reference:numero,category:"Sites",type:"compte_rendu",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"OPS",generated:true};
+  if(!String(html||"").trim()){toast("Archivage refusé : contenu du document obligatoire pour PostgreSQL","error");return false}
+  const entry={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),html,name:employeeDocumentFileName("COMPTE RENDU",numero),title:"COMPTE RENDU D'ÉVÉNEMENT",reference:numero,category:"Sites",type:"compte_rendu",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"OPS",generated:true};
   site.documents=site.documents||{};
   site.documents[key]=entry;
   site.comptesRendus=Array.isArray(site.comptesRendus)?site.comptesRendus:[];
@@ -16245,7 +16289,8 @@ async function archiveSitePVFromWindow(docWindow,meta){
   const reference=meta.reference||("PV-"+today());
   const key=employeeDocumentSafeKey("pv_site",reference);
   site.documents=site.documents||{};
-  site.documents[key]={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),name:employeeDocumentFileName("PROCES VERBAL",reference),title:"PROCES VERBAL",reference,category:"Sites",type:"pv_site",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"SGDI",generated:true};
+  if(!String(html||"").trim()){toast("Archivage refusé : contenu du document obligatoire pour PostgreSQL","error");return false}
+  site.documents[key]={url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),html,name:employeeDocumentFileName("PROCES VERBAL",reference),title:"PROCES VERBAL",reference,category:"Sites",type:"pv_site",date:meta.date||today(),createdAt:new Date().toISOString(),createdBy:session?.username||"SGDI",generated:true};
   site.updatedAt=today();
   try{await persistSiteToPostgres(site)}catch(e){toast("PV non enregistré : "+(e.message||e),"error");return false}
   if(!(await saveDBAndWaitToast("PV non confirmé")))return false;
