@@ -6955,6 +6955,26 @@ function viewDoc(url,name){
   const preview=isImage?`<img src="${safeUrl}" class="w-full rounded-lg"/>`:`<iframe src="${safeUrl}" class="w-full rounded-lg" style="height:70vh" sandbox="allow-scripts allow-same-origin"></iframe>`;
   openModal(`<div class="p-2"><div class="flex justify-between items-center mb-3"><h3 class="font-bold">${escapeHTML(name)}</h3><button class="btn btn-ghost" onclick="closeModal()">✕</button></div>${preview}<a href="${safeUrl}" download="${escapeHTML(name)}" class="btn btn-primary mt-3">⬇ Télécharger</a></div>`);
 }
+function viewDocA4(url,name){
+  const safeUrl=sgdiHtmlDataUrlWithInlineStyles(url);
+  const allowed=safeUrl.startsWith("data:image/")||safeUrl.startsWith("data:application/pdf")||safeUrl.startsWith("data:text/html")||safeUrl.startsWith("blob:")||safeUrl.startsWith("https://")||safeUrl.startsWith("http://")||safeUrl.startsWith("/");
+  if(!allowed){console.warn("viewDocA4: URL non autorisée",safeUrl.slice(0,80));toast("Document impossible à ouvrir","error");return}
+  const isImage=safeUrl.startsWith("data:image/");
+  const preview=isImage
+    ?`<div class="archive-a4-sheet"><img src="${escapeHTML(safeUrl)}" alt="${escapeHTML(name||"Document")}" /></div>`
+    :`<iframe src="${escapeHTML(safeUrl)}" class="archive-a4-frame" sandbox="allow-scripts allow-same-origin"></iframe>`;
+  openModal(`<div class="archive-a4-viewer">
+    <div class="archive-a4-toolbar">
+      <div><h3>${escapeHTML(name||"Document")}</h3><p>Affichage archive · format A4</p></div>
+      <div class="archive-a4-actions">
+        <a href="${escapeHTML(safeUrl)}" download="${escapeHTML(name||"document")}" class="btn btn-secondary">Télécharger</a>
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>
+      </div>
+    </div>
+    <div class="archive-a4-stage">${preview}</div>
+  </div>`);
+  document.querySelector("#modal-host .modal")?.classList.add("archive-a4-modal");
+}
 function candidateDocumentLabel(key){
   const found=typeof contractVerificationItems==="function"?contractVerificationItems().find(([k])=>k===key):null;
   return found?found[1]:key==="CV"?"CV":"Document candidat";
@@ -7054,7 +7074,7 @@ async function viewAgentArchivedDoc(agentId,key,label){
       <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
     return;
   }
-  viewDoc(url,d.name||label);
+  viewDocA4(url,d.name||label);
 }
 function openAgentDocumentUpload(agentId,key,label){
   const input=document.createElement("input");input.type="file";input.accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
@@ -7094,7 +7114,17 @@ function updateDocsArchiveSearch(value){
     const groupText=docsArchiveSearchText(group.getAttribute("data-docs-agent-search")||"");
     const agentMatch=!q||groupText.includes(q);
     let groupHasVisible=false;
-    group.querySelectorAll(".docs-archive-row").forEach(row=>{
+    const rows=[...group.querySelectorAll(".docs-archive-row")];
+    if(!rows.length){
+      groupHasVisible=agentMatch;
+      group.hidden=!groupHasVisible;
+      if(groupHasVisible){
+        visibleGroups++;
+        visibleDocs+=parseInt(group.getAttribute("data-doc-count")||"0",10)||0;
+      }
+      return;
+    }
+    rows.forEach(row=>{
       const rowText=docsArchiveSearchText(row.getAttribute("data-docs-search")||"");
       const show=agentMatch||rowText.includes(q);
       row.hidden=!show;
@@ -7112,6 +7142,21 @@ function clearDocsArchiveSearch(){
   if(input)input.value="";
   updateDocsArchiveSearch("");
   input?.focus();
+}
+function openEmployeeArchiveDocuments(agentId){
+  const a=findEmployeeByRef(agentId)||db.agents.find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
+  if(!a){toast("Employé introuvable","error");return}
+  const docs=employeeDocumentsArchiveRows(a.societe).filter(row=>String(row.agent.id||row.agent.backendId||row.agent.matricule)===String(a.id||a.backendId||a.matricule));
+  if(!docs.length){toast("Aucun document pour cet employé","error");return}
+  if(docs.length===1){viewAgentArchivedDoc(a.id||a.backendId||a.matricule,docs[0].key,docs[0].title);return}
+  const title=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim()||"Employé");
+  openModal(`<div class="docs-employee-docs-modal">
+    <div class="docs-archive-modal-head"><div><h3>${title}</h3><p>${escapeHTML(a.matricule||a.code||"—")} · ${docs.length} document(s)</p></div><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>
+    <div class="docs-employee-docs-list">${docs.map(({key,doc,date,title})=>`<button type="button" class="docs-employee-doc-item" onclick="viewAgentArchivedDoc('${escapeHTML(a.id||a.backendId||a.matricule||"")}','${escapeHTML(key)}','${escapeHTML(title)}')">
+      <span><b>${escapeHTML(title)}</b><small>${escapeHTML(doc.category||doc.type||"Document")} ${doc.reference?`· Réf. ${escapeHTML(doc.reference)}`:""} ${date?`· ${formatDate(date)}`:""}</small></span>
+      <strong>Voir</strong>
+    </button>`).join("")}</div>
+  </div>`);
 }
 function renderDocumentsArchives(view,sub,arg){
   const soc=currentStructureSocieteFilter()||mySoc()||"";
@@ -7134,12 +7179,9 @@ function renderDocumentsArchives(view,sub,arg){
       </div>
       <div id="docsArchiveSearchMeta" class="docs-archive-search-meta">${rows.length} document(s) trouvé(s) · ${groups.length} employé(s)</div>
     </div>
-    ${groups.length?groups.map(({agent,docs})=>{const agentSearch=[agent.nom,agent.prenom,agent.matricule,agent.societe].join(" ");return`<section class="card p-4 mb-3 docs-archive-group" data-docs-agent-search="${escapeHTML(agentSearch)}">
-      <div class="docs-archive-head"><div><h3>${escapeHTML(((agent.nom||"")+" "+(agent.prenom||"")).trim()||"Employé")}</h3><p>${escapeHTML(agent.matricule||"—")} · ${escapeHTML(agent.societe||"—")} · ${docs.length} document(s)</p></div><a class="docs-title-link" href="#/agents/${employeeRouteId(agent)}">Ouvrir fiche</a></div>
-      <div class="docs-archive-list">${docs.map(({key,doc,date,title})=>{const rowSearch=[title,doc.category,doc.type,doc.reference,doc.name,date,agentSearch].join(" ");return`<div class="docs-archive-row" data-docs-search="${escapeHTML(rowSearch)}">
-        <div><strong>${escapeHTML(title)}</strong><span>${escapeHTML(doc.category||doc.type||"Document")} ${doc.reference?`· Réf. ${escapeHTML(doc.reference)}`:""} ${date?`· ${formatDate(date)}`:""}</span></div>
-        <button type="button" class="docs-title-link" onclick="viewAgentArchivedDoc('${escapeHTML(agent.id||agent.backendId||agent.matricule||"")}','${escapeHTML(key)}','${escapeHTML(title)}')">Voir</button>
-      </div>`}).join("")}</div>
+    ${groups.length?groups.map(({agent,docs})=>{const agentName=((agent.nom||"")+" "+(agent.prenom||"")).trim()||"Employé";const agentCode=agent.matricule||agent.code||"—";const agentSearch=[agent.nom,agent.prenom,agent.matricule,agent.code,agent.societe,...docs.flatMap(({doc,title,date})=>[title,doc.category,doc.type,doc.reference,doc.name,date])].join(" ");return`<section class="card p-4 mb-3 docs-archive-group docs-archive-employee-row" data-doc-count="${docs.length}" data-docs-agent-search="${escapeHTML(agentSearch)}">
+      <button type="button" class="docs-employee-view-button" onclick="openEmployeeArchiveDocuments('${escapeHTML(agent.id||agent.backendId||agent.matricule||"")}')">Voir document</button>
+      <div class="docs-archive-employee-identity"><h3>${escapeHTML(agentName)}</h3><p>${escapeHTML(agentCode)}</p></div>
     </section>`}).join(""):`<div class="card p-10 text-center text-slate-500">Aucun document archivé${soc?` pour ${escapeHTML(soc)}`:""}.</div>`}`;
   if(qRaw)setTimeout(()=>updateDocsArchiveSearch(qRaw),0);
 }
@@ -11174,7 +11216,7 @@ function employeeFicheRhActionsHTML(a){
   </div>`;
 }
 function rhEffectifActionLabel(action){
-  return {detail:"DETAIL",conge:"CONGÉ",rec_periode_essai:"REC/PERIODE D'ESSAI",suspendre:"SUSPENDRE",convoquer:"CONVOQUER",blacklister:"BLACKLISTER",mise_en_demeure:"MISE EN DEMEURE",periode_enc:"PERIODE E-N-C",sanctionner:"SANCTIONNER",avenant:"AVENANT",nouveau_contrat:"NOUVEAU CONTRAT",fin_contrat:"FIN DE RELATION DE TRAVAIL",integrer:"REINTEGRER"}[action]||"ACTION";
+  return {detail:"DETAIL",conge:"CONGÉ",rec_periode_essai:"REC/PERIODE D'ESSAI",suspendre:"SUSPENDRE",lever_suspension:"LEVER SUSPENSION",convoquer:"CONVOQUER",blacklister:"BLACKLISTER",lever_blacklist:"LEVER BLACKLIST",mise_en_demeure:"MISE EN DEMEURE",periode_enc:"PERIODE E-N-C",sanctionner:"SANCTIONNER",avenant:"AVENANT",nouveau_contrat:"NOUVEAU CONTRAT",fin_contrat:"FIN DE RELATION DE TRAVAIL",integrer:"REINTEGRER"}[action]||"ACTION";
 }
 function rhEffectifActionType(action){
   return {suspendre:"Suspension",convoquer:"Convocation",mise_en_demeure:"Mise en demeure",periode_enc:"Période E-N-C",fin_contrat:"Fin de contrat"}[action]||"";
@@ -11203,8 +11245,10 @@ function runRhEffectifAction(action,agentId){
   if(action==="conge")return openGestionModal(agentId,"Congé");
   if(action==="rec_periode_essai")return openGestionModal(agentId,"Période d'essai");
   if(action==="suspendre")return openEmployeeSuspensionModal(agentId);
+  if(action==="lever_suspension")return openEmployeeIntegrationModal(agentId);
   if(action==="convoquer")return openEmployeeConvocationModal(agentId);
   if(action==="blacklister")return openBlackListModal(agentId);
+  if(action==="lever_blacklist")return removeBlackList(agentId);
   if(action==="mise_en_demeure")return openEmployeeMiseEnDemeureModal(agentId);
   if(action==="periode_enc")return openPeriodeEncModal(agentId);
   if(action==="sanctionner")return openSanctionModal(agentId);
@@ -11221,8 +11265,10 @@ function rhEffectifActionStyle(action){
     conge:["#0369a1","#eff6ff","#bfdbfe"],
     rec_periode_essai:["#7c3aed","#f5f3ff","#ddd6fe"],
     suspendre:["#dc2626","#fef2f2","#fecaca"],
+    lever_suspension:["#047857","#ecfdf5","#bbf7d0"],
     convoquer:["#0369a1","#eff6ff","#bfdbfe"],
     blacklister:["#111827","#f8fafc","#cbd5e1"],
+    lever_blacklist:["#047857","#ecfdf5","#bbf7d0"],
     mise_en_demeure:["#b45309","#fffbeb","#fde68a"],
     periode_enc:["#7c3aed","#f5f3ff","#ddd6fe"],
     sanctionner:["#c2410c","#fff7ed","#fed7aa"],
@@ -11826,7 +11872,8 @@ function openEmployeeIntegrationModal(agentId){
     toast("Réactivation d'un employé SORTANT non autorisée. Habilitation requise (Administration → Utilisateurs).","error");return;
   }
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];if(!selected){toast("Aucun employé disponible","error");return}
-  openModal(`<div class="flex items-start justify-between gap-3 mb-3 flex-wrap"><h3 class="font-bold text-lg">REINTEGRER</h3><div style="min-width:240px"><label class="label">Référence décision</label><input class="input bg-slate-50" name="reference" form="employee-integration-form" value="${escapeHTML(rhDecisionReference("INT",selected,today()))}" readonly/></div></div>
+  const title=String(selected.statut||"").toLowerCase()==="suspendu"?"LEVER LA SUSPENSION":"REINTEGRER";
+  openModal(`<div class="flex items-start justify-between gap-3 mb-3 flex-wrap"><h3 class="font-bold text-lg">${title}</h3><div style="min-width:240px"><label class="label">Référence décision</label><input class="input bg-slate-50" name="reference" form="employee-integration-form" value="${escapeHTML(rhDecisionReference("INT",selected,today()))}" readonly/></div></div>
     <form id="employee-integration-form" onsubmit="event.preventDefault();confirmEmployeeIntegration(this)">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="md:col-span-2"><label class="label">Employé</label><select class="select" name="agentId" required onchange="updateIntegrationReference()">${rhDecisionEmployeeOptions(selected.id)}</select></div>
@@ -11845,14 +11892,15 @@ async function confirmEmployeeIntegration(form){
   const printWindow=window.open("","_blank","width=900,height=700");
   if(printWindow)printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Préparation intégration</title></head><body style="font-family:Arial;padding:24px">Préparation de la décision...</body></html>`);
   try{
-    (a.gestionEvents||[]).forEach(e=>{if(e.statut==="en_cours"&&(e.type==="Suspension"||e.type==="Absence"||e.type==="Fin de contrat"))e.statut="termine"});
+    const wasSuspended=String(a.statut||"").toLowerCase()==="suspendu";
+    (a.gestionEvents||[]).forEach(e=>{if(e.statut==="en_cours"&&(e.type==="Suspension"||e.type==="Absence"||e.type==="Fin de contrat")){e.statut="termine";e.closedAt=new Date().toISOString();e.closedBy=session?.username||"DRH";e.closeMotif=draft.motif;}});
     if(String(a.statut||"").toLowerCase()==="sortant"){
       a.dateSortie=null;a.finRelationAt=null;a.finRelationDotationReversee=null;
       a.stcCongeReliquat=null;a.stcDeductionReforme=null;
       a.finRelationMed1SentAt=null;a.finRelationMed2SentAt=null;a.finRelationGendarmerieSentAt=null;
       a.finRelationReversementAt=null;a.finRelationReversementDate=null;
     }
-    await persistEmployeeRhDecision(a,{type:"Intégration",du:draft.dateDecision,au:draft.dateDecision,motif:draft.motif,observation:draft.observation,details:draft.observation,reference:draft.reference,statut:"termine"},{status:"actif"});
+    await persistEmployeeRhDecision(a,{type:wasSuspended?"Levée suspension":"Intégration",du:draft.dateDecision,au:draft.dateDecision,motif:draft.motif,observation:draft.observation,details:draft.observation,reference:draft.reference,statut:"termine"},{status:"actif"});
   }catch(e){if(printWindow)printWindow.close();toast("Intégration non enregistrée : "+(e.message||e),"error");return}
   if(!(await saveDBAndWaitToast("Intégration non confirmée"))){if(printWindow)printWindow.close();return}
   if(printWindow)printRhDecisionWindow(a,{...draft,a},printWindow);else toast("Intégration enregistrée, mais l'impression a été bloquée","warn");
@@ -12094,7 +12142,9 @@ function openEmployeeStatusActions(event,agentId,actionContext){
   const isContractContext=actionContext==="contracts";
   const isSortant=String(a?.statut||"").toLowerCase()==="sortant";
   const canIntegrer=String(a?.statut||"").toLowerCase()==="suspendu"||(isSortant&&canUserReactiverSortant());
-  const labels=isContractContext?[["nouveau_contrat","NOUVEAU CONTRAT"],["avenant","NOUVEAU AVENANT"]]:isOpsEffectifContext()?opsEmployeeActionLabels():[["detail","DETAIL"],["conge","CONGÉ"],["rec_periode_essai","REC/PERIODE D'ESSAI"],["suspendre","SUSPENDRE"],["convoquer","CONVOQUER"],["mise_en_demeure","MISE EN DEMEURE"],["sanctionner","SANCTIONNER"],["avenant","AVENANT"],["nouveau_contrat","NOUVEAU CONTRAT"],["fin_contrat","FIN DE RELATION DE TRAVAIL"],["integrer","REINTEGRER"]];
+  const isSuspended=String(a?.statut||"").toLowerCase()==="suspendu";
+  const isBlacklisted=!!(a?.blacklist||a?.blacklistContractBlocked||a?.contractBlocked);
+  const labels=isContractContext?[["nouveau_contrat","NOUVEAU CONTRAT"],["avenant","NOUVEAU AVENANT"]]:isOpsEffectifContext()?opsEmployeeActionLabels():[["detail","DETAIL"],["conge","CONGÉ"],["rec_periode_essai","REC/PERIODE D'ESSAI"],["suspendre","SUSPENDRE"],...(isSuspended?[["lever_suspension","LEVER SUSPENSION"]]:[]),["convoquer","CONVOQUER"],["mise_en_demeure","MISE EN DEMEURE"],["sanctionner","SANCTIONNER"],["blacklister","BLACKLISTER"],...(isBlacklisted?[["lever_blacklist","LEVER BLACKLIST"]]:[]),["avenant","AVENANT"],["nouveau_contrat","NOUVEAU CONTRAT"],["fin_contrat","FIN DE RELATION DE TRAVAIL"],["integrer","REINTEGRER"]];
   const btn=event.currentTarget;
   const rect=btn.getBoundingClientRect();
   const menu=document.createElement("div");
@@ -14165,12 +14215,15 @@ async function confirmBlackList(form){
   closeModal();toast("⛔ Agent inscrit sur la black list","success");renderView();
 }
 async function removeBlackList(agentId){
-  if(!isAdminFichePositionContext()){toast("Retrait black list réservé à Administration système > Fiche de position","error");return}
+  if(!canUseEmployeeActionWorkflows()&&!isAdminFichePositionContext()){toast("Retrait black list non autorisé pour cet utilisateur","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(!confirm("Retirer "+a.nom+" "+a.prenom+" de la black list ?"))return;
   const motif=prompt("Motif du retrait (obligatoire) :","");if(motif===null||!motif.trim()){toast("Motif requis","error");return}
   a.blacklistHistory=a.blacklistHistory||[];
   a.blacklistHistory.push({action:"retrait",date:new Date().toISOString(),by:session?session.username:"system",motif:motif.trim()});
+  (a.gestionEvents||[]).forEach(e=>{if(e.type==="Blacklist"&&e.statut==="en_cours")e.statut="termine";});
+  a.gestionEvents=a.gestionEvents||[];
+  a.gestionEvents.push({type:"Levée blacklist",du:today(),au:today(),motif:motif.trim(),statut:"termine",createdAt:new Date().toISOString(),createdBy:session?.username||"DRH",source:"rh-effectif"});
   a.blacklist=false;a.blacklistAt=null;a.blacklistBy=null;a.blacklistMotif="";a.blacklistReference="";a.blacklistContractBlocked=false;a.contractBlocked=false;
   try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}
   catch(e){toast("Retrait black list non enregistré : "+(e.message||e),"error");return}
@@ -15668,7 +15721,7 @@ function viewSiteArchivedDoc(siteId,key,label){
   const d=site&&((site.documentsArchive&&site.documentsArchive[key])||(site.documents&&site.documents[key]));
   const url=employeeArchivedDocumentUrl(d);
   if(!d||!url){toast(`Archive site incomplète à régénérer : ${label}`,"error");return}
-  viewDoc(url,d.name||label);
+  viewDocA4(url,d.name||label);
 }
 function openSiteDocumentsModal(siteId){
   const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
@@ -31823,7 +31876,30 @@ function ptNormalizeAbandonsForMonth(ym,soc){
   pointageOperationalAgents(soc).forEach(a=>{const sh=ptGetSheet(a.id,ym);if(ptNormalizeAbandonDePoste(sh))changed=true});
   return changed;
 }
-function ptSetCell(agentId,ym,day,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();saveDB()}
+function employeeSuspensionActiveOn(a,date){
+  if(!a)return false;
+  const d=String(date||today()).slice(0,10);
+  const status=String(a.statut||a.status||"").toLowerCase();
+  const activeEvent=(a.gestionEvents||[]).some(e=>{
+    if(String(e?.type||"").toLowerCase()!=="suspension")return false;
+    if(String(e?.statut||"en_cours").toLowerCase()!=="en_cours")return false;
+    const du=String(e.du||e.date||"").slice(0,10),au=String(e.au||e.dateFin||"").slice(0,10);
+    return (!du||du<=d)&&(!au||au>=d);
+  });
+  return status==="suspendu"||activeEvent;
+}
+function employeePointageBlocked(a,date){
+  if(employeeSuspensionActiveOn(a,date))return "Employé suspendu — pointage impossible avant levée de suspension.";
+  if(a?.blacklist||a?.blacklistContractBlocked||a?.contractBlocked)return "Employé blacklisté — pointage impossible avant levée administrative.";
+  return "";
+}
+function ptGuardEmployeePointage(agentId,date){
+  const a=findEmployeeByRef(agentId)||db.agents.find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
+  const msg=employeePointageBlocked(a,date);
+  if(msg){toast(msg,"error");return true}
+  return false;
+}
+function ptSetCell(agentId,ym,day,code){const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();saveDB()}
 function ptPresenceAgentId(f){
   const refs=[f?.agentId,f?.agentBackendId,f?.employee_id,f?.matricule].map(x=>String(x||"")).filter(Boolean);
   const a=(db.agents||[]).find(ag=>refs.includes(String(ag.id||""))||refs.includes(String(ag.backendId||""))||refs.includes(String(ag.matricule||"")));
@@ -31831,6 +31907,7 @@ function ptPresenceAgentId(f){
 }
 function ptApplyPresenceLine(f){
   if(!f||!f.date||!f.agentId)return false;
+  if(employeePointageBlocked(findEmployeeByRef(ptPresenceAgentId(f)),f.date))return false;
   const ym=f.date.slice(0,7),day=f.date.slice(8,10);if(!ym||!day)return false;
   const agentId=ptPresenceAgentId(f);
   const s=ptEnsureSheet(agentId,ym);if(s.valide)return false;
@@ -31940,7 +32017,7 @@ function fpqClotureInfo(date){if(!db.feuillePresenceCloture)return null;return d
 function fpqIsArchived(date){return !!(db.feuillePresenceArchive&&db.feuillePresenceArchive[date])}
 function fpqGuardArchive(date){if(fpqIsArchived(date)){toast("📦 Feuille du "+formatDate(date)+" archivée automatiquement — aucune modification n'est possible","error");return true}return false}
 function fpqGuardCloture(date){if(fpqIsCloture(date)){toast("🔒 Feuille du "+formatDate(date)+" clôturée · déclôturez d'abord","error");return true}return false}
-function fpqGuardLine(date,agentId){const f=fpqGet(date,agentId);if(f&&f.valide){toast("🔒 Ligne validée · déverrouillez avant modification","error");return true}return false}
+function fpqGuardLine(date,agentId){if(ptGuardEmployeePointage(agentId,date))return true;const f=fpqGet(date,agentId);if(f&&f.valide){toast("🔒 Ligne validée · déverrouillez avant modification","error");return true}return false}
 function ptAutoArchiveOldDays(){
   if(!db||!session)return;
   const td=today();

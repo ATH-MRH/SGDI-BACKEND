@@ -6431,3 +6431,211 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 .drh-workforce-ribbon .drh-workforce-item:hover{
   background:#dff0ff!important;
 }
+
+/* Documents / Archives : liste simple par employé */
+.docs-archive-employee-row{
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:16px;
+  padding:16px 18px!important;
+  border-radius:14px!important;
+  background:#fff!important;
+}
+.docs-employee-view-button{
+  appearance:none;
+  border:1px solid #0b477f;
+  background:#eaf4ff;
+  color:#043970;
+  border-radius:999px;
+  min-height:36px;
+  padding:0 16px;
+  font-size:12px;
+  font-weight:950;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.docs-employee-view-button:hover{
+  background:#043970;
+  color:#fff;
+}
+.docs-archive-employee-identity h3{
+  margin:0;
+  color:#172033;
+  font-size:16px;
+  font-weight:950;
+  text-transform:uppercase;
+}
+.docs-archive-employee-identity p{
+  margin:3px 0 0;
+  color:#047857;
+  font-size:13px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  font-weight:950;
+}
+.docs-archive-modal-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+  margin-bottom:12px;
+}
+.docs-archive-modal-head h3{
+  margin:0;
+  font-size:18px;
+  font-weight:950;
+  color:#172033;
+}
+.docs-archive-modal-head p{
+  margin:4px 0 0;
+  font-size:12px;
+  font-weight:800;
+  color:#64748b;
+}
+.docs-employee-docs-list{
+  display:grid;
+  gap:8px;
+}
+.docs-employee-doc-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  background:#f8fbff;
+  padding:12px 14px;
+  text-align:left;
+  cursor:pointer;
+}
+.docs-employee-doc-item:hover{
+  border-color:#93c5fd;
+  background:#eff6ff;
+}
+.docs-employee-doc-item b{
+  display:block;
+  color:#172033;
+  font-size:13px;
+  font-weight:950;
+}
+.docs-employee-doc-item small{
+  display:block;
+  margin-top:3px;
+  color:#64748b;
+  font-size:11px;
+  font-weight:750;
+}
+.docs-employee-doc-item strong{
+  color:#043970;
+  font-size:12px;
+  font-weight:950;
+}
+
+/* Aperçu archives en format A4 */
+.archive-a4-modal{
+  width:min(96vw,1180px)!important;
+  max-width:min(96vw,1180px)!important;
+  padding:0!important;
+  overflow:hidden!important;
+  background:#f1f5f9!important;
+}
+.archive-a4-viewer{
+  min-height:86vh;
+  display:flex;
+  flex-direction:column;
+}
+.archive-a4-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 16px;
+  border-bottom:1px solid #dbe3ef;
+  background:#fff;
+}
+.archive-a4-toolbar h3{
+  margin:0;
+  color:#172033;
+  font-size:15px;
+  font-weight:950;
+}
+.archive-a4-toolbar p{
+  margin:2px 0 0;
+  color:#64748b;
+  font-size:11px;
+  font-weight:800;
+}
+.archive-a4-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.archive-a4-stage{
+  flex:1;
+  overflow:auto;
+  padding:18px;
+  display:flex;
+  justify-content:center;
+  background:#e8eef6;
+}
+.archive-a4-frame{
+  width:210mm;
+  height:297mm;
+  max-width:100%;
+  border:0;
+  border-radius:4px;
+  background:#fff;
+  box-shadow:0 18px 45px rgba(15,23,42,.22);
+}
+.archive-a4-sheet{
+  width:210mm;
+  min-height:297mm;
+  max-width:100%;
+  background:#fff;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding:10mm;
+  box-shadow:0 18px 45px rgba(15,23,42,.22);
+}
+.archive-a4-sheet img{
+  max-width:100%;
+  height:auto;
+  object-fit:contain;
+}
+
+/* Correction style des barres de recherche/filtres */
+#view .drh-effectif-search-slot,
+#view .drh-effectif-sort-slot,
+#view .ops-effectif-tools,
+#view .fp-filters,
+#view .effectif-filter-bar{
+  align-items:center!important;
+}
+#view .drh-effectif-search-slot .input,
+#view .drh-effectif-sort-slot .select,
+#view .ops-effectif-tools .input,
+#view .ops-effectif-tools .select,
+#view .fp-filters .input,
+#view .fp-filters .select,
+#view .effectif-filter-bar .input,
+#view .effectif-filter-bar .select{
+  height:42px!important;
+  min-height:42px!important;
+  border-radius:12px!important;
+  border:1px solid #d6e1ef!important;
+  background:#f8fbff!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.7)!important;
+}
+#view .drh-effectif-search-slot .input:focus,
+#view .drh-effectif-sort-slot .select:focus,
+#view .ops-effectif-tools .input:focus,
+#view .ops-effectif-tools .select:focus,
+#view .fp-filters .input:focus,
+#view .fp-filters .select:focus{
+  border-color:#2b6cb0!important;
+  box-shadow:0 0 0 3px rgba(43,108,176,.12)!important;
+  background:#fff!important;
+}
