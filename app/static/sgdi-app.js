@@ -7086,6 +7086,16 @@ async function persistEmployeeContractRecord(a,draft){
   const existing=(await SGDI.rh.contracts(employeeId)).find(c=>String(c.status||"").toLowerCase()==="actif")||null;
   return existing?SGDI.rh.updateContract(existing.id,payload):SGDI.rh.createContract(payload);
 }
+async function persistEmployeeMasterContractFields(a){
+  if(!a)return null;
+  if(!sqlBackendId(a.backendId))return a;
+  const previousBackendId=a.backendId;
+  const localSnapshot={...a};
+  const saved=await SGDI.employees.update(a.backendId,employeeApiPayload(a));
+  const mapped=employeeFromApi(saved);
+  Object.assign(a,mapped,localSnapshot,{backendId:saved?.id||previousBackendId});
+  return a;
+}
 function findEmployeeConvertedFromCandidate(c){
   if(!c)return null;
   const refs=[c.convertedEmployeeId,c.employeeId,c.agentId,c.matricule].map(v=>String(v||"").trim()).filter(Boolean);
@@ -7162,12 +7172,17 @@ async function saveAndArchiveEmployeeContractFromWindow(docWindow,meta){
   a.articleOverridesContrat=draft.articleOverrides||a.articleOverridesContrat||{};
   a.statut=a.statut||"actif";
   try{
+    await persistEmployeeMasterContractFields(a);
     await persistEmployeeContractRecord(a,draft);
     await persistEmployeeRhDecision(a,{type:"Nouveau contrat",du:draft.dateDebut,au:draft.dateFin,motif:`${a.typeContrat} ${contratDureeLabel(draft.dureeContrat)}`,details:[`Fonction : ${draft.poste}`,`Période d'essai : ${contratDureeLabel(draft.periodeEssai)||"—"}`,`N° pièce d'identité : ${draft.numeroPieceIdentite||"—"}`,`N° identité National : ${draft.nin||"—"}`,`Client : ${draft.client||"—"}`,`Adresse : ${draft.adresseSite||"—"}`,`Wilaya : ${draft.wilaya||"—"}`,`Commune : ${draft.commune||"—"}`,draft.missions?`Missions : ${draft.missions}`:"",`Salaire : ${money(draft.salaireNet||0)}`,draft.observation?`Observation : ${draft.observation}`:""].filter(Boolean).join("\n"),reference:draft.reference||meta?.reference||"",statut:"termine"});
   }catch(e){toast("Contrat non enregistré : "+(e.message||e),"error");return false}
   if(!(await saveDBAndWaitToast("Contrat non confirmé")))return false;
   const archived=await archiveEmployeeDocumentFromWindow(docWindow,{...meta,agentId:a.id||meta?.agentId,employeeBackendId:a.backendId||meta?.employeeBackendId,matricule:a.matricule||meta?.matricule});
-  if(archived)toast("Contrat enregistré et archivé","success");
+  if(archived){
+    toast("Contrat enregistré et archivé","success");
+    renderSidebar();
+    renderView();
+  }
   return archived;
 }
 function employeeDocumentSignatureControls(meta,label="Valider document"){
@@ -9151,9 +9166,20 @@ function employeeContractDocumentType(a){
 function employeePositionContractDuration(a){
   return normalizeContractDurationValue(a?.dureeContrat||"12m")||"12m";
 }
+function employeeLatestContractEndDate(a){
+  if(!a)return "";
+  const dates=[];
+  const add=v=>{const d=String(v||"").slice(0,10);if(/^\d{4}-\d{2}-\d{2}$/.test(d))dates.push(d)};
+  (db.contrats||[]).forEach(c=>{if(contractRecordMatchesAgent(c,a))add(c.end_date||c.dateFinContrat||c.dateFin)});
+  (db.contratsPersonnel||[]).forEach(c=>{if(contractRecordMatchesAgent(c,a))add(c.end_date||c.dateFinContrat||c.dateFin)});
+  return dates.sort().pop()||"";
+}
 function employeePositionContractEndDate(a){
   const duration=employeePositionContractDuration(a);
-  return a?.dateFinContrat||contractEndDate(a?.dateRecrutement||"",duration);
+  const direct=a?.dateFinContrat||contractEndDate(a?.dateRecrutement||"",duration);
+  const latest=employeeLatestContractEndDate(a);
+  if(latest&&(!direct||latest>direct))return latest;
+  return direct;
 }
 function employeePositionContractDaysLeft(a,baseDate){
   const end=employeePositionContractEndDate(a);
@@ -10305,6 +10331,7 @@ async function confirmEmployeeNewContract(form){
   a.articleOverridesContrat=draft.articleOverrides||a.articleOverridesContrat||{};
   a.statut=a.statut||"actif";
   try{
+    await persistEmployeeMasterContractFields(a);
     await persistEmployeeContractRecord(a,draft);
     await persistEmployeeRhDecision(a,{type:"Nouveau contrat",du:draft.dateDebut,au:draft.dateFin,motif:`${draft.typeContrat} ${contratDureeLabel(draft.dureeContrat)}`,details:[`Fonction : ${draft.poste}`,`Période d'essai : ${contratDureeLabel(draft.periodeEssai)||"—"}`,`N° pièce d'identité : ${draft.numeroPieceIdentite||"—"}`,`N° identité National : ${draft.nin||"—"}`,`Client : ${draft.client||"—"}`,`Adresse : ${draft.adresseSite||"—"}`,`Wilaya : ${draft.wilaya||"—"}`,`Commune : ${draft.commune||"—"}`,draft.missions?`Missions : ${draft.missions}`:"",`Salaire : ${money(draft.salaireNet||0)}`,draft.observation?`Observation : ${draft.observation}`:""].filter(Boolean).join("\n"),reference:draft.reference,statut:"termine"});
   }catch(e){toast("Contrat non enregistré : "+(e.message||e),"error");return}
