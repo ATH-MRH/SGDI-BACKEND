@@ -7046,24 +7046,40 @@ function employeeDocumentsArchiveRows(scopeSoc){
 function documentsArchivesTotalCount(){
   return employeeDocumentsArchiveRows().length;
 }
+function docsArchiveSearchText(value){
+  return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+}
 function updateDocsArchiveSearch(value){
   sessionStorage.setItem("docsArchiveQ",String(value||""));
-  clearTimeout(window._docsArchiveSearchTimer);
-  window._docsArchiveSearchTimer=setTimeout(()=>renderView(),160);
+  const q=docsArchiveSearchText(value);
+  let visibleDocs=0,visibleGroups=0;
+  document.querySelectorAll(".docs-archive-group").forEach(group=>{
+    const groupText=docsArchiveSearchText(group.getAttribute("data-docs-agent-search")||"");
+    const agentMatch=!q||groupText.includes(q);
+    let groupHasVisible=false;
+    group.querySelectorAll(".docs-archive-row").forEach(row=>{
+      const rowText=docsArchiveSearchText(row.getAttribute("data-docs-search")||"");
+      const show=agentMatch||rowText.includes(q);
+      row.hidden=!show;
+      if(show){visibleDocs++;groupHasVisible=true}
+    });
+    group.hidden=!groupHasVisible;
+    if(groupHasVisible)visibleGroups++;
+  });
+  const meta=document.getElementById("docsArchiveSearchMeta");
+  if(meta)meta.textContent=`${visibleDocs} document(s) trouvé(s) · ${visibleGroups} employé(s)`;
 }
 function clearDocsArchiveSearch(){
   sessionStorage.removeItem("docsArchiveQ");
-  renderView();
+  const input=document.getElementById("docsArchiveSearchInput");
+  if(input)input.value="";
+  updateDocsArchiveSearch("");
+  input?.focus();
 }
 function renderDocumentsArchives(view,sub,arg){
   const soc=currentStructureSocieteFilter()||mySoc()||"";
   const qRaw=String(sessionStorage.getItem("docsArchiveQ")||"");
-  const q=qRaw.toLowerCase().trim();
-  const rows=employeeDocumentsArchiveRows(soc).filter(row=>{
-    if(!q)return true;
-    const a=row.agent,d=row.doc;
-    return [a.nom,a.prenom,a.matricule,a.societe,row.title,d.category,d.type,d.reference].some(v=>String(v||"").toLowerCase().includes(q));
-  });
+  const rows=employeeDocumentsArchiveRows(soc);
   const byAgent=new Map();
   rows.forEach(row=>{
     const id=row.agent.id||row.agent.backendId||row.agent.matricule;
@@ -7077,17 +7093,18 @@ function renderDocumentsArchives(view,sub,arg){
       <div class="docs-archive-search-box">
         <span aria-hidden="true" class="docs-archive-search-ico">⌕</span>
         <input id="docsArchiveSearchInput" class="docs-archive-search-input" placeholder="Nom, prénom, matricule, société ou document..." value="${escapeHTML(qRaw)}" oninput="updateDocsArchiveSearch(this.value)" autocomplete="off"/>
-        ${qRaw?`<button type="button" class="docs-archive-search-clear" onclick="clearDocsArchiveSearch()" aria-label="Effacer la recherche">×</button>`:""}
+        <button type="button" class="docs-archive-search-clear" onclick="clearDocsArchiveSearch()" aria-label="Effacer la recherche">×</button>
       </div>
-      <div class="docs-archive-search-meta">${rows.length} document(s) trouvé(s) · ${groups.length} employé(s)</div>
+      <div id="docsArchiveSearchMeta" class="docs-archive-search-meta">${rows.length} document(s) trouvé(s) · ${groups.length} employé(s)</div>
     </div>
-    ${groups.length?groups.map(({agent,docs})=>`<section class="card p-4 mb-3 docs-archive-group">
+    ${groups.length?groups.map(({agent,docs})=>{const agentSearch=[agent.nom,agent.prenom,agent.matricule,agent.societe].join(" ");return`<section class="card p-4 mb-3 docs-archive-group" data-docs-agent-search="${escapeHTML(agentSearch)}">
       <div class="docs-archive-head"><div><h3>${escapeHTML(((agent.nom||"")+" "+(agent.prenom||"")).trim()||"Employé")}</h3><p>${escapeHTML(agent.matricule||"—")} · ${escapeHTML(agent.societe||"—")} · ${docs.length} document(s)</p></div><a class="docs-title-link" href="#/agents/${employeeRouteId(agent)}">Ouvrir fiche</a></div>
-      <div class="docs-archive-list">${docs.map(({key,doc,date,title})=>`<div class="docs-archive-row">
+      <div class="docs-archive-list">${docs.map(({key,doc,date,title})=>{const rowSearch=[title,doc.category,doc.type,doc.reference,doc.name,date,agentSearch].join(" ");return`<div class="docs-archive-row" data-docs-search="${escapeHTML(rowSearch)}">
         <div><strong>${escapeHTML(title)}</strong><span>${escapeHTML(doc.category||doc.type||"Document")} ${doc.reference?`· Réf. ${escapeHTML(doc.reference)}`:""} ${date?`· ${formatDate(date)}`:""}</span></div>
         <button type="button" class="docs-title-link" onclick="viewAgentArchivedDoc('${escapeHTML(agent.id||agent.backendId||agent.matricule||"")}','${escapeHTML(key)}','${escapeHTML(title)}')">Voir</button>
-      </div>`).join("")}</div>
-    </section>`).join(""):`<div class="card p-10 text-center text-slate-500">Aucun document archivé${soc?` pour ${escapeHTML(soc)}`:""}.</div>`}`;
+      </div>`}).join("")}</div>
+    </section>`}).join(""):`<div class="card p-10 text-center text-slate-500">Aucun document archivé${soc?` pour ${escapeHTML(soc)}`:""}.</div>`}`;
+  if(qRaw)setTimeout(()=>updateDocsArchiveSearch(qRaw),0);
 }
 async function archiveEmployeeGeneratedDocument(agentId,doc){
   let a=findEmployeeByRef(agentId)||(db.agents||[]).find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
