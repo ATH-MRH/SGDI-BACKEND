@@ -4814,17 +4814,17 @@ function render(){
     const h=(location.hash||"").slice(2);
     const root=h.split("/")[0];
     const allowedByMod={
-      facturation:["facturation","incidents","demandes_structure"],
-      facmod:["facturation","incidents","demandes_structure"],
-      commercial:["commercial","incidents","demandes_structure"],
-      secretariat:["secretariat","incidents","demandes_structure"],
-      materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure"],
-      admin:["admin","sites","incidents","demandes_structure"],
-      pointage:["pointage","incidents","demandes_structure"],
-      paie:["paie","effectif","agents","demandes_structure"],
-      ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure"],
-      drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail"],
-      global:["global-dashboard","effectif","agents","contrats","fiches","sites","pointage","paie","recrutement","reserve","candidats_archives","dossiers","incidents","conges","demandes_personnel","demandes_structure","rapports","ops","drh","admin","facturation","commercial","secretariat","materiel"]
+      facturation:["facturation","incidents","demandes_structure","documents"],
+      facmod:["facturation","incidents","demandes_structure","documents"],
+      commercial:["commercial","incidents","demandes_structure","documents"],
+      secretariat:["secretariat","incidents","demandes_structure","documents"],
+      materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure","documents"],
+      admin:["admin","sites","incidents","demandes_structure","documents"],
+      pointage:["pointage","incidents","demandes_structure","documents"],
+      paie:["paie","effectif","agents","demandes_structure","documents"],
+      ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents"],
+      drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail","documents"],
+      global:["global-dashboard","effectif","agents","contrats","fiches","sites","pointage","paie","recrutement","reserve","candidats_archives","dossiers","incidents","conges","demandes_personnel","demandes_structure","rapports","ops","drh","admin","facturation","commercial","secretariat","materiel","documents"]
     };
     const allowed=allowedByMod[session.transverse]||[session.transverse];
     if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":session.transverse==="pointage"?"pointage":session.transverse==="ops"?"ops/dashboard":session.transverse==="global"?"global-dashboard":session.transverse+"/dashboard";location.hash="#/"+target;return}
@@ -5309,6 +5309,7 @@ function renderSidebar(){
     if(r.includes("dashboard"))return svg(`<path d="M4 11.5 12 5l8 6.5"></path><path d="M6.5 10.5V19h11v-8.5"></path>`);
     if(r.includes("recrutement")||r.includes("reserve")||l.includes("candidat"))return svg(`<circle cx="12" cy="8" r="3.2"></circle><path d="M5.5 19c1.2-4 11.8-4 13 0"></path>`);
     if(r.includes("contrat"))return svg(`<path d="M7 4h7l3 3v13H7z"></path><path d="M14 4v4h4"></path><path d="M9.5 12h5"></path><path d="M9.5 16h5"></path>`);
+    if(r.includes("document")||r.includes("archive"))return svg(`<path d="M7 4h7l3 3v13H7z"></path><path d="M14 4v4h4"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path>`);
     if(r.includes("effectif")||r.includes("agent")||r.includes("fiches"))return svg(`<circle cx="9" cy="8" r="3"></circle><path d="M3.8 19c.9-3.7 9.5-3.7 10.4 0"></path><path d="M15.5 7.2a2.5 2.5 0 0 1 0 4.6"></path><path d="M16.5 15c2 .5 3.4 1.8 3.8 4"></path>`);
     if(r.includes("site")||r.includes("location"))return svg(`<path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11Z"></path><circle cx="12" cy="10" r="2"></circle>`);
     if(r.includes("incident")||l.includes("main courante"))return svg(`<path d="M12 4 21 20H3z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path>`);
@@ -5522,7 +5523,9 @@ function renderSidebar(){
       ]
     };
     const baseItems=sidebarByModule[mod]||[];
-    const items=mod==="drh"?baseItems:mergeSidebarCustomItems(mod,baseItems);
+    const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
+    const withDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
+    const items=mod==="drh"?withDocs:mergeSidebarCustomItems(mod,withDocs);
     renderItems(applySidebarOrder(mod,items));
     restoreSidebarScroll();
     return;
@@ -6555,6 +6558,7 @@ function renderView(){
       case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else if(sub==="sortants")renderElementsSortants(view);else renderEffectif(view,sub||"actifs");break;
       case"agents":if(sub)renderAgentForm(view,sub);else renderEffectif(view,"actifs");break;
       case"fiches":renderFiches(view,sub||"toutes");break;
+      case"documents":renderDocumentsArchives(view,sub,arg);break;
       case"badge":if(sub==="verify"&&arg)renderBadgeVerify(view,arg);else renderFiches(view,"badge");break;
       case"sites":if(!["ops","admin","materiel","global"].includes(session?.transverse)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé OPS / Matériel / Administration système</h2><p class="text-slate-600">La carte Sites est disponible uniquement dans les modules OPS, Matériel ou Administration système.</p></div>`;break}if(sub==="nouveau"&&!arg)renderSiteForm(view,null);else if(sub==="actifs")renderSites(view);else if(sub)renderSiteForm(view,sub);else renderSites(view);break;
       case"incidents":renderIncidents(view,sub||"dashboard");break;
@@ -7003,6 +7007,46 @@ function employeeDocumentSafeKey(prefix,reference){
 function employeeDocumentFileName(title,reference){
   const base=[title||"Document",reference||today()].filter(Boolean).join(" - ").replace(/[\\/:*?"<>|]+/g," ").trim();
   return (base||"Document")+".html";
+}
+function employeeDocumentsArchiveRows(scopeSoc){
+  const soc=scopeSoc!==undefined?scopeSoc:(currentStructureSocieteFilter()||mySoc()||"");
+  const rows=[];
+  (db.agents||[]).forEach(a=>{
+    if(soc&&a.societe&&normalizeSocieteName(a.societe)!==normalizeSocieteName(soc))return;
+    Object.entries(a.documents||{}).forEach(([key,d])=>{
+      if(!d)return;
+      rows.push({agent:a,key,doc:d,date:String(d.date||d.uploadedAt||d.createdAt||"").slice(0,10),title:d.title||d.name||key});
+    });
+  });
+  return rows.sort((x,y)=>String(y.date||"").localeCompare(String(x.date||""))||String((x.agent.nom||"")+" "+(x.agent.prenom||"")).localeCompare(String((y.agent.nom||"")+" "+(y.agent.prenom||""))));
+}
+function documentsArchivesTotalCount(){
+  return employeeDocumentsArchiveRows().length;
+}
+function renderDocumentsArchives(view,sub,arg){
+  const soc=currentStructureSocieteFilter()||mySoc()||"";
+  const q=String(sessionStorage.getItem("docsArchiveQ")||"").toLowerCase().trim();
+  const rows=employeeDocumentsArchiveRows(soc).filter(row=>{
+    if(!q)return true;
+    const a=row.agent,d=row.doc;
+    return [a.nom,a.prenom,a.matricule,a.societe,row.title,d.category,d.type,d.reference].some(v=>String(v||"").toLowerCase().includes(q));
+  });
+  const byAgent=new Map();
+  rows.forEach(row=>{
+    const id=row.agent.id||row.agent.backendId||row.agent.matricule;
+    if(!byAgent.has(id))byAgent.set(id,{agent:row.agent,docs:[]});
+    byAgent.get(id).docs.push(row);
+  });
+  const groups=[...byAgent.values()];
+  view.innerHTML=`<div class="module-page-header"><div class="module-page-header-copy"><h1>Documents / Archives</h1><p>Documents archivés par employé${soc?` · ${escapeHTML(soc)}`:""}.</p></div></div>
+    <div class="card p-4 mb-4"><input class="input" placeholder="Rechercher employé, matricule, document..." value="${escapeHTML(q)}" oninput="sessionStorage.setItem('docsArchiveQ',this.value);renderView()"/></div>
+    ${groups.length?groups.map(({agent,docs})=>`<section class="card p-4 mb-3 docs-archive-group">
+      <div class="docs-archive-head"><div><h3>${escapeHTML(((agent.nom||"")+" "+(agent.prenom||"")).trim()||"Employé")}</h3><p>${escapeHTML(agent.matricule||"—")} · ${escapeHTML(agent.societe||"—")} · ${docs.length} document(s)</p></div><a class="docs-title-link" href="#/agents/${employeeRouteId(agent)}">Ouvrir fiche</a></div>
+      <div class="docs-archive-list">${docs.map(({key,doc,date,title})=>`<div class="docs-archive-row">
+        <div><strong>${escapeHTML(title)}</strong><span>${escapeHTML(doc.category||doc.type||"Document")} ${doc.reference?`· Réf. ${escapeHTML(doc.reference)}`:""} ${date?`· ${formatDate(date)}`:""}</span></div>
+        <button type="button" class="docs-title-link" onclick="viewAgentArchivedDoc('${escapeHTML(agent.id||agent.backendId||agent.matricule||"")}','${escapeHTML(key)}','${escapeHTML(title)}')">Voir</button>
+      </div>`).join("")}</div>
+    </section>`).join(""):`<div class="card p-10 text-center text-slate-500">Aucun document archivé${soc?` pour ${escapeHTML(soc)}`:""}.</div>`}`;
 }
 async function archiveEmployeeGeneratedDocument(agentId,doc){
   let a=findEmployeeByRef(agentId)||(db.agents||[]).find(x=>String(x.id)===String(agentId)||String(x.backendId||"")===String(agentId)||String(x.matricule||"")===String(agentId));
@@ -9093,7 +9137,7 @@ function renderContratsDashboard(view){
     <h3>${escapeHTML(title)}</h3>
     <div class="contract-summary-metrics">${items.join("")}</div>
   </section>`;
-  const contractActions=`<div class="contract-actions-row flex gap-2 flex-wrap justify-end items-center"><button class="btn btn-secondary text-xs" onclick="openAvenantModal('general')">+ Créer avenant</button><button class="btn contract-create-btn" onclick="openContratsCreateContract()">+ Créer contrat</button></div>`;
+  const contractActions=`<div class="contract-actions-row contract-title-actions flex gap-4 flex-wrap justify-end items-center"><button type="button" class="contract-title-link" onclick="openAvenantModal('general')">+ Créer avenant</button><button type="button" class="contract-title-link" onclick="openContratsCreateContract()">+ Créer contrat</button></div>`;
   view.innerHTML=`
     <div class="mb-4 flex items-center justify-between gap-3 flex-wrap">
       <div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div>
@@ -11008,7 +11052,7 @@ function drhEffectifActionsBarHTML(){
     {k:"nouveau_contrat",  l:"Nouveau contrat",    c:"#1d4ed8"},
     {k:"fin_contrat",      l:"Fin de contrat",     c:"#374151"},
   ];
-  return `<div class="drh-effectif-actions-bar">${btns.map(({k,l,c})=>`<button type="button" class="drh-effectif-action-btn" onclick="openRhEffectifActionModal('${k}')" style="--action-color:${c}">${l}</button>`).join("")}</div>`;
+  return `<div class="drh-effectif-actions-bar">${btns.map(({k,l,c})=>`<button type="button" class="drh-effectif-action-title" onclick="openRhEffectifActionModal('${k}')" style="--action-color:${c}">${l}</button>`).join("")}</div>`;
 }
 function rhEffectifActionsHTML(){
   const actions=drhEmployeeActionLabels(false);
@@ -17526,7 +17570,7 @@ function renderFiches(view,sub){
         <div class="fp-quick-filter"><label>Poste</label><select id="fp-poste" onchange="setFpFilter('poste',this.value)"><option value="">Tous les postes</option>${POSTES_SITE.map(p=>`<option ${fpFilter.poste===p?"selected":""}>${p}</option>`).join("")}</select></div>
         <div class="fp-quick-filter"><label>Statut</label><select id="fp-status" onchange="setFpFilter('status',this.value)"><option value="">Tous les statuts</option><option value="actif" ${fpFilter.status==="actif"?"selected":""}>Actif</option><option value="congé" ${fpFilter.status==="congé"?"selected":""}>Congé</option><option value="maladie" ${fpFilter.status==="maladie"?"selected":""}>Maladie</option><option value="suspendu" ${fpFilter.status==="suspendu"?"selected":""}>Suspendu</option><option value="absent" ${fpFilter.status==="absent"?"selected":""}>Absent</option><option value="abandon" ${fpFilter.status==="abandon"?"selected":""}>Abandon</option><option value="sortant" ${fpFilter.status==="sortant"?"selected":""}>Sortant / archivé</option></select></div>
       </div>
-      <details class="fp-advanced" ${activeAdvancedFilters?"open":""}>
+      <details class="fp-advanced hidden" ${activeAdvancedFilters?"open":""}>
         <summary><span><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Plus de filtres${activeAdvancedFilters?` <b>${activeAdvancedFilters}</b>`:""}</span><span class="fp-chevron">⌄</span></summary>
         <div class="fp-advanced-grid">
           <div><label>Recrutement du</label><input type="date" value="${escapeHTML(fpFilter.recruitFrom)}" onchange="setFpFilter('recruitFrom',this.value)"/></div>
@@ -17535,7 +17579,7 @@ function renderFiches(view,sub){
           <div><label>Âge maximum</label><input type="number" min="0" max="100" value="${escapeHTML(fpFilter.ageMax)}" placeholder="45" onchange="setFpFilter('ageMax',this.value)"/></div>
         </div>
       </details>
-      <div class="fp-filter-footer">
+      <div class="fp-filter-footer hidden">
         <div class="fp-result-count"><strong>${list.length}</strong> fiche${list.length!==1?"s":""} affichée${list.length!==1?"s":""}</div>
         <div class="fp-display-controls"><label>Trier par</label><select onchange="setFpFilter('sort',this.value)">
           <option value="alpha_asc" ${fpFilter.sort==="alpha_asc"?"selected":""}>Alphabetique A-Z</option>
