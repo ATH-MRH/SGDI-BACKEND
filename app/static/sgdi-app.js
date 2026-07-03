@@ -5527,8 +5527,8 @@ function renderSidebar(){
     };
     const baseItems=sidebarByModule[mod]||[];
     const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
-    const withDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
-    const items=mod==="drh"?withDocs:mergeSidebarCustomItems(mod,withDocs);
+    const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
+    const items=mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems);
     renderItems(applySidebarOrder(mod,items));
     restoreSidebarScroll();
     return;
