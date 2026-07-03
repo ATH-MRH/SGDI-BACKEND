@@ -4252,7 +4252,7 @@ function moduleCountersRibbonHTML(){
     const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
     if(!empCounters||!erpDrh||!erpOps)return"";
     const total=Math.max(1,counterNumericValue(empCounters.total));
-    const actifs=counterNumericValue(empCounters.operationalActive);
+    const actifs=counterNumericValue(empCounters.active);
     const activeHeadcount=counterNumericValue(empCounters.activeHeadcount);
     const sansDotation=counterNumericValue(empCounters.withoutEquipment);
     const sansAffectation=counterNumericValue(empCounters.withoutAssignment);
@@ -4272,7 +4272,7 @@ function moduleCountersRibbonHTML(){
     ]:[];
     return moduleCountersRibbon([
       ...(session.transverse==="ops"?[opsSiteCounter]:[]),
-      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/operationnels",pctBase:Math.max(1,activeHeadcount)},
+      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/actifs",pctBase:Math.max(1,activeHeadcount)},
       ...prepCounters,
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
       {label:"EFF. MALADIE",value:enMaladie,color:"#c2410c",route:"effectif/maladie",pctBase:total},
@@ -4288,7 +4288,7 @@ function moduleCountersRibbonHTML(){
     const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
     if(!empCounters||!erpOps)return"";
     const total=Math.max(1,counterNumericValue(empCounters.total));
-    const actifs=counterNumericValue(empCounters.operationalActive);
+    const actifs=counterNumericValue(empCounters.active);
     const activeHeadcount=counterNumericValue(empCounters.activeHeadcount);
     const sansAffectation=counterNumericValue(empCounters.withoutAssignment);
     const sansDotation=counterNumericValue(empCounters.withoutEquipment);
@@ -4305,7 +4305,7 @@ function moduleCountersRibbonHTML(){
     ]:[];
     return moduleCountersRibbon([
       {label:"NBR SITE",value:counterNumericValue(erpOps.sites_active),color:"#043970",route:"sites/actifs",sub:"site(s)"},
-      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/operationnels",pctBase:Math.max(1,activeHeadcount)},
+      {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/actifs",pctBase:Math.max(1,activeHeadcount)},
       ...prepCounters,
       {label:"MISSION EN COURS",value:missionEnCours,color:"#043970",route:"ops/missions",pctBase:missionTotal},
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
@@ -29496,7 +29496,7 @@ function renderAdminEffectifsConfig(view){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Sans affectation</div><div class="text-3xl font-black text-amber-700">${sansAffectation}</div></div>
   </div>
   <form onsubmit="event.preventDefault();saveAdminEffectifsConfig(this)">
-    <section class="card p-5 mb-4"><h2 class="font-black text-lg mb-3">Préparation opérationnelle</h2><div class="mb-3 text-sm font-semibold text-slate-600">Le compteur EFF. OPÉRATIONNEL correspond aux employés actifs affectés à un site. Les options ci-dessous pilotent les compteurs de préparation.</div><div class="grid grid-cols-1 md:grid-cols-2 gap-3">${toggle("operationalRequiresDotation","Compter les employés sans dotation","Affiche le compteur de préparation pour les dotations matérielles manquantes.")}${toggle("operationalRequiresAffectation","Compter les employés sans affectation","Affiche le compteur de préparation pour les affectations manquantes.")}${toggle("showPreparationCounters","Afficher les compteurs de préparation","Affiche sans dotation et sans affectation dans la barre fixe.")}</div></section>
+    <section class="card p-5 mb-4"><h2 class="font-black text-lg mb-3">Préparation opérationnelle</h2><div class="mb-3 text-sm font-semibold text-slate-600">Le compteur EFF. OPÉRATIONNEL correspond à l'ensemble des employés de la société sélectionnée, tous postes confondus, hors employés sortants. Les options ci-dessous pilotent les compteurs de préparation.</div><div class="grid grid-cols-1 md:grid-cols-2 gap-3">${toggle("operationalRequiresDotation","Compter les employés sans dotation","Affiche le compteur de préparation pour les dotations matérielles manquantes.")}${toggle("operationalRequiresAffectation","Compter les employés sans affectation","Affiche le compteur de préparation pour les affectations manquantes.")}${toggle("showPreparationCounters","Afficher les compteurs de préparation","Affiche sans dotation et sans affectation dans la barre fixe.")}</div></section>
     <section class="card p-5 mb-4"><h2 class="font-black text-lg mb-3">Sécurité et archivage</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-3">${toggle("lockValidatedSections","Verrouiller les sections validées","Une section validée reste protégée sauf intervention autorisée.")}${toggle("archiveDocumentsByEmployee","Archiver les documents par employé","Les décisions, contrats et documents générés restent liés au dossier de l'employé.")}</div></section>
     <section class="card p-5 mb-4"><h2 class="font-black text-lg mb-3">Actions et statuts</h2><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="label">Actions DRH</label><textarea class="input" name="drhActions" rows="8">${escapeHTML(adminEffectifTextList(cfg.drhActions))}</textarea></div><div><label class="label">Actions OPS</label><textarea class="input" name="opsActions" rows="8">${escapeHTML(adminEffectifTextList(cfg.opsActions))}</textarea></div><div><label class="label">Statuts effectif</label><textarea class="input" name="statuses" rows="8">${escapeHTML(adminEffectifTextList(cfg.statuses))}</textarea></div></div><div class="text-xs text-slate-500 mt-2">Une valeur par ligne. Les routes et traitements existants restent protégés.</div></section>
     <div class="sticky bottom-0 mt-5 p-3 flex justify-end gap-2" style="background:#ffffffcc;backdrop-filter:blur(8px);border-top:1px solid #e2e8f0"><button type="button" class="btn btn-ghost" onclick="renderView()">Annuler</button><button class="btn btn-primary">Enregistrer la configuration</button></div>
