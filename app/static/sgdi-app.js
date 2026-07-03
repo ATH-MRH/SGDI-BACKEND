@@ -4118,11 +4118,13 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
   if(erpEmp&&typeof erpEmp==="object"){
     const total=counterNumericValue(erpEmp.total);
     const active=counterNumericValue(erpEmp.active);
+    const operationalActive=counterNumericValue(erpEmp.operational_active??erpEmp.active);
     const activeHeadcount=counterNumericValue(erpEmp.non_archived??erpEmp.active??erpEmp.total);
     return {
       source:"backend",
       total,
       active,
+      operationalActive,
       activeHeadcount:activeHeadcount||active||total,
       withoutEquipment:counterNumericValue(erpEmp.without_equipment),
       withoutAssignment:counterNumericValue(erpEmp.without_assignment),
@@ -4142,6 +4144,7 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
     source:"local-fallback",
     total:agents.length,
     active:activeAgents.length,
+    operationalActive:activeAgents.filter(agentIsOperational).length,
     activeHeadcount:nonArchived.length||activeAgents.length||agents.length,
     withoutEquipment:materialPendingDotationCountForSoc(scopeSoc),
     withoutAssignment:activeAgents.filter(agentNeedsAffectation).length,
@@ -4219,7 +4222,7 @@ function employeeIsActive(a){
   return !employeeIsFormer(a)&&["actif","active"].includes(employeeLifecycleStatusKey(a));
 }
 function agentIsOperational(a){
-  return employeeIsActive(a);
+  return employeeIsActive(a)&&agentHasLiveAffectation(a)&&!agentNeedsDotation(a)&&!agentNeedsInstallationPV(a);
 }
 function agentNeedsDotation(a){
   const cfg=effectifConfigSettings();
@@ -4249,7 +4252,7 @@ function moduleCountersRibbonHTML(){
     const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
     if(!empCounters||!erpDrh||!erpOps)return"";
     const total=Math.max(1,counterNumericValue(empCounters.total));
-    const actifs=counterNumericValue(empCounters.active);
+    const actifs=counterNumericValue(empCounters.operationalActive);
     const activeHeadcount=counterNumericValue(empCounters.activeHeadcount);
     const sansDotation=counterNumericValue(empCounters.withoutEquipment);
     const sansAffectation=counterNumericValue(empCounters.withoutAssignment);
@@ -4285,7 +4288,7 @@ function moduleCountersRibbonHTML(){
     const erpOps=sgdiErpModuleCounters("ops",scopeSoc);
     if(!empCounters||!erpOps)return"";
     const total=Math.max(1,counterNumericValue(empCounters.total));
-    const actifs=counterNumericValue(empCounters.active);
+    const actifs=counterNumericValue(empCounters.operationalActive);
     const activeHeadcount=counterNumericValue(empCounters.activeHeadcount);
     const sansAffectation=counterNumericValue(empCounters.withoutAssignment);
     const sansDotation=counterNumericValue(empCounters.withoutEquipment);
@@ -31315,12 +31318,20 @@ function renderOPS(view,sub,arg){
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
   if(sub==="instance_dotation"){renderOpsInstanceDotation(view);return}
   const soc=currentStructureSocieteFilter();
+  const empCounters=sgdiUnifiedEmployeeCounters(soc);
+  const erpOps=sgdiErpModuleCounters("ops",soc);
   const ag=(db.agents||[]).filter(a=>!soc||a.societe===soc);
   const sites=(db.sites||[]).filter(s=>s&&siteBelongsToPrimarySociete(s,soc));
   const pts=(db.pointages||[]).filter(p=>!soc||((db.agents||[]).find(a=>a.id===p.agentId)?.societe===soc)||p.societe===soc);
   const actifs=ag.filter(employeeIsActive);
+  const dashboardActive=counterNumericValue(empCounters?.active??actifs.length);
+  const dashboardOperational=counterNumericValue(empCounters?.operationalActive??actifs.length);
+  const dashboardSansAffectation=counterNumericValue(empCounters?.withoutAssignment??actifs.filter(agentNeedsAffectation).length);
+  const dashboardSansDotation=counterNumericValue(empCounters?.withoutEquipment??materialPendingDotationCountForSoc(soc));
+  const dashboardSitesActifs=counterNumericValue(erpOps?.sites_active??sites.filter(s=>s.actif!==false).length);
+  const dashboardAffectes=counterNumericValue(erpOps?.assignments_active??actifs.filter(agentHasLiveAffectation).length);
   const instanceAffectation=actifs.filter(agentNeedsAffectation);
-  const instanceDotationCount=materialPendingDotationCountForSoc(soc);
+  const instanceDotationCount=dashboardSansDotation;
   const sitesActifs=sites.filter(s=>s.actif!==false);
   const now=new Date();const curYM=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
   const ptsCur=pts.filter(p=>p.periode===curYM);
@@ -31349,11 +31360,11 @@ function renderOPS(view,sub,arg){
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">TABLEAU DE BORD</h1>
   <p class="text-slate-500 text-sm mb-4">OPS · Pointage, fiches de position, sites · ${soc?escapeHTML(soc):"Toutes sociétés"}</p>
   <div class="grid grid-5 mb-6">
-    <a href="#/effectif/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif opérationnel</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">Employés actifs · ${affectes.length} affecté(s)</div></a>
-    <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${instanceAffectation.length}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
+    <a href="#/effectif/operationnels" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#eff6ff,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#1e40af">👮</div><h3 class="text-right">Effectif opérationnel</h3></div><div class="text-4xl font-bold">${dashboardOperational}</div><div class="text-xs text-slate-500 mt-1">${dashboardActive} employés actifs · ${dashboardAffectes} affectation(s) active(s)</div></a>
+    <a href="#/effectif/instance_affectation" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fff7ed,#fed7aa)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#c2410c">📍</div><h3 class="text-right">Effectif en attente d'affectation</h3></div><div class="text-4xl font-bold text-orange-700">${dashboardSansAffectation}</div><div class="text-xs font-semibold text-orange-700 mt-1">→ Affectation à traiter par OPS</div></a>
     <a href="#/ops/instance_dotation" class="card p-5 block hover:shadow-md transition-shadow ${instanceDotationCount?"ops-dot-counter-alert":""}" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#fef2f2,#fee2e2)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#dc2626">🎒</div><h3 class="text-right">Employés en instance de dotation</h3></div><div id="ops-dot-card-count" class="text-4xl font-bold text-red-700">${instanceDotationCount}</div><div class="text-xs font-semibold text-red-700 mt-1">→ Dotation à coordonner</div></a>
-    <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${sitesActifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
-    <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position actives</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les fiches actives</div></a>
+    <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${dashboardSitesActifs}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
+    <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position actives</h3></div><div class="text-4xl font-bold">${dashboardActive}</div><div class="text-xs text-slate-500 mt-1">→ Voir les fiches actives</div></a>
   </div>
   <div class="grid grid-cols-1 mb-6">
     <div class="card p-5"><h3 class="mb-3">🕒 Pointage du mois</h3><div class="text-xs text-slate-500 mb-3 capitalize">${now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div><div class="grid grid-cols-3 gap-2"><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-emerald-700">P</div><div class="text-xl font-black text-emerald-700">${totP}</div></div><div class="card p-2 text-center" style="background:#fee2e2"><div class="text-[10px] font-semibold text-red-700">A</div><div class="text-xl font-black text-red-700">${totA}</div></div><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-amber-700">M</div><div class="text-xl font-black text-amber-700">${totM}</div></div></div></div>
