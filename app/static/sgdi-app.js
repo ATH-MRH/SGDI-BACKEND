@@ -31358,13 +31358,6 @@ function renderOPS(view,sub,arg){
   <div class="grid grid-cols-1 mb-6">
     <div class="card p-5"><h3 class="mb-3">🕒 Pointage du mois</h3><div class="text-xs text-slate-500 mb-3 capitalize">${now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div><div class="grid grid-cols-3 gap-2"><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-emerald-700">P</div><div class="text-xl font-black text-emerald-700">${totP}</div></div><div class="card p-2 text-center" style="background:#fee2e2"><div class="text-[10px] font-semibold text-red-700">A</div><div class="text-xl font-black text-red-700">${totA}</div></div><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-amber-700">M</div><div class="text-xl font-black text-amber-700">${totM}</div></div></div></div>
   </div>
-  <div class="grid grid-4 mb-6">
-    ${opsLine("Taux d'affectation",tauxAffectation+"%","#043970","effectif/actifs")}
-    ${opsLine("Pointage saisi aujourd'hui",tauxPointage+"%","#047857","pointage/feuille")}
-    ${opsLine("Pointage du jour",fpqMouvements,"#7c3aed","pointage/feuille")}
-    ${opsLine("Incidents ouverts",incidentsOuverts.length,"#b91c1c","incidents/site")}
-    <a href="#/ops/qr" class="p-3 rounded-lg block text-white" style="background:#043970;border:1px solid #043970;text-decoration:none;color:#fff !important"><div class="text-[10px] uppercase tracking-wider font-black text-white" style="color:#fff !important">📲 QR Codes Présence</div><div class="text-sm font-black mt-1 text-white" style="color:#fff !important">Par site · 10 sec</div></a>
-  </div>
   <div class="card p-5 mb-6 overflow-hidden">
     <h3 class="mb-3">🏢 Récapitulatif par société</h3>
     <table><thead><tr><th>Société</th><th>Effectif actif</th><th>Affectés</th><th>En instance</th><th>Sites actifs</th><th>Incidents</th></tr></thead>
