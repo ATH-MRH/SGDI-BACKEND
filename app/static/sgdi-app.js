@@ -28480,10 +28480,27 @@ function renderDRHDashboard(view){
       </div>
       ${contratsAlerte.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${contratsAlerte.slice(0,6).map(a=>{const d=employeePositionContractDaysLeft(a);return`<a href="#/effectif/agent/${a.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #fecaca;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b><span class="pill pill-red">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.societe||"—")} · Fin : ${employeePositionContractEndPillHTML(a)}</div></a>`}).join("")}</div>${contratsAlerte.length>6?`<div class="text-xs text-red-700 mt-2 font-semibold">+ ${contratsAlerte.length-6} autre(s) contrat(s) en alerte.</div>`:""}`:`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat critique.</div>`}
     </div>
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
-      <div class="card p-5"><h3 class="font-bold mb-3">Répartition par société</h3>${drhBars(bySoc,"#043970")}</div>
-      <div class="card p-5"><h3 class="font-bold mb-3">Top fonctions / postes</h3>${drhBars(topFonctions,"#047857")}</div>
-    </div>`;
+    <section class="drh-dashboard-stat-section card p-5 mb-6">
+      <div class="drh-dashboard-stat-head">
+        <div>
+          <h2>Statistiques RH</h2>
+          <p>Vue synthétique des indicateurs RH principaux · source backend PostgreSQL.</p>
+        </div>
+        <a href="#/drh/stats" class="drh-dashboard-stat-link">Voir statistiques détaillées →</a>
+      </div>
+      <div class="drh-dashboard-stat-grid">
+        ${miniCurve("Effectif",dashEmployees,seriesEffectif,"#043970","#/effectif/actifs")}
+        ${miniCurve("Congés",dashConge,seriesConges,"#d97706","#/conges")}
+        ${miniCurve("Maladies",dashMaladie,seriesMaladies,"#c2410c","#/conges")}
+        ${miniCurve("Absences",dashAbsents,seriesAbsences,"#dc2626","#/pointage/feuille")}
+        ${miniCurve("Suspensions",dashSusp,seriesSuspensions,"#7c3aed","#/effectif/actifs")}
+        ${miniCurve("Candidats",dashCandTotal,seriesCandidats,"#4f46e5","#/recrutement/candidats")}
+        ${miniCurve("Demandes",demandesPersonnel,seriesDemandes,"#0891b2","#/demandes_personnel/dashboard")}
+        ${miniCurve("Incidents",dashIncidents,seriesIncidents,"#b91c1c","#/incidents/site")}
+        ${miniCurve("Contrats",contratsAlerte.length,seriesContrats,"#ea580c","#/contrats/situation")}
+        ${miniCurve("Sites",dashSites,seriesSites,"#0f766e","#/sites/actifs")}
+      </div>
+    </section>`;
 }
 function renderDRHStats(view){
   const ag=drhAgentsList();
@@ -31338,10 +31355,8 @@ function renderOPS(view,sub,arg){
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">📍</div><h3 class="text-right">Sites actifs</h3></div><div class="text-4xl font-bold">${sitesActifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les sites</div></a>
     <a href="#/fiches/toutes" class="card p-5 block hover:shadow-md transition-shadow" style="text-decoration:none;color:inherit;background:linear-gradient(135deg,#043970,#043970)"><div class="flex items-center justify-between mb-3"><div class="text-3xl" style="color:#043970">🪪</div><h3 class="text-right">Fiches de position actives</h3></div><div class="text-4xl font-bold">${actifs.length}</div><div class="text-xs text-slate-500 mt-1">→ Voir les fiches actives</div></a>
   </div>
-  <div class="grid grid-3 mb-6">
+  <div class="grid grid-cols-1 mb-6">
     <div class="card p-5"><h3 class="mb-3">🕒 Pointage du mois</h3><div class="text-xs text-slate-500 mb-3 capitalize">${now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div><div class="grid grid-cols-3 gap-2"><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-emerald-700">P</div><div class="text-xl font-black text-emerald-700">${totP}</div></div><div class="card p-2 text-center" style="background:#fee2e2"><div class="text-[10px] font-semibold text-red-700">A</div><div class="text-xl font-black text-red-700">${totA}</div></div><div class="card p-2 text-center" style="background:#043970"><div class="text-[10px] font-semibold text-amber-700">M</div><div class="text-xl font-black text-amber-700">${totM}</div></div></div></div>
-    <div class="card p-5"><h3 class="mb-3">📍 Sites par société</h3>${opsDashboardSocietes.map(s=>{const n=sitesActifs.filter(x=>siteBelongsToPrimarySociete(x,s)).length;return`<div class="flex items-center justify-between text-sm mb-1"><span class="text-slate-600">${escapeHTML(s)}</span><span class="font-bold">${n}</span></div>`}).join("")}</div>
-    <div class="card p-5"><h3 class="mb-3">👮 Effectif opérationnel par société</h3>${opsDashboardSocietes.map(s=>{const n=affectes.filter(a=>a.societe===s).length;const total=actifs.filter(a=>a.societe===s).length;return`<div class="flex items-center justify-between text-sm mb-1"><span class="text-slate-600">${escapeHTML(s)}</span><span class="font-bold">${n}<span class="text-xs text-slate-400 font-semibold"> / ${total}</span></span></div>`}).join("")}</div>
   </div>
   <div class="grid grid-4 mb-6">
     ${opsLine("Taux d'affectation",tauxAffectation+"%","#043970","effectif/actifs")}
@@ -31349,40 +31364,6 @@ function renderOPS(view,sub,arg){
     ${opsLine("Pointage du jour",fpqMouvements,"#7c3aed","pointage/feuille")}
     ${opsLine("Incidents ouverts",incidentsOuverts.length,"#b91c1c","incidents/site")}
     <a href="#/ops/qr" class="p-3 rounded-lg block text-white" style="background:#043970;border:1px solid #043970;text-decoration:none;color:#fff !important"><div class="text-[10px] uppercase tracking-wider font-black text-white" style="color:#fff !important">📲 QR Codes Présence</div><div class="text-sm font-black mt-1 text-white" style="color:#fff !important">Par site · 10 sec</div></a>
-  </div>
-  <div class="grid grid-3 mb-6">
-    <div class="card p-5">
-      <h3 class="mb-3">⚠️ Opérations à traiter</h3>
-      <div class="space-y-2">
-        <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-orange-50 text-sm" style="text-decoration:none;color:inherit"><span>Employés sans affectation</span><b class="text-orange-700">${instanceAffectation.length}</b></a>
-        <a href="#/ops/instance_dotation" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm ${instanceDotationCount?"ops-dot-row-alert":""}" style="text-decoration:none;color:inherit"><span>Employés en instance de dotation</span><b class="text-red-700">${instanceDotationCount}</b></a>
-        <a href="#/effectif/instance_affectation" class="flex items-center justify-between p-2 rounded-lg bg-amber-50 text-sm" style="text-decoration:none;color:inherit"><span>Fiches validées à traiter</span><b class="text-amber-700">${opsWorkflowTasks.length}</b></a>
-        <a href="#/sites/actifs" class="flex items-center justify-between p-2 rounded-lg bg-slate-50 text-sm" style="text-decoration:none;color:inherit"><span>Sites actifs sans effectif</span><b>${sitesSansEffectif.length}</b></a>
-        <a href="#/pointage/feuille" class="flex items-center justify-between p-2 rounded-lg bg-red-50 text-sm" style="text-decoration:none;color:inherit"><span>Feuilles non clôturées</span><b class="text-red-700">${feuillesNonCloturees}</b></a>
-      </div>
-    </div>
-    <div class="card p-5 md:col-span-2">
-      <div class="flex items-center justify-between gap-3 mb-4">
-        <h3 class="mb-0">📋 Situation présence aujourd'hui</h3>
-        <a href="#/pointage/feuille" class="btn btn-secondary text-xs" style="text-decoration:none">Voir pointage</a>
-      </div>
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div class="p-3 rounded-lg text-center" style="background:#ecfdf5;border:1px solid #bbf7d0;min-height:88px"><div class="text-[11px] font-black uppercase tracking-wide text-emerald-700">Présents</div><div class="text-3xl font-black text-emerald-700 mt-1">${fpqPresent}</div></div>
-        <div class="p-3 rounded-lg text-center" style="background:#fef2f2;border:1px solid #fecaca;min-height:88px"><div class="text-[11px] font-black uppercase tracking-wide text-red-700">Absences</div><div class="text-3xl font-black text-red-700 mt-1">${fpqAbsence}</div></div>
-        <div class="p-3 rounded-lg text-center" style="background:#fffbeb;border:1px solid #fde68a;min-height:88px"><div class="text-[11px] font-black uppercase tracking-wide text-amber-700">Récupération</div><div class="text-3xl font-black text-amber-700 mt-1">${fpqRecup}</div></div>
-        <div class="p-3 rounded-lg text-center" style="background:#f5f3ff;border:1px solid #ddd6fe;min-height:88px"><div class="text-[11px] font-black uppercase tracking-wide text-violet-700">Suspendus</div><div class="text-3xl font-black text-violet-700 mt-1">${fpqSuspendu}</div></div>
-        <div class="p-3 rounded-lg text-center" style="background:#f8fafc;border:1px solid #e2e8f0;min-height:88px"><div class="text-[11px] font-black uppercase tracking-wide text-slate-700">Lignes</div><div class="text-3xl font-black text-slate-800 mt-1">${fpqToday.length}</div></div>
-      </div>
-      <div class="mt-4 flex items-center justify-between gap-3">
-        <div class="text-xs font-bold text-slate-600">${fpqPointes}/${fpqToday.length||0} lignes renseignées</div>
-        <div class="text-xs font-black text-emerald-700">${tauxPointage}% saisi</div>
-      </div>
-      <div class="mt-2" style="height:10px;background:#e2e8f0;border-radius:999px;overflow:hidden"><div style="height:100%;width:${tauxPointage}%;background:linear-gradient(90deg,#047857,#22c55e)"></div></div>
-    </div>
-    <div class="card p-5">
-      <h3 class="mb-3">📌 Alertes exploitation</h3>
-      ${incidentsOuverts.slice(0,5).map(i=>`<a href="#/incidents/${i.id}" class="block p-2 rounded-lg bg-slate-50 mb-2" style="text-decoration:none;color:inherit"><div class="text-xs font-bold">${escapeHTML(i.sujet||i.categorie||"Incident")}</div><div class="text-[10px] text-slate-500">${formatDate(i.date||i.createdAt||"")} · ${escapeHTML(i.statut||"ouvert")}</div></a>`).join("")||`<div class="text-sm text-emerald-700 font-semibold">Aucune alerte ouverte.</div>`}
-    </div>
   </div>
   <div class="card p-5 mb-6 overflow-hidden">
     <h3 class="mb-3">🏢 Récapitulatif par société</h3>
