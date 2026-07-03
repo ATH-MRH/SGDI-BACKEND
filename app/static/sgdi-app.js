@@ -4273,11 +4273,11 @@ function moduleCountersRibbonHTML(){
     return moduleCountersRibbon([
       ...(session.transverse==="ops"?[opsSiteCounter]:[]),
       {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/actifs",pctBase:Math.max(1,activeHeadcount)},
-      ...prepCounters,
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
       {label:"EFF. MALADIE",value:enMaladie,color:"#c2410c",route:"effectif/maladie",pctBase:total},
       {label:"EFF. ABSENT",value:absents,color:"#dc2626",route:"effectif/absents",pctBase:total},
       {label:"EFF. SUSPENDU",value:susp,color:"#7c3aed",route:"effectif/suspension",pctBase:total},
+      ...prepCounters,
       {label:"EFF. BLACKLISTÉ",value:blacklist,color:"#111827",route:"effectif/blacklist",pctBase:total},
       {label:"CANDIDAT RÉSERVE",value:reserveCandidates,color:"#0ea5e9",route:"reserve",pctBase:reserveTotal},
       ...(module==="drh"?[]:[{label:"MISSION EN COURS",value:missionEnCours,color:"#7c3aed",route:"ops/missions",pctBase:missionTotal}])
@@ -4306,12 +4306,12 @@ function moduleCountersRibbonHTML(){
     return moduleCountersRibbon([
       {label:"NBR SITE",value:counterNumericValue(erpOps.sites_active),color:"#043970",route:"sites/actifs",sub:"site(s)"},
       {label:"EFF. OPÉRATIONNEL",value:actifs,color:"#047857",route:"effectif/actifs",pctBase:Math.max(1,activeHeadcount)},
-      ...prepCounters,
       {label:"MISSION EN COURS",value:missionEnCours,color:"#043970",route:"ops/missions",pctBase:missionTotal},
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
       {label:"EFF. MALADIE",value:enMaladie,color:"#c2410c",route:"effectif/maladie",pctBase:total},
       {label:"EFF. ABSENT",value:absents,color:"#dc2626",route:"effectif/absents",pctBase:total},
       {label:"EFF. SUSPENDU",value:susp,color:"#7c3aed",route:"effectif/suspension",pctBase:total},
+      ...prepCounters,
       {label:"EFF. BLACKLISTÉ",value:blacklist,color:"#111827",route:"effectif/blacklist",pctBase:total}
     ]);
   }
