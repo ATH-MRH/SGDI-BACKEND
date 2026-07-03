@@ -6955,10 +6955,37 @@ function viewDoc(url,name){
   const preview=isImage?`<img src="${safeUrl}" class="w-full rounded-lg"/>`:`<iframe src="${safeUrl}" class="w-full rounded-lg" style="height:70vh" sandbox="allow-scripts allow-same-origin"></iframe>`;
   openModal(`<div class="p-2"><div class="flex justify-between items-center mb-3"><h3 class="font-bold">${escapeHTML(name)}</h3><button class="btn btn-ghost" onclick="closeModal()">✕</button></div>${preview}<a href="${safeUrl}" download="${escapeHTML(name)}" class="btn btn-primary mt-3">⬇ Télécharger</a></div>`);
 }
+function printArchiveA4Current(){
+  const cur=window._archiveA4CurrentDoc||{};
+  const url=String(cur.url||"");
+  const name=String(cur.name||"Document");
+  if(!url){toast("Aucun document à imprimer","error");return}
+  const w=window.open("","_blank","width=1100,height=850");
+  if(!w){toast("Popup bloquée par le navigateur — autorisez les fenêtres pour imprimer","error");return}
+  if(url.startsWith("data:text/html")){
+    const comma=url.indexOf(",");
+    let html="";
+    try{html=decodeURIComponent(url.slice(comma+1))}catch(e){html=""}
+    w.document.open();
+    w.document.write(html||`<!doctype html><html><body>Document indisponible</body></html>`);
+    w.document.close();
+    setTimeout(()=>{try{w.focus();w.print()}catch(e){}},500);
+    return;
+  }
+  if(url.startsWith("data:image/")){
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><title>${escapeHTML(name)}</title><style>@page{size:A4;margin:10mm}body{margin:0;background:#fff;display:flex;align-items:flex-start;justify-content:center}img{max-width:190mm;max-height:277mm;object-fit:contain}</style></head><body><img src="${escapeHTML(url)}" onload="setTimeout(()=>print(),300)"></body></html>`);
+    w.document.close();
+    return;
+  }
+  w.location.href=url;
+  setTimeout(()=>{try{w.focus();w.print()}catch(e){}},900);
+}
 function viewDocA4(url,name){
   const safeUrl=sgdiHtmlDataUrlWithInlineStyles(url);
   const allowed=safeUrl.startsWith("data:image/")||safeUrl.startsWith("data:application/pdf")||safeUrl.startsWith("data:text/html")||safeUrl.startsWith("blob:")||safeUrl.startsWith("https://")||safeUrl.startsWith("http://")||safeUrl.startsWith("/");
   if(!allowed){console.warn("viewDocA4: URL non autorisée",safeUrl.slice(0,80));toast("Document impossible à ouvrir","error");return}
+  window._archiveA4CurrentDoc={url:safeUrl,name:name||"Document"};
   const isImage=safeUrl.startsWith("data:image/");
   const preview=isImage
     ?`<div class="archive-a4-sheet"><img src="${escapeHTML(safeUrl)}" alt="${escapeHTML(name||"Document")}" /></div>`
@@ -6968,6 +6995,7 @@ function viewDocA4(url,name){
       <div><h3>${escapeHTML(name||"Document")}</h3><p>Affichage archive · format A4</p></div>
       <div class="archive-a4-actions">
         <a href="${escapeHTML(safeUrl)}" download="${escapeHTML(name||"document")}" class="btn btn-secondary">Télécharger</a>
+        <button type="button" class="btn btn-primary" onclick="printArchiveA4Current()">Imprimer</button>
         <button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>
       </div>
     </div>
