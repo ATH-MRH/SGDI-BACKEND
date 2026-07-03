@@ -336,6 +336,8 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
         contracts_active += 1 if state.has_contract else 0
         assignments_active += 1 if state.has_assignment else 0
         equipped_employees += 1 if state.has_equipment else 0
+        if state.employee_id not in active_employee_ids:
+            continue
         for step in state.missing_steps:
             if step in missing_steps:
                 missing_steps[step] += 1

@@ -4138,16 +4138,17 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
   const scopeNorm=normalizeSocieteName(scopeSoc||"");
   const agents=(db?.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a.societe||"")===scopeNorm);
   const nonArchived=agents.filter(a=>!ficheAgentIsSortantArchive(a));
+  const nonSortants=agents.filter(a=>!employeeIsFormer(a));
   const activeAgents=agents.filter(employeeIsActive);
   const statusCount=key=>activeAgents.filter(a=>employeeLifecycleStatusKey(a)===key).length;
   return {
     source:"local-fallback",
     total:agents.length,
-    active:activeAgents.length,
+    active:nonSortants.length||activeAgents.length,
     operationalActive:activeAgents.filter(agentIsOperational).length,
-    activeHeadcount:nonArchived.length||activeAgents.length||agents.length,
+    activeHeadcount:nonSortants.length||nonArchived.length||activeAgents.length||agents.length,
     withoutEquipment:materialPendingDotationCountForSoc(scopeSoc),
-    withoutAssignment:activeAgents.filter(agentNeedsAffectation).length,
+    withoutAssignment:nonSortants.filter(a=>!agentHasLiveAffectation(a)).length,
     leaveCurrent:activeAgents.filter(a=>ficheAgentInConge(a)).length,
     sickLeaveCurrent:activeAgents.filter(a=>ficheAgentInMaladie(a)).length,
     absent:statusCount("absent"),
@@ -4232,8 +4233,7 @@ function employeeNeedsMaterialDotation(a){
   return employeeIsActive(a)&&!agentHasMaterialDotation(a);
 }
 function agentNeedsAffectation(a){
-  const cfg=effectifConfigSettings();
-  return !!cfg.operationalRequiresAffectation&&employeeIsActive(a)&&!agentHasLiveAffectation(a);
+  return !employeeIsFormer(a)&&!agentHasLiveAffectation(a);
 }
 function agentNeedsInstallationPV(a){
   const cfg=effectifConfigSettings();

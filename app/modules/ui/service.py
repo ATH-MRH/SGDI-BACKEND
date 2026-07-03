@@ -201,21 +201,21 @@ def _apply_legacy_fallbacks(db: Session, erp: dict[str, Any], society: str | Non
     agents = [row for row in _legacy_rows(db, "agents") if _matches_society(row, society)]
     if agents and not int(erp.get("employees", {}).get("total") or 0):
         active_rows = [row for row in agents if _is_employee_active(row)]
+        non_exit_rows = [row for row in agents if not _is_employee_archived(row)]
         operational_rows = [row for row in active_rows if _employee_has_assignment(row)]
-        non_archived = [row for row in agents if not _is_employee_archived(row)]
         agent_ids = {str(row.get("id") or row.get("backendId") or "").strip() for row in agents if row.get("id") or row.get("backendId")}
         conge_rows = [row for row in _legacy_rows(db, "conges") if _matches_society(row, society) or not society]
         leave_count, sick_leave_count = _legacy_current_leave_counts(conge_rows, agent_ids)
         employees = erp.setdefault("employees", {})
         employees.update({
             "total": len(agents),
-            "non_archived": len(non_archived),
-            "active": len(active_rows),
+            "non_archived": len(non_exit_rows),
+            "active": len(non_exit_rows),
             "operational_active": len(operational_rows),
             "preparation": 0,
             "without_contract": 0,
             "without_equipment": int(employees.get("without_equipment") or 0),
-            "without_assignment": sum(1 for row in active_rows if not _employee_has_assignment(row)),
+            "without_assignment": sum(1 for row in non_exit_rows if not _employee_has_assignment(row)),
             "without_installation_pv": 0,
             "leave_current": leave_count,
             "sick_leave_current": sick_leave_count,
