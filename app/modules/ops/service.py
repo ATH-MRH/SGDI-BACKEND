@@ -199,14 +199,15 @@ def general_sites_situation(db: Session):
                 })
         rows.append({"site": s, "contractual_staff": s.contractual_staff, "realized_staff": realized, "missing_staff": missing, "surplus_staff": surplus, "operational_site": site_is_operational(s), "by_group": by_group})
 
+    active_rows = [r for r in rows if r["site"].active]
     return {
         "active_sites": sum(1 for s in sites if s.active),
-        "instance_assignment_sites": sum(1 for r in rows if r["site"].active and r["realized_staff"] == 0),
+        "instance_assignment_sites": sum(1 for r in active_rows if r["realized_staff"] == 0 and (r["contractual_staff"] or 0) > 0),
         "operational_sites": sum(1 for r in rows if site_is_operational(r["site"])),
-        "contractual_staff": sum(r["contractual_staff"] or 0 for r in rows),
-        "realized_staff": sum(r["realized_staff"] for r in rows),
-        "missing_staff": sum(r["missing_staff"] for r in rows),
-        "surplus_staff": sum(r["surplus_staff"] for r in rows),
+        "contractual_staff": sum(r["contractual_staff"] or 0 for r in active_rows),
+        "realized_staff": sum(r["realized_staff"] for r in active_rows),
+        "missing_staff": sum(r["missing_staff"] for r in active_rows),
+        "surplus_staff": sum(r["surplus_staff"] for r in active_rows),
         "sites": rows,
     }
 
