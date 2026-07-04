@@ -32368,35 +32368,39 @@ function updateOmSaveOverlay(msg,success){
 function closeOmSaveOverlay(){clearTimeout(window._omSaveOverlayTimer);const el=document.getElementById("om-save-overlay");if(el)el.remove()}
 async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
   showOmSaveOverlay();
-  try{
-    const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
-    const line=result?.data?.item||result?.item||{...f,...patch,date,agentId};
-    const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId};
-    const savedLine=fpqUpsertLocalPresenceLine(line);
-    opsUpsertMovementHistory(movement);
-    // Feedback immédiat — le reste se fait en arrière-plan
-    updateOmSaveOverlay("Enregistrement effectué",true);
-    const completion=fpqMovementCompletionMessage(patch);
-    toast([opt.message||"OM validé et archivé",completion].filter(Boolean).join(" · "),"success");
-    if(opt.print)opsPrintMovementDocument(movement,true);
-    if(opt.closeModal!==false)closeModal();
-    setTimeout(closeOmSaveOverlay,1800);
-    // Mise à jour locale immédiate + re-render de la liste agents
-    opsApplyLocalMovementAffectation(date,agentId,patch);
-    window.__sgdiOpsMovementSqlSyncedAt=Date.now();
-    renderView();
-    // Synchronisation et archivage en arrière-plan
-    window._sgdiSilentRibbon=true;
-    sgdiPullState({silent:true}).then(async()=>{
-      const fresh=(db.opsMouvements||[]).find(x=>opsMovementKey(x)===opsMovementKey(movement))||(db.feuillePresence||[]).find(x=>String(x.id||"")===String(savedLine.id||""))||movement||savedLine;
-      opsUpsertMovementHistory(fresh);
-      await fpqApplyMovementAffectation(date,agentId,patch);
-      const saved=(db.opsMouvements||[]).find(x=>opsMovementKey(x)===opsMovementKey(movement))||fresh;
-      opsUpsertMovementHistory(saved);
-      await opsArchiveMovementDocument(saved);
-    }).catch(e=>console.warn("Sync OM background:",e)).finally(()=>{window._sgdiSilentRibbon=false;sgdiRefreshCountersNow({reason:"single-om"});});
-    return true;
-  }catch(e){closeOmSaveOverlay();toast("Mouvement refusé : "+(e.message||e),"error");return false}
+  // Optimistic : appliquer localement immédiatement, sans attendre PostgreSQL
+  const localLine=fpqUpsertLocalPresenceLine({...f,...patch,date,agentId});
+  const localMovement={...localLine,...patch,date,agentId};
+  opsUpsertMovementHistory(localMovement);
+  opsApplyLocalMovementAffectation(date,agentId,patch);
+  updateOmSaveOverlay("Enregistrement effectué",true);
+  const completion=fpqMovementCompletionMessage(patch);
+  toast([opt.message||"OM validé et archivé",completion].filter(Boolean).join(" · "),"success");
+  if(opt.print)opsPrintMovementDocument(localMovement,true);
+  if(opt.closeModal!==false)closeModal();
+  setTimeout(closeOmSaveOverlay,1800);
+  renderView();
+  // Sauvegarde PostgreSQL en arrière-plan (ne bloque plus l'UI)
+  window._sgdiSilentRibbon=true;
+  sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}})
+    .then(result=>{
+      const line=result?.data?.item||result?.item||localLine;
+      const movement=result?.data?.movement||result?.movement||localMovement;
+      fpqUpsertLocalPresenceLine(line);
+      opsUpsertMovementHistory(movement);
+      window.__sgdiOpsMovementSqlSyncedAt=Date.now();
+      return sgdiPullState({silent:true}).then(async()=>{
+        const fresh=(db.opsMouvements||[]).find(x=>opsMovementKey(x)===opsMovementKey(movement))||movement;
+        opsUpsertMovementHistory(fresh);
+        await fpqApplyMovementAffectation(date,agentId,patch);
+        const saved=(db.opsMouvements||[]).find(x=>opsMovementKey(x)===opsMovementKey(movement))||fresh;
+        opsUpsertMovementHistory(saved);
+        await opsArchiveMovementDocument(saved);
+      });
+    })
+    .catch(e=>{console.warn("Sync OM background:",e);toast("OM enregistré localement — synchronisation différée","warn");})
+    .finally(()=>{window._sgdiSilentRibbon=false;sgdiRefreshCountersNow({reason:"single-om"});});
+  return true;
 }
 async function fpqValidateOrdreMouvementFromDocument(movement){
   const date=String(movement?.date||today());
