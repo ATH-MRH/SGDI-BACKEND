@@ -12550,12 +12550,15 @@ function operationalPreparationHTML(data,source){
   const items=data?.items||[];
   const filterKey=data?.filterKey||"";
   const activeStyle=key=>filterKey===key?"box-shadow:0 0 0 2px currentColor inset;":"";
+  const filterTitles={affectation:"EFFECTIF SANS AFFECTATION",dotation:"SANS DOTATION",contrat:"SANS CONTRAT",pv:"SANS PV D'INSTALLATION"};
+  const pageTitle=filterKey&&filterTitles[filterKey]?filterTitles[filterKey]:"Préparation opérationnelle";
+  const pageSubtitle=filterKey&&filterTitles[filterKey]?(soc?`<b>${escapeHTML(soc)}</b>`:""):`Employés non opérationnels avec les étapes bloquantes${soc?` · <b>${escapeHTML(soc)}</b>`:""}`;
   const cards=[
     ["Contrat",counters.contrat||0,"#dc2626"],
     ["Dotation",counters.dotation||0,"#0ea5e9"],
     ["Affectation",counters.affectation||0,"#f59e0b"]
   ];
-  return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-bold">Préparation opérationnelle</h1><p class="text-sm text-slate-500">Employés non opérationnels avec les étapes bloquantes${soc?` · <b>${escapeHTML(soc)}</b>`:""}</p></div><div class="flex gap-2 flex-wrap"><button class="btn btn-secondary" onclick="navigate('effectif/actifs')">Effectif</button><button class="btn btn-secondary" onclick="navigate('materiel/dotation')">Dotations</button></div></div>
+  return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-bold">${pageTitle}</h1>${pageSubtitle?`<p class="text-sm text-slate-500">${pageSubtitle}</p>`:""}</div><div class="flex gap-2 flex-wrap"><button class="btn btn-secondary" onclick="navigate('effectif/actifs')">Effectif</button><button class="btn btn-secondary" onclick="navigate('materiel/dotation')">Dotations</button></div></div>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">${cards.map(c=>{const key=c[0].toLowerCase();return`<button type="button" class="card p-4 text-left" onclick="navigate('effectif/preparation_${key}')" style="border-left:4px solid ${c[2]};color:${c[2]};${activeStyle(key)}"><div class="text-xs font-black uppercase text-slate-500">Sans ${escapeHTML(c[0])}</div><div class="text-3xl font-black mt-1" style="color:${c[2]}">${c[1]}</div></button>`}).join("")}</div>
   ${items.length?`<div class="card overflow-hidden"><table><thead><tr><th>Employé</th><th>Société</th><th>Poste</th><th>Site</th><th>Blocage</th></tr></thead><tbody>${items.map(row=>{const blockers=row.blockers||[];return `<tr data-searchable><td><div class="font-bold">${escapeHTML(row.name||"—")}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(row.code||"—")}</div></td><td class="text-xs">${escapeHTML(row.society||"—")}</td><td class="text-xs">${escapeHTML(row.position||"—")}</td><td class="text-xs">${escapeHTML(row.site||"Sans affectation")}</td><td>${blockers.map(b=>`<span class="pill" style="background:${operationalPreparationColor(b.key)}18;color:${operationalPreparationColor(b.key)};font-weight:900;margin:2px">${escapeHTML(b.label)}</span>`).join(" ")}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="card p-10 text-center text-slate-500">Tous les employés de ce périmètre sont prêts ou déjà opérationnels.</div>`}`;
 }
