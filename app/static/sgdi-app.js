@@ -31081,7 +31081,7 @@ function opsSetMovementSelectedAgent(value){
   const existing=document.querySelector("form[data-ops-movement-form]");
   if(existing){
     const soc=currentStructureSocieteFilter()||effectifSocieteFilter()||session?.societe||"";
-    const agents=(db.agents||[]).filter(a=>!soc||a.societe===soc).sort((a,b)=>opsMovementAgentAvailability(a).rank-opsMovementAgentAvailability(b).rank||opsMovementAgentLabel(a).localeCompare(opsMovementAgentLabel(b)));
+    const agents=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&!ficheAgentIsSortantArchive(a)).sort((a,b)=>opsMovementAgentAvailability(a).rank-opsMovementAgentAvailability(b).rank||opsMovementAgentLabel(a).localeCompare(opsMovementAgentLabel(b)));
     const tmp=document.createElement("div");
     tmp.innerHTML=opsMovementEditorHTML(today(),value||"",agents);
     existing.replaceWith(tmp.firstElementChild);
@@ -31377,7 +31377,7 @@ function _renderOpsMouvementsHTML(view){
     .filter(f=>opsMovementInPeriod(f,period))
     .filter(f=>{if(!searchQ)return true;const a=f._agent;const hay=[opsMovementAgentLabel(a),(a?.nom||"")+" "+(a?.prenom||""),a?.matricule||a?.code||"",a?.affectationCourante?.structure||a?.structure||"",a?.societe||"",f.ordreMouvementNumero||f.mouvementNumero||"",f.mouvementMotif||f.mouvementType||"",opsMovementSiteLabel(f),opsMovementClientLabel(f),f.groupe||"",f.date||""].join(" ").toLowerCase();return hay.includes(searchQ)})
     .sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))||String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||"")));
-  const agents=(db.agents||[]).filter(a=>!soc||a.societe===soc).sort((a,b)=>opsMovementAgentAvailability(a).rank-opsMovementAgentAvailability(b).rank||opsMovementAgentLabel(a).localeCompare(opsMovementAgentLabel(b)));
+  const agents=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&!ficheAgentIsSortantArchive(a)).sort((a,b)=>opsMovementAgentAvailability(a).rank-opsMovementAgentAvailability(b).rank||opsMovementAgentLabel(a).localeCompare(opsMovementAgentLabel(b)));
   const count=p=>baseRows.filter(f=>opsMovementInPeriod(f,p)).length;
   view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap">
     <div>
