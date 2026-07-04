@@ -31357,13 +31357,48 @@ function renderOPS(view,sub,arg){
   const opsLine=(label,value,color,route)=>`<a href="#/${route}" class="p-3 rounded-lg block" style="background:${color}12;border:1px solid ${color}44;text-decoration:none;color:inherit"><div class="text-[10px] uppercase tracking-wider font-black" style="color:${color}">${label}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></a>`;
   const opsDashboardSocietes=soc?[soc]:SOCIETES;
   const societeRows=opsDashboardSocietes.map(s=>{const eff=actifs.filter(a=>a.societe===s);const aff=eff.filter(agentHasLiveAffectation);const st=sitesActifs.filter(x=>siteBelongsToPrimarySociete(x,s));const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));return{soc:s,eff:eff.length,aff:aff.length,sans:eff.length-aff.length,sites:st.length,inc:inc.length}});
+  // Présents par site (feuille du jour)
+  const _presentsBySite={};
+  fpqToday.forEach(f=>{if(fpqPresenceCode(f.heureArrivee)==="P"){const k=f.siteName||"Sans site affecté";_presentsBySite[k]=(_presentsBySite[k]||0)+1;}});
+  const _affectesBySite={};
+  affectes.forEach(a=>{const aff=agentLiveAffectation(a);const k=aff?.siteName||"Sans site affecté";_affectesBySite[k]=(_affectesBySite[k]||0)+1;});
+  const _siteStatKeys=[...new Set([...Object.keys(_presentsBySite),...Object.keys(_affectesBySite),...sitesActifs.map(s=>s.nom||s.intitule||"—")])].sort((a,b)=>a.localeCompare(b));
+  const _siteStatRows=_siteStatKeys.map(k=>{const pres=_presentsBySite[k]||0;const aff=_affectesBySite[k]||0;const total=Math.max(aff,pres);const taux=total?Math.round(pres/total*100):0;const bar=total?`<div style="height:6px;background:#e2e8f0;border-radius:3px;width:80px;display:inline-block;vertical-align:middle"><div style="height:100%;border-radius:3px;background:${taux>=80?"#16a34a":taux>=50?"#f59e0b":"#dc2626"};width:${taux}%"></div></div>`:"-";return`<tr><td class="font-semibold text-sm">${escapeHTML(k)}</td><td class="text-center font-bold text-emerald-700 text-sm">${pres}</td><td class="text-center text-sm text-slate-500">${aff||"—"}</td><td class="text-center text-xs">${total?`<span class="font-bold" style="color:${taux>=80?"#16a34a":taux>=50?"#ca8a04":"#dc2626"}">${taux}%</span> ${bar}`:"-"}</td></tr>`;}).join("");
+  // Compteurs statut du jour
+  const _absCodes=new Set(["A","AB","A1","A2","A3"]);
+  const _fpqAbsList=fpqToday.filter(f=>{const c=fpqPresenceCode(f.heureArrivee)||String(f.heureArrivee||"").toUpperCase();return _absCodes.has(c);});
+  const _fpqMalList=fpqToday.filter(f=>(fpqPresenceCode(f.heureArrivee)||String(f.heureArrivee||"").toUpperCase())==="M");
+  const _fpqSuspList=fpqToday.filter(f=>(fpqPresenceCode(f.heureArrivee)||String(f.heureArrivee||"").toUpperCase())==="S");
+  const _sanctionList=ag.filter(a=>(a.gestionEvents||[]).some(e=>["Mise en demeure","Sanction"].includes(e.type)&&(e.statut==="en_cours"||e.statut==="approuve")));
+  window._opsStatLists={
+    absents:_fpqAbsList.map(f=>{const a=(db.agents||[]).find(x=>x.id===f.agentId);return{nom:(a?.nom||"")+" "+(a?.prenom||""),mat:a?.matricule||"—",site:f.siteName||"—",code:f.heureArrivee||"A"};}),
+    malades:_fpqMalList.map(f=>{const a=(db.agents||[]).find(x=>x.id===f.agentId);return{nom:(a?.nom||"")+" "+(a?.prenom||""),mat:a?.matricule||"—",site:f.siteName||"—",code:"M"};}),
+    suspendus:_fpqSuspList.map(f=>{const a=(db.agents||[]).find(x=>x.id===f.agentId);return{nom:(a?.nom||"")+" "+(a?.prenom||""),mat:a?.matricule||"—",site:f.siteName||"—",code:"S"};}),
+    sanctions:_sanctionList.map(a=>{const ev=(a.gestionEvents||[]).filter(e=>["Mise en demeure","Sanction"].includes(e.type)&&(e.statut==="en_cours"||e.statut==="approuve")).pop();return{nom:(a.nom||"")+" "+(a.prenom||""),mat:a.matricule||"—",site:agentLiveAffectation(a)?.siteName||"—",code:ev?.type||"Sanction"};})
+  };
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">TABLEAU DE BORD</h1>
   <p class="text-slate-500 text-sm mb-4">OPS · Pointage, fiches de position, sites · ${soc?escapeHTML(soc):"Toutes sociétés"}</p>
-  <div class="card p-5 mb-6 overflow-hidden">
+  <div class="card p-5 mb-4 overflow-hidden">
     <h3 class="mb-3">🏢 Récapitulatif par société</h3>
     <table><thead><tr><th>Société</th><th>Effectif actif</th><th>Affectés</th><th>En instance</th><th>Sites actifs</th><th>Incidents</th></tr></thead>
       <tbody>${societeRows.map(r=>`<tr><td class="font-bold">${escapeHTML(r.soc)}</td><td>${r.eff}</td><td class="text-emerald-700 font-bold">${r.aff}</td><td class="${r.sans?"text-orange-700 font-bold":"text-slate-500"}">${r.sans}</td><td>${r.sites}</td><td class="${r.inc?"text-red-700 font-bold":"text-slate-500"}">${r.inc}</td></tr>`).join("")}</tbody>
     </table>
+  </div>
+  <div class="card p-5 mb-4">
+    <div class="text-xs font-black uppercase text-slate-500 mb-3">Situation du jour — ${formatDate(td)}</div>
+    <div class="grid grid-cols-4 gap-3">
+      <button type="button" onclick="openOpsStatModal('absents')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#fee2e2;border:1px solid #fca5a5"><div class="text-xs font-black uppercase" style="color:#991b1b">Absents</div><div class="text-3xl font-black mt-1" style="color:#dc2626">${_fpqAbsList.length}</div><div class="text-xs mt-1" style="color:#b91c1c">Feuille du jour</div></button>
+      <button type="button" onclick="openOpsStatModal('malades')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#fff7ed;border:1px solid #fed7aa"><div class="text-xs font-black uppercase" style="color:#9a3412">Maladie</div><div class="text-3xl font-black mt-1" style="color:#ea580c">${_fpqMalList.length}</div><div class="text-xs mt-1" style="color:#c2410c">Feuille du jour</div></button>
+      <button type="button" onclick="openOpsStatModal('suspendus')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#f5f3ff;border:1px solid #ddd6fe"><div class="text-xs font-black uppercase" style="color:#5b21b6">Suspendus</div><div class="text-3xl font-black mt-1" style="color:#7c3aed">${_fpqSuspList.length}</div><div class="text-xs mt-1" style="color:#6d28d9">Feuille du jour</div></button>
+      <button type="button" onclick="openOpsStatModal('sanctions')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#1f2937;border:1px solid #374151"><div class="text-xs font-black uppercase" style="color:#9ca3af">En sanction</div><div class="text-3xl font-black mt-1" style="color:#f9fafb">${_sanctionList.length}</div><div class="text-xs mt-1" style="color:#9ca3af">Actif</div></button>
+    </div>
+  </div>
+  <div class="card p-5 mb-6 overflow-hidden">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-black">📍 Présents par site — aujourd'hui</h3>
+      <a href="#/pointage/feuille" class="btn btn-ghost text-xs">Voir feuille</a>
+    </div>
+    ${_siteStatKeys.length?`<table><thead><tr><th class="text-left">Site</th><th class="text-center">Présents</th><th class="text-center">Affectés</th><th class="text-center">Taux</th></tr></thead><tbody>${_siteStatRows}</tbody></table>`:`<div class="text-slate-400 text-sm text-center py-4">Aucune feuille de présence saisie aujourd'hui.</div>`}
   </div>
   <div class="grid grid-3">
     <a href="#/pointage/feuille" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">🕒</div><div><div class="font-bold text-cyan-700">Pointage</div><div class="text-xs text-slate-500">Feuille quotidienne · Saisie manuelle · Récap</div></div></div></a>
@@ -31372,6 +31407,18 @@ function renderOPS(view,sub,arg){
   </div>`;
 }
 
+function openOpsStatModal(type){
+  const lists=window._opsStatLists||{};
+  const rows=lists[type]||[];
+  const titles={absents:"Absents du jour",malades:"En maladie aujourd'hui",suspendus:"Suspendus aujourd'hui",sanctions:"En sanction (actif)"};
+  const colors={absents:"#dc2626",malades:"#ea580c",suspendus:"#7c3aed",sanctions:"#1f2937"};
+  const title=titles[type]||type;
+  const color=colors[type]||"#043970";
+  const body=rows.length
+    ?`<table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 uppercase bg-slate-50"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2 text-left">Matricule</th><th class="px-3 py-2 text-left">Site</th><th class="px-3 py-2 text-center">Code</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="px-3 py-2 font-semibold">${escapeHTML(r.nom)}</td><td class="px-3 py-2 font-mono text-xs">${escapeHTML(r.mat)}</td><td class="px-3 py-2 text-xs text-slate-500">${escapeHTML(r.site)}</td><td class="px-3 py-2 text-center"><span class="pill" style="background:${color}22;color:${color};font-weight:800">${escapeHTML(r.code)}</span></td></tr>`).join("")}</tbody></table>`
+    :`<div class="text-center text-slate-400 py-8">Aucun employé concerné aujourd'hui.</div>`;
+  openModal(`<div class="flex items-center gap-3 mb-4"><div class="text-2xl font-black" style="color:${color}">${rows.length}</div><div><div class="font-black text-sm">${escapeHTML(title)}</div><div class="text-xs text-slate-500">${formatDate(today())}</div></div></div><div class="overflow-auto" style="max-height:60vh">${body}</div><div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
+}
 function renderOpsInstanceDotation(view){
   const soc=currentStructureSocieteFilter();
   const agents=agentsEnInstanceDotationForSoc(soc);
