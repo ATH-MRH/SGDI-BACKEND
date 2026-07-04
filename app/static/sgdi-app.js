@@ -15260,6 +15260,7 @@ function siteSyntheseServerHTML(d,sites){
   const surplusGlobal=("surplus_staff" in d)?siteBackendNumber(d.surplus_staff):Math.max(0,effectifRealise-effectifGlobal);
   return`<div class="sites-synth-panel">
     <div class="sites-synth-head"><div><span>Vue exploitation</span><h2>Synthèse situation générale des sites</h2></div><button type="button" onclick="filterSitesSituation('all')">Tous les sites</button></div>
+    <div id="sites-synth-detail" class="sites-synth-detail" style="display:none"></div>
     <div class="sites-synth-grid">
       ${siteSynthKpiHTML({mode:"instance",tone:siteInstanceAffectation>0?"warn":"success",icon:"⌖",label:"Site en instance d'affectation",value:siteInstanceAffectation,sub:siteInstanceAffectation>0?"Actifs sans aucun agent":"Tous les sites sont dotés",title:"Afficher les sites sans agent affecté"})}
       ${siteSynthKpiHTML({mode:"all",tone:"info",icon:"●",label:"Site actif",value:siteActif,sub:"Sites non archivés",title:"Afficher tous les sites actifs"})}
@@ -15281,6 +15282,7 @@ function siteSyntheseGeneraleHTML(sites){
   const surplusGlobal=Math.max(0,effectifRealise-effectifGlobal);
   return`<div class="sites-synth-panel">
     <div class="sites-synth-head"><div><span>Vue exploitation</span><h2>Synthèse situation générale des sites</h2></div><button type="button" onclick="filterSitesSituation('all')">Tous les sites</button></div>
+    <div id="sites-synth-detail" class="sites-synth-detail" style="display:none"></div>
     <div class="sites-synth-grid">
       ${siteSynthKpiHTML({mode:"instance",tone:siteInstanceAffectation>0?"warn":"success",icon:"⌖",label:"Site en instance d'affectation",value:siteInstanceAffectation,sub:siteInstanceAffectation>0?"Actifs sans aucun agent":"Tous les sites sont dotés",title:"Afficher les sites sans agent affecté"})}
       ${siteSynthKpiHTML({mode:"all",tone:"info",icon:"●",label:"Site actif",value:siteActif,sub:"Sites non archivés",title:"Afficher tous les sites actifs"})}
@@ -15294,6 +15296,7 @@ function siteSyntheseGeneraleHTML(sites){
 function filterSitesSituation(mode){
   const cards=document.querySelectorAll(".site-card");
   let shown=0;
+  const matched=[];
   cards.forEach(card=>{
     const manque=+card.dataset.siteManque||0;
     const surplus=+card.dataset.siteSurplus||0;
@@ -15303,13 +15306,49 @@ function filterSitesSituation(mode){
     const realise=+card.dataset.siteRealise||0;
     const ok=mode==="all"||(mode==="operationnel"&&status==="operationnel")||(mode==="manque"&&manque>0)||(mode==="surplus"&&surplus>0)||(mode==="instance"&&instance>0)||(mode==="contractuel"&&contractuel>0)||(mode==="realise"&&realise>0);
     card.style.display=ok?"":"none";
-    if(ok)shown++;
+    if(ok){shown++;matched.push(card)}
   });
+  renderSitesSynthDetail(mode,matched);
   const info=document.getElementById("sites-filter-info");
   if(info){
     if(mode==="all"){info.classList.add("hidden");info.innerHTML="";}
     else{info.classList.remove("hidden");info.innerHTML=`Filtre actif : ${mode==="operationnel"?"sites opérationnels":mode==="instance"?"sites en instance d'affectation":mode==="contractuel"?"sites avec effectif contractuel":mode==="realise"?"sites avec effectif réalisé":mode==="surplus"?"sites avec effectif surplus":"sites avec manque d'effectif"} · ${shown} site(s) affiché(s) <button class="btn btn-ghost text-xs ml-3" onclick="filterSitesSituation('all')">Réinitialiser</button>`;}
   }
+}
+function sitesSynthModeLabel(mode){
+  return mode==="operationnel"?"Sites opérationnels":mode==="instance"?"Sites en instance d'affectation":mode==="contractuel"?"Sites avec effectif contrat":mode==="realise"?"Sites avec effectif réalisé":mode==="surplus"?"Sites avec effectif surplus":mode==="manque"?"Sites avec manque d'effectif":"Tous les sites";
+}
+function renderSitesSynthDetail(mode,cards){
+  const box=document.getElementById("sites-synth-detail");
+  if(!box)return;
+  if(mode==="all"){
+    box.style.display="none";
+    box.innerHTML="";
+    return;
+  }
+  const rows=(cards||[]).slice(0,12).map(card=>{
+    const title=(card.querySelector("h2 span:not(.site-status-lamp):not(.pill)")?.textContent||card.querySelector("h2")?.textContent||"Site").replace(/\s+/g," ").trim();
+    const contractuel=+card.dataset.siteContractuel||0;
+    const realise=+card.dataset.siteRealise||0;
+    const manque=+card.dataset.siteManque||0;
+    const surplus=+card.dataset.siteSurplus||0;
+    const status=card.dataset.siteStatus==="operationnel"?"Opérationnel":"Non opérationnel";
+    return `<tr>
+      <td>${escapeHTML(title)}</td>
+      <td>${status}</td>
+      <td>${contractuel}</td>
+      <td>${realise}</td>
+      <td class="${manque>0?"is-danger":""}">${manque}</td>
+      <td class="${surplus>0?"is-warn":""}">${surplus}</td>
+    </tr>`;
+  }).join("");
+  box.innerHTML=`<div class="sites-synth-detail-head">
+      <div><strong>${escapeHTML(sitesSynthModeLabel(mode))}</strong><span>${cards.length} site(s) concerné(s)</span></div>
+      <button type="button" onclick="filterSitesSituation('all')">Fermer</button>
+    </div>
+    ${cards.length?`<div class="sites-synth-detail-table"><table><thead><tr><th>Site</th><th>Statut</th><th>Contrat</th><th>Réalisé</th><th>Manque</th><th>Surplus</th></tr></thead><tbody>${rows}</tbody></table>${cards.length>12?`<div class="sites-synth-detail-more">+ ${cards.length-12} autre(s) site(s) affiché(s) dans la liste en dessous.</div>`:""}</div>`:`<div class="sites-synth-detail-empty">Aucun site correspondant à ce compteur.</div>`}`;
+  box.style.display="";
+  box.scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function siteMovementHistoryHTML(site){
   if(session?.transverse==="materiel")return"";
