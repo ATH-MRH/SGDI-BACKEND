@@ -31356,7 +31356,8 @@ function renderOPS(view,sub,arg){
   const tauxPointage=fpqToday.length?Math.round(fpqPointes*100/fpqToday.length):0;
   const opsLine=(label,value,color,route)=>`<a href="#/${route}" class="p-3 rounded-lg block" style="background:${color}12;border:1px solid ${color}44;text-decoration:none;color:inherit"><div class="text-[10px] uppercase tracking-wider font-black" style="color:${color}">${label}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></a>`;
   const opsDashboardSocietes=soc?[soc]:SOCIETES;
-  const societeRows=opsDashboardSocietes.map(s=>{const eff=actifs.filter(a=>a.societe===s);const aff=eff.filter(agentHasLiveAffectation);const st=sitesActifs.filter(x=>siteBelongsToPrimarySociete(x,s));const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));return{soc:s,eff:eff.length,aff:aff.length,sans:eff.length-aff.length,sites:st.length,inc:inc.length}});
+  window._opsSocLists={};
+  const societeRows=opsDashboardSocietes.map(s=>{const eff=actifs.filter(a=>a.societe===s);const aff=eff.filter(agentHasLiveAffectation);const sans=eff.filter(a=>!agentHasLiveAffectation(a));const st=sitesActifs.filter(x=>siteBelongsToPrimarySociete(x,s));const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));window._opsSocLists[s]={eff,aff,sans,inc};return{soc:s,eff:eff.length,aff:aff.length,sans:sans.length,sites:st.length,inc:inc.length}});
   // Présents par site (feuille du jour)
   const _presentsBySite={};
   fpqToday.forEach(f=>{if(fpqPresenceCode(f.heureArrivee)==="P"){const k=f.siteName||"Sans site affecté";_presentsBySite[k]=(_presentsBySite[k]||0)+1;}});
@@ -31381,7 +31382,7 @@ function renderOPS(view,sub,arg){
   <div class="card p-5 mb-4 overflow-hidden">
     <h3 class="mb-3">🏢 Récapitulatif par société</h3>
     <table><thead><tr><th>Société</th><th>Effectif actif</th><th>Affectés</th><th>En instance</th><th>Sites actifs</th><th>Incidents</th></tr></thead>
-      <tbody>${societeRows.map(r=>`<tr><td class="font-bold">${escapeHTML(r.soc)}</td><td>${r.eff}</td><td class="text-emerald-700 font-bold">${r.aff}</td><td class="${r.sans?"text-orange-700 font-bold":"text-slate-500"}">${r.sans}</td><td>${r.sites}</td><td class="${r.inc?"text-red-700 font-bold":"text-slate-500"}">${r.inc}</td></tr>`).join("")}</tbody>
+      <tbody>${societeRows.map(r=>{const sk=encodeURIComponent(r.soc);return`<tr><td class="font-bold">${escapeHTML(r.soc)}</td><td><button type="button" class="font-bold hover:underline" style="background:none;border:none;cursor:pointer;color:#0f172a" onclick="openOpsSocModal('${sk}','eff')">${r.eff}</button></td><td><button type="button" class="font-bold hover:underline" style="background:none;border:none;cursor:pointer;color:#16a34a" onclick="openOpsSocModal('${sk}','aff')">${r.aff}</button></td><td><button type="button" class="font-bold hover:underline" style="background:none;border:none;cursor:pointer;color:${r.sans?"#ea580c":"#94a3b8"}" onclick="openOpsSocModal('${sk}','sans')">${r.sans}</button></td><td><a href="#/sites/actifs" class="font-bold hover:underline" style="color:#0f172a">${r.sites}</a></td><td><button type="button" class="font-bold hover:underline" style="background:none;border:none;cursor:pointer;color:${r.inc?"#dc2626":"#94a3b8"}" onclick="openOpsSocModal('${sk}','inc')">${r.inc}</button></td></tr>`;}).join("")}</tbody>
     </table>
   </div>
   <div class="card p-5 mb-4">
@@ -31407,6 +31408,23 @@ function renderOPS(view,sub,arg){
   </div>`;
 }
 
+function openOpsSocModal(socEncoded,type){
+  const soc=decodeURIComponent(socEncoded);
+  const lists=(window._opsSocLists||{})[soc]||{};
+  const titles={eff:"Effectif actif",aff:"Affectés",sans:"En instance (sans affectation)",inc:"Incidents ouverts"};
+  const colors={eff:"#043970",aff:"#16a34a",sans:"#ea580c",inc:"#dc2626"};
+  const title=`${titles[type]||type} — ${soc}`;
+  const color=colors[type]||"#043970";
+  const agents=type==="inc"?null:(lists[type]||[]);
+  const incidents=type==="inc"?(lists.inc||[]):null;
+  let body;
+  if(type==="inc"){
+    body=incidents.length?`<table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 uppercase bg-slate-50"><th class="px-3 py-2 text-left">Titre</th><th class="px-3 py-2 text-left">Site</th><th class="px-3 py-2 text-left">Statut</th></tr></thead><tbody>${incidents.map(i=>`<tr><td class="px-3 py-2 font-semibold">${escapeHTML(i.titre||i.title||"—")}</td><td class="px-3 py-2 text-xs text-slate-500">${escapeHTML(i.siteName||"—")}</td><td class="px-3 py-2"><span class="pill pill-red">${escapeHTML(i.statut||"ouvert")}</span></td></tr>`).join("")}</tbody></table>`:`<div class="text-center text-slate-400 py-8">Aucun incident ouvert.</div>`;
+  }else{
+    body=agents.length?`<table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 uppercase bg-slate-50"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2 text-left">Matricule</th><th class="px-3 py-2 text-left">Site</th><th class="px-3 py-2 text-left">Poste</th></tr></thead><tbody>${agents.map(a=>`<tr><td class="px-3 py-2 font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</td><td class="px-3 py-2 font-mono text-xs">${escapeHTML(a.matricule||"—")}</td><td class="px-3 py-2 text-xs text-slate-500">${escapeHTML(agentLiveAffectation(a)?.siteName||"—")}</td><td class="px-3 py-2 text-xs">${escapeHTML(a.fonction||a.affectationCourante?.poste||"—")}</td></tr>`).join("")}</tbody></table>`:`<div class="text-center text-slate-400 py-8">Aucun employé dans cette catégorie.</div>`;
+  }
+  openModal(`<div class="flex items-center gap-3 mb-4"><div class="text-2xl font-black" style="color:${color}">${type==="inc"?(incidents?.length||0):(agents?.length||0)}</div><div><div class="font-black text-sm">${escapeHTML(title)}</div></div></div><div class="overflow-auto" style="max-height:60vh">${body}</div><div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
+}
 function openOpsStatModal(type){
   const lists=window._opsStatLists||{};
   const rows=lists[type]||[];
