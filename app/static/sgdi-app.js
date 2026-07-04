@@ -15237,9 +15237,17 @@ function siteIsOperationalByOpeningDate(site){
 }
 function siteStaffingBalanceKpiHTML(manqueGlobal,surplusGlobal){
   if(surplusGlobal>0){
-    return `<button type="button" onclick="filterSitesSituation('surplus')" class="p-4 rounded-lg bg-white border border-orange-400 text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec effectif surplus"><div class="text-xs uppercase font-bold text-orange-700">Effectif surplus</div><div class="text-3xl font-black mt-1 text-orange-700">${surplusGlobal}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Réalisé - contractuel</div></button>`;
+    return siteSynthKpiHTML({mode:"surplus",tone:"warn",icon:"↗",label:"Effectif surplus",value:surplusGlobal,sub:"Réalisé - contractuel",title:"Afficher les sites avec effectif surplus"});
   }
-  return `<button type="button" onclick="filterSitesSituation('manque')" class="p-4 rounded-lg bg-white border ${manqueGlobal>0?"border-red-400":"border-slate-200"} text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec manque d'effectif"><div class="text-xs uppercase font-bold ${manqueGlobal>0?"text-red-700":"text-slate-500"}">Manque d'effectif</div><div class="text-3xl font-black mt-1 ${manqueGlobal>0?"text-red-700":"text-emerald-700"}">${manqueGlobal}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Contractuel - réalisé</div></button>`;
+  return siteSynthKpiHTML({mode:"manque",tone:manqueGlobal>0?"danger":"success",icon:manqueGlobal>0?"!":"✓",label:"Manque d'effectif",value:manqueGlobal,sub:"Contractuel - réalisé",title:"Afficher les sites avec manque d'effectif"});
+}
+function siteSynthKpiHTML({mode,tone="neutral",icon="•",label,value,sub,title}){
+  return `<button type="button" onclick="filterSitesSituation('${mode}')" class="sites-synth-kpi sites-synth-kpi--${tone} kpi-clickable" title="${escapeHTML(title||label)}">
+    <span class="sites-synth-kpi-icon">${escapeHTML(icon)}</span>
+    <span class="sites-synth-kpi-label">${escapeHTML(label)}</span>
+    <strong>${value}</strong>
+    <small>${escapeHTML(sub||"")}</small>
+  </button>`;
 }
 function siteSyntheseServerHTML(d,sites){
   if(!d)return"";
@@ -15250,14 +15258,14 @@ function siteSyntheseServerHTML(d,sites){
   const effectifRealise=siteBackendNumber(d.realized_staff);
   const manqueGlobal=siteBackendNumber(d.missing_staff);
   const surplusGlobal=("surplus_staff" in d)?siteBackendNumber(d.surplus_staff):Math.max(0,effectifRealise-effectifGlobal);
-  return`<div class="card p-5 mb-5" style="background:#f8fafc;border:1px solid #e2e8f0">
-    <h2 class="text-lg font-black mb-4">Synthèse situation générale des sites</h2>
-    <div class="grid grid-6 gap-3">
-      <button type="button" onclick="filterSitesSituation('instance')" class="p-4 rounded-lg bg-white border ${siteInstanceAffectation>0?"border-amber-400":"border-slate-200"} text-left hover:shadow transition kpi-clickable" title="Afficher les sites sans agent affecté"><div class="text-xs uppercase font-bold ${siteInstanceAffectation>0?"text-amber-700":"text-slate-500"}">📍 Site en instance d'affectation</div><div class="text-3xl font-black mt-1 ${siteInstanceAffectation>0?"text-amber-700":"text-slate-700"}">${siteInstanceAffectation}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">${siteInstanceAffectation>0?"Actifs sans aucun agent":"Tous les sites sont dotés"}</div></button>
-      <button type="button" onclick="filterSitesSituation('all')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher tous les sites actifs"><div class="text-xs uppercase font-bold text-slate-500">Site actif</div><div class="text-3xl font-black mt-1">${siteActif}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Sites non archivés</div></button>
-      <button type="button" onclick="filterSitesSituation('operationnel')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher les sites opérationnels"><div class="text-xs uppercase font-bold text-slate-500">Site opérationnel</div><div class="text-3xl font-black mt-1 text-emerald-700">${siteOperationnel}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Date ouverture atteinte</div></button>
-      <button type="button" onclick="filterSitesSituation('contractuel')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec effectif contractuel"><div class="text-xs uppercase font-bold text-slate-500">Effectif contrat</div><div class="text-3xl font-black mt-1">${effectifGlobal}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Besoin total prévu</div></button>
-      <button type="button" onclick="filterSitesSituation('realise')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec effectif réalisé"><div class="text-xs uppercase font-bold text-slate-500">Effectif réalisé</div><div class="text-3xl font-black mt-1 text-blue-900">${effectifRealise}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Employés affectés</div></button>
+  return`<div class="sites-synth-panel">
+    <div class="sites-synth-head"><div><span>Vue exploitation</span><h2>Synthèse situation générale des sites</h2></div><button type="button" onclick="filterSitesSituation('all')">Tous les sites</button></div>
+    <div class="sites-synth-grid">
+      ${siteSynthKpiHTML({mode:"instance",tone:siteInstanceAffectation>0?"warn":"success",icon:"⌖",label:"Site en instance d'affectation",value:siteInstanceAffectation,sub:siteInstanceAffectation>0?"Actifs sans aucun agent":"Tous les sites sont dotés",title:"Afficher les sites sans agent affecté"})}
+      ${siteSynthKpiHTML({mode:"all",tone:"info",icon:"●",label:"Site actif",value:siteActif,sub:"Sites non archivés",title:"Afficher tous les sites actifs"})}
+      ${siteSynthKpiHTML({mode:"operationnel",tone:"success",icon:"✓",label:"Site opérationnel",value:siteOperationnel,sub:"Date ouverture atteinte",title:"Afficher les sites opérationnels"})}
+      ${siteSynthKpiHTML({mode:"contractuel",tone:"neutral",icon:"≡",label:"Effectif contrat",value:effectifGlobal,sub:"Besoin total prévu",title:"Afficher les sites avec effectif contractuel"})}
+      ${siteSynthKpiHTML({mode:"realise",tone:"primary",icon:"👥",label:"Effectif réalisé",value:effectifRealise,sub:"Employés affectés",title:"Afficher les sites avec effectif réalisé"})}
       ${siteStaffingBalanceKpiHTML(manqueGlobal,surplusGlobal)}
     </div>
   </div>`;
@@ -15271,14 +15279,14 @@ function siteSyntheseGeneraleHTML(sites){
   const effectifRealise=data.reduce((sum,d)=>sum+d.agents.length,0);
   const manqueGlobal=Math.max(0,effectifGlobal-effectifRealise);
   const surplusGlobal=Math.max(0,effectifRealise-effectifGlobal);
-  return`<div class="card p-5 mb-5" style="background:#f8fafc;border:1px solid #e2e8f0">
-    <h2 class="text-lg font-black mb-4">Synthèse situation générale des sites</h2>
-    <div class="grid grid-6 gap-3">
-      <button type="button" onclick="filterSitesSituation('instance')" class="p-4 rounded-lg bg-white border ${siteInstanceAffectation>0?"border-amber-400":"border-slate-200"} text-left hover:shadow transition kpi-clickable" title="Afficher les sites sans agent affecté"><div class="text-xs uppercase font-bold ${siteInstanceAffectation>0?"text-amber-700":"text-slate-500"}">📍 Site en instance d'affectation</div><div class="text-3xl font-black mt-1 ${siteInstanceAffectation>0?"text-amber-700":"text-slate-700"}">${siteInstanceAffectation}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">${siteInstanceAffectation>0?"Actifs sans aucun agent":"Tous les sites sont dotés"}</div></button>
-      <button type="button" onclick="filterSitesSituation('all')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher tous les sites actifs"><div class="text-xs uppercase font-bold text-slate-500">Site actif</div><div class="text-3xl font-black mt-1">${siteActif}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Sites non archivés</div></button>
-      <button type="button" onclick="filterSitesSituation('operationnel')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher les sites opérationnels"><div class="text-xs uppercase font-bold text-slate-500">Site opérationnel</div><div class="text-3xl font-black mt-1 text-emerald-700">${siteOperationnel}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Date ouverture atteinte</div></button>
-      <button type="button" onclick="filterSitesSituation('contractuel')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec effectif contractuel"><div class="text-xs uppercase font-bold text-slate-500">Effectif contrat</div><div class="text-3xl font-black mt-1">${effectifGlobal}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Besoin total prévu</div></button>
-      <button type="button" onclick="filterSitesSituation('realise')" class="p-4 rounded-lg bg-white border border-slate-200 text-left hover:shadow transition kpi-clickable" title="Afficher les sites avec effectif réalisé"><div class="text-xs uppercase font-bold text-slate-500">Effectif réalisé</div><div class="text-3xl font-black mt-1 text-blue-900">${effectifRealise}</div><div class="text-[11px] font-semibold text-slate-400 mt-1">Employés affectés</div></button>
+  return`<div class="sites-synth-panel">
+    <div class="sites-synth-head"><div><span>Vue exploitation</span><h2>Synthèse situation générale des sites</h2></div><button type="button" onclick="filterSitesSituation('all')">Tous les sites</button></div>
+    <div class="sites-synth-grid">
+      ${siteSynthKpiHTML({mode:"instance",tone:siteInstanceAffectation>0?"warn":"success",icon:"⌖",label:"Site en instance d'affectation",value:siteInstanceAffectation,sub:siteInstanceAffectation>0?"Actifs sans aucun agent":"Tous les sites sont dotés",title:"Afficher les sites sans agent affecté"})}
+      ${siteSynthKpiHTML({mode:"all",tone:"info",icon:"●",label:"Site actif",value:siteActif,sub:"Sites non archivés",title:"Afficher tous les sites actifs"})}
+      ${siteSynthKpiHTML({mode:"operationnel",tone:"success",icon:"✓",label:"Site opérationnel",value:siteOperationnel,sub:"Date ouverture atteinte",title:"Afficher les sites opérationnels"})}
+      ${siteSynthKpiHTML({mode:"contractuel",tone:"neutral",icon:"≡",label:"Effectif contrat",value:effectifGlobal,sub:"Besoin total prévu",title:"Afficher les sites avec effectif contractuel"})}
+      ${siteSynthKpiHTML({mode:"realise",tone:"primary",icon:"👥",label:"Effectif réalisé",value:effectifRealise,sub:"Employés affectés",title:"Afficher les sites avec effectif réalisé"})}
       ${siteStaffingBalanceKpiHTML(manqueGlobal,surplusGlobal)}
     </div>
   </div>`;
