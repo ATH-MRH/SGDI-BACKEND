@@ -4273,9 +4273,9 @@ function moduleCountersRibbonHTML(){
     const missionEnCours=counterNumericValue(erpOps.missions_current);
     const missionTotal=Math.max(1,missionEnCours);
     const opsSiteCounter={label:"NBR SITE",value:counterNumericValue(erpOps.sites_active),color:"#043970",route:"sites/actifs",sub:"site(s)"};
-    const prepCounters=effectifConfigSettings().showPreparationCounters?[
-      {label:"SANS DOTATION",value:sansDotation,color:"#0ea5e9",route:"effectif/preparation_dotation",pctBase:total},
-      {label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total}
+    const prepEnabled=effectifConfigSettings().showPreparationCounters;
+    const prepCounters=prepEnabled?[
+      {label:"SANS DOTATION",value:sansDotation,color:"#0ea5e9",route:"effectif/preparation_dotation",pctBase:total}
     ]:[];
     return moduleCountersRibbon([
       ...(session.transverse==="ops"?[opsSiteCounter]:[]),
@@ -4283,6 +4283,7 @@ function moduleCountersRibbonHTML(){
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
       {label:"EFF. MALADIE",value:enMaladie,color:"#c2410c",route:"effectif/maladie",pctBase:total},
       {label:"EFF. ABSENT",value:absents,color:"#dc2626",route:"effectif/absents",pctBase:total},
+      ...(prepEnabled?[{label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total}]:[]),
       {label:"EFF. SUSPENDU",value:susp,color:"#7c3aed",route:"effectif/suspension",pctBase:total},
       ...prepCounters,
       {label:"EFF. BLACKLISTÉ",value:blacklist,color:"#111827",route:"effectif/blacklist",pctBase:total},
@@ -4306,8 +4307,8 @@ function moduleCountersRibbonHTML(){
     const absents=counterNumericValue(empCounters.absent);
     const susp=counterNumericValue(empCounters.suspended);
     const blacklist=counterNumericValue(empCounters.blacklisted);
-    const prepCounters=effectifConfigSettings().showPreparationCounters?[
-      {label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total},
+    const prepEnabled2=effectifConfigSettings().showPreparationCounters;
+    const prepCounters=prepEnabled2?[
       {label:"SANS DOTATION",value:sansDotation,color:"#0ea5e9",route:"effectif/preparation_dotation",pctBase:total}
     ]:[];
     return moduleCountersRibbon([
@@ -4317,6 +4318,7 @@ function moduleCountersRibbonHTML(){
       {label:"EFF. CONGÉ",value:enConge,color:"#f59e0b",route:"effectif/conge",pctBase:total},
       {label:"EFF. MALADIE",value:enMaladie,color:"#c2410c",route:"effectif/maladie",pctBase:total},
       {label:"EFF. ABSENT",value:absents,color:"#dc2626",route:"effectif/absents",pctBase:total},
+      ...(prepEnabled2?[{label:"SANS AFFECTATION",value:sansAffectation,color:"#f59e0b",route:"effectif/preparation_affectation",pctBase:total}]:[]),
       {label:"EFF. SUSPENDU",value:susp,color:"#7c3aed",route:"effectif/suspension",pctBase:total},
       ...prepCounters,
       {label:"EFF. BLACKLISTÉ",value:blacklist,color:"#111827",route:"effectif/blacklist",pctBase:total}
