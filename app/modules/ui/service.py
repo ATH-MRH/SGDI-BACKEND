@@ -199,31 +199,38 @@ def _apply_legacy_fallbacks(db: Session, erp: dict[str, Any], society: str | Non
     """
 
     agents = [row for row in _legacy_rows(db, "agents") if _matches_society(row, society)]
-    if agents and not int(erp.get("employees", {}).get("total") or 0):
-        active_rows = [row for row in agents if _is_employee_active(row)]
+    if agents:
         non_exit_rows = [row for row in agents if not _is_employee_archived(row)]
-        operational_rows = [row for row in active_rows if _employee_has_assignment(row)]
-        agent_ids = {str(row.get("id") or row.get("backendId") or "").strip() for row in agents if row.get("id") or row.get("backendId")}
-        conge_rows = [row for row in _legacy_rows(db, "conges") if _matches_society(row, society) or not society]
-        leave_count, sick_leave_count = _legacy_current_leave_counts(conge_rows, agent_ids)
-        employees = erp.setdefault("employees", {})
-        employees.update({
-            "total": len(agents),
-            "non_archived": len(non_exit_rows),
-            "active": len(non_exit_rows),
-            "operational_active": len(operational_rows),
-            "preparation": 0,
-            "without_contract": 0,
-            "without_equipment": int(employees.get("without_equipment") or 0),
-            "without_assignment": sum(1 for row in non_exit_rows if not _employee_has_assignment(row)),
-            "without_installation_pv": 0,
-            "leave_current": leave_count,
-            "sick_leave_current": sick_leave_count,
-            "absent": sum(1 for row in agents if _status(row) == "absent"),
-            "suspended": sum(1 for row in agents if _status(row) == "suspendu"),
-            "blacklisted": sum(1 for row in agents if _status(row) in {"blacklist", "blackliste", "blacklisté"} or row.get("blacklist") or row.get("contractBlocked")),
-            "by_status": {},
-        })
+        legacy_without_assignment = sum(1 for row in non_exit_rows if not _employee_has_assignment(row))
+
+        if not int(erp.get("employees", {}).get("total") or 0):
+            active_rows = [row for row in agents if _is_employee_active(row)]
+            operational_rows = [row for row in active_rows if _employee_has_assignment(row)]
+            agent_ids = {str(row.get("id") or row.get("backendId") or "").strip() for row in agents if row.get("id") or row.get("backendId")}
+            conge_rows = [row for row in _legacy_rows(db, "conges") if _matches_society(row, society) or not society]
+            leave_count, sick_leave_count = _legacy_current_leave_counts(conge_rows, agent_ids)
+            employees = erp.setdefault("employees", {})
+            employees.update({
+                "total": len(agents),
+                "non_archived": len(non_exit_rows),
+                "active": len(non_exit_rows),
+                "operational_active": len(operational_rows),
+                "preparation": 0,
+                "without_contract": 0,
+                "without_equipment": int(employees.get("without_equipment") or 0),
+                "without_assignment": legacy_without_assignment,
+                "without_installation_pv": 0,
+                "leave_current": leave_count,
+                "sick_leave_current": sick_leave_count,
+                "absent": sum(1 for row in agents if _status(row) == "absent"),
+                "suspended": sum(1 for row in agents if _status(row) == "suspendu"),
+                "blacklisted": sum(1 for row in agents if _status(row) in {"blacklist", "blackliste", "blacklisté"} or row.get("blacklist") or row.get("contractBlocked")),
+                "by_status": {},
+            })
+        else:
+            # SQL employees table is populated but Assignment table may be out of sync
+            # with legacy affectationCourante — always trust the legacy value for this counter
+            erp["employees"]["without_assignment"] = legacy_without_assignment
 
     candidats = [row for row in _legacy_rows(db, "candidats") if _matches_society(row, society)]
     if candidats and not int(erp.get("drh", {}).get("candidates_total") or 0):
