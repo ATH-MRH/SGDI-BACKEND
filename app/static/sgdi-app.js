@@ -1687,6 +1687,14 @@ function assignmentFromApi(row){
 }
 function applyAssignmentsToEmployees(assignments){
   const active=(assignments||db.assignments||[]).filter(x=>x&&x.active!==false&&x.active!==0);
+  const activeEmployeeRefs=new Set(active.flatMap(assignmentEmployeeRefs));
+  (db.agents||[]).forEach(a=>{
+    if(!a?.backendId||employeeMatchesAssignmentRefs(a,activeEmployeeRefs))return;
+    const current=a.affectationCourante||{};
+    if(current.siteId||current.siteBackendId||current.siteName||current.assignmentBackendId){
+      a.affectationCourante={...current,siteId:"",siteBackendId:null,siteName:"",clientName:"",groupe:"",dateDebut:"",assignmentBackendId:""};
+    }
+  });
   active.forEach(aff=>{
     const a=findEmployeeByRef(aff.agentBackendId)||findEmployeeByRef(aff.agentId);
     if(!a)return;
@@ -1719,7 +1727,6 @@ async function syncAssignmentsFromPostgres(){
   const rows=Array.isArray(result?.items)?result.items:Array.isArray(result)?result:[];
   db.assignments=rows.map(assignmentFromApi);
   applyAssignmentsToEmployees(db.assignments);
-  await backfillLegacyAssignmentsToPostgres();
 }
 async function persistAssignmentFromMovement(date,employee,site,patch){
   if(!patch||patch.siteId==="autres")return null;
@@ -12321,7 +12328,7 @@ function applyOpsEffectifFilters(list){
   const ageMin=parseInt(f.ageMin,10);
   const ageMax=parseInt(f.ageMax,10);
   const selectedSite=f.site&&f.site!=="__none__"?(db.sites||[]).find(s=>String(s.id)===String(f.site)||String(s.backendId||"")===String(f.site)):null;
-  const selectedSiteAgentRefs=selectedSite?new Set(siteAgentsAffectes(selectedSite).flatMap(a=>[a.id,a.backendId,a.matricule]).filter(v=>v!==undefined&&v!==null&&v!=="").map(v=>String(v))):null;
+  const selectedSiteAgentRefs=selectedSite?backendAssignmentRefsForSite(selectedSite):null;
   return (list||[]).filter(a=>{
     const aff=agentLiveAffectation(a);
     const siteId=String(aff?.siteId||"");
@@ -12330,9 +12337,13 @@ function applyOpsEffectifFilters(list){
     const age=ageFromDate(a.dateNaissance);
     if(f.site==="__none__"){if(siteId||siteName)return false}
     else if(f.site){
+      if(selectedSiteAgentRefs){
+        if(!employeeMatchesAssignmentRefs(a,selectedSiteAgentRefs))return false;
+      }else{
       const directRef=selectedSite?siteMatchesReference(selectedSite,{...aff,siteId:aff?.siteId??a.siteId,site_id:a.site_id}):false;
-      const listedRef=selectedSiteAgentRefs?[a.id,a.backendId,a.matricule].some(v=>selectedSiteAgentRefs.has(String(v||""))):false;
+      const listedRef=false;
       if(!directRef&&!listedRef&&siteId!==String(f.site))return false;
+      }
     }
     if(f.poste&&poste!==f.poste)return false;
     if(f.situation&&String(a.situation||"")!==f.situation)return false;
@@ -14660,6 +14671,8 @@ async function renderSitesServer(view){
     const sites=siteOpsSitesForScope(soc,mapRows.length?mapRows:rows,{onlyExtra:true,includeInactive:true});
     const mapSites=siteOpsSitesForScope(soc,mapRows,{onlyExtra:true});
     const situationBySite=siteBackendSituationMap(situationData);
+    window.__SGDI_SITE_SITUATION_DATA=situationData||null;
+    window.__SGDI_SITE_SITUATION_BY_SITE=situationBySite;
     const pagination=sgdiServerPaginationHTML("sites",soc||"all",result);
     view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
     ${sitesSocieteSelectorHTML(mapSites)}
@@ -15217,8 +15230,38 @@ function siteBackendSituationMap(d){
   });
   return map;
 }
+function siteBackendSituationForSite(site,situationBySite){
+  const map=situationBySite||window.__SGDI_SITE_SITUATION_BY_SITE;
+  if(!map||!site)return null;
+  return map.get(String(site?.backendId||""))||map.get(String(site?.id||""))||null;
+}
+function siteBackendAssignmentRows(site,situationBySite){
+  const row=siteBackendSituationForSite(site,situationBySite);
+  const byGroup=row?.by_group;
+  if(byGroup&&typeof byGroup==="object")return Object.values(byGroup).flat().filter(Boolean);
+  const siteIds=[site?.backendId,site?.id].filter(v=>v!==undefined&&v!==null&&v!=="").map(v=>String(v));
+  if(!siteIds.length)return null;
+  const rows=(db.assignments||[]).filter(x=>x&&x.active!==false&&x.active!==0&&siteIds.some(id=>String(x.siteBackendId||x.site_id||x.siteId||"")===id));
+  return rows.length?rows:null;
+}
+function assignmentEmployeeRefs(row){
+  return [row?.employee_id,row?.employeeId,row?.agentBackendId,row?.agentId,row?.code,row?.matricule]
+    .filter(v=>v!==undefined&&v!==null&&v!=="")
+    .map(v=>String(v));
+}
+function employeeMatchesAssignmentRefs(agent,refs){
+  if(!agent||!refs)return false;
+  return [agent.id,agent.backendId,agent.matricule,agent.code]
+    .filter(v=>v!==undefined&&v!==null&&v!=="")
+    .some(v=>refs.has(String(v)));
+}
+function backendAssignmentRefsForSite(site,situationBySite){
+  const rows=siteBackendAssignmentRows(site,situationBySite);
+  if(!rows)return null;
+  return new Set(rows.flatMap(assignmentEmployeeRefs));
+}
 function siteBackendMetricForSite(site,situationBySite){
-  const row=situationBySite?.get(String(site?.backendId||""))||situationBySite?.get(String(site?.id||""))||null;
+  const row=siteBackendSituationForSite(site,situationBySite);
   const contractual=siteBackendNumber(row?.contractual_staff);
   const realized=siteBackendNumber(row?.realized_staff);
   const missing=siteBackendNumber(row?.missing_staff);
@@ -15370,11 +15413,24 @@ function openSiteMovementHistoryModal(siteId){
 function openSiteAffectesModal(siteId){
   const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
   const eff=siteEffectifsNorm(site);
-  const contractuel=+eff.totalContractuel||0;
-  const agents=siteAgentsAffectes(site);
+  const backend=siteBackendSituationForSite(site);
+  const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
+  const backendRows=siteBackendAssignmentRows(site);
+  const agents=backendRows||siteAgentsAffectes(site);
   const surplus=contractuel>0&&agents.length>contractuel?agents.slice(contractuel):[];
   const main=contractuel>0&&agents.length>contractuel?agents.slice(0,contractuel):agents;
-  const agentRow=a=>{const aff=opsEmployeeLiveAffectation(a);return`<tr data-searchable><td><a href="#/effectif/agent/${a.id}" class="font-mono text-amber-600 font-bold hover:underline" onclick="closeModal()">${safe(a.matricule)}</a></td><td><a href="#/effectif/agent/${a.id}" class="hover:underline" onclick="closeModal()">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a></td><td class="text-xs">${safe(aff?.poste||a.fonction)}</td><td class="text-xs">${formatDate(aff?.dateDebut)}</td></tr>`};
+  const agentFromAssignmentRow=row=>findEmployeeByRef(row?.employee_id)||findEmployeeByRef(row?.code)||findEmployeeByRef(row?.matricule)||null;
+  const agentRow=item=>{
+    const row=item?.employee_id||item?.assignment_id?item:null;
+    const a=row?agentFromAssignmentRow(row):item;
+    const aff=a?opsEmployeeLiveAffectation(a):{};
+    const code=row?.code||a?.matricule||"—";
+    const name=row?.name||((a?.nom||"")+" "+(a?.prenom||"")).trim()||"Employé PostgreSQL";
+    const poste=row?.position||aff?.poste||a?.fonction||"—";
+    const start=row?.start_date||aff?.dateDebut||"";
+    const href=a?`#/effectif/agent/${employeeRouteId(a)}`:"#";
+    return`<tr data-searchable><td><a href="${href}" class="font-mono text-amber-600 font-bold hover:underline" onclick="closeModal()">${safe(code)}</a></td><td><a href="${href}" class="hover:underline" onclick="closeModal()">${escapeHTML(name)}</a></td><td class="text-xs">${safe(poste)}</td><td class="text-xs">${formatDate(start)}</td></tr>`;
+  };
   openModal(`<h3 class="font-bold text-lg mb-2">Effectifs affectés</h3>
     <div class="p-3 rounded bg-slate-50 border border-slate-200 mb-4">
       <div class="font-black">${escapeHTML(site.nom||"Site")}</div>
@@ -15396,6 +15452,8 @@ function siteEffectifAlertHTML(eff,agents){
   </div>`;
 }
 function siteAgentsAffectes(site){
+  const refs=backendAssignmentRefsForSite(site);
+  if(refs)return (db.agents||[]).filter(a=>employeeMatchesAssignmentRefs(a,refs)).sort((a,b)=>(a.matricule||a.nom||"").localeCompare(b.matricule||b.nom||""));
   return (db.agents||[]).filter(a=>{
     if(a.statut!=="actif")return false;
     const aff=opsEmployeeLiveAffectation(a);
@@ -17706,7 +17764,11 @@ function applyFpPositionFilters(list){
   const f=fpFilters();
   let out=(list||[]).slice();
   const q=String(f.q||"").toLowerCase().trim();
-  if(f.site)out=out.filter(a=>fpSiteFilterKeyForAgent(a)===f.site);
+  if(f.site){
+    const selectedSite=(db.sites||[]).find(s=>fpSiteFilterKeyForSite(s)===f.site)||null;
+    const refs=selectedSite?backendAssignmentRefsForSite(selectedSite):null;
+    out=out.filter(a=>refs?employeeMatchesAssignmentRefs(a,refs):fpSiteFilterKeyForAgent(a)===f.site);
+  }
   if(f.poste)out=out.filter(a=>{
     const aff=agentLiveAffectation(a)||{};
     return String(aff.poste||a.fonction||a.position||a.posteContrat||"")===String(f.poste);
@@ -30863,14 +30925,6 @@ function opsLatestMovementForEmployee(a){
 }
 function opsEmployeeLiveAffectation(a){
   const current=a?.affectationCourante||{};
-  const latest=opsLatestMovementForEmployee(a);
-  if(latest){
-    const site=latest._site||(db.sites||[]).find(s=>String(s.id)===String(latest.siteId)||String(s.backendId||"")===String(latest.siteBackendId||""));
-    const latestDate=opsMovementDateValue(latest)||"";
-    const currentDate=String(current.dateDebut||"").slice(0,10);
-    const shouldUseLatest=!current.siteName&&!current.siteId||latestDate&&(!currentDate||latestDate>=currentDate);
-    if(shouldUseLatest)return {...current,siteId:site?.id||latest.siteId||current.siteId||"",siteBackendId:site?.backendId||latest.siteBackendId||current.siteBackendId||"",siteName:site?.nom||site?.intitule||latest.siteName||latest.autreAffectation||current.siteName||"",clientName:site?.client||latest.clientName||current.clientName||"",groupe:latest.groupe||current.groupe||"",dateDebut:latestDate||current.dateDebut||""};
-  }
   return current;
 }
 function opsEmployeeCurrentPositionLabel(a){
@@ -31065,16 +31119,9 @@ function opsMovementEditorHTML(date,agentId,agents){
   const sites=movementSitesForSociete(siteSociete);
   const remplacementAgents=(db.agents||[]).filter(x=>!siteSociete||normalizeSocieteName(x.societe)===normalizeSocieteName(siteSociete)).sort((x,y)=>((x.nom||"")+" "+(x.prenom||"")).localeCompare((y.nom||"")+" "+(y.prenom||"")));
   const numeroOrdre=nextOrdreMouvementNumero();
-  // Pré-calcul unique des affectations : un seul scan opsMovementRows() pour toute la liste
-  const _mvtRows=opsMovementRows();
   const _affMap=new Map();
   agents.forEach(a=>{
-    const refs=new Set([a.id,a.backendId,a.matricule,a.code].map(v=>String(v||"").trim()).filter(Boolean));
-    const latest=_mvtRows.filter(f=>(refs.has(String(f.agentId||"").trim())||refs.has(String(f.agentBackendId||"").trim())||refs.has(String(f.matricule||"").trim())||refs.has(String(f.employee_id||"").trim()))&&(f.siteId||f.siteName||f.autreAffectation)).sort((x,y)=>String(opsMovementDateValue(y)||"").localeCompare(String(opsMovementDateValue(x)||"")))[0]||null;
-    const current=a?.affectationCourante||{};
-    let aff=current;
-    if(latest){const site=latest._site||(db.sites||[]).find(s=>String(s.id)===String(latest.siteId)||String(s.backendId||"")===String(latest.siteBackendId||""));const latestDate=opsMovementDateValue(latest)||"";const currentDate=String(current.dateDebut||"").slice(0,10);if(!current.siteName&&!current.siteId||latestDate&&(!currentDate||latestDate>=currentDate))aff={...current,siteId:site?.id||latest.siteId||current.siteId||"",siteName:site?.nom||site?.intitule||latest.siteName||latest.autreAffectation||current.siteName||"",clientName:site?.client||latest.clientName||current.clientName||"",groupe:latest.groupe||current.groupe||"",dateDebut:latestDate||current.dateDebut||""};}
-    _affMap.set(a.id,aff);
+    _affMap.set(a.id,agentLiveAffectation(a)||a?.affectationCourante||{});
   });
   const nonAffectes=agents.filter(a=>{const aff=_affMap.get(a.id)||{};return!(aff.siteId||aff.siteName);});
   const affectes=agents.filter(a=>{const aff=_affMap.get(a.id)||{};return!!(aff.siteId||aff.siteName);});
