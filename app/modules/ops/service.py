@@ -164,9 +164,14 @@ def general_sites_situation(db: Session):
         return {"active_sites": 0, "instance_assignment_sites": 0, "operational_sites": 0, "contractual_staff": 0, "realized_staff": 0, "missing_staff": 0, "surplus_staff": 0, "sites": []}
 
     site_ids = [s.id for s in sites]
+    _former = {"sortant", "demissionne", "licencie", "archive", "archivee", "ancien"}
     assignments = db.execute(select(Assignment).where(Assignment.active == 1, Assignment.site_id.in_(site_ids))).scalars().all()
     employee_ids = list({a.employee_id for a in assignments})
-    employees = {e.id: e for e in db.execute(select(Employee).where(Employee.id.in_(employee_ids))).scalars().all()} if employee_ids else {}
+    employees = {
+        e.id: e
+        for e in db.execute(select(Employee).where(Employee.id.in_(employee_ids))).scalars().all()
+        if (e.status or "actif").lower() not in _former
+    } if employee_ids else {}
 
     by_site: dict[int, list] = {s.id: [] for s in sites}
     for assignment in assignments:
@@ -190,7 +195,7 @@ def general_sites_situation(db: Session):
         by_group: dict[str, list] = {}
         for a in db.execute(select(Assignment).where(Assignment.site_id == s.id, Assignment.active == 1)).scalars().all():
             grp = a.group_code or "A"
-            emp = employees.get(a.employee_id)
+            emp = employees.get(a.employee_id)  # already filtered to active statuses
             if emp:
                 by_group.setdefault(grp, []).append({
                     "assignment_id": a.id, "employee_id": emp.id,
