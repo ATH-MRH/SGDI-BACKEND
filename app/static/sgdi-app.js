@@ -4122,6 +4122,10 @@ function sgdiErpEmployeeCounters(scopeSoc){
 }
 function sgdiUnifiedEmployeeCounters(scopeSoc){
   const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
+  const scopeNorm=normalizeSocieteName(scopeSoc||"");
+  const _localAgents=(db?.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a.societe||"")===scopeNorm);
+  const _localNonSortants=_localAgents.filter(a=>!employeeIsFormer(a));
+  const localWithoutAssignment=_localNonSortants.filter(a=>!agentHasLiveAffectation(a)).length;
   if(erpEmp&&typeof erpEmp==="object"){
     const total=counterNumericValue(erpEmp.total);
     const active=counterNumericValue(erpEmp.active);
@@ -4134,7 +4138,7 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
       operationalActive,
       activeHeadcount:activeHeadcount||active||total,
       withoutEquipment:counterNumericValue(erpEmp.without_equipment),
-      withoutAssignment:counterNumericValue(erpEmp.without_assignment),
+      withoutAssignment:localWithoutAssignment,
       leaveCurrent:counterNumericValue(erpEmp.leave_current),
       sickLeaveCurrent:counterNumericValue(erpEmp.sick_leave_current),
       absent:counterNumericValue(erpEmp.absent),
@@ -4142,8 +4146,7 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
       blacklisted:counterNumericValue(erpEmp.blacklisted)
     };
   }
-  const scopeNorm=normalizeSocieteName(scopeSoc||"");
-  const agents=(db?.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a.societe||"")===scopeNorm);
+  const agents=_localAgents;
   const nonArchived=agents.filter(a=>!ficheAgentIsSortantArchive(a));
   const nonSortants=agents.filter(a=>!employeeIsFormer(a));
   const activeAgents=agents.filter(employeeIsActive);
