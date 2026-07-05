@@ -5342,7 +5342,7 @@ function renderSidebar(){
     const active=sidebarRouteActive(path,item.route)||item.aliases?.some(r=>sidebarRouteActive(path,r));
     const badge=item.badge?`<span class="nav-count">${escapeHTML(item.badge)}</span>`:(positiveCount(item.count)?`<span class="nav-count">${positiveCount(item.count)}</span>`:"");
     const gapClass=item.gapBefore?" nav-gap-before":"";
-    return `<div class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label">${escapeHTML(item.label)}</span>${badge}</div>`;
+    return `<div class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label">${escapeHTML(item.label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
   const renderItems=(items,showBack=true)=>{
     nav.innerHTML=items.map(itemHTML).join("");
@@ -6485,9 +6485,14 @@ function navigatePreserveScroll(route){
   sgdiResetViewScroll=false;
   navigate(route);
 }
+function openInNewTab(route){
+  const hash="#/"+String(route||"").replace(/^#?\/?/,"");
+  window.open(location.pathname+location.search+hash,"_blank","noopener,noreferrer");
+}
 function sidebarNavigate(event,route){
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
   if(event){
+    if(event.ctrlKey||event.metaKey||event.shiftKey){openInNewTab(route);return;}
     event.preventDefault();
     event.stopPropagation();
   }
