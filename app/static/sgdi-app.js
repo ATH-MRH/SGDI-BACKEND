@@ -12818,7 +12818,7 @@ function renderAgentForm(view,id){
   const fpTabs=[
     ["identite","Informations personnelles"],
     ["habilitations","Habilitations"],
-    ["contrat","RH / contrat"],
+    ...((adminFicheContext||isDrhFicheContext())?[["contrat","RH / contrat"]]:[]),
     ["conges","Congés"],
     ["absences","Absences"],
     ["carriere","Carrière"],
