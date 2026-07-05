@@ -12566,12 +12566,7 @@ function operationalPreparationHTML(data,source){
   ${items.length?`<div class="card overflow-hidden"><table><thead><tr><th>Employé</th><th>Société</th><th>Poste</th><th>Site</th><th>Blocage</th></tr></thead><tbody>${items.map(row=>{const blockers=row.blockers||[];return `<tr data-searchable><td><div class="font-bold">${escapeHTML(row.name||"—")}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(row.code||"—")}</div></td><td class="text-xs">${escapeHTML(row.society||"—")}</td><td class="text-xs">${escapeHTML(row.position||"—")}</td><td class="text-xs">${escapeHTML(row.site||"Sans affectation")}</td><td>${blockers.map(b=>`<span class="pill" style="background:${operationalPreparationColor(b.key)}18;color:${operationalPreparationColor(b.key)};font-weight:900;margin:2px">${escapeHTML(b.label)}</span>`).join(" ")}</td></tr>`}).join("")}</tbody></table></div>`:`<div class="card p-10 text-center text-slate-500">Tous les employés de ce périmètre sont prêts ou déjà opérationnels.</div>`}`;
 }
 function renderOperationalPreparation(view,filter){
-  const localData=localOperationalPreparationData(filter);
-  const soc=localData.society||"";
-  const fallback=()=>{view.innerHTML=operationalPreparationHTML(localOperationalPreparationData(filter),"local")};
-  fallback();
-  if(!window.SGDI_API?.erp?.operationalPreparation)return;
-  window.SGDI_API.erp.operationalPreparation(soc?{society:soc}:{}).then(()=>{view.innerHTML=operationalPreparationHTML(localOperationalPreparationData(filter),"PostgreSQL")}).catch(e=>{console.warn("Préparation opérationnelle PostgreSQL indisponible",e);fallback();toast("Lecture ERP PostgreSQL indisponible : "+(e.message||e),"warn")});
+  view.innerHTML=operationalPreparationHTML(localOperationalPreparationData(filter),"local");
 }
 
 function absencesRecapHTML(){
