@@ -5225,7 +5225,8 @@ function mergeSidebarCustomItems(module,items){
 function applySidebarOrder(module,items){
   const pinned=sidebarPinnedDefaultOrder(module);
   const saved=sidebarOrderForModule(module);
-  const order=pinned.length?[...pinned,...saved.filter(route=>!pinned.includes(route))]:saved;
+  // Saved order (user-defined) takes priority over pinned defaults
+  const order=saved.length?[...saved,...pinned.filter(r=>!saved.includes(r))]:(pinned.length?pinned:[]);
   if(!order.length)return items;
   const byRoute=new Map((items||[]).map(item=>[item.route,item]));
   const used=new Set();
