@@ -31721,12 +31721,11 @@ function renderOpsMissions(view,arg){
     <div><h1 class="text-2xl font-black uppercase">MISSIONS OPS</h1><div class="text-xs text-slate-500">Création, suivi, ordres de mission et archivage employé · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div>
     <button class="btn btn-secondary" onclick="openOpsMissionModal()">＋ Nouvelle mission</button>
   </div>
-  <div class="grid grid-5 gap-3 mb-5">
+  <div class="grid grid-4 gap-3 mb-5">
     ${missionKpi("Total missions",missions.length,"#043970","Toutes les missions")}
     ${missionKpi("En cours",activeMissions.length,"#16a34a","Actives aujourd'hui")}
     ${missionKpi("Planifiées",plannedMissions.length,"#f59e0b","À venir")}
     ${missionKpi("Urgentes",urgentMissions.length,"#dc2626","Intervention / urgent")}
-    ${missionKpi("Archivables",withEmployee,"#7c3aed","Employé renseigné")}
   </div>
   <div class="card p-5 overflow-hidden">
     <div class="flex items-center justify-between mb-3 gap-2 flex-wrap"><h3 class="font-black">Liste des missions OPS</h3><span class="pill">${missions.length} mission${missions.length>1?"s":""}</span></div>
