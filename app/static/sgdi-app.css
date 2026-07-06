@@ -4064,7 +4064,7 @@ body:has(.sgdi-login-page) #app{
 }
 .sgdi-login-page{
   min-height:100vh!important;
-  overflow:hidden!important;
+  overflow:auto!important;
   color:#fff!important;
   background:
     radial-gradient(circle at 86% 42%, rgba(25,172,231,.28) 0 3px, transparent 4px),
@@ -4100,9 +4100,10 @@ body:has(.sgdi-login-page) #app{
 }
 .sgdi-login-main{
   width:100%!important;
+  min-width:620px!important;
   min-height:100svh!important;
   margin:0!important;
-  padding:0!important;
+  padding:48px!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:center!important;
@@ -4312,18 +4313,18 @@ body:has(.sgdi-login-page) #app{
 }
 @media(max-width:520px){
   .sgdi-login-panel{
-    width:min(488px,calc(100vw - 32px))!important;
-    min-height:auto!important;
-    padding:48px 42px 34px!important;
+    width:488px!important;
+    min-height:572px!important;
+    padding:68px 68px 44px!important;
   }
-  .sgdi-login-panel h1{font-size:26px!important}
-  .sgdi-login-form{gap:18px!important}
-  .sgdi-login-form .sgdi-login-field input{height:46px!important;min-height:46px!important;font-size:18px!important}
-  .sgdi-login-field span{font-size:15px!important}
-  .sgdi-login-remember,.sgdi-login-forgot{font-size:15px!important}
-  .sgdi-login-page .sgdi-login-submit{height:50px!important;min-height:50px!important;font-size:18px!important}
-  .sgdi-login-signup,.sgdi-login-signup button{font-size:16px!important}
-  .sgdi-login-page .login-admin-system-shortcut{font-size:16px!important}
+  .sgdi-login-panel h1{font-size:30px!important}
+  .sgdi-login-form{gap:24px!important}
+  .sgdi-login-form .sgdi-login-field input{height:52px!important;min-height:52px!important;font-size:22px!important}
+  .sgdi-login-field span{font-size:18px!important}
+  .sgdi-login-remember,.sgdi-login-forgot{font-size:18px!important}
+  .sgdi-login-page .sgdi-login-submit{height:56px!important;min-height:56px!important;font-size:22px!important}
+  .sgdi-login-signup,.sgdi-login-signup button{font-size:20px!important}
+  .sgdi-login-page .login-admin-system-shortcut{font-size:20px!important}
   .sgdi-login-page .login-admin-system-shortcut{
     left:0!important;
     right:0!important;
