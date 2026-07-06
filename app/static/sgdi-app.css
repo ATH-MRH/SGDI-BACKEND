@@ -4123,26 +4123,26 @@ body:has(.sgdi-login-page) #app{
   display:none!important;
 }
 .sgdi-login-panel{
-  width:244px!important;
-  min-height:286px!important;
+  width:488px!important;
+  min-height:572px!important;
   border:0!important;
-  border-radius:4px!important;
+  border-radius:8px!important;
   background:rgba(24,54,126,.58)!important;
-  box-shadow:0 24px 55px rgba(0,20,75,.26)!important;
-  backdrop-filter:blur(4px)!important;
-  padding:34px 34px 22px!important;
+  box-shadow:0 48px 95px rgba(0,20,75,.3)!important;
+  backdrop-filter:blur(6px)!important;
+  padding:68px 68px 44px!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:stretch!important;
 }
 .sgdi-login-panel-head{
-  margin:0 0 22px!important;
+  margin:0 0 44px!important;
   text-align:center!important;
 }
 .sgdi-login-panel h1{
   margin:0!important;
   color:#fff!important;
-  font-size:15px!important;
+  font-size:30px!important;
   line-height:1!important;
   font-weight:900!important;
   letter-spacing:.01em!important;
@@ -4151,7 +4151,7 @@ body:has(.sgdi-login-page) #app{
 .sgdi-login-form{
   width:100%!important;
   display:grid!important;
-  gap:12px!important;
+  gap:24px!important;
 }
 .sgdi-login-field{
   display:block!important;
@@ -4160,45 +4160,45 @@ body:has(.sgdi-login-page) #app{
 }
 .sgdi-login-field:before{
   position:absolute!important;
-  left:10px!important;
+  left:20px!important;
   top:50%!important;
   transform:translateY(-50%)!important;
   z-index:2!important;
-  font-size:11px!important;
+  font-size:22px!important;
   color:#ffb25c!important;
   opacity:.95!important;
 }
 .sgdi-login-field:first-child:before{content:"⚇"!important}
-.sgdi-login-password-field:before{content:"🔒"!important;font-size:10px!important}
+.sgdi-login-password-field:before{content:"🔒"!important;font-size:20px!important}
 .sgdi-login-form .sgdi-login-field input{
   width:100%!important;
-  height:26px!important;
-  min-height:26px!important;
+  height:52px!important;
+  min-height:52px!important;
   border:0!important;
-  border-radius:5px!important;
+  border-radius:10px!important;
   background:rgba(184,207,230,.68)!important;
   color:#fff!important;
   box-shadow:none!important;
   outline:none!important;
-  padding:0 10px 0 28px!important;
-  font-size:11px!important;
+  padding:0 20px 0 56px!important;
+  font-size:22px!important;
   font-weight:700!important;
   font-family:Arial,Helvetica,sans-serif!important;
   transition:background .16s ease,box-shadow .16s ease!important;
 }
-.sgdi-login-form .sgdi-login-password-field input{padding-right:10px!important}
+.sgdi-login-form .sgdi-login-password-field input{padding-right:20px!important}
 .sgdi-login-form .sgdi-login-field input::placeholder{color:transparent!important}
 .sgdi-login-form .sgdi-login-field input:focus{
   background:rgba(202,219,236,.82)!important;
-  box-shadow:0 0 0 2px rgba(109,177,255,.25)!important;
+  box-shadow:0 0 0 4px rgba(109,177,255,.25)!important;
 }
 .sgdi-login-field span{
   position:absolute!important;
-  left:28px!important;
+  left:56px!important;
   top:50%!important;
   transform:translateY(-50%)!important;
   color:rgba(255,255,255,.78)!important;
-  font-size:9px!important;
+  font-size:18px!important;
   font-weight:700!important;
   font-style:italic!important;
   pointer-events:none!important;
@@ -4208,34 +4208,34 @@ body:has(.sgdi-login-page) #app{
 .sgdi-login-field input:not(:placeholder-shown)+span{
   opacity:0!important;
   transform:translateY(-50%)!important;
-  font-size:9px!important;
+  font-size:18px!important;
 }
 .sgdi-login-remember{
   display:flex!important;
   align-items:center!important;
-  gap:5px!important;
+  gap:10px!important;
   margin:0!important;
   color:rgba(255,255,255,.82)!important;
-  font-size:9px!important;
+  font-size:18px!important;
   line-height:1!important;
   font-weight:700!important;
 }
 .sgdi-login-remember input{
-  width:10px!important;
-  height:10px!important;
+  width:20px!important;
+  height:20px!important;
   accent-color:#4da1ff!important;
 }
 .sgdi-login-page .sgdi-login-submit{
   width:100%!important;
-  height:28px!important;
-  min-height:28px!important;
-  margin:12px 0 9px!important;
+  height:56px!important;
+  min-height:56px!important;
+  margin:24px 0 18px!important;
   border:0!important;
-  border-radius:5px!important;
+  border-radius:10px!important;
   background:#4b9bff!important;
   color:#fff!important;
-  box-shadow:0 9px 18px rgba(12,64,145,.24)!important;
-  font-size:11px!important;
+  box-shadow:0 18px 36px rgba(12,64,145,.24)!important;
+  font-size:22px!important;
   font-weight:950!important;
   letter-spacing:.03em!important;
   cursor:pointer!important;
@@ -4244,23 +4244,23 @@ body:has(.sgdi-login-page) #app{
   background:#68adff!important;
   color:#fff!important;
   transform:translateY(-1px)!important;
-  box-shadow:0 11px 22px rgba(12,64,145,.32)!important;
+  box-shadow:0 22px 44px rgba(12,64,145,.32)!important;
 }
 .sgdi-login-page .sgdi-login-submit.is-loading{
-  padding-left:32px!important;
+  padding-left:64px!important;
 }
 .sgdi-login-page .sgdi-login-submit.is-loading::before{
-  width:12px!important;
-  height:12px!important;
-  left:14px!important;
-  margin-top:-6px!important;
+  width:24px!important;
+  height:24px!important;
+  left:28px!important;
+  margin-top:-12px!important;
 }
 .sgdi-login-status{
-  min-height:14px!important;
-  margin:0 0 4px!important;
+  min-height:28px!important;
+  margin:0 0 8px!important;
   color:#fff!important;
   text-align:center!important;
-  font-size:9px!important;
+  font-size:18px!important;
   font-weight:800!important;
 }
 .sgdi-login-forgot{
@@ -4268,7 +4268,7 @@ body:has(.sgdi-login-page) #app{
   background:transparent!important;
   color:rgba(255,255,255,.78)!important;
   cursor:pointer!important;
-  font-size:9px!important;
+  font-size:18px!important;
   font-weight:700!important;
   padding:0!important;
   text-align:center!important;
@@ -4276,7 +4276,7 @@ body:has(.sgdi-login-page) #app{
 .sgdi-login-forgot:hover{text-decoration:underline!important;color:#fff!important}
 .sgdi-login-signup{
   color:rgba(255,255,255,.78)!important;
-  font-size:10px!important;
+  font-size:20px!important;
   font-weight:600!important;
   position:relative!important;
   z-index:2!important;
@@ -4286,7 +4286,7 @@ body:has(.sgdi-login-page) #app{
   background:transparent!important;
   color:#fff!important;
   cursor:pointer!important;
-  font-size:10px!important;
+  font-size:20px!important;
   font-weight:950!important;
   padding:0!important;
 }
@@ -4303,7 +4303,7 @@ body:has(.sgdi-login-page) #app{
   color:rgba(255,255,255,.78)!important;
   box-shadow:none!important;
   backdrop-filter:none!important;
-  font-size:10px!important;
+  font-size:20px!important;
   font-weight:800!important;
 }
 .sgdi-login-page .login-admin-system-shortcut:hover{
@@ -4312,9 +4312,18 @@ body:has(.sgdi-login-page) #app{
 }
 @media(max-width:520px){
   .sgdi-login-panel{
-    width:min(244px,calc(100vw - 48px))!important;
-    padding:32px 30px 22px!important;
+    width:min(488px,calc(100vw - 32px))!important;
+    min-height:auto!important;
+    padding:48px 42px 34px!important;
   }
+  .sgdi-login-panel h1{font-size:26px!important}
+  .sgdi-login-form{gap:18px!important}
+  .sgdi-login-form .sgdi-login-field input{height:46px!important;min-height:46px!important;font-size:18px!important}
+  .sgdi-login-field span{font-size:15px!important}
+  .sgdi-login-remember,.sgdi-login-forgot{font-size:15px!important}
+  .sgdi-login-page .sgdi-login-submit{height:50px!important;min-height:50px!important;font-size:18px!important}
+  .sgdi-login-signup,.sgdi-login-signup button{font-size:16px!important}
+  .sgdi-login-page .login-admin-system-shortcut{font-size:16px!important}
   .sgdi-login-page .login-admin-system-shortcut{
     left:0!important;
     right:0!important;
