@@ -5518,8 +5518,8 @@ function renderSidebar(){
         {label:"MAGASINS",route:"admin/magasins",count:adminMagasinsCount||null},
         {label:"ARTICLES",route:"admin/articles",count:adminArticlesCount||null},
         {label:"MODÈLES DOCUMENTS",route:"admin/document-models",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
-        {label:"UTILISATEURS & BLOCAGE",route:"admin/users",gapBefore:true,count:(db.users||[]).filter(u=>u.actif===false).length||null},
-        {label:"DROITS D'ACCÈS",route:"admin/droits"},
+        {label:"UTILISATEURS & BLOCAGE",route:"admin/users",gapBefore:true,count:(db.users||[]).length||null},
+        {label:"DROITS D'ACCÈS",route:"admin/droits",count:Object.keys(db.droitsAcces||{}).length||null},
         {label:"NIVEAUX D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"SÉCURITÉ DES ACCÈS",route:"admin/access"},
         {label:"ORGANISER MENU LATÉRAL",route:"admin/menu"},
@@ -29555,7 +29555,7 @@ async function renderAdminSystemDashboard(view){
   }
   const adminSoc=adminActiveSociete();
   const agents=(db.agents||[]).filter(adminMatchesSociete);
-  const sitesCount=opsSitesActiveCount()??siteOpsSitesForScope(sessionStorage.getItem("opsSociete")||"").length;
+  const sitesCount=(db.sites||[]).filter(s=>s.actif!==false&&s.active!==0&&adminDataMatchesSociete(s)).length;
   const magasins=(db.magasins||[]).filter(adminDataMatchesSociete);
   const articles=(db.stockArticles||[]).filter(adminDataMatchesSociete);
   const users=db.users||[];
@@ -29575,6 +29575,7 @@ async function renderAdminSystemDashboard(view){
   <div class="grid grid-2 gap-4">
     ${card("Utilisateurs & blocage","Création, modification, blocage et structures autorisées.","admin/users","#dc2626",users.length)}
     ${card("Droits d'accès","Matrice des droits par module et niveau d'habilitation.","admin/droits","#64748b",Object.keys(db.droitsAcces||{}).length)}
+    ${card("Niveaux d'accès","Niveaux d'habilitation, rôles et modules autorisés par niveau.","admin/niveaux","#7c3aed",(db.niveauxAcces||[]).length)}
     ${card("Sécurité des accès","Accès SGDI, sociétés, structures et code journalier.","admin/access","#0891b2","")}
     ${card("Candidats","Suppression en masse par statut, société ou suppression totale.","admin/candidats","#b91c1c",(db.candidats||[]).length)}
   </div>
