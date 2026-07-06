@@ -29844,16 +29844,22 @@ function renderAdminFichesPosition(view){
   const rawQ=String(sessionStorage.getItem("adminFicheSearch")||"");
   const q=adminFicheSearchText(rawQ);
   const adminSoc=adminActiveSociete();
-  const baseAgents=(db.agents||[]).filter(adminMatchesSociete);
+  const allAgents=db.agents||[];
+  const baseAgents=allAgents.filter(adminMatchesSociete);
   const agents=baseAgents.filter(a=>adminFicheMatchesSearch(a,q));
   const locked=agents.filter(a=>a.locked||a.fichePositionOfficielle).length;
+  const otherSocieties=adminSoc&&baseAgents.length===0&&allAgents.length>0
+    ?[...new Set(allAgents.map(a=>a.societe||a.society||"").filter(Boolean))].sort()
+    :[];
   view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Fiche de position</h1><p class="text-sm text-slate-500 mt-1">Toutes les fiches sont verrouillées dans RH, OPS, Matériel et les autres modules. Les modifications et suppressions se font uniquement ici.</p></div>
   ${adminSocieteSelectorHTML(adminSoc?"Les fiches affichées et les actions de configuration concernent cette société.":"Vue globale des fiches. Sélectionnez une société pour travailler dans son périmètre.")}
-  <div class="grid grid-3 gap-3 mb-4">
+  <div class="grid grid-4 gap-3 mb-4">
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Total DB</div><div class="text-3xl font-black text-slate-400">${allAgents.length}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Fiches</div><div class="text-3xl font-black" style="color:#043970">${baseAgents.length}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Verrouillées</div><div class="text-3xl font-black text-emerald-700">${locked}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Affichées</div><div class="text-3xl font-black text-amber-700">${agents.length}</div></div>
   </div>
+  ${otherSocieties.length?`<div class="card p-4 mb-4" style="background:#fef3c7;border-left:4px solid #f59e0b"><div class="font-black text-amber-800 mb-1">⚠ Aucun employé pour « ${escapeHTML(adminSoc)} »</div><div class="text-sm text-amber-700">Les ${allAgents.length} employés présents dans la base appartiennent à : <b>${otherSocieties.map(escapeHTML).join(", ")}</b></div><div class="mt-2"><button class="btn btn-ghost text-xs" onclick="setAdminActiveSociete('')">Voir toutes les sociétés</button></div></div>`:""}
   <div class="card p-4 mb-4"><div class="grid grid-4 gap-3 items-end">
     <div><label class="label">Société</label><select class="select" onchange="setAdminActiveSociete(this.value)"><option value="" ${!adminSoc?"selected":""}>Toutes les sociétés</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${normalizeSocieteName(adminSoc)===normalizeSocieteName(s)?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
     <div class="col-span-2"><label class="label">Recherche</label><input id="admin-fiche-search-input" class="input" value="${escapeHTML(rawQ)}" placeholder="Nom, prénom, code, matricule, société, site..." oninput="adminFicheSearchInput(this)"/></div>
