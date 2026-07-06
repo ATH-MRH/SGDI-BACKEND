@@ -6640,45 +6640,26 @@ setInterval(()=>{if(session&&sgdiPostgresReady)refreshDemandesPersonnelFromPostg
 function renderLogin(){
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page">
     <main class="sgdi-login-main">
-      <section class="sgdi-login-visual" aria-label="ATLAS">
-        <div class="sgdi-login-brand"><span>ATLA</span><i>S</i></div>
-        <p class="sgdi-login-kicker">Suite de gestion integree</p>
-        <div class="sgdi-login-orbit" aria-hidden="true">
-          <span></span><span></span><span></span>
-        </div>
-        <div class="sgdi-login-preview">
-          <div class="sgdi-login-preview-head">
-            <strong>Portail operationnel</strong>
-            <span>En ligne</span>
-          </div>
-          <div class="sgdi-login-preview-grid">
-            <em>DRH</em><em>OPS</em><em>FIN</em><em>MAT</em>
-          </div>
-        </div>
-      </section>
       <section class="sgdi-login-panel">
         <div class="sgdi-login-panel-head">
-          <span class="sgdi-login-chip">Acces securise</span>
-          <h1>Bienvenue</h1>
-          <p>Connectez-vous pour acceder a votre espace ATLAS.</p>
+          <h1>Login</h1>
         </div>
         <form id="login-form" class="sgdi-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
           <label class="sgdi-login-field">
             <input name="username" autocomplete="username" placeholder=" " autofocus/>
-            <span>Identifiant</span>
+            <span>Username</span>
           </label>
           <label class="sgdi-login-field sgdi-login-password-field">
             <input type="password" name="password" autocomplete="current-password" placeholder=" "/>
-            <span>Mot de passe</span>
-            <button type="button" class="sgdi-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button>
+            <span>Password</span>
           </label>
+          <label class="sgdi-login-remember"><input type="checkbox" checked/> Remember me</label>
         </form>
-        <button class="sgdi-login-submit" type="submit" form="login-form">Se connecter</button>
+        <button class="sgdi-login-submit" type="submit" form="login-form">LOGIN</button>
         <div class="sgdi-login-status" hidden aria-live="polite"></div>
-        <div class="sgdi-login-assurance" aria-label="Securite">
-          <span></span> Session chiffree
-        </div>
+        <button type="button" class="sgdi-login-forgot" onclick="toast('Contactez l\\'administrateur système pour réinitialiser le mot de passe','info')">Forgot your password?</button>
       </section>
+      <div class="sgdi-login-signup">New here? <button type="button" onclick="toast('Création de compte réservée à l\\'administration système','info')">Sign Up</button></div>
     </main>
     <button type="button" class="login-admin-system-shortcut" onclick="openAdminSystemPasswordModal(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">
       <span>Administration systeme</span>
