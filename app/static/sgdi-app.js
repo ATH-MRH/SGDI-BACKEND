@@ -12881,7 +12881,7 @@ function renderAgentForm(view,id){
               <label><span>N° SS <small>(C/Chiffa)</small></span><input class="input" name="numeroCnas" value="${escapeHTML(a.numeroCnas||"")}" inputmode="numeric" ${identiteEditable?"":"disabled"}/></label>
               <label class="rh-phone-field"><span>Numéro de téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${identiteEditable?"":"disabled"}/></label>
               <label><span>N° PP/CIN</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Email</span><input class="input" type="email" name="email" value="${escapeHTML(a.email||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Email</span><input class="input" type="text" inputmode="email" name="email" value="${escapeHTML(a.email||"")}" ${identiteEditable?"":"disabled"}/></label>
               <label><span>Compte bancaire</span><select class="select" name="banque" ${identiteEditable?"":"disabled"}><option value="">— Choisir la banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></label>
               <label><span>Date de naissance</span><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" oninput="updateAgentBirthAge(this)" ${identiteEditable?"":"disabled"}/></label>
               <label><span>N° Compte</span><input class="input" name="numeroCompte" value="${escapeHTML(a.numeroCompte||a.iban||"")}" ${identiteEditable?"":"disabled"}/></label>
@@ -12998,8 +12998,9 @@ function validateAgentForm(form){
   clearAgentFormErrors(form);const errors=[];
   const add=(name,message)=>{const el=form.querySelector(`[name="${name}"]:not([type='hidden'])`);if(!el)return;el.setAttribute("aria-invalid","true");el.classList.add("rh-input-invalid");const msg=document.createElement("small");msg.className="rh-field-error";msg.textContent=message;el.closest("label")?.appendChild(msg);errors.push(el)};
   const value=name=>String(form.querySelector(`[name="${name}"]:not([type='hidden'])`)?.value||"").trim();
-  const email=value("email");if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))add("email","Adresse email non valide");
-  [["telephone","Téléphone"],["contactUrgenceTel","Téléphone du contact"]].forEach(([name,label])=>{const raw=value(name),digits=raw.replace(/\D/g,"");if(raw&&(digits.length<9||digits.length>10))add(name,`${label} : 9 à 10 chiffres attendus`)});
+  const optionalValue=name=>{const v=value(name);return ["/","-","—","n/a","na","ras"].includes(v.toLowerCase())?"":v};
+  const email=optionalValue("email");if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))add("email","Adresse email non valide");
+  [["telephone","Téléphone"]].forEach(([name,label])=>{const raw=value(name),digits=raw.replace(/\D/g,"");if(raw&&(digits.length<9||digits.length>10))add(name,`${label} : 9 à 10 chiffres attendus`)});
   const nin=value("nin").replace(/\D/g,"");if(value("nin")&&![10,18].includes(nin.length))add("nin","Le NIN doit contenir 10 ou 18 chiffres");
   const birth=value("dateNaissance");if(birth&&birth>today())add("dateNaissance","La date de naissance ne peut pas être future");
   const start=value("dateRecrutement"),end=value("dateFinContrat");if(start&&end&&end<start)add("dateFinContrat","La fin du contrat doit être postérieure au début");
