@@ -32286,7 +32286,17 @@ function ptGuardEmployeePointage(agentId,date){
   if(msg){toast(msg,"error");return true}
   return false;
 }
-function ptSetCell(agentId,ym,day,code){const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();saveDB()}
+async function ptPersistCell(agentId,ym,day,code){
+  try{
+    await sgdiRunLegacyAction("save-pointage-cell",{data:{agentId,periode:ym,day:String(day).padStart(2,"0"),code:code||""}});
+    uiSaveState("Sauvegardé","success");
+  }catch(e){
+    toast("Pointage non enregistré : "+(e.message||e),"error");
+    await sgdiPullState({silent:true,force:true}).catch(()=>null);
+    renderView();
+  }
+}
+function ptSetCell(agentId,ym,day,code){const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();ptPersistCell(agentId,ym,day,code)}
 function ptPresenceAgentId(f){
   const refs=[f?.agentId,f?.agentBackendId,f?.employee_id,f?.matricule].map(x=>String(x||"")).filter(Boolean);
   const a=(db.agents||[]).find(ag=>refs.includes(String(ag.id||""))||refs.includes(String(ag.backendId||""))||refs.includes(String(ag.matricule||"")));
@@ -33017,7 +33027,7 @@ function ptOpenCodePicker(agentId,ym,day){
 }
 function ptPickCode(agentId,ym,day,code){ptSetCell(agentId,ym,day,code);closeModal();renderView()}
 function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);renderView()}
-function ptClearRow(agentId,ym){const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.updatedAt=new Date().toISOString();saveDB()}renderView()}
+async function ptClearRow(agentId,ym){const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
 function ptCellHTML(agentId,ym,day,code,isWeekend){const c=POINTAGE_CODES[code];const bg=c?c.bg:(isWeekend?"#dbeafe":"");const fg=c?c.color:(isWeekend?"#1e40af":"#64748b");const txt=code||"·";return`<td class="text-center align-middle" style="border:1px solid #e2e8f0;padding:0;width:28px;min-width:28px;max-width:28px;background:${bg}"><button onclick="ptOpenCodePicker('${agentId}','${ym}',${day})" title="Cliquer pour choisir le code" style="width:100%;height:28px;border:0;background:transparent;color:${fg};font-weight:800;font-family:ui-monospace,monospace;cursor:pointer;font-size:8px;line-height:1">${txt}</button></td>`}
 function ptDonutSVG(slices,total,cx,cy,r,ir){
@@ -33317,7 +33327,7 @@ function renderPointage(view,sub,arg){
 function renderPointageSaisie(){
   const isDrh=session?.transverse==="drh";
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
-  const syncChanged=ptSyncFeuillePresenceMonth(ym);if(syncChanged)saveDB();
+  ptSyncFeuillePresenceMonth(ym);
   const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
@@ -33372,7 +33382,7 @@ function renderPointageSaisie(){
 }
 function renderPointageSaisieAuto(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
-  const abandonChanged=ptNormalizeAbandonsForMonth(ym,soc);if(abandonChanged)saveDB();
+  ptNormalizeAbandonsForMonth(ym,soc);
   const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
