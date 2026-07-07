@@ -32181,6 +32181,7 @@ function fpqRelieveDueWithoutPointage(f){
   return now.getHours()*60+now.getMinutes()>=((+m[1]||0)*60+(+m[2]||0));
 }
 const POINTAGE_TABS=[["feuille","📋 Feuille quotidienne"],["saisie","📝 Saisie manuelle"],["auto","🤖 Saisie automatique"],["recap","👤 Récap par agent"],["societe","🏢 Récap par société"],["stats","📈 Statistiques"],["legende","🎨 Légende & codes"],["qr","📲 QR par site"]];
+function isSupOrUser(){return String(session?.username||"").trim().toUpperCase()==="SUP-OR"}
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.societe||currentStructureSocieteFilter?.()||""}
 function ptCurrentSearch(){return sessionStorage.getItem("ptSearch")||""}
@@ -33058,8 +33059,13 @@ function renderPointageDashboard(isDrh){
   const fpqRate=ag.length?Math.round(fpqPresents*100/ag.length):0;
   const unclosed=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(Boolean))].filter(d=>!fpqIsCloture(d));
   const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||""}</div></button>`;
-  const codeOrder=["P","A","M","C","S","R","AB","A1","A2","A3","F1","F2","F3","P/F1","P/F2","P/F3"];
-  const codeCards=codeOrder.filter(k=>POINTAGE_CODES[k]&&tot[k]!==undefined).map(k=>{const v=POINTAGE_CODES[k];return`<button type="button" onclick="navigate('pointage/stats')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${tot[k]||0}</b></button>`}).join("");
+  const codeCard=(k)=>{const v=POINTAGE_CODES[k];return v?`<button type="button" onclick="navigate('pointage/stats')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${tot[k]||0}</b></button>`:""};
+  const codeGroup=(title,codes)=>`<section class="pointage-code-group"><div class="pointage-code-group-title">${escapeHTML(title)}</div><div class="pointage-code-grid">${codes.map(codeCard).join("")}</div></section>`;
+  const codeCards=`<div class="pointage-code-groups">
+    ${codeGroup("Codes principaux",["P","A","M","C","S","R"])}
+    ${codeGroup("Absences renforcées",["AB","A1","A2","A3"])}
+    ${codeGroup("Récupération / maintien",["F1","F2","F3","P/F1","P/F2","P/F3"])}
+  </div>`;
   // ── Statistiques card ──
   const baseCodes=["P","A","M","S","C","R","AB"];
   const totalBase=baseCodes.reduce((s,k)=>s+(tot[k]||0),0);
@@ -33115,7 +33121,7 @@ function renderPointageDashboard(isDrh){
       ${kpi("Taux présence",tauxP+"%","pointage/stats",tauxP>=80?"#16a34a":"#f59e0b","Sur saisies du mois")}
       ${isDrh?"":kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"#dc2626":"#16a34a","Feuilles à contrôler")}
     </div>
-    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><h3 class="font-black mb-3">Répartition des codes</h3><div class="pointage-code-grid">${codeCards}</div></div>${statsCard}</div>`;
+    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><div class="flex items-center justify-between gap-2 mb-3"><h3 class="font-black">Répartition des codes</h3><span class="text-[10px] uppercase font-black text-slate-400">par famille</span></div>${codeCards}</div>${statsCard}</div>`;
 }
 
 // ── QR Tablet Generator — 10s per site ──────────────────────────────────────
@@ -33299,15 +33305,24 @@ function renderFeuillePresentQR(){
   </table></div></div>`;
 }
 
-function renderPointage(view,sub,arg){
+function renderPointage(view,sub,arg,_skipEnsure){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="qr")ptStopQrTabletTimer();
   if(sub!=="feuille")fpqStopLiveRefresh();
-  sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:true});
+  if(!_skipEnsure){
+    const _r=sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:true});
+    if(_r&&typeof _r.then==="function"){
+      view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;
+      _r.then(()=>renderPointage(view,sub,arg,true)).catch(()=>renderPointage(view,sub,arg,true));
+      return;
+    }
+  }
   const isDrh=session?.transverse==="drh";
+  const hideAuto=isSupOrUser();
   if(isDrh&&(sub==="saisie"||sub==="dashboard"))sub="auto";
+  if(hideAuto&&sub==="auto")sub="saisie";
   if(sub==="scan")sub="feuille";
-  const allowedTabs=isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS;
+  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto"));
   const tabsHTML=allowedTabs.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${l}</button>`).join("");
   const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
