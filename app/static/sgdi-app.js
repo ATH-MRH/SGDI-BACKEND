@@ -3660,6 +3660,7 @@ function societePortalModules(){
     {key:"ops",label:"OPS",route:"ops/dashboard"},
     {key:"materiel",label:"MATERIEL",route:"materiel/dashboard"},
     {key:"commercial",label:"COMMERCIAL",route:"commercial/dashboard"},
+    {key:"pointage",label:"POINTAGE",route:"pointage/dashboard"},
     {key:"secretariat",label:"SECRETARIAT",route:"secretariat/dashboard"},
     {key:"facturation",label:"FINANCES/COMPTABILITE",route:"facturation/dashboard"},
     {key:"facmod",label:"FACTURATION",route:"facturation/dashboard"},
@@ -3975,6 +3976,7 @@ const MODULE_META={
   facturation:{icon:"💰",label:"FACTURATION",color:"#d97706"},
   paie:{icon:"$",label:"PAIE",  color:"#0f766e"},
   commercial: {icon:"🤝",label:"COMMERCIAL",color:"#7c3aed"},
+  pointage:{icon:"🕒",label:"POINTAGE",color:"#0ea5e9"},
   secretariat:{icon:"✉️", label:"SECRÉTARIAT",color:"#475569"},
 };
 function topbarStructureIcon(key){
