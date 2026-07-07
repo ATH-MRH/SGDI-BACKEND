@@ -5530,9 +5530,13 @@ function renderSidebar(){
         {label:"SITES",route:"sites/actifs",aliases:["sites"]},
         {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"]},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length||null},
-        {label:"OPS",route:"ops/dashboard",aliases:["ops"],gapBefore:true},
+        {label:"DRH",route:"drh/dashboard",aliases:["drh"],gapBefore:true},
+        {label:"OPS",route:"ops/dashboard",aliases:["ops"]},
+        {label:"MATÉRIEL",route:"materiel/dashboard",aliases:["materiel"]},
         {label:"FINANCES",route:"facturation/dashboard",aliases:["facturation"]},
         {label:"COMMERCIAL",route:"commercial/dashboard",aliases:["commercial"]},
+        {label:"SECRÉTARIAT",route:"secretariat/dashboard",aliases:["secretariat"]},
+        {label:"MODULE PAIE",route:"paie/dashboard",aliases:["paie"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"]}
       ],
       admin:isAdminSystemSession()?[
