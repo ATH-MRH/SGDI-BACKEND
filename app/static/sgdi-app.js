@@ -580,7 +580,9 @@ function sgdiBackendSave(){
       sgdiSaveAgain=false;
       const payload=JSON.stringify({data:sgdiLegacySnapshot()});
       const res=await fetch(url,{method:"PUT",headers:sgdiAuthHeaders(),body:payload,cache:"no-store"});
-      const out=await res.json().catch(()=>({ok:false,error:"Réponse API invalide"}));
+      const raw=await res.text().catch(()=>"");
+      let out={};
+      try{out=raw?JSON.parse(raw):{}}catch(e){out={ok:false,error:"Réponse serveur invalide (HTTP "+res.status+")"+(raw.length>200?" — "+raw.slice(0,200):"")}}
       if(!res.ok||out.ok===false){
         const detail=Array.isArray(out.detail)?out.detail.map(d=>d.msg||JSON.stringify(d)).join(", "):out.detail;
         throw new Error(out.error||detail||out.message||("Erreur API "+res.status));
@@ -1885,7 +1887,7 @@ async function reloadArticleFromPostgres(a){
 }
 async function persistMovementToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=movementApiPayload(m);if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour le mouvement");const saved=await SGDI.stock.createMovement(payload);Object.assign(m,movementFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));if(article)await reloadArticleFromPostgres(article);return m}
 async function persistOpsMovementToPostgres(m){
-  if(!m||!sgdiAuthToken()||!window.SGDI_API?.ops?.movements?.upsert)return null;
+  if(!m||!sgdiAuthToken()||!window.SGDI_API?.movements?.upsert)return null;
   const agent=(db.agents||[]).find(a=>String(a.id)===String(m.agentId||"")||String(a.backendId||"")===String(m.agentBackendId||m.employee_id||""));
   const site=(db.sites||[]).find(s=>String(s.id)===String(m.siteId||"")||String(s.backendId||"")===String(m.siteBackendId||m.site_id||""));
   const payload={
@@ -1900,7 +1902,7 @@ async function persistOpsMovementToPostgres(m){
     society:m.societe||"",
     data:{_legacy:m}
   };
-  const saved=await SGDI.ops.movements.upsert(payload);
+  const saved=await SGDI.movements.upsert(payload);
   if(saved?.id&&!m.backendId)m.backendId=saved.id;
   return saved;
 }
@@ -31502,10 +31504,10 @@ function opsMovementSitesReferenceHTML(soc,rows){
   return `<div class="card p-4"><div class="text-xs uppercase font-black text-slate-500 mb-3">Sites</div>${out.length?out.map(group=>`<div class="flex justify-between gap-3 py-2 border-t border-slate-100 first:border-t-0"><span class="text-xs font-bold text-slate-700">${escapeHTML(group.label)}</span><span class="pill pill-blue">${countForGroup(group)}</span></div>`).join(""):`<div class="text-xs text-slate-400">Aucun site actif.</div>`}</div>`;
 }
 async function syncOpsMovementsFromPostgres(society){
-  if(!sgdiAuthToken()||!window.SGDI_API?.ops?.movements?.list)return false;
+  if(!sgdiAuthToken()||!window.SGDI_API?.movements?.list)return false;
   try{
     const soc=society||currentStructureSocieteFilter()||"";
-    const rows=await SGDI.ops.movements.list(soc?{society:soc}:undefined);
+    const rows=await SGDI.movements.list(soc?{society:soc}:undefined);
     if(!Array.isArray(rows)||!rows.length)return false;
     if(!Array.isArray(db.opsMouvements))db.opsMouvements=[];
     let changed=false;
