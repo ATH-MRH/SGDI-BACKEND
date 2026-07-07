@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -25,6 +25,21 @@ logger = logging.getLogger("sgdi.assistant.agent")
 
 MAX_TOOL_ITERATIONS = 6
 _LIST_LIMIT = 25
+
+_FR_DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+_FR_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
+              "septembre", "octobre", "novembre", "décembre"]
+
+
+def _now_context() -> str:
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo("Africa/Algiers"))
+    except Exception:
+        now = datetime.now()
+    jour = _FR_DAYS[now.weekday()]
+    mois = _FR_MONTHS[now.month - 1]
+    return f"Nous sommes le {jour} {now.day} {mois} {now.year}, il est {now.hour:02d}h{now.minute:02d} (heure d'Alger)."
 
 SYSTEM_PROMPT = """Tu es ATLAS, l'assistant IA intégré au progiciel ATLAS/SGDI — un ERP complet de
 gestion des ressources humaines et de gardiennage/sécurité, utilisé par les sociétés du groupe
@@ -57,7 +72,10 @@ RÈGLES :
   lecture hors de ce périmètre.
 - Après une action, indique clairement ce qui a été créé/modifié.
 - Réponds en français, de façon claire, professionnelle et concise. Formate les listes
-  lisiblement (tirets, chiffres exacts)."""
+  lisiblement (tirets, chiffres exacts).
+- Tu peux aussi discuter naturellement de tout et de rien : questions générales, culture,
+  conseils, calculs, rédaction, conversation informelle. Tu es intelligent, cultivé et
+  agréable — un véritable interlocuteur, pas seulement un outil de consultation."""
 
 
 # --------------------------------------------------------------------------- #
@@ -667,7 +685,7 @@ def run_agent(db: Session, user: User, message: str, history: list[dict[str, Any
     import anthropic
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    system_prompt = SYSTEM_PROMPT
+    system_prompt = SYSTEM_PROMPT + "\n\n" + _now_context()
     memory = _load_memory(db, user)
     if memory:
         system_prompt += (
