@@ -12,7 +12,7 @@ from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.drh.models import Employee
 from app.modules.ops import iron_sync, service
-from app.modules.ops.models import Assignment, DailyPresence, Event, Site, SitePost
+from app.modules.ops.models import Assignment, DailyPresence, Event, OpsMovement, Site, SitePost
 from app.modules.ops.schemas import (
     AssignmentCreate,
     AssignmentOut,
@@ -20,6 +20,8 @@ from app.modules.ops.schemas import (
     DailyPresenceCreate,
     DailyPresenceOut,
     DailyPresenceUpdate,
+    OpsMovementCreate,
+    OpsMovementOut,
     RotationGenerateRequest,
     EventCreate,
     EventOut,
@@ -352,3 +354,27 @@ def create_event(payload: EventCreate, db: Session = Depends(get_db)):
 @router.post("/events/{event_id}/close", response_model=EventOut)
 def close_event(event_id: int, action_taken: str | None = None, db: Session = Depends(get_db)):
     return service.close_event(db, event_id, action_taken)
+
+
+@router.get("/movements", response_model=list[OpsMovementOut])
+def list_movements(
+    society: str | None = None,
+    limit: int = 500,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if not unrestricted_scope(user):
+        allowed = _allowed_societies(user)
+        if allowed and society and _normalize_society(society) not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+        if not society and allowed:
+            society = allowed[0] if len(allowed) == 1 else None
+    return service.list_movements(db, society=society, limit=limit)
+
+
+@router.post("/movements", response_model=OpsMovementOut)
+def upsert_movement(payload: dict, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    society = str(payload.get("society") or "").strip()
+    if society:
+        _ensure_society_allowed(user, society)
+    return service.upsert_movement(db, payload)

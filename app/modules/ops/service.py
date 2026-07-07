@@ -6,7 +6,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.modules.drh.models import Employee
-from app.modules.ops.models import Assignment, DailyPresence, Event, Site, SitePost
+from app.modules.ops.models import Assignment, DailyPresence, Event, OpsMovement, Site, SitePost
 
 
 def list_rows(db: Session, model: Type, filters: dict[str, Any] | None = None):
@@ -414,3 +414,43 @@ def close_event(db: Session, event_id: int, action_taken: str | None = None):
     db.commit()
     db.refresh(event)
     return event
+
+
+def list_movements(db: Session, society: str | None = None, limit: int = 500) -> list[OpsMovement]:
+    stmt = select(OpsMovement).order_by(OpsMovement.movement_date.desc(), OpsMovement.id.desc())
+    if society:
+        stmt = stmt.where(OpsMovement.society == society)
+    return db.execute(stmt.limit(limit)).scalars().all()
+
+
+def upsert_movement(db: Session, payload: Any) -> OpsMovement:
+    from copy import deepcopy
+    ext_id = str(payload.get("external_id") or payload.get("id") or "").strip()
+    mvt_num = str(payload.get("movement_number") or payload.get("ordreMouvementNumero") or payload.get("mouvementNumero") or "").strip()
+    row = db.get(OpsMovement, payload.get("id") if isinstance(payload.get("id"), int) else None) if isinstance(payload.get("id"), int) else None
+    if not row and ext_id:
+        row = db.execute(select(OpsMovement).where(OpsMovement.external_id == ext_id)).scalar_one_or_none()
+    if not row and mvt_num:
+        row = db.execute(select(OpsMovement).where(OpsMovement.movement_number == mvt_num)).scalar_one_or_none()
+    if not row:
+        row = OpsMovement()
+        db.add(row)
+    row.external_id = ext_id or row.external_id
+    row.movement_number = mvt_num or row.movement_number
+    if payload.get("movement_date"):
+        from datetime import date as _date
+        v = payload["movement_date"]
+        row.movement_date = v if isinstance(v, _date) else _date.fromisoformat(str(v)[:10])
+    if payload.get("employee_id") is not None:
+        row.employee_id = payload["employee_id"]
+    if payload.get("site_id") is not None:
+        row.site_id = payload["site_id"]
+    row.group_code = str(payload.get("group_code") or row.group_code or "")[:20] or None
+    row.movement_type = str(payload.get("movement_type") or row.movement_type or "")[:120] or None
+    row.movement_reason = str(payload.get("movement_reason") or row.movement_reason or "") or None
+    row.society = str(payload.get("society") or row.society or "")[:120] or None
+    legacy = deepcopy(payload.get("data") or {})
+    row.data = {**(row.data or {}), **legacy, "_legacy": {**(((row.data or {}).get("_legacy")) or {}), **deepcopy(payload)}}
+    db.commit()
+    db.refresh(row)
+    return row

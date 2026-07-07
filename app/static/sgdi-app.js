@@ -1219,6 +1219,7 @@ window.SGDI_API={
   sites:{list:(params)=>sgdiApi("/ops/sites"+(params?sgdiQuery(params):""),{legacy:false}),page:(params)=>sgdiApi("/ops/sites/page"+sgdiQuery(params),{legacy:false}),create:(payload)=>sgdiApi("/ops/sites",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),delete:(id)=>sgdiApi("/ops/sites/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),situation:(params)=>sgdiApi("/ops/sites/situation-generale"+(params?sgdiQuery(params):""),{legacy:false})},
   pointage:{daily:(date)=>sgdiApi("/ops/pointage/daily?presence_date="+encodeURIComponent(date||today()),{legacy:false}),dailyPage:(params)=>sgdiApi("/ops/pointage/daily/page"+sgdiQuery(params),{legacy:false}),generate:(date)=>sgdiApi("/ops/pointage/daily/generate?presence_date="+encodeURIComponent(date||today()),{method:"POST",legacy:false}),generateRotation:(payload)=>sgdiApi("/ops/pointage/daily/generate-rotation",{method:"POST",body:payload,legacy:false}),standby:(date,soc,siteId)=>sgdiApi("/ops/pointage/standby?presence_date="+encodeURIComponent(date||today())+(soc?"&society="+encodeURIComponent(soc):"")+(siteId?"&site_id="+encodeURIComponent(siteId):""),{legacy:false}),updateDaily:(id,payload)=>sgdiApi("/ops/pointage/daily/"+encodeURIComponent(id),{method:"PATCH",body:payload,legacy:false})},
   events:{list:()=>sgdiApi("/ops/events",{legacy:false}),page:(params)=>sgdiApi("/ops/events/page"+sgdiQuery(params),{legacy:false})},
+  movements:{list:(params)=>sgdiApi("/ops/movements"+(params?sgdiQuery(params):""),{legacy:false}),upsert:(payload)=>sgdiApi("/ops/movements",{method:"POST",body:payload,legacy:false})},
   assignments:{
     page:(params)=>sgdiApi("/ops/assignments/page"+sgdiQuery(params),{legacy:false}),
     list:(params)=>sgdiApi("/ops/assignments"+sgdiQuery(params),{legacy:false}),
@@ -1883,6 +1884,26 @@ async function reloadArticleFromPostgres(a){
   return a;
 }
 async function persistMovementToPostgres(m){if(!m)return null;sgdiRequireServerWrite();const payload=movementApiPayload(m);if(!payload.article_id)throw new Error("Article PostgreSQL manquant pour le mouvement");const saved=await SGDI.stock.createMovement(payload);Object.assign(m,movementFromApi(saved),{id:m.id||String(saved.id),backendId:saved.id});const article=(db.stockArticles||[]).find(a=>String(a.id)===String(m.articleId));if(article)await reloadArticleFromPostgres(article);return m}
+async function persistOpsMovementToPostgres(m){
+  if(!m||!sgdiAuthToken()||!window.SGDI_API?.ops?.movements?.upsert)return null;
+  const agent=(db.agents||[]).find(a=>String(a.id)===String(m.agentId||"")||String(a.backendId||"")===String(m.agentBackendId||m.employee_id||""));
+  const site=(db.sites||[]).find(s=>String(s.id)===String(m.siteId||"")||String(s.backendId||"")===String(m.siteBackendId||m.site_id||""));
+  const payload={
+    external_id:m.id||"",
+    movement_number:m.ordreMouvementNumero||m.mouvementNumero||"",
+    movement_date:m.date||m.dateDebut||"",
+    employee_id:m.employee_id||agent?.backendId||m.agentBackendId||null,
+    site_id:m.site_id||site?.backendId||m.siteBackendId||null,
+    group_code:m.groupe||"",
+    movement_type:m.mouvementMotif||m.mouvementType||"",
+    movement_reason:m.mouvementMotif||"",
+    society:m.societe||"",
+    data:{_legacy:m}
+  };
+  const saved=await SGDI.ops.movements.upsert(payload);
+  if(saved?.id&&!m.backendId)m.backendId=saved.id;
+  return saved;
+}
 function dotationApiPayload(m){
   // Priorité : backendId directement stocké > recherche dans db.agents
   const employeeId=m.employeeBackendId||sqlRelationId(db.agents,m.agentId||m.beneficiaireAgentId);
@@ -31480,13 +31501,39 @@ function opsMovementSitesReferenceHTML(soc,rows){
   const out=[...groups.values()].sort((a,b)=>a.label.localeCompare(b.label));
   return `<div class="card p-4"><div class="text-xs uppercase font-black text-slate-500 mb-3">Sites</div>${out.length?out.map(group=>`<div class="flex justify-between gap-3 py-2 border-t border-slate-100 first:border-t-0"><span class="text-xs font-bold text-slate-700">${escapeHTML(group.label)}</span><span class="pill pill-blue">${countForGroup(group)}</span></div>`).join(""):`<div class="text-xs text-slate-400">Aucun site actif.</div>`}</div>`;
 }
+async function syncOpsMovementsFromPostgres(society){
+  if(!sgdiAuthToken()||!window.SGDI_API?.ops?.movements?.list)return false;
+  try{
+    const soc=society||currentStructureSocieteFilter()||"";
+    const rows=await SGDI.ops.movements.list(soc?{society:soc}:undefined);
+    if(!Array.isArray(rows)||!rows.length)return false;
+    if(!Array.isArray(db.opsMouvements))db.opsMouvements=[];
+    let changed=false;
+    rows.forEach(r=>{
+      const legacy=(r.data&&r.data._legacy)||{};
+      const item={...legacy,...r,id:legacy.id||String(r.id),backendId:r.id,
+        date:legacy.date||r.movement_date||"",agentId:legacy.agentId||r.employee_id||"",
+        agentBackendId:r.employee_id||legacy.agentBackendId||"",
+        siteId:legacy.siteId||r.site_id||"",siteBackendId:r.site_id||legacy.siteBackendId||"",
+        ordreMouvementNumero:r.movement_number||legacy.ordreMouvementNumero||"",
+        mouvementMotif:r.movement_reason||legacy.mouvementMotif||"",
+        mouvementType:r.movement_type||legacy.mouvementType||"",
+        groupe:r.group_code||legacy.groupe||"",societe:r.society||legacy.societe||""};
+      const idx=db.opsMouvements.findIndex(x=>opsMovementKey(x)===opsMovementKey(item)||String(x.backendId||"")===String(r.id));
+      if(idx>=0)db.opsMouvements[idx]={...db.opsMouvements[idx],...item};
+      else{db.opsMouvements.unshift(item);changed=true;}
+    });
+    return changed;
+  }catch(e){console.warn("Mouvements OPS PostgreSQL indisponibles",e);return false;}
+}
 async function ensureOpsMovementSqlSync(){
   if(!sgdiAuthToken()||!db)return false;
   const now=Date.now();
   if(window.__sgdiOpsMovementSqlSyncedAt&&now-window.__sgdiOpsMovementSqlSyncedAt<15000)return false;
   await Promise.all([
     syncSitesFromPostgres().catch(e=>console.warn("Sites PostgreSQL indisponibles",e)),
-    typeof syncAssignmentsFromPostgres==="function"?syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées",e)):Promise.resolve()
+    typeof syncAssignmentsFromPostgres==="function"?syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées",e)):Promise.resolve(),
+    syncOpsMovementsFromPostgres().catch(e=>console.warn("Mouvements OPS non synchronisés",e))
   ]);
   window.__sgdiOpsMovementSqlSyncedAt=now;
   return true;
@@ -32646,7 +32693,7 @@ async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
         await opsArchiveMovementDocument(saved);
       });
     })
-    .catch(e=>{console.warn("Sync OM background:",e);toast("OM enregistré localement — synchronisation différée","warn");})
+    .catch(e=>{console.warn("Sync OM background:",e);persistOpsMovementToPostgres(localMovement).catch(()=>{});toast("OM enregistré localement — synchronisation différée","warn");})
     .finally(()=>{window._sgdiSilentRibbon=false;sgdiRefreshCountersNow({reason:"single-om"});});
   return true;
 }

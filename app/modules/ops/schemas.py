@@ -172,3 +172,22 @@ class EventOut(EventCreate):
 
     model_config = {"from_attributes": True}
 
+
+class OpsMovementCreate(BaseModel):
+    external_id: str | None = None
+    movement_number: str | None = None
+    movement_date: date | None = None
+    employee_id: int | None = None
+    site_id: int | None = None
+    group_code: str | None = None
+    movement_type: str | None = None
+    movement_reason: str | None = None
+    society: str | None = None
+    data: dict[str, Any] | None = None
+
+
+class OpsMovementOut(OpsMovementCreate):
+    id: int
+
+    model_config = {"from_attributes": True}
+
