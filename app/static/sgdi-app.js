@@ -1978,8 +1978,7 @@ async function sgdiBackgroundSqlSync(options){
   return sgdiSqlSyncInProgress;
 }
 async function syncSqlModulesFromPostgres(){
-  await sgdiPullEmployees({silent:true});
-  await syncSitesFromPostgres();
+  await Promise.all([sgdiPullEmployees({silent:true}),syncSitesFromPostgres()]);
   const tasks=[syncAssignmentsFromPostgres(),syncMaterielFromPostgres(),syncClientsFromPostgres()];
   const results=await Promise.allSettled(tasks);
   const errors=results.filter(r=>r.status==="rejected").map(r=>r.reason?.message||String(r.reason));

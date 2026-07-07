@@ -1,6 +1,8 @@
 import logging
+import time
 from copy import deepcopy
 from datetime import datetime
+from threading import Lock
 from typing import Any
 
 from fastapi import HTTPException
@@ -31,6 +33,36 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
     "caisse", "stockArticles", "stockMouvements", "magasins", "fournisseurs",
     "echanges",
 }
+
+
+_SNAPSHOT_CACHE: dict[str, tuple[float, dict]] = {}
+_SNAPSHOT_CACHE_LOCK = Lock()
+_SNAPSHOT_CACHE_TTL = 12.0
+
+
+def _snapshot_cache_key(user: Any, include_sql: bool) -> str:
+    username = _user_username(user)
+    societies = ",".join(sorted(_user_allowed_societies(user)))
+    return f"{username}|{societies}|{include_sql}"
+
+
+def _snapshot_cache_get(key: str) -> dict | None:
+    with _SNAPSHOT_CACHE_LOCK:
+        entry = _SNAPSHOT_CACHE.get(key)
+        if entry and time.monotonic() - entry[0] < _SNAPSHOT_CACHE_TTL:
+            return entry[1]
+        _SNAPSHOT_CACHE.pop(key, None)
+        return None
+
+
+def _snapshot_cache_set(key: str, value: dict) -> None:
+    with _SNAPSHOT_CACHE_LOCK:
+        _SNAPSHOT_CACHE[key] = (time.monotonic(), value)
+
+
+def _snapshot_cache_invalidate() -> None:
+    with _SNAPSHOT_CACHE_LOCK:
+        _SNAPSHOT_CACHE.clear()
 
 
 def _invalid_item_id(value: Any) -> bool:
@@ -331,6 +363,10 @@ def get_database(
     include_sql: bool = True,
 ) -> dict[str, list[Any] | dict[str, Any]]:
     ensure_material_schema(db)
+    cache_key = _snapshot_cache_key(user, include_sql)
+    cached = _snapshot_cache_get(cache_key)
+    if cached is not None:
+        return cached
     rows = db.execute(select(SgdiRecord).order_by(SgdiRecord.collection.asc(), SgdiRecord.position.asc(), SgdiRecord.id.asc())).scalars().all()
     grouped: dict[str, list[SgdiRecord]] = {}
     for row in rows:
@@ -351,17 +387,16 @@ def get_database(
             rows_to_use = items[-limit:] if limit and len(items) > limit else items
             result[name] = [row.data for row in rows_to_use if row.kind == "item"]
     if include_sql:
-        for name in sorted(sql_bridge.SQL_COLLECTIONS):
-            result[name] = sql_bridge.list_collection(db, name)
+        from app.db.session import SessionLocal
+        result.update(sql_bridge.list_all_collections_parallel(SessionLocal))
     else:
-        # Mode léger pour l'ouverture de session et les synchronisations
-        # automatiques : les collections SQL ont déjà des endpoints dédiés
-        # paginés. Éviter leur reconstruction ici supprime le plus gros coût
-        # de /api/irongs/db sans casser le format historique attendu par le
-        # frontend.
+        # Mode léger : les collections SQL ont déjà des endpoints dédiés.
+        # Éviter leur reconstruction supprime le plus gros coût de /api/irongs/db.
         for name in sorted(sql_bridge.SQL_COLLECTIONS):
             result[name] = []
-    return scope_database_for_user(result, user)
+    scoped = scope_database_for_user(result, user)
+    _snapshot_cache_set(cache_key, scoped)
+    return scoped
 
 
 def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]], user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
@@ -383,6 +418,7 @@ def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]
             continue
         _replace_collection_no_commit(db, name, data)
     db.commit()
+    _snapshot_cache_invalidate()
     logger.info("Base SGDI sauvegardée: tables SQL métier + sgdi_records résiduel")
     return {"ok": True, "saved": True}
 
@@ -468,9 +504,11 @@ def replace_collection(db: Session, name: str, data: list[Any] | dict[str, Any],
         db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
         out = sql_bridge.replace_collection(db, name, data)
         db.commit()
+        _snapshot_cache_invalidate()
         return out
     _replace_collection_no_commit(db, name, data)
     db.commit()
+    _snapshot_cache_invalidate()
     return get_collection(db, name)
 
 
@@ -487,6 +525,7 @@ def create_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
         db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
         out = sql_bridge.upsert_item(db, name, dict(item))
         db.commit()
+        _snapshot_cache_invalidate()
         return out
     item = _ensure_id(dict(item), name)
     item_id = str(item["id"])
@@ -496,6 +535,7 @@ def create_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
     position = len(_collection_rows(db, name))
     db.add(SgdiRecord(collection=name, item_id=item_id, position=position, kind="item", data=item, label=str(item.get("nom") or item.get("name") or item.get("code") or "")))
     db.commit()
+    _snapshot_cache_invalidate()
     return item
 
 
@@ -514,6 +554,7 @@ def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], par
         data.setdefault("id", item_id)
         out = sql_bridge.upsert_item(db, name, data)
         db.commit()
+        _snapshot_cache_invalidate()
         return out
     row = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
     if not row or not isinstance(row.data, dict):
@@ -523,17 +564,20 @@ def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], par
     row.data = updated
     row.label = str(updated.get("nom") or updated.get("name") or updated.get("code") or "")
     db.commit()
+    _snapshot_cache_invalidate()
     return deepcopy(updated)
 
 
 def delete_item(db: Session, name: str, item_id: str) -> dict[str, str]:
     if name in sql_bridge.SQL_COLLECTIONS:
+        _snapshot_cache_invalidate()
         return sql_bridge.delete_item(db, name, item_id)
     row = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Élément introuvable")
     db.delete(row)
     db.commit()
+    _snapshot_cache_invalidate()
     return {"deleted": item_id}
 
 

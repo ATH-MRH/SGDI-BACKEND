@@ -675,6 +675,25 @@ def upsert_contract(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     return contract_to_item(row)
 
 
+def list_all_collections_parallel(session_factory: Any) -> "dict[str, list[dict[str, Any]]]":
+    """Run all SQL collection queries in parallel (one session per thread) for faster /api/irongs/db."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    names = sorted(SQL_COLLECTIONS)
+
+    def fetch(name: str) -> "tuple[str, list]":
+        with session_factory() as db:
+            return name, list_collection(db, name)
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(fetch, n): n for n in names}
+        for future in as_completed(futures):
+            name, data = future.result()
+            result[name] = data
+    return result
+
+
 def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name == "candidats": return [candidate_to_item(r) for r in db.execute(select(Candidate).order_by(Candidate.id)).scalars().all()]
     if name in {"agents", "employees"}: return [employee_to_item(r) for r in db.execute(select(Employee).order_by(Employee.id)).scalars().all()]
