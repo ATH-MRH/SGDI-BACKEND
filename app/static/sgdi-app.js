@@ -31316,9 +31316,15 @@ function opsMovementEditorHTML(date,agentId,agents){
             <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="opsMovementSelectAll(false)">Aucun</button>
           </div>
         </div>
-        <div id="ops-mvt-agent-list" style="max-height:220px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;padding:4px">
-          ${nonAffectes.length?`<div data-section-header class="px-2 py-1 text-xs font-black uppercase text-slate-400 tracking-wide">Non affectés (${nonAffectes.length})</div>${nonAffectes.map(mkRow).join("")}`:""}
-          ${affectes.length?`<div data-section-header class="px-2 py-1 text-xs font-black uppercase text-slate-400 tracking-wide${nonAffectes.length?" mt-1":""}" style="border-top:${nonAffectes.length?"1px solid #e2e8f0":"none"}">Affectés (${affectes.length})</div>${affectes.map(mkRow).join("")}`:""}
+        <div id="ops-mvt-agent-list" class="ops-mvt-agent-columns">
+          <div class="ops-mvt-agent-col">
+            <div data-section-header class="ops-mvt-agent-col-title">Non affectés (${nonAffectes.length})</div>
+            ${nonAffectes.length?nonAffectes.map(mkRow).join(""):`<div class="p-3 text-slate-500 text-sm text-center">Aucun non affecté</div>`}
+          </div>
+          <div class="ops-mvt-agent-col">
+            <div data-section-header class="ops-mvt-agent-col-title">Affectés (${affectes.length})</div>
+            ${affectes.length?affectes.map(mkRow).join(""):`<div class="p-3 text-slate-500 text-sm text-center">Aucun affecté</div>`}
+          </div>
           ${!agents.length?`<div class="p-3 text-slate-500 text-sm text-center">Aucun employé disponible</div>`:""}
         </div>
       </div>

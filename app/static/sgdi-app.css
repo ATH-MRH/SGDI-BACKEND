@@ -7408,3 +7408,8 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 .badge-crop-help{flex:1;min-width:230px;color:#64748b;font-size:12px;font-weight:800}
 .badge-crop-zoom{display:flex;align-items:center;gap:8px;color:#043970;font-size:12px;font-weight:900}
 .badge-crop-zoom input{accent-color:#043970;width:150px}
+
+.ops-mvt-agent-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;max-height:260px;overflow:hidden;border:1px solid #dbe7f5;border-radius:14px;padding:10px;background:#f8fbff}
+.ops-mvt-agent-col{min-width:0;overflow-y:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:6px}
+.ops-mvt-agent-col-title{position:sticky;top:0;z-index:1;margin:-6px -6px 6px;padding:8px 10px;background:#eef6ff;border-bottom:1px solid #dbe7f5;color:#043970;font-size:11px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}
+@media(max-width:760px){.ops-mvt-agent-columns{grid-template-columns:1fr;max-height:none;overflow:visible}.ops-mvt-agent-col{max-height:220px}}
