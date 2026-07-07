@@ -33475,7 +33475,8 @@ function renderPointageRecap(agentId){
 function renderPointageSociete(){
   const ym=ptCurrentMonth();const days=ptDaysInMonth(ym);
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3"><div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div></div></div>`;
-  const rows=SOCIETES.map(s=>{
+  const allowedSocietes=currentAllowedSocietes();
+  const rows=allowedSocietes.map(s=>{
     const ag=pointageOperationalAgents(s);
     const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
     const tot={P:0,A:0,M:0,S:0,C:0,R:0,AB:0,F1:0,F2:0,F3:0,"P/F1":0,"P/F2":0,"P/F3":0,A1:0,A2:0,A3:0};sheets.forEach(sh=>{Object.values(sh.days||{}).forEach(v=>{if(tot[v]!==undefined)tot[v]++})});
