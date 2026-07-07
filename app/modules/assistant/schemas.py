@@ -14,3 +14,12 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+
+class AgentRequest(BaseModel):
+    message: str
+    history: list[Message] = Field(default_factory=list)
+
+
+class AgentResponse(BaseModel):
+    response: str

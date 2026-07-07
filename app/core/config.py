@@ -28,6 +28,9 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = None
     assistant_paid_ai_enabled: bool = False
+    # Agent IA ATLAS (Phase 1 : lecture seule). Nécessite ANTHROPIC_API_KEY.
+    assistant_agent_enabled: bool = False
+    assistant_agent_model: str = "claude-opus-4-8"
 
     contract_email_alerts_enabled: bool = True
     contract_email_alert_window_days: int = 30

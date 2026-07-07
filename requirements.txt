@@ -11,3 +11,4 @@ python-multipart==0.0.20
 pywebpush>=1.9.0
 cryptography>=41.0.0
 httpx==0.28.1
+anthropic>=0.40.0
