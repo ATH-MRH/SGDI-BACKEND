@@ -32218,6 +32218,25 @@ function pointageOperationalAgents(soc){
   const cached=window.__pointageStableAgentsBySoc?.[normalizeSocieteName(soc||"__all__")];
   return Array.isArray(cached)?cached:[];
 }
+function employeeIsPointageEligible(a,soc){
+  if(!a)return false;
+  const st=normalizeEmployeeStatusValue(a.statut||a.status||"");
+  if(employeeIsFormer(a)||["sortant","demissionne","licencie","archive","suspendu","blacklist"].includes(st))return false;
+  if(a.blacklist||a.blacklistContractBlocked||a.contractBlocked)return false;
+  return !soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
+}
+function pointageEligibleAgents(soc){
+  const list=(db.agents||[])
+    .filter(a=>employeeIsPointageEligible(a,soc))
+    .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
+  if(list.length){
+    window.__pointageEligibleStableAgentsBySoc=window.__pointageEligibleStableAgentsBySoc||{};
+    window.__pointageEligibleStableAgentsBySoc[normalizeSocieteName(soc||"__all__")]=list;
+    return list;
+  }
+  const cached=window.__pointageEligibleStableAgentsBySoc?.[normalizeSocieteName(soc||"__all__")];
+  return Array.isArray(cached)?cached:[];
+}
 function ptDaysInMonth(ym){const [y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate()}
 function ptKey(year,month){return year+"-"+String(month).padStart(2,"0")}
 function ptGetSheet(agentId,ym){if(!db.pointages)db.pointages=[];return db.pointages.find(p=>p.agentId===agentId&&p.periode===ym)}
@@ -32241,7 +32260,7 @@ function ptNormalizeAbandonDePoste(sheet){
 }
 function ptNormalizeAbandonsForMonth(ym,soc){
   let changed=false;
-  pointageOperationalAgents(soc).forEach(a=>{const sh=ptGetSheet(a.id,ym);if(ptNormalizeAbandonDePoste(sh))changed=true});
+  pointageEligibleAgents(soc).forEach(a=>{const sh=ptGetSheet(a.id,ym);if(ptNormalizeAbandonDePoste(sh))changed=true});
   return changed;
 }
 function employeeSuspensionActiveOn(a,date){
@@ -32320,7 +32339,7 @@ async function ptDevaliderSheet(agentId,ym){
   }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
 async function ptValiderTous(ym,soc){
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   if(!ag.length){toast("Aucun employé à valider","error");return}
   if(!confirm(`Valider le pointage de ${ag.length} agent(s) pour la période ${ym} ?`))return;
   try{
@@ -33017,7 +33036,7 @@ function ptDonutSVG(slices,total,cx,cy,r,ir){
 }
 function renderPointageDashboard(isDrh){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);const todayDate=today();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
   const valid=sheets.filter(s=>s.valide).length;
   const tot={P:0,A:0,M:0,S:0,C:0,R:0,AB:0,F1:0,F2:0,F3:0,"P/F1":0,"P/F2":0,"P/F3":0,A1:0,A2:0,A3:0};
@@ -33299,7 +33318,7 @@ function renderPointageSaisie(){
   const isDrh=session?.transverse==="drh";
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
   const syncChanged=ptSyncFeuillePresenceMonth(ym);if(syncChanged)saveDB();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
@@ -33354,7 +33373,7 @@ function renderPointageSaisie(){
 function renderPointageSaisieAuto(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
   const abandonChanged=ptNormalizeAbandonsForMonth(ym,soc);if(abandonChanged)saveDB();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
@@ -33452,7 +33471,7 @@ function ptAutoApercu(){
 }
 function renderPointageRecap(agentId){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   const cur=agentId?db.agents.find(a=>a.id===agentId):null;
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
@@ -33477,7 +33496,7 @@ function renderPointageSociete(){
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3"><div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div></div></div>`;
   const allowedSocietes=currentAllowedSocietes();
   const rows=allowedSocietes.map(s=>{
-    const ag=pointageOperationalAgents(s);
+    const ag=pointageEligibleAgents(s);
     const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
     const tot={P:0,A:0,M:0,S:0,C:0,R:0,AB:0,F1:0,F2:0,F3:0,"P/F1":0,"P/F2":0,"P/F3":0,A1:0,A2:0,A3:0};sheets.forEach(sh=>{Object.values(sh.days||{}).forEach(v=>{if(tot[v]!==undefined)tot[v]++})});
     const totFx=tot.F1+tot.F2+tot.F3+tot["P/F1"]+tot["P/F2"]+tot["P/F3"];const totAbs=tot.A+tot.AB+tot.A1+(tot.A2*2)+(tot.A3*3);const totAx=tot.AB+tot.A2+tot.A3;
@@ -33490,7 +33509,7 @@ function renderPointageSociete(){
 }
 function renderPointageStats(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
     <div><label class="label">Société</label><select class="select" onchange="setPtSociete(this.value)"><option value="" ${!soc?"selected":""}>🏢 Toutes les sociétés</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${s}</option>`).join("")}</select></div>
