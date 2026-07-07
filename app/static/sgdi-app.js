@@ -29860,7 +29860,8 @@ function renderAdminFichesPosition(view,_skipEnsure){
   const allAgents=db.agents||[];
   const baseAgents=allAgents.filter(adminMatchesSociete);
   const agents=baseAgents.filter(a=>adminFicheMatchesSearch(a,q));
-  const totalDb=adminSoc?baseAgents.length:allAgents.length;
+  const _empCounters=typeof sgdiUnifiedEmployeeCounters==="function"?sgdiUnifiedEmployeeCounters(adminSoc||""):null;
+  const totalDb=counterNumericValue(_empCounters?.total||_empCounters?.active||_empCounters?.activeHeadcount)||(adminSoc?baseAgents.length:allAgents.length);
   const locked=agents.filter(a=>a.locked||a.fichePositionOfficielle).length;
   const otherSocieties=adminSoc&&baseAgents.length===0&&allAgents.length>0
     ?[...new Set(allAgents.map(a=>a.societe||a.society||"").filter(Boolean))].sort()
