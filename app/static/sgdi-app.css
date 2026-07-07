@@ -4139,39 +4139,6 @@ body:has(.sgdi-login-page) #app{
   font-weight:900!important;
   letter-spacing:-.02em!important;
 }
-.sgdi-login-intro{
-  max-width:560px!important;
-  margin:20px 0 0!important;
-  color:#64748b!important;
-  font-size:17px!important;
-  line-height:1.75!important;
-  font-weight:650!important;
-}
-.sgdi-login-modules{
-  width:min(420px,100%)!important;
-  margin-top:38px!important;
-  padding:16px!important;
-  border:1px solid rgba(4,57,112,.1)!important;
-  border-radius:22px!important;
-  background:rgba(255,255,255,.72)!important;
-  box-shadow:0 24px 60px rgba(15,23,42,.09)!important;
-  backdrop-filter:blur(14px)!important;
-  display:grid!important;
-  grid-template-columns:repeat(4,1fr)!important;
-  gap:12px!important;
-}
-.sgdi-login-modules span{
-  height:74px!important;
-  border-radius:16px!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  background:linear-gradient(180deg,#edf7ff,#e3f0fb)!important;
-  color:#075985!important;
-  font-size:16px!important;
-  font-weight:950!important;
-  letter-spacing:.03em!important;
-}
 .sgdi-login-panel{
   width:100%!important;
   min-height:0!important;
@@ -4245,7 +4212,7 @@ body:has(.sgdi-login-page) #app{
   font-family:Arial,Helvetica,sans-serif!important;
   transition:border-color .16s ease,box-shadow .16s ease,background .16s ease!important;
 }
-.sgdi-login-form .sgdi-login-password-field input{padding-right:104px!important}
+.sgdi-login-form .sgdi-login-password-field input{padding-right:92px!important}
 .sgdi-login-form .sgdi-login-field input::placeholder{color:transparent!important}
 .sgdi-login-form .sgdi-login-field input:focus{
   border-color:#1267a8!important;
@@ -4273,21 +4240,31 @@ body:has(.sgdi-login-page) #app{
 }
 .sgdi-login-page .sgdi-login-password-toggle{
   display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
   position:absolute!important;
-  right:12px!important;
+  right:10px!important;
   top:50%!important;
   transform:translateY(-50%)!important;
-  min-height:38px!important;
-  height:38px!important;
-  padding:0 14px!important;
+  min-width:72px!important;
+  min-height:32px!important;
+  height:32px!important;
+  padding:0 10px!important;
   border:0!important;
-  border-radius:12px!important;
-  background:#edf7ff!important;
+  border-radius:10px!important;
+  background:#e9f5ff!important;
   color:#1267a8!important;
   box-shadow:none!important;
-  font-size:12px!important;
+  font-size:11px!important;
+  line-height:1!important;
   font-weight:950!important;
   cursor:pointer!important;
+  z-index:3!important;
+  white-space:nowrap!important;
+}
+.sgdi-login-page .sgdi-login-password-toggle:hover{
+  background:#dcefff!important;
+  color:#043970!important;
 }
 .sgdi-login-remember{
   display:flex!important;
@@ -4400,14 +4377,10 @@ body:has(.sgdi-login-page) #app{
   .sgdi-login-visual{min-height:auto!important;text-align:center!important}
   .sgdi-login-brand{font-size:clamp(64px,18vw,96px)!important}
   .sgdi-login-kicker{font-size:20px!important}
-  .sgdi-login-intro{display:none!important}
-  .sgdi-login-modules{margin:24px auto 0!important}
 }
 @media(max-width:520px){
   .sgdi-login-main{width:min(100% - 24px,420px)!important}
   .sgdi-login-panel{border-radius:22px!important;padding:24px!important}
-  .sgdi-login-modules{grid-template-columns:repeat(2,1fr)!important}
-  .sgdi-login-modules span{height:58px!important}
   .sgdi-login-page .login-admin-system-shortcut{
     left:14px!important;
     right:14px!important;

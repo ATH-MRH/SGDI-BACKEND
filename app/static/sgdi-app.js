@@ -6643,10 +6643,6 @@ function renderLogin(){
       <section class="sgdi-login-visual" aria-label="Présentation ATLAS">
         <div class="sgdi-login-brand"><span>ATLA</span><i>S</i></div>
         <p class="sgdi-login-kicker">Suite de gestion intégrée</p>
-        <p class="sgdi-login-intro">Un portail clair pour piloter les ressources humaines, les opérations, le matériel et les finances depuis un même espace sécurisé.</p>
-        <div class="sgdi-login-modules" aria-label="Modules ATLAS">
-          <span>DRH</span><span>OPS</span><span>MAT</span><span>FIN</span>
-        </div>
       </section>
       <section class="sgdi-login-panel">
         <div class="sgdi-login-panel-head">
