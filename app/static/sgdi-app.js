@@ -31441,11 +31441,10 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
   window._sgdiSilentRibbon=true;
   (async()=>{
     try{
-      await saveDB();
-      await sgdiPullState({silent:true});
       for(const {aid,patch} of saved){
         try{await fpqApplyMovementAffectation(date,aid,patch);}catch(e){console.warn("Affectation SQL agent",aid,e);}
       }
+      await sgdiPullState({silent:true});
     }catch(e){console.warn("Sync multi-OM background:",e);}
     finally{window._sgdiSilentRibbon=false;sgdiRefreshCountersNow({reason:"multi-om"});}
   })();
@@ -32498,7 +32497,7 @@ async function fpqApplyMovementAffectation(date,agentId,patch){
   a.affectationCourante={...current,siteId:patch.siteId==="autres"?"":patch.siteId,siteBackendId:patch.siteBackendId||site?.backendId||current.siteBackendId||null,siteName,clientName:site?.client||patch.clientName||current.clientName||"",poste:current.poste||a.fonction||a.position||"",horaire:current.horaire||"Mixte",groupe:patch.groupe||current.groupe||"",dateDebut:date,natureMouvement:patch.mouvementMotif||patch.mouvementType||"Affectation",assignmentBackendId:patch.assignmentBackendId||current.assignmentBackendId||""};
   addEmployeeCareerEvent(a,"Affectation",{date,motif:`${a.affectationCourante.natureMouvement} vers ${siteName}`,source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||patch.mouvementNumero||"",details:{siteId:a.affectationCourante.siteId,siteName,groupe:a.affectationCourante.groupe}});
   if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId});
-  return await saveDBAndWaitToast("Affectation mouvement non confirmée");
+  return true;
 }
 function fpqMovementCompletionMessage(patch){
   if(!patch?.siteId||patch.siteId==="autres")return "";
