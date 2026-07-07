@@ -33815,6 +33815,18 @@ try{
     try{rec.start()}catch(e){if(mic)mic.textContent="🎤";}
   };
 
+  window.aiSpeakClean=function(t){
+    if(typeof _sgdiSpeakText!=="function")return;
+    var clean=String(t||"")
+      .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{FE0F}\u{2B00}-\u{2BFF}]/gu,"")
+      .replace(/[*_`~#>]/g,"")
+      .replace(/\s*[-•·]\s+/g,", ")
+      .replace(/https?:\/\/\S+/g,"un lien")
+      .replace(/\//g," ")
+      .replace(/\s+/g," ").trim();
+    if(clean)_sgdiSpeakText(clean);
+  };
+
   window.aiTestVoice=function(){
     const ok=_sgdiSpeakText("Bonjour. Je suis ATLAS, votre assistante intelligente.");
     if(ok&&typeof toast==="function")toast("Test voix lancé","info");
@@ -33888,7 +33900,7 @@ try{
       if(typingEl)typingEl.remove();
       aiAppendMessage(data.response,"ai");
       aiHistory.push({role:"assistant",content:data.response});
-      try{if(typeof _sgdiVoiceEnabled==="function"&&_sgdiVoiceEnabled()&&typeof _sgdiSpeakText==="function")_sgdiSpeakText(data.response);}catch(e){}
+      try{if(typeof _sgdiVoiceEnabled==="function"&&_sgdiVoiceEnabled()&&typeof aiSpeakClean==="function")aiSpeakClean(data.response);}catch(e){}
     }catch(e){
       if(typingEl)typingEl.remove();
       aiAppendMessage("Assistant indisponible : "+(e.message||"vérifiez votre session puis réessayez."),"ai");

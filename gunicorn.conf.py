@@ -1,6 +1,9 @@
 import os
 
-workers = int(os.environ.get("WEB_CONCURRENCY", 4))
+# Défaut prudent : chaque worker charge toute l'app en mémoire. Sur un petit serveur
+# ou un VPS partagé, trop de workers sature la RAM et ralentit tout. Augmentez
+# WEB_CONCURRENCY sur une machine dédiée bien dotée.
+workers = int(os.environ.get("WEB_CONCURRENCY", 2))
 worker_class = "uvicorn.workers.UvicornWorker"
 bind = f"0.0.0.0:{os.environ.get('PORT', '8000')}"
 proxy_headers = True
