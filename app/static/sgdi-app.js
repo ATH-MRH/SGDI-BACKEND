@@ -29843,9 +29843,10 @@ function adminFicheSearchRestore(){
   try{input.setSelectionRange(pos,pos)}catch(e){}
 }
 function renderAdminFichesPosition(view){
+  const adminSoc=adminActiveSociete();
+  if(typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:adminSoc||"",force:true});if(_r&&typeof _r.then==="function"){_r.then(rows=>{if((rows||[]).some(a=>!adminSoc||a.societe===adminSoc))renderAdminFichesPosition(view)}).catch(()=>null);return}}
   const rawQ=String(sessionStorage.getItem("adminFicheSearch")||"");
   const q=adminFicheSearchText(rawQ);
-  const adminSoc=adminActiveSociete();
   const allAgents=db.agents||[];
   const baseAgents=allAgents.filter(adminMatchesSociete);
   const agents=baseAgents.filter(a=>adminFicheMatchesSearch(a,q));
