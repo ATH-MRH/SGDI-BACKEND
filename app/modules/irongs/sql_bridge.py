@@ -37,7 +37,7 @@ SQL_COLLECTIONS = {
     "opsMouvements", "incidents",
     "contrats",
 }
-SQL_SKIP_EMPTY_ON_DB_REPLACE = {"sites", "clients", "magasins", "fournisseurs", "stockArticles", "stockMouvements", "opsMouvements", "incidents"}
+SQL_SKIP_EMPTY_ON_DB_REPLACE = {"sites", "clients", "magasins", "fournisseurs", "stockArticles", "stockMouvements", "opsMouvements", "incidents", "feuillePresence"}
 FINANCE_MODELS = {"factures": Invoice, "paiements": Payment, "avances": Advance, "avoirs": CreditNote, "caisse": CashEntry}
 STOCK_MODELS = {"stockArticles": StockArticle, "stockMouvements": StockMovement, "magasins": Store, "fournisseurs": Supplier}
 
@@ -537,7 +537,7 @@ def upsert_presence(db: Session, item: dict[str, Any], collection: str) -> dict[
 def ops_movement_to_item(row: OpsMovement) -> dict[str, Any]:
     item = dict((row.data or {}).get("_legacy") or {})
     item.update({
-        "id": item.get("id") or str(row.id),
+        "id": item.get("id") or row.external_id or str(row.id),
         "backendId": row.id,
         "ordreMouvementNumero": row.movement_number or item.get("ordreMouvementNumero") or item.get("mouvementNumero") or "",
         "mouvementNumero": row.movement_number or item.get("mouvementNumero") or "",
@@ -558,13 +558,26 @@ def ops_movement_to_item(row: OpsMovement) -> dict[str, Any]:
 
 
 def upsert_ops_movement(db: Session, item: dict[str, Any]) -> dict[str, Any]:
-    ext_id = str(item.get("id") or item.get("backendId") or "").strip()
-    mvt_num = str(item.get("ordreMouvementNumero") or item.get("mouvementNumero") or "").strip()
+    ext_id = str(item.get("id") or item.get("external_id") or item.get("backendId") or "").strip()
+    mvt_num = str(item.get("ordreMouvementNumero") or item.get("mouvementNumero") or item.get("movement_number") or "").strip()
     row = db.get(OpsMovement, as_int(item.get("backendId")) or 0)
     if not row and ext_id:
         row = db.execute(select(OpsMovement).where(OpsMovement.external_id == ext_id)).scalar_one_or_none()
     if not row and mvt_num:
         row = db.execute(select(OpsMovement).where(OpsMovement.movement_number == mvt_num)).scalar_one_or_none()
+    # Dernier recours : clé naturelle (date + employé + type) pour éviter les doublons
+    if not row:
+        mvt_date = as_date(item.get("date") or item.get("dateDebut") or item.get("movement_date"))
+        emp_id = as_int(item.get("agentBackendId") or item.get("employee_id"))
+        mvt_type = str(item.get("mouvementType") or item.get("natureMouvement") or item.get("movement_type") or "").strip()[:120] or None
+        if mvt_date and emp_id and mvt_type:
+            row = db.execute(
+                select(OpsMovement).where(
+                    OpsMovement.movement_date == mvt_date,
+                    OpsMovement.employee_id == emp_id,
+                    OpsMovement.movement_type == mvt_type,
+                ).order_by(OpsMovement.id.desc())
+            ).scalars().first()
     if not row:
         row = OpsMovement()
         db.add(row)
@@ -576,8 +589,9 @@ def upsert_ops_movement(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     row.employee_id = employee.id if employee else (as_int(item.get("agentBackendId") or item.get("employee_id")) or row.employee_id)
     row.site_id = site.id if site else (as_int(item.get("siteBackendId") or item.get("site_id")) or row.site_id)
     row.group_code = str(item.get("groupe") or item.get("group_code") or row.group_code or "")[:20] or None
-    row.movement_type = str(item.get("mouvementMotif") or item.get("mouvementType") or item.get("natureMouvement") or row.movement_type or "")[:120] or None
-    row.movement_reason = str(item.get("mouvementMotif") or item.get("natureMouvement") or item.get("motif") or row.movement_reason or "") or None
+    # movement_type = nature du mouvement (AFFECTATION, MUTATION…) ; movement_reason = motif textuel
+    row.movement_type = str(item.get("mouvementType") or item.get("natureMouvement") or item.get("movement_type") or row.movement_type or "")[:120] or None
+    row.movement_reason = str(item.get("mouvementMotif") or item.get("motif") or item.get("movement_reason") or row.movement_reason or "") or None
     row.society = str(item.get("societe") or item.get("society") or row.society or "")[:120] or None
     row.data = {**(row.data or {}), "_legacy": deepcopy(item)}
     db.flush()
@@ -707,7 +721,11 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name in {"assignments", "affectations"}: return [assignment_to_item(r) for r in db.execute(select(Assignment).order_by(Assignment.id)).scalars().all()]
     if name == "opsMouvements":
         cutoff = date.today() - timedelta(days=180)
-        return [ops_movement_to_item(r) for r in db.execute(select(OpsMovement).where(OpsMovement.movement_date >= cutoff).order_by(OpsMovement.movement_date.desc(), OpsMovement.id.desc())).scalars().all()]
+        return [ops_movement_to_item(r) for r in db.execute(
+            select(OpsMovement).where(
+                (OpsMovement.movement_date.is_(None)) | (OpsMovement.movement_date >= cutoff)
+            ).order_by(OpsMovement.movement_date.desc().nullslast(), OpsMovement.id.desc())
+        ).scalars().all()]
     if name == "incidents":
         cutoff = date.today() - timedelta(days=180)
         return [incident_to_item(r) for r in db.execute(select(Incident).where(Incident.incident_date >= cutoff).order_by(Incident.incident_date.desc(), Incident.id.desc())).scalars().all()]

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.modules.irongs.models import SgdiRecord
 from app.modules.irongs import sql_bridge
 from app.modules.drh.models import Employee
+from app.modules.ops.models import Site
 from app.modules.materiel.service import ensure_material_schema
 from app.core.photo_storage import normalize_photo_fields
 
@@ -870,39 +871,38 @@ def _presence_movement_save(db: Session, data: dict[str, Any]) -> dict[str, Any]
     movement["date"] = line.get("date") or data.get("date")
     movement["agentId"] = line.get("agentId") or data.get("agentId")
     if not movement.get("societe"):
-        agent_refs = {str(movement.get(key) or "").strip() for key in ("agentId", "agentBackendId", "employee_id", "matricule")}
-        agent_refs.discard("")
-        site_refs = {str(movement.get(key) or "").strip() for key in ("siteId", "siteBackendId", "site_id")}
-        site_refs.discard("")
-        agent = next(
-            (
-                row for row in _collection_list(db, "agents")
-                if isinstance(row, dict)
-                and {str(row.get(key) or "").strip() for key in ("id", "backendId", "employee_id", "matricule", "code")} & agent_refs
-            ),
-            None,
-        )
-        site = next(
-            (
-                row for row in _collection_list(db, "sites")
-                if isinstance(row, dict)
-                and {str(row.get(key) or "").strip() for key in ("id", "backendId", "site_id")} & site_refs
-            ),
-            None,
-        )
-        movement["societe"] = (agent or {}).get("societe") or (site or {}).get("societe") or ""
+        emp_id = next((movement.get(k) for k in ("agentBackendId", "employee_id") if movement.get(k)), None)
+        emp_ext = next((str(movement.get(k) or "").strip() for k in ("agentId", "matricule") if movement.get(k)), None)
+        employee: Employee | None = None
+        if emp_id:
+            try:
+                employee = db.get(Employee, int(emp_id))
+            except (ValueError, TypeError):
+                pass
+        if not employee and emp_ext:
+            employee = db.execute(
+                select(Employee).where(
+                    (Employee.external_id == emp_ext) | (Employee.code == emp_ext) | (Employee.matricule == emp_ext)
+                )
+            ).scalars().first()
+        site_id = next((movement.get(k) for k in ("siteBackendId", "site_id") if movement.get(k)), None)
+        site_ext = next((str(movement.get(k) or "").strip() for k in ("siteId",) if movement.get(k)), None)
+        site_row: Site | None = None
+        if site_id:
+            try:
+                site_row = db.get(Site, int(site_id))
+            except (ValueError, TypeError):
+                pass
+        if not site_row and site_ext:
+            site_row = db.execute(
+                select(Site).where(Site.external_id == site_ext)
+            ).scalars().first()
+        movement["societe"] = (employee.society if employee else None) or (site_row.society if site_row else None) or ""
     movement["id"] = movement.get("id") or f"om_{_movement_history_key(movement)}"
     movement["updatedAt"] = _now_iso()
     movement.setdefault("createdAt", movement["updatedAt"])
     if movement.get("mouvementMotif") or movement.get("mouvementType") or movement.get("ordreMouvementNumero") or movement.get("mouvementNumero"):
-        rows = _collection_list(db, "opsMouvements")
-        key = _movement_history_key(movement)
-        idx = next((i for i, row in enumerate(rows) if _movement_history_key(row) == key), -1)
-        if idx >= 0:
-            rows[idx] = {**rows[idx], **movement}
-        else:
-            rows.insert(0, movement)
-        replace_collection(db, "opsMouvements", rows)
+        sql_bridge.replace_collection(db, "opsMouvements", [movement])
     return {"status": "success", "data": {"item": line, "movement": movement}}
 
 

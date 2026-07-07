@@ -1,7 +1,7 @@
 from datetime import date
 import unicodedata
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -362,6 +362,7 @@ def list_movements(
     limit: int = 500,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
+    response: Response = None,
 ):
     if not unrestricted_scope(user):
         allowed = _allowed_societies(user)
@@ -369,12 +370,15 @@ def list_movements(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
         if not society and allowed:
             society = allowed[0] if len(allowed) == 1 else None
+    total = service.count_movements(db, society=society)
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total)
     return service.list_movements(db, society=society, limit=limit)
 
 
 @router.post("/movements", response_model=OpsMovementOut)
-def upsert_movement(payload: dict, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    society = str(payload.get("society") or "").strip()
+def upsert_movement(payload: OpsMovementCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    society = str(payload.society or "").strip()
     if society:
         _ensure_society_allowed(user, society)
-    return service.upsert_movement(db, payload)
+    return service.upsert_movement(db, payload.model_dump(exclude_unset=True))

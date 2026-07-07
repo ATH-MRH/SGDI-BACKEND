@@ -553,7 +553,7 @@ function sgdiRequireServerWrite(){
 let sgdiSaveQueue=Promise.resolve();
 let sgdiSaveInFlight=false;
 let sgdiSaveAgain=false;
-const SQL_OWNED_COLLECTIONS=new Set(["candidats","agents","employees","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs","assignments","affectations"]);
+const SQL_OWNED_COLLECTIONS=new Set(["candidats","agents","employees","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs","assignments","affectations","opsMouvements","feuillePresence"]);
 function sgdiLegacySnapshot(){
   const source=db&&typeof db==="object"?db:{};
   const snap={...source};
@@ -1897,7 +1897,7 @@ async function persistOpsMovementToPostgres(m){
     employee_id:m.employee_id||agent?.backendId||m.agentBackendId||null,
     site_id:m.site_id||site?.backendId||m.siteBackendId||null,
     group_code:m.groupe||"",
-    movement_type:m.mouvementMotif||m.mouvementType||"",
+    movement_type:m.mouvementType||m.natureMouvement||"",
     movement_reason:m.mouvementMotif||"",
     society:m.societe||"",
     data:{_legacy:m}
@@ -32546,7 +32546,7 @@ async function fpqApplyMovementAffectation(date,agentId,patch){
     a.affectationsHistorique=a.affectationsHistorique||[];
     a.affectationsHistorique.push({...current,dateFin:date,motifChangement:patch.mouvementMotif||patch.mouvementType||"Ordre de mouvement"});
   }
-  a.affectationCourante={...current,siteId:patch.siteId==="autres"?"":patch.siteId,siteBackendId:patch.siteBackendId||site?.backendId||current.siteBackendId||null,siteName,clientName:site?.client||patch.clientName||current.clientName||"",poste:current.poste||a.fonction||a.position||"",horaire:current.horaire||"Mixte",groupe:patch.groupe||current.groupe||"",dateDebut:date,natureMouvement:patch.mouvementMotif||patch.mouvementType||"Affectation",assignmentBackendId:patch.assignmentBackendId||current.assignmentBackendId||""};
+  a.affectationCourante={...current,siteId:patch.siteId==="autres"?"":patch.siteId,siteBackendId:patch.siteBackendId||site?.backendId||current.siteBackendId||null,siteName,clientName:site?.client||patch.clientName||current.clientName||"",poste:current.poste||a.fonction||a.position||"",horaire:current.horaire||"Mixte",groupe:patch.groupe||current.groupe||"",dateDebut:date,natureMouvement:patch.mouvementMotif||patch.mouvementType||"Affectation",ordreMouvementNumero:patch.ordreMouvementNumero||patch.mouvementNumero||"",assignmentBackendId:patch.assignmentBackendId||current.assignmentBackendId||""};
   addEmployeeCareerEvent(a,"Affectation",{date,motif:`${a.affectationCourante.natureMouvement} vers ${siteName}`,source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||patch.mouvementNumero||"",details:{siteId:a.affectationCourante.siteId,siteName,groupe:a.affectationCourante.groupe}});
   if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId});
   return true;
@@ -32685,7 +32685,7 @@ async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
       fpqUpsertLocalPresenceLine(line);
       opsUpsertMovementHistory(movement);
       window.__sgdiOpsMovementSqlSyncedAt=Date.now();
-      return sgdiPullState({silent:true}).then(async()=>{
+      return sgdiPullState({silent:true,light:true}).then(async()=>{
         const fresh=(db.opsMouvements||[]).find(x=>opsMovementKey(x)===opsMovementKey(movement))||movement;
         opsUpsertMovementHistory(fresh);
         await fpqApplyMovementAffectation(date,agentId,patch);
