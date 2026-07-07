@@ -17793,6 +17793,8 @@ function applyFpPositionFilters(list){
 function renderFiches(view,sub){
   const fixedSociete=mySoc()||"";
   const socFilter=fixedSociete||(session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||""));
+  const _fpSocForEnsure=socFilter||(session?.transverse?currentStructureSocieteFilter():"");
+  if(typeof sgdiEnsureEmployeesForDisplay==="function"){const ensureResult=sgdiEnsureEmployeesForDisplay({society:_fpSocForEnsure,force:true});if(ensureResult&&typeof ensureResult.then==="function"){ensureResult.then(rows=>{if((rows||[]).some(a=>!_fpSocForEnsure||a.societe===_fpSocForEnsure))renderFiches(view,sub)}).catch(()=>null);return}}
   const allowedSocietes=currentAllowedSocietes();
   const restrictedSocietes=hasExplicitSocieteRestriction();
   const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
@@ -29847,6 +29849,7 @@ function renderAdminFichesPosition(view){
   const allAgents=db.agents||[];
   const baseAgents=allAgents.filter(adminMatchesSociete);
   const agents=baseAgents.filter(a=>adminFicheMatchesSearch(a,q));
+  const totalDb=adminSoc?baseAgents.length:allAgents.length;
   const locked=agents.filter(a=>a.locked||a.fichePositionOfficielle).length;
   const otherSocieties=adminSoc&&baseAgents.length===0&&allAgents.length>0
     ?[...new Set(allAgents.map(a=>a.societe||a.society||"").filter(Boolean))].sort()
@@ -29854,7 +29857,7 @@ function renderAdminFichesPosition(view){
   view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Fiche de position</h1><p class="text-sm text-slate-500 mt-1">Toutes les fiches sont verrouillées dans RH, OPS, Matériel et les autres modules. Les modifications et suppressions se font uniquement ici.</p></div>
   ${adminSocieteSelectorHTML(adminSoc?"Les fiches affichées et les actions de configuration concernent cette société.":"Vue globale des fiches. Sélectionnez une société pour travailler dans son périmètre.")}
   <div class="grid grid-4 gap-3 mb-4">
-    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Total DB</div><div class="text-3xl font-black text-slate-400">${allAgents.length}</div></div>
+    <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Total DB</div><div class="text-3xl font-black text-slate-400">${totalDb}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Fiches</div><div class="text-3xl font-black" style="color:#043970">${baseAgents.length}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Verrouillées</div><div class="text-3xl font-black text-emerald-700">${locked}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase font-bold">Affichées</div><div class="text-3xl font-black text-amber-700">${agents.length}</div></div>
