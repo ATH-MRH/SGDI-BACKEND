@@ -47,6 +47,9 @@ CE QUE TU PEUX FAIRE :
    donne un ordre clair, exécute-le avec l'outil approprié puis confirme précisément ce que tu
    as fait (avec les valeurs enregistrées). Si une information indispensable manque, demande-la
    brièvement avant d'agir.
+3. MÉMORISER — tu disposes d'une mémoire durable. Dès que l'utilisateur te confie une information à
+   retenir (préférence, consigne, nom, fait important), appelle l'outil « remember » pour la garder.
+   Ta mémoire actuelle t'est fournie plus bas, tiens-en compte dans tes réponses.
 
 RÈGLES :
 - Base-toi TOUJOURS sur les outils pour les chiffres et les faits ; ne devine jamais.
@@ -436,6 +439,48 @@ def _tool_update_employee_status(db: Session, user: User, reference: str, statut
     return {"ok": True, "message": f"Statut de {emp.code} ({emp.last_name} {emp.first_name}) : {ancien} → {statut}."}
 
 
+# --------------------------------------------------------------------------- #
+# Mémoire persistante (par utilisateur)
+# --------------------------------------------------------------------------- #
+_MEMORY_COLLECTION = "atlasMemory"
+
+
+def _load_memory(db: Session, user: User) -> list[str]:
+    try:
+        from app.modules.irongs import service as _irongs_service
+        items = _irongs_service.list_items(db, _MEMORY_COLLECTION)
+    except Exception:
+        return []
+    uname = getattr(user, "username", "")
+    notes = [
+        str(i.get("note", "")).strip()
+        for i in items
+        if isinstance(i, dict) and i.get("user") == uname and i.get("note")
+    ]
+    return notes[-40:]
+
+
+def _tool_remember(db: Session, user: User, note: str) -> dict:
+    note = (note or "").strip()
+    if not note:
+        return {"ok": False, "message": "Rien à mémoriser."}
+    try:
+        from datetime import datetime
+
+        from app.modules.irongs import service as _irongs_service
+        _irongs_service.create_item(db, _MEMORY_COLLECTION, {
+            "user": getattr(user, "username", "?"),
+            "note": note[:600],
+            "date": datetime.now().isoformat(timespec="seconds"),
+        })
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return {"ok": False, "message": f"Échec mémorisation : {exc}"}
+    _audit(user, "remember", note[:120])
+    return {"ok": True, "message": "C'est noté, je m'en souviendrai."}
+
+
 # Schémas d'outils exposés à Claude
 TOOLS: list[dict[str, Any]] = [
     {
@@ -568,6 +613,17 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["reference", "statut"],
         },
     },
+    {
+        "name": "remember",
+        "description": "MÉMOIRE : enregistre durablement une information que l'utilisateur te confie (préférence, "
+                       "consigne, fait à retenir). Appelle-le dès que l'utilisateur te dit de retenir/noter quelque chose, "
+                       "ou partage une info utile pour les prochaines fois.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"note": {"type": "string", "description": "L'information à mémoriser, reformulée clairement."}},
+            "required": ["note"],
+        },
+    },
 ]
 
 _DISPATCH = {
@@ -585,6 +641,7 @@ _DISPATCH = {
     "create_candidate": _tool_create_candidate,
     "create_event": _tool_create_event,
     "update_employee_status": _tool_update_employee_status,
+    "remember": _tool_remember,
 }
 
 
@@ -610,6 +667,13 @@ def run_agent(db: Session, user: User, message: str, history: list[dict[str, Any
     import anthropic
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    system_prompt = SYSTEM_PROMPT
+    memory = _load_memory(db, user)
+    if memory:
+        system_prompt += (
+            "\n\nMÉMOIRE (ce que l'utilisateur t'a demandé de retenir — tiens-en compte) :\n"
+            + "\n".join("- " + m for m in memory)
+        )
     messages: list[dict[str, Any]] = list(history or [])[-10:]
     messages.append({"role": "user", "content": message})
 
@@ -619,7 +683,7 @@ def run_agent(db: Session, user: User, message: str, history: list[dict[str, Any
         response = client.messages.create(
             model=settings.assistant_agent_model,
             max_tokens=2048,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             tools=TOOLS,
             messages=messages,
         )
