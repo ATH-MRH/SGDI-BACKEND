@@ -4055,280 +4055,363 @@ body:has(.sgdi-login-page) #app{
   }
 }
 
-/* ----- BLUE COMPACT LOGIN ----- */
+/* ----- ATLAS CLEAR LOGIN ----- */
 body:has(.sgdi-login-page),
 html:has(.sgdi-login-page),
 body:has(.sgdi-login-page) #app{
-  background:#123a91!important;
+  background:#eef6ff!important;
   background-image:none!important;
 }
 .sgdi-login-page{
   min-height:100vh!important;
   overflow:auto!important;
-  color:#fff!important;
+  color:#0f172a!important;
   background:
-    radial-gradient(circle at 86% 42%, rgba(25,172,231,.28) 0 3px, transparent 4px),
-    radial-gradient(circle at 91% 60%, rgba(25,172,231,.22) 0 2px, transparent 3px),
-    radial-gradient(circle at 94% 74%, rgba(25,172,231,.18) 0 2px, transparent 3px),
-    linear-gradient(145deg, rgba(23,41,128,.94), rgba(10,106,185,.92))!important;
+    radial-gradient(circle at 10% 10%, rgba(29,78,216,.13), transparent 28%),
+    radial-gradient(circle at 88% 18%, rgba(14,165,233,.16), transparent 32%),
+    linear-gradient(135deg,#f8fbff 0%,#eaf4ff 48%,#f7fbff 100%)!important;
   position:relative!important;
 }
 .sgdi-login-page:before{
   content:""!important;
   position:absolute!important;
-  inset:auto -8% -15% -12%!important;
-  height:42vh!important;
-  background:
-    radial-gradient(70% 115% at 15% 0%, rgba(91,55,158,.35), transparent 58%),
-    linear-gradient(165deg, rgba(33,143,220,.34), rgba(26,82,170,.34))!important;
-  border-radius:48% 52% 0 0!important;
-  transform:rotate(-3deg)!important;
+  inset:0!important;
+  background-image:
+    linear-gradient(rgba(4,57,112,.055) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(4,57,112,.055) 1px,transparent 1px)!important;
+  background-size:48px 48px!important;
   pointer-events:none!important;
-  mask-image:none!important;
+  mask-image:linear-gradient(135deg,rgba(0,0,0,.62),transparent 78%)!important;
 }
 .sgdi-login-page:after{
   content:""!important;
   position:absolute!important;
-  left:-18%!important;
-  top:8%!important;
-  width:55vw!important;
-  height:70vh!important;
-  border-radius:50%!important;
-  background:rgba(66,34,130,.22)!important;
-  filter:blur(2px)!important;
+  right:-14vw!important;
+  bottom:-28vh!important;
+  width:58vw!important;
+  height:58vw!important;
+  border-radius:999px!important;
+  background:rgba(4,57,112,.08)!important;
   pointer-events:none!important;
 }
 .sgdi-login-main{
-  width:100%!important;
-  min-width:620px!important;
+  width:min(1180px,calc(100% - 48px))!important;
+  min-width:0!important;
   min-height:100svh!important;
-  margin:0!important;
-  padding:48px!important;
-  display:flex!important;
-  flex-direction:column!important;
+  margin:0 auto!important;
+  padding:clamp(28px,6vh,72px) 0!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1.05fr) minmax(360px,.82fr)!important;
   align-items:center!important;
-  justify-content:center!important;
-  gap:18px!important;
+  gap:clamp(34px,6vw,88px)!important;
   background:transparent!important;
   position:relative!important;
   z-index:1!important;
 }
-.sgdi-login-visual,
-.sgdi-login-brand,
-.sgdi-login-kicker,
-.sgdi-login-orbit,
-.sgdi-login-preview,
-.sgdi-login-chip,
-.sgdi-login-assurance,
-.sgdi-login-password-toggle{
-  display:none!important;
+.sgdi-login-visual{
+  display:flex!important;
+  min-height:520px!important;
+  flex-direction:column!important;
+  justify-content:center!important;
+  position:relative!important;
+}
+.sgdi-login-brand{
+  display:block!important;
+  margin:0!important;
+  color:#081528!important;
+  font-size:clamp(86px,12vw,156px)!important;
+  line-height:.82!important;
+  font-weight:950!important;
+  letter-spacing:-.055em!important;
+  text-shadow:0 18px 42px rgba(4,57,112,.14)!important;
+}
+.sgdi-login-brand i{
+  color:#1267a8!important;
+  font-style:normal!important;
+  margin-left:8px!important;
+}
+.sgdi-login-kicker{
+  display:block!important;
+  margin:20px 0 0!important;
+  color:#334155!important;
+  font-size:clamp(22px,2.4vw,32px)!important;
+  line-height:1.1!important;
+  font-weight:900!important;
+  letter-spacing:-.02em!important;
+}
+.sgdi-login-intro{
+  max-width:560px!important;
+  margin:20px 0 0!important;
+  color:#64748b!important;
+  font-size:17px!important;
+  line-height:1.75!important;
+  font-weight:650!important;
+}
+.sgdi-login-modules{
+  width:min(420px,100%)!important;
+  margin-top:38px!important;
+  padding:16px!important;
+  border:1px solid rgba(4,57,112,.1)!important;
+  border-radius:22px!important;
+  background:rgba(255,255,255,.72)!important;
+  box-shadow:0 24px 60px rgba(15,23,42,.09)!important;
+  backdrop-filter:blur(14px)!important;
+  display:grid!important;
+  grid-template-columns:repeat(4,1fr)!important;
+  gap:12px!important;
+}
+.sgdi-login-modules span{
+  height:74px!important;
+  border-radius:16px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:linear-gradient(180deg,#edf7ff,#e3f0fb)!important;
+  color:#075985!important;
+  font-size:16px!important;
+  font-weight:950!important;
+  letter-spacing:.03em!important;
 }
 .sgdi-login-panel{
-  width:488px!important;
-  min-height:572px!important;
-  border:0!important;
-  border-radius:8px!important;
-  background:rgba(24,54,126,.58)!important;
-  box-shadow:0 48px 95px rgba(0,20,75,.3)!important;
-  backdrop-filter:blur(6px)!important;
-  padding:68px 68px 44px!important;
+  width:100%!important;
+  min-height:0!important;
+  border:1px solid rgba(4,57,112,.12)!important;
+  border-radius:28px!important;
+  background:rgba(255,255,255,.88)!important;
+  box-shadow:0 30px 80px rgba(15,23,42,.14)!important;
+  backdrop-filter:blur(18px)!important;
+  padding:clamp(30px,4vw,46px)!important;
   display:flex!important;
   flex-direction:column!important;
   align-items:stretch!important;
 }
 .sgdi-login-panel-head{
-  margin:0 0 44px!important;
-  text-align:center!important;
+  margin:0 0 28px!important;
+  text-align:left!important;
+}
+.sgdi-login-chip{
+  display:inline-flex!important;
+  align-items:center!important;
+  width:max-content!important;
+  min-height:30px!important;
+  padding:0 12px!important;
+  border:1px solid rgba(18,103,168,.2)!important;
+  border-radius:999px!important;
+  background:#edf7ff!important;
+  color:#1267a8!important;
+  font-size:12px!important;
+  font-weight:950!important;
 }
 .sgdi-login-panel h1{
-  margin:0!important;
-  color:#fff!important;
-  font-size:30px!important;
-  line-height:1!important;
+  margin:18px 0 8px!important;
+  color:#0f172a!important;
+  font-size:clamp(34px,4vw,48px)!important;
+  line-height:.95!important;
   font-weight:900!important;
-  letter-spacing:.01em!important;
+  letter-spacing:-.04em!important;
 }
-.sgdi-login-panel p{display:none!important}
+.sgdi-login-panel p{
+  display:block!important;
+  margin:0!important;
+  color:#64748b!important;
+  font-size:15px!important;
+  line-height:1.6!important;
+  font-weight:650!important;
+}
 .sgdi-login-form{
   width:100%!important;
   display:grid!important;
-  gap:24px!important;
+  gap:16px!important;
 }
 .sgdi-login-field{
   display:block!important;
   position:relative!important;
   margin:0!important;
 }
-.sgdi-login-field:before{
-  position:absolute!important;
-  left:20px!important;
-  top:50%!important;
-  transform:translateY(-50%)!important;
-  z-index:2!important;
-  font-size:22px!important;
-  color:#ffb25c!important;
-  opacity:.95!important;
-}
-.sgdi-login-field:first-child:before{content:"⚇"!important}
-.sgdi-login-password-field:before{content:"🔒"!important;font-size:20px!important}
+.sgdi-login-field:before{content:none!important}
 .sgdi-login-form .sgdi-login-field input{
   width:100%!important;
-  height:52px!important;
-  min-height:52px!important;
-  border:0!important;
-  border-radius:10px!important;
-  background:rgba(184,207,230,.68)!important;
-  color:#fff!important;
+  height:62px!important;
+  min-height:62px!important;
+  border:1px solid #d7e3ef!important;
+  border-radius:16px!important;
+  background:#fff!important;
+  color:#0f172a!important;
   box-shadow:none!important;
   outline:none!important;
-  padding:0 20px 0 56px!important;
-  font-size:22px!important;
-  font-weight:700!important;
+  padding:23px 18px 8px!important;
+  font-size:17px!important;
+  font-weight:750!important;
   font-family:Arial,Helvetica,sans-serif!important;
-  transition:background .16s ease,box-shadow .16s ease!important;
+  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease!important;
 }
-.sgdi-login-form .sgdi-login-password-field input{padding-right:20px!important}
+.sgdi-login-form .sgdi-login-password-field input{padding-right:104px!important}
 .sgdi-login-form .sgdi-login-field input::placeholder{color:transparent!important}
 .sgdi-login-form .sgdi-login-field input:focus{
-  background:rgba(202,219,236,.82)!important;
-  box-shadow:0 0 0 4px rgba(109,177,255,.25)!important;
+  border-color:#1267a8!important;
+  background:#fbfdff!important;
+  box-shadow:0 0 0 4px rgba(18,103,168,.13)!important;
 }
 .sgdi-login-field span{
   position:absolute!important;
-  left:56px!important;
-  top:50%!important;
-  transform:translateY(-50%)!important;
-  color:rgba(255,255,255,.78)!important;
-  font-size:18px!important;
-  font-weight:700!important;
-  font-style:italic!important;
+  left:18px!important;
+  top:21px!important;
+  transform:none!important;
+  color:#64748b!important;
+  font-size:15px!important;
+  font-weight:750!important;
+  font-style:normal!important;
   pointer-events:none!important;
-  transition:opacity .12s ease!important;
+  transition:transform .14s ease,color .14s ease,font-size .14s ease!important;
 }
 .sgdi-login-field input:focus+span,
 .sgdi-login-field input:not(:placeholder-shown)+span{
-  opacity:0!important;
+  opacity:1!important;
+  transform:translateY(-12px)!important;
+  color:#1267a8!important;
+  font-size:11px!important;
+}
+.sgdi-login-page .sgdi-login-password-toggle{
+  display:inline-flex!important;
+  position:absolute!important;
+  right:12px!important;
+  top:50%!important;
   transform:translateY(-50%)!important;
-  font-size:18px!important;
+  min-height:38px!important;
+  height:38px!important;
+  padding:0 14px!important;
+  border:0!important;
+  border-radius:12px!important;
+  background:#edf7ff!important;
+  color:#1267a8!important;
+  box-shadow:none!important;
+  font-size:12px!important;
+  font-weight:950!important;
+  cursor:pointer!important;
 }
 .sgdi-login-remember{
   display:flex!important;
   align-items:center!important;
-  gap:10px!important;
+  gap:9px!important;
   margin:0!important;
-  color:rgba(255,255,255,.82)!important;
-  font-size:18px!important;
-  line-height:1!important;
-  font-weight:700!important;
+  color:#64748b!important;
+  font-size:13px!important;
+  line-height:1.2!important;
+  font-weight:800!important;
 }
 .sgdi-login-remember input{
-  width:20px!important;
-  height:20px!important;
-  accent-color:#4da1ff!important;
+  width:16px!important;
+  height:16px!important;
+  accent-color:#1267a8!important;
 }
 .sgdi-login-page .sgdi-login-submit{
   width:100%!important;
-  height:56px!important;
-  min-height:56px!important;
-  margin:24px 0 18px!important;
+  height:58px!important;
+  min-height:58px!important;
+  margin:22px 0 12px!important;
   border:0!important;
-  border-radius:10px!important;
-  background:#4b9bff!important;
+  border-radius:16px!important;
+  background:linear-gradient(135deg,#043970,#1267a8)!important;
   color:#fff!important;
-  box-shadow:0 18px 36px rgba(12,64,145,.24)!important;
-  font-size:22px!important;
+  box-shadow:0 18px 38px rgba(4,57,112,.24)!important;
+  font-size:16px!important;
   font-weight:950!important;
-  letter-spacing:.03em!important;
+  letter-spacing:0!important;
   cursor:pointer!important;
+  transition:transform .16s ease,box-shadow .16s ease,filter .16s ease!important;
 }
 .sgdi-login-page .sgdi-login-submit:hover{
-  background:#68adff!important;
+  filter:brightness(1.08)!important;
   color:#fff!important;
   transform:translateY(-1px)!important;
-  box-shadow:0 22px 44px rgba(12,64,145,.32)!important;
+  box-shadow:0 22px 46px rgba(4,57,112,.3)!important;
 }
 .sgdi-login-page .sgdi-login-submit.is-loading{
-  padding-left:64px!important;
+  padding-left:42px!important;
 }
 .sgdi-login-page .sgdi-login-submit.is-loading::before{
-  width:24px!important;
-  height:24px!important;
-  left:28px!important;
-  margin-top:-12px!important;
+  width:16px!important;
+  height:16px!important;
+  left:18px!important;
+  margin-top:-8px!important;
 }
 .sgdi-login-status{
-  min-height:28px!important;
-  margin:0 0 8px!important;
-  color:#fff!important;
-  text-align:center!important;
-  font-size:18px!important;
+  min-height:20px!important;
+  margin:0 0 10px!important;
+  color:#475569!important;
+  text-align:left!important;
+  font-size:13px!important;
   font-weight:800!important;
+}
+.sgdi-login-assurance{
+  display:flex!important;
+  align-items:center!important;
+  gap:9px!important;
+  color:#64748b!important;
+  font-size:13px!important;
+  font-weight:850!important;
+  margin:0 0 12px!important;
+}
+.sgdi-login-assurance span{
+  width:9px!important;
+  height:9px!important;
+  border-radius:999px!important;
+  background:#16a34a!important;
+  box-shadow:0 0 0 5px rgba(22,163,74,.13)!important;
 }
 .sgdi-login-forgot{
   border:0!important;
   background:transparent!important;
-  color:rgba(255,255,255,.78)!important;
+  color:#1267a8!important;
   cursor:pointer!important;
-  font-size:18px!important;
-  font-weight:700!important;
+  font-size:13px!important;
+  font-weight:900!important;
   padding:0!important;
-  text-align:center!important;
+  text-align:left!important;
 }
-.sgdi-login-forgot:hover{text-decoration:underline!important;color:#fff!important}
-.sgdi-login-signup{
-  color:rgba(255,255,255,.78)!important;
-  font-size:20px!important;
-  font-weight:600!important;
-  position:relative!important;
-  z-index:2!important;
-}
-.sgdi-login-signup button{
-  border:0!important;
-  background:transparent!important;
-  color:#fff!important;
-  cursor:pointer!important;
-  font-size:20px!important;
-  font-weight:950!important;
-  padding:0!important;
-}
-.sgdi-login-signup button:hover{text-decoration:underline!important}
+.sgdi-login-forgot:hover{text-decoration:underline!important;color:#043970!important}
 .sgdi-login-page .login-admin-system-shortcut{
-  right:24px!important;
-  bottom:20px!important;
-  min-height:auto!important;
+  right:clamp(18px,3vw,42px)!important;
+  bottom:clamp(18px,3vw,34px)!important;
+  min-height:42px!important;
   height:auto!important;
-  padding:0!important;
-  border:0!important;
-  border-radius:0!important;
-  background:transparent!important;
-  color:rgba(255,255,255,.78)!important;
-  box-shadow:none!important;
-  backdrop-filter:none!important;
-  font-size:20px!important;
-  font-weight:800!important;
+  padding:0 16px!important;
+  border:1px solid rgba(4,57,112,.14)!important;
+  border-radius:999px!important;
+  background:rgba(255,255,255,.78)!important;
+  color:#334155!important;
+  box-shadow:0 14px 34px rgba(15,23,42,.1)!important;
+  backdrop-filter:blur(14px)!important;
+  font-size:13px!important;
+  font-weight:900!important;
 }
 .sgdi-login-page .login-admin-system-shortcut:hover{
-  color:#fff!important;
-  text-decoration:underline!important;
+  color:#1267a8!important;
+  border-color:rgba(18,103,168,.28)!important;
+  text-decoration:none!important;
+}
+@media(max-width:860px){
+  .sgdi-login-main{
+    width:min(100% - 28px,520px)!important;
+    grid-template-columns:1fr!important;
+    gap:24px!important;
+    padding:28px 0 86px!important;
+  }
+  .sgdi-login-visual{min-height:auto!important;text-align:center!important}
+  .sgdi-login-brand{font-size:clamp(64px,18vw,96px)!important}
+  .sgdi-login-kicker{font-size:20px!important}
+  .sgdi-login-intro{display:none!important}
+  .sgdi-login-modules{margin:24px auto 0!important}
 }
 @media(max-width:520px){
-  .sgdi-login-panel{
-    width:488px!important;
-    min-height:572px!important;
-    padding:68px 68px 44px!important;
-  }
-  .sgdi-login-panel h1{font-size:30px!important}
-  .sgdi-login-form{gap:24px!important}
-  .sgdi-login-form .sgdi-login-field input{height:52px!important;min-height:52px!important;font-size:22px!important}
-  .sgdi-login-field span{font-size:18px!important}
-  .sgdi-login-remember,.sgdi-login-forgot{font-size:18px!important}
-  .sgdi-login-page .sgdi-login-submit{height:56px!important;min-height:56px!important;font-size:22px!important}
-  .sgdi-login-signup,.sgdi-login-signup button{font-size:20px!important}
-  .sgdi-login-page .login-admin-system-shortcut{font-size:20px!important}
+  .sgdi-login-main{width:min(100% - 24px,420px)!important}
+  .sgdi-login-panel{border-radius:22px!important;padding:24px!important}
+  .sgdi-login-modules{grid-template-columns:repeat(2,1fr)!important}
+  .sgdi-login-modules span{height:58px!important}
   .sgdi-login-page .login-admin-system-shortcut{
-    left:0!important;
-    right:0!important;
-    width:100%!important;
+    left:14px!important;
+    right:14px!important;
+    width:calc(100% - 28px)!important;
     text-align:center!important;
     justify-content:center!important;
   }
