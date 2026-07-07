@@ -33419,7 +33419,8 @@ function renderPointageSaisieAuto(){
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
-  const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;return`<th style="border:1px solid #e2e8f0;padding:1px 0;width:24px;min-width:24px;max-width:24px;text-align:center;font-size:7px;font-weight:700;${we?"color:#1e40af;background:#dbeafe":"color:#64748b"}">${String(d).padStart(2,"0")}</th>`;}).join("");
+  const weekdayShort=["D","L","M","Me","J","V","S"];
+  const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;return`<th style="border:1px solid #e2e8f0;padding:1px 0;width:24px;min-width:24px;max-width:24px;text-align:center;font-size:7px;font-weight:700;${we?"color:#1e40af;background:#dbeafe":"color:#64748b"}"><div>${String(d).padStart(2,"0")}</div><div style="font-size:6px;line-height:8px;opacity:.8">${weekdayShort[wd]}</div></th>`;}).join("");
   const fpqGetForAgent=(a,dateStr)=>(db.feuillePresence||[]).find(x=>
     x.date===dateStr&&(
       String(x.agentId||"")===String(a.id||"")||
@@ -33441,7 +33442,7 @@ function renderPointageSaisieAuto(){
   </div>`;
   const filtered=ptFilterAgents(ag);
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
-  const rows=filtered.map(a=>{
+  const rows=filtered.map((a,idx)=>{
     let nP=0,nA=0,nM=0,nS=0,nC=0,nR=0;
     const sheet=ptGetSheet(a.id,ym);
     const cells=Array.from({length:days},(_,i)=>{
@@ -33461,7 +33462,8 @@ function renderPointageSaisieAuto(){
       return`<td style="border:1px solid #e2e8f0;padding:0;width:24px;min-width:24px;max-width:24px;background:${bg};text-align:center;color:${fg};font-weight:800;font-family:ui-monospace,monospace;font-size:8px;line-height:11px">${code||"·"}</td>`;
     }).join("");
     return`<tr>
-      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:0;z-index:1;padding:0 4px;font-size:10px;line-height:13px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:9px;opacity:.7">${escapeHTML(a.matricule||"")}</span></td>
+      <td style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:0;z-index:2;width:34px;min-width:34px;text-align:center;font-weight:800;color:#043970;font-size:9px">${idx+1}</td>
+      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:34px;z-index:1;padding:0 4px;font-size:10px;line-height:13px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:9px;opacity:.7">${escapeHTML(a.matricule||"")}</span></td>
       ${cells}
       <td style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;text-align:center;font-weight:700;font-size:8px;width:22px">${nP}</td>
       <td style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;text-align:center;font-weight:700;font-size:8px;width:22px">${nA}</td>
@@ -33473,7 +33475,7 @@ function renderPointageSaisieAuto(){
   }).join("");
   const searchNote=ptCurrentSearch()?` · <span style="color:#043970;font-weight:700">${filtered.length} résultat${filtered.length>1?"s":""} sur ${ag.length}</span>`:"";
   const tableHTML=`<table class="w-full" id="pt-auto-table" style="border-collapse:collapse;font-size:8px">
-      <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:22px;text-align:center;font-size:8px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:22px;text-align:center;font-size:8px">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:22px;text-align:center;font-size:8px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:22px;text-align:center;font-size:8px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:22px;text-align:center;font-size:8px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:22px;text-align:center;font-size:8px">R</th></tr></thead>
+      <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 4px;text-align:center;position:sticky;left:0;background:#f1f5f9;z-index:3;width:34px;min-width:34px;white-space:nowrap;font-size:8px">N°</th><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:34px;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:22px;text-align:center;font-size:8px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:22px;text-align:center;font-size:8px">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:22px;text-align:center;font-size:8px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:22px;text-align:center;font-size:8px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:22px;text-align:center;font-size:8px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:22px;text-align:center;font-size:8px">R</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
   return filterBar+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Saisie automatique — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
