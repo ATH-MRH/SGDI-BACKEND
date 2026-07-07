@@ -7413,3 +7413,12 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 .ops-mvt-agent-col{min-width:0;height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;border:1px solid #e2e8f0;border-radius:12px;background:#fff;padding:6px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .ops-mvt-agent-col-title{position:sticky;top:0;z-index:1;margin:-6px -6px 6px;padding:8px 10px;background:#eef6ff;border-bottom:1px solid #dbe7f5;color:#043970;font-size:11px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}
 @media(max-width:760px){.ops-mvt-agent-columns{grid-template-columns:1fr;height:auto;max-height:none;overflow:visible}.ops-mvt-agent-col{height:220px;max-height:220px}}
+
+.pointage-code-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.pointage-code-card{min-height:58px;border:1px solid;border-radius:12px;background:linear-gradient(135deg,#fff,var(--pc-bg));padding:8px 9px;text-align:left;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(15,23,42,.035);transition:transform .14s ease,box-shadow .14s ease}
+.pointage-code-card:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.07)}
+.pointage-code-key{width:30px;height:30px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:var(--pc-bg);color:var(--pc-color);font-size:11px;font-weight:950;font-family:ui-monospace,monospace}
+.pointage-code-label{min-width:0;color:#24344b;font-size:10px;font-weight:950;text-transform:uppercase;line-height:1.15;letter-spacing:.035em}
+.pointage-code-card b{color:var(--pc-color);font-size:22px;line-height:1;font-weight:950;font-variant-numeric:tabular-nums}
+@media(max-width:1180px){.pointage-code-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.pointage-code-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pointage-code-card{min-height:54px;padding:7px}}

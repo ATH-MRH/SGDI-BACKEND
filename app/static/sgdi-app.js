@@ -4847,9 +4847,6 @@ function render(){
   }
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
   if(session.societe&&!session.transverse&&["societe-portal","dashboard"].includes((location.hash||"").slice(2)||"dashboard")){
-    const _mods=societePortalModules();
-    const _keys=[...new Set(_mods.map(m=>m.key))];
-    if(_keys.length===1){const _m=_mods[0];enterSocietePortalRoute(_m.key,_m.route);return}
     renderSocietePortal();return
   }
   // En mode transverse, restreindre aux routes du module sélectionné
@@ -32221,6 +32218,25 @@ function pointageOperationalAgents(soc){
   const cached=window.__pointageStableAgentsBySoc?.[normalizeSocieteName(soc||"__all__")];
   return Array.isArray(cached)?cached:[];
 }
+function employeeIsPointageEligible(a,soc){
+  if(!a)return false;
+  const st=normalizeEmployeeStatusValue(a.statut||a.status||"");
+  if(employeeIsFormer(a)||["sortant","demissionne","licencie","archive","suspendu","blacklist"].includes(st))return false;
+  if(a.blacklist||a.blacklistContractBlocked||a.contractBlocked)return false;
+  return !soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
+}
+function pointageEligibleAgents(soc){
+  const list=(db.agents||[])
+    .filter(a=>employeeIsPointageEligible(a,soc))
+    .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
+  if(list.length){
+    window.__pointageEligibleStableAgentsBySoc=window.__pointageEligibleStableAgentsBySoc||{};
+    window.__pointageEligibleStableAgentsBySoc[normalizeSocieteName(soc||"__all__")]=list;
+    return list;
+  }
+  const cached=window.__pointageEligibleStableAgentsBySoc?.[normalizeSocieteName(soc||"__all__")];
+  return Array.isArray(cached)?cached:[];
+}
 function ptDaysInMonth(ym){const [y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate()}
 function ptKey(year,month){return year+"-"+String(month).padStart(2,"0")}
 function ptGetSheet(agentId,ym){if(!db.pointages)db.pointages=[];return db.pointages.find(p=>p.agentId===agentId&&p.periode===ym)}
@@ -32244,7 +32260,7 @@ function ptNormalizeAbandonDePoste(sheet){
 }
 function ptNormalizeAbandonsForMonth(ym,soc){
   let changed=false;
-  pointageOperationalAgents(soc).forEach(a=>{const sh=ptGetSheet(a.id,ym);if(ptNormalizeAbandonDePoste(sh))changed=true});
+  pointageEligibleAgents(soc).forEach(a=>{const sh=ptGetSheet(a.id,ym);if(ptNormalizeAbandonDePoste(sh))changed=true});
   return changed;
 }
 function employeeSuspensionActiveOn(a,date){
@@ -32323,7 +32339,7 @@ async function ptDevaliderSheet(agentId,ym){
   }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
 async function ptValiderTous(ym,soc){
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   if(!ag.length){toast("Aucun employé à valider","error");return}
   if(!confirm(`Valider le pointage de ${ag.length} agent(s) pour la période ${ym} ?`))return;
   try{
@@ -33020,7 +33036,7 @@ function ptDonutSVG(slices,total,cx,cy,r,ir){
 }
 function renderPointageDashboard(isDrh){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);const todayDate=today();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
   const valid=sheets.filter(s=>s.valide).length;
   const tot={P:0,A:0,M:0,S:0,C:0,R:0,AB:0,F1:0,F2:0,F3:0,"P/F1":0,"P/F2":0,"P/F3":0,A1:0,A2:0,A3:0};
@@ -33032,7 +33048,8 @@ function renderPointageDashboard(isDrh){
   const fpqRate=ag.length?Math.round(fpqPresents*100/ag.length):0;
   const unclosed=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(Boolean))].filter(d=>!fpqIsCloture(d));
   const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||""}</div></button>`;
-  const codeCards=Object.entries(POINTAGE_CODES).filter(([k])=>tot[k]!==undefined).map(([k,v])=>`<button type="button" onclick="navigate('pointage/stats')" class="card p-3 text-center" style="background:${v.bg};border:1px solid ${v.color}33"><div class="text-[10px] uppercase font-black" style="color:${v.color}">${v.label}</div><div class="text-2xl font-black" style="color:${v.color}">${tot[k]||0}</div></button>`).join("");
+  const codeOrder=["P","A","M","C","S","R","AB","A1","A2","A3","F1","F2","F3","P/F1","P/F2","P/F3"];
+  const codeCards=codeOrder.filter(k=>POINTAGE_CODES[k]&&tot[k]!==undefined).map(k=>{const v=POINTAGE_CODES[k];return`<button type="button" onclick="navigate('pointage/stats')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${tot[k]||0}</b></button>`}).join("");
   // ── Statistiques card ──
   const baseCodes=["P","A","M","S","C","R","AB"];
   const totalBase=baseCodes.reduce((s,k)=>s+(tot[k]||0),0);
@@ -33088,7 +33105,7 @@ function renderPointageDashboard(isDrh){
       ${kpi("Taux présence",tauxP+"%","pointage/stats",tauxP>=80?"#16a34a":"#f59e0b","Sur saisies du mois")}
       ${isDrh?"":kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"#dc2626":"#16a34a","Feuilles à contrôler")}
     </div>
-    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><h3 class="font-black mb-3">Répartition des codes</h3><div class="grid grid-cols-3 gap-2">${codeCards}</div></div>${statsCard}</div>`;
+    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><h3 class="font-black mb-3">Répartition des codes</h3><div class="pointage-code-grid">${codeCards}</div></div>${statsCard}</div>`;
 }
 
 // ── QR Tablet Generator — 10s per site ──────────────────────────────────────
@@ -33301,7 +33318,7 @@ function renderPointageSaisie(){
   const isDrh=session?.transverse==="drh";
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
   const syncChanged=ptSyncFeuillePresenceMonth(ym);if(syncChanged)saveDB();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
@@ -33356,7 +33373,7 @@ function renderPointageSaisie(){
 function renderPointageSaisieAuto(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
   const abandonChanged=ptNormalizeAbandonsForMonth(ym,soc);if(abandonChanged)saveDB();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
@@ -33454,7 +33471,7 @@ function ptAutoApercu(){
 }
 function renderPointageRecap(agentId){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   const cur=agentId?db.agents.find(a=>a.id===agentId):null;
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
@@ -33477,8 +33494,9 @@ function renderPointageRecap(agentId){
 function renderPointageSociete(){
   const ym=ptCurrentMonth();const days=ptDaysInMonth(ym);
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3"><div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div></div></div>`;
-  const rows=SOCIETES.map(s=>{
-    const ag=pointageOperationalAgents(s);
+  const allowedSocietes=currentAllowedSocietes();
+  const rows=allowedSocietes.map(s=>{
+    const ag=pointageEligibleAgents(s);
     const sheets=ag.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);
     const tot={P:0,A:0,M:0,S:0,C:0,R:0,AB:0,F1:0,F2:0,F3:0,"P/F1":0,"P/F2":0,"P/F3":0,A1:0,A2:0,A3:0};sheets.forEach(sh=>{Object.values(sh.days||{}).forEach(v=>{if(tot[v]!==undefined)tot[v]++})});
     const totFx=tot.F1+tot.F2+tot.F3+tot["P/F1"]+tot["P/F2"]+tot["P/F3"];const totAbs=tot.A+tot.AB+tot.A1+(tot.A2*2)+(tot.A3*3);const totAx=tot.AB+tot.A2+tot.A3;
@@ -33491,7 +33509,7 @@ function renderPointageSociete(){
 }
 function renderPointageStats(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();
-  const ag=pointageOperationalAgents(soc);
+  const ag=pointageEligibleAgents(soc);
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
     <div><label class="label">Société</label><select class="select" onchange="setPtSociete(this.value)"><option value="" ${!soc?"selected":""}>🏢 Toutes les sociétés</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${s}</option>`).join("")}</select></div>
@@ -33663,7 +33681,22 @@ try{
   let aiTyping=false;
 
   function aiMount(){
+    if(document.getElementById("ai-fab")||document.getElementById("ai-panel"))return;
     document.getElementById("atlas-ai-widget")?.remove();
+    const host=document.createElement("div");
+    host.id="atlas-ai-widget";
+    const fab=document.createElement("button");
+    fab.id="ai-fab";
+    fab.className="ai-fab";
+    fab.type="button";
+    fab.title="Assistant ATLAS IA";
+    fab.setAttribute("aria-label","Ouvrir l'assistant ATLAS");
+    fab.innerHTML="🤖";
+    // Style intégré pour garantir la visibilité quel que soit le CSS.
+    fab.style.cssText="position:fixed;right:20px;bottom:20px;z-index:2147483000;width:58px;height:58px;border-radius:50%;border:none;background:#1e40af;color:#fff;font-size:27px;line-height:1;cursor:pointer;box-shadow:0 10px 28px rgba(15,23,42,.4);display:flex;align-items:center;justify-content:center";
+    fab.onclick=function(){window.aiToggle();};
+    host.appendChild(fab);
+    document.body.appendChild(host);
   }
 
   window.aiToggle=function(){
@@ -33801,7 +33834,7 @@ try{
     if(send)send.disabled=true;
     const typingEl=aiAppendMessage("…","ai ai-typing");
     try{
-      const data=await sgdiApi("/assistant/chat",{
+      const data=await sgdiApi("/assistant/agent",{
         method:"POST",
         legacy:false,
         body:{message:msg,history:aiHistory.slice(-10,-1),context:aiCurrentContext()}
@@ -33824,4 +33857,6 @@ try{
     document.addEventListener("DOMContentLoaded",aiMount);
   else
     aiMount();
+  // Auto-réparation : re-crée le bouton s'il disparaît (changement d'écran SPA).
+  setInterval(aiMount,2000);
 })();
