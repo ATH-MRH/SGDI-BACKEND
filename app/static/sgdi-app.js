@@ -2347,6 +2347,10 @@ function moneyToFrenchWords(v){
 function qty(n){if(n===null||n===undefined||n==="")return"—";const v=Number(n);if(isNaN(v))return"—";const isInt=v===Math.floor(v);return v.toLocaleString("fr-FR",{minimumFractionDigits:isInt?0:2,maximumFractionDigits:isInt?0:2})}
 function formatDate(d){if(!d)return"—";try{return new Date(d).toLocaleDateString("fr-FR")}catch(e){return d}}
 function formatTime(d){if(!d)return"—";try{return new Date(d).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}catch(e){return"—"}}
+function movementTimeLabel(m){
+  const source=m?.createdAt||m?.created_at||m?.updatedAt||m?.updated_at||"";
+  return /[T\s]\d{2}:\d{2}/.test(String(source))?formatTime(source):"—";
+}
 function stockMovementDateTimeLabel(m){
   const source=m?.createdAt||m?.created_at||m?.date||"";
   const hasTime=/[T\s]\d{2}:\d{2}/.test(String(source));
@@ -31544,8 +31548,8 @@ function _renderOpsMouvementsHTML(view){
         <button type="button" class="btn btn-secondary text-xs" onclick="['opsMovementAgentId','opsMovementSelectedAgent','opsMovementAgentFilter','opsMovementSite','opsMovementClient','opsMovementSearch'].forEach(k=>sessionStorage.removeItem(k));sessionStorage.setItem('opsMovementPeriod','all');renderView()">Tout afficher</button>
       </div>
     </div>
-    ${rows.length?`<table class="w-full text-sm"><thead style="background:#f8fafc"><tr><th class="p-3 text-left">Date</th><th class="p-3 text-left">N° ordre</th><th class="p-3 text-left">Agent</th><th class="p-3 text-left">Motif</th><th class="p-3 text-left">Affectation</th><th class="p-3 text-left">Durée</th><th class="p-3 text-right">Action</th></tr></thead><tbody>
-      ${rows.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 text-xs font-mono">${escapeHTML(formatDate(f.date||""))}</td><td class="p-3 text-xs font-black">${escapeHTML(f.ordreMouvementNumero||f.mouvementNumero||"—")}</td><td class="p-3 font-semibold">${escapeHTML(opsMovementAgentLabel(f._agent))}</td><td class="p-3 text-xs">${escapeHTML(f.mouvementMotif||f.mouvementType||"—")}</td><td class="p-3 text-xs">${escapeHTML(opsMovementSiteLabel(f))}<div class="text-[10px] text-slate-500">${escapeHTML(opsMovementClientLabel(f))}</div></td><td class="p-3 text-xs">${escapeHTML(f.mouvementDuree||"—")}</td><td class="p-3 text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="fpqOpenMouvement('${escapeHTML(f.date||today())}','${escapeHTML(f.agentId||"")}')">Modifier</button><button class="btn btn-ghost text-xs" onclick="opsOpenMovementDocumentByRow('${escapeHTML(f.id||"")}')">Ordre</button></div></td></tr>`).join("")}
+    ${rows.length?`<table class="w-full text-sm"><thead style="background:#f8fafc"><tr><th class="p-3 text-left">Date</th><th class="p-3 text-left">Heure</th><th class="p-3 text-left">N° ordre</th><th class="p-3 text-left">Agent</th><th class="p-3 text-left">Motif</th><th class="p-3 text-left">Affectation</th><th class="p-3 text-left">Durée</th><th class="p-3 text-right">Action</th></tr></thead><tbody>
+      ${rows.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 text-xs font-mono">${escapeHTML(formatDate(f.date||""))}</td><td class="p-3 text-xs font-mono">${escapeHTML(movementTimeLabel(f))}</td><td class="p-3 text-xs font-black">${escapeHTML(f.ordreMouvementNumero||f.mouvementNumero||"—")}</td><td class="p-3 font-semibold">${escapeHTML(opsMovementAgentLabel(f._agent))}</td><td class="p-3 text-xs">${escapeHTML(f.mouvementMotif||f.mouvementType||"—")}</td><td class="p-3 text-xs">${escapeHTML(opsMovementSiteLabel(f))}<div class="text-[10px] text-slate-500">${escapeHTML(opsMovementClientLabel(f))}</div></td><td class="p-3 text-xs">${escapeHTML(f.mouvementDuree||"—")}</td><td class="p-3 text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="fpqOpenMouvement('${escapeHTML(f.date||today())}','${escapeHTML(f.agentId||"")}')">Modifier</button><button class="btn btn-ghost text-xs" onclick="opsOpenMovementDocumentByRow('${escapeHTML(f.id||"")}')">Ordre</button></div></td></tr>`).join("")}
     </tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucun mouvement enregistré.</div>`}
   </div>`;
   if(presetAgent)sessionStorage.removeItem("opsMovementAgentId");
