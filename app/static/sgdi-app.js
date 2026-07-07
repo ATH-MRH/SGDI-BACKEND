@@ -2820,6 +2820,7 @@ function _sgdiVoiceScore(voice){
 function _sgdiSelectVoice(){
   const voices=(window.speechSynthesis?.getVoices?.()||[]).filter(Boolean);
   if(!voices.length)return null;
+  try{const chosen=localStorage.getItem("sgdiVoiceName");if(chosen){const m=voices.find(v=>v.name===chosen);if(m)return m;}}catch(e){}
   const scored=voices
     .filter(v=>!_sgdiIsClearlyMaleVoice(v)&&!_sgdiIsSilentVoice(v)&&_sgdiIsPreferredFemaleVoice(v)&&(/^fr/i.test(String(v.lang||""))||/fran[cç]ais|french|audrey|marie|julie|aurelie|aurélie|virginie|denise|vivienne|siri|flo|sandy|shelley/i.test(String(v.name||""))))
     .map(v=>({voice:v,score:_sgdiVoiceScore(v)}))
@@ -33722,18 +33723,27 @@ try{
           <div class="ai-panel-head-status">● Assistant système en ligne</div>
         </div>
         <button class="ai-panel-voice ai-panel-voice-toggle" id="ai-voice-toggle" onclick="aiToggleVoice()" title="Activer/désactiver la voix" aria-pressed="true">Voix</button>
+        <select id="ai-voice-select" onchange="aiSetVoice(this.value)" title="Choisir la voix" style="max-width:120px;font-size:11px;border-radius:8px;border:1px solid #cbd5e1;padding:3px;background:#fff;color:#0f172a"></select>
         <button class="ai-panel-close" onclick="aiClosePanel()" title="Fermer">✕</button>
       </div>
       <div class="ai-messages" id="ai-messages">
         <div class="ai-msg ai-msg-ai">👋 Bonjour, je suis <b>ATLAS</b>, votre assistant IA. Je connais l'ensemble de votre système : <b>RH</b>, <b>opérations &amp; sites</b>, <b>matériel &amp; stock</b>, <b>commercial</b> et <b>finances</b>.<br><br>Posez-moi une question ou donnez-moi un ordre — par exemple :<br>• « Combien d'agents actifs ? »<br>• « Quels contrats finissent ce mois ? »<br>• « Enregistre un incident au site … »<br>• « Suspends l'agent A01 »</div>
       </div>
-      <div class="ai-suggestions" id="ai-suggestions">${sugg}</div>
       <div class="ai-input-bar">
-        <textarea class="ai-input" id="ai-input" rows="1" placeholder="Posez votre question..." onkeydown="aiInputKeydown(event)" oninput="aiAutoResize(this)"></textarea>
+        <button class="ai-send" id="ai-mic" onclick="aiStartMic()" title="Parler au micro" style="background:#0ea5e9">🎤</button>
+        <textarea class="ai-input" id="ai-input" rows="1" placeholder="Posez votre question ou parlez..." onkeydown="aiInputKeydown(event)" oninput="aiAutoResize(this)"></textarea>
         <button class="ai-send" id="ai-send" onclick="aiSend()" title="Envoyer">➤</button>
       </div>`;
     host.appendChild(panel);
+    try{if(typeof _sgdiSetVoiceEnabled==="function")_sgdiSetVoiceEnabled(true);}catch(e){}
     _sgdiUpdateVoiceToggle();
+    aiPopulateVoices();
+    // Présentation vocale automatique à l'ouverture du chat
+    try{
+      if(typeof _sgdiSpeakText==="function"){
+        setTimeout(function(){_sgdiSpeakText("Bonjour, je suis ATLAS, votre assistant intelligent. Je peux consulter vos données ressources humaines, opérations, matériel et finances, et exécuter vos ordres : créer un candidat, enregistrer un incident, ou changer le statut d'un agent. Que puis-je faire pour vous ?");},500);
+      }
+    }catch(e){}
     if(aiHistory.length){
       aiHistory.forEach(m=>{
         aiAppendMessage(m.content,m.role==="user"?"user":"ai");
@@ -33765,6 +33775,42 @@ try{
   window.aiAutoResize=function(el){
     el.style.height="auto";
     el.style.height=Math.min(el.scrollHeight,100)+"px";
+  };
+
+  window.aiPopulateVoices=function(){
+    const sel=document.getElementById("ai-voice-select");
+    if(!sel||!window.speechSynthesis)return;
+    const voices=(window.speechSynthesis.getVoices?.()||[]).filter(Boolean);
+    if(!voices.length){setTimeout(window.aiPopulateVoices,300);return;}
+    const fr=voices.filter(v=>/^fr/i.test(String(v.lang||"")));
+    const list=fr.length?fr:voices;
+    let chosen="";try{chosen=localStorage.getItem("sgdiVoiceName")||""}catch(e){}
+    sel.innerHTML=list.map(v=>'<option value="'+v.name.replace(/"/g,"")+'"'+(v.name===chosen?" selected":"")+'>'+v.name+'</option>').join("");
+  };
+
+  window.aiSetVoice=function(name){
+    try{localStorage.setItem("sgdiVoiceName",name)}catch(e){}
+    if(typeof _sgdiSetVoiceEnabled==="function")_sgdiSetVoiceEnabled(true);
+    if(typeof _sgdiUpdateVoiceToggle==="function")_sgdiUpdateVoiceToggle();
+    if(typeof _sgdiSpeakText==="function")_sgdiSpeakText("Voici ma nouvelle voix.");
+  };
+
+  window.aiStartMic=function(){
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){if(typeof toast==="function")toast("Micro non supporté par ce navigateur (utilisez Chrome).","error");return;}
+    const mic=document.getElementById("ai-mic");
+    const rec=new SR();
+    rec.lang="fr-FR";rec.interimResults=false;rec.maxAlternatives=1;
+    if(mic)mic.textContent="●";
+    rec.onresult=function(e){
+      const t=e.results[0][0].transcript||"";
+      const inp=document.getElementById("ai-input");
+      if(inp){inp.value=t;aiAutoResize(inp);}
+      if(t.trim())aiSend();
+    };
+    rec.onerror=function(){if(mic)mic.textContent="🎤";};
+    rec.onend=function(){if(mic)mic.textContent="🎤";};
+    try{rec.start()}catch(e){if(mic)mic.textContent="🎤";}
   };
 
   window.aiTestVoice=function(){
@@ -33840,6 +33886,7 @@ try{
       if(typingEl)typingEl.remove();
       aiAppendMessage(data.response,"ai");
       aiHistory.push({role:"assistant",content:data.response});
+      try{if(typeof _sgdiVoiceEnabled==="function"&&_sgdiVoiceEnabled()&&typeof _sgdiSpeakText==="function")_sgdiSpeakText(data.response);}catch(e){}
     }catch(e){
       if(typingEl)typingEl.remove();
       aiAppendMessage("Assistant indisponible : "+(e.message||"vérifiez votre session puis réessayez."),"ai");

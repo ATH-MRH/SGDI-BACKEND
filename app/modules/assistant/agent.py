@@ -322,6 +322,28 @@ def _tool_recent_events(db: Session, user: User, limit: int = 15) -> dict:
 # --------------------------------------------------------------------------- #
 def _audit(user: User, action: str, detail: Any) -> None:
     logger.info("ACTION ATLAS user=%s action=%s detail=%s", getattr(user, "username", "?"), action, detail)
+    # Trace aussi dans le journal d'activité de l'application (best-effort, jamais bloquant).
+    try:
+        from datetime import datetime
+
+        from app.db.session import SessionLocal
+        from app.modules.irongs import service as _irongs_service
+
+        with SessionLocal() as _db:
+            _irongs_service.create_item(_db, "activityLog", {
+                "type": "assistant-action",
+                "source": "ATLAS IA",
+                "action": action,
+                "details": str(detail),
+                "utilisateur": getattr(user, "username", "?"),
+                "date": datetime.now().isoformat(timespec="seconds"),
+            })
+            try:
+                _db.commit()
+            except Exception:
+                pass
+    except Exception as exc:  # pragma: no cover
+        logger.debug("Journalisation action assistant échouée: %s", exc)
 
 
 def _writable_society(user: User, society: str | None) -> tuple[str | None, str | None]:
