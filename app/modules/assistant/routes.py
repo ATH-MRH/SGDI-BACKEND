@@ -13,6 +13,12 @@ from app.modules.assistant import service
 router = APIRouter(dependencies=[Depends(current_user)])
 
 
+def _is_super_admin(user: User) -> bool:
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    level = str(getattr(user, "access_level", "") or "").strip().upper()
+    return role in {"admin", "adm", "adm1", "adm2"} or level == "H5"
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, user: User = Depends(current_user)):
     # Mode local (par défaut, sans clé API)
@@ -44,7 +50,9 @@ async def chat(payload: ChatRequest, user: User = Depends(current_user)):
 
 @router.post("/agent", response_model=AgentResponse)
 def agent_endpoint(payload: AgentRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    """Agent IA ATLAS (Phase 1, lecture seule). Repli sur l'ATLAS local si désactivé/indisponible."""
+    """Agent IA ATLAS — réservé au super administrateur. Repli local si désactivé/indisponible."""
+    if not _is_super_admin(user):
+        raise HTTPException(status_code=403, detail="Assistant réservé à l'administrateur général.")
     if not settings.assistant_agent_enabled or not settings.anthropic_api_key:
         return AgentResponse(response=service.local_atlas_answer(payload.message, None))
     history = [{"role": m.role, "content": m.content} for m in payload.history]

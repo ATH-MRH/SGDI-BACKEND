@@ -33682,6 +33682,8 @@ try{
   let aiTyping=false;
 
   function aiMount(){
+    // Assistant réservé au super administrateur uniquement.
+    if(typeof isAdmin==="function"&&!isAdmin()){document.getElementById("atlas-ai-widget")?.remove();return;}
     if(document.getElementById("ai-fab")||document.getElementById("ai-panel"))return;
     document.getElementById("atlas-ai-widget")?.remove();
     const host=document.createElement("div");
@@ -33727,7 +33729,7 @@ try{
         <button class="ai-panel-close" onclick="aiClosePanel()" title="Fermer">✕</button>
       </div>
       <div class="ai-messages" id="ai-messages">
-        <div class="ai-msg ai-msg-ai">👋 Bonjour, je suis <b>ATLAS</b>, votre assistant IA. Je connais l'ensemble de votre système : <b>RH</b>, <b>opérations &amp; sites</b>, <b>matériel &amp; stock</b>, <b>commercial</b> et <b>finances</b>.<br><br>Posez-moi une question ou donnez-moi un ordre — par exemple :<br>• « Combien d'agents actifs ? »<br>• « Quels contrats finissent ce mois ? »<br>• « Enregistre un incident au site … »<br>• « Suspends l'agent A01 »</div>
+        <div class="ai-msg ai-msg-ai">👋 Bonjour, je suis <b>ATLAS</b>, votre assistant intelligent et votre <b>expert en gardiennage &amp; sécurité</b>. Voici tout ce que je peux faire pour vous :<br><br>📊 <b>Consulter</b> vos données : RH &amp; agents, sites &amp; opérations, matériel &amp; stock, commercial, finances.<br>⚡ <b>Exécuter vos ordres</b> : créer un candidat, enregistrer un incident, changer le statut d'un agent…<br>🧠 <b>Mémoriser</b> ce que vous me confiez et m'en souvenir.<br>💡 <b>Vous conseiller</b> sur la gestion de vos équipes et vos opérations.<br>💬 <b>Discuter</b> de tout — à l'écrit ou à la voix 🎤.<br><br>Que puis-je faire pour vous ?</div>
       </div>
       <div class="ai-input-bar">
         <button class="ai-send" id="ai-mic" onclick="aiStartMic()" title="Parler au micro" style="background:#0ea5e9">🎤</button>
@@ -33741,7 +33743,7 @@ try{
     // Présentation vocale automatique à l'ouverture du chat
     try{
       if(typeof _sgdiSpeakText==="function"){
-        setTimeout(function(){_sgdiSpeakText("Bonjour, je suis ATLAS, votre assistant intelligent. Je peux consulter vos données ressources humaines, opérations, matériel et finances, et exécuter vos ordres : créer un candidat, enregistrer un incident, ou changer le statut d'un agent. Que puis-je faire pour vous ?");},500);
+        setTimeout(function(){_sgdiSpeakText("Bonjour, je suis ATLAS, votre assistant intelligent et votre expert en gardiennage et sécurité. Je peux consulter toutes vos données : ressources humaines, sites et opérations, matériel, commercial et finances. J'exécute vos ordres, je retiens ce que vous me confiez, je vous conseille sur la gestion de vos équipes, et je peux discuter de tout. Que puis-je faire pour vous ?");},500);
       }
     }catch(e){}
     if(aiHistory.length){
