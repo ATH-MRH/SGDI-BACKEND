@@ -33029,7 +33029,8 @@ function renderPointageDashboard(isDrh){
   const fpqRate=ag.length?Math.round(fpqPresents*100/ag.length):0;
   const unclosed=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(Boolean))].filter(d=>!fpqIsCloture(d));
   const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||""}</div></button>`;
-  const codeCards=Object.entries(POINTAGE_CODES).filter(([k])=>tot[k]!==undefined).map(([k,v])=>`<button type="button" onclick="navigate('pointage/stats')" class="card p-3 text-center" style="background:${v.bg};border:1px solid ${v.color}33"><div class="text-[10px] uppercase font-black" style="color:${v.color}">${v.label}</div><div class="text-2xl font-black" style="color:${v.color}">${tot[k]||0}</div></button>`).join("");
+  const codeOrder=["P","A","M","C","S","R","AB","A1","A2","A3","F1","F2","F3","P/F1","P/F2","P/F3"];
+  const codeCards=codeOrder.filter(k=>POINTAGE_CODES[k]&&tot[k]!==undefined).map(k=>{const v=POINTAGE_CODES[k];return`<button type="button" onclick="navigate('pointage/stats')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${tot[k]||0}</b></button>`}).join("");
   // ── Statistiques card ──
   const baseCodes=["P","A","M","S","C","R","AB"];
   const totalBase=baseCodes.reduce((s,k)=>s+(tot[k]||0),0);
@@ -33085,7 +33086,7 @@ function renderPointageDashboard(isDrh){
       ${kpi("Taux présence",tauxP+"%","pointage/stats",tauxP>=80?"#16a34a":"#f59e0b","Sur saisies du mois")}
       ${isDrh?"":kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"#dc2626":"#16a34a","Feuilles à contrôler")}
     </div>
-    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><h3 class="font-black mb-3">Répartition des codes</h3><div class="grid grid-cols-3 gap-2">${codeCards}</div></div>${statsCard}</div>`;
+    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><h3 class="font-black mb-3">Répartition des codes</h3><div class="pointage-code-grid">${codeCards}</div></div>${statsCard}</div>`;
 }
 
 // ── QR Tablet Generator — 10s per site ──────────────────────────────────────
