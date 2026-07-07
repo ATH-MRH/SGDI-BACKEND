@@ -12864,13 +12864,15 @@ function renderAgentForm(view,id){
         ${fpTabs.map(([k,l],i)=>`<button type="button" data-fp-tab="${k}" class="${i===0?"is-active":""}" onclick="fichePositionSwitchTab('${k}')">${l}</button>`).join("")}
       </div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="identite">
-        <input type="hidden" name="nom" value="${escapeHTML(a.nom||"")}"/>
-        <input type="hidden" name="prenom" value="${escapeHTML(a.prenom||"")}"/>
         <input type="hidden" name="photo" value="${escapeHTML(a.photo||"")}"/>
         <div class="rh-op-layout">
           <fieldset class="rh-op-box rh-op-personal">
             <legend>Informations personnelles</legend>
             <div class="rh-op-grid">
+              <label><span>Nom</span><input class="input" name="nom" value="${escapeHTML(a.nom||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Prénom</span><input class="input" name="prenom" value="${escapeHTML(a.prenom||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Nom du père</span><input class="input" name="nomPere" value="${escapeHTML(a.nomPere||"")}" ${identiteEditable?"":"disabled"}/></label>
+              <label><span>Nom de la mère</span><input class="input" name="nomMere" value="${escapeHTML(a.nomMere||"")}" ${identiteEditable?"":"disabled"}/></label>
               <label><span>Adresse</span><input class="input" name="adresse" value="${escapeHTML(a.adresse||a.address||"")}" ${identiteEditable?"":"disabled"}/></label>
               <span class="rh-op-grid-spacer" aria-hidden="true"></span>
               <label><span>Commune</span><select class="select" name="commune" ${identiteEditable?"":"disabled"}>${communeOptionsHTML(a.wilaya,a.commune||"")}</select></label>
