@@ -6640,29 +6640,40 @@ setInterval(()=>{if(session&&sgdiPostgresReady)refreshDemandesPersonnelFromPostg
 function renderLogin(){
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page">
     <main class="sgdi-login-main">
+      <section class="sgdi-login-visual" aria-label="Présentation ATLAS">
+        <div class="sgdi-login-brand"><span>ATLA</span><i>S</i></div>
+        <p class="sgdi-login-kicker">Suite de gestion intégrée</p>
+        <p class="sgdi-login-intro">Un portail clair pour piloter les ressources humaines, les opérations, le matériel et les finances depuis un même espace sécurisé.</p>
+        <div class="sgdi-login-modules" aria-label="Modules ATLAS">
+          <span>DRH</span><span>OPS</span><span>MAT</span><span>FIN</span>
+        </div>
+      </section>
       <section class="sgdi-login-panel">
         <div class="sgdi-login-panel-head">
-          <h1>Login</h1>
+          <span class="sgdi-login-chip">Accès sécurisé</span>
+          <h1>Connexion</h1>
+          <p>Connectez-vous à votre espace ATLAS.</p>
         </div>
         <form id="login-form" class="sgdi-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
           <label class="sgdi-login-field">
             <input name="username" autocomplete="username" placeholder=" " autofocus/>
-            <span>Username</span>
+            <span>Identifiant</span>
           </label>
           <label class="sgdi-login-field sgdi-login-password-field">
             <input type="password" name="password" autocomplete="current-password" placeholder=" "/>
-            <span>Password</span>
+            <span>Mot de passe</span>
+            <button type="button" class="sgdi-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button>
           </label>
-          <label class="sgdi-login-remember"><input type="checkbox" checked/> Remember me</label>
+          <label class="sgdi-login-remember"><input type="checkbox" checked/> Mémoriser cette session</label>
         </form>
-        <button class="sgdi-login-submit" type="submit" form="login-form">LOGIN</button>
+        <button class="sgdi-login-submit" type="submit" form="login-form">Se connecter</button>
         <div class="sgdi-login-status" hidden aria-live="polite"></div>
-        <button type="button" class="sgdi-login-forgot" onclick="toast('Contactez l\\'administrateur système pour réinitialiser le mot de passe','info')">Forgot your password?</button>
+        <div class="sgdi-login-assurance"><span></span> Session chiffrée</div>
+        <button type="button" class="sgdi-login-forgot" onclick="toast('Contactez l\\'administrateur système pour réinitialiser le mot de passe','info')">Mot de passe oublié ?</button>
       </section>
-      <div class="sgdi-login-signup">New here? <button type="button" onclick="toast('Création de compte réservée à l\\'administration système','info')">Sign Up</button></div>
     </main>
     <button type="button" class="login-admin-system-shortcut" onclick="openAdminSystemPasswordModal(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">
-      <span>Administration systeme</span>
+      <span>Administration système</span>
     </button>
   </div>`;
 }
@@ -17790,11 +17801,10 @@ function applyFpPositionFilters(list){
   });
   return out;
 }
-function renderFiches(view,sub){
+function renderFiches(view,sub,_skipEnsure){
   const fixedSociete=mySoc()||"";
   const socFilter=fixedSociete||(session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||""));
-  const _fpSocForEnsure=socFilter||(session?.transverse?currentStructureSocieteFilter():"");
-  if(typeof sgdiEnsureEmployeesForDisplay==="function"){const ensureResult=sgdiEnsureEmployeesForDisplay({society:_fpSocForEnsure,force:true});if(ensureResult&&typeof ensureResult.then==="function"){ensureResult.then(rows=>{if((rows||[]).some(a=>!_fpSocForEnsure||a.societe===_fpSocForEnsure))renderFiches(view,sub)}).catch(()=>null);return}}
+  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:socFilter,force:true});if(_r&&typeof _r.then==="function"){_r.then(()=>renderFiches(view,sub,true)).catch(()=>renderFiches(view,sub,true));return}}
   const allowedSocietes=currentAllowedSocietes();
   const restrictedSocietes=hasExplicitSocieteRestriction();
   const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
@@ -29842,9 +29852,9 @@ function adminFicheSearchRestore(){
   const pos=Math.min(Number(sessionStorage.getItem("adminFicheSearchCursor")||input.value.length),input.value.length);
   try{input.setSelectionRange(pos,pos)}catch(e){}
 }
-function renderAdminFichesPosition(view){
+function renderAdminFichesPosition(view,_skipEnsure){
   const adminSoc=adminActiveSociete();
-  if(typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:adminSoc||"",force:true});if(_r&&typeof _r.then==="function"){_r.then(rows=>{if((rows||[]).some(a=>!adminSoc||a.societe===adminSoc))renderAdminFichesPosition(view)}).catch(()=>null);return}}
+  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:adminSoc||"",force:true});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderAdminFichesPosition(view,true)).catch(()=>renderAdminFichesPosition(view,true));return}}
   const rawQ=String(sessionStorage.getItem("adminFicheSearch")||"");
   const q=adminFicheSearchText(rawQ);
   const allAgents=db.agents||[];
