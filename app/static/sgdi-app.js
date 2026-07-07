@@ -18255,6 +18255,7 @@ function renderBadgeModule(view){
 	      </div>
       <div class="card p-5">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-2"><h3 class="font-bold text-sm">Aperçu</h3>${selected?`<div class="text-xs text-slate-500">${escapeHTML(selected.nom+" "+selected.prenom)} · ${escapeHTML(selected.matricule||"")}</div>`:""}</div>
+        ${selected&&selected.photo?badgePhotoCropToolsHTML(selected):""}
         ${selected?`<div class="flex justify-center overflow-auto p-4 bg-slate-100 rounded-lg">${badgeHTML(selected,{color,format,verso,preview:true})}</div>`:`<div class="text-center text-slate-500 p-10">Sélectionnez un employé.</div>`}
       </div>
     </div>
@@ -18311,6 +18312,116 @@ function badgeQrSrc(a,size){
   const data=encodeURIComponent(badgeVerifyURL(a));
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size||180}x${size||180}&margin=1&data=${data}`;
 }
+function badgeFindAgent(id){
+  return (db.agents||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id)||String(x.matricule||"")===String(id));
+}
+function badgePhotoCrop(a){
+  const raw=a&&a.badgePhotoCrop&&typeof a.badgePhotoCrop==="object"?a.badgePhotoCrop:{};
+  const scale=Math.max(1,Math.min(3.5,Number(raw.scale)||1));
+  const x=Math.max(-120,Math.min(120,Number(raw.x)||0));
+  const y=Math.max(-120,Math.min(120,Number(raw.y)||0));
+  return {x,y,scale};
+}
+function badgePhotoTransform(a){
+  const c=badgePhotoCrop(a);
+  return `translate(${c.x}px,${c.y}px) scale(${c.scale})`;
+}
+function badgePhotoHTML(a,opts){
+  opts=opts||{};
+  const style=opts.style||"";
+  if(!a.photo)return`<div class="badge-photo" style="${style}">PHOTO</div>`;
+  const editable=!!opts.editable;
+  const id=String(a.id||a.backendId||a.matricule||"");
+  return`<div class="badge-photo badge-photo-crop ${editable?"is-editable":""}" style="${style}" data-badge-photo-id="${escapeHTML(id)}" ${editable?`onpointerdown="badgePhotoPointerDown(event,'${jsString(id)}')" onwheel="badgePhotoWheel(event,'${jsString(id)}')" title="Glisser pour recadrer · molette pour zoomer"`:""}>
+    <img src="${escapeHTML(a.photo)}" alt="Photo ${escapeHTML(a.matricule||"")}" draggable="false" style="transform:${badgePhotoTransform(a)}"/>
+    ${editable?`<span class="badge-photo-crop-hint no-print">Glisser · Zoom</span>`:""}
+  </div>`;
+}
+function badgePhotoCropToolsHTML(a){
+  const c=badgePhotoCrop(a);
+  const id=String(a.id||a.backendId||a.matricule||"");
+  return`<div class="badge-crop-tools no-print">
+    <div class="badge-crop-help">Photo : glissez directement sur le badge pour déplacer, utilisez la molette ou le zoom pour redimensionner.</div>
+    <label class="badge-crop-zoom"><span>Zoom</span><input id="badge-photo-zoom" type="range" min="1" max="3.5" step="0.01" value="${c.scale}" oninput="badgePhotoZoomInput('${jsString(id)}',this.value)"></label>
+    <button type="button" class="btn btn-ghost text-xs" onclick="badgePhotoReset('${jsString(id)}')">Recentrer</button>
+  </div>`;
+}
+function badgePhotoApplyToDom(a){
+  if(!a)return;
+  const id=String(a.id||a.backendId||a.matricule||"");
+  const safeId=window.CSS&&CSS.escape?CSS.escape(id):id.replace(/"/g,'\\"');
+  const transform=badgePhotoTransform(a);
+  document.querySelectorAll(`[data-badge-photo-id="${safeId}"] img`).forEach(img=>{img.style.transform=transform});
+  const zoom=document.getElementById("badge-photo-zoom");
+  if(zoom)zoom.value=badgePhotoCrop(a).scale;
+}
+let badgePhotoCropSaveTimer=null;
+function badgePhotoSetCrop(id,patch,opts){
+  const a=badgeFindAgent(id);
+  if(!a)return;
+  const current=badgePhotoCrop(a);
+  a.badgePhotoCrop={...current,...patch};
+  a.badgePhotoCrop=badgePhotoCrop(a);
+  a.updatedAt=new Date().toISOString();
+  badgePhotoApplyToDom(a);
+  if(!opts||opts.persist!==false)badgePhotoScheduleSave(id);
+}
+function badgePhotoScheduleSave(id){
+  clearTimeout(badgePhotoCropSaveTimer);
+  badgePhotoCropSaveTimer=setTimeout(()=>persistBadgePhotoCrop(id),450);
+}
+async function persistBadgePhotoCrop(id){
+  const a=badgeFindAgent(id);
+  if(!a)return;
+  try{
+    if(a.backendId&&window.SGDI&&SGDI.employees&&SGDI.employees.update){
+      const saved=await SGDI.employees.update(a.backendId,employeeApiPayload(a));
+      Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
+    }
+    await saveDBAndWaitToast("Recadrage photo non confirmé");
+  }catch(e){
+    toast("Recadrage photo non enregistré : "+(e.message||e),"error");
+  }
+}
+function badgePhotoZoomInput(id,value){
+  badgePhotoSetCrop(id,{scale:Number(value)||1});
+}
+function badgePhotoReset(id){
+  badgePhotoSetCrop(id,{x:0,y:0,scale:1});
+}
+function badgePhotoWheel(ev,id){
+  ev.preventDefault();
+  const a=badgeFindAgent(id);
+  if(!a)return;
+  const c=badgePhotoCrop(a);
+  const next=c.scale+(ev.deltaY<0?0.08:-0.08);
+  badgePhotoSetCrop(id,{scale:next});
+}
+function badgePhotoPointerDown(ev,id){
+  if(ev.button!==undefined&&ev.button!==0)return;
+  const a=badgeFindAgent(id);
+  if(!a||!a.photo)return;
+  ev.preventDefault();
+  const c=badgePhotoCrop(a);
+  window.__badgePhotoDrag={id,startX:ev.clientX,startY:ev.clientY,x:c.x,y:c.y};
+  ev.currentTarget?.classList.add("is-dragging");
+  try{ev.currentTarget?.setPointerCapture?.(ev.pointerId)}catch(e){}
+  window.addEventListener("pointermove",badgePhotoPointerMove);
+  window.addEventListener("pointerup",badgePhotoPointerUp,{once:true});
+  window.addEventListener("pointercancel",badgePhotoPointerUp,{once:true});
+}
+function badgePhotoPointerMove(ev){
+  const drag=window.__badgePhotoDrag;
+  if(!drag)return;
+  badgePhotoSetCrop(drag.id,{x:drag.x+(ev.clientX-drag.startX),y:drag.y+(ev.clientY-drag.startY)},{persist:false});
+}
+function badgePhotoPointerUp(){
+  const drag=window.__badgePhotoDrag;
+  window.removeEventListener("pointermove",badgePhotoPointerMove);
+  document.querySelectorAll(".badge-photo-crop.is-dragging").forEach(el=>el.classList.remove("is-dragging"));
+  if(drag)badgePhotoScheduleSave(drag.id);
+  window.__badgePhotoDrag=null;
+}
 function badgeHTML(a,opts){
   opts=opts||{};
   const color=opts.color||"#043970";
@@ -18329,7 +18440,7 @@ function badgeHTML(a,opts){
     <div class="badge-top" style="background:${color}"><div class="badge-brand">${escapeHTML(a.societe||"SGDI")}</div><div class="badge-type">BADGE PERSONNEL</div></div>
     <div class="badge-body">
       <div class="badge-identity-row">
-        <div class="badge-photo" style="width:${photoSize};height:${photoSize}">${a.photo?`<img src="${a.photo}"/>`:"PHOTO"}</div>
+        ${badgePhotoHTML(a,{style:`width:${photoSize};height:${photoSize}`,editable:!!opts.preview})}
         <div class="badge-identity-fields">
 		          <div class="badge-field"><span>Nom :</span><b>${escapeHTML(nom||"—")}</b></div>
 		          <div class="badge-field"><span>Prénom :</span><b>${escapeHTML(prenom||"—")}</b></div>
@@ -18369,7 +18480,7 @@ async function renderBadgeVerify(view,id){
   const a=await publicBadgeEmployee(id);
   if(!a){view.innerHTML=`<div class="public-badge-page"><div class="public-badge-error">Badge introuvable ou employé supprimé.</div></div>`;return}
   const name=String(`${a.nom||""} ${a.prenom||""}`).trim()||"Nom Prenom";
-  const photo=a.photo?`<img src="${escapeHTML(a.photo)}" alt="Photo">`:"PHOTO";
+  const photo=a.photo?`<img src="${escapeHTML(a.photo)}" alt="Photo" style="transform:${badgePhotoTransform(a)};transform-origin:center center">`:"PHOTO";
   const active=a.badgeActif!==false;
   const fonction=String(a.affectationCourante?.poste||a.fonction||"").trim();
   const groupeSanguin=String(a.groupeSanguin||a.groupe_sanguin||"").trim();
