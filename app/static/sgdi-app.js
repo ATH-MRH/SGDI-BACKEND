@@ -33681,6 +33681,7 @@ try{
   let aiTyping=false;
 
   function aiMount(){
+    if(document.getElementById("ai-fab")||document.getElementById("ai-panel"))return;
     document.getElementById("atlas-ai-widget")?.remove();
     const host=document.createElement("div");
     host.id="atlas-ai-widget";
@@ -33691,6 +33692,8 @@ try{
     fab.title="Assistant ATLAS IA";
     fab.setAttribute("aria-label","Ouvrir l'assistant ATLAS");
     fab.innerHTML="🤖";
+    // Style intégré pour garantir la visibilité quel que soit le CSS.
+    fab.style.cssText="position:fixed;right:20px;bottom:20px;z-index:2147483000;width:58px;height:58px;border-radius:50%;border:none;background:#1e40af;color:#fff;font-size:27px;line-height:1;cursor:pointer;box-shadow:0 10px 28px rgba(15,23,42,.4);display:flex;align-items:center;justify-content:center";
     fab.onclick=function(){window.aiToggle();};
     host.appendChild(fab);
     document.body.appendChild(host);
@@ -33854,4 +33857,6 @@ try{
     document.addEventListener("DOMContentLoaded",aiMount);
   else
     aiMount();
+  // Auto-réparation : re-crée le bouton s'il disparaît (changement d'écran SPA).
+  setInterval(aiMount,2000);
 })();
