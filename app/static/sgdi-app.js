@@ -4847,9 +4847,6 @@ function render(){
   }
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
   if(session.societe&&!session.transverse&&["societe-portal","dashboard"].includes((location.hash||"").slice(2)||"dashboard")){
-    const _mods=societePortalModules();
-    const _keys=[...new Set(_mods.map(m=>m.key))];
-    if(_keys.length===1){const _m=_mods[0];enterSocietePortalRoute(_m.key,_m.route);return}
     renderSocietePortal();return
   }
   // En mode transverse, restreindre aux routes du module sélectionné
