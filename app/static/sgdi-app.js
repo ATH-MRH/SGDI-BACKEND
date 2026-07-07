@@ -33721,13 +33721,11 @@ try{
           <div class="ai-panel-head-name">ATLAS IA</div>
           <div class="ai-panel-head-status">● Assistant système en ligne</div>
         </div>
-        <button class="ai-panel-voice ai-panel-voice-toggle" id="ai-voice-toggle" onclick="aiToggleVoice()" title="Désactiver la voix" aria-pressed="true">Voix ON</button>
-        <button class="ai-panel-voice" onclick="aiTestVoice()" title="Tester la voix">Test</button>
-        <button class="ai-panel-voice" onclick="aiTestSound()" title="Tester le son">Son</button>
+        <button class="ai-panel-voice ai-panel-voice-toggle" id="ai-voice-toggle" onclick="aiToggleVoice()" title="Activer/désactiver la voix" aria-pressed="true">Voix</button>
         <button class="ai-panel-close" onclick="aiClosePanel()" title="Fermer">✕</button>
       </div>
       <div class="ai-messages" id="ai-messages">
-        <div class="ai-msg ai-msg-ai">Bonjour ! Je suis ATLAS IA. Posez-moi une question sur DRH, OPS, Matériel, Commercial ou Finances.</div>
+        <div class="ai-msg ai-msg-ai">👋 Bonjour, je suis <b>ATLAS</b>, votre assistant IA. Je connais l'ensemble de votre système : <b>RH</b>, <b>opérations &amp; sites</b>, <b>matériel &amp; stock</b>, <b>commercial</b> et <b>finances</b>.<br><br>Posez-moi une question ou donnez-moi un ordre — par exemple :<br>• « Combien d'agents actifs ? »<br>• « Quels contrats finissent ce mois ? »<br>• « Enregistre un incident au site … »<br>• « Suspends l'agent A01 »</div>
       </div>
       <div class="ai-suggestions" id="ai-suggestions">${sugg}</div>
       <div class="ai-input-bar">
