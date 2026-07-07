@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import smtplib
 from datetime import date, datetime
 from email.message import EmailMessage
@@ -221,6 +222,10 @@ async def _contract_email_alert_loop() -> None:
 def start_contract_email_alert_scheduler() -> None:
     global _scheduler_task
     if _scheduler_task and not _scheduler_task.done():
+        return
+    worker_id = os.environ.get("GUNICORN_WORKER_ID")
+    if worker_id is not None and worker_id != "1":
+        logger.info("Planificateur alertes email inactif dans le worker %s (actif uniquement dans le worker 1)", worker_id)
         return
     _scheduler_task = asyncio.get_running_loop().create_task(_contract_email_alert_loop())
     logger.info("Planificateur alertes email contrat demarre")

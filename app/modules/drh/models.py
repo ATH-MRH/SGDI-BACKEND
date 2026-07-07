@@ -32,7 +32,7 @@ class Employee(Base, TimestampMixin):
     salary_net: Mapped[float] = mapped_column(Float, default=0)
     recruit_date: Mapped[date | None] = mapped_column(Date)
     trial_end_date: Mapped[date | None] = mapped_column(Date)
-    contract_end_date: Mapped[date | None] = mapped_column(Date)
+    contract_end_date: Mapped[date | None] = mapped_column(Date, index=True)
     locked: Mapped[int] = mapped_column(Integer, default=1)
     extra: Mapped[dict | None] = mapped_column(JSON)
 

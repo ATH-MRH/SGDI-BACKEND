@@ -129,7 +129,6 @@ def dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    service.repair_employee_codes_if_needed(db)
     effective_society = _effective_society_filter(user, society)
     employees_rows = service.list_rows(db, Employee, {"society": effective_society})
     candidates_rows = service.list_rows(db, Candidate, {"society": effective_society})
@@ -165,7 +164,6 @@ def employees_page(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    service.repair_employee_codes_if_needed(db)
     effective_society = _effective_society_filter(user, society)
     allowed = _allowed_societies(user)
     return service.list_employees_page(
@@ -186,7 +184,6 @@ def employees(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    service.repair_employee_codes_if_needed(db)
     effective_society = _effective_society_filter(user, society)
     rows = service.list_rows(db, Employee, {"status": status, "society": effective_society})
     allowed = _allowed_societies(user)
@@ -195,10 +192,17 @@ def employees(
     return rows
 
 
+@router.post("/employees/repair-codes")
+def repair_employee_codes(db: Session = Depends(get_db), user: User = Depends(current_user), token_payload: dict = Depends(current_token_payload)):
+    if not _is_admin_system_user(user, token_payload):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé à l'administrateur système")
+    updated = service.repair_employee_codes_if_needed(db)
+    return {"updated": updated}
+
+
 @router.post("/employees", response_model=EmployeeOut)
 def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
-    service.repair_employee_codes_if_needed(db)
     code = (payload.code or "").strip().upper() or service.next_employee_code(db, payload.society)
     for attempt in range(200):
         values = payload.model_dump()

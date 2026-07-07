@@ -106,7 +106,7 @@ class OpsMovement(Base, TimestampMixin):
     group_code: Mapped[str | None] = mapped_column(String(20))
     movement_type: Mapped[str | None] = mapped_column(String(120))
     movement_reason: Mapped[str | None] = mapped_column(Text)
-    society: Mapped[str | None] = mapped_column(String(120))
+    society: Mapped[str | None] = mapped_column(String(120), index=True)
     data: Mapped[dict | None] = mapped_column(JSON)
 
 
@@ -125,6 +125,6 @@ class Incident(Base, TimestampMixin):
     subject: Mapped[str | None] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(40), default="ouvert", index=True)
-    society: Mapped[str | None] = mapped_column(String(120))
+    society: Mapped[str | None] = mapped_column(String(120), index=True)
     data: Mapped[dict | None] = mapped_column(JSON)
 

@@ -33,9 +33,6 @@ echo "[start] PostgreSQL connection confirmed."
 echo "[start] Applying database migrations..."
 python3 -m alembic upgrade head
 
-echo "[start] Starting server..."
-exec python3 -m uvicorn app.main:app \
-  --host 0.0.0.0 \
-  --port "${PORT:-8000}" \
-  --proxy-headers \
-  --forwarded-allow-ips "*"
+echo "[start] Starting server (${WEB_CONCURRENCY:-4} workers)..."
+exec python3 -m gunicorn app.main:app \
+  --config gunicorn.conf.py

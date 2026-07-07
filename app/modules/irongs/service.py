@@ -881,9 +881,7 @@ def _presence_movement_save(db: Session, data: dict[str, Any]) -> dict[str, Any]
                 pass
         if not employee and emp_ext:
             employee = db.execute(
-                select(Employee).where(
-                    (Employee.external_id == emp_ext) | (Employee.code == emp_ext) | (Employee.matricule == emp_ext)
-                )
+                select(Employee).where(Employee.code == emp_ext)
             ).scalars().first()
         site_id = next((movement.get(k) for k in ("siteBackendId", "site_id") if movement.get(k)), None)
         site_ext = next((str(movement.get(k) or "").strip() for k in ("siteId",) if movement.get(k)), None)
@@ -895,7 +893,7 @@ def _presence_movement_save(db: Session, data: dict[str, Any]) -> dict[str, Any]
                 pass
         if not site_row and site_ext:
             site_row = db.execute(
-                select(Site).where(Site.external_id == site_ext)
+                select(Site).where((Site.indicatif == site_ext) | (Site.name == site_ext))
             ).scalars().first()
         movement["societe"] = (employee.society if employee else None) or (site_row.society if site_row else None) or ""
     movement["id"] = movement.get("id") or f"om_{_movement_history_key(movement)}"

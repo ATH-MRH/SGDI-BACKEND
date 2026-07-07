@@ -96,40 +96,6 @@ def employee_by_ref(db: Session, value: Any):
         row = db.execute(select(Employee).where(Employee.code == text)).scalar_one_or_none()
         if row:
             return row
-        for employee in db.execute(select(Employee)).scalars().all():
-            extra = employee.extra if isinstance(employee.extra, dict) else {}
-            legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
-            refs = [
-                legacy.get("id"),
-                legacy.get("backendId"),
-                legacy.get("matricule"),
-                legacy.get("code"),
-                extra.get("id"),
-                extra.get("matricule"),
-                extra.get("code"),
-            ]
-            if any(str(ref) == text for ref in refs if ref not in (None, "", "None", "undefined", "null")):
-                return employee
-        # Fallback : chercher dans sgdi_records (agents du store JSON legacy)
-        rec = db.execute(
-            select(SgdiRecord).where(SgdiRecord.collection == "agents")
-        ).scalars().all()
-        for r in rec:
-            d = r.data if isinstance(r.data, dict) else {}
-            refs = [d.get("matricule"), d.get("code"), d.get("id"), d.get("backendId")]
-            if any(str(ref) == text for ref in refs if ref not in (None, "", "None", "undefined", "null")):
-                # Créer l'employé dans la table employees à la volée
-                new_emp = Employee(
-                    code=d.get("matricule") or d.get("code") or text,
-                    first_name=(d.get("prenom") or "").upper(),
-                    last_name=(d.get("nom") or "").upper(),
-                    society=d.get("societe") or "",
-                    status=d.get("statut") or "actif",
-                    extra={"_legacy": d},
-                )
-                db.add(new_emp)
-                db.flush()
-                return new_emp
     return None
 
 
@@ -144,12 +110,6 @@ def site_by_ref(db: Session, value: Any):
         row = db.execute(select(Site).where((Site.indicatif == text) | (Site.name == text))).scalar_one_or_none()
         if row:
             return row
-        for site in db.execute(select(Site)).scalars().all():
-            plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
-            legacy = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
-            refs = [legacy.get("id"), legacy.get("backendId"), legacy.get("indicatif"), plan.get("id"), plan.get("backendId"), plan.get("indicatif")]
-            if any(str(ref) == text for ref in refs if ref not in (None, "", "None", "undefined", "null")):
-                return site
     return None
 
 
