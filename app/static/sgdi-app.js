@@ -33819,7 +33819,7 @@ try{
     if(send)send.disabled=true;
     const typingEl=aiAppendMessage("…","ai ai-typing");
     try{
-      const data=await sgdiApi("/assistant/chat",{
+      const data=await sgdiApi("/assistant/agent",{
         method:"POST",
         legacy:false,
         body:{message:msg,history:aiHistory.slice(-10,-1),context:aiCurrentContext()}
