@@ -33459,18 +33459,18 @@ function renderPointageSaisieAuto(){
       else if(ptIsAbsencePayrollCode(code))nA+=ptCodeAbsencePayrollValue(code);
       else if(code==="M")nM++;else if(code==="S")nS++;else if(code==="C")nC++;else if(code==="R")nR++;
       const ci=POINTAGE_CODES[code];const bg=ci?ci.bg:(we?"#dbeafe":"");const fg=ci?ci.color:(we?"#1e40af":"#94a3b8");
-      return`<td style="border:1px solid #e2e8f0;padding:0;width:24px;min-width:24px;max-width:24px;background:${bg};text-align:center;color:${fg};font-weight:800;font-family:ui-monospace,monospace;font-size:8px;line-height:11px">${code||"·"}</td>`;
+      return`<td style="border:1px solid #e2e8f0;padding:0;width:24px;min-width:24px;max-width:24px;background:${bg};text-align:center;color:${fg};font-weight:800;font-family:ui-monospace,monospace;font-size:7px;line-height:9px;height:18px">${code||"·"}</td>`;
     }).join("");
     return`<tr>
-      <td style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:0;z-index:2;width:34px;min-width:34px;text-align:center;font-weight:800;color:#043970;font-size:9px">${idx+1}</td>
-      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:34px;z-index:1;padding:0 4px;font-size:10px;line-height:13px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:9px;opacity:.7">${escapeHTML(a.matricule||"")}</span></td>
+      <td style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:0;z-index:2;width:34px;min-width:34px;text-align:center;font-weight:800;color:#043970;font-size:8px;line-height:9px;height:18px">${idx+1}</td>
+      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:34px;z-index:1;padding:0 3px;font-size:9px;line-height:10px;height:18px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:8px;opacity:.7">${escapeHTML(a.matricule||"")}</span></td>
       ${cells}
-      <td style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;text-align:center;font-weight:700;font-size:8px;width:22px">${nP}</td>
-      <td style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;text-align:center;font-weight:700;font-size:8px;width:22px">${nA}</td>
-      <td style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;text-align:center;font-weight:700;font-size:8px;width:22px">${nM}</td>
-      <td style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;text-align:center;font-weight:700;font-size:8px;width:22px">${nS}</td>
-      <td style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;text-align:center;font-weight:700;font-size:8px;width:22px">${nC}</td>
-      <td style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;text-align:center;font-weight:700;font-size:8px;width:22px">${nR}</td>
+      <td style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nP}</td>
+      <td style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nA}</td>
+      <td style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nM}</td>
+      <td style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nS}</td>
+      <td style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nC}</td>
+      <td style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nR}</td>
     </tr>`;
   }).join("");
   const searchNote=ptCurrentSearch()?` · <span style="color:#043970;font-weight:700">${filtered.length} résultat${filtered.length>1?"s":""} sur ${ag.length}</span>`:"";
