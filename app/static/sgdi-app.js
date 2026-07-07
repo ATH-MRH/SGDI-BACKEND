@@ -1452,6 +1452,7 @@ async function sgdiLoadAuthState(){
         role:u.role||"agent",
         niveau,
         actif:u.is_active!==false,
+        sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):[],
         societesAutorisees:socs,
         structuresAutorisees:structs,
         validationCodeEnabled
@@ -3023,7 +3024,7 @@ async function login(u,p,opt={}){
       const us=await window.SGDI_API.auth.login(u,p);
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
-      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
+      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
       saveSession(session);
       // Tentative de rendu immédiat depuis le cache (même utilisateur, < 2h)
       const loginCached=_bootCacheLoad(session.username);
@@ -3034,7 +3035,7 @@ async function login(u,p,opt={}){
         sgdiPostgresReady=true;
         if(typeof loadCustomSocietes==="function")loadCustomSocietes();
         const localUserC=(db.users||[]).find(x=>x.username===session.username);
-        if(localUserC){session={...session,role:localUserC.role||session.role,niveau:localUserC.niveau||session.niveau,nom:localUserC.nom||session.nom,societesAutorisees:Array.isArray(localUserC.societesAutorisees)?localUserC.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUserC.structuresAutorisees)?localUserC.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+        if(localUserC){session={...session,role:localUserC.role||session.role,niveau:localUserC.niveau||session.niveau,nom:localUserC.nom||session.nom,sitesAutorises:Array.isArray(localUserC.sitesAutorises)&&localUserC.sitesAutorises.length?localUserC.sitesAutorises:(session.sitesAutorises||[]),societesAutorisees:Array.isArray(localUserC.societesAutorisees)?localUserC.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUserC.structuresAutorisees)?localUserC.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
         showDailyValidationCodeIfNeeded();
         sgdiSpeakWelcome();
         location.hash="#/select-societe";route();
@@ -3047,7 +3048,7 @@ async function login(u,p,opt={}){
       db=db||loadDB();
       sgdiPullState({render:true,silent:true,force:true,deferSql:true,deferSecondary:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(e=>console.warn("Synchronisation post-connexion différée",e));
       const localUser=(db.users||[]).find(x=>x.username===session.username);
-      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,sitesAutorises:Array.isArray(localUser.sitesAutorises)&&localUser.sitesAutorises.length?localUser.sitesAutorises:(session.sitesAutorises||[]),societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
       if(opt.adminSystem){setLoginBusy(false);toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       showDailyValidationCodeIfNeeded();
       sgdiSpeakWelcome();
@@ -3085,7 +3086,7 @@ async function validateAdminSystemPassword(form){
     const us=await window.SGDI_API.auth.adminSystemLogin(password);
     window.__SGDI_BACKEND_ENABLED__=true;
     const authUser=us?.user||us;
-    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
+    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
     saveSession(session);
     const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
     if(!loaded){
@@ -30274,6 +30275,7 @@ function adminUserFromApi(u){
     role:u.role||"agent",
     niveau:u.access_level||u.niveau||"",
     actif:u.is_active!==false,
+    sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):(Array.isArray(u.sitesAutorises)?u.sitesAutorises:[]),
     societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:(Array.isArray(u.societesAutorisees)?u.societesAutorisees:[]),
     structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees),
     validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled)
@@ -30283,7 +30285,7 @@ function openAdminUserModal(username){
   username=String(username||"").trim();
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
-  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
+  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
@@ -30304,6 +30306,8 @@ function openAdminUserModal(username){
       <div class="grid grid-2 gap-2">${SOCIETES.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/>${escapeHTML(s)}</label>`).join("")}</div>
       <label class="label mt-3">Structures autorisées (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""}/>${escapeHTML(st.label)}</label>`).join("")}</div>
+      <label class="label mt-3">Sites autorisés (vide = tous)</label>
+      <div class="grid grid-2 gap-2" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(db.sites||[]).filter(s=>s.actif!==false).map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="site_${s.backendId||s.id}" value="${s.backendId||s.id}" ${(u.sitesAutorises||[]).includes(Number(s.backendId||s.id))?"checked":""}/>${escapeHTML((s.societe?s.societe+" · ":"")+(s.nom||s.intitule||"Site #"+(s.backendId||s.id)))}</label>`).join("")||`<div class="text-sm text-slate-500">Aucun site chargé.</div>`}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
   setTimeout(()=>previewUserAccessLevel(selectedNiveau),0);
@@ -30327,7 +30331,7 @@ async function confirmAdminUser(originalUsername){
   if(isAdminSystemSession()&&!(await ensureAdminSystemApiToken("enregistrer un utilisateur"))){if(window._sgdiSaveOverlayShown)closeSaveOverlay();return}
   const fd=new FormData(f);
   const username=String(fd.get("username")||"").trim();const password=String(fd.get("password")||"");
-  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key)};
+  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),sitesAutorises:(db.sites||[]).filter(s=>s.actif!==false&&fd.get("site_"+(s.backendId||s.id))===String(s.backendId||s.id)).map(s=>Number(s.backendId||s.id))};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
@@ -30339,7 +30343,7 @@ async function confirmAdminUser(originalUsername){
     if(!password){toast("Mot de passe requis","error");return}
     let savedUser=null;
     try{
-      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password});
+      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,password});
       if(!savedUser||!savedUser.username)throw new Error("Confirmation PostgreSQL invalide");
     }catch(e){
       const msg=String(e.message||e||"");
@@ -30355,7 +30359,7 @@ async function confirmAdminUser(originalUsername){
     const idx=existing?db.users.findIndex(x=>x.username===existing.username):-1;if(idx<0){toast("Utilisateur introuvable","error");return}
     originalUsername=existing.username;
     try{
-      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,is_active:data.actif};
+      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,is_active:data.actif};
       if(password)payload.password=password;
       await SGDI.auth.updateUser(originalUsername,payload);
     }catch(e){
@@ -30363,7 +30367,7 @@ async function confirmAdminUser(originalUsername){
       if(/not found|introuvable|404/i.test(msg)){
         try{
           if(!password){toast("Mot de passe obligatoire pour recréer l'utilisateur côté backend","error");return}
-          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password});
+          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,password});
           toast("Utilisateur recréé dans PostgreSQL","warning");
         }catch(createErr){
           const createMsg=String(createErr.message||createErr||"");
@@ -32198,7 +32202,7 @@ function fpqRelieveDueWithoutPointage(f){
   return now.getHours()*60+now.getMinutes()>=((+m[1]||0)*60+(+m[2]||0));
 }
 const POINTAGE_TABS=[["feuille","📋 Feuille quotidienne"],["saisie","📝 Saisie manuelle"],["auto","🤖 Saisie automatique"],["recap","👤 Récap par agent"],["societe","🏢 Récap par société"],["stats","📈 Statistiques"],["legende","🎨 Légende & codes"],["qr","📲 QR par site"]];
-function isSupOrUser(){return String(session?.username||"").trim().toUpperCase()==="SUP-OR"}
+function isSupOrUser(){return Array.isArray(session?.sitesAutorises)&&session.sitesAutorises.length>0}
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.societe||currentStructureSocieteFilter?.()||""}
 function ptCurrentSearch(){return sessionStorage.getItem("ptSearch")||""}
@@ -32244,8 +32248,10 @@ function employeeIsPointageEligible(a,soc){
   return !soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
 }
 function pointageEligibleAgents(soc){
+  const authorizedSiteIds=Array.isArray(session?.sitesAutorises)&&session.sitesAutorises.length?new Set(session.sitesAutorises.map(String)):null;
   const list=(db.agents||[])
     .filter(a=>employeeIsPointageEligible(a,soc))
+    .filter(a=>!authorizedSiteIds||authorizedSiteIds.has(String(a.affectationCourante?.siteBackendId||"")))
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   if(list.length){
     window.__pointageEligibleStableAgentsBySoc=window.__pointageEligibleStableAgentsBySoc||{};
