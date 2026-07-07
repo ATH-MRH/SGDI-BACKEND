@@ -13,7 +13,8 @@ router = APIRouter(dependencies=[Depends(current_user)])
 
 
 def _list_collection(db: Session, name: str, user: Any = None) -> list[Any]:
-    data = service.get_collection(db, name, user)
+    data = service.get_collection(db, name)
+    data = service.scope_collection_for_user(name, data, user)
     return data if isinstance(data, list) else []
 
 

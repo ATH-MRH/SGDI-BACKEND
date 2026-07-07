@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
     allow_public_registration: bool = False
     cors_allowed_origins: str | None = None
+    # Noms d'hôte qui servent le Portail RH mobile (séparés par des virgules).
+    # Permet d'ajouter un domaine de test (ex. portail-rh-test.irongs.com) sans toucher au code.
+    portal_hostnames: str = "portail-rh.irongs.com"
     startup_maintenance_enabled: bool = False
     public_employee_pages_require_token: bool = True
     max_photo_upload_bytes: int = 5_000_000

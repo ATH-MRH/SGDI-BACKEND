@@ -423,14 +423,22 @@ def _local_ipv4_addresses() -> list[str]:
     return addresses
 
 
+def _portal_hostnames() -> set[str]:
+    return {h.strip().lower() for h in str(settings.portal_hostnames or "").split(",") if h.strip()}
+
+
+def _is_portal_host(host: str) -> bool:
+    return host.split(":")[0].lower() in _portal_hostnames()
+
+
 def _portal_mobile_urls(request: Request) -> list[str]:
     scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
     host = request.headers.get("host", "").split(":")[0].lower()
     port = request.url.port
     port_part = f":{port}" if port and port not in (80, 443) else ""
     urls: list[str] = []
-    if host in ("portail-rh.irongs.com", "drh.irongs.com"):
-        urls.append("https://portail-rh.irongs.com")
+    if _is_portal_host(host) or host == "drh.irongs.com":
+        urls.append(f"https://{host}" if _is_portal_host(host) else "https://portail-rh.irongs.com")
     else:
         urls.append(str(request.url_for("portal_rh_mobile")))
     for ip in _local_ipv4_addresses():
@@ -977,7 +985,7 @@ def _build_index_html() -> str:
 @app.get("/", include_in_schema=False)
 def frontend(request: Request) -> HTMLResponse:
     host = request.headers.get("host", "").split(":")[0].lower()
-    if host == "portail-rh.irongs.com":
+    if _is_portal_host(host):
         return FileResponse(
             STATIC_DIR / "portail-rh-bilingue.html",
             media_type="text/html; charset=utf-8",

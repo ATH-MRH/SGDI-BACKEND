@@ -17,6 +17,7 @@ COPY app ./app
 COPY scripts ./scripts
 COPY migrations ./migrations
 COPY alembic.ini .
+COPY gunicorn.conf.py .
 COPY start.sh .
 
 RUN useradd --create-home --shell /usr/sbin/nologin sgdi \

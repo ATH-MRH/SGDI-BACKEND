@@ -13,6 +13,12 @@ services:
       STARTUP_MAINTENANCE_ENABLED: ${STARTUP_MAINTENANCE_ENABLED:-false}
       PUBLIC_EMPLOYEE_PAGES_REQUIRE_TOKEN: ${PUBLIC_EMPLOYEE_PAGES_REQUIRE_TOKEN:-true}
       MAX_PHOTO_UPLOAD_BYTES: ${MAX_PHOTO_UPLOAD_BYTES:-5000000}
+      # Répertoire des photos/fichiers uploadés (monté sur un volume persistant ci-dessous)
+      SGDI_UPLOADS_DIR: /app/uploads
+      # Noms d'hôte servant le Portail RH (ajouter le sous-domaine de test si besoin)
+      PORTAL_HOSTNAMES: ${PORTAL_HOSTNAMES:-portail-rh.irongs.com}
+      # Nombre de workers Gunicorn (vide = valeur par défaut de gunicorn.conf.py)
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-}
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:?}
       JWT_SECRET: ${JWT_SECRET:?}
       JWT_ALGORITHM: HS256
@@ -21,6 +27,9 @@ services:
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
       ADMIN_SYSTEM_USERNAME: ${ADMIN_SYSTEM_USERNAME:-}
       ADMIN_SYSTEM_PASSWORD: ${ADMIN_SYSTEM_PASSWORD:-}
+    volumes:
+      # Photos et fichiers uploadés : DOIT être persistant, sinon perte au redéploiement.
+      - sgdi_uploads:/app/uploads
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).read()\""]
       interval: 30s
@@ -33,7 +42,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16
+    image: postgres:17-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:?}
       POSTGRES_USER: ${POSTGRES_USER:?}
@@ -47,5 +56,22 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # Tunnel Cloudflare : expose l'app en HTTPS sans ouvrir de port ni IP publique fixe.
+  # Activer avec :  docker compose --profile tunnel up -d
+  # TUNNEL_TOKEN se récupère dans le dashboard Cloudflare Zero Trust (Tunnels).
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?}
+    depends_on:
+      - sgdi
+    restart: unless-stopped
+    profiles: ["tunnel"]
+
 volumes:
   sgdi_postgres_data:
+  # Nom fixe (non préfixé par le projet) pour que les scripts de restauration/sauvegarde
+  # puissent référencer le volume directement via `docker run -v sgdi_uploads:...`.
+  sgdi_uploads:
+    name: sgdi_uploads
