@@ -33682,6 +33682,18 @@ try{
 
   function aiMount(){
     document.getElementById("atlas-ai-widget")?.remove();
+    const host=document.createElement("div");
+    host.id="atlas-ai-widget";
+    const fab=document.createElement("button");
+    fab.id="ai-fab";
+    fab.className="ai-fab";
+    fab.type="button";
+    fab.title="Assistant ATLAS IA";
+    fab.setAttribute("aria-label","Ouvrir l'assistant ATLAS");
+    fab.innerHTML="🤖";
+    fab.onclick=function(){window.aiToggle();};
+    host.appendChild(fab);
+    document.body.appendChild(host);
   }
 
   window.aiToggle=function(){
