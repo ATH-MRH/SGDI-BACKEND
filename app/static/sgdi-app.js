@@ -1129,9 +1129,20 @@ async function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   try{
-    const employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
+    const scopeNorm=opt.society?normalizeSocieteName(opt.society):"";
+    let employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
+    if(opt.society&&Array.isArray(employees)&&employees.length===0&&sgdiBackendEmployeeTotalForDisplay(opt.society)>0){
+      employees=await window.SGDI_API.employees.list({});
+    }
     if(!Array.isArray(employees))return null;
-    db.agents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
+    const backendAgents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
+    if(scopeNorm){
+      const previous=(db.agents||[]).filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
+      const scoped=backendAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
+      db.agents=dedupeEmployeesByBackendId([...previous,...scoped]);
+    }else{
+      db.agents=backendAgents;
+    }
     normalizeEmployeeCodesInDB();
     if(opt.render&&typeof render==="function")render();
     if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
@@ -1259,12 +1270,18 @@ function sgdiEnsureEmployeesForDisplay(options){
   const opt=options||{};
   if(sgdiEmployeesDisplayLoading||!sgdiBackendShouldUse()||!sgdiAuthToken()||!window.SGDI_API?.employees?.list)return null;
   const scopeSoc=opt.society||"";
-  const localCount=(db.agents||[]).filter(a=>!scopeSoc||a.societe===scopeSoc).length;
+  const scopeNorm=scopeSoc?normalizeSocieteName(scopeSoc):"";
+  const localRows=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
+  const localCount=localRows.length;
+  const localEligible=typeof employeeIsPointageEligible==="function"
+    ?localRows.filter(a=>employeeIsPointageEligible(a,scopeSoc)).length
+    :localCount;
   const backendCount=sgdiBackendEmployeeTotalForDisplay(scopeSoc);
-  if(localCount>0||(!opt.force&&backendCount<=0))return null;
+  if(localCount>0&&(localEligible>0||backendCount<=0))return null;
+  if(!opt.force&&backendCount<=0)return null;
   sgdiEmployeesDisplayLoading=true;
   return sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
-    const count=(rows||[]).filter(a=>!scopeSoc||a.societe===scopeSoc).length;
+    const count=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm).length;
     if(count>0){
       if(typeof renderView==="function")renderView();
       else if(typeof render==="function")render();
