@@ -686,11 +686,7 @@ def _dispatch(name: str, tool_input: dict[str, Any], db: Session, user: User) ->
 # --------------------------------------------------------------------------- #
 # Boucle agentique
 # --------------------------------------------------------------------------- #
-def run_agent(db: Session, user: User, message: str, history: list[dict[str, Any]] | None = None) -> str:
-    """Exécute une requête via l'agent Claude en mode lecture seule. Lève en cas d'erreur API."""
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+def _build_system_prompt(db: Session, user: User) -> str:
     system_prompt = SYSTEM_PROMPT + "\n\n" + _now_context()
     memory = _load_memory(db, user)
     if memory:
@@ -698,18 +694,22 @@ def run_agent(db: Session, user: User, message: str, history: list[dict[str, Any
             "\n\nMÉMOIRE (ce que l'utilisateur t'a demandé de retenir — tiens-en compte) :\n"
             + "\n".join("- " + m for m in memory)
         )
-    messages: list[dict[str, Any]] = list(history or [])[-10:]
-    messages.append({"role": "user", "content": message})
+    return system_prompt
 
+
+def _run_claude_agent(db: Session, user: User, message: str, history: list, system_prompt: str) -> str:
+    """Boucle agentique avec Claude (Anthropic). Lève en cas d'erreur API/import."""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    messages: list[dict[str, Any]] = list(history)
+    messages.append({"role": "user", "content": message})
     used_tools: list[str] = []
     response = None
     for _ in range(MAX_TOOL_ITERATIONS):
         response = client.messages.create(
-            model=settings.assistant_agent_model,
-            max_tokens=2048,
-            system=system_prompt,
-            tools=TOOLS,
-            messages=messages,
+            model=settings.assistant_agent_model, max_tokens=2048,
+            system=system_prompt, tools=TOOLS, messages=messages,
         )
         if response.stop_reason != "tool_use":
             break
@@ -721,13 +721,66 @@ def run_agent(db: Session, user: User, message: str, history: list[dict[str, Any
                 output = _dispatch(block.name, block.input, db, user)
                 tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
         messages.append({"role": "user", "content": tool_results})
-
-    logger.info(
-        "Agent ATLAS user=%s question=%r outils=%s",
-        getattr(user, "username", "?"), (message or "")[:160], used_tools,
-    )
-
+    logger.info("Agent ATLAS (Claude) user=%s outils=%s", getattr(user, "username", "?"), used_tools)
     if response is None:
         return "Je n'ai pas pu traiter la demande."
     text = "".join(b.text for b in response.content if getattr(b, "type", None) == "text").strip()
     return text or "Je n'ai pas trouvé de réponse à cette question."
+
+
+def _openai_tools() -> list[dict[str, Any]]:
+    return [
+        {"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}}
+        for t in TOOLS
+    ]
+
+
+def _run_ollama_agent(db: Session, user: User, message: str, history: list, system_prompt: str) -> str:
+    """Repli sur un modèle local (gpt-oss via Ollama, API compatible OpenAI). Illimité, hors-facturation."""
+    import httpx
+
+    url = settings.ollama_base_url.rstrip("/") + "/v1/chat/completions"
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    messages.extend(list(history))
+    messages.append({"role": "user", "content": message})
+    tools = _openai_tools()
+    used_tools: list[str] = []
+    last_text = ""
+    with httpx.Client(timeout=180) as client:
+        for _ in range(MAX_TOOL_ITERATIONS):
+            resp = client.post(url, json={
+                "model": settings.ollama_model, "messages": messages,
+                "tools": tools, "tool_choice": "auto", "stream": False,
+            })
+            resp.raise_for_status()
+            msg = resp.json()["choices"][0]["message"]
+            tool_calls = msg.get("tool_calls") or []
+            if not tool_calls:
+                last_text = msg.get("content") or ""
+                break
+            messages.append({"role": "assistant", "content": msg.get("content") or "", "tool_calls": tool_calls})
+            for call in tool_calls:
+                fn = call.get("function", {})
+                name = fn.get("name", "")
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except Exception:
+                    args = {}
+                used_tools.append(name)
+                output = _dispatch(name, args, db, user)
+                messages.append({"role": "tool", "tool_call_id": call.get("id"), "content": output})
+    logger.info("Agent ATLAS (repli %s) user=%s outils=%s", settings.ollama_model, getattr(user, "username", "?"), used_tools)
+    return last_text.strip() or "Je n'ai pas trouvé de réponse à cette question."
+
+
+def run_agent(db: Session, user: User, message: str, history: list[dict[str, Any]] | None = None) -> str:
+    """Exécute une requête : Claude en priorité, repli automatique sur le modèle local si échec."""
+    system_prompt = _build_system_prompt(db, user)
+    hist = list(history or [])[-10:]
+    try:
+        return _run_claude_agent(db, user, message, hist, system_prompt)
+    except Exception as exc:
+        if not settings.assistant_fallback_enabled:
+            raise
+        logger.warning("Claude indisponible (%s) — repli sur %s", exc, settings.ollama_model)
+        return _run_ollama_agent(db, user, message, hist, system_prompt)

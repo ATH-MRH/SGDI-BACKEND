@@ -31,9 +31,13 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = None
     assistant_paid_ai_enabled: bool = False
-    # Agent IA ATLAS (Phase 1 : lecture seule). Nécessite ANTHROPIC_API_KEY.
+    # Agent IA ATLAS. Nécessite ANTHROPIC_API_KEY.
     assistant_agent_enabled: bool = False
     assistant_agent_model: str = "claude-opus-4-8"
+    # Repli automatique sur un modèle local (Ollama) si Claude échoue / pour éviter les coûts.
+    assistant_fallback_enabled: bool = True
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "gpt-oss:120b"
 
     contract_email_alerts_enabled: bool = True
     contract_email_alert_window_days: int = 30
