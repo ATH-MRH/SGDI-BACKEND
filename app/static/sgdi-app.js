@@ -17982,18 +17982,21 @@ function renderFiches(view,sub,_skipEnsure){
   const withoutAffectation=counterNumericValue(employeeCounters.withoutAssignment);
   const withoutDotation=counterNumericValue(employeeCounters.withoutEquipment);
   const dotationToReplace=activeBase.filter(agentHasDotationToReplace).length;
+  const suspendedEmployees=counterNumericValue(employeeCounters.suspended);
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const summaryCards=[
     ["Employés actifs",activeEmployees,"Dans l'effectif","#15803d",ratio(activeEmployees,counterRatioBase),"effectif/actifs","users"],
     ["Sans affectation",withoutAffectation,"Site à renseigner","#d97706",ratio(withoutAffectation,counterRatioBase),"effectif/preparation_affectation","pin"],
     ["Sans dotation",withoutDotation,"Matériel à attribuer","#dc2626",ratio(withoutDotation,counterRatioBase),"materiel/dotation","box"],
-    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,counterRatioBase),"materiel/dotation","refresh"]
+    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,counterRatioBase),"materiel/dotation","refresh"],
+    ["Employés suspendus",suspendedEmployees,"Suspension en cours","#dc2626",ratio(suspendedEmployees,counterRatioBase),"effectif/suspension","pause"]
   ];
   const metricIcon=type=>({
     users:'<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     pin:'<svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
     box:'<svg viewBox="0 0 24 24"><path d="m21 8-9 5-9-5 9-5 9 5Z"/><path d="m3 8 9 5 9-5v8l-9 5-9-5V8Z"/><path d="M12 13v8"/></svg>',
-    refresh:'<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a9 9 0 1 0 2 8"/></svg>'
+    refresh:'<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a9 9 0 1 0 2 8"/></svg>',
+    pause:'<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>'
   }[type]||'');
   const activeAdvancedFilters=[fpFilter.recruitFrom,fpFilter.recruitTo,fpFilter.ageMin,fpFilter.ageMax].filter(Boolean).length;
   const showFichePrintBadgeActions=session?.transverse!=="ops";
