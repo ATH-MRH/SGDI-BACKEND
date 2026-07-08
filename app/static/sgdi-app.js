@@ -452,30 +452,22 @@ function sgdiEditingBlocksRender(){
 }
 // Compat : ancien nom conservé (référencé ailleurs) = inverse du bloqueur d'édition.
 function sgdiAutoSyncSafe(){return !sgdiEditingBlocksRender();}
-function sgdiCaptureScroll(){
-  try{
-    const se=document.scrollingElement||document.documentElement;
-    const view=document.getElementById("view");
-    return {win:(se&&se.scrollTop)||window.scrollY||0,view:(view&&view.scrollTop)||0};
-  }catch(e){return null;}
-}
-function sgdiRestoreScroll(pos){
-  if(!pos)return;
-  try{
-    const se=document.scrollingElement||document.documentElement;
-    if(se&&pos.win)se.scrollTop=pos.win;
-    const view=document.getElementById("view");
-    if(view&&pos.view)view.scrollTop=pos.view;
-  }catch(e){}
-}
-// Réaffichage automatique en préservant la position de défilement (pas de saut en haut de page).
+// Réaffichage automatique en préservant la position de défilement via le mécanisme natif de l'app
+// (sgdiNextScrollRestore, consommé et nettoyé par renderView) — évite tout saut en haut de page.
+// NB : ne PAS redéfinir sgdiCaptureScroll/sgdiRestoreScroll ici, ces noms existent déjà plus bas
+// (sgdiScrollSnapshot/sgdiRestoreScroll) et une redéfinition les écraserait.
 function sgdiAutoRender(){
-  const pos=sgdiCaptureScroll();
   sgdiPendingAutoRender=false;
   sgdiPendingAutoRenderReason="";
   sgdiClearRefreshAvailable();
-  if(typeof render==="function")render();
-  requestAnimationFrame(()=>sgdiRestoreScroll(pos));
+  if(typeof render!=="function")return;
+  try{
+    if(typeof sgdiScrollSnapshot==="function"){
+      sgdiNextScrollRestore=sgdiScrollSnapshot();
+      sgdiResetViewScroll=false;
+    }
+  }catch(e){}
+  render();
 }
 async function sgdiAutoSync(reason){
   reason=reason||"Nouvelles données";

@@ -876,6 +876,11 @@ def _events_signature() -> str:
         "invoices",
         "payments",
         "cash_entries",
+        "ops_movements",
+        "incidents",
+        "site_posts",
+        "advances",
+        "credit_notes",
     ]
     with SessionLocal() as db:
         parts: list[str] = []
