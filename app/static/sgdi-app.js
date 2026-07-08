@@ -1129,9 +1129,20 @@ async function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   try{
-    const employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
+    const scopeNorm=opt.society?normalizeSocieteName(opt.society):"";
+    let employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
+    if(opt.society&&Array.isArray(employees)&&employees.length===0&&sgdiBackendEmployeeTotalForDisplay(opt.society)>0){
+      employees=await window.SGDI_API.employees.list({});
+    }
     if(!Array.isArray(employees))return null;
-    db.agents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
+    const backendAgents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
+    if(scopeNorm){
+      const previous=(db.agents||[]).filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
+      const scoped=backendAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
+      db.agents=dedupeEmployeesByBackendId([...previous,...scoped]);
+    }else{
+      db.agents=backendAgents;
+    }
     normalizeEmployeeCodesInDB();
     if(opt.render&&typeof render==="function")render();
     if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
@@ -1259,12 +1270,18 @@ function sgdiEnsureEmployeesForDisplay(options){
   const opt=options||{};
   if(sgdiEmployeesDisplayLoading||!sgdiBackendShouldUse()||!sgdiAuthToken()||!window.SGDI_API?.employees?.list)return null;
   const scopeSoc=opt.society||"";
-  const localCount=(db.agents||[]).filter(a=>!scopeSoc||a.societe===scopeSoc).length;
+  const scopeNorm=scopeSoc?normalizeSocieteName(scopeSoc):"";
+  const localRows=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
+  const localCount=localRows.length;
+  const localEligible=typeof employeeIsPointageEligible==="function"
+    ?localRows.filter(a=>employeeIsPointageEligible(a,scopeSoc)).length
+    :localCount;
   const backendCount=sgdiBackendEmployeeTotalForDisplay(scopeSoc);
-  if(localCount>0||(!opt.force&&backendCount<=0))return null;
+  if(localCount>0&&(localEligible>0||backendCount<=0))return null;
+  if(!opt.force&&backendCount<=0)return null;
   sgdiEmployeesDisplayLoading=true;
   return sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
-    const count=(rows||[]).filter(a=>!scopeSoc||a.societe===scopeSoc).length;
+    const count=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm).length;
     if(count>0){
       if(typeof renderView==="function")renderView();
       else if(typeof render==="function")render();
@@ -1435,6 +1452,7 @@ async function sgdiLoadAuthState(){
         role:u.role||"agent",
         niveau,
         actif:u.is_active!==false,
+        sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):[],
         societesAutorisees:socs,
         structuresAutorisees:structs,
         validationCodeEnabled
@@ -3007,7 +3025,7 @@ async function login(u,p,opt={}){
       const us=await window.SGDI_API.auth.login(u,p);
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
-      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
+      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
       saveSession(session);
       // Tentative de rendu immédiat depuis le cache (même utilisateur, < 2h)
       const loginCached=_bootCacheLoad(session.username);
@@ -3018,7 +3036,7 @@ async function login(u,p,opt={}){
         sgdiPostgresReady=true;
         if(typeof loadCustomSocietes==="function")loadCustomSocietes();
         const localUserC=(db.users||[]).find(x=>x.username===session.username);
-        if(localUserC){session={...session,role:localUserC.role||session.role,niveau:localUserC.niveau||session.niveau,nom:localUserC.nom||session.nom,societesAutorisees:Array.isArray(localUserC.societesAutorisees)?localUserC.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUserC.structuresAutorisees)?localUserC.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+        if(localUserC){session={...session,role:localUserC.role||session.role,niveau:localUserC.niveau||session.niveau,nom:localUserC.nom||session.nom,sitesAutorises:Array.isArray(localUserC.sitesAutorises)&&localUserC.sitesAutorises.length?localUserC.sitesAutorises:(session.sitesAutorises||[]),societesAutorisees:Array.isArray(localUserC.societesAutorisees)?localUserC.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUserC.structuresAutorisees)?localUserC.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
         showDailyValidationCodeIfNeeded();
         sgdiSpeakWelcome();
         location.hash="#/select-societe";route();
@@ -3031,7 +3049,7 @@ async function login(u,p,opt={}){
       db=db||loadDB();
       sgdiPullState({render:true,silent:true,force:true,deferSql:true,deferSecondary:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(e=>console.warn("Synchronisation post-connexion différée",e));
       const localUser=(db.users||[]).find(x=>x.username===session.username);
-      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
+      if(localUser){session={...session,role:localUser.role||session.role,niveau:localUser.niveau||session.niveau,nom:localUser.nom||session.nom,sitesAutorises:Array.isArray(localUser.sitesAutorises)&&localUser.sitesAutorises.length?localUser.sitesAutorises:(session.sitesAutorises||[]),societesAutorisees:Array.isArray(localUser.societesAutorisees)?localUser.societesAutorisees:(session.societesAutorisees||[]),structuresAutorisees:normalizeStructureList(Array.isArray(localUser.structuresAutorisees)?localUser.structuresAutorisees:(session.structuresAutorisees||[]))};saveSession(session)}
       if(opt.adminSystem){setLoginBusy(false);toast("Administration système : utilisez le bouton dédié et le compte administrateur","error");return}
       showDailyValidationCodeIfNeeded();
       sgdiSpeakWelcome();
@@ -3069,7 +3087,7 @@ async function validateAdminSystemPassword(form){
     const us=await window.SGDI_API.auth.adminSystemLogin(password);
     window.__SGDI_BACKEND_ENABLED__=true;
     const authUser=us?.user||us;
-    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
+    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
     saveSession(session);
     const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
     if(!loaded){
@@ -30258,6 +30276,7 @@ function adminUserFromApi(u){
     role:u.role||"agent",
     niveau:u.access_level||u.niveau||"",
     actif:u.is_active!==false,
+    sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):(Array.isArray(u.sitesAutorises)?u.sitesAutorises:[]),
     societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:(Array.isArray(u.societesAutorisees)?u.societesAutorisees:[]),
     structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees),
     validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled)
@@ -30267,7 +30286,7 @@ function openAdminUserModal(username){
   username=String(username||"").trim();
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
-  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
+  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
@@ -30288,6 +30307,8 @@ function openAdminUserModal(username){
       <div class="grid grid-2 gap-2">${SOCIETES.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/>${escapeHTML(s)}</label>`).join("")}</div>
       <label class="label mt-3">Structures autorisées (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""}/>${escapeHTML(st.label)}</label>`).join("")}</div>
+      <label class="label mt-3">Sites autorisés (vide = tous)</label>
+      <div class="grid grid-2 gap-2" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{const seen=new Set();return(db.sites||[]).filter(s=>{const k=String(s.backendId||s.id||"");if(!k||seen.has(k))return false;seen.add(k);return s.actif!==false;}).map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="site_${s.backendId||s.id}" value="${s.backendId||s.id}" ${(u.sitesAutorises||[]).includes(Number(s.backendId||s.id))?"checked":""}/>${escapeHTML((s.societe?s.societe+" · ":"")+(s.nom||s.intitule||"Site #"+(s.backendId||s.id)))}</label>`).join("")||`<div class="text-sm text-slate-500">Aucun site chargé.</div>`})()}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
   setTimeout(()=>previewUserAccessLevel(selectedNiveau),0);
@@ -30311,7 +30332,7 @@ async function confirmAdminUser(originalUsername){
   if(isAdminSystemSession()&&!(await ensureAdminSystemApiToken("enregistrer un utilisateur"))){if(window._sgdiSaveOverlayShown)closeSaveOverlay();return}
   const fd=new FormData(f);
   const username=String(fd.get("username")||"").trim();const password=String(fd.get("password")||"");
-  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key)};
+  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),sitesAutorises:(db.sites||[]).filter(s=>s.actif!==false&&fd.get("site_"+(s.backendId||s.id))===String(s.backendId||s.id)).map(s=>Number(s.backendId||s.id))};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
@@ -30323,7 +30344,7 @@ async function confirmAdminUser(originalUsername){
     if(!password){toast("Mot de passe requis","error");return}
     let savedUser=null;
     try{
-      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password});
+      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,password});
       if(!savedUser||!savedUser.username)throw new Error("Confirmation PostgreSQL invalide");
     }catch(e){
       const msg=String(e.message||e||"");
@@ -30339,7 +30360,7 @@ async function confirmAdminUser(originalUsername){
     const idx=existing?db.users.findIndex(x=>x.username===existing.username):-1;if(idx<0){toast("Utilisateur introuvable","error");return}
     originalUsername=existing.username;
     try{
-      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,is_active:data.actif};
+      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,is_active:data.actif};
       if(password)payload.password=password;
       await SGDI.auth.updateUser(originalUsername,payload);
     }catch(e){
@@ -30347,7 +30368,7 @@ async function confirmAdminUser(originalUsername){
       if(/not found|introuvable|404/i.test(msg)){
         try{
           if(!password){toast("Mot de passe obligatoire pour recréer l'utilisateur côté backend","error");return}
-          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,password});
+          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,password});
           toast("Utilisateur recréé dans PostgreSQL","warning");
         }catch(createErr){
           const createMsg=String(createErr.message||createErr||"");
@@ -32182,6 +32203,7 @@ function fpqRelieveDueWithoutPointage(f){
   return now.getHours()*60+now.getMinutes()>=((+m[1]||0)*60+(+m[2]||0));
 }
 const POINTAGE_TABS=[["feuille","📋 Feuille quotidienne"],["saisie","📝 Saisie manuelle"],["auto","🤖 Saisie automatique"],["recap","👤 Récap par agent"],["societe","🏢 Récap par société"],["stats","📈 Statistiques"],["legende","🎨 Légende & codes"],["qr","📲 QR par site"]];
+function isSupOrUser(){return Array.isArray(session?.sitesAutorises)&&session.sitesAutorises.length>0}
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.societe||currentStructureSocieteFilter?.()||""}
 function ptCurrentSearch(){return sessionStorage.getItem("ptSearch")||""}
@@ -32227,8 +32249,10 @@ function employeeIsPointageEligible(a,soc){
   return !soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
 }
 function pointageEligibleAgents(soc){
+  const authorizedSiteIds=Array.isArray(session?.sitesAutorises)&&session.sitesAutorises.length?new Set(session.sitesAutorises.map(String)):null;
   const list=(db.agents||[])
     .filter(a=>employeeIsPointageEligible(a,soc))
+    .filter(a=>!authorizedSiteIds||authorizedSiteIds.has(String(a.affectationCourante?.siteBackendId||"")))
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   if(list.length){
     window.__pointageEligibleStableAgentsBySoc=window.__pointageEligibleStableAgentsBySoc||{};
@@ -32287,7 +32311,17 @@ function ptGuardEmployeePointage(agentId,date){
   if(msg){toast(msg,"error");return true}
   return false;
 }
-function ptSetCell(agentId,ym,day,code){const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();saveDB()}
+async function ptPersistCell(agentId,ym,day,code){
+  try{
+    await sgdiRunLegacyAction("save-pointage-cell",{data:{agentId,periode:ym,day:String(day).padStart(2,"0"),code:code||""}});
+    uiSaveState("Sauvegardé","success");
+  }catch(e){
+    toast("Pointage non enregistré : "+(e.message||e),"error");
+    await sgdiPullState({silent:true,force:true}).catch(()=>null);
+    renderView();
+  }
+}
+function ptSetCell(agentId,ym,day,code){const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();ptPersistCell(agentId,ym,day,code)}
 function ptPresenceAgentId(f){
   const refs=[f?.agentId,f?.agentBackendId,f?.employee_id,f?.matricule].map(x=>String(x||"")).filter(Boolean);
   const a=(db.agents||[]).find(ag=>refs.includes(String(ag.id||""))||refs.includes(String(ag.backendId||""))||refs.includes(String(ag.matricule||"")));
@@ -33018,7 +33052,7 @@ function ptOpenCodePicker(agentId,ym,day){
 }
 function ptPickCode(agentId,ym,day,code){ptSetCell(agentId,ym,day,code);closeModal();renderView()}
 function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);renderView()}
-function ptClearRow(agentId,ym){const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.updatedAt=new Date().toISOString();saveDB()}renderView()}
+async function ptClearRow(agentId,ym){const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
 function ptCellHTML(agentId,ym,day,code,isWeekend){const c=POINTAGE_CODES[code];const bg=c?c.bg:(isWeekend?"#dbeafe":"");const fg=c?c.color:(isWeekend?"#1e40af":"#64748b");const txt=code||"·";return`<td class="text-center align-middle" style="border:1px solid #e2e8f0;padding:0;width:28px;min-width:28px;max-width:28px;background:${bg}"><button onclick="ptOpenCodePicker('${agentId}','${ym}',${day})" title="Cliquer pour choisir le code" style="width:100%;height:28px;border:0;background:transparent;color:${fg};font-weight:800;font-family:ui-monospace,monospace;cursor:pointer;font-size:8px;line-height:1">${txt}</button></td>`}
 function ptDonutSVG(slices,total,cx,cy,r,ir){
@@ -33049,8 +33083,13 @@ function renderPointageDashboard(isDrh){
   const fpqRate=ag.length?Math.round(fpqPresents*100/ag.length):0;
   const unclosed=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(Boolean))].filter(d=>!fpqIsCloture(d));
   const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||""}</div></button>`;
-  const codeOrder=["P","A","M","C","S","R","AB","A1","A2","A3","F1","F2","F3","P/F1","P/F2","P/F3"];
-  const codeCards=codeOrder.filter(k=>POINTAGE_CODES[k]&&tot[k]!==undefined).map(k=>{const v=POINTAGE_CODES[k];return`<button type="button" onclick="navigate('pointage/stats')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${tot[k]||0}</b></button>`}).join("");
+  const codeCard=(k)=>{const v=POINTAGE_CODES[k];return v?`<button type="button" onclick="navigate('pointage/stats')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${tot[k]||0}</b></button>`:""};
+  const codeGroup=(title,codes)=>`<section class="pointage-code-group"><div class="pointage-code-group-title">${escapeHTML(title)}</div><div class="pointage-code-grid">${codes.map(codeCard).join("")}</div></section>`;
+  const codeCards=`<div class="pointage-code-groups">
+    ${codeGroup("Codes principaux",["P","A","M","C","S","R"])}
+    ${codeGroup("Absences renforcées",["AB","A1","A2","A3"])}
+    ${codeGroup("Récupération / maintien",["F1","F2","F3","P/F1","P/F2","P/F3"])}
+  </div>`;
   // ── Statistiques card ──
   const baseCodes=["P","A","M","S","C","R","AB"];
   const totalBase=baseCodes.reduce((s,k)=>s+(tot[k]||0),0);
@@ -33106,7 +33145,7 @@ function renderPointageDashboard(isDrh){
       ${kpi("Taux présence",tauxP+"%","pointage/stats",tauxP>=80?"#16a34a":"#f59e0b","Sur saisies du mois")}
       ${isDrh?"":kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"#dc2626":"#16a34a","Feuilles à contrôler")}
     </div>
-    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><h3 class="font-black mb-3">Répartition des codes</h3><div class="pointage-code-grid">${codeCards}</div></div>${statsCard}</div>`;
+    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><div class="flex items-center justify-between gap-2 mb-3"><h3 class="font-black">Répartition des codes</h3><span class="text-[10px] uppercase font-black text-slate-400">par famille</span></div>${codeCards}</div>${statsCard}</div>`;
 }
 
 // ── QR Tablet Generator — 10s per site ──────────────────────────────────────
@@ -33290,15 +33329,24 @@ function renderFeuillePresentQR(){
   </table></div></div>`;
 }
 
-function renderPointage(view,sub,arg){
+function renderPointage(view,sub,arg,_skipEnsure){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="qr")ptStopQrTabletTimer();
   if(sub!=="feuille")fpqStopLiveRefresh();
-  sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:true});
+  if(!_skipEnsure){
+    const _r=sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:true});
+    if(_r&&typeof _r.then==="function"){
+      view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;
+      _r.then(()=>renderPointage(view,sub,arg,true)).catch(()=>renderPointage(view,sub,arg,true));
+      return;
+    }
+  }
   const isDrh=session?.transverse==="drh";
+  const hideAuto=isSupOrUser();
   if(isDrh&&(sub==="saisie"||sub==="dashboard"))sub="auto";
+  if(hideAuto&&sub==="auto")sub="saisie";
   if(sub==="scan")sub="feuille";
-  const allowedTabs=isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS;
+  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto"));
   const tabsHTML=allowedTabs.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${l}</button>`).join("");
   const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
@@ -33318,7 +33366,7 @@ function renderPointage(view,sub,arg){
 function renderPointageSaisie(){
   const isDrh=session?.transverse==="drh";
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
-  const syncChanged=ptSyncFeuillePresenceMonth(ym);if(syncChanged)saveDB();
+  ptSyncFeuillePresenceMonth(ym);
   const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
@@ -33373,12 +33421,13 @@ function renderPointageSaisie(){
 }
 function renderPointageSaisieAuto(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
-  const abandonChanged=ptNormalizeAbandonsForMonth(ym,soc);if(abandonChanged)saveDB();
+  ptNormalizeAbandonsForMonth(ym,soc);
   const ag=pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
-  const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;return`<th style="border:1px solid #e2e8f0;padding:1px 0;width:24px;min-width:24px;max-width:24px;text-align:center;font-size:7px;font-weight:700;${we?"color:#1e40af;background:#dbeafe":"color:#64748b"}">${String(d).padStart(2,"0")}</th>`;}).join("");
+  const weekdayShort=["D","L","M","Me","J","V","S"];
+  const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;return`<th style="border:1px solid #e2e8f0;padding:1px 0;width:24px;min-width:24px;max-width:24px;text-align:center;font-size:7px;font-weight:700;${we?"color:#1e40af;background:#dbeafe":"color:#64748b"}"><div>${String(d).padStart(2,"0")}</div><div style="font-size:6px;line-height:8px;opacity:.8">${weekdayShort[wd]}</div></th>`;}).join("");
   const fpqGetForAgent=(a,dateStr)=>(db.feuillePresence||[]).find(x=>
     x.date===dateStr&&(
       String(x.agentId||"")===String(a.id||"")||
@@ -33400,7 +33449,7 @@ function renderPointageSaisieAuto(){
   </div>`;
   const filtered=ptFilterAgents(ag);
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
-  const rows=filtered.map(a=>{
+  const rows=filtered.map((a,idx)=>{
     let nP=0,nA=0,nM=0,nS=0,nC=0,nR=0;
     const sheet=ptGetSheet(a.id,ym);
     const cells=Array.from({length:days},(_,i)=>{
@@ -33417,22 +33466,23 @@ function renderPointageSaisieAuto(){
       else if(ptIsAbsencePayrollCode(code))nA+=ptCodeAbsencePayrollValue(code);
       else if(code==="M")nM++;else if(code==="S")nS++;else if(code==="C")nC++;else if(code==="R")nR++;
       const ci=POINTAGE_CODES[code];const bg=ci?ci.bg:(we?"#dbeafe":"");const fg=ci?ci.color:(we?"#1e40af":"#94a3b8");
-      return`<td style="border:1px solid #e2e8f0;padding:0;width:24px;min-width:24px;max-width:24px;background:${bg};text-align:center;color:${fg};font-weight:800;font-family:ui-monospace,monospace;font-size:8px;line-height:11px">${code||"·"}</td>`;
+      return`<td style="border:1px solid #e2e8f0;padding:0;width:24px;min-width:24px;max-width:24px;background:${bg};text-align:center;color:${fg};font-weight:800;font-family:ui-monospace,monospace;font-size:7px;line-height:9px;height:18px">${code||"·"}</td>`;
     }).join("");
     return`<tr>
-      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:0;z-index:1;padding:0 4px;font-size:10px;line-height:13px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:9px;opacity:.7">${escapeHTML(a.matricule||"")}</span></td>
+      <td style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:0;z-index:2;width:34px;min-width:34px;text-align:center;font-weight:800;color:#043970;font-size:8px;line-height:9px;height:18px">${idx+1}</td>
+      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:34px;z-index:1;padding:0 3px;font-size:9px;line-height:10px;height:18px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:8px;opacity:.7">${escapeHTML(a.matricule||"")}</span></td>
       ${cells}
-      <td style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;text-align:center;font-weight:700;font-size:8px;width:22px">${nP}</td>
-      <td style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;text-align:center;font-weight:700;font-size:8px;width:22px">${nA}</td>
-      <td style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;text-align:center;font-weight:700;font-size:8px;width:22px">${nM}</td>
-      <td style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;text-align:center;font-weight:700;font-size:8px;width:22px">${nS}</td>
-      <td style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;text-align:center;font-weight:700;font-size:8px;width:22px">${nC}</td>
-      <td style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;text-align:center;font-weight:700;font-size:8px;width:22px">${nR}</td>
+      <td style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nP}</td>
+      <td style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nA}</td>
+      <td style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nM}</td>
+      <td style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nS}</td>
+      <td style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nC}</td>
+      <td style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nR}</td>
     </tr>`;
   }).join("");
   const searchNote=ptCurrentSearch()?` · <span style="color:#043970;font-weight:700">${filtered.length} résultat${filtered.length>1?"s":""} sur ${ag.length}</span>`:"";
   const tableHTML=`<table class="w-full" id="pt-auto-table" style="border-collapse:collapse;font-size:8px">
-      <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:0;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:22px;text-align:center;font-size:8px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:22px;text-align:center;font-size:8px">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:22px;text-align:center;font-size:8px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:22px;text-align:center;font-size:8px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:22px;text-align:center;font-size:8px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:22px;text-align:center;font-size:8px">R</th></tr></thead>
+      <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 4px;text-align:center;position:sticky;left:0;background:#f1f5f9;z-index:3;width:34px;min-width:34px;white-space:nowrap;font-size:8px">N°</th><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:34px;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:22px;text-align:center;font-size:8px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:22px;text-align:center;font-size:8px">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:22px;text-align:center;font-size:8px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:22px;text-align:center;font-size:8px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:22px;text-align:center;font-size:8px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:22px;text-align:center;font-size:8px">R</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
   return filterBar+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Saisie automatique — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>

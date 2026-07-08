@@ -15,6 +15,7 @@ class User(Base, TimestampMixin):
     access_level: Mapped[str | None] = mapped_column(String(40), nullable=True)
     authorized_societies: Mapped[list | None] = mapped_column(JSON, nullable=True)
     authorized_structures: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    authorized_sites: Mapped[list | None] = mapped_column(JSON, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 

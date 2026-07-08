@@ -43,6 +43,13 @@ def _allowed_societies(user: User) -> list[str]:
     return [_normalize_society(v) for v in values if _normalize_society(v)]
 
 
+def _authorized_site_ids(user: User) -> list[int]:
+    if unrestricted_scope(user):
+        return []
+    values = user.authorized_sites if isinstance(user.authorized_sites, list) else []
+    return [int(v) for v in values if str(v).strip().lstrip("-").isdigit()]
+
+
 def _normalize_society(value: object) -> str:
     text = " ".join(str(value or "").strip().upper().split())
     text = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
@@ -77,6 +84,11 @@ def _ensure_site_allowed(db: Session, user: User, site_id: int | None) -> Site |
     site = db.get(Site, site_id)
     if not site:
         raise HTTPException(status_code=404, detail="Enregistrement introuvable")
+    allowed_ids = _authorized_site_ids(user)
+    if allowed_ids:
+        if site_id not in allowed_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Site non autorisé")
+        return site
     society = _site_society(site)
     if society:
         _ensure_society_allowed(user, society)
@@ -94,6 +106,13 @@ def _ensure_employee_allowed(db: Session, user: User, employee_id: int | None) -
 
 
 def _filter_site_rows(rows: list[Site], user: User, society: str | None = None) -> list[Site]:
+    allowed_ids = _authorized_site_ids(user)
+    if allowed_ids:
+        rows = [row for row in rows if row.id in allowed_ids]
+        if society:
+            norm = _normalize_society(society)
+            rows = [row for row in rows if _normalize_society(_site_society(row)) == norm]
+        return rows
     if society:
         norm = _normalize_society(society)
         return [row for row in rows if _normalize_society(_site_society(row)) == norm]
