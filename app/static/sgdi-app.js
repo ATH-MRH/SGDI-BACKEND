@@ -441,7 +441,13 @@ let sgdiPendingAutoRenderReason="";
 function sgdiEditingBlocksRender(){
   if(document.querySelector(".modal-bg"))return true;
   if(sgdiSaveInFlight||sgdiSaveAgain)return true;
-  if(sgdiFormHasUnsavedChanges&&!sgdiViewModeActive)return true;
+  // Formulaire déverrouillé pour édition (l'utilisateur a cliqué "Modifier") : NE JAMAIS
+  // réafficher par-dessus, sinon on écrase la fiche et le travail en cours. Le réaffichage
+  // se fera tout seul dès que l'utilisateur aura enregistré ou annulé (retour en mode lecture).
+  if(!sgdiViewModeActive)return true;
+  if(sgdiFormHasUnsavedChanges)return true;
+  // Un bouton "Enregistrer"/"Annuler" actif signale un formulaire éditable ouvert.
+  if(document.querySelector(".rh-save-submit:not(:disabled),.rh-save-cancel:not(:disabled)"))return true;
   const el=document.activeElement;
   if(el){
     const tag=String(el.tagName||"").toUpperCase();
@@ -473,9 +479,9 @@ async function sgdiAutoSync(reason){
   reason=reason||"Nouvelles données";
   if(sgdiAutoSyncRunning)return;
   if(!session||!sgdiAuthToken()||!sgdiPostgresReady)return;
-  // Données locales non sauvegardées : ne pas recharger (risque d'écraser la saisie).
-  // On réaffichera automatiquement dès que la sauvegarde sera terminée.
-  if(sgdiDirty){sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;return;}
+  // Saisie/édition en cours : ne rien recharger du tout (ni données, ni affichage) pour ne
+  // jamais écraser le travail. On réessaiera automatiquement dès la fin (enregistré/annulé).
+  if(sgdiDirty||sgdiEditingBlocksRender()){sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;return;}
   sgdiAutoSyncRunning=true;
   try{
     const loaded=await sgdiPullState({silent:true,render:false,force:true});
