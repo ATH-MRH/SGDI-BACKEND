@@ -37,6 +37,7 @@ from app.modules.ops import models as _ops_models  # noqa: F401
 from app.modules.irongs import service as irongs_service
 from app.modules.drh import service as drh_service
 from app.modules.drh.email_alerts import start_contract_email_alert_scheduler, stop_contract_email_alert_scheduler
+from app.modules.assistant.scheduler import start_scheduler as start_assistant_scheduler, stop_scheduler as stop_assistant_scheduler
 from app.modules.accounting import models as _accounting_models  # noqa: F401
 from app.modules.achats import models as _achats_models  # noqa: F401
 from app.modules.ventes import models as _ventes_models  # noqa: F401
@@ -394,11 +395,13 @@ def on_startup() -> None:
         _fix_societe_name()
         _purge_oversized_collections()
     start_contract_email_alert_scheduler()
+    start_assistant_scheduler()
 
 
 @app.on_event("shutdown")
 def on_shutdown() -> None:
     stop_contract_email_alert_scheduler()
+    stop_assistant_scheduler()
 
 
 @app.get("/health")

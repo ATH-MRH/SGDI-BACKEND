@@ -687,6 +687,67 @@ def _tool_generate_report(db: Session, user: User, dataset: str, society: str | 
             "message": f"Rapport Excel prêt ({len(rows)} lignes). Téléchargement : {url}"}
 
 
+# --------------------------------------------------------------------------- #
+# Tâches planifiées (exécutées automatiquement au bon moment)
+# --------------------------------------------------------------------------- #
+def _tool_schedule_task(
+    db: Session, user: User, title: str, instruction: str, frequency: str = "daily",
+    hour: int = 8, minute: int = 0, day_of_week: Any = None, recipient_email: str | None = None,
+) -> dict:
+    from app.modules.assistant import scheduler
+    freq = (frequency or "daily").strip().lower()
+    if freq not in ("daily", "weekly"):
+        freq = "daily"
+    try:
+        hour = max(0, min(23, int(hour)))
+        minute = max(0, min(59, int(minute)))
+    except (TypeError, ValueError):
+        return {"ok": False, "message": "Heure/minute invalides."}
+    instruction = str(instruction or "").strip()
+    if not instruction:
+        return {"ok": False, "message": "Précisez ce que la tâche doit faire."}
+    dow = 0
+    try:
+        if day_of_week not in (None, ""):
+            dow = max(0, min(6, int(day_of_week)))
+    except (TypeError, ValueError):
+        dow = 0
+    task = {
+        "id": f"task-{datetime.now():%Y%m%d%H%M%S%f}",
+        "user": getattr(user, "username", "?"),
+        "title": (title or instruction)[:120],
+        "instruction": instruction[:1000],
+        "frequency": freq, "hour": hour, "minute": minute, "day_of_week": dow,
+        "recipient_email": (recipient_email or None), "active": True,
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "last_run": None, "last_result": None,
+    }
+    try:
+        scheduler.create_task(db, task)
+    except Exception as exc:
+        db.rollback()
+        return {"ok": False, "message": f"Échec programmation : {exc}"}
+    _audit(user, "schedule_task", {"title": task["title"], "freq": freq, "hour": hour})
+    quand = f"chaque {_FR_DAYS[dow]}" if freq == "weekly" else "chaque jour"
+    dest = f" (envoyé à {recipient_email})" if recipient_email else ""
+    return {"ok": True, "message": f"Tâche programmée : « {task['title']} », {quand} à {hour:02d}h{minute:02d}{dest}."}
+
+
+def _tool_list_scheduled_tasks(db: Session, user: User) -> dict:
+    from app.modules.assistant import scheduler
+    uname = getattr(user, "username", "")
+    tasks = [t for t in scheduler.list_tasks(db) if t.get("user") == uname]
+    return {
+        "count": len(tasks),
+        "taches": [
+            {"titre": t.get("title"), "frequence": t.get("frequency"),
+             "heure": f"{int(t.get('hour', 8)):02d}h{int(t.get('minute', 0)):02d}",
+             "active": t.get("active", True), "derniere_execution": t.get("last_run")}
+            for t in tasks
+        ],
+    }
+
+
 # Schémas d'outils exposés à Claude
 TOOLS: list[dict[str, Any]] = [
     {
@@ -889,6 +950,29 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["dataset"],
         },
     },
+    {
+        "name": "schedule_task",
+        "description": "PLANIFIER : programme une tâche récurrente que tu exécuteras automatiquement au bon moment "
+                       "(ex. « chaque lundi 08:00, résume la semaine »). Déduis fréquence/heure/jour de la demande.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Titre court de la tâche"},
+                "instruction": {"type": "string", "description": "Ce que tu devras faire (comme une question à toi-même)."},
+                "frequency": {"type": "string", "description": "daily ou weekly"},
+                "hour": {"type": "integer", "description": "0-23"},
+                "minute": {"type": "integer", "description": "0-59"},
+                "day_of_week": {"type": "integer", "description": "0=lundi … 6=dimanche (si weekly)"},
+                "recipient_email": {"type": "string", "description": "email destinataire du résultat (optionnel)"},
+            },
+            "required": ["instruction"],
+        },
+    },
+    {
+        "name": "list_scheduled_tasks",
+        "description": "Liste les tâches planifiées de l'utilisateur.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
 ]
 
 _DISPATCH = {
@@ -911,6 +995,8 @@ _DISPATCH = {
     "create_leave": _tool_create_leave,
     "create_assignment": _tool_create_assignment,
     "generate_report": _tool_generate_report,
+    "schedule_task": _tool_schedule_task,
+    "list_scheduled_tasks": _tool_list_scheduled_tasks,
 }
 
 
