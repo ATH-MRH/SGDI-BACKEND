@@ -422,7 +422,7 @@ function sgdiScheduleRealtimePull(event){
   sgdiRealtimePullTimer=setTimeout(()=>sgdiRunRealtimePull(event),250);
 }
 async function sgdiRunRealtimePull(event){
-  if(sgdiRealtimePullRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||sgdiDirty)return;
+  if(sgdiRealtimePullRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady)return;
   sgdiRealtimePullRunning=true;
   try{
     await sgdiAutoSync("Nouvelles données enregistrées");
@@ -433,33 +433,83 @@ async function sgdiRunRealtimePull(event){
   }
 }
 let sgdiAutoSyncRunning=false;
-function sgdiAutoSyncSafe(){
-  // Sûr de recharger si aucune fenêtre modale n'est ouverte et l'utilisateur ne saisit pas.
-  if(document.querySelector(".modal-bg"))return false;
-  const tag=(document.activeElement&&document.activeElement.tagName)||"";
-  return !["INPUT","TEXTAREA","SELECT"].includes(tag);
+let sgdiPendingAutoRender=false;
+let sgdiPendingAutoRenderReason="";
+// Le réaffichage n'est bloqué QUE si l'utilisateur est réellement en train de saisir/éditer
+// (fenêtre modale, sauvegarde en cours, formulaire en édition, curseur dans un champ texte).
+// Un simple visualiseur de liste n'est jamais bloqué -> synchro 100% automatique.
+function sgdiEditingBlocksRender(){
+  if(document.querySelector(".modal-bg"))return true;
+  if(sgdiSaveInFlight||sgdiSaveAgain)return true;
+  if(sgdiFormHasUnsavedChanges&&!sgdiViewModeActive)return true;
+  const el=document.activeElement;
+  if(el){
+    const tag=String(el.tagName||"").toUpperCase();
+    if(tag==="INPUT"||tag==="TEXTAREA"||el.closest?.("[contenteditable='true']"))return true;
+  }
+  if(document.querySelector("form[data-dirty='1'],[data-dirty='1']"))return true;
+  return false;
+}
+// Compat : ancien nom conservé (référencé ailleurs) = inverse du bloqueur d'édition.
+function sgdiAutoSyncSafe(){return !sgdiEditingBlocksRender();}
+function sgdiCaptureScroll(){
+  try{
+    const se=document.scrollingElement||document.documentElement;
+    const view=document.getElementById("view");
+    return {win:(se&&se.scrollTop)||window.scrollY||0,view:(view&&view.scrollTop)||0};
+  }catch(e){return null;}
+}
+function sgdiRestoreScroll(pos){
+  if(!pos)return;
+  try{
+    const se=document.scrollingElement||document.documentElement;
+    if(se&&pos.win)se.scrollTop=pos.win;
+    const view=document.getElementById("view");
+    if(view&&pos.view)view.scrollTop=pos.view;
+  }catch(e){}
+}
+// Réaffichage automatique en préservant la position de défilement (pas de saut en haut de page).
+function sgdiAutoRender(){
+  const pos=sgdiCaptureScroll();
+  sgdiPendingAutoRender=false;
+  sgdiPendingAutoRenderReason="";
+  sgdiClearRefreshAvailable();
+  if(typeof render==="function")render();
+  requestAnimationFrame(()=>sgdiRestoreScroll(pos));
 }
 async function sgdiAutoSync(reason){
   reason=reason||"Nouvelles données";
   if(sgdiAutoSyncRunning)return;
   if(!session||!sgdiAuthToken()||!sgdiPostgresReady)return;
-  // Si une saisie/fenêtre est en cours, ne pas perturber : garder le badge.
-  if(sgdiDirty||sgdiHasUnsavedUserWork()||!sgdiAutoSyncSafe()){sgdiMarkRefreshAvailable(reason);return;}
+  // Données locales non sauvegardées : ne pas recharger (risque d'écraser la saisie).
+  // On réaffichera automatiquement dès que la sauvegarde sera terminée.
+  if(sgdiDirty){sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;return;}
   sgdiAutoSyncRunning=true;
   try{
     const loaded=await sgdiPullState({silent:true,render:false,force:true});
     if(loaded){
       try{await sgdiRefreshCountersNow({reason:"auto-sync"});}catch(e){}
-      if(sgdiAutoSyncSafe()&&!sgdiDirty){sgdiClearRefreshAvailable();render();}
-      else sgdiMarkRefreshAvailable(reason);
+      if(sgdiEditingBlocksRender()){
+        // Données fraîches déjà en mémoire ; le réaffichage se fera tout seul dès la fin de la saisie.
+        sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;
+      }else{
+        sgdiAutoRender();
+      }
     }
   }catch(e){
     console.warn("Auto-sync SGDI échouée",e);
-    sgdiMarkRefreshAvailable(reason);
+    sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;
   }finally{
     sgdiAutoSyncRunning=false;
   }
 }
+// Vidange automatique : dès que l'utilisateur a fini de saisir, on synchronise et réaffiche sans aucun clic.
+setInterval(()=>{
+  if(!sgdiPendingAutoRender)return;
+  if(sgdiAutoSyncRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||document.hidden)return;
+  if(sgdiDirty||sgdiEditingBlocksRender())return;
+  sgdiAutoSync(sgdiPendingAutoRenderReason||"Synchronisation");
+},1200);
 function sgdiInstallRealtimeBridge(){
   try{
     if(typeof BroadcastChannel!=="undefined"&&!sgdiRealtimeChannel){
@@ -824,7 +874,7 @@ function sgdiStartMessageRefresh(){
         db=previous;
       }
       if(before!==after){
-        sgdiMarkRefreshAvailable("Nouveaux messages disponibles");
+        await sgdiAutoSync("Nouveaux messages disponibles");
       }
     }catch(e){
       console.warn("Actualisation messagerie SGDI échouée",e);
@@ -929,7 +979,8 @@ async function refreshDemandesPersonnelFromPostgres(options){
       demandesPersonnelLastOpenCount=demandePersonnelOpenCount();
       renderSidebar();
       if(opt.render)renderView();
-      else sgdiMarkRefreshAvailable("Nouvelles demandes personnel disponibles");
+      else if(sgdiEditingBlocksRender()){sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason="Nouvelles demandes personnel disponibles";}
+      else sgdiAutoRender();
       if((newIds.length||demandePersonnelOpenCount()>previousOpen)&&!opt.mute){
         playDemandePersonnelSound();
         if(typeof toast==="function")toast("Nouvelle demande personnel reçue","info");
