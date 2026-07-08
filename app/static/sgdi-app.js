@@ -435,6 +435,7 @@ async function sgdiRunRealtimePull(event){
 let sgdiAutoSyncRunning=false;
 let sgdiPendingAutoRender=false;
 let sgdiPendingAutoRenderReason="";
+let sgdiLastFormInputAt=0;
 // Le réaffichage n'est bloqué QUE si l'utilisateur est réellement en train de saisir/éditer
 // (fenêtre modale, sauvegarde en cours, formulaire en édition, curseur dans un champ texte).
 // Un simple visualiseur de liste n'est jamais bloqué -> synchro 100% automatique.
@@ -446,6 +447,10 @@ function sgdiEditingBlocksRender(){
   // se fera tout seul dès que l'utilisateur aura enregistré ou annulé (retour en mode lecture).
   if(!sgdiViewModeActive)return true;
   if(sgdiFormHasUnsavedChanges)return true;
+  // Filet UNIVERSEL : l'utilisateur vient de saisir/choisir dans un champ (n'importe quel
+  // formulaire, y compris ceux toujours éditables comme nouveau candidat/site/stock/OPS).
+  // On ne réaffiche rien pendant qu'il travaille, ni ~10s après sa dernière frappe.
+  if(sgdiLastFormInputAt&&Date.now()-sgdiLastFormInputAt<10000)return true;
   // Un bouton "Enregistrer"/"Annuler" actif signale un formulaire éditable ouvert.
   if(document.querySelector(".rh-save-submit:not(:disabled),.rh-save-cancel:not(:disabled)"))return true;
   const el=document.activeElement;
@@ -5773,6 +5778,7 @@ function sgdiEnterViewMode(silent){
     if(typeof logActivity==="function")logActivity("Verrouillage formulaire",page);
   }
   sgdiViewModeActive=true;
+  sgdiLastFormInputAt=0;
   document.body.classList.add("sgdi-view-mode");
   const view=document.getElementById("view");
   if(view){
@@ -5876,12 +5882,18 @@ function _sgdiDoNavigate(r){
     renderView();
   }else{location.hash=target;}
 }
-document.addEventListener("input",e=>{
-  if(!sgdiViewModeActive&&session&&e.target.closest("#view"))sgdiFormHasUnsavedChanges=true;
-},{passive:true});
-document.addEventListener("change",e=>{
-  if(!sgdiViewModeActive&&session&&e.target.closest("#view"))sgdiFormHasUnsavedChanges=true;
-},{passive:true});
+function sgdiNoteFormInput(e){
+  const t=e&&e.target;
+  if(!session||!t||typeof t.closest!=="function"||!t.closest("#view"))return;
+  const tag=String(t.tagName||"").toUpperCase();
+  const isField=tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||t.isContentEditable;
+  if(!isField)return;
+  // Marque la dernière interaction de saisie (protège l'utilisateur qui travaille, partout).
+  sgdiLastFormInputAt=Date.now();
+  if(!sgdiViewModeActive)sgdiFormHasUnsavedChanges=true;
+}
+document.addEventListener("input",sgdiNoteFormInput,{passive:true});
+document.addEventListener("change",sgdiNoteFormInput,{passive:true});
 /* ─────────────────────────────────────────────────────────── */
 
 function navigate(r){
