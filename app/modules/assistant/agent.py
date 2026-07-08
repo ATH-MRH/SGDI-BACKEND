@@ -640,6 +640,53 @@ def _tool_create_assignment(db: Session, user: User, employee_reference: str, si
     return {"ok": True, "message": f"{emp.code} ({emp.last_name} {emp.first_name}) affecté au site {target.name}."}
 
 
+# --------------------------------------------------------------------------- #
+# Rapports Excel à la demande
+# --------------------------------------------------------------------------- #
+def _tool_generate_report(db: Session, user: User, dataset: str, society: str | None = None, jours: int | None = None) -> dict:
+    dataset = (dataset or "").strip().lower()
+    builders = {
+        "employees": lambda: _tool_search_employees(db, user, society=society, limit=1000).get("employes", []),
+        "employes": lambda: _tool_search_employees(db, user, society=society, limit=1000).get("employes", []),
+        "candidats": lambda: _tool_list_candidates(db, user, society=society).get("candidats", []),
+        "candidates": lambda: _tool_list_candidates(db, user, society=society).get("candidats", []),
+        "contrats": lambda: _tool_contracts_ending(db, user, days=(jours or 30), society=society).get("contrats", []),
+        "contracts": lambda: _tool_contracts_ending(db, user, days=(jours or 30), society=society).get("contrats", []),
+        "stock": lambda: _tool_stock_summary(db, user, society=society).get("articles", []),
+        "sites": lambda: _tool_list_sites(db, user, society=society).get("sites", []),
+    }
+    builder = builders.get(dataset)
+    if builder is None:
+        return {"ok": False, "message": f"Type de rapport inconnu. Choix : {', '.join(sorted(set(builders)))}."}
+    rows = builder()
+    if not rows:
+        return {"ok": True, "lignes": 0, "message": "Aucune donnée pour ce rapport."}
+    try:
+        import openpyxl
+
+        from app.core.photo_storage import UPLOADS_ROOT
+    except Exception:
+        return {"ok": False, "message": "Génération Excel indisponible sur ce serveur (openpyxl manquant)."}
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = dataset[:31]
+        headers = list(rows[0].keys())
+        ws.append(headers)
+        for r in rows:
+            ws.append([r.get(h) for h in headers])
+        reports_dir = UPLOADS_ROOT / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        name = f"{dataset}_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        wb.save(reports_dir / name)
+    except Exception as exc:
+        return {"ok": False, "message": f"Échec génération rapport : {exc}"}
+    _audit(user, "generate_report", {"dataset": dataset, "lignes": len(rows)})
+    url = f"/uploads/reports/{name}"
+    return {"ok": True, "url": url, "lignes": len(rows),
+            "message": f"Rapport Excel prêt ({len(rows)} lignes). Téléchargement : {url}"}
+
+
 # Schémas d'outils exposés à Claude
 TOOLS: list[dict[str, Any]] = [
     {
@@ -827,6 +874,21 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["employee_reference", "site"],
         },
     },
+    {
+        "name": "generate_report",
+        "description": "RAPPORT : génère un fichier Excel téléchargeable d'un jeu de données et renvoie un lien. "
+                       "Datasets : employees, candidats, contrats, stock, sites. Exécute quand on te demande "
+                       "un export ou un rapport Excel. Donne le lien à l'utilisateur.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dataset": {"type": "string", "description": "employees | candidats | contrats | stock | sites"},
+                "society": {"type": "string"},
+                "jours": {"type": "integer", "description": "pour 'contrats' : fenêtre en jours (défaut 30)"},
+            },
+            "required": ["dataset"],
+        },
+    },
 ]
 
 _DISPATCH = {
@@ -848,6 +910,7 @@ _DISPATCH = {
     "add_knowledge": _tool_add_knowledge,
     "create_leave": _tool_create_leave,
     "create_assignment": _tool_create_assignment,
+    "generate_report": _tool_generate_report,
 }
 
 
