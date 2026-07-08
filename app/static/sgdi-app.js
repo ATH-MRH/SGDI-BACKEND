@@ -1795,7 +1795,7 @@ function applyAssignmentsToEmployees(assignments){
     if(!a?.backendId||employeeMatchesAssignmentRefs(a,activeEmployeeRefs))return;
     const current=a.affectationCourante||{};
     if(current.siteId||current.siteBackendId||current.siteName||current.assignmentBackendId){
-      a.affectationCourante={...current,siteId:"",siteBackendId:null,siteName:"",clientName:"",groupe:"",dateDebut:"",assignmentBackendId:""};
+      a.affectationCourante={...current,siteId:"",siteBackendId:null,siteName:"",clientName:"",groupe:"",dateDebut:"",assignmentBackendId:"",poste:a.fonction||a.position||""};
     }
   });
   active.forEach(aff=>{
