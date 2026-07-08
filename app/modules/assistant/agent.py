@@ -16,10 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.modules.auth.models import User
-from app.modules.drh.models import Candidate, Employee
+from app.modules.drh.models import Candidate, Employee, Leave
 from app.modules.finance_models import Invoice, Payment
 from app.modules.materiel.models import EmployeeEquipment, StockArticle
-from app.modules.ops.models import DailyPresence, Event, Site
+from app.modules.ops.models import Assignment, DailyPresence, Event, Site
 
 logger = logging.getLogger("sgdi.assistant.agent")
 
@@ -511,6 +511,135 @@ def _tool_remember(db: Session, user: User, note: str) -> dict:
     return {"ok": True, "message": "C'est noté, je m'en souviendrai."}
 
 
+# --------------------------------------------------------------------------- #
+# Base de connaissances (procédures/consignes globales, gérées par l'admin)
+# --------------------------------------------------------------------------- #
+_KNOWLEDGE_COLLECTION = "atlasKnowledge"
+
+
+def _load_knowledge(db: Session) -> list[str]:
+    try:
+        from app.modules.irongs import service as _irongs_service
+        items = _irongs_service.list_items(db, _KNOWLEDGE_COLLECTION)
+    except Exception:
+        return []
+    out = []
+    for i in items:
+        if isinstance(i, dict) and i.get("content"):
+            topic = str(i.get("topic") or "").strip()
+            out.append((f"{topic} : " if topic else "") + str(i["content"]).strip())
+    return out[-60:]
+
+
+def _tool_add_knowledge(db: Session, user: User, topic: str, content: str) -> dict:
+    content = (content or "").strip()
+    if not content:
+        return {"ok": False, "message": "Contenu vide."}
+    try:
+        from app.modules.irongs import service as _irongs_service
+        _irongs_service.create_item(db, _KNOWLEDGE_COLLECTION, {
+            "topic": (topic or "").strip()[:120],
+            "content": content[:2000],
+            "auteur": getattr(user, "username", "?"),
+            "date": datetime.now().isoformat(timespec="seconds"),
+        })
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return {"ok": False, "message": f"Échec enregistrement : {exc}"}
+    _audit(user, "add_knowledge", (topic or content)[:120])
+    return {"ok": True, "message": "Procédure enregistrée dans la base de connaissances."}
+
+
+# --------------------------------------------------------------------------- #
+# Actions supplémentaires : congés et affectations
+# --------------------------------------------------------------------------- #
+def _parse_input_date(value: Any) -> date | None:
+    if isinstance(value, date):
+        return value
+    s = str(value or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(s[:10], fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _find_employee_scoped(db: Session, user: User, reference: str) -> Employee | None:
+    ref = (reference or "").strip()
+    emp = db.execute(select(Employee).where(Employee.code == ref)).scalars().first()
+    if emp is None and ref.isdigit():
+        emp = db.get(Employee, int(ref))
+    if emp is None:
+        return None
+    scope = _resolve_scope(user, None)
+    if scope is not None and emp.society not in scope:
+        return None
+    return emp
+
+
+def _tool_create_leave(
+    db: Session, user: User, reference: str, date_debut: str, date_fin: str,
+    type_conge: str | None = None, motif: str | None = None,
+) -> dict:
+    emp = _find_employee_scoped(db, user, reference)
+    if emp is None:
+        return {"ok": False, "message": "Employé introuvable ou hors de vos sociétés autorisées."}
+    d1, d2 = _parse_input_date(date_debut), _parse_input_date(date_fin)
+    if not d1 or not d2:
+        return {"ok": False, "message": "Dates invalides (format attendu AAAA-MM-JJ ou JJ/MM/AAAA)."}
+    if d2 < d1:
+        return {"ok": False, "message": "La date de fin est avant la date de début."}
+    try:
+        leave = Leave(
+            employee_id=emp.id, leave_type=(type_conge or "conge").strip()[:80],
+            start_date=d1, end_date=d2, reason=(motif or None), status="instance",
+        )
+        db.add(leave)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return {"ok": False, "message": f"Échec création congé : {exc}"}
+    _audit(user, "create_leave", {"code": emp.code, "du": d1.isoformat(), "au": d2.isoformat()})
+    return {"ok": True, "message": f"Congé enregistré pour {emp.code} du {d1.isoformat()} au {d2.isoformat()} (en attente de validation)."}
+
+
+def _tool_create_assignment(db: Session, user: User, employee_reference: str, site: str, group_code: str | None = None) -> dict:
+    emp = _find_employee_scoped(db, user, employee_reference)
+    if emp is None:
+        return {"ok": False, "message": "Employé introuvable ou hors de vos sociétés autorisées."}
+    scope = _resolve_scope(user, None)
+    target = None
+    for s in _scoped_sites(db, scope):
+        if site.strip().lower() in ((s.name or "").lower(), (s.indicatif or "").lower()):
+            target = s
+            break
+    if target is None:
+        return {"ok": False, "message": f"Site « {site} » introuvable dans votre périmètre."}
+    try:
+        # Désactive les affectations actives existantes de l'employé (logique métier OPS).
+        existing = db.execute(
+            select(Assignment).where(Assignment.employee_id == emp.id, Assignment.active == 1)
+        ).scalars().all()
+        for old in existing:
+            old.active = 0
+            old.end_date = old.end_date or date.today()
+        row = Assignment(
+            employee_id=emp.id, site_id=target.id, group_code=(group_code or "A").strip()[:20],
+            start_date=date.today(), active=1,
+        )
+        db.add(row)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return {"ok": False, "message": f"Échec affectation : {exc}"}
+    _audit(user, "create_assignment", {"code": emp.code, "site": target.name})
+    return {"ok": True, "message": f"{emp.code} ({emp.last_name} {emp.first_name}) affecté au site {target.name}."}
+
+
 # Schémas d'outils exposés à Claude
 TOOLS: list[dict[str, Any]] = [
     {
@@ -654,6 +783,50 @@ TOOLS: list[dict[str, Any]] = [
             "required": ["note"],
         },
     },
+    {
+        "name": "add_knowledge",
+        "description": "BASE DE CONNAISSANCES : enregistre une procédure, une règle métier ou une consigne "
+                       "générale de l'entreprise, réutilisable pour tous. Appelle-le quand l'admin te dicte "
+                       "une procédure à retenir durablement pour l'organisation.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Sujet / titre court"},
+                "content": {"type": "string", "description": "La procédure ou règle, clairement rédigée."},
+            },
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "create_leave",
+        "description": "ACTION : enregistre un congé/absence pour un employé (en attente de validation). "
+                       "Exécute quand on te demande de poser un congé.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "reference": {"type": "string", "description": "code employé"},
+                "date_debut": {"type": "string", "description": "AAAA-MM-JJ ou JJ/MM/AAAA"},
+                "date_fin": {"type": "string", "description": "AAAA-MM-JJ ou JJ/MM/AAAA"},
+                "type_conge": {"type": "string", "description": "ex. conge, maladie, absence"},
+                "motif": {"type": "string"},
+            },
+            "required": ["reference", "date_debut", "date_fin"],
+        },
+    },
+    {
+        "name": "create_assignment",
+        "description": "ACTION : affecte un employé à un site (désactive son affectation active précédente). "
+                       "Exécute quand on te demande d'affecter/muter un agent sur un site.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "employee_reference": {"type": "string", "description": "code employé"},
+                "site": {"type": "string", "description": "nom ou indicatif du site"},
+                "group_code": {"type": "string", "description": "groupe/brigade (ex. A, B), optionnel"},
+            },
+            "required": ["employee_reference", "site"],
+        },
+    },
 ]
 
 _DISPATCH = {
@@ -672,6 +845,9 @@ _DISPATCH = {
     "create_event": _tool_create_event,
     "update_employee_status": _tool_update_employee_status,
     "remember": _tool_remember,
+    "add_knowledge": _tool_add_knowledge,
+    "create_leave": _tool_create_leave,
+    "create_assignment": _tool_create_assignment,
 }
 
 
@@ -694,6 +870,12 @@ def _dispatch(name: str, tool_input: dict[str, Any], db: Session, user: User) ->
 # --------------------------------------------------------------------------- #
 def _build_system_prompt(db: Session, user: User) -> str:
     system_prompt = SYSTEM_PROMPT + "\n\n" + _now_context()
+    knowledge = _load_knowledge(db)
+    if knowledge:
+        system_prompt += (
+            "\n\nBASE DE CONNAISSANCES (procédures et règles de l'entreprise — applique-les) :\n"
+            + "\n".join("- " + k for k in knowledge)
+        )
     memory = _load_memory(db, user)
     if memory:
         system_prompt += (
