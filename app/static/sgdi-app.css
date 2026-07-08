@@ -832,15 +832,15 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .fp-head-action-secondary{background:#fff;color:#334155;border:1px solid #d7e0eb}
   .fp-head-action-primary{background:#073d77;color:#fff;border:1px solid #073d77;box-shadow:0 6px 16px rgba(7,61,119,.16)}
   .fp-head-action:hover{transform:translateY(-1px);text-decoration:none}.fp-head-action-secondary:hover{color:#073d77;border-color:#9db4cc}.fp-head-action-primary:hover{color:#fff;background:#052f5d}
-  .fp-summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
-  .fp-summary-card{min-height:104px;background:#fff;border:1px solid #e1e8f0;border-radius:13px;padding:17px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:13px;box-shadow:0 1px 2px rgba(15,23,42,.025);transition:.16s ease}
+  .fp-summary-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+  .fp-summary-card{min-height:80px;background:#fff;border:1px solid #e1e8f0;border-radius:12px;padding:12px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(15,23,42,.025);transition:.16s ease}
   .fp-summary-card:hover{border-color:#c7d5e5!important;transform:translateY(-1px);box-shadow:0 8px 22px rgba(15,23,42,.06)!important}
-  .fp-metric-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--metric-color);background:color-mix(in srgb,var(--metric-color) 10%,#fff)}
-  .fp-metric-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-  .fp-metric-copy{min-width:0}.fp-summary-card .fp-metric-copy span{display:block;color:#64748b;text-transform:none;font-size:12px;font-weight:750;letter-spacing:0;white-space:nowrap}
-  .fp-summary-card .fp-metric-copy strong{display:block;font-size:26px;line-height:1;margin:5px 0;color:#172033;font-weight:850}
-  .fp-summary-card .fp-metric-copy small{display:block;color:#8492a6;font-size:11px;line-height:1.2;white-space:nowrap}
-  .fp-summary-card .fp-metric-trend{align-self:start;color:var(--metric-color);background:color-mix(in srgb,var(--metric-color) 8%,#fff);border-radius:999px;padding:4px 7px;font-size:10px;font-weight:800}
+  .fp-metric-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--metric-color);background:color-mix(in srgb,var(--metric-color) 10%,#fff)}
+  .fp-metric-icon svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .fp-metric-copy{min-width:0}.fp-summary-card .fp-metric-copy span{display:block;color:#64748b;text-transform:none;font-size:11px;font-weight:750;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fp-summary-card .fp-metric-copy strong{display:block;font-size:21px;line-height:1;margin:3px 0;color:#172033;font-weight:850}
+  .fp-summary-card .fp-metric-copy small{display:block;color:#8492a6;font-size:10px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fp-summary-card .fp-metric-trend{align-self:start;color:var(--metric-color);background:color-mix(in srgb,var(--metric-color) 8%,#fff);border-radius:999px;padding:3px 6px;font-size:9px;font-weight:800}
   .fp-ring{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto;background:conic-gradient(var(--ring) var(--pct),#e5e7eb 0)}
   .fp-ring b{width:42px;height:42px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;color:#334155}
   .fp-status-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
