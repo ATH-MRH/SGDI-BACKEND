@@ -370,22 +370,24 @@ def on_startup() -> None:
             db.add(admin)
         elif admin is None:
             logger.warning("Compte administrateur absent: définissez ADMIN_INITIAL_USERNAME et ADMIN_INITIAL_PASSWORD pour le créer au démarrage")
-        # Compte module FACTURATION
-        fac_user = db.query(User).filter(User.username == "fac01").one_or_none()
-        if fac_user is None:
-            fac_user = User(
-                username="fac01",
-                email=None,
-                full_name="Facturation",
-                role="facmod",
-                access_level="H1",
-                authorized_societies=[],
-                authorized_structures=["facmod"],
-                password_hash=hash_password("fac01"),
-                is_active=True,
-            )
-            db.add(fac_user)
-            logger.info("Compte fac01 créé")
+        # Compte module FACTURATION — créé UNIQUEMENT si un mot de passe fort est fourni
+        # (FAC_INITIAL_PASSWORD). Plus de compte fac01/fac01 faible créé par défaut.
+        if settings.fac_initial_password:
+            fac_user = db.query(User).filter(User.username == "fac01").one_or_none()
+            if fac_user is None:
+                fac_user = User(
+                    username="fac01",
+                    email=None,
+                    full_name="Facturation",
+                    role="facmod",
+                    access_level="H1",
+                    authorized_societies=[],
+                    authorized_structures=["facmod"],
+                    password_hash=hash_password(settings.fac_initial_password),
+                    is_active=True,
+                )
+                db.add(fac_user)
+                logger.info("Compte fac01 créé")
         db.commit()
     logger.info("Compte administrateur vérifié")
     if settings.startup_maintenance_enabled:

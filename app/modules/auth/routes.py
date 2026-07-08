@@ -1,10 +1,11 @@
 import hmac
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from urllib.parse import unquote
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from app.core import rate_limit
 from app.core.config import settings
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
@@ -24,6 +25,23 @@ from app.modules.auth.service import authenticate, create_user, update_user
 
 
 router = APIRouter()
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _enforce_login_rate(ip: str) -> None:
+    key = f"login:{ip}"
+    if rate_limit.failure_count(key, settings.login_window_seconds) >= settings.login_max_attempts:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de tentatives de connexion. Réessayez dans quelques minutes.",
+            headers={"Retry-After": str(settings.login_window_seconds)},
+        )
 
 
 def is_admin_role(role: str | None) -> bool:
@@ -153,7 +171,9 @@ def patch_access_rule(
 
 
 @router.post("/admin-system-login", response_model=TokenOut)
-def admin_system_login(payload: AdminSystemLoginIn, db: Session = Depends(get_db)):
+def admin_system_login(payload: AdminSystemLoginIn, request: Request, db: Session = Depends(get_db)):
+    ip = _client_ip(request)
+    _enforce_login_rate(ip)
     admin_username = (settings.admin_system_username or settings.admin_initial_username or "admin").strip()
     if not admin_username:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte administration système non configuré")
@@ -171,14 +191,23 @@ def admin_system_login(payload: AdminSystemLoginIn, db: Session = Depends(get_db
         except HTTPException:
             password_ok = False
     if not password_ok:
+        rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mot de passe administration système incorrect")
+    rate_limit.clear(f"login:{ip}")
     token = create_access_token(str(user.id), {"role": user.role, "username": user.username, "admin_system": True})
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 
 @router.post("/login", response_model=TokenOut)
-def login(payload: LoginIn, db: Session = Depends(get_db)):
-    token, user = authenticate(db, payload.username, payload.password)
+def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
+    ip = _client_ip(request)
+    _enforce_login_rate(ip)
+    try:
+        token, user = authenticate(db, payload.username, payload.password)
+    except HTTPException:
+        rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
+        raise
+    rate_limit.clear(f"login:{ip}")
     return {"access_token": token, "token_type": "bearer", "user": user}
 
 

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_prefix: str = "/api"
     allow_public_registration: bool = False
+    # Anti brute-force : nombre d'échecs autorisés par IP avant blocage temporaire.
+    login_max_attempts: int = 8
+    login_window_seconds: int = 300
     cors_allowed_origins: str | None = None
     # Noms d'hôte qui servent le Portail RH mobile (séparés par des virgules).
     # Permet d'ajouter un domaine de test (ex. portail-rh-test.irongs.com) sans toucher au code.
@@ -22,6 +25,8 @@ class Settings(BaseSettings):
     admin_system_username: str | None = None
     admin_initial_username: str | None = None
     admin_initial_password: str | None = None
+    # Compte module Facturation : créé UNIQUEMENT si un mot de passe fort est fourni ici.
+    fac_initial_password: str | None = None
 
     database_url: str
 
