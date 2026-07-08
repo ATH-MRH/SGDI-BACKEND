@@ -12196,7 +12196,7 @@ function openEmployeeFinRelationModal(agentId){
         <input type="hidden" name="agentId" value="${escapeHTML(selected.id)}"/>
         ${finRelationEmployeeSummaryHTML(selected)}
         <div><label class="label">Date de décision</label><input class="input" type="date" name="dateDecision" value="${today()}" required/></div>
-        <div><label class="label">Date d'effet</label><input class="input" type="date" name="dateEffet" value="${selected.dateFinContrat||today()}" onchange="updateFinRelationReference()" required/></div>
+        <div><label class="label">Date d'effet</label><input class="input" type="date" name="dateEffet" value="${today()}" onchange="updateFinRelationReference()" required/></div>
         <div class="md:col-span-2"><label class="label">Motif</label><label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid ${trialExpired?"#fecaca":"#e2e8f0"};background:${trialExpired?"#fef2f2":"#f8fafc"};color:${trialExpired?"#991b1b":"#0f172a"}"><input type="checkbox" name="motifFinEssai" style="width:16px;height:16px" ${trialExpired?"disabled":""}/> <span>Période d'essai non concluante</span></label>${trialExpired?`<div class="text-xs text-red-700 font-bold mt-1">Motif bloqué : la période d'essai est dépassée depuis le ${formatDate(selected.dateFinEssai)}.</div>`:""}</div>
         <div class="md:col-span-2"><label class="label">Motif complémentaire</label><textarea class="textarea" name="motifLibre" rows="3" placeholder="Motif détaillé..."></textarea></div>
         <div class="md:col-span-2"><label class="label">Observation</label><textarea class="textarea" name="observation" rows="4"></textarea></div>
