@@ -12924,6 +12924,7 @@ function renderAgentForm(view,id){
   else if(congeActif&&congeActif.type==="Maladie"){situation="maladie";sitClass="pill-amber";sitIcon="🤒"}
   else if(congeActif){situation="congé";sitClass="pill-blue";sitIcon="🏖"}
   else if(agentStatut==="actif"){situation="actif";sitClass="pill-green";sitIcon="✅"}
+  else if(agentStatut==="sortant"){situation="sortant";sitClass="pill-red";sitIcon="🚪"}
   else{situation=a.statut||"—";sitClass="pill-gray";sitIcon="•"}
   const situationBadge=`<span class="pill ${sitClass} agent-active-status-pill" style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:6px 14px">${sitIcon} ${situation}</span>`;
   const operationnel=(situation==="actif");
