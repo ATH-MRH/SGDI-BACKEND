@@ -425,11 +425,39 @@ async function sgdiRunRealtimePull(event){
   if(sgdiRealtimePullRunning||!session||!sgdiAuthToken()||!sgdiPostgresReady||sgdiDirty)return;
   sgdiRealtimePullRunning=true;
   try{
-    sgdiMarkRefreshAvailable("Nouvelles données enregistrées");
+    await sgdiAutoSync("Nouvelles données enregistrées");
   }catch(e){
     console.warn("Synchronisation temps réel SGDI échouée",e);
   }finally{
     sgdiRealtimePullRunning=false;
+  }
+}
+let sgdiAutoSyncRunning=false;
+function sgdiAutoSyncSafe(){
+  // Sûr de recharger si aucune fenêtre modale n'est ouverte et l'utilisateur ne saisit pas.
+  if(document.querySelector(".modal-bg"))return false;
+  const tag=(document.activeElement&&document.activeElement.tagName)||"";
+  return !["INPUT","TEXTAREA","SELECT"].includes(tag);
+}
+async function sgdiAutoSync(reason){
+  reason=reason||"Nouvelles données";
+  if(sgdiAutoSyncRunning)return;
+  if(!session||!sgdiAuthToken()||!sgdiPostgresReady)return;
+  // Si une saisie/fenêtre est en cours, ne pas perturber : garder le badge.
+  if(sgdiDirty||sgdiHasUnsavedUserWork()||!sgdiAutoSyncSafe()){sgdiMarkRefreshAvailable(reason);return;}
+  sgdiAutoSyncRunning=true;
+  try{
+    const loaded=await sgdiPullState({silent:true,render:false,force:true});
+    if(loaded){
+      try{await sgdiRefreshCountersNow({reason:"auto-sync"});}catch(e){}
+      if(sgdiAutoSyncSafe()&&!sgdiDirty){sgdiClearRefreshAvailable();render();}
+      else sgdiMarkRefreshAvailable(reason);
+    }
+  }catch(e){
+    console.warn("Auto-sync SGDI échouée",e);
+    sgdiMarkRefreshAvailable(reason);
+  }finally{
+    sgdiAutoSyncRunning=false;
   }
 }
 function sgdiInstallRealtimeBridge(){
@@ -719,7 +747,7 @@ async function sgdiCheckRemoteChanges(){
     const signature=sgdiStatsSignature(stats);
     const current=sgdiStatsSignature(window.SGDI_SIDEBAR_STATS);
     if(signature&&!sgdiLastRemoteStatsSignature)sgdiLastRemoteStatsSignature=current||signature;
-    if(signature&&current&&signature!==current)sgdiMarkRefreshAvailable("Nouvelles données disponibles");
+    if(signature&&current&&signature!==current)await sgdiAutoSync("Nouvelles données disponibles");
     await sgdiCheckAppVersion();
     return stats;
   }catch(e){
@@ -748,12 +776,12 @@ async function sgdiStartEventStream(){
     const url=sgdiApiUrl("/irongs/events/stream?ticket="+encodeURIComponent(ticket),false);
     sgdiEventsSource=new EventSource(url);
     sgdiEventsSource.addEventListener("sgdi-change",async()=>{
-      if(!session||!sgdiAuthToken()||sgdiDirty)return;
+      if(!session||!sgdiAuthToken())return;
       const now=Date.now();
-      if(now-sgdiEventsLastPull<5000)return;
+      if(now-sgdiEventsLastPull<2000)return;
       sgdiEventsLastPull=now;
       try{
-        sgdiMarkRefreshAvailable("Nouvelles données enregistrées");
+        await sgdiAutoSync("Nouvelles données enregistrées");
       }catch(e){console.warn("Alerte temps réel SGDI non synchronisée",e)}
     });
     sgdiEventsSource.onopen=()=>{sgdiSseRetryDelay=5000};
@@ -33241,7 +33269,14 @@ async function fpqLiveRefresh(){
 function fpqStartLiveRefresh(){
   fpqStopLiveRefresh();
   const dot=document.getElementById("fpq-live-dot");
-  if(dot)dot.style.background="#64748b";
+  if(dot)dot.style.background="#16a34a";
+  _fpqLiveTimer=setInterval(()=>{
+    if(sgdiDirty||document.hidden)return;
+    if(document.querySelector(".modal-bg"))return;
+    const tag=(document.activeElement&&document.activeElement.tagName)||"";
+    if(["INPUT","TEXTAREA","SELECT"].includes(tag))return;
+    fpqLiveRefresh();
+  },5000);
 }
 function fpqStopLiveRefresh(){clearInterval(_fpqLiveTimer);_fpqLiveTimer=null;}
 

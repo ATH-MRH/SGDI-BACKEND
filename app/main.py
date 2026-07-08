@@ -893,7 +893,7 @@ def _events_signature() -> str:
 _EVENTS_SIGNATURE_CACHE: dict[str, object] = {"value": "", "at": 0.0}
 
 
-def _events_signature_cached(ttl_seconds: float = 5.0) -> str:
+def _events_signature_cached(ttl_seconds: float = 2.0) -> str:
     now = time.monotonic()
     cached_at = float(_EVENTS_SIGNATURE_CACHE.get("at") or 0.0)
     cached_value = str(_EVENTS_SIGNATURE_CACHE.get("value") or "")
@@ -950,7 +950,7 @@ def irongs_events_stream(ticket: str | None = None, token: str | None = None):
                 yield "data: " + json.dumps({"signature": sig}) + "\n\n"
             else:
                 yield ": keepalive\n\n"
-            await asyncio.sleep(5)
+            await asyncio.sleep(2)
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 
