@@ -12226,6 +12226,20 @@ function calculateStcCongeReliquat(a,dateEffet){
     .reduce((s,c)=>s+(parseInt(c.joursConge)||(c.du&&c.au?daysBetween(c.du,c.au)+1:0)),0);
   return Math.max(0,Math.round((totalAcquis-pris)*100)/100);
 }
+// Date de référence pour les congés acquis d'un sortant : jamais dans le futur
+// (on n'acquiert pas de congés sur des jours non travaillés). Plafonne à aujourd'hui.
+function drhSortantEffectiveDate(a){
+  const ds=String((a&&(a.dateSortie||a.departAt))||"").slice(0,10);
+  const t=today();
+  return ds&&ds<t?ds:t;
+}
+// Reliquat affiché pour un sortant : recalcul auto-correcteur (corrige les anciennes fiches datées dans le futur).
+function drhStcReliquatDisplay(a){
+  if(!a)return null;
+  const live=calculateStcCongeReliquat(a,drhSortantEffectiveDate(a));
+  if(live!=null)return live;
+  return a.stcCongeReliquat!=null?a.stcCongeReliquat:null;
+}
 async function onEmployeeFinRelation(a,draft){
   const congeReliquat=calculateStcCongeReliquat(a,draft.dateEffet);
   a.stcCongeReliquat=congeReliquat;
@@ -14495,7 +14509,7 @@ function ficheStatusInfo(a){
   const congeActif=(db.conges||[]).find(c=>c.agentId===a.id&&c.statut==="approuve"&&inRange(c));
   const st=String(a?.statut||"").toLowerCase();
   if(a.blacklist)return{label:"Black list",alert:"Agent inscrit sur la black list. Vérifier la référence et le motif avant toute décision RH."};
-  if(ficheAgentIsSortantArchive(a)||st==="sortant"){const ds=a.dateSortie?formatDate(a.dateSortie):"";const rev=a.finRelationDotationReversee?"✓ Dotation reversée le "+formatDate(a.finRelationReversementDate||""):"⚠ Dotation non reversée";let stcInfo="";if(a.stcCongeReliquat!=null)stcInfo+=" — Reliquat congés : "+a.stcCongeReliquat+" j";if(a.stcDeductionReforme)stcInfo+=" — Déduction réformé : "+money(a.stcDeductionReforme);return{label:"SORTANT"+(ds?" · "+ds:""),alert:"Cet employé est sorti du cycle actif."+(ds?" Date de sortie : "+ds+".":" ")+"\n"+rev+stcInfo};}
+  if(ficheAgentIsSortantArchive(a)||st==="sortant"){const ds=a.dateSortie?formatDate(a.dateSortie):"";const rev=a.finRelationDotationReversee?"✓ Dotation reversée le "+formatDate(a.finRelationReversementDate||""):"⚠ Dotation non reversée";let stcInfo="";const _stcR=drhStcReliquatDisplay(a);if(_stcR!=null)stcInfo+=" — Reliquat congés : "+_stcR+" j";if(a.stcDeductionReforme)stcInfo+=" — Déduction réformé : "+money(a.stcDeductionReforme);return{label:"SORTANT"+(ds?" · "+ds:""),alert:"Cet employé est sorti du cycle actif."+(ds?" Date de sortie : "+ds+".":" ")+"\n"+rev+stcInfo};}
   if(ficheAgentInAbandon(a))return{label:"Abandon de poste",alert:"Situation sensible : abandon de poste détecté dans les événements de gestion."};
   if(st==="suspendu")return{label:"Suspendu",alert:"Agent suspendu. Les actions opérationnelles doivent être validées par la DRH."};
   if(congeActif&&congeActif.type==="Maladie")return{label:"En maladie",alert:`Maladie approuvée du ${formatDate(congeActif.du)} au ${formatDate(congeActif.au)}.`};
@@ -20655,7 +20669,7 @@ function openFicheReversementPrint(a,lines,dateRev,reformeTotal){
     <td class="text-center ${l.etat==="Réformé"?"reforme":""}">${escapeHTML(l.etat)}</td>
   </tr>`).join("");
   const totalValeur=lines.reduce((s,l)=>s+l.valeur,0);
-  const stcConge=a.stcCongeReliquat!=null?a.stcCongeReliquat+"":"—";
+  const _stcDisp=drhStcReliquatDisplay(a);const stcConge=_stcDisp!=null?_stcDisp+"":"—";
   const html=`<!doctype html><html><head><meta charset="utf-8">
 <title>Fiche de Reversement — ${escapeHTML(nom)}</title>
 <style>
@@ -28012,7 +28026,8 @@ function renderElementsSortants(view){
     const dotRev=a.finRelationDotationReversee
       ?`<span class="badge" style="background:#dcfce7;color:#166534">✓ Reversée</span>`
       :`<span class="badge" style="background:#fee2e2;color:#991b1b">⚠ En attente</span>`;
-    const stc=a.stcCongeReliquat!=null?`${a.stcCongeReliquat} j`:"—";
+    const stcVal=drhStcReliquatDisplay(a);
+    const stc=stcVal!=null?`${stcVal} j`:"—";
     const ded=a.stcDeductionReforme?`-${money(a.stcDeductionReforme)}`:"";
     const med=isDrh?(()=>{
       if(!a.finRelationAt)return"—";
