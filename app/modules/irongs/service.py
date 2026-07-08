@@ -36,9 +36,22 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
 }
 
 
-_SNAPSHOT_CACHE: dict[str, tuple[float, dict]] = {}
+# Cache par (utilisateur, périmètre) : (instant, signature d'événements, snapshot).
+# La signature reflète toutes les tables surveillées : dès qu'une donnée change (y compris
+# via les routes natives des modules qui n'invalident pas explicitement le cache),
+# la signature diffère et le snapshot est reconstruit -> pas de données périmées en temps réel.
+_SNAPSHOT_CACHE: dict[str, tuple[float, str, dict]] = {}
 _SNAPSHOT_CACHE_LOCK = Lock()
 _SNAPSHOT_CACHE_TTL = 12.0
+
+
+def _current_events_signature() -> str:
+    # Import paresseux pour éviter tout import circulaire avec app.main.
+    try:
+        from app.main import _events_signature_cached
+        return _events_signature_cached()
+    except Exception:
+        return ""
 
 
 def _snapshot_cache_key(user: Any, include_sql: bool) -> str:
@@ -48,17 +61,19 @@ def _snapshot_cache_key(user: Any, include_sql: bool) -> str:
 
 
 def _snapshot_cache_get(key: str) -> dict | None:
+    signature = _current_events_signature()
     with _SNAPSHOT_CACHE_LOCK:
         entry = _SNAPSHOT_CACHE.get(key)
-        if entry and time.monotonic() - entry[0] < _SNAPSHOT_CACHE_TTL:
-            return entry[1]
+        if entry and time.monotonic() - entry[0] < _SNAPSHOT_CACHE_TTL and entry[1] == signature:
+            return entry[2]
         _SNAPSHOT_CACHE.pop(key, None)
         return None
 
 
 def _snapshot_cache_set(key: str, value: dict) -> None:
+    signature = _current_events_signature()
     with _SNAPSHOT_CACHE_LOCK:
-        _SNAPSHOT_CACHE[key] = (time.monotonic(), value)
+        _SNAPSHOT_CACHE[key] = (time.monotonic(), signature, value)
 
 
 def _snapshot_cache_invalidate() -> None:

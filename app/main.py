@@ -878,7 +878,6 @@ def _events_signature() -> str:
         "cash_entries",
         "ops_movements",
         "incidents",
-        "site_posts",
         "advances",
         "credit_notes",
     ]
