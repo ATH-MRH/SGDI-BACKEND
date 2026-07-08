@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import rate_limit
+from app.core.config import settings
 from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
@@ -21,6 +23,24 @@ from app.modules.ops.models import Assignment, DailyPresence, Site
 router = APIRouter()
 
 PORTAL_TOKEN_TTL = 60 * 24  # 24 heures
+
+
+def _ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _limit_public(request: Request, name: str, maxn: int) -> None:
+    """Anti-abus sur les endpoints publics du portail (par IP, fenêtre glissante)."""
+    key = f"portal:{name}:{_ip(request)}"
+    if rate_limit.record_failure(key, settings.login_window_seconds) > maxn:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de tentatives. Réessayez dans quelques minutes.",
+            headers={"Retry-After": str(settings.login_window_seconds)},
+        )
 
 
 def _require_portal_token(matricule: str, authorization: str | None = Header(default=None)) -> str:
@@ -154,7 +174,8 @@ def _to_pointage(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/validate-employee")
-def validate_employee(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+def validate_employee(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _limit_public(request, "validate", 15)
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Payload invalide")
 
@@ -216,7 +237,8 @@ def validate_employee(payload: dict[str, Any], db: Session = Depends(get_db)) ->
 
 
 @router.post("/self-register", status_code=status.HTTP_201_CREATED)
-def portal_self_register(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+def portal_self_register(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _limit_public(request, "register", 8)
     required = ("nom", "prenom", "code", "dateNaissance", "password")
     if any(not _clean_text(payload.get(k)) for k in required):
         raise HTTPException(status_code=400, detail="Tous les champs sont obligatoires")
@@ -265,7 +287,8 @@ def portal_self_register(payload: dict[str, Any], db: Session = Depends(get_db))
 
 
 @router.post("/self-reset-password")
-def portal_self_reset_password(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+def portal_self_reset_password(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _limit_public(request, "reset", 8)
     required = ("nom", "prenom", "code", "dateNaissance", "password")
     if any(not _clean_text(payload.get(k)) for k in required):
         raise HTTPException(status_code=400, detail="Tous les champs sont obligatoires")
@@ -623,7 +646,8 @@ def delete_portal_account(
 # ─────────────────────────────────────────────────────────────────
 
 @router.post("/login")
-def portal_login(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+def portal_login(payload: dict[str, Any], request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _limit_public(request, "login", 30)
     username = _norm_text(payload.get("username"))
     password = _clean_text(payload.get("password"))
     if not username or not password:
