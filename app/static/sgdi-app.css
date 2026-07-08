@@ -804,7 +804,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
 
   /* ----- FICHES DE POSITION ----- */
   .fp-page{width:calc(100% + 2*clamp(8px,1.2vw,18px));margin-inline:calc(-1*clamp(8px,1.2vw,18px));display:flex;flex-direction:column;gap:18px}
-  .fp-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:8px 2px 2px;background:transparent;border:0;box-shadow:none}
+  .fp-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:8px 0 2px;background:transparent;border:0;box-shadow:none}
   .fp-head h1{font-size:29px;line-height:1.1;margin:0;color:#0f172a;font-weight:850;text-align:left;text-transform:none!important;letter-spacing:-.025em}
   .fp-head p{margin:7px 0 0;color:#64748b;font-size:14px;line-height:1.35;text-transform:none!important}
   .fp-head p span{font-weight:800;color:#043970}
