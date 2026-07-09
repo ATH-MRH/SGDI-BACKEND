@@ -15615,6 +15615,102 @@ function openSiteAffectesModal(siteId){
     ${surplus.length?`<div class="card overflow-hidden" style="border-color:#fdba74"><div class="px-3 py-2 border-b font-semibold text-sm" style="background:#fff7ed;color:#c2410c">Effectifs en surplus (+${surplus.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th></tr></thead><tbody>${surplus.map(agentRow).join("")}</tbody></table></div>`:""}
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
+function siteNonAffectesPourSite(site){
+  const soc=site?.societe||"";
+  return (db.agents||[])
+    .filter(a=>employeeIsActive(a)&&!agentHasLiveAffectation(a)&&(!soc||normalizeSocieteName(a.societe||"")===normalizeSocieteName(soc)))
+    .sort((a,b)=>((a.nom||"")+" "+(a.prenom||"")).localeCompare((b.nom||"")+" "+(b.prenom||"")));
+}
+function openSiteAjouterEffectifModal(siteId){
+  const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
+  const agents=siteNonAffectesPourSite(site);
+  const row=a=>{
+    const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
+    const mat=escapeHTML(a.matricule||"—");
+    const poste=escapeHTML(a.fonction||a.position||"");
+    return `<label class="site-eff-add-row"><input type="checkbox" class="site-eff-add-cb" value="${escapeHTML(a.id)}" onchange="siteAjouterEffectifCount()"/><span><b>${nom}</b><small> · ${mat}${poste?" · "+poste:""}</small></span></label>`;
+  };
+  openModal(`<h3 class="font-bold text-lg mb-2">Ajouter effectif</h3>
+    <div class="p-3 rounded bg-slate-50 border border-slate-200 mb-3">
+      <div class="font-black">${escapeHTML(site.nom||"Site")}</div>
+      <div class="text-xs text-slate-500">${escapeHTML(site.indicatif||"—")}${site.societe?` · ${escapeHTML(site.societe)}`:""}</div>
+    </div>
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs text-slate-500"><span id="site-eff-add-count">0</span> sélectionné(s)</span>
+      <div class="flex items-center gap-2">
+        <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="siteAjouterEffectifSelectAll(true)">Tout</button>
+        <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="siteAjouterEffectifSelectAll(false)">Aucun</button>
+      </div>
+    </div>
+    <div id="site-eff-add-list" class="site-eff-add-list">
+      ${agents.length?agents.map(row).join(""):`<div class="p-4 text-center text-slate-500 text-sm">Aucun employé non affecté${site.societe?" pour "+escapeHTML(site.societe):""}.</div>`}
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button type="button" id="site-eff-add-validate" class="btn btn-primary" onclick="siteAjouterEffectifValider('${jsString(siteId)}')">Valider affectation</button>
+    </div>`);
+}
+function siteAjouterEffectifCount(){
+  const list=document.getElementById("site-eff-add-list");
+  const n=list?list.querySelectorAll(".site-eff-add-cb:checked").length:0;
+  const el=document.getElementById("site-eff-add-count");
+  if(el)el.textContent=n;
+}
+function siteAjouterEffectifSelectAll(checked){
+  const list=document.getElementById("site-eff-add-list");
+  if(!list)return;
+  list.querySelectorAll(".site-eff-add-cb").forEach(cb=>cb.checked=checked);
+  siteAjouterEffectifCount();
+}
+async function siteAjouterEffectifValider(siteId){
+  const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
+  const list=document.getElementById("site-eff-add-list");
+  const agentIds=list?[...list.querySelectorAll(".site-eff-add-cb:checked")].map(cb=>cb.value).filter(Boolean):[];
+  if(!agentIds.length){toast("Sélectionnez au moins un employé","error");return}
+  const btn=document.getElementById("site-eff-add-validate");
+  if(btn){btn.disabled=true;btn.textContent="Enregistrement..."}
+  const date=today();
+  const ordreMouvementNumero=nextOrdreMouvementNumero();
+  let ok=0,fail=0;
+  for(const agentId of agentIds){
+    try{
+      const agent=(db.agents||[]).find(a=>String(a.id)===String(agentId));
+      if(!agent)throw new Error("Employé introuvable");
+      const f=fpqEnsure(date,agentId);
+      const patch={
+        employee_id:agent.backendId||sqlBackendId(agentId)||null,
+        agentBackendId:agent.backendId||null,
+        matricule:agent.matricule||"",
+        ordreMouvementNumero,
+        mouvementNumero:ordreMouvementNumero,
+        positionActuelle:opsEmployeeCurrentPositionLabel(agent),
+        siteId:site.id,
+        siteBackendId:site.backendId||null,
+        siteName:site.nom||site.intitule||"",
+        societe:site.societe||agent.societe||"",
+        mouvementMotif:"Affectation",
+        mouvementType:"Affectation",
+        mouvementDuree:"Jusqu'à nouvel ordre",
+        groupe:"",
+        mouvementObs:"Affectation groupée depuis la fiche site",
+        siteManual:true
+      };
+      opsApplyLocalMovementAffectation(date,agentId,patch);
+      const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
+      const line=result?.data?.item||result?.item||{...f,...patch,date,agentId};
+      const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId};
+      fpqUpsertLocalPresenceLine(line);
+      opsUpsertMovementHistory(movement);
+      await fpqApplyMovementAffectation(date,agentId,patch);
+      await opsArchiveMovementDocument(movement);
+      ok++;
+    }catch(e){console.warn("Affectation refusée pour",agentId,e);fail++;}
+  }
+  await sgdiPullState({silent:true});
+  closeModal();
+  toast(`${ok} employé(s) affecté(s) et ordre de mouvement archivé`+(ok>1?"s":"")+(fail?` · ${fail} échec(s)`:""),ok?"success":"error");
+  renderView();
+}
 function siteEffectifAlertHTML(eff,agents){
   if(session?.transverse==="materiel")return"";
   const manque=Math.max(0,(+eff.totalContractuel||0)-agents.length);
@@ -15623,6 +15719,36 @@ function siteEffectifAlertHTML(eff,agents){
     <div class="flex items-center justify-between gap-3">
       <div><div class="font-black text-sm">ALERTE MANQUE D'EFFECTIF</div><div class="text-xs mt-1">Effectif contractuel : <strong>${eff.totalContractuel}</strong> · Affectés : <strong>${agents.length}</strong> · Manquant : <strong>${manque}</strong></div></div>
       <span class="pill pill-red text-sm">${manque} manquant${manque>1?"s":""}</span>
+    </div>
+  </div>`;
+}
+function siteRecapBlockHTML(site,eff){
+  const backend=siteBackendSituationForSite(site);
+  const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
+  const agents=siteBackendAssignmentRows(site)||siteAgentsAffectes(site);
+  const realise=agents.length;
+  const manque=Math.max(0,contractuel-realise);
+  const surplus=Math.max(0,realise-contractuel);
+  const consignesText=String(site.consignesGenerales||site.consignes||site.consigneGenerale||"").trim();
+  const consignesPreview=consignesText?(consignesText.length>90?consignesText.slice(0,90)+"…":consignesText):"Aucune consigne enregistrée.";
+  const tile=(label,value,color)=>`<div class="site-recap-tile"><span>${escapeHTML(label)}</span><strong${color?` style="color:${color}"`:""}>${escapeHTML(String(value))}</strong></div>`;
+  return `<div class="site-editor-wide site-recap-card">
+    <div class="site-recap-head">
+      <div class="site-recap-grid">
+        ${tile("Date d'ouverture",formatDate(site.dateOuverture))}
+        ${tile("Indicatif",site.indicatif||"—")}
+        ${tile("Téléphone du site",site.telephone||"—")}
+        ${tile("Effectif contrat",contractuel)}
+        ${tile("Effectif réalisé",realise,realise>=contractuel&&contractuel>0?"#15803d":"")}
+        ${tile("Manque",manque,manque?"#dc2626":"#15803d")}
+        ${tile("Surplus",surplus,surplus?"#7c3aed":"#94a3b8")}
+      </div>
+      ${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-primary" data-site-lock-keep onclick="openSiteAjouterEffectifModal('${jsString(siteEditRouteId(site))}')">Ajouter effectif</button>`}
+    </div>
+    <div class="site-recap-consignes">
+      <span class="site-recap-consignes-label">Consignes et instructions</span>
+      <p>${escapeHTML(consignesPreview)}</p>
+      <button type="button" class="btn btn-ghost text-xs" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(site))}')">Voir / gérer</button>
     </div>
   </div>`;
 }
@@ -16461,15 +16587,16 @@ async function renderSiteForm(view,id){
       if(Array.isArray(stores)&&stores.length)db.magasins=stores.map(storeFromApi);
     }catch(e){console.warn("renderSiteForm: stores preload failed",e);}
   }
-  let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),dateOuverture:"",siteOuvertPar:"",nom:"",indicatif:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
+  let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),dateOuverture:"",siteOuvertPar:"",nom:"",indicatif:"",telephone:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
   const rotationSystem=inferSiteRotationSystem(s);
   const eff=siteEffectifsNorm(s);
   const canEditSite=siteCanEditFromCurrentModule(s);
   const lockNotice=!canEditSite&&!s.isNew?`<div class="site-editor-wide p-3 rounded mb-3" style="background:#f8fafc;border:1px solid #cbd5e1;color:#475569;font-weight:800">Fiche technique site verrouillée après enregistrement.</div>`:"";
   const siteHeaderActions=s.isNew?"":`<div class="site-editor-wide site-editor-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDocumentsModal('${jsString(siteEditRouteId(s))}')">Documents</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDemandesModal('${jsString(siteEditRouteId(s))}')">Demandes</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteCompteRenduForm('${jsString(siteEditRouteId(s))}')">Événements</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(s))}')">Consignes générales</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteProceduresModal('${jsString(siteEditRouteId(s))}')">Procédures</button>${isAdminSystemSession()?`<button type="button" class="btn btn-ghost" data-site-lock-keep style="border-color:#fecaca;color:#b91c1c;background:#fff1f2" onclick="archiveSite('${jsString(siteEditRouteId(s))}')">Archiver</button><button type="button" class="btn btn-danger" data-site-lock-keep onclick="deleteSite('${jsString(siteEditRouteId(s))}')">Supprimer</button>`:""}<button class="btn btn-ghost" data-site-lock-keep onclick="navigate('sites/actifs')">← Retour</button></div>`;
-  view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${siteHeaderActions}${lockNotice}
+  const siteRecap=s.isNew?"":siteRecapBlockHTML(s,eff);
+  view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${siteRecap}${siteHeaderActions}${lockNotice}
   <form id="site-form" class="site-editor-wide site-form-layout" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
-    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div></div></div>
+    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">S3. Effectifs</div>
       <div class="grid grid-2 mb-4">
@@ -16553,6 +16680,7 @@ function siteDraftFromCurrentForm(id){
     id:existing.id||id,
     nom:String(fd.get("nom")||existing.nom||"").trim(),
     indicatif:String(fd.get("indicatif")||existing.indicatif||"").trim(),
+    telephone:String(fd.get("telephone")||existing.telephone||"").trim(),
     adresse:String(fd.get("adresse")||existing.adresse||"").trim(),
     commune:String(fd.get("commune")||existing.commune||"").trim(),
     wilaya:String(fd.get("wilaya")||existing.wilaya||"").trim(),
