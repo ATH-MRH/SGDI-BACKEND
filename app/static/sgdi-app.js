@@ -848,7 +848,7 @@ async function sgdiCheckRemoteChanges(){
   sgdiAutoRefreshRunning=true;
   try{
     const society=sgdiActiveStatsSociety();
-    const stats=await window.SGDI_API.ui.sidebarStats(society?{society}:{});
+    const stats=await window.SGDI_API.ui.sidebarStats({});
     const signature=sgdiStatsSignature(stats);
     const current=sgdiStatsSignature(window.SGDI_SIDEBAR_STATS);
     if(signature&&!sgdiLastRemoteStatsSignature)sgdiLastRemoteStatsSignature=current||signature;
@@ -1489,11 +1489,12 @@ function sgdiActiveStatsSociety(){
 async function sgdiRefreshSidebarStats(society){
   if(!window.SGDI_API?.ui?.sidebarStats)return null;
   try{
-    const activeSociety=society!==undefined?society:sgdiActiveStatsSociety();
-    const stats=await window.SGDI_API.ui.sidebarStats(activeSociety?{society:activeSociety}:{});
+    // Compteurs de vue d'ensemble : TOUJOURS le total autorisé (global). Le backend borne déjà
+    // le résultat aux sociétés permises (tout pour un super-admin). On n'applique plus le filtre
+    // société de navigation ici -> plus d'oscillation 2/5 entre deux rafraîchissements.
+    const stats=await window.SGDI_API.ui.sidebarStats({});
     window.SGDI_SIDEBAR_STATS=stats;
-    sgdiRememberSidebarStats(stats);
-    sgdiEnsureEmployeesForDisplay({society:activeSociety});
+    sgdiEnsureEmployeesForDisplay({society:""});
     window.dispatchEvent(new CustomEvent("sgdi:sidebar-stats",{detail:stats}));
     return stats;
   }catch(error){
@@ -14866,7 +14867,7 @@ async function renderSitesServer(view){
       SGDI.sites.page({society:soc||undefined,page,page_size:12}),
       SGDI.sites.list({society:soc||undefined}).catch(()=>[]),
       globalQ?SGDI.sites.page({society:soc||undefined,q:globalQ,page:1,page_size:50}).catch(()=>null):Promise.resolve(null),
-      session?.transverse!=="materiel"&&window.SGDI_API?.ui?.sidebarStats?window.SGDI_API.ui.sidebarStats(soc?{society:soc}:{}).catch(()=>null):Promise.resolve(null)
+      session?.transverse!=="materiel"&&window.SGDI_API?.ui?.sidebarStats?window.SGDI_API.ui.sidebarStats({}).catch(()=>null):Promise.resolve(null)
     ]);
     if(statsData)window.SGDI_SIDEBAR_STATS=statsData;
     const rows=(result?.items||result?.data||[]).map(siteFromApi);
