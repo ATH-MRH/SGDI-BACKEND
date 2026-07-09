@@ -3676,18 +3676,28 @@ function renderGlobalDashboard(view){
   const socRows=SOCIETES.map(soc=>{
     const ag=allAgents.filter(a=>normalizeSocieteName(a.societe)===normalizeSocieteName(soc));
     const actifs=ag.filter(a=>a.statut==="actif").length;
-    const essai=ag.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0&&d<=90}).length;
-    const cdd=ag.filter(a=>{const end=employeePositionContractEndDate(a);if(!end||a.typeContrat!=="CDD")return false;const d=daysBetween(today_,end);return d>=0&&d<=90}).length;
-    const sits=(db.sites||[]).filter(s=>s?.actif!==false&&normalizeSocieteName(sitePrimarySociete(s)||s?.societe||"")===normalizeSocieteName(soc)).length;
-    const alertCls=essai>0||cdd>0?"background:#fff7ed;border-left:3px solid #f97316":"";
+    const sitesSoc=(db.sites||[]).filter(s=>s?.actif!==false&&normalizeSocieteName(sitePrimarySociete(s)||s?.societe||"")===normalizeSocieteName(soc));
+    const effContrat=sitesSoc.reduce((sum,site)=>sum+(+siteEffectifsNorm(site).totalContractuel||0),0);
+    const incidents=(db.incidents||[]).filter(i=>{
+      const st=String(i?.statut||"").toLowerCase();
+      return !["clos","cloture","clôturé","ferme","fermé","closed"].includes(st)&&incidentMatchesSociete(i,soc);
+    }).length;
+    const sansContrat=ag.filter(a=>{
+      if(a.statut!=="actif")return false;
+      if(agentOfficialContractDoc(a))return false;
+      if((db.contrats||[]).some(c=>contractRecordMatchesAgent(c,a)))return false;
+      if((db.contratsPersonnel||[]).some(c=>contractRecordMatchesAgent(c,a)))return false;
+      return !(a.contratPersonnelId||a.contratPersonnelTitre);
+    }).length;
+    const alertCls=incidents>0||sansContrat>0?"background:#fff7ed;border-left:3px solid #f97316":"";
     return`<tr style="${alertCls}">
       <td style="padding:10px 14px;font-weight:700;color:#0f172a;font-size:13px">${escapeHTML(soc)}</td>
-      <td style="padding:10px 14px;text-align:center;font-size:13px;font-weight:600">${ag.length}</td>
+      <td style="padding:10px 14px;text-align:center;font-size:13px;font-weight:600">${effContrat}</td>
       <td style="padding:10px 14px;text-align:center"><span style="background:#dcfce7;color:#166534;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">${actifs}</span></td>
-      <td style="padding:10px 14px;text-align:center;font-size:13px">${sits||"—"}</td>
-      <td style="padding:10px 14px;text-align:center">${essai>0?`<span style="background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">⚠ ${essai}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
-      <td style="padding:10px 14px;text-align:center">${cdd>0?`<span style="background:#fee2e2;color:#991b1b;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">⚠ ${cdd}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
-      <td style="padding:10px 14px;text-align:right"><button onclick="selectSocieteDirect('${escapeHTML(soc)}')" style="background:#043970;color:white;border:0;border-radius:6px;font-size:11px;font-weight:700;padding:4px 12px;cursor:pointer">Accéder →</button></td>
+      <td style="padding:10px 14px;text-align:center;font-size:13px">${sitesSoc.length||"—"}</td>
+      <td style="padding:10px 14px;text-align:center">${incidents>0?`<span style="background:#fee2e2;color:#991b1b;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">${incidents}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
+      <td style="padding:10px 14px;text-align:center">${sansContrat>0?`<span style="background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">${sansContrat}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
+      <td style="padding:10px 14px;text-align:right"><button onclick="selectSocieteDirect('${jsString(soc)}')" style="background:#043970;color:white;border:0;border-radius:6px;font-size:11px;font-weight:700;padding:4px 12px;cursor:pointer">Accéder →</button></td>
     </tr>`;
   }).join("");
   const KPI=(label,val,color,sub)=>`<div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;text-align:center">
@@ -3713,11 +3723,11 @@ function renderGlobalDashboard(view){
       <table style="width:100%;border-collapse:collapse">
         <thead><tr style="background:#f8fafc">
           <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:left;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Société</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Effectif</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Actifs</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Sites</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Fin essai ≤90j</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">CDD ≤90j</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Eff contrat</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Eff actif</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Nbr site</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Incidents</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Eff sans contrat</th>
           <th style="padding:8px 14px;border-bottom:1px solid #e2e8f0"></th>
         </tr></thead>
         <tbody>${socRows}</tbody>
