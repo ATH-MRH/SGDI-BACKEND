@@ -667,18 +667,6 @@ function sgdiLegacySnapshot(){
   }
   return snap;
 }
-// Réconciliation "vérité serveur" : après une écriture, on recharge discrètement la donnée
-// depuis le serveur et on réaffiche à partir d'elle (au lieu de faire confiance à la copie
-// optimiste locale qui peut dériver -> c'est ce qui provoquait les "données fantômes"
-// corrigées seulement au refresh manuel). Débouncé pour absorber les rafales de sauvegardes.
-let sgdiReconcileTimer=null;
-function sgdiScheduleReconcile(){
-  if(sgdiReconcileTimer)clearTimeout(sgdiReconcileTimer);
-  sgdiReconcileTimer=setTimeout(()=>{
-    sgdiReconcileTimer=null;
-    if(typeof sgdiAutoSync==="function")sgdiAutoSync("Réconciliation serveur");
-  },800);
-}
 function sgdiBackendSave(){
   if(!sgdiBackendShouldUse()||!db)return false;
   // JAMAIS sauvegarder avant le premier chargement serveur : sinon on enverrait une base
@@ -721,7 +709,6 @@ function sgdiBackendSave(){
     sgdiCaptureBaseline();
     uiSaveState("Sauvegardé","success");
     sgdiRefreshCountersNow({reason:"save"});
-    sgdiScheduleReconcile();
     if(window._sgdiSaveOverlayShown){updateSaveOverlay("Enregistrement terminé",true);setTimeout(closeSaveOverlay,1600);}
     return last;
   }).catch(e=>{
