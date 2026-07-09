@@ -29455,12 +29455,28 @@ function adminSocieteSelectorHTML(context){
     </div>
   </div>`;
 }
+function adminItemAssignedToSociete(item,soc){
+  if(!soc||!item)return false;
+  const aff=typeof agentLiveAffectation==="function"?agentLiveAffectation(item):(item.affectationCourante||{});
+  const ids=new Set([item.siteId,item.siteBackendId,aff?.siteId,aff?.siteBackendId].filter(v=>v!==undefined&&v!==null&&v!=="").map(v=>String(v)));
+  const names=[item.siteName,item.site,aff?.siteName,aff?.site].map(v=>normalizeSocieteName(v||"")).filter(Boolean);
+  if(!ids.size&&!names.length)return false;
+  return (db.sites||[]).some(site=>{
+    if(!siteMatchesSociete(site,soc))return false;
+    const siteIds=[site.id,site.backendId].filter(v=>v!==undefined&&v!==null&&v!=="").map(v=>String(v));
+    if(siteIds.some(id=>ids.has(id)))return true;
+    const siteNames=[site.name,site.nom,site.indicatif].map(v=>normalizeSocieteName(v||"")).filter(Boolean);
+    return siteNames.some(name=>names.includes(name));
+  });
+}
 function adminMatchesSociete(item){
   const s=adminActiveSociete();
   if(!s)return true;
   if(!item)return false;
   const itemSoc=item.societe||item.society||item.company||item.societeRattachement||"";
-  if(itemSoc)return normalizeSocieteName(itemSoc)===normalizeSocieteName(s);
+  if(itemSoc&&normalizeSocieteName(itemSoc)===normalizeSocieteName(s))return true;
+  if(adminItemAssignedToSociete(item,s))return true;
+  if(itemSoc)return false;
   if(Array.isArray(item.societesAutorisees))return !item.societesAutorisees.length||item.societesAutorisees.includes(s);
   if(Array.isArray(item.authorized_societies))return !item.authorized_societies.length||item.authorized_societies.includes(s);
   return true;
@@ -29470,7 +29486,7 @@ function adminDataMatchesSociete(item){
   if(!s)return true;
   if(!item)return false;
   const itemSoc=item.societe||item.society||item.company||item.societeRattachement||"";
-  return !!itemSoc&&normalizeSocieteName(itemSoc)===normalizeSocieteName(s);
+  return (!!itemSoc&&normalizeSocieteName(itemSoc)===normalizeSocieteName(s))||adminItemAssignedToSociete(item,s);
 }
 function adminSocieteLabel(value){return value&&SOCIETES.includes(value)?value:"Global"}
 const ADMIN_LEVEL_ACTIONS=[

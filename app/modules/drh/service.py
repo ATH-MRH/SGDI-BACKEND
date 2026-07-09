@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.modules.auth.models import User
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.irongs.models import SgdiRecord
+from app.modules.ops.models import Assignment, Site
 from app.core.photo_storage import normalize_photo_fields
 
 
@@ -31,6 +32,41 @@ def list_rows(db: Session, model: Type, filters: dict[str, Any] | None = None):
         if value not in (None, "") and hasattr(model, key):
             stmt = stmt.where(getattr(model, key) == value)
     return db.execute(stmt.order_by(model.id.desc())).scalars().all()
+
+
+def _site_society_condition(societies: list[str]):
+    return or_(
+        Site.equipment_plan["societe"].as_string().in_(societies),
+        Site.equipment_plan["society"].as_string().in_(societies),
+    )
+
+
+def employee_society_scope_condition(societies: list[str] | None):
+    values = [str(value).strip() for value in (societies or []) if str(value).strip()]
+    if not values:
+        return None
+    assigned_employee_ids = (
+        select(Assignment.employee_id)
+        .join(Site, Assignment.site_id == Site.id)
+        .where(Assignment.active == 1, _site_society_condition(values))
+    )
+    return or_(Employee.society.in_(values), Employee.id.in_(assigned_employee_ids))
+
+
+def list_employees(
+    db: Session,
+    *,
+    status: str | None = None,
+    society: str | None = None,
+    allowed_societies: list[str] | None = None,
+) -> list[Employee]:
+    stmt = select(Employee)
+    scope = employee_society_scope_condition([society] if society else allowed_societies)
+    if scope is not None:
+        stmt = stmt.where(scope)
+    if status:
+        stmt = stmt.where(Employee.status == status)
+    return db.execute(stmt.order_by(Employee.id.desc())).scalars().all()
 
 
 def get_or_404(db: Session, model: Type, row_id: int):
@@ -92,10 +128,9 @@ def list_employees_page(
     page_size = min(max(int(page_size or 25), 5), 100)
 
     stmt = select(Employee)
-    if society:
-        stmt = stmt.where(Employee.society == society)
-    elif allowed_societies:
-        stmt = stmt.where(Employee.society.in_(allowed_societies))
+    scope = employee_society_scope_condition([society] if society else allowed_societies)
+    if scope is not None:
+        stmt = stmt.where(scope)
 
     selected_mode = (mode or "actifs").strip().lower()
     if selected_mode in {"actifs", "active", "actif"}:

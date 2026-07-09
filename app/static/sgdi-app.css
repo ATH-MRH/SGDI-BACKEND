@@ -7570,3 +7570,22 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
   color:#94a3b8!important;
   cursor:not-allowed!important;
 }
+
+/* Sites dashboard: avoid floating controls covering site cards */
+body:has(#view .site-card) #sgdi-edit-fab{
+  display:none!important;
+}
+body:has(#view .site-card) #atlas-ai-widget{
+  right:14px!important;
+  bottom:14px!important;
+}
+body:has(#view .site-card) #atlas-ai-widget .ai-fab{
+  width:46px!important;
+  height:46px!important;
+  font-size:18px!important;
+  box-shadow:0 3px 14px rgba(37,99,235,.28)!important;
+}
+body:has(#view .site-card) #atlas-ai-widget .ai-panel{
+  right:14px!important;
+  bottom:72px!important;
+}

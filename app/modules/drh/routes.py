@@ -96,7 +96,11 @@ def _authorized_employee_ids(db: Session, user: User) -> set[int] | None:
     allowed = _allowed_societies(user)
     if not allowed:
         return None
-    rows = db.execute(select(Employee.id).where(Employee.society.in_(allowed))).scalars().all()
+    scope = service.employee_society_scope_condition(allowed)
+    stmt = select(Employee.id)
+    if scope is not None:
+        stmt = stmt.where(scope)
+    rows = db.execute(stmt).scalars().all()
     return set(rows)
 
 
@@ -130,11 +134,14 @@ def dashboard(
     user: User = Depends(current_user),
 ):
     effective_society = _effective_society_filter(user, society)
-    employees_rows = service.list_rows(db, Employee, {"society": effective_society})
-    candidates_rows = service.list_rows(db, Candidate, {"society": effective_society})
     allowed = _allowed_societies(user)
+    employees_rows = service.list_employees(
+        db,
+        society=effective_society,
+        allowed_societies=allowed if allowed and not effective_society else None,
+    )
+    candidates_rows = service.list_rows(db, Candidate, {"society": effective_society})
     if allowed and not effective_society:
-        employees_rows = [row for row in employees_rows if row.society in allowed]
         candidates_rows = [row for row in candidates_rows if row.society in allowed]
 
     employee_ids = {row.id for row in employees_rows}
@@ -185,10 +192,13 @@ def employees(
     user: User = Depends(current_user),
 ):
     effective_society = _effective_society_filter(user, society)
-    rows = service.list_rows(db, Employee, {"status": status, "society": effective_society})
     allowed = _allowed_societies(user)
-    if allowed and not effective_society:
-        rows = [row for row in rows if row.society in allowed]
+    rows = service.list_employees(
+        db,
+        status=status,
+        society=effective_society,
+        allowed_societies=allowed if allowed and not effective_society else None,
+    )
     # Injecter l'affectation ACTIVE réelle (table SQL assignments) dans chaque employé, pour que
     # le front affiche la vérité sans dépendre d'un appariement local fragile. Un employé sans
     # affectation active repart sans site (cohérent avec la base).
