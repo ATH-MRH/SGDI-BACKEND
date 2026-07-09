@@ -6852,6 +6852,9 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
   border-radius:14px!important;
   background:#fff!important;
 }
+.docs-archive-employee-row[hidden]{
+  display:none!important;
+}
 .docs-employee-view-button{
   appearance:none;
   border:1px solid #0b477f;
