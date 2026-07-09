@@ -15460,7 +15460,7 @@ function siteStaffingBalanceKpiHTML(manqueGlobal,surplusGlobal){
   return siteSynthKpiHTML({mode:"manque",tone:manqueGlobal>0?"danger":"success",icon:manqueGlobal>0?"!":"✓",label:"Manque d'effectif",value:manqueGlobal,sub:"Contractuel - réalisé",title:"Afficher les sites avec manque d'effectif"});
 }
 function siteSynthKpiHTML({mode,tone="neutral",icon="•",label,value,sub,title}){
-  return `<button type="button" onclick="filterSitesSituation('${mode}')" class="sites-synth-kpi sites-synth-kpi--${tone} kpi-clickable" title="${escapeHTML(title||label)}">
+  return `<button type="button" onclick="filterSitesSituation('${mode}')" class="sites-synth-kpi sites-synth-kpi--${tone} sites-synth-kpi--mode-${escapeHTML(mode)} kpi-clickable" title="${escapeHTML(title||label)}">
     <span class="sites-synth-kpi-icon">${escapeHTML(icon)}</span>
     <span class="sites-synth-kpi-label">${escapeHTML(label)}</span>
     <strong>${value}</strong>
