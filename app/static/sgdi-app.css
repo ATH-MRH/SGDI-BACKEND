@@ -7473,3 +7473,100 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 .pointage-code-card b{color:var(--pc-color);font-size:20px;line-height:1;font-weight:950;font-variant-numeric:tabular-nums}
 @media(max-width:1180px){.pointage-code-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){.pointage-code-grid{grid-template-columns:1fr}.pointage-code-card{min-height:48px;padding:7px}}
+
+/* ----- ADMIN TOOLBAR BUTTON STYLE ----- */
+#view .btn:not(.btn-danger),
+#view button.btn:not(.btn-danger),
+#view a.btn:not(.btn-danger),
+#view td .btn:not(.btn-danger),
+#view .module-page-header-actions button:not(.btn-danger),
+#view .module-page-header-actions .btn:not(.btn-danger),
+#view .candidate-actions-panel .btn:not(.btn-danger),
+#view .candidate-actions-row .btn:not(.btn-danger),
+#view .candidate-global-footer-actions .btn:not(.btn-danger),
+#view .recrutement-actions-row .btn:not(.btn-danger),
+#view .recrutement-actions-row button:not(.btn-danger),
+#view .contract-actions-row .btn:not(.btn-danger),
+#view .contract-actions-row button:not(.btn-danger),
+#view .mat-actions .btn:not(.btn-danger),
+#view .portal-open-btn,
+#view .topbar-dialogue-btn,
+#view .pointage-dialogue-style-btn,
+#view .fp-head-action,
+#view .fp-card-action,
+#view .fp-reset-btn,
+#view .rh-doc-action,
+#view .drh-effectif-action-btn{
+  min-height:38px!important;
+  height:38px!important;
+  min-width:92px!important;
+  width:auto!important;
+  max-width:none!important;
+  padding:0 18px!important;
+  border:1px solid #cfd9e6!important;
+  border-radius:2px!important;
+  background:#f8fafc!important;
+  background-image:none!important;
+  color:#06264a!important;
+  box-shadow:none!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  font-size:10px!important;
+  font-weight:900!important;
+  line-height:1.05!important;
+  letter-spacing:.02em!important;
+  text-transform:uppercase!important;
+  text-align:center!important;
+  text-decoration:none!important;
+  white-space:normal!important;
+  cursor:pointer!important;
+  transform:none!important;
+  box-sizing:border-box!important;
+}
+#view .btn:not(.btn-danger):hover,
+#view button.btn:not(.btn-danger):hover,
+#view a.btn:not(.btn-danger):hover,
+#view td .btn:not(.btn-danger):hover,
+#view .module-page-header-actions button:not(.btn-danger):hover,
+#view .module-page-header-actions .btn:not(.btn-danger):hover,
+#view .candidate-actions-panel .btn:not(.btn-danger):hover,
+#view .candidate-actions-row .btn:not(.btn-danger):hover,
+#view .candidate-global-footer-actions .btn:not(.btn-danger):hover,
+#view .recrutement-actions-row .btn:not(.btn-danger):hover,
+#view .recrutement-actions-row button:not(.btn-danger):hover,
+#view .contract-actions-row .btn:not(.btn-danger):hover,
+#view .contract-actions-row button:not(.btn-danger):hover,
+#view .mat-actions .btn:not(.btn-danger):hover,
+#view .portal-open-btn:hover,
+#view .topbar-dialogue-btn:hover,
+#view .pointage-dialogue-style-btn:hover,
+#view .fp-head-action:hover,
+#view .fp-card-action:hover,
+#view .fp-reset-btn:hover,
+#view .rh-doc-action:hover,
+#view .drh-effectif-action-btn:hover{
+  background:#eef3f8!important;
+  border-color:#b8c6d6!important;
+  color:#011b3f!important;
+  box-shadow:none!important;
+  text-decoration:none!important;
+  transform:none!important;
+}
+#view .btn:not(.btn-danger):active,
+#view button.btn:not(.btn-danger):active,
+#view a.btn:not(.btn-danger):active,
+#view .fp-head-action:active,
+#view .fp-card-action:active,
+#view .fp-reset-btn:active,
+#view .drh-effectif-action-btn:active{
+  background:#e6edf5!important;
+}
+#view .btn:not(.btn-danger)[disabled],
+#view button.btn:not(.btn-danger)[disabled]{
+  background:#f4f6f9!important;
+  border-color:#dde5ee!important;
+  color:#94a3b8!important;
+  cursor:not-allowed!important;
+}
