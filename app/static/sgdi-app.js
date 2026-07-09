@@ -15261,7 +15261,7 @@ function initInlineSitePositionMap(){
     const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);
     const hasPos=el.dataset.hasPosition==="1"&&Number.isFinite(lat)&&Number.isFinite(lng);
     const center=[Number.isFinite(lng)?lng:1.6596,Number.isFinite(lat)?lat:28.0339];
-    const map=new maplibregl.Map({container:"site-position-inline-map",style:sgdiMapLibreStyle(),center,zoom:hasPos?14:5});
+    const map=new maplibregl.Map({container:"site-position-inline-map",style:sgdiMapLibreStyle(),center,zoom:hasPos?14:5,scrollZoom:false});
     window.__sgdiInlineSitePositionMap=map;
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-left");
     const marker=new maplibregl.Marker({element:sitePositionMarkerIcon(),draggable:!locked}).setLngLat(center).addTo(map);
@@ -15314,7 +15314,7 @@ function initSitePositionMap(){
     if(!document.getElementById("site-position-map"))return;
     const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);
     const center=[Number.isFinite(lng)?lng:1.6596,Number.isFinite(lat)?lat:28.0339];
-    const map=new maplibregl.Map({container:"site-position-map",style:sgdiMapLibreStyle(),center,zoom:Number.isFinite(lat)&&Number.isFinite(lng)?14:5});
+    const map=new maplibregl.Map({container:"site-position-map",style:sgdiMapLibreStyle(),center,zoom:Number.isFinite(lat)&&Number.isFinite(lng)?14:5,scrollZoom:false});
     window.__sgdiSitePositionMap=map;
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-left");
     const marker=new maplibregl.Marker({element:sitePositionMarkerIcon(),draggable:true}).setLngLat(center).addTo(map);
