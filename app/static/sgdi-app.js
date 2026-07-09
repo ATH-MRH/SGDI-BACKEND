@@ -726,49 +726,68 @@ function sgdiFireAndForgetSave(){
   sgdiBackendSave();
 }
 let _sgdiLastPullError="";
+let sgdiPullStateInFlight=null;
 async function sgdiPullState(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   if(sgdiDirty&&!opt.force)return db;
-  try{
-    const _dbCtrl=new AbortController();const _dbTimer=setTimeout(()=>_dbCtrl.abort(),120000);
-    const snapshotPath=(opt.light||opt.deferSql||opt.deferSecondary||opt.auto)?"/api/irongs/db?light=1":"/api/irongs/db";
-    let remote;try{remote=await sgdiApi(snapshotPath,{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
-    if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
-      window.__SGDI_BACKEND_ENABLED__=true;
-      const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents"];
-      const _prevSQL=opt.light&&db?Object.fromEntries(_sqlKeys.filter(k=>Array.isArray(db[k])&&db[k].length).map(k=>[k,db[k]])):null;
-      hydrateDB(remote);
-      if(_prevSQL){for(const[k,v]of Object.entries(_prevSQL)){if(!(db[k]||[]).length)db[k]=v;}}
-      sanitizeCandidatesInDB();
-      sgdiPostgresReady=true;
-      sgdiHydrated=true;
-      if(typeof loadCustomSocietes==="function")loadCustomSocietes();
-      if(typeof sgdiScheduleAutoRefresh==="function")sgdiScheduleAutoRefresh();
-      await sgdiLoadAuthState();
-      if(opt.deferSql){
-        setTimeout(()=>sgdiBackgroundSqlSync({silent:opt.silent,render:opt.render}),50);
-      }else if(!opt.light){
-        await sgdiBackgroundSqlSync({silent:opt.silent,render:false,blocking:true});
-      }
-      const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
-      if(typeof normalizePostesInDB==="function")normalizePostesInDB();
-      const refreshPositions=async()=>{try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=[...new Set(pr.map(p=>p.name||p))]}catch(_){}};
-      if(opt.deferSql||opt.deferSecondary)setTimeout(refreshPositions,80);else await refreshPositions();
-      const pruned=pruneEmptyCandidates();
-      if(purged||pruned)sgdiBackendSave();
-      if(typeof ptAutoArchiveOldDays==="function")ptAutoArchiveOldDays();
-      if(opt.render&&typeof render==="function")render();
-      sgdiRefreshCountersNow({reason:"pull"});
-      if(!opt.silent&&typeof toast==="function")toast("Données chargées depuis le backend","success");
-      return db;
-    }
-  }catch(e){
-    _sgdiLastPullError=e.message||String(e);
-    console.error("[SGDI] sgdiPullState echec:",e);
-    if(!opt.silent&&typeof toast==="function")toast("Backend indisponible : "+(e.message||e),"error");
+  // sgdiPullState est appelé depuis des dizaines d'endroits (sauvegardes, navigation,
+  // temps réel...). Sans sérialisation, deux appels concurrents peuvent chacun lancer
+  // leur propre hydrateDB() et se marcher dessus sur db.agents/db.sites/db.assignments
+  // (source des instantanés incohérents déjà observés sur le module Mouvement).
+  while(sgdiPullStateInFlight){
+    await sgdiPullStateInFlight.catch(()=>{});
   }
-  return null;
+  const run=(async()=>{
+    try{
+      const _dbCtrl=new AbortController();const _dbTimer=setTimeout(()=>_dbCtrl.abort(),120000);
+      const snapshotPath=(opt.light||opt.deferSql||opt.deferSecondary||opt.auto)?"/api/irongs/db?light=1":"/api/irongs/db";
+      let remote;try{remote=await sgdiApi(snapshotPath,{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
+      if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
+        window.__SGDI_BACKEND_ENABLED__=true;
+        const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents"];
+        const _prevSQL=opt.light&&db?Object.fromEntries(_sqlKeys.filter(k=>Array.isArray(db[k])&&db[k].length).map(k=>[k,db[k]])):null;
+        // Attend qu'un cycle de sync des collections SQL déjà en cours (sites,
+        // affectations...) se termine avant de remplacer db en bloc.
+        if(sgdiSqlSyncInProgress)await sgdiSqlSyncInProgress.catch(()=>{});
+        hydrateDB(remote);
+        if(_prevSQL){for(const[k,v]of Object.entries(_prevSQL)){if(!(db[k]||[]).length)db[k]=v;}}
+        sanitizeCandidatesInDB();
+        sgdiPostgresReady=true;
+        sgdiHydrated=true;
+        if(typeof loadCustomSocietes==="function")loadCustomSocietes();
+        if(typeof sgdiScheduleAutoRefresh==="function")sgdiScheduleAutoRefresh();
+        await sgdiLoadAuthState();
+        if(opt.deferSql){
+          setTimeout(()=>sgdiBackgroundSqlSync({silent:opt.silent,render:opt.render}),50);
+        }else if(!opt.light){
+          await sgdiBackgroundSqlSync({silent:opt.silent,render:false,blocking:true});
+        }
+        const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
+        if(typeof normalizePostesInDB==="function")normalizePostesInDB();
+        const refreshPositions=async()=>{try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=[...new Set(pr.map(p=>p.name||p))]}catch(_){}};
+        if(opt.deferSql||opt.deferSecondary)setTimeout(refreshPositions,80);else await refreshPositions();
+        const pruned=pruneEmptyCandidates();
+        if(purged||pruned)sgdiBackendSave();
+        if(typeof ptAutoArchiveOldDays==="function")ptAutoArchiveOldDays();
+        if(opt.render&&typeof render==="function")render();
+        sgdiRefreshCountersNow({reason:"pull"});
+        if(!opt.silent&&typeof toast==="function")toast("Données chargées depuis le backend","success");
+        return db;
+      }
+    }catch(e){
+      _sgdiLastPullError=e.message||String(e);
+      console.error("[SGDI] sgdiPullState echec:",e);
+      if(!opt.silent&&typeof toast==="function")toast("Backend indisponible : "+(e.message||e),"error");
+    }
+    return null;
+  })();
+  sgdiPullStateInFlight=run.catch(()=>null);
+  try{
+    return await run;
+  }finally{
+    sgdiPullStateInFlight=null;
+  }
 }
 let sgdiAutoRefreshTimer=null;
 let sgdiAutoRefreshRunning=false;
@@ -1803,7 +1822,7 @@ function applyAssignmentsToEmployees(assignments){
     if(!a?.backendId||employeeMatchesAssignmentRefs(a,activeEmployeeRefs))return;
     const current=a.affectationCourante||{};
     if(current.siteId||current.siteBackendId||current.siteName||current.assignmentBackendId){
-      a.affectationCourante={...current,siteId:"",siteBackendId:null,siteName:"",clientName:"",groupe:"",dateDebut:"",assignmentBackendId:""};
+      a.affectationCourante={...current,siteId:"",siteBackendId:null,siteName:"",clientName:"",groupe:"",dateDebut:"",assignmentBackendId:"",poste:a.fonction||a.position||""};
     }
   });
   active.forEach(aff=>{
@@ -3665,18 +3684,28 @@ function renderGlobalDashboard(view){
   const socRows=SOCIETES.map(soc=>{
     const ag=allAgents.filter(a=>normalizeSocieteName(a.societe)===normalizeSocieteName(soc));
     const actifs=ag.filter(a=>a.statut==="actif").length;
-    const essai=ag.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0&&d<=90}).length;
-    const cdd=ag.filter(a=>{const end=employeePositionContractEndDate(a);if(!end||a.typeContrat!=="CDD")return false;const d=daysBetween(today_,end);return d>=0&&d<=90}).length;
-    const sits=(db.sites||[]).filter(s=>s?.actif!==false&&normalizeSocieteName(sitePrimarySociete(s)||s?.societe||"")===normalizeSocieteName(soc)).length;
-    const alertCls=essai>0||cdd>0?"background:#fff7ed;border-left:3px solid #f97316":"";
+    const sitesSoc=(db.sites||[]).filter(s=>s?.actif!==false&&normalizeSocieteName(sitePrimarySociete(s)||s?.societe||"")===normalizeSocieteName(soc));
+    const effContrat=sitesSoc.reduce((sum,site)=>sum+(+siteEffectifsNorm(site).totalContractuel||0),0);
+    const incidents=(db.incidents||[]).filter(i=>{
+      const st=String(i?.statut||"").toLowerCase();
+      return !["clos","cloture","clôturé","ferme","fermé","closed"].includes(st)&&incidentMatchesSociete(i,soc);
+    }).length;
+    const sansContrat=ag.filter(a=>{
+      if(a.statut!=="actif")return false;
+      if(agentOfficialContractDoc(a))return false;
+      if((db.contrats||[]).some(c=>contractRecordMatchesAgent(c,a)))return false;
+      if((db.contratsPersonnel||[]).some(c=>contractRecordMatchesAgent(c,a)))return false;
+      return !(a.contratPersonnelId||a.contratPersonnelTitre);
+    }).length;
+    const alertCls=incidents>0||sansContrat>0?"background:#fff7ed;border-left:3px solid #f97316":"";
     return`<tr style="${alertCls}">
       <td style="padding:10px 14px;font-weight:700;color:#0f172a;font-size:13px">${escapeHTML(soc)}</td>
-      <td style="padding:10px 14px;text-align:center;font-size:13px;font-weight:600">${ag.length}</td>
+      <td style="padding:10px 14px;text-align:center;font-size:13px;font-weight:600">${effContrat}</td>
       <td style="padding:10px 14px;text-align:center"><span style="background:#dcfce7;color:#166534;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">${actifs}</span></td>
-      <td style="padding:10px 14px;text-align:center;font-size:13px">${sits||"—"}</td>
-      <td style="padding:10px 14px;text-align:center">${essai>0?`<span style="background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">⚠ ${essai}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
-      <td style="padding:10px 14px;text-align:center">${cdd>0?`<span style="background:#fee2e2;color:#991b1b;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">⚠ ${cdd}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
-      <td style="padding:10px 14px;text-align:right"><button onclick="selectSocieteDirect('${escapeHTML(soc)}')" style="background:#043970;color:white;border:0;border-radius:6px;font-size:11px;font-weight:700;padding:4px 12px;cursor:pointer">Accéder →</button></td>
+      <td style="padding:10px 14px;text-align:center;font-size:13px">${sitesSoc.length||"—"}</td>
+      <td style="padding:10px 14px;text-align:center">${incidents>0?`<span style="background:#fee2e2;color:#991b1b;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">${incidents}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
+      <td style="padding:10px 14px;text-align:center">${sansContrat>0?`<span style="background:#fef3c7;color:#92400e;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px">${sansContrat}</span>`:`<span style="color:#cbd5e1">—</span>`}</td>
+      <td style="padding:10px 14px;text-align:right"><button onclick="selectSocieteDirect('${jsString(soc)}')" style="background:#043970;color:white;border:0;border-radius:6px;font-size:11px;font-weight:700;padding:4px 12px;cursor:pointer">Accéder →</button></td>
     </tr>`;
   }).join("");
   const KPI=(label,val,color,sub)=>`<div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;text-align:center">
@@ -3702,11 +3731,11 @@ function renderGlobalDashboard(view){
       <table style="width:100%;border-collapse:collapse">
         <thead><tr style="background:#f8fafc">
           <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:left;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Société</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Effectif</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Actifs</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Sites</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Fin essai ≤90j</th>
-          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">CDD ≤90j</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Eff contrat</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Eff actif</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Nbr site</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Incidents</th>
+          <th style="padding:8px 14px;font-size:10px;font-weight:700;color:#94a3b8;text-align:center;border-bottom:1px solid #e2e8f0;text-transform:uppercase">Eff sans contrat</th>
           <th style="padding:8px 14px;border-bottom:1px solid #e2e8f0"></th>
         </tr></thead>
         <tbody>${socRows}</tbody>
@@ -12932,6 +12961,7 @@ function renderAgentForm(view,id){
   else if(congeActif&&congeActif.type==="Maladie"){situation="maladie";sitClass="pill-amber";sitIcon="🤒"}
   else if(congeActif){situation="congé";sitClass="pill-blue";sitIcon="🏖"}
   else if(agentStatut==="actif"){situation="actif";sitClass="pill-green";sitIcon="✅"}
+  else if(agentStatut==="sortant"){situation="sortant";sitClass="pill-red";sitIcon="🚪"}
   else{situation=a.statut||"—";sitClass="pill-gray";sitIcon="•"}
   const situationBadge=`<span class="pill ${sitClass} agent-active-status-pill" style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:6px 14px">${sitIcon} ${situation}</span>`;
   const operationnel=(situation==="actif");
@@ -14057,7 +14087,7 @@ function opsAssignmentDocumentHTML(draft,type,opt={}){
   const reference=draft.reference||ref;
   const meta={agentId:a.id,title,category:"OPS",type,reference,date:draft.dateDebut||today()};
   const html=`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(title)}</title><style>
-    @page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:12px}.op-doc{width:277mm;margin:0 auto;padding:5mm 6mm}.op-head{position:relative;min-height:22mm;margin-left:0;display:flex;align-items:center;justify-content:center}.op-logo{position:absolute;left:0;top:-3mm;width:26mm;height:26mm;object-fit:contain}.op-title{text-align:center;line-height:1.05}.op-title b{display:block;font-size:23px}.op-title span{font-size:18px}.op-row{display:grid;grid-template-columns:1.7fr .85fr;gap:2mm;margin-top:2mm}.op-row-2{display:grid;grid-template-columns:1fr 1fr;gap:2mm;margin-top:2mm}.op-wide{grid-column:1/2}.op-ref{display:grid;grid-template-columns:1fr 1fr;gap:130mm;margin-top:3mm}.op-small{border:1.8px solid #043970;border-radius:5px;padding:6px 7px}.op-motif{display:grid;grid-template-columns:2.2fr 1fr;gap:2mm;margin-top:2mm}.op-motif-box{border:1.8px solid #043970;border-radius:5px;padding:6px 7px;min-height:30px}.op-body{display:grid;grid-template-columns:1fr 1fr;margin-top:2mm;border:1.8px solid #043970}.op-cell{min-height:35mm;padding:7px;border-right:1.8px solid #043970}.op-cell:last-child{border-right:0}.op-lines{line-height:1.75}.op-dots{border-bottom:1px dotted #555;min-height:18px}.op-sign-grid{display:grid;grid-template-columns:1fr 1fr;border:1.8px solid #043970;border-top:0}.op-sign{height:31mm;text-align:center;font-weight:800;padding-top:4mm;border-right:1.8px solid #043970}.op-sign:last-child{border-right:0}.op-bottom{border-bottom:2px solid #043970;margin-top:3mm}@media print{.no-print{display:none!important}.op-doc{width:auto;margin:0;padding:0}}
+    @page{size:210mm 135mm;margin:5mm}*{box-sizing:border-box}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:9.5px}.op-doc{width:200mm;margin:0 auto;padding:3mm 4mm}.op-head{position:relative;min-height:15mm;margin-left:0;display:flex;align-items:center;justify-content:center}.op-logo{position:absolute;left:0;top:-2mm;width:17mm;height:17mm;object-fit:contain}.op-title{text-align:center;line-height:1.05}.op-title b{display:block;font-size:17px}.op-title span{font-size:13px}.op-row{display:grid;grid-template-columns:1.7fr .85fr;gap:1.5mm;margin-top:1.5mm}.op-row-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5mm;margin-top:1.5mm}.op-wide{grid-column:1/2}.op-ref{display:grid;grid-template-columns:1fr 1fr;gap:90mm;margin-top:2mm}.op-small{border:1.4px solid #043970;border-radius:4px;padding:3px 5px}.op-motif{display:grid;grid-template-columns:2.2fr 1fr;gap:1.5mm;margin-top:1.5mm}.op-motif-box{border:1.4px solid #043970;border-radius:4px;padding:3px 5px;min-height:20px}.op-body{display:grid;grid-template-columns:1fr 1fr;margin-top:1.5mm;border:1.4px solid #043970}.op-cell{min-height:22mm;padding:4px;border-right:1.4px solid #043970}.op-cell:last-child{border-right:0}.op-lines{line-height:1.55}.op-dots{border-bottom:1px dotted #555;min-height:13px}.op-sign-grid{display:grid;grid-template-columns:1fr 1fr;border:1.4px solid #043970;border-top:0}.op-sign{height:18mm;text-align:center;font-weight:800;padding-top:2mm;border-right:1.4px solid #043970}.op-sign:last-child{border-right:0}.op-bottom{border-bottom:1.5px solid #043970;margin-top:2mm}@media print{.no-print{display:none!important}.op-doc{width:auto;margin:0;padding:0}}
   </style></head><body><main class="op-doc">
     <div class="op-head">${sgdiDocumentLogoHTML(a.societe||draft.societe,"op-logo")}<div class="op-title"><b>${escapeHTML(title)}</b><span>PERSONNEL</span></div></div>
     <div class="op-ref"><div class="op-small">Réf : <b>${escapeHTML(reference)}</b></div><div class="op-small">Date : <b>${formatDate(today())}</b></div></div>
@@ -14066,7 +14096,7 @@ function opsAssignmentDocumentHTML(draft,type,opt={}){
     <div class="op-row">${opsAssignmentLine("Affectation actuelle",draft.currentPosition,true)}${opsAssignmentLine("Indicatif",draft.currentIndicatif)}</div>
     <div class="op-row">${opsAssignmentLine("Nouvelle Affectation",draft.newPosition,true)}${opsAssignmentLine("Indicatif",draft.newIndicatif)}</div>
     <div class="op-motif"><div class="op-motif-box">Motif du Mouvement : &nbsp; Premiere Affectation ${opsAssignmentCheckbox(isFirst)} &nbsp;&nbsp; Remp Absence ${opsAssignmentCheckbox(false)} &nbsp;&nbsp; Nouvelle Affectation ${opsAssignmentCheckbox(!isFirst)}</div><div class="op-motif-box">Définitif ${opsAssignmentCheckbox(isDef)} &nbsp;&nbsp; Provisoir ${opsAssignmentCheckbox(isTemp)}</div></div>
-    <div class="op-body"><div class="op-cell"><div>Observations :</div><div class="op-lines"><div class="op-dots">${escapeHTML(draft.motifChangement||"")}</div><div class="op-dots"></div><div class="op-dots"></div><div class="op-dots"></div></div></div><div class="op-cell"><div class="op-lines"><div>Date du Mouvement : <b>${formatDate(draft.dateDebut)}</b></div><div>Mouvement effectué par : <span class="op-dots" style="display:inline-block;width:62mm"></span></div><div>Signature<span class="op-dots" style="display:inline-block;width:75mm"></span></div></div></div></div>
+    <div class="op-body"><div class="op-cell"><div>Observations :</div><div class="op-lines"><div class="op-dots">${escapeHTML(draft.motifChangement||"")}</div><div class="op-dots"></div><div class="op-dots"></div><div class="op-dots"></div></div></div><div class="op-cell"><div class="op-lines"><div>Date du Mouvement : <b>${formatDate(draft.dateDebut)}</b></div><div>Mouvement effectué par : <span class="op-dots" style="display:inline-block;width:45mm"></span></div><div>Signature<span class="op-dots" style="display:inline-block;width:54mm"></span></div></div></div></div>
     <div class="op-sign-grid"><div class="op-sign">En cas de Refus<br/><br/>Signature<br/><br/>............................</div><div class="op-sign">En cas d'Acceptation<br/><br/>Signature<br/><br/>............................</div></div>
     <div class="op-bottom"></div>
   </main></body></html>`;
@@ -15249,7 +15279,7 @@ function initInlineSitePositionMap(){
     const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);
     const hasPos=el.dataset.hasPosition==="1"&&Number.isFinite(lat)&&Number.isFinite(lng);
     const center=[Number.isFinite(lng)?lng:1.6596,Number.isFinite(lat)?lat:28.0339];
-    const map=new maplibregl.Map({container:"site-position-inline-map",style:sgdiMapLibreStyle(),center,zoom:hasPos?14:5});
+    const map=new maplibregl.Map({container:"site-position-inline-map",style:sgdiMapLibreStyle(),center,zoom:hasPos?14:5,scrollZoom:false});
     window.__sgdiInlineSitePositionMap=map;
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-left");
     const marker=new maplibregl.Marker({element:sitePositionMarkerIcon(),draggable:!locked}).setLngLat(center).addTo(map);
@@ -15302,7 +15332,7 @@ function initSitePositionMap(){
     if(!document.getElementById("site-position-map"))return;
     const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);
     const center=[Number.isFinite(lng)?lng:1.6596,Number.isFinite(lat)?lat:28.0339];
-    const map=new maplibregl.Map({container:"site-position-map",style:sgdiMapLibreStyle(),center,zoom:Number.isFinite(lat)&&Number.isFinite(lng)?14:5});
+    const map=new maplibregl.Map({container:"site-position-map",style:sgdiMapLibreStyle(),center,zoom:Number.isFinite(lat)&&Number.isFinite(lng)?14:5,scrollZoom:false});
     window.__sgdiSitePositionMap=map;
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-left");
     const marker=new maplibregl.Marker({element:sitePositionMarkerIcon(),draggable:true}).setLngLat(center).addTo(map);
@@ -15448,7 +15478,7 @@ function siteStaffingBalanceKpiHTML(manqueGlobal,surplusGlobal){
   return siteSynthKpiHTML({mode:"manque",tone:manqueGlobal>0?"danger":"success",icon:manqueGlobal>0?"!":"✓",label:"Manque d'effectif",value:manqueGlobal,sub:"Contractuel - réalisé",title:"Afficher les sites avec manque d'effectif"});
 }
 function siteSynthKpiHTML({mode,tone="neutral",icon="•",label,value,sub,title}){
-  return `<button type="button" onclick="filterSitesSituation('${mode}')" class="sites-synth-kpi sites-synth-kpi--${tone} kpi-clickable" title="${escapeHTML(title||label)}">
+  return `<button type="button" onclick="filterSitesSituation('${mode}')" class="sites-synth-kpi sites-synth-kpi--${tone} sites-synth-kpi--mode-${escapeHTML(mode)} kpi-clickable" title="${escapeHTML(title||label)}">
     <span class="sites-synth-kpi-icon">${escapeHTML(icon)}</span>
     <span class="sites-synth-kpi-label">${escapeHTML(label)}</span>
     <strong>${value}</strong>
@@ -15603,6 +15633,102 @@ function openSiteAffectesModal(siteId){
     ${surplus.length?`<div class="card overflow-hidden" style="border-color:#fdba74"><div class="px-3 py-2 border-b font-semibold text-sm" style="background:#fff7ed;color:#c2410c">Effectifs en surplus (+${surplus.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th></tr></thead><tbody>${surplus.map(agentRow).join("")}</tbody></table></div>`:""}
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
+function siteNonAffectesPourSite(site){
+  const soc=site?.societe||"";
+  return (db.agents||[])
+    .filter(a=>employeeIsActive(a)&&!agentHasLiveAffectation(a)&&(!soc||normalizeSocieteName(a.societe||"")===normalizeSocieteName(soc)))
+    .sort((a,b)=>((a.nom||"")+" "+(a.prenom||"")).localeCompare((b.nom||"")+" "+(b.prenom||"")));
+}
+function openSiteAjouterEffectifModal(siteId){
+  const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
+  const agents=siteNonAffectesPourSite(site);
+  const row=a=>{
+    const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
+    const mat=escapeHTML(a.matricule||"—");
+    const poste=escapeHTML(a.fonction||a.position||"");
+    return `<label class="site-eff-add-row"><input type="checkbox" class="site-eff-add-cb" value="${escapeHTML(a.id)}" onchange="siteAjouterEffectifCount()"/><span><b>${nom}</b><small> · ${mat}${poste?" · "+poste:""}</small></span></label>`;
+  };
+  openModal(`<h3 class="font-bold text-lg mb-2">Ajouter effectif</h3>
+    <div class="p-3 rounded bg-slate-50 border border-slate-200 mb-3">
+      <div class="font-black">${escapeHTML(site.nom||"Site")}</div>
+      <div class="text-xs text-slate-500">${escapeHTML(site.indicatif||"—")}${site.societe?` · ${escapeHTML(site.societe)}`:""}</div>
+    </div>
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-xs text-slate-500"><span id="site-eff-add-count">0</span> sélectionné(s)</span>
+      <div class="flex items-center gap-2">
+        <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="siteAjouterEffectifSelectAll(true)">Tout</button>
+        <button type="button" class="btn btn-ghost text-xs py-0.5 px-2" onclick="siteAjouterEffectifSelectAll(false)">Aucun</button>
+      </div>
+    </div>
+    <div id="site-eff-add-list" class="site-eff-add-list">
+      ${agents.length?agents.map(row).join(""):`<div class="p-4 text-center text-slate-500 text-sm">Aucun employé non affecté${site.societe?" pour "+escapeHTML(site.societe):""}.</div>`}
+    </div>
+    <div class="flex justify-end gap-2 mt-4">
+      <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+      <button type="button" id="site-eff-add-validate" class="btn btn-primary" onclick="siteAjouterEffectifValider('${jsString(siteId)}')">Valider affectation</button>
+    </div>`);
+}
+function siteAjouterEffectifCount(){
+  const list=document.getElementById("site-eff-add-list");
+  const n=list?list.querySelectorAll(".site-eff-add-cb:checked").length:0;
+  const el=document.getElementById("site-eff-add-count");
+  if(el)el.textContent=n;
+}
+function siteAjouterEffectifSelectAll(checked){
+  const list=document.getElementById("site-eff-add-list");
+  if(!list)return;
+  list.querySelectorAll(".site-eff-add-cb").forEach(cb=>cb.checked=checked);
+  siteAjouterEffectifCount();
+}
+async function siteAjouterEffectifValider(siteId){
+  const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
+  const list=document.getElementById("site-eff-add-list");
+  const agentIds=list?[...list.querySelectorAll(".site-eff-add-cb:checked")].map(cb=>cb.value).filter(Boolean):[];
+  if(!agentIds.length){toast("Sélectionnez au moins un employé","error");return}
+  const btn=document.getElementById("site-eff-add-validate");
+  if(btn){btn.disabled=true;btn.textContent="Enregistrement..."}
+  const date=today();
+  const ordreMouvementNumero=nextOrdreMouvementNumero();
+  let ok=0,fail=0;
+  for(const agentId of agentIds){
+    try{
+      const agent=(db.agents||[]).find(a=>String(a.id)===String(agentId));
+      if(!agent)throw new Error("Employé introuvable");
+      const f=fpqEnsure(date,agentId);
+      const patch={
+        employee_id:agent.backendId||sqlBackendId(agentId)||null,
+        agentBackendId:agent.backendId||null,
+        matricule:agent.matricule||"",
+        ordreMouvementNumero,
+        mouvementNumero:ordreMouvementNumero,
+        positionActuelle:opsEmployeeCurrentPositionLabel(agent),
+        siteId:site.id,
+        siteBackendId:site.backendId||null,
+        siteName:site.nom||site.intitule||"",
+        societe:site.societe||agent.societe||"",
+        mouvementMotif:"Affectation",
+        mouvementType:"Affectation",
+        mouvementDuree:"Jusqu'à nouvel ordre",
+        groupe:"",
+        mouvementObs:"Affectation groupée depuis la fiche site",
+        siteManual:true
+      };
+      opsApplyLocalMovementAffectation(date,agentId,patch);
+      const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
+      const line=result?.data?.item||result?.item||{...f,...patch,date,agentId};
+      const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId};
+      fpqUpsertLocalPresenceLine(line);
+      opsUpsertMovementHistory(movement);
+      await fpqApplyMovementAffectation(date,agentId,patch);
+      await opsArchiveMovementDocument(movement);
+      ok++;
+    }catch(e){console.warn("Affectation refusée pour",agentId,e);fail++;}
+  }
+  await sgdiPullState({silent:true});
+  closeModal();
+  toast(`${ok} employé(s) affecté(s) et ordre de mouvement archivé`+(ok>1?"s":"")+(fail?` · ${fail} échec(s)`:""),ok?"success":"error");
+  renderView();
+}
 function siteEffectifAlertHTML(eff,agents){
   if(session?.transverse==="materiel")return"";
   const manque=Math.max(0,(+eff.totalContractuel||0)-agents.length);
@@ -15611,6 +15737,36 @@ function siteEffectifAlertHTML(eff,agents){
     <div class="flex items-center justify-between gap-3">
       <div><div class="font-black text-sm">ALERTE MANQUE D'EFFECTIF</div><div class="text-xs mt-1">Effectif contractuel : <strong>${eff.totalContractuel}</strong> · Affectés : <strong>${agents.length}</strong> · Manquant : <strong>${manque}</strong></div></div>
       <span class="pill pill-red text-sm">${manque} manquant${manque>1?"s":""}</span>
+    </div>
+  </div>`;
+}
+function siteRecapBlockHTML(site,eff){
+  const backend=siteBackendSituationForSite(site);
+  const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
+  const agents=siteBackendAssignmentRows(site)||siteAgentsAffectes(site);
+  const realise=agents.length;
+  const manque=Math.max(0,contractuel-realise);
+  const surplus=Math.max(0,realise-contractuel);
+  const consignesText=String(site.consignesGenerales||site.consignes||site.consigneGenerale||"").trim();
+  const consignesPreview=consignesText?(consignesText.length>90?consignesText.slice(0,90)+"…":consignesText):"Aucune consigne enregistrée.";
+  const tile=(label,value,color)=>`<div class="site-recap-tile"><span>${escapeHTML(label)}</span><strong${color?` style="color:${color}"`:""}>${escapeHTML(String(value))}</strong></div>`;
+  return `<div class="site-editor-wide site-recap-card">
+    <div class="site-recap-head">
+      <div class="site-recap-grid">
+        ${tile("Date d'ouverture",formatDate(site.dateOuverture))}
+        ${tile("Indicatif",site.indicatif||"—")}
+        ${tile("Téléphone du site",site.telephone||"—")}
+        ${tile("Effectif contrat",contractuel)}
+        ${tile("Effectif réalisé",realise,realise>=contractuel&&contractuel>0?"#15803d":"")}
+        ${tile("Manque",manque,manque?"#dc2626":"#15803d")}
+        ${tile("Surplus",surplus,surplus?"#7c3aed":"#94a3b8")}
+      </div>
+      ${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-primary" data-site-lock-keep onclick="openSiteAjouterEffectifModal('${jsString(siteEditRouteId(site))}')">Ajouter effectif</button>`}
+    </div>
+    <div class="site-recap-consignes">
+      <span class="site-recap-consignes-label">Consignes et instructions</span>
+      <p>${escapeHTML(consignesPreview)}</p>
+      <button type="button" class="btn btn-ghost text-xs" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(site))}')">Voir / gérer</button>
     </div>
   </div>`;
 }
@@ -16449,15 +16605,16 @@ async function renderSiteForm(view,id){
       if(Array.isArray(stores)&&stores.length)db.magasins=stores.map(storeFromApi);
     }catch(e){console.warn("renderSiteForm: stores preload failed",e);}
   }
-  let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),dateOuverture:"",siteOuvertPar:"",nom:"",indicatif:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
+  let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),dateOuverture:"",siteOuvertPar:"",nom:"",indicatif:"",telephone:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
   const rotationSystem=inferSiteRotationSystem(s);
   const eff=siteEffectifsNorm(s);
   const canEditSite=siteCanEditFromCurrentModule(s);
   const lockNotice=!canEditSite&&!s.isNew?`<div class="site-editor-wide p-3 rounded mb-3" style="background:#f8fafc;border:1px solid #cbd5e1;color:#475569;font-weight:800">Fiche technique site verrouillée après enregistrement.</div>`:"";
   const siteHeaderActions=s.isNew?"":`<div class="site-editor-wide site-editor-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDocumentsModal('${jsString(siteEditRouteId(s))}')">Documents</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDemandesModal('${jsString(siteEditRouteId(s))}')">Demandes</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteCompteRenduForm('${jsString(siteEditRouteId(s))}')">Événements</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(s))}')">Consignes générales</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteProceduresModal('${jsString(siteEditRouteId(s))}')">Procédures</button>${isAdminSystemSession()?`<button type="button" class="btn btn-ghost" data-site-lock-keep style="border-color:#fecaca;color:#b91c1c;background:#fff1f2" onclick="archiveSite('${jsString(siteEditRouteId(s))}')">Archiver</button><button type="button" class="btn btn-danger" data-site-lock-keep onclick="deleteSite('${jsString(siteEditRouteId(s))}')">Supprimer</button>`:""}<button class="btn btn-ghost" data-site-lock-keep onclick="navigate('sites/actifs')">← Retour</button></div>`;
-  view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${siteHeaderActions}${lockNotice}
+  const siteRecap=s.isNew?"":siteRecapBlockHTML(s,eff);
+  view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${siteRecap}${siteHeaderActions}${lockNotice}
   <form id="site-form" class="site-editor-wide site-form-layout" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
-    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div></div></div>
+    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">S3. Effectifs</div>
       <div class="grid grid-2 mb-4">
@@ -16490,7 +16647,7 @@ async function renderSiteForm(view,id){
       <div class="text-xs text-slate-500">Les articles sélectionnés doivent être disponibles dans les magasins de la société. À l'enregistrement, les nouvelles lignes créent une dotation site et déduisent le stock.</div>
       ${session?.transverse==="materiel"?`<div class="flex justify-end mt-3"><button type="button" class="btn btn-primary" onclick="saveSiteEquipementOnly('${jsString(s.id)}')">Enregistrer</button></div>`:""}
     </div>
-    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="editSiteOpeningPV('${s.id}')">Editer PV</button>`}${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
+    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="editSiteOpeningPV('${s.id}')">Editer PV</button>`}<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="saveSite('${jsString(s.id)}')">Enregistrer modification</button>${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
   </form></div>`;
   setTimeout(()=>{updateSiteEffectifTotalContractuel();initInlineSitePositionMap();applySiteFormLock()},0);
 }
@@ -16541,6 +16698,7 @@ function siteDraftFromCurrentForm(id){
     id:existing.id||id,
     nom:String(fd.get("nom")||existing.nom||"").trim(),
     indicatif:String(fd.get("indicatif")||existing.indicatif||"").trim(),
+    telephone:String(fd.get("telephone")||existing.telephone||"").trim(),
     adresse:String(fd.get("adresse")||existing.adresse||"").trim(),
     commune:String(fd.get("commune")||existing.commune||"").trim(),
     wilaya:String(fd.get("wilaya")||existing.wilaya||"").trim(),
@@ -17989,18 +18147,21 @@ function renderFiches(view,sub,_skipEnsure){
   const withoutAffectation=counterNumericValue(employeeCounters.withoutAssignment);
   const withoutDotation=counterNumericValue(employeeCounters.withoutEquipment);
   const dotationToReplace=activeBase.filter(agentHasDotationToReplace).length;
+  const suspendedEmployees=counterNumericValue(employeeCounters.suspended);
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const summaryCards=[
     ["Employés actifs",activeEmployees,"Dans l'effectif","#15803d",ratio(activeEmployees,counterRatioBase),"effectif/actifs","users"],
     ["Sans affectation",withoutAffectation,"Site à renseigner","#d97706",ratio(withoutAffectation,counterRatioBase),"effectif/preparation_affectation","pin"],
     ["Sans dotation",withoutDotation,"Matériel à attribuer","#dc2626",ratio(withoutDotation,counterRatioBase),"materiel/dotation","box"],
-    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,counterRatioBase),"materiel/dotation","refresh"]
+    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,counterRatioBase),"materiel/dotation","refresh"],
+    ["Employés suspendus",suspendedEmployees,"Suspension en cours","#dc2626",ratio(suspendedEmployees,counterRatioBase),"effectif/suspension","pause"]
   ];
   const metricIcon=type=>({
     users:'<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     pin:'<svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
     box:'<svg viewBox="0 0 24 24"><path d="m21 8-9 5-9-5 9-5 9 5Z"/><path d="m3 8 9 5 9-5v8l-9 5-9-5V8Z"/><path d="M12 13v8"/></svg>',
-    refresh:'<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a9 9 0 1 0 2 8"/></svg>'
+    refresh:'<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a9 9 0 1 0 2 8"/></svg>',
+    pause:'<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>'
   }[type]||'');
   const activeAdvancedFilters=[fpFilter.recruitFrom,fpFilter.recruitTo,fpFilter.ageMin,fpFilter.ageMax].filter(Boolean).length;
   const showFichePrintBadgeActions=session?.transverse!=="ops";
@@ -31669,12 +31830,21 @@ async function ensureOpsMovementSqlSync(){
   if(!sgdiAuthToken()||!db)return false;
   const now=Date.now();
   if(window.__sgdiOpsMovementSqlSyncedAt&&now-window.__sgdiOpsMovementSqlSyncedAt<15000)return false;
-  await Promise.all([
+  // Partage le même verrou que sgdiBackgroundSqlSync : évite qu'un cycle de sync
+  // "temps réel" (SSE) et celui-ci s'exécutent en parallèle et se marchent dessus
+  // sur db.agents/db.sites/db.assignments (source de l'affichage instable).
+  if(sgdiSqlSyncInProgress){
+    await sgdiSqlSyncInProgress.catch(()=>{});
+    window.__sgdiOpsMovementSqlSyncedAt=Date.now();
+    return true;
+  }
+  sgdiSqlSyncInProgress=Promise.all([
     syncSitesFromPostgres().catch(e=>console.warn("Sites PostgreSQL indisponibles",e)),
     typeof syncAssignmentsFromPostgres==="function"?syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées",e)):Promise.resolve(),
     syncOpsMovementsFromPostgres().catch(e=>console.warn("Mouvements OPS non synchronisés",e))
-  ]);
-  window.__sgdiOpsMovementSqlSyncedAt=now;
+  ]).finally(()=>{sgdiSqlSyncInProgress=null});
+  await sgdiSqlSyncInProgress;
+  window.__sgdiOpsMovementSqlSyncedAt=Date.now();
   return true;
 }
 async function renderOpsMouvements(view){

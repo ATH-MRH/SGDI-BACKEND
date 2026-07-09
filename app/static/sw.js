@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260625-login-fast-refresh";
+const SGDI_CACHE = "sgdi-pwa-v20260709-global-columns";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
