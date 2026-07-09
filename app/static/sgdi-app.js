@@ -16629,7 +16629,7 @@ async function renderSiteForm(view,id){
       <div class="text-xs text-slate-500">Les articles sélectionnés doivent être disponibles dans les magasins de la société. À l'enregistrement, les nouvelles lignes créent une dotation site et déduisent le stock.</div>
       ${session?.transverse==="materiel"?`<div class="flex justify-end mt-3"><button type="button" class="btn btn-primary" onclick="saveSiteEquipementOnly('${jsString(s.id)}')">Enregistrer</button></div>`:""}
     </div>
-    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="editSiteOpeningPV('${s.id}')">Editer PV</button>`}${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
+    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="editSiteOpeningPV('${s.id}')">Editer PV</button>`}<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="saveSite('${jsString(s.id)}')">Enregistrer modification</button>${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
   </form></div>`;
   setTimeout(()=>{updateSiteEffectifTotalContractuel();initInlineSitePositionMap();applySiteFormLock()},0);
 }
