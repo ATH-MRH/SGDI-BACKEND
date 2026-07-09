@@ -19,7 +19,7 @@ esac
 
 echo "[start] Waiting for PostgreSQL..."
 attempt=1
-until python3 -c 'from sqlalchemy import text; from app.db.session import engine; assert engine.dialect.name == "postgresql", "PostgreSQL required"; c = engine.connect(); c.execute(text("SELECT 1")); c.close()' 2>/dev/null; do
+until python3 -c 'from sqlalchemy import text; from app.db.session import engine; assert engine.dialect.name == "postgresql", "PostgreSQL required"; c = engine.connect(); c.execute(text("SELECT 1")); c.close()'; do
   if [ "$attempt" -ge 30 ]; then
     echo "[start] ERROR: PostgreSQL is unavailable after 30 attempts." >&2
     exit 1
