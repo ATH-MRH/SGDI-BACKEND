@@ -719,48 +719,67 @@ function sgdiFireAndForgetSave(){
   sgdiBackendSave();
 }
 let _sgdiLastPullError="";
+let sgdiPullStateInFlight=null;
 async function sgdiPullState(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   if(sgdiDirty&&!opt.force)return db;
-  try{
-    const _dbCtrl=new AbortController();const _dbTimer=setTimeout(()=>_dbCtrl.abort(),120000);
-    const snapshotPath=(opt.light||opt.deferSql||opt.deferSecondary||opt.auto)?"/api/irongs/db?light=1":"/api/irongs/db";
-    let remote;try{remote=await sgdiApi(snapshotPath,{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
-    if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
-      window.__SGDI_BACKEND_ENABLED__=true;
-      const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents"];
-      const _prevSQL=opt.light&&db?Object.fromEntries(_sqlKeys.filter(k=>Array.isArray(db[k])&&db[k].length).map(k=>[k,db[k]])):null;
-      hydrateDB(remote);
-      if(_prevSQL){for(const[k,v]of Object.entries(_prevSQL)){if(!(db[k]||[]).length)db[k]=v;}}
-      sanitizeCandidatesInDB();
-      sgdiPostgresReady=true;
-      if(typeof loadCustomSocietes==="function")loadCustomSocietes();
-      if(typeof sgdiScheduleAutoRefresh==="function")sgdiScheduleAutoRefresh();
-      await sgdiLoadAuthState();
-      if(opt.deferSql){
-        setTimeout(()=>sgdiBackgroundSqlSync({silent:opt.silent,render:opt.render}),50);
-      }else if(!opt.light){
-        await sgdiBackgroundSqlSync({silent:opt.silent,render:false,blocking:true});
-      }
-      const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
-      if(typeof normalizePostesInDB==="function")normalizePostesInDB();
-      const refreshPositions=async()=>{try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=[...new Set(pr.map(p=>p.name||p))]}catch(_){}};
-      if(opt.deferSql||opt.deferSecondary)setTimeout(refreshPositions,80);else await refreshPositions();
-      const pruned=pruneEmptyCandidates();
-      if(purged||pruned)sgdiBackendSave();
-      if(typeof ptAutoArchiveOldDays==="function")ptAutoArchiveOldDays();
-      if(opt.render&&typeof render==="function")render();
-      sgdiRefreshCountersNow({reason:"pull"});
-      if(!opt.silent&&typeof toast==="function")toast("Données chargées depuis le backend","success");
-      return db;
-    }
-  }catch(e){
-    _sgdiLastPullError=e.message||String(e);
-    console.error("[SGDI] sgdiPullState echec:",e);
-    if(!opt.silent&&typeof toast==="function")toast("Backend indisponible : "+(e.message||e),"error");
+  // sgdiPullState est appelé depuis des dizaines d'endroits (sauvegardes, navigation,
+  // temps réel...). Sans sérialisation, deux appels concurrents peuvent chacun lancer
+  // leur propre hydrateDB() et se marcher dessus sur db.agents/db.sites/db.assignments
+  // (source des instantanés incohérents déjà observés sur le module Mouvement).
+  while(sgdiPullStateInFlight){
+    await sgdiPullStateInFlight.catch(()=>{});
   }
-  return null;
+  const run=(async()=>{
+    try{
+      const _dbCtrl=new AbortController();const _dbTimer=setTimeout(()=>_dbCtrl.abort(),120000);
+      const snapshotPath=(opt.light||opt.deferSql||opt.deferSecondary||opt.auto)?"/api/irongs/db?light=1":"/api/irongs/db";
+      let remote;try{remote=await sgdiApi(snapshotPath,{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
+      if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
+        window.__SGDI_BACKEND_ENABLED__=true;
+        const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents"];
+        const _prevSQL=opt.light&&db?Object.fromEntries(_sqlKeys.filter(k=>Array.isArray(db[k])&&db[k].length).map(k=>[k,db[k]])):null;
+        // Attend qu'un cycle de sync des collections SQL déjà en cours (sites,
+        // affectations...) se termine avant de remplacer db en bloc.
+        if(sgdiSqlSyncInProgress)await sgdiSqlSyncInProgress.catch(()=>{});
+        hydrateDB(remote);
+        if(_prevSQL){for(const[k,v]of Object.entries(_prevSQL)){if(!(db[k]||[]).length)db[k]=v;}}
+        sanitizeCandidatesInDB();
+        sgdiPostgresReady=true;
+        if(typeof loadCustomSocietes==="function")loadCustomSocietes();
+        if(typeof sgdiScheduleAutoRefresh==="function")sgdiScheduleAutoRefresh();
+        await sgdiLoadAuthState();
+        if(opt.deferSql){
+          setTimeout(()=>sgdiBackgroundSqlSync({silent:opt.silent,render:opt.render}),50);
+        }else if(!opt.light){
+          await sgdiBackgroundSqlSync({silent:opt.silent,render:false,blocking:true});
+        }
+        const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
+        if(typeof normalizePostesInDB==="function")normalizePostesInDB();
+        const refreshPositions=async()=>{try{const pr=await sgdiApi("/api/irongs/positions",{method:"GET",legacy:false});if(Array.isArray(pr)&&pr.length)POSTES=[...new Set(pr.map(p=>p.name||p))]}catch(_){}};
+        if(opt.deferSql||opt.deferSecondary)setTimeout(refreshPositions,80);else await refreshPositions();
+        const pruned=pruneEmptyCandidates();
+        if(purged||pruned)sgdiBackendSave();
+        if(typeof ptAutoArchiveOldDays==="function")ptAutoArchiveOldDays();
+        if(opt.render&&typeof render==="function")render();
+        sgdiRefreshCountersNow({reason:"pull"});
+        if(!opt.silent&&typeof toast==="function")toast("Données chargées depuis le backend","success");
+        return db;
+      }
+    }catch(e){
+      _sgdiLastPullError=e.message||String(e);
+      console.error("[SGDI] sgdiPullState echec:",e);
+      if(!opt.silent&&typeof toast==="function")toast("Backend indisponible : "+(e.message||e),"error");
+    }
+    return null;
+  })();
+  sgdiPullStateInFlight=run.catch(()=>null);
+  try{
+    return await run;
+  }finally{
+    sgdiPullStateInFlight=null;
+  }
 }
 let sgdiAutoRefreshTimer=null;
 let sgdiAutoRefreshRunning=false;
