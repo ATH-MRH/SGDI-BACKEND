@@ -1472,19 +1472,13 @@ function sgdiUpsertServerItem(listName,item){
 }
 const SGDI_SIDEBAR_STATS_CACHE_KEY="sgdi_sidebar_stats_last_v1";
 function sgdiLoadCachedSidebarStats(){
-  try{
-    const raw=sessionStorage.getItem(SGDI_SIDEBAR_STATS_CACHE_KEY)||localStorage.getItem(SGDI_SIDEBAR_STATS_CACHE_KEY);
-    const parsed=raw?JSON.parse(raw):null;
-    return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:null;
-  }catch(e){return null}
+  // Plus de cache localStorage des compteurs : il ressortait de vieilles valeurs périmées
+  // (ex : "2" au lieu de "5"). On purge tout cache existant et on repart toujours du serveur.
+  try{sessionStorage.removeItem(SGDI_SIDEBAR_STATS_CACHE_KEY);localStorage.removeItem(SGDI_SIDEBAR_STATS_CACHE_KEY);}catch(e){}
+  return null;
 }
 function sgdiRememberSidebarStats(stats){
-  if(!stats||typeof stats!=="object"||Array.isArray(stats))return;
-  try{
-    const payload=JSON.stringify(stats);
-    sessionStorage.setItem(SGDI_SIDEBAR_STATS_CACHE_KEY,payload);
-    localStorage.setItem(SGDI_SIDEBAR_STATS_CACHE_KEY,payload);
-  }catch(e){}
+  // Ne rien persister : les compteurs viennent toujours frais du serveur.
 }
 window.SGDI_SIDEBAR_STATS=sgdiLoadCachedSidebarStats();
 function sgdiActiveStatsSociety(){
@@ -33950,10 +33944,14 @@ const BOOT_CACHE_KEY="atlas_boot_cache";
 const BOOT_CACHE_TTL=7200000; // 2h
 const BOOT_CACHE_MAX=3*1024*1024; // 3 MB max
 function _bootCacheLoad(username){
-  try{const r=localStorage.getItem(BOOT_CACHE_KEY);if(!r)return null;const c=JSON.parse(r);if(c.u!==username)return null;if(Date.now()-c.t>BOOT_CACHE_TTL)return null;return c.d||null}catch(e){return null}
+  // Plus de cache de démarrage : il pouvait servir une base vieille de 2h (données fantômes).
+  // On purge tout cache existant et on charge TOUJOURS frais depuis le serveur.
+  try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}
+  return null;
 }
 function _bootCacheSave(username,data){
-  try{const s=JSON.stringify(data);if(s.length>BOOT_CACHE_MAX)return;localStorage.setItem(BOOT_CACHE_KEY,JSON.stringify({u:username,t:Date.now(),d:data}))}catch(e){}
+  // Ne rien persister : on repart toujours du serveur (source de vérité).
+  try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}
 }
 function _bootCacheClear(){try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}}
 // ─────────────────────────────────────────────────────────────────────────────
