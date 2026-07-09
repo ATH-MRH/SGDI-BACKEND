@@ -423,14 +423,20 @@ def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]
     echanges = payload_to_store.get("echanges")
     if isinstance(echanges, list):
         payload_to_store["echanges"] = _merge_confidential_echanges_for_replace(db, echanges, user)
-    db.execute(delete(SgdiRecord).where(~SgdiRecord.collection.in_(SERVER_ONLY_COLLECTIONS)))
+    # NE PAS effacer globalement les collections. Un client pas encore chargé enverrait une
+    # base vide et effacerait TOUT côté serveur (bug "tous les chiffres à zéro" en multi-PC).
+    # On remplace collection par collection et on IGNORE toute collection vide/absente :
+    # une sauvegarde ne peut jamais écraser des données existantes avec du vide.
     logger.info("Remplacement base SGDI API-first: %s collection(s)", len(payload))
     for name, data in payload_to_store.items():
         if name in SERVER_ONLY_COLLECTIONS:
             continue
         if name in sql_bridge.SQL_COLLECTIONS:
-            if isinstance(data, list) and (data or name not in sql_bridge.SQL_SKIP_EMPTY_ON_DB_REPLACE):
+            if isinstance(data, list) and data:
                 sql_bridge.replace_collection(db, name, data)
+            continue
+        # Collections JSON : ne jamais écraser avec du vide.
+        if data is None or (isinstance(data, list) and not data) or (isinstance(data, dict) and not data):
             continue
         _replace_collection_no_commit(db, name, data)
     db.commit()

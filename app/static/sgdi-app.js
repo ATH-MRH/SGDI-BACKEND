@@ -162,6 +162,9 @@ const ADMIN_SYSTEM_UNLOCK_KEY = "sgdi_admin_system_unlocked_v1";
 const SGDI_API_TOKEN_KEY = "sgdi_api_token_v1";
 let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:0,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null;
 let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPendingRoute=null;
+// Devient true UNIQUEMENT après un vrai chargement serveur réussi (sgdiPullState). Empêche
+// d'envoyer une base vide/non chargée qui effacerait les données (bug "tout à zéro" en multi-PC).
+let sgdiHydrated=false;
 const sgdiRuntimeCandidateAliases={};
 const sgdiRuntimePendingCandidates=new Map();
 
@@ -643,6 +646,10 @@ function sgdiLegacySnapshot(){
 }
 function sgdiBackendSave(){
   if(!sgdiBackendShouldUse()||!db)return false;
+  // JAMAIS sauvegarder avant le premier chargement serveur : sinon on enverrait une base
+  // vide/non chargée qui effacerait tout côté serveur (bug "tout à zéro" en multi-PC).
+  // On garde le changement en attente (sgdiDirty) ; il partira après l'hydratation.
+  if(!sgdiHydrated){sgdiDirty=true;return false;}
   try{sgdiRequireServerWrite()}catch(e){sgdiServerOnlyFailure(e.message||String(e));uiSaveState("Sauvegarde refusée","error");return false}
   sanitizeCandidatesInDB();
   normalizeEmployeeCodesInDB();
@@ -735,6 +742,7 @@ async function sgdiPullState(options){
       if(_prevSQL){for(const[k,v]of Object.entries(_prevSQL)){if(!(db[k]||[]).length)db[k]=v;}}
       sanitizeCandidatesInDB();
       sgdiPostgresReady=true;
+      sgdiHydrated=true;
       if(typeof loadCustomSocietes==="function")loadCustomSocietes();
       if(typeof sgdiScheduleAutoRefresh==="function")sgdiScheduleAutoRefresh();
       await sgdiLoadAuthState();
@@ -3255,7 +3263,7 @@ async function ensureAdminSystemApiToken(actionLabel){
   }
 }
 function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
+function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;sgdiHydrated=false;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function isAdminFichePositionContext(){return isAdminGeneralSession()&&String(location.hash||"").startsWith("#/admin/fiches")}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
