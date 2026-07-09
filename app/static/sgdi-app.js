@@ -31665,12 +31665,21 @@ async function ensureOpsMovementSqlSync(){
   if(!sgdiAuthToken()||!db)return false;
   const now=Date.now();
   if(window.__sgdiOpsMovementSqlSyncedAt&&now-window.__sgdiOpsMovementSqlSyncedAt<15000)return false;
-  await Promise.all([
+  // Partage le même verrou que sgdiBackgroundSqlSync : évite qu'un cycle de sync
+  // "temps réel" (SSE) et celui-ci s'exécutent en parallèle et se marchent dessus
+  // sur db.agents/db.sites/db.assignments (source de l'affichage instable).
+  if(sgdiSqlSyncInProgress){
+    await sgdiSqlSyncInProgress.catch(()=>{});
+    window.__sgdiOpsMovementSqlSyncedAt=Date.now();
+    return true;
+  }
+  sgdiSqlSyncInProgress=Promise.all([
     syncSitesFromPostgres().catch(e=>console.warn("Sites PostgreSQL indisponibles",e)),
     typeof syncAssignmentsFromPostgres==="function"?syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées",e)):Promise.resolve(),
     syncOpsMovementsFromPostgres().catch(e=>console.warn("Mouvements OPS non synchronisés",e))
-  ]);
-  window.__sgdiOpsMovementSqlSyncedAt=now;
+  ]).finally(()=>{sgdiSqlSyncInProgress=null});
+  await sgdiSqlSyncInProgress;
+  window.__sgdiOpsMovementSqlSyncedAt=Date.now();
   return true;
 }
 async function renderOpsMouvements(view){
