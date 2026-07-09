@@ -638,10 +638,33 @@ let sgdiSaveQueue=Promise.resolve();
 let sgdiSaveInFlight=false;
 let sgdiSaveAgain=false;
 const SQL_OWNED_COLLECTIONS=new Set(["candidats","agents","employees","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs","assignments","affectations","opsMouvements","feuillePresence"]);
+// Empreinte (JSON) par collection du dernier état serveur connu (après chargement ou sauvegarde).
+// Permet la SAUVEGARDE CIBLÉE : n'envoyer que les collections réellement modifiées.
+let sgdiSavedBaseline={};
+function sgdiCaptureBaseline(){
+  try{
+    const b={};
+    if(db&&typeof db==="object"){for(const k of Object.keys(db)){try{b[k]=JSON.stringify(db[k]);}catch(e){}}}
+    sgdiSavedBaseline=b;
+  }catch(e){sgdiSavedBaseline={};}
+}
 function sgdiLegacySnapshot(){
   const source=db&&typeof db==="object"?db:{};
   const snap={...source};
   SQL_OWNED_COLLECTIONS.forEach(k=>{if(Array.isArray(snap[k]))snap[k]=[]});
+  // Sauvegarde CIBLÉE : les collections INCHANGÉES depuis le dernier chargement/sauvegarde
+  // partent vides -> le serveur les ignore (backend non destructif). On n'envoie donc que ce
+  // qui a réellement changé -> payload minuscule (fin du blocage) et aucun écrasement des
+  // données que les AUTRES PC ont modifiées entre-temps sur d'autres collections.
+  for(const k of Object.keys(snap)){
+    if(SQL_OWNED_COLLECTIONS.has(k))continue;
+    const cur=snap[k];
+    if(cur==null)continue;
+    const base=sgdiSavedBaseline[k];
+    if(base===undefined)continue; // pas de référence connue -> on l'envoie par sécurité
+    let s; try{s=JSON.stringify(cur);}catch(e){continue;}
+    if(s===base)snap[k]=Array.isArray(cur)?[]:(typeof cur==="object"?{}:cur);
+  }
   return snap;
 }
 function sgdiBackendSave(){
@@ -683,6 +706,7 @@ function sgdiBackendSave(){
       window.__sgdiLastLocalSaveAt=Date.now();
       sgdiPublishDataChange("legacy-save");
     }while(sgdiSaveAgain);
+    sgdiCaptureBaseline();
     uiSaveState("Sauvegardé","success");
     sgdiRefreshCountersNow({reason:"save"});
     if(window._sgdiSaveOverlayShown){updateSaveOverlay("Enregistrement terminé",true);setTimeout(closeSaveOverlay,1600);}
@@ -755,6 +779,7 @@ async function sgdiPullState(options){
         sanitizeCandidatesInDB();
         sgdiPostgresReady=true;
         sgdiHydrated=true;
+        sgdiCaptureBaseline();
         if(typeof loadCustomSocietes==="function")loadCustomSocietes();
         if(typeof sgdiScheduleAutoRefresh==="function")sgdiScheduleAutoRefresh();
         await sgdiLoadAuthState();
@@ -3282,7 +3307,7 @@ async function ensureAdminSystemApiToken(actionLabel){
   }
 }
 function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;sgdiHydrated=false;saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
+function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;sgdiHydrated=false;sgdiSavedBaseline={};saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function isAdminFichePositionContext(){return isAdminGeneralSession()&&String(location.hash||"").startsWith("#/admin/fiches")}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
