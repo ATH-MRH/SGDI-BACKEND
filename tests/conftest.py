@@ -52,8 +52,13 @@ def create_tables():
     yield
     import os as _os
     Base.metadata.drop_all(bind=test_engine)
+    # Windows garde le fichier verrouillé tant que le pool n'est pas fermé.
+    test_engine.dispose()
     if _os.path.exists("./test_sgdi.db"):
-        _os.remove("./test_sgdi.db")
+        try:
+            _os.remove("./test_sgdi.db")
+        except PermissionError:
+            pass  # fichier encore tenu par un worker : sans conséquence, il sera recréé
 
 
 def _seed_admin():
