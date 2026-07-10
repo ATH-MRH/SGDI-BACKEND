@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.commercial.models import Client
@@ -668,9 +668,60 @@ def list_all_collections_parallel(session_factory: Any) -> "dict[str, list[dict[
     return result
 
 
+def _live_assignment_map(db: Session) -> dict[int, dict[str, Any]]:
+    # Affectation ACTIVE réelle par employé, reconstruite depuis la table SQL assignments + sites.
+    # C'est la source de vérité. On l'injecte dans affectationCourante de chaque employé pour que
+    # TOUS les écrans (compteurs, listes, filtres) soient cohérents (fin des "50 affectés / 19 en
+    # instance" alors que le vrai est "71 / 0"). Un employé sans affectation active reste sans site.
+    today = date.today()
+    assignments = db.execute(
+        select(Assignment)
+        .where(Assignment.active == 1)
+        .where(or_(Assignment.end_date.is_(None), Assignment.end_date >= today))
+        .order_by(Assignment.id)
+    ).scalars().all()
+    if not assignments:
+        return {}
+    site_ids = {a.site_id for a in assignments if a.site_id}
+    site_map: dict[int, dict[str, Any]] = {}
+    if site_ids:
+        for s in db.execute(select(Site).where(Site.id.in_(site_ids))).scalars().all():
+            plan = s.equipment_plan if isinstance(s.equipment_plan, dict) else {}
+            raw = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
+            site_map[s.id] = {
+                "siteId": raw.get("id") or plan.get("id") or f"st_{s.id}",
+                "siteName": s.name or "",
+                "clientName": s.client_name or "",
+            }
+    result: dict[int, dict[str, Any]] = {}
+    for a in assignments:  # order_by id asc -> la plus récente écrase
+        site = site_map.get(a.site_id, {})
+        result[a.employee_id] = {
+            "siteId": site.get("siteId") or f"st_{a.site_id}",
+            "siteName": site.get("siteName") or "",
+            "siteBackendId": a.site_id,
+            "clientName": site.get("clientName") or "",
+            "groupe": a.group_code or "",
+            "poste": a.position or "",
+            "dateDebut": date_out(a.start_date),
+            "assignmentBackendId": a.id,
+        }
+    return result
+
+
 def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name == "candidats": return [candidate_to_item(r) for r in db.execute(select(Candidate).order_by(Candidate.id)).scalars().all()]
-    if name in {"agents", "employees"}: return [employee_to_item(r) for r in db.execute(select(Employee).order_by(Employee.id)).scalars().all()]
+    if name in {"agents", "employees"}:
+        live = _live_assignment_map(db)
+        out: list[dict[str, Any]] = []
+        for r in db.execute(select(Employee).order_by(Employee.id)).scalars().all():
+            item = employee_to_item(r)
+            aff = live.get(r.id)
+            if aff:
+                cur = item.get("affectationCourante") if isinstance(item.get("affectationCourante"), dict) else {}
+                item["affectationCourante"] = {**cur, **aff}
+            out.append(item)
+        return out
     if name == "sites": return [site_to_item(r) for r in db.execute(select(Site).order_by(Site.id)).scalars().all()]
     if name == "clients": return [client_to_item(r) for r in db.execute(select(Client).order_by(Client.id)).scalars().all()]
     if name == "feuillePresence":
