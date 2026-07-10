@@ -808,7 +808,7 @@ async function sgdiPullState(options){
         const pruned=pruneEmptyCandidates();
         if(purged||pruned)sgdiBackendSave();
         if(typeof ptAutoArchiveOldDays==="function")ptAutoArchiveOldDays();
-        if(opt.render&&typeof render==="function")render();
+        if(opt.render&&typeof sgdiAutoRender==="function")sgdiAutoRender();
         sgdiRefreshCountersNow({reason:"pull"});
         if(!opt.silent&&typeof toast==="function")toast("Données chargées depuis le backend","success");
         return db;
@@ -1291,7 +1291,7 @@ async function sgdiPullEmployees(options){
       db.agents=backendAgents;
     }
     normalizeEmployeeCodesInDB();
-    if(opt.render&&typeof render==="function")render();
+    if(opt.render&&typeof sgdiAutoRender==="function")sgdiAutoRender();
     if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
     return db.agents;
   }catch(e){
@@ -2122,7 +2122,7 @@ async function sgdiBackgroundSqlSync(options){
     if(typeof normalizePostesInDB==="function")normalizePostesInDB();
     const pruned=typeof pruneEmptyCandidates==="function"?pruneEmptyCandidates():0;
     if(purged||pruned)sgdiBackendSave();
-    if(opt.render&&typeof render==="function")render();
+    if(opt.render&&typeof sgdiAutoRender==="function")sgdiAutoRender();
     return !syncErrors.length;
   })().finally(()=>{
     sgdiSqlSyncInProgress=null;
