@@ -729,7 +729,11 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
         return [presence_to_item(r) for r in db.execute(select(DailyPresence).where(DailyPresence.presence_date >= cutoff).order_by(DailyPresence.id)).scalars().all() if (r.data or {}).get("collection") != "pointages"]
     if name in FINANCE_MODELS: return [simple_raw(r) for r in db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()]
     if name in STOCK_MODELS: return [stock_raw(r) for r in db.execute(select(STOCK_MODELS[name]).order_by(STOCK_MODELS[name].id)).scalars().all()]
-    if name in {"assignments", "affectations"}: return [assignment_to_item(r) for r in db.execute(select(Assignment).order_by(Assignment.id)).scalars().all()]
+    if name in {"assignments", "affectations"}:
+        # NE PAS envoyer l'historique inactif (des dizaines de milliers de lignes qui gonflent
+        # le snapshot et ralentissent tout). Le navigateur n'a besoin que des affectations ACTIVES
+        # (l'état courant). L'historique des changements est dans opsMouvements.
+        return [assignment_to_item(r) for r in db.execute(select(Assignment).where(Assignment.active == 1).order_by(Assignment.id)).scalars().all()]
     if name == "opsMouvements":
         cutoff = date.today() - timedelta(days=180)
         return [ops_movement_to_item(r) for r in db.execute(

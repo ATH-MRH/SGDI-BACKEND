@@ -347,6 +347,18 @@ def on_startup() -> None:
     ensure_upload_dirs()
     Base.metadata.create_all(bind=engine)
     ensure_schema_upgrades()
+    # Index d'accélération : la table assignments accumule un gros historique inactif
+    # (dizaines de milliers de lignes). Sans index, chaque requête d'affectation la scanne
+    # entièrement -> lenteur. Un index partiel sur les lignes ACTIVES rend ces requêtes instantanées.
+    for ddl in (
+        "CREATE INDEX IF NOT EXISTS ix_assignments_active_emp ON assignments (employee_id) WHERE active = 1",
+        "CREATE INDEX IF NOT EXISTS ix_assignments_emp_active ON assignments (employee_id, active)",
+    ):
+        try:
+            with engine.begin() as conn:
+                conn.execute(text(ddl))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Index assignments non créé (%s): %s", ddl, exc)
     logger.info("Tables PostgreSQL vérifiées/créées")
     with SessionLocal() as db:
         if settings.startup_maintenance_enabled:
