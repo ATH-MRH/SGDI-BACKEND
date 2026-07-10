@@ -30251,7 +30251,9 @@ function renderAdminDashboard(view){
   const actifs=users.filter(u=>u.actif!==false).length;
   const blocked=users.filter(u=>u.actif===false).length;
   const agents=(db.agents||[]).filter(a=>a.statut!=="archive"&&adminMatchesSociete(a));
-  const agentsActifs=agents.filter(a=>a.statut==="actif").length;
+  // "Effectif actif" = employés NON sortants (inclut suspendus/absents), même définition que la
+  // Fiche de position (GRH) et le serveur -> coherence 71 partout (au lieu de 69 en excluant les suspendus).
+  const agentsActifs=agents.filter(a=>!employeeIsFormer(a)).length;
   const absents=agents.filter(a=>a.statut==="absent").length;
   const suspendus=agents.filter(a=>a.statut==="suspendu").length;
   const blacklist=agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
@@ -32023,7 +32025,7 @@ function renderOPS(view,sub,arg){
   const opsLine=(label,value,color,route)=>`<a href="#/${route}" class="p-3 rounded-lg block" style="background:${color}12;border:1px solid ${color}44;text-decoration:none;color:inherit"><div class="text-[10px] uppercase tracking-wider font-black" style="color:${color}">${label}</div><div class="text-2xl font-black mt-1" style="color:${color}">${value}</div></a>`;
   const opsDashboardSocietes=soc?[soc]:SOCIETES;
   window._opsSocLists={};
-  const societeRows=opsDashboardSocietes.map(s=>{const eff=actifs.filter(a=>a.societe===s);const aff=eff.filter(agentHasLiveAffectation);const sans=eff.filter(a=>!agentHasLiveAffectation(a));const st=sitesActifs.filter(x=>siteBelongsToPrimarySociete(x,s));const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));window._opsSocLists[s]={eff,aff,sans,inc};return{soc:s,eff:eff.length,aff:aff.length,sans:sans.length,sites:st.length,inc:inc.length}});
+  const societeRows=opsDashboardSocietes.map(s=>{const eff=(db.agents||[]).filter(a=>a.societe===s&&!employeeIsFormer(a));const aff=eff.filter(agentHasLiveAffectation);const sans=eff.filter(a=>!agentHasLiveAffectation(a));const st=sitesActifs.filter(x=>siteBelongsToPrimarySociete(x,s));const inc=incidentsOuverts.filter(i=>i.societe===s||st.some(site=>site.id===i.siteId));window._opsSocLists[s]={eff,aff,sans,inc};return{soc:s,eff:eff.length,aff:aff.length,sans:sans.length,sites:st.length,inc:inc.length}});
   // Présents par site (feuille du jour)
   const _presentsBySite={};
   fpqToday.forEach(f=>{if(fpqPresenceCode(f.heureArrivee)==="P"){const k=f.siteName||"Sans site affecté";_presentsBySite[k]=(_presentsBySite[k]||0)+1;}});
