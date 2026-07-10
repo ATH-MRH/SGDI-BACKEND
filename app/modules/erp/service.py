@@ -222,6 +222,23 @@ def _has_installation_pv(employee: Employee) -> bool:
     return any(bool(values.get(key)) for key in PV_INSTALLATION_KEYS)
 
 
+def _has_legacy_assignment(employee: Employee) -> bool:
+    # Aligne le backend sur la vérité du front : un employé est "affecté" dès que son
+    # affectationCourante a un site, même si la table SQL assignments n'est pas synchronisée
+    # (site non résolu, date de fin dépassée, employé pas re-sauvegardé). Corrige le faux "21".
+    extra = employee.extra if isinstance(employee.extra, dict) else {}
+    legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+    aff = legacy.get("affectationCourante") if isinstance(legacy.get("affectationCourante"), dict) else None
+    if not aff:
+        return False
+    return bool(
+        str(aff.get("siteName") or "").strip()
+        or aff.get("siteId")
+        or aff.get("site_id")
+        or aff.get("siteBackendId")
+    )
+
+
 def employee_operational_state(
     employee: Employee,
     *,
@@ -231,7 +248,7 @@ def employee_operational_state(
 ) -> EmployeeOperationalState:
     raw_status = _status_key(employee.status)
     has_contract = employee.id in (active_contract_ids or set())
-    has_assignment = employee.id in (active_assignment_ids or set())
+    has_assignment = employee.id in (active_assignment_ids or set()) or _has_legacy_assignment(employee)
     has_equipment = employee.id in (equipped_ids or set()) or _is_no_equipment_validated(employee)
     has_pv = _has_installation_pv(employee)
 
