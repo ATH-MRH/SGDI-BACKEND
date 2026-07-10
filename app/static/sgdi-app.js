@@ -477,14 +477,24 @@ function sgdiAutoRender(){
   sgdiPendingAutoRender=false;
   sgdiPendingAutoRenderReason="";
   sgdiClearRefreshAvailable();
-  if(typeof render!=="function")return;
   try{
     if(typeof sgdiScrollSnapshot==="function"){
       sgdiNextScrollRestore=sgdiScrollSnapshot();
       sgdiResetViewScroll=false;
     }
   }catch(e){}
-  render();
+  // RÈGLE GLOBALE : un rafraîchissement AUTOMATIQUE ne doit JAMAIS changer de page. On met à jour
+  // le contenu (renderView) et la sidebar sans rejouer la garde de route de render() (qui pouvait
+  // rediriger vers l'accueil du module). On ne reconstruit toute la coquille (render) que si elle
+  // n'existe pas encore. Vaut pour TOUT le logiciel, quel que soit l'utilisateur.
+  const shellReady=document.getElementById("view")&&document.getElementById("sidebar-nav");
+  if(shellReady){
+    try{if(typeof renderView==="function")renderView();}catch(e){}
+    try{if(typeof renderSidebar==="function")renderSidebar();}catch(e){}
+    try{if(typeof refreshModuleCountersRibbon==="function")refreshModuleCountersRibbon();}catch(e){}
+  }else if(typeof render==="function"){
+    render();
+  }
 }
 async function sgdiAutoSync(reason){
   reason=reason||"Nouvelles données";
@@ -5020,7 +5030,7 @@ function render(){
       commercial:["commercial","incidents","demandes_structure","documents"],
       secretariat:["secretariat","incidents","demandes_structure","documents"],
       materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure","documents"],
-      admin:["admin","sites","incidents","demandes_structure","documents"],
+      admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard"],
       pointage:["pointage","incidents","demandes_structure","documents"],
       paie:["paie","effectif","agents","demandes_structure","documents"],
       ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents"],
