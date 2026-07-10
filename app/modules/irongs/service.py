@@ -1,5 +1,6 @@
 import logging
 import time
+import unicodedata
 from copy import deepcopy
 from datetime import datetime
 from threading import Lock
@@ -142,11 +143,24 @@ def _collection_rows(db: Session, name: str) -> list[SgdiRecord]:
     ).scalars().all()
 
 
+def _society_key(value: Any) -> str:
+    """Clé de comparaison d'un nom de société : majuscules, espaces normalisés, SANS accents.
+
+    Même règle que ops.routes._normalize_society et que normalizeSocieteName() côté
+    frontend. Sans le retrait des accents, « IRON GLOBAL SÉCURITÉ » (liste d'un
+    utilisateur) et « IRON GLOBAL SECURITE » (valeur écrite par les routes SQL) ne
+    correspondaient pas : les lignes de la société étaient masquées à un utilisateur
+    pourtant autorisé dessus.
+    """
+    text = " ".join(str(value or "").strip().upper().split())
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+
 def _normalized_set(values: Any) -> set[str]:
     out: set[str] = set()
     if isinstance(values, (list, tuple, set)):
         for value in values:
-            clean = str(value or "").strip().upper()
+            clean = _society_key(value)
             if clean:
                 out.add(clean)
     return out
@@ -236,7 +250,7 @@ def _item_society(item: dict[str, Any]) -> str:
     for field in SOCIETY_FIELDS:
         value = str(item.get(field) or "").strip()
         if value:
-            return value.upper()
+            return _society_key(value)
     return ""
 
 

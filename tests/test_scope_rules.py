@@ -159,6 +159,68 @@ def test_business_role_without_society_list_sees_all_payslips(client, auth_heade
         "Un DRH sans liste de sociétés a perdu la visibilité sur la paie"
 
 
+# ── Normalisation des noms de société (accents) ──────────────────────────────
+
+def test_society_key_ignores_accents_case_and_spacing():
+    """La clé de comparaison doit être insensible aux accents, à la casse et aux espaces.
+
+    En production, les listes authorized_societies contiennent 'IRON GLOBAL SÉCURITÉ'
+    (accentué) tandis que les routes SQL écrivent 'Iron Global Securite' (sans accents).
+    Sans normalisation, les lignes de la société étaient masquées à un utilisateur
+    pourtant autorisé dessus.
+    """
+    from app.modules.irongs.service import _society_key
+
+    attendu = "IRON GLOBAL SECURITE"
+    for variante in ("Iron Global Sécurité", "IRON GLOBAL SÉCURITÉ", "iron global securite",
+                     "  Iron   Global   Securite  ", "Iron Global Securite"):
+        assert _society_key(variante) == attendu, f"{variante!r} mal normalisé"
+
+    # Deux sociétés différentes ne doivent surtout pas se confondre
+    assert _society_key("Sword Corporation") != _society_key("Sword Construction")
+    assert _society_key("") == ""
+    assert _society_key(None) == ""
+
+
+def test_society_key_matches_the_ops_module_normalization():
+    """irongs et ops doivent normaliser à l'identique, sinon les deux filtres divergent."""
+    from app.modules.irongs.service import _society_key
+    from app.modules.ops.routes import _normalize_society
+
+    for nom in ("Iron Global Sécurité", "IRON GLOBAL SECURITE", "Sword Corporation",
+                "Iron Global Solution", "  sword   construction  "):
+        assert _society_key(nom) == _normalize_society(nom), f"divergence sur {nom!r}"
+
+
+def test_accented_user_list_matches_unaccented_data(client, auth_headers, db):
+    """Cas RÉEL de production : liste utilisateur accentuée, données sans accents."""
+    from app.core.security import hash_password
+    from app.modules.auth.models import User
+
+    if not db.query(User).filter(User.username == "testaccent").first():
+        db.add(User(username="testaccent", email="acc@test.com", full_name="Accent",
+                    role="agent", access_level="H1",
+                    authorized_societies=["IRON GLOBAL SÉCURITÉ"],  # accentué, comme en prod
+                    authorized_structures=[], password_hash=hash_password("testpass123"),
+                    is_active=True))
+        db.commit()
+
+    assert client.put("/api/irongs/db", headers=auth_headers, json={"data": {"paieBulletins": [
+        {"id": "acc_avec", "ym": "2026-03", "societe": "Iron Global Sécurité"},
+        {"id": "acc_sans", "ym": "2026-03", "societe": "Iron Global Securite"},
+        {"id": "acc_maj", "ym": "2026-03", "societe": "IRON GLOBAL SECURITE"},
+        {"id": "acc_swd", "ym": "2026-03", "societe": "Sword Corporation"},
+    ]}}).status_code == 200
+
+    tok = client.post("/api/auth/login", json={"username": "testaccent", "password": "testpass123"})
+    h = {"Authorization": f"Bearer {tok.json()['access_token']}"}
+    vus = {b["id"] for b in (client.get("/api/irongs/db", headers=h).json().get("paieBulletins") or [])}
+
+    assert {"acc_avec", "acc_sans", "acc_maj"} <= vus, \
+        f"Même société écrite autrement : lignes masquées à tort ({vus})"
+    assert "acc_swd" not in vus, "Une autre société reste visible : le cloisonnement a sauté"
+
+
 def test_non_paie_collections_unaffected_for_restricted_user(client, auth_headers, restricted_headers):
     """Témoin : une collection libre (notifications) garde ses lignes sans société."""
     assert client.put("/api/irongs/db", headers=auth_headers, json={"data": {
