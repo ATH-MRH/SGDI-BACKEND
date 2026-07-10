@@ -14901,6 +14901,20 @@ async function renderSitesServer(view){
   }
 }
 function renderSites(view){
+  // Backend disponible : on affiche UNIQUEMENT les chiffres serveur. On montre un chargement,
+  // puis renderSitesServer remplit les vrais chiffres. Plus de calcul local faux au 1er affichage
+  // (fini le "je dois recharger pour voir les vrais chiffres"). Le rendu local ci-dessous n'est
+  // conservé que comme repli hors-ligne (backend indisponible).
+  if(sgdiAuthToken()&&typeof sgdiBackendShouldUse==="function"&&sgdiBackendShouldUse()&&!window.__sgdiSitesLocalFallback&&!window.__sgdiSitesBgRefreshing){
+    // Chargement affiché seulement au 1er rendu (écran vide) pour ne pas "flasher" à chaque
+    // synchro auto ; sinon on garde l'affichage courant et le serveur le met à jour.
+    if(!view.querySelector(".sites-synth-panel")){
+      view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1></div><div class="card p-10 text-center text-slate-500">Chargement des chiffres depuis le serveur…</div>`;
+    }
+    window.__sgdiSitesBgRefreshing=true;
+    renderSitesServer(view).finally(()=>{window.__sgdiSitesBgRefreshing=false;});
+    return;
+  }
   const soc=sitesPageSocieteFilter();
   const sites=siteOpsSitesForScope(soc);
   view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
