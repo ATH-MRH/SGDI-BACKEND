@@ -165,6 +165,9 @@ let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPend
 // Devient true UNIQUEMENT après un vrai chargement serveur réussi (sgdiPullState). Empêche
 // d'envoyer une base vide/non chargée qui effacerait les données (bug "tout à zéro" en multi-PC).
 let sgdiHydrated=false;
+// Devient true quand TOUTES les données SQL (employés, sites, affectations...) sont chargées.
+// Tant que false, les vues de données restent en chargement (jamais de chiffre local faux).
+let sgdiFullDataReady=false;
 const sgdiRuntimeCandidateAliases={};
 const sgdiRuntimePendingCandidates=new Map();
 
@@ -2117,9 +2120,12 @@ async function sgdiBackgroundSqlSync(options){
     return !syncErrors.length;
   })().finally(()=>{
     sgdiSqlSyncInProgress=null;
+    // Données complètes chargées : on lève l'écran de chargement et on affiche les vrais chiffres.
+    sgdiFullDataReady=true;
     requestAnimationFrame(()=>{
       try{renderSidebar()}catch(_e){}
       try{refreshModuleCountersRibbon()}catch(_e){}
+      try{if(typeof renderView==="function")renderView()}catch(_e){}
     });
   });
   return sgdiSqlSyncInProgress;
@@ -3302,7 +3308,7 @@ async function ensureAdminSystemApiToken(actionLabel){
   }
 }
 function openAdminSystemAccess(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}session={...session,societe:null,transverse:"admin",adminSystem:true};sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");saveSession(session);location.hash="#/admin/dashboard";route()}
-function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;sgdiHydrated=false;sgdiSavedBaseline={};saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
+function logout(){_bootCacheClear();session=null;sgdiPostgresReady=false;sgdiHydrated=false;sgdiFullDataReady=false;sgdiSavedBaseline={};saveSession(null);sessionStorage.removeItem(SGDI_API_TOKEN_KEY);sessionStorage.removeItem(ADMIN_SYSTEM_UNLOCK_KEY);unlockedAgents.clear();saveUnlocked();location.hash="#/login";route()}
 function isAdmin(){return session&&(session.role==="admin"||String(session.role||"").toUpperCase().startsWith("ADM"))}
 function isAdminFichePositionContext(){return isAdminGeneralSession()&&String(location.hash||"").startsWith("#/admin/fiches")}
 function normalizeAccessCode(v){return String(v||"").toUpperCase().replace(/[\s_-]+/g,"")}
@@ -6744,6 +6750,20 @@ function switchRecruitmentTab(event,route,mode){
 
 function renderView(){
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
+  // RÈGLE GLOBALE : tant que les données complètes du serveur ne sont pas chargées, on n'affiche
+  // AUCUN chiffre calculé en local (qui serait faux). On reste en CHARGEMENT jusqu'à la réponse
+  // du serveur. Vaut pour toutes les vues de données (synthèses, compteurs, dotations, affectations,
+  // contrats...). Le login et la sélection de société passent avant renderView -> non concernés.
+  if(session&&typeof sgdiBackendShouldUse==="function"&&sgdiBackendShouldUse()&&!sgdiFullDataReady){
+    const _v=document.getElementById("view");
+    if(_v)_v.innerHTML=`<div class="card p-12 text-center text-slate-500"><div class="text-lg font-black mb-2">Chargement des données…</div><div class="text-sm">Récupération des chiffres réels depuis le serveur.</div></div>`;
+    if(typeof uiProgressDone==="function")uiProgressDone();
+    // Filet anti-blocage : si le serveur ne répond jamais, on affiche au pire ce qu'on a après 20s.
+    if(!window.__sgdiDataReadySafety){
+      window.__sgdiDataReadySafety=setTimeout(()=>{sgdiFullDataReady=true;try{if(typeof renderView==="function")renderView()}catch(e){}},20000);
+    }
+    return;
+  }
   sanitizeCandidatesInDB();
   uiProgressStart();
   const path=(location.hash||"#/dashboard").slice(2);
