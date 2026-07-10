@@ -29,6 +29,10 @@ test_engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": Fals
 @event.listens_for(test_engine, "connect")
 def set_sqlite_pragma(dbapi_conn, _):
     dbapi_conn.execute("PRAGMA foreign_keys=ON")
+    # Concurrence réelle : au lieu d'échouer immédiatement sur "database is locked",
+    # SQLite attend qu'un autre writer libère le verrou (jusqu'à 30 s). Indispensable
+    # pour les tests de concurrence (plusieurs threads qui écrivent en même temps).
+    dbapi_conn.execute("PRAGMA busy_timeout=30000")
 
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
@@ -106,3 +110,22 @@ def auth_headers(client):
 @pytest.fixture
 def society():
     return "TEST_SOC"
+
+
+# ── Concurrence réelle (sans mock) ───────────────────────────────────────────
+# Client qui N'override PAS get_db : chaque requête HTTP obtient sa PROPRE session
+# (comme en production). Indispensable pour tester plusieurs threads qui écrivent
+# en même temps. Portée module pour ne lancer le lifespan qu'une fois.
+@pytest.fixture(scope="module")
+def live_client():
+    app.dependency_overrides.pop(get_db, None)
+    with TestClient(app, raise_server_exceptions=True) as c:
+        yield c
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture(scope="module")
+def live_headers(live_client):
+    resp = live_client.post("/api/auth/login", json={"username": "testadmin", "password": "testpass123"})
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}

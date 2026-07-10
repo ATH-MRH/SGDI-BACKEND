@@ -10,3 +10,9 @@ __pycache__/
 uploads/
 *.db
 .pytest_cache/
+
+# Frontend test deps
+node_modules/
+package-lock.json
+.coverage
+htmlcov/
