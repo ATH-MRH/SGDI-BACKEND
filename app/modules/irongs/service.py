@@ -33,6 +33,10 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
     "opportunites", "visites", "devis", "factures", "paiements", "avances", "avoirs",
     "caisse", "stockArticles", "stockMouvements", "magasins", "fournisseurs",
     "echanges",
+    # Paie : bulletins, éléments, clôtures et grilles de salaire. Sans cela,
+    # GET /collections/{name} renvoyait les salaires de TOUTES les sociétés à
+    # n'importe quel utilisateur authentifié (le snapshot /db, lui, filtrait déjà).
+    "paieBulletins", "paieElements", "paieClotures", "paieGrilles",
 }
 
 
