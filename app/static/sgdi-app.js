@@ -30257,7 +30257,7 @@ function renderAdminDashboard(view){
   const absents=agents.filter(a=>a.statut==="absent").length;
   const suspendus=agents.filter(a=>a.statut==="suspendu").length;
   const blacklist=agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length;
-  const affectes=agents.filter(agentHasLiveAffectation).length;
+  const affectes=agents.filter(a=>!employeeIsFormer(a)&&agentHasLiveAffectation(a)).length;
   const candidats=(db.candidats||[]).filter(c=>candidatIsActive(c)&&adminMatchesSociete(c));
   const reserve=candidats.filter(c=>candidatIsReserve(c)).length;
   const sitesActifs=(db.sites||[]).filter(s=>s.actif!==false&&s.active!==0&&adminDataMatchesSociete(s)).length;
@@ -30278,7 +30278,7 @@ function renderAdminDashboard(view){
   const dotations=typeof agentsEnInstanceDotation==="function"?agentsEnInstanceDotation().length:0;
   const reversements=typeof agentsEnInstanceReversement==="function"?agentsEnInstanceReversement().length:0;
   const tauxPresence=agents.length?Math.round((agentsActifs/(agentsActifs+absents+suspendus||1))*100):0;
-  const tauxAffectation=agents.length?Math.round((affectes/agents.length)*100):0;
+  const tauxAffectation=agentsActifs?Math.round((affectes/agentsActifs)*100):0;
   const moduleCard=(title,desc,route,color,metrics)=>`<button class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:154px"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black tracking-wider text-slate-500">${title}</div><div class="text-sm text-slate-500 mt-1">${desc}</div></div><div class="text-xl font-black" style="color:${color}">→</div></div><div class="grid grid-2 gap-2 mt-4">${metrics.map(m=>`<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px"><div class="text-[11px] uppercase font-bold text-slate-500">${m[0]}</div><div class="text-xl font-black" style="color:${color}">${m[1]}</div></div>`).join("")}</div></button>`;
   view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administrateur général</div><h1 class="text-3xl font-black mt-1">Cockpit Direction Générale</h1><p class="text-sm text-slate-500 mt-1">${adminSoc?`Vue société : ${escapeHTML(adminSoc)}.`:"Vue N°01 : performance globale, alertes critiques, situation par direction et accès direct à tous les modules."}</p></div>
   ${adminSocieteSelectorHTML("Basculez la société pour consulter et configurer le périmètre correspondant.")}
