@@ -4310,11 +4310,9 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
   const erpEmp=sgdiErpEmployeeCounters(scopeSoc);
   const scopeNorm=normalizeSocieteName(scopeSoc||"");
   const _localAgents=(db?.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a.societe||"")===scopeNorm);
-  const _localNonSortants=_localAgents.filter(a=>!employeeIsFormer(a));
-  // Les affectations doivent être chargées pour compter les "sans affectation". Sinon TOUS les
-  // employés paraissent sans affectation (bug du "21" qui saute vers 0). Sans données -> 0.
-  const _assignLoaded=((db?.affectations||[]).length>0)||((db?.assignments||[]).length>0);
-  const localWithoutAssignment=_assignLoaded?_localNonSortants.filter(a=>!agentHasLiveAffectation(a)).length:0;
+  // "Sans affectation" n'est JAMAIS calculé en local : le db client n'a pas les affectations
+  // fiables (affectationCourante souvent vide alors que l'affectation existe côté serveur) ->
+  // c'était la source du faux "21". On prend uniquement la valeur serveur (0 si absente).
   if(erpEmp&&typeof erpEmp==="object"){
     const total=counterNumericValue(erpEmp.total);
     const active=counterNumericValue(erpEmp.active);
@@ -4327,7 +4325,7 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
       operationalActive,
       activeHeadcount:activeHeadcount||active||total,
       withoutEquipment:counterNumericValue(erpEmp.without_equipment),
-      withoutAssignment:(erpEmp.without_assignment!=null?counterNumericValue(erpEmp.without_assignment):localWithoutAssignment),
+      withoutAssignment:counterNumericValue(erpEmp.without_assignment),
       leaveCurrent:counterNumericValue(erpEmp.leave_current),
       sickLeaveCurrent:counterNumericValue(erpEmp.sick_leave_current),
       absent:counterNumericValue(erpEmp.absent),
@@ -4347,7 +4345,7 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
     operationalActive:activeAgents.filter(agentIsOperational).length,
     activeHeadcount:nonSortants.length||nonArchived.length||activeAgents.length||agents.length,
     withoutEquipment:materialPendingDotationCountForSoc(scopeSoc),
-    withoutAssignment:_assignLoaded?nonSortants.filter(a=>!agentHasLiveAffectation(a)).length:0,
+    withoutAssignment:0,
     leaveCurrent:activeAgents.filter(a=>ficheAgentInConge(a)).length,
     sickLeaveCurrent:activeAgents.filter(a=>ficheAgentInMaladie(a)).length,
     absent:statusCount("absent"),
