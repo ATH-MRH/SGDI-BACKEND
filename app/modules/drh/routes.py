@@ -189,7 +189,26 @@ def employees(
     allowed = _allowed_societies(user)
     if allowed and not effective_society:
         rows = [row for row in rows if row.society in allowed]
-    return rows
+    # Injecter l'affectation ACTIVE réelle (table SQL assignments) dans chaque employé, pour que
+    # le front affiche la vérité sans dépendre d'un appariement local fragile. Un employé sans
+    # affectation active repart sans site (cohérent avec la base).
+    from app.modules.irongs.sql_bridge import _live_assignment_map
+    live = _live_assignment_map(db)
+    out: list[dict] = []
+    for row in rows:
+        data = EmployeeOut.model_validate(row).model_dump()
+        extra = dict(data.get("extra") or {})
+        legacy = dict(extra.get("_legacy")) if isinstance(extra.get("_legacy"), dict) else {}
+        aff = live.get(row.id)
+        if aff:
+            cur = legacy.get("affectationCourante") if isinstance(legacy.get("affectationCourante"), dict) else {}
+            legacy["affectationCourante"] = {**cur, **aff}
+        elif isinstance(legacy.get("affectationCourante"), dict):
+            legacy["affectationCourante"] = {}
+        extra["_legacy"] = legacy
+        data["extra"] = extra
+        out.append(data)
+    return out
 
 
 @router.post("/employees/repair-codes")

@@ -1840,14 +1840,10 @@ function assignmentFromApi(row){
 }
 function applyAssignmentsToEmployees(assignments){
   const active=(assignments||db.assignments||[]).filter(x=>x&&x.active!==false&&x.active!==0);
-  const activeEmployeeRefs=new Set(active.flatMap(assignmentEmployeeRefs));
-  (db.agents||[]).forEach(a=>{
-    if(!a?.backendId||employeeMatchesAssignmentRefs(a,activeEmployeeRefs))return;
-    const current=a.affectationCourante||{};
-    if(current.siteId||current.siteBackendId||current.siteName||current.assignmentBackendId){
-      a.affectationCourante={...current,siteId:"",siteBackendId:null,siteName:"",clientName:"",groupe:"",dateDebut:"",assignmentBackendId:"",poste:a.fonction||a.position||""};
-    }
-  });
+  // On NE vide plus l'affectation en se basant sur db.assignments (souvent incomplet côté client) :
+  // c'est ce qui faisait perdre l'affectation à des employés pourtant affectés (50/19 au lieu de 71/0).
+  // La vérité de l'affectation vient désormais du serveur (endpoint /drh/employees). Ici on se contente
+  // d'APPLIQUER/renforcer les affectations connues, jamais de les effacer.
   active.forEach(aff=>{
     const a=findEmployeeByRef(aff.agentBackendId)||findEmployeeByRef(aff.agentId);
     if(!a)return;
