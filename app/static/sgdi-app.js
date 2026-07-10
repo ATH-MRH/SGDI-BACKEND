@@ -1424,10 +1424,20 @@ function sgdiEnsureEmployeesForDisplay(options){
     ?localRows.filter(a=>employeeIsPointageEligible(a,scopeSoc)).length
     :localCount;
   const backendCount=sgdiBackendEmployeeTotalForDisplay(scopeSoc);
-  if(localCount>0&&(localEligible>0||backendCount<=0))return null;
+  // force -> on recharge frais depuis le serveur (chargement affiché, pas de chiffre local faux),
+  // mais au plus une fois toutes les 10s pour ne pas flasher un chargement à chaque onglet.
+  // Sans force -> court-circuit habituel si des données locales existent déjà.
+  const _ensureKey=scopeNorm||"__all";
+  window.__sgdiEnsuredAt=window.__sgdiEnsuredAt||{};
+  if(opt.force){
+    if(Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<10000)return null;
+  }else if(localCount>0&&(localEligible>0||backendCount<=0)){
+    return null;
+  }
   if(!opt.force&&backendCount<=0)return null;
   sgdiEmployeesDisplayLoading=true;
   return sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
+    window.__sgdiEnsuredAt[_ensureKey]=Date.now();
     const count=(db.agents||[]).filter(a=>!scopeNorm||normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm).length;
     if(count>0){
       if(typeof renderView==="function")renderView();
