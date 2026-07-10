@@ -104,6 +104,61 @@ def test_admin_can_still_replace_any_collection(client, auth_headers):
     assert r.status_code == 200, r.text
 
 
+def test_who_is_actually_unrestricted():
+    """Qui échappe totalement au filtrage ? La réponse décide qui est impacté.
+
+    Un utilisateur est non filtré si son rôle est administrateur OU si sa liste de
+    sociétés autorisées est vide. Seuls les utilisateurs ayant À LA FOIS un rôle
+    non-admin ET une liste de sociétés non vide sont filtrés.
+    """
+    from app.modules.irongs.service import ADMIN_SNAPSHOT_ROLES, _snapshot_unrestricted
+
+    class U:
+        def __init__(self, role, societes):
+            self.role = role
+            self.authorized_societies = societes
+
+    # Tous les rôles administrateurs, quelle que soit leur liste de sociétés
+    for role in ADMIN_SNAPSHOT_ROLES:
+        assert _snapshot_unrestricted(U(role, ["Iron Global Securite"])) is True, role
+        assert _snapshot_unrestricted(U(role.upper(), ["Iron Global Securite"])) is True, role
+
+    # Un rôle métier SANS liste de sociétés est également non filtré (voit tout)
+    assert _snapshot_unrestricted(U("drh", [])) is True
+    assert _snapshot_unrestricted(U("drh", None)) is True
+
+    # Seul ce profil est filtré : rôle métier + liste de sociétés explicite
+    assert _snapshot_unrestricted(U("drh", ["Iron Global Securite"])) is False
+    assert _snapshot_unrestricted(U("ops", ["Sword Corporation"])) is False
+    assert _snapshot_unrestricted(None) is False
+
+
+def test_business_role_without_society_list_sees_all_payslips(client, auth_headers, db):
+    """Un DRH sans liste de sociétés voit toujours toute la paie : rien n'a changé pour lui."""
+    from app.core.security import hash_password
+    from app.modules.auth.models import User
+
+    if not db.query(User).filter(User.username == "testdrh_global").first():
+        db.add(User(username="testdrh_global", email="drh@test.com", full_name="DRH Global",
+                    role="drh", access_level="H4", authorized_societies=[], authorized_structures=[],
+                    password_hash=hash_password("testpass123"), is_active=True))
+        db.commit()
+
+    assert client.put("/api/irongs/db", headers=auth_headers, json={"data": {"paieBulletins": [
+        {"id": "drhg_igs", "ym": "2026-03", "societe": "Iron Global Securite"},
+        {"id": "drhg_swd", "ym": "2026-03", "societe": "Sword Corporation"},
+    ]}}).status_code == 200
+
+    tok = client.post("/api/auth/login", json={"username": "testdrh_global", "password": "testpass123"})
+    assert tok.status_code == 200, tok.text
+    h = {"Authorization": f"Bearer {tok.json()['access_token']}"}
+
+    snap = client.get("/api/irongs/db", headers=h).json()
+    ids = {b["id"] for b in (snap.get("paieBulletins") or [])}
+    assert {"drhg_igs", "drhg_swd"} <= ids, \
+        "Un DRH sans liste de sociétés a perdu la visibilité sur la paie"
+
+
 def test_non_paie_collections_unaffected_for_restricted_user(client, auth_headers, restricted_headers):
     """Témoin : une collection libre (notifications) garde ses lignes sans société."""
     assert client.put("/api/irongs/db", headers=auth_headers, json={"data": {
