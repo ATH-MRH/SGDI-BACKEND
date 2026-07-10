@@ -76,7 +76,21 @@ def _seed_admin():
                 password_hash=hash_password("testpass123"),
                 is_active=True,
             ))
-            session.commit()
+        # Utilisateur RESTREINT à une seule société : role != admin ET access_level != H5,
+        # sinon unrestricted_scope() court-circuite toutes les gardes de périmètre.
+        if not session.query(User).filter(User.username == "testops").first():
+            session.add(User(
+                username="testops",
+                email="ops@test.com",
+                full_name="Test Ops",
+                role="ops",
+                access_level="H3",
+                authorized_societies=["Iron Global Securite"],
+                authorized_structures=[],
+                password_hash=hash_password("testpass123"),
+                is_active=True,
+            ))
+        session.commit()
     finally:
         session.close()
 
@@ -110,6 +124,14 @@ def auth_headers(client):
     assert resp.status_code == 200, resp.text
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def restricted_headers(client):
+    """Jeton d'un utilisateur limité à la société 'Iron Global Securite'."""
+    resp = client.post("/api/auth/login", json={"username": "testops", "password": "testpass123"})
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
 
 @pytest.fixture

@@ -400,4 +400,6 @@ def upsert_movement(payload: OpsMovementCreate, db: Session = Depends(get_db), u
     society = str(payload.society or "").strip()
     if society:
         _ensure_society_allowed(user, society)
-    return service.upsert_movement(db, payload.model_dump(exclude_unset=True))
+    # mode="json" : les dates deviennent des chaînes ISO, indispensables car le bridge
+    # recopie l'item brut dans la colonne JSON data["_legacy"] (un objet date y casse).
+    return service.upsert_movement(db, payload.model_dump(mode="json", exclude_unset=True))
