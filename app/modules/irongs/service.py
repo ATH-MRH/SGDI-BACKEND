@@ -39,6 +39,21 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
     "paieBulletins", "paieElements", "paieClotures", "paieGrilles",
 }
 
+# Collections sensibles dont une ligne SANS société est une référence GLOBALE
+# légitime, partagée par toutes les sociétés : grille de salaire commune à une
+# fonction, clôture de paie « toutes sociétés ». Le métier s'appuie dessus
+# (paieGrilleForAgent accepte une grille sans societe ; paieIsClosed traite
+# societe == "" comme une clôture globale).
+# Pour ces collections on masque bien les lignes d'une AUTRE société, mais on
+# conserve les lignes globales : les jeter ferait perdre le plancher/plafond de
+# grille et rouvrirait un mois clôturé côté utilisateur restreint.
+GLOBAL_ROW_COLLECTIONS = {"paieClotures", "paieGrilles"}
+
+
+def _keep_unscoped_rows(name: str) -> bool:
+    """Faut-il garder les lignes sans société ni rattachement agent/site ?"""
+    return name not in SENSITIVE_SOCIETY_COLLECTIONS or name in GLOBAL_ROW_COLLECTIONS
+
 
 # Cache par (utilisateur, périmètre) : (instant, signature d'événements, snapshot).
 # La signature reflète toutes les tables surveillées : dès qu'une donnée change (y compris
@@ -332,7 +347,7 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
             allowed_societies,
             allowed_agent_refs,
             allowed_site_refs,
-            keep_unscoped=name not in SENSITIVE_SOCIETY_COLLECTIONS,
+            keep_unscoped=_keep_unscoped_rows(name),
         )
 
     current_username = str(getattr(user, "username", "") or "")
@@ -367,7 +382,7 @@ def scope_collection_for_user(
         allowed_societies,
         allowed_agent_refs=set(),
         allowed_site_refs=set(),
-        keep_unscoped=False,
+        keep_unscoped=name in GLOBAL_ROW_COLLECTIONS,
     )
 
 

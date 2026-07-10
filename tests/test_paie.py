@@ -111,6 +111,40 @@ def test_collection_endpoint_hides_foreign_society_payslips(client, auth_headers
         "FUITE : les bulletins de salaire d'une autre société sont lisibles via /collections"
 
 
+def test_global_grille_and_cloture_stay_visible_to_restricted_user(client, auth_headers, restricted_headers):
+    """Le cloisonnement ne doit PAS emporter les références globales de la paie.
+
+    Le métier s'appuie dessus : paieGrilleForAgent accepte une grille sans société,
+    et paieIsClosed traite societe == "" comme une clôture « toutes sociétés ».
+    Les jeter ferait perdre le plancher/plafond de grille (base de salaire fausse)
+    et rouvrirait un mois pourtant clôturé.
+    """
+    _put(client, auth_headers, {
+        "paieGrilles": [
+            {"id": "g_global", "fonction": "AGENT DE SECURITE", "min": 40000, "max": 80000},
+            {"id": "g_igs", "fonction": "CHEF", "societe": SOC_IGS, "min": 50000},
+            {"id": "g_swd", "fonction": "CHEF", "societe": SOC_SWORD, "min": 90000},
+        ],
+        "paieClotures": [
+            {"id": "c_global", "ym": "2026-03", "societe": ""},
+            {"id": "c_swd", "ym": "2026-04", "societe": SOC_SWORD},
+        ],
+    })
+    snap = client.get("/api/irongs/db", headers=restricted_headers).json()
+    grilles = {g["id"] for g in (snap.get("paieGrilles") or [])}
+    clotures = {c["id"] for c in (snap.get("paieClotures") or [])}
+
+    assert "g_global" in grilles, "La grille GLOBALE a disparu pour un utilisateur restreint"
+    assert "g_igs" in grilles, "La grille de sa propre société a disparu"
+    assert "g_swd" not in grilles, "La grille d'une autre société est visible"
+    assert "c_global" in clotures, "La clôture GLOBALE a disparu pour un utilisateur restreint"
+    assert "c_swd" not in clotures, "La clôture d'une autre société est visible"
+
+    # Même règle sur l'endpoint mono-collection
+    ids = {g["id"] for g in _collection(client, restricted_headers, "paieGrilles")}
+    assert "g_global" in ids and "g_igs" in ids and "g_swd" not in ids
+
+
 def test_restricted_user_cannot_replace_the_database(client, auth_headers, restricted_headers):
     """La sauvegarde globale est réservée à l'administrateur : un utilisateur restreint
     ne peut donc jamais écraser les bulletins d'une autre société."""
