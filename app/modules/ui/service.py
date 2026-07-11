@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import time
 from copy import deepcopy
 from datetime import date, datetime, timezone
+from threading import Lock
 from typing import Any
 
 from sqlalchemy import func
@@ -268,7 +270,40 @@ def _distinct_society_count(db: Session) -> int:
     return len(values)
 
 
+# Cache par (utilisateur, société) : (instant, signature d'événements, résultat).
+# build_sidebar_stats parcourt et recopie une douzaine de collections legacy en
+# entier à chaque appel (agents, congés, candidats, sites, prospects, devis...) —
+# c'était la requête la plus lente de l'app (jusqu'à 8s), appelée très fréquemment.
+# Même mécanisme d'invalidation que le cache de snapshot (/api/irongs/db) : dès
+# qu'une donnée surveillée change, la signature diffère et le résultat est recalculé.
+_SIDEBAR_STATS_CACHE: dict[str, tuple[float, str, dict]] = {}
+_SIDEBAR_STATS_CACHE_LOCK = Lock()
+_SIDEBAR_STATS_CACHE_TTL = 120.0
+
+
+def _sidebar_stats_signature() -> str:
+    try:
+        from app.main import _events_signature_cached
+        return _events_signature_cached()
+    except Exception:
+        return ""
+
+
 def build_sidebar_stats(db: Session, user: User, society: str | None = None) -> dict[str, Any]:
+    cache_key = f"{user.username}|{(society or '').strip()}"
+    signature = _sidebar_stats_signature()
+    now = time.monotonic()
+    with _SIDEBAR_STATS_CACHE_LOCK:
+        entry = _SIDEBAR_STATS_CACHE.get(cache_key)
+        if entry and now - entry[0] < _SIDEBAR_STATS_CACHE_TTL and entry[1] == signature:
+            return deepcopy(entry[2])
+    result = _build_sidebar_stats_uncached(db, user, society)
+    with _SIDEBAR_STATS_CACHE_LOCK:
+        _SIDEBAR_STATS_CACHE[cache_key] = (now, signature, result)
+    return deepcopy(result)
+
+
+def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None = None) -> dict[str, Any]:
     """Return ERP counters computed by the backend.
 
     The frontend still keeps the legacy snapshot during the transition, but this
