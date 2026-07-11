@@ -204,10 +204,10 @@ def employees(
     # affectation active repart sans site (cohérent avec la base).
     from app.modules.irongs.sql_bridge import _live_assignment_map
     live = _live_assignment_map(db)
-    out: list[dict] = []
+    out: list[EmployeeOut] = []
     for row in rows:
-        data = EmployeeOut.model_validate(row).model_dump()
-        extra = dict(data.get("extra") or {})
+        item = EmployeeOut.model_validate(row)
+        extra = dict(item.extra or {})
         legacy = dict(extra.get("_legacy")) if isinstance(extra.get("_legacy"), dict) else {}
         aff = live.get(row.id)
         if aff:
@@ -216,8 +216,9 @@ def employees(
         elif isinstance(legacy.get("affectationCourante"), dict):
             legacy["affectationCourante"] = {}
         extra["_legacy"] = legacy
-        data["extra"] = extra
-        out.append(data)
+        # model_copy évite de repasser par un cycle complet model_dump()+re-validation
+        # (FastAPI revalide déjà la réponse une fois via response_model=list[EmployeeOut]).
+        out.append(item.model_copy(update={"extra": extra}))
     return out
 
 
