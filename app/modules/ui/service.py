@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from threading import Lock
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
@@ -56,8 +56,25 @@ def _status(row: dict[str, Any]) -> str:
     return _norm(row.get("statut") or row.get("status"))
 
 
+_SOCIETY_JSON_KEYS = ("societe", "society", "societeRattachement", "company")
+
+
 def _count_legacy_items(db: Session, name: str, society: str | None = None) -> int:
-    return len([row for row in _legacy_rows(db, name) if _matches_society(row, society)])
+    # Compte en SQL plutôt que de récupérer toutes les lignes en Python pour les
+    # jeter après comptage — appelée ~10 fois par sidebar-stats, c'était l'un des
+    # postes de coût les plus lourds de l'endpoint. Reproduit exactement la logique
+    # de _matches_society (mêmes 4 clés, comparaison insensible à la casse, trim).
+    wanted = _norm(society)
+    stmt = db.query(func.count(SgdiRecord.id)).filter(
+        SgdiRecord.collection == name,
+        SgdiRecord.kind == "item",
+    )
+    if wanted:
+        stmt = stmt.filter(or_(*(
+            func.lower(func.trim(SgdiRecord.data[key].astext)) == wanted
+            for key in _SOCIETY_JSON_KEYS
+        )))
+    return int(stmt.scalar() or 0)
 
 
 def _client_site_count(data: dict[str, Any]) -> int:
