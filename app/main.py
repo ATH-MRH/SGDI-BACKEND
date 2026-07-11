@@ -893,7 +893,10 @@ def _events_signature() -> str:
         "advances",
         "credit_notes",
     ]
-    with SessionLocal() as db:
+    def _fallback_per_table(db) -> str:
+        # Repli tolérant aux erreurs : une table par requête (lent mais robuste si une
+        # table de la liste manque une colonne ou n'existe pas).
+        db.rollback()
         parts: list[str] = []
         for table_name in watched_tables:
             try:
@@ -902,7 +905,27 @@ def _events_signature() -> str:
                 ).mappings().one()
                 parts.append(f"{table_name}:{row['c']}:{row['u'] or ''}:{row['r'] or ''}")
             except Exception:
+                db.rollback()
                 continue
+        return "|".join(parts)
+
+    with SessionLocal() as db:
+        # Combine les 23 requêtes en un seul aller-retour réseau (UNION ALL) au lieu d'une
+        # requête séquentielle par table — c'était la source dominante de latence de
+        # /api/irongs/db, appelé à chaque connexion et très fréquemment pendant l'usage.
+        union_sql = " UNION ALL ".join(
+            f"SELECT '{t}' AS t, COUNT(*) AS c, MAX(updated_at) AS u, MAX(created_at) AS r FROM {t}"
+            for t in watched_tables
+        )
+        try:
+            rows = {row["t"]: row for row in db.execute(text(union_sql)).mappings().all()}
+        except Exception:
+            return _fallback_per_table(db)
+        parts = [
+            f"{table_name}:{row['c']}:{row['u'] or ''}:{row['r'] or ''}"
+            for table_name in watched_tables
+            if (row := rows.get(table_name)) is not None
+        ]
         return "|".join(parts)
 
 

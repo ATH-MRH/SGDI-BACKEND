@@ -1892,8 +1892,17 @@ function applyAssignmentsToEmployees(assignments){
 }
 async function syncAssignmentsFromPostgres(){
   if(!sgdiAuthToken()||!db||!window.SGDI?.assignments?.page)return;
-  const result=await SGDI.assignments.page({active:1,page_size:5000});
-  const rows=Array.isArray(result?.items)?result.items:Array.isArray(result)?result:[];
+  // Le serveur plafonne page_size à 100 quel que soit ce qu'on demande : on boucle sur
+  // les pages pour ne jamais tronquer silencieusement les affectations au-delà de 100.
+  const rows=[];
+  let page=1,pages=1;
+  do{
+    const result=await SGDI.assignments.page({active:1,page,page_size:100});
+    const items=Array.isArray(result?.items)?result.items:Array.isArray(result)?result:[];
+    rows.push(...items);
+    pages=Number(result?.pages)||1;
+    page++;
+  }while(page<=pages);
   db.assignments=rows.map(assignmentFromApi);
   applyAssignmentsToEmployees(db.assignments);
 }
