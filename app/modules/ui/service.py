@@ -26,13 +26,16 @@ def _legacy_counts(db: Session) -> dict[str, int]:
 
 
 def _legacy_rows(db: Session, name: str) -> list[dict[str, Any]]:
+    # Lecture seule : tous les appelants ne font que lire/compter (jamais muter) ces
+    # dicts, donc pas besoin de deepcopy ici — ça évite de recopier en mémoire des
+    # blobs JSON potentiellement volumineux pour chaque collection à chaque appel.
     rows = (
         db.query(SgdiRecord)
         .filter(SgdiRecord.collection == name)
         .order_by(SgdiRecord.position.asc(), SgdiRecord.id.asc())
         .all()
     )
-    return [deepcopy(row.data) for row in rows if row.kind == "item" and isinstance(row.data, dict)]
+    return [row.data for row in rows if row.kind == "item" and isinstance(row.data, dict)]
 
 
 def _norm(value: Any) -> str:
