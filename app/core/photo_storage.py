@@ -14,9 +14,13 @@ from app.core.config import settings
 logger = logging.getLogger("sgdi.photos")
 UPLOADS_ROOT = Path(os.getenv("SGDI_UPLOADS_DIR", "/app/uploads"))
 PHOTOS_DIR = UPLOADS_ROOT / "photos"
-DOCS_DIR = UPLOADS_ROOT / "docs"
+# Les documents vont SOUS photos/ (et non directement sous /app/uploads) : ce dossier
+# est deja provisionne et inscriptible par l'utilisateur de l'app, alors que la racine
+# /app/uploads appartient a root (volume monte) -> creer un dossier a la racine echoue.
+# Le frontend sert et affiche les URLs /uploads/... de la meme facon.
+DOCS_DIR = PHOTOS_DIR / "docs"
 PUBLIC_PHOTO_PREFIX = "/uploads/photos"
-PUBLIC_DOC_PREFIX = "/uploads/docs"
+PUBLIC_DOC_PREFIX = "/uploads/photos/docs"
 _DATA_URL_RE = re.compile(r"^data:image/[^;]+;base64,", re.IGNORECASE)
 _DATA_ANY_RE = re.compile(r"^data:([^;,]*)(;base64)?,", re.IGNORECASE)
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")

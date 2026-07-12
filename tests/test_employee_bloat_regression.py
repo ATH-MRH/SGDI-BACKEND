@@ -78,8 +78,8 @@ def test_save_roundtrip_does_not_grow_extra(db, uploads):
 
     # Le document est toujours là et affichable (url externalisée)
     final = sql_bridge.employee_to_item(row)
-    assert final["documents"]["CV"]["url"].startswith("/uploads/docs/"), final["documents"]["CV"]
-    assert (uploads / "docs").exists()
+    assert final["documents"]["CV"]["url"].startswith("/uploads/photos/docs/"), final["documents"]["CV"]
+    assert (uploads / "photos" / "docs").exists()
 
 
 def test_no_base64_remains_in_stored_extra_after_save(db, uploads):
@@ -125,7 +125,7 @@ def test_migration_shrinks_without_losing_data(db, uploads):
 
     # Rien perdu : le document ET le champ enfoui profondément survivent
     item = sql_bridge.employee_to_item(row)
-    assert item["documents"]["CV"]["url"].startswith("/uploads/docs/")
+    assert item["documents"]["CV"]["url"].startswith("/uploads/photos/docs/")
     assert item["champProfond"] == "valeur_unique"
     # Le base64 a quitté la base
     assert ";base64," not in json.dumps(row.extra)
@@ -171,4 +171,4 @@ def test_migration_preserves_document_only_in_deep_legacy(db, uploads):
     db.flush()
     item = sql_bridge.employee_to_item(row)
     assert "Casier" in item["documents"], "document enfoui perdu par la migration"
-    assert item["documents"]["Casier"]["url"].startswith("/uploads/docs/")
+    assert item["documents"]["Casier"]["url"].startswith("/uploads/photos/docs/")

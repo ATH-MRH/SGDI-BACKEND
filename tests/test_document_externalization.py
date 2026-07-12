@@ -27,14 +27,14 @@ def _data_url(mime, raw_bytes):
 def test_save_pdf_document_writes_file_and_returns_url(photo_storage, tmp_path):
     url, saved = photo_storage.save_base64_document(_data_url("application/pdf", b"%PDF-1.4 fake"), "A01_CV")
     assert saved is True
-    assert url == "/uploads/docs/A01_CV.pdf"
-    assert (tmp_path / "docs" / "A01_CV.pdf").read_bytes() == b"%PDF-1.4 fake"
+    assert url == "/uploads/photos/docs/A01_CV.pdf"
+    assert (tmp_path / "photos" / "docs" / "A01_CV.pdf").read_bytes() == b"%PDF-1.4 fake"
 
 
 def test_save_image_document_uses_right_extension(photo_storage, tmp_path):
     url, saved = photo_storage.save_base64_document(_data_url("image/png", b"\x89PNG..."), "K10_Acte")
     assert saved and url.endswith(".png")
-    assert (tmp_path / "docs" / "K10_Acte.png").exists()
+    assert (tmp_path / "photos" / "docs" / "K10_Acte.png").exists()
 
 
 def test_already_external_url_is_left_untouched(photo_storage):
@@ -64,7 +64,7 @@ def test_externalize_employee_documents_only_touches_base64(photo_storage):
         "Vide": {"name": "rien"},                                        # rien à faire
     }
     out = photo_storage.externalize_employee_documents(documents, fallback="A01")
-    assert out["CV"]["url"] == "/uploads/docs/A01_CV.pdf", "le base64 doit être externalisé"
+    assert out["CV"]["url"] == "/uploads/photos/docs/A01_CV.pdf", "le base64 doit être externalisé"
     assert out["CV"]["name"] == "cv.pdf", "les autres champs du document sont conservés"
     assert out["Acte"]["url"] == "/uploads/docs/deja.pdf"    # inchangé
     assert out["Casier"]["url"] == "https://cdn/casier.pdf"  # inchangé
@@ -83,7 +83,7 @@ def test_externalize_is_idempotent(photo_storage):
     documents = {"CV": {"url": _data_url("application/pdf", b"cv")}}
     once = photo_storage.externalize_employee_documents(documents, fallback="A01")
     twice = photo_storage.externalize_employee_documents(once, fallback="A01")
-    assert once["CV"]["url"] == twice["CV"]["url"] == "/uploads/docs/A01_CV.pdf"
+    assert once["CV"]["url"] == twice["CV"]["url"] == "/uploads/photos/docs/A01_CV.pdf"
 
 
 def test_externalize_handles_non_dict_entries(photo_storage):
