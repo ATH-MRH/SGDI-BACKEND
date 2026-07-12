@@ -674,33 +674,33 @@ def _live_assignment_map(db: Session) -> dict[int, dict[str, Any]]:
     # TOUS les écrans (compteurs, listes, filtres) soient cohérents (fin des "50 affectés / 19 en
     # instance" alors que le vrai est "71 / 0"). Un employé sans affectation active reste sans site.
     today = date.today()
-    assignments = db.execute(
-        select(Assignment)
+    # Une seule requête (LEFT JOIN) au lieu de deux allers-retours séquentiels
+    # (affectations puis sites) — appelée à chaque chargement de la liste des employés.
+    rows = db.execute(
+        select(Assignment, Site)
+        .join(Site, Assignment.site_id == Site.id, isouter=True)
         .where(Assignment.active == 1)
         .where(or_(Assignment.end_date.is_(None), Assignment.end_date >= today))
         .order_by(Assignment.id)
-    ).scalars().all()
-    if not assignments:
+    ).all()
+    if not rows:
         return {}
-    site_ids = {a.site_id for a in assignments if a.site_id}
-    site_map: dict[int, dict[str, Any]] = {}
-    if site_ids:
-        for s in db.execute(select(Site).where(Site.id.in_(site_ids))).scalars().all():
+    result: dict[int, dict[str, Any]] = {}
+    for a, s in rows:  # order_by id asc -> la plus récente écrase
+        site_id_label = f"st_{a.site_id}"
+        site_name = ""
+        client_name = ""
+        if s is not None:
             plan = s.equipment_plan if isinstance(s.equipment_plan, dict) else {}
             raw = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
-            site_map[s.id] = {
-                "siteId": raw.get("id") or plan.get("id") or f"st_{s.id}",
-                "siteName": s.name or "",
-                "clientName": s.client_name or "",
-            }
-    result: dict[int, dict[str, Any]] = {}
-    for a in assignments:  # order_by id asc -> la plus récente écrase
-        site = site_map.get(a.site_id, {})
+            site_id_label = raw.get("id") or plan.get("id") or site_id_label
+            site_name = s.name or ""
+            client_name = s.client_name or ""
         result[a.employee_id] = {
-            "siteId": site.get("siteId") or f"st_{a.site_id}",
-            "siteName": site.get("siteName") or "",
+            "siteId": site_id_label,
+            "siteName": site_name,
             "siteBackendId": a.site_id,
-            "clientName": site.get("clientName") or "",
+            "clientName": client_name,
             "groupe": a.group_code or "",
             "poste": a.position or "",
             "dateDebut": date_out(a.start_date),

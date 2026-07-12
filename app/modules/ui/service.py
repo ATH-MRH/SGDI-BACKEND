@@ -277,16 +277,21 @@ def _user_count(db: Session) -> int:
 
 
 def _distinct_society_count(db: Session) -> int:
+    # _apply_legacy_fallbacks (appelée avant, dans le même appel à build_sidebar_stats)
+    # charge déjà "agents" et "sites" en entier — on évite de les recharger ici en
+    # ne demandant que les valeurs distinctes directement en SQL.
     values: set[str] = set()
-    for model, attr in ((Client, Client.society),):
-        rows = db.query(attr).distinct().all()
-        values.update(str(row[0]).strip() for row in rows if row and str(row[0] or "").strip())
+    rows = db.query(Client.society).distinct().all()
+    values.update(str(row[0]).strip() for row in rows if row and str(row[0] or "").strip())
     for name in ("agents", "sites", "clients"):
-        for row in _legacy_rows(db, name):
-            for key in ("societe", "society", "societeRattachement"):
-                value = str(row.get(key) or "").strip()
-                if value:
-                    values.add(value)
+        for key in ("societe", "society", "societeRattachement"):
+            rows = (
+                db.query(SgdiRecord.data[key].astext)
+                .filter(SgdiRecord.collection == name, SgdiRecord.kind == "item")
+                .distinct()
+                .all()
+            )
+            values.update(str(row[0]).strip() for row in rows if row and row[0] and str(row[0]).strip())
     return len(values)
 
 
