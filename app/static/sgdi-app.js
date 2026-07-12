@@ -5024,6 +5024,13 @@ document.addEventListener("click",(event)=>{
   }
 });
 function render(){
+  // Wrapper : garantit que la barre de progression du haut (#ui-progress, démarrée au
+  // hashchange) est TOUJOURS terminée, même sur les pages à retour anticipé (portail,
+  // select-societe, sélecteur de société...). Sans ça, ces pages laissaient la barre
+  // bloquée à 76 %.
+  try{renderInternal()}finally{if(typeof uiProgressDone==="function")uiProgressDone()}
+}
+function renderInternal(){
   sanitizeCandidatesInDB();
   if(!session)renderOverlayHost();
   if(!session){renderLogin();return}
