@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import date, timedelta
 from typing import Any, Type
 
@@ -27,6 +28,22 @@ DOTATION_TYPES = {"nouvelle_dotation", "renouvellement_dotation", "dotation_pret
 
 _store_schema_ok = False
 _material_schema_ok = False
+
+
+def _society_key(value: Any) -> str:
+    """Clé de comparaison société : majuscules, espaces normalisés, sans accents.
+    Même règle que irongs/ops. Indispensable ici car le DRH met la société employé en
+    MAJUSCULES (_UpperMixin) alors que le matériel la garde telle quelle : une
+    comparaison brute rejetait à tort une dotation pourtant de la même société."""
+    text = " ".join(str(value or "").strip().upper().split())
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+
+def _same_society(a: Any, b: Any) -> bool:
+    """Vrai si a et b désignent la même société (ou si l'une est vide = pas de contrainte)."""
+    if not a or not b:
+        return True
+    return _society_key(a) == _society_key(b)
 
 
 def ensure_store_schema(db: Session) -> None:
@@ -122,7 +139,7 @@ def _article_payload_with_store_rules(db: Session, payload: Any, current: StockA
     if store_id is None:
         raise HTTPException(status_code=422, detail="Magasin obligatoire pour chaque article")
     store = get_or_404(db, Store, store_id)
-    if store.society and data.get("society") and store.society != data.get("society"):
+    if not _same_society(store.society, data.get("society")):
         raise HTTPException(status_code=422, detail="Magasin et article de sociétés différentes")
     data["store_id"] = store.id
     data["society"] = data.get("society") or store.society
@@ -437,6 +454,9 @@ def create_movement(db: Session, payload: MovementCreate, *, allow_employee_dota
         raise HTTPException(status_code=422, detail="Stock insuffisant")
     article.quantity = (article.quantity or 0) + sign * payload.quantity
     data = payload.model_dump(exclude_unset=True)
+    # model_dump(exclude_unset=True) retire les champs non fournis MÊME s'ils ont un
+    # défaut : sans ça, une date omise par le client tombe à NULL -> crash insert.
+    data.setdefault("movement_date", payload.movement_date)
     data["store_id"] = store_id
     movement = StockMovement(**data)
     if not movement.unit_price:
@@ -461,7 +481,7 @@ def create_dotation(db: Session, payload: DotationCreate):
         raise HTTPException(status_code=422, detail="Site obligatoire pour une dotation site")
     if target_type == "structure" and not payload.structure:
         raise HTTPException(status_code=422, detail="Structure obligatoire pour une dotation structure")
-    if employee and article.society and employee.society and article.society != employee.society:
+    if employee and not _same_society(article.society, employee.society):
         raise HTTPException(status_code=422, detail="Article et employé de sociétés différentes")
     target_label = payload.target_label
     if employee:

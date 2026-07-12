@@ -345,7 +345,7 @@ def delete_movement(movement_id: int, db: Session = Depends(get_db), user: User 
 def create_dotation(payload: DotationCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     article = _ensure_article_allowed(db, user, payload.article_id)
     employee = _ensure_employee_allowed(db, user, payload.employee_id)
-    if article and employee and article.society and employee.society and article.society != employee.society:
+    if article and employee and not service._same_society(article.society, employee.society):
         raise HTTPException(status_code=422, detail="Article et employé de sociétés différentes")
     return service.create_dotation(db, payload)
 
@@ -417,7 +417,7 @@ def bulk_dotation_initiale(
         article = db.get(StockArticle, art_id)
         if not article:
             raise HTTPException(status_code=422, detail=f"Article ID {art_id} introuvable.")
-        if article.society and article.society != target_society:
+        if article.society and not service._same_society(article.society, target_society):
             raise HTTPException(status_code=422, detail=f"Article {article.designation} hors société cible.")
         resolved.append((article, qty))
 
