@@ -18289,7 +18289,7 @@ function renderFiches(view,sub,_skipEnsure){
   }[type]||'');
   const activeAdvancedFilters=[fpFilter.recruitFrom,fpFilter.recruitTo,fpFilter.ageMin,fpFilter.ageMax].filter(Boolean).length;
   const showFichePrintBadgeActions=session?.transverse!=="ops";
-  view.innerHTML=`<div class="fp-page">
+  view.innerHTML=`<div class="fp-page fp-stable-layout">
     <div class="fp-head">
       <div>
         <h1 class="text-2xl font-black uppercase">${title}</h1>

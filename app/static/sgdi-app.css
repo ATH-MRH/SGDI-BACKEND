@@ -7780,3 +7780,111 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .fp-display-controls{grid-template-columns:1fr 78px 126px!important}
   #view .fp-display-controls>label{display:none!important}
 }
+
+/* Fiches de position: stable scoped layout. Prevents older fp-page rules from
+   widening the page or shifting the filter footer into a second visual layout. */
+#view .fp-page.fp-stable-layout{
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  padding:0!important;
+  display:flex!important;
+  flex-direction:column!important;
+  gap:16px!important;
+  box-sizing:border-box!important;
+}
+#view .fp-page.fp-stable-layout .fp-head{
+  width:100%!important;
+  margin:0!important;
+  padding:4px 0 0!important;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:start!important;
+  gap:16px!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+#view .fp-page.fp-stable-layout .fp-summary-grid{
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  display:grid!important;
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  gap:10px!important;
+}
+#view .fp-page.fp-stable-layout .fp-filter-panel{
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  display:block!important;
+  border:1px solid #d9e6f3!important;
+  border-radius:16px!important;
+  overflow:hidden!important;
+  background:rgba(255,255,255,.92)!important;
+  box-sizing:border-box!important;
+}
+#view .fp-page.fp-stable-layout .fp-filter-main{
+  width:100%!important;
+  display:grid!important;
+  grid-template-columns:minmax(320px,1.45fr) repeat(3,minmax(180px,.7fr))!important;
+  align-items:center!important;
+  gap:14px!important;
+  padding:18px!important;
+  box-sizing:border-box!important;
+}
+#view .fp-page.fp-stable-layout .fp-filter-footer{
+  width:100%!important;
+  min-height:58px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:16px!important;
+  padding:10px 12px 10px 18px!important;
+  border-top:1px solid #edf3f9!important;
+  background:#f8fbff!important;
+  box-sizing:border-box!important;
+}
+#view .fp-page.fp-stable-layout .fp-result-count{
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+}
+#view .fp-page.fp-stable-layout .fp-display-controls{
+  width:auto!important;
+  margin-left:auto!important;
+  display:grid!important;
+  grid-template-columns:auto minmax(220px,280px) 82px 128px!important;
+  align-items:center!important;
+  gap:10px!important;
+  min-width:0!important;
+}
+#view .fp-page.fp-stable-layout .fp-display-controls>select{
+  width:100%!important;
+  min-width:0!important;
+}
+#view .fp-page.fp-stable-layout .fp-layout-switch{
+  justify-self:end!important;
+}
+#view .fp-page.fp-stable-layout .fp-reset-btn{
+  justify-self:end!important;
+}
+@media(max-width:1180px){
+  #view .fp-page.fp-stable-layout .fp-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #view .fp-page.fp-stable-layout .fp-filter-main{grid-template-columns:1fr 1fr!important}
+  #view .fp-page.fp-stable-layout .fp-search-field{grid-column:1/-1!important}
+  #view .fp-page.fp-stable-layout .fp-filter-footer{display:grid!important;grid-template-columns:1fr!important}
+  #view .fp-page.fp-stable-layout .fp-display-controls{
+    width:100%!important;
+    margin-left:0!important;
+    grid-template-columns:auto minmax(180px,1fr) 82px 128px!important;
+  }
+}
+@media(max-width:720px){
+  #view .fp-page.fp-stable-layout .fp-head{grid-template-columns:1fr!important}
+  #view .fp-page.fp-stable-layout .fp-summary-grid,
+  #view .fp-page.fp-stable-layout .fp-filter-main{grid-template-columns:1fr!important}
+  #view .fp-page.fp-stable-layout .fp-search-field{grid-column:auto!important}
+  #view .fp-page.fp-stable-layout .fp-filter-footer{padding:12px!important}
+  #view .fp-page.fp-stable-layout .fp-display-controls{grid-template-columns:1fr 82px 128px!important}
+  #view .fp-page.fp-stable-layout .fp-display-controls>label{display:none!important}
+}

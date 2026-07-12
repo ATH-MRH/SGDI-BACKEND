@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260712-fp-filter-audit";
+const SGDI_CACHE = "sgdi-pwa-v20260713-fp-stable-layout";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
@@ -46,24 +46,33 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // 2) Fichiers statiques versionnés (.js, .css, images, polices) : CACHE D'ABORD.
-  //    Chaque fichier porte un ?v=hash : si le contenu change, l'URL change =>
-  //    re-téléchargement automatique. Sinon, servi instantanément depuis le disque,
-  //    comme un logiciel installé (plus aucun re-téléchargement à chaque ouverture).
+  // 2) Fichiers statiques versionnés (.js, .css, images, polices).
+  //    Avec un ?v=..., le réseau gagne afin de couper les anciens rendus coincés
+  //    dans le cache. Sans version, on garde le cache d'abord pour les assets stables.
   const isVersionedAsset = url.pathname.startsWith("/static/") &&
     [".js", ".css", ".png", ".jpg", ".jpeg", ".svg", ".webp", ".woff", ".woff2", ".ttf", ".ico"]
       .some(ext => url.pathname.endsWith(ext));
   if (isVersionedAsset) {
-    event.respondWith(
-      caches.match(req).then(cached => {
-        if (cached) return cached;
-        return fetch(req).then(res => {
+    if (url.searchParams.has("v")) {
+      event.respondWith(
+        fetch(req, { cache: "reload" }).then(res => {
           const copy = res.clone();
           caches.open(SGDI_CACHE).then(cache => cache.put(req, copy)).catch(() => null);
           return res;
-        });
-      })
-    );
+        }).catch(() => caches.match(req))
+      );
+    } else {
+      event.respondWith(
+        caches.match(req).then(cached => {
+          if (cached) return cached;
+          return fetch(req).then(res => {
+            const copy = res.clone();
+            caches.open(SGDI_CACHE).then(cache => cache.put(req, copy)).catch(() => null);
+            return res;
+          });
+        })
+      );
+    }
     return;
   }
 
