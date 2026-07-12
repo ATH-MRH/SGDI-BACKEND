@@ -160,7 +160,7 @@ const SESSION_KEY = "irongs_session_v1";
 const UNLOCK_SESSION_KEY = "irongs_unlocked_v1";
 const ADMIN_SYSTEM_UNLOCK_KEY = "sgdi_admin_system_unlocked_v1";
 const SGDI_API_TOKEN_KEY = "sgdi_api_token_v1";
-let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:0,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null;
+let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:1,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null;
 let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPendingRoute=null;
 // Devient true UNIQUEMENT après un vrai chargement serveur réussi (sgdiPullState). Empêche
 // d'envoyer une base vide/non chargée qui effacerait les données (bug "tout à zéro" en multi-PC).
@@ -9666,7 +9666,7 @@ function contractSituationSortableHeaderHTML(index,label,type){
   return `<th><button type="button" data-contract-sort="${index}" data-sort-type="${escapeHTML(type||"text")}" onclick="sortContractSituationTable(${index},'${escapeHTML(type||"text")}')" style="display:flex;align-items:center;gap:6px;width:100%;font:inherit;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:inherit;background:transparent;border:0;padding:0;text-align:left;cursor:pointer"><span>${escapeHTML(label)}</span><span data-contract-sort-indicator style="font-size:10px;color:#64748b">↕</span></button></th>`;
 }
 function contractSituationHeadersHTML(){
-  return `<tr>${[
+  return `<tr><th class="contract-row-number-head">N°</th>${[
     ["Employé","text"],
     ["Code","text"],
     ["Société","text"],
@@ -9676,7 +9676,7 @@ function contractSituationHeadersHTML(){
     ["Fin contrat","date"],
     ["Salaire net","number"],
     ["Statut","text"]
-  ].map((h,i)=>contractSituationSortableHeaderHTML(i,h[0],h[1])).join("")}</tr>`;
+  ].map((h,i)=>contractSituationSortableHeaderHTML(i+1,h[0],h[1])).join("")}</tr>`;
 }
 function contractSituationEmployeeCode(a){
   return normalizeEmployeeCodeFormat(a?.matricule||a?.code||"");
@@ -9729,6 +9729,7 @@ function sortContractSituationTable(index,type){
     return dir==="asc"?result:-result;
   });
   tbody.replaceChildren(...rows,...empty);
+  refreshContractSituationRowNumbers(tbody);
   document.querySelectorAll("[data-contract-sort]").forEach(btn=>{
     const indicator=btn.querySelector("[data-contract-sort-indicator]");
     if(!indicator)return;
@@ -9736,8 +9737,19 @@ function sortContractSituationTable(index,type){
     indicator.style.color=parseInt(btn.dataset.contractSort,10)===idx?"#043970":"#64748b";
   });
 }
+function refreshContractSituationRowNumbers(tbody){
+  const host=tbody||document.getElementById("ct-tbody");
+  if(!host)return;
+  let n=1;
+  [...host.querySelectorAll("tr[data-row]")].forEach(row=>{
+    const cell=row.querySelector("[data-contract-row-number]");
+    if(!cell)return;
+    if(row.classList.contains("hidden"))cell.textContent="";
+    else cell.textContent=String(n++);
+  });
+}
 function contractSituationRowsHTML(agents,today_){
-  return agents.length===0?`<tr><td colspan="9" class="text-center text-slate-500 p-6">Aucun employé.</td></tr>`:agents.map(a=>{
+  return agents.length===0?`<tr><td colspan="10" class="text-center text-slate-500 p-6">Aucun employé.</td></tr>`:agents.map((a,index)=>{
     const employeeCode=contractSituationEmployeeCode(a);
     let essaiCell="—";
     if(a.dateFinEssai){const d=daysBetween(today_,a.dateFinEssai);
@@ -9752,7 +9764,7 @@ function contractSituationRowsHTML(agents,today_){
     const contractKind=cleanContractType(a.typeContrat)||"AUTRE";
     const tCl=documentType.startsWith("Avenant")?"pill-blue":documentType.endsWith("+")?"pill-amber":"pill-green";
     const fullName=((a.nom||"")+" "+(a.prenom||"")).trim();
-    return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${contractEnd||""}" data-contractkind="${escapeHTML(contractKind)}" data-typecontrat="${escapeHTML(documentType)}" data-q="${escapeHTML((fullName+" "+employeeCode).toLowerCase())}" data-searchable><td data-sort="${escapeHTML(fullName)}"><a class="font-semibold hover:underline uppercase" href="#/effectif/agent/${a.id}">${escapeHTML(fullName.toUpperCase())}</a></td><td class="font-mono text-xs font-black" data-sort="${escapeHTML(employeeCode)}">${safe(employeeCode)}</td><td data-sort="${escapeHTML(a.societe||"")}"><span class="pill pill-indigo">${safe(a.societe)}</span></td><td data-sort="${escapeHTML(documentType)}"><span class="pill ${tCl}">${safe(documentType)}</span></td><td class="text-xs" data-sort="${escapeHTML(a.dateRecrutement||"")}">${formatDate(a.dateRecrutement)}</td><td class="text-xs" data-sort="${escapeHTML(a.dateFinEssai||"")}">${essaiCell}</td><td class="text-xs" data-sort="${escapeHTML(contractEnd||"")}">${contratCell}</td><td data-sort="${Number(a.salaireNet)||0}">${a.salaireNet?money(a.salaireNet):"—"}</td><td data-sort="${escapeHTML(a.statut||"")}">${employeeStatusPillHTML(a,true,"contracts")}</td></tr>`;
+    return`<tr data-row data-finessai="${a.dateFinEssai||""}" data-fincontrat="${contractEnd||""}" data-contractkind="${escapeHTML(contractKind)}" data-typecontrat="${escapeHTML(documentType)}" data-q="${escapeHTML((fullName+" "+employeeCode).toLowerCase())}" data-searchable><td class="contract-row-number" data-contract-row-number data-sort="${index+1}">${index+1}</td><td data-sort="${escapeHTML(fullName)}"><a class="font-semibold hover:underline uppercase" href="#/effectif/agent/${a.id}">${escapeHTML(fullName.toUpperCase())}</a></td><td class="font-mono text-xs font-black" data-sort="${escapeHTML(employeeCode)}">${safe(employeeCode)}</td><td data-sort="${escapeHTML(a.societe||"")}"><span class="pill pill-indigo">${safe(a.societe)}</span></td><td data-sort="${escapeHTML(documentType)}"><span class="pill ${tCl}">${safe(documentType)}</span></td><td class="text-xs" data-sort="${escapeHTML(a.dateRecrutement||"")}">${formatDate(a.dateRecrutement)}</td><td class="text-xs" data-sort="${escapeHTML(a.dateFinEssai||"")}">${essaiCell}</td><td class="text-xs" data-sort="${escapeHTML(contractEnd||"")}">${contratCell}</td><td data-sort="${Number(a.salaireNet)||0}">${a.salaireNet?money(a.salaireNet):"—"}</td><td data-sort="${escapeHTML(a.statut||"")}">${employeeStatusPillHTML(a,true,"contracts")}</td></tr>`;
   }).join("");
 }
 function contractSituationListHTML(agents,today_,options){
@@ -10981,6 +10993,7 @@ function applyContratFilters(){
     if(ok)shown++;
   });
   const sh=document.getElementById("ct-shown");if(sh)sh.textContent=shown;
+  refreshContractSituationRowNumbers(document.getElementById("ct-tbody"));
 }
 function resetContratFilters(){window.__contractQuickFilter="";document.querySelectorAll(".contract-metric-click.is-selected").forEach(el=>el.classList.remove("is-selected"));["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});drumRender("flt-essai");drumRender("flt-contrat");applyContratFilters()}
 function setContratQuickFilter(type){

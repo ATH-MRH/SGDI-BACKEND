@@ -7628,6 +7628,20 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
   font-size:9px!important;
   line-height:1!important;
 }
+#view .contract-row-number-head,
+#view .contract-row-number{
+  width:48px!important;
+  min-width:48px!important;
+  max-width:48px!important;
+  text-align:center!important;
+  white-space:nowrap!important;
+}
+#view .contract-row-number{
+  color:#64748b!important;
+  font-size:12px!important;
+  font-weight:900!important;
+  font-variant-numeric:tabular-nums!important;
+}
 
 /* Sites dashboard: avoid floating controls covering site cards */
 body:has(#view .site-card) #sgdi-edit-fab{

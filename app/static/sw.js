@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260712-fp-table-head";
+const SGDI_CACHE = "sgdi-pwa-v20260712-contract-row-number";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
