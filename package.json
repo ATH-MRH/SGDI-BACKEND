@@ -3,6 +3,6 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "node --test tests_frontend/sgdi-app.test.js tests_frontend/drh.test.js tests_frontend/ops.test.js tests_frontend/paie.test.js tests_frontend/irongs.test.js tests_frontend/materiel.test.js tests_frontend/pointage.test.js"
+    "test": "node --test tests_frontend/sgdi-app.test.js tests_frontend/drh.test.js tests_frontend/ops.test.js tests_frontend/paie.test.js tests_frontend/irongs.test.js tests_frontend/materiel.test.js tests_frontend/pointage.test.js tests_frontend/facturation.test.js"
   }
 }
