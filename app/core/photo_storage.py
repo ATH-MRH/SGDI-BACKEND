@@ -22,7 +22,10 @@ DOCS_DIR = PHOTOS_DIR / "docs"
 PUBLIC_PHOTO_PREFIX = "/uploads/photos"
 PUBLIC_DOC_PREFIX = "/uploads/photos/docs"
 _DATA_URL_RE = re.compile(r"^data:image/[^;]+;base64,", re.IGNORECASE)
-_DATA_ANY_RE = re.compile(r"^data:([^;,]*)(;base64)?,", re.IGNORECASE)
+# En-tête d'un data:URL = tout jusqu'à la PREMIÈRE virgule. Peut contenir des
+# paramètres (ex. data:text/html;charset=utf-8,... ou data:application/pdf;base64,...).
+# On capture l'en-tête entier puis on en déduit le mime et l'encodage.
+_DATA_ANY_RE = re.compile(r"^data:([^,]*),", re.IGNORECASE)
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 _MIME_EXT = {
     "application/pdf": "pdf", "image/jpeg": "jpg", "image/jpg": "jpg",
@@ -100,8 +103,9 @@ def save_base64_document(data_url: str, name_base: str) -> tuple[str, bool]:
     m = _DATA_ANY_RE.match(text)
     if not m:
         return data_url, False  # déjà une URL (/uploads, http) ou autre : on ne touche pas
-    mime = (m.group(1) or "").lower().strip()
-    is_b64 = bool(m.group(2))
+    header = m.group(1) or ""              # ex. "text/html;charset=utf-8" ou "application/pdf;base64"
+    is_b64 = ";base64" in header.lower()   # base64 vs pourcent-encodé
+    mime = header.split(";")[0].strip().lower()
     payload = text[m.end():]
     try:
         if is_b64:

@@ -79,7 +79,7 @@ def main() -> int:
         if not args.apply:
             db.rollback()
             print("\nAPERÇU uniquement (aucune écriture en base). "
-                  "Note : les fichiers documents ont pu être écrits sur /uploads/docs "
+                  "Note : les fichiers documents ont pu être écrits sur /uploads/photos/docs "
                   "(inoffensif, ils seront référencés au --apply).")
             print("Relancez avec --apply pour appliquer.")
             return 0

@@ -55,6 +55,24 @@ def test_unknown_mime_falls_back_to_bin(photo_storage, tmp_path):
     assert saved and url.endswith(".bin")
 
 
+def test_html_data_url_with_charset_is_externalized(photo_storage, tmp_path):
+    """Cas REEL prod : data:text/html;charset=utf-8,<html pourcent-encode> (pas base64).
+    L'ancienne regex s'arretait au premier ';' et ne matchait pas -> non externalise."""
+    from urllib.parse import quote
+    html = "<!doctype html><h1>Ordre de mouvement</h1>"
+    data_url = "data:text/html;charset=utf-8," + quote(html)
+    url, saved = photo_storage.save_base64_document(data_url, "K10_ordre")
+    assert saved is True, "un data:text/html;charset=utf-8 doit maintenant s'externaliser"
+    assert url == "/uploads/photos/docs/K10_ordre.html"
+    assert (tmp_path / "photos" / "docs" / "K10_ordre.html").read_text(encoding="utf-8") == html
+
+
+def test_pdf_base64_with_extra_params_still_works(photo_storage):
+    # data:application/pdf;base64,... (le ;base64 doit toujours etre detecte)
+    url, saved = photo_storage.save_base64_document(_data_url("application/pdf", b"%PDF"), "Z_cv")
+    assert saved and url.endswith(".pdf")
+
+
 def test_externalize_employee_documents_only_touches_base64(photo_storage):
     documents = {
         "CV": {"url": _data_url("application/pdf", b"cv"), "name": "cv.pdf"},
