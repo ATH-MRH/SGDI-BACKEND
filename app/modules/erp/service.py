@@ -74,10 +74,33 @@ def effective_societies(user: User | None, society: str | None = None) -> list[s
     return allowed
 
 
-def employee_scope_condition(user: User | None, society: str | None = None):
+def _resolve_societies(db: Session, requested: list[str]) -> list[str]:
+    """Résout les sociétés demandées vers les valeurs RÉELLEMENT stockées, casse et
+    accents ignorés. Indispensable : le DRH stocke 'IRON GLOBAL SÉCURITÉ' (majuscules
+    accentuées) tandis qu'un appelant peut demander 'Iron Global Securite' — une
+    comparaison SQL brute (.in_) ne matchait alors AUCUN employé (compteurs à 0).
+    On garde aussi les valeurs demandées telles quelles (match exact éventuel)."""
+    wanted = {_status_key(s) for s in requested if _status_key(s)}
+    if not wanted:
+        return list(requested)
+    resolved: set[str] = set(requested)
+    for value in db.execute(select(Employee.society).distinct()).scalars().all():
+        if value and _status_key(value) in wanted:
+            resolved.add(value)
+    for plan in db.execute(select(Site.equipment_plan)).scalars().all():
+        if isinstance(plan, dict):
+            for key in ("societe", "society"):
+                value = plan.get(key)
+                if value and _status_key(value) in wanted:
+                    resolved.add(value)
+    return list(resolved)
+
+
+def employee_scope_condition(db: Session, user: User | None, society: str | None = None):
     societies = effective_societies(user, society)
     if not societies:
         return None
+    societies = _resolve_societies(db, societies)
     assigned_employee_ids = (
         select(Assignment.employee_id)
         .join(Site, Assignment.site_id == Site.id)
@@ -103,9 +126,9 @@ def store_scope_condition(user: User | None, society: str | None = None):
     return or_(Store.society.in_(societies), Store.society.is_(None), Store.society == "")
 
 
-def _employee_base_stmt(user: User | None, society: str | None = None):
+def _employee_base_stmt(db: Session, user: User | None, society: str | None = None):
     stmt = select(Employee)
-    condition = employee_scope_condition(user, society)
+    condition = employee_scope_condition(db, user, society)
     if condition is not None:
         stmt = stmt.where(condition)
     return stmt
@@ -293,7 +316,7 @@ def employee_operational_state(
 
 
 def employee_operational_states(db: Session, user: User | None = None, society: str | None = None) -> list[EmployeeOperationalState]:
-    employees = db.execute(_employee_base_stmt(user, society)).scalars().all()
+    employees = db.execute(_employee_base_stmt(db, user, society)).scalars().all()
     employee_ids = {employee.id for employee in employees}
     contract_ids = _active_contract_employee_ids(db, employee_ids)
     assignment_ids = _active_assignment_employee_ids(db, employee_ids)
@@ -310,7 +333,7 @@ def employee_operational_states(db: Session, user: User | None = None, society: 
 
 
 def build_erp_counters(db: Session, user: User | None = None, society: str | None = None) -> dict[str, Any]:
-    employee_stmt = _employee_base_stmt(user, society)
+    employee_stmt = _employee_base_stmt(db, user, society)
     employees = db.execute(employee_stmt).scalars().all()
     employee_ids = {employee.id for employee in employees}
     today = _today()
@@ -511,7 +534,7 @@ def _employee_extra_values(employee: Employee) -> dict[str, Any]:
 
 
 def operational_preparation_rows(db: Session, user: User | None = None, society: str | None = None) -> dict[str, Any]:
-    employees = db.execute(_employee_base_stmt(user, society).order_by(Employee.last_name, Employee.first_name, Employee.id)).scalars().all()
+    employees = db.execute(_employee_base_stmt(db, user, society).order_by(Employee.last_name, Employee.first_name, Employee.id)).scalars().all()
     employee_ids = {employee.id for employee in employees}
     contract_ids = _active_contract_employee_ids(db, employee_ids)
     assignment_ids = _active_assignment_employee_ids(db, employee_ids)

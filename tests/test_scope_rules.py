@@ -230,3 +230,41 @@ def test_non_paie_collections_unaffected_for_restricted_user(client, auth_header
     snap = client.get("/api/irongs/db", headers=restricted_headers).json()
     ids = {n["id"] for n in (snap.get("notifications") or [])}
     assert "sc_n1" in ids, "Une notification sans société a disparu : le filtrage a débordé"
+
+
+# ── Compteurs ERP : filtre société insensible aux accents/casse ──────────────
+
+def test_erp_counters_match_society_ignoring_accents_and_case(client, auth_headers, db):
+    """Non-régression : le DRH stocke la société employé en MAJUSCULES ACCENTUÉES
+    ('IRON GLOBAL SÉCURITÉ'). build_erp_counters interrogé avec une variante non
+    accentuée / autre casse doit quand même compter ces employés (avant : filtre SQL
+    brut .in_ -> 0 employé, d'où le compteur suspendus à 0)."""
+    from app.modules.erp.service import build_erp_counters, _resolve_societies
+
+    # Employé créé via DRH -> société stockée en MAJUSCULES accentuées
+    r = client.post("/api/drh/employees", headers=auth_headers, json={
+        "code": "ACC_SEC", "first_name": "Accent", "last_name": "Test",
+        "society": "Iron Global Sécurité", "status": "actif", "contract_type": "CDD",
+    })
+    assert r.status_code in (200, 201), r.text
+
+    stored = client.get("/api/drh/employees", headers=auth_headers).json()
+    emp = next(e for e in stored if e.get("code") == "ACC_SEC")
+    assert emp["society"] == "IRON GLOBAL SÉCURITÉ", "le DRH met la société en majuscules accentuées"
+
+    # Le résolveur mappe une demande non accentuée vers la valeur stockée accentuée
+    resolved = _resolve_societies(db, ["iron global securite"])
+    assert "IRON GLOBAL SÉCURITÉ" in resolved
+
+    # Les compteurs comptent l'employé quelle que soit l'écriture demandée
+    for variante in ("IRON GLOBAL SÉCURITÉ", "Iron Global Securite", "iron global securite"):
+        emp_counters = build_erp_counters(db, None, variante)["employees"]
+        assert emp_counters["active"] >= 1, f"aucun employé matché pour {variante!r} (filtre accents/casse cassé)"
+
+
+def test_erp_counters_do_not_leak_other_society(client, auth_headers, db):
+    """Le filtre reste STRICT entre sociétés distinctes (pas de faux positif)."""
+    from app.modules.erp.service import _resolve_societies
+    resolved = _resolve_societies(db, ["Iron Global Securite"])
+    # Une société réellement différente ne doit jamais être résolue dedans
+    assert not any("SWORD" in str(s).upper() for s in resolved)
