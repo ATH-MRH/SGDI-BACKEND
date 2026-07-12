@@ -250,6 +250,20 @@ def test_bootstrap(client, auth_headers):
     assert r.status_code == 200 and isinstance(r.json(), dict)
 
 
+def test_bootstrap_structure_precise(client, auth_headers):
+    # La réponse est désormais assemblée à partir d'octets JSON pré-encodés (le "db"
+    # est mis en cache). Ce test verrouille : content-type JSON, JSON bien formé
+    # (sinon .json() lèverait), et présence des 3 clés user/constants/db.
+    r = client.get("/api/irongs/bootstrap", headers=auth_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/json")
+    body = r.json()
+    assert {"user", "constants", "db"}.issubset(body), body.keys()
+    assert isinstance(body["db"], dict)
+    assert isinstance(body["constants"], dict)
+    assert body["user"].get("username")
+
+
 def test_legacy_action_set_status(client, auth_headers):
     # Un client existe (collection JSON prospects/clients gérée en legacy pour set-status)
     client.put("/api/irongs/db", headers=auth_headers, json={"data": {

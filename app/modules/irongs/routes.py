@@ -1,6 +1,7 @@
+import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -27,23 +28,31 @@ def _get_postes(db: Session) -> list[str]:
 
 
 @router.get("/bootstrap")
-def bootstrap(db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
-    return {
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role,
-            "is_active": user.is_active,
+def bootstrap(db: Session = Depends(get_db), user=Depends(current_user)) -> Response:
+    # L'en-tête (user + constants) est petit ; le "db" (jusqu'à ~26 Mo) est pré-encodé
+    # et mis en cache par get_database_json. On assemble les octets sans ré-encoder le db.
+    head = json.dumps(
+        {
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role,
+                "is_active": user.is_active,
+            },
+            "constants": {
+                "societes": SOCIETES,
+                "postes": _get_postes(db),
+                "categories_prestations": CATEGORIES_PREST,
+            },
         },
-        "constants": {
-            "societes": SOCIETES,
-            "postes": _get_postes(db),
-            "categories_prestations": CATEGORIES_PREST,
-        },
-        "db": service.get_database(db, user),
-    }
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    db_bytes = service.get_database_json(db, user)
+    body = head[:-1] + b',"db":' + db_bytes + b"}"
+    return Response(content=body, media_type="application/json")
 
 
 class PositionCreate(BaseModel):
@@ -94,8 +103,9 @@ def get_db_snapshot(
     light: bool = Query(False, description="Retourne le snapshot legacy sans reconstruire les collections SQL lourdes"),
     db: Session = Depends(get_db),
     user=Depends(current_user),
-) -> dict[str, Any]:
-    return service.get_database(db, user, include_sql=not light)
+) -> Response:
+    body = service.get_database_json(db, user, include_sql=not light)
+    return Response(content=body, media_type="application/json")
 
 
 @router.put("/db")

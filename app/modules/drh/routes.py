@@ -4,7 +4,7 @@ from io import BytesIO
 import unicodedata
 from typing import Annotated
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -204,11 +204,15 @@ def employees(
     # affectation active repart sans site (cohérent avec la base).
     from app.modules.irongs.sql_bridge import _live_assignment_map
     live = _live_assignment_map(db)
-    out: list[EmployeeOut] = []
+    # Un seul passage de sérialisation : model_dump(mode="json") produit un dict JSON-safe,
+    # qu'on renvoie tel quel via JSONResponse. On évite ainsi la re-validation intégrale que
+    # FastAPI ferait sur ~12 Mo si on retournait des objets EmployeeOut avec response_model.
+    # (_live_assignment_map ne fournit que des chaînes/entiers : le dict reste JSON-safe.)
+    payload: list[dict] = []
     for row in rows:
-        item = EmployeeOut.model_validate(row)
-        extra = dict(item.extra or {})
-        legacy = dict(extra.get("_legacy")) if isinstance(extra.get("_legacy"), dict) else {}
+        data = EmployeeOut.model_validate(row).model_dump(mode="json")
+        extra = data.get("extra") if isinstance(data.get("extra"), dict) else {}
+        legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
         aff = live.get(row.id)
         if aff:
             cur = legacy.get("affectationCourante") if isinstance(legacy.get("affectationCourante"), dict) else {}
@@ -216,10 +220,9 @@ def employees(
         elif isinstance(legacy.get("affectationCourante"), dict):
             legacy["affectationCourante"] = {}
         extra["_legacy"] = legacy
-        # model_copy évite de repasser par un cycle complet model_dump()+re-validation
-        # (FastAPI revalide déjà la réponse une fois via response_model=list[EmployeeOut]).
-        out.append(item.model_copy(update={"extra": extra}))
-    return out
+        data["extra"] = extra
+        payload.append(data)
+    return JSONResponse(content=payload)
 
 
 @router.post("/employees/repair-codes")

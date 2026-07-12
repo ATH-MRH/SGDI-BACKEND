@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 import unicodedata
@@ -7,6 +8,7 @@ from threading import Lock
 from typing import Any
 
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -61,6 +63,10 @@ def _keep_unscoped_rows(name: str) -> bool:
 # via les routes natives des modules qui n'invalident pas explicitement le cache),
 # la signature diffère et le snapshot est reconstruit -> pas de données périmées en temps réel.
 _SNAPSHOT_CACHE: dict[str, tuple[float, str, dict]] = {}
+# Snapshot déjà encodé en JSON (bytes) : évite de ré-encoder ~26 Mo (jsonable_encoder
+# + json.dumps) à chaque requête /bootstrap et /db. Même clé et même invalidation que
+# le cache du dict ci-dessus.
+_SNAPSHOT_JSON_CACHE: dict[str, tuple[float, str, bytes]] = {}
 _SNAPSHOT_CACHE_LOCK = Lock()
 _SNAPSHOT_CACHE_TTL = 120.0
 
@@ -96,9 +102,26 @@ def _snapshot_cache_set(key: str, value: dict) -> None:
         _SNAPSHOT_CACHE[key] = (time.monotonic(), signature, value)
 
 
+def _snapshot_json_cache_get(key: str) -> bytes | None:
+    signature = _current_events_signature()
+    with _SNAPSHOT_CACHE_LOCK:
+        entry = _SNAPSHOT_JSON_CACHE.get(key)
+        if entry and time.monotonic() - entry[0] < _SNAPSHOT_CACHE_TTL and entry[1] == signature:
+            return entry[2]
+        _SNAPSHOT_JSON_CACHE.pop(key, None)
+        return None
+
+
+def _snapshot_json_cache_set(key: str, value: bytes) -> None:
+    signature = _current_events_signature()
+    with _SNAPSHOT_CACHE_LOCK:
+        _SNAPSHOT_JSON_CACHE[key] = (time.monotonic(), signature, value)
+
+
 def _snapshot_cache_invalidate() -> None:
     with _SNAPSHOT_CACHE_LOCK:
         _SNAPSHOT_CACHE.clear()
+        _SNAPSHOT_JSON_CACHE.clear()
 
 
 def _invalid_item_id(value: Any) -> bool:
@@ -446,6 +469,26 @@ def get_database(
     scoped = scope_database_for_user(result, user)
     _snapshot_cache_set(cache_key, scoped)
     return scoped
+
+
+def get_database_json(db: Session, user: Any | None = None, *, include_sql: bool = True) -> bytes:
+    """Snapshot encodé en JSON (bytes), mis en cache.
+
+    /bootstrap et /db renvoient jusqu'à ~26 Mo. Sans cache, FastAPI ré-exécute
+    jsonable_encoder + json.dumps sur ces 26 Mo à CHAQUE requête (le gros du TTFB).
+    On pré-encode une seule fois par période de cache (TTL + signature d'événements,
+    exactement comme le snapshot dict) et on renvoie les octets tels quels.
+    """
+    cache_key = _snapshot_cache_key(user, include_sql) + "|json"
+    cached = _snapshot_json_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    snapshot = get_database(db, user, include_sql=include_sql)
+    raw = json.dumps(
+        jsonable_encoder(snapshot), ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    _snapshot_json_cache_set(cache_key, raw)
+    return raw
 
 
 def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]], user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
