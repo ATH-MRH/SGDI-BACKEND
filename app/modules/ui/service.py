@@ -71,7 +71,7 @@ def _count_legacy_items(db: Session, name: str, society: str | None = None) -> i
     )
     if wanted:
         stmt = stmt.filter(or_(*(
-            func.lower(func.trim(SgdiRecord.data[key].astext)) == wanted
+            func.lower(func.trim(SgdiRecord.data[key].as_string())) == wanted
             for key in _SOCIETY_JSON_KEYS
         )))
     return int(stmt.scalar() or 0)
@@ -286,7 +286,7 @@ def _distinct_society_count(db: Session) -> int:
     for name in ("agents", "sites", "clients"):
         for key in ("societe", "society", "societeRattachement"):
             rows = (
-                db.query(SgdiRecord.data[key].astext)
+                db.query(SgdiRecord.data[key].as_string())
                 .filter(SgdiRecord.collection == name, SgdiRecord.kind == "item")
                 .distinct()
                 .all()
