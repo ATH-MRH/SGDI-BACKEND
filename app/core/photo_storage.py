@@ -28,8 +28,15 @@ _MIME_EXT = {
 
 
 def ensure_upload_dirs() -> None:
-    PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
-    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    """Crée les dossiers d'upload si possible. BEST-EFFORT : ne fait JAMAIS planter le
+    démarrage. Si le volume /app/uploads n'est pas inscriptible par l'utilisateur de
+    l'app (dossier appartenant à root), on log et on continue — l'écriture des fichiers
+    retombera proprement sur la conservation en base (save_base64_* renvoie l'original)."""
+    for directory in (PHOTOS_DIR, DOCS_DIR):
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning("Dossier upload %s non cree (%s) : sera gere a la demande.", directory, exc)
 
 
 def is_base64_photo(value: Any) -> bool:
