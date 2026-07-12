@@ -7571,6 +7571,64 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
   cursor:not-allowed!important;
 }
 
+/* Effectif / fiches list: sortable table headers must not inherit button styling */
+#view .effectif-table thead th{
+  height:46px!important;
+  padding:0 12px!important;
+  background:#ebedee!important;
+  color:#06264a!important;
+  border-bottom:1px solid #d3deea!important;
+  vertical-align:middle!important;
+}
+#view .effectif-table thead th .effectif-sort-head,
+#view .effectif-table thead th button.effectif-sort-head,
+#view button.effectif-sort-head{
+  appearance:none!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  background-image:none!important;
+  box-shadow:none!important;
+  color:inherit!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:5px!important;
+  font:inherit!important;
+  font-size:10px!important;
+  font-weight:950!important;
+  line-height:1.1!important;
+  letter-spacing:.07em!important;
+  text-align:left!important;
+  text-transform:uppercase!important;
+  white-space:nowrap!important;
+  cursor:pointer!important;
+  transform:none!important;
+}
+#view .effectif-table thead th .effectif-sort-head:hover,
+#view .effectif-table thead th .effectif-sort-head.is-active,
+#view button.effectif-sort-head:hover,
+#view button.effectif-sort-head.is-active{
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  color:#043970!important;
+  text-decoration:none!important;
+}
+#view .effectif-table thead th .effectif-sort-head span{
+  margin-left:2px!important;
+  color:#043970!important;
+  font-size:9px!important;
+  line-height:1!important;
+}
+
 /* Sites dashboard: avoid floating controls covering site cards */
 body:has(#view .site-card) #sgdi-edit-fab{
   display:none!important;
