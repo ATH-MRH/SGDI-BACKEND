@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
+import anyio.to_thread
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -338,6 +339,16 @@ def _fix_societe_name() -> None:
             logger.info("Correction société : %d enregistrement(s) mis à jour (%s → %s)", fixed, OLD, NEW)
     except Exception as exc:
         logger.warning("Correction société échouée (non bloquante) : %s", exc)
+
+
+@app.on_event("startup")
+async def _raise_thread_pool_limit() -> None:
+    # Toutes les routes sont des `def` synchrones, exécutées via le threadpool anyio
+    # (limité à 40 threads concurrents par défaut, par worker). Sous charge (plusieurs
+    # utilisateurs, chaque chargement de page tirant 6-10 requêtes en parallèle), ce
+    # plafond se remplit et fait attendre TOUTES les requêtes en file — y compris des
+    # fichiers statiques sans aucun accès base de données (observé : /sw.js à 5s).
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 200
 
 
 @app.on_event("startup")
