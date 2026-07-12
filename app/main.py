@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
+import anyio.to_thread
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -338,6 +339,16 @@ def _fix_societe_name() -> None:
             logger.info("Correction société : %d enregistrement(s) mis à jour (%s → %s)", fixed, OLD, NEW)
     except Exception as exc:
         logger.warning("Correction société échouée (non bloquante) : %s", exc)
+
+
+@app.on_event("startup")
+async def _raise_thread_pool_limit() -> None:
+    # Toutes les routes sont des `def` synchrones, exécutées via le threadpool anyio
+    # (limité à 40 threads concurrents par défaut, par worker). Sous charge (plusieurs
+    # utilisateurs, chaque chargement de page tirant 6-10 requêtes en parallèle), ce
+    # plafond se remplit et fait attendre TOUTES les requêtes en file — y compris des
+    # fichiers statiques sans aucun accès base de données (observé : /sw.js à 5s).
+    anyio.to_thread.current_default_thread_limiter().total_tokens = 200
 
 
 @app.on_event("startup")
@@ -893,7 +904,10 @@ def _events_signature() -> str:
         "advances",
         "credit_notes",
     ]
-    with SessionLocal() as db:
+    def _fallback_per_table(db) -> str:
+        # Repli tolérant aux erreurs : une table par requête (lent mais robuste si une
+        # table de la liste manque une colonne ou n'existe pas).
+        db.rollback()
         parts: list[str] = []
         for table_name in watched_tables:
             try:
@@ -902,7 +916,27 @@ def _events_signature() -> str:
                 ).mappings().one()
                 parts.append(f"{table_name}:{row['c']}:{row['u'] or ''}:{row['r'] or ''}")
             except Exception:
+                db.rollback()
                 continue
+        return "|".join(parts)
+
+    with SessionLocal() as db:
+        # Combine les 23 requêtes en un seul aller-retour réseau (UNION ALL) au lieu d'une
+        # requête séquentielle par table — c'était la source dominante de latence de
+        # /api/irongs/db, appelé à chaque connexion et très fréquemment pendant l'usage.
+        union_sql = " UNION ALL ".join(
+            f"SELECT '{t}' AS t, COUNT(*) AS c, MAX(updated_at) AS u, MAX(created_at) AS r FROM {t}"
+            for t in watched_tables
+        )
+        try:
+            rows = {row["t"]: row for row in db.execute(text(union_sql)).mappings().all()}
+        except Exception:
+            return _fallback_per_table(db)
+        parts = [
+            f"{table_name}:{row['c']}:{row['u'] or ''}:{row['r'] or ''}"
+            for table_name in watched_tables
+            if (row := rows.get(table_name)) is not None
+        ]
         return "|".join(parts)
 
 

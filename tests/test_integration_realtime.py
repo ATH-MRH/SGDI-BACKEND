@@ -35,12 +35,29 @@ def test_snapshot_reflects_created_data(client, auth_headers):
     assert "SNAPX01" in codes
 
 
+def _bust_sidebar_cache():
+    """Force le rafraîchissement des compteurs serveur. /api/ui/sidebar-stats est mis
+    en cache (perf : c'était la requête la plus lente, jusqu'à 8s), invalidé par la
+    signature d'événements — elle-même cachée 2s. En test, les écritures suivies d'une
+    relecture immédiate tombent dans cette fenêtre : on vide les caches pour vérifier le
+    COMPTAGE serveur, pas le délai de cache."""
+    import app.main as _m
+    from app.modules.ui import service as _ui
+    try:
+        _m._EVENTS_SIGNATURE_CACHE["at"] = 0.0
+    except Exception:
+        pass
+    _ui._SIDEBAR_STATS_CACHE.clear()
+
+
 def test_sidebar_stats_reflect_reality(client, auth_headers):
     """Les compteurs serveur (sidebar-stats) comptent bien les employés créés."""
+    _bust_sidebar_cache()
     before = client.get("/api/ui/sidebar-stats", headers=auth_headers).json()
     before_total = (((before.get("erp") or {}).get("employees") or {}).get("total")) or 0
     _create_employee(client, auth_headers, "STAT001")
     _create_employee(client, auth_headers, "STAT002")
+    _bust_sidebar_cache()  # le cache est invalidé par une signature cachée 2s : on force
     after = client.get("/api/ui/sidebar-stats", headers=auth_headers).json()
     after_total = (((after.get("erp") or {}).get("employees") or {}).get("total")) or 0
     assert after_total >= before_total + 2, f"Compteur effectif serveur incohérent : {before_total} -> {after_total}"

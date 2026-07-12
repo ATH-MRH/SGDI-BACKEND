@@ -78,7 +78,15 @@ def employee_scope_condition(user: User | None, society: str | None = None):
     societies = effective_societies(user, society)
     if not societies:
         return None
-    return Employee.society.in_(societies)
+    assigned_employee_ids = (
+        select(Assignment.employee_id)
+        .join(Site, Assignment.site_id == Site.id)
+        .where(
+            Assignment.active == 1,
+            or_(Site.equipment_plan["societe"].as_string().in_(societies), Site.equipment_plan["society"].as_string().in_(societies)),
+        )
+    )
+    return or_(Employee.society.in_(societies), Employee.id.in_(assigned_employee_ids))
 
 
 def site_scope_condition(user: User | None, society: str | None = None):

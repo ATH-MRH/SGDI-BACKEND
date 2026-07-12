@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260709-global-columns";
+const SGDI_CACHE = "sgdi-pwa-v20260712-fp-table-head";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

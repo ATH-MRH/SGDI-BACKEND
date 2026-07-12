@@ -15,9 +15,16 @@ def normalize_database_url(url: str) -> str:
 
 
 database_url = normalize_database_url(settings.database_url)
+# pool_size/max_overflow par défaut (5+10=15 par worker) sont vite saturés : un seul
+# chargement de page tire déjà 6-10 requêtes API en parallèle, chacune ouvrant une
+# connexion. Sous charge concurrente, les requêtes en attente d'une connexion libre
+# se traduisaient par des pics de lenteur simultanés sur des endpoints sans rapport
+# (ex: /api/irongs/positions et /api/ops/sites bloqués ~10s exactement en même temps).
 engine_kwargs = {"future": True, "pool_pre_ping": True}
 if database_url.startswith("postgresql"):
     engine_kwargs["connect_args"] = {"connect_timeout": 5}
+    engine_kwargs["pool_size"] = 15
+    engine_kwargs["max_overflow"] = 25
 engine = create_engine(database_url, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 

@@ -62,7 +62,7 @@ def _keep_unscoped_rows(name: str) -> bool:
 # la signature diffère et le snapshot est reconstruit -> pas de données périmées en temps réel.
 _SNAPSHOT_CACHE: dict[str, tuple[float, str, dict]] = {}
 _SNAPSHOT_CACHE_LOCK = Lock()
-_SNAPSHOT_CACHE_TTL = 12.0
+_SNAPSHOT_CACHE_TTL = 120.0
 
 
 def _current_events_signature() -> str:

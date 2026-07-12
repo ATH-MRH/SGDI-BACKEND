@@ -96,7 +96,11 @@ def _authorized_employee_ids(db: Session, user: User) -> set[int] | None:
     allowed = _allowed_societies(user)
     if not allowed:
         return None
-    rows = db.execute(select(Employee.id).where(Employee.society.in_(allowed))).scalars().all()
+    scope = service.employee_society_scope_condition(allowed)
+    stmt = select(Employee.id)
+    if scope is not None:
+        stmt = stmt.where(scope)
+    rows = db.execute(stmt).scalars().all()
     return set(rows)
 
 
@@ -130,11 +134,14 @@ def dashboard(
     user: User = Depends(current_user),
 ):
     effective_society = _effective_society_filter(user, society)
-    employees_rows = service.list_rows(db, Employee, {"society": effective_society})
-    candidates_rows = service.list_rows(db, Candidate, {"society": effective_society})
     allowed = _allowed_societies(user)
+    employees_rows = service.list_employees(
+        db,
+        society=effective_society,
+        allowed_societies=allowed if allowed and not effective_society else None,
+    )
+    candidates_rows = service.list_rows(db, Candidate, {"society": effective_society})
     if allowed and not effective_society:
-        employees_rows = [row for row in employees_rows if row.society in allowed]
         candidates_rows = [row for row in candidates_rows if row.society in allowed]
 
     employee_ids = {row.id for row in employees_rows}
@@ -185,19 +192,22 @@ def employees(
     user: User = Depends(current_user),
 ):
     effective_society = _effective_society_filter(user, society)
-    rows = service.list_rows(db, Employee, {"status": status, "society": effective_society})
     allowed = _allowed_societies(user)
-    if allowed and not effective_society:
-        rows = [row for row in rows if row.society in allowed]
+    rows = service.list_employees(
+        db,
+        status=status,
+        society=effective_society,
+        allowed_societies=allowed if allowed and not effective_society else None,
+    )
     # Injecter l'affectation ACTIVE réelle (table SQL assignments) dans chaque employé, pour que
     # le front affiche la vérité sans dépendre d'un appariement local fragile. Un employé sans
     # affectation active repart sans site (cohérent avec la base).
     from app.modules.irongs.sql_bridge import _live_assignment_map
     live = _live_assignment_map(db)
-    out: list[dict] = []
+    out: list[EmployeeOut] = []
     for row in rows:
-        data = EmployeeOut.model_validate(row).model_dump()
-        extra = dict(data.get("extra") or {})
+        item = EmployeeOut.model_validate(row)
+        extra = dict(item.extra or {})
         legacy = dict(extra.get("_legacy")) if isinstance(extra.get("_legacy"), dict) else {}
         aff = live.get(row.id)
         if aff:
@@ -206,8 +216,9 @@ def employees(
         elif isinstance(legacy.get("affectationCourante"), dict):
             legacy["affectationCourante"] = {}
         extra["_legacy"] = legacy
-        data["extra"] = extra
-        out.append(data)
+        # model_copy évite de repasser par un cycle complet model_dump()+re-validation
+        # (FastAPI revalide déjà la réponse une fois via response_model=list[EmployeeOut]).
+        out.append(item.model_copy(update={"extra": extra}))
     return out
 
 

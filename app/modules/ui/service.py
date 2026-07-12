@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from copy import deepcopy
 from datetime import date, datetime, timezone
+from threading import Lock
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
@@ -24,13 +26,16 @@ def _legacy_counts(db: Session) -> dict[str, int]:
 
 
 def _legacy_rows(db: Session, name: str) -> list[dict[str, Any]]:
+    # Lecture seule : tous les appelants ne font que lire/compter (jamais muter) ces
+    # dicts, donc pas besoin de deepcopy ici — ça évite de recopier en mémoire des
+    # blobs JSON potentiellement volumineux pour chaque collection à chaque appel.
     rows = (
         db.query(SgdiRecord)
         .filter(SgdiRecord.collection == name)
         .order_by(SgdiRecord.position.asc(), SgdiRecord.id.asc())
         .all()
     )
-    return [deepcopy(row.data) for row in rows if row.kind == "item" and isinstance(row.data, dict)]
+    return [row.data for row in rows if row.kind == "item" and isinstance(row.data, dict)]
 
 
 def _norm(value: Any) -> str:
@@ -51,8 +56,25 @@ def _status(row: dict[str, Any]) -> str:
     return _norm(row.get("statut") or row.get("status"))
 
 
+_SOCIETY_JSON_KEYS = ("societe", "society", "societeRattachement", "company")
+
+
 def _count_legacy_items(db: Session, name: str, society: str | None = None) -> int:
-    return len([row for row in _legacy_rows(db, name) if _matches_society(row, society)])
+    # Compte en SQL plutôt que de récupérer toutes les lignes en Python pour les
+    # jeter après comptage — appelée ~10 fois par sidebar-stats, c'était l'un des
+    # postes de coût les plus lourds de l'endpoint. Reproduit exactement la logique
+    # de _matches_society (mêmes 4 clés, comparaison insensible à la casse, trim).
+    wanted = _norm(society)
+    stmt = db.query(func.count(SgdiRecord.id)).filter(
+        SgdiRecord.collection == name,
+        SgdiRecord.kind == "item",
+    )
+    if wanted:
+        stmt = stmt.filter(or_(*(
+            func.lower(func.trim(SgdiRecord.data[key].as_string())) == wanted
+            for key in _SOCIETY_JSON_KEYS
+        )))
+    return int(stmt.scalar() or 0)
 
 
 def _client_site_count(data: dict[str, Any]) -> int:
@@ -255,20 +277,58 @@ def _user_count(db: Session) -> int:
 
 
 def _distinct_society_count(db: Session) -> int:
+    # _apply_legacy_fallbacks (appelée avant, dans le même appel à build_sidebar_stats)
+    # charge déjà "agents" et "sites" en entier — on évite de les recharger ici en
+    # ne demandant que les valeurs distinctes directement en SQL.
     values: set[str] = set()
-    for model, attr in ((Client, Client.society),):
-        rows = db.query(attr).distinct().all()
-        values.update(str(row[0]).strip() for row in rows if row and str(row[0] or "").strip())
+    rows = db.query(Client.society).distinct().all()
+    values.update(str(row[0]).strip() for row in rows if row and str(row[0] or "").strip())
     for name in ("agents", "sites", "clients"):
-        for row in _legacy_rows(db, name):
-            for key in ("societe", "society", "societeRattachement"):
-                value = str(row.get(key) or "").strip()
-                if value:
-                    values.add(value)
+        for key in ("societe", "society", "societeRattachement"):
+            rows = (
+                db.query(SgdiRecord.data[key].as_string())
+                .filter(SgdiRecord.collection == name, SgdiRecord.kind == "item")
+                .distinct()
+                .all()
+            )
+            values.update(str(row[0]).strip() for row in rows if row and row[0] and str(row[0]).strip())
     return len(values)
 
 
+# Cache par (utilisateur, société) : (instant, signature d'événements, résultat).
+# build_sidebar_stats parcourt et recopie une douzaine de collections legacy en
+# entier à chaque appel (agents, congés, candidats, sites, prospects, devis...) —
+# c'était la requête la plus lente de l'app (jusqu'à 8s), appelée très fréquemment.
+# Même mécanisme d'invalidation que le cache de snapshot (/api/irongs/db) : dès
+# qu'une donnée surveillée change, la signature diffère et le résultat est recalculé.
+_SIDEBAR_STATS_CACHE: dict[str, tuple[float, str, dict]] = {}
+_SIDEBAR_STATS_CACHE_LOCK = Lock()
+_SIDEBAR_STATS_CACHE_TTL = 120.0
+
+
+def _sidebar_stats_signature() -> str:
+    try:
+        from app.main import _events_signature_cached
+        return _events_signature_cached()
+    except Exception:
+        return ""
+
+
 def build_sidebar_stats(db: Session, user: User, society: str | None = None) -> dict[str, Any]:
+    cache_key = f"{user.username}|{(society or '').strip()}"
+    signature = _sidebar_stats_signature()
+    now = time.monotonic()
+    with _SIDEBAR_STATS_CACHE_LOCK:
+        entry = _SIDEBAR_STATS_CACHE.get(cache_key)
+        if entry and now - entry[0] < _SIDEBAR_STATS_CACHE_TTL and entry[1] == signature:
+            return deepcopy(entry[2])
+    result = _build_sidebar_stats_uncached(db, user, society)
+    with _SIDEBAR_STATS_CACHE_LOCK:
+        _SIDEBAR_STATS_CACHE[cache_key] = (now, signature, result)
+    return deepcopy(result)
+
+
+def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None = None) -> dict[str, Any]:
     """Return ERP counters computed by the backend.
 
     The frontend still keeps the legacy snapshot during the transition, but this
