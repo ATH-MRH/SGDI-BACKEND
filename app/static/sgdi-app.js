@@ -18276,7 +18276,7 @@ function renderFiches(view,sub,_skipEnsure){
           <div><label>Âge maximum</label><input type="number" min="0" max="100" value="${escapeHTML(fpFilter.ageMax)}" placeholder="45" onchange="setFpFilter('ageMax',this.value)"/></div>
         </div>
       </details>
-      <div class="fp-filter-footer hidden">
+      <div class="fp-filter-footer">
         <div class="fp-result-count"><strong>${list.length}</strong> fiche${list.length!==1?"s":""} affichée${list.length!==1?"s":""}</div>
         <div class="fp-display-controls"><label>Trier par</label><select onchange="setFpFilter('sort',this.value)">
           <option value="alpha_asc" ${fpFilter.sort==="alpha_asc"?"selected":""}>Alphabetique A-Z</option>
@@ -18288,7 +18288,7 @@ function renderFiches(view,sub,_skipEnsure){
         </select><div class="fp-layout-switch" role="group" aria-label="Mode d’affichage"><button type="button" class="${fpFilter.layout!=="liste"?"active":""}" onclick="setFpFilter('layout','mosaique')" title="Affichage en mosaïque" aria-label="Affichage en mosaïque"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="5.5" height="5.5" rx="1"/><rect x="12" y="2.5" width="5.5" height="5.5" rx="1"/><rect x="2.5" y="12" width="5.5" height="5.5" rx="1"/><rect x="12" y="12" width="5.5" height="5.5" rx="1"/></svg></button><button type="button" class="${fpFilter.layout==="liste"?"active":""}" onclick="setFpFilter('layout','liste')" title="Affichage en liste" aria-label="Affichage en liste"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="3.5" height="3.5" rx=".7"/><path d="M9 4.75h8.5M9 10h8.5M9 15.25h8.5"/><rect x="2.5" y="8.25" width="3.5" height="3.5" rx=".7"/><rect x="2.5" y="13.5" width="3.5" height="3.5" rx=".7"/></svg></button></div><button type="button" class="fp-reset-btn" onclick="resetFpPositionFilters()">Réinitialiser</button></div>
       </div>
     </section>
-    ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucune fiche${safeSocFilter?` pour ${escapeHTML(safeSocFilter)}`:""}.</div>`:(fpFilter.layout==="liste"?fichePositionListHTML(list):`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`)}
+    ${list.length===0?`<div class="fp-empty-state">Aucune fiche${safeSocFilter?` pour ${escapeHTML(safeSocFilter)}`:""}.</div>`:(fpFilter.layout==="liste"?fichePositionListHTML(list):`<div id="fp-grid" class="fp-card-grid">${list.map(a=>fichePositionCard(a)).join("")}</div>`)}
   </div>`;
 }
 function setFpSociete(v){

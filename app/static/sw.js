@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260709-admin-society-scope";
+const SGDI_CACHE = "sgdi-pwa-v20260712-fp-layout";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
