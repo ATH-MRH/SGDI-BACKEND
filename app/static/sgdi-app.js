@@ -3535,22 +3535,29 @@ function fpSiteFilterKeyFromName(v){
   return normalizedSearchText(v).replace(/\s+/g," ").trim();
 }
 function fpSiteFilterKeyForSite(site){
-  return fpSiteFilterKeyFromName(site?.nom||site?.intitule||site?.name||"")||String(site?.id||site?.backendId||"");
+  const ref=site?.backendId||site?.id||"";
+  if(ref)return "site:"+String(ref);
+  const name=fpSiteFilterKeyFromName(site?.nom||site?.intitule||site?.name||"");
+  return name?"name:"+name:"";
 }
 function fpSiteFilterKeyForAgent(a){
   const aff=agentLiveAffectation(a)||{};
   const site=findSiteByRef(aff.siteId||aff.siteBackendId||aff.siteName||"");
-  return fpSiteFilterKeyFromName(aff.siteName||site?.nom||site?.intitule||"")||String(aff.siteId||aff.siteBackendId||"");
+  if(site)return fpSiteFilterKeyForSite(site);
+  const ref=aff.siteBackendId||aff.siteId||"";
+  if(ref)return "site:"+String(ref);
+  const name=fpSiteFilterKeyFromName(aff.siteName||"");
+  return name?"name:"+name:"";
 }
 function fpUniqueSiteOptions(scopeSoc){
-  const byName=new Map();
+  const byKey=new Map();
   siteOpsSitesForScope(scopeSoc).forEach(site=>{
     const key=fpSiteFilterKeyForSite(site);
     if(!key)return;
-    const previous=byName.get(key);
-    if(!previous||String(site.backendId||"").localeCompare(String(previous.backendId||""))<0)byName.set(key,site);
+    const previous=byKey.get(key);
+    if(!previous||String(site.backendId||site.id||"").localeCompare(String(previous.backendId||previous.id||""))<0)byKey.set(key,site);
   });
-  return [...byName.values()].sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||""),"fr"));
+  return [...byKey.values()].sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||""),"fr"));
 }
 function movementSitesForSociete(siteSociete){
   const scope=canonicalSocieteName(siteSociete||currentStructureSocieteFilter()||session?.societe||"",societeConfig().custom||SOCIETES);
@@ -18183,19 +18190,30 @@ function resetFpPositionFilters(){
 }
 function fpRecruitDate(a){return String(a?.dateRecrutement||a?.dateEntree||"").slice(0,10)}
 function fpEmployeeAge(a){const age=ageFromDate(a?.dateNaissance);return age===null||age===undefined?null:age}
+function fpPosteFilterKey(value){return normalizedSearchText(value).replace(/\s+/g," ").trim()}
+function fpAgentPosteValue(a){
+  const aff=agentLiveAffectation(a)||{};
+  return String(aff.poste||a.fonction||a.position||a.posteContrat||"").trim();
+}
+function fpPosteOptions(list){
+  const byKey=new Map();
+  (list||[]).forEach(a=>{
+    const value=fpAgentPosteValue(a);
+    const key=fpPosteFilterKey(value);
+    if(key&&!byKey.has(key))byKey.set(key,value);
+  });
+  return [...byKey.values()].sort((a,b)=>String(a).localeCompare(String(b),"fr",{numeric:true,sensitivity:"base"}));
+}
 function applyFpPositionFilters(list){
   const f=fpFilters();
   let out=(list||[]).slice();
   const q=String(f.q||"").toLowerCase().trim();
   if(f.site){
-    const selectedSite=(db.sites||[]).find(s=>fpSiteFilterKeyForSite(s)===f.site)||null;
+    const selectedSite=siteOpsSitesForScope("").find(s=>fpSiteFilterKeyForSite(s)===f.site)||null;
     const refs=selectedSite?backendAssignmentRefsForSite(selectedSite):null;
     out=out.filter(a=>refs?employeeMatchesAssignmentRefs(a,refs):fpSiteFilterKeyForAgent(a)===f.site);
   }
-  if(f.poste)out=out.filter(a=>{
-    const aff=agentLiveAffectation(a)||{};
-    return String(aff.poste||a.fonction||a.position||a.posteContrat||"")===String(f.poste);
-  });
+  if(f.poste)out=out.filter(a=>fpPosteFilterKey(fpAgentPosteValue(a))===fpPosteFilterKey(f.poste));
   if(f.status)out=out.filter(a=>employeeDisplayStatus(a).key===f.status);
   if(q)out=out.filter(a=>{
     const aff=agentLiveAffectation(a)||{};
@@ -18227,7 +18245,9 @@ function renderFiches(view,sub,_skipEnsure){
   const allowedSocietes=currentAllowedSocietes();
   const restrictedSocietes=hasExplicitSocieteRestriction();
   const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
-  let baseList=db.agents.filter(a=>authorizedAgent(a)&&!ficheAgentIsSortantArchive(a));let title="Fiches de position — Toutes";
+  const fpFilter=fpFilters();
+  const includeSortants=sub==="archivees"||fpFilter.status==="sortant";
+  let baseList=db.agents.filter(a=>authorizedAgent(a)&&(includeSortants||!ficheAgentIsSortantArchive(a)));let title="Fiches de position — Toutes";
   if(sub==="maladie"){baseList=baseList.filter(a=>ficheAgentInMaladie(a));title="🤒 Fiches de position — En maladie"}
   else if(sub==="conge"){baseList=baseList.filter(a=>ficheAgentInConge(a));title="🏖 Fiches de position — En congé"}
   else if(sub==="suspendu"){baseList=baseList.filter(a=>a.statut==="suspendu");title="⏸ Fiches de position — Suspendu"}
@@ -18238,9 +18258,11 @@ function renderFiches(view,sub,_skipEnsure){
   else if(sub==="badge"){return renderBadgeModule(view)}
   const safeSocFilter=socFilter&&allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(socFilter))?socFilter:"";
   const rawList=safeSocFilter?baseList.filter(a=>a.societe===safeSocFilter):baseList;
-  const fpFilter=fpFilters();
-  const list=applyFpPositionFilters(rawList);
   const fpSites=fpUniqueSiteOptions(safeSocFilter);
+  const fpPostes=fpPosteOptions(rawList);
+  if(fpFilter.site&&!fpSites.some(s=>fpSiteFilterKeyForSite(s)===fpFilter.site)){sessionStorage.removeItem("fpSite");fpFilter.site=""}
+  if(fpFilter.poste&&!fpPostes.some(p=>fpPosteFilterKey(p)===fpPosteFilterKey(fpFilter.poste))){sessionStorage.removeItem("fpPoste");fpFilter.poste=""}
+  const list=applyFpPositionFilters(rawList);
   const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent);
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
   const employeeCounters=sgdiUnifiedEmployeeCounters(safeSocFilter);
@@ -18286,7 +18308,7 @@ function renderFiches(view,sub,_skipEnsure){
       <div class="fp-filter-main">
         <div class="fp-search-field"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="fp-q" value="${escapeHTML(fpFilter.q)}" placeholder="Rechercher par nom ou matricule…" oninput="filterFiches()"/></div>
         <div class="fp-quick-filter"><label>Site</label><select id="fp-site" onchange="setFpFilter('site',this.value)"><option value="">Tous les sites</option>${fpSites.map(s=>{const key=fpSiteFilterKeyForSite(s);return`<option value="${escapeHTML(key)}" ${fpFilter.site===key?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`}).join("")}</select></div>
-        <div class="fp-quick-filter"><label>Poste</label><select id="fp-poste" onchange="setFpFilter('poste',this.value)"><option value="">Tous les postes</option>${POSTES_SITE.map(p=>`<option ${fpFilter.poste===p?"selected":""}>${p}</option>`).join("")}</select></div>
+        <div class="fp-quick-filter"><label>Poste</label><select id="fp-poste" onchange="setFpFilter('poste',this.value)"><option value="">Tous les postes</option>${fpPostes.map(p=>`<option value="${escapeHTML(p)}" ${fpPosteFilterKey(fpFilter.poste)===fpPosteFilterKey(p)?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
         <div class="fp-quick-filter"><label>Statut</label><select id="fp-status" onchange="setFpFilter('status',this.value)"><option value="">Tous les statuts</option><option value="actif" ${fpFilter.status==="actif"?"selected":""}>Actif</option><option value="congé" ${fpFilter.status==="congé"?"selected":""}>Congé</option><option value="maladie" ${fpFilter.status==="maladie"?"selected":""}>Maladie</option><option value="suspendu" ${fpFilter.status==="suspendu"?"selected":""}>Suspendu</option><option value="absent" ${fpFilter.status==="absent"?"selected":""}>Absent</option><option value="abandon" ${fpFilter.status==="abandon"?"selected":""}>Abandon</option><option value="sortant" ${fpFilter.status==="sortant"?"selected":""}>Sortant / archivé</option></select></div>
       </div>
       <details class="fp-advanced hidden" ${activeAdvancedFilters?"open":""}>
@@ -18440,14 +18462,29 @@ function filterFiches(){
   sessionStorage.setItem("fpPoste",poste);
   sessionStorage.setItem("fpStatus",status);
   sessionStorage.setItem("fpQ",q);
+  let shown=0;
   document.querySelectorAll("#fp-grid [data-row]").forEach(c=>{
     let ok=true;
     if(site&&c.dataset.siteKey!==site)ok=false;
-    if(poste&&c.dataset.poste!==poste)ok=false;
+    if(poste&&fpPosteFilterKey(c.dataset.poste)!==fpPosteFilterKey(poste))ok=false;
     if(status&&c.dataset.status!==status)ok=false;
     if(q&&!c.dataset.q.includes(q))ok=false;
     c.classList.toggle("hidden",!ok);
+    if(ok)shown++;
   });
+  const result=document.querySelector(".fp-result-count");
+  if(result)result.innerHTML=`<strong>${shown}</strong> fiche${shown!==1?"s":""} affichée${shown!==1?"s":""}`;
+  let empty=document.getElementById("fp-live-empty-state");
+  const grid=document.getElementById("fp-grid");
+  if(!shown&&grid&&!empty){
+    empty=document.createElement("div");
+    empty.id="fp-live-empty-state";
+    empty.className="fp-empty-state";
+    empty.textContent="Aucune fiche ne correspond aux filtres.";
+    grid.insertAdjacentElement("afterend",empty);
+  }else if(shown&&empty){
+    empty.remove();
+  }
 }
 function agentDocumentsList(){
   const base=[
