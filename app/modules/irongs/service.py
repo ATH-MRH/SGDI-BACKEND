@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 import unicodedata
@@ -7,8 +6,8 @@ from datetime import datetime
 from threading import Lock
 from typing import Any
 
+import orjson
 from fastapi import HTTPException
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -484,9 +483,10 @@ def get_database_json(db: Session, user: Any | None = None, *, include_sql: bool
     if cached is not None:
         return cached
     snapshot = get_database(db, user, include_sql=include_sql)
-    raw = json.dumps(
-        jsonable_encoder(snapshot), ensure_ascii=False, separators=(",", ":")
-    ).encode("utf-8")
+    # orjson : sérialisation en C, 5-10x plus rapide que json.dumps(jsonable_encoder(...)).
+    # Gère nativement date/datetime ; default=str couvre les types résiduels (Decimal, Enum...).
+    # OPT_NON_STR_KEYS reproduit la tolérance de json.dumps aux clés non-str.
+    raw = orjson.dumps(snapshot, default=str, option=orjson.OPT_NON_STR_KEYS)
     _snapshot_json_cache_set(cache_key, raw)
     return raw
 

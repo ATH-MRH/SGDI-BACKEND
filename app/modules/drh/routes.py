@@ -4,7 +4,8 @@ from io import BytesIO
 import unicodedata
 from typing import Annotated
 
-from fastapi.responses import JSONResponse, StreamingResponse
+import orjson
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -222,7 +223,10 @@ def employees(
         extra["_legacy"] = legacy
         data["extra"] = extra
         payload.append(data)
-    return JSONResponse(content=payload)
+    # orjson (C) : bien plus rapide que le json.dumps par défaut sur ~12 Mo. payload est déjà
+    # JSON-safe (model_dump(mode="json") + valeurs str/int) ; default=str en filet de sécurité.
+    raw = orjson.dumps(payload, default=str, option=orjson.OPT_NON_STR_KEYS)
+    return Response(content=raw, media_type="application/json")
 
 
 @router.post("/employees/repair-codes")
