@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, optimisation-et-migration]
+  pull_request:
+
+# Un nouveau push sur une branche annule le run precedent encore en cours.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Tests backend (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Installer les dependances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      # Les tests sont autonomes : conftest.py force DATABASE_URL sur une base
+      # SQLite locale (test_sgdi.db) et fixe tous les secrets/JWT/uploads.
+      # Aucun PostgreSQL externe n'est requis.
+      - name: Lancer pytest
+        run: python -m pytest -q
+
+  frontend:
+    name: Tests frontend (node --test + jsdom)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # jsdom est declare dans package.json (devDependencies) ; node_modules
+      # est gitignore donc on l'installe ici.
+      - name: Installer jsdom
+        run: npm install
+
+      - name: Lancer les tests frontend
+        run: npm test
