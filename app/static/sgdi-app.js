@@ -4368,7 +4368,9 @@ function sgdiUnifiedEmployeeCounters(scopeSoc){
   const nonArchived=agents.filter(a=>!ficheAgentIsSortantArchive(a));
   const nonSortants=agents.filter(a=>!employeeIsFormer(a));
   const activeAgents=agents.filter(employeeIsActive);
-  const statusCount=key=>activeAgents.filter(a=>employeeLifecycleStatusKey(a)===key).length;
+  // Compter suspendu/absent/blacklist sur les NON-sortants (pas sur activeAgents, qui ne
+  // garde que "actif" et EXCLUT justement ces statuts -> comptait toujours 0).
+  const statusCount=key=>nonArchived.filter(a=>employeeLifecycleStatusKey(a)===key).length;
   return {
     source:"local-fallback",
     total:agents.length,
