@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.modules.auth.models import User
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.irongs.models import SgdiRecord
-from app.core.photo_storage import normalize_photo_fields
+from app.core.photo_storage import externalize_employee_documents, normalize_photo_fields
 
 
 def _postgres_error_detail(exc: SQLAlchemyError) -> str:
@@ -591,10 +591,23 @@ def update_candidate(db: Session, candidate_id: int, payload: Any):
     db.refresh(row)
     return row
 
+def _prepare_employee_extra(extra: dict, fallback: str) -> dict:
+    """Prépare l'extra d'un employé pour le stockage : photos + documents externalisés,
+    emboîtement _legacy aplati. Empêche le gonflement de la ligne (cause des lenteurs)."""
+    from app.modules.irongs.sql_bridge import flatten_employee_extra
+
+    extra = normalize_photo_fields(extra, fallback=fallback)
+    if isinstance(extra.get("documents"), dict):
+        extra["documents"] = externalize_employee_documents(extra["documents"], fallback=fallback)
+    if isinstance(extra.get("_legacy"), dict):
+        extra["_legacy"] = flatten_employee_extra(extra["_legacy"])
+    return extra
+
+
 def create_row(db: Session, model: Type, payload: Any):
     values = payload.model_dump(exclude_unset=True)
     if model is Employee and isinstance(values.get("extra"), dict):
-        values["extra"] = normalize_photo_fields(values["extra"], fallback=values.get("code") or "employee")
+        values["extra"] = _prepare_employee_extra(values["extra"], fallback=values.get("code") or "employee")
     row = model(**values)
     db.add(row)
     try:
@@ -610,7 +623,7 @@ def update_row(db: Session, model: Type, row_id: int, payload: Any):
     row = get_or_404(db, model, row_id)
     values = payload.model_dump(exclude_unset=True)
     if model is Employee and isinstance(values.get("extra"), dict):
-        values["extra"] = normalize_photo_fields(values["extra"], fallback=getattr(row, "code", None) or str(row_id))
+        values["extra"] = _prepare_employee_extra(values["extra"], fallback=getattr(row, "code", None) or str(row_id))
     for key, value in values.items():
         setattr(row, key, value)
     try:

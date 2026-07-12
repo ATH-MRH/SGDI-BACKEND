@@ -14,13 +14,22 @@ from app.core.config import settings
 logger = logging.getLogger("sgdi.photos")
 UPLOADS_ROOT = Path(os.getenv("SGDI_UPLOADS_DIR", "/app/uploads"))
 PHOTOS_DIR = UPLOADS_ROOT / "photos"
+DOCS_DIR = UPLOADS_ROOT / "docs"
 PUBLIC_PHOTO_PREFIX = "/uploads/photos"
+PUBLIC_DOC_PREFIX = "/uploads/docs"
 _DATA_URL_RE = re.compile(r"^data:image/[^;]+;base64,", re.IGNORECASE)
+_DATA_ANY_RE = re.compile(r"^data:([^;,]*)(;base64)?,", re.IGNORECASE)
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
+_MIME_EXT = {
+    "application/pdf": "pdf", "image/jpeg": "jpg", "image/jpg": "jpg",
+    "image/png": "png", "image/webp": "webp", "image/gif": "gif",
+    "image/svg+xml": "svg", "text/html": "html", "text/plain": "txt",
+}
 
 
 def ensure_upload_dirs() -> None:
     PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+    DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def is_base64_photo(value: Any) -> bool:
@@ -65,6 +74,69 @@ def save_base64_photo(value: str, item: dict[str, Any] | None = None, fallback: 
     path = PHOTOS_DIR / f"{name}.jpg"
     path.write_bytes(content)
     return f"{PUBLIC_PHOTO_PREFIX}/{name}.jpg"
+
+
+def save_base64_document(data_url: str, name_base: str) -> tuple[str, bool]:
+    """Écrit un document data:URL sur le disque persistant, renvoie (url_publique, True).
+
+    Ne perd JAMAIS un document : si l'URL n'est pas un data: décodable, ou en cas
+    d'erreur, renvoie (valeur d'origine, False) — le base64 reste en base plutôt que
+    d'être perdu. Le frontend affiche déjà les URLs /uploads/... sans modification.
+    """
+    if not isinstance(data_url, str):
+        return data_url, False
+    text = data_url.strip()
+    m = _DATA_ANY_RE.match(text)
+    if not m:
+        return data_url, False  # déjà une URL (/uploads, http) ou autre : on ne touche pas
+    mime = (m.group(1) or "").lower().strip()
+    is_b64 = bool(m.group(2))
+    payload = text[m.end():]
+    try:
+        if is_b64:
+            content = base64.b64decode(payload, validate=False)
+        else:
+            from urllib.parse import unquote_to_bytes
+            content = unquote_to_bytes(payload)
+    except (binascii.Error, ValueError) as exc:
+        logger.warning("Document data:URL invalide conserve en base: %s", exc)
+        return data_url, False
+    if not content:
+        return data_url, False
+    ext = _MIME_EXT.get(mime, "bin")
+    safe = _SAFE_NAME_RE.sub("_", str(name_base or "doc")).strip("._")[:110] or "doc"
+    try:
+        ensure_upload_dirs()
+        (DOCS_DIR / f"{safe}.{ext}").write_bytes(content)
+    except OSError as exc:
+        logger.warning("Ecriture document echouee, base64 conserve en base: %s", exc)
+        return data_url, False
+    return f"{PUBLIC_DOC_PREFIX}/{safe}.{ext}", True
+
+
+def externalize_employee_documents(documents: Any, fallback: str) -> Any:
+    """Déplace le base64 des documents (clé .url en data:URL) vers le disque.
+
+    documents = map {typeDoc: {url, name, ...}}. Renvoie une NOUVELLE map où chaque
+    .url en data:URL est remplacée par /uploads/docs/... . Tout ce qui n'est pas un
+    data:URL (déjà externalisé, http, vide) est laissé tel quel. Ne perd aucun document.
+    """
+    if not isinstance(documents, dict):
+        return documents
+    out: dict[str, Any] = {}
+    for key, entry in documents.items():
+        if not isinstance(entry, dict):
+            out[key] = entry
+            continue
+        new_entry = deepcopy(entry)
+        url = new_entry.get("url")
+        if isinstance(url, str) and url.startswith("data:"):
+            safe_key = _SAFE_NAME_RE.sub("_", str(key)).strip("._")[:60] or "doc"
+            new_url, saved = save_base64_document(url, f"{fallback}_{safe_key}")
+            if saved:
+                new_entry["url"] = new_url
+        out[key] = new_entry
+    return out
 
 
 def normalize_photo_fields(value: Any, fallback: str | None = None) -> Any:

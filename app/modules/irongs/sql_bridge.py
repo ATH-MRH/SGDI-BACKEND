@@ -14,7 +14,7 @@ from app.modules.finance_models import Advance, CashEntry, CreditNote, Invoice, 
 from app.modules.irongs.models import SgdiRecord
 from app.modules.materiel.models import StockArticle, StockMovement, Store, Supplier
 from app.modules.ops.models import Assignment, DailyPresence, Incident, OpsMovement, Site
-from app.core.photo_storage import normalize_photo_fields
+from app.core.photo_storage import externalize_employee_documents, normalize_photo_fields
 
 def _strip_embedded_base64(item: dict[str, Any], _depth: int = 0) -> dict[str, Any]:
     """Remove base64-encoded blobs recursively (photos, data: URLs in archived docs, etc.)."""
@@ -158,10 +158,120 @@ def upsert_candidate(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     db.flush()
     return candidate_to_item(row)
 
+def _employee_doc_has_content(entry: Any) -> bool:
+    """Un document est 'utile' s'il porte de quoi l'afficher (url/html/données)."""
+    if isinstance(entry, dict):
+        return bool(
+            entry.get("url") or entry.get("html") or entry.get("data")
+            or entry.get("fileData") or entry.get("content")
+            or entry.get("contentHtml") or entry.get("bodyHtml")
+        )
+    return bool(entry)
+
+
+def _merge_employee_documents(levels: list[dict[str, Any]]) -> dict[str, Any]:
+    """Fusionne les 'documents' de tous les niveaux _legacy (du plus récent au plus ancien).
+
+    Règle SANS PERTE : le plus récent gagne, mais un document vide au niveau récent
+    est remplacé par une version plus ancienne qui a du contenu. Aucun document
+    présent quelque part n'est perdu.
+    """
+    out: dict[str, Any] = {}
+    for level in levels:  # levels: récent -> ancien
+        docs = level.get("documents")
+        if not isinstance(docs, dict):
+            continue
+        for key, entry in docs.items():
+            if key not in out:
+                out[key] = entry
+            elif not _employee_doc_has_content(out[key]) and _employee_doc_has_content(entry):
+                out[key] = entry
+    return out
+
+
+def flatten_employee_extra(extra: Any, _max_depth: int = 60) -> dict[str, Any]:
+    """Aplatit l'emboîtement récursif extra._legacy._legacy... en un seul niveau.
+
+    Cause du gonflement (65 Mo/table) : chaque sauvegarde ré-emballait l'état
+    précédent dans un nouveau _legacy, dupliquant tout (documents compris) à chaque
+    aller-retour. On fusionne tous les niveaux en un dict plat : le niveau le plus
+    récent (le moins profond) gagne pour chaque champ, l'union des documents est
+    préservée. Le résultat NE contient plus de clé _legacy. Fonction idempotente.
+    """
+    if not isinstance(extra, dict):
+        return {}
+    levels: list[dict[str, Any]] = []
+    node: Any = extra
+    depth = 0
+    while isinstance(node, dict) and depth < _max_depth:
+        levels.append(node)
+        node = node.get("_legacy")
+        depth += 1
+    merged: dict[str, Any] = {}
+    for level in reversed(levels):  # ancien -> récent : le récent écrase en dernier
+        for key, value in level.items():
+            if key in ("_legacy", "documents"):
+                continue
+            merged[key] = deepcopy(value)
+    docs = _merge_employee_documents(levels)
+    if docs:
+        merged["documents"] = deepcopy(docs)
+    return merged
+
+
+def shrink_employee_extra(row: Employee) -> bool:
+    """Réduit l'extra d'un employé : aplatit l'emboîtement _legacy et externalise les
+    documents base64. Renvoie True si la ligne a changé. IDEMPOTENTE (2e passage = no-op).
+
+    Migration one-shot pour résorber les lignes gonflées (jusqu'à 2,7 Mo/ligne) sans
+    rien perdre : tous les champs et documents sont préservés (fusion sans perte).
+    """
+    extra = row.extra if isinstance(row.extra, dict) else {}
+    if not extra:
+        return False
+    legacy = flatten_employee_extra(extra)
+    if isinstance(legacy.get("documents"), dict):
+        legacy["documents"] = externalize_employee_documents(
+            legacy["documents"], fallback=row.code or str(row.id))
+    # fonction est un POINT FIXE : on le pose à la fois au premier niveau (lu par
+    # employee_to_item) ET dans _legacy, sinon flatten() le ré-injecterait à chaque
+    # passage et la migration ne serait pas idempotente.
+    fonction = extra.get("fonction")
+    if fonction is None:
+        fonction = legacy.get("fonction")
+    legacy["fonction"] = fonction
+    new_extra = {"fonction": fonction, "_legacy": legacy}
+    if new_extra == extra:
+        return False
+    row.extra = new_extra
+    return True
+
+
+def migrate_flatten_employees(db: Session) -> dict[str, int]:
+    """Applique shrink_employee_extra à TOUS les employés. Un seul commit à la fin :
+    tout ou rien (une erreur -> rollback, aucune ligne modifiée)."""
+    rows = db.execute(select(Employee).order_by(Employee.id)).scalars().all()
+    changed = sum(1 for row in rows if shrink_employee_extra(row))
+    if changed:
+        db.commit()
+    return {"total": len(rows), "changed": changed}
+
+
 def employee_to_item(row: Employee) -> dict[str, Any]:
     extra = row.extra if isinstance(row.extra, dict) else {}
-    item = _strip_embedded_base64(dict(extra.get("_legacy") or {}))
-    item.update({key: deepcopy(value) for key, value in extra.items() if key != "_legacy"})
+    # 1) Aplatir l'emboîtement _legacy en fusionnant tous les niveaux (champs récents
+    #    gagnants, documents en union sans perte).
+    flat = flatten_employee_extra(extra)
+    # 2) Protéger les documents du stripping : ils doivent atteindre le frontend pour
+    #    l'affichage (leur .url peut être un data:URL tant que la migration
+    #    d'externalisation n'est pas passée ; ensuite ce sera /uploads/...).
+    docs = flat.pop("documents", None)
+    item = _strip_embedded_base64(flat)
+    if isinstance(docs, dict) and docs:
+        item["documents"] = docs
+    # 3) Recouvrir avec les champs de premier niveau (hors _legacy et documents déjà
+    #    fusionnés au point 1, pour ne pas réintroduire une version moins complète).
+    item.update({key: deepcopy(value) for key, value in extra.items() if key not in ("_legacy", "documents")})
     item.update({
         "id": item.get("id") or str(row.id), "backendId": row.id,
         "matricule": row.code, "code": row.code, "nom": row.last_name, "prenom": row.first_name,
@@ -208,7 +318,17 @@ def upsert_employee(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     row.trial_end_date = as_date(item.get("dateFinEssai"))
     row.contract_end_date = as_date(item.get("dateFinContrat"))
     row.locked = 1 if item.get("locked", False) else 0
-    row.extra = {**(row.extra or {}), "fonction": item.get("fonction") or item.get("poste"), "_legacy": deepcopy(item)}
+    # _legacy APLATI + documents externalisés. On fusionne l'ancien extra comme un
+    # niveau PLUS ANCIEN (item gagne, rien n'est perdu), on aplatit en un seul niveau
+    # et on stocke uniquement {fonction, _legacy}. Sans ça, chaque sauvegarde
+    # ré-emballait l'état précédent -> emboîtement récursif et duplication des
+    # documents (gonflement à 65 Mo/table). Le base64 des documents part sur le disque
+    # persistant (comme les photos) ; le frontend affiche déjà les URLs /uploads/....
+    legacy = flatten_employee_extra({**item, "_legacy": row.extra or {}})
+    if isinstance(legacy.get("documents"), dict):
+        legacy["documents"] = externalize_employee_documents(
+            legacy["documents"], fallback=code or legacy_id(item))
+    row.extra = {"fonction": item.get("fonction") or item.get("poste"), "_legacy": legacy}
     db.flush()
     sync_assignment_from_agent(db, row, item)
     return employee_to_item(row)
