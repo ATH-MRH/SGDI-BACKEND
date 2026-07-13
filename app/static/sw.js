@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260713-ops-supervisor-readonly";
+const SGDI_CACHE = "sgdi-pwa-v20260713-hide-ops-supervisor-fab";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

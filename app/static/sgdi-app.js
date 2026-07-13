@@ -5942,6 +5942,12 @@ function _sgdiUpdateEditFab(){
   const fab=document.getElementById("sgdi-edit-fab");
   if(!fab)return;
   if(!session){fab.classList.remove("visible");return}
+  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
+    fab.classList.remove("visible","unlocked");
+    fab.onclick=null;
+    fab.title="";
+    return;
+  }
   fab.classList.add("visible");
   if(sgdiViewModeActive){
     fab.classList.remove("unlocked");
@@ -5956,6 +5962,7 @@ function _sgdiUpdateEditFab(){
   }
 }
 function sgdiInitEditFab(){
+  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession())return;
   if(document.getElementById("sgdi-edit-fab"))return;
   const fab=document.createElement("button");
   fab.id="sgdi-edit-fab";
