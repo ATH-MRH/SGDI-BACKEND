@@ -2857,7 +2857,7 @@ function commandRoutes(){
   const base=[
     ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Ajouter candidats","reserve"],["Candidats archives","candidats_archives"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/feuille"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
   ];
-  if(isAdminGeneralSession())base.push([isAdminSystemSession()?"Administration systeme":"Administrateur general","admin/dashboard"],["Utilisateurs","admin/users"]);
+  if(isAdminGeneralSession())base.push([isAdminSystemSession()?"Administration système":"Administrateur général","admin/dashboard"],["Utilisateurs","admin/users"]);
   return base.filter(([_,r])=>canAccess(r.split("/")[0])||r.startsWith(session?.transverse||""));
 }
 function openCommandPalette(){
@@ -4956,7 +4956,7 @@ const SGDI_LANG_PAIRS=[
   ["PAIE","الأجور"],["Paie","الأجور"],["Salaire","الأجر"],["Salaire net","الأجر الصافي"],["Fiche de paye","كشف الراتب"],
   ["RAPPORTS","التقارير"],["Rapports","التقارير"],["STATISTIQUES RH","إحصائيات الموارد البشرية"],["Vue d'ensemble","نظرة عامة"],["Par société","حسب الشركة"],["Par thème","حسب الموضوع"],["Par fonction","حسب الوظيفة"],["Par catégorie","حسب الفئة"],["Par salaire","حسب الأجر"],["Par affectation","حسب التعيين"],
   ["MISSIONS","المهام"],["SUPERVISION SITE","مراقبة الموقع"],["Programmer une Inspection","برمجة تفتيش"],["Inspections programmées","التفتيشات المبرمجة"],["Inspections inopinées","التفتيشات المفاجئة"],
-  ["Articles","المواد"],["MAGASIN","المخزن"],["Fournisseurs","الموردون"],["Stockage serveur","تخزين PostgreSQL"],["Utilisateurs & accès","المستخدمون والصلاحيات"],["Droits d'accès","حقوق الوصول"],["Niveaux d'accès","مستويات الصلاحية"],["Journal d'activité","سجل النشاط"],["Historique messages","سجل الرسائل"],["Paramètres","الإعدادات"],["Code de déverrouillage","رمز فتح القفل"],["Journal déverrouillages","سجل فتح القفل"],
+  ["Articles","المواد"],["MAGASIN","المخزن"],["Fournisseurs","الموردون"],["Stockage serveur","تخزين PostgreSQL"],["Utilisateurs & accès","المستخدمون والصلاحيات"],["Droits d'accès","حقوق الوصول"],["Profils d'accès","ملفات الصلاحية"],["Journal d'activité","سجل النشاط"],["Historique messages","سجل الرسائل"],["Paramètres","الإعدادات"],["Code de déverrouillage","رمز فتح القفل"],["Journal déverrouillages","سجل فتح القفل"],
   ["Créer","إنشاء"],["Modifier","تعديل"],["Supprimer","حذف"],["Valider","تأكيد"],["Annuler","إلغاء"],["Enregistrer","حفظ"],["Envoyer","إرسال"],["Répondre","رد"],["Traiter","معالجة"],["Fermer","إغلاق"],["Ouvrir","فتح"],["Retour société","العودة إلى الشركة"],["Retour à la sélection","العودة إلى الاختيار"],["Changer de société","تغيير الشركة"],["Se déconnecter","تسجيل الخروج"],["Choix langue","اختيار اللغة"],
   ["Statut","الحالة"],["Réponse","الرد"],["Employé","الموظف"],["Société / Site","الشركة / الموقع"],["Pièce","مرفق"],["Pièces jointes","المرفقات"],["Date","التاريخ"],["De","من"],["Vers","إلى"],["Objet","الموضوع"],["Message","الرسالة"],["Action","الإجراء"],["Actions","الإجراءات"],["Total","المجموع"],["Nouvelles","الجديدة"],["En cours","قيد المعالجة"],["Traité","تمت المعالجة"],["Traitées","تمت معالجتها"],["Rejeté","مرفوض"],["Rejetées","مرفوضة"],["Tous statuts","كل الحالات"],["Tous types","كل الأنواع"],["Recherche globale","بحث شامل"],["Réinitialiser","إعادة تعيين"],
   ["Présent","حاضر"],["Absent","غائب"],["Suspendu","موقوف"],["Repos","راحة"],["Pointage","الحضور"],["Feuille de présence quotidienne","ورقة الحضور اليومية"],["Saisie pointage","إدخال الحضور"],["Récap par agent","ملخص حسب الموظف"],["Récap par société","ملخص حسب الشركة"],["Statistiques","إحصائيات"],["Légende & codes","الرموز والدلالات"]
@@ -5528,7 +5528,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD PAIE","paie/dashboard"],["EFFECTIF PAIE","effectif/recap"]
     ],
     admin:[
-      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS & ACCÈS","admin/users"],["DROITS D'ACCÈS","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["NIVEAUX D'ACCÈS","admin/niveaux"],["FICHE DE POSITION","admin/fiches"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
+      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
     ]
   };
 }
@@ -5786,7 +5786,7 @@ function renderSidebar(){
         {label:"MODÈLES DOCUMENTS",route:"admin/document-models",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
         {label:"UTILISATEURS & BLOCAGE",route:"admin/users",gapBefore:true,count:(db.users||[]).length||null},
         {label:"DROITS D'ACCÈS",route:"admin/droits",count:Object.keys(db.droitsAcces||{}).length||null},
-        {label:"NIVEAUX D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
+        {label:"PROFILS D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"SÉCURITÉ DES ACCÈS",route:"admin/access"},
         {label:"ORGANISER MENU LATÉRAL",route:"admin/menu"},
         {label:"ORGANISER LES COMPTEURS",route:"admin/counters"},
@@ -29522,6 +29522,53 @@ const ADMIN_MODULES=[
   "pointage","pointage/recap","pointage/societe","pointage/stats","pointage/legende",
   "ops","ops/missions","ops/mouvements","ops/supervision","ops/qr","portail","parametres","admin"
 ];
+const ADMIN_PROFILE_MODULES=[
+  {key:"dashboard",label:"Tableau de bord"},
+  {key:"drh",label:"DRH"},
+  {key:"ops",label:"OPS"},
+  {key:"pointage",label:"Pointage"},
+  {key:"sites",label:"Sites"},
+  {key:"materiel",label:"Matériel / équipement"},
+  {key:"facturation",label:"Finances / comptabilité"},
+  {key:"paie",label:"Paie"},
+  {key:"commercial",label:"Commercial"},
+  {key:"secretariat",label:"Secrétariat général"},
+  {key:"portail",label:"Portail RH"},
+  {key:"admin",label:"Administration système"}
+];
+function adminProfileModuleLabel(key){
+  const item=ADMIN_PROFILE_MODULES.find(x=>x.key===key);
+  return item?item.label:adminAccessModuleLabel(key);
+}
+function adminNormalizeProfileModuleKey(value){
+  const raw=String(value||"").trim();
+  if(!raw)return"";
+  if(ADMIN_PROFILE_MODULES.some(x=>x.key===raw))return raw;
+  const host=adminModuleHostKey(raw);
+  if(ADMIN_PROFILE_MODULES.some(x=>x.key===host))return host;
+  return "";
+}
+function normalizeAdminProfileModules(value){
+  const out=[];
+  (Array.isArray(value)?value:[]).forEach(v=>{const k=adminNormalizeProfileModuleKey(v);if(k&&!out.includes(k))out.push(k)});
+  return out;
+}
+function adminModuleHostKey(key){
+  const raw=String(key||"").trim();
+  const lower=raw.toLowerCase();
+  const direct=normalizeStructureKey(raw);
+  if(direct)return direct;
+  if(["dashboard"].includes(lower))return"dashboard";
+  if(["sites","incidents"].includes(lower))return"sites";
+  if(["agents","fiches","effectif","badge","contrats","a_contractualiser","dossiers","recrutement","reserve","candidats_archives","demandes_personnel","demandes_structure","conges","rapports","drh/social"].includes(lower))return"drh";
+  if(lower.startsWith("ops/"))return"ops";
+  if(lower.startsWith("pointage/"))return"pointage";
+  if(lower.startsWith("materiel/"))return"materiel";
+  if(lower.startsWith("facturation/"))return"facturation";
+  if(lower.startsWith("commercial/"))return"commercial";
+  if(lower.startsWith("secretariat/"))return"secretariat";
+  return lower;
+}
 function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
 function adminAccessModuleLabel(module){
   const labels={
@@ -29670,7 +29717,10 @@ function normalizeAdminLevelList(value,allowed){
 }
 function levelAllowsModule(level,key){
   if(!level||!Array.isArray(level.modules)||!level.modules.length)return true;
-  return level.modules.includes(key)||level.modules.includes(String(key||"").toUpperCase());
+  const modules=[...normalizeAdminLevelList(level.modules),...normalizeAdminProfileModules(level.modules)];
+  const host=adminModuleHostKey(key);
+  const raw=String(key||"").trim();
+  return modules.includes(raw)||modules.includes(raw.toUpperCase())||(host&&modules.includes(host));
 }
 function defaultNiveauxAcces(){
   return[
@@ -29694,6 +29744,8 @@ function ensureNiveauxAcces(){
 function logActivity(action,details){if(!db.activityLog)db.activityLog=[];db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:action,details:details||""});if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);recordOperationFeed(action+(details?" · "+details:""),"Activité système");saveDB()}
 function renderAdmin(view,sub,arg){
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
+  const systemOnly=["menu","counters","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","contrats","candidats"];
+  if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
   if(sub==="counters")return renderAdminCountersMenu(view);
@@ -30135,7 +30187,7 @@ function renderAdminAccessSecurity(view,section){
     <div class="p-3 rounded bg-blue-50 text-blue-800 text-sm font-bold">${habilites} utilisateur(s) habilité(s). L'habilitation se règle dans Administration système > Utilisateurs.</div>
   </section>`;
   const sections={access_sgdi:sgdiBlock,access_societes:socBlock,access_structures:structBlock,access_code:codeBlock};
-  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Sécurité des accès</h1><p class="text-sm text-slate-500 mt-1">Les mots de passe internes ont été supprimés. Les accès se gèrent uniquement par utilisateur, niveau, rôle, société et structure autorisée.</p></div>
+  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Sécurité des accès</h1><p class="text-sm text-slate-500 mt-1">Les mots de passe internes ont été supprimés. Les accès se gèrent par utilisateur, profil d'accès, société, site et structure autorisée.</p></div>
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
       <button class="card p-4 text-left" style="border-left:4px solid #16a34a" onclick="navigate('admin/access_sgdi')"><div class="text-xs text-slate-500">Accès</div><div class="font-black">SGDI libre</div></button>
       <button class="card p-4 text-left" style="border-left:4px solid #16a34a" onclick="navigate('admin/access_societes')"><div class="text-xs text-slate-500">Accès</div><div class="font-black">Sociétés libres</div></button>
@@ -30164,10 +30216,10 @@ async function saveAdminAccessSecurity(form){
 }
 
 function adminRoleGuide(){return[
-  ["agent","Agent","Accès utilisateur standard selon les modules autorisés"],
-  ["dispatch","Dispatch","Suivi opérationnel, terrain, pointage et structures autorisées"],
-  ["ops","OPS","Accès aux rubriques opérationnelles et DRH selon la matrice"],
-  ["ADM","Administration","Pouvoir complet sur utilisateurs, droits et paramètres"]
+  ["agent","Consultation","Accès simple aux modules et périmètres autorisés"],
+  ["dispatch","Supervision terrain","Suivi opérationnel, sites, pointage et missions autorisées"],
+  ["ops","Gestion métier","Exploitation OPS/DRH selon profil et périmètre"],
+  ["ADM","Administration","Configuration système, utilisateurs, profils et sécurité"]
 ]}
 function adminRoleDescription(role){const r=adminRoleGuide().find(x=>x[0]===String(role||""));return r?r[1]+" — "+r[2]:"Profil utilisateur SGDI"}
 function adminDashboardCard(title,desc,route,color,icon){return`<button class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px"><div class="text-2xl mb-2">${icon||""}</div><div class="font-black text-lg mb-1">${title}</div><div class="text-sm text-slate-500 leading-relaxed">${desc}</div></button>`}
@@ -30246,25 +30298,32 @@ async function renderAdminSystemDashboard(view){
   const articles=(db.stockArticles||[]).filter(adminDataMatchesSociete);
   const users=db.users||[];
   const templates=(db.documentTemplates||[]).filter(t=>t&&t.active!==false);
-  const card=(title,desc,route,color,count)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:136px"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(title)}</div><div class="text-sm text-slate-500 mt-2">${escapeHTML(desc)}</div></div><div class="text-3xl font-black" style="color:${color}">${count}</div></div></button>`;
-  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Panneau de configuration générale</h1><p class="text-sm text-slate-500 mt-1">Configuration, maintenance, droits, données sensibles et actions techniques par société.</p></div>
-  ${adminSocieteSelectorHTML(adminSoc?"Toutes les listes et suppressions sont filtrées sur cette société.":"Sélectionnez une société pour travailler sur un périmètre précis.")}
-  <div class="grid grid-3 gap-4 mb-5">
-    ${card("Gestion des effectifs","Règles opérationnelles, statuts, actions DRH/OPS et paramètres employés.","admin/effectifs","#043970",agents.length)}
-    ${card("Fiche de position","Suppression, modification, contrats et verrouillage des fiches employés.","admin/fiches","#0f766e",agents.length)}
-    ${card("Postes / Fonctions","Gérez la liste des postes et fonctions disponibles dans les formulaires.","admin/postes","#0891b2",POSTES.length)}
-    ${card("Sites","Modification et suppression des sites et informations associées.","sites/actifs","#1d4ed8",sitesCount)}
-    ${card("Magasins","Maintenance magasins, rattachement société et suppression contrôlée.","admin/magasins","#ca8a04",magasins.length)}
-    ${card("Articles","Catalogue matériel, stock, articles et suppressions contrôlées.","admin/articles","#7c3aed",articles.length)}
-    ${card("Modèles documents","Téléversement et rattachement des modèles documentaires.","admin/document-models","#334155",templates.length)}
-  </div>
-  <div class="grid grid-2 gap-4">
-    ${card("Utilisateurs & blocage","Création, modification, blocage et structures autorisées.","admin/users","#dc2626",users.length)}
-    ${card("Droits d'accès","Matrice des droits par module et niveau d'habilitation.","admin/droits","#64748b",Object.keys(db.droitsAcces||{}).length)}
-    ${card("Niveaux d'accès","Niveaux d'habilitation, rôles et modules autorisés par niveau.","admin/niveaux","#7c3aed",(db.niveauxAcces||[]).length)}
-    ${card("Sécurité des accès","Accès SGDI, sociétés, structures et code journalier.","admin/access","#0891b2","")}
-    ${card("Candidats","Suppression en masse par statut, société ou suppression totale.","admin/candidats","#b91c1c",(db.candidats||[]).length)}
-  </div>
+  const card=(title,desc,route,color,count,tag)=>`<button type="button" class="card p-5 text-left kpi-clickable" onclick="navigate('${route}')" style="border-left:5px solid ${color};min-height:132px"><div class="flex items-start justify-between gap-3"><div><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(tag||"Configuration")}</div><div class="font-black text-lg mt-1">${escapeHTML(title)}</div><div class="text-sm text-slate-500 mt-2">${escapeHTML(desc)}</div></div><div class="text-3xl font-black" style="color:${color}">${count}</div></div></button>`;
+  const profileCount=(db.niveauxAcces||[]).length;
+  const rightsCount=Object.keys(db.droitsAcces||{}).length;
+  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Panneau d'administration</h1><p class="text-sm text-slate-500 mt-1">Une logique simple : utilisateur + profil d'accès + périmètre société/site/structure.</p></div>
+	  ${adminSocieteSelectorHTML(adminSoc?"Toutes les listes et suppressions sont filtrées sur cette société.":"Sélectionnez une société pour travailler sur un périmètre précis.")}
+	  <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5">
+	    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Utilisateurs</div><div class="text-3xl font-black text-slate-900">${users.length}</div><div class="text-xs text-slate-500">Comptes et blocage</div></div>
+	    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Profils</div><div class="text-3xl font-black text-violet-700">${profileCount}</div><div class="text-xs text-slate-500">Droits métier</div></div>
+	    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Périmètre</div><div class="text-3xl font-black text-blue-700">${sitesCount}</div><div class="text-xs text-slate-500">Sites actifs</div></div>
+	    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Données</div><div class="text-3xl font-black text-emerald-700">${agents.length}</div><div class="text-xs text-slate-500">Employés</div></div>
+	    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Règles fines</div><div class="text-3xl font-black text-amber-700">${rightsCount}</div><div class="text-xs text-slate-500">Exceptions</div></div>
+	  </div>
+	  <div class="grid grid-2 gap-4">
+	    ${card("Utilisateurs","Créer, bloquer et rattacher chaque compte à un profil et un périmètre.","admin/users","#043970",users.length,"1. Comptes")}
+	    ${card("Profils d'accès","Définir les modules visibles et le référentiel d'actions par profil.","admin/niveaux","#7c3aed",profileCount,"2. Droits")}
+	    ${card("Périmètres & sécurité","Sociétés, structures, code journalier et règles de sécurité.","admin/access","#0891b2","", "3. Périmètres")}
+	    ${card("Données métier","Effectifs, fiches, postes, sites, matériel et modèles documents.","admin/effectifs","#0f766e",agents.length,"4. Métier")}
+	    ${card("Droits techniques","Exceptions rôle × module pour cas avancés. À utiliser rarement.","admin/droits","#64748b",rightsCount,"Avancé")}
+	  </div>
+	  <div class="grid grid-3 gap-3 mt-4">
+	    ${card("Fiches de position","Maintenance contrôlée des fiches employés.","admin/fiches","#0f766e",agents.length,"Métier")}
+	    ${card("Sites","Édition et archivage des sites.","sites/actifs","#1d4ed8",sitesCount,"Métier")}
+	    ${card("Articles / magasins","Catalogue matériel, magasins et stocks.","admin/articles","#ca8a04",articles.length+magasins.length,"Métier")}
+	    ${card("Modèles documents","Modèles documentaires et rattachements.","admin/document-models","#334155",templates.length,"Métier")}
+	    ${card("Candidats","Contrôle des sections et nettoyage candidat.","admin/candidats","#b91c1c",(db.candidats||[]).length,"Métier")}
+	  </div>
   <div class="mt-4">${(()=>{const dups=findDuplicateMatricules();return`<button type="button" class="w-full card p-4 text-left flex items-center justify-between gap-3 hover:bg-slate-50 transition" onclick="openDuplicateMatriculesModal()" style="border-left:5px solid ${dups.length?"#dc2626":"#16a34a"}"><div><div class="text-xs font-black uppercase text-slate-500">Intégrité des codes employés</div><div class="text-sm text-slate-600 mt-1">${dups.length?`${dups.length} code(s) en doublon détecté(s) — cliquez pour corriger`:"Aucun doublon détecté · tous les codes sont uniques"}</div></div><div class="text-2xl font-black" style="color:${dups.length?"#dc2626":"#16a34a"}">${dups.length||"✓"}</div></button>`})()}</div>
   <div class="mt-4 card p-5" style="border-left:5px solid #0369a1"><div class="text-xs font-black uppercase text-slate-500 mb-3">Actions Contrats</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-success text-xs" onclick="openRecruitAllContractCandidatesModal()">Recruter tous</button><button type="button" class="btn btn-secondary text-xs" onclick="openContractExcelImport()">Importer Excel</button></div></div>`;
 }
@@ -30750,18 +30809,18 @@ function renderAdminUsers(view){
   ensureNiveauxAcces();
   const adminSoc=adminActiveSociete();
   const u=(db.users||[]).filter(adminMatchesSociete);
-  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Utilisateurs & blocage</h1><p class="text-sm text-slate-500 mt-1">Pour chaque utilisateur : fonction, niveau d'habilitation, sociétés autorisées, structures autorisées et statut. Pour bloquer un utilisateur, passez son statut à Désactivé.</p></div>
+  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Utilisateurs</h1><p class="text-sm text-slate-500 mt-1">Un compte se règle simplement : identité, profil d'accès, périmètre sociétés/sites/structures, puis statut actif ou désactivé.</p></div>
     ${adminSocieteSelectorHTML(adminSoc?"La liste affiche les utilisateurs autorisés sur cette société ou sur toutes les sociétés.":"Vue globale des utilisateurs. Sélectionnez une société pour créer/configurer un périmètre précis.")}
     <div class="card p-4 mb-4" style="background:#f8fafc;border-left:4px solid #043970">
       <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <div><div class="font-bold">Méthode simple d'attribution</div><div class="text-xs text-slate-500">1. Choisir la fonction · 2. Choisir le niveau · 3. Cocher sociétés/modules · 4. Activer ou désactiver · 5. Enregistrer.</div></div>
-        <div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="navigate('admin/niveaux')">Configurer les niveaux</button><button class="btn btn-secondary text-xs" onclick="navigate('admin/droits')">Matrice des droits</button><button class="btn btn-primary" onclick="openAdminUserModal('')">Nouvel utilisateur</button></div>
+        <div><div class="font-bold">Méthode simple d'attribution</div><div class="text-xs text-slate-500">1. Choisir le profil · 2. Définir le périmètre · 3. Activer ou désactiver · 4. Enregistrer.</div></div>
+        <div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="navigate('admin/niveaux')">Configurer les profils</button><button class="btn btn-primary" onclick="openAdminUserModal('')">Nouvel utilisateur</button></div>
       </div>
       <div class="grid grid-4 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<div class="p-2 rounded-lg" style="background:#fff;border:1px solid #e2e8f0"><div class="font-black text-xs" style="color:${adminRoleColor(code)}">${code} · ${title}</div><div class="text-[11px] text-slate-500">${desc}</div></div>`).join("")}</div>
     </div>
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-slate-50"><tr><th class="text-left p-3">Identifiant</th><th class="text-left p-3">Nom complet</th><th class="text-left p-3">Rôle</th><th class="text-left p-3">Niveau</th><th class="text-left p-3">Sociétés autorisées</th><th class="text-left p-3">Structures autorisées</th><th class="text-left p-3">Statut</th><th class="p-3">Actions</th></tr></thead>
+        <thead class="bg-slate-50"><tr><th class="text-left p-3">Identifiant</th><th class="text-left p-3">Nom complet</th><th class="text-left p-3">Type</th><th class="text-left p-3">Profil</th><th class="text-left p-3">Sociétés</th><th class="text-left p-3">Structures</th><th class="text-left p-3">Statut</th><th class="p-3">Actions</th></tr></thead>
         <tbody>${u.map(x=>{const roleColor=adminRoleColor(x.role);const niv=(db.niveauxAcces||[]).find(n=>n.code===x.niveau);return`<tr class="border-t">
           <td class="p-3 font-mono">${escapeHTML(x.username)}</td>
           <td class="p-3 font-semibold">${escapeHTML(x.nom||"")}</td>
@@ -30814,17 +30873,17 @@ function openAdminUserModal(username){
         <div><label class="label">Identifiant *</label><input class="input" name="username"  value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
-        <div><label class="label">Fonction / rôle *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
-        <div><label class="label">Niveau d'habilitation *</label><select class="input" name="niveau"  onchange="previewUserAccessLevel(this.value)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
+        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
+        <div><label class="label">Profil d'accès *</label><select class="input" name="niveau"  onchange="previewUserAccessLevel(this.value)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #fecaca;background:#fef2f2"><input type="checkbox" name="peutReactiverSortant" ${u.peutReactiverSortant?"checked":""}/> Peut réactiver un employé SORTANT</label>
       </div>
-      <label class="label mt-3">Périmètre sociétés autorisées (vide = toutes)</label>
+      <label class="label mt-3">Périmètre sociétés (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${SOCIETES.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/>${escapeHTML(s)}</label>`).join("")}</div>
-      <label class="label mt-3">Structures autorisées (vide = toutes)</label>
+      <label class="label mt-3">Périmètre structures (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""}/>${escapeHTML(st.label)}</label>`).join("")}</div>
-      <label class="label mt-3">Sites autorisés (vide = tous)</label>
+      <label class="label mt-3">Périmètre sites (vide = tous)</label>
       <div class="grid grid-2 gap-2" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{const seen=new Set();return(db.sites||[]).filter(s=>{const k=String(s.backendId||s.id||"");if(!k||seen.has(k))return false;seen.add(k);return s.actif!==false;}).map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="site_${s.backendId||s.id}" value="${s.backendId||s.id}" ${(u.sitesAutorises||[]).includes(Number(s.backendId||s.id))?"checked":""}/>${escapeHTML((s.societe?s.societe+" · ":"")+(s.nom||s.intitule||"Site #"+(s.backendId||s.id)))}</label>`).join("")||`<div class="text-sm text-slate-500">Aucun site chargé.</div>`})()}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
@@ -30940,19 +30999,19 @@ function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
   const colors={agent:"#0f766e",ops:"#043970",dispatch:"#7c3aed",ADM:"#dc2626"};
   const accessRoles=ADMIN_ACCESS_ROLES;
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🔐 Droits d'accès — Matrice rôle × module</h1>
-    <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">ℹ️ Cochez/décochez les cases pour autoriser ou refuser l'accès d'un niveau à un module. Les droits par défaut sont appliqués si aucune règle personnalisée n'est définie.</div>
+  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Droits techniques avancés</h1><p class="text-sm text-slate-500 mt-1">À utiliser uniquement pour des exceptions rôle × module. Pour une configuration normale, utilisez les profils d'accès.</p></div>
+    <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">Cette matrice règle les droits par type de compte, pas les profils. Les profils restent la méthode principale et lisible.</div>
     <div class="card p-0 overflow-x-auto admin-access-card">
       <table class="w-full text-sm admin-access-table">
         <thead class="bg-slate-50"><tr><th class="text-left p-3">Module</th>${accessRoles.map(r=>`<th class="p-3" style="color:${colors[r]||"#043970"}">${r}</th>`).join("")}</tr></thead>
         <tbody>${ADMIN_MODULES.map(m=>{const route=adminModuleRoute(m);const label=adminAccessModuleLabel(m);const group=adminAccessModuleGroup(m);return`<tr class="border-t"><td class="p-3 admin-access-module-cell"><button type="button" class="admin-access-module-label" onclick="navigate('${route}')">${escapeHTML(label)}</button><div class="admin-access-module-meta">${escapeHTML(group)}${label!==m?` · Code : ${escapeHTML(m)}`:""}</div></td>${accessRoles.map(r=>{const key=m+":"+r;const def=canAccessOriginal(m,r);const override=droits[key];const enabled=override===undefined?def:override;return`<td class="p-3 text-center"><input type="checkbox" ${enabled?"checked":""} onchange="adminToggleDroit('${m}','${r}',this.checked)" style="width:18px;height:18px;cursor:pointer"/></td>`}).join("")}</tr>`}).join("")}</tbody>
       </table>
     </div>
-    <div class="mt-4 flex gap-2"><button class="btn btn-ghost" onclick="adminResetDroits()">🔄 Réinitialiser aux valeurs par défaut</button></div>`;
+    <div class="mt-4 flex gap-2"><button class="btn btn-secondary" onclick="navigate('admin/niveaux')">Retour aux profils</button><button class="btn btn-ghost" onclick="adminResetDroits()">Réinitialiser aux valeurs par défaut</button></div>`;
 }
 function canAccessOriginal(key,role){const map=defaultAccessMap();const base=adminAccessBaseRole(role);return(map[key]||["admin"]).includes(base)}
-async function adminToggleDroit(m,r,enabled){if(!db.droitsAcces)db.droitsAcces={};db.droitsAcces[m+":"+r]=enabled;try{await SGDI.auth.saveAccessRules(Object.entries(db.droitsAcces).map(([k,v])=>{const parts=k.split(":");return{module_key:parts[0],role:parts[1],allowed:!!v}}))}catch(e){toast("Droit PostgreSQL refusé : "+(e.message||e),"error");return}logActivity("Modification droits",m+":"+r+"="+enabled);toast("Droit mis à jour","success")}
-async function adminResetDroits(){if(!confirm("Réinitialiser tous les droits aux valeurs par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Droits réinitialisés","success");render()}
+async function adminToggleDroit(m,r,enabled){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");renderView();return}if(!db.droitsAcces)db.droitsAcces={};db.droitsAcces[m+":"+r]=enabled;try{await SGDI.auth.saveAccessRules(Object.entries(db.droitsAcces).map(([k,v])=>{const parts=k.split(":");return{module_key:parts[0],role:parts[1],allowed:!!v}}))}catch(e){toast("Droit PostgreSQL refusé : "+(e.message||e),"error");return}logActivity("Modification droits",m+":"+r+"="+enabled);toast("Droit mis à jour","success")}
+async function adminResetDroits(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}if(!confirm("Réinitialiser tous les droits aux valeurs par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Droits réinitialisés","success");render()}
 function renderAdminAccessSocietes(view){
   const access=societeAccessSettings();
   const passwords={...(access.passwords||{})};
@@ -31029,8 +31088,9 @@ function saveAdminCandidatSectionSettings(){
 }
 function renderAdminNiveaux(view){
   const niv=ensureNiveauxAcces();
-  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Niveaux d'accès</h1><p class="text-sm text-slate-500 mt-1">Chaque niveau définit les rôles compatibles, les modules visibles et les actions autorisées.</p></div>
-    <div class="flex justify-end mb-3"><button class="btn btn-primary" onclick="openAdminNiveauModal('')">➕ Nouveau niveau</button></div>
+  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Profils d'accès</h1><p class="text-sm text-slate-500 mt-1">Un profil définit les modules visibles, le type de compte compatible et le référentiel d'actions. Il est ensuite affecté aux utilisateurs.</p></div>
+    <div class="card p-4 mb-4" style="background:#f8fafc;border-left:4px solid #7c3aed"><div class="font-black mb-1">Règle simple</div><div class="text-sm text-slate-600">Utilisateur = profil d'accès + périmètre société/site/structure. Les droits techniques restent disponibles dans la matrice avancée, mais les profils sont la méthode principale.</div></div>
+    <div class="flex justify-end gap-2 mb-3"><button class="btn btn-secondary" onclick="navigate('admin/droits')">Droits techniques</button><button class="btn btn-primary" onclick="openAdminNiveauModal('')">Nouveau profil</button></div>
     <div class="grid grid-2 gap-3">${niv.sort((a,b)=>a.weight-b.weight).map(n=>{const modules=Array.isArray(n.modules)&&n.modules.length?n.modules:["Défaut système"];const actions=Array.isArray(n.actions)&&n.actions.length?n.actions:[];const roles=Array.isArray(n.roles)&&n.roles.length?n.roles:[];return`<div class="card p-4" style="border-left:4px solid ${n.color}">
       <div class="flex justify-between items-start gap-3">
         <div><div class="font-bold text-lg" style="color:${n.color}">${escapeHTML(n.label)}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(n.code)} · poids ${n.weight}</div></div>
@@ -31038,11 +31098,11 @@ function renderAdminNiveaux(view){
       </div>
       <div class="text-sm text-slate-600 mt-2">${escapeHTML(n.description||"")}</div>
       <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-        <div><div class="font-black text-slate-500 uppercase mb-1">Rôles</div><div class="flex flex-wrap gap-1">${(roles.length?roles:["Tous"]).map(x=>`<span class="pill pill-gray">${escapeHTML(x)}</span>`).join("")}</div></div>
-        <div><div class="font-black text-slate-500 uppercase mb-1">Modules</div><div class="flex flex-wrap gap-1">${modules.slice(0,6).map(x=>`<span class="pill pill-blue">${escapeHTML(x)}</span>`).join("")}${modules.length>6?`<span class="pill pill-gray">+${modules.length-6}</span>`:""}</div></div>
-        <div><div class="font-black text-slate-500 uppercase mb-1">Actions</div><div class="flex flex-wrap gap-1">${(actions.length?actions:["Défaut"]).slice(0,5).map(x=>`<span class="pill pill-green">${escapeHTML(ADMIN_LEVEL_ACTIONS.find(a=>a.key===x)?.label||x)}</span>`).join("")}</div></div>
+        <div><div class="font-black text-slate-500 uppercase mb-1">Types</div><div class="flex flex-wrap gap-1">${(roles.length?roles:["Tous"]).map(x=>`<span class="pill pill-gray">${escapeHTML(x)}</span>`).join("")}</div></div>
+        <div><div class="font-black text-slate-500 uppercase mb-1">Modules</div><div class="flex flex-wrap gap-1">${modules.slice(0,6).map(x=>`<span class="pill pill-blue">${escapeHTML(adminProfileModuleLabel(x))}</span>`).join("")}${modules.length>6?`<span class="pill pill-gray">+${modules.length-6}</span>`:""}</div></div>
+        <div><div class="font-black text-slate-500 uppercase mb-1">Actions prévues</div><div class="flex flex-wrap gap-1">${(actions.length?actions:["Défaut"]).slice(0,5).map(x=>`<span class="pill pill-green">${escapeHTML(ADMIN_LEVEL_ACTIONS.find(a=>a.key===x)?.label||x)}</span>`).join("")}</div></div>
       </div>
-    </div>`}).join("")||`<div class="text-slate-400 text-sm">Aucun niveau.</div>`}</div>`;
+    </div>`}).join("")||`<div class="text-slate-400 text-sm">Aucun profil.</div>`}</div>`;
 }
 function adminNiveauCheckGrid(name,items,selected,cols){
   const set=new Set(Array.isArray(selected)?selected:[]);
@@ -31053,38 +31113,39 @@ function openAdminNiveauModal(code){
   const n=isNew?{code:"",label:"",description:"",weight:5,color:"#043970",roles:[],modules:[],actions:["read"],societes:[],structures:[],sensitive:[]}:db.niveauxAcces.find(x=>x.code===code);
   if(!n){toast("Niveau introuvable","error");return}
   const roles=normalizeAdminLevelList(n.roles,ADMIN_ACCESS_ROLES);
-  const modules=normalizeAdminLevelList(n.modules,ADMIN_MODULES);
+  const modules=normalizeAdminProfileModules(n.modules);
   const actions=normalizeAdminLevelList(n.actions,ADMIN_LEVEL_ACTIONS.map(a=>a.key));
   const societes=normalizeAdminLevelList(n.societes,SOCIETES);
   const structures=normalizeAdminLevelList(n.structures,ADMIN_STRUCTURES.map(s=>s.key));
   const sensitive=normalizeAdminLevelList(n.sensitive,ADMIN_LEVEL_SENSITIVE.map(s=>s.key));
-  openModal(`<h3 class="font-bold text-lg mb-1">${isNew?"➕ Nouveau niveau d'accès":"✏ Configurer le niveau"}</h3>
-    <p class="text-sm text-slate-500 mb-4">Définissez précisément ce que ce niveau peut voir et faire dans SGDI.</p>
+  openModal(`<h3 class="font-bold text-lg mb-1">${isNew?"Nouveau profil d'accès":"Configurer le profil"}</h3>
+    <p class="text-sm text-slate-500 mb-4">Définissez ce que les utilisateurs de ce profil peuvent voir et faire.</p>
     <form onsubmit="event.preventDefault();confirmAdminNiveau('${n.code||''}')" class="space-y-4">
       <div class="grid grid-2 gap-3">
-        <div><label class="label">Code *</label><input class="input" name="code" value="${escapeHTML(n.code)}" placeholder="Ex: H6 ou NIV_OPS" ${isNew?"":"readonly"}/></div>
-        <div><label class="label">Libellé *</label><input class="input" name="label" value="${escapeHTML(n.label)}" placeholder="Ex: Supervision OPS"/></div>
+        <div><label class="label">Code *</label><input class="input" name="code" value="${escapeHTML(n.code)}" placeholder="Ex: SUP_OPS ou DRH_VALIDATION" ${isNew?"":"readonly"}/></div>
+        <div><label class="label">Nom du profil *</label><input class="input" name="label" value="${escapeHTML(n.label)}" placeholder="Ex: Superviseur OPS"/></div>
         <div><label class="label">Poids hiérarchique (1-10)</label><input class="input" name="weight" type="number" min="1" max="10" value="${Number(n.weight)||5}"/></div>
         <div><label class="label">Couleur</label><input class="input" name="color" type="color" value="${escapeHTML(n.color||"#043970")}"/></div>
       </div>
-      <div><label class="label">Description</label><textarea class="input" name="description" rows="2" placeholder="Expliquez le périmètre de ce niveau">${escapeHTML(n.description||"")}</textarea></div>
-      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">1. Rôles compatibles</div>${adminNiveauCheckGrid("roles",ADMIN_ACCESS_ROLES,roles,4)}</div>
-      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">2. Modules autorisés</div><div class="text-xs text-slate-500 mb-2">Si aucun module n'est coché, le niveau utilise les droits par défaut du rôle.</div>${adminNiveauCheckGrid("modules",ADMIN_MODULES,modules,3)}</div>
+      <div><label class="label">Description</label><textarea class="input" name="description" rows="2" placeholder="Expliquez le périmètre de ce profil">${escapeHTML(n.description||"")}</textarea></div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">1. Types de compte compatibles</div>${adminNiveauCheckGrid("roles",ADMIN_ACCESS_ROLES,roles,4)}</div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">2. Modules autorisés</div><div class="text-xs text-slate-500 mb-2">Une coche sur OPS couvre aussi missions, mouvements et supervision OPS. Vide = droits par défaut du type de compte.</div>${adminNiveauCheckGrid("modules",ADMIN_PROFILE_MODULES,modules,3)}</div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div class="card p-3 bg-slate-50"><div class="font-black mb-2">3. Sociétés autorisées par défaut</div><div class="text-xs text-slate-500 mb-2">Vide = toutes, sauf restriction dans la fiche utilisateur.</div>${adminNiveauCheckGrid("societes",SOCIETES,societes,1)}</div>
-        <div class="card p-3 bg-slate-50"><div class="font-black mb-2">4. Structures autorisées par défaut</div><div class="text-xs text-slate-500 mb-2">Vide = toutes, sauf restriction dans la fiche utilisateur.</div>${adminNiveauCheckGrid("structures",ADMIN_STRUCTURES,structures,1)}</div>
+        <div class="card p-3 bg-slate-50"><div class="font-black mb-2">3. Sociétés par défaut</div><div class="text-xs text-slate-500 mb-2">Vide = toutes, sauf restriction dans la fiche utilisateur.</div>${adminNiveauCheckGrid("societes",SOCIETES,societes,1)}</div>
+        <div class="card p-3 bg-slate-50"><div class="font-black mb-2">4. Structures par défaut</div><div class="text-xs text-slate-500 mb-2">Vide = toutes, sauf restriction dans la fiche utilisateur.</div>${adminNiveauCheckGrid("structures",ADMIN_STRUCTURES,structures,1)}</div>
       </div>
-      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">5. Actions autorisées</div>${adminNiveauCheckGrid("actions",ADMIN_LEVEL_ACTIONS,actions,4)}</div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">5. Actions prévues</div><div class="text-xs text-slate-500 mb-2">Référentiel lisible du profil. Les modules cochés restent le verrou principal appliqué par l'application.</div>${adminNiveauCheckGrid("actions",ADMIN_LEVEL_ACTIONS,actions,4)}</div>
       <div class="card p-3 bg-slate-50"><div class="font-black mb-2">6. Droits sensibles</div>${adminNiveauCheckGrid("sensitive",ADMIN_LEVEL_SENSITIVE,sensitive,2)}</div>
-      <div class="flex justify-end gap-2 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer la configuration</button></div>
+      <div class="flex justify-end gap-2 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer le profil</button></div>
     </form>`);
 }
 function confirmAdminNiveau(originalCode){
+  if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}
   const f=document.querySelector(".modal-bg form");if(!f)return;
   const fd=new FormData(f);
   const code=String(fd.get("code")||"").trim().toUpperCase().replace(/\s+/g,"_");
   const label=String(fd.get("label")||"").trim();
-  if(code.length<2){toast("Code niveau obligatoire","error");return}
+  if(code.length<2){toast("Code profil obligatoire","error");return}
   if(!label){toast("Libellé obligatoire","error");return}
   const data={
     code,
@@ -31093,7 +31154,7 @@ function confirmAdminNiveau(originalCode){
     weight:Number(fd.get("weight"))||5,
     color:fd.get("color")||"#043970",
     roles:normalizeAdminLevelList(fd.getAll("roles"),ADMIN_ACCESS_ROLES),
-    modules:normalizeAdminLevelList(fd.getAll("modules"),ADMIN_MODULES),
+    modules:normalizeAdminProfileModules(fd.getAll("modules")),
     societes:normalizeAdminLevelList(fd.getAll("societes"),SOCIETES),
     structures:normalizeAdminLevelList(fd.getAll("structures"),ADMIN_STRUCTURES.map(s=>s.key)),
     actions:normalizeAdminLevelList(fd.getAll("actions"),ADMIN_LEVEL_ACTIONS.map(a=>a.key)),
@@ -31103,9 +31164,9 @@ function confirmAdminNiveau(originalCode){
   };
   if(!originalCode){if(db.niveauxAcces.find(n=>n.code===data.code)){toast("Code déjà utilisé","error");return}db.niveauxAcces.push(data);logActivity("Création niveau d'accès",data.code)}
   else{const idx=db.niveauxAcces.findIndex(n=>n.code===originalCode);if(idx<0)return;db.niveauxAcces[idx]={...db.niveauxAcces[idx],...data};logActivity("Modification niveau d'accès",data.code)}
-  saveDB();closeModal();toast("Niveau configuré","success");render();
+  saveDB();closeModal();toast("Profil configuré","success");render();
 }
-function adminDeleteNiveau(code){if(!confirm("Supprimer le niveau "+code+" ?"))return;db.niveauxAcces=db.niveauxAcces.filter(n=>n.code!==code);logActivity("Suppression niveau d'accès",code);saveDB();toast("Supprimé","success");render()}
+function adminDeleteNiveau(code){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}if(!confirm("Supprimer le profil "+code+" ?"))return;db.niveauxAcces=db.niveauxAcces.filter(n=>n.code!==code);logActivity("Suppression profil d'accès",code);saveDB();toast("Supprimé","success");render()}
 
 function defaultAdminDocumentTemplates(){
   return[
