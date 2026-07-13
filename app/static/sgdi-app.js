@@ -3594,6 +3594,8 @@ function canAccess(key){
   if(!session)return false;
   const r=session.role;
   const level=accessLevelRecord(session.niveau);
+  const host=adminModuleHostKey(key);
+  if(isOpsSupervisorReadOnlySession()&&["ops","pointage"].includes(host||String(key||"").toLowerCase()))return true;
   if(level&&!levelAllowsModule(level,key))return false;
   const droits=(db&&db.droitsAcces&&typeof db.droitsAcces==="object")?db.droitsAcces:null;
   if(droits&&Object.keys(droits).length){
