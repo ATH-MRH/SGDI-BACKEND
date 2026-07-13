@@ -7888,3 +7888,150 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .fp-page.fp-stable-layout .fp-display-controls{grid-template-columns:1fr 82px 128px!important}
   #view .fp-page.fp-stable-layout .fp-display-controls>label{display:none!important}
 }
+
+/* Topbar visibility guard: keep the company/module strip visible after cache
+   refreshes and later page-scoped layout overrides. */
+.sgdi-shell > .sgdi-topbar{
+  display:grid!important;
+  grid-template-columns:minmax(360px,1fr) auto minmax(0,auto)!important;
+  align-items:center!important;
+  width:100%!important;
+  min-height:40px!important;
+  flex:0 0 40px!important;
+  padding:0 24px 0 10px!important;
+  gap:14px!important;
+  position:relative!important;
+  z-index:1000!important;
+  overflow:hidden!important;
+  background:#011b3f!important;
+  border-bottom:1px solid #062b5f!important;
+  color:#fff!important;
+}
+.sgdi-shell > .sgdi-topbar .sgdi-topbar-left,
+.sgdi-shell > .sgdi-topbar .sgdi-topbar-left-module{
+  display:flex!important;
+  align-items:center!important;
+  min-width:0!important;
+  overflow:hidden!important;
+}
+.sgdi-shell > .sgdi-topbar .text-slate-500,
+.sgdi-shell > .sgdi-topbar .text-slate-400{
+  color:#c2d0e5!important;
+}
+.sgdi-shell > .sgdi-topbar .sgdi-topbar-title-right,
+.sgdi-shell > .sgdi-topbar .sgdi-topbar-module-title,
+.sgdi-shell > .sgdi-topbar .sgdi-topbar-module-title-active{
+  color:#fff!important;
+  justify-self:end!important;
+  text-align:right!important;
+}
+@media(max-width:767px){
+  .sgdi-shell > .sgdi-topbar{
+    display:flex!important;
+    flex-wrap:wrap!important;
+    min-height:40px!important;
+    height:auto!important;
+    flex-basis:auto!important;
+    padding:6px 8px!important;
+    overflow:visible!important;
+  }
+}
+
+/* DRH effectifs: boxed action strip, matching the fiche action style. */
+#view .drh-effectif-actions-card{
+  width:100%!important;
+  margin:0 0 14px!important;
+  padding:20px 20px 38px!important;
+  border:1px solid #d7e4f2!important;
+  border-radius:6px!important;
+  background:#fff!important;
+  box-shadow:none!important;
+  box-sizing:border-box!important;
+}
+#view .drh-effectif-actions-head{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:16px!important;
+  margin:0 0 14px!important;
+}
+#view .drh-effectif-actions-head h3{
+  margin:0!important;
+  color:#24364c!important;
+  font-size:12px!important;
+  font-weight:950!important;
+  letter-spacing:.04em!important;
+  text-transform:uppercase!important;
+}
+#view .drh-effectif-actions-head span{
+  color:#64748b!important;
+  font-size:12px!important;
+  font-weight:500!important;
+  white-space:nowrap!important;
+}
+#view .drh-effectif-actions-card .drh-effectif-actions-bar{
+  width:100%!important;
+  margin:0!important;
+  padding:0!important;
+  display:grid!important;
+  grid-template-columns:repeat(12,minmax(0,1fr))!important;
+  gap:6px!important;
+  overflow:visible!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+#view .drh-effectif-actions-card .drh-effectif-action-btn{
+  width:100%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:38px!important;
+  min-height:38px!important;
+  padding:0 8px!important;
+  border:1px solid #cfd9e6!important;
+  border-radius:0!important;
+  background:#f8fafc!important;
+  color:#06264a!important;
+  box-shadow:none!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  font-size:10px!important;
+  font-weight:950!important;
+  line-height:1.05!important;
+  letter-spacing:0!important;
+  text-transform:uppercase!important;
+  white-space:normal!important;
+  word-break:normal!important;
+  overflow-wrap:normal!important;
+}
+#view .drh-effectif-actions-card .drh-effectif-action-btn:hover{
+  background:#eef3f8!important;
+  border-color:#b8c6d6!important;
+  color:#011b3f!important;
+  text-decoration:none!important;
+}
+@media(max-width:1320px){
+  #view .drh-effectif-actions-card .drh-effectif-actions-bar{
+    grid-template-columns:repeat(6,minmax(128px,1fr))!important;
+    overflow-x:auto!important;
+  }
+}
+@media(max-width:767px){
+  #view .drh-effectif-actions-card{
+    padding:14px!important;
+  }
+  #view .drh-effectif-actions-head{
+    align-items:flex-start!important;
+    flex-direction:column!important;
+    gap:4px!important;
+  }
+  #view .drh-effectif-actions-head span{
+    white-space:normal!important;
+  }
+  #view .drh-effectif-actions-card .drh-effectif-actions-bar{
+    grid-template-columns:repeat(2,minmax(132px,1fr))!important;
+    overflow-x:auto!important;
+  }
+}

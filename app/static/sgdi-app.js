@@ -11484,19 +11484,26 @@ function effectifRecapCardsHTML(activeFilter,showTitle,stable){
 }
 function drhEffectifActionsBarHTML(){
   const btns=[
-    {k:"detail",           l:"Détail",           c:"#1e3a8a"},
-    {k:"conge",            l:"Congé",             c:"#0369a1"},
-    {k:"rec_periode_essai",l:"Période d'essai",   c:"#7c3aed"},
-    {k:"suspendre",        l:"Suspendre",          c:"#dc2626"},
-    {k:"convoquer",        l:"Convoquer",          c:"#0c4a6e"},
-    {k:"blacklister",      l:"Blacklist",          c:"#111827"},
-    {k:"mise_en_demeure",  l:"Mise en demeure",    c:"#b45309"},
-    {k:"sanctionner",      l:"Sanctionner",        c:"#9f1239"},
-    {k:"avenant",          l:"Avenant",            c:"#0f766e"},
-    {k:"nouveau_contrat",  l:"Nouveau contrat",    c:"#1d4ed8"},
-    {k:"fin_contrat",      l:"Fin de contrat",     c:"#374151"},
+    {k:"detail",           l:"DETAIL",             c:"#1e3a8a"},
+    {k:"conge",            l:"CONGÉ",              c:"#0369a1"},
+    {k:"rec_periode_essai",l:"REC/PERIODE D'ESSAI",c:"#7c3aed"},
+    {k:"suspendre",        l:"SUSPENDRE",          c:"#dc2626"},
+    {k:"convoquer",        l:"CONVOQUER",          c:"#0c4a6e"},
+    {k:"blacklister",      l:"BLACKLISTER",        c:"#111827"},
+    {k:"mise_en_demeure",  l:"MISE EN DEMEURE",    c:"#b45309"},
+    {k:"periode_enc",      l:"PERIODE E-N-C",      c:"#7c2d12"},
+    {k:"sanctionner",      l:"SANCTIONNER",        c:"#9f1239"},
+    {k:"avenant",          l:"AVENANT",            c:"#0f766e"},
+    {k:"nouveau_contrat",  l:"NOUVEAU CONTRAT",    c:"#1d4ed8"},
+    {k:"fin_contrat",      l:"FIN DE CONTRAT",     c:"#374151"},
   ];
-  return `<div class="drh-effectif-actions-bar">${btns.map(({k,l,c})=>`<button type="button" class="drh-effectif-action-title" onclick="openRhEffectifActionModal('${k}')" style="--action-color:${c}">${l}</button>`).join("")}</div>`;
+  return `<section class="drh-effectif-actions-card">
+    <div class="drh-effectif-actions-head">
+      <h3>Actions à faire</h3>
+      <span>Fiche en lecture seule · actions RH autorisées</span>
+    </div>
+    <div class="drh-effectif-actions-bar">${btns.map(({k,l,c})=>`<button type="button" class="drh-effectif-action-btn" onclick="openRhEffectifActionModal('${k}')" style="--action-color:${c}">${l}</button>`).join("")}</div>
+  </section>`;
 }
 function rhEffectifActionsHTML(){
   const actions=drhEmployeeActionLabels(false);
@@ -13140,11 +13147,7 @@ function renderAgentForm(view,id){
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
     ${isMaterielFicheContext()?"":renderAgentDemandesSection(a)}
     <form id="agent-form" onsubmit="event.preventDefault();saveAgent('${a.id}')">
-      <div class="card p-5 mb-4">
-        ${a.blacklist?`<div class="card p-3 mb-3" style="background:#1f2937;color:#fff;border:2px solid #000"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex items-center gap-2"><div style="font-size:24px">⛔</div><div><div class="text-xs uppercase tracking-wider font-black" style="color:#f87171">⛔ BLACK LIST</div><div class="text-xs">Inscrit le ${a.blacklistAt?new Date(a.blacklistAt).toLocaleDateString("fr-FR"):"?"} par <strong>${escapeHTML(a.blacklistBy||"?")}</strong></div>${a.blacklistMotif?`<div class="text-xs italic mt-1">Motif : ${escapeHTML(a.blacklistMotif)}</div>`:""}</div></div>${adminFicheContext?`<button type="button" class="btn btn-secondary text-xs" onclick="removeBlackList('${a.id}')">↩ Retirer de la black list</button>`:""}</div></div>`:""}
-        <div class="flex items-center justify-between gap-3 flex-wrap mb-3"><h3 class="text-sm font-black uppercase tracking-wider text-slate-700">Actions à faire</h3><span class="text-xs text-slate-500">${locked?"Fiche en lecture seule · actions RH autorisées":"Administration système"}</span></div>
-        ${employeeFicheRhActionsHTML(a)}
-      </div>
+      ${a.blacklist?`<div class="card p-3 mb-4" style="background:#1f2937;color:#fff;border:2px solid #000"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex items-center gap-2"><div style="font-size:24px">⛔</div><div><div class="text-xs uppercase tracking-wider font-black" style="color:#f87171">⛔ BLACK LIST</div><div class="text-xs">Inscrit le ${a.blacklistAt?new Date(a.blacklistAt).toLocaleDateString("fr-FR"):"?"} par <strong>${escapeHTML(a.blacklistBy||"?")}</strong></div>${a.blacklistMotif?`<div class="text-xs italic mt-1">Motif : ${escapeHTML(a.blacklistMotif)}</div>`:""}</div></div>${adminFicheContext?`<button type="button" class="btn btn-secondary text-xs" onclick="removeBlackList('${a.id}')">↩ Retirer de la black list</button>`:""}</div></div>`:""}
       <div class="fp-tabs rh-erp-tabs">
         ${fpTabs.map(([k,l],i)=>`<button type="button" data-fp-tab="${k}" class="${i===0?"is-active":""}" onclick="fichePositionSwitchTab('${k}')">${l}</button>`).join("")}
       </div>
