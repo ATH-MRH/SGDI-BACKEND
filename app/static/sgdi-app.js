@@ -1450,6 +1450,13 @@ function sgdiEnsureEmployeesForDisplay(options){
   }).finally(()=>{sgdiEmployeesDisplayLoading=false});
 }
 async function sgdiRunLegacyAction(action,payload){
+  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
+    const allowed=new Set(["save-pointage-cell","upsert-presence-line","add-presence-agent"]);
+    if(!allowed.has(String(action||""))){
+      toast("Accès superviseur OPS : action non autorisée. Seule la saisie pointage est autorisée.","error");
+      throw new Error("Action non autorisée pour SUPERVISEUR OPS");
+    }
+  }
   const out=await SGDI.actions.run(action,payload||{});
   if(out&&out.data&&typeof out.data==="object"){
     const data=out.data;
@@ -3598,6 +3605,29 @@ function canAccess(key){
   const map=defaultAccessMap();
   const base=adminAccessBaseRole(r);
   return (map[key]||["admin"]).includes(base);
+}
+function isOpsSupervisorReadOnlySession(){
+  if(!session||session.transverse!=="ops")return false;
+  const role=String(session.role||"");
+  const base=adminAccessBaseRole(role);
+  const username=String(session.username||"");
+  const name=String(session.nom||"");
+  const level=accessLevelRecord(session.niveau);
+  const levelText=[session.niveau,level?.label,level?.description].filter(Boolean).join(" ");
+  return base==="dispatch"||/^SUP/i.test(role)||/^SUP/i.test(username)||/^SUP/i.test(name)||/superviseur|supervision\s*ops/i.test(levelText);
+}
+function canOpsSupervisorMutate(kind){
+  if(!isOpsSupervisorReadOnlySession())return true;
+  return kind==="pointage";
+}
+function guardOpsSupervisorMutation(kind,message){
+  if(canOpsSupervisorMutate(kind))return false;
+  toast(message||"Accès superviseur OPS : modification non autorisée. Seule la saisie pointage est autorisée.","error");
+  return true;
+}
+function opsSupervisorReadOnlyNoticeHTML(){
+  if(!isOpsSupervisorReadOnlySession())return"";
+  return `<div class="card p-3 mb-4" style="border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:13px;font-weight:800">Mode superviseur OPS : consultation uniquement. La saisie pointage reste autorisée.</div>`;
 }
 function mySoc(){return session?.societe||""}
 function isDrhModuleContext(){const h=(location.hash||"").slice(2);return session?.transverse==="drh"||h.startsWith("drh")}
@@ -9458,6 +9488,7 @@ function renderAvenants(view){
 }
 function nextAvenantNumero(){const y=new Date().getFullYear();const n=(db.avenants||[]).filter(a=>String(a.numero||"").includes(String(y))).length+1;return`AV-${y}-${String(n).padStart(4,"0")}`}
 function openAvenantModal(mode,selectedAgentId){
+  if(guardOpsSupervisorMutation("contrat","Accès superviseur OPS : édition contrat non autorisée."))return;
   mode=mode||"general";
   const soc=currentStructureSocieteFilter()||mySoc()||"";
   const agents=db.agents.filter(a=>a.statut!=="archive"&&(!soc||a.societe===soc)).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
@@ -10746,6 +10777,7 @@ function openDrhContractModal(agentId){
   openEmployeeNewContractModal(agentId,{allowExistingContract:true});
 }
 function openEmployeeNewContractModal(agentId,options){
+  if(guardOpsSupervisorMutation("contrat","Accès superviseur OPS : création contrat non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Nouveau contrat non autorisé depuis ce module","error");return}
   const allowExistingContract=!!(options&&options.allowExistingContract);
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];
@@ -11540,6 +11572,7 @@ function rhEffectifActionTargets(){
   return (db.agents||[]).filter(a=>!soc||a.societe===soc).sort((a,b)=>((a.nom||"")+" "+(a.prenom||"")).localeCompare((b.nom||"")+" "+(b.prenom||"")));
 }
 function openRhEffectifActionModal(action){
+  if(action!=="detail"&&guardOpsSupervisorMutation("employee-action","Accès superviseur OPS : action RH non autorisée."))return;
   const list=rhEffectifActionTargets();
   if(!list.length){toast("Aucun employé disponible pour cette action","error");return}
   const label=rhEffectifActionLabel(action);
@@ -11554,6 +11587,7 @@ function runRhEffectifAction(action,agentId){
   closeModal();
   closeEmployeeRowActions();
   if(action==="detail")return openEmployeeStatusDetailModal(agentId);
+  if(guardOpsSupervisorMutation("employee-action","Accès superviseur OPS : action RH non autorisée."))return;
   if(action==="muter")return openOpsMutationModal(agentId);
   if(action==="demande_nouvelle_dotation")return openOpsDotationRequestModal(agentId);
   if(action==="conge")return openGestionModal(agentId,"Congé");
@@ -11703,6 +11737,7 @@ function printEmployeeSuspensionDecisionFromForm(form){
   w.document.close();
 }
 function openEmployeeSuspensionModal(agentId){
+  if(guardOpsSupervisorMutation("suspension","Accès superviseur OPS : suspension non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Suspension non autorisée depuis ce module","error");return}
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];
   if(!selected){toast("Aucun employé disponible","error");return}
@@ -11821,6 +11856,7 @@ function printEmployeeConvocationFromForm(form){
   w.document.close();
 }
 function openEmployeeConvocationModal(agentId){
+  if(guardOpsSupervisorMutation("convocation","Accès superviseur OPS : convocation non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Convocation non autorisée depuis ce module","error");return}
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];
   if(!selected){toast("Aucun employé disponible","error");return}
@@ -11954,6 +11990,7 @@ function sendDocumentToAgentPortail(a,subject,message){
   return true;
 }
 function openPeriodeEncModal(agentId){
+  if(guardOpsSupervisorMutation("periode-essai","Accès superviseur OPS : période d'essai non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Action RH non autorisée depuis ce module","error");return}
   const a=findEmployeeByRef(agentId);if(!a){toast("Employé introuvable","error");return}
   const dateFinEssai=a.dateFinEssai||"";
@@ -12235,6 +12272,7 @@ function miseEnDemeureDraftFromForm(form){
   return {a,title:"MISE EN DEMEURE",reference,dateDecision,dateEffet:dateDecision,dateLimite,motif,details,motifTitle:"Objet de la mise en demeure",intro:"La Direction des Ressources Humaines met officiellement en demeure l'employé(e) concerné(e) pour les faits indiqués ci-dessous.",closing:"L'intéressé(e) est tenu(e) de régulariser sa situation dans les délais indiqués. A défaut, des mesures disciplinaires pourront être engagées."};
 }
 function openEmployeeMiseEnDemeureModal(agentId){
+  if(guardOpsSupervisorMutation("mise-en-demeure","Accès superviseur OPS : mise en demeure non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Mise en demeure non autorisée depuis ce module","error");return}
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];if(!selected){toast("Aucun employé disponible","error");return}
   openModal(`<div class="flex items-start justify-between gap-3 mb-3 flex-wrap"><h3 class="font-bold text-lg">MISE EN DEMEURE</h3><div style="min-width:240px"><label class="label">Référence décision</label><input class="input bg-slate-50" name="reference" form="employee-mise-form" value="${escapeHTML(rhDecisionReference("MED",selected,today()))}" readonly/></div></div>
@@ -12336,6 +12374,7 @@ function confirmFinRelationFromControl(control){
   confirmEmployeeFinRelation(form);
 }
 function openEmployeeFinRelationModal(agentId){
+  if(guardOpsSupervisorMutation("contrat","Accès superviseur OPS : fin de contrat non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Fin de relation non autorisée depuis ce module","error");return}
   const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];if(!selected){toast("Aucun employé disponible","error");return}
   const trialExpired=employeeTrialExpired(selected);
@@ -12534,6 +12573,7 @@ function isOpsEffectifContext(){
   return session?.transverse==="ops"||sessionStorage.getItem("ficheContext")==="ops";
 }
 function canUseOpsEmployeeActionWorkflows(){
+  if(isOpsSupervisorReadOnlySession())return false;
   return isOpsEffectifContext()||isOpsFicheContext()||session?.transverse==="ops";
 }
 function canUseEmployeeActionWorkflows(){
@@ -13430,6 +13470,7 @@ function opsSuspensionPreviewHTML(a,draft,ref){
   return `<div class="space-y-3"><div class="p-3 rounded bg-red-50 border border-red-100"><div class="text-xs text-red-700 font-black uppercase">Demande de suspension</div><div class="font-black text-lg">${escapeHTML((a.nom||"")+" "+(a.prenom||""))} · ${escapeHTML(a.matricule||"—")}</div><div class="text-sm text-red-800">Délai maximum : ${formatDate(draft.dateDebut)} au ${formatDate(draft.dateFin)} inclus.</div></div><div class="grid grid-cols-2 gap-2 text-sm"><div class="p-2 bg-slate-50 rounded"><b>Société</b><br>${escapeHTML(a.societe||"—")}</div><div class="p-2 bg-slate-50 rounded"><b>Affectation</b><br>${escapeHTML(a.affectationCourante?.siteName||"Sans affectation")}</div><div class="p-2 bg-slate-50 rounded"><b>Pièce</b><br>${escapeHTML(draft.pieceType)}</div><div class="p-2 bg-slate-50 rounded"><b>Validation DRH attendue</b><br>03 heures</div></div><div><div class="label">Motif</div><div class="p-3 rounded border border-slate-200 whitespace-pre-wrap text-sm">${escapeHTML(draft.motif)}</div></div></div>`;
 }
 function openOpsSuspensionModal(agentId,draft){
+  if(guardOpsSupervisorMutation("suspension","Accès superviseur OPS : suspension non autorisée."))return;
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Agent introuvable","error");return}
   const d=draft||{motif:"",dateDebut:today(),pieceType:"Compte rendu"};
   openModal(`<h3 class="font-bold text-lg mb-3">Suspendre un employé</h3><form onsubmit="event.preventDefault();previewOpsSuspension('${agentId}',this)">
@@ -13443,6 +13484,7 @@ function openOpsSuspensionModal(agentId,draft){
   </form>`);
 }
 function previewOpsSuspension(agentId,form){
+  if(guardOpsSupervisorMutation("suspension","Accès superviseur OPS : suspension non autorisée."))return;
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(form);const motif=String(fd.get("motif")||"").trim();const dateDebut=String(fd.get("dateDebut")||"").trim();const pieceType=String(fd.get("pieceType")||"").trim();
   if(!motif||!dateDebut||!pieceType){toast("Renseignez tous les champs obligatoires","error");return}
@@ -13458,11 +13500,13 @@ function openOpsSuspensionPreviewAgain(){
   openModal(`<h3 class="font-bold text-lg mb-3">Aperçu de la demande</h3>${opsSuspensionPreviewHTML(a,pack.draft,pack.ref)}<div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsSuspensionModal('${pack.agentId}',window._opsSuspensionDraft.draft)">Modifier</button><button type="button" class="btn btn-primary" onclick="openOpsSuspensionRecipients()">Envoyer</button></div>`);
 }
 function openOpsSuspensionRecipients(){
+  if(guardOpsSupervisorMutation("suspension","Accès superviseur OPS : suspension non autorisée."))return;
   const pack=window._opsSuspensionDraft;if(!pack)return;
   const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
   openModal(`<h3 class="font-bold text-lg mb-3">Envoyer la demande de suspension</h3>${opsSuspensionPreviewHTML(a,pack.draft,pack.ref)}<form onsubmit="event.preventDefault();sendOpsSuspensionRequest(this)"><div class="mt-4"><label class="label">Destinataires membres SGDI</label>${opsSuspensionRecipientsHTML()}</div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsSuspensionPreviewAgain()">Retour</button><button class="btn btn-primary">Envoyer</button></div></form>`);
 }
 async function sendOpsSuspensionRequest(form){
+  if(guardOpsSupervisorMutation("suspension","Accès superviseur OPS : suspension non autorisée."))return;
   const pack=window._opsSuspensionDraft;if(!pack)return;
   const a=(db.agents||[]).find(x=>x.id===pack.agentId);if(!a)return;
   ensureDemandesStructure();
@@ -13732,6 +13776,7 @@ function printLeaveTitleFromForm(agentId,form){
   w.document.close();
 }
 function openGestionModal(agentId,type){
+  if(guardOpsSupervisorMutation("employee-action","Accès superviseur OPS : action RH non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Action RH non autorisée depuis ce module","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const isTrial=type==="Période d'essai";
@@ -14096,6 +14141,7 @@ async function deleteSelectedEffectifEmployees(){
   renderView();
 }
 function openReaffectation(agentId){
+  if(guardOpsSupervisorMutation("affectation","Accès superviseur OPS : affectation non autorisée."))return;
   if(!isAdminFichePositionContext()&&sgdiViewModeActive){toast("Affectation verrouillée : modification réservée à Administration système > Fiche de position","error");return}
   if(!isOpsFicheContext()&&!isAdminFichePositionContext()){toast("Nouvelle affectation réservée au module OPS","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
@@ -14125,6 +14171,7 @@ function opsFindSite(ref){
   return (db.sites||[]).find(s=>String(s.id)===lookup||String(s.backendId||"")===lookup||String(s.indicatif||"")===lookup)||null;
 }
 function openOpsMutationModal(agentId){
+  if(guardOpsSupervisorMutation("affectation","Accès superviseur OPS : affectation non autorisée."))return;
   if(!canUseOpsEmployeeActionWorkflows()){toast("Affectation réservée au module OPS","error");return}
   const a=opsFindEmployee(agentId);if(!a){toast("Employé introuvable","error");return}
   if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||""))){toast("Affectation impossible — cet employé est sortant de la société","error");return}
@@ -14222,6 +14269,7 @@ async function persistSqlAssignment(employeeBackendId,siteBackendId,groupe,dateD
   }catch(e){console.warn("Création assignment SQL échouée",e);return null}
 }
 async function confirmOpsMutation(agentId,form){
+  if(guardOpsSupervisorMutation("affectation","Accès superviseur OPS : affectation non autorisée."))return;
   const a=opsFindEmployee(agentId);if(!a)return;
   if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||""))){toast("Affectation impossible — cet employé est sortant de la société","error");return}
   const fd=new FormData(form);const siteId=String(fd.get("siteId")||"");const site=opsFindSite(siteId);
@@ -14248,6 +14296,7 @@ async function confirmOpsMutation(agentId,form){
   closeModal();toast("Affectation enregistrée","success");renderView();
 }
 function openOpsDotationRequestModal(agentId){
+  if(guardOpsSupervisorMutation("dotation","Accès superviseur OPS : demande de dotation non autorisée."))return;
   if(!canUseOpsEmployeeActionWorkflows()){toast("Demande de dotation réservée au module OPS","error");return}
   const a=db.agents.find(x=>String(x.id)===String(agentId));if(!a){toast("Employé introuvable","error");return}
   openModal(`<h3 class="font-bold text-lg mb-1">D.N.DOTATION</h3><p class="text-sm text-slate-500 mb-3">Demande nouvelle dotation · ${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} · ${escapeHTML(a.matricule||"—")}</p>
@@ -14260,6 +14309,7 @@ function openOpsDotationRequestModal(agentId){
     </form>`);
 }
 async function confirmOpsDotationRequest(agentId,form){
+  if(guardOpsSupervisorMutation("dotation","Accès superviseur OPS : demande de dotation non autorisée."))return;
   const a=db.agents.find(x=>String(x.id)===String(agentId));if(!a)return;
   const fd=new FormData(form);
   const name=((a.nom||"")+" "+(a.prenom||"")).trim();
@@ -14269,6 +14319,7 @@ async function confirmOpsDotationRequest(agentId,form){
   closeModal();toast("Demande transmise à Matériel","success");renderView();
 }
 async function confirmReaffectation(agentId){
+  if(guardOpsSupervisorMutation("affectation","Accès superviseur OPS : affectation non autorisée."))return;
   const a=db.agents.find(x=>x.id===agentId);
   if(!a)return;
   if(EMPLOYEE_FORMER_STATUS_KEYS.has(employeeStatusKey(a.statut||a.status||""))){toast("Affectation impossible — cet employé est sortant de la société","error");return}
@@ -14301,6 +14352,7 @@ async function confirmReaffectation(agentId){
   closeModal();toast("Affectation enregistrée","success");renderView();
 }
 function openSanctionModal(agentId){
+  if(guardOpsSupervisorMutation("sanction","Accès superviseur OPS : sanction non autorisée."))return;
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const siteCourant=agentLiveAffectation(a)?.siteId||"";
   const sitesOpts=`<option value="">—</option>`+db.sites.map(s=>`<option value="${s.id}" data-indicatif="${escapeHTML(s.indicatif||"")}" ${s.id===siteCourant?"selected":""}>${escapeHTML(s.nom)}</option>`).join("");
@@ -14362,6 +14414,7 @@ function sanctionDraftFromForm(agentId,form){
   return {a,title:"DECISION DE SANCTION DISCIPLINAIRE",reference,dateDecision,dateEffet:type==="Mise à pied"?dateMiseAPiedDebut:dateDebut,motif,details,motifTitle:"Faute et sanction retenues",intro:"La Direction des Ressources Humaines notifie à l'employé(e) concerné(e) la sanction disciplinaire indiquée ci-dessous.",closing:"La présente décision sera versée au dossier administratif de l'employé(e).",siteId,site,indicatif:fd.get("indicatif")||"",type:"sanction",sanctionType:type,faute,observation,joursMiseAPied,dateDebut,dateMiseAPiedDebut,dateMiseAPiedFin,dateReprise,dateInfraction:fd.get("dateInfraction")||dateDecision,noSignature:true};
 }
 async function confirmSanction(agentId,form){
+  if(guardOpsSupervisorMutation("sanction","Accès superviseur OPS : sanction non autorisée."))return;
   const draft=sanctionDraftFromForm(agentId,form);const a=draft?.a;if(!a)return;
   if(!draft.faute){toast("Décrivez la faute reprochée","error");return}
   if(!draft.sanctionType){toast("Choisissez la sanction","error");return}
@@ -14394,7 +14447,7 @@ async function confirmSanction(agentId,form){
   if(printWindow)printRhDecisionWindow(a,{...draft,a},printWindow);else toast("Sanction enregistrée, mais l'impression a été bloquée","warn");
   closeModal();toast("Sanction enregistrée","success");renderView();
 }
-async function deleteSanction(agentId,idx){if(!confirm("Supprimer ?"))return;const a=db.agents.find(x=>x.id===agentId);a.sanctions.splice(idx,1);try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){toast("Suppression sanction non enregistrée : "+(e.message||e),"error");return}if(!(await saveDBAndWaitToast("Suppression sanction non confirmée")))return;renderView()}
+async function deleteSanction(agentId,idx){if(guardOpsSupervisorMutation("sanction","Accès superviseur OPS : sanction non autorisée."))return;if(!confirm("Supprimer ?"))return;const a=db.agents.find(x=>x.id===agentId);a.sanctions.splice(idx,1);try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){toast("Suppression sanction non enregistrée : "+(e.message||e),"error");return}if(!(await saveDBAndWaitToast("Suppression sanction non confirmée")))return;renderView()}
 
 
 
@@ -14403,6 +14456,7 @@ function opsConvocationDocumentHTML(a,d,ref){
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(ref)}</title></head><body><div class="head"><div class="brand">SGDI - DRH</div><div>Référence : ${escapeHTML(ref)} · Date : ${formatDate(today())}</div></div><h1>Convocation officielle</h1><div class="meta"><div class="k">Destinataire</div><div>${escapeHTML(agentName)} (${escapeHTML(a.matricule||"—")})</div><div class="k">Société</div><div>${escapeHTML(a.societe||"—")}</div><div class="k">Site</div><div>${escapeHTML(a.affectationCourante?.siteName||"—")}</div><div class="k">Date convocation</div><div>${formatDate(d.dateConvocation)}</div><div class="k">Heure</div><div>${escapeHTML(d.heure||"—")}</div><div class="k">Lieu</div><div>${escapeHTML(d.lieu||"DRH")}</div></div><p>Vous êtes convoqué(e) officiellement par la Direction des Ressources Humaines pour le motif indiqué ci-dessous.</p><h3>Objet / motif</h3><div class="box">${escapeHTML(d.motif)}</div><p>La présence de l'intéressé(e) est obligatoire à la date et l'heure indiquées.</p><div class="sign"><span>Signature DRH</span></div></body></html>`;
 }
 function openOpsConvocationModal(agentId){
+  if(guardOpsSupervisorMutation("convocation","Accès superviseur OPS : convocation non autorisée."))return;
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Agent introuvable","error");return}
   openModal(`<h3 class="font-bold text-lg mb-3">Demander une convocation DRH</h3><form onsubmit="event.preventDefault();sendOpsConvocationRequest('${agentId}',this)">
     <div class="p-3 rounded bg-blue-50 text-sm text-blue-800 mb-3">La DRH recevra une demande et pourra envoyer la convocation officielle dans le portail RH de l'employé.</div>
@@ -14416,6 +14470,7 @@ function openOpsConvocationModal(agentId){
   </form>`);
 }
 async function sendOpsConvocationRequest(agentId,form){
+  if(guardOpsSupervisorMutation("convocation","Accès superviseur OPS : convocation non autorisée."))return;
   const a=(db.agents||[]).find(x=>x.id===agentId);if(!a)return;
   const fd=new FormData(form);const motif=String(fd.get("motif")||"").trim();if(!motif){toast("Motif obligatoire","error");return}
   ensureDemandesStructure();
@@ -14496,6 +14551,7 @@ function blacklistDraftFromForm(form){
   return {a,title:"DECISION D'INSCRIPTION SUR BLACKLIST",reference,dateDecision,dateEffet:dateDecision,motif,details,motifTitle:"Motif d'inscription sur blacklist",intro:"La Direction des Ressources Humaines décide l'inscription de l'employé(e) concerné(e) sur la blacklist interne selon les éléments ci-dessous.",closing:"Cette décision bloque toute nouvelle contractualisation ou réembauche sans levée administrative expresse."};
 }
 function openBlackListModal(agentId){
+  if(guardOpsSupervisorMutation("blacklist","Accès superviseur OPS : blacklist non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Black list non autorisée depuis ce module","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(a.blacklist){
@@ -14520,6 +14576,7 @@ function openBlackListModal(agentId){
     </form>`);
 }
 async function confirmBlackList(form){
+  if(guardOpsSupervisorMutation("blacklist","Accès superviseur OPS : blacklist non autorisée."))return;
   const draft=blacklistDraftFromForm(form);
   const a=draft.a;if(!a){toast("Employé introuvable","error");return}
   if(a.blacklist){toast("Cet employé est déjà sur la blacklist","error");return}
@@ -14546,6 +14603,7 @@ async function confirmBlackList(form){
   closeModal();toast("⛔ Agent inscrit sur la black list","success");renderView();
 }
 async function removeBlackList(agentId){
+  if(guardOpsSupervisorMutation("blacklist","Accès superviseur OPS : blacklist non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()&&!isAdminFichePositionContext()){toast("Retrait black list non autorisé pour cet utilisateur","error");return}
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   if(!confirm("Retirer "+a.nom+" "+a.prenom+" de la black list ?"))return;
@@ -14963,12 +15021,14 @@ async function renderSitesServer(view){
     window.__SGDI_SITE_SITUATION_DATA=situationData||null;
     window.__SGDI_SITE_SITUATION_BY_SITE=situationBySite;
     const pagination=sgdiServerPaginationHTML("sites",soc||"all",result);
-    view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
+    const opsReadOnly=isOpsSupervisorReadOnlySession();
+    view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
+    ${opsSupervisorReadOnlyNoticeHTML()}
     ${sitesSocieteSelectorHTML(mapSites)}
     ${session?.transverse==="materiel"?"":situationData?siteSyntheseServerHTML(situationData,mapSites):siteSyntheseGeneraleHTML(mapSites)}
     ${siteMapDashboardHTML(mapSites)}
     <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
-    ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const metric=siteBackendMetricForSite(s,situationBySite);const eff={...siteEffectifsNorm(s),totalContractuel:metric.contractual};const manque=metric.missing;const surplus=metric.surplus;const realized=metric.realized;const op=metric.operational;const archived=s.actif===false||s.active===0||s.statut==="inactif";const lampOk=eff.totalContractuel>0&&realized===eff.totalContractuel;const lampKo=eff.totalContractuel>0&&realized!==eff.totalContractuel;const sid2=siteEditRouteId(s);return `<div class="card p-5 site-card ${archived?"opacity-75":""}" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-surplus="${surplus}" data-site-instance="${realized===0?1:0}" data-site-contractuel="${eff.totalContractuel}" data-site-realise="${realized}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black flex items-center gap-2 flex-wrap"><span class="site-status-lamp ${lampOk?"lamp-green":lampKo?"lamp-red":"lamp-gray"}" title="${lampOk?"Effectif conforme":surplus>0?"Surplus +"+surplus:manque>0?"Manque −"+manque:"Effectif non défini"}"></span>${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span> ${archived?`<span class="pill pill-gray ml-2">Archivé</span>`:`<span class="pill pill-green ml-2">Actif</span>`}</h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${sid2}">Modifier</a>${siteAdminSystemActionsHTML(s)}</div></div>${siteEffectifAlertHTML(eff,{length:realized})}<div class="grid grid-6 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel||0}</div></div><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Jour</div><div class="text-lg font-bold">${eff.jour||0}</div></div><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Nuit</div><div class="text-lg font-bold">${eff.nuit||0}</div></div><button type="button" class="p-2 rounded border text-center transition ${surplus>0?"hover:opacity-80":"hover:bg-blue-50 hover:border-blue-300 bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74":""}" onclick="event.stopPropagation();openSiteAffectesModal('${sid2}')"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Affecté</div><div class="text-lg font-bold">${realized}</div></button><div class="p-2 rounded border text-center ${surplus>0?"":"bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74;color:#c2410c":""}"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Surplus</div><div class="text-lg font-bold">${surplus>0?"+"+surplus:0}</div></div><div class="p-2 rounded border text-center ${manque>0?"":"bg-slate-50 border-slate-200"}" style="${manque>0?"background:#fef2f2;border-color:#fca5a5;color:#991b1b":""}"><div class="font-semibold ${manque>0?"":"text-slate-500"}">Manque</div><div class="text-lg font-bold">${manque>0?"−"+manque:0}</div></div></div>${siteMovementHistoryHTML(s)}</div>`}).join("")}</div>`}
+    ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const metric=siteBackendMetricForSite(s,situationBySite);const eff={...siteEffectifsNorm(s),totalContractuel:metric.contractual};const manque=metric.missing;const surplus=metric.surplus;const realized=metric.realized;const op=metric.operational;const archived=s.actif===false||s.active===0||s.statut==="inactif";const lampOk=eff.totalContractuel>0&&realized===eff.totalContractuel;const lampKo=eff.totalContractuel>0&&realized!==eff.totalContractuel;const sid2=siteEditRouteId(s);return `<div class="card p-5 site-card ${archived?"opacity-75":""}" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-surplus="${surplus}" data-site-instance="${realized===0?1:0}" data-site-contractuel="${eff.totalContractuel}" data-site-realise="${realized}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black flex items-center gap-2 flex-wrap"><span class="site-status-lamp ${lampOk?"lamp-green":lampKo?"lamp-red":"lamp-gray"}" title="${lampOk?"Effectif conforme":surplus>0?"Surplus +"+surplus:manque>0?"Manque −"+manque:"Effectif non défini"}"></span>${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span> ${archived?`<span class="pill pill-gray ml-2">Archivé</span>`:`<span class="pill pill-green ml-2">Actif</span>`}</h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${sid2}">${opsReadOnly?"Accéder":"Modifier"}</a>${opsReadOnly?"":siteAdminSystemActionsHTML(s)}</div></div>${siteEffectifAlertHTML(eff,{length:realized})}<div class="grid grid-6 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel||0}</div></div><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Jour</div><div class="text-lg font-bold">${eff.jour||0}</div></div><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Nuit</div><div class="text-lg font-bold">${eff.nuit||0}</div></div><button type="button" class="p-2 rounded border text-center transition ${surplus>0?"hover:opacity-80":"hover:bg-blue-50 hover:border-blue-300 bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74":""}" onclick="event.stopPropagation();openSiteAffectesModal('${sid2}')"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Affecté</div><div class="text-lg font-bold">${realized}</div></button><div class="p-2 rounded border text-center ${surplus>0?"":"bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74;color:#c2410c":""}"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Surplus</div><div class="text-lg font-bold">${surplus>0?"+"+surplus:0}</div></div><div class="p-2 rounded border text-center ${manque>0?"":"bg-slate-50 border-slate-200"}" style="${manque>0?"background:#fef2f2;border-color:#fca5a5;color:#991b1b":""}"><div class="font-semibold ${manque>0?"":"text-slate-500"}">Manque</div><div class="text-lg font-bold">${manque>0?"−"+manque:0}</div></div></div>${siteMovementHistoryHTML(s)}</div>`}).join("")}</div>`}
     ${pagination}`;
     setTimeout(()=>{initSitesDashboardMap();enableClickableSiteCards()},0);
   }catch(e){
@@ -14994,13 +15054,15 @@ function renderSites(view){
   }
   const soc=sitesPageSocieteFilter();
   const sites=siteOpsSitesForScope(soc);
-  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
+  const opsReadOnly=isOpsSupervisorReadOnlySession();
+  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
+  ${opsSupervisorReadOnlyNoticeHTML()}
   ${sitesSocieteSelectorHTML(sites)}
   ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
   ${siteMapDashboardHTML(sites)}
   <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-  ${sites.length===0?`<div class="card p-10 text-center text-slate-500 col-span-2">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const surplus=Math.max(0,agents.length-(+eff.totalContractuel||0));const op=siteIsOperationalByOpeningDate(s);const sid=siteEditRouteId(s);const lampOk=eff.totalContractuel>0&&agents.length===eff.totalContractuel;const lampKo=eff.totalContractuel>0&&agents.length!==eff.totalContractuel;return`<div class="card p-5 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-surplus="${surplus}" data-site-instance="${agents.length===0?1:0}" data-site-contractuel="${eff.totalContractuel}" data-site-realise="${agents.length}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold flex items-center gap-2 flex-wrap"><span class="site-status-lamp ${lampOk?"lamp-green":lampKo?"lamp-red":"lamp-gray"}" title="${lampOk?"Effectif conforme":surplus>0?"Surplus +"+surplus:manque>0?"Manque −"+manque:"Effectif non défini"}"></span><span>${escapeHTML(s.nom)}</span> <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${sid}">Modifier</a>${siteAdminSystemActionsHTML(s)}<span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid grid-6 mb-3 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200 text-center"><div class="text-slate-500 font-semibold">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel||0}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200 text-center"><div class="text-slate-500 font-semibold">Jour</div><div class="text-lg font-bold">${eff.jour||0}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200 text-center"><div class="text-slate-500 font-semibold">Nuit</div><div class="text-lg font-bold">${eff.nuit||0}</div></div><button type="button" class="p-2 rounded border text-center transition ${surplus>0?"hover:opacity-80":"hover:bg-blue-50 hover:border-blue-300 bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74":""}" onclick="event.stopPropagation();openSiteAffectesModal('${sid}')"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Affecté</div><div class="text-lg font-bold ${surplus>0?"":"" }">${agents.length}</div></button><div class="p-2 rounded border text-center ${surplus>0?"":"bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74;color:#c2410c":""}"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Surplus</div><div class="text-lg font-bold">${surplus>0?"+"+surplus:0}</div></div><div class="p-2 rounded border text-center ${manque>0?"":"bg-slate-50 border-slate-200"}" style="${manque>0?"background:#fef2f2;border-color:#fca5a5;color:#991b1b":""}"><div class="font-semibold ${manque>0?"":"text-slate-500"}">Manque</div><div class="text-lg font-bold">${manque>0?"−"+manque:0}</div></div></div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${siteMovementHistoryHTML(s)}</div>`}).join("")}
+  ${sites.length===0?`<div class="card p-10 text-center text-slate-500 col-span-2">Aucun.</div>`:sites.map(s=>{const agents=siteAgentsAffectes(s);const eff=siteEffectifsNorm(s);const manque=Math.max(0,eff.totalContractuel-agents.length);const surplus=Math.max(0,agents.length-(+eff.totalContractuel||0));const op=siteIsOperationalByOpeningDate(s);const sid=siteEditRouteId(s);const lampOk=eff.totalContractuel>0&&agents.length===eff.totalContractuel;const lampKo=eff.totalContractuel>0&&agents.length!==eff.totalContractuel;return`<div class="card p-5 site-card" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-surplus="${surplus}" data-site-instance="${agents.length===0?1:0}" data-site-contractuel="${eff.totalContractuel}" data-site-realise="${agents.length}" data-searchable><div class="flex items-start justify-between mb-4"><div><h2 class="text-xl font-bold flex items-center gap-2 flex-wrap"><span class="site-status-lamp ${lampOk?"lamp-green":lampKo?"lamp-red":"lamp-gray"}" title="${lampOk?"Effectif conforme":surplus>0?"Surplus +"+surplus:manque>0?"Manque −"+manque:"Effectif non défini"}"></span><span>${escapeHTML(s.nom)}</span> <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span></h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)} · Contact : ${safe(s.contact?.nom)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${sid}">${opsReadOnly?"Accéder":"Modifier"}</a>${opsReadOnly?"":siteAdminSystemActionsHTML(s)}<span class="pill pill-green">Actif</span></div></div>${siteEffectifAlertHTML(eff,agents)}<div class="grid grid-6 mb-3 text-xs"><div class="bg-slate-50 p-2 rounded border border-slate-200 text-center"><div class="text-slate-500 font-semibold">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel||0}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200 text-center"><div class="text-slate-500 font-semibold">Jour</div><div class="text-lg font-bold">${eff.jour||0}</div></div><div class="bg-slate-50 p-2 rounded border border-slate-200 text-center"><div class="text-slate-500 font-semibold">Nuit</div><div class="text-lg font-bold">${eff.nuit||0}</div></div><button type="button" class="p-2 rounded border text-center transition ${surplus>0?"hover:opacity-80":"hover:bg-blue-50 hover:border-blue-300 bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74":""}" onclick="event.stopPropagation();openSiteAffectesModal('${sid}')"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Affecté</div><div class="text-lg font-bold ${surplus>0?"":"" }">${agents.length}</div></button><div class="p-2 rounded border text-center ${surplus>0?"":"bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74;color:#c2410c":""}"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Surplus</div><div class="text-lg font-bold">${surplus>0?"+"+surplus:0}</div></div><div class="p-2 rounded border text-center ${manque>0?"":"bg-slate-50 border-slate-200"}" style="${manque>0?"background:#fef2f2;border-color:#fca5a5;color:#991b1b":""}"><div class="font-semibold ${manque>0?"":"text-slate-500"}">Manque</div><div class="text-lg font-bold">${manque>0?"−"+manque:0}</div></div></div>${session?.transverse==="materiel"?siteDotationHTML(s):""}${siteMovementHistoryHTML(s)}</div>`}).join("")}
   </div>`;
   setTimeout(()=>{initSitesDashboardMap();enableClickableSiteCards()},0);
   if(sgdiAuthToken()&&!window.__sgdiSitesLocalFallback&&!window.__sgdiSitesBgRefreshing){
@@ -15133,10 +15195,11 @@ function sgdiMapLibreMarkerHTML(site){
 function siteMapDashboardStatusHTML(sites){
   const positioned=(sites||[]).filter(siteLatLng);
   const missing=(sites||[]).filter(s=>!siteLatLng(s));
+  const missingActions=isOpsSupervisorReadOnlySession()?"":`${missing.length?`<div class="site-map-missing">${missing.slice(0,6).map(s=>`<button type="button" onclick="navigate('sites/${siteEditRouteId(s)}')" title="Ajouter une position GPS">${escapeHTML(s.nom||s.indicatif||"Site")}</button>`).join("")}${missing.length>6?`<span>+ ${missing.length-6} autre(s)</span>`:""}</div>`:""}`;
   return `<div class="site-map-status">
     <span class="site-map-status-ok">${positioned.length} site(s) positionné(s)</span>
     <span class="${missing.length?"site-map-status-warn":"site-map-status-muted"}">${missing.length} sans position GPS</span>
-    ${missing.length?`<div class="site-map-missing">${missing.slice(0,6).map(s=>`<button type="button" onclick="navigate('sites/${siteEditRouteId(s)}')" title="Ajouter une position GPS">${escapeHTML(s.nom||s.indicatif||"Site")}</button>`).join("")}${missing.length>6?`<span>+ ${missing.length-6} autre(s)</span>`:""}</div>`:""}
+    ${missingActions}
   </div>`;
 }
 function siteMapDashboardHTML(sites){
@@ -15298,6 +15361,7 @@ function sitePositionLabel(lat,lng){
 function sitePositionFieldHTML(s){
   const hasPos=Number.isFinite(parseFloat(s.latitude))&&Number.isFinite(parseFloat(s.longitude));
   const center=siteLatLng(s)||{lat:28.0339,lng:1.6596};
+  const readOnly=isOpsSupervisorReadOnlySession();
   return `<div class="col-span-6 site-position-box ${hasPos?"has-position":"missing-position"}">
     <input type="hidden" name="latitude" value="${escapeHTML(s.latitude||"")}"/>
     <input type="hidden" name="longitude" value="${escapeHTML(s.longitude||"")}"/>
@@ -15305,9 +15369,9 @@ function sitePositionFieldHTML(s){
       <div class="site-position-copy">
         <div class="site-position-kicker">Position GPS du site</div>
         <div id="site-position-current" class="site-position-value">${escapeHTML(sitePositionLabel(s.latitude,s.longitude))}</div>
-        <div class="site-position-note">${hasPos?"Coordonnées prêtes à enregistrer avec la fiche site.":"Cliquez sur la carte ou déplacez le marqueur pour positionner le site."}</div>
+        <div class="site-position-note">${readOnly?"Position GPS consultable uniquement.":hasPos?"Coordonnées prêtes à enregistrer avec la fiche site.":"Cliquez sur la carte ou déplacez le marqueur pour positionner le site."}</div>
       </div>
-      ${session?.transverse==="materiel"?"":`<div class="site-position-actions"><button type="button" class="btn btn-warn site-position-action" onclick="openSitePositionModal('${jsString(s.id)}')">${hasPos?"Ouvrir en grand":"Positionner site"}</button><button type="button" class="btn btn-primary site-position-save" onclick="saveSitePositionInline('${jsString(s.id)}')">Enregistrer position</button></div>`}
+      ${session?.transverse==="materiel"||readOnly?"":`<div class="site-position-actions"><button type="button" class="btn btn-warn site-position-action" onclick="openSitePositionModal('${jsString(s.id)}')">${hasPos?"Ouvrir en grand":"Positionner site"}</button><button type="button" class="btn btn-primary site-position-save" onclick="saveSitePositionInline('${jsString(s.id)}')">Enregistrer position</button></div>`}
     </div>
     <div class="site-position-inline-wrap">
       <div id="site-position-inline-map" class="sgdi-maplibre-map site-position-inline-map" data-lat="${Number.isFinite(center.lat)?center.lat:28.0339}" data-lng="${Number.isFinite(center.lng)?center.lng:1.6596}" data-has-position="${hasPos?"1":"0"}" role="region" aria-label="Carte GPS du site"></div>
@@ -15342,6 +15406,7 @@ function updateSitePositionFormFields(lat,lng){
   return true;
 }
 async function saveSitePositionOnly(siteId,lat,lng){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return false;
   const lookup=decodeURIComponent(String(siteId||""));
   const site=(db.sites||[]).find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);
   if(!site){toast("Enregistrez d'abord la fiche site avant d'enregistrer sa position","error");return false}
@@ -15371,6 +15436,7 @@ async function saveSitePositionOnly(siteId,lat,lng){
   }
 }
 async function saveSitePositionInline(siteId){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   const f=document.getElementById("site-form");
   const lat=parseFloat(f?.querySelector('[name="latitude"]')?.value);
   const lng=parseFloat(f?.querySelector('[name="longitude"]')?.value);
@@ -15387,7 +15453,7 @@ function initInlineSitePositionMap(){
   loadMapLibre().then(maplibregl=>{
     if(!document.getElementById("site-position-inline-map"))return;
     const f=document.getElementById("site-form");
-    const locked=f?.dataset?.locked==="1";
+    const locked=f?.dataset?.locked==="1"||isOpsSupervisorReadOnlySession();
     const lat=parseFloat(el.dataset.lat),lng=parseFloat(el.dataset.lng);
     const hasPos=el.dataset.hasPosition==="1"&&Number.isFinite(lat)&&Number.isFinite(lng);
     const center=[Number.isFinite(lng)?lng:1.6596,Number.isFinite(lat)?lat:28.0339];
@@ -15408,6 +15474,7 @@ function initInlineSitePositionMap(){
   });
 }
 function openSitePositionModal(siteId){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   const f=document.getElementById("site-form");if(!f)return;
   const lat=parseFloat(f.querySelector('[name="latitude"]')?.value);
   const lng=parseFloat(f.querySelector('[name="longitude"]')?.value);
@@ -15480,6 +15547,7 @@ function refreshSitePositionMap(){
 }
 function refreshSitePositionGoogleMap(){refreshSitePositionMap()}
 async function saveSitePositionFromModal(siteId){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   const lat=document.querySelector('.modal-bg [name="modal_latitude"]')?.value;
   const lng=document.querySelector('.modal-bg [name="modal_longitude"]')?.value;
   const a=parseFloat(lat),b=parseFloat(lng);
@@ -16709,6 +16777,11 @@ function applySiteFormLock(){
   form.querySelectorAll("button[data-site-lock-keep]").forEach(btn=>{btn.disabled=false;btn.classList.remove("bg-slate-100")});
 }
 async function renderSiteForm(view,id){
+  if(isOpsSupervisorReadOnlySession()&&!id){
+    toast("Accès superviseur OPS : création de site non autorisée.","error");
+    navigate("sites/actifs");
+    return;
+  }
   view.classList.add("site-create-view");
   // Always load stores from API before rendering so the magasin dropdown is populated
   if(sgdiAuthToken()&&SGDI?.stock?.stores){
@@ -16720,11 +16793,11 @@ async function renderSiteForm(view,id){
   let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),dateOuverture:"",siteOuvertPar:"",nom:"",indicatif:"",telephone:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
   const rotationSystem=inferSiteRotationSystem(s);
   const eff=siteEffectifsNorm(s);
-  const canEditSite=siteCanEditFromCurrentModule(s);
+  const canEditSite=siteCanEditFromCurrentModule(s)&&!isOpsSupervisorReadOnlySession();
   const lockNotice=!canEditSite&&!s.isNew?`<div class="site-editor-wide p-3 rounded mb-3" style="background:#f8fafc;border:1px solid #cbd5e1;color:#475569;font-weight:800">Fiche technique site verrouillée après enregistrement.</div>`:"";
-  const siteHeaderActions=s.isNew?"":`<div class="site-editor-wide site-editor-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDocumentsModal('${jsString(siteEditRouteId(s))}')">Documents</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDemandesModal('${jsString(siteEditRouteId(s))}')">Demandes</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteCompteRenduForm('${jsString(siteEditRouteId(s))}')">Événements</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(s))}')">Consignes générales</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteProceduresModal('${jsString(siteEditRouteId(s))}')">Procédures</button>${isAdminSystemSession()?`<button type="button" class="btn btn-ghost" data-site-lock-keep style="border-color:#fecaca;color:#b91c1c;background:#fff1f2" onclick="archiveSite('${jsString(siteEditRouteId(s))}')">Archiver</button><button type="button" class="btn btn-danger" data-site-lock-keep onclick="deleteSite('${jsString(siteEditRouteId(s))}')">Supprimer</button>`:""}<button class="btn btn-ghost" data-site-lock-keep onclick="navigate('sites/actifs')">← Retour</button></div>`;
+  const siteHeaderActions=s.isNew?"":`<div class="site-editor-wide site-editor-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDocumentsModal('${jsString(siteEditRouteId(s))}')">Documents</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDemandesModal('${jsString(siteEditRouteId(s))}')">Demandes</button>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteCompteRenduForm('${jsString(siteEditRouteId(s))}')">Événements</button>`}<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(s))}')">Consignes générales</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteProceduresModal('${jsString(siteEditRouteId(s))}')">Procédures</button>${isAdminSystemSession()?`<button type="button" class="btn btn-ghost" data-site-lock-keep style="border-color:#fecaca;color:#b91c1c;background:#fff1f2" onclick="archiveSite('${jsString(siteEditRouteId(s))}')">Archiver</button><button type="button" class="btn btn-danger" data-site-lock-keep onclick="deleteSite('${jsString(siteEditRouteId(s))}')">Supprimer</button>`:""}<button class="btn btn-ghost" data-site-lock-keep onclick="navigate('sites/actifs')">← Retour</button></div>`;
   const siteRecap=s.isNew?"":siteRecapBlockHTML(s,eff);
-  view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${siteRecap}${siteHeaderActions}${lockNotice}
+  view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${opsSupervisorReadOnlyNoticeHTML()}${siteRecap}${siteHeaderActions}${lockNotice}
   <form id="site-form" class="site-editor-wide site-form-layout" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
     <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div></div></div>
@@ -16759,7 +16832,7 @@ async function renderSiteForm(view,id){
       <div class="text-xs text-slate-500">Les articles sélectionnés doivent être disponibles dans les magasins de la société. À l'enregistrement, les nouvelles lignes créent une dotation site et déduisent le stock.</div>
       ${session?.transverse==="materiel"?`<div class="flex justify-end mt-3"><button type="button" class="btn btn-primary" onclick="saveSiteEquipementOnly('${jsString(s.id)}')">Enregistrer</button></div>`:""}
     </div>
-    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="editSiteOpeningPV('${s.id}')">Editer PV</button>`}<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="saveSite('${jsString(s.id)}')">Enregistrer modification</button>${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
+    <div class="card p-4 flex justify-end gap-2 flex-wrap site-form-actions">${session?.transverse==="materiel"||isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="editSiteOpeningPV('${s.id}')">Editer PV</button>`}${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="saveSite('${jsString(s.id)}')">Enregistrer modification</button>`}${canEditSite?`<button class="btn btn-primary">💾 Enregistrer</button>`:""}</div>
   </form></div>`;
   setTimeout(()=>{updateSiteEffectifTotalContractuel();initInlineSitePositionMap();applySiteFormLock()},0);
 }
@@ -16892,6 +16965,7 @@ function sitePVControlsHTML(meta){
   </section><script>window.SGDI_SITE_PV_META=${metaJson};(function(){const v=document.getElementById("site-pv-validate"),p=document.getElementById("site-pv-print"),c=document.getElementById("site-pv-close"),s=document.getElementById("site-pv-state");function setPrint(on){p.disabled=!on;p.style.opacity=on?"1":".45"}if(v)v.addEventListener("click",async()=>{v.disabled=true;v.style.opacity=".45";if(s){s.textContent="PV en cours d'enregistrement...";s.style.color="#64748b"}let ok=false;try{if(window.opener&&window.opener.archiveSitePVFromWindow)ok=await window.opener.archiveSitePVFromWindow(window,window.SGDI_SITE_PV_META||{});}catch(e){console.error(e)}if(!ok){v.disabled=false;v.style.opacity="1";if(s){s.textContent="Enregistrement impossible. Vérifiez la session serveur puis réessayez.";s.style.color="#dc2626"}return}setPrint(true);if(s){s.textContent="PV enregistré. Vous pouvez imprimer.";s.style.color="#047857"}});if(p)p.addEventListener("click",()=>window.print());if(c)c.addEventListener("click",()=>window.close());setPrint(false);})();<\/script>`;
 }
 async function archiveSitePVFromWindow(docWindow,meta){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return false;
   let site=(db.sites||[]).find(s=>String(s.id)===String(meta?.siteId)||String(s.backendId||"")===String(meta?.siteBackendId)||String(s.indicatif||"")===String(meta?.indicatif||""));
   if(!site&&meta?.siteDraft){
     site={...meta.siteDraft,id:meta.siteDraft.id||uid("st"),actif:meta.siteDraft.actif!==false};
@@ -16920,6 +16994,7 @@ async function archiveSitePVFromWindow(docWindow,meta){
   return true;
 }
 function editSiteOpeningPV(id){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   try{
     const site=siteDraftFromCurrentForm(id);
     if(!String(site.nom||"").trim()){toast("Saisissez la dénomination du site avant d'éditer le PV","error");return}
@@ -17031,6 +17106,7 @@ async function syncSiteGroupAssignmentsToEmployees(site){
   return [];
 }
 async function saveSiteEquipementOnly(id){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   const lookup=decodeURIComponent(String(id||""));
   const s=(db.sites||[]).find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);
   if(!s){toast("Site introuvable","error");return}
@@ -17075,6 +17151,7 @@ async function saveSiteEquipementOnly(id){
   renderView();
 }
 async function saveSite(id){
+  if(guardOpsSupervisorMutation("site","Accès superviseur OPS : édition des sites non autorisée."))return;
   const f=document.getElementById("site-form");
   const fd=new FormData(f);
   const scopeSociete=siteSafeSociete({societe:currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||session?.societe||""})||currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||session?.societe||"";
@@ -31694,6 +31771,7 @@ function opsOpenMovementDocumentByRow(rowId){
   opsPrintMovementDocument(f,false);
 }
 function opsOpenSelectedMovement(){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : création/modification mouvement non autorisée."))return;
   const agentId=document.getElementById("ops-mvt-agent")?.value||sessionStorage.getItem("opsMovementSelectedAgent")||sessionStorage.getItem("opsMovementAgentId")||"";
   if(!agentId){toast("Choisissez un employé avant de créer un mouvement","error");return}
   sessionStorage.setItem("opsMovementAgentId",agentId);
@@ -31743,6 +31821,9 @@ function opsFilterMovementAgentSelect(query){
   sel.innerHTML=`<option value="">${agents.length?"— Choisir employé —":"— Aucun résultat —"}</option>${agents.map(a=>opsMovementAgentOptionHTML(a,currentId)).join("")}`;
 }
 function opsMovementEditorHTML(date,agentId,agents){
+  if(isOpsSupervisorReadOnlySession()){
+    return `<div class="card p-4 mb-5" style="border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:13px;font-weight:800">Mode superviseur OPS : les mouvements sont consultables uniquement. La création et la modification d'ordres de mouvement sont desactivees.</div>`;
+  }
   const motifs=["Affectation","Remplacement Absence","Remplacement Manque","Mission","Fixation","Remplacement Malade","Remplacement Abandon de poste"];
   const durees=["Provisoire","Définitif","Jusqu'à nouvel ordre"];
   const soc=currentStructureSocieteFilter()||effectifSocieteFilter()||session?.societe||"";
@@ -31868,6 +31949,7 @@ function opsMovementCentralContext(btn){
   return {form,date,agentId,agentIds,f,patch};
 }
 function opsApplyLocalMovementAffectation(date,agentId,patch){
+  if(isOpsSupervisorReadOnlySession())return;
   const a=opsFindEmployee(agentId)||findEmployeeByRef(patch?.agentBackendId)||findEmployeeByRef(patch?.matricule);
   if(!a||!patch)return;
   const resolvedSite=opsFindSite(patch.siteId)||opsFindSite(patch.siteBackendId)||null;
@@ -31884,21 +31966,25 @@ function opsApplyLocalMovementAffectation(date,agentId,patch){
   addEmployeeCareerEvent(a,"Affectation",{date,motif:(patch.mouvementMotif||"Affectation")+" vers "+(resolvedSiteName||"site"),source:"ordre-mouvement",sourceId:patch.ordreMouvementNumero||""});
 }
 async function opsEditerOrdreMouvementCentral(btn){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : création/modification mouvement non autorisée."))return;
   const ctx=opsMovementCentralContext(btn);if(!ctx)return;
   if(ctx.agentIds.length>1){toast("Editer un seul OM à la fois — désélectionnez les autres employés","error");return}
   return fpqEditerOrdreMouvement(ctx.date,ctx.agentId,ctx.form);
 }
 async function opsValiderOrdreMouvementCentral(btn){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : validation mouvement non autorisée."))return;
   const ctx=opsMovementCentralContext(btn);if(!ctx)return;
   if(ctx.agentIds.length===1)return fpqPersistOrdreMouvement(ctx.date,ctx.agentId,ctx.f,ctx.patch,{print:false,closeModal:false,message:"OM validé et archivé"});
   return opsValiderMultiOM(ctx.agentIds,ctx.form,ctx.date,{print:false});
 }
 async function opsImprimerOrdreMouvementCentral(btn){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : validation mouvement non autorisée."))return;
   const ctx=opsMovementCentralContext(btn);if(!ctx)return;
   if(ctx.agentIds.length===1)return fpqPersistOrdreMouvement(ctx.date,ctx.agentId,ctx.f,ctx.patch,{print:true,closeModal:false,message:"OM validé, archivé et prêt à imprimer"});
   return opsValiderMultiOM(ctx.agentIds,ctx.form,ctx.date,{print:true});
 }
 async function opsValiderMultiOM(agentIds,form,date,opt={}){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : validation mouvement non autorisée."))return;
   showOmSaveOverlay();
   // 1. Envoyer tous les OM en parallèle
   const results=await Promise.allSettled(agentIds.map(async aid=>{
@@ -32065,7 +32151,7 @@ function _renderOpsMouvementsHTML(view){
       </div>
     </div>
     ${rows.length?`<table class="w-full text-sm"><thead style="background:#f8fafc"><tr><th class="p-3 text-left">Date</th><th class="p-3 text-left">Heure</th><th class="p-3 text-left">N° ordre</th><th class="p-3 text-left">Agent</th><th class="p-3 text-left">Motif</th><th class="p-3 text-left">Affectation</th><th class="p-3 text-left">Durée</th><th class="p-3 text-right">Action</th></tr></thead><tbody>
-      ${rows.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 text-xs font-mono">${escapeHTML(formatDate(f.date||""))}</td><td class="p-3 text-xs font-mono">${escapeHTML(movementTimeLabel(f))}</td><td class="p-3 text-xs font-black">${escapeHTML(f.ordreMouvementNumero||f.mouvementNumero||"—")}</td><td class="p-3 font-semibold">${escapeHTML(opsMovementAgentLabel(f._agent))}</td><td class="p-3 text-xs">${escapeHTML(f.mouvementMotif||f.mouvementType||"—")}</td><td class="p-3 text-xs">${escapeHTML(opsMovementSiteLabel(f))}<div class="text-[10px] text-slate-500">${escapeHTML(opsMovementClientLabel(f))}</div></td><td class="p-3 text-xs">${escapeHTML(f.mouvementDuree||"—")}</td><td class="p-3 text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="fpqOpenMouvement('${escapeHTML(f.date||today())}','${escapeHTML(f.agentId||"")}')">Modifier</button><button class="btn btn-ghost text-xs" onclick="opsOpenMovementDocumentByRow('${escapeHTML(f.id||"")}')">Ordre</button></div></td></tr>`).join("")}
+      ${rows.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 text-xs font-mono">${escapeHTML(formatDate(f.date||""))}</td><td class="p-3 text-xs font-mono">${escapeHTML(movementTimeLabel(f))}</td><td class="p-3 text-xs font-black">${escapeHTML(f.ordreMouvementNumero||f.mouvementNumero||"—")}</td><td class="p-3 font-semibold">${escapeHTML(opsMovementAgentLabel(f._agent))}</td><td class="p-3 text-xs">${escapeHTML(f.mouvementMotif||f.mouvementType||"—")}</td><td class="p-3 text-xs">${escapeHTML(opsMovementSiteLabel(f))}<div class="text-[10px] text-slate-500">${escapeHTML(opsMovementClientLabel(f))}</div></td><td class="p-3 text-xs">${escapeHTML(f.mouvementDuree||"—")}</td><td class="p-3 text-right"><div class="flex gap-1 justify-end flex-wrap">${isOpsSupervisorReadOnlySession()?"":`<button class="btn btn-secondary text-xs" onclick="fpqOpenMouvement('${escapeHTML(f.date||today())}','${escapeHTML(f.agentId||"")}')">Modifier</button>`}<button class="btn btn-ghost text-xs" onclick="opsOpenMovementDocumentByRow('${escapeHTML(f.id||"")}')">Ordre</button></div></td></tr>`).join("")}
     </tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucun mouvement enregistré.</div>`}
   </div>`;
   if(presetAgent)sessionStorage.removeItem("opsMovementAgentId");
@@ -32349,6 +32435,7 @@ function opsMissionLoadingHTML(){
   return `<!doctype html><html><head><meta charset="utf-8"><title>Préparation OM</title></head><body style="margin:0;font-family:Arial,Helvetica,sans-serif;background:#f8fafc;color:#043970;min-height:100vh;display:flex;align-items:center;justify-content:center"><div style="text-align:center"><div style="font-size:22px;font-weight:900;margin-bottom:8px">Préparation de l'ordre de mission...</div><div style="font-size:13px;color:#64748b">Veuillez patienter quelques secondes.</div></div></body></html>`;
 }
 function openOpsMissionModal(id){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : création/modification mission non autorisée."))return;
   if(!db.missions)db.missions=[];
   const soc=currentStructureSocieteFilter()||session?.societe||"";
   const editing=id?(db.missions||[]).find(m=>String(m.id)===String(id)):null;
@@ -32376,17 +32463,19 @@ function openOpsMissionModal(id){
 }
 function renderOpsMissions(view,arg){
   if(!db.missions)db.missions=[];
+  const opsReadOnly=isOpsSupervisorReadOnlySession();
   const soc=currentStructureSocieteFilter();
   const missions=(db.missions||[]).filter(m=>!soc||m.societe===soc).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   const activeMissions=missions.filter(x=>(!x.dateFin||x.dateFin>=today())&&(!x.dateDebut||x.dateDebut<=today()));
   const plannedMissions=missions.filter(x=>x.dateDebut&&x.dateDebut>today());
   const urgentMissions=missions.filter(x=>/urgent|intervention/i.test([x.motif,x.nature,x.objet,x.consignes].join(" ")));
   const withEmployee=missions.filter(x=>x.agentId).length;
-  const missionKpi=(label,n,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="openOpsMissionModal()" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Cliquer pour créer"}</div></button>`;
+  const missionKpi=(label,n,color,sub)=>`<div class="card p-4 text-left" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Suivi missions"}</div></div>`;
   view.innerHTML=`<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
     <div><h1 class="text-2xl font-black uppercase">MISSIONS OPS</h1><div class="text-xs text-slate-500">Création, suivi, ordres de mission et archivage employé · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div>
-    <button class="btn btn-secondary" onclick="openOpsMissionModal()">＋ Nouvelle mission</button>
+    ${opsReadOnly?"":`<button class="btn btn-secondary" onclick="openOpsMissionModal()">＋ Nouvelle mission</button>`}
   </div>
+  ${opsSupervisorReadOnlyNoticeHTML()}
   <div class="grid grid-4 gap-3 mb-5">
     ${missionKpi("Total missions",missions.length,"#043970","Toutes les missions")}
     ${missionKpi("En cours",activeMissions.length,"#16a34a","Actives aujourd'hui")}
@@ -32396,12 +32485,13 @@ function renderOpsMissions(view,arg){
   <div class="card p-5 overflow-hidden">
     <div class="flex items-center justify-between mb-3 gap-2 flex-wrap"><h3 class="font-black">Liste des missions OPS</h3><span class="pill">${missions.length} mission${missions.length>1?"s":""}</span></div>
     <table><thead><tr><th>N°</th><th>Employé</th><th>Lieu</th><th>Début</th><th>Fin</th><th>Motif</th><th class="text-right">Actions</th></tr></thead><tbody>
-      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—";return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}</td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}</td><td class="text-xs">${formatDate(x.dateFin)}</td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button><button class="btn btn-secondary text-xs" onclick="openOpsMissionModal('${escapeHTML(x.id)}')">Modifier</button></div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
+      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—";return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}</td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}</td><td class="text-xs">${formatDate(x.dateFin)}</td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button>${opsReadOnly?"":`<button class="btn btn-secondary text-xs" onclick="openOpsMissionModal('${escapeHTML(x.id)}')">Modifier</button>`}</div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
     </tbody></table>
   </div>`;
-  if(arg)setTimeout(()=>openOpsMissionModal(arg),50);
+  if(arg&&!opsReadOnly)setTimeout(()=>openOpsMissionModal(arg),50);
 }
 async function saveOpsMission(id,form,openDoc){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : création/modification mission non autorisée."))return;
   if(!db.missions)db.missions=[];
   form=form||document.getElementById("ops-mission-form")||document.querySelector("#view form");if(!form)return;
   const editBtn=form.querySelector("#ops-mission-edit-btn");
@@ -32439,6 +32529,7 @@ async function saveOpsMission(id,form,openDoc){
   renderView();
 }
 async function deleteOpsMission(id){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : suppression mission non autorisée."))return;
   if(!confirm("Supprimer cette mission OPS ?"))return;
   db.missions=(db.missions||[]).filter(m=>String(m.id)!==String(id));
   if(!(await saveDBAndWaitToast("Suppression mission OPS non confirmée")))return;
@@ -32463,7 +32554,7 @@ function inspectionStatusHTML(i){
   return`<span class="pill">Programmée</span>`;
 }
 function inspectionTabs(active){
-  const tabs=[["programmer","Programmer une Inspection"],["programmees","Inspections programmées"],["inopinees","Inspections inopinées"]];
+  const tabs=isOpsSupervisorReadOnlySession()?[["programmees","Inspections programmées"],["inopinees","Inspections inopinées"]]:[["programmer","Programmer une Inspection"],["programmees","Inspections programmées"],["inopinees","Inspections inopinées"]];
   return`<div class="flex gap-2 flex-wrap mb-5">${tabs.map(t=>`<button class="btn ${active===t[0]?"btn-primary":"btn-secondary"}" onclick="navigate('ops/supervision/${t[0]}')">${t[1]}</button>`).join("")}</div>`;
 }
 
@@ -32502,13 +32593,14 @@ function inspectionSupervisorSpaceHTML(supervisors,inspections){
   return`<div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-5">${data.map(a=>{const st=inspectionSupervisorStats(a.id,inspections);return`<div class="card p-4"><div class="flex items-start justify-between gap-3"><div><div class="font-black">${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">Espace superviseur · historique & statistiques</div></div><span class="pill">${st.total}</span></div><div class="grid grid-cols-4 gap-2 mt-3"><div class="text-center rounded bg-blue-50 p-2"><div class="text-[10px] font-black text-blue-700">Prog.</div><div class="font-black text-blue-700">${st.programmed}</div></div><div class="text-center rounded bg-purple-50 p-2"><div class="text-[10px] font-black text-purple-700">Inop.</div><div class="font-black text-purple-700">${st.unexpected}</div></div><div class="text-center rounded bg-emerald-50 p-2"><div class="text-[10px] font-black text-emerald-700">Finies</div><div class="font-black text-emerald-700">${st.finished}</div></div><div class="text-center rounded bg-red-50 p-2"><div class="text-[10px] font-black text-red-700">Alertes</div><div class="font-black text-red-700">${st.alerts}</div></div></div><div class="mt-3 text-xs">${st.history.length?st.history.map(i=>`<div class="flex justify-between border-t py-1"><span>${formatDate(i.date)} · ${escapeHTML((i.siteIds||[]).map(inspectionSiteName).join(', '))}</span><b>${i.type==='inopinee'?'Inopinée':'Programmée'}</b></div>`).join(""):`<div class="text-slate-500">Aucun historique pour le moment.</div>`}</div></div>`}).join("")}</div>`;
 }
 function renderOpsSupervisionDashboard(view,soc,sites,supervisors,inspections){
+  const opsReadOnly=isOpsSupervisorReadOnlySession();
   const programmed=inspections.filter(i=>i.type==="programmee");
   const unexpected=inspections.filter(i=>i.type==="inopinee");
   const todayIns=inspections.filter(i=>i.date===today());
   const finished=inspections.filter(i=>(i.siteIds||[]).length&&(i.siteIds||[]).every(id=>(i.scans||{})[id]?.entree&&(i.scans||{})[id]?.sortie));
   const alerts=inspections.filter(i=>i.type==="inopinee"||(i.type==="programmee"&&i.date<=today()&&(i.siteIds||[]).some(id=>!(i.scans||{})[id]?.entree)));
   const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Cliquer pour ouvrir"}</div></button>`;
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE - TABLEAU DE BORD</h1><p class="text-sm text-slate-500">Inspections programmées, inopinées, passages QR et alertes superviseurs · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div><button class="btn btn-primary" onclick="navigate('ops/supervision/programmer')">Programmer une inspection</button></div>${inspectionTabs("dashboard")}
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE - TABLEAU DE BORD</h1><p class="text-sm text-slate-500">Inspections programmées, inopinées, passages QR et alertes superviseurs · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>${opsReadOnly?"":`<button class="btn btn-primary" onclick="navigate('ops/supervision/programmer')">Programmer une inspection</button>`}</div>${opsSupervisorReadOnlyNoticeHTML()}${inspectionTabs("dashboard")}
     <div class="grid grid-5 gap-3 mb-5">
       ${kpi("Programmées",programmed.length,"ops/supervision/programmees","#043970","Planifiées")}
       ${kpi("Aujourd'hui",todayIns.length,"ops/supervision/programmees","#f59e0b","Passages attendus")}
@@ -32521,6 +32613,7 @@ function renderOpsSupervisionDashboard(view,soc,sites,supervisors,inspections){
 
 function renderOpsSupervision(view,tab){
   if(!db.siteInspections)db.siteInspections=[];
+  if(isOpsSupervisorReadOnlySession()&&tab==="programmer")tab="programmees";
   const soc=currentStructureSocieteFilter();
   const sites=(db.sites||[]).filter(s=>s.actif!==false&&siteMatchesSociete(s,soc));
   const supervisors=(db.agents||[]).filter(a=>{const poste=[a.fonction,a.poste,a.affectationCourante?.poste].filter(Boolean).join(" ");return(!soc||a.societe===soc)&&!["sortant","demissionne","licencie","archive"].includes(a.statut)&&/superviseur|controleur|contrôleur|inspecteur/i.test(poste)});
@@ -32553,6 +32646,7 @@ function renderOpsSupervision(view,tab){
   <div class="mt-5"><h3 class="font-black mb-2">Espaces superviseurs</h3>${inspectionSupervisorSpaceHTML(supervisors,inspections)}</div>`;
 }
 async function saveProgrammedInspection(){
+  if(guardOpsSupervisorMutation("supervision","Accès superviseur OPS : programmation inspection non autorisée."))return;
   const form=document.querySelector("#view form");if(!form)return;
   const fd=new FormData(form);const siteIds=fd.getAll("siteIds").filter(Boolean);const dates=fd.getAll("inspectionDates").filter(Boolean);
   if(!fd.get("supervisorId")){toast("Nom du superviseur obligatoire","error");return}
@@ -32564,17 +32658,20 @@ async function saveProgrammedInspection(){
   toast(dates.length+" inspection(s) programmée(s)","success");navigate("ops/supervision/programmees");
 }
 function renderProgrammedInspections(view,soc,inspections,supervisors){
+  const opsReadOnly=isOpsSupervisorReadOnlySession();
   const list=inspections.filter(i=>i.type==="programmee").sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
-  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Inspections programmées · historique superviseurs · passages QR entrée/sortie · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${inspectionTabs("programmees")}
-  <div class="card p-5 overflow-hidden"><table><thead><tr><th>Date</th><th>Horaire</th><th>Superviseur</th><th>Sites</th><th>Véhicule</th><th>Chauffeur</th><th>Moyens</th><th>Passages QR</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${list.length?list.map(i=>`<tr><td>${formatDate(i.date)}</td><td class="font-bold">${escapeHTML(i.horaire||"—")}</td><td>${escapeHTML(inspectionSupervisorName(i.supervisorId))}</td><td class="text-xs">${(i.siteIds||[]).map(id=>escapeHTML(inspectionSiteName(id))).join("<br>")}</td><td>${escapeHTML(i.vehicule||"")}</td><td>${escapeHTML(inspectionSupervisorName(i.chauffeurId))}</td><td class="text-xs">${escapeHTML(i.moyens||"")}</td><td class="text-xs">${inspectionScansHTML(i)}</td><td>${inspectionStatusHTML(i)}</td><td><button class="btn btn-secondary text-xs" onclick="openInspectionScan('${i.id}')">Scanner QR</button></td></tr>`).join(""):`<tr><td colspan="10" class="text-center text-slate-500 p-4">Aucune inspection programmée.</td></tr>`}</tbody></table></div>
+  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Inspections programmées · historique superviseurs · passages QR entrée/sortie · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${opsSupervisorReadOnlyNoticeHTML()}${inspectionTabs("programmees")}
+  <div class="card p-5 overflow-hidden"><table><thead><tr><th>Date</th><th>Horaire</th><th>Superviseur</th><th>Sites</th><th>Véhicule</th><th>Chauffeur</th><th>Moyens</th><th>Passages QR</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${list.length?list.map(i=>`<tr><td>${formatDate(i.date)}</td><td class="font-bold">${escapeHTML(i.horaire||"—")}</td><td>${escapeHTML(inspectionSupervisorName(i.supervisorId))}</td><td class="text-xs">${(i.siteIds||[]).map(id=>escapeHTML(inspectionSiteName(id))).join("<br>")}</td><td>${escapeHTML(i.vehicule||"")}</td><td>${escapeHTML(inspectionSupervisorName(i.chauffeurId))}</td><td class="text-xs">${escapeHTML(i.moyens||"")}</td><td class="text-xs">${inspectionScansHTML(i)}</td><td>${inspectionStatusHTML(i)}</td><td>${opsReadOnly?"—":`<button class="btn btn-secondary text-xs" onclick="openInspectionScan('${i.id}')">Scanner QR</button>`}</td></tr>`).join(""):`<tr><td colspan="10" class="text-center text-slate-500 p-4">Aucune inspection programmée.</td></tr>`}</tbody></table></div>
   <div class="mt-5"><h3 class="font-black mb-2">Espaces superviseurs</h3>${inspectionSupervisorSpaceHTML(supervisors||[],inspections)}</div>`;
 }
 function inspectionScansHTML(i){return(i.siteIds||[]).map(id=>{const sc=(i.scans||{})[id]||{};return`<div class="mb-1"><b>${escapeHTML(inspectionSiteName(id))}</b><br>Entrée: ${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"}<br>Sortie: ${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}${inspectionElapsed(sc)?`<br>Temps: <b>${inspectionElapsed(sc)}</b>`:""}</div>`}).join("")}
 function openInspectionScan(id){
+  if(guardOpsSupervisorMutation("supervision","Accès superviseur OPS : scan inspection non autorisé."))return;
   const i=(db.siteInspections||[]).find(x=>x.id===id);if(!i)return;
   openModal(`<h3 class="font-bold text-lg mb-3">Scan QR - Inspection</h3><div class="text-sm text-slate-600 mb-3">${escapeHTML(inspectionSupervisorName(i.supervisorId))} · ${formatDate(i.date)}</div>${(i.siteIds||[]).map(siteId=>{const sc=(i.scans||{})[siteId]||{};return`<div class="card p-3 mb-2"><div class="font-bold mb-2">${escapeHTML(inspectionSiteName(siteId))}</div><div class="text-xs text-slate-500 mb-2">Entrée: ${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"} · Sortie: ${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}</div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inspectionScan('${i.id}','${siteId}','entree')">Scanner entrée</button><button class="btn btn-primary text-xs" onclick="inspectionScan('${i.id}','${siteId}','sortie')">Scanner sortie</button></div></div>`}).join("")}<div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 async function inspectionScan(id,siteId,kind){
+  if(guardOpsSupervisorMutation("supervision","Accès superviseur OPS : scan inspection non autorisé."))return;
   const i=(db.siteInspections||[]).find(x=>x.id===id);if(!i)return;
   if(!i.scans)i.scans={};if(!i.scans[siteId])i.scans[siteId]={};
   if(kind==="sortie"&&!i.scans[siteId].entree){toast("Scanner l'entrée avant la sortie","error");return}
@@ -32583,12 +32680,14 @@ async function inspectionScan(id,siteId,kind){
   toast("Scan QR enregistré","success");closeModal();renderView();
 }
 function renderUnexpectedInspections(view,soc,sites,supervisors,inspections){
+  const opsReadOnly=isOpsSupervisorReadOnlySession();
   const list=inspections.filter(i=>i.type==="inopinee").sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
-  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Inspections inopinées créées automatiquement si aucun passage n'était programmé · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${inspectionTabs("inopinees")}
-  <div class="card p-5 mb-5"><h3 class="font-black mb-3">Scan QR inspection inopinée</h3><form onsubmit="event.preventDefault();saveUnexpectedInspectionScan()"><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="label">Superviseur</label><select class="select" name="supervisorId"><option value="">— Choisir superviseur —</option>${supervisors.map(a=>`<option value="${a.id}">${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</option>`).join("")}</select></div><div><label class="label">Site scanné</label><select class="select" name="siteId"><option value="">— Choisir site —</option>${sites.map(st=>`<option value="${st.id}">${escapeHTML((st.societe?st.societe+" · ":"")+(st.nom||st.intitule||"Site"))}</option>`).join("")}</select></div><div><label class="label">Action QR</label><select class="select" name="kind"><option value="entree">Arrivée / Entrée</option><option value="sortie">Départ / Sortie</option></select></div></div><div class="flex justify-end mt-4"><button class="btn btn-primary">Valider scan</button></div></form></div>
+  view.innerHTML=`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><div><h1 class="text-2xl font-black uppercase">SUPERVISION SITE</h1><div class="text-xs text-slate-500">Inspections inopinées créées automatiquement si aucun passage n'était programmé · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div></div>${opsSupervisorReadOnlyNoticeHTML()}${inspectionTabs("inopinees")}
+  ${opsReadOnly?"":`<div class="card p-5 mb-5"><h3 class="font-black mb-3">Scan QR inspection inopinée</h3><form onsubmit="event.preventDefault();saveUnexpectedInspectionScan()"><div class="grid grid-cols-1 md:grid-cols-3 gap-3"><div><label class="label">Superviseur</label><select class="select" name="supervisorId"><option value="">— Choisir superviseur —</option>${supervisors.map(a=>`<option value="${a.id}">${escapeHTML((a.matricule? a.matricule+" · ":"")+(a.nom||"")+" "+(a.prenom||""))}</option>`).join("")}</select></div><div><label class="label">Site scanné</label><select class="select" name="siteId"><option value="">— Choisir site —</option>${sites.map(st=>`<option value="${st.id}">${escapeHTML((st.societe?st.societe+" · ":"")+(st.nom||st.intitule||"Site"))}</option>`).join("")}</select></div><div><label class="label">Action QR</label><select class="select" name="kind"><option value="entree">Arrivée / Entrée</option><option value="sortie">Départ / Sortie</option></select></div></div><div class="flex justify-end mt-4"><button class="btn btn-primary">Valider scan</button></div></form></div>`}
   <div class="card p-5 overflow-hidden"><table><thead><tr><th>Date</th><th>Superviseur</th><th>Site</th><th>Entrée</th><th>Sortie</th><th>Temps sur site</th><th>Alerte</th></tr></thead><tbody>${list.length?list.map(i=>{const id=(i.siteIds||[])[0];const sc=(i.scans||{})[id]||{};return`<tr><td>${formatDate(i.date)}</td><td>${escapeHTML(inspectionSupervisorName(i.supervisorId))}</td><td>${escapeHTML(inspectionSiteName(id))}</td><td>${sc.entree?new Date(sc.entree).toLocaleString("fr-FR"):"—"}</td><td>${sc.sortie?new Date(sc.sortie).toLocaleString("fr-FR"):"—"}</td><td>${escapeHTML(inspectionElapsed(sc)||"")}</td><td><span class="pill pill-red">Inspection non programmée</span></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune inspection inopinée.</td></tr>`}</tbody></table></div>`;
 }
 async function saveUnexpectedInspectionScan(){
+  if(guardOpsSupervisorMutation("supervision","Accès superviseur OPS : scan inspection non autorisé."))return;
   const form=document.querySelector("#view form");if(!form)return;const fd=new FormData(form);const supervisorId=fd.get("supervisorId")||"",siteId=fd.get("siteId")||"",kind=fd.get("kind")||"entree";
   if(!supervisorId||!siteId){toast("Superviseur et site obligatoires","error");return}
   if(!db.siteInspections)db.siteInspections=[];
@@ -32797,6 +32896,7 @@ function ptSyncFeuillePresenceMonth(ym){
   return changed;
 }
 async function ptValiderSheet(agentId,ym){
+  if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   try{
     await sgdiRunLegacyAction("validate-pointage",{data:{agentId,periode:ym}});
     await sgdiPullState({silent:true});
@@ -32806,6 +32906,7 @@ async function ptValiderSheet(agentId,ym){
   }catch(e){toast("Validation refusée : "+(e.message||e),"error")}
 }
 async function ptDevaliderSheet(agentId,ym){
+  if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
   if(!confirm("Déverrouiller ce pointage validé ?"))return;
   try{
     await sgdiRunLegacyAction("unlock-pointage",{data:{agentId,periode:ym}});
@@ -32816,6 +32917,7 @@ async function ptDevaliderSheet(agentId,ym){
   }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
 async function ptValiderTous(ym,soc){
+  if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   const ag=pointageEligibleAgents(soc);
   if(!ag.length){toast("Aucun employé à valider","error");return}
   if(!confirm(`Valider le pointage de ${ag.length} agent(s) pour la période ${ym} ?`))return;
@@ -32828,6 +32930,7 @@ async function ptValiderTous(ym,soc){
   }catch(e){toast("Validation globale refusée : "+(e.message||e),"error")}
 }
 async function ptDevaliderTous(ym,soc){
+  if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
   if(!confirm(`Déverrouiller TOUS les pointages validés pour ${ym} ?`))return;
   try{
     const out=await sgdiRunLegacyAction("unlock-pointage-all",{data:{periode:ym,societe:soc||""}});
@@ -32935,8 +33038,8 @@ function renderPointageArchives(){
 async function fpqSetField(date,agentId,field,value){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
 async function fpqSetRowField(rowId,field,value){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId)){renderView();return}try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date:f.date,agentId:f.agentId,patch:{[field]:value||""}}});await sgdiPullState({silent:true})}catch(e){toast("Modification refusée : "+(e.message||e),"error");renderView()}}
 async function fpqSetSite(date,agentId,siteId){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId)){renderView();return}const s=db.sites.find(x=>x.id===siteId);try{await sgdiRunLegacyAction("upsert-presence-line",{data:{date,agentId,patch:{siteId:siteId||"",siteName:s?(s.nom||s.intitule||""):"",siteManual:true}}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Affectation refusée : "+(e.message||e),"error");renderView()}}
-async function fpqDelete(date,agentId){if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{data:{date,agentId}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
-async function fpqDeleteRow(rowId){const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{item_id:rowId,data:{}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+async function fpqDelete(date,agentId){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{data:{date,agentId}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
+async function fpqDeleteRow(rowId){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f)return;if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date)||fpqGuardLine(f.date,f.agentId))return;if(!confirm("Effacer la ligne de présence ?"))return;try{await sgdiRunLegacyAction("delete-presence-line",{item_id:rowId,data:{}});await sgdiPullState({silent:true});renderView()}catch(e){toast("Suppression refusée : "+(e.message||e),"error")}}
 function fpqNeedsRemplaceAgent(motif){return["Remplacement Absence","Remplacement Malade","Remplacement Abandon de poste"].includes(motif)}
 function fpqRemplaceAgentLabel(motif){if(motif==="Remplacement Malade")return"Employé malade";if(motif==="Remplacement Abandon de poste")return"Employé en abandon de poste";return"Employé absent"}
 function nextOrdreMouvementNumero(){
@@ -32947,6 +33050,7 @@ function nextOrdreMouvementNumero(){
   return `OD/OPS/${y}/${String(next).padStart(4,"0")}`;
 }
 function fpqOpenMouvement(date,agentId){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : création/modification mouvement non autorisée."))return;
   if(fpqGuardArchive(date)||fpqGuardCloture(date)||fpqGuardLine(date,agentId))return;
   const f=fpqEnsure(date,agentId);const a=(db.agents||[]).find(x=>x.id===agentId);
   const positionActuelle=opsEmployeeCurrentPositionLabel(a);
@@ -33005,6 +33109,7 @@ function fpqMovementPatchFromForm(date,agentId,form){
   return {f,patch};
 }
 async function fpqEditerOrdreMouvement(date,agentId,form){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : création/modification mouvement non autorisée."))return;
   const {f,patch}=fpqMovementPatchFromForm(date,agentId,form);
   if(!patch.siteId){toast("Choisissez une nouvelle affectation avant d'éditer l'OM","error");return}
   if(patch.siteId==="autres"&&!patch.autreAffectation){toast("Précisez l'autre affectation avant d'éditer l'OM","error");return}
@@ -33025,6 +33130,7 @@ async function fpqEditerOrdreMouvement(date,agentId,form){
   }
 }
 async function fpqApplyMovementAffectation(date,agentId,patch){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : affectation par mouvement non autorisée."))return false;
   if(!patch?.siteId)return true;
   const a=findEmployeeByRef(agentId)||findEmployeeByRef(patch.matricule)||findEmployeeByRef(patch.agentBackendId);
   if(!a)return false;
@@ -33163,6 +33269,7 @@ function updateOmSaveOverlay(msg,success){
 }
 function closeOmSaveOverlay(){clearTimeout(window._omSaveOverlayTimer);const el=document.getElementById("om-save-overlay");if(el)el.remove()}
 async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : création/modification mouvement non autorisée."))return false;
   showOmSaveOverlay();
   // Optimistic : appliquer localement immédiatement, sans attendre PostgreSQL
   const localLine=fpqUpsertLocalPresenceLine({...f,...patch,date,agentId});
@@ -33199,6 +33306,7 @@ async function fpqPersistOrdreMouvement(date,agentId,f,patch,opt={}){
   return true;
 }
 async function fpqValidateOrdreMouvementFromDocument(movement){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : validation mouvement non autorisée."))return false;
   const date=String(movement?.date||today());
   const agentId=String(movement?.agentId||"");
   if(!agentId){toast("Employé obligatoire pour valider l'OM","error");return false}
@@ -33209,11 +33317,13 @@ async function fpqValidateOrdreMouvementFromDocument(movement){
   return fpqPersistOrdreMouvement(date,agentId,f,patch,{print:false,message:"OM validé et archivé"});
 }
 async function fpqSaveMouvement(date,agentId){
+  if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : création/modification mouvement non autorisée."))return;
   const form=document.querySelector(".modal-bg form");if(!form)return;
   const {f,patch}=fpqMovementPatchFromForm(date,agentId,form);
   return fpqPersistOrdreMouvement(date,agentId,f,patch,{print:true,message:"Mouvement enregistré, archivé et prêt à imprimer"});
 }
 async function fpqValiderLigne(date,agentId){
+  if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const f=fpqEnsure(date,agentId);
   if(!f.siteId){toast("Site obligatoire avant validation","error");return}
@@ -33225,6 +33335,7 @@ async function fpqValiderLigne(date,agentId){
   }catch(e){toast("Validation ligne refusée : "+(e.message||e),"error")}
 }
 async function fpqDevaliderLigne(date,agentId){
+  if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
   const f=fpqGet(date,agentId);if(!f)return;
   try{
     await sgdiRunLegacyAction("unlock-presence-line",{collection:"feuillePresence",item_id:f.id,data:{}});
@@ -33233,9 +33344,9 @@ async function fpqDevaliderLigne(date,agentId){
     renderView();
   }catch(e){toast("Déverrouillage ligne refusé : "+(e.message||e),"error")}
 }
-async function fpqCloturerJournee(date){if(!date)date=fpqCurrentDate();if(fpqIsCloture(date)){toast("Déjà clôturée","info");return}const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);if(!lignes.length){if(!confirm("Aucune ligne saisie pour le "+formatDate(date)+".\nClôturer la feuille à zéro quand même ?"))return}else{const incomplets=lignes.filter(f=>!f.heureArrivee).length;const msg="Clôturer définitivement la feuille du "+formatDate(date)+" ?\n\n• "+lignes.length+" ligne(s) au total\n"+(incomplets?"• ⚠ "+incomplets+" ligne(s) incomplète(s) (situation manquante)\n":"")+"\nLes lignes ne pourront plus être modifiées sans déclôture.";if(!confirm(msg))return}try{await sgdiRunLegacyAction("close-presence-day",{data:{date}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Clôture feuille de présence","Date: "+formatDate(date)+" · "+lignes.length+" ligne(s)");toast("Feuille clôturée par le backend","success");renderView()}catch(e){toast("Clôture refusée : "+(e.message||e),"error")}}
+async function fpqCloturerJournee(date){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : clôture pointage non autorisée."))return;if(!date)date=fpqCurrentDate();if(fpqIsCloture(date)){toast("Déjà clôturée","info");return}const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);if(!lignes.length){if(!confirm("Aucune ligne saisie pour le "+formatDate(date)+".\nClôturer la feuille à zéro quand même ?"))return}else{const incomplets=lignes.filter(f=>!f.heureArrivee).length;const msg="Clôturer définitivement la feuille du "+formatDate(date)+" ?\n\n• "+lignes.length+" ligne(s) au total\n"+(incomplets?"• ⚠ "+incomplets+" ligne(s) incomplète(s) (situation manquante)\n":"")+"\nLes lignes ne pourront plus être modifiées sans déclôture.";if(!confirm(msg))return}try{await sgdiRunLegacyAction("close-presence-day",{data:{date}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Clôture feuille de présence","Date: "+formatDate(date)+" · "+lignes.length+" ligne(s)");toast("Feuille clôturée par le backend","success");renderView()}catch(e){toast("Clôture refusée : "+(e.message||e),"error")}}
 function fpqDeclôturerJournee(date){return fpqDecloturerJournee(date)}
-async function fpqDecloturerJournee(date){if(!date)date=fpqCurrentDate();if(fpqGuardArchive(date))return;if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}try{await sgdiRunLegacyAction("reopen-presence-day",{data:{date,motif:motif.trim()}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("Feuille déclôturée par le backend","success");renderView()}catch(e){toast("Déclôture refusée : "+(e.message||e),"error")}}
+async function fpqDecloturerJournee(date){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déclôture pointage non autorisée."))return;if(!date)date=fpqCurrentDate();if(fpqGuardArchive(date))return;if(!fpqIsCloture(date)){toast("Feuille non clôturée","info");return}const motif=prompt("Motif de la déclôture du "+formatDate(date)+" :","");if(motif===null)return;if(!motif.trim()){toast("Motif obligatoire","error");return}try{await sgdiRunLegacyAction("reopen-presence-day",{data:{date,motif:motif.trim()}});await sgdiPullState({silent:true});if(typeof logActivity==="function")logActivity("Déclôture feuille de présence","Date: "+formatDate(date)+" · Motif: "+motif.trim());toast("Feuille déclôturée par le backend","success");renderView()}catch(e){toast("Déclôture refusée : "+(e.message||e),"error")}}
 function fpqClotureBannerHTML(){if(!db||!session)return"";if(session.transverse!=="ops")return"";if(typeof canAccess==="function"&&!canAccess("ops"))return"";const today=new Date().toISOString().slice(0,10);const allDates=new Set();(db.feuillePresence||[]).forEach(f=>allDates.add(f.date));allDates.add(today);const c=db.feuillePresenceCloture||{};const pending=[...allDates].filter(d=>!c[d]).sort((a,b)=>b.localeCompare(a));if(!pending.length)return"";const todayPending=pending.includes(today);const oldPending=pending.filter(d=>d!==today).sort((a,b)=>b.localeCompare(a));const todayCount=(db.feuillePresence||[]).filter(f=>f.date===today).length;const oldList=oldPending.slice(0,5).map(d=>{const cnt=(db.feuillePresence||[]).filter(f=>f.date===d).length;return`<button class="text-[11px] px-2 py-0.5 rounded-full font-bold" style="background:#fff;color:#b91c1c;border:1px solid #fca5a5" onclick="setFpqDate('${d}');navigate('pointage/feuille')">📅 ${formatDate(d)} · ${cnt} ligne${cnt>1?"s":""}</button>`}).join(" ");const moreOld=oldPending.length>5?` <span class="text-[11px] text-red-700 font-semibold">+ ${oldPending.length-5} autre(s)…</span>`:"";const todayLabel=new Date(today).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long"});const bg=todayPending&&!oldPending.length?"linear-gradient(90deg,#043970,#043970)":"linear-gradient(90deg,#fee2e2,#fecaca)";const border=todayPending&&!oldPending.length?"#043970":"#dc2626";const titleColor=todayPending&&!oldPending.length?"#043970":"#991b1b";const subColor=todayPending&&!oldPending.length?"#043970":"#7f1d1d";return`<div class="no-print mx-4 mt-3 p-4 rounded-lg shadow-lg fpq-banner-pulse" style="background:${bg};border:3px solid ${border}">
     <div class="flex items-center justify-between gap-3 flex-wrap">
       <div class="flex items-center gap-3 flex-1 min-w-0">
@@ -33256,7 +33367,7 @@ function fpqClotureBannerHTML(){if(!db||!session)return"";if(session.transverse!
       </div>
     </div>
   </div>`}
-function fpqClearAll(date,soc){if(fpqGuardArchive(date)||fpqGuardCloture(date))return;if(!confirm("Effacer toute la feuille du "+formatDate(date)+" ?"))return;const removed=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||f.societe===soc));removed.forEach(f=>ptRemovePresenceLine(f));const before=(db.feuillePresence||[]).length;db.feuillePresence=(db.feuillePresence||[]).filter(f=>{if(f.date!==date)return true;if(soc&&f.societe!==soc)return true;return false});saveDB();toast((before-db.feuillePresence.length)+" ligne(s) supprimée(s)","success");renderView()}
+function fpqClearAll(date,soc){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : suppression pointage non autorisée."))return;if(fpqGuardArchive(date)||fpqGuardCloture(date))return;if(!confirm("Effacer toute la feuille du "+formatDate(date)+" ?"))return;const removed=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||f.societe===soc));removed.forEach(f=>ptRemovePresenceLine(f));const before=(db.feuillePresence||[]).length;db.feuillePresence=(db.feuillePresence||[]).filter(f=>{if(f.date!==date)return true;if(soc&&f.societe!==soc)return true;return false});saveDB();toast((before-db.feuillePresence.length)+" ligne(s) supprimée(s)","success");renderView()}
 function fpqSupprimerFeuille(date){
   if(fpqGuardArchive(date)||fpqGuardCloture(date))return;
   const lignes=(db.feuillePresence||[]).filter(f=>f.date===date);
@@ -33465,6 +33576,7 @@ function fpqApsAgentsForPrise(date,currentId){
   return [...standby,...aps].filter(a=>{if(seen.has(a.id))return false;seen.add(a.id);return true}).sort((x,y)=>(x.matricule||x.nom||"").localeCompare(y.matricule||y.nom||""));
 }
 async function fpqAssignVacantAgent(rowId,agentId){
+  if(guardOpsSupervisorMutation("affectation","Accès superviseur OPS : affectation non autorisée."))return;
   const f=(db.feuillePresence||[]).find(x=>x.id===rowId);if(!f||!agentId)return;
   if(fpqGuardArchive(f.date)||fpqGuardCloture(f.date))return;
   if((db.feuillePresence||[]).some(x=>x.date===f.date&&x.agentId===agentId&&x.id!==rowId)){toast("Cet employé figure déjà sur la feuille","error");renderView();return}
@@ -33494,7 +33606,7 @@ function ptOpenCodePicker(agentId,ym,day){
 }
 function ptPickCode(agentId,ym,day,code){ptSetCell(agentId,ym,day,code);closeModal();renderView()}
 function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);renderView()}
-async function ptClearRow(agentId,ym){const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
+async function ptClearRow(agentId,ym){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : effacement pointage non autorisé."))return;const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
 function ptCellHTML(agentId,ym,day,code,isWeekend){const c=POINTAGE_CODES[code];const bg=c?c.bg:(isWeekend?"#dbeafe":"");const fg=c?c.color:(isWeekend?"#1e40af":"#64748b");const txt=code||"·";return`<td class="text-center align-middle" style="border:1px solid #e2e8f0;padding:0;width:28px;min-width:28px;max-width:28px;background:${bg}"><button onclick="ptOpenCodePicker('${agentId}','${ym}',${day})" title="Cliquer pour choisir le code" style="width:100%;height:28px;border:0;background:transparent;color:${fg};font-weight:800;font-family:ui-monospace,monospace;cursor:pointer;font-size:8px;line-height:1">${txt}</button></td>`}
 function ptDonutSVG(slices,total,cx,cy,r,ir){
