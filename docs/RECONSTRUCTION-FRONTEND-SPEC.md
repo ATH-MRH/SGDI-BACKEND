@@ -15389,3 +15389,1892 @@
 **portal** (2) :
   - POST /api/portal/validate-employee
   - PUT /api/portal/accounts/{matricule}/password
+
+
+# =====================================================
+# RATTRAPAGE — ECRANS DES ROUTES ACTIVES NON COUVERTES
+# (routes du switch renderView jamais inventoriees en passe 3)
+# =====================================================
+
+### Dossier administratif (archive des pièces)
+**Route:** `#/dossiers`  |  **Rendu:** renderDossiers(view) — l.7116 (dispatch routeur case "dossiers" l.6861)
+
+**Donnees utilisees:**
+- db.agents (l.7117): id, nom, prenom, matricule, photo, societe, statut, cvFile, documents
+- db.candidats (l.7117): id, nom, prenom, photo, societe, statut, cvFile, documents (matricule affiché '—')
+- Constante SOCIETES (l.7121) pour le KPI 'Sociétés'
+- Calcul totalPieces (l.7118) = somme des clés de documents + 1 si cvFile, par personne
+
+**Actions:**
+- Lien 'Ouvrir →' par ligne (l.7124): <a href> vers #/agents/<id> si type=agent, sinon #/reserve/<id> (candidat). Navigation hash, aucun handler JS.
+- Aucun bouton d'action métier, aucun formulaire, aucune suppression: écran 100% lecture/consultation.
+
+**Appels API:**
+- Aucun appel /api direct dans renderDossiers. Lit uniquement le snapshot local db.* déjà hydraté.
+
+**Dependances snapshot/auto-refresh:**
+- Lecture pure du snapshot global db (agents+candidats). Aucun PUT/saveDB. Se re-rend via renderView() sur hashchange / auto-refresh.
+
+**Permissions:**
+- AUCUNE garde inline dans renderDossiers ni dans le case "dossiers" du routeur (l.6861). Route accessible à quiconque tape #/dossiers. Filtrage d'accès porté seulement par la construction de la sidebar (hors fonction).
+- AUCUN filtrage par société: agrège TOUS les agents et candidats sans respecter mySoc()/currentAllowedSocietes (contrairement aux autres écrans effectif).
+
+**Risques / cas limites:**
+- Complétude 'pct' codée en dur = nb/10*100 (l.7124): le dénominateur 10 est arbitraire, non lié au nombre réel de pièces requises — barre de progression trompeuse.
+- Fuite inter-société: pas de filtre societe, expose les dossiers de toutes les sociétés à tout profil qui atteint la route.
+- Les pills de pièces affichent k.slice(0,4) (4 premiers caractères de la clé document) — étiquettes cryptiques (ex: 'acte' pour acteNaissance).
+- Lien candidat pointe vers #/reserve/<id> même pour un candidat 'nouvelle'/archivé — peut ne pas ouvrir le bon formulaire selon l'état du candidat.
+- Pas de recherche/filtre/pagination: perf dégradée si beaucoup d'agents+candidats (rendu monolithique innerHTML).
+
+### Documents / Archives (documents archivés par employé)
+**Route:** `#/documents`  |  **Rendu:** renderDocumentsArchives(view,sub,arg) — l.7494 (sub/arg ignorés dans le corps)
+
+**Donnees utilisees:**
+- db.agents via employeeDocumentsArchiveRows(soc) (l.7424): aplatit tous les a.documents en lignes {agent,key,doc,date,title}, filtré par société normalisée, trié par date desc puis nom.
+- Portée société: currentStructureSocieteFilter() || mySoc() || '' (l.7495).
+- sessionStorage 'docsArchiveQ' (l.7496) pour restaurer la recherche.
+- Pour l'ouverture: a.extra._legacy.documents + a.extra.documents + a.documents fusionnés (l.7383); gestionEvents (reconstruction suspension l.7358).
+
+**Actions:**
+- Champ recherche #docsArchiveSearchInput (l.7510): oninput=updateDocsArchiveSearch(this.value) — filtrage DOM côté client (l.7442), persiste la requête dans sessionStorage 'docsArchiveQ'.
+- Bouton × 'Effacer la recherche' (l.7511): clearDocsArchiveSearch() (l.7472) — vide sessionStorage 'docsArchiveQ' et refocus.
+- Bouton 'Voir document' par employé (l.7516): openEmployeeArchiveDocuments(agentId) (l.7479) — si 1 doc ouvre directement viewAgentArchivedDoc, si plusieurs ouvre une modale de liste.
+- Dans la modale liste (l.7488): chaque item onclick=viewAgentArchivedDoc(agentId,key,title) (l.7381) → viewDocA4(url,name) (l.7289) qui ouvre l'aperçu A4 avec boutons Télécharger / Imprimer (printArchiveA4Current l.7263) / Fermer.
+- viewAgentArchivedDoc peut RECONSTRUIRE un document manquant (rebuildEmployeeArchivedDocumentHTML l.7355, cas suspension) puis le PERSISTER via persistEmployeeArchivedDocumentContent (l.7369).
+
+**Appels API:**
+- renderDocumentsArchives lui-même: aucun /api (lit db.agents).
+- Indirect via 'Voir document' → viewAgentArchivedDoc → persistEmployeeArchivedDocumentContent (l.7369): SGDI.employees.update(a.backendId,payload) ou SGDI.employees.create(payload) — payload.extra.documents / extra._legacy.documents (l.7373-7376) pour ré-archiver un doc reconstruit dans PostgreSQL.
+- Payload employé construit par employeeApiPayload(a); doc mappé par employeeFromApi(saved).
+
+**Dependances snapshot/auto-refresh:**
+- Lecture snapshot db.agents. L'action 'Voir' d'un doc à contenu manquant DÉCLENCHE un write PostgreSQL (SGDI.employees.update/create) — effet de bord d'archivage lors d'une simple consultation.
+- persistEmployeeArchivedDocumentContent mute l'objet agent en mémoire (Object.assign l.7378) sans passer par saveDB global — dépend du modèle backend non destructif.
+- sessionStorage 'docsArchiveQ' survit à l'auto-refresh; setTimeout(updateDocsArchiveSearch) réapplique le filtre après re-render (l.7519).
+
+**Permissions:**
+- AUCUNE garde de rôle inline (ni isAdmin ni canAccess) dans renderDocumentsArchives ni dans le case "documents" (l.6878).
+- Filtrage limité à la SOCIÉTÉ courante (soc) — pas de contrôle de rôle. Sécurité déléguée au menu/sidebar.
+
+**Risques / cas limites:**
+- sub/arg reçus du routeur sont IGNORÉS: #/documents/<sub>/<arg> rend exactement le même écran que #/documents (aucune sous-vue distincte — à confirmer côté migration comme route sans profondeur).
+- Consultation à effet de bord: ouvrir un doc reconstruisible écrit en base (toast 'Document reconstruit et archivé dans PostgreSQL') — comportement non-idempotent à préserver/migrer prudemment.
+- Recherche = filtrage DOM (hidden) sur attributs data-*: sur gros volumes, tous les nœuds restent dans le DOM (perf).
+- Docs à contenu absent affichent une modale 'Archive incomplète à régénérer' (l.7399) — logique métier 'no more empty archive' à conserver.
+- Clés d'identité employé multiples (id||backendId||matricule) utilisées comme identifiant partout — fragile si collision/valeur vide.
+- employeeArchivedDocumentUrl (l.7346) reconstruit une data:url à partir de html/content — dépend de champs hétérogènes (data/fileData/html/contentHtml/bodyHtml).
+
+### Demande structure — Tableau de bord
+**Route:** `#/demandes_structure`  |  **Rendu:** renderDemandesStructureDashboard(view) — l.18162 (appelé par renderDemandesStructure quand sub=='dashboard')
+
+**Donnees utilisees:**
+- ensureDemandesStructure() (l.18163) crée db.demandesStructure=[] si absent.
+- migrateStructureDemandes() (l.18164, def l.17475): reclasse db.demandesPersonnel dont isStructureDemand()==true vers db.demandesStructure.
+- db.demandesStructure normalisé par normalizeStructureDemand (l.17468): fromStructure/toStructure/typeLabel.
+- Filtres received=structureDemandReceived (l.17488, dépend currentStructureKey()=session.transverse||'drh'), sent=structureDemandSent (l.17489, fromStructure===clé ou createdBy===session.username).
+- Compteurs par statut nouveau/en_cours/traite/rejete (l.18168-18171) + urgentes (urgence haute/urgent/critique l.18172).
+- session.transverse / currentStructureKey() pour l'entête (l.18175).
+
+**Actions:**
+- Bouton 'Réception' (l.18175) → navigate('demandes_structure/reception').
+- Bouton 'Envoi' (l.18175) → navigate('demandes_structure/envoi').
+- 5 KPI cliquables (l.18177-18181): navigate vers reception (Réception/Nouvelles/En cours/Traitées) ou envoi (Envoi).
+- Accès rapides (l.18185): 'Ouvrir la réception' → navigate reception; 'Voir les envois' → navigate envoi; 'Demandes suspension' → sessionStorage.setItem('ds_q','suspension')+navigate reception; 'Demandes convocation' → sessionStorage.setItem('ds_q','convocation')+navigate reception.
+- Cartes 'Dernières demandes reçues' (l.18184): rendues par structureDemandCardHTML — chaque carte porte ses propres boutons (Répondre + actions suspension/convocation, voir écran liste).
+
+**Appels API:**
+- Aucun /api direct. Lecture snapshot db.demandesStructure. (migrateStructureDemandes déplace localement des lignes de db.demandesPersonnel — pas d'appel réseau).
+
+**Dependances snapshot/auto-refresh:**
+- migrateStructureDemandes() MUTE le snapshot (db.demandesPersonnel ↔ db.demandesStructure) à CHAQUE rendu — effet de bord de re-classification au simple affichage.
+- sessionStorage 'ds_q' porte le filtre de recherche transmis à l'écran liste.
+- Lecture pure sinon; pas de PUT direct depuis le dashboard.
+
+**Permissions:**
+- AUCUNE garde inline. Visibilité pilotée par structureDemandReceived: un profil 'admin' voit tout (m==='admin' l.17488), 'drh' voit toStructure vide/'drh'/'all'.
+- Pas de contrôle isAdmin/canAccess dans le routeur (l.6885).
+
+**Risques / cas limites:**
+- Effet de bord au rendu: migrateStructureDemandes peut faire DISPARAÎTRE des demandes de l'écran demandes_personnel (reclassées) — cf. note spec l.3655. À migrer avec soin (séparation lecture/mutation).
+- currentStructureKey défaut 'drh': un utilisateur sans transverse voit la file DRH par défaut.
+- grid grid-5 pour 5 KPI: layout à revoir en responsive.
+- normalizeStructureDemand force toStructure='drh' si absent → toute demande sans destinataire atterrit chez DRH.
+
+### Demande structure — Réception / Envoi (liste)
+**Route:** `#/demandes_structure/reception`  |  **Rendu:** renderDemandesStructure(view,sub,arg) — l.18189 (sub='dashboard' délègue à renderDemandesStructureDashboard l.18190)
+
+**Donnees utilisees:**
+- ensureDemandesStructure/migrateStructureDemandes (l.18191-18192), normalizeStructureDemand sur chaque (l.18193).
+- db.demandesStructure filtré par structureDemandSent (mode envoi) ou structureDemandReceived (l.18196).
+- sessionStorage 'ds_q' (l.18195) recherche sur ref/agentName/matricule/objet/message/type/typeLabel/societe/site (l.18197).
+- Tri par createdAt/date desc (l.18198).
+- Carte lit: objet/typeLabel/type, ref/id, fromStructure/toStructure, agentName/matricule, societe/site, message, reponse, pieces[], statut, urgence (via demandePersonnelIsAlert l.17497).
+
+**Actions:**
+- Onglets 'Réception'/'Envoi' (l.18199) → navigate('demandes_structure/reception'|'envoi').
+- Champ recherche (l.18199): oninput=sessionStorage.setItem('ds_q',this.value)+renderView() — re-render complet à chaque frappe.
+- Par carte (structureDemandCardHTML l.18150): bouton 'Répondre' → openTraiterStructureDemand(id) (l.18201) ouvre modale statut(en_cours/traite/rejete)+réponse; submit → saveTraiterStructureDemand(id,form) (l.18205).
+- Si demande reçue: actions suspensionDemandActionsHTML(d) + convocationDemandActionsHTML(d) injectées (l.18159) — boutons métier suspension/convocation (fonctions hors périmètre listé).
+- Pièces jointes (l.18158): liens <a download> data-url par pièce.
+- saveTraiterStructureDemand (l.18205): met à jour statut/reponse/updatedAt/traitePar, pousse historique, saveDBAndWaitToast, closeModal, toast, renderSidebar+renderView.
+
+**Appels API:**
+- Pas d'appel /api explicite; la persistance passe par saveDBAndWaitToast('Demande structure non confirmée') (l.18205) = PUT du snapshot global (mécanisme saveDB).
+
+**Dependances snapshot/auto-refresh:**
+- saveTraiterStructureDemand → saveDBAndWaitToast = écrit tout le snapshot (PUT global) ; renderSidebar après pour recompter structureOpenCount (l.17490).
+- migrateStructureDemandes muté à chaque rendu (comme le dashboard).
+- Recherche re-render via renderView() (risque de réafficher par-dessus une saisie — cf. mémoire 'temps réel ne coupe jamais l'édition').
+
+**Permissions:**
+- AUCUNE garde de rôle inline. Visibilité via structureDemandReceived/Sent (dépend session.transverse).
+- Répondre disponible sur toute carte (le bloc actions 'Répondre' est hors condition received l.18159).
+
+**Risques / cas limites:**
+- oninput→renderView() sur le champ recherche re-render toute la page à chaque touche: perte de focus/curseur possible, coûteux, et conflit potentiel avec l'auto-refresh (règle mémoire réédition).
+- saveDBAndWaitToast persiste TOUT le db (pas seulement la demande) — écriture non ciblée, contraire au plan 'sauvegarde ciblée' (mémoire multi-PC).
+- Aucune garde: n'importe quel profil atteignant la route peut Répondre et changer le statut d'une demande.
+- sub inconnu (ni dashboard/reception/envoi) → traité comme reception (mode=sub||'reception' l.18194 mais list filtre received) — silencieux.
+- Historique/traitePar dépendent de session.username (peut être vide).
+
+### Rapports (synthèse RH)
+**Route:** `#/rapports`  |  **Rendu:** renderRapports(view) — l.24704
+
+**Donnees utilisees:**
+- db.agents.filter(statut==='actif') pour 'Agents actifs' (l.24704).
+- db.incidents.filter(statut==='en_cours') pour 'Évèn. en cours'.
+- Constante SOCIETES: agents actifs par société.
+- Constante TYPES_CONTRAT: agents actifs par typeContrat (masque les types à 0).
+
+**Actions:**
+- AUCUN bouton, aucun handler, aucun lien: écran statique 100% lecture (2 KPI + 2 tableaux de répartition).
+
+**Appels API:**
+- Aucun /api. Lecture directe db.agents et db.incidents.
+
+**Dependances snapshot/auto-refresh:**
+- Lecture pure db.*, aucun write. Re-render via renderView sur navigation/auto-refresh.
+
+**Permissions:**
+- AUCUNE garde inline ni dans le routeur (l.6900). Route ouverte.
+
+**Risques / cas limites:**
+- Écran très minimal (2 KPI + 2 listes) sans filtre société, sans période, sans export — probablement à enrichir/repositionner lors de la reconstruction.
+- Aucun filtrage par société/rôle: compte sur TOUS les agents/incidents du snapshot.
+- Dépend des constantes globales SOCIETES/TYPES_CONTRAT (statiques) — pas des sociétés réellement autorisées à l'utilisateur.
+- Pas de gestion d'erreur si db.incidents undefined (mais routeur try/catch global l.6905).
+
+### Paramètres (code de déverrouillage + journal récent)
+**Route:** `#/parametres`  |  **Rendu:** renderParametres(view) — l.24707
+
+**Donnees utilisees:**
+- db.settings.unlockCode (affiché en clair readonly, l.24707).
+- db.settings.unlockLog (20 derniers, l.24707): date, user, role, agentId.
+- db.agents pour résoudre matricule+nom de l'agent déverrouillé (lien #/agents/<id>).
+
+**Actions:**
+- Garde: si !isAdmin() → affiche 'Accès réservé à l'administrateur.' et return (l.24707).
+- Bouton 👁 (l.24707): bascule type password/text de #code-current (inline JS).
+- Bouton 📋: navigator.clipboard.writeText(db.settings.unlockCode)+toast('Copié').
+- Bouton 'Vider' (Action): confirm() puis db.settings.unlockCode=''; saveDB(); renderView(); toast('Code vidé').
+- Formulaire 'Mettre à jour' → changeUnlockCode() (l.24709): compare c1/c2, si égaux db.settings.unlockCode=c1; saveDB(); toast; renderView().
+- Bouton 'Voir tout →' → navigate('parametres/log') (vers renderUnlockLog).
+
+**Appels API:**
+- Aucun /api direct. Persistance via saveDB() (PUT snapshot global).
+
+**Dependances snapshot/auto-refresh:**
+- 'Vider' et changeUnlockCode() appellent saveDB() (PUT snapshot global) — écriture non ciblée de tout db.
+- saveDB() ici est synchrone (pas saveDBAndWaitToast): pas d'attente de confirmation serveur — risque de perte multi-PC.
+- renderView() après modification.
+
+**Permissions:**
+- GARDE inline forte: isAdmin() requis (l.24707), sinon carte 'Accès réservé'. Seul écran de ce lot avec vraie garde de rôle (avec renderUnlockLog).
+
+**Risques / cas limites:**
+- Code de déverrouillage stocké et affiché EN CLAIR dans le snapshot (db.settings.unlockCode) et copiable presse-papier — donnée sensible à durcir.
+- saveDB() non-awaited (contrairement à saveDBAndWaitToast ailleurs): modification du code non confirmée par le serveur, sujette à écrasement multi-PC (cf. mémoire multi-PC/scalabilité).
+- 'Vider' via confirm() natif — pas de garde de saisie du code actuel.
+- unlockLog.slice(0,20): pas de pagination ici (vue complète = renderUnlockLog).
+- isAdmin() est la seule barrière: à préserver strictement lors de la migration.
+
+### Journal de déverrouillage (complet)
+**Route:** `#/parametres/log`  |  **Rendu:** renderUnlockLog(view) — l.24708
+
+**Donnees utilisees:**
+- db.settings.unlockLog (TOUTES les entrées, l.24708): date, user, role, agentId.
+- db.agents pour résoudre matricule+nom par agentId.
+
+**Actions:**
+- Garde: si !isAdmin() → 'Accès réservé.' et return (l.24708).
+- Bouton 🗑 'Vider' (l.24708): confirm('Vider ?') puis db.settings.unlockLog=[]; saveDB(); renderView().
+- Liens par ligne vers #/agents/<agentId> (matricule+nom de l'agent).
+- Aucun autre handler: table complète en lecture.
+
+**Appels API:**
+- Aucun /api direct. Vidage via saveDB() (PUT snapshot global).
+
+**Dependances snapshot/auto-refresh:**
+- 'Vider' → db.settings.unlockLog=[]; saveDB() (PUT snapshot global, non-awaited) + renderView().
+- Lecture pure sinon.
+
+**Permissions:**
+- GARDE inline: isAdmin() requis (l.24708), sinon 'Accès réservé.'
+
+**Risques / cas limites:**
+- saveDB() non-awaited (comme renderParametres): purge du journal non confirmée serveur, risque multi-PC.
+- Purge irréversible du journal d'audit via simple confirm() — perte de traçabilité.
+- Aucune pagination: table entière rendue (perf si journal volumineux).
+- Lien agent cassé si agentId ne correspond plus à un agent existant (affiche '—').
+
+### Rubrique personnalisée (page satellite créée depuis Administration système)
+**Route:** `#/custom/`  |  **Rendu:** renderCustomSidebarPage(view,module,slug) — l.30423
+
+**Donnees utilisees:**
+- customSidebarItemByRoute(module,route) (l.30425): retrouve l'item de sidebar personnalisé par route 'custom/<module>/<slug>' — fallback {label:'Rubrique personnalisée',route} si introuvable.
+- adminSidebarModuleLabel(module) (l.30426) pour le sur-titre du module.
+- item.label et item.route affichés.
+
+**Actions:**
+- AUCUN bouton/handler/lien actif: page placeholder statique ('Page prête') affichant le libellé de la rubrique et la route en font-mono.
+- Sert de point d'entrée propre pour éviter une navigation vide; aucune logique métier attachée.
+
+**Appels API:**
+- Aucun /api. Lit la config de rubrique en mémoire.
+
+**Dependances snapshot/auto-refresh:**
+- Lecture de la config sidebar personnalisée (sidebarOrderSettings / items custom, stockés dans db/settings). Aucun write depuis cette page.
+- Les rubriques sont créées/ordonnées ailleurs (renderAdminSidebarMenu, saveAdminSidebarMenuOrder l.30429 → saveDB).
+
+**Permissions:**
+- AUCUNE garde de rôle inline ni dans le routeur (l.6895). La visibilité dépend de la présence de la rubrique dans la sidebar (config admin).
+
+**Risques / cas limites:**
+- Page volontairement vide (placeholder): si la migration attend une 'vraie' page, chaque rubrique custom reste un cul-de-sac fonctionnel tant qu'aucune logique n'y est rattachée.
+- Route reconstruite 'custom/<module>/<slug>' à partir des segments d'URL: un slug contenant '/' (>3 segments) casse la correspondance → retombe sur le libellé de repli 'Rubrique personnalisée' (cf. spec l.14794).
+- Une rubrique dont la route ne commence pas par 'custom/' n'atteint jamais cette fonction: le routeur dispatch sur le module réel et affiche son fallback/dashboard (spec l.14793).
+- Aucun contrôle d'accès: quiconque forge #/custom/x/y voit la page placeholder.
+
+### Tableau de bord Secrétariat
+**Route:** `#/secretariat/dashboard`  |  **Rendu:** renderSecretariat (l.31564, sub="dashboard" par défaut via dispatcher l.6898 `renderSecretariat(view,sub||"dashboard",arg)`)
+
+**Donnees utilisees:**
+- db.secretariatCourriers (l.31566 init [] si absent ; l.31569 lecture)
+- db.secretariatNotes (l.31567 init [] si absent ; l.31570 lecture)
+- Dérivés locaux : courriers=secretariatScopedItems(db.secretariatCourriers) (l.31569), notes=secretariatScopedItems(db.secretariatNotes) (l.31570), archives=courriers.filter(c=>c.archive||c.statut==="archive") (l.31571), ouverts=courriers.filter(c=>!c.archive&&c.statut!=="archive") (l.31572)
+- secretariatScopedItems (l.31560-31563) filtre par societe via currentStructureSocieteFilter() (l.3481) : garde x.societe===soc, ou tout si soc vide (mode global)
+- soc=currentStructureSocieteFilter() (l.31568) affiché dans le sous-titre
+- Derniers courriers : courriers.slice(0,8) rendu par secretariatTableHTML (l.31581)
+
+**Actions:**
+- Bouton `＋ Nouveau courrier` (l.31577) -> openSecretariatCourrierModal() (l.31587) : ouvre un modal de création de courrier
+- 4 cartes KPI cliquables (helper `card` l.31573) : `Courriers`->#/secretariat/courriers, `En cours`->#/secretariat/courriers, `Notes internes`->#/secretariat/notes, `Archives`->#/secretariat/archives (l.31578). Ce sont de simples liens <a href> hash, pas de handler JS
+- Tableau `Derniers courriers` (l.31579) : lignes en lecture seule (data-searchable), aucune action par ligne (pas de clic, pas d'édition, pas de suppression, pas d'archivage)
+
+**Appels API:**
+- Aucun appel /api/... direct depuis renderSecretariat. Les compteurs affichés ici viennent de db.* local (pas du backend).
+- NB divergence : le ruban de compteurs du module (sgdiBackendModuleCounters("secretariat") l.4589-4597, hors renderSecretariat) lit les stats serveur sec.courriers_total / courriers_open / notes_total / archives_total via sgdiBackendStatsForScope — chiffres potentiellement différents des cartes locales de ce dashboard.
+
+**Dependances snapshot/auto-refresh:**
+- Lecture pure du snapshot global db (hydraté par sgdiPullState/hydrateDB l.767+). Aucune écriture ici.
+- Sensible à l'auto-refresh temps réel : un re-render déclenché par sgdiScheduleAutoRefresh/refreshRealtimeFeed peut réafficher ce dashboard après hydratation (pas de saisie en cours ici, donc pas de perte de travail sur cet écran).
+- Compteurs du dashboard = comptages en direct sur les tableaux db.secretariatCourriers/Notes ; ruban module = stats backend (deux sources).
+
+**Permissions:**
+- Garde en tête de renderSecretariat (l.31565) : `if(!canAccess("secretariat")) -> 🔐 Accès refusé`
+- canAccess (l.3593) : refuse si !session ; respecte db.droitsAcces["secretariat:<role>"] si défini ; sinon defaultAccessMap()["secretariat"]=["rh","dispatch","admin"] (+"ops" injecté l.3590)
+- Rôles déclarés du module : roles:["rh","dispatch","admin"] (registre l.6981)
+- Sous-routes secretariat/courriers|notes|archives mappées sur map.secretariat pour l'accès (l.3587)
+- Filtrage société via structureSocieteFilterKey -> "secretariatSociete" (l.3479) ; enterSocieteStructure autorise "secretariat" (l.3851) sous réserve de canAccessStructureKey et société sélectionnée
+
+**Risques / cas limites:**
+- Le paramètre `arg` est passé (dispatcher l.6898) mais jamais utilisé par renderSecretariat (aucune vue détail d'un courrier).
+- Cartes KPI `Courriers` et `En cours` pointent toutes deux vers #/secretariat/courriers (l.31578) : la carte `En cours` n'a pas de vue filtrée dédiée ; l'utilisateur voit tous les courriers, pas seulement les ouverts.
+- Aucune persistance backend dédiée : secretariatCourriers/Notes ne sont sauvegardés que dans le snapshot JSON global (saveDB/sgdiBackendSave) — logique métier 100% côté client à migrer côté serveur.
+- Divergence de comptage possible entre cartes locales (db.*) et ruban backend (sgdiBackendModuleCounters) si le snapshot local et les stats SQL serveur ne sont pas synchronisés.
+- secretariatScopedItems filtre sur égalité stricte x.societe===soc sans normalisation (pas de normalizeSocieteName) : un courrier dont la société diffère par casse/espaces sera masqué.
+
+### Courriers (liste)
+**Route:** `#/secretariat/courriers`  |  **Rendu:** renderSecretariat (l.31564) branche `if(sub==="courriers") return renderSecretariatList(view,"Courriers",courriers)` (l.31574) -> renderSecretariatList (l.31584)
+
+**Donnees utilisees:**
+- courriers = secretariatScopedItems(db.secretariatCourriers) (l.31569) — TOUS les courriers de la société (pas de filtre statut), archives incluses
+- Rendu tabulaire via secretariatTableHTML (l.31581-31582) : colonnes Référence(c.ref), Date(c.date||c.createdAt via formatDate), Objet(c.objet), Origine/Destinataire(c.tiers), Statut(pill c.statut||"en cours", gris si archive)
+
+**Actions:**
+- Bouton `← Tableau de bord` (l.31585) -> navigate('secretariat/dashboard')
+- Aucune action par ligne : tableau lecture seule (pas d'ouverture, édition, suppression, archivage, export)
+- Pas de bouton `Nouveau courrier` sur cette vue liste (uniquement sur le dashboard)
+
+**Appels API:**
+- Aucun appel /api/... . Rendu purement local depuis db.secretariatCourriers.
+
+**Dependances snapshot/auto-refresh:**
+- Lecture seule du snapshot global. Aucune écriture.
+- Réaffiché lors d'un auto-refresh (re-render du path courant après hydrateDB).
+
+**Permissions:**
+- Passe d'abord par la garde canAccess("secretariat") de renderSecretariat (l.31565) avant d'atteindre la branche courriers.
+- Accès sous-route secretariat/courriers = map.secretariat (l.3587) = ["rh","dispatch","admin","ops"].
+
+**Risques / cas limites:**
+- La vue "Courriers" inclut aussi les courriers archivés (aucun filtre !archive), alors que le dashboard distingue ouverts/archives : cohérence à revoir lors de la refonte.
+- Aucun tri/recherche/pagination : les lignes portent data-searchable (dépend d'un filtre de recherche global externe), sinon tout est affiché brut.
+- Titre codé en dur "Courriers" ; sous-titre générique "Module Secretariat Général." (l.31585).
+
+### Notes internes (liste)
+**Route:** `#/secretariat/notes`  |  **Rendu:** renderSecretariat (l.31564) branche `if(sub==="notes") return renderSecretariatList(view,"Notes internes",notes)` (l.31575) -> renderSecretariatList (l.31584)
+
+**Donnees utilisees:**
+- notes = secretariatScopedItems(db.secretariatNotes) (l.31570) — collection db.secretariatNotes
+- Rendu via secretariatTableHTML (l.31581) : MÊMES colonnes que courriers (Référence/Date/Objet/Origine-Destinataire/Statut). Le schéma d'une note n'est jamais défini par le code (aucun créateur).
+
+**Actions:**
+- Bouton `← Tableau de bord` -> navigate('secretariat/dashboard') (l.31585)
+- Aucune autre action ; aucun bouton de création de note nulle part dans le module.
+
+**Appels API:**
+- Aucun appel /api/... . Lecture locale de db.secretariatNotes.
+
+**Dependances snapshot/auto-refresh:**
+- Lecture seule du snapshot global db.secretariatNotes (initialisée à [] l.31567 si absente). Jamais écrite par le code.
+
+**Permissions:**
+- Garde canAccess("secretariat") (l.31565). Sous-route secretariat/notes -> map.secretariat (l.3587).
+
+**Risques / cas limites:**
+- BUG/LACUNE MAJEURE : aucune fonction n'écrit dans db.secretariatNotes. openSecretariatCourrierModal/saveSecretariatCourrier ne créent que des courriers (db.secretariatCourriers). Il n'existe aucun modal ni handler `note`. => La liste Notes internes sera TOUJOURS vide (sauf données injectées hors app).
+- La table réutilise le schéma courrier (ref/objet/tiers/statut) : si des notes étaient créées un jour, leur modèle de données n'est pas spécifié — à définir lors de la reconstruction.
+- Le compteur backend notes_total (ruban l.4595) peut afficher un nombre non nul alors que la liste locale est vide, faute d'écriture locale — incohérence.
+
+### Archives (liste)
+**Route:** `#/secretariat/archives`  |  **Rendu:** renderSecretariat (l.31564) branche `if(sub==="archives") return renderSecretariatList(view,"Archives",archives)` (l.31576) -> renderSecretariatList (l.31584)
+
+**Donnees utilisees:**
+- archives = courriers.filter(c=>c.archive||c.statut==="archive") (l.31571) — sous-ensemble des courriers marqués archivés
+- Rendu via secretariatTableHTML (l.31581) : mêmes colonnes ; pill grise (pill-gray) car archive/statut==="archive" (l.31582).
+
+**Actions:**
+- Bouton `← Tableau de bord` -> navigate('secretariat/dashboard') (l.31585)
+- Aucune action de désarchivage / restauration / suppression.
+
+**Appels API:**
+- Aucun appel /api/... . Filtrage local sur db.secretariatCourriers.
+
+**Dependances snapshot/auto-refresh:**
+- Lecture seule du snapshot global. Aucune écriture.
+
+**Permissions:**
+- Garde canAccess("secretariat") (l.31565). Sous-route secretariat/archives -> map.secretariat (l.3587).
+
+**Risques / cas limites:**
+- BUG/LACUNE : aucun bouton/handler ne pose c.archive=true ni c.statut="archive" (saveSecretariatCourrier crée statut:"en cours" l.31593 en dur). => La vue Archives sera TOUJOURS vide dans l'app telle quelle.
+- Le compteur backend archives_total (ruban l.4596) peut être non nul alors que la liste locale reste vide (deux sources : filtre local vs stats SQL).
+- Aucun mécanisme de cycle de vie courrier (ouvrir->archiver->purger) côté client : à concevoir lors de la refonte.
+
+### Modal Nouveau courrier (création)
+**Route:** `#/secretariat/dashboard`  |  **Rendu:** openSecretariatCourrierModal (l.31587-31589) via openModal ; soumission -> saveSecretariatCourrier (l.31590-31596)
+
+**Donnees utilisees:**
+- Formulaire : ref (préremplie `SEC-<yyyymmdd>-<rand 1000-9999>` l.31588), date (défaut today()), objet (required), tiers (Origine/Destinataire), note (Observation, textarea)
+- À l'enregistrement, saveSecretariatCourrier lit currentStructureSocieteFilter()||session?.societe pour societe (l.31593) et session?.username pour createdBy
+
+**Actions:**
+- `Annuler` -> closeModal() (l.31588)
+- `Enregistrer` (submit) -> event.preventDefault();saveSecretariatCourrier(this) (l.31588)
+- saveSecretariatCourrier (l.31590) : init db.secretariatCourriers si absent (l.31591) ; new FormData(form) (l.31592) ; db.secretariatCourriers.unshift({id:uid("sec"), ref, date, objet, tiers, note, societe, statut:"en cours", createdAt:new Date().toISOString(), createdBy}) (l.31593) ; `if(!(await saveDBAndWaitToast("Courrier secrétariat non confirmé")))return` (l.31594) ; puis closeModal();toast("Courrier enregistré","success");renderView() (l.31595)
+
+**Appels API:**
+- saveDBAndWaitToast (l.751) -> saveDBAndWait (l.747) -> sgdiBackendSaveAndWait() : POUSSE le snapshot global au backend (pas d'endpoint courrier dédié ; le courrier voyage dans le blob db complet). En cas d'échec/refus serveur : toast d'erreur et return (le courrier reste en mémoire locale db mais n'est pas confirmé côté serveur).
+- uid (l.2375) génère l'id local `sec_<rand>` (pas d'id serveur).
+
+**Dependances snapshot/auto-refresh:**
+- ÉCRITURE : unshift dans db.secretariatCourriers puis persistance via saveDBAndWait (snapshot global complet, PUT du db entier, pas d'écriture ciblée collection). sgdiDirty=true (l.748).
+- Après succès : renderView() re-rend la vue courante (dashboard) avec le nouveau courrier en tête.
+- Dépend du garde-fou serveur : saveDB principal (l.2278) appelle sgdiRequireServerWrite (l.2286) et sgdiBackendSave (l.2287) ; ici le chemin passe par saveDBAndWait (variante await) qui exige la confirmation serveur avant de fermer le modal (protège contre le 'tout à zéro' multi-PC).
+
+**Permissions:**
+- Pas de re-check canAccess dans le modal/save : la protection repose sur le fait que le bouton n'est atteignable que depuis le dashboard déjà gardé par canAccess("secretariat") (l.31565).
+- societe forcée = currentStructureSocieteFilter()||session?.societe (rattache le courrier à la société active).
+
+**Risques / cas limites:**
+- Aucune re-vérification de permission côté saveSecretariatCourrier : un appel direct saveSecretariatCourrier() contournerait la garde (défense en profondeur absente ; à sécuriser côté serveur).
+- statut est codé en dur "en cours" et aucune UI ne le fait passer à "archive" -> vues Archives inertes (cf. écran Archives).
+- ref auto-générée avec Math.random sans contrôle d'unicité : collision de référence possible (faible mais non nulle) ; pas de séquence serveur.
+- objet est le seul champ required ; date peut être vide->fallback today() ; pas de validation de format de ref.
+- Persistance = snapshot global entier : coûteux et concurrent (deux PC peuvent s'écraser) ; saveDBAndWait atténue mais l'écriture n'est pas au niveau collection. Migration recommandée vers un endpoint /api/.../secretariat/courriers dédié.
+- createdBy=session?.username (peut être vide) ; pas d'horodatage de modification, pas d'historique.
+
+### OPS — Tableau de bord
+**Route:** `#/ops/dashboard`  |  **Rendu:** renderOPS (l.32229) — fall-through body l.32241-32330; helper modals openOpsSocModal (l.32332), openOpsStatModal (l.32349)
+
+**Donnees utilisees:**
+- db.agents (l.32244 ag by société; actifs=employeeIsActive; sanctions from a.gestionEvents l.32294; societeRows per-société l.32281 uses !employeeIsFormer)
+- db.sites (l.32245 siteBelongsToPrimarySociete; sitesActifs l.32256; sitesSansEffectif l.32272)
+- db.pointages (l.32246 scoped by agent lookup or p.societe; ptsCur by p.periode===curYM; P/A/M counts over p.days l.32260-62)
+- db.feuillePresence (l.32264 fpqToday = date===today && société; fpqPresenceCode(f.heureArrivee); _presentsBySite l.32284; abs/mal/susp lists l.32291-93)
+- db.incidents (l.32271 incidentsOuverts = statut!=='clos' && incidentMatchesSociete)
+- Derived: sgdiUnifiedEmployeeCounters(soc) l.32242, sgdiErpModuleCounters('ops',soc) l.32243, materialPendingDotationCountForSoc, workflowTasksForModule('ops') l.32275; SOCIETES l.32279; currentStructureSocieteFilter() l.32241
+- Transient globals window._opsSocLists (l.32280/81) and window._opsStatLists (l.32295) populated for modals
+
+**Actions:**
+- Société recap table l.32306: openOpsSocModal(soc,'eff'|'aff'|'sans'|'inc') opens modal from window._opsSocLists; sites cell links #/sites/actifs
+- Situation du jour cards l.32312-15: openOpsStatModal('absents'|'malades'|'suspendus'|'sanctions') from window._opsStatLists
+- 'Voir feuille' l.32321 -> #/pointage/feuille
+- 3 nav cards l.32326-28 -> #/pointage/feuille, #/fiches/toutes, #/sites/actifs
+- opsLine() helper l.32278 defined but unused in this body (dead code)
+
+**Appels API:**
+- None directly — pure client render over in-memory db.* snapshot; counters read from cached sgdiUnifiedEmployeeCounters/sgdiErpModuleCounters, no fetch inside renderOPS
+
+**Dependances snapshot/auto-refresh:**
+- Reads global db snapshot only; no PUT/auto-refresh. Relies on counters cache kept fresh by sgdiRefreshCountersNow elsewhere. Resets window._opsSocLists/_opsStatLists each render
+
+**Permissions:**
+- canAccess('ops') guard top of renderOPS (l.32230) else '🔐 Accès refusé'. canAccess (l.3593): OPS-supervisor read-only auto-allowed for host ops/pointage (l.3598); else level + db.droitsAcces + defaultAccessMap. ops base roles = rh/dispatch/admin (l.3582). No mutation here so no guardOpsSupervisorMutation
+
+**Risques / cas limites:**
+- Heavy per-render recompute: societeRows scans all agents×sites×incidents per société (l.32281) client-side; migrate to server aggregation
+- Two 'active' definitions: société table uses !employeeIsFormer (l.32281) vs top counters employeeIsActive (l.32247) — totals can diverge
+- Absent code set hard-coded _absCodes {A,AB,A1,A2,A3} (l.32290) must stay in sync with POINTAGE_CODES
+- incident-société match mixes i.societe===s and site.id===i.siteId (l.32281) — incidents without société/siteId miscounted
+- Modal data on window globals goes stale if snapshot re-renders between open and click
+- counterNumericValue fallbacks can show cached counters disagreeing with live db filter
+
+### OPS — QR Présence (générateur QR par site)
+**Route:** `#/ops/qr`  |  **Rendu:** renderOPS sub==='qr' branch (l.32232-36) wrapping renderPointageQRGen (l.33781); timers ptStartQrTabletTimer (l.33812)/ptStopQrTabletTimer (l.33824)/ptRefreshQrTablet (l.33826); token ptQrToken (l.33779) & ptQrTimeSlot10
+
+**Donnees utilisees:**
+- db.sites (l.33783 s.actif!==false && normalizeSocieteName match; also l.33828; QR id = s.backendId||s.id l.33789; nom/intitule/indicatif)
+- ptCurrentSoc() l.33782 (sessionStorage ptSociete || session.societe || currentStructureSocieteFilter)
+- today() l.33784
+
+**Actions:**
+- Header 'Tableau de bord OPS' l.32233 -> navigate('ops/dashboard')
+- Automatic setInterval 500ms l.33816 updates #pt-qr-countdown and on 10s slot change regenerates each site QR (ptRefreshQrTablet l.33826) into #pt-qr-canvas-{sid}
+- QR payload token = `${siteBackendId}|${timeSlot10s}` (l.33779) rotating every 10s; scanned from Portail RH on agent phones
+
+**Appels API:**
+- None — QR tokens generated client-side from site id + 10s time slot; scan validation happens on Portail RH side (separate flow)
+
+**Dependances snapshot/auto-refresh:**
+- Reads db.sites snapshot only. Starts global interval _ptQrTabletTimer (l.33816); renderOPS stops it on any non-qr sub (l.32231) and re-arms via setTimeout(ptStartQrTabletTimer,100) l.32234 — lifecycle tied to navigation
+- LIEN pointage: shares QR token scheme with Pointage 'QR par site' tab (POINTAGE_TABS 'qr' l.32816) and feuillePresence scan ingestion; token format must match Portail RH scanner and pointage feuille scanArrivee
+
+**Permissions:**
+- canAccess('ops') (renderOPS l.32230). No further gate; OPS read-only can view (no mutation)
+
+**Risques / cas limites:**
+- QR id backendId||id (l.33789): sites not yet synced to PostgreSQL (no backendId) fall back to local id — token won't resolve server-side
+- 10s rotating token depends on client clock; skew between tablet and phone breaks scan window
+- window-global _ptQrTabletTimer leaks if ptStopQrTabletTimer missed on multiple mounts
+- Requires window.QRCode (l.33839); absent -> raw text token fallback (l.33842) exposing token literally
+
+### OPS — Missions (ordres de mission)
+**Route:** `#/ops/missions`  |  **Rendu:** renderOpsMissions (l.32534). Modal openOpsMissionModal (l.32507); save saveOpsMission (l.32563); delete deleteOpsMission (l.32601); doc openOpsMissionDocument (l.32495)/opsMissionDocumentHTML (l.32466); numbering nextMis
+
+**Donnees utilisees:**
+- db.missions (l.32538 filter société, sort createdAt desc; KPIs activeMissions/plannedMissions/urgentMissions/withEmployee l.32539-42; init [] l.32535)
+- db.agents (l.32558 lookup mission.agentId; opsMissionTargets l.32429 excludes sortant/demissionne/licencie/archive; info box l.32459)
+- currentStructureSocieteFilter()/session.societe (l.32537) for société scope + new mission société
+
+**Actions:**
+- '＋ Nouvelle mission' l.32546 -> openOpsMissionModal() (hidden for OPS read-only)
+- Row 'Ordre' l.32558 -> openOpsMissionDocument(id): print window A4 OM via opsMissionDocumentHTML, archived through prepareEmployeeDocumentForValidation (l.32482, type ordre_mission)
+- Row 'Modifier' l.32558 -> openOpsMissionModal(id) (hidden read-only)
+- Modal: search filterOpsMissionEmployeeOptions (l.32439); onchange updateOpsMissionEmployeeInfo (l.32455) fills info + auto-fills lieu; date change updateOpsMissionDays (l.32412) computes nombreJours
+- Submit saveOpsMission(id,form,true) l.32515: validates missionDayCount, writes db.missions, opens OM print window, saveDBAndWaitToast, closeModal, renderView
+- arg -> setTimeout openOpsMissionModal(arg) l.32561 only if !opsReadOnly
+
+**Appels API:**
+- No dedicated missions endpoint — persistence via saveDBAndWaitToast (l.32597) generic global collections PUT/save of db (missions ride snapshot save). OM document archived via employee-document pipeline (prepareEmployeeDocumentForValidation)
+
+**Dependances snapshot/auto-refresh:**
+- db.missions part of global snapshot; saveOpsMission mutates db.missions.unshift (l.32574) then saveDBAndWaitToast persists whole db. No auto-refresh. nextMissionNumero scans db.missions for OM/OPS/YYYY/#### sequence (l.32392)
+- LIEN effectif: mission targets/employee info read db.agents; OM doc archived into employee dossier
+
+**Permissions:**
+- canAccess('ops'). isOpsSupervisorReadOnlySession -> opsReadOnly hides create/modify buttons (l.32536,32546,32558) + banner opsSupervisorReadOnlyNoticeHTML (l.32548). guardOpsSupervisorMutation('mission') in openOpsMissionModal (l.32508), saveOpsMission (l.32564), deleteOpsMission (l.32602)
+
+**Risques / cas limites:**
+- nextMissionNumero (l.32392) client-side max+1 over local db.missions — concurrent creators on different PCs collide on same number (multi-PC issue)
+- Print window opened before save confirmation (l.32569); if saveDBAndWaitToast fails, OM may already be printed/archived — inconsistency
+- urgentMissions is regex over concatenated free-text fields (l.32541) — brittle; migrate to real status field
+- missionDayCount=0 blocks save (l.32584) but KPI activeMissions uses raw date compares (l.32539) misclassifying missions with missing dates
+- Editor auto-fills lieu from affectationCourante.siteName if empty (l.32463) — silent coupling
+- deleteOpsMission (l.32601) exists but not wired into the table — orphan capability
+
+### OPS — Mouvements (ordres de mouvement)
+**Route:** `#/ops/mouvements`  |  **Rendu:** renderOpsMouvements (l.32166, async local-then-sync) -> _renderOpsMouvementsHTML (l.32185). Editor opsMovementEditorHTML (l.31893); handlers opsEditer/Valider/ImprimerOrdreMouvementCentral (l.32038-55), opsValiderMultiOM
+
+**Donnees utilisees:**
+- db.feuillePresence + db.opsMouvements merged in opsMovementRows (l.31668) keyed opsMovementKey; only rows with movement marker (mouvementMotif/Type/ordreMouvementNumero/mouvementNumero) l.31670
+- db.agents (l.31674 synthesizes rows from affectationCourante+affectationsHistorique+careerEvents/gestionEvents source==='ordre-mouvement' l.31681; editor list l.32205 société-scoped, excludes sortant/archive & statut suspendu; _agent join l.31689)
+- db.sites (opsMovementSiteFromRow l.31757 by id/backendId/site_id/name; movementSitesForSociete editor select l.31901; client from site.client l.31770)
+- sessionStorage opsMovementAgentId/opsMovementSelectedAgent/opsMovementSearch/opsMovementSite/opsMovementClient/opsMovementPeriod (l.32187-93)
+- currentStructureSocieteFilter() l.32186; opsMovementRowMatchesSociete l.31772
+
+**Actions:**
+- Editor: multi-select agent checkboxes with search (opsMovementFilterAgents l.31994), Tout/Aucun (opsMovementSelectAll l.31988), 'Nouvelle affectation' site select (+ 'Autres' free text), Motif/Durée/Groupe, conditional remplacé-agent for Remplacement Absence/Malade/Abandon
+- 'Editer OM' l.31976 -> opsEditerOrdreMouvementCentral (single-agent only l.32041) -> fpqEditerOrdreMouvement (l.33181) posts draft + prints doc
+- 'Valider OM' l.31977 -> opsValiderOrdreMouvementCentral (l.32044): 1 agent -> fpqPersistOrdreMouvement; >1 -> opsValiderMultiOM (l.32056)
+- 'Imprimer OM' l.31978 -> opsImprimerOrdreMouvementCentral (l.32050) persist print:true
+- History row 'Modifier' l.32224 -> fpqOpenMouvement(date,agentId) modal; 'Ordre' -> opsOpenMovementDocumentByRow(rowId) (l.31838) prints movement doc
+- Search input l.32219 sets opsMovementSearch+renderView; 'Tout afficher' l.32220 clears session filters
+
+**Appels API:**
+- POST /irongs/actions/save-presence-movement via sgdiRunLegacyAction (l.1452 -> SGDI.actions.run l.1396). Payload {data:{date,agentId,employee_id,agentBackendId,matricule,patch}} (fpqPersist l.33358, fpqEditer l.33188, multiOM l.32062)
+- GET /ops/movements via SGDI.movements.list (l.1382) in syncOpsMovementsFromPostgres (l.32120) inside ensureOpsMovementSqlSync (l.32157)
+- POST /ops/movements via SGDI.movements.upsert (l.1382) in persistOpsMovementToPostgres (l.2071) fallback on background sync failure (l.33374)
+- POST assignments via SGDI.assignments.create in persistAssignmentFromMovement (l.1916) inside fpqApplyMovementAffectation (l.33215); PUT /drh/employees/{id} via SGDI.employees.update (l.1356) to persist new affectationCourante (l.33227)
+- syncSitesFromPostgres + syncAssignmentsFromPostgres in ensureOpsMovementSqlSync (l.32158-59); sgdiPullState({silent}) after persist (l.33365)
+
+**Dependances snapshot/auto-refresh:**
+- Optimistic local write then background PostgreSQL sync (fpqPersistOrdreMouvement l.33344-75): mutates db.feuillePresence (fpqUpsertLocalPresenceLine l.31628), db.opsMouvements (opsUpsertMovementHistory l.31618), db.agents affectationCourante/historique (opsApplyLocalMovementAffectation l.32021 / fpqApplyMovementAffectation l.33202)
+- Auto background SQL sync ensureOpsMovementSqlSync (l.32145) throttled 15s via window.__sgdiOpsMovementSqlSyncedAt (l.32148,32171); shares lock sgdiSqlSyncInProgress with realtime SSE sync to avoid races on agents/sites/assignments (l.32152)
+- renderOpsMouvements skips re-render while OM form open (formOpen l.32177) to protect scroll/form — 'temps réel ne coupe jamais l'édition'. sgdiRefreshCountersNow after persist (l.33375,32090)
+- LIEN sites/effectif/pointage: one OM writes presence line (feuillePresence) + employee affectationCourante (effectif) + PostgreSQL assignment (sites/effectif) + employee PUT; archives previous affectation to affectationsHistorique (l.33221-33227). Movement rows partly derived from pointage feuille + agent career events (opsMovementRows l.31666)
+
+**Permissions:**
+- canAccess('ops'). OPS read-only: editor replaced by notice (l.31894); row 'Modifier' hidden (l.32224); mutations guarded guardOpsSupervisorMutation('mouvement') at opsEditer/Valider/Imprimer (l.32039,45,51), multiOM (l.32057), fpqOpenMouvement (l.33123), fpqEditer (l.33182), fpqPersist (l.33342), fpqApplyMovementAffectation (l.33203). sgdiRunLegacyAction hard-blocks all actions except pointage allowlist for read-only sessions (l.1453-58)
+
+**Risques / cas limites:**
+- Multi-write consistency: one OM mutates feuillePresence + opsMouvements + agent affectation + SQL assignment + employee PUT across optimistic-local then background-async — partial failure diverges local/remote (background catch persists movement only via persistOpsMovementToPostgres l.33374, affectation may be lost)
+- opsValiderMultiOM (l.32056) fires N parallel save-presence-movement then N sequential fpqApplyMovementAffectation in background (l.32085); failures only console.warn — silent effectif/site drift
+- opsMovementRows merges 4 heterogeneous sources (feuille, opsMouvements, affectations, career/gestion events) via opsMovementKey + opsDedupeMovementRows (l.31694) — high duplicate/missing-row risk on migration
+- 'Autres' free-text affectation skips SQL assignment (l.1917, l.33211) — never reaches PostgreSQL assignments
+- Sites without backendId throw 'Site PostgreSQL introuvable' (l.1922) — move recorded locally only
+- Editor société mixes currentStructureSocieteFilter/effectifSocieteFilter/session.societe + canonicalSocieteName (l.31899) vs agent list a.societe===soc (l.32205) — can show agents with no valid target site
+- 15s throttle + shared sync lock is the workaround for the multi-PC race behind 'tout à zéro'; migration must preserve non-destructive merge
+
+### OPS — Supervision site (inspections)
+**Route:** `#/ops/supervision`  |  **Rendu:** renderOpsSupervision (l.32684) dispatches: dashboard->renderOpsSupervisionDashboard (l.32665); programmees->renderProgrammedInspections (l.32730); inopinees->renderUnexpectedInspections (l.32752); default/programmer-> in
+
+**Donnees utilisees:**
+- db.siteInspections (l.32685 init []; société-filtered l.32692; type programmee/inopinee; scans map per siteId {entree,sortie} ISO)
+- db.sites (l.32688 s.actif!==false && siteMatchesSociete; inspectionSiteName l.32610)
+- db.agents (l.32689 supervisors = poste ~ /superviseur|controleur|contrôleur|inspecteur/ & not sortant/archive; chauffeurs inspectionDriverOptions l.32648; inspectionSupervisorName l.32611)
+- db.materiel + db.stockArticles (inspectionVehicleOptions l.32643 vehicle-like designations)
+- sessionStorage inspectionProgramMonth (l.32631); currentStructureSocieteFilter() l.32687
+
+**Actions:**
+- Tabs inspectionTabs (l.32626) navigate ops/supervision/{tab} (programmer hidden read-only)
+- Dashboard KPI cards l.32672 navigate programmees/inopinees; alert cards navigate by type (l.32681)
+- Programmer form submit saveProgrammedInspection (l.32718): supervisorId + calendar checkbox dates + per-date time + siteIds + vehicule/chauffeur/moyens; creates one db.siteInspections per date (l.32726), saveDBAndWaitToast, navigate programmees
+- Programmées 'Scanner QR' l.32734 -> openInspectionScan(id) (l.32738) -> inspectionScan(id,siteId,'entree'|'sortie') (l.32743): scans[siteId][kind]=now, requires entree before sortie, saveDBAndWaitToast
+- Inopinées form saveUnexpectedInspectionScan (l.32759): supervisorId+siteId+kind; finds/creates open inopinee for today (l.32764), records scan
+- Calendar inspectionCalendarHTML (l.32637) checkbox+time per day; setInspectionProgramMonth (l.32632) re-renders on month change
+
+**Appels API:**
+- No dedicated inspection endpoint — persistence via saveDBAndWaitToast (global db snapshot save) at l.32727 (program), l.32749 (scan), l.32769 (inopinee); db.siteInspections rides generic collections save
+
+**Dependances snapshot/auto-refresh:**
+- db.siteInspections part of global snapshot; each save mutates array then saveDBAndWaitToast. No polling/auto-refresh. ids via uid('insp') (l.32726,65). Reads sessionStorage for calendar month only
+- LIEN sites/effectif: sites drive inspection targets & scan identity; supervisors/chauffeurs from effectif (db.agents by poste); vehicles inferred from db.materiel/db.stockArticles
+
+**Permissions:**
+- canAccess('ops'). OPS read-only: 'programmer' forced to 'programmees' (l.32686), tabs drop 'programmer' (l.32627), Programmer button + notice (l.32673), scan buttons hidden (l.32734), inopinee scan form hidden (l.32756). guardOpsSupervisorMutation('supervision') at saveProgrammedInspection (l.32719), openInspectionScan (l.32739), inspectionScan (l.32744), saveUnexpectedInspectionScan (l.32760)
+
+**Risques / cas limites:**
+- Supervisor/chauffeur detection is regex over free-text poste (l.32650,32689); non-standard titles miss; inspectionDriverOptions falls back to ALL agents if no driver matches (l.32651)
+- 'Scanner QR' records manual timestamps (inspectionScan l.32743) — no real QR/geo verification; 'passage non respecté' alert purely date/scan-state derived (inspectionStatusHTML l.32618)
+- Inopinee auto-match (l.32764) by supervisor+site+no-sortie ambiguous if multiple open — may append to wrong record
+- Vehicle list mixes inventory scan with hard-coded 'Véhicule 01..' defaults (l.32645) — not a real asset link
+- Per-date rows created in a loop (l.32726) bloat db.siteInspections snapshot
+- No pagination; scans HTML rebuilt inline per row (inspectionScansHTML l.32737)
+
+### OPS — Employés en instance de dotation (suivi)
+**Route:** `#/ops/instance_dotation`  |  **Rendu:** renderOpsInstanceDotation (l.32361)
+
+**Donnees utilisees:**
+- db.agents via agentsEnInstanceDotationForSoc(soc) (l.19485 = matDotationScopedActiveAgents(soc) filtered !agentHasMaterialDotation); actifs = employeeIsActive & société (l.32364); 'Déjà dotés' = actifs.filter(agentHasMaterialDotation) (l.32376)
+- currentStructureSocieteFilter() l.32362
+
+**Actions:**
+- '← Tableau de bord' l.32367 -> navigate('ops/dashboard')
+- Row 'Fiche' l.32387 -> #/effectif/agent/{a.id}
+- Read-only tracking screen — banner l.32369 states dotation creation/stock/print reserved to Matériel module; no dotation action here
+
+**Appels API:**
+- None — pure client render over db.agents snapshot; no fetch
+
+**Dependances snapshot/auto-refresh:**
+- Reads db.agents snapshot only. No writes, no auto-refresh. Depends on agentHasMaterialDotation / matDotationScopedActiveAgents shared with Matériel module
+- LIEN effectif/materiel: read-only mirror of Matériel dotation state scoped by matDotationScopedActiveAgents; rows link into effectif fiche (#/effectif/agent/{id})
+
+**Permissions:**
+- canAccess('ops'). No mutation; OPS read-only session fully allowed (view only); no guardOpsSupervisorMutation
+
+**Risques / cas limites:**
+- Depends on agentHasMaterialDotation heuristic staying consistent with Matériel module definition — divergence shows wrong instance counts
+- 'Effectif actif' uses employeeIsActive+société (l.32364), may differ from dashboard société-table active (employeeIsFormer) — cross-screen inconsistency
+- Marked data-searchable (l.32380) relies on a global search handler; no pagination — renders whole list
+- Action intentionally absent (suivi only) — must remain disabled after migration
+
+### DRH — Service social (liste CNAS/Chifa)
+**Route:** `#/drh/social`  |  **Rendu:** renderDRHSocial (l.28747) — si arg présent délègue à renderDRHSocialAgent (l.28748)
+
+**Donnees utilisees:**
+- drhAgentsList() en excluant statut sortant/demissionne/licencie/archive (l.28752)
+- agentSocialData(a) (l.28700): objet a.social dérivé de a.numeroCnas/cnas & a.numeroChifa/chifa; statuts par défaut a_declarer/absente
+- socialCnasOk (statutCnas==='declare' & numéro) / socialChifaOk (statut active|valide & numéro) l.28709-28710
+- sessionStorage 'drhSocialQ' (recherche) et 'drhSocialFilter' (vue, défaut 'alertes')
+
+**Actions:**
+- 4 KPI-boutons filtre (kpi() l.28764): onclick sessionStorage.setItem('drhSocialFilter',key)+renderView -> alertes/cnas/chifa/ok
+- Input recherche oninput sessionStorage 'drhSocialQ'+renderView (l.28778) — RE-RENDER complet à chaque frappe
+- Select 'Vue' onchange sessionStorage drhSocialFilter+renderView (l.28779)
+- Bouton 'Réinitialiser' (l.28782) efface drhSocialQ, remet filter='alertes'
+- 'Procédure social'->openSocialGuideModal (l.28767), lien 'Congés'->#/conges
+- Imprimés CNAS (socialOfficialFormsHTML l.28732): printSocialCnasDeclarationActivite (IM.03), printSocialCnasListe (IM.13), openSocialGuideModal, + liens externes cnas.dz (target _blank)
+- Par ligne: 'Dossier social'->openSocialAgentModal(id) (édition -> saveSocialAgent), 'SECU.01'->printSocialCnasAffiliation(id), 'Lire Chifa'->openChifaReadModal(id) (-> saveChifaReaderData)
+
+**Appels API:**
+- saveSocialAgent (l.28874): socialApplyFormToAgent (mute a.social + a.numeroCnas/numeroChifa l.28871-28872) puis saveDBAndWaitToast — PAS d'appel SGDI.employees.update direct (persistance via saveDB global)
+- saveChifaReaderData (l.28892): extrait numéros du texte lecteur, mute a.social, persiste (idem)
+- Refetch employés parent l.28571
+
+**Dependances snapshot/auto-refresh:**
+- État de filtre/recherche en sessionStorage (NON dans l'URL) l.28750-28751
+- renderView() déclenché à chaque frappe (oninput) -> reconstruit toute la table
+- Écriture: dossier social stocké dans sous-objet a.social + a.numeroCnas/Chifa, persisté seulement par saveDB (pas d'endpoint social dédié)
+
+**Permissions:**
+- Module drh; normalizeStructureModule mappe 'drh/social'->'drh' (l.29565)
+
+**Risques / cas limites:**
+- MEMORY realtime-never-interrupt-editing: oninput->renderView à chaque caractère reconstruit la table et re-crée l'input (valeur restaurée depuis sessionStorage) — risque de saut de curseur/perte de focus/frappe
+- Incohérence statut: socialChifaOk accepte 'valide' mais le modal (l.28836) n'offre que active/en_attente/absente/expiree — 'valide' inatteignable par l'UI
+- Persistance sociale non transactionnelle par employé (dépend d'un saveDB global) — pas d'appel PUT /drh/employees ciblé comme genMed/reversement
+- Données CNAS/Chifa dupliquées (a.social.* ET a.numeroCnas/a.numeroChifa) -> risque de désync
+
+### DRH — Service social, fiche agent (détail)
+**Route:** `#/drh/social/{id}`  |  **Rendu:** renderDRHSocialAgent (l.28798) — atteint via renderDRHSocial(view,arg) quand arg présent (l.28748)
+
+**Donnees utilisees:**
+- db.agents.find(id) (l.28799); agentSocialData(a) — 4 cartes (statut CNAS, Chifa, date déclaration, validité) + dossier (ayants droit, centre, observations) + traçabilité (updatedAt/updatedBy)
+
+**Actions:**
+- 'Modifier'->openSocialAgentModal(id) (l.28804) -> saveSocialAgent
+- 'SECU.01'->printSocialCnasAffiliation(id), 'IM.10'->printSocialCnasTempsPartiel(id), 'Lire Chifa'->openChifaReadModal(id)
+- 'Retour'->#/drh/social (l.28804)
+
+**Appels API:**
+- Via modals: saveSocialAgent / saveChifaReaderData (persistance saveDB). Aucun appel propre au rendu
+
+**Dependances snapshot/auto-refresh:**
+- Lecture db.agents; aucune écriture au rendu (écritures via modals -> saveDB)
+
+**Permissions:**
+- Module drh (idem social)
+
+**Risques / cas limites:**
+- ROUTE NON LIÉE dans le code: aucun onclick/href ne produit #/drh/social/{id} (les boutons de la liste ouvrent des modals; le 'Retour' du détail va à #/drh/social). Atteignable seulement par URL manuelle
+- 'Employé introuvable' (l.28800) si id absent de db.agents — probable car employés paginés/non hydratés (drhAgentsList partiel), la fiche peut ne pas se charger
+- Comparaison String(x.id)===String(id) uniquement (pas de backendId), contrairement à d'autres lookups
+
+### DRH — Mise en demeure (dotation non reversée, sortants)
+**Route:** `#/drh/mise_en_demeure`  |  **Rendu:** renderDRHMiseEnDemeure (l.28314)
+
+**Donnees utilisees:**
+- db.agents statut==='sortant' && !finRelationDotationReversee && finRelationAt (+filtre société) -> sortants (l.28316)
+- allDone = mêmes critères mais finRelationDotationReversee=true (dossiers clôturés, l.28317)
+- drhMedDaysSince (l.28300, daysBetween date/today), drhMedPendingCount (l.28305: seuils >=3j, MED1+7j, MED2+7j)
+- Champs: finRelationMed1SentAt/Med2SentAt/GendarmerieSentAt, finRelationReversementDate, dateSortie, matricule, societe, stcDeductionReforme (montant lettre)
+
+**Actions:**
+- 'Voir MED1/MED2/Gendarmerie'->viewMed(evt,id,1|2|3) (l.28329-28331/28377): ouvre fenêtre impression du doc déjà émis (openMedPrintWindow) — lecture seule
+- 'Émettre MED n°1/n°2 / Lettre Gendarmerie'->genMed(evt,id,1|2|3) (l.28332-28334/28363): MUTATION — pose finRelationMed{1,2}SentAt/GendarmerieSentAt + dates, PUT backend, saveDB, imprime, renderSidebar+renderView
+- Badge 'MED1 disponible dans X j' si délai <3j (l.28337), non cliquable
+
+**Appels API:**
+- genMed (l.28363): if(a.backendId) SGDI.employees.update(a.backendId, employeeApiPayload(a)) = PUT /drh/employees/{id} (l.1356) ; catch -> console.warn seulement ; puis saveDB() (l.28373)
+
+**Dependances snapshot/auto-refresh:**
+- genMed mute l'agent en mémoire PUIS saveDB + renderSidebar()+renderView() (re-render global)
+- Toute la cascade d'échéances (72h/J+7/J+14) calculée client à partir des timestamps stockés
+
+**Permissions:**
+- Module drh. Alertes push module 'drh' route drh/... (l.4893 pour 72h)
+
+**Risques / cas limites:**
+- LOGIQUE MÉTIER CLIENT à migrer: procédure MED (drhMedPendingCount seuils jours>=3, >=7, >=7) — échéancier légal codé en dur côté front
+- genMed persiste localement (saveDB) MÊME si le PUT backend échoue (catch console.warn l.28372) -> divergence local/serveur, doc réputé émis alors que non sauvé côté serveur
+- Bug typo: genMed écrit a.finRelationGendramerieDate (l.28370, faute) alors que la lecture utilise finRelationGendarmerieSentAt/finRelationMed2Date -> champ date gendarmerie potentiellement jamais relu
+- Filtre exige finRelationAt non nul: un sortant sans finRelationAt n'apparaît jamais (ni instance ni clôturé)
+- daysSince basé sur finRelationAt, mais colonne 'Date sortie' affiche a.dateSortie (deux dates distinctes possibles)
+
+### DRH — Période d'essai
+**Route:** `#/drh/essai`  |  **Rendu:** renderDRHPeriodeEssai (l.28535)
+
+**Donnees utilisees:**
+- db.agents ayant a.dateFinEssai (+filtre société) l.28538
+- Segmentation client: enCours (daysBetween>=0), expires30 (<=30), expires90 (<=90), expired (<0), sansPortail (!agentHasPortailAccount) l.28539-28543
+- agentHasPortailAccount (l.11991), a.gestionEvents (type 'Période E-N-C' -> badge ENC; 'Période d'essai' -> compteur reconductions) l.28548-28549
+- dateRecrutement, dateFinEssai, matricule, societe
+
+**Actions:**
+- Par ligne 'ENC'->openPeriodeEncModal(id) (l.28551) (défini ailleurs)
+- Par ligne 'Reconduire'->runRhEffectifAction('rec_periode_essai',id) (l.28551) (défini ailleurs)
+- Lien '<- Contrats'->#/contrats/dashboard (l.28556)
+- Lien nom agent ->#/effectif/agent/{id} (l.28551)
+
+**Appels API:**
+- Aucun appel propre au rendu; persistance déléguée à openPeriodeEncModal/runRhEffectifAction (hors fonction). Refetch employés parent l.28571
+
+**Dependances snapshot/auto-refresh:**
+- Lecture db.agents + gestionEvents; aucune écriture directe ici
+- Fenêtres 30/90 j recalculées à chaque rendu (daysBetween vs today)
+
+**Permissions:**
+- Module drh. Alerte push route 'drh/essai' pour essai sans portail (l.4834)
+
+**Risques / cas limites:**
+- Fenêtres/échéances essai calculées client (30/90 j)
+- Table 'expirées' tronquée slice(0,20) (l.28567) — au-delà non affiché
+- data-searchable-table déclaré (l.28566) mais AUCUN champ de recherche câblé dans cet écran -> attribut inerte
+- Nombre de reconductions/ENC dérivé de gestionEvents (dépend de la complétude de cet historique)
+- Alerte 'sans compte Portail' = logique de notification métier côté client
+
+### DRH — Reversements en attente (dotation)
+**Route:** `#/drh/reversement`  |  **Rendu:** renderDRHReversementEnAttente (l.28467)
+
+**Donnees utilisees:**
+- db.agents: statut ex-employé (EMPLOYEE_FORMER_STATUS_KEYS via employeeStatusKey) && !finRelationDotationReversee && a une dotation (dotation||dotationCourante||dotations[]) (+filtre société) l.28470-28477
+- elapsedH(a) depuis finRelationAt (seuil 72h) l.28478; segmentation alerte72 (>=72h) / enCours (<72h ou null) l.28479-28480
+- Description dotation: parse d.articles/items/description ou a.dotations[] (l.28491-28502)
+- finRelationMotif, dateSortie, matricule, societe
+
+**Actions:**
+- Par ligne 'Marquer reversée'->markDotationReversee(id) (l.28504/28519): ouvre modal de confirmation
+- Modal -> 'Confirmer le reversement'->confirmMarkDotationReversee(id) (l.28525/28528): MUTATION finRelationDotationReversee=true+At, updatedAt, PUT backend, saveDBAndWaitToast, toast, renderView
+- Lien nom agent ->#/effectif/agent/{id} (l.28504)
+
+**Appels API:**
+- confirmMarkDotationReversee (l.28528): if(a.backendId) SGDI.employees.update(a.backendId, employeeApiPayload(a)) = PUT /drh/employees/{id} ; catch -> toast erreur ; puis saveDBAndWaitToast('Reversement non enregistré') (l.28531-28532)
+
+**Dependances snapshot/auto-refresh:**
+- confirmMarkDotationReversee mute l'agent puis saveDBAndWaitToast + renderView (re-render)
+- Alerte 72h et clignotement calculés client à partir de finRelationAt
+
+**Permissions:**
+- Module drh. Alerte push (72h) route (l.4893)
+
+**Risques / cas limites:**
+- elapsedH null quand finRelationAt absent (l.28478) -> délai '—', l'agent n'entre jamais en alerte 72h même si sorti depuis longtemps
+- Exige à la fois statut ex-employé ET dotation présente ET !reversée: un sortant avec dotation non modélisée (ni dotation/dotationCourante/dotations) est invisible
+- confirmMarkDotationReversee: si PUT échoue -> toast erreur mais poursuit (saveDBAndWaitToast) -> possible reversé localement non confirmé serveur
+- Lien ligne ->#/effectif/agent/{id} (l.28504) alors que d'autres vues DRH utilisent #/agents/{employeeRouteId} ou #/effectif/agent — incohérence de routage vers la fiche
+- Fallback description dotation = JSON.stringify(d).slice(0,60) (l.28496) -> affichage technique brut si structure inattendue
+
+### Statistiques RH (tableau multi-graphes)
+**Route:** `#/drh/stats`  |  **Rendu:** renderDRHStats (l.29282-29390) — dispatché par renderDRH l.28578, lui-même par le routeur case"drh" l.6893 (path split l.6857).
+
+**Donnees utilisees:**
+- drhAgentsList() l.29283 = db.agents filtrés par société autorisée (drhApplySocieteFilter l.29081)
+- drhCandidatesList() l.29284 = db.candidats filtrés société
+- db.conges l.29285 (co)
+- drhDemandesPersonnelList() l.29286 = incomingPortalDemandesPersonnel() filtré société (l.29090)
+- db.incidents l.29287
+- db.sites l.29288
+- drhSocieteRows() l.29291 (dérivé de SOCIETES + drhAuthorizedSocieties)
+- helpers lecture: agentLiveAffectation, drhResolvedAgentSite, employeePositionContractEndDate, candidatIsActive/candidatIsReserve, drhOperationalAgents/drhSiteBucketsFromAgents
+
+**Actions:**
+- AUCUN bouton/handler interne: écran 100% lecture. drhTabs("stats") l.29359 renvoie "" (stub l.28299) => aucune barre d'onglets rendue, aucune navigation inter-stats in-page.
+- Aucun export, aucun onclick, aucun formulaire.
+
+**Appels API:**
+- Aucun appel /api direct dans la fonction: tout est calculé depuis le snapshot global db.*.
+- Effet de bord amont: renderDRH l.28571 appelle sgdiEnsureEmployeesForDisplay({society:drhActiveSocieteFilter(),force:true}) qui hydrate les employés depuis le backend avant rendu.
+
+**Dependances snapshot/auto-refresh:**
+- Lit exclusivement db.agents/db.candidats/db.conges/db.incidents/db.sites (snapshot global).
+- renderView bloque le rendu tant que sgdiFullDataReady est faux (l.6837), filet de sécurité 20s l.6843.
+- Filtre société actif via drhActiveSocieteFilter (session.societe / sessionStorage 'drhSociete' / société unique autorisée) l.29073.
+- Aucune écriture / aucun PUT collection; pas d'auto-refresh propre à l'écran.
+
+**Permissions:**
+- canAccess('drh') l.3593: map par défaut defaultAccessMap; module 'drh' autorisé aux rôles rh/admin (cf. l.4183 et map transverse drh l.5104).
+- Filtrage sociétés: drhAuthorizedSocieties() = currentUserRecord().societesAutorisees l.29068; SOCIETES restreintes en conséquence l.29057.
+- Pas de garde de rôle supplémentaire dans renderDRHStats lui-même.
+
+**Risques / cas limites:**
+- TOUTE l'agrégation est côté client (à migrer serveur): 20+ séries/rollups calculés en JS (l.29291-29356).
+- seriesMasse l.29317 applique statut==='actif' (état courant) à chaque mois passé => masse salariale 'historique' fausse (rétro-projection non historisée).
+- KPI 'Salaire moyen' sous-titré 'CDD actifs' (l.29364) mais calcule sur tous les agents statut==='actif' (l.29303-29305), pas seulement CDD => libellé trompeur.
+- seriesDeparts/seriesAbsences l.29308/29311 datent via updatedAt fallback => bruit temporel (updatedAt ≠ date réelle de départ/absence).
+- clientLabel l.29328-29332 chaîne de fallbacks fragile (client/site/affectation) => regroupements 'Sans client' potentiellement gonflés.
+- Tranches salaire codées en dur (30k/45k/60k/80k l.29319-29323) et divergentes de l'écran stats_salaire (6 tranches, l.29465).
+- drhSiteBucketsFromAgents ne compte que les opérationnels (drhOperationalAgents l.29112) => 'Affectation sites' exclut les actifs non opérationnels.
+- Aucun état vide global: si db.* vide mais sgdiFullDataReady, affiche des graphes à zéro.
+
+### Statistiques par société (tableau)
+**Route:** `#/drh/stats_societe`  |  **Rendu:** renderDRHStatsSociete (l.29391-29414) — dispatché renderDRH l.28579.
+
+**Donnees utilisees:**
+- drhAgentsList() l.29392 (db.agents filtré société)
+- db.conges l.29392
+- drhSocieteRows() l.29393 (lignes société autorisées + 'Sans société')
+- agentIsOperational l.29396, drhMatchSoc l.29394, inRange (congés en cours)
+
+**Actions:**
+- Aucun bouton/handler. drhTabs("stats_societe") l.29406 = "" (aucune barre). Tableau statique + ligne TOTAL.
+- Aucun export.
+
+**Appels API:**
+- Aucun /api direct. Hydratation amont via renderDRH l.28571 (sgdiEnsureEmployeesForDisplay).
+
+**Dependances snapshot/auto-refresh:**
+- db.agents + db.conges (snapshot global), filtre société drhActiveSocieteFilter.
+- Bloqué par sgdiFullDataReady (renderView l.6837). Pas d'écriture, pas d'auto-refresh.
+
+**Permissions:**
+- canAccess('drh') (rh/admin). Sociétés limitées par drhAuthorizedSocieties (drhSocieteRows l.29057).
+
+**Risques / cas limites:**
+- Agrégation client-side par société à migrer (l.29393-29404): total, actif/opérationnel, congé, maladie, absent, suspendu, sortant, masse salariale.
+- masse l.29402 = somme salaire des statut==='actif' uniquement; ligne colonne 'actif' calculée (l.29395) mais NON affichée (le tableau montre 'Opérationnel' l.29410) => variable actif morte, risque d'incohérence conceptuelle actif vs opérationnel.
+- enCo/enMa dépendent de inRange(c) et statut==='approuve' & type; logique métier congé/maladie dupliquée de renderDRHStats (à centraliser au backend).
+- TOTAL recalculé en front via reduce l.29411 (pas de total serveur).
+
+### Statistiques par thème
+**Route:** `#/drh/stats_theme`  |  **Rendu:** renderDRHStatsTheme (l.29415-29431) — dispatché renderDRH l.28580.
+
+**Donnees utilisees:**
+- drhAgentsList() l.29416 (db.agents filtré société)
+- champ agent a.theme l.29417; agentIsOperational; a.salaire (statut==='actif')
+
+**Actions:**
+- Aucun handler. drhTabs("stats_theme") l.29420 = "". 2 graphes drhBars + 1 tableau.
+- Aucun export.
+
+**Appels API:**
+- Aucun /api direct. Hydratation amont renderDRH l.28571.
+
+**Dependances snapshot/auto-refresh:**
+- db.agents (via drhAgentsList). Filtre société actif. Bloqué par sgdiFullDataReady. Aucune écriture.
+
+**Permissions:**
+- canAccess('drh') (rh/admin); sociétés restreintes drhAuthorizedSocieties.
+
+**Risques / cas limites:**
+- Agrégation par thème client-side (l.29417): total, opérationnels, masse, salaire moyen (Math.round(masse/actif) l.29428 — 'actif' = compteur opérationnels, division par opérationnels et non par effectif rémunéré => salaire moyen biaisé).
+- Regroupe sur a.theme brut sans normalisation (casse/espaces) => thèmes doublonnés possibles.
+- État vide géré (message 'Renseignez le champ thème' l.29428) mais champ 'thème' peu fiable côté données.
+
+### Statistiques par fonction
+**Route:** `#/drh/stats_fonction`  |  **Rendu:** renderDRHStatsFonction (l.29432-29445) — dispatché renderDRH l.28581.
+
+**Donnees utilisees:**
+- drhAgentsList() l.29433
+- clé fonction = a.fonction || a.poste || agentLiveAffectation(a)?.poste || 'Non précisé' l.29434
+- a.salaire (statut==='actif') collecté dans tableau salaires[] pour min/moy/max
+
+**Actions:**
+- Aucun handler. drhTabs("stats_fonction") l.29437 = "". 1 graphe drhBars + tableau min/moy/max/masse.
+- Aucun export.
+
+**Appels API:**
+- Aucun /api direct. Hydratation amont renderDRH l.28571.
+
+**Dependances snapshot/auto-refresh:**
+- db.agents via drhAgentsList; agentLiveAffectation lit l'affectation courante. Filtre société. Bloqué par sgdiFullDataReady.
+
+**Permissions:**
+- canAccess('drh') (rh/admin); sociétés restreintes.
+
+**Risques / cas limites:**
+- Agrégation + stats descriptives (min/moyenne/max/masse) calculées en JS l.29434/29442 => à migrer.
+- min/moy/max calculés sur salaires>0 des actifs seulement; 'Opérationnels' (v.actif) compté séparément => colonnes de bases différentes dans une même ligne.
+- Clé fonction à triple fallback (fonction/poste/affectation) => une même fonction peut se scinder selon le champ renseigné.
+- Pas de normalisation de casse => 'Chauffeur' vs 'chauffeur' séparés.
+
+### Statistiques par catégorie
+**Route:** `#/drh/stats_categorie`  |  **Rendu:** renderDRHStatsCategorie (l.29446-29462) — dispatché renderDRH l.28582.
+
+**Donnees utilisees:**
+- drhAgentsList() l.29447
+- a.categorie l.29448; agentIsOperational; a.salaire (statut==='actif'); ag.length pour % effectif
+
+**Actions:**
+- Aucun handler. drhTabs("stats_categorie") l.29451 = "". 2 graphes drhBars (effectif, masse) + tableau.
+- Aucun export.
+
+**Appels API:**
+- Aucun /api direct. Hydratation amont renderDRH l.28571.
+
+**Dependances snapshot/auto-refresh:**
+- db.agents via drhAgentsList; filtre société; bloqué par sgdiFullDataReady; aucune écriture.
+
+**Permissions:**
+- canAccess('drh') (rh/admin); sociétés restreintes.
+
+**Risques / cas limites:**
+- Agrégation par catégorie client-side (l.29448) à migrer: total, opérationnels, masse, % effectif.
+- % effectif l.29459 = v.total/ag.length arrondi => somme des % peut ne pas faire 100 (arrondis).
+- Clé a.categorie brute, sans normalisation.
+
+### Statistiques par salaire
+**Route:** `#/drh/stats_salaire`  |  **Rendu:** renderDRHStatsSalaire (l.29463-29494) — dispatché renderDRH l.28583.
+
+**Donnees utilisees:**
+- drhAgentsList().filter(statut==='actif' && salaire>0) l.29464
+- 6 tranches codées en dur l.29465-29472; salaires triés l.29474; nom/prénom/fonction pour Top 10
+
+**Actions:**
+- Aucun handler. drhTabs("stats_salaire") l.29480 = "". KPI (5 cartes) + distribution en barres + liste Top 10 salaires.
+- Aucun export.
+
+**Appels API:**
+- Aucun /api direct. Hydratation amont renderDRH l.28571.
+
+**Dependances snapshot/auto-refresh:**
+- db.agents via drhAgentsList; filtre société; bloqué par sgdiFullDataReady.
+
+**Permissions:**
+- canAccess('drh') (rh/admin); sociétés restreintes. NB: affiche noms + salaires nominatifs (Top 10 l.29492) — données sensibles, aucune garde de rôle plus fine que 'drh'.
+
+**Risques / cas limites:**
+- Statistiques (moyenne, MÉDIANE l.29477, min, max, masse, tranches) calculées côté client => à migrer.
+- Médiane calcul manuel (pair/impair) l.29477: correct mais logique métier à centraliser.
+- Tranches en dur (< 30k … ≥ 120k l.29465-29472) divergentes des tranches de renderDRHStats (l.29319) => définitions incohérentes entre écrans.
+- Exposition nominative des rémunérations (Top 10) sans anonymisation ni permission dédiée.
+
+### Statistiques par affectation (sites)
+**Route:** `#/drh/stats_affectation`  |  **Rendu:** renderDRHStatsAffectation (l.29495-29513) — dispatché renderDRH l.28584.
+
+**Donnees utilisees:**
+- drhAgentsList() l.29496; db.sites l.29496
+- drhSiteBucketsFromAgents(ag,sites) l.29497 (buckets par site, opérationnels uniquement l.29112)
+- agentNeedsAffectation l.29498 (sans affectation); sitePrimarySociete pour la colonne Société
+
+**Actions:**
+- Aucun handler. drhTabs("stats_affectation") l.29500 = "". 3 KPI + graphe drhBars effectif/site + tableau par site.
+- Aucun export.
+
+**Appels API:**
+- Aucun /api direct. Hydratation amont renderDRH l.28571.
+
+**Dependances snapshot/auto-refresh:**
+- db.agents + db.sites (snapshot). agentLiveAffectation / drhResolvedAgentSite résolvent site depuis l'affectation courante. Filtre société. Bloqué par sgdiFullDataReady.
+
+**Permissions:**
+- canAccess('drh') (rh/admin); sociétés restreintes.
+
+**Risques / cas limites:**
+- Regroupement par site et masse salariale calculés client-side (drhSiteBucketsFromAgents l.29110-29123) => à migrer.
+- buckets ne comptent QUE les opérationnels (drhOperationalAgents l.29112): 'Agents affectés' (l.29503, somme r.actif) exclut actifs non opérationnels affectés => sous-comptage.
+- 'Sans affectation' via agentNeedsAffectation l.29498 dépend du flag cfg.operationalRequiresPvInstallation (l.4504-4509) => définition métier conditionnelle à migrer.
+- Clé bucket = backendId||id||texte normalisé du libellé (l.29116): sites sans id fusionnés/scindés par libellé => regroupements approximatifs; label fallback 'Site inconnu'.
+
+### Auth — Connexion (login)
+**Route:** `Pas de hash. #authView > .auth-form#form-login (active par d`  |  **Rendu:** doLogin() L2254 ; markup form-login L846-866 ; showAuthForm() L2177 ; boot() L3565 ; setSessionV2() L2092 ; enterApp() L2437
+
+**Donnees utilisees:**
+- lit #login-id, #login-pwd, #login-remember (L2256-2258)
+- écrit session SESSION_V2_KEY='rh_session_v2' via setSessionV2 (L2092-2100) en localStorage ou sessionStorage
+- employee.* de la réponse → profile ; site normalisé toFrenchSource (L2297)
+
+**Actions:**
+- onsubmit form-login (L846) → doLogin() : POST login, setSessionV2(remember), enterApp
+- togglePwd('login-pwd', this) (L855, def L2133) → affiche/masque mot de passe
+- checkbox #login-remember (L859) → session persistante (localStorage) vs sessionStorage
+- 'Créer un compte' (L863) → showAuthForm('signup')
+- 'Mot de passe oublié ?' (L864) → showAuthForm('reset')
+- setLanguage('fr'|'ar') (L834-835) → bascule i18n
+
+**Appels API:**
+- POST /api/portal/login body {username: id.trim().toLowerCase(), password} (L2271-2275) → {employee, portal_token}
+
+**Dependances snapshot/auto-refresh:**
+- Aucun snapshot global. Session en web storage. Pas d'auto-refresh.
+
+**Permissions:**
+- Aucune avant login ; obtient portal_token (Bearer) stocké en session
+
+**Risques / cas limites:**
+- username forcé lowercase (L2274) — doit matcher casing matricule backend ; self-register envoie code toUpperCase (L2202) → normalisation incohérente
+- btn label tr('Connexion...') (L2266) et toast tr('Bienvenue') (L2304) absents du dico AR → restent en FR
+- dépend de toFrenchSource(site) donc du mapping AR→FR (L2297)
+- aucun rate-limit client ; detail d'erreur backend affiché brut (L2282-2284)
+
+### Auth — Créer un compte (self-register)
+**Route:** `#authView > .auth-form#form-signup (L869). Affiché par showA`  |  **Rendu:** doSignup() L2184 ; markup L869-904
+
+**Donnees utilisees:**
+- lit #su-nom, #su-prenom, #su-code, #su-ddn, #su-pwd, #su-pwd2 (L2186-2191)
+- succès → setSessionV2(...,false) (L2212) + enterApp(matricule) (L2213)
+
+**Actions:**
+- onsubmit form-signup (L869) → doSignup()
+- togglePwd('su-pwd', this) (L893)
+- '← Retour connexion' (L902) → showAuthForm('login')
+
+**Appels API:**
+- POST /api/portal/self-register body {nom, prenom, code: code.trim().toUpperCase(), dateNaissance: ddn, password} (L2199-2203) → {employee, portal_token}
+
+**Dependances snapshot/auto-refresh:**
+- Aucun. Session web storage.
+
+**Permissions:**
+- Aucune ; renvoie portal_token
+
+**Risques / cas limites:**
+- validation: tous requis (L2192), pwd>=6 (L2195), match (L2196) — MAIS change-password impose min 8 (L2363) → politique mot de passe incohérente
+- code envoyé toUpperCase (L2202) mais matricule stocké lowercase pour la session (L2211)
+- checkStrength() (L2144) lit #reg-pwd qui N'EXISTE PAS (ids réels su-pwd) → fonction morte/jamais câblée
+- showAlert('Tous les champs sont obligatoires') / 'Mot de passe trop court...' absents du dico AR
+
+### Auth — Réinitialiser le mot de passe (reset)
+**Route:** `#authView > .auth-form#form-reset (L907). Affiché par showAu`  |  **Rendu:** doResetPassword() L2220 ; markup L907-942
+
+**Donnees utilisees:**
+- lit #rst-nom/#rst-prenom/#rst-code/#rst-ddn/#rst-pwd/#rst-pwd2 (L2222-2227)
+- succès → préremplit #login-id (L2247) puis showAuthForm('login')
+
+**Actions:**
+- onsubmit form-reset (L907) → doResetPassword()
+- togglePwd('rst-pwd', this) (L931)
+- '← Retour connexion' (L940) → showAuthForm('login')
+
+**Appels API:**
+- POST /api/portal/self-reset-password body {nom, prenom, code: toUpperCase, dateNaissance, password} (L2235-2238)
+
+**Dependances snapshot/auto-refresh:**
+- Aucun.
+
+**Permissions:**
+- Aucune. Preuve d'identité = nom+prenom+code+dateNaissance (reset par connaissance)
+
+**Risques / cas limites:**
+- RISQUE MÉTIER: reset par simple nom+code+DDN, sans email/OTP — quiconque connaît ces 3 infos réinitialise le mot de passe. À durcir côté serveur lors de la migration.
+- min 6 chars ici vs min 8 en change-password
+- message succès 'Mot de passe réinitialisé...' absent du dico AR
+
+### Changer le mot de passe (modal)
+**Route:** `Modal #pwdModal (L1665-1691). Ouvert par openChangePassword(`  |  **Rendu:** changePassword() L2355 ; openChangePassword() L2345 ; closePwdModal() L2352
+
+**Donnees utilisees:**
+- lit #cp-old/#cp-new/#cp-new2 (L2356-2358) ; alerte #pwdAlert
+
+**Actions:**
+- openChangePassword() (L1611) → vide cp-old/cp-new/cp-new2, ouvre modal (L2345-2351)
+- 'Mettre à jour' (L1688) → changePassword()
+- Annuler (L1687) / ✕ (L1669) → closePwdModal()
+
+**Appels API:**
+- POST /api/portal/change-password headers portalAuthHeaders (Bearer) body {oldPassword, newPassword} (L2367-2371)
+
+**Dependances snapshot/auto-refresh:**
+- Aucun.
+
+**Permissions:**
+- Bearer portal_token requis (portalAuthHeaders L2369)
+
+**Risques / cas limites:**
+- min 8 ici (L2363) vs min 6 register/reset — incohérence de politique
+- écran de fait inatteignable car onglet Profil sans navigation → migration doit rétablir un point d'entrée
+- si token expiré → 401 backend affiché comme detail (L2373-2375)
+
+### Accueil / Pointage rapide (tab-home)
+**Route:** `switchTab('home') → #tab-home (L976). Ajoute classe home-mod`  |  **Rendu:** renderHomeTab() L2540 (déclenché par switchTab L2520 et enterApp) ; loadPortalPointages() L2791
+
+**Donnees utilisees:**
+- agrège rows par date (L2550-2562) : arrivee/presence=1re arrivée, depart=dernier, site, gps si position.lat ; garde 6 derniers jours triés localeCompare desc (L2562)
+- remplit #homeHistBody (L2563-2574)
+
+**Actions:**
+- Tap zone empreinte .fp-frame-wrap (L980) → switchTab('pointage')
+- Bouton 'PORTAIL RH' (L1019) → switchTab('portail')
+
+**Appels API:**
+- GET /api/portal/pointages/{code} headers Bearer (L2794-2796) — code = matricule||code||key (L2792)
+
+**Dependances snapshot/auto-refresh:**
+- Aucun snapshot ; source = /api/portal/pointages, pas de timer auto-refresh.
+
+**Permissions:**
+- Bearer portal_token
+
+**Risques / cas limites:**
+- tri par localeCompare de chaîne (L2562) suppose date ISO
+- 'presence' et 'arrivee' fusionnés (L2554) ; seule 1re arrivée retenue
+- échec → 'Indisponible' (L2576)
+- aucun rafraîchissement auto (rendu seulement au switchTab)
+
+### Menu Portail (tab-portail)
+**Route:** `switchTab('portail') → #tab-portail (L1035). Ajoute portail-`  |  **Rendu:** AUCUNE fonction de rendu dynamique — menu statique (L1035-1062). switchTab() bascule seulement les classes (L2512-2527).
+
+**Donnees utilisees:**
+- Aucune ; purement statique
+
+**Actions:**
+- 'Nouvelle demande' (L1038) → switchTab('nouvelle')
+- 'Boîte de réception' (L1042) → switchTab('reception') (+ badge #inboxBadgeHome jamais peuplé, display:none figé L1043)
+- 'Mes demandes' (L1046) → switchTab('historique')
+- 'Pointage (QR / GPS)' (L1050) → switchTab('pointage')
+- 'Contrôle de ronde' (L1054) → switchTab('ronde')
+- '← Retour pointage' (L1060) → switchTab('home')
+
+**Dependances snapshot/auto-refresh:**
+- Aucun.
+
+**Permissions:**
+- Session active (post-login)
+
+**Risques / cas limites:**
+- #inboxBadgeHome (L1043) déclaré mais jamais mis à jour (updateInboxBadge ne cible que #inboxBadge L2982) → compteur mort
+- Aucune entrée vers Profil/Documents dans ce menu (Documents/Profil non listés)
+
+### Nouvelle demande — 7 types (tab-nouvelle)
+**Route:** `switchTab('nouvelle') → #tab-nouvelle (L1146). Barre .tabs v`  |  **Rendu:** selectType() L2580 ; submitRequest() L2693 ; getDetails() L2594 ; validate() L2656 ; showConfirm() L2882 ; resetForm() L2948 ; sendRequestToSgdi() L2679 ; cartes L1150-1186 ; formulaires L1191-1454
+
+**Donnees utilisees:**
+- getDetails(type) lit tous les champs par type (L2594-2653) : attestation/fichePaie(mois cochés L2605)/reclamation/conges/pointage/compteRendu/documents
+- currentUser.profile embarqué dans record.employee (L2703)
+- persistance locale localStorage rh_requests_<key> (loadRequests L2732 / saveRequests L2735)
+
+**Actions:**
+- 7 .type-card data-type (L1150-1186) → selectType(type) (câblé L2507-2509 + L2580) : active carte, affiche #form-<type>, montre #submitBtn
+- #submitBtn (L1458) → submitRequest() (L2693)
+- Modal confirm : Fermer→closeModal (L1645,2909), Imprimer→printReceipt window.print (L1646,2913), Télécharger .txt→downloadReceipt (L1647,2915)
+
+**Appels API:**
+- POST /api/portal/demandes headers Bearer, body record {ref,type,typeLabel,employee:{...profile},details,status:'en-attente',createdAt,createdAtFormatted} (sendRequestToSgdi L2679-2691)
+
+**Dependances snapshot/auto-refresh:**
+- localStorage rh_requests_<key> ; déclenche renderInbox après envoi.
+
+**Permissions:**
+- Bearer portal_token (portalAuthHeaders L2683)
+
+**Risques / cas limites:**
+- DOUBLE PERSISTANCE: record écrit d'abord en localStorage (L2710-2712) PUIS POST ; en échec réseau, conservé localement sentToSgdi:false + syncError (L2720-2723) SANS file de retry automatique → demandes perdues côté serveur (à migrer en vraie synchro)
+- ref généré client generateRef (L2874-2880) = prefix+yymmdd+random 4 chiffres → collisions possibles
+- L'écran Historique (Mes demandes) lit UNIQUEMENT localStorage, jamais le serveur → divergence multi-appareil (cf. note mémoire multi-PC)
+- employee figé au moment du submit (L2703) → obsolète si profil change ensuite
+- validate() listes requises par type (L2658-2666) ; fichePaie exige ≥1 mois (L2671-2675)
+- renderInbox(false,true) rappelé après submit (L2728) + applyLanguage (L2729)
+
+### Boîte de réception (tab-reception)
+**Route:** `switchTab('reception') → #tab-reception (L1544) ; renderInbo`  |  **Rendu:** renderInbox() L3028 ; fetchInboxFromSgdi() L2970 ; renderInboxRows() L2999 ; updateInboxBadge() L2980 ; statusLabel/statusBadgeClass L2985-2998
+
+**Donnees utilisees:**
+- inboxCache global (L2969) rempli par fetchInboxFromSgdi ; champs par item: objet/type/ref/id/date/createdAt/statut/reponse/pieces[]/documentsDemandes[]/historique[] (L3008-3024)
+
+**Actions:**
+- 'Actualiser' (L1551) → renderInbox(true)
+- Liens 'Télécharger' pièces <a href=p.data download> (L3021)
+
+**Appels API:**
+- GET /api/portal/demandes/{matricule} headers Bearer (L2973-2975) — matricule = profile.matricule||key (L2971)
+
+**Dependances snapshot/auto-refresh:**
+- inboxCache (var globale L2969) partagée avec Documents ; applyLanguage rappelé (L3005,3026).
+
+**Permissions:**
+- Bearer portal_token
+
+**Risques / cas limites:**
+- pieces rendues <a href="${p.data}"> SANS escapeHtml sur href (L3021) — data-URI/base64 inline injecté brut (alors que Documents échappe href L3079) → incohérence + risque d'injection si data contrôlé
+- badge = items statut ∈ ['nouveau','en_cours'] (L2981)
+- gros payloads base64 (pièces inline) chargés d'un coup — perf mobile
+- mapping statut nouveau/en_cours/traite/rejete (L2985-2998) ≠ statut local des demandes ('en-attente') → deux vocabulaires
+- inboxCache partagé/muté aussi par l'écran Documents (couplage)
+
+### Documents (tab-documents)
+**Route:** `switchTab('documents') → #tab-documents (L1507) ; renderDocu`  |  **Rendu:** renderDocuments() L3047
+
+**Donnees utilisees:**
+- réutilise inboxCache (L3052) ; docsReady = d.pieces[] (L3059-3065), docsPending = documentsDemandes[] où !recu (L3066-3068)
+
+**Actions:**
+- 'Demander un document' (L1514) → selectType('documents'); switchTab('nouvelle')
+- 'Actualiser' (L1515) → renderDocuments(true)
+- Liens 'Télécharger' (L3079)
+
+**Appels API:**
+- GET /api/portal/demandes/{matricule} via fetchInboxFromSgdi() (L3052)
+
+**Dependances snapshot/auto-refresh:**
+- inboxCache (partagé).
+
+**Permissions:**
+- Bearer portal_token
+
+**Risques / cas limites:**
+- mute inboxCache partagé avec Réception (L3052) → effet de bord entre écrans
+- href échappé ici (escapeHtml L3079) contrairement à Réception → traitement incohérent
+- pièces via p.data || p.url (L3064)
+- onglet quasi-inaccessible (pas d'entrée menu) sauf via bouton interne 'Demander un document' inverse
+
+### Pointage manuel / GPS (tab-pointage, cartes manuelle + historique)
+**Route:** `switchTab('pointage') → #tab-pointage (L1465) ; renderPointa`  |  **Rendu:** renderPointage() L2817 ; submitPortalPointage() L2840 ; updatePointageClock() L2754 ; getPortalPosition() L2762 ; _updateArriveeBtn() L2802 ; loadPortalPointages() L2791
+
+**Donnees utilisees:**
+- #pointage-date/#pointage-heure remplis par horloge client updatePointageClock (L2754-2760), readonly ; #pointage-note
+- position via getPortalPosition() (L2762-2776)
+
+**Actions:**
+- 'POINTER ARRIVEE' (L1495) → submitPortalPointage('arrivee')
+- 'POINTER DEPART' (L1496) → submitPortalPointage('depart')
+- 'Actualiser' (L1497) → renderPointage()
+
+**Appels API:**
+- POST /api/portal/pointages headers Bearer, body {ref,action,employee:{...profile},date,heure,note,createdAt,position} (sendPortalPointage L2778-2789)
+- GET /api/portal/pointages/{code} headers Bearer (L2794) pour l'historique (20 dernières, L2829)
+
+**Dependances snapshot/auto-refresh:**
+- Aucun snapshot ; re-render après pointage QR (setTimeout renderPointage L3693).
+
+**Permissions:**
+- Bearer portal_token
+
+**Risques / cas limites:**
+- géoloc: insecure_context / geolocation_unavailable / permission_denied / position_unavailable (L2762-2776) ; permission_denied bloque (L2854), autres erreurs → position {lat:null, source:'manual'} et pointe quand même (L2859-2861)
+- bouton Arrivée désactivé 12h après dernière arrivée (_updateArriveeBtn L2802-2815) — garde CLIENT uniquement, contournable
+- ref client PTG-yyyymmdd-random (L2843) → collisions
+- date/heure = horloge de l'appareil (readonly) → confiance à l'horloge locale (fraude possible)
+- employee figé au submit (L2847)
+
+### Pointage QR — jetons éphémères (tab-pointage, carte QR)
+**Route:** `Même #tab-pointage, carte #qr-scan-card (L1467-1476). Lib Ht`  |  **Rendu:** portalStartQrScan() L3586 ; portalStopQrScan() L3623 ; portalOnQrScan() L3642 ; portalShowQrResult() L3700 ; playPointageSound() L3709
+
+**Donnees utilisees:**
+- decodedText (token QR) ; getSessionV2().matricule (L3665) ; réponse employee/site/duplicate (L3682-3691)
+
+**Actions:**
+- Bouton rond 'Pointer présence' (L1473) → portalStartQrScan() (démarre caméra environment, fallback user L3606-3620)
+- '✕ Fermer la caméra' (L1474) → portalStopQrScan()
+
+**Appels API:**
+- POST /api/portal/pointage-qr headers Bearer, body {token, matricule: session.matricule} (L3668-3672) → {employee, heure, site, duplicate, record}
+
+**Dependances snapshot/auto-refresh:**
+- Aucun ; setTimeout renderPointage 800ms après succès (L3693).
+
+**Permissions:**
+- Bearer portal_token + matricule de session
+
+**Risques / cas limites:**
+- LOGIQUE JETON ÉPHÉMÈRE CÔTÉ CLIENT (L3646-3664): 2 formats — avec '|' fenêtre 10 s (slot=Date.now()/10000), sinon 300 s (Date.now()/300000) ; tolérance ±1 slot (L3660). Anti-rejeu dépend de l'horloge du téléphone ; validation d'expiration faite AVANT le POST puis re-validée serveur (doit rester autoritaire côté serveur à la migration)
+- _portalQrBusy anti double-scan (L3643-3644)
+- retry portalStartQrScan toutes les 500ms tant que lib Html5Qrcode absente (L3596) — boucle si CDN local manquant
+- duplicate géré via data.duplicate (L3686) ; son distinct (playPointageSound warning/success)
+- site fallback data.site || record.siteName || profile.site || '—' (L3685)
+- utilise Html5Qrcode (API start/stop) — DIFFÉRENT de la ronde qui utilise Html5QrcodeScanner (2 APIs de scan à unifier)
+
+### Contrôle de ronde — portail (tab-ronde)
+**Route:** `switchTab('ronde') → #tab-ronde (L1065) ; ajoute portail-mod`  |  **Rendu:** rondeInit() L3237 ; rondeShowZone() L3263 ; rondeShowCircuitInfo() L3269 ; rondeStartExecution() L3282 ; rondeRenderActive() L3303 ; rondeRefresh() L3347 ; rondeOpenQrScan() L3360 ; rondeGpsScan() L3381 ; rondeSendScan()
+
+**Donnees utilisees:**
+- _rondeCircuits (L3210) ; _rondeActiveId (L3208)
+- réponse active: execution{id, circuit_name, scanned_checkpoints, total_checkpoints, scans[], started_at, ended_at}, remaining_checkpoints[], all_checkpoints[] (rondeRenderActive L3303-3345)
+
+**Actions:**
+- #ronde-circuit-select onchange (L3247) → rondeShowCircuitInfo() (affiche total_checkpoints, duree_prevue_min, description L3276)
+- '🚀 DÉMARRER LA RONDE' (L1082) → rondeStartExecution()
+- '📷 SCANNER QR CODE' (L1108) → rondeOpenQrScan() (Html5QrcodeScanner L3372, toggle on/off)
+- '📍 VALIDER PAR GPS' (L1111) → rondeGpsScan() (getCurrentPosition L3386)
+- '✅ TERMINER LA RONDE' (L1127) → rondeEndExecution() (confirm L3429)
+- 'Nouvelle ronde' (L1139) → rondeReset() → rondeInit()
+
+**Appels API:**
+- GET /api/ronde/portal/circuits?matricule= (L3240)
+- GET /api/ronde/portal/executions/active?matricule= (L3250, 3296, 3350)
+- POST /api/ronde/portal/executions/start body {matricule, circuit_id, guard_name} (L3290-3293)
+- POST /api/ronde/portal/executions/{id}/scan body {matricule, qr_token, scan_method:'qr'|'gps', gps_lat, gps_lng, gps_accuracy} (L3404-3407 ; QR L3377 ; GPS L3387-3392)
+- PUT /api/ronde/portal/executions/{id}/end body {matricule} (L3431-3434)
+
+**Dependances snapshot/auto-refresh:**
+- Aucun état persistant client ; l'exécution vit côté serveur ; pas d'auto-refresh.
+
+**Permissions:**
+- Bearer portal_token (fusionné dans _rondeFetch L3219) + matricule en query ET en body
+
+**Risques / cas limites:**
+- matricule transmis 3x (query + body + implicite via Bearer) — le serveur doit réconcilier identité token vs matricule fourni (usurpation possible si non vérifié)
+- scan QR = Html5QrcodeScanner (L3372) alors que pointage = Html5Qrcode → 2 APIs à unifier
+- GPS: coords brutes envoyées, géofence/validation proximité = responsabilité serveur (scan_method='gps')
+- guard_name dérivé côté client du profil (L3288) — non fiable
+- fin de ronde détectée par res.remaining_checkpoints.length===0 (L3410) ; end en PUT alors que start/scan en POST
+- aucun polling auto — état ronde rafraîchi seulement sur action (rondeRefresh non appelé automatiquement)
+- scanner nettoyé à chaque rendu (L3343)
+
+### Web Push VAPID + Service Worker (carte Notifications de Profil + portail-sw.js)
+**Route:** `Carte #notif-card dans #tab-profil (L1615-1621) ; SW enregis`  |  **Rendu:** updateNotifUI() L3481 ; togglePushNotifications() L3510 ; autoSubscribePush() L3546 ; registerServiceWorker() L3467 ; _urlBase64ToUint8Array() L3474 ; SW: push handler portail-sw.js L31-46 ; notificationclick L49-58 ; fe
+
+**Donnees utilisees:**
+- Notification.permission (L3490) ; reg.pushManager.getSubscription (L3498,3513,3551) ; clé VAPID convertie Uint8Array (L3474-3479, 3531)
+
+**Actions:**
+- 'Activer/Désactiver les notifications' (L1619) → togglePushNotifications()
+- auto à l'entrée Profil (L2532) → updateNotifUI() + autoSubscribePush()
+
+**Appels API:**
+- GET /api/portal/push/vapid-public-key (L3526) → {public_key}
+- POST /api/portal/push/subscribe headers Bearer body {subscription: sub.toJSON()} (L3533-3537 ; auto L3554)
+- DELETE /api/portal/push/subscribe headers Bearer body {endpoint: sub.endpoint} (L3517-3521)
+
+**Dependances snapshot/auto-refresh:**
+- Aucun ; état = souscription PushManager + endpoints serveur.
+
+**Permissions:**
+- Bearer portal_token pour subscribe/unsubscribe ; permission Notification navigateur
+
+**Risques / cas limites:**
+- SW cache network-first et n'entre JAMAIS /api/ en cache (portail-sw.js L15-28) — bon pour données fraîches ; assets cachés sous CACHE='portail-rh-v17-qr-fix' (L2) → bump de version requis pour invalider
+- push: parse e.data.json avec fallback text (L31-34) ; notificationclick refocalise fenêtre même origine sinon openWindow(data.url) (L49-58)
+- autoSubscribePush re-POST la souscription existante à chaque visite Profil (best-effort silencieux L3553-3559)
+- unsubscribe DELETE best-effort: si échec réseau, sub retirée localement mais endpoint conservé serveur → push fantômes
+- _swReg peut être null → fallback getRegistration('/') (L3496,3511,3549)
+- écran de fait inatteignable (Profil sans entrée) → activer push impossible dans l'UI livrée
+
+### Moteur i18n bilingue FR/AR (transverse — pas un écran distinct)
+**Route:** `N/A. Moteur global. Sélecteurs de langue: header auth (L833-`  |  **Rendu:** applyLanguage() L1981 ; setLanguage() L2045 ; tr() L1972 ; toFrenchSource() L1954 ; getTypeLabel() L1977 ; dico AR L1721-1950 ; FR_BY_AR inverse L1952 ; TYPE_LABELS_AR L1962
+
+**Donnees utilisees:**
+- dico AR (map FR→AR) et FR_BY_AR (AR→FR) ; TreeWalker sur tout document.body pour retraduire les nœuds texte (L1993-2009), placeholders/title (L2011-2023), <option> (L2025-2030)
+
+**Actions:**
+- setLanguage('fr') / setLanguage('ar') (L834-835, 963-964) → localStorage + renderHistory + applyLanguage (L2045-2051)
+
+**Dependances snapshot/auto-refresh:**
+- localStorage rh_lang ; ré-exécuté après presque tous les rendus (couplage fort avec chaque écran).
+
+**Permissions:**
+- Aucune
+
+**Risques / cas limites:**
+- RISQUE ÉDITION EN COURS (cf. note mémoire 'temps réel ne coupe jamais l'édition'): applyLanguage réécrit nodeValue/placeholder GLOBALEMENT et est rappelé après quasi chaque rendu (L2729,3005,3026,3088,3112,3132,3152) — peut écraser une saisie/écran en cours si déclenché pendant l'édition
+- options sans attribut value: applyLanguage écrit opt.value = texte FR (L2028) → getDetails lit val() qui renvoie alors le TEXTE FR (ex att-motif, cg-type...) ; changer de langue MUTE les valeurs des <option> — fragile pour la soumission
+- clés AR manquantes → fallback FR silencieux (tr L1974) ; nombreux messages dynamiques non traduits ('Connexion...', 'Bienvenue', alerts register/reset, toasts pointage)
+- toFrenchSource écrase les espaces multiples (L1958) — peut altérer la mise en forme ; stocke _frText sur les nœuds (état caché sur le DOM)
+- dir=rtl + body.lang-ar (L1982-1984) — styles RTL spécifiques CSS L620-642
+
+### Profil (tab-profil) — ORPHELIN (aucune navigation)
+**Route:** `switchTab('profil') → #tab-profil (L1559) mais AUCUN appelan`  |  **Rendu:** loadProfileForm() L2387 ; saveProfile() L2399 ; deleteAccount() L2419 ; (switchTab('profil') câblerait loadProfileForm+updateNotifUI+autoSubscribePush L2532)
+
+**Donnees utilisees:**
+- currentUser.profile → champs nom/prenom/matricule(disabled)/site/poste/departement/email/telephone (loadProfileForm L2387-2397)
+- matricule disabled non modifiable (L1576)
+
+**Actions:**
+- 'Enregistrer les modifications' (L1610) → saveProfile() : maj email/telephone en session+profil (L2399-2417)
+- 'Changer le mot de passe' (L1611) → openChangePassword() (modal)
+- 'Activer les notifications' (L1619) → togglePushNotifications()
+- 'Supprimer mon compte' (L1628) → deleteAccount() : efface localStorage rh_requests_ + session, déconnecte (L2419-2428)
+
+**Appels API:**
+- Aucun appel direct pour saveProfile (persistance LOCALE uniquement, session V2 L2409-2413) ; deleteAccount purement local (L2421-2422)
+
+**Dependances snapshot/auto-refresh:**
+- localStorage rh_session_v2 (profile) + rh_requests_<key> (deleteAccount) ; pas de synchro serveur.
+
+**Permissions:**
+- Session locale ; saveProfile/deleteAccount ne touchent PAS le serveur
+
+**Risques / cas limites:**
+- ÉCRAN INATTEIGNABLE: aucun bouton/menu n'appelle switchTab('profil') → Changer mot de passe, Notifications push, édition profil, suppression compte tous inaccessibles dans l'UI livrée (bug de navigation majeur à corriger en migration)
+- saveProfile ne persiste email/telephone qu'EN LOCAL (session V2) — jamais envoyé au backend (L2399-2417) → divergence serveur
+- deleteAccount 'Supprimer mon compte' n'efface QUE la session/localStorage locale (L2419-2428) — le compte reste en base (libellé trompeur)
+- select #prof-site normalisé toFrenchSource (L2392) — dépend du dico AR↔FR
+
+### Comptabilité — Tableau de bord
+**Route:** `#/accounting/dashboard`  |  **Rendu:** renderAccounting (erp-frontend.js:109) — branche dashboard par défaut L157-171
+
+**Donnees utilisees:**
+- Réponses REST uniquement, aucun accès au snapshot db.* global
+- GET .total de /accounting/comptes/page (page_size=1) L158
+- GET .total de /accounting/ecritures/page (page_size=1) L159
+- soc() = window.session.societe ?? sessionStorage 'dashSociete' (L9)
+
+**Actions:**
+- nav('accounting/comptes') L167
+- nav('accounting/ecritures') L168
+- nav('accounting/balance') L169
+- erpNewEcriture() L170 -> modal L203 -> erpSaveEcriture (POST /accounting/ecritures) L213
+
+**Appels API:**
+- GET /api/accounting/comptes/page?society=<soc>&page_size=1 (L158, .catch -> {total:0})
+- GET /api/accounting/ecritures/page?society=<soc>&page_size=1 (L159, .catch -> {total:0})
+
+**Dependances snapshot/auto-refresh:**
+- Aucune dépendance au snapshot global db / PUT collections / auto-refresh
+- Bloqué en amont par le gate sgdiFullDataReady de renderView (sgdi-app.js:6836) : l'écran attend l'hydratation globale ('Chargement des données…') alors qu'il ne consomme pas ces données
+- Rafraîchissement uniquement via nav() -> window.route -> renderView -> refetch complet
+
+**Permissions:**
+- Aucune garde in-render ni canAccess côté client
+- Route 'accounting' câblée à sgdi-app.js:6891(→6888) SANS canAccessStructureKey, et ABSENTE de societePortalModules (L3882-3897) : atteignable seulement par hash direct
+- Backend accounting/routes.py:23 = APIRouter(dependencies=[Depends(current_user)]) : simple authentification, aucun rôle spécifique
+
+**Risques / cas limites:**
+- KPI = champ .total de la réponse page ; si l'API n'expose pas total -> affiche 0 sans erreur
+- Comptage société-dépendant : si aucune société sélectionnée soc()=='' -> qs() omet society (L21) -> totaux tous-sociétés confondus
+
+### Comptabilité — Plan comptable (comptes)
+**Route:** `#/accounting/comptes`  |  **Rendu:** renderAccounting (erp-frontend.js:109) — branche sub==='comptes' L112-125
+
+**Donnees utilisees:**
+- GET /accounting/comptes/page (items() L10 tolère tableau ou {items})
+- Champs lus: r.numero, r.libelle, r.type_compte, r.society, r.id (L117-121)
+
+**Actions:**
+- erpNewCompte() L123 -> modal L175 (numero, libelle, type_compte, society=soc(), notes) -> erpSaveCompte L185 -> POST /accounting/comptes -> nav('accounting/comptes')
+- erpEditCompte(r.id) L121 -> L188 GET /accounting/comptes puis find(x=>x.id===id) côté client -> modal L191 -> erpUpdateCompte L200 -> PUT /accounting/comptes/{id}
+
+**Appels API:**
+- GET /api/accounting/comptes/page?society=<soc>&page_size=100 (L113)
+- POST /api/accounting/comptes payload {numero,libelle,type_compte,society,notes} (L186)
+- GET /api/accounting/comptes (liste NON paginée) pour l'édition (L189)
+- PUT /api/accounting/comptes/{id} (L201)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot global ; refetch complet via nav() après création/édition (submitForm->closeModal->onOk->nav)
+- Aucun update optimiste, aucune écriture dans db.*
+
+**Permissions:**
+- Idem dashboard : aucune garde front, route non exposée dans le portail, backend auth-only (Depends(current_user))
+
+**Risques / cas limites:**
+- page_size=100 : au-delà de 100 comptes non affichés NI éditables via le tableau
+- erpEditCompte recharge TOUTE la liste /accounting/comptes puis find() JS (L189) — inefficace et SANS filtre society (peut tirer d'autres sociétés) ; si id introuvable, retourne silencieusement (L190)
+- Aucun bouton Supprimer alors que le backend expose DELETE /comptes/{id} (accounting/routes.py:91)
+- society en champ texte libre (L180) : pas de contrôle référentiel
+
+### Comptabilité — Écritures (journal)
+**Route:** `#/accounting/ecritures`  |  **Rendu:** renderAccounting (erp-frontend.js:109) — branche sub==='ecritures' L126-141
+
+**Donnees utilisees:**
+- GET /accounting/ecritures/page ; champs r.numero_piece, r.date_ecriture, r.journal, r.libelle, r.total_debit, r.total_credit, r.status (L131-137)
+
+**Actions:**
+- erpNewEcriture() L139 -> modal L203 (date_ecriture=today(), journal[ACH/VTE/BQ/OD/CAI], libelle, ref_externe, society=soc()) -> erpSaveEcriture L213 -> POST /accounting/ecritures -> nav('accounting/ecritures')
+
+**Appels API:**
+- GET /api/accounting/ecritures/page?society=<soc>&page_size=50 (L127)
+- POST /api/accounting/ecritures payload {date_ecriture,journal,libelle,ref_externe,society} (L214)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; refetch via nav() après POST
+
+**Permissions:**
+- Aucune garde front ; backend auth-only
+
+**Risques / cas limites:**
+- Le formulaire de création ne saisit AUCUNE ligne débit/crédit -> écriture d'en-tête seule, total_debit/total_credit = 0 -> jamais équilibrée depuis l'UI
+- Backend expose ecritures/{id} (GET L125, PUT L138), /valider (L145), /lignes POST/PUT/DELETE (L159-173) et DELETE (L152) — AUCUN n'est appelé depuis cet écran (pas de bouton valider/éditer/lignes/supprimer)
+- status affiché défaut 'brouillon' (L137) ; pill mappé via STATUS_COLORS L24-31 (clés accentuées 'validé' etc.)
+- page_size=50 : pagination non gérée en UI
+
+### Comptabilité — Balance
+**Route:** `#/accounting/balance`  |  **Rendu:** renderAccounting (erp-frontend.js:109) — branche sub==='balance' L142-156
+
+**Donnees utilisees:**
+- GET /accounting/balance (tableau) ; champs r.compte_numero, r.libelle, r.total_debit, r.total_credit, r.solde (L149-153)
+- Agrégats calculés CÔTÉ CLIENT : totalD/totalC via reduce (L144-145)
+
+**Actions:**
+- Aucune action mutative — seulement les onglets (tabs). Pas d'export.
+
+**Appels API:**
+- GET /api/accounting/balance?society=<soc> (L143, .catch -> [])
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; pas de refetch (lecture seule)
+
+**Permissions:**
+- Aucune garde front ; backend auth-only
+
+**Risques / cas limites:**
+- rows = await api(...).catch(()=>[]) : si l'endpoint répond en SUCCÈS avec un objet {items:...} au lieu d'un tableau, rows.reduce (L144) LÈVE -> attrapé par le try externe -> renderError (écran d'erreur au lieu du tableau)
+- Totaux calculés en local (débit/crédit) — logique métier à préserver côté migration
+- Couleur du solde selon signe (L153) ; aucun export Excel/PDF
+
+### Achats — Tableau de bord
+**Route:** `#/achats/dashboard`  |  **Rendu:** renderAchats (erp-frontend.js:222) — branche dashboard par défaut L291-314
+
+**Donnees utilisees:**
+- 4x .total de /achats/{fournisseurs,commandes,receptions,factures}/page page_size=1 (L292-295)
+- GET /reporting/achats -> stats.factures_fournisseur.{montant_ttc,restant_a_payer} (L297,304-305)
+
+**Actions:**
+- nav vers fournisseurs/commandes/receptions/factures (L308-311)
+- erpNewFournisseur() L312 ; erpNewCommande() L313
+
+**Appels API:**
+- GET /api/achats/fournisseurs/page?society=&page_size=1 (L292)
+- GET /api/achats/commandes/page?...&page_size=1 (L293)
+- GET /api/achats/receptions/page?...&page_size=1 (L294)
+- GET /api/achats/factures/page?...&page_size=1 (L295)
+- GET /api/reporting/achats?society=<soc> (L297, .catch -> {})
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot global ; bloqué par le gate sgdiFullDataReady (sgdi-app.js:6836)
+- KPI achats réutilisent le module reporting (couplage /reporting/achats)
+
+**Permissions:**
+- Entrée portail 'ACHATS' route achats/dashboard mappée à la clé structure 'materiel' (societePortalModules L3895), filtrée par canAccessStructureKey('materiel') (L3898, def L29626)
+- AUCUNE garde in-render dans renderAchats ; backend achats/routes.py:30 = Depends(current_user) auth-only, pas de rôle 'materiel'
+
+**Risques / cas limites:**
+- KPI conditionnels stats.factures_fournisseur : si /reporting/achats échoue -> {} -> KPI Achats/Restant masqués silencieusement (L304-305)
+- Comptages société-dépendants (soc()=='' -> tous-sociétés)
+
+### Achats — Fournisseurs
+**Route:** `#/achats/fournisseurs`  |  **Rendu:** renderAchats (erp-frontend.js:222) — branche sub==='fournisseurs' L225-239
+
+**Donnees utilisees:**
+- GET /achats/fournisseurs/page ; champs name, legal_name, contact_name, phone, email, status, id (L230-235)
+
+**Actions:**
+- erpNewFournisseur() L237 -> modal L318 (name,legal_name,contact_name,contact_position,phone,email,nif,rc,society,status,address) -> erpSaveFournisseur L331 -> POST /achats/fournisseurs -> nav
+- erpEditFournisseur(id) L235 -> L334 GET /achats/fournisseurs/{id} -> modal L337 -> erpUpdateFournisseur L349 -> PUT /achats/fournisseurs/{id}
+- exportBtn '⬇ Excel' L237 -> erpDownload GET /achats/fournisseurs/export/xlsx (L60)
+
+**Appels API:**
+- GET /api/achats/fournisseurs/page?society=<soc>&page_size=50 (L226)
+- POST /api/achats/fournisseurs (L332)
+- GET /api/achats/fournisseurs/{id} (L335)
+- PUT /api/achats/fournisseurs/{id} (L350)
+- GET /api/achats/fournisseurs/export/xlsx?society=<soc> (blob, L237/63)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; refetch via nav() après POST/PUT
+
+**Permissions:**
+- Portail via clé 'materiel' (comme dashboard) ; backend auth-only
+
+**Risques / cas limites:**
+- erpDownload (L60-75) construit Authorization:'Bearer '+token SANS vérifier token -> 'Bearer null' si session expirée -> export échoue via toast (L74)
+- page_size=50 : au-delà non listé/éditable
+- Aucun bouton Supprimer alors que backend a DELETE /fournisseurs/{id} (achats/routes.py:108)
+- status pill défaut 'actif' (mappé STATUS_COLORS)
+
+### Achats — Commandes (BDC)
+**Route:** `#/achats/commandes`  |  **Rendu:** renderAchats (erp-frontend.js:222) — branche sub==='commandes' L240-256
+
+**Donnees utilisees:**
+- GET /achats/commandes/page ; champs numero, fournisseur_name, date_commande, date_livraison_prevue, total_ht, total_ttc, status, id (L245-252)
+
+**Actions:**
+- erpNewCommande() L254 -> modal L352 (fournisseur_name texte, date_commande=today(), date_livraison_prevue, society, notes) -> erpSaveCommande L362 -> POST /achats/commandes -> nav
+- PDF par ligne : erpDownload('/achats/commandes/{id}/pdf', 'bdc-<numero>') L252
+- exportBtn '⬇ Excel' L254 -> GET /achats/commandes/export/xlsx
+
+**Appels API:**
+- GET /api/achats/commandes/page?society=<soc>&page_size=50 (L241)
+- POST /api/achats/commandes (L363)
+- GET /api/achats/commandes/{id}/pdf (blob, L252)
+- GET /api/achats/commandes/export/xlsx?society=<soc> (L254)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; refetch via nav()
+
+**Permissions:**
+- Portail clé 'materiel' ; backend auth-only
+
+**Risques / cas limites:**
+- Formulaire ne saisit que fournisseur_name en TEXTE LIBRE (pas d'ID/FK référentiel) et AUCUNE ligne d'article -> total_ht/total_ttc = 0
+- Aucune transition de statut (confirmer/valider/annuler) depuis l'UI bien que STATUS_COLORS gère confirmée/validée/annulée
+- page_size=50
+
+### Achats — Réceptions
+**Route:** `#/achats/receptions`  |  **Rendu:** renderAchats (erp-frontend.js:222) — branche sub==='receptions' L257-270
+
+**Donnees utilisees:**
+- GET /achats/receptions/page ; champs numero, fournisseur_name, date_reception, status, id (L262-266)
+
+**Actions:**
+- erpNewReception() L268 -> modal L365 (fournisseur_name, date_reception=today(), society, notes) -> erpSaveReception L375 -> POST /achats/receptions -> nav
+- erpValiderReception(id) CONDITIONNEL status==='en_cours' L266 -> L378 confirm() -> POST /achats/receptions/{id}/valider -> toast selon r.mouvements_crees -> nav
+
+**Appels API:**
+- GET /api/achats/receptions/page?society=<soc>&page_size=50 (L258)
+- POST /api/achats/receptions (L376)
+- POST /api/achats/receptions/{id}/valider (L381)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot frontend ; MAIS la validation déclenche la création SERVEUR de mouvements de stock (logique métier serveur) — le message client dépend de r.mouvements_crees (L382)
+- Refetch via nav('achats/receptions') après validation
+
+**Permissions:**
+- Portail clé 'materiel' ; backend auth-only ; bouton Valider masqué hors statut 'en_cours'
+
+**Risques / cas limites:**
+- Le formulaire de création n'a AUCUNE ligne d'article : l'appariement stock repose entièrement sur le serveur -> message 'aucun article en stock correspondant trouvé' fréquent (L382)
+- confirm() bloquant natif (L379) ; gestion d'erreur toast||alert (L385)
+- status défaut 'en_cours' (L265)
+
+### Achats — Factures fournisseur
+**Route:** `#/achats/factures`  |  **Rendu:** renderAchats (erp-frontend.js:222) — branche sub==='factures' L271-290
+
+**Donnees utilisees:**
+- GET /achats/factures/page ; champs numero, fournisseur_name, date_facture, date_echeance, total_ttc, montant_paye, status (L278-285)
+- restant = total_ttc - montant_paye calculé CÔTÉ CLIENT (L276)
+
+**Actions:**
+- erpNewFactureFournisseur() L288 -> modal L394 (fournisseur_name, numero_fournisseur, date_facture=today(), date_echeance, total_ht, tva, total_ttc readonly, society, notes) -> erpSaveFactureFournisseur L406 -> POST /achats/factures -> nav
+- erpCalcTTC(this) oninput sur total_ht/tva (L387-393) : total_ttc = ht + tva (TVA saisie en MONTANT)
+- exportBtn '⬇ Excel' L288 -> GET /achats/factures/export/xlsx
+
+**Appels API:**
+- GET /api/achats/factures/page?society=<soc>&page_size=50 (L272)
+- POST /api/achats/factures (L407)
+- GET /api/achats/factures/export/xlsx?society=<soc> (L288)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; restant recalculé en local ; refetch via nav()
+
+**Permissions:**
+- Portail clé 'materiel' ; backend auth-only
+
+**Risques / cas limites:**
+- TTC = HT + TVA en MONTANT (pas un taux) — L392 ; champ TTC readonly ; logique de calcul TVA côté client à migrer
+- restant coloré rouge si >0 (L284) mais AUCUNE action pour enregistrer un paiement/règlement (montant_paye non modifiable depuis l'UI)
+- page_size=50
+
+### Ventes — Tableau de bord
+**Route:** `#/ventes/dashboard`  |  **Rendu:** renderVentes (erp-frontend.js:415) — branche dashboard par défaut L468-483
+
+**Donnees utilisees:**
+- GET /reporting/ventes -> stats.devis.{total,montant_ttc}, stats.commandes.{total,montant_ttc} (L468-476)
+
+**Actions:**
+- nav vers ventes/devis, ventes/commandes, ventes/livraisons (L479-481)
+- erpNewDevis() L482
+
+**Appels API:**
+- GET /api/reporting/ventes?society=<soc> (L468, .catch -> {})
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; KPI empruntés au module reporting (couplage /reporting/ventes plutôt que /ventes)
+- Bloqué par le gate sgdiFullDataReady
+
+**Permissions:**
+- Entrée portail 'VENTES' route ventes/dashboard mappée à la clé structure 'commercial' (societePortalModules L3896), filtrée par canAccessStructureKey('commercial')
+- Aucune garde in-render ; backend ventes/routes.py auth-only (Depends(current_user))
+
+**Risques / cas limites:**
+- Si /reporting/ventes échoue -> {} -> tous KPI à 0 silencieusement
+- Le dashboard Ventes ne compte PAS les livraisons (aucun KPI livraisons)
+
+### Ventes — Devis
+**Route:** `#/ventes/devis`  |  **Rendu:** renderVentes (erp-frontend.js:415) — branche sub==='devis' L418-438
+
+**Donnees utilisees:**
+- GET /ventes/devis/page ; champs numero, client_name, date_devis, date_validite, objet, total_ttc, status, id (L423-433)
+
+**Actions:**
+- erpNewDevis() L436 -> modal L487 (client_name, date_devis=today(), date_validite, society, objet, notes) -> erpSaveDevis L498 -> POST /ventes/devis -> nav
+- erpEnvoyerDevis(id) CONDITIONNEL status==='brouillon' L431 -> L501 confirm() -> POST /ventes/devis/{id}/valider -> nav('ventes/devis')
+- erpConvertirDevis(id) CONDITIONNEL status==='envoyé' L432 -> L506 confirm() -> POST /ventes/devis/{id}/convertir -> nav('ventes/commandes')
+- PDF par ligne : erpDownload('/ventes/devis/{id}/pdf', 'devis-<numero||id>') L433
+- exportBtn '⬇ Excel' L436 -> GET /ventes/devis/export/xlsx
+
+**Appels API:**
+- GET /api/ventes/devis/page?society=<soc>&page_size=50 (L419)
+- POST /api/ventes/devis (L499)
+- POST /api/ventes/devis/{id}/valider (L503)
+- POST /api/ventes/devis/{id}/convertir (L508)
+- GET /api/ventes/devis/{id}/pdf (blob, L433)
+- GET /api/ventes/devis/export/xlsx?society=<soc> (L436)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; workflow devis->commande via refetch nav()
+
+**Permissions:**
+- Portail clé 'commercial' ; backend auth-only ; boutons Envoyer/Convertir gardés uniquement par la valeur status côté client (L431-432)
+
+**Risques / cas limites:**
+- Formulaire sans lignes d'article -> total_ttc = 0
+- Statuts ACCENTUÉS : 'envoyé' comparé strictement (L432) et clés STATUS_COLORS accentuées (L25-26) — toute divergence d'encodage serveur casse le pill (gris) et masque le bouton Convertir
+- Conversion offerte SEULEMENT sur 'envoyé', pas sur 'accepté' (un devis accepté ne peut être converti depuis l'UI)
+- confirm() natif bloquant (L502,507)
+
+### Ventes — Commandes client
+**Route:** `#/ventes/commandes`  |  **Rendu:** renderVentes (erp-frontend.js:415) — branche sub==='commandes' L439-454
+
+**Donnees utilisees:**
+- GET /ventes/commandes/page ; champs numero, client_name, date_commande, date_livraison_prevue, objet, total_ttc, status (L444-450)
+
+**Actions:**
+- erpNewCommandeClient() L452 -> modal L511 (client_name, date_commande=today(), date_livraison_prevue, society, objet, notes) -> erpSaveCommandeClient L522 -> POST /ventes/commandes -> nav
+- exportBtn '⬇ Excel' L452 -> GET /ventes/commandes/export/xlsx
+
+**Appels API:**
+- GET /api/ventes/commandes/page?society=<soc>&page_size=50 (L440)
+- POST /api/ventes/commandes (L523)
+- GET /api/ventes/commandes/export/xlsx?society=<soc> (L452)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; refetch via nav()
+
+**Permissions:**
+- Portail clé 'commercial' ; backend auth-only
+
+**Risques / cas limites:**
+- Pas de bouton PDF ici (contrairement aux devis et BDC achats)
+- Aucune génération de BL ni transition de statut depuis cet écran
+- client_name texte libre, aucune ligne -> total_ttc = 0
+
+### Ventes — Livraisons (BL)
+**Route:** `#/ventes/livraisons`  |  **Rendu:** renderVentes (erp-frontend.js:415) — branche sub==='livraisons' L455-467
+
+**Donnees utilisees:**
+- GET /ventes/livraisons/page ; champs numero, client_name, date_livraison, status (L460-463)
+
+**Actions:**
+- erpNewBL() L465 -> modal L525 (client_name, date_livraison=today(), society, notes) -> erpSaveBL L535 -> POST /ventes/livraisons -> nav
+
+**Appels API:**
+- GET /api/ventes/livraisons/page?society=<soc>&page_size=50 (L456)
+- POST /api/ventes/livraisons (L536)
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; refetch via nav()
+
+**Permissions:**
+- Portail clé 'commercial' ; backend auth-only
+
+**Risques / cas limites:**
+- BL non rattaché à une commande dans le formulaire (client_name texte libre uniquement) — pas de sélection de commande source
+- Aucune validation, aucun PDF, aucun export
+- status défaut 'brouillon'
+
+### Reporting — Dashboard consolidé
+**Route:** `#/reporting/dashboard`  |  **Rendu:** renderReporting (erp-frontend.js:544) — branche dashboard par défaut L610-630
+
+**Donnees utilisees:**
+- GET /reporting/dashboard ; champs chiffre_affaires_ht, chiffre_affaires_ttc, paiements_encaisses, achats_ttc, marge_brute_estimee, nb_clients, nb_fournisseurs, nb_devis, nb_commandes, nb_factures (L610-622)
+
+**Actions:**
+- nav vers reporting/ventes, reporting/achats, reporting/tresorerie, reporting/top-clients, reporting/top-fournisseurs (L625-629)
+
+**Appels API:**
+- GET /api/reporting/dashboard?society=<soc> (L610, .catch -> {})
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot global ; bloqué par le gate sgdiFullDataReady
+- Variable 'endpoint' calculée L546 est du CODE MORT (jamais réutilisée)
+
+**Permissions:**
+- Route 'reporting' câblée sgdi-app.js:6891 SANS canAccess, ABSENTE de societePortalModules -> atteignable seulement par hash direct ou boutons nav internes
+- Aucune garde in-render ; backend reporting/routes.py auth-only (Depends(current_user))
+
+**Risques / cas limites:**
+- Tous les KPI en fallback 0 si l'appel échoue (.catch {})
+- marge_brute_estimee colorée selon signe (L617) — indicateur calculé serveur
+
+### Reporting — Statistiques ventes
+**Route:** `#/reporting/ventes`  |  **Rendu:** renderReporting (erp-frontend.js:544) — branche sub==='ventes' L568-583
+
+**Donnees utilisees:**
+- GET /reporting/ventes ; d.devis, d.commandes, d.factures avec .total/.montant_ttc/.par_status (L569-581)
+- erpStatusGrid (L634) rend d.devis.par_status et d.commandes.par_status
+
+**Actions:**
+- Aucune action mutative — onglets uniquement
+
+**Appels API:**
+- GET /api/reporting/ventes?society=<soc> (L569, .catch -> {})
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; lecture seule (pas de refetch)
+
+**Permissions:**
+- Non exposé au portail ; aucune garde front ; backend auth-only
+
+**Risques / cas limites:**
+- erpStatusGrid affiche les pills par statut : clés accentuées de STATUS_COLORS (L24-31) — statut serveur non-accentué -> pill gris
+- Même endpoint /reporting/ventes que le dashboard Ventes (couplage)
+
+### Reporting — Statistiques achats
+**Route:** `#/reporting/achats`  |  **Rendu:** renderReporting (erp-frontend.js:544) — branche sub==='achats' L584-597
+
+**Donnees utilisees:**
+- GET /reporting/achats ; d.bons_commande.{total,montant_ttc}, d.factures_fournisseur.{total,montant_ttc,montant_paye,restant_a_payer} (L585-594)
+
+**Actions:**
+- Aucune action mutative — onglets uniquement
+
+**Appels API:**
+- GET /api/reporting/achats?society=<soc> (L585, .catch -> {})
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; lecture seule
+
+**Permissions:**
+- Non exposé au portail ; aucune garde front ; backend auth-only
+
+**Risques / cas limites:**
+- KPI 'Restant à payer' forcé rouge #dc2626 (L594) ; tous 0 si l'appel échoue
+- Même endpoint que le dashboard Achats (KPI stats.factures_fournisseur)
+
+### Reporting — Trésorerie
+**Route:** `#/reporting/tresorerie`  |  **Rendu:** renderReporting (erp-frontend.js:544) — branche sub==='tresorerie' L598-609
+
+**Donnees utilisees:**
+- GET /reporting/tresorerie ; champs encaissements_clients, entrees_caisse, sorties_caisse, decaissements_fournisseurs, solde_net (L599-606)
+
+**Actions:**
+- Aucune action mutative — onglets uniquement
+
+**Appels API:**
+- GET /api/reporting/tresorerie?society=<soc> (L599, .catch -> {})
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; lecture seule
+
+**Permissions:**
+- Non exposé au portail ; aucune garde front ; backend auth-only
+
+**Risques / cas limites:**
+- solde_net coloré selon signe (L606) ; toutes valeurs 0 si l'appel échoue silencieusement
+- Aucun graphe/série temporelle — KPI ponctuels uniquement
+
+### Reporting — Top clients
+**Route:** `#/reporting/top-clients`  |  **Rendu:** renderReporting (erp-frontend.js:544) — branche sub==='top-clients' L548-557
+
+**Donnees utilisees:**
+- GET /reporting/top-clients (tableau) ; champs r.client_name, r.total_ttc ; rang = index+1 (L551-554)
+
+**Actions:**
+- Aucune action mutative — onglets uniquement
+
+**Appels API:**
+- GET /api/reporting/top-clients?society=<soc>&limit=20 (L549, .catch -> [])
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; lecture seule
+
+**Permissions:**
+- Non exposé au portail ; aucune garde front ; backend auth-only
+
+**Risques / cas limites:**
+- rows attendu tableau : si succès renvoie un objet non-tableau, rows.map (L551) lève -> renderError
+- limit=20 fixe (Top 20)
+
+### Reporting — Top fournisseurs
+**Route:** `#/reporting/top-fournisseurs`  |  **Rendu:** renderReporting (erp-frontend.js:544) — branche sub==='top-fournisseurs' L558-567
+
+**Donnees utilisees:**
+- GET /reporting/top-fournisseurs (tableau) ; champs r.fournisseur_name, r.total_ttc ; rang = index+1 (L561-564)
+
+**Actions:**
+- Aucune action mutative — onglets uniquement
+
+**Appels API:**
+- GET /api/reporting/top-fournisseurs?society=<soc>&limit=20 (L559, .catch -> [])
+
+**Dependances snapshot/auto-refresh:**
+- Indépendant du snapshot ; lecture seule
+
+**Permissions:**
+- Non exposé au portail ; aucune garde front ; backend auth-only
+
+**Risques / cas limites:**
+- Même risque .map sur objet non-tableau (L561) -> renderError
+- limit=20 fixe

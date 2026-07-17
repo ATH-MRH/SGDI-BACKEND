@@ -1,6 +1,6 @@
 # Checklist de parité — Reconstruction Frontend SGDI/ATLAS
 
-> Une case par écran (143) + fonctionnalités transverses. Cocher UNIQUEMENT quand l'écran reconstruit est **vérifié à parité** contre sa fiche `RECONSTRUCTION-FRONTEND-SPEC.md` :
+> Une case par écran (208) + fonctionnalités transverses. Cocher UNIQUEMENT quand l'écran reconstruit est **vérifié à parité** contre sa fiche `RECONSTRUCTION-FRONTEND-SPEC.md` :
 > même route · mêmes champs · mêmes actions · mêmes appels API · **même résultat de calcul** · mêmes permissions · mêmes cas limites (bugs critiques CORRIGÉS, pas reproduits).
 
 ## Fonctionnalités transverses (à couvrir avant/pendant les écrans)
@@ -36,12 +36,30 @@
 - [ ] Situation générale — Groupe (tableau de bord consolidé multi-sociétés, l — `#/global-dashboard` (`renderGlobalDashboard`)
 - [ ] Tableau de bord (Accueil) — renderDashboard — `#/dashboard (default route; also fallbac` (`renderDashboard`)
 
+### 01c-DRH sous-vues  (12)
+- [ ] DRH — Mise en demeure (dotation non reversée, sortants) — `#/drh/mise_en_demeure` (`renderDRHMiseEnDemeure`) 🔴
+- [ ] DRH — Période d'essai — `#/drh/essai` (`renderDRHPeriodeEssai`) 🟠
+- [ ] DRH — Reversements en attente (dotation) — `#/drh/reversement` (`renderDRHReversementEnAttente`) 🟠
+- [ ] DRH — Service social (liste CNAS/Chifa) — `#/drh/social` (`renderDRHSocial`) 🔴
+- [ ] DRH — Service social, fiche agent (détail) — `#/drh/social/{id}` (`renderDRHSocialAgent`) 🟠
+- [ ] Statistiques RH (tableau multi-graphes) — `#/drh/stats` (`renderDRHStats`) 🔴
+- [ ] Statistiques par affectation (sites) — `#/drh/stats_affectation` (`renderDRHStatsAffectation`)
+- [ ] Statistiques par catégorie — `#/drh/stats_categorie` (`renderDRHStatsCategorie`)
+- [ ] Statistiques par fonction — `#/drh/stats_fonction` (`renderDRHStatsFonction`)
+- [ ] Statistiques par salaire — `#/drh/stats_salaire` (`renderDRHStatsSalaire`)
+- [ ] Statistiques par société (tableau) — `#/drh/stats_societe` (`renderDRHStatsSociete`)
+- [ ] Statistiques par thème — `#/drh/stats_theme` (`renderDRHStatsTheme`)
+
 ### 02-Recrutement  (5)
 - [ ] Candidats archivés (onglet "Archives" du hub Recrutement / Candidats) — `#/candidats_archives (liste) — #/candida` (`renderRecrutement`)
 - [ ] Candidats en réserve (liste + actions) — onglet "Réserve" du module Recr — `#/reserve  (dispatch ligne 8863 du switc` (`renderRecrutement`)
 - [ ] Fiche candidat (dossier) — formulaire de dossier candidat en 2 étapes /  — `#/recrutement/{id} (alias exacts : #/res` (`renderCandidatForm`)
 - [ ] Nouvelles candidatures (onglet "new" de l'écran unifié Recrutement / Can — `#/recrutement (alias équivalents : #/rec` (`renderRecrutement`)
 - [ ] Réception demandes & réclamations (Demandes Personnel — Portail RH) — `#/demandes_personnel/dashboard (alias su` (`renderDemandesPersonnel`) 🟠
+
+### 02-Recrutement & Demandes  (2)
+- [ ] Demande structure — Réception / Envoi (liste) — `#/demandes_structure/reception` (`renderDemandesStructure`) 🔴
+- [ ] Demande structure — Tableau de bord — `#/demandes_structure` (`renderDemandesStructureDashboard`) 🟠
 
 ### 03-Contrats  (6)
 - [ ] Avenants au contrat (Contrats > Avenants) — `#/contrats/avenants — dispatché dans le ` (`renderAvenants`)
@@ -51,18 +69,29 @@
 - [ ] Tableau de bord CONTRAT (module DRH) — 5 groupes de métriques cliquables — `#/contrats/dashboard (routeur: case "con` (`renderContratsDashboard`)
 - [ ] À contractualiser (Contrats > Candidats retenus / Instance de signature) — `#/contrats/a_contractualiser — dispatché` (`renderContrats`) 🟠
 
-### 04-Congés & Fiches  (5)
+### 04-Congés & Fiches  (6)
 - [ ] Blocage "PostgreSQL obligatoire" — écran de garde plein écran (interstit — `Pas de route hash dédiée : c'est un inte` (`renderPostgresRequired`) 🟠
 - [ ] Création de badge (module Badges personnel, DRH) — `#/fiches/badge (alias: #/badge → renderF` (`renderBadgeModule`)
+- [ ] Dossier administratif (archive des pièces) — `#/dossiers` (`renderDossiers`) 🔴
 - [ ] Impression en lot des fiches de position — écran DRH permettant de coche — `#/fiches/imprimer — dispatché par render` (`renderFichesImpression`)
 - [ ] Situation des congés — `#/conges (dispatch: `case"conges":render` (`renderConges`) 🟠
 - [ ] Vérification publique de badge (page publique plein écran affichée au sc — `#/badge/verify/:id — :id = référence emp` (`renderBadgeVerify`)
+
+### 04b-Documents/Archives  (1)
+- [ ] Documents / Archives (documents archivés par employé) — `#/documents` (`renderDocumentsArchives`) 🔴
 
 ### 05-Incidents/Main courante  (4)
 - [ ] Main courante — Tableau de bord — `#/incidents/dashboard (router: `case"inc` (`renderMainCouranteDashboard`)
 - [ ] Main courante — Évènements autres — `#/incidents/autres (dispatch: `case"inci` (`renderIncidents`)
 - [ ] Main courante — Évènements site — `#/incidents/site (dispatch: `case"incide` (`renderIncidents`)
 - [ ] Modal — Nouvel évènement (Main courante / Incidents) — `Modale ouverte par openIncidentModal(mod` (`openIncidentModal`) 🟠
+
+### 05b-Secrétariat  (5)
+- [ ] Archives (liste) — `#/secretariat/archives` (`renderSecretariat`) 🔴
+- [ ] Courriers (liste) — `#/secretariat/courriers` (`renderSecretariat`)
+- [ ] Modal Nouveau courrier (création) — `#/secretariat/dashboard` (`openSecretariatCourrierModal`) 🟠
+- [ ] Notes internes (liste) — `#/secretariat/notes` (`renderSecretariat`) 🔴
+- [ ] Tableau de bord Secrétariat — `#/secretariat/dashboard` (`renderSecretariat`) 🟠
 
 ### 06-Sites & Pointage  (14)
 - [ ] Encart évènements fiche Site (bloc "Main courante" — siteEvenementsHTML) — `app/static/sgdi-app.js l.16413 `siteEven` (`siteEvenementsHTML`) 🟠
@@ -79,6 +108,14 @@
 - [ ] Pointage — Tableau de bord (renderPointageDashboard) — `#/pointage/dashboard — dispatché par le ` (`renderPointageDashboard`) 🟠
 - [ ] Sites — Fiche technique / Création de site — `#/sites/nouveau (création, id=null) — mê` (`renderSiteForm`)
 - [ ] Sites — Tableau de bord — `#/sites (et alias #/sites/actifs — le me` (`renderSites`)
+
+### 06b-OPS  (6)
+- [ ] OPS — Employés en instance de dotation (suivi) — `#/ops/instance_dotation` (`renderOpsInstanceDotation`)
+- [ ] OPS — Missions (ordres de mission) — `#/ops/missions` (`renderOpsMissions`) 🟠
+- [ ] OPS — Mouvements (ordres de mouvement) — `#/ops/mouvements` (`renderOpsMouvements`) 🟠
+- [ ] OPS — QR Présence (générateur QR par site) — `#/ops/qr` (`renderOPS`)
+- [ ] OPS — Supervision site (inspections) — `#/ops/supervision` (`renderOpsSupervision`) 🟠
+- [ ] OPS — Tableau de bord — `#/ops/dashboard` (`renderOPS`) 🟠
 
 ### 07-Paie  (6)
 - [ ] Aperçu / Impression fiche de paie (bulletin de paie SGDI) — document en  — `Pas de route dédiée : overlay (modale) s` (`paieFicheHTML`) 🟠
@@ -142,19 +179,52 @@
 - [ ] Facturation — Thèmes (référentiel des thèmes de prestation/facture) — `#/facturation/themes — dispatché par ren` (`renderFactThemes`) 🟠
 - [ ] Facture — Éditeur (création/modification d'une facture client) — `#/facturation/factures avec le flag glob` (`renderFactureEditor`) 🔴
 
-### 11-ERP Compta/Achats/Ventes  (4)
+### 11-ERP Compta/Achats/Ventes  (23)
+- [ ] Achats — Commandes (BDC) — `#/achats/commandes` (`renderAchats`)
+- [ ] Achats — Factures fournisseur — `#/achats/factures` (`renderAchats`) 🟠
+- [ ] Achats — Fournisseurs — `#/achats/fournisseurs` (`renderAchats`) 🟠
+- [ ] Achats — Réceptions — `#/achats/receptions` (`renderAchats`)
+- [ ] Achats — Tableau de bord — `#/achats/dashboard` (`renderAchats`)
+- [ ] Comptabilité — Balance — `#/accounting/balance` (`renderAccounting`)
+- [ ] Comptabilité — Plan comptable (comptes) — `#/accounting/comptes` (`renderAccounting`) 🟠
+- [ ] Comptabilité — Tableau de bord — `#/accounting/dashboard` (`renderAccounting`) 🟠
+- [ ] Comptabilité — Écritures (journal) — `#/accounting/ecritures` (`renderAccounting`) 🟠
 - [ ] ERP Achats (module ATLAS ERP « Achats & Fournisseurs ») — 5 sous-écrans  — `#/achats (défaut sub=dashboard) — sous-r` (`renderAchats`)
 - [ ] ERP Comptabilité (module ATLAS ERP « accounting ») — 4 onglets : Tableau — `#/accounting[/<sub>] où sub ∈ {dashboard` (`renderAccounting`)
 - [ ] ERP Reporting (ATLAS ERP) — tableau de bord analytique consolidé, lectur — `#/reporting  (et #/reporting/<sub> — sub` (`renderReporting`)
 - [ ] ERP Ventes (ATLAS ERP — Ventes & Clients) — `#/ventes  → aussi #/ventes/dashboard, #/` (`renderVentes`)
+- [ ] Reporting — Dashboard consolidé — `#/reporting/dashboard` (`renderReporting`)
+- [ ] Reporting — Statistiques achats — `#/reporting/achats` (`renderReporting`)
+- [ ] Reporting — Statistiques ventes — `#/reporting/ventes` (`renderReporting`)
+- [ ] Reporting — Top clients — `#/reporting/top-clients` (`renderReporting`)
+- [ ] Reporting — Top fournisseurs — `#/reporting/top-fournisseurs` (`renderReporting`)
+- [ ] Reporting — Trésorerie — `#/reporting/tresorerie` (`renderReporting`)
+- [ ] Ventes — Commandes client — `#/ventes/commandes` (`renderVentes`)
+- [ ] Ventes — Devis — `#/ventes/devis` (`renderVentes`)
+- [ ] Ventes — Livraisons (BL) — `#/ventes/livraisons` (`renderVentes`)
+- [ ] Ventes — Tableau de bord — `#/ventes/dashboard` (`renderVentes`)
 
-### 12-Portail RH & Mobile  (6)
+### 12-Portail RH & Mobile  (20)
+- [ ] Accueil / Pointage rapide (tab-home) — `switchTab('home') → #tab-home (L976). Aj` (`renderHomeTab`)
+- [ ] Auth — Connexion (login) — `Pas de hash. #authView > .auth-form#form` (`?`) 🟠
+- [ ] Auth — Créer un compte (self-register) — `#authView > .auth-form#form-signup (L869` (`?`)
+- [ ] Auth — Réinitialiser le mot de passe (reset) — `#authView > .auth-form#form-reset (L907)` (`?`)
+- [ ] Boîte de réception (tab-reception) — `switchTab('reception') → #tab-reception ` (`renderInbox`)
+- [ ] Changer le mot de passe (modal) — `Modal #pwdModal (L1665-1691). Ouvert par` (`openChangePassword`)
 - [ ] Comptes Portail RH — `#/portail/comptes — dispatché ligne 6883` (`renderPortailComptes`)
+- [ ] Contrôle de ronde — portail (tab-ronde) — `switchTab('ronde') → #tab-ronde (L1065) ` (`?`) 🟠
+- [ ] Documents (tab-documents) — `switchTab('documents') → #tab-documents ` (`renderDocuments`) 🟠
+- [ ] Menu Portail (tab-portail) — `switchTab('portail') → #tab-portail (L10` (`?`)
 - [ ] Module-Portal (portail de sous-domaine / module-host) — grille des rubri — `#/module-portal (alias captés par le mêm` (`renderModuleHostPortal`)
+- [ ] Nouvelle demande — 7 types (tab-nouvelle) — `switchTab('nouvelle') → #tab-nouvelle (L` (`?`) 🟠
+- [ ] Pointage QR — jetons éphémères (tab-pointage, carte QR) — `Même #tab-pointage, carte #qr-scan-card ` (`?`)
+- [ ] Pointage manuel / GPS (tab-pointage, cartes manuelle + historique) — `switchTab('pointage') → #tab-pointage (L` (`renderPointage`)
 - [ ] Portail RH (vue DRH) — réception, suivi et traitement des demandes / réc — `#/portail — dispatch l.6883: case 'porta` (`renderPortailPersonnel`) 🟠
 - [ ] Portail RH personnel (self-service employé) — `#/portail — branche employé de `renderPo` (`renderPortailPersonnel`) 🟠
 - [ ] Portail mobile self-service RH (PWA bilingue FR/AR). SPA autonome, indep — `` (`renderHistory`)
 - [ ] Portail société (Company portal) — hub de lancement des modules pour la  — `#/societe-portal (et #/dashboard quand u` (`renderSocietePortal`)
+- [ ] Profil (tab-profil) — ORPHELIN (aucune navigation) — `switchTab('profil') → #tab-profil (L1559` (`saveProfile`) 🔴
+- [ ] Web Push VAPID + Service Worker (carte Notifications de Profil + portail — `Carte #notif-card dans #tab-profil (L161` (`?`)
 
 ### 13-Administration  (31)
 - [ ] Accès sociétés (libres) — "🏢 Accès sociétés libres" (Administration syst — `admin/access_societes (nominal). ATTENTI` (`renderAdminAccessSocietes`) 🟠
@@ -189,12 +259,23 @@
 - [ ] Utilisateurs (Administration système) — gestion des comptes SGDI — `Hash `#admin/users` → renderAdmin(view,'` (`renderAdminUsers`)
 - [ ] Validation des sections candidat (Admin système) — page de configuration — `admin/sections_candidat — dispatché dans` (`renderAdminCandidatSections`) 🟠
 
-### 14-Infra transverse  (5)
+### 13b-Rapports  (1)
+- [ ] Rapports (synthèse RH) — `#/rapports` (`renderRapports`)
+
+### 13c-Paramètres  (2)
+- [ ] Journal de déverrouillage (complet) — `#/parametres/log` (`renderUnlockLog`) 🔴
+- [ ] Paramètres (code de déverrouillage + journal récent) — `#/parametres` (`renderParametres`) 🟠
+
+### 14-Infra transverse  (6)
 - [ ] Bannière de mise à jour d'application (update-banner) — `sgdiCheckAppVersion` (`sgdiCheckAppVersion`)
 - [ ] Barre de chargement de données (bandeau bas global, progression indéterm — `sgdiShowDataLoadingBar — n'est PAS une r` (`sgdiShowDataLoadingBar`)
 - [ ] Bouton d'actualisation manuelle du workspace (barre d'onglets « chrome n — `refreshWorkspace (pas une route hash : c` (`refreshWorkspace`) 🟠
 - [ ] ERP Ruban compteurs (bandeau KPI horizontal, sous la barre d'onglets, au — `Bandeau global non routé — injecté dans ` (`moduleCountersRibbonHTML`)
 - [ ] Messagerie / dialogue interne (widget global overlay) — panneau MESSAGES — `Pas de route hash dédiée : overlay globa` (`dialogueBoxHTML`) 🟠
+- [ ] Moteur i18n bilingue FR/AR (transverse — pas un écran distinct) — `N/A. Moteur global. Sélecteurs de langue` (`?`) 🟠
+
+### 14b-Pages custom  (1)
+- [ ] Rubrique personnalisée (page satellite créée depuis Administration systè — `#/custom/` (`renderCustomSidebarPage`) 🟠
 
 ---
 Légende : 🔴 risque critique à corriger · 🟠 écriture snapshot → mutation REST + logique serveur · (rien) lecture/re-plomberie simple.

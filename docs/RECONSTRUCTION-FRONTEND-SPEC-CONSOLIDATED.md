@@ -11,8 +11,10 @@
 | **145** | Estimation de la passe 1 (par domaine) |
 | **163** | Liste d'écrans envoyée aux agents — **gonflée par ~11 doublons ERP-facturation** mal attribués |
 | **170** | **Événements du journal cumulés sur 3 reprises** du workflow (relances après limites d'usage) — **compte des invocations d'agents, PAS des écrans** |
-| **148** | Fiches écran réellement produites au run final |
-| **143** | **ÉCRANS UNIQUES CONFIRMÉS** (148 − 5 doublons ERP-facturation) ✅ |
+| **148** | Fiches écran produites au run final de la passe 3 |
+| **143** | Écrans uniques passe 3 (148 − 5 doublons ERP-facturation) |
+| **+65** | Écrans **rattrapés** (routes actives de `renderView` jamais couvertes : dossiers, documents, demandes_structure, rapports, parametres, custom, secrétariat, OPS détaillé, sous-vues + stats DRH, portail mobile éclaté, ERP sous-onglets) |
+| **208** | **TOTAL ÉCRANS UNIQUES CONFIRMÉS** ✅ |
 
 Endpoints : **110** = estimation passe 1 des endpoints *référencés par le front*. Le vrai total backend est **273** (compté sur les décorateurs), dont classification en §4.
 
@@ -26,7 +28,7 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | **Doublon** | Même écran inventorié 2× (ERP-facturation) — fusionné |
 | **À vérifier** | Fonction de rendu introuvable — **0 cas** (136/136 vérifiées) |
 
-**Répartition (143 écrans) :** Confirmé : 79 · Backend requis : 60 · Risque critique : 4
+**Répartition (208 écrans) :** Confirmé : 112 · Backend requis : 82 · Risque critique : 14
 
 ## 3. Index des écrans par module
 
@@ -54,6 +56,23 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Situation générale — Groupe (tableau de bord consolidé multi-sociétés, | `#/global-dashboard` | `renderGlobalDashboard` | Confirmé | — |
 | Tableau de bord (Accueil) — renderDashboard | `#/dashboard (default route; also fallback for un` | `renderDashboard` | Confirmé | — |
 
+### 01c-DRH sous-vues  (12 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| DRH — Mise en demeure (dotation non reversée, sortants) | `#/drh/mise_en_demeure` | `renderDRHMiseEnDemeure` | Risque critique | ⚠️ oui |
+| DRH — Période d'essai | `#/drh/essai` | `renderDRHPeriodeEssai` | Backend requis | ⚠️ oui |
+| DRH — Reversements en attente (dotation) | `#/drh/reversement` | `renderDRHReversementEnAttente` | Backend requis | ⚠️ oui |
+| DRH — Service social (liste CNAS/Chifa) | `#/drh/social` | `renderDRHSocial` | Risque critique | ⚠️ oui |
+| DRH — Service social, fiche agent (détail) | `#/drh/social/{id}` | `renderDRHSocialAgent` | Backend requis | ⚠️ oui |
+| Statistiques RH (tableau multi-graphes) | `#/drh/stats` | `renderDRHStats` | Risque critique | ⚠️ oui |
+| Statistiques par affectation (sites) | `#/drh/stats_affectation` | `renderDRHStatsAffectation` | Confirmé | — |
+| Statistiques par catégorie | `#/drh/stats_categorie` | `renderDRHStatsCategorie` | Confirmé | — |
+| Statistiques par fonction | `#/drh/stats_fonction` | `renderDRHStatsFonction` | Confirmé | — |
+| Statistiques par salaire | `#/drh/stats_salaire` | `renderDRHStatsSalaire` | Confirmé | — |
+| Statistiques par société (tableau) | `#/drh/stats_societe` | `renderDRHStatsSociete` | Confirmé | — |
+| Statistiques par thème | `#/drh/stats_theme` | `renderDRHStatsTheme` | Confirmé | — |
+
 ### 02-Recrutement  (5 écrans)
 
 | Écran | Route / repère | Rendu | Statut | Écrit snapshot |
@@ -63,6 +82,13 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Fiche candidat (dossier) — formulaire de dossier candidat en 2 étapes  | `#/recrutement/{id} (alias exacts : #/reserve/{id` | `renderCandidatForm` | Confirmé | — |
 | Nouvelles candidatures (onglet "new" de l'écran unifié Recrutement / C | `#/recrutement (alias équivalents : #/recrutement` | `renderRecrutement` | Confirmé | — |
 | Réception demandes & réclamations (Demandes Personnel — Portail RH) | `#/demandes_personnel/dashboard (alias sub-route ` | `renderDemandesPersonnel` | Backend requis | ⚠️ oui |
+
+### 02-Recrutement & Demandes  (2 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| Demande structure — Réception / Envoi (liste) | `#/demandes_structure/reception` | `renderDemandesStructure` | Risque critique | ⚠️ oui |
+| Demande structure — Tableau de bord | `#/demandes_structure` | `renderDemandesStructureDashboard` | Backend requis | ⚠️ oui |
 
 ### 03-Contrats  (6 écrans)
 
@@ -75,15 +101,22 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Tableau de bord CONTRAT (module DRH) — 5 groupes de métriques cliquabl | `#/contrats/dashboard (routeur: case "contrats" →` | `renderContratsDashboard` | Confirmé | — |
 | À contractualiser (Contrats > Candidats retenus / Instance de signatur | `#/contrats/a_contractualiser — dispatché dans le` | `renderContrats` | Backend requis | ⚠️ oui |
 
-### 04-Congés & Fiches  (5 écrans)
+### 04-Congés & Fiches  (6 écrans)
 
 | Écran | Route / repère | Rendu | Statut | Écrit snapshot |
 |---|---|---|---|---|
 | Blocage "PostgreSQL obligatoire" — écran de garde plein écran (interst | `Pas de route hash dédiée : c'est un intercepteur` | `renderPostgresRequired` | Backend requis | ⚠️ oui |
 | Création de badge (module Badges personnel, DRH) | `#/fiches/badge (alias: #/badge → renderFiches(vi` | `renderBadgeModule` | Confirmé | — |
+| Dossier administratif (archive des pièces) | `#/dossiers` | `renderDossiers` | Risque critique | ⚠️ oui |
 | Impression en lot des fiches de position — écran DRH permettant de coc | `#/fiches/imprimer — dispatché par renderView() (` | `renderFichesImpression` | Confirmé | — |
 | Situation des congés | `#/conges (dispatch: `case"conges":renderConges(v` | `renderConges` | Backend requis | ⚠️ oui |
 | Vérification publique de badge (page publique plein écran affichée au  | `#/badge/verify/:id — :id = référence employé, ac` | `renderBadgeVerify` | Confirmé | — |
+
+### 04b-Documents/Archives  (1 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| Documents / Archives (documents archivés par employé) | `#/documents` | `renderDocumentsArchives` | Risque critique | ⚠️ oui |
 
 ### 05-Incidents/Main courante  (4 écrans)
 
@@ -93,6 +126,16 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Main courante — Évènements autres | `#/incidents/autres (dispatch: `case"incidents":r` | `renderIncidents` | Confirmé | — |
 | Main courante — Évènements site | `#/incidents/site (dispatch: `case"incidents":ren` | `renderIncidents` | Confirmé | — |
 | Modal — Nouvel évènement (Main courante / Incidents) | `Modale ouverte par openIncidentModal(mode) (l.17` | `openIncidentModal` | Backend requis | ⚠️ oui |
+
+### 05b-Secrétariat  (5 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| Archives (liste) | `#/secretariat/archives` | `renderSecretariat` | Risque critique | — |
+| Courriers (liste) | `#/secretariat/courriers` | `renderSecretariat` | Confirmé | — |
+| Modal Nouveau courrier (création) | `#/secretariat/dashboard` | `openSecretariatCourrierModal` | Backend requis | ⚠️ oui |
+| Notes internes (liste) | `#/secretariat/notes` | `renderSecretariat` | Risque critique | — |
+| Tableau de bord Secrétariat | `#/secretariat/dashboard` | `renderSecretariat` | Backend requis | ⚠️ oui |
 
 ### 06-Sites & Pointage  (14 écrans)
 
@@ -112,6 +155,17 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Pointage — Tableau de bord (renderPointageDashboard) | `#/pointage/dashboard — dispatché par le routeur ` | `renderPointageDashboard` | Backend requis | ⚠️ oui |
 | Sites — Fiche technique / Création de site | `#/sites/nouveau (création, id=null) — même fonct` | `renderSiteForm` | Confirmé | — |
 | Sites — Tableau de bord | `#/sites (et alias #/sites/actifs — le menu point` | `renderSites` | Confirmé | — |
+
+### 06b-OPS  (6 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| OPS — Employés en instance de dotation (suivi) | `#/ops/instance_dotation` | `renderOpsInstanceDotation` | Confirmé | — |
+| OPS — Missions (ordres de mission) | `#/ops/missions` | `renderOpsMissions` | Backend requis | ⚠️ oui |
+| OPS — Mouvements (ordres de mouvement) | `#/ops/mouvements` | `renderOpsMouvements` | Backend requis | ⚠️ oui |
+| OPS — QR Présence (générateur QR par site) | `#/ops/qr` | `renderOPS` | Confirmé | — |
+| OPS — Supervision site (inspections) | `#/ops/supervision` | `renderOpsSupervision` | Backend requis | ⚠️ oui |
+| OPS — Tableau de bord | `#/ops/dashboard` | `renderOPS` | Backend requis | ⚠️ oui |
 
 ### 07-Paie  (6 écrans)
 
@@ -187,25 +241,58 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Facturation — Thèmes (référentiel des thèmes de prestation/facture) | `#/facturation/themes — dispatché par renderView(` | `renderFactThemes` | Backend requis | ⚠️ oui |
 | Facture — Éditeur (création/modification d'une facture client) | `#/facturation/factures avec le flag global windo` | `renderFactureEditor` | Risque critique | ⚠️ oui |
 
-### 11-ERP Compta/Achats/Ventes  (4 écrans)
+### 11-ERP Compta/Achats/Ventes  (23 écrans)
 
 | Écran | Route / repère | Rendu | Statut | Écrit snapshot |
 |---|---|---|---|---|
+| Achats — Commandes (BDC) | `#/achats/commandes` | `renderAchats` | Confirmé | — |
+| Achats — Factures fournisseur | `#/achats/factures` | `renderAchats` | Backend requis | ⚠️ oui |
+| Achats — Fournisseurs | `#/achats/fournisseurs` | `renderAchats` | Backend requis | ⚠️ oui |
+| Achats — Réceptions | `#/achats/receptions` | `renderAchats` | Confirmé | — |
+| Achats — Tableau de bord | `#/achats/dashboard` | `renderAchats` | Confirmé | — |
+| Comptabilité — Balance | `#/accounting/balance` | `renderAccounting` | Confirmé | — |
+| Comptabilité — Plan comptable (comptes) | `#/accounting/comptes` | `renderAccounting` | Backend requis | ⚠️ oui |
+| Comptabilité — Tableau de bord | `#/accounting/dashboard` | `renderAccounting` | Backend requis | ⚠️ oui |
+| Comptabilité — Écritures (journal) | `#/accounting/ecritures` | `renderAccounting` | Backend requis | ⚠️ oui |
 | ERP Achats (module ATLAS ERP « Achats & Fournisseurs ») — 5 sous-écran | `#/achats (défaut sub=dashboard) — sous-routes: #` | `renderAchats` | Confirmé | — |
 | ERP Comptabilité (module ATLAS ERP « accounting ») — 4 onglets : Table | `#/accounting[/<sub>] où sub ∈ {dashboard (défaut` | `renderAccounting` | Confirmé | — |
 | ERP Reporting (ATLAS ERP) — tableau de bord analytique consolidé, lect | `#/reporting  (et #/reporting/<sub> — sub ∈ dashb` | `renderReporting` | Confirmé | — |
 | ERP Ventes (ATLAS ERP — Ventes & Clients) | `#/ventes  → aussi #/ventes/dashboard, #/ventes/d` | `renderVentes` | Confirmé | — |
+| Reporting — Dashboard consolidé | `#/reporting/dashboard` | `renderReporting` | Confirmé | — |
+| Reporting — Statistiques achats | `#/reporting/achats` | `renderReporting` | Confirmé | — |
+| Reporting — Statistiques ventes | `#/reporting/ventes` | `renderReporting` | Confirmé | — |
+| Reporting — Top clients | `#/reporting/top-clients` | `renderReporting` | Confirmé | — |
+| Reporting — Top fournisseurs | `#/reporting/top-fournisseurs` | `renderReporting` | Confirmé | — |
+| Reporting — Trésorerie | `#/reporting/tresorerie` | `renderReporting` | Confirmé | — |
+| Ventes — Commandes client | `#/ventes/commandes` | `renderVentes` | Confirmé | — |
+| Ventes — Devis | `#/ventes/devis` | `renderVentes` | Confirmé | — |
+| Ventes — Livraisons (BL) | `#/ventes/livraisons` | `renderVentes` | Confirmé | — |
+| Ventes — Tableau de bord | `#/ventes/dashboard` | `renderVentes` | Confirmé | — |
 
-### 12-Portail RH & Mobile  (6 écrans)
+### 12-Portail RH & Mobile  (20 écrans)
 
 | Écran | Route / repère | Rendu | Statut | Écrit snapshot |
 |---|---|---|---|---|
+| Accueil / Pointage rapide (tab-home) | `switchTab('home') → #tab-home (L976). Ajoute cla` | `renderHomeTab` | Confirmé | — |
+| Auth — Connexion (login) | `Pas de hash. #authView > .auth-form#form-login (` | `?` | Backend requis | ⚠️ oui |
+| Auth — Créer un compte (self-register) | `#authView > .auth-form#form-signup (L869). Affic` | `?` | Confirmé | — |
+| Auth — Réinitialiser le mot de passe (reset) | `#authView > .auth-form#form-reset (L907). Affich` | `?` | Confirmé | — |
+| Boîte de réception (tab-reception) | `switchTab('reception') → #tab-reception (L1544) ` | `renderInbox` | Confirmé | — |
+| Changer le mot de passe (modal) | `Modal #pwdModal (L1665-1691). Ouvert par openCha` | `openChangePassword` | Confirmé | — |
 | Comptes Portail RH | `#/portail/comptes — dispatché ligne 6883: `case"` | `renderPortailComptes` | Confirmé | — |
+| Contrôle de ronde — portail (tab-ronde) | `switchTab('ronde') → #tab-ronde (L1065) ; ajoute` | `?` | Backend requis | ⚠️ oui |
+| Documents (tab-documents) | `switchTab('documents') → #tab-documents (L1507) ` | `renderDocuments` | Backend requis | ⚠️ oui |
+| Menu Portail (tab-portail) | `switchTab('portail') → #tab-portail (L1035). Ajo` | `?` | Confirmé | — |
 | Module-Portal (portail de sous-domaine / module-host) — grille des rub | `#/module-portal (alias captés par le même rendu ` | `renderModuleHostPortal` | Confirmé | — |
+| Nouvelle demande — 7 types (tab-nouvelle) | `switchTab('nouvelle') → #tab-nouvelle (L1146). B` | `?` | Backend requis | ⚠️ oui |
+| Pointage QR — jetons éphémères (tab-pointage, carte QR) | `Même #tab-pointage, carte #qr-scan-card (L1467-1` | `?` | Confirmé | — |
+| Pointage manuel / GPS (tab-pointage, cartes manuelle + historique) | `switchTab('pointage') → #tab-pointage (L1465) ; ` | `renderPointage` | Confirmé | — |
 | Portail RH (vue DRH) — réception, suivi et traitement des demandes / r | `#/portail — dispatch l.6883: case 'portail': if(` | `renderPortailPersonnel` | Backend requis | ⚠️ oui |
 | Portail RH personnel (self-service employé) | `#/portail — branche employé de `renderPortailPer` | `renderPortailPersonnel` | Backend requis | ⚠️ oui |
 | Portail mobile self-service RH (PWA bilingue FR/AR). SPA autonome, ind | `` | `renderHistory` | Confirmé | — |
 | Portail société (Company portal) — hub de lancement des modules pour l | `#/societe-portal (et #/dashboard quand une socié` | `renderSocietePortal` | Confirmé | — |
+| Profil (tab-profil) — ORPHELIN (aucune navigation) | `switchTab('profil') → #tab-profil (L1559) mais A` | `saveProfile` | Risque critique | ⚠️ oui |
+| Web Push VAPID + Service Worker (carte Notifications de Profil + porta | `Carte #notif-card dans #tab-profil (L1615-1621) ` | `?` | Confirmé | — |
 
 ### 13-Administration  (31 écrans)
 
@@ -243,7 +330,20 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Utilisateurs (Administration système) — gestion des comptes SGDI | `Hash `#admin/users` → renderAdmin(view,'users',a` | `renderAdminUsers` | Confirmé | — |
 | Validation des sections candidat (Admin système) — page de configurati | `admin/sections_candidat — dispatché dans renderA` | `renderAdminCandidatSections` | Backend requis | ⚠️ oui |
 
-### 14-Infra transverse  (5 écrans)
+### 13b-Rapports  (1 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| Rapports (synthèse RH) | `#/rapports` | `renderRapports` | Confirmé | — |
+
+### 13c-Paramètres  (2 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| Journal de déverrouillage (complet) | `#/parametres/log` | `renderUnlockLog` | Risque critique | ⚠️ oui |
+| Paramètres (code de déverrouillage + journal récent) | `#/parametres` | `renderParametres` | Backend requis | ⚠️ oui |
+
+### 14-Infra transverse  (6 écrans)
 
 | Écran | Route / repère | Rendu | Statut | Écrit snapshot |
 |---|---|---|---|---|
@@ -252,11 +352,18 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Bouton d'actualisation manuelle du workspace (barre d'onglets « chrome | `refreshWorkspace (pas une route hash : contrôle ` | `refreshWorkspace` | Backend requis | ⚠️ oui |
 | ERP Ruban compteurs (bandeau KPI horizontal, sous la barre d'onglets,  | `Bandeau global non routé — injecté dans le shell` | `moduleCountersRibbonHTML` | Confirmé | — |
 | Messagerie / dialogue interne (widget global overlay) — panneau MESSAG | `Pas de route hash dédiée : overlay global rendu ` | `dialogueBoxHTML` | Backend requis | ⚠️ oui |
+| Moteur i18n bilingue FR/AR (transverse — pas un écran distinct) | `N/A. Moteur global. Sélecteurs de langue: header` | `?` | Backend requis | ⚠️ oui |
+
+### 14b-Pages custom  (1 écrans)
+
+| Écran | Route / repère | Rendu | Statut | Écrit snapshot |
+|---|---|---|---|---|
+| Rubrique personnalisée (page satellite créée depuis Administration sys | `#/custom/` | `renderCustomSidebarPage` | Backend requis | ⚠️ oui |
 
 ## 4. Classification des 273 endpoints backend
 
-- **Utilisé** (appelé par le front) : **233**
-- **Défini non consommé** (orphelin backend — à câbler à une UI ou supprimer) : **40**
+- **Utilisé** (appelé par le front) : **234**
+- **Défini non consommé** (orphelin backend — à câbler à une UI ou supprimer) : **39**
 - **À créer** (le front appelle une route inexistante, ou nouveau besoin d'archi) : **9**
 
 ### 4.a Endpoints définis non consommés (orphelins)
@@ -273,13 +380,13 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 
 **finance_routes.py** (2) : `GET /api/entries/{collection}/page`, `GET /api/payroll/{collection}/page`
 
-**ronde** (2) : `POST /api/ronde/circuits/{circuit_id}/checkpoints`, `PUT /api/ronde/portal/executions/{execution_id}/end`
-
 **materiel** (1) : `GET /api/materiel/employees/{employee_id}/equipment`
 
 **auth** (1) : `PATCH /api/auth/access-rules/{module_key}/{role}`
 
 **ops** (1) : `POST /api/ops/events/{event_id}/close`
+
+**ronde** (1) : `POST /api/ronde/circuits/{circuit_id}/checkpoints`
 
 **portal** (1) : `PUT /api/portal/accounts/{matricule}/password`
 
@@ -343,3 +450,13 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 - `Stats stock pro — "Matériel & Équipement › Statistiques" (on` — logique métier côté client à corriger/migrer (voir SPEC)
 - `Entrée/Sortie stock (modaux) — une seule modale paramétrée p` — logique métier côté client à corriger/migrer (voir SPEC)
 - `Facture — Éditeur (création/modification d'une facture clien` — logique métier côté client à corriger/migrer (voir SPEC)
+- `Dossier administratif (archive des pièces)` — 
+- `Documents / Archives (documents archivés par employé)` — 
+- `Demande structure — Réception / Envoi (liste)` — 
+- `Journal de déverrouillage (complet)` — 
+- `Notes internes (liste)` — 
+- `Archives (liste)` — 
+- `DRH — Service social (liste CNAS/Chifa)` — 
+- `DRH — Mise en demeure (dotation non reversée, sortants)` — 
+- `Statistiques RH (tableau multi-graphes)` — 
+- `Profil (tab-profil) — ORPHELIN (aucune navigation)` — 
