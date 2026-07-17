@@ -2,7 +2,7 @@
 
 > ⚠️ **ERRATA / SOURCE AUTORITAIRE DES COMPTEURS** — Ce fichier est le **détail brut par écran**.
 > Les compteurs **FINAUX et validés** sont dans `RECONSTRUCTION-FRONTEND-SPEC-CONSOLIDATED.md` :
-> **208 écrans uniques** · **15 fonctionnalités transverses** · 3 frontends · **273 endpoints (234 utilisés / 39 orphelins / 9 à créer)** · **169/169 fonctions de rendu vérifiées**.
+> **209 écrans uniques** · **15 fonctionnalités transverses** · 3 frontends · **273 endpoints (234 utilisés / 39 orphelins / 9 à créer)** · **169/169 fonctions de rendu vérifiées**.
 > Toute estimation plus ancienne dans le corps de ce fichier (ex. « ~85 endpoints orphelins », « 148 écrans ») est **SUPERSÉDÉE** par la classification finale ci-dessus.
 >
 > Inventaire genere par ~340 agents (3 passes + vérifications + rattrapage documentaire).

@@ -1,7 +1,7 @@
 # Roadmap de reconstruction — Frontend SGDI/ATLAS
 
 > Migration **strangler** (ancien + nouveau coexistent, bascule module par module derrière le même backend).
-> 208 écrans · 273 endpoints · 3 frontends. Ordre issu de la passe 1, enrichi des dépendances.
+> 209 écrans · 273 endpoints · 3 frontends. Ordre issu de la passe 1, enrichi des dépendances.
 
 ## Principe de chaque phase
 `reconstruire (fiche d'inventaire) → vérifier la parité (agents adversariaux : mêmes champs/calculs/résultat) → tests → bascule`.
@@ -94,7 +94,7 @@
 - **07-Paie** (6 écrans) : `Tableau de bord Paie — écran p`, `Dossier salaire employé (Paie `, `Modale « Éléments de paie » (é`, `Modale « Nouvelle grille salar`, `Modale "Nouvelle rubrique de p`, `Aperçu / Impression fiche de p`
 - **10-Facturation/Finances** (17 écrans) : `Client — Fiche imprimable (ape`, `Facturation — Tableau de bord`, `Facturation — Clients (lecture`, `Facturation — Factures (liste)`, `Facture — Éditeur (création/mo`, `Facturation — Devis` …
 - **11-ERP Compta/Achats/Ventes** (23 écrans) : `ERP Comptabilité (module ATLAS`, `ERP Reporting (ATLAS ERP) — ta`, `ERP Achats (module ATLAS ERP «`, `ERP Ventes (ATLAS ERP — Ventes`, `Comptabilité — Tableau de bord`, `Comptabilité — Plan comptable ` …
-- **12-Portail RH & Mobile** (20 écrans) : `Portail société (Company porta`, `Portail RH (vue DRH) — récepti`, `Portail RH personnel (self-ser`, `Comptes Portail RH`, `Module-Portal (portail de sous`, `Portail mobile self-service RH` …
+- **12-Portail RH & Mobile** (21 écrans) : `Portail société (Company porta`, `Portail RH (vue DRH) — récepti`, `Portail RH personnel (self-ser`, `Comptes Portail RH`, `Module-Portal (portail de sous`, `Portail mobile self-service RH` …
 - **13-Administration** (31 écrans) : `Administration système (sous-f`, `Fiche de position employé (age`, `Fiches de position (annuaire) `, `Onglet "Portail RH" (Compte Po`, `Cockpit Direction Générale (ta`, `Panneau administration système` …
 - **13b-Rapports** (1 écrans) : `Rapports (synthèse RH)`
 - **13c-Paramètres** (2 écrans) : `Paramètres (code de déverrouil`, `Journal de déverrouillage (com`
