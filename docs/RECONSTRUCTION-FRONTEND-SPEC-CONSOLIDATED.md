@@ -26,7 +26,7 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | **Backend requis** | Écrit via le snapshot global (`PUT /irongs/db` ou `/collections`) → nécessite de vraies mutations REST + logique serveur |
 | **Risque critique** | Bug métier confirmé à corriger (ne PAS reproduire) — voir §7 |
 | **Doublon** | Même écran inventorié 2× (ERP-facturation) — fusionné |
-| **À vérifier** | Fonction de rendu introuvable — **0 cas** (136/136 vérifiées) |
+| **À vérifier** | Fonction de rendu introuvable — **0 cas** (169/169 fonctions de rendu distinctes vérifiées dans le code ; 9 vues portail sans fonction `render*` dédiée vérifiées par ailleurs) |
 
 **Répartition (208 écrans) :** Confirmé : 112 · Backend requis : 82 · Risque critique : 14
 
@@ -307,7 +307,7 @@ Endpoints : **110** = estimation passe 1 des endpoints *référencés par le fro
 | Contrats du personnel (modèles Word) — Administration système > CONTRA | `#/admin/contrats (renderAdmin(view, sub="contrat` | `renderAdminContratsPersonnel` | Confirmé | — |
 | Droits techniques avancés (matrice module × type de compte) — Administ | `admin/droits (dispatché par renderAdmin(view, su` | `renderAdminDroits` | Confirmé | — |
 | Fiche de position (Administration système) — liste/maintenance des fic | `#/admin/fiches → renderAdmin(view,"fiches",arg) ` | `renderAdminFichesPosition` | Confirmé | — |
-| Fiche de position employé (agent form) | `#/effectif/agent/:id — dispatch in `renderView` ` | `renderAgentForm` | Confirmé | — |
+| Fiche de position employé (agent form) | `#/effectif/agent/:id` · **alias `#/agents/:id`** (case `agents`) | `renderAgentForm` | Confirmé | — |
 | Fiches de position (annuaire) — liste/annuaire des employés avec carte | `#/fiches (alias #/fiches/toutes). Sous-routes gé` | `renderFiches` | Confirmé | — |
 | Fil d'actualité admin (Administration — Fil d'actualité) | `admin/feed — dispatché par renderAdmin(view, sub` | `renderAdminFeed` | Backend requis | ⚠️ oui |
 | Gestion des candidats (nettoyage) — Administration système | `admin/candidats — atteint via renderAdmin (sub =` | `renderAdminCandidats` | Confirmé | — |

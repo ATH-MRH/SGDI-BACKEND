@@ -236,7 +236,7 @@
 - [ ] Contrats du personnel (modèles Word) — Administration système > CONTRAT — `#/admin/contrats (renderAdmin(view, sub=` (`renderAdminContratsPersonnel`)
 - [ ] Droits techniques avancés (matrice module × type de compte) — Administra — `admin/droits (dispatché par renderAdmin(` (`renderAdminDroits`)
 - [ ] Fiche de position (Administration système) — liste/maintenance des fiche — `#/admin/fiches → renderAdmin(view,"fiche` (`renderAdminFichesPosition`)
-- [ ] Fiche de position employé (agent form) — `#/effectif/agent/:id — dispatch in `rend` (`renderAgentForm`)
+- [ ] Fiche de position employé (agent form) — `#/effectif/agent/:id` **· Alias : `#/agents/:id`** (case `agents` → `renderAgentForm`)
 - [ ] Fiches de position (annuaire) — liste/annuaire des employés avec cartes  — `#/fiches (alias #/fiches/toutes). Sous-r` (`renderFiches`)
 - [ ] Fil d'actualité admin (Administration — Fil d'actualité) — `admin/feed — dispatché par renderAdmin(v` (`renderAdminFeed`) 🟠
 - [ ] Gestion des candidats (nettoyage) — Administration système — `admin/candidats — atteint via renderAdmi` (`renderAdminCandidats`)

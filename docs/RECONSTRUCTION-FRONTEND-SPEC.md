@@ -1,7 +1,11 @@
 # Contrat de reconstruction — Frontend SGDI
 
-> Inventaire exhaustif genere par ~340 agents (3 passes + verifications).
-> **148 ecrans detailles** · **15 fonctionnalites transverses** · 3 frontends · 273 endpoints backend.
+> ⚠️ **ERRATA / SOURCE AUTORITAIRE DES COMPTEURS** — Ce fichier est le **détail brut par écran**.
+> Les compteurs **FINAUX et validés** sont dans `RECONSTRUCTION-FRONTEND-SPEC-CONSOLIDATED.md` :
+> **208 écrans uniques** · **15 fonctionnalités transverses** · 3 frontends · **273 endpoints (234 utilisés / 39 orphelins / 9 à créer)** · **169/169 fonctions de rendu vérifiées**.
+> Toute estimation plus ancienne dans le corps de ce fichier (ex. « ~85 endpoints orphelins », « 148 écrans ») est **SUPERSÉDÉE** par la classification finale ci-dessus.
+>
+> Inventaire genere par ~340 agents (3 passes + vérifications + rattrapage documentaire).
 
 ## 1. Checklist maitre
 
@@ -196,7 +200,7 @@
 - ATLAS ERP — routes #/accounting et #/reporting sont ORPHELINES (implémentées, fonctionnelles, mais aucun point d'entrée menu/portail — accessibles uniquement par URL tapée); #/achats et #/ventes atteignables via les tuiles société-portail (clés materiel/commercial).
 - DEUX sous-systèmes parallèles pour les mêmes métiers: modules SGDI natifs materiel/commercial/facturation (sgdi-app.js) vs ATLAS-ERP achats/ventes/accounting; tuiles portail dupliquées (MATERIEL+ACHATS, COMMERCIAL+VENTES, FINANCES+FACTURATION); la clé 'facmod' ne normalise pas → tuile FACTURATION admin-only.
 - MODULES routés hors des 15 domaines: DRH (renderDRH + ~15 sous-vues), OPS (renderOPS: supervision/inspections/missions/dotation), Secrétariat (renderSecretariat), demandes_personnel, demandes_structure, rapports (legacy KPI ≠ ERP reporting), dossiers, documents/archives, parametres, custom (pages sidebar dynamiques).
-- ~85 endpoints backend RÉELLEMENT orphelins après fusion des 3 frontends: sous-système ronde admin complet, sub-CRUD + line-items accounting/achats/ventes, écritures drh leaves/sanctions/documents, dashboards par module (drh/ops/materiel — calculés client-side), CRUD par-item irongs/collections + bootstrap, materiel/inventory, assistant/chat, portal/validate-employee, auth access-rules PATCH, public-links.
+- [ANCIENNE ESTIMATION — supersédée par la classification finale : 39 orphelins sur 273, cf. SPEC-CONSOLIDATED §4] endpoints backend orphelins après fusion des 3 frontends: sous-système ronde admin complet, sub-CRUD + line-items accounting/achats/ventes, écritures drh leaves/sanctions/documents, dashboards par module (drh/ops/materiel — calculés client-side), CRUD par-item irongs/collections + bootstrap, materiel/inventory, assistant/chat, portal/validate-employee, auth access-rules PATCH, public-links.
 - 6 appels frontend vers des routes backend INEXISTANTES (404 si invoqués): auth otp/send, otp/verify, email/confirm, password/forgot, password/reset, et drh/amendments.
 - app/static/app.js est un fichier MORT (non chargé par index.html) — ses appels (/drh/sanctions, /drh/documents) ne comptent pas comme consommateurs; sgdi-inline-2.js ne contient aucun appel API.
 - sgdi-app.js n'utilise pas de chemins /api/<module> littéraux mais un registre window.SGDI_API (l.1320-1398) + wrappers sgdiApi/sgdiActionApi/sgdiDownload; un grep de '/api/' rate ~60 appels.
@@ -241,7 +245,7 @@
 - [ ] Décider du sort des routes ORPHELINES #/accounting et #/reporting (ajouter une entrée menu/portail ou documenter l'accès URL-only); vérifier le point d'entrée société-portail pour achats/ventes.
 - [ ] Rationaliser les DEUX sous-systèmes parallèles (SGDI materiel/commercial/facturation vs ERP achats/ventes/accounting) et les tuiles portail dupliquées; corriger la clé 'facmod' non normalisée.
 - [ ] Inventorier et recâbler explicitement les modules hors-15: DRH, OPS, Secrétariat, demandes_personnel, demandes_structure, rapports, dossiers, documents/archives, parametres, custom.
-- [ ] Statuer sur les ~85 endpoints backend orphelins (supprimer, documenter, ou câbler une UI) — en particulier ronde admin, sub-CRUD/line-items ERP, drh leaves/sanctions/documents.
+- [ ] Statuer sur les 39 endpoints backend orphelins (ancienne estimation ~85 ; classification finale en SPEC-CONSOLIDATED §4) (supprimer, documenter, ou câbler une UI) — en particulier ronde admin, sub-CRUD/line-items ERP, drh leaves/sanctions/documents.
 - [ ] Corriger ou supprimer les 6 appels frontend vers routes inexistantes (auth otp/email/password + drh/amendments) qui renvoient 404.
 - [ ] Préserver la convention extra/_legacy à double imbrication (employees.extra, sites.equipment_plan) ET le 'data' plat (candidates/clients) — ne pas uniformiser aveuglément.
 - [ ] Reproduire la régénération matricule au CREATE, la sanitation NIN + flags, et le statut employé DÉRIVÉ (ne pas round-tripper status).
