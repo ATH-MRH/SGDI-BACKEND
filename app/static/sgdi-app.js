@@ -1277,16 +1277,17 @@ async function sgdiPullEmployees(options){
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
   try{
     const scopeNorm=opt.society?normalizeSocieteName(opt.society):"";
+    const previousAgents=Array.isArray(db?.agents)?db.agents:[];
     let employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
-    if(opt.society&&Array.isArray(employees)&&employees.length===0&&sgdiBackendEmployeeTotalForDisplay(opt.society)>0){
+    if(opt.society&&Array.isArray(employees)&&employees.length===0){
       employees=await window.SGDI_API.employees.list({});
     }
     if(!Array.isArray(employees))return null;
     const backendAgents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
     if(scopeNorm){
-      const previous=(db.agents||[]).filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
+      const previous=previousAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
       const scoped=backendAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")===scopeNorm);
-      db.agents=dedupeEmployeesByBackendId([...previous,...scoped]);
+      db.agents=scoped.length?dedupeEmployeesByBackendId([...previous,...scoped]):previousAgents;
     }else{
       db.agents=backendAgents;
     }
