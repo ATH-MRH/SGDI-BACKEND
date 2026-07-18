@@ -2136,12 +2136,40 @@ async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWri
 async function updateExistingClientToPostgres(c){if(!c)throw new Error("Client existant introuvable");sgdiRequireServerWrite();const rawId=c.backendId||(/^[1-9]\d*$/.test(String(c.id||""))?c.id:null);const bid=rawId&&Number.isInteger(Number(rawId))&&Number(rawId)>0?Number(rawId):null;if(!bid)throw new Error("Identifiant PostgreSQL du client manquant : rechargez la liste des clients");const saved=await SGDI.commercial.updateClient(bid,clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
 let sgdiSqlSyncInProgress=null;
+function sgdiCurrentRouteRoot(){
+  return String(location.hash||"").replace(/^#\/?/,"").split("/")[0]||"";
+}
+function sgdiSqlSyncScope(options){
+  const opt=options||{};
+  const all={drh:true,ops:true,materiel:true,commercial:true};
+  if(opt.full||opt.blocking||isAdminSystemSession())return all;
+  const scope={drh:false,ops:false,materiel:false,commercial:false};
+  const cfg=typeof sgdiModuleHostConfig==="function"?sgdiModuleHostConfig():null;
+  const route=sgdiCurrentRouteRoot();
+  const add=(key)=>{
+    key=String(key||"").toLowerCase();
+    if(!key)return;
+    if(["drh","recrutement","contrats","fiches","effectif","conges","demandes_personnel","reserve","candidats_archives"].includes(key))scope.drh=true;
+    if(["ops","sites","pointage","incidents","missions","mouvement"].includes(key))scope.ops=true;
+    if(["materiel","achats"].includes(key))scope.materiel=true;
+    if(["commercial","ventes","facturation","facmod"].includes(key))scope.commercial=true;
+  };
+  add(opt.module);
+  add(cfg?.key);
+  add(session?.transverse);
+  add(route);
+  if(!scope.drh&&!scope.ops&&!scope.materiel&&!scope.commercial&&session?.societe){
+    scope.drh=true;
+    scope.ops=true;
+  }
+  return scope;
+}
 async function sgdiBackgroundSqlSync(options){
   const opt=options||{};
   if(!sgdiAuthToken()||!db)return null;
   if(sgdiSqlSyncInProgress)return sgdiSqlSyncInProgress;
   sgdiSqlSyncInProgress=(async()=>{
-    const syncResults=await Promise.allSettled([syncCandidatesFromPostgres(),syncSqlModulesFromPostgres()]);
+    const syncResults=await Promise.allSettled(sgdiSqlSyncTasks(opt));
     const syncErrors=syncResults.filter(r=>r.status==="rejected").map(r=>r.reason?.message||String(r.reason));
     if(syncErrors.length){
       console.warn("Synchronisation PostgreSQL partielle",syncErrors);
@@ -2165,9 +2193,31 @@ async function sgdiBackgroundSqlSync(options){
   });
   return sgdiSqlSyncInProgress;
 }
-async function syncSqlModulesFromPostgres(){
-  await Promise.all([sgdiPullEmployees({silent:true}),syncSitesFromPostgres()]);
-  const tasks=[syncAssignmentsFromPostgres(),syncMaterielFromPostgres(),syncClientsFromPostgres()];
+function sgdiSqlSyncTasks(options){
+  const scope=sgdiSqlSyncScope(options);
+  const tasks=[];
+  let employeesTask=null;
+  const ensureEmployees=()=>{
+    if(!employeesTask)employeesTask=sgdiPullEmployees({silent:true});
+    return employeesTask;
+  };
+  if(scope.drh)tasks.push((async()=>{await ensureEmployees();await syncCandidatesFromPostgres()})());
+  if(scope.ops){
+    tasks.push((async()=>{
+      await ensureEmployees();
+      await syncSitesFromPostgres();
+      const opsTasks=[];
+      if(typeof syncAssignmentsFromPostgres==="function")opsTasks.push(syncAssignmentsFromPostgres());
+      if(typeof syncOpsMovementsFromPostgres==="function")opsTasks.push(syncOpsMovementsFromPostgres());
+      if(opsTasks.length)await Promise.all(opsTasks);
+    })());
+  }
+  if(scope.materiel)tasks.push((async()=>{await ensureEmployees();await syncMaterielFromPostgres({full:!!options?.full})})());
+  if(scope.commercial)tasks.push(syncClientsFromPostgres());
+  return tasks.length?tasks:[Promise.resolve(true)];
+}
+async function syncSqlModulesFromPostgres(options){
+  const tasks=sgdiSqlSyncTasks(options||{full:true});
   const results=await Promise.allSettled(tasks);
   const errors=results.filter(r=>r.status==="rejected").map(r=>r.reason?.message||String(r.reason));
   if(errors.length)throw new Error(errors.join(" · "));
@@ -3890,10 +3940,14 @@ function sgdiStructureDefaultRoute(mod){
   if(mod==="agenda")return "agenda/dashboard";
   return mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage":(mod==="ops"?"ops/dashboard":(mod==="portail"?"portail":mod+"/dashboard")));
 }
+function sgdiWarmModuleSqlSync(mod){
+  if(!sgdiAuthToken()||!db)return;
+  setTimeout(()=>sgdiBackgroundSqlSync({silent:true,render:true,module:mod}).catch(e=>console.warn("Préchargement module indisponible",e)),30);
+}
 function enterTransverseModule(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","admin","pointage","ops","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdminGeneralSession()){toast("Accès réservé au compte Administration système","error");return}}if(["facturation","commercial","secretariat","drh","materiel","ops","pointage","paie","portail","agenda"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
-function enterTransverseModuleDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
+function enterTransverseModuleDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}sgdiWarmModuleSqlSync(mod);const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
 function enterSocieteStructure(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
-function enterSocieteStructureDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
+function enterSocieteStructureDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}sgdiWarmModuleSqlSync(mod);const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
 function switchWorkspaceModule(mod){
   const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","pointage","paie","portail","agenda"];
   if(!ok.includes(mod))return;
@@ -3902,6 +3956,7 @@ function switchWorkspaceModule(mod){
   saveSession(session);
   try{sessionStorage.setItem("ficheContext",mod);if(mod!=="materiel")sessionStorage.removeItem("mtSociete")}catch(e){}
   sgdiSpeakStructureChosenAfterRoute(mod);
+  sgdiWarmModuleSqlSync(mod);
   const target=sgdiStructureDefaultRoute(mod);
   navigate(target);
 }
@@ -3921,6 +3976,7 @@ function enterSocietePortalRoute(mod,targetRoute){
   try{sessionStorage.setItem("ficheContext",mod)}catch(e){}
   const portalModule=societePortalModules().find(m=>m.route===targetRoute&&m.key===mod)||societePortalModules().find(m=>m.route===targetRoute);
   sgdiSpeakStructureChosenAfterRoute(mod,portalModule?.label);
+  sgdiWarmModuleSqlSync(mod);
   location.hash="#/"+targetRoute;
   window.route();
 }
