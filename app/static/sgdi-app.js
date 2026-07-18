@@ -5594,6 +5594,14 @@ function mergeSidebarCustomItems(module,items){
   sidebarCustomItemsForModule(module).forEach(item=>{if(!routes.has(item.route)){base.push(item);routes.add(item.route)}});
   return base;
 }
+function sidebarItemsWithAgendaShortcut(module,items){
+  const base=(items||[]).slice();
+  if(["agenda","global"].includes(String(module||"")))return base;
+  if(base.some(item=>String(item.route||"").startsWith("agenda")))return base;
+  if(!canAccess("agenda"))return base;
+  base.push({label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],gapBefore:true});
+  return base;
+}
 function applySidebarOrder(module,items){
   const pinned=sidebarPinnedDefaultOrder(module);
   const saved=sidebarOrderForModule(module);
@@ -5932,7 +5940,7 @@ function renderSidebar(){
     const baseItems=sidebarByModule[mod]||[];
     const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
     const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
-    const items=mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems);
+    const items=sidebarItemsWithAgendaShortcut(mod,mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems));
     renderItems(applySidebarOrder(mod,items));
     restoreSidebarScroll();
     return;
