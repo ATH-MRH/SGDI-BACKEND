@@ -113,17 +113,25 @@ def site_is_operational(site: Site, today_value: date | None = None) -> bool:
     return bool(open_date and open_date <= (today_value or date.today()))
 
 
-def dashboard(db: Session):
-    active_sites = db.scalar(select(func.count(Site.id)).where(Site.active == 1)) or 0
-    active_assignments = db.scalar(select(func.count(Assignment.id)).where(Assignment.active == 1)) or 0
-    open_events = db.scalar(select(func.count(Event.id)).where(Event.status == "ouvert")) or 0
+def dashboard(db: Session, site_ids: list[int] | None = None):
+    """Compteurs OPS. Si `site_ids` est fourni (utilisateur restreint), les compteurs
+    sont limités à ces sites — sinon ils sont globaux (admin / H5)."""
+    scoped = site_ids is not None
     today = date.today()
-    daily_rows = db.scalar(select(func.count(DailyPresence.id)).where(DailyPresence.presence_date == today)) or 0
+    sites_q = select(func.count(Site.id)).where(Site.active == 1)
+    asg_q = select(func.count(Assignment.id)).where(Assignment.active == 1)
+    ev_q = select(func.count(Event.id)).where(Event.status == "ouvert")
+    dp_q = select(func.count(DailyPresence.id)).where(DailyPresence.presence_date == today)
+    if scoped:
+        sites_q = sites_q.where(Site.id.in_(site_ids))
+        asg_q = asg_q.where(Assignment.site_id.in_(site_ids))
+        ev_q = ev_q.where(Event.site_id.in_(site_ids))
+        dp_q = dp_q.where(DailyPresence.site_id.in_(site_ids))
     return {
-        "active_sites": active_sites,
-        "active_assignments": active_assignments,
-        "open_events": open_events,
-        "daily_presence_rows_today": daily_rows,
+        "active_sites": db.scalar(sites_q) or 0,
+        "active_assignments": db.scalar(asg_q) or 0,
+        "open_events": db.scalar(ev_q) or 0,
+        "daily_presence_rows_today": db.scalar(dp_q) or 0,
     }
 
 

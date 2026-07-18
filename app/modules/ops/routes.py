@@ -134,6 +134,45 @@ def _filter_site_rows(rows: list[Site], user: User, society: str | None = None) 
     return rows
 
 
+def _visible_site_ids(db: Session, user: User) -> list[int] | None:
+    """IDs des sites visibles par l'utilisateur (None = aucune restriction :
+    admin/H5, ou liste de sociétés vide = convention « tout »). Sinon : sites
+    explicitement autorisés, ou à défaut les sites des sociétés autorisées."""
+    if is_unrestricted(user):
+        return None
+    explicit = _authorized_site_ids(user)
+    if explicit:
+        return explicit
+    allowed = _allowed_societies(user)
+    if not allowed:
+        return None
+    return [s.id for s in db.execute(select(Site)).scalars().all() if _normalize_society(_site_society(s)) in allowed]
+
+
+def _employee_in_scope(db: Session, user: User, employee_id: int | None) -> bool:
+    if employee_id is None:
+        return False
+    if is_unrestricted(user):
+        return True
+    allowed = _allowed_societies(user)
+    if not allowed:
+        return True
+    emp = db.get(Employee, employee_id)
+    return bool(emp and _normalize_society(emp.society) in allowed)
+
+
+def _scope_rows(db: Session, user: User, rows: list) -> list:
+    """Filtre une liste (events / présences) sur les sites visibles OU l'employé autorisé."""
+    visible = _visible_site_ids(db, user)
+    if visible is None:
+        return rows
+    vis = set(visible)
+    return [
+        r for r in rows
+        if getattr(r, "site_id", None) in vis or _employee_in_scope(db, user, getattr(r, "employee_id", None))
+    ]
+
+
 def _site_matches_query(site: Site, q: str | None) -> bool:
     query = str(q or "").strip().lower()
     if not query:
@@ -143,8 +182,8 @@ def _site_matches_query(site: Site, q: str | None) -> bool:
 
 
 @router.get("/dashboard")
-def ops_dashboard(db: Session = Depends(get_db)):
-    return service.dashboard(db)
+def ops_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return service.dashboard(db, site_ids=_visible_site_ids(db, user))
 
 
 @router.get("/sites/page")
@@ -322,13 +361,20 @@ def generate_daily_rotation(payload: RotationGenerateRequest, db: Session = Depe
 
 @router.get("/pointage/standby")
 def pointage_standby(presence_date: date | None = None, society: str | None = None, site_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    allowed = _allowed_societies(user)
-    effective_society = society
-    if not effective_society and len(allowed) == 1:
-        effective_society = allowed[0]
+    if site_id:
+        _ensure_site_allowed(db, user, site_id)
+    allowed = None if is_unrestricted(user) else _allowed_societies(user)
     if society:
         _ensure_society_allowed(user, society)
-    return service.standby_personnel(db, presence_date or date.today(), effective_society, site_id)
+    effective_society = society
+    if not effective_society and allowed and len(allowed) == 1:
+        effective_society = allowed[0]
+    rows = service.standby_personnel(db, presence_date or date.today(), effective_society, site_id)
+    # Multi-sociétés sans filtre explicite : on restreint aux sociétés autorisées (pas de fuite).
+    if allowed and not effective_society and not site_id:
+        aset = set(allowed)
+        rows = [r for r in rows if _normalize_society(r.get("society")) in aset]
+    return rows
 
 
 @router.post("/pointage/daily/close", dependencies=[Depends(require_level("validate"))])
@@ -339,11 +385,14 @@ def close_daily(presence_date: date | None = None, db: Session = Depends(get_db)
 
 @router.get("/pointage/daily/page")
 def daily_presence_page(presence_date: date | None = None, site_id: int | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if site_id is not None:
-        _ensure_site_allowed(db, user, site_id)
     stmt = select(DailyPresence).where(DailyPresence.presence_date == (presence_date or date.today()))
     if site_id is not None:
+        _ensure_site_allowed(db, user, site_id)
         stmt = stmt.where(DailyPresence.site_id == site_id)
+    else:
+        visible = _visible_site_ids(db, user)
+        if visible is not None:
+            stmt = stmt.where(DailyPresence.site_id.in_(visible))  # pas de fuite inter-sociétés
     return paginate_statement(db, stmt, model=DailyPresence, search_fields=[DailyPresence.group_code, DailyPresence.status, DailyPresence.notes, DailyPresence.faction], q=q, page=page, page_size=page_size)
 
 
@@ -351,7 +400,8 @@ def daily_presence_page(presence_date: date | None = None, site_id: int | None =
 def daily_presence(presence_date: date | None = None, site_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
     if site_id:
         _ensure_site_allowed(db, user, site_id)
-    return service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
+    rows = service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
+    return rows if site_id else _scope_rows(db, user, rows)
 
 
 @router.post("/pointage/daily", response_model=DailyPresenceOut, dependencies=[Depends(require_level("write"))])
@@ -374,18 +424,21 @@ def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, db: Se
 
 
 @router.get("/events/page")
-def events_page(status: str | None = None, level: str | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db)):
+def events_page(status: str | None = None, level: str | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db), user: User = Depends(current_user)):
     stmt = select(Event)
     if status:
         stmt = stmt.where(Event.status == status)
     if level:
         stmt = stmt.where(Event.level == level)
+    visible = _visible_site_ids(db, user)
+    if visible is not None:
+        stmt = stmt.where(Event.site_id.in_(visible))  # confidentialité inter-sociétés
     return paginate_statement(db, stmt, model=Event, search_fields=[Event.event_type, Event.level, Event.title, Event.message, Event.status, Event.action_taken], q=q, page=page, page_size=page_size)
 
 
 @router.get("/events", response_model=list[EventOut])
-def events(status: str | None = None, level: str | None = None, db: Session = Depends(get_db)):
-    return service.list_rows(db, Event, {"status": status, "level": level})
+def events(status: str | None = None, level: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return _scope_rows(db, user, service.list_rows(db, Event, {"status": status, "level": level}))
 
 
 @router.post("/events", response_model=EventOut, dependencies=[Depends(require_level("write"))])
@@ -407,6 +460,8 @@ def close_event(event_id: int, action_taken: str | None = None, db: Session = De
     event = service.get_or_404(db, Event, event_id)
     if event.site_id:
         _ensure_site_allowed(db, user, event.site_id)
+    elif event.employee_id:
+        _ensure_employee_allowed(db, user, event.employee_id)  # évènement lié à un employé seul
     elif not is_unrestricted(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Évènement hors périmètre")
     return service.close_event(db, event_id, action_taken)
@@ -420,16 +475,19 @@ def list_movements(
     user: User = Depends(current_user),
     response: Response = None,
 ):
-    if not unrestricted_scope(user):
-        allowed = _allowed_societies(user)
-        if allowed and society and _normalize_society(society) not in allowed:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
-        if not society and allowed:
-            society = allowed[0] if len(allowed) == 1 else None
-    total = service.count_movements(db, society=society)
+    allowed = None if is_unrestricted(user) else _allowed_societies(user)
+    if allowed and society and _normalize_society(society) not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+    rows = service.list_movements(db, society=society, limit=limit)
+    # Utilisateur multi-sociétés sans filtre explicite : on restreint à SES sociétés
+    # (l'ancien code laissait `society=None` => TOUTES les sociétés, fuite).
+    if allowed and not society:
+        aset = set(allowed)
+        rows = [m for m in rows if _normalize_society(m.society) in aset]
     if response is not None:
+        total = len(rows) if (allowed and not society) else service.count_movements(db, society=society)
         response.headers["X-Total-Count"] = str(total)
-    return service.list_movements(db, society=society, limit=limit)
+    return rows
 
 
 @router.post("/movements", response_model=OpsMovementOut, dependencies=[Depends(require_level("write"))])
