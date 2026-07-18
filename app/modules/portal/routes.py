@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
-from app.core.authz import require_level
+from app.core.authz import is_unrestricted, require_level
 from app.core.config import settings
 from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
@@ -66,6 +66,23 @@ def _norm_text(value: Any) -> str:
     raw = unicodedata.normalize("NFKD", _clean_text(value))
     raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
     return re.sub(r"\s+", " ", raw).casefold().strip()
+
+
+def _allowed_societies(admin: User) -> list[str]:
+    """Sociétés autorisées (normalisées). Liste vide = aucune restriction
+    (admin/H5, ou convention `authorized_societies` vide = tout)."""
+    if is_unrestricted(admin):
+        return []
+    values = admin.authorized_societies if isinstance(admin.authorized_societies, list) else []
+    return [_norm_text(v) for v in values if _norm_text(v)]
+
+
+def _ensure_account_societe_allowed(admin: User, societe: Any) -> None:
+    """Cloisonnement société sur les comptes portail. Une société nulle (compte non
+    rattaché) reste accessible ; une société explicite hors périmètre est refusée."""
+    allowed = _allowed_societies(admin)
+    if allowed and societe and _norm_text(societe) not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
 
 
 def _norm_date(value: Any) -> str:
@@ -554,6 +571,9 @@ def list_portal_accounts(
 ) -> list[dict[str, Any]]:
     accounts = service.list_items(db, "portalAccounts")
     rows = [a for a in accounts if isinstance(a, dict)]
+    allowed = _allowed_societies(admin)
+    if allowed:  # pas de fuite inter-sociétés de l'annuaire portail
+        rows = [a for a in rows if _norm_text(a.get("societe", "")) in allowed]
     if societe:
         s = _norm_text(societe)
         rows = [a for a in rows if _norm_text(a.get("societe", "")) == s]
@@ -580,6 +600,7 @@ def create_portal_account(
     )
     if not agent:
         raise HTTPException(status_code=404, detail="Employé introuvable")
+    _ensure_account_societe_allowed(admin, _agent_field(agent, "societe"))  # employé cible dans le périmètre
 
     if _find_portal_account(db, matricule_raw):
         raise HTTPException(status_code=409, detail="Un compte portail existe déjà pour cet employé")
@@ -610,6 +631,7 @@ def get_portal_account(
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
+    _ensure_account_societe_allowed(admin, account.get("societe"))  # pas de lecture inter-sociétés
     return {k: v for k, v in account.items() if k != "passwordHash"}
 
 
@@ -626,6 +648,7 @@ def reset_portal_password(
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
+    _ensure_account_societe_allowed(admin, account.get("societe"))  # pas de reset inter-sociétés
     updated = service.update_item(db, "portalAccounts", account["id"], {"passwordHash": hash_password(password)})
     return {k: v for k, v in updated.items() if k != "passwordHash"}
 
@@ -639,6 +662,7 @@ def delete_portal_account(
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
+    _ensure_account_societe_allowed(admin, account.get("societe"))  # pas de suppression inter-sociétés
     return service.delete_item(db, "portalAccounts", account["id"])
 
 

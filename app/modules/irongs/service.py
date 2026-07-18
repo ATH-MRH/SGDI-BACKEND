@@ -16,6 +16,7 @@ from app.modules.irongs import sql_bridge
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Site
 from app.modules.materiel.service import ensure_material_schema
+from app.core.authz import assert_can
 from app.core.photo_storage import normalize_photo_fields
 
 logger = logging.getLogger("sgdi.records")
@@ -492,8 +493,12 @@ def get_database_json(db: Session, user: Any | None = None, *, include_sql: bool
 
 
 def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]], user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
-    if not _snapshot_unrestricted(user):
-        raise HTTPException(status_code=403, detail="Remplacement global réservé administrateur")
+    # Écriture GLOBALE la plus destructive : on exige le super-privilège (rôle admin OU H5),
+    # PAS `_snapshot_unrestricted` (qui inclut « authorized_societies vide = tout », convention
+    # pensée pour la LECTURE) — sinon un H1 non-admin « voit tout » pourrait tout réécrire.
+    from app.core.authz import is_unrestricted
+    if user is None or not is_unrestricted(user):
+        raise HTTPException(status_code=403, detail="Remplacement global réservé à l'administration système")
     _validate_legacy_database_payload(payload)
     payload_to_store = dict(payload)
     echanges = payload_to_store.get("echanges")
@@ -810,6 +815,7 @@ def _delete_employee_fiche(db: Session, data: dict[str, Any], user: Any | None) 
 def _validate_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) -> dict[str, Any]:
     if not agent_id or not periode:
         raise HTTPException(status_code=422, detail="Agent et période obligatoires")
+    _find_pointage_agent(db, agent_id, user)  # cloisonnement société (comme save-pointage-cell)
     sheets = _collection_list(db, "pointages")
     sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
     if not sheet:
@@ -840,10 +846,16 @@ def _bulk_pointage(db: Session, periode: str, society: str | None, validate: boo
         raise HTTPException(status_code=422, detail="Période obligatoire")
     if not validate:
         _require_admin_action(user)
+    # Cloisonnement société : un utilisateur restreint ne valide/déverrouille en masse
+    # que SES sociétés (sinon opération de masse inter-sociétés via /actions).
+    allowed = set() if _snapshot_unrestricted(user) else _user_allowed_societies(user)
+    if allowed and society and _society_key(society) not in allowed:
+        raise HTTPException(status_code=403, detail="Société non autorisée pour cet utilisateur")
     agents = [
         row for row in _collection_list(db, "agents")
         if row.get("statut") not in {"sortant", "demissionne", "licencie", "archive"}
         and (not society or row.get("societe") == society)
+        and (not allowed or _society_key(row.get("societe")) in allowed)
     ]
     sheets = _collection_list(db, "pointages")
     count = 0
@@ -971,11 +983,26 @@ def _sync_presence_line_to_pointage(db: Session, line: dict[str, Any], validate:
     replace_collection(db, "pointages", sheets)
 
 
+def _ensure_presence_line_allowed(db: Session, line: dict[str, Any], user: Any) -> None:
+    """Cloisonnement société d'une ligne de feuille de présence : société directe de la
+    ligne, sinon celle de l'agent référencé. Sans société résolue (ligne globale/vacante),
+    on n'ajoute pas de restriction."""
+    if _snapshot_unrestricted(user):
+        return
+    society = _item_society(line)
+    if not society:
+        agent = next((row for row in _collection_list(db, "agents") if str(row.get("id")) == str(line.get("agentId"))), None)
+        society = _item_society(agent) if isinstance(agent, dict) else ""
+    if society and society not in _user_allowed_societies(user):
+        raise HTTPException(status_code=403, detail="Société non autorisée pour cet utilisateur")
+
+
 def _presence_line_action(db: Session, line_id: str, validate: bool, user: Any) -> dict[str, Any]:
     if not validate:
         _require_admin_action(user)
     lines = _collection_list(db, "feuillePresence")
     line = _find_item(lines, line_id)
+    _ensure_presence_line_allowed(db, line, user)  # cloisonnement société sur la ligne ciblée
     closures = _collection_object(db, "feuillePresenceCloture")
     if closures.get(str(line.get("date"))):
         raise HTTPException(status_code=422, detail="Feuille clôturée")
@@ -1069,7 +1096,7 @@ def _presence_movement_save(db: Session, data: dict[str, Any]) -> dict[str, Any]
     return {"status": "success", "data": {"item": line, "movement": movement}}
 
 
-def _presence_line_delete(db: Session, line_id: str | None, data: dict[str, Any]) -> dict[str, Any]:
+def _presence_line_delete(db: Session, line_id: str | None, data: dict[str, Any], user: Any = None) -> dict[str, Any]:
     lines = _collection_list(db, "feuillePresence")
     if line_id:
         line = _find_item(lines, line_id)
@@ -1077,6 +1104,7 @@ def _presence_line_delete(db: Session, line_id: str | None, data: dict[str, Any]
         line = next((row for row in lines if str(row.get("date")) == str(data.get("date")) and str(row.get("agentId")) == str(data.get("agentId"))), None)
         if not line:
             raise HTTPException(status_code=404, detail="Ligne introuvable")
+    _ensure_presence_line_allowed(db, line, user)  # cloisonnement société sur la ligne supprimée
     closures = _collection_object(db, "feuillePresenceCloture")
     if closures.get(str(line.get("date"))):
         raise HTTPException(status_code=422, detail="Feuille clôturée")
@@ -1131,10 +1159,34 @@ def _presence_day_close(db: Session, day: str, close: bool, user: Any, motif: st
     return _replace_and_success(db, "feuillePresenceCloture", closures, {"date": day, "closed": close})
 
 
+# Niveau minimum par action du dispatcher /actions/{action}. La route pose un plancher
+# `write` (H2) ; ici on ÉLÈVE les validations (H3) et suppressions (H4) — sinon un H2
+# pouvait valider des pointages ou supprimer des fiches via ce point d'entrée fourre-tout.
+_ACTION_LEVELS: dict[str, str] = {
+    "validate-pointage": "validate",
+    "validate-pointage-all": "validate",
+    "unlock-pointage": "validate",
+    "unlock-pointage-all": "validate",
+    "validate-presence-line": "validate",
+    "unlock-presence-line": "validate",
+    "close-presence-day": "validate",
+    "reopen-presence-day": "validate",
+    "convert-prospect": "validate",
+    "delete-item": "delete",
+    "delete-employee-fiche": "delete",
+    "delete-presence-line": "delete",
+}
+
+
 def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None = None) -> dict[str, Any]:
     data = dict(getattr(payload, "data", {}) or {})
     collection = getattr(payload, "collection", None)
     item_id = getattr(payload, "item_id", None)
+
+    # Calibrage de niveau par action (au-dessus du plancher `write` de la route).
+    required_level = _ACTION_LEVELS.get(action)
+    if required_level:
+        assert_can(user, required_level)
 
     if action == "set-status":
         allowed_by_collection = {
@@ -1147,6 +1199,7 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
             raise HTTPException(status_code=422, detail="Collection non autorisée pour changement de statut")
         items = _collection_list(db, collection)
         item = _find_item(items, item_id)
+        ensure_item_allowed_for_user(item, user, collection)  # cloisonnement société sur l'item ciblé
         target = _validate_status_value(data.get("status") or data.get("statut") or data.get("etape"), allowed_by_collection[collection])
         field = "etape" if collection == "opportunites" else "statut"
         item[field] = target
@@ -1157,7 +1210,8 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         if collection not in {"prospects", "opportunites", "avenants"}:
             raise HTTPException(status_code=422, detail="Suppression non autorisée pour cette collection")
         items = _collection_list(db, collection)
-        _find_item(items, item_id)
+        target_item = _find_item(items, item_id)
+        ensure_item_allowed_for_user(target_item, user, collection)  # cloisonnement société sur l'item supprimé
         items = [row for row in items if str(row.get("id")) != str(item_id)]
         return _replace_and_success(db, collection, items, {"deleted": True, "id": item_id})
 
@@ -1168,6 +1222,7 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         prospects = _collection_list(db, "prospects")
         clients = _collection_list(db, "clients")
         prospect = _find_item(prospects, item_id)
+        ensure_item_allowed_for_user(prospect, user, "prospects")  # cloisonnement société sur le prospect
         if prospect.get("statut") == "converti":
             raise HTTPException(status_code=422, detail="Prospect déjà converti")
         client = {
@@ -1222,7 +1277,7 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
     if action == "upsert-presence-line":
         return _presence_line_upsert(db, data)
     if action == "delete-presence-line":
-        return _presence_line_delete(db, item_id, data)
+        return _presence_line_delete(db, item_id, data, user)
     if action == "save-presence-movement":
         return _presence_movement_save(db, data)
     if action == "add-presence-agent":

@@ -6,6 +6,7 @@ Contrôleur de Ronde — API
   /ronde/scans             → guard (portal token)
 """
 import math
+import unicodedata
 from datetime import datetime, timezone
 from typing import Any
 
@@ -15,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
-from app.core.authz import require_level
+from app.core.authz import is_unrestricted, require_level
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.ronde.models import (
@@ -35,6 +36,46 @@ def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     dlam = math.radians(lng2 - lng1)
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+# ─── cloisonnement société ───────────────────────────────────────────────────
+
+def _norm_soc(value: object) -> str:
+    text = " ".join(str(value or "").strip().upper().split())
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+
+def _allowed_societies(user: User) -> list[str]:
+    """Sociétés autorisées (normalisées). Liste vide = aucune restriction
+    (admin/H5, ou convention `authorized_societies` vide = tout)."""
+    if is_unrestricted(user):
+        return []
+    values = user.authorized_societies if isinstance(user.authorized_societies, list) else []
+    return [_norm_soc(v) for v in values if _norm_soc(v)]
+
+
+def _ensure_societe_allowed(user: User, societe: object) -> None:
+    """Refuse une société EXPLICITE hors périmètre. Une société nulle (circuit/ronde
+    global, non affecté) reste autorisée — cohérent avec la création sans société."""
+    allowed = _allowed_societies(user)
+    if allowed and societe and _norm_soc(societe) not in allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+
+
+def _societe_visible(user: User, societe: object) -> bool:
+    """Une ligne est visible si l'utilisateur n'est pas restreint, si sa société est
+    autorisée, ou si elle est globale (société nulle)."""
+    allowed = _allowed_societies(user)
+    if not allowed:
+        return True
+    return (not societe) or (_norm_soc(societe) in allowed)
+
+
+def _ensure_circuit_allowed(user: User, circuit: "RondeCircuit | None") -> "RondeCircuit":
+    if not circuit:
+        raise HTTPException(404, "Circuit introuvable")
+    _ensure_societe_allowed(user, circuit.societe)
+    return circuit
 
 
 # ─── helpers ────────────────────────────────────────────────────────────────
@@ -135,6 +176,7 @@ def list_circuits(
     if site:
         q = q.where(RondeCircuit.site == site)
     circuits = db.execute(q).scalars().all()
+    circuits = [c for c in circuits if _societe_visible(_user, c.societe)]  # pas de fuite inter-sociétés
     return [_circuit_dict(c) for c in circuits]
 
 
@@ -144,6 +186,7 @@ def create_circuit(
     db: Session = Depends(get_db),
     _user: User = Depends(current_user),
 ) -> dict:
+    _ensure_societe_allowed(_user, payload.get("societe"))  # pas de création dans une société non autorisée
     c = RondeCircuit(
         name=str(payload.get("name", "")).strip() or "Circuit",
         site=payload.get("site") or None,
@@ -164,9 +207,7 @@ def get_circuit(
     db: Session = Depends(get_db),
     _user: User = Depends(current_user),
 ) -> dict:
-    c = db.get(RondeCircuit, circuit_id)
-    if not c:
-        raise HTTPException(404, "Circuit introuvable")
+    c = _ensure_circuit_allowed(_user, db.get(RondeCircuit, circuit_id))
     return _circuit_dict(c)
 
 
@@ -177,9 +218,9 @@ def update_circuit(
     db: Session = Depends(get_db),
     _user: User = Depends(current_user),
 ) -> dict:
-    c = db.get(RondeCircuit, circuit_id)
-    if not c:
-        raise HTTPException(404, "Circuit introuvable")
+    c = _ensure_circuit_allowed(_user, db.get(RondeCircuit, circuit_id))  # interdit de modifier une autre société
+    if "societe" in payload:
+        _ensure_societe_allowed(_user, payload["societe"])  # interdit de le déplacer vers une société non autorisée
     for field in ("name", "site", "societe", "description", "duree_prevue_min", "active"):
         if field in payload:
             setattr(c, field, payload[field])
@@ -194,9 +235,7 @@ def delete_circuit(
     db: Session = Depends(get_db),
     _user: User = Depends(current_user),
 ) -> None:
-    c = db.get(RondeCircuit, circuit_id)
-    if not c:
-        raise HTTPException(404, "Circuit introuvable")
+    c = _ensure_circuit_allowed(_user, db.get(RondeCircuit, circuit_id))  # interdit de supprimer une autre société
     db.delete(c)
     db.commit()
 
@@ -210,9 +249,7 @@ def add_checkpoint(
     db: Session = Depends(get_db),
     _user: User = Depends(current_user),
 ) -> dict:
-    c = db.get(RondeCircuit, circuit_id)
-    if not c:
-        raise HTTPException(404, "Circuit introuvable")
+    c = _ensure_circuit_allowed(_user, db.get(RondeCircuit, circuit_id))  # circuit parent dans le périmètre
     # Auto-position: next after last
     existing = db.execute(
         select(RondeCheckpoint)
@@ -245,6 +282,7 @@ def update_checkpoint(
     cp = db.get(RondeCheckpoint, cp_id)
     if not cp:
         raise HTTPException(404, "Checkpoint introuvable")
+    _ensure_circuit_allowed(_user, db.get(RondeCircuit, cp.circuit_id))  # circuit parent dans le périmètre
     for field in ("name", "position", "gps_lat", "gps_lng", "gps_radius_m", "description"):
         if field in payload:
             setattr(cp, field, payload[field])
@@ -262,6 +300,7 @@ def delete_checkpoint(
     cp = db.get(RondeCheckpoint, cp_id)
     if not cp:
         raise HTTPException(404, "Checkpoint introuvable")
+    _ensure_circuit_allowed(_user, db.get(RondeCircuit, cp.circuit_id))  # circuit parent dans le périmètre
     db.delete(cp)
     db.commit()
 
@@ -465,6 +504,7 @@ def list_executions(
     if statut:
         q = q.where(RondeExecution.statut == statut)
     execs = db.execute(q.limit(200)).scalars().all()
+    execs = [e for e in execs if _societe_visible(_user, e.societe)]  # pas de fuite inter-sociétés
     return [_exec_dict(e, with_scans=False) for e in execs]
 
 
@@ -477,4 +517,5 @@ def get_execution(
     e = db.get(RondeExecution, execution_id)
     if not e:
         raise HTTPException(404, "Exécution introuvable")
+    _ensure_societe_allowed(_user, e.societe)  # pas de lecture d'une exécution d'une autre société
     return _exec_dict(e, with_scans=True)

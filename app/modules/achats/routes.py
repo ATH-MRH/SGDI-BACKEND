@@ -102,7 +102,9 @@ def create_fournisseur(payload: FournisseurCreate, db: Session = Depends(get_db)
 @router.put("/fournisseurs/{fournisseur_id}", response_model=FournisseurOut, dependencies=[Depends(require_level("write"))])
 def update_fournisseur(fournisseur_id: int, payload: FournisseurUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_fournisseur_or_404(db, fournisseur_id)
-    _ensure_society_allowed(user, payload.society or existing.society)
+    _ensure_society_allowed(user, existing.society)  # interdit de modifier un fournisseur d'une autre société
+    if payload.society:
+        _ensure_society_allowed(user, payload.society)  # interdit de le déplacer vers une société non autorisée
     return service.update_fournisseur(db, fournisseur_id, payload)
 
 

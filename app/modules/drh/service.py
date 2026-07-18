@@ -1314,6 +1314,22 @@ def generate_contract(db: Session, request: Any, user: Any | None = None) -> Gen
     return row
 
 
+def find_employee_for_direct_contract(db: Session, request: Any) -> Employee | None:
+    """Résout l'employé EXISTANT ciblé par un contrat direct (par NIN puis matricule).
+    Source unique de la logique de rapprochement, utilisée aussi par la route pour
+    vérifier le périmètre de l'employé AVANT de l'écraser (cf. prise de contrôle
+    inter-sociétés : nin/matricule sont entièrement contrôlés par l'appelant)."""
+    nin_raw = str(request.nin or "").strip()
+    nin = nin_raw if re.fullmatch(r"\d{10}", nin_raw) else ""
+    code = str(getattr(request, "matricule", "") or "").strip()
+    employee = None
+    if nin:
+        employee = db.execute(select(Employee).where(Employee.nin == nin)).scalar_one_or_none()
+    if employee is None and code:
+        employee = db.execute(select(Employee).where(Employee.code == code)).scalar_one_or_none()
+    return employee
+
+
 def generate_contract_from_form(db: Session, request: Any, user: Any | None = None) -> GeneratedContract:
     first_name = str(request.first_name or "").strip()
     last_name = str(request.last_name or "").strip()
@@ -1329,14 +1345,10 @@ def generate_contract_from_form(db: Session, request: Any, user: Any | None = No
         "detailSalaire": request.salary_details or "",
         "dureeContrat": getattr(request, "contract_duration", None) or "",
     }
-    employee = None
     nin_raw = str(request.nin or "").strip()
     nin = nin_raw if re.fullmatch(r"\d{10}", nin_raw) else ""
     code = str(getattr(request, "matricule", "") or "").strip()
-    if nin:
-        employee = db.execute(select(Employee).where(Employee.nin == nin)).scalar_one_or_none()
-    if employee is None and code:
-        employee = db.execute(select(Employee).where(Employee.code == code)).scalar_one_or_none()
+    employee = find_employee_for_direct_contract(db, request)
     if employee is None:
         employee = Employee(
             code=code or next_employee_code(db, request.society),

@@ -93,6 +93,25 @@ def _ensure_article_allowed(db: Session, user: User, article_id: int | None) -> 
     return _ensure_row_society_allowed(db.get(StockArticle, article_id), user)
 
 
+def _ensure_site_allowed(db: Session, user: User, site_id: int | None):
+    """Garde société sur un site cible de dotation. La société d'un site est stockée dans
+    son `equipment_plan` (même convention que le module OPS) ; sans ce contrôle, une dotation
+    'site' pouvait être rattachée au site d'une autre société."""
+    if site_id is None:
+        return None
+    from app.modules.ops.models import Site
+    site = db.get(Site, site_id)
+    if not site:
+        raise HTTPException(status_code=404, detail="Enregistrement introuvable")
+    if not _allowed_societies(user):
+        return site
+    plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
+    legacy = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
+    society = plan.get("societe") or plan.get("society") or legacy.get("societe") or legacy.get("society")
+    _ensure_society_allowed(user, society)
+    return site
+
+
 def _ensure_employee_allowed(db: Session, user: User, employee_id: int | None) -> Employee | None:
     if employee_id is None:
         return None
@@ -346,6 +365,8 @@ def delete_movement(movement_id: int, db: Session = Depends(get_db), user: User 
 def create_dotation(payload: DotationCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     article = _ensure_article_allowed(db, user, payload.article_id)
     employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    if str(payload.target_type or "employee").strip().lower() == "site":
+        _ensure_site_allowed(db, user, payload.site_id)  # site cible dans le périmètre société
     if article and employee and not service._same_society(article.society, employee.society):
         raise HTTPException(status_code=422, detail="Article et employé de sociétés différentes")
     return service.create_dotation(db, payload)
@@ -380,7 +401,11 @@ def bulk_dotation_articles(db: Session = Depends(get_db), user: User = Depends(c
     """Retourne tous les articles actifs pour la sélection du kit."""
     if not is_admin_role(user.role):
         raise HTTPException(status_code=403, detail="Accès administrateur requis")
-    rows = db.execute(select(StockArticle).where(StockArticle.active == 1).order_by(StockArticle.designation)).scalars().all()
+    stmt = select(StockArticle).where(StockArticle.active == 1)
+    allowed = _allowed_societies(user)
+    if allowed:  # un admin volontairement cloisonné ne voit que ses sociétés (cohérent avec GET /articles)
+        stmt = stmt.where(StockArticle.society.in_(allowed))
+    rows = db.execute(stmt.order_by(StockArticle.designation)).scalars().all()
     return [{"id": a.id, "designation": a.designation, "category": a.category or "", "quantity": a.quantity} for a in rows]
 
 

@@ -89,7 +89,9 @@ def create_compte(payload: CompteComptableCreate, db: Session = Depends(get_db),
 @router.put("/comptes/{compte_id}", response_model=CompteComptableOut, dependencies=[Depends(require_level("write"))])
 def update_compte(compte_id: int, payload: CompteComptableUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_compte_or_404(db, compte_id)
-    _ensure_society_allowed(user, payload.society or existing.society)
+    _ensure_society_allowed(user, existing.society)  # interdit de modifier un compte d'une autre société
+    if payload.society:
+        _ensure_society_allowed(user, payload.society)  # interdit de le déplacer vers une société non autorisée
     return service.update_compte(db, compte_id, payload)
 
 
@@ -143,7 +145,9 @@ def create_ecriture(payload: EcritureComptableCreate, db: Session = Depends(get_
 @router.put("/ecritures/{ecriture_id}", dependencies=[Depends(require_level("write"))])
 def update_ecriture(ecriture_id: int, payload: EcritureComptableUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
-    _ensure_society_allowed(user, payload.society or ecriture.society)
+    _ensure_society_allowed(user, ecriture.society)  # interdit de modifier une écriture d'une autre société
+    if payload.society:
+        _ensure_society_allowed(user, payload.society)  # interdit de la déplacer vers une société non autorisée
     return service.update_ecriture(db, ecriture_id, payload)
 
 
@@ -175,7 +179,7 @@ def update_ligne(ecriture_id: int, ligne_id: int, payload: LigneEcritureUpdate, 
     return service.update_ligne(db, ecriture_id, ligne_id, payload)
 
 
-@router.delete("/ecritures/{ecriture_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
+@router.delete("/ecritures/{ecriture_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("delete"))])
 def delete_ligne(ecriture_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, ecriture.society)

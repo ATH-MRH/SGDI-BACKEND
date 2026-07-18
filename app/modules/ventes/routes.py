@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.core.authz import require_level
+from app.core.authz import assert_can, require_level
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -129,7 +129,7 @@ def update_ligne_devis(devis_id: int, ligne_id: int, payload: LigneVenteUpdate, 
     return service.update_ligne_devis(db, devis_id, ligne_id, payload)
 
 
-@router.delete("/devis/{devis_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
+@router.delete("/devis/{devis_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("delete"))])
 def delete_ligne_devis(devis_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
@@ -196,7 +196,7 @@ def update_ligne_commande(cmd_id: int, ligne_id: int, payload: LigneVenteUpdate,
     return service.update_ligne_commande(db, cmd_id, ligne_id, payload)
 
 
-@router.delete("/commandes/{cmd_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
+@router.delete("/commandes/{cmd_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("delete"))])
 def delete_ligne_commande(cmd_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     cmd = service.get_commande_or_404(db, cmd_id)
     _ensure_society_allowed(user, cmd.society)
@@ -246,6 +246,10 @@ def create_bl(payload: BonDeLivraisonCreate, db: Session = Depends(get_db), user
 def update_bl(bl_id: int, payload: BonDeLivraisonUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bl = service.get_bl_or_404(db, bl_id)
     _ensure_society_allowed(user, bl.society)
+    # Une transition de statut (clôture/annulation d'un BL) relève de la validation (H3),
+    # pas de la simple saisie (H2) : on la verrouille indépendamment du niveau de la route.
+    if payload.status is not None and payload.status != bl.status:
+        assert_can(user, "validate")
     return service.update_bl(db, bl_id, payload)
 
 
@@ -263,7 +267,7 @@ def update_ligne_bl(bl_id: int, ligne_id: int, payload: LigneBLUpdate, db: Sessi
     return service.update_ligne_bl(db, bl_id, ligne_id, payload)
 
 
-@router.delete("/livraisons/{bl_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
+@router.delete("/livraisons/{bl_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("delete"))])
 def delete_ligne_bl(bl_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bl = service.get_bl_or_404(db, bl_id)
     _ensure_society_allowed(user, bl.society)

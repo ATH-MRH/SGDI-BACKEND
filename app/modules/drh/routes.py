@@ -114,8 +114,28 @@ def _filter_employee_owned_rows(db: Session, user: User, rows):
 
 
 def _ensure_document_allowed(db: Session, user: User, owner_type: str | None, owner_id: int | None) -> None:
+    """Vérifie le périmètre du propriétaire FOURNI (sans bloquer la liste sans filtre :
+    le GET /documents s'appuie sur _filter_documents pour le scope)."""
+    if not _allowed_societies(user):
+        return  # utilisateur non restreint par société : rien à cloisonner
     if owner_type == "employee" and owner_id:
         _ensure_employee_allowed(db, user, owner_id)
+    elif owner_type == "candidate" and owner_id:
+        candidate = service.get_or_404(db, Candidate, owner_id)
+        _ensure_society_allowed(user, candidate.society)
+
+
+def _ensure_document_owner_in_scope(db: Session, user: User, owner_type: str | None, owner_id: int | None) -> None:
+    """Écriture : un utilisateur restreint doit rattacher le document à un propriétaire
+    (employé/candidat) de SON périmètre — sinon pollution de données invisible en lecture."""
+    _ensure_document_allowed(db, user, owner_type, owner_id)
+    if not _allowed_societies(user):
+        return
+    if owner_type not in {"employee", "candidate"} or not owner_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Document hors périmètre (propriétaire employé/candidat requis)",
+        )
 
 
 def _filter_documents(db: Session, user: User, rows):
@@ -469,7 +489,7 @@ def documents(owner_type: str | None = None, owner_id: int | None = None, db: Se
 
 @router.post("/documents", response_model=DocumentOut, dependencies=[Depends(require_level("write"))])
 def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_document_allowed(db, user, payload.owner_type, payload.owner_id)
+    _ensure_document_owner_in_scope(db, user, payload.owner_type, payload.owner_id)
     return service.create_row(db, Document, payload)
 
 
@@ -612,15 +632,21 @@ def generated_contracts(employee_id: int | None = None, db: Session = Depends(ge
     return _filter_employee_owned_rows(db, user, rows)
 
 
-@router.post("/generated-contracts", response_model=GeneratedContractOut, dependencies=[Depends(require_level("write"))])
+@router.post("/generated-contracts", response_model=GeneratedContractOut, dependencies=[Depends(require_level("generate"))])
 def generate_contract(payload: GenerateContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, payload.employee_id)
     return service.generate_contract(db, payload, user)
 
 
-@router.post("/generated-contracts/from-form", response_model=GeneratedContractOut, dependencies=[Depends(require_level("write"))])
+@router.post("/generated-contracts/from-form", response_model=GeneratedContractOut, dependencies=[Depends(require_level("generate"))])
 def generate_contract_from_form(payload: DirectContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_society_allowed(user, payload.society)
+    _ensure_society_allowed(user, payload.society)  # société cible autorisée
+    # Si le formulaire cible un employé EXISTANT (résolu par NIN/matricule, champs contrôlés
+    # par l'appelant), on vérifie que cet employé est DÉJÀ dans le périmètre de l'utilisateur
+    # avant que le service ne le réassigne à payload.society et n'écrase ses données.
+    existing = service.find_employee_for_direct_contract(db, payload)
+    if existing is not None:
+        _ensure_employee_allowed(db, user, existing.id)
     return service.generate_contract_from_form(db, payload, user)
 
 

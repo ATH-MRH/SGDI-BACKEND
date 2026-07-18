@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.authz import is_unrestricted, require_level
+from app.core.authz import assert_can, is_unrestricted, require_level
 from app.core.pagination import paginate_list, paginate_statement
 from app.db.session import get_db
 from app.modules.erp.service import unrestricted_scope
@@ -156,7 +156,11 @@ def _employee_in_scope(db: Session, user: User, employee_id: int | None) -> bool
         return True
     allowed = _allowed_societies(user)
     if not allowed:
-        return True
+        # Pas de restriction par société. Si l'utilisateur est restreint par SITE,
+        # l'axe employé ne doit PAS ouvrir l'accès (sinon fuite inter-sociétés via
+        # les lignes rattachées à un employé) : il n'est « tout permis » que s'il
+        # n'a AUCUNE restriction (ni société ni site).
+        return not _authorized_site_ids(user)
     emp = db.get(Employee, employee_id)
     return bool(emp and _normalize_society(emp.society) in allowed)
 
@@ -267,10 +271,11 @@ def site_posts(site_id: int | None = None, db: Session = Depends(get_db), user: 
     if site_id is not None:
         _ensure_site_allowed(db, user, site_id)
     rows = service.list_rows(db, SitePost, {"site_id": site_id})
-    allowed = _allowed_societies(user)
-    if allowed and site_id is None:
-        allowed_site_ids = {row.id for row in service.list_rows(db, Site, {}) if _normalize_society(_site_society(row)) in allowed}
-        rows = [row for row in rows if row.site_id in allowed_site_ids]
+    if site_id is None:
+        visible = _visible_site_ids(db, user)  # sites autorisés (par site OU par société)
+        if visible is not None:
+            vis = set(visible)
+            rows = [row for row in rows if row.site_id in vis]
     return rows
 
 
@@ -295,6 +300,10 @@ def update_assignment(assignment_id: int, payload: AssignmentUpdate, background_
     _ensure_site_allowed(db, user, assignment.site_id)
     was_active = assignment.active == 1
     going_inactive = payload.active == 0
+    # La clôture d'une affectation (mise à inactif) relève de la validation (H3),
+    # pas de la simple saisie (H2) : on la verrouille indépendamment du niveau de la route.
+    if was_active and going_inactive:
+        assert_can(user, "validate")
 
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(assignment, key, value)
@@ -317,14 +326,13 @@ def update_assignment(assignment_id: int, payload: AssignmentUpdate, background_
 
 @router.get("/assignments/page")
 def assignments_page(site_id: int | None = None, employee_id: int | None = None, active: int | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    allowed = _allowed_societies(user)
     stmt = select(Assignment)
+    visible = _visible_site_ids(db, user)  # sites autorisés (par site OU par société) ; None = illimité
+    if visible is not None:
+        stmt = stmt.where(Assignment.site_id.in_(visible))  # pas de fuite inter-sociétés / inter-sites
     if site_id is not None:
         _ensure_site_allowed(db, user, site_id)
         stmt = stmt.where(Assignment.site_id == site_id)
-    elif allowed:
-        allowed_site_ids = [s.id for s in db.execute(select(Site)).scalars().all() if _normalize_society(_site_society(s)) in allowed]
-        stmt = stmt.where(Assignment.site_id.in_(allowed_site_ids))
     if employee_id is not None:
         _ensure_employee_allowed(db, user, employee_id)
         stmt = stmt.where(Assignment.employee_id == employee_id)
@@ -340,10 +348,10 @@ def assignments(site_id: int | None = None, employee_id: int | None = None, acti
     if employee_id:
         _ensure_employee_allowed(db, user, employee_id)
     rows = service.list_rows(db, Assignment, {"site_id": site_id, "employee_id": employee_id, "active": active})
-    allowed = _allowed_societies(user)
-    if allowed and not site_id and not employee_id:
-        allowed_site_ids = {s.id for s in db.execute(select(Site)).scalars().all() if _normalize_society(_site_society(s)) in allowed}
-        rows = [row for row in rows if row.site_id in allowed_site_ids]
+    visible = _visible_site_ids(db, user)  # sites autorisés (par site OU par société) ; None = illimité
+    if visible is not None:
+        vis = set(visible)
+        rows = [row for row in rows if row.site_id in vis]
     return rows
 
 
@@ -490,8 +498,33 @@ def list_movements(
     return rows
 
 
+def _ensure_target_movement_allowed(db: Session, user: User, payload: OpsMovementCreate) -> None:
+    """Un upsert résout la cible par clé naturelle (external_id / movement_number).
+    Sans ce contrôle, un utilisateur pourrait ÉCRASER un mouvement d'une autre société
+    par collision de clé (le payload seul étant validé). On vérifie donc le périmètre du
+    mouvement EXISTANT ciblé, comme le font les PATCH qui chargent d'abord la ligne."""
+    if is_unrestricted(user):
+        return
+    ext_id = str(getattr(payload, "external_id", None) or "").strip()
+    mvt_num = str(getattr(payload, "movement_number", None) or "").strip()
+    row: OpsMovement | None = None
+    if ext_id:
+        row = db.execute(select(OpsMovement).where(OpsMovement.external_id == ext_id)).scalar_one_or_none()
+    if row is None and mvt_num:
+        row = db.execute(select(OpsMovement).where(OpsMovement.movement_number == mvt_num)).scalar_one_or_none()
+    if row is None:
+        return  # pas de cible existante : c'est une création, gardée par le contrôle du payload
+    if getattr(row, "society", None):
+        _ensure_society_allowed(user, row.society)
+    if getattr(row, "site_id", None):
+        _ensure_site_allowed(db, user, row.site_id)
+    if getattr(row, "employee_id", None):
+        _ensure_employee_allowed(db, user, row.employee_id)
+
+
 @router.post("/movements", response_model=OpsMovementOut, dependencies=[Depends(require_level("write"))])
 def upsert_movement(payload: OpsMovementCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_target_movement_allowed(db, user, payload)  # interdit d'écraser un mouvement d'une autre société
     scoped = False
     if payload.employee_id:
         _ensure_employee_allowed(db, user, payload.employee_id)
