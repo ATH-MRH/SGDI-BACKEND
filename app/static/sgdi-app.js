@@ -3834,8 +3834,22 @@ function renderGlobalDashboard(view){
       </table>
     </div>`;
 }
+function canUseAllSocietesPortal(){
+  if(isAdminGeneralSession())return true;
+  const u=currentUserRecord();
+  const username=normalizeAccessCode(session?.username||u?.username||"");
+  const niveau=normalizeAccessCode(session?.niveau||u?.niveau||"");
+  const role=normalizeAccessCode(session?.role||u?.role||"");
+  return /^(ADG|ADM|ATL)\d+$/.test(username)||niveau==="H5"||role==="ADM";
+}
+function legacyAtlasUsernameSuggestion(username){
+  const raw=String(username||"").trim().toUpperCase();
+  const compact=raw.replace(/[\s_-]+/g,"");
+  if(/^GRH\d+$/.test(compact))return compact.replace(/^GRH/,"DRH");
+  return "";
+}
 function pickAllSocietes(){
-  if(!isAdminGeneralSession()){toast("Accès réservé à l'Administrateur Général","error");return}
+  if(!canUseAllSocietesPortal()){toast("Accès réservé aux profils centraux Atlas","error");return}
   session.societe=null;session.transverse="global";saveSession(session);
   try{["drhSociete","opsSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","agendaSociete","facturationSociete"].forEach(k=>sessionStorage.removeItem(k))}catch(e){}
   location.hash="#/global-dashboard";route();
@@ -5421,20 +5435,43 @@ async function confirmCreateSociete(){
 function renderSocieteSelector(){
   const selectableSocietes=currentAllowedSocietes();
   const userName=session?.nom||session?.username||"Utilisateur";
-  const socCards=selectableSocietes.map(s=>`<button type="button" class="company-portal-module module-host-module module-host-soc-card" onclick="pickSociete('${jsString(s)}')">${escapeHTML(s)}</button>`).join("");
-  const adminAllBtn=isAdminGeneralSession()?`<button type="button" class="company-portal-module module-host-module module-host-soc-card" onclick="pickAllSocietes()">Toutes les sociétés</button>`:"";
+  const username=session?.username||"";
+  const migrationName=legacyAtlasUsernameSuggestion(username);
+  const allowedStructures=currentAllowedStructures();
+  const structureLabels=allowedStructures.length?allowedStructures.map(adminStructureLabel).join(" · "):"Tous modules autorisés";
+  const socCards=selectableSocietes.map(s=>`<button type="button" class="company-portal-module module-host-module module-host-soc-card" onclick="pickSociete('${jsString(s)}')">
+      <span class="company-portal-card-status">Société</span>
+      <strong>${escapeHTML(s)}</strong>
+      <em>Accéder au périmètre</em>
+    </button>`).join("");
+  const adminAllBtn=canUseAllSocietesPortal()?`<button type="button" class="company-portal-module module-host-module module-host-soc-card company-portal-all-card" onclick="pickAllSocietes()">
+      <span class="company-portal-card-status">Vue groupe</span>
+      <strong>Toutes les sociétés</strong>
+      <em>Consolidation Atlas</em>
+    </button>`:"";
   document.getElementById("app").innerHTML=`<div class="company-portal module-host-portal">
     <button type="button" class="company-portal-logout" onclick="logout()">Déconnexion</button>
     ${isAdminGeneralSession()?`<button type="button" class="company-portal-change" onclick="openSelectSocieteToEditModal()">Modifier société</button>`:""}
     <main class="company-portal-main module-host-main">
+      <section class="company-portal-session">
+        <div>
+          <span>Connecté</span>
+          <strong>${escapeHTML(userName)}</strong>
+          <small>${escapeHTML(username||"Identifiant non renseigné")}${migrationName?` · à migrer vers ${escapeHTML(migrationName)}`:""}</small>
+        </div>
+        <div>
+          <span>Périmètre</span>
+          <strong>${selectableSocietes.length} société(s)</strong>
+          <small>${escapeHTML(structureLabels)}</small>
+        </div>
+      </section>
       <section class="company-portal-hero module-host-hero">
         <div class="module-host-brand">PORTAIL ATLAS</div>
-        <div class="module-host-subtitle">CHOISISSEZ LA SOCIÉTÉ À GÉRER</div>
+        <div class="module-host-subtitle">Choisissez le périmètre à gérer</div>
       </section>
       <div class="company-portal-grid module-host-grid">${adminAllBtn}${socCards}</div>
       ${selectableSocietes.length?``:`<div class="company-portal-foot text-red-700">Aucune société autorisée pour ce compte.</div>`}
     </main>
-    <div class="company-portal-user">Connecté en tant que : <strong>${escapeHTML(userName)}</strong></div>
     ${isAdminGeneralSession()?`<button type="button" class="sgdi-societe-admin" onclick="enterTransverseModule('admin')">${isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL"}</button>`:""}
   </div>`;
   stripCryptogrammes(document.getElementById("app"));

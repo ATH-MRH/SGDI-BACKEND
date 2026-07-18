@@ -5409,7 +5409,53 @@ body:has(.company-portal) #app{
 /* Module subdomain portals */
 .module-host-portal .company-portal-main{
   justify-content:center!important;
-  gap:28px!important;
+  gap:24px!important;
+  padding-top:88px!important;
+}
+.company-portal-session{
+  position:fixed;
+  left:clamp(18px,3vw,42px);
+  top:26px;
+  z-index:6;
+  display:flex;
+  align-items:stretch;
+  gap:10px;
+  max-width:min(760px,calc(100vw - 220px));
+}
+.company-portal-session>div{
+  min-width:190px;
+  max-width:330px;
+  padding:12px 14px;
+  border:1px solid rgba(15,23,42,.09);
+  border-radius:12px;
+  background:rgba(255,255,255,.82);
+  box-shadow:0 16px 38px rgba(31,50,71,.12);
+  backdrop-filter:blur(14px);
+}
+.company-portal-session span{
+  display:block;
+  margin-bottom:5px;
+  color:#64748b;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.company-portal-session strong{
+  display:block;
+  color:#061b42;
+  font-size:15px;
+  line-height:1.15;
+  font-weight:950;
+  text-transform:uppercase;
+}
+.company-portal-session small{
+  display:block;
+  margin-top:5px;
+  color:#64748b;
+  font-size:11px;
+  line-height:1.3;
+  font-weight:750;
 }
 .module-host-hero{
   display:flex!important;
@@ -5421,7 +5467,7 @@ body:has(.company-portal) #app{
 }
 .module-host-brand{
   color:#061b42;
-  font-size:clamp(38px,6vw,78px);
+  font-size:clamp(46px,7vw,84px);
   font-weight:950;
   letter-spacing:0;
   line-height:1;
@@ -5439,9 +5485,9 @@ body:has(.company-portal) #app{
 }
 .module-host-grid{
   transform:none!important;
-  width:min(760px,80vw)!important;
-  grid-template-columns:repeat(2,minmax(180px,1fr))!important;
-  gap:16px!important;
+  width:min(860px,84vw)!important;
+  grid-template-columns:repeat(2,minmax(220px,1fr))!important;
+  gap:14px!important;
 }
 .module-host-module{
   min-height:54px!important;
@@ -5450,18 +5496,72 @@ body:has(.company-portal) #app{
   font-weight:850!important;
 }
 .module-host-soc-card{
+  align-items:flex-start!important;
+  justify-content:center!important;
   flex-direction:column!important;
-  min-height:110px!important;
-  gap:10px!important;
-  padding:16px 12px!important;
+  min-height:92px!important;
+  gap:5px!important;
+  padding:16px 18px!important;
+  text-align:left!important;
+}
+.module-host-soc-card .company-portal-card-status{
+  display:inline-flex;
+  align-items:center;
+  min-height:20px;
+  padding:0 8px;
+  border-radius:999px;
+  background:#e8f2fb;
+  color:#1267a8;
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.module-host-soc-card strong{
+  color:#061b42;
+  font-size:15px;
+  line-height:1.18;
+  font-weight:950;
+}
+.module-host-soc-card em{
+  color:#64748b;
+  font-size:12px;
+  font-style:normal;
+  font-weight:750;
+}
+.company-portal-all-card{
+  border-color:rgba(18,103,168,.26)!important;
+  background:linear-gradient(135deg,#ffffff,#eef7ff)!important;
+}
+.company-portal-all-card .company-portal-card-status{
+  background:#061b42;
+  color:#fff;
 }
 .module-host-drh .module-host-module:hover{border-color:#0f766e!important}
 .module-host-ops .module-host-module:hover{border-color:#1d4ed8!important}
 .module-host-materiel .module-host-module:hover{border-color:#b45309!important}
+body:has(.company-portal) #atlas-ai-widget{
+  right:12px!important;
+  bottom:12px!important;
+}
+body:has(.company-portal) #atlas-ai-widget .ai-fab{
+  width:34px!important;
+  height:34px!important;
+  font-size:15px!important;
+  box-shadow:0 8px 18px rgba(37,99,235,.24)!important;
+}
 @media(max-width:640px){
   .module-host-grid{width:min(360px,86vw)!important;grid-template-columns:1fr!important}
   .module-host-brand{font-size:38px}
   .module-host-subtitle{font-size:11px}
+  .company-portal-session{
+    position:static!important;
+    max-width:100%!important;
+    width:100%!important;
+    flex-direction:column!important;
+    margin-bottom:8px!important;
+  }
+  .company-portal-session>div{min-width:0!important;max-width:none!important}
 }
 
 /* ── ATLAS AI Widget ─────────────────────────────────────────────────────── */
