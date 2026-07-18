@@ -5529,14 +5529,6 @@ body:has(.company-portal) #app{
   font-style:normal;
   font-weight:750;
 }
-.company-portal-all-card{
-  border-color:rgba(18,103,168,.26)!important;
-  background:linear-gradient(135deg,#ffffff,#eef7ff)!important;
-}
-.company-portal-all-card .company-portal-card-status{
-  background:#061b42;
-  color:#fff;
-}
 .module-host-drh .module-host-module:hover{border-color:#0f766e!important}
 .module-host-ops .module-host-module:hover{border-color:#1d4ed8!important}
 .module-host-materiel .module-host-module:hover{border-color:#b45309!important}
