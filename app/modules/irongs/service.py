@@ -1009,17 +1009,49 @@ def _sync_presence_line_to_pointage(db: Session, line: dict[str, Any], validate:
     replace_collection(db, "pointages", sheets)
 
 
-def _ensure_presence_line_allowed(db: Session, line: dict[str, Any], user: Any) -> None:
-    """Cloisonnement société d'une ligne de feuille de présence : société directe de la
-    ligne, sinon celle de l'agent référencé. Sans société résolue (ligne globale/vacante),
-    on n'ajoute pas de restriction."""
+def _presence_site_society(db: Session, item: dict[str, Any]) -> str:
+    """Société (clé normalisée) du site référencé par une ligne/mouvement de présence,
+    lue depuis Site.equipment_plan (même convention qu'OPS). '' si non résolu."""
+    site: Site | None = None
+    bid = sql_bridge.as_int(item.get("siteBackendId") or item.get("site_id"))
+    if bid:
+        site = db.get(Site, bid)
+    if site is None:
+        ext = str(item.get("siteId") or "").strip()
+        if ext:
+            site = db.execute(select(Site).where((Site.indicatif == ext) | (Site.name == ext))).scalars().first()
+    if site is None:
+        return ""
+    plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
+    legacy = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
+    soc = plan.get("societe") or plan.get("society") or legacy.get("societe") or legacy.get("society")
+    return _society_key(soc) if soc else ""
+
+
+def _ensure_presence_line_allowed(db: Session, item: dict[str, Any], user: Any) -> None:
+    """Cloisonnement société d'une ligne/mouvement de feuille de présence. On collecte
+    TOUTES les sociétés déductibles de l'enregistrement — société directe (societe/society),
+    agent référencé (agentId), et site cible (siteId/site_id/siteBackendId) — et on refuse
+    si l'UNE d'elles est hors périmètre. Sans société résolue (vacant/global), pas de
+    restriction (comportement inchangé)."""
     if _snapshot_unrestricted(user):
         return
-    society = _item_society(line)
-    if not society:
-        agent = next((row for row in _collection_list(db, "agents") if str(row.get("id")) == str(line.get("agentId"))), None)
-        society = _item_society(agent) if isinstance(agent, dict) else ""
-    if society and society not in _user_allowed_societies(user):
+    allowed = _user_allowed_societies(user)
+    societies: set[str] = set()
+    direct = _item_society(item)
+    if direct:
+        societies.add(direct)
+    agent_ref = str(item.get("agentId") or "").strip()
+    if agent_ref:
+        agent = next((row for row in _collection_list(db, "agents") if str(row.get("id")) == agent_ref), None)
+        if isinstance(agent, dict):
+            agent_soc = _item_society(agent)
+            if agent_soc:
+                societies.add(agent_soc)
+    site_soc = _presence_site_society(db, item)
+    if site_soc:
+        societies.add(site_soc)
+    if any(soc not in allowed for soc in societies):
         raise HTTPException(status_code=403, detail="Société non autorisée pour cet utilisateur")
 
 
@@ -1047,17 +1079,20 @@ def _presence_line_upsert(db: Session, data: dict[str, Any], user: Any = None) -
     agent_id = str(data.get("agentId") or "").strip()
     if not date_value or not agent_id:
         raise HTTPException(status_code=422, detail="Date et agent obligatoires")
-    # Cloisonnement société : l'agent source ET l'agent cible (réaffectation) doivent
-    # être dans le périmètre (cohérent avec validate/delete-presence-line).
-    _ensure_presence_line_allowed(db, {"agentId": agent_id, "date": date_value}, user)
+    # Cloisonnement société : société directe, agent source ET cible (réaffectation), et
+    # site cible du payload doivent tous être dans le périmètre (cohérent avec validate/delete).
+    _descriptor = {k: v for k, v in {**data, **(data.get("patch") or {})}.items() if k != "patch"}
+    _ensure_presence_line_allowed(db, {**_descriptor, "agentId": agent_id}, user)
     target_agent = str((data.get("patch") or {}).get("agentId") or agent_id).strip()
     if target_agent != agent_id:
-        _ensure_presence_line_allowed(db, {"agentId": target_agent, "date": date_value}, user)
+        _ensure_presence_line_allowed(db, {**_descriptor, "agentId": target_agent}, user)
     closures = _collection_object(db, "feuillePresenceCloture")
     if closures.get(date_value):
         raise HTTPException(status_code=422, detail="Feuille clôturée")
     lines = _collection_list(db, "feuillePresence")
     line = next((row for row in lines if str(row.get("date")) == date_value and str(row.get("agentId")) == agent_id), None)
+    if line:
+        _ensure_presence_line_allowed(db, line, user)  # ligne existante : société/site de la cible
     if line and line.get("valide"):
         raise HTTPException(status_code=422, detail="Ligne validée")
     if not line:
@@ -1124,6 +1159,9 @@ def _presence_movement_save(db: Session, data: dict[str, Any], user: Any = None)
     movement["updatedAt"] = _now_iso()
     movement.setdefault("createdAt", movement["updatedAt"])
     if movement.get("mouvementMotif") or movement.get("mouvementType") or movement.get("ordreMouvementNumero") or movement.get("mouvementNumero"):
+        # Périmètre du mouvement FINAL (société résolue + agent + site) avant écriture SQL :
+        # empêche d'écrire un ordre de mouvement pour une autre société.
+        _ensure_presence_line_allowed(db, movement, user)
         sql_bridge.replace_collection(db, "opsMouvements", [movement])
     return {"status": "success", "data": {"item": line, "movement": movement}}
 
@@ -1175,6 +1213,13 @@ def _presence_day_close(db: Session, day: str, close: bool, user: Any, motif: st
         raise HTTPException(status_code=422, detail="Date obligatoire")
     closures = _collection_object(db, "feuillePresenceCloture")
     if close:
+        # La clôture est indexée par JOUR (toutes sociétés confondues) : elle est donc
+        # GLOBALE par conception. Un utilisateur cloisonné (authorized_societies non vide)
+        # ne peut pas clôturer la journée de toutes les sociétés — réservé aux profils non
+        # restreints (admin/H5 ou « voit tout »). Une clôture par périmètre nécessiterait un
+        # changement du modèle FPQ (clé jour+société), hors de cette passe de sécurité.
+        if not _snapshot_unrestricted(user):
+            raise HTTPException(status_code=403, detail="Clôture globale de la journée réservée à un profil non cloisonné")
         if closures.get(day):
             raise HTTPException(status_code=422, detail="Feuille déjà clôturée")
         lines = [row for row in _collection_list(db, "feuillePresence") if row.get("date") == day]
