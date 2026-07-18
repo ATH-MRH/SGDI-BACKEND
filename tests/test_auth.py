@@ -1,6 +1,9 @@
 """Tests d'authentification."""
 import pytest
 
+from app.core.security import decode_token, hash_password
+from app.modules.auth.models import User
+
 
 def test_login_valid(client):
     resp = client.post("/api/auth/login", json={"username": "testadmin", "password": "testpass123"})
@@ -18,6 +21,30 @@ def test_login_wrong_password(client):
 def test_login_unknown_user(client):
     resp = client.post("/api/auth/login", json={"username": "nobody", "password": "anything"})
     assert resp.status_code == 401
+
+
+def test_admin_system_login_accepts_named_h5_admin(client, db):
+    db.add(User(
+        username="DRH01",
+        email=None,
+        full_name="Admin DRH",
+        role="admin",
+        access_level="H5",
+        authorized_societies=[],
+        authorized_structures=["admin", "drh"],
+        authorized_sites=[],
+        password_hash=hash_password("DRH01"),
+        is_active=True,
+    ))
+    db.commit()
+
+    resp = client.post("/api/auth/admin-system-login", json={"username": "DRH01", "password": "DRH01"})
+
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["access_token"]
+    payload = decode_token(token)
+    assert payload["username"] == "DRH01"
+    assert payload["admin_system"] is True
 
 
 def test_protected_endpoint_without_token(client):

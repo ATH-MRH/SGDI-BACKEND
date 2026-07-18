@@ -66,6 +66,7 @@ class LoginIn(BaseModel):
 
 
 class AdminSystemLoginIn(BaseModel):
+    username: str | None = None
     password: str
 
 
@@ -73,4 +74,3 @@ class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserOut
-

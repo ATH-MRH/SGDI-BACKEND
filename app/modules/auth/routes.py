@@ -102,7 +102,18 @@ def admin_system_recovery_password_ok(password: str) -> bool:
     return False
 
 
-def ensure_admin_system_user(db: Session, password: str) -> User | None:
+def ensure_admin_system_user(db: Session, password: str, username: str | None = None) -> User | None:
+    requested_username = (username or "").strip()
+    if requested_username:
+        requested_user = find_user_by_identifier(db, requested_username)
+        if (
+            requested_user is not None
+            and requested_user.is_active
+            and is_admin_role(requested_user.role)
+            and (requested_user.access_level or "").strip().upper() == "H5"
+        ):
+            return requested_user
+        return None
     user = find_admin_system_user(db)
     if user is not None:
         return user
@@ -258,7 +269,7 @@ def patch_access_rule(
 def admin_system_login(payload: AdminSystemLoginIn, request: Request, db: Session = Depends(get_db)):
     ip = _client_ip(request)
     _enforce_login_rate(ip)
-    user = ensure_admin_system_user(db, payload.password)
+    user = ensure_admin_system_user(db, payload.password, payload.username)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte admin introuvable ou inactif")
     password_ok = bool(

@@ -1333,8 +1333,11 @@ window.SGDI_API={
       if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
       return r;
     },
-    adminSystemLogin:async(password)=>{
-      const r=await sgdiApi("/auth/admin-system-login",{method:"POST",body:{password},legacy:false});
+    adminSystemLogin:async(password,username)=>{
+      const body={password};
+      const cleanUsername=String(username||"").trim();
+      if(cleanUsername)body.username=cleanUsername;
+      const r=await sgdiApi("/auth/admin-system-login",{method:"POST",body,legacy:false});
       const token=r?.token||r?.access_token;
       if(token) sessionStorage.setItem(SGDI_API_TOKEN_KEY,token);
       return r;
@@ -3190,8 +3193,13 @@ function isAdminSystemUsernameCandidate(username){
   const u=normalizeAccessCode(username);
   return u==="ADMIN"||/^ADG\d+$/.test(u);
 }
-async function startAdminSystemSession(password){
-  const us=await window.SGDI_API.auth.adminSystemLogin(password);
+function authUserCanOpenAdminSystem(authUser){
+  const role=String(authUser?.role||"").toUpperCase();
+  const level=String(authUser?.access_level||authUser?.accessLevel||authUser?.niveau||"").toUpperCase();
+  return (role==="ADMIN"||role==="ADM"||role.startsWith("ADM"))&&level==="H5";
+}
+async function startAdminSystemSession(password,username){
+  const us=await window.SGDI_API.auth.adminSystemLogin(password,username);
   window.__SGDI_BACKEND_ENABLED__=true;
   const authUser=us?.user||us;
   session={username:authUser.username||"ADG01",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
@@ -3216,9 +3224,9 @@ async function login(u,p,opt={}){
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
       session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
-      if(!opt.adminSystem&&isAdminSystemUsernameCandidate(session.username)&&isAdmin()){
+      if(!opt.adminSystem&&(isAdminSystemUsernameCandidate(session.username)||authUserCanOpenAdminSystem(authUser))&&isAdmin()){
         try{
-          await startAdminSystemSession(p);
+          await startAdminSystemSession(p,session.username);
           return;
         }catch(adminErr){
           sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
@@ -3268,11 +3276,12 @@ async function login(u,p,opt={}){
   toast("Connexion obligatoire : aucun mode local autorisé","error");return
 }
 function openAdminSystemPasswordModal(form){
-  const username="ADG01";
+  const username=String(form?.username?.value||session?.username||"ADG01").trim().toUpperCase();
   openModal(`<h3 class="font-bold text-lg mb-2">Administration système</h3>
-    <p class="text-sm text-slate-500 mb-4">Entrez le mot de passe du compte système ${escapeHTML(username)}.</p>
+    <p class="text-sm text-slate-500 mb-4">Entrez l'identifiant et le mot de passe du compte autorisé Administration système.</p>
     <form onsubmit="event.preventDefault();validateAdminSystemPassword(this)">
-      <input type="hidden" name="username" value="${escapeHTML(username)}"/>
+      <label class="label">Identifiant</label>
+      <input class="input mb-3" name="username" value="${escapeHTML(username)}" autocomplete="username"/>
       <label class="label">Mot de passe</label>
       <input class="input mb-4" type="password" name="password" autocomplete="current-password" autofocus/>
       <div class="flex gap-2 justify-end">
@@ -3283,11 +3292,13 @@ function openAdminSystemPasswordModal(form){
   setTimeout(()=>document.querySelector(".modal-bg [name='password']")?.focus(),0);
 }
 async function validateAdminSystemPassword(form){
+  const username=String(form?.username?.value||"").trim();
   const password=String(form?.password?.value||"");
+  if(!username){toast("Identifiant obligatoire","error");return}
   if(!password){toast("Mot de passe obligatoire","error");return}
   closeModal();
   try{
-    await startAdminSystemSession(password);
+    await startAdminSystemSession(password,username);
   }catch(e){
     sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
     saveSession(null);
@@ -3350,7 +3361,7 @@ async function ensureAdminSystemApiToken(actionLabel){
   const password=prompt("Confirmez le mot de passe Administration système pour "+action+" :");
   if(!password){toast("Action annulée","info");return false}
   try{
-    const us=await window.SGDI_API.auth.adminSystemLogin(password);
+    const us=await window.SGDI_API.auth.adminSystemLogin(password,session?.username);
     const authUser=us?.user||us;
     session={...session,username:authUser.username||session.username||"admin",role:authUser.role||session.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||session.niveau||"H5",nom:authUser.full_name||authUser.nom||authUser.username||session.nom||"Administrateur",adminSystem:true,societe:null,transverse:"admin"};
     sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");
