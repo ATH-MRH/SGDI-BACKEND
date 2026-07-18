@@ -34381,7 +34381,9 @@ try{
     fab.setAttribute("aria-label","Ouvrir l'assistant ATLAS");
     fab.innerHTML="🤖";
     // Style intégré pour garantir la visibilité quel que soit le CSS.
-    fab.style.cssText="position:fixed;right:20px;bottom:20px;z-index:2147483000;width:58px;height:58px;border-radius:50%;border:none;background:#1e40af;color:#fff;font-size:27px;line-height:1;cursor:pointer;box-shadow:0 10px 28px rgba(15,23,42,.4);display:flex;align-items:center;justify-content:center";
+    fab.style.cssText="position:fixed;right:8px;bottom:96px;z-index:120;width:38px;height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.78);background:#1e40af;color:#fff;font-size:19px;line-height:1;cursor:pointer;box-shadow:0 8px 18px rgba(15,23,42,.22);display:flex;align-items:center;justify-content:center;opacity:.72;transition:opacity .15s,transform .15s,box-shadow .15s";
+    fab.onmouseenter=function(){fab.style.opacity="1";fab.style.transform="translateX(-4px) scale(1.04)";fab.style.boxShadow="0 10px 22px rgba(15,23,42,.28)"};
+    fab.onmouseleave=function(){fab.style.opacity=".72";fab.style.transform="";fab.style.boxShadow="0 8px 18px rgba(15,23,42,.22)"};
     fab.onclick=function(){window.aiToggle();};
     host.appendChild(fab);
     document.body.appendChild(host);
