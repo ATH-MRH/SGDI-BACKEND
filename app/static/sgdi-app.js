@@ -3208,6 +3208,7 @@ async function startAdminSystemSession(password){
   openAdminSystemAccess();
 }
 async function login(u,p,opt={}){
+  u=String(u||"").trim();
   setLoginBusy(true,"Verification des identifiants...");
   if(sgdiBackendShouldUse()){
     try{
