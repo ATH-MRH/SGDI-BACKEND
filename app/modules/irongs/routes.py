@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.core.authz import assert_can, require_level
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.irongs.schemas import CollectionOut, CollectionReplace, DbReplace, ItemPayload, LegacyActionPayload
@@ -15,6 +16,20 @@ from app.modules.auth.routes import is_admin_role
 
 
 router = APIRouter(dependencies=[Depends(current_user)])
+
+
+def _require_collection_write(name: str, user=Depends(current_user)):
+    """Écriture d'un item/collection legacy : niveau selon la collection.
+    Clôtures et grilles de paie (GLOBAL_ROW_COLLECTIONS) = validation (H3) ;
+    tout le reste = saisie (H2). Le cloisonnement société reste géré dans le handler."""
+    assert_can(user, "validate" if name in service.GLOBAL_ROW_COLLECTIONS else "write")
+    return user
+
+
+def _require_collection_delete(name: str, user=Depends(current_user)):
+    """Suppression d'un item legacy = supervision (H4)."""
+    assert_can(user, "delete")
+    return user
 
 
 def _get_postes(db: Session) -> list[str]:
@@ -125,7 +140,7 @@ def get_collection(name: str, db: Session = Depends(get_db), user=Depends(curren
     return {"name": name, "data": service.scope_collection_for_user(name, data, user)}
 
 
-@router.put("/collections/{name}", response_model=CollectionOut)
+@router.put("/collections/{name}", response_model=CollectionOut, dependencies=[Depends(_require_collection_write)])
 def replace_collection(name: str, payload: CollectionReplace, db: Session = Depends(get_db), user=Depends(current_user)):
     if not service.can_replace_collection_for_user(name, user):
         raise HTTPException(status_code=403, detail="Remplacement collection réservé administrateur")
@@ -139,7 +154,7 @@ def list_items(name: str, db: Session = Depends(get_db), user=Depends(current_us
     return value if isinstance(value, list) else []
 
 
-@router.post("/collections/{name}/items")
+@router.post("/collections/{name}/items", dependencies=[Depends(_require_collection_write)])
 def create_item(name: str, payload: ItemPayload, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     data = dict(payload.data)
     if name == "echanges" and data.get("type") == "message":
@@ -157,7 +172,7 @@ def get_item(name: str, item_id: str, db: Session = Depends(get_db), user=Depend
     return item
 
 
-@router.put("/collections/{name}/items/{item_id}")
+@router.put("/collections/{name}/items/{item_id}", dependencies=[Depends(_require_collection_write)])
 def replace_item(name: str, item_id: str, payload: ItemPayload, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     existing = service.get_item(db, name, item_id)
     service.ensure_item_allowed_for_user(existing, user, name)
@@ -165,7 +180,7 @@ def replace_item(name: str, item_id: str, payload: ItemPayload, db: Session = De
     return service.update_item(db, name, item_id, payload.data, partial=False)
 
 
-@router.patch("/collections/{name}/items/{item_id}")
+@router.patch("/collections/{name}/items/{item_id}", dependencies=[Depends(_require_collection_write)])
 def patch_item(name: str, item_id: str, payload: ItemPayload, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     existing = service.get_item(db, name, item_id)
     service.ensure_item_allowed_for_user(existing, user, name)
@@ -174,14 +189,14 @@ def patch_item(name: str, item_id: str, payload: ItemPayload, db: Session = Depe
     return service.update_item(db, name, item_id, payload.data, partial=True)
 
 
-@router.delete("/collections/{name}/items/{item_id}")
+@router.delete("/collections/{name}/items/{item_id}", dependencies=[Depends(_require_collection_delete)])
 def delete_item(name: str, item_id: str, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, str]:
     existing = service.get_item(db, name, item_id)
     service.ensure_item_allowed_for_user(existing, user, name)
     return service.delete_item(db, name, item_id)
 
 
-@router.post("/actions/{action}")
+@router.post("/actions/{action}", dependencies=[Depends(require_level("write"))])
 def legacy_action(
     action: str,
     payload: LegacyActionPayload,
