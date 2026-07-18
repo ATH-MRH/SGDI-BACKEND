@@ -18,7 +18,7 @@ fi
 export SGDI_UPLOADS_DIR="$(pwd)/uploads"
 export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg2://sgdi:sgdi@localhost:5432/sgdi}"
 export JWT_SECRET="${JWT_SECRET:-dev-only-secret-not-for-production}"
-export ADMIN_INITIAL_USERNAME="${ADMIN_INITIAL_USERNAME:-admin}"
+export ADMIN_INITIAL_USERNAME="${ADMIN_INITIAL_USERNAME:-ADG01}"
 export ADMIN_INITIAL_PASSWORD="${ADMIN_INITIAL_PASSWORD:-changeme-dev}"
 # Sync Iron désactivée par défaut en dev (renseignez-les dans .env.dev si besoin).
 export IRON_API_URL="${IRON_API_URL:-}"

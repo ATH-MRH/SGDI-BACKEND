@@ -118,19 +118,19 @@ Le script démarre PostgreSQL, restaure la base, remet les photos dans le volume
 ### B.5 Exposition Internet via Cloudflare Tunnel
 1. Cloudflare Zero Trust → **Tunnels** → créer un tunnel → copier le **token**.
 2. Router dans le tunnel (Public Hostnames) vers `http://sgdi:8000` :
-   - `sgdi.irongs.com` (+ `drh`, `ops`, `materiel`, `finances`, `comptabilite`, `facturation`, `commercial`)
+   - `atlas.irongs.com` (+ `drh`, `ops`, `materiel`, `finances`, `comptabilite`, `facturation`, `commercial`, `agenda`)
    - `portail-rh.irongs.com`
 3. Dans `.env.production` : `CLOUDFLARE_TUNNEL_TOKEN=<token>`
 4. Lancer avec le tunnel :
    ```bash
    docker compose --env-file .env.production --profile tunnel up -d
    ```
-5. Vérifier `https://sgdi.irongs.com/health` et `https://portail-rh.irongs.com/`.
+5. Vérifier `https://atlas.irongs.com/health` et `https://portail-rh.irongs.com/`.
 
 ### B.6 Bascule DNS (cutover)
 - Fenêtre de maintenance : geler les écritures sur OVH.
 - **Dump final** OVH (delta) → restaurer au bureau (rejouer B.2/B.4).
-- Basculer le DNS Cloudflare de `sgdi.irongs.com` (et sous-domaines) vers le tunnel.
+- Basculer le DNS Cloudflare de `atlas.irongs.com` (et sous-domaines) vers le tunnel.
 - Vérifier tout (health, login, portail, GPS, QR, photos).
 - **Garder OVH en secours** quelques jours avant de couper.
 

@@ -31145,6 +31145,38 @@ function adminUserFromApi(u){
     validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled)
   };
 }
+function adminUsernamePrefixForStructure(structure){
+  const k=normalizeStructureKey(structure);
+  return ({drh:"DRH",ops:"OPS",materiel:"MAT",facturation:"FIN",facmod:"FAC",commercial:"COM",secretariat:"SEC",agenda:"AGD",pointage:"PTG",portail:"PRH",admin:"ADM"}[k])||"ATL";
+}
+function adminUsernamePrefixFromForm(form){
+  if(!form)return"ATL";
+  const role=normalizeAdminUserRole(form.role?.value||"agent");
+  const niveau=String(form.niveau?.value||"").toUpperCase();
+  const structures=[...form.querySelectorAll('input[name^="struct_"]:checked')].map(el=>normalizeStructureKey(el.value)).filter(Boolean);
+  if(role==="ADM")return niveau==="H5"&&structures.includes("admin")?"ADG":"ADM";
+  if(structures.length===1)return adminUsernamePrefixForStructure(structures[0]);
+  if(role==="dispatch"||role==="ops")return"ATL";
+  return structures.length?adminUsernamePrefixForStructure(structures[0]):"ATL";
+}
+function adminNextUsername(prefix){
+  const p=String(prefix||"ATL").toUpperCase();
+  const nums=(db.users||[]).map(u=>String(u.username||"").toUpperCase()).map(name=>{
+    const m=name.match(new RegExp("^"+p+"(\\d+)$"));
+    return m?parseInt(m[1],10):0;
+  }).filter(Boolean);
+  return p+String((nums.length?Math.max(...nums):0)+1).padStart(2,"0");
+}
+function adminSuggestUsernameForForm(force){
+  const form=document.querySelector(".modal-bg form");
+  if(!form)return;
+  const input=form.querySelector('[name="username"]');
+  if(!input||input.readOnly)return;
+  const current=String(input.value||"").trim().toUpperCase();
+  const generatedLike=/^(ADG|ADM|ATL|DRH|OPS|MAT|FIN|FAC|COM|SEC|AGD|PTG|PRH)\d+$/.test(current);
+  if(!force&&current&&!generatedLike)return;
+  input.value=adminNextUsername(adminUsernamePrefixFromForm(form));
+}
 function openAdminUserModal(username){
   username=String(username||"").trim();
   const isNew=!username;
@@ -31157,11 +31189,11 @@ function openAdminUserModal(username){
   openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"➕ Nouvel utilisateur":"✏ Modifier "+escapeHTML(u.username)}</h3>
     <form data-no-critical-auth="1" onsubmit="event.preventDefault();confirmAdminUserByKey('${encodeURIComponent(u.username||"")}')">
       <div class="grid grid-2 gap-3">
-        <div><label class="label">Identifiant *</label><input class="input" name="username"  value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/></div>
+        <div><label class="label">Identifiant *</label><div class="flex gap-2"><input class="input" name="username" value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/>${isNew?`<button type="button" class="btn btn-secondary text-xs" onclick="adminSuggestUsernameForForm(true)">Générer</button>`:""}</div><div class="text-[11px] text-slate-500 mt-1">Convention : DRH01, OPS01, ATL01, ADM01, ADG01.</div></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
-        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
-        <div><label class="label">Profil d'accès *</label><select class="input" name="niveau"  onchange="previewUserAccessLevel(this.value)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
+        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
+        <div><label class="label">Profil d'accès *</label><select class="input" name="niveau" onchange="previewUserAccessLevel(this.value);adminSuggestUsernameForForm(false)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #fecaca;background:#fef2f2"><input type="checkbox" name="peutReactiverSortant" ${u.peutReactiverSortant?"checked":""}/> Peut réactiver un employé SORTANT</label>
@@ -31169,12 +31201,12 @@ function openAdminUserModal(username){
       <label class="label mt-3">Périmètre sociétés (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${SOCIETES.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/>${escapeHTML(s)}</label>`).join("")}</div>
       <label class="label mt-3">Périmètre structures (vide = toutes)</label>
-      <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""}/>${escapeHTML(st.label)}</label>`).join("")}</div>
+      <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""} onchange="adminSuggestUsernameForForm(false)"/>${escapeHTML(st.label)}</label>`).join("")}</div>
       <label class="label mt-3">Périmètre sites (vide = tous)</label>
       <div class="grid grid-2 gap-2" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{const seen=new Set();return(db.sites||[]).filter(s=>{const k=String(s.backendId||s.id||"");if(!k||seen.has(k))return false;seen.add(k);return s.actif!==false;}).map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="site_${s.backendId||s.id}" value="${s.backendId||s.id}" ${(u.sitesAutorises||[]).includes(Number(s.backendId||s.id))?"checked":""}/>${escapeHTML((s.societe?s.societe+" · ":"")+(s.nom||s.intitule||"Site #"+(s.backendId||s.id)))}</label>`).join("")||`<div class="text-sm text-slate-500">Aucun site chargé.</div>`})()}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
-  setTimeout(()=>previewUserAccessLevel(selectedNiveau),0);
+  setTimeout(()=>{previewUserAccessLevel(selectedNiveau);if(isNew)adminSuggestUsernameForForm(false)},0);
 }
 function previewUserAccessLevel(code){
   const n=ensureNiveauxAcces().find(x=>x.code===code);
@@ -31194,7 +31226,9 @@ async function confirmAdminUser(originalUsername){
   const f=document.querySelector(".modal-bg form");if(!f){toast("Formulaire introuvable","error");return}
   if(isAdminSystemSession()&&!(await ensureAdminSystemApiToken("enregistrer un utilisateur"))){if(window._sgdiSaveOverlayShown)closeSaveOverlay();return}
   const fd=new FormData(f);
-  const username=String(fd.get("username")||"").trim();const password=String(fd.get("password")||"");
+  const rawUsername=String(fd.get("username")||"").trim();
+  const username=originalUsername?rawUsername:rawUsername.toUpperCase();
+  const password=String(fd.get("password")||"");
   const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),sitesAutorises:(db.sites||[]).filter(s=>s.actif!==false&&fd.get("site_"+(s.backendId||s.id))===String(s.backendId||s.id)).map(s=>Number(s.backendId||s.id))};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
