@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
+from app.core.authz import require_level
 from app.core.config import settings
 from app.core.security import create_access_token, decode_token, hash_password, verify_password
 from app.db.session import get_db
@@ -559,7 +560,7 @@ def list_portal_accounts(
     return [{k: v for k, v in a.items() if k != "passwordHash"} for a in rows]
 
 
-@router.post("/accounts", status_code=status.HTTP_201_CREATED)
+@router.post("/accounts", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_level("write"))])
 def create_portal_account(
     payload: dict[str, Any],
     db: Session = Depends(get_db),
@@ -612,7 +613,7 @@ def get_portal_account(
     return {k: v for k, v in account.items() if k != "passwordHash"}
 
 
-@router.put("/accounts/{matricule}/password")
+@router.put("/accounts/{matricule}/password", dependencies=[Depends(require_level("write"))])
 def reset_portal_password(
     matricule: str,
     payload: dict[str, Any],
@@ -629,7 +630,7 @@ def reset_portal_password(
     return {k: v for k, v in updated.items() if k != "passwordHash"}
 
 
-@router.delete("/accounts/{matricule}")
+@router.delete("/accounts/{matricule}", dependencies=[Depends(require_level("delete"))])
 def delete_portal_account(
     matricule: str,
     db: Session = Depends(get_db),
@@ -795,7 +796,7 @@ def push_unsubscribe(
     return {"ok": True}
 
 
-@router.post("/push/send/{matricule}")
+@router.post("/push/send/{matricule}", dependencies=[Depends(require_level("write"))])
 def push_send(
     matricule: str,
     payload: dict[str, Any],

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_token
 from app.db.session import get_db
+from app.core.authz import require_level
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.ronde.models import (
@@ -137,7 +138,7 @@ def list_circuits(
     return [_circuit_dict(c) for c in circuits]
 
 
-@router.post("/circuits", status_code=201)
+@router.post("/circuits", status_code=201, dependencies=[Depends(require_level("write"))])
 def create_circuit(
     payload: dict[str, Any],
     db: Session = Depends(get_db),
@@ -169,7 +170,7 @@ def get_circuit(
     return _circuit_dict(c)
 
 
-@router.put("/circuits/{circuit_id}")
+@router.put("/circuits/{circuit_id}", dependencies=[Depends(require_level("write"))])
 def update_circuit(
     circuit_id: int,
     payload: dict[str, Any],
@@ -187,7 +188,7 @@ def update_circuit(
     return _circuit_dict(c)
 
 
-@router.delete("/circuits/{circuit_id}", status_code=204)
+@router.delete("/circuits/{circuit_id}", status_code=204, dependencies=[Depends(require_level("delete"))])
 def delete_circuit(
     circuit_id: int,
     db: Session = Depends(get_db),
@@ -202,7 +203,7 @@ def delete_circuit(
 
 # ─── CHECKPOINTS (admin) ─────────────────────────────────────────────────────
 
-@router.post("/circuits/{circuit_id}/checkpoints", status_code=201)
+@router.post("/circuits/{circuit_id}/checkpoints", status_code=201, dependencies=[Depends(require_level("write"))])
 def add_checkpoint(
     circuit_id: int,
     payload: dict[str, Any],
@@ -234,7 +235,7 @@ def add_checkpoint(
     return _cp_dict(cp)
 
 
-@router.put("/checkpoints/{cp_id}")
+@router.put("/checkpoints/{cp_id}", dependencies=[Depends(require_level("write"))])
 def update_checkpoint(
     cp_id: int,
     payload: dict[str, Any],
@@ -252,7 +253,7 @@ def update_checkpoint(
     return _cp_dict(cp)
 
 
-@router.delete("/checkpoints/{cp_id}", status_code=204)
+@router.delete("/checkpoints/{cp_id}", status_code=204, dependencies=[Depends(require_level("delete"))])
 def delete_checkpoint(
     cp_id: int,
     db: Session = Depends(get_db),
