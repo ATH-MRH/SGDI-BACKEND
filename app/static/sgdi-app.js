@@ -4222,6 +4222,60 @@ function sgdiEditModeButtonHTML(){
     :`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
   return `<button type="button" id="sgdi-edit-toggle" class="ws-lock-toggle ${locked?"":"unlocked"}" data-no-critical-auth="1" onclick="${locked?"sgdiExitViewMode()":"sgdiEnterViewMode()"}" title="${escapeHTML(title)}" aria-label="${escapeHTML(title)}">${icon}<span>${label}</span></button>`;
 }
+function sgdiOpenQuickApp(key){
+  const apps={
+    word:{label:"Microsoft Word",url:"https://www.office.com/launch/word"},
+    outlook:{label:"Calendrier Outlook",url:"https://outlook.office.com/calendar/"},
+    excel:{label:"Microsoft Excel",url:"https://www.office.com/launch/excel"}
+  };
+  if(key==="calculator"){openSgdiCalculatorModal();return}
+  const app=apps[key];
+  if(!app)return;
+  const opened=window.open(app.url,"_blank","noopener,noreferrer");
+  if(!opened)window.location.href=app.url;
+  if(typeof toast==="function")toast("Ouverture de "+app.label,"info");
+}
+function openSgdiCalculatorModal(){
+  const keys=["7","8","9","/","4","5","6","*","1","2","3","-","0",".","=","+","C","⌫"];
+  openModal(`<h3 class="font-bold text-lg mb-3">Calculatrice</h3>
+    <div class="sgdi-calculator" data-no-critical-auth="1">
+      <input id="sgdi-calculator-display" class="input sgdi-calculator-display" value="" placeholder="0" inputmode="decimal" onkeydown="sgdiCalculatorKey(event)">
+      <div class="sgdi-calculator-grid">
+        ${keys.map(k=>`<button type="button" class="sgdi-calculator-key ${/[+\-*/=]/.test(k)?"operator":k==="C"?"clear":""}" onclick="sgdiCalculatorPress('${escapeHTML(k)}')">${escapeHTML(k)}</button>`).join("")}
+      </div>
+    </div>`);
+  setTimeout(()=>document.getElementById("sgdi-calculator-display")?.focus(),50);
+}
+function sgdiCalculatorPress(key){
+  const display=document.getElementById("sgdi-calculator-display");
+  if(!display)return;
+  if(key==="C"){display.value="";display.focus();return}
+  if(key==="⌫"){display.value=display.value.slice(0,-1);display.focus();return}
+  if(key==="="){
+    try{
+      const result=sgdiCalculatorEval(display.value);
+      display.value=String(result).replace(".",",");
+    }catch(e){
+      if(typeof toast==="function")toast("Calcul invalide","error");
+    }
+    display.focus();
+    return;
+  }
+  display.value+=key;
+  display.focus();
+}
+function sgdiCalculatorKey(e){
+  if(e.key==="Enter"){e.preventDefault();sgdiCalculatorPress("=");return}
+  if(e.key==="Escape"){e.preventDefault();closeModal();return}
+}
+function sgdiCalculatorEval(raw){
+  const expr=String(raw||"").replace(/,/g,".").replace(/%/g,"/100");
+  if(!expr.trim())return 0;
+  if(!/^[0-9+\-*/().\s]+$/.test(expr))throw new Error("invalid");
+  const result=Function('"use strict";return ('+expr+')')();
+  if(!Number.isFinite(result))throw new Error("invalid");
+  return Math.round(result*100000000)/100000000;
+}
 async function refreshWorkspace(){
   const btn=document.querySelector(".ws-refresh-tab");
   try{
@@ -4255,10 +4309,10 @@ window.refreshWorkspace=refreshWorkspace;
 function workspaceTabsBarHTML(){
   if(!session)return"";
   const quickLaunchHTML=`<div class="ws-quicklaunch-group">
-    <a class="ws-quicklaunch-btn" href="ms-word:" onclick="event.stopPropagation();window.location.href='ms-word:';return false" title="Microsoft Word"><span class="ws-ql-icon" style="background:#2b579a">W</span></a>
-    <a class="ws-quicklaunch-btn" href="ms-outlook:" onclick="event.stopPropagation();window.location.href='ms-outlook:';return false" title="Calendrier Outlook"><span class="ws-ql-icon" style="background:#0078d4;font-size:13px">📅</span></a>
-    <a class="ws-quicklaunch-btn" href="ms-excel:" onclick="event.stopPropagation();window.location.href='ms-excel:';return false" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></a>
-    <a class="ws-quicklaunch-btn" href="calculator:" onclick="event.stopPropagation();window.location.href='calculator:';return false" title="Calculatrice"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></a>
+    <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('word')" title="Microsoft Word"><span class="ws-ql-icon" style="background:#2b579a">W</span></button>
+    <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('outlook')" title="Calendrier Outlook"><span class="ws-ql-icon" style="background:#0078d4;font-size:13px">📅</span></button>
+    <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('excel')" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></button>
+    <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('calculator')" title="Calculatrice SGDI"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></button>
   </div>`;
   const sgdiActionsHTML=`<div class="ws-system-actions">${sgdiEditModeButtonHTML()}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
   return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
