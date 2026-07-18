@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from app.core.authz import require_level
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -92,20 +93,20 @@ def get_fournisseur(fournisseur_id: int, db: Session = Depends(get_db), user: Us
     return row
 
 
-@router.post("/fournisseurs", response_model=FournisseurOut)
+@router.post("/fournisseurs", response_model=FournisseurOut, dependencies=[Depends(require_level("write"))])
 def create_fournisseur(payload: FournisseurCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_fournisseur(db, payload)
 
 
-@router.put("/fournisseurs/{fournisseur_id}", response_model=FournisseurOut)
+@router.put("/fournisseurs/{fournisseur_id}", response_model=FournisseurOut, dependencies=[Depends(require_level("write"))])
 def update_fournisseur(fournisseur_id: int, payload: FournisseurUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_fournisseur_or_404(db, fournisseur_id)
     _ensure_society_allowed(user, payload.society or existing.society)
     return service.update_fournisseur(db, fournisseur_id, payload)
 
 
-@router.delete("/fournisseurs/{fournisseur_id}")
+@router.delete("/fournisseurs/{fournisseur_id}", dependencies=[Depends(require_level("delete"))])
 def delete_fournisseur(fournisseur_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_fournisseur_or_404(db, fournisseur_id)
     _ensure_society_allowed(user, existing.society)
@@ -145,55 +146,55 @@ def get_bdc(bdc_id: int, db: Session = Depends(get_db), user: User = Depends(cur
     return service._bdc_with_lignes(db, bdc_id)
 
 
-@router.post("/commandes")
+@router.post("/commandes", dependencies=[Depends(require_level("write"))])
 def create_bdc(payload: BonDeCommandeCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_bdc(db, payload)
 
 
-@router.put("/commandes/{bdc_id}")
+@router.put("/commandes/{bdc_id}", dependencies=[Depends(require_level("write"))])
 def update_bdc(bdc_id: int, payload: BonDeCommandeUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bdc = service.get_bdc_or_404(db, bdc_id)
     _ensure_society_allowed(user, bdc.society)
     return service.update_bdc(db, bdc_id, payload)
 
 
-@router.post("/commandes/{bdc_id}/valider")
+@router.post("/commandes/{bdc_id}/valider", dependencies=[Depends(require_level("validate"))])
 def valider_bdc(bdc_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bdc = service.get_bdc_or_404(db, bdc_id)
     _ensure_society_allowed(user, bdc.society)
     return service.valider_bdc(db, bdc_id)
 
 
-@router.post("/commandes/{bdc_id}/annuler")
+@router.post("/commandes/{bdc_id}/annuler", dependencies=[Depends(require_level("validate"))])
 def annuler_bdc(bdc_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bdc = service.get_bdc_or_404(db, bdc_id)
     _ensure_society_allowed(user, bdc.society)
     return service.annuler_bdc(db, bdc_id)
 
 
-@router.delete("/commandes/{bdc_id}")
+@router.delete("/commandes/{bdc_id}", dependencies=[Depends(require_level("delete"))])
 def delete_bdc(bdc_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bdc = service.get_bdc_or_404(db, bdc_id)
     _ensure_society_allowed(user, bdc.society)
     return service.delete_bdc(db, bdc_id)
 
 
-@router.post("/commandes/{bdc_id}/lignes")
+@router.post("/commandes/{bdc_id}/lignes", dependencies=[Depends(require_level("write"))])
 def add_ligne_bdc(bdc_id: int, payload: LigneBDCCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bdc = service.get_bdc_or_404(db, bdc_id)
     _ensure_society_allowed(user, bdc.society)
     return service.add_ligne_bdc(db, bdc_id, payload)
 
 
-@router.put("/commandes/{bdc_id}/lignes/{ligne_id}")
+@router.put("/commandes/{bdc_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def update_ligne_bdc(bdc_id: int, ligne_id: int, payload: LigneBDCUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bdc = service.get_bdc_or_404(db, bdc_id)
     _ensure_society_allowed(user, bdc.society)
     return service.update_ligne_bdc(db, bdc_id, ligne_id, payload)
 
 
-@router.delete("/commandes/{bdc_id}/lignes/{ligne_id}")
+@router.delete("/commandes/{bdc_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def delete_ligne_bdc(bdc_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bdc = service.get_bdc_or_404(db, bdc_id)
     _ensure_society_allowed(user, bdc.society)
@@ -231,20 +232,20 @@ def get_reception(rec_id: int, db: Session = Depends(get_db), user: User = Depen
     return service._reception_with_lignes(db, rec_id)
 
 
-@router.post("/receptions")
+@router.post("/receptions", dependencies=[Depends(require_level("write"))])
 def create_reception(payload: ReceptionCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_reception(db, payload)
 
 
-@router.put("/receptions/{rec_id}")
+@router.put("/receptions/{rec_id}", dependencies=[Depends(require_level("write"))])
 def update_reception(rec_id: int, payload: ReceptionUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     rec = service.get_reception_or_404(db, rec_id)
     _ensure_society_allowed(user, rec.society)
     return service.update_reception(db, rec_id, payload)
 
 
-@router.post("/receptions/{rec_id}/valider")
+@router.post("/receptions/{rec_id}/valider", dependencies=[Depends(require_level("validate"))])
 def valider_reception(rec_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """Valide la réception : statut → reçue, crée les mouvements de stock."""
     rec = service.get_reception_or_404(db, rec_id)
@@ -252,21 +253,21 @@ def valider_reception(rec_id: int, db: Session = Depends(get_db), user: User = D
     return service.valider_reception(db, rec_id)
 
 
-@router.post("/receptions/{rec_id}/lignes")
+@router.post("/receptions/{rec_id}/lignes", dependencies=[Depends(require_level("write"))])
 def add_ligne_reception(rec_id: int, payload: LigneReceptionCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     rec = service.get_reception_or_404(db, rec_id)
     _ensure_society_allowed(user, rec.society)
     return service.add_ligne_reception(db, rec_id, payload)
 
 
-@router.put("/receptions/{rec_id}/lignes/{ligne_id}")
+@router.put("/receptions/{rec_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def update_ligne_reception(rec_id: int, ligne_id: int, payload: LigneReceptionUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     rec = service.get_reception_or_404(db, rec_id)
     _ensure_society_allowed(user, rec.society)
     return service.update_ligne_reception(db, rec_id, ligne_id, payload)
 
 
-@router.delete("/receptions/{rec_id}/lignes/{ligne_id}")
+@router.delete("/receptions/{rec_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def delete_ligne_reception(rec_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     rec = service.get_reception_or_404(db, rec_id)
     _ensure_society_allowed(user, rec.society)
@@ -306,13 +307,13 @@ def get_facture(facture_id: int, db: Session = Depends(get_db), user: User = Dep
     return row
 
 
-@router.post("/factures", response_model=FactureFournisseurOut)
+@router.post("/factures", response_model=FactureFournisseurOut, dependencies=[Depends(require_level("write"))])
 def create_facture(payload: FactureFournisseurCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_facture(db, payload)
 
 
-@router.put("/factures/{facture_id}", response_model=FactureFournisseurOut)
+@router.put("/factures/{facture_id}", response_model=FactureFournisseurOut, dependencies=[Depends(require_level("write"))])
 def update_facture(facture_id: int, payload: FactureFournisseurUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     row = service.get_facture_or_404(db, facture_id)
     _ensure_society_allowed(user, row.society)
@@ -323,7 +324,7 @@ class PaiementPayload(BaseModel):
     montant: float
 
 
-@router.post("/factures/{facture_id}/payer", response_model=FactureFournisseurOut)
+@router.post("/factures/{facture_id}/payer", response_model=FactureFournisseurOut, dependencies=[Depends(require_level("validate"))])
 def payer_facture(facture_id: int, payload: PaiementPayload, db: Session = Depends(get_db), user: User = Depends(current_user)):
     row = service.get_facture_or_404(db, facture_id)
     _ensure_society_allowed(user, row.society)

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from app.core.authz import require_level
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -80,55 +81,55 @@ def get_devis(devis_id: int, db: Session = Depends(get_db), user: User = Depends
     return service._devis_with_lignes(db, devis_id)
 
 
-@router.post("/devis")
+@router.post("/devis", dependencies=[Depends(require_level("write"))])
 def create_devis(payload: DevisCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_devis(db, payload)
 
 
-@router.put("/devis/{devis_id}")
+@router.put("/devis/{devis_id}", dependencies=[Depends(require_level("write"))])
 def update_devis(devis_id: int, payload: DevisUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
     return service.update_devis(db, devis_id, payload)
 
 
-@router.post("/devis/{devis_id}/valider")
+@router.post("/devis/{devis_id}/valider", dependencies=[Depends(require_level("validate"))])
 def valider_devis(devis_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
     return service.envoyer_devis(db, devis_id)
 
 
-@router.post("/devis/{devis_id}/convertir")
+@router.post("/devis/{devis_id}/convertir", dependencies=[Depends(require_level("validate"))])
 def convertir_devis(devis_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
     return service.convertir_en_commande(db, devis_id)
 
 
-@router.delete("/devis/{devis_id}")
+@router.delete("/devis/{devis_id}", dependencies=[Depends(require_level("delete"))])
 def delete_devis(devis_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
     return service.delete_devis(db, devis_id)
 
 
-@router.post("/devis/{devis_id}/lignes")
+@router.post("/devis/{devis_id}/lignes", dependencies=[Depends(require_level("write"))])
 def add_ligne_devis(devis_id: int, payload: LigneVenteCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
     return service.add_ligne_devis(db, devis_id, payload)
 
 
-@router.put("/devis/{devis_id}/lignes/{ligne_id}")
+@router.put("/devis/{devis_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def update_ligne_devis(devis_id: int, ligne_id: int, payload: LigneVenteUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
     return service.update_ligne_devis(db, devis_id, ligne_id, payload)
 
 
-@router.delete("/devis/{devis_id}/lignes/{ligne_id}")
+@router.delete("/devis/{devis_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def delete_ligne_devis(devis_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     devis = service.get_devis_or_404(db, devis_id)
     _ensure_society_allowed(user, devis.society)
@@ -168,34 +169,34 @@ def get_commande(cmd_id: int, db: Session = Depends(get_db), user: User = Depend
     return service._commande_with_lignes(db, cmd_id)
 
 
-@router.post("/commandes")
+@router.post("/commandes", dependencies=[Depends(require_level("write"))])
 def create_commande(payload: CommandeClientCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_commande(db, payload)
 
 
-@router.put("/commandes/{cmd_id}")
+@router.put("/commandes/{cmd_id}", dependencies=[Depends(require_level("write"))])
 def update_commande(cmd_id: int, payload: CommandeClientUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     cmd = service.get_commande_or_404(db, cmd_id)
     _ensure_society_allowed(user, cmd.society)
     return service.update_commande(db, cmd_id, payload)
 
 
-@router.post("/commandes/{cmd_id}/lignes")
+@router.post("/commandes/{cmd_id}/lignes", dependencies=[Depends(require_level("write"))])
 def add_ligne_commande(cmd_id: int, payload: LigneVenteCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     cmd = service.get_commande_or_404(db, cmd_id)
     _ensure_society_allowed(user, cmd.society)
     return service.add_ligne_commande(db, cmd_id, payload)
 
 
-@router.put("/commandes/{cmd_id}/lignes/{ligne_id}")
+@router.put("/commandes/{cmd_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def update_ligne_commande(cmd_id: int, ligne_id: int, payload: LigneVenteUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     cmd = service.get_commande_or_404(db, cmd_id)
     _ensure_society_allowed(user, cmd.society)
     return service.update_ligne_commande(db, cmd_id, ligne_id, payload)
 
 
-@router.delete("/commandes/{cmd_id}/lignes/{ligne_id}")
+@router.delete("/commandes/{cmd_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def delete_ligne_commande(cmd_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     cmd = service.get_commande_or_404(db, cmd_id)
     _ensure_society_allowed(user, cmd.society)
@@ -235,34 +236,34 @@ def get_bl(bl_id: int, db: Session = Depends(get_db), user: User = Depends(curre
     return service._bl_with_lignes(db, bl_id)
 
 
-@router.post("/livraisons")
+@router.post("/livraisons", dependencies=[Depends(require_level("write"))])
 def create_bl(payload: BonDeLivraisonCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_bl(db, payload)
 
 
-@router.put("/livraisons/{bl_id}")
+@router.put("/livraisons/{bl_id}", dependencies=[Depends(require_level("write"))])
 def update_bl(bl_id: int, payload: BonDeLivraisonUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bl = service.get_bl_or_404(db, bl_id)
     _ensure_society_allowed(user, bl.society)
     return service.update_bl(db, bl_id, payload)
 
 
-@router.post("/livraisons/{bl_id}/lignes")
+@router.post("/livraisons/{bl_id}/lignes", dependencies=[Depends(require_level("write"))])
 def add_ligne_bl(bl_id: int, payload: LigneBLCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bl = service.get_bl_or_404(db, bl_id)
     _ensure_society_allowed(user, bl.society)
     return service.add_ligne_bl(db, bl_id, payload)
 
 
-@router.put("/livraisons/{bl_id}/lignes/{ligne_id}")
+@router.put("/livraisons/{bl_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def update_ligne_bl(bl_id: int, ligne_id: int, payload: LigneBLUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bl = service.get_bl_or_404(db, bl_id)
     _ensure_society_allowed(user, bl.society)
     return service.update_ligne_bl(db, bl_id, ligne_id, payload)
 
 
-@router.delete("/livraisons/{bl_id}/lignes/{ligne_id}")
+@router.delete("/livraisons/{bl_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def delete_ligne_bl(bl_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     bl = service.get_bl_or_404(db, bl_id)
     _ensure_society_allowed(user, bl.society)

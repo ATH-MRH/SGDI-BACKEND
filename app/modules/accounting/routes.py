@@ -1,6 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from app.core.authz import require_level
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -75,20 +76,20 @@ def comptes(society: str | None = None, db: Session = Depends(get_db), user: Use
     return service.list_comptes(db, eff)
 
 
-@router.post("/comptes", response_model=CompteComptableOut)
+@router.post("/comptes", response_model=CompteComptableOut, dependencies=[Depends(require_level("write"))])
 def create_compte(payload: CompteComptableCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_compte(db, payload)
 
 
-@router.put("/comptes/{compte_id}", response_model=CompteComptableOut)
+@router.put("/comptes/{compte_id}", response_model=CompteComptableOut, dependencies=[Depends(require_level("write"))])
 def update_compte(compte_id: int, payload: CompteComptableUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_compte_or_404(db, compte_id)
     _ensure_society_allowed(user, payload.society or existing.society)
     return service.update_compte(db, compte_id, payload)
 
 
-@router.delete("/comptes/{compte_id}")
+@router.delete("/comptes/{compte_id}", dependencies=[Depends(require_level("delete"))])
 def delete_compte(compte_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_compte_or_404(db, compte_id)
     _ensure_society_allowed(user, existing.society)
@@ -129,48 +130,48 @@ def get_ecriture(ecriture_id: int, db: Session = Depends(get_db), user: User = D
     return service.get_ecriture_with_lignes(db, ecriture_id)
 
 
-@router.post("/ecritures")
+@router.post("/ecritures", dependencies=[Depends(require_level("write"))])
 def create_ecriture(payload: EcritureComptableCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_ecriture(db, payload)
 
 
-@router.put("/ecritures/{ecriture_id}")
+@router.put("/ecritures/{ecriture_id}", dependencies=[Depends(require_level("write"))])
 def update_ecriture(ecriture_id: int, payload: EcritureComptableUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, payload.society or ecriture.society)
     return service.update_ecriture(db, ecriture_id, payload)
 
 
-@router.post("/ecritures/{ecriture_id}/valider")
+@router.post("/ecritures/{ecriture_id}/valider", dependencies=[Depends(require_level("validate"))])
 def valider_ecriture(ecriture_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, ecriture.society)
     return service.valider_ecriture(db, ecriture_id)
 
 
-@router.delete("/ecritures/{ecriture_id}")
+@router.delete("/ecritures/{ecriture_id}", dependencies=[Depends(require_level("delete"))])
 def delete_ecriture(ecriture_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, ecriture.society)
     return service.delete_ecriture(db, ecriture_id)
 
 
-@router.post("/ecritures/{ecriture_id}/lignes")
+@router.post("/ecritures/{ecriture_id}/lignes", dependencies=[Depends(require_level("write"))])
 def add_ligne(ecriture_id: int, payload: LigneEcritureCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, ecriture.society)
     return service.add_ligne(db, ecriture_id, payload)
 
 
-@router.put("/ecritures/{ecriture_id}/lignes/{ligne_id}")
+@router.put("/ecritures/{ecriture_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def update_ligne(ecriture_id: int, ligne_id: int, payload: LigneEcritureUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, ecriture.society)
     return service.update_ligne(db, ecriture_id, ligne_id, payload)
 
 
-@router.delete("/ecritures/{ecriture_id}/lignes/{ligne_id}")
+@router.delete("/ecritures/{ecriture_id}/lignes/{ligne_id}", dependencies=[Depends(require_level("write"))])
 def delete_ligne(ecriture_id: int, ligne_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, ecriture.society)
