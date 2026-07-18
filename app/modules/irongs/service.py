@@ -16,7 +16,7 @@ from app.modules.irongs import sql_bridge
 from app.modules.drh.models import Employee
 from app.modules.ops.models import Site
 from app.modules.materiel.service import ensure_material_schema
-from app.core.authz import assert_can
+from app.core.authz import assert_can, is_unrestricted
 from app.core.photo_storage import normalize_photo_fields
 
 logger = logging.getLogger("sgdi.records")
@@ -1218,7 +1218,7 @@ def _presence_day_close(db: Session, day: str, close: bool, user: Any, motif: st
         # ne peut pas clôturer la journée de toutes les sociétés — réservé aux profils non
         # restreints (admin/H5 ou « voit tout »). Une clôture par périmètre nécessiterait un
         # changement du modèle FPQ (clé jour+société), hors de cette passe de sécurité.
-        if not _snapshot_unrestricted(user):
+        if not (is_unrestricted(user) or _snapshot_unrestricted(user)):
             raise HTTPException(status_code=403, detail="Clôture globale de la journée réservée à un profil non cloisonné")
         if closures.get(day):
             raise HTTPException(status_code=422, detail="Feuille déjà clôturée")

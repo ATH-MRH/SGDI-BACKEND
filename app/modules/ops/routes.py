@@ -378,10 +378,11 @@ def pointage_standby(presence_date: date | None = None, society: str | None = No
     if not effective_society and allowed and len(allowed) == 1:
         effective_society = allowed[0]
     rows = service.standby_personnel(db, presence_date or date.today(), effective_society, site_id)
-    # Sans filtre explicite : on restreint au périmètre de l'utilisateur — société(s)
-    # autorisée(s) OU sites autorisés (cas « restreint par SITE seul », authorized_societies
-    # vide + authorized_sites non vide, sinon fuite inter-sociétés du roster).
-    if not is_unrestricted(user) and not effective_society and not site_id:
+    # On borne TOUJOURS au périmètre de l'utilisateur — société(s) autorisée(s) OU sites
+    # autorisés — même quand un paramètre `society` est fourni : sinon un « restreint par
+    # SITE seul » (authorized_societies vide) contourne le filtre via ?society=B
+    # (_ensure_society_allowed est un no-op pour ce profil).
+    if not is_unrestricted(user):
         aset = set(_allowed_societies(user))
         visible = _visible_site_ids(db, user)
         vis = set(visible) if visible is not None else None
@@ -496,11 +497,13 @@ def list_movements(
     if allowed and society and _normalize_society(society) not in allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
     rows = service.list_movements(db, society=society, limit=limit)
-    # Sans filtre explicite : on restreint au périmètre — société(s) autorisée(s) OU sites
-    # autorisés (cas « restreint par SITE seul », authorized_societies vide + authorized_sites
-    # non vide ; l'ancien code laissait tout passer car _allowed_societies renvoyait []).
+    # On borne TOUJOURS au périmètre — société(s) autorisée(s) OU sites autorisés — même
+    # quand `society` est fourni : sinon un « restreint par SITE seul » (authorized_societies
+    # vide + authorized_sites non vide) contourne le filtre via ?society=B (_ensure_society_allowed
+    # est un no-op pour ce profil). L'ancien code laissait aussi tout passer car _allowed_societies
+    # renvoyait [].
     filtered = False
-    if not is_unrestricted(user) and not society:
+    if not is_unrestricted(user):
         aset = set(allowed or [])
         visible = _visible_site_ids(db, user)
         vis = set(visible) if visible is not None else None

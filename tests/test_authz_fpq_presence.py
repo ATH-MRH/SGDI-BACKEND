@@ -106,3 +106,20 @@ def test_admin_close_presence_day_ok(client, auth_headers):
     # Admin (non cloisonné) passe la garde société ; 200 (clôture) ou 422 (déjà clôturée),
     # jamais 403.
     assert r.status_code in (200, 422), r.text
+
+
+def test_h5_avec_societes_close_presence_day_pas_de_faux_403(client, db):
+    """Un H5 (illimité par niveau) avec des sociétés listées ne doit PAS recevoir un
+    faux 403 sur close-presence-day (is_unrestricted inclut H5, pas seulement les
+    sociétés vides)."""
+    if not db.query(User).filter(User.username == "fpq_h5_soc").first():
+        db.add(User(
+            username="fpq_h5_soc", email="h5@t.com", full_name="H5 Soc",
+            role="ops", access_level="H5", authorized_societies=[SOC],
+            authorized_structures=[], password_hash=hash_password("testpass123"), is_active=True,
+        ))
+        db.commit()
+    hdr = _hdr(client, "fpq_h5_soc")
+    r = client.post("/api/irongs/actions/close-presence-day", headers=hdr,
+                    json={"data": {"date": "2026-09-08"}})
+    assert r.status_code in (200, 422), r.text  # jamais 403

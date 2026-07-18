@@ -73,6 +73,30 @@ def test_ops_standby_et_movements_restreint_par_site_ne_fuit_pas(client, db, aut
     assert all(r.get("site_id") == sa_id for r in sb_rows), "fuite : roster standby inter-sociétés"
 
 
+def test_ops_standby_et_movements_restreint_par_site_param_society_ne_fuit_pas(client, db, auth_headers):
+    """Contournement via ?society=B : un « restreint par SITE seul » ne doit PAS voir
+    le périmètre d'une autre société même en passant le paramètre society."""
+    DAY = "2026-08-11"
+    sa = client.post("/api/ops/sites", headers=auth_headers, json={"name": "R2P SITE A", "equipment_plan": {"societe": SOC}})
+    sb = client.post("/api/ops/sites", headers=auth_headers, json={"name": "R2P SITE B", "equipment_plan": {"societe": FOREIGN}})
+    sa_id, sb_id = sa.json()["id"], sb.json()["id"]
+    eb = Employee(code="R2PEB", first_name="B", last_name="B", society=FOREIGN, status="actif", phone="222")
+    db.add(eb); db.commit()
+    r = client.post("/api/ops/movements", headers=auth_headers, json={
+        "external_id": "R2PMV_B", "employee_id": eb.id, "site_id": sb_id, "society": FOREIGN, "movement_type": "affectation",
+    })
+    assert r.status_code in (200, 201), r.text
+
+    _mk(db, "r2p_site_a", "ops", "H2", [], sites=[sa_id])
+    hdr = _hdr(client, "r2p_site_a")
+
+    # Le paramètre society=FOREIGN ne doit rien exfiltrer de la société étrangère.
+    mv = client.get(f"/api/ops/movements?society={FOREIGN}", headers=hdr).json()
+    assert all(m["site_id"] == sa_id for m in mv), "fuite : ?society=B expose les mouvements d'une autre société"
+    sbrows = client.get(f"/api/ops/pointage/standby?presence_date={DAY}&society={FOREIGN}", headers=hdr).json()
+    assert all(r.get("site_id") == sa_id for r in sbrows), "fuite : ?society=B expose le roster d'une autre société"
+
+
 # ── ronde : restreint par SITE seul -> fail-closed au global ─────────────────
 
 def test_ronde_restreint_par_site_ne_voit_que_global(client, db, auth_headers):
