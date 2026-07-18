@@ -644,7 +644,10 @@ function sgdiServerOnlyFailure(message){
 function sgdiRequireServerWrite(){
   if(!session)throw new Error("Session SGDI absente");
   if(!sgdiAuthToken())throw new Error("Session PostgreSQL expirée : reconnectez-vous");
-  if(!sgdiPostgresReady)throw new Error("PostgreSQL non chargé : sauvegarde refusée");
+  if(!sgdiPostgresReady&&sgdiHydrated){
+    sgdiPostgresReady=true;
+  }
+  if(!sgdiPostgresReady)throw new Error("PostgreSQL en cours de chargement : sauvegarde momentanément indisponible");
   return true;
 }
 let sgdiSaveQueue=Promise.resolve();
@@ -2338,6 +2341,11 @@ function saveDB(){
     normalizeEmployeeCodesInDB();
     uiSaveState("Enregistrement...","");
     recordSaveOperation();
+    if(!sgdiHydrated){
+      uiSaveState("Chargement PostgreSQL...","error");
+      if(typeof toast==="function")toast("Patientez : les données PostgreSQL sont encore en cours de chargement.","warning");
+      return false;
+    }
     try{sgdiRequireServerWrite()}catch(e){sgdiServerOnlyFailure(e.message||String(e));uiSaveState("Sauvegarde refusée","error");if(window._sgdiSaveOverlayShown)closeSaveOverlay();return false}
     if(!sgdiBackendSave()){uiSaveState("Sauvegarde échouée","error");if(window._sgdiSaveOverlayShown)closeSaveOverlay();return false}
     uiSaveState("Enregistrement en cours...","");
