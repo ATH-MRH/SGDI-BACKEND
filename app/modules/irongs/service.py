@@ -31,7 +31,7 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
     "agents", "employees", "sites", "candidats", "candidatsReserve", "candidatsArchives",
     "contrats", "contratsPersonnel", "avenants", "conges", "incidents", "materiel",
     "demandesPersonnel", "demandesStructure", "pointages", "pointageMensuel",
-    "feuillePresence", "missions", "siteInspections", "clients", "prospects",
+    "feuillePresence", "missions", "siteInspections", "agendaEvents", "clients", "prospects",
     "opportunites", "visites", "devis", "factures", "paiements", "avances", "avoirs",
     "caisse", "stockArticles", "stockMouvements", "magasins", "fournisseurs",
     "echanges",

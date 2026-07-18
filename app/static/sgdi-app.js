@@ -208,7 +208,7 @@ function uniqueSocieteNames(names){
 function deriveSocietesFromData(source){
   const src=source||db||{};
   const names=[];
-  ["agents","candidats","sites","materiel","clients","prospects","opportunites","devis","factures","paiements","demandesPersonnel","demandesStructure","pointages","feuillePresence","opsMouvements"].forEach(key=>{
+  ["agents","candidats","sites","materiel","clients","prospects","opportunites","devis","factures","paiements","demandesPersonnel","demandesStructure","pointages","feuillePresence","opsMouvements","agendaEvents"].forEach(key=>{
     if(!Array.isArray(src[key]))return;
     src[key].forEach(item=>{if(item&&item.societe)names.push(item.societe)});
   });
@@ -2179,6 +2179,7 @@ function emptyDB(){
   return{
     users:[],agents:[],sites:[],candidats:[],incidents:[],conges:[],contrats:[],materiel:[],
     echanges:[],workflowTasks:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],opsMouvements:[],demandesPersonnel:[],demandesStructure:[],missions:[],siteInspections:[],
+    agendaEvents:[],
     devis:[],factures:[],paiements:[],avances:[],avoirs:[],caisse:[],
     prospects:[],clients:[],opportunites:[],visites:[],catalogue:[],
     stockArticles:[],stockMouvements:[],magasins:[],fournisseurs:[],
@@ -2214,7 +2215,7 @@ function sgdiAutoRepairDB(options){
       used.add(id);
     });
   };
-  [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["echanges","msg"],["workflowTasks","wft"]].forEach(([k,p])=>fixListIds(k,p));
+  [["users","usr"],["agents","ag"],["candidats","cand"],["sites","site"],["clients","cl"],["stockArticles","art"],["stockMouvements","mvt"],["magasins","mag"],["fournisseurs","four"],["demandesPersonnel","dp"],["demandesStructure","ds"],["agendaEvents","ag_ev"],["echanges","msg"],["workflowTasks","wft"]].forEach(([k,p])=>fixListIds(k,p));
   db.societesConfig={custom:uniqueSocieteNames([...DEFAULT_SOCIETES,...(db.societesConfig?.custom||[]),...deriveSocietesFromData(db)]).filter(s=>!isRemovedSociete(s)),descriptions:{...(db.societesConfig?.descriptions||{})},images:{...(db.societesConfig?.images||{})},removed:REMOVED_SOCIETES.slice(),access:{...defaultSocieteAccessPasswords(),...(db.societesConfig?.access||{})}};
   if(!db.settings||typeof db.settings!=="object")db.settings={unlockCode:"",unlockLog:[],autoRefresh:{enabled:true,intervalSeconds:20}};
   if(typeof db.settings.unlockCode!=="string")db.settings.unlockCode="";
@@ -2305,7 +2306,7 @@ function purgeRemovedSocieteData(d){
     if(d[key].length!==before)changed=true;
   };
   const stockIds=new Set((d.stockArticles||[]).filter(x=>isRemovedSociete(x&&x.societe)).map(x=>x.id));
-  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","opsMouvements","demandesPersonnel","demandesStructure","missions","siteInspections"].forEach(filterSoc);
+  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","opsMouvements","demandesPersonnel","demandesStructure","missions","siteInspections","agendaEvents"].forEach(filterSoc);
   if(Array.isArray(d.stockMouvements)){
     const before=d.stockMouvements.length;
     d.stockMouvements=d.stockMouvements.filter(x=>!isRemovedSociete(x&&x.societe)&&!stockIds.has(x&&x.articleId));
@@ -2938,7 +2939,7 @@ function sgdiSpeakStructure(){
 }
 function sgdiStructureVoiceLabel(mod){
   const adminLabel=isAdminSystemSession()?"Administration système":"Administrateur général";
-  return ({drh:"Direction R H",ops:"O P S",materiel:"Matériel",facturation:"Finances et Comptabilité",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",pointage:"Pointage",admin:adminLabel,accounting:"Comptabilité",achats:"Achats",ventes:"Ventes"}[mod]||String(mod||"structure").toUpperCase());
+  return ({drh:"Direction R H",ops:"O P S",materiel:"Matériel",facturation:"Finances et Comptabilité",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",agenda:"Agenda",pointage:"Pointage",admin:adminLabel,accounting:"Comptabilité",achats:"Achats",ventes:"Ventes"}[mod]||String(mod||"structure").toUpperCase());
 }
 function sgdiSpeakStructureChosen(mod,label){
   const structure=label||sgdiStructureVoiceLabel(mod);
@@ -3274,7 +3275,7 @@ async function validateAdminSystemPassword(form){
   }
 }
 function defaultStructureAccessPasswords(){return{}}
-function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE",secretariat:"SECRETARIAT GÉNÉRAL"}[mod]||String(mod||"").toUpperCase())}
+function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"AGENDA"}[mod]||String(mod||"").toUpperCase())}
 function accessSecuritySettings(){
   if(!db.settings)db.settings={};
   const cfg=db.settings.accessSecurity&&typeof db.settings.accessSecurity==="object"?db.settings.accessSecurity:{};
@@ -3476,7 +3477,7 @@ function currentAccessLevelCode(){const u=currentUserRecord();return String(sess
 function isCadreCat01(){return currentAccessLevelCode().toUpperCase().replace(/[\s-]+/g,"_")==="CADRE_CAT_01"}
 function structureSocieteFilterKey(mod){
   const m=mod||session?.transverse||"";
-  return({drh:"drhSociete",ops:"opsSociete",materiel:"mtSociete",pointage:"pointageSociete",facturation:"facturationSociete",commercial:"commercialSociete",secretariat:"secretariatSociete",admin:"adminSocieteActive"}[m])||"moduleSociete";
+  return({drh:"drhSociete",ops:"opsSociete",materiel:"mtSociete",pointage:"pointageSociete",facturation:"facturationSociete",commercial:"commercialSociete",secretariat:"secretariatSociete",agenda:"agendaSociete",admin:"adminSocieteActive"}[m])||"moduleSociete";
 }
 function currentStructureSocieteFilter(){
   if(session?.societe)return session.societe;
@@ -3492,7 +3493,7 @@ function storeCurrentStructureSocieteFilter(s){
   try{
     const v=session?.societe||s||"";
     sessionStorage.setItem(structureSocieteFilterKey(),v);
-    ["drhSociete","opsSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","facturationSociete"].forEach(k=>sessionStorage.setItem(k,v));
+    ["drhSociete","opsSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","agendaSociete","facturationSociete"].forEach(k=>sessionStorage.setItem(k,v));
   }catch(e){}
 }
 function setCurrentStructureSocieteFilter(s){
@@ -3579,12 +3580,13 @@ function incidentMatchesSociete(incident,soc){
   return false;
 }
 function defaultAccessMap(){
-  const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],"SECRETARIAT GÉNÉRAL":["rh","dispatch","admin"],"POINTAGE":["rh","dispatch","admin"],"PORTAIL RH":["rh","dispatch","agent","admin"],"ADMINISTRATEUR GÉNÉRAL":["admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],badge:["rh","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],secretariat:["rh","dispatch","admin"],drh:["rh","admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],portail:["rh","dispatch","agent","admin"],parametres:["admin"],admin:["admin"]};
+  const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],"SECRETARIAT GÉNÉRAL":["rh","dispatch","admin"],"AGENDA":["rh","dispatch","agent","admin"],"POINTAGE":["rh","dispatch","admin"],"PORTAIL RH":["rh","dispatch","agent","admin"],"ADMINISTRATEUR GÉNÉRAL":["admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],badge:["rh","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],secretariat:["rh","dispatch","admin"],agenda:["rh","dispatch","agent","admin"],drh:["rh","admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],portail:["rh","dispatch","agent","admin"],parametres:["admin"],admin:["admin"]};
   map["ADMINISTRATION SYSTEME"]=map["ADMINISTRATEUR GÉNÉRAL"];
   ["materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement"].forEach(k=>map[k]=map.materiel);
   ["facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation"].forEach(k=>map[k]=map.facturation);
   ["commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/devis","commercial/catalogue","commercial/tarifs","commercial/stats"].forEach(k=>map[k]=map.commercial);
   ["secretariat/courriers","secretariat/notes","secretariat/archives"].forEach(k=>map[k]=map.secretariat);
+  ["agenda/dashboard","agenda/liste","agenda/semaine","agenda/rappels"].forEach(k=>map[k]=map.agenda);
   ["pointage/recap","pointage/societe","pointage/stats","pointage/legende"].forEach(k=>map[k]=map.pointage);
   ["ops/missions","ops/mouvements","ops/supervision"].forEach(k=>map[k]=map.ops);
   Object.values(map).forEach(roles=>{if(roles.includes("rh")&&!roles.includes("ops"))roles.push("ops")});
@@ -3835,7 +3837,7 @@ function renderGlobalDashboard(view){
 function pickAllSocietes(){
   if(!isAdminGeneralSession()){toast("Accès réservé à l'Administrateur Général","error");return}
   session.societe=null;session.transverse="global";saveSession(session);
-  try{["drhSociete","opsSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","facturationSociete"].forEach(k=>sessionStorage.removeItem(k))}catch(e){}
+  try{["drhSociete","opsSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","agendaSociete","facturationSociete"].forEach(k=>sessionStorage.removeItem(k))}catch(e){}
   location.hash="#/global-dashboard";route();
 }
 function confirmPickSociete(s,p){selectSocieteDirect(s)}
@@ -3844,14 +3846,15 @@ function confirmPickSocieteFilter(s,p){if(session?.societe){storeCurrentStructur
 function changeSociete(){if(!confirm("Changer de société ?"))return;session.societe=null;session.transverse=null;saveSession(session);try{sessionStorage.removeItem("dashSociete");sessionStorage.removeItem("fpSociete");sessionStorage.removeItem("mtSociete")}catch(e){}location.hash="#/select-societe";route()}
 function sgdiStructureDefaultRoute(mod){
   if(mod==="facmod")return "facturation/dashboard";
+  if(mod==="agenda")return "agenda/dashboard";
   return mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage":(mod==="ops"?"ops/dashboard":(mod==="portail"?"portail":mod+"/dashboard")));
 }
-function enterTransverseModule(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","admin","pointage","ops","paie","portail"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdminGeneralSession()){toast("Accès réservé au compte Administration système","error");return}}if(["facturation","commercial","secretariat","drh","materiel","ops","pointage","paie","portail"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
+function enterTransverseModule(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","admin","pointage","ops","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdminGeneralSession()){toast("Accès réservé au compte Administration système","error");return}}if(["facturation","commercial","secretariat","drh","materiel","ops","pointage","paie","portail","agenda"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
 function enterTransverseModuleDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
-function enterSocieteStructure(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","paie","portail"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
+function enterSocieteStructure(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
 function enterSocieteStructureDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
 function switchWorkspaceModule(mod){
-  const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","pointage","paie","portail"];
+  const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","pointage","paie","portail","agenda"];
   if(!ok.includes(mod))return;
   if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}
   if(session?.societe){session.transverse=mod}else{session.transverse=mod;session.societe=null}
@@ -3890,6 +3893,7 @@ function societePortalModules(){
     {key:"commercial",label:"COMMERCIAL",route:"commercial/dashboard"},
     {key:"pointage",label:"POINTAGE",route:"pointage/dashboard"},
     {key:"secretariat",label:"SECRETARIAT",route:"secretariat/dashboard"},
+    {key:"agenda",label:"AGENDA",route:"agenda/dashboard"},
     {key:"facturation",label:"FINANCES/COMPTABILITE",route:"facturation/dashboard"},
     {key:"facmod",label:"FACTURATION",route:"facturation/dashboard"},
     {key:"materiel",label:"ACHATS",route:"achats/dashboard"},
@@ -3994,6 +3998,18 @@ function sgdiModuleHostConfigs(){
         {label:"AVANCES",route:"facturation/avances"},
         {label:"AVOIRS",route:"facturation/avoirs"},
         {label:"CAISSE",route:"facturation/caisse"}
+      ]
+    },
+    agenda:{
+      key:"agenda",
+      title:"Portail Agenda",
+      context:"Planification, rappels et suivi quotidien",
+      homeRoute:"agenda/dashboard",
+      sections:[
+        {label:"TABLEAU DE BORD",route:"agenda/dashboard"},
+        {label:"LISTE",route:"agenda/liste"},
+        {label:"SEMAINE",route:"agenda/semaine"},
+        {label:"RAPPELS",route:"agenda/rappels"}
       ]
     },
     admin:{
@@ -4185,7 +4201,8 @@ function structureTopbarItems(){
     {key:"materiel",label:"MATÉRIEL",roles:["rh","dispatch","admin"]},
     {key:"facturation",label:"FACTURATION",roles:["rh","admin"]},
     {key:"commercial",label:"COMMERCIAL",roles:["rh","admin"]},
-    {key:"secretariat",label:"SECRETARIAT",roles:["rh","dispatch","admin"]}
+    {key:"secretariat",label:"SECRETARIAT",roles:["rh","dispatch","admin"]},
+    {key:"agenda",label:"AGENDA",roles:["rh","dispatch","agent","admin"]}
   ];
   const active=normalizeStructureKey(session?.transverse||"");
   if(active){
@@ -4206,6 +4223,7 @@ const MODULE_META={
   commercial: {icon:"🤝",label:"COMMERCIAL",color:"#7c3aed"},
   pointage:{icon:"🕒",label:"POINTAGE",color:"#0ea5e9"},
   secretariat:{icon:"✉️", label:"SECRÉTARIAT",color:"#475569"},
+  agenda:{icon:"📅", label:"AGENDA",color:"#2563eb"},
 };
 function topbarStructureIcon(key){
   return (MODULE_META[key]?.icon)||"•";
@@ -4669,6 +4687,21 @@ function moduleCountersRibbonHTML(){
       {label:"EN COURS",value:counterNumericValue(sec.courriers_open),color:"#f59e0b",route:"secretariat/courriers",pctBase:Math.max(1,counterNumericValue(sec.courriers_total))},
       {label:"NOTES INTERNES",value:counterNumericValue(sec.notes_total),color:"#0f766e",route:"secretariat/notes"},
       {label:"ARCHIVES",value:counterNumericValue(sec.archives_total),color:"#64748b",route:"secretariat/archives",pctBase:Math.max(1,counterNumericValue(sec.courriers_total))}
+    ]);
+  }
+  if(module==="agenda"){
+    const events=agendaEvents();
+    const td=today();
+    const todayRows=events.filter(e=>e.date===td&&!agendaEventIsDone(e));
+    const upcoming=events.filter(e=>e.date>td&&!agendaEventIsDone(e));
+    const overdue=events.filter(e=>e.date<td&&!agendaEventIsDone(e));
+    const done=events.filter(agendaEventIsDone);
+    const total=Math.max(1,events.length);
+    return moduleCountersRibbon([
+      {label:"AUJOURD'HUI",value:todayRows.length,color:"#2563eb",route:"agenda/dashboard",pctBase:total},
+      {label:"À VENIR",value:upcoming.length,color:"#0891b2",route:"agenda/liste",pctBase:total},
+      {label:"EN RETARD",value:overdue.length,color:"#dc2626",route:"agenda/rappels",pctBase:total},
+      {label:"TERMINÉS",value:done.length,color:"#16a34a",route:"agenda/liste",pctBase:total}
     ]);
   }
   if(module==="pointage"){
@@ -5171,13 +5204,14 @@ function renderInternal(){
       facmod:["facturation","incidents","demandes_structure","documents"],
       commercial:["commercial","incidents","demandes_structure","documents"],
       secretariat:["secretariat","incidents","demandes_structure","documents"],
+      agenda:["agenda","incidents","demandes_structure","documents"],
       materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure","documents"],
-      admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard"],
+      admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","agenda","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard"],
       pointage:["pointage","incidents","demandes_structure","documents"],
       paie:["paie","effectif","agents","demandes_structure","documents"],
       ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents"],
       drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail","documents"],
-      global:["global-dashboard","effectif","agents","contrats","fiches","sites","pointage","paie","recrutement","reserve","candidats_archives","dossiers","incidents","conges","demandes_personnel","demandes_structure","rapports","ops","drh","admin","facturation","commercial","secretariat","materiel","documents"]
+      global:["global-dashboard","effectif","agents","contrats","fiches","sites","pointage","paie","recrutement","reserve","candidats_archives","dossiers","incidents","conges","demandes_personnel","demandes_structure","rapports","ops","drh","admin","facturation","commercial","secretariat","agenda","materiel","documents"]
     };
     const allowed=allowedByMod[session.transverse]||[session.transverse];
     if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":session.transverse==="pointage"?"pointage":session.transverse==="ops"?"ops/dashboard":session.transverse==="global"?"global-dashboard":session.transverse+"/dashboard";location.hash="#/"+target;return}
@@ -5185,9 +5219,9 @@ function renderInternal(){
   const app=document.getElementById("app");
   const socColors={};
   const isTrans=!!session.transverse;
-  const transLabels={facturation:"FINANCES & COMPTABILITÉ",facmod:"FACTURATION",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL",pointage:"MODULE POINTAGE",ops:"DIRECTION OPS",secretariat:"SECRETARIAT GÉNÉRAL",paie:"MODULE PAIE",global:"🌐 SITUATION GÉNÉRALE"};
-  const transColors={facturation:"#043970",facmod:"#0f766e",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af",secretariat:"#0f766e",paie:"#0f766e",global:"#0f172a"};
-  const transDescs={facturation:"Toutes sociétés confondues",facmod:"Facturation clients · Toutes sociétés",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"OPS · Pointage · Fiches · Sites",secretariat:"Courriers · Notes · Archives · Suivi administratif",paie:"Paie · Bulletins · Déclarations · Toutes sociétés",global:"Toutes sociétés confondues — Vue consolidée groupe"};
+  const transLabels={facturation:"FINANCES & COMPTABILITÉ",facmod:"FACTURATION",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL",pointage:"MODULE POINTAGE",ops:"DIRECTION OPS",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"MODULE AGENDA",paie:"MODULE PAIE",global:"🌐 SITUATION GÉNÉRALE"};
+  const transColors={facturation:"#043970",facmod:"#0f766e",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af",secretariat:"#0f766e",agenda:"#2563eb",paie:"#0f766e",global:"#0f172a"};
+  const transDescs={facturation:"Toutes sociétés confondues",facmod:"Facturation clients · Toutes sociétés",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"OPS · Pointage · Fiches · Sites",secretariat:"Courriers · Notes · Archives · Suivi administratif",agenda:"Planification · Rappels · Suivi quotidien",paie:"Paie · Bulletins · Déclarations · Toutes sociétés",global:"Toutes sociétés confondues — Vue consolidée groupe"};
   const socColor=isTrans?transColors[session.transverse]:(socColors[session.societe]||"#64748b");
   const headerTitle=isTrans?transLabels[session.transverse]:session.societe;
   const headerSub=isTrans?(session.societe?`Société active : ${session.societe}`:transDescs[session.transverse]):"Société active";
@@ -5598,6 +5632,9 @@ function adminSidebarOrganizerDefaults(){
     secretariat:[
       ["TABLEAU DE BORD","secretariat/dashboard"],["COURRIERS","secretariat/courriers"],["NOTES INTERNES","secretariat/notes"],["ARCHIVES","secretariat/archives"],["MAIN COURANTE","incidents/dashboard"]
     ],
+    agenda:[
+      ["TABLEAU DE BORD","agenda/dashboard"],["LISTE","agenda/liste"],["SEMAINE","agenda/semaine"],["RAPPELS","agenda/rappels"]
+    ],
     pointage:[
       ["TABLEAU DE BORD POINTAGE","pointage/dashboard"],["RÉCAP PAR AGENT","pointage/recap"],["RÉCAP PAR SOCIÉTÉ","pointage/societe"],["STATISTIQUES","pointage/stats"],["LÉGENDE & CODES","pointage/legende"],["ARCHIVES POINTAGE","pointage/archives"]
     ],
@@ -5609,7 +5646,7 @@ function adminSidebarOrganizerDefaults(){
     ]
   };
 }
-function adminSidebarModuleLabel(key){return {drh:"DRH",ops:"OPS",materiel:"Matériel",facturation:"Finances",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",pointage:"Pointage",admin:"Administration"}[key]||String(key||"").toUpperCase()}
+function adminSidebarModuleLabel(key){return {drh:"DRH",ops:"OPS",materiel:"Matériel",facturation:"Finances",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",agenda:"Agenda",pointage:"Pointage",admin:"Administration"}[key]||String(key||"").toUpperCase()}
 function adminCounterOrganizerDefaults(){
   return {
     drh:["EFF. OPÉRATIONNEL","SANS DOTATION","SANS AFFECTATION","EFF. CONGÉ","EFF. MALADIE","EFF. ABSENT","EFF. SUSPENDU","EFF. BLACKLISTÉ","CANDIDAT RÉSERVE"],
@@ -5620,6 +5657,7 @@ function adminCounterOrganizerDefaults(){
     facturation:["DEVIS","FACTURES","PAIEMENTS","FACTURES ÉCHUES","AVANCES","CAISSE"],
     commercial:["PROSPECTS","CLIENTS ACTIFS","OPPORTUNITÉS","VISITES","CONTRATS 30J","TARIFS"],
     secretariat:["COURRIERS","EN COURS","NOTES INTERNES","ARCHIVES"],
+    agenda:["AUJOURD'HUI","À VENIR","EN RETARD","TERMINÉS"],
     admin:["UTILISATEURS","SOCIÉTÉS","DROITS","ALERTES","MESSAGES","JOURNAL"]
   };
 }
@@ -5668,6 +5706,7 @@ function renderSidebar(){
     if(r.includes("site")||r.includes("location"))return svg(`<path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11Z"></path><circle cx="12" cy="10" r="2"></circle>`);
     if(r.includes("incident")||l.includes("main courante"))return svg(`<path d="M12 4 21 20H3z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path>`);
     if(r.includes("conges"))return svg(`<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path>`);
+    if(r.includes("agenda"))return svg(`<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path>`);
     if(r.includes("paie")||r.includes("facturation"))return svg(`<path d="M12 3v18"></path><path d="M16.5 7.5c-.8-1-2.2-1.6-4-1.6-2.3 0-4 .9-4 2.6 0 4 8 1.7 8 5.8 0 1.8-1.8 3-4.3 3-2 0-3.7-.7-4.7-1.9"></path>`);
     if(r.includes("rapport")||r.includes("stat"))return svg(`<path d="M5 19V5"></path><path d="M5 19h15"></path><path d="M9 16v-5"></path><path d="M13 16V8"></path><path d="M17 16v-3"></path>`);
     if(r.includes("materiel")||r.includes("stock"))return svg(`<path d="M4 8.5 12 4l8 4.5-8 4.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M12 13v7"></path>`);
@@ -5809,6 +5848,14 @@ function renderSidebar(){
         {label:"ARCHIVES",route:"secretariat/archives"},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
       ],
+      agenda:[
+        {label:"TABLEAU DE BORD",route:"agenda/dashboard"},
+        {label:"LISTE",route:"agenda/liste"},
+        {label:"SEMAINE",route:"agenda/semaine"},
+        {label:"RAPPELS",route:"agenda/rappels",count:(db.agendaEvents||[]).filter(agendaEventIsReminderDue).length||null},
+        {label:"DEMANDES STRUCTURE",route:"demandes_structure/dashboard",aliases:["demandes_structure"]},
+        {label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"]}
+      ],
       commercial:[
         {label:"TABLEAU DE BORD",route:"commercial/dashboard"},
         {label:"CALENDRIER",route:"commercial/calendrier"},
@@ -5849,6 +5896,7 @@ function renderSidebar(){
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"PORTAIL RH",route:"portail",aliases:["portail"]},
         {label:"SECRÉTARIAT",route:"secretariat/dashboard",aliases:["secretariat"]},
+        {label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"]},
         {label:"MODULE PAIE",route:"paie/dashboard",aliases:["paie"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"]}
       ],
@@ -6966,6 +7014,7 @@ function renderView(){
       case"pointage":renderPointage(view,sub||"dashboard",arg);break;
       case"ops":renderOPS(view,sub||"dashboard",arg);break;
       case"secretariat":renderSecretariat(view,sub||"dashboard",arg);break;
+      case"agenda":renderAgenda(view,sub||"dashboard",arg);break;
       case"paie":renderPaie(view,sub||"dashboard",arg);break;
       case"rapports":renderRapports(view);break;
       case"parametres":if(sub==="log")renderUnlockLog(view);else renderParametres(view);break;
@@ -7048,7 +7097,8 @@ function dashboardModuleShortcuts(){
     {key:"materiel",title:"MATERIEL / EQUIPEMENT",desc:"Articles, magasins, fournisseurs, dotations, reversements",metric:()=>`${(db.stockArticles||[]).length} articles`,roles:["rh","dispatch","admin"]},
     {key:"facturation",title:"FINANCES / COMPTABILITE",desc:"Factures, paiements, caisse, avances et situation",metric:()=>`${(db.factures||[]).length} factures`,roles:["rh","admin"]},
     {key:"commercial",title:"COMMERCIAL",desc:"Clients, contrats, prestations et opportunités",metric:()=>`${(db.clients||[]).length} clients`,roles:["rh","admin"]},
-    {key:"secretariat",title:"SECRETARIAT GÉNÉRAL",desc:"Courriers, notes internes, archives et suivi administratif",metric:()=>`${(db.secretariatCourriers||[]).length} courriers`,roles:["rh","dispatch","admin"]}
+    {key:"secretariat",title:"SECRETARIAT GÉNÉRAL",desc:"Courriers, notes internes, archives et suivi administratif",metric:()=>`${(db.secretariatCourriers||[]).length} courriers`,roles:["rh","dispatch","admin"]},
+    {key:"agenda",title:"AGENDA",desc:"Planning, rappels et échéances SGDI",metric:()=>`${(db.agendaEvents||[]).filter(e=>!agendaEventIsDone(e)).length} à suivre`,roles:["rh","dispatch","agent","admin"]}
   ];
   const role=session?.role||"agent";
   const visible=modules.filter(m=>m.roles.includes(role));
@@ -25973,6 +26023,158 @@ function renderFactStructures(view){
 function addStructure(nom){if(!nom)return;db.structures=db.structures||[];if(db.structures.includes(nom)){toast("Existe déjà","error");return}db.structures.push(nom);saveDB();renderView();toast("Structure ajoutée","success")}
 function deleteStructure(nom){if(!confirm("Supprimer ?"))return;db.structures=(db.structures||[]).filter(s=>s!==nom);saveDB();renderView()}
 
+/* ============ AGENDA MODULE ============ */
+function agendaEvents(){
+  if(!Array.isArray(db.agendaEvents))db.agendaEvents=[];
+  const soc=currentStructureSocieteFilter()||session?.societe||"";
+  return db.agendaEvents.filter(e=>!soc||!e.societe||normalizeSocieteName(e.societe)===normalizeSocieteName(soc));
+}
+function agendaEventIsDone(e){return String(e?.statut||"planifie")==="termine"}
+function agendaEventIsReminderDue(e){
+  if(!e||agendaEventIsDone(e))return false;
+  const d=String(e.date||"");
+  if(!d)return false;
+  const td=today();
+  if(d<td)return true;
+  if(d!==td)return false;
+  const now=new Date();
+  const cur=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  return !e.heureDebut||String(e.heureDebut)<=cur;
+}
+function agendaEventTypeMeta(type){
+  return ({
+    reunion:{label:"Réunion",color:"#2563eb",bg:"#eff6ff"},
+    rappel:{label:"Rappel",color:"#d97706",bg:"#fffbeb"},
+    echeance:{label:"Échéance",color:"#dc2626",bg:"#fef2f2"},
+    mission:{label:"Mission",color:"#0891b2",bg:"#ecfeff"},
+    personnel:{label:"Personnel",color:"#7c3aed",bg:"#f5f3ff"}
+  })[type]||{label:"Événement",color:"#475569",bg:"#f8fafc"};
+}
+function agendaDateOffset(base,days){
+  const d=new Date((base||today())+"T00:00:00");
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+function agendaWeekStart(dateStr){
+  const d=new Date((dateStr||today())+"T00:00:00");
+  const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day);
+  return d.toISOString().slice(0,10);
+}
+function agendaStatusPill(e){
+  const st=String(e.statut||"planifie");
+  const cls=st==="termine"?"pill-green":st==="annule"?"pill-red":agendaEventIsReminderDue(e)?"pill-amber":"pill-blue";
+  const label=st==="termine"?"Terminé":st==="annule"?"Annulé":agendaEventIsReminderDue(e)?"À traiter":"Planifié";
+  return `<span class="pill ${cls}">${label}</span>`;
+}
+function agendaScopeLabel(){return currentStructureSocieteFilter()||session?.societe||"Toutes sociétés"}
+function agendaEventCard(e,compact){
+  const meta=agendaEventTypeMeta(e.type);
+  const who=e.responsable||e.createdBy||"";
+  return `<div class="agenda-event-card ${agendaEventIsDone(e)?"is-done":""}" style="border-left-color:${meta.color}" data-searchable>
+    <div class="agenda-event-head">
+      <div>
+        <div class="agenda-event-title">${escapeHTML(e.titre||"Sans titre")}</div>
+        <div class="agenda-event-meta">${formatDate(e.date)}${e.heureDebut?` · ${escapeHTML(e.heureDebut)}`:""}${e.heureFin?`-${escapeHTML(e.heureFin)}`:""}${who?` · ${escapeHTML(who)}`:""}</div>
+      </div>
+      <div class="agenda-event-actions">${agendaStatusPill(e)}<button type="button" class="btn btn-secondary text-xs" onclick="openAgendaEventModal('${escapeHTML(e.id)}')">Modifier</button></div>
+    </div>
+    ${compact?"":`<div class="agenda-event-body">${escapeHTML(e.description||"")}</div>`}
+    <div class="agenda-event-foot"><span style="background:${meta.bg};color:${meta.color}">${escapeHTML(meta.label)}</span>${e.lieu?`<span>${escapeHTML(e.lieu)}</span>`:""}${e.societe?`<span>${escapeHTML(e.societe)}</span>`:""}</div>
+  </div>`;
+}
+function renderAgenda(view,sub,arg){
+  if(!canAccess("agenda")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
+  if(!Array.isArray(db.agendaEvents))db.agendaEvents=[];
+  const mode=sub||"dashboard";
+  const events=agendaEvents().sort((a,b)=>String(a.date||"").localeCompare(String(b.date||""))||String(a.heureDebut||"").localeCompare(String(b.heureDebut||"")));
+  const td=today();
+  const todayRows=events.filter(e=>e.date===td&&!agendaEventIsDone(e));
+  const upcoming=events.filter(e=>e.date>td&&!agendaEventIsDone(e));
+  const overdue=events.filter(e=>e.date<td&&!agendaEventIsDone(e));
+  const done=events.filter(agendaEventIsDone);
+  const kpi=(label,value,subText,color)=>`<div class="agenda-kpi"><span>${escapeHTML(label)}</span><strong style="color:${color}">${value}</strong><small>${escapeHTML(subText||"")}</small></div>`;
+  const header=`<div class="agenda-page">
+    <div class="agenda-head">
+      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Module autonome</div><h1>Agenda SGDI</h1><p>Planification, rappels et suivi quotidien · ${escapeHTML(agendaScopeLabel())}</p></div>
+      <div class="agenda-head-actions"><button type="button" class="btn btn-secondary" onclick="navigate('agenda/semaine')">Vue semaine</button><button type="button" class="btn btn-primary" onclick="openAgendaEventModal()">+ Nouvel événement</button></div>
+    </div>
+    <div class="agenda-tabs">
+      ${["dashboard","liste","semaine","rappels"].map(k=>`<button type="button" class="${mode===k?"active":""}" onclick="navigate('agenda/${k}')">${k==="dashboard"?"Tableau de bord":k==="liste"?"Liste":k==="semaine"?"Semaine":"Rappels"}</button>`).join("")}
+    </div>`;
+  if(mode==="semaine"){
+    const start=agendaWeekStart(arg||td);
+    const days=Array.from({length:7},(_,i)=>agendaDateOffset(start,i));
+    view.innerHTML=header+`<div class="agenda-week-nav"><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,-7)}')">← Semaine précédente</button><strong>${formatDate(start)} - ${formatDate(days[6])}</strong><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,7)}')">Semaine suivante →</button></div>
+      <div class="agenda-week-grid">${days.map(d=>{const rows=events.filter(e=>e.date===d);return`<div class="agenda-day ${d===td?"today":""}"><div class="agenda-day-title">${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</div>${rows.length?rows.map(e=>agendaEventCard(e,true)).join(""):`<div class="agenda-empty-mini">Libre</div>`}</div>`}).join("")}</div></div>`;
+    return;
+  }
+  if(mode==="rappels"){
+    const reminders=events.filter(agendaEventIsReminderDue);
+    view.innerHTML=header+`<div class="agenda-grid-main"><section class="agenda-panel"><h2>Rappels à traiter</h2>${reminders.length?reminders.map(e=>agendaEventCard(e)).join(""):`<div class="agenda-empty">Aucun rappel en attente.</div>`}</section></div></div>`;
+    return;
+  }
+  if(mode==="liste"){
+    const filter=(sessionStorage.getItem("agendaFilter")||"tous");
+    const filtered=filter==="aujourdhui"?todayRows:filter==="retard"?overdue:filter==="termine"?done:events;
+    view.innerHTML=header+`<div class="agenda-list-toolbar"><select class="select" onchange="sessionStorage.setItem('agendaFilter',this.value);renderView()"><option value="tous" ${filter==="tous"?"selected":""}>Tous les événements</option><option value="aujourdhui" ${filter==="aujourdhui"?"selected":""}>Aujourd'hui</option><option value="retard" ${filter==="retard"?"selected":""}>En retard</option><option value="termine" ${filter==="termine"?"selected":""}>Terminés</option></select><input class="input" placeholder="Rechercher..." oninput="filterTable(this.value)"></div><section class="agenda-panel">${filtered.length?filtered.map(e=>agendaEventCard(e)).join(""):`<div class="agenda-empty">Aucun événement.</div>`}</section></div>`;
+    return;
+  }
+  view.innerHTML=header+`<div class="agenda-kpis">${kpi("Aujourd'hui",todayRows.length,"Événement(s) à suivre","#2563eb")}${kpi("À venir",upcoming.length,"Planifiés après aujourd'hui","#0891b2")}${kpi("En retard",overdue.length,"Non terminés","#dc2626")}${kpi("Terminés",done.length,"Historique clôturé","#16a34a")}</div>
+    <div class="agenda-grid-main"><section class="agenda-panel"><h2>Aujourd'hui</h2>${todayRows.length?todayRows.map(e=>agendaEventCard(e)).join(""):`<div class="agenda-empty">Aucun événement aujourd'hui.</div>`}</section><section class="agenda-panel"><h2>Prochains événements</h2>${upcoming.slice(0,8).length?upcoming.slice(0,8).map(e=>agendaEventCard(e,true)).join(""):`<div class="agenda-empty">Aucun événement à venir.</div>`}</section></div>
+    ${overdue.length?`<section class="agenda-panel agenda-overdue"><h2>En retard</h2>${overdue.map(e=>agendaEventCard(e,true)).join("")}</section>`:""}</div>`;
+}
+function openAgendaEventModal(id){
+  const e=(db.agendaEvents||[]).find(x=>String(x.id)===String(id))||null;
+  const soc=currentStructureSocieteFilter()||session?.societe||e?.societe||"";
+  const users=(db.users||[]).map(u=>u.nom||u.username).filter(Boolean);
+  openModal(`<h3 class="font-bold text-lg mb-4">${e?"Modifier événement":"Nouvel événement"}</h3>
+    <form onsubmit="event.preventDefault();saveAgendaEvent('${escapeHTML(e?.id||"")}',this)">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="md:col-span-2"><label class="label">Titre *</label><input class="input" name="titre" required value="${escapeHTML(e?.titre||"")}"></div>
+        <div><label class="label">Date *</label><input class="input" type="date" name="date" required value="${escapeHTML(e?.date||today())}"></div>
+        <div><label class="label">Type</label><select class="select" name="type">${["reunion","rappel","echeance","mission","personnel"].map(t=>`<option value="${t}" ${e?.type===t?"selected":""}>${escapeHTML(agendaEventTypeMeta(t).label)}</option>`).join("")}</select></div>
+        <div><label class="label">Heure début</label><input class="input" type="time" name="heureDebut" value="${escapeHTML(e?.heureDebut||"")}"></div>
+        <div><label class="label">Heure fin</label><input class="input" type="time" name="heureFin" value="${escapeHTML(e?.heureFin||"")}"></div>
+        <div><label class="label">Responsable</label><input class="input" name="responsable" list="agenda-users" value="${escapeHTML(e?.responsable||session?.nom||"")}"><datalist id="agenda-users">${users.map(u=>`<option value="${escapeHTML(u)}">`).join("")}</datalist></div>
+        <div><label class="label">Lieu</label><input class="input" name="lieu" value="${escapeHTML(e?.lieu||"")}"></div>
+        <div><label class="label">Société</label><input class="input" name="societe" value="${escapeHTML(soc)}" ${session?.societe?"readonly":""}></div>
+        <div><label class="label">Statut</label><select class="select" name="statut">${["planifie","termine","annule"].map(s=>`<option value="${s}" ${String(e?.statut||"planifie")===s?"selected":""}>${s==="planifie"?"Planifié":s==="termine"?"Terminé":"Annulé"}</option>`).join("")}</select></div>
+        <div class="md:col-span-2"><label class="label">Description</label><textarea class="input" name="description" rows="4">${escapeHTML(e?.description||"")}</textarea></div>
+      </div>
+      <div class="flex justify-between gap-2 mt-4 flex-wrap">
+        <div>${e?`<button type="button" class="btn btn-danger" onclick="deleteAgendaEvent('${escapeHTML(e.id)}')">Supprimer</button>`:""}</div>
+        <div class="flex gap-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div>
+      </div>
+    </form>`);
+}
+function saveAgendaEvent(id,form){
+  if(!Array.isArray(db.agendaEvents))db.agendaEvents=[];
+  const fd=new FormData(form);
+  let e=id?(db.agendaEvents||[]).find(x=>String(x.id)===String(id)):null;
+  if(!e){e={id:uid("ag_ev"),createdAt:new Date().toISOString(),createdBy:session?.username||""};db.agendaEvents.unshift(e)}
+  Object.assign(e,{
+    titre:String(fd.get("titre")||"").trim(),
+    date:fd.get("date")||today(),
+    type:fd.get("type")||"reunion",
+    heureDebut:fd.get("heureDebut")||"",
+    heureFin:fd.get("heureFin")||"",
+    responsable:String(fd.get("responsable")||"").trim(),
+    lieu:String(fd.get("lieu")||"").trim(),
+    societe:String(fd.get("societe")||"").trim(),
+    statut:fd.get("statut")||"planifie",
+    description:String(fd.get("description")||"").trim(),
+    updatedAt:new Date().toISOString(),
+    updatedBy:session?.username||""
+  });
+  saveDB();closeModal();toast("Événement agenda enregistré","success");renderView();
+}
+function deleteAgendaEvent(id){
+  if(!confirm("Supprimer cet événement agenda ?"))return;
+  db.agendaEvents=(db.agendaEvents||[]).filter(e=>String(e.id)!==String(id));
+  saveDB();closeModal();toast("Événement supprimé","success");renderView();
+}
+
 /* ============ COMMERCIAL MODULE ============ */
 function commTabs(active){return ""}
 function statutProspectPill(s){return{"nouveau":"pill-blue","contacte":"pill-indigo","interesse":"pill-amber","rdv_planifie":"pill-amber","rdv_realise":"pill-amber","converti":"pill-green","perdu":"pill-red"}[s]||"pill-gray"}
@@ -29584,13 +29786,13 @@ function renderDRHStatsAffectation(view){
 
 /* ============ ADMIN MODULE (transverse, admin only) ============ */
 const ADMIN_MODULES=[
-  "DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL",
+  "DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","AGENDA","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL",
   "dashboard","dossiers","recrutement","reserve","candidats_archives","drh/social","demandes_personnel","demandes_structure",
   "contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports",
   "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement",
   "facturation","facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
   "commercial","commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats",
-  "secretariat","secretariat/courriers","secretariat/notes","secretariat/archives",
+  "secretariat","secretariat/courriers","secretariat/notes","secretariat/archives","agenda","agenda/liste","agenda/semaine","agenda/rappels",
   "pointage","pointage/recap","pointage/societe","pointage/stats","pointage/legende",
   "ops","ops/missions","ops/mouvements","ops/supervision","ops/qr","portail","parametres","admin"
 ];
@@ -29605,6 +29807,7 @@ const ADMIN_PROFILE_MODULES=[
   {key:"paie",label:"Paie"},
   {key:"commercial",label:"Commercial"},
   {key:"secretariat",label:"Secrétariat général"},
+  {key:"agenda",label:"Agenda"},
   {key:"portail",label:"Portail RH"},
   {key:"admin",label:"Administration système"}
 ];
@@ -29639,18 +29842,20 @@ function adminModuleHostKey(key){
   if(lower.startsWith("facturation/"))return"facturation";
   if(lower.startsWith("commercial/"))return"commercial";
   if(lower.startsWith("secretariat/"))return"secretariat";
+  if(lower.startsWith("agenda/"))return"agenda";
   return lower;
 }
-function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
+function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","AGENDA":"agenda/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives",agenda:"agenda/dashboard","agenda/liste":"agenda/liste","agenda/semaine":"agenda/semaine","agenda/rappels":"agenda/rappels","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
 function adminAccessModuleLabel(module){
   const labels={
-    "DRH":"DRH","OPS":"OPS","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
+    "DRH":"DRH","OPS":"OPS","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","AGENDA":"Agenda","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
     dashboard:"Tableau de bord",dossiers:"Dossiers",recrutement:"Recrutement",reserve:"Réserve",candidats_archives:"Candidats archivés","drh/social":"Social DRH",demandes_personnel:"Demandes personnel",demandes_structure:"Demandes structure",
     contrats:"Contrats",a_contractualiser:"À contractualiser",effectif:"Effectifs",agents:"Agents",fiches:"Fiches de position",badge:"Badges",sites:"Sites",incidents:"Incidents",conges:"Congés",paie:"Paie",rapports:"Rapports",
     materiel:"Tableau de bord matériel","materiel/articles":"Articles","materiel/magasins":"Magasins","materiel/fournisseurs":"Fournisseurs","materiel/alertes":"Alertes stock","materiel/dotation":"Dotation employés","materiel/sites-dotation":"Dotation sites","materiel/reversement":"Reversement",
     facturation:"Tableau de bord finances","facturation/devis":"Devis","facturation/factures":"Factures","facturation/paiements":"Paiements","facturation/avances":"Avances","facturation/avoirs":"Avoirs","facturation/caisse":"Caisse","facturation/situation":"Situation client",
     commercial:"Tableau de bord commercial","commercial/prospects":"Prospects","commercial/clients":"Clients","commercial/opportunites":"Opportunités","commercial/visites":"Visites","commercial/catalogue":"Catalogue","commercial/tarifs":"Tarifs","commercial/stats":"Statistiques commerciales",
     secretariat:"Tableau de bord secrétariat","secretariat/courriers":"Courriers","secretariat/notes":"Notes","secretariat/archives":"Archives",
+    agenda:"Tableau de bord agenda","agenda/liste":"Liste agenda","agenda/semaine":"Vue semaine","agenda/rappels":"Rappels",
     pointage:"Tableau de bord pointage","pointage/recap":"Récapitulatif","pointage/societe":"Récap société","pointage/stats":"Statistiques pointage","pointage/legende":"Légende et codes",
     ops:"Tableau de bord OPS","ops/missions":"Missions","ops/mouvements":"Mouvements","ops/supervision":"Supervision site",portail:"Portail RH",parametres:"Paramètres",admin:"Administration système"
   };
@@ -29659,11 +29864,12 @@ function adminAccessModuleLabel(module){
 }
 function adminAccessModuleGroup(module){
   const m=String(module||"");
-  if(["DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL"].includes(m))return"Module principal";
+  if(["DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","AGENDA","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL"].includes(m))return"Module principal";
   if(m.startsWith("materiel"))return"Matériel";
   if(m.startsWith("facturation"))return"Finances";
   if(m.startsWith("commercial"))return"Commercial";
   if(m.startsWith("secretariat"))return"Secrétariat";
+  if(m.startsWith("agenda"))return"Agenda";
   if(m.startsWith("pointage"))return"Pointage";
   if(m.startsWith("ops"))return"OPS";
   if(["dashboard","dossiers","recrutement","reserve","candidats_archives","drh/social","demandes_personnel","demandes_structure","contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports","portail","parametres","admin"].includes(m))return"DRH / système";
@@ -29672,7 +29878,7 @@ function adminAccessModuleGroup(module){
 const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
-const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"facmod",label:"FACTURATION"},{key:"paie",label:"PAIE"},{key:"commercial",label:"COMMERCIAL"},{key:"secretariat",label:"SECRETARIAT GÉNÉRAL"},{key:"pointage",label:"POINTAGE"},{key:"portail",label:"PORTAIL RH"},{key:"admin",label:"ADMINISTRATION SYSTÈME"}];
+const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"facmod",label:"FACTURATION"},{key:"paie",label:"PAIE"},{key:"commercial",label:"COMMERCIAL"},{key:"secretariat",label:"SECRETARIAT GÉNÉRAL"},{key:"agenda",label:"AGENDA"},{key:"pointage",label:"POINTAGE"},{key:"portail",label:"PORTAIL RH"},{key:"admin",label:"ADMINISTRATION SYSTÈME"}];
 function normalizeStructureKey(value){
   const raw=String(value||"").trim();
   const v=raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[_\s-]+/g," ");
@@ -29683,6 +29889,7 @@ function normalizeStructureKey(value){
   if(v.includes("finance")||v.includes("compta")||v.includes("facturation"))return"facturation";
   if(v.includes("paie")||v.includes("payroll")||v.includes("salaire"))return"paie";
   if(v.includes("commercial"))return"commercial";
+  if(v.includes("agenda"))return"agenda";
   if(v.includes("pointage"))return"pointage";
   if(v.includes("portail"))return"portail";
   if(v.includes("admin")||v.includes("administrateur general")||v.includes("administration systeme"))return"admin";
@@ -30230,7 +30437,7 @@ function cleanupActionTrimFpq(months){
   renderView();
 }
 
-function accessStructureModules(){return["drh","ops","materiel","facturation","commercial","pointage"]}
+function accessStructureModules(){return["drh","ops","materiel","facturation","commercial","secretariat","agenda","pointage"]}
 function renderAdminAccessSecurity(view,section){
   const security=accessSecuritySettings();
   const socAccess=societeAccessSettings();
