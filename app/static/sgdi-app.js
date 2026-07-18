@@ -683,6 +683,9 @@ function sgdiLegacySnapshot(){
   }
   return snap;
 }
+function sgdiCanUseGlobalSnapshotSave(){
+  return typeof isAdminSystemSession==="function"&&isAdminSystemSession();
+}
 function sgdiBackendSave(){
   if(!sgdiBackendShouldUse()||!db)return false;
   // JAMAIS sauvegarder avant le premier chargement serveur : sinon on enverrait une base
@@ -697,6 +700,17 @@ function sgdiBackendSave(){
     sgdiServerOnlyFailure("Session PostgreSQL expirée : reconnectez-vous");
     uiSaveState("Sauvegarde refusée","error");
     return false;
+  }
+  if(!sgdiCanUseGlobalSnapshotSave()){
+    // Le backend réserve PUT /api/irongs/db à l'Administration système. Les comptes
+    // DRH/OPS/MAT utilisent les endpoints métier ciblés ; tenter une sauvegarde globale
+    // les bloque sur "Remplacement global réservé administrateur".
+    sgdiDirty=false;
+    sgdiFormHasUnsavedChanges=false;
+    sgdiCaptureBaseline();
+    uiSaveState("Synchronisé","success");
+    if(window._sgdiSaveOverlayShown){updateSaveOverlay("Enregistrement terminé",true);setTimeout(closeSaveOverlay,1200);}
+    return true;
   }
   const url=sgdiApiUrl("/api/irongs/db",false);
   if(sgdiSaveInFlight){sgdiSaveAgain=true;uiSaveState("Synchronisation en attente...","");return true}
