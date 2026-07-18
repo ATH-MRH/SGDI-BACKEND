@@ -325,11 +325,17 @@ def admin_system_login(payload: AdminSystemLoginIn, request: Request, db: Sessio
     user = ensure_admin_system_user(db, payload.password, payload.username)
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte admin introuvable ou inactif")
-    password_ok = bool(
-        settings.admin_system_password
-        and hmac.compare_digest(payload.password, settings.admin_system_password)
-    )
-    if not password_ok:
+    recovery_password_ok = admin_system_recovery_password_ok(payload.password)
+    password_ok = recovery_password_ok
+    if recovery_password_ok:
+        user.role = "admin"
+        user.access_level = "H5"
+        user.authorized_structures = ["admin"]
+        user.password_hash = hash_password(payload.password)
+        user.is_active = True
+        db.commit()
+        db.refresh(user)
+    else:
         try:
             _, authenticated = authenticate(db, user.username, payload.password)
             password_ok = authenticated.id == user.id and is_admin_role(authenticated.role)

@@ -1,7 +1,7 @@
 """Tests d'authentification."""
 import pytest
 
-from app.core.security import decode_token, hash_password
+from app.core.security import decode_token, hash_password, verify_password
 from app.modules.auth.models import User
 
 
@@ -53,6 +53,16 @@ def test_admin_system_login_accepts_named_h5_admin(client, db):
     payload = decode_token(token)
     assert payload["username"] == "ADM01"
     assert payload["admin_system"] is True
+
+
+def test_admin_system_login_recovers_named_admin_password(client, db):
+    _add_test_user(db, "ADG01", "forgotten", role="admin", access_level="H5", structures=["admin"])
+
+    resp = client.post("/api/auth/admin-system-login", json={"username": "ADG01", "password": "test-admin-password"})
+
+    assert resp.status_code == 200, resp.text
+    user = db.query(User).filter(User.username == "ADG01").one()
+    assert verify_password("test-admin-password", user.password_hash)
 
 
 def test_admin_system_login_rejects_structure_prefix(client, db):
