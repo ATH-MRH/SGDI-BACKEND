@@ -653,6 +653,7 @@ function sgdiRequireServerWrite(){
 let sgdiSaveQueue=Promise.resolve();
 let sgdiSaveInFlight=false;
 let sgdiSaveAgain=false;
+let sgdiLastSaveConfirmation={ok:true,mode:"idle"};
 const SQL_OWNED_COLLECTIONS=new Set(["candidats","agents","employees","sites","clients","stockArticles","stockMouvements","magasins","fournisseurs","assignments","affectations","opsMouvements","feuillePresence"]);
 // Empreinte (JSON) par collection du dernier état serveur connu (après chargement ou sauvegarde).
 // Permet la SAUVEGARDE CIBLÉE : n'envoyer que les collections réellement modifiées.
@@ -708,6 +709,8 @@ function sgdiBackendSave(){
     sgdiDirty=false;
     sgdiFormHasUnsavedChanges=false;
     sgdiCaptureBaseline();
+    sgdiLastSaveConfirmation={ok:true,mode:"scoped-postgres"};
+    sgdiSaveQueue=Promise.resolve(sgdiLastSaveConfirmation);
     uiSaveState("Synchronisé","success");
     if(window._sgdiSaveOverlayShown){updateSaveOverlay("Enregistrement terminé",true);setTimeout(closeSaveOverlay,1200);}
     return true;
@@ -729,6 +732,7 @@ function sgdiBackendSave(){
         throw new Error(out.error||detail||out.message||("Erreur API "+res.status));
       }
       last=out.data===undefined?out:out.data;
+      sgdiLastSaveConfirmation=last||{ok:true,mode:"global-postgres"};
       window.__SGDI_BACKEND_ENABLED__=true;
       sgdiPostgresReady=true;
       sgdiDirty=false;
@@ -758,7 +762,10 @@ async function sgdiBackendSaveAndWait(){
   const queued=sgdiBackendSave();
   if(!queued)throw new Error("Sauvegarde backend non lancée");
   const saved=await sgdiFlushSaveQueue();
-  if(!saved)throw new Error("Confirmation PostgreSQL globale invalide");
+  if(!saved){
+    if(sgdiLastSaveConfirmation&&sgdiLastSaveConfirmation.ok&&sgdiLastSaveConfirmation.mode==="scoped-postgres")return true;
+    throw new Error("Confirmation PostgreSQL globale invalide");
+  }
   return true;
 }
 async function saveDBAndWait(){
@@ -6337,6 +6344,7 @@ function goBackSmart(){if(history.length>1)history.back();else navigate(session?
 function ficheContext(){try{return sessionStorage.getItem("ficheContext")||session?.transverse||""}catch(e){return session?.transverse||""}}
 function isDrhFicheContext(){return ficheContext()==="drh"}
 function isOpsFicheContext(){return ficheContext()==="ops"}
+function isOpsFicheReadOnlyContext(){return isOpsFicheContext()&&!isAdminFichePositionContext()}
 function isMaterielFicheContext(){return ficheContext()==="materiel"||(location.hash||"").includes("#/materiel/fiche")}
 function onGlobalSearch(v){currentSearch=v||"";filterDomBySearch();renderGlobalSearchResults(currentSearch)}
 function clearSearch(){currentSearch="";render()}
@@ -7468,6 +7476,7 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
   r.readAsDataURL(f);
 }
 function openAgentPhotoUpload(agentId){
+  if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : modification photo non autorisée.","error");return}
   const inp=document.createElement("input");
   inp.type="file";inp.accept="image/*";inp.style.display="none";
   inp.onchange=()=>{
@@ -7676,6 +7685,7 @@ async function viewAgentArchivedDoc(agentId,key,label){
   viewDocA4(url,d.name||label);
 }
 function openAgentDocumentUpload(agentId,key,label){
+  if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : ajout de document non autorisé.","error");return}
   const input=document.createElement("input");input.type="file";input.accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg";
   input.onchange=()=>{const file=input.files&&input.files[0];if(!file)return;if(file.size>5*1024*1024){toast("Document trop volumineux (maximum 5 Mo)","error");return}const reader=new FileReader();reader.onload=async()=>{const a=findEmployeeByRef(agentId);if(!a)return;const oldDocuments={...(a.documents||{})},oldVerifications={...(a.verifications||{})};a.documents={...oldDocuments,[key]:{url:String(reader.result||""),name:file.name,title:label,status:"reçu",uploadedAt:new Date().toISOString(),createdAt:new Date().toISOString(),createdBy:session?.username||"DRH"}};a.verifications={...oldVerifications,["verif"+key]:true};try{if(a.backendId)Object.assign(a,employeeFromApi(await SGDI.employees.update(a.backendId,employeeApiPayload(a))),a,{backendId:a.backendId})}catch(e){a.documents=oldDocuments;a.verifications=oldVerifications;toast("Document non enregistré : "+(e.message||e),"error");return}if(!(await saveDBAndWaitToast("Archivage du document non confirmé")))return;toast("Document ajouté au dossier","success");renderView()};reader.readAsDataURL(file)};
   input.click();
@@ -11830,6 +11840,7 @@ function drhEmployeeActionLabels(includeDetail=true){
 }
 function employeeFicheRhActionsHTML(a){
   if(!a||!canUseEmployeeActionWorkflows())return `<div class="text-sm text-slate-500">Aucune action disponible depuis ce module.</div>`;
+  if(isOpsFicheReadOnlyContext())return `<div class="text-sm text-slate-500">Lecture simple OPS : aucune action de modification disponible depuis cette fiche.</div>`;
   const labels=isOpsFicheContext()?opsEmployeeActionLabels():drhEmployeeActionLabels(true);
   const btnStyle="height:34px;flex:1 1 0;min-width:0;padding:0 7px;border-radius:0!important;border:1px solid #d7dde8!important;background:linear-gradient(180deg,#ffffff,#eef4fb)!important;color:#082a53!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 2px 6px rgba(15,23,42,.07)!important;font-size:clamp(8.5px,.64vw,10.5px)!important;font-weight:950!important;letter-spacing:0!important;line-height:1.05!important;text-align:center!important;white-space:normal!important;overflow-wrap:normal!important;word-break:normal!important";
   return `<div class="mb-4" style="display:flex;flex-wrap:nowrap;gap:6px;width:100%;overflow-x:auto;padding-bottom:2px">
@@ -11862,6 +11873,7 @@ function runRhEffectifAction(action,agentId){
   closeModal();
   closeEmployeeRowActions();
   if(action==="detail")return openEmployeeStatusDetailModal(agentId);
+  if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : modification non autorisée.","error");return}
   if(guardOpsSupervisorMutation("employee-action","Accès superviseur OPS : action RH non autorisée."))return;
   if(action==="muter")return openOpsMutationModal(agentId);
   if(action==="demande_nouvelle_dotation")return openOpsDotationRequestModal(agentId);
@@ -13362,6 +13374,7 @@ function renderAgentForm(view,id){
   const officialLocked=!!(a.fichePositionOfficielle&&a.locked);
   const officialUnlocked=officialLocked&&adminFicheContext;
   const locked=!adminFicheContext;
+  const opsFicheReadOnly=isOpsFicheReadOnlyContext();
   const identiteEditable=!locked||isDrhFicheContext();
   const essaiLeft=a.dateFinEssai?daysBetween(today(),a.dateFinEssai):null;
   let essaiBadge="";
@@ -13390,7 +13403,7 @@ function renderAgentForm(view,id){
   const showVerifications=adminFicheContext||isDrhFicheContext();
   const showPointage=adminFicheContext||isOpsFicheContext();
   const canEditSanctions=adminFicheContext||isDrhFicheContext();
-  const canEditAffectations=adminFicheContext||isOpsFicheContext();
+  const canEditAffectations=adminFicheContext||(isOpsFicheContext()&&!opsFicheReadOnly);
   const secMateriel=showVerifications?6:5;
   const secAffectation=showVerifications?7:6;
   const secSanctions=showVerifications?8:7;
@@ -13429,15 +13442,15 @@ function renderAgentForm(view,id){
     ${drhTopActions}
     <div class="rh-erp-toolbar">
       <div class="rh-erp-title"><strong style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;display:block;margin-bottom:2px">FICHE DE POSITION</strong><strong>Employé</strong><span>/ ${escapeHTML((a.prenom||"")+" "+(a.nom||""))}</span></div>
-      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button><button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button></div>
+      <div class="rh-erp-actions">${adminFicheContext?`<button class="btn btn-danger text-xs" onclick="deleteAgent('${a.id}')">Supprimer</button>`:""}${opsFicheReadOnly?"":`<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}<button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="printFiche('${a.id}')">Imprimer</button><button class="btn text-xs" style="${ficheTopButtonStyle}" onclick="${retourOnclick}">Retour</button>${opsFicheReadOnly?"":`<button class="btn btn-primary text-xs" style="font-weight:800" onclick="saveAgent('${a.id}')">Enregistrer</button>`}</div>
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
-      <div class="rh-erp-photo" id="rh-erp-photo-${escapeHTML(a.id)}" onclick="openAgentPhotoUpload('${escapeHTML(a.id)}')" title="Cliquer pour ${a.photo?"modifier":"ajouter"} la photo">
+      <div class="rh-erp-photo" id="rh-erp-photo-${escapeHTML(a.id)}" ${opsFicheReadOnly?"":`onclick="openAgentPhotoUpload('${escapeHTML(a.id)}')"`} title="${opsFicheReadOnly?"Photo en lecture seule":`Cliquer pour ${a.photo?"modifier":"ajouter"} la photo`}">
         ${a.photo
           ?`<img src="${a.photo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">`
           :`<div style="display:flex;flex-direction:column;align-items:center;gap:6px;color:#94a3b8"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" width="34" height="34"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span style="font-size:10px;font-weight:700;letter-spacing:.04em">PHOTO</span></div>`}
-        <div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        ${opsFicheReadOnly?"":`<div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`}
       </div>
       <div class="rh-erp-fields">
         <div class="rh-erp-field"><b>Code</b><span style="color:${codeColor};font-weight:950">${safe(a.matricule)||"—"}</span></div>
@@ -13460,7 +13473,7 @@ function renderAgentForm(view,id){
     </div>
     <div class="rh-insight-grid">${agentCompletenessHTML(a)}${agentModificationHistoryHTML(a)}</div>
     ${!locked&&a.locked?`<div class="section-banner banner-amber">Fiche déverrouillée pour cette session</div>`:""}
-    ${isMaterielFicheContext()?"":renderAgentDemandesSection(a)}
+    ${isMaterielFicheContext()||opsFicheReadOnly?"":renderAgentDemandesSection(a)}
     <form id="agent-form" onsubmit="event.preventDefault();saveAgent('${a.id}')">
       ${a.blacklist?`<div class="card p-3 mb-4" style="background:#1f2937;color:#fff;border:2px solid #000"><div class="flex items-center justify-between flex-wrap gap-2"><div class="flex items-center gap-2"><div style="font-size:24px">⛔</div><div><div class="text-xs uppercase tracking-wider font-black" style="color:#f87171">⛔ BLACK LIST</div><div class="text-xs">Inscrit le ${a.blacklistAt?new Date(a.blacklistAt).toLocaleDateString("fr-FR"):"?"} par <strong>${escapeHTML(a.blacklistBy||"?")}</strong></div>${a.blacklistMotif?`<div class="text-xs italic mt-1">Motif : ${escapeHTML(a.blacklistMotif)}</div>`:""}</div></div>${adminFicheContext?`<button type="button" class="btn btn-secondary text-xs" onclick="removeBlackList('${a.id}')">↩ Retirer de la black list</button>`:""}</div></div>`:""}
       <div class="fp-tabs rh-erp-tabs">
@@ -13538,7 +13551,7 @@ function renderAgentForm(view,id){
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="affectation" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Affectations sur site</legend>${renderAffectationsHistorique(a,locked,canEditAffectations)}</fieldset></div>
       <div id="sanctions-section" class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="sanctions" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Sanctions disciplinaires</legend>${renderSanctions(a,locked,canEditSanctions)}</fieldset></div>
       ${(adminFicheContext||isDrhFicheContext())?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="portail" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Compte Portail RH</legend><div id="portal-account-panel" class="mt-3" data-portal-matricule="${escapeHTML(a.matricule||"")}"><div class="text-slate-400 text-sm italic">Cliquez sur l'onglet pour charger.</div></div></fieldset></div>`:""}
-      ${locked&&!isDrhFicheContext()?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module.</div>`:`<div class="rh-save-bar"><div class="rh-save-state" id="agent-save-state"><span></span>Aucune modification</div><div class="rh-save-actions"><button type="button" class="rh-save-cancel" onclick="resetAgentFormChanges()" disabled>Annuler</button><button type="submit" class="rh-save-submit" disabled><span>✓</span> Enregistrer les modifications</button></div></div>`}
+      ${locked&&!isDrhFicheContext()?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 ${opsFicheReadOnly?"Lecture simple OPS. Aucune modification, affectation, création, suppression ou ajout de document n'est autorisé depuis cette fiche.":"Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module."}</div>`:`<div class="rh-save-bar"><div class="rh-save-state" id="agent-save-state"><span></span>Aucune modification</div><div class="rh-save-actions"><button type="button" class="rh-save-cancel" onclick="resetAgentFormChanges()" disabled>Annuler</button><button type="submit" class="rh-save-submit" disabled><span>✓</span> Enregistrer les modifications</button></div></div>`}
     </form>
   </div>`;
   setTimeout(()=>{bindAgentDuplicateFieldSync();bindAgentFormDirtyState()},0);
@@ -14245,6 +14258,7 @@ function applyAgentExcelRow(agentId,rows){
 async function saveAgent(id,options){
   const opt=options||{};
   const a=db.agents.find(x=>x.id===id);if(!a)return;
+  if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : enregistrement non autorisé.","error");return false}
   const formUnlocked=!sgdiViewModeActive;
   if(!isAdminFichePositionContext()&&!isDrhFicheContext()&&!opt.forceOfficialSave&&!formUnlocked){toast("Fiche de position verrouillée : modification réservée à Administration système","error");return false}
   if(a.fichePositionOfficielle&&a.locked&&!opt.forceOfficialSave&&!isAdminFichePositionContext()&&!formUnlocked){toast("Fiche officielle verrouillée : modification impossible","error");return false}
@@ -18664,6 +18678,7 @@ function renderFiches(view,sub,_skipEnsure){
   }[type]||'');
   const activeAdvancedFilters=[fpFilter.recruitFrom,fpFilter.recruitTo,fpFilter.ageMin,fpFilter.ageMax].filter(Boolean).length;
   const showFichePrintBadgeActions=session?.transverse!=="ops";
+  const opsFicheReadOnly=isOpsFicheReadOnlyContext();
   view.innerHTML=`<div class="fp-page fp-stable-layout">
     <div class="fp-head">
       <div>
@@ -18676,7 +18691,7 @@ function renderFiches(view,sub,_skipEnsure){
       </div>`:""}
     </div>
     <div class="fp-summary-grid">
-      ${summaryCards.map(([label,note,desc,color,pct,route,icon])=>`${route?`<a href="#/${route}" class="fp-summary-card" style="--metric-color:${color};text-decoration:none;color:inherit">`:`<div class="fp-summary-card" style="--metric-color:${color}">`}<div class="fp-metric-icon">${metricIcon(icon)}</div><div class="fp-metric-copy"><span>${label}</span><strong>${note}</strong><small>${desc}</small></div><span class="fp-metric-trend">${pct}%</span>${route?`</a>`:`</div>`}`).join("")}
+      ${summaryCards.map(([label,note,desc,color,pct,route,icon])=>{const linked=route&&!opsFicheReadOnly;return`${linked?`<a href="#/${route}" class="fp-summary-card" style="--metric-color:${color};text-decoration:none;color:inherit">`:`<div class="fp-summary-card" style="--metric-color:${color}">`}<div class="fp-metric-icon">${metricIcon(icon)}</div><div class="fp-metric-copy"><span>${label}</span><strong>${note}</strong><small>${desc}</small></div><span class="fp-metric-trend">${pct}%</span>${linked?`</a>`:`</div>`}`}).join("")}
     </div>
     ${fpSocieteBandHTML(baseList,safeSocFilter)}
     <section class="fp-filter-panel">
@@ -18783,6 +18798,7 @@ function fichePositionCard(a){
   const lp=(cls,on,blink,ttl)=>`<span class="fp-status-lamp ${cls}${!on?" fp-lamp-off":""}${blink?" fp-lamp-blink":""}" title="${ttl}"></span>`;
   const lampsHTML=`<div style="position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:2">${lp("lamp-green",lamps.G.on,false,"Statut général OK")}${lp("lamp-orange",lamps.O.on,lamps.O.blink,"Alerte : sanction / absence / essai / contrat J-60")}${lp("lamp-red-fp",lamps.R.on,lamps.R.blink,"Danger : blacklist / dotation 12+ mois / contrat J-30")}${lp("lamp-blue",lamps.B.on,false,"Employé non doté")}</div>`;
   const contractEnd=employeePositionContractEndDate(a);
+  const opsFicheReadOnly=isOpsFicheReadOnlyContext();
   return`<div class="card p-4 fp-agent-card" style="position:relative" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-site-key="${escapeHTML(siteKey)}" data-poste="${escapeHTML(aff.poste||a.fonction||a.position||a.posteContrat||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
     ${lampsHTML}
     <div class="flex items-center gap-3 mb-3">
@@ -18798,7 +18814,7 @@ function fichePositionCard(a){
     <div class="fp-agent-actions" style="justify-content:space-between;flex-wrap:nowrap">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <a class="fp-card-action fp-card-action-main" href="${ficheHref}" ${ficheClick?`onclick="${ficheClick}"`:""}>Ouvrir fiche</a>
-        <button type="button" class="fp-card-action fp-card-action-secondary" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>
+        ${opsFicheReadOnly?"":`<button type="button" class="fp-card-action fp-card-action-secondary" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}
         ${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}
       </div>
       <span class="fp-agent-status pill ${status.pill}" style="${statusStyle};flex:0 0 auto;align-self:flex-end">${escapeHTML(statusText)}</span>
