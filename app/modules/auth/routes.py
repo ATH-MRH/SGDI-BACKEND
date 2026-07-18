@@ -20,7 +20,7 @@ from app.modules.auth.schemas import (
     UserOut,
     UserUpdate,
 )
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 from app.modules.auth.service import authenticate, create_user, update_user
 
 
@@ -52,6 +52,90 @@ def is_admin_role(role: str | None) -> bool:
 def require_admin(user: User) -> None:
     if not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès administrateur requis")
+
+
+def admin_system_username_candidates() -> list[str]:
+    candidates = [
+        settings.admin_system_username,
+        settings.admin_initial_username,
+        "ADG01",
+        "admin",
+        "ADM01",
+    ]
+    clean: list[str] = []
+    seen: set[str] = set()
+    for value in candidates:
+        username = (value or "").strip()
+        key = username.lower()
+        if username and key not in seen:
+            clean.append(username)
+            seen.add(key)
+    return clean
+
+
+def find_admin_system_user(db: Session) -> User | None:
+    for username in admin_system_username_candidates():
+        user = (
+            db.query(User)
+            .filter(func.lower(User.username) == username.lower(), User.is_active.is_(True))
+            .one_or_none()
+        )
+        if user is not None and is_admin_role(user.role):
+            return user
+    admins = (
+        db.query(User)
+        .filter(User.is_active.is_(True))
+        .order_by(User.username)
+        .all()
+    )
+    active_admins = [user for user in admins if is_admin_role(user.role)]
+    for user in active_admins:
+        if (user.access_level or "").strip().upper() == "H5":
+            return user
+    return active_admins[0] if active_admins else None
+
+
+def admin_system_recovery_password_ok(password: str) -> bool:
+    for secret in [settings.admin_system_password, settings.admin_initial_password]:
+        if secret and hmac.compare_digest(password, secret):
+            return True
+    return False
+
+
+def ensure_admin_system_user(db: Session, password: str) -> User | None:
+    user = find_admin_system_user(db)
+    if user is not None:
+        return user
+    if not admin_system_recovery_password_ok(password):
+        return None
+    username = admin_system_username_candidates()[0] if admin_system_username_candidates() else "ADG01"
+    user = (
+        db.query(User)
+        .filter(func.lower(User.username) == username.lower())
+        .one_or_none()
+    )
+    if user is None:
+        user = User(
+            username=username,
+            email=None,
+            full_name="Administrateur",
+            role="admin",
+            access_level="H5",
+            authorized_societies=[],
+            authorized_structures=[],
+            authorized_sites=[],
+            password_hash=hash_password(password),
+            is_active=True,
+        )
+        db.add(user)
+    else:
+        user.role = "admin"
+        user.access_level = user.access_level or "H5"
+        user.password_hash = hash_password(password)
+        user.is_active = True
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def find_user_by_identifier(db: Session, identifier: str) -> User | None:
@@ -174,11 +258,8 @@ def patch_access_rule(
 def admin_system_login(payload: AdminSystemLoginIn, request: Request, db: Session = Depends(get_db)):
     ip = _client_ip(request)
     _enforce_login_rate(ip)
-    admin_username = (settings.admin_system_username or settings.admin_initial_username or "ADG01").strip()
-    if not admin_username:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte administration système non configuré")
-    user = db.query(User).filter(User.username == admin_username, User.is_active.is_(True)).one_or_none()
-    if user is None or not is_admin_role(user.role):
+    user = ensure_admin_system_user(db, payload.password)
+    if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Compte admin introuvable ou inactif")
     password_ok = bool(
         settings.admin_system_password
@@ -186,7 +267,7 @@ def admin_system_login(payload: AdminSystemLoginIn, request: Request, db: Sessio
     )
     if not password_ok:
         try:
-            _, authenticated = authenticate(db, admin_username, payload.password)
+            _, authenticated = authenticate(db, user.username, payload.password)
             password_ok = authenticated.id == user.id and is_admin_role(authenticated.role)
         except HTTPException:
             password_ok = False
