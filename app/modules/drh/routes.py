@@ -120,13 +120,11 @@ def _ensure_document_allowed(db: Session, user: User, owner_type: str | None, ow
 
 def _filter_documents(db: Session, user: User, rows):
     allowed_ids = _authorized_employee_ids(db, user)
-    if allowed_ids is None:
+    if allowed_ids is None:  # utilisateur non restreint : tout visible
         return rows
-    return [
-        row
-        for row in rows
-        if row.owner_type != "employee" or row.owner_id in allowed_ids
-    ]
+    # Restreint : uniquement les documents d'employés autorisés. Les documents non
+    # rattachés à un employé n'ont pas de société vérifiable -> masqués (pas de fuite).
+    return [row for row in rows if row.owner_type == "employee" and row.owner_id in allowed_ids]
 
 
 @router.get("/dashboard")

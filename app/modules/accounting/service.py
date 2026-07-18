@@ -197,12 +197,14 @@ def delete_ligne(db: Session, ecriture_id: int, ligne_id: int) -> dict:
     return get_ecriture_with_lignes(db, ecriture_id)
 
 
-def get_balance(db: Session, society: str | None, date_debut: date | None, date_fin: date | None) -> list[dict]:
+def get_balance(db: Session, society: str | None, date_debut: date | None, date_fin: date | None, societies: list[str] | None = None) -> list[dict]:
     stmt = select(LigneEcriture).join(
         EcritureComptable, LigneEcriture.ecriture_id == EcritureComptable.id
     ).where(EcritureComptable.status == "validée")
     if society:
         stmt = stmt.where(EcritureComptable.society == society)
+    elif societies:  # utilisateur multi-sociétés : agrégat borné à ses sociétés
+        stmt = stmt.where(EcritureComptable.society.in_(societies))
     if date_debut:
         stmt = stmt.where(EcritureComptable.date_ecriture >= date_debut)
     if date_fin:

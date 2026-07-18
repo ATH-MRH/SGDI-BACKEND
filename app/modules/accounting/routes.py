@@ -73,7 +73,11 @@ def comptes_page(
 @router.get("/comptes", response_model=list[CompteComptableOut])
 def comptes(society: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
     eff = _effective_society(user, society)
-    return service.list_comptes(db, eff)
+    allowed = _allowed_societies(user)
+    rows = service.list_comptes(db, eff)
+    if allowed and not eff:  # multi-sociétés sans filtre : borner aux sociétés autorisées
+        rows = [r for r in rows if r.society in allowed]
+    return rows
 
 
 @router.post("/comptes", response_model=CompteComptableOut, dependencies=[Depends(require_level("write"))])
@@ -186,4 +190,5 @@ def balance(
     db: Session = Depends(get_db), user: User = Depends(current_user),
 ):
     eff = _effective_society(user, society)
-    return service.get_balance(db, eff, date_debut, date_fin)
+    allowed = _allowed_societies(user)
+    return service.get_balance(db, eff, date_debut, date_fin, societies=None if eff else (allowed or None))

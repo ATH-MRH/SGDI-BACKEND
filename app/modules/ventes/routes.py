@@ -278,9 +278,12 @@ def export_devis_excel(
     db: Session = Depends(get_db), user: User = Depends(current_user),
 ):
     eff = _effective_society(user, society)
+    allowed = _allowed_societies(user)
     stmt = select(Devis)
     if eff:
         stmt = stmt.where(Devis.society == eff)
+    elif allowed:
+        stmt = stmt.where(Devis.society.in_(allowed))
     if status:
         stmt = stmt.where(Devis.status == status)
     rows = db.execute(stmt.order_by(Devis.id.desc())).scalars().all()
@@ -319,9 +322,12 @@ def export_commandes_excel(
     db: Session = Depends(get_db), user: User = Depends(current_user),
 ):
     eff = _effective_society(user, society)
+    allowed = _allowed_societies(user)
     stmt = select(CommandeClient)
     if eff:
         stmt = stmt.where(CommandeClient.society == eff)
+    elif allowed:
+        stmt = stmt.where(CommandeClient.society.in_(allowed))
     if status:
         stmt = stmt.where(CommandeClient.status == status)
     rows = db.execute(stmt.order_by(CommandeClient.id.desc())).scalars().all()

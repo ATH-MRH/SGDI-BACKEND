@@ -339,7 +339,10 @@ def export_fournisseurs_excel(
     db: Session = Depends(get_db), user: User = Depends(current_user),
 ):
     eff = _effective_society(user, society)
+    allowed = _allowed_societies(user)
     rows = service.list_fournisseurs(db, eff, status)
+    if allowed and not eff:  # multi-sociétés : ne pas exporter les autres sociétés
+        rows = [r for r in rows if r.society in allowed]
     data_rows = [[r.name, r.legal_name, r.contact_name, r.phone, r.email, r.nif, r.rc, r.status] for r in rows]
     return excel_response("fournisseurs.xlsx", [{
         "title": "Fournisseurs",
@@ -355,9 +358,12 @@ def export_bdc_excel(
     db: Session = Depends(get_db), user: User = Depends(current_user),
 ):
     eff = _effective_society(user, society)
+    allowed = _allowed_societies(user)
     stmt = select(BonDeCommande)
     if eff:
         stmt = stmt.where(BonDeCommande.society == eff)
+    elif allowed:
+        stmt = stmt.where(BonDeCommande.society.in_(allowed))
     if status:
         stmt = stmt.where(BonDeCommande.status == status)
     rows = db.execute(stmt.order_by(BonDeCommande.id.desc())).scalars().all()
@@ -395,9 +401,12 @@ def export_factures_excel(
     db: Session = Depends(get_db), user: User = Depends(current_user),
 ):
     eff = _effective_society(user, society)
+    allowed = _allowed_societies(user)
     stmt = select(FactureFournisseur)
     if eff:
         stmt = stmt.where(FactureFournisseur.society == eff)
+    elif allowed:
+        stmt = stmt.where(FactureFournisseur.society.in_(allowed))
     if status:
         stmt = stmt.where(FactureFournisseur.status == status)
     rows = db.execute(stmt.order_by(FactureFournisseur.id.desc())).scalars().all()
