@@ -90,8 +90,8 @@ def create_compte(payload: CompteComptableCreate, db: Session = Depends(get_db),
 def update_compte(compte_id: int, payload: CompteComptableUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_compte_or_404(db, compte_id)
     _ensure_society_allowed(user, existing.society)  # interdit de modifier un compte d'une autre société
-    if payload.society:
-        _ensure_society_allowed(user, payload.society)  # interdit de le déplacer vers une société non autorisée
+    if payload.society is not None:  # interdit de le déplacer (y compris vers "" / société vide)
+        _ensure_society_allowed(user, payload.society)
     return service.update_compte(db, compte_id, payload)
 
 
@@ -146,8 +146,8 @@ def create_ecriture(payload: EcritureComptableCreate, db: Session = Depends(get_
 def update_ecriture(ecriture_id: int, payload: EcritureComptableUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     ecriture = service.get_ecriture_or_404(db, ecriture_id)
     _ensure_society_allowed(user, ecriture.society)  # interdit de modifier une écriture d'une autre société
-    if payload.society:
-        _ensure_society_allowed(user, payload.society)  # interdit de la déplacer vers une société non autorisée
+    if payload.society is not None:  # interdit de la déplacer (y compris vers "" / société vide)
+        _ensure_society_allowed(user, payload.society)
     return service.update_ecriture(db, ecriture_id, payload)
 
 

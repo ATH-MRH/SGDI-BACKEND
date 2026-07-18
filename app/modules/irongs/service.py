@@ -493,12 +493,13 @@ def get_database_json(db: Session, user: Any | None = None, *, include_sql: bool
 
 
 def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]], user: Any | None = None) -> dict[str, list[Any] | dict[str, Any]]:
-    # Écriture GLOBALE la plus destructive : on exige le super-privilège (rôle admin OU H5),
-    # PAS `_snapshot_unrestricted` (qui inclut « authorized_societies vide = tout », convention
-    # pensée pour la LECTURE) — sinon un H1 non-admin « voit tout » pourrait tout réécrire.
-    from app.core.authz import is_unrestricted
-    if user is None or not is_unrestricted(user):
-        raise HTTPException(status_code=403, detail="Remplacement global réservé à l'administration système")
+    # Le trou d'origine (patron G) etait l'ABSENCE de garde de NIVEAU : un H1 (lecture seule)
+    # pouvait ecrire via /db. Le niveau est desormais impose sur la ROUTE (require_level("write")),
+    # ce qui bloque H1 sans casser la sauvegarde frontend des comptes H2+ « voit tout » (sociétés
+    # vides). Ici on conserve la garde SOCIETE `_snapshot_unrestricted` (convention vide = tout),
+    # identique aux autres écritures du module ; un utilisateur borné à des sociétés reste bloqué.
+    if not _snapshot_unrestricted(user):
+        raise HTTPException(status_code=403, detail="Remplacement global réservé administrateur")
     _validate_legacy_database_payload(payload)
     payload_to_store = dict(payload)
     echanges = payload_to_store.get("echanges")
@@ -764,6 +765,30 @@ def _delete_employee_fiche(db: Session, data: dict[str, Any], user: Any | None) 
     if not refs:
         raise HTTPException(status_code=422, detail="Identifiant employé obligatoire")
 
+    # Cloisonnement société : interdire la suppression destructive d'une fiche d'une autre
+    # société (cohérent avec delete-item). On résout la société de la cible (agent legacy,
+    # sinon employé SQL) AVANT toute suppression.
+    if not _snapshot_unrestricted(user):
+        target_soc = ""
+        agent = next(
+            (row for row in _collection_list(db, "agents")
+             if isinstance(row, dict) and _item_identity_refs(row) & refs),
+            None,
+        )
+        if isinstance(agent, dict):
+            target_soc = _item_society(agent)
+        if not target_soc:
+            backend_ref = sql_bridge.as_int(data.get("backendId") or data.get("employeeId") or data.get("employee_id"))
+            emp_target = db.get(Employee, backend_ref) if backend_ref else None
+            for ref in refs:
+                if emp_target:
+                    break
+                emp_target = db.execute(select(Employee).where(Employee.code == ref)).scalar_one_or_none()
+            if emp_target and emp_target.society:
+                target_soc = _society_key(emp_target.society)
+        if target_soc and target_soc not in _user_allowed_societies(user):
+            raise HTTPException(status_code=403, detail="Société non autorisée pour cet utilisateur")
+
     linked_collections = {
         "agents", "employees", "conges", "contrats", "contratsPersonnel", "materiel",
         "pointages", "pointageMensuel", "feuillePresence", "demandesPersonnel",
@@ -830,6 +855,7 @@ def _validate_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any
 
 def _unlock_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) -> dict[str, Any]:
     _require_admin_action(user)
+    _find_pointage_agent(db, agent_id, user)  # cloisonnement société (comme validate-pointage)
     sheets = _collection_list(db, "pointages")
     sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
     if not sheet:
@@ -1016,11 +1042,17 @@ def _presence_line_action(db: Session, line_id: str, validate: bool, user: Any) 
     return _replace_and_success(db, "feuillePresence", lines, {"item": line})
 
 
-def _presence_line_upsert(db: Session, data: dict[str, Any]) -> dict[str, Any]:
+def _presence_line_upsert(db: Session, data: dict[str, Any], user: Any = None) -> dict[str, Any]:
     date_value = str(data.get("date") or "").strip()
     agent_id = str(data.get("agentId") or "").strip()
     if not date_value or not agent_id:
         raise HTTPException(status_code=422, detail="Date et agent obligatoires")
+    # Cloisonnement société : l'agent source ET l'agent cible (réaffectation) doivent
+    # être dans le périmètre (cohérent avec validate/delete-presence-line).
+    _ensure_presence_line_allowed(db, {"agentId": agent_id, "date": date_value}, user)
+    target_agent = str((data.get("patch") or {}).get("agentId") or agent_id).strip()
+    if target_agent != agent_id:
+        _ensure_presence_line_allowed(db, {"agentId": target_agent, "date": date_value}, user)
     closures = _collection_object(db, "feuillePresenceCloture")
     if closures.get(date_value):
         raise HTTPException(status_code=422, detail="Feuille clôturée")
@@ -1055,8 +1087,8 @@ def _movement_history_key(item: dict[str, Any]) -> str:
     )
 
 
-def _presence_movement_save(db: Session, data: dict[str, Any]) -> dict[str, Any]:
-    result = _presence_line_upsert(db, data)
+def _presence_movement_save(db: Session, data: dict[str, Any], user: Any = None) -> dict[str, Any]:
+    result = _presence_line_upsert(db, data, user)
     line = dict((result.get("data") or {}).get("item") or {})
     patch = dict(data.get("patch") or {})
     movement = {**line, **patch}
@@ -1118,6 +1150,7 @@ def _presence_line_delete(db: Session, line_id: str | None, data: dict[str, Any]
 def _create_legacy_item(db: Session, collection: str | None, data: dict[str, Any], user: Any) -> dict[str, Any]:
     if collection not in {"prospects", "opportunites"}:
         raise HTTPException(status_code=422, detail="Création non autorisée pour cette collection")
+    ensure_item_allowed_for_user(data, user, collection)  # cloisonnement société (comme la route REST /items)
     items = _collection_list(db, collection)
     item = dict(data)
     item["id"] = str(item.get("id") or f"{collection[:2]}_{int(datetime.utcnow().timestamp() * 1000)}")
@@ -1275,15 +1308,15 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
     if action == "reopen-presence-day":
         return _presence_day_close(db, str(data.get("date") or ""), False, user, data.get("motif"))
     if action == "upsert-presence-line":
-        return _presence_line_upsert(db, data)
+        return _presence_line_upsert(db, data, user)
     if action == "delete-presence-line":
         return _presence_line_delete(db, item_id, data, user)
     if action == "save-presence-movement":
-        return _presence_movement_save(db, data)
+        return _presence_movement_save(db, data, user)
     if action == "add-presence-agent":
-        return _presence_line_upsert(db, {"date": data.get("date"), "agentId": data.get("agentId"), "patch": data.get("patch") or {}})
+        return _presence_line_upsert(db, {"date": data.get("date"), "agentId": data.get("agentId"), "patch": data.get("patch") or {}}, user)
     if action == "assign-vacant-agent":
-        return _presence_line_upsert(db, data)
+        return _presence_line_upsert(db, data, user)
 
     raise HTTPException(status_code=422, detail="Action métier inconnue")
 

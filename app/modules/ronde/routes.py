@@ -54,9 +54,23 @@ def _allowed_societies(user: User) -> list[str]:
     return [_norm_soc(v) for v in values if _norm_soc(v)]
 
 
+def _site_only_restricted(user: User) -> bool:
+    """Utilisateur restreint UNIQUEMENT par site (authorized_sites non vide, aucune société).
+    Le module ronde n'a pas de mapping site→circuit : par sécurité (fail-closed), un tel
+    utilisateur ne voit/écrit QUE le global (société nulle), jamais une société nommée."""
+    if is_unrestricted(user) or _allowed_societies(user):
+        return False
+    sites = user.authorized_sites if isinstance(user.authorized_sites, list) else []
+    return any(str(s).strip() for s in sites)
+
+
 def _ensure_societe_allowed(user: User, societe: object) -> None:
     """Refuse une société EXPLICITE hors périmètre. Une société nulle (circuit/ronde
     global, non affecté) reste autorisée — cohérent avec la création sans société."""
+    if _site_only_restricted(user):
+        if societe:  # un restreint-par-site-seul ne peut toucher qu'au global
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
+        return
     allowed = _allowed_societies(user)
     if allowed and societe and _norm_soc(societe) not in allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
@@ -65,6 +79,8 @@ def _ensure_societe_allowed(user: User, societe: object) -> None:
 def _societe_visible(user: User, societe: object) -> bool:
     """Une ligne est visible si l'utilisateur n'est pas restreint, si sa société est
     autorisée, ou si elle est globale (société nulle)."""
+    if _site_only_restricted(user):
+        return not societe  # restreint-par-site-seul : uniquement le global
     allowed = _allowed_societies(user)
     if not allowed:
         return True

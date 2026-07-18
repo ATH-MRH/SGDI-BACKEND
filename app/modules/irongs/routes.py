@@ -123,12 +123,12 @@ def get_db_snapshot(
     return Response(content=body, media_type="application/json")
 
 
-@router.put("/db")
+@router.put("/db", dependencies=[Depends(require_level("write"))])
 def replace_db_snapshot(payload: DbReplace, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     return service.replace_database(db, payload.data, user)
 
 
-@router.post("/db")
+@router.post("/db", dependencies=[Depends(require_level("write"))])
 def post_db_snapshot(payload: dict[str, Any], db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     return service.replace_database(db, data, user)

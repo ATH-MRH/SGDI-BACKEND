@@ -378,10 +378,19 @@ def pointage_standby(presence_date: date | None = None, society: str | None = No
     if not effective_society and allowed and len(allowed) == 1:
         effective_society = allowed[0]
     rows = service.standby_personnel(db, presence_date or date.today(), effective_society, site_id)
-    # Multi-sociétés sans filtre explicite : on restreint aux sociétés autorisées (pas de fuite).
-    if allowed and not effective_society and not site_id:
-        aset = set(allowed)
-        rows = [r for r in rows if _normalize_society(r.get("society")) in aset]
+    # Sans filtre explicite : on restreint au périmètre de l'utilisateur — société(s)
+    # autorisée(s) OU sites autorisés (cas « restreint par SITE seul », authorized_societies
+    # vide + authorized_sites non vide, sinon fuite inter-sociétés du roster).
+    if not is_unrestricted(user) and not effective_society and not site_id:
+        aset = set(_allowed_societies(user))
+        visible = _visible_site_ids(db, user)
+        vis = set(visible) if visible is not None else None
+        if aset or vis is not None:
+            rows = [
+                r for r in rows
+                if (aset and _normalize_society(r.get("society")) in aset)
+                or (vis is not None and r.get("site_id") in vis)
+            ]
     return rows
 
 
@@ -487,13 +496,23 @@ def list_movements(
     if allowed and society and _normalize_society(society) not in allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
     rows = service.list_movements(db, society=society, limit=limit)
-    # Utilisateur multi-sociétés sans filtre explicite : on restreint à SES sociétés
-    # (l'ancien code laissait `society=None` => TOUTES les sociétés, fuite).
-    if allowed and not society:
-        aset = set(allowed)
-        rows = [m for m in rows if _normalize_society(m.society) in aset]
+    # Sans filtre explicite : on restreint au périmètre — société(s) autorisée(s) OU sites
+    # autorisés (cas « restreint par SITE seul », authorized_societies vide + authorized_sites
+    # non vide ; l'ancien code laissait tout passer car _allowed_societies renvoyait []).
+    filtered = False
+    if not is_unrestricted(user) and not society:
+        aset = set(allowed or [])
+        visible = _visible_site_ids(db, user)
+        vis = set(visible) if visible is not None else None
+        if aset or vis is not None:
+            rows = [
+                m for m in rows
+                if (aset and _normalize_society(m.society) in aset)
+                or (vis is not None and m.site_id in vis)
+            ]
+            filtered = True
     if response is not None:
-        total = len(rows) if (allowed and not society) else service.count_movements(db, society=society)
+        total = len(rows) if filtered else service.count_movements(db, society=society)
         response.headers["X-Total-Count"] = str(total)
     return rows
 

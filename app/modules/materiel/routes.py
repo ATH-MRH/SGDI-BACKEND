@@ -108,7 +108,8 @@ def _ensure_site_allowed(db: Session, user: User, site_id: int | None):
     plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
     legacy = plan.get("_legacy") if isinstance(plan.get("_legacy"), dict) else {}
     society = plan.get("societe") or plan.get("society") or legacy.get("societe") or legacy.get("society")
-    _ensure_society_allowed(user, society)
+    if society:  # ne verrouiller que si le site porte une société (sinon fail-closed indû, cf. OPS)
+        _ensure_society_allowed(user, society)
     return site
 
 
