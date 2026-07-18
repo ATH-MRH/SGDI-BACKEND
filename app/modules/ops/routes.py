@@ -5,6 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.authz import require_level
 from app.core.pagination import paginate_list, paginate_statement
 from app.db.session import get_db
 from app.modules.erp.service import unrestricted_scope
@@ -151,7 +152,7 @@ def sites(active: int | None = None, society: str | None = None, db: Session = D
     return _filter_site_rows(rows, user, society)
 
 
-@router.post("/sites", response_model=SiteOut)
+@router.post("/sites", response_model=SiteOut, dependencies=[Depends(require_level("write"))])
 def create_site(payload: SiteCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     plan = payload.equipment_plan if isinstance(payload.equipment_plan, dict) else {}
     _ensure_society_allowed(user, plan.get("societe") or plan.get("society"))
@@ -190,7 +191,7 @@ def get_site(site_id: int, db: Session = Depends(get_db), user: User = Depends(c
     return service.site_situation(db, site_id)
 
 
-@router.put("/sites/{site_id}", response_model=SiteOut)
+@router.put("/sites/{site_id}", response_model=SiteOut, dependencies=[Depends(require_level("write"))])
 def update_site(site_id: int, payload: SiteUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_site_allowed(db, user, site_id)
     plan = payload.equipment_plan if isinstance(payload.equipment_plan, dict) else None
@@ -199,13 +200,13 @@ def update_site(site_id: int, payload: SiteUpdate, db: Session = Depends(get_db)
     return service.update_row(db, Site, site_id, payload)
 
 
-@router.delete("/sites/{site_id}")
+@router.delete("/sites/{site_id}", dependencies=[Depends(require_level("delete"))])
 def delete_site(site_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_site_allowed(db, user, site_id)
     return service.delete_row(db, Site, site_id)
 
 
-@router.post("/site-posts", response_model=SitePostOut)
+@router.post("/site-posts", response_model=SitePostOut, dependencies=[Depends(require_level("write"))])
 def create_site_post(payload: SitePostCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_site_allowed(db, user, payload.site_id)
     return service.create_row(db, SitePost, payload)
@@ -223,7 +224,7 @@ def site_posts(site_id: int | None = None, db: Session = Depends(get_db), user: 
     return rows
 
 
-@router.post("/assignments", response_model=AssignmentOut)
+@router.post("/assignments", response_model=AssignmentOut, dependencies=[Depends(require_level("write"))])
 def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(current_user)):
     site = _ensure_site_allowed(db, user, payload.site_id) if payload.site_id else None
     employee = _ensure_employee_allowed(db, user, payload.employee_id)
@@ -237,7 +238,7 @@ def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTas
     return result
 
 
-@router.patch("/assignments/{assignment_id}", response_model=AssignmentOut)
+@router.patch("/assignments/{assignment_id}", response_model=AssignmentOut, dependencies=[Depends(require_level("write"))])
 def update_assignment(assignment_id: int, payload: AssignmentUpdate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(current_user)):
     assignment = service.get_or_404(db, Assignment, assignment_id)
     employee = _ensure_employee_allowed(db, user, assignment.employee_id)
@@ -295,12 +296,12 @@ def assignments(site_id: int | None = None, employee_id: int | None = None, acti
     return rows
 
 
-@router.post("/pointage/daily/generate")
+@router.post("/pointage/daily/generate", dependencies=[Depends(require_level("generate"))])
 def generate_daily(presence_date: date | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return service.generate_daily_presence(db, presence_date or date.today())
 
 
-@router.post("/pointage/daily/generate-rotation")
+@router.post("/pointage/daily/generate-rotation", dependencies=[Depends(require_level("generate"))])
 def generate_daily_rotation(payload: RotationGenerateRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return service.generate_rotation_daily_presence(db, payload)
 
@@ -316,7 +317,7 @@ def pointage_standby(presence_date: date | None = None, society: str | None = No
     return service.standby_personnel(db, presence_date or date.today(), effective_society, site_id)
 
 
-@router.post("/pointage/daily/close")
+@router.post("/pointage/daily/close", dependencies=[Depends(require_level("validate"))])
 def close_daily(presence_date: date | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return service.close_daily_presence(db, presence_date or date.today())
 
@@ -338,14 +339,14 @@ def daily_presence(presence_date: date | None = None, site_id: int | None = None
     return service.list_rows(db, DailyPresence, {"presence_date": presence_date or date.today(), "site_id": site_id})
 
 
-@router.post("/pointage/daily", response_model=DailyPresenceOut)
+@router.post("/pointage/daily", response_model=DailyPresenceOut, dependencies=[Depends(require_level("write"))])
 def create_daily_presence(payload: DailyPresenceCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     if hasattr(payload, "site_id") and payload.site_id:
         _ensure_site_allowed(db, user, payload.site_id)
     return service.create_row(db, DailyPresence, payload)
 
 
-@router.patch("/pointage/daily/{presence_id}", response_model=DailyPresenceOut)
+@router.patch("/pointage/daily/{presence_id}", response_model=DailyPresenceOut, dependencies=[Depends(require_level("write"))])
 def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return service.update_row(db, DailyPresence, presence_id, payload)
 
@@ -365,12 +366,12 @@ def events(status: str | None = None, level: str | None = None, db: Session = De
     return service.list_rows(db, Event, {"status": status, "level": level})
 
 
-@router.post("/events", response_model=EventOut)
+@router.post("/events", response_model=EventOut, dependencies=[Depends(require_level("write"))])
 def create_event(payload: EventCreate, db: Session = Depends(get_db)):
     return service.create_row(db, Event, payload)
 
 
-@router.post("/events/{event_id}/close", response_model=EventOut)
+@router.post("/events/{event_id}/close", response_model=EventOut, dependencies=[Depends(require_level("validate"))])
 def close_event(event_id: int, action_taken: str | None = None, db: Session = Depends(get_db)):
     return service.close_event(db, event_id, action_taken)
 
@@ -395,7 +396,7 @@ def list_movements(
     return service.list_movements(db, society=society, limit=limit)
 
 
-@router.post("/movements", response_model=OpsMovementOut)
+@router.post("/movements", response_model=OpsMovementOut, dependencies=[Depends(require_level("write"))])
 def upsert_movement(payload: OpsMovementCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     society = str(payload.society or "").strip()
     if society:
