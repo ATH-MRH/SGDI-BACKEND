@@ -11,6 +11,11 @@ os.environ["ADMIN_INITIAL_PASSWORD"] = "testpass123"
 os.environ["APP_ENV"] = "test"
 os.environ["LOG_LEVEL"] = "ERROR"
 os.environ["SGDI_UPLOADS_DIR"] = _tmp_uploads
+# Anti brute-force : toutes les requêtes de test partagent la même IP factice
+# (TestClient). Sans ça, les quelques tests qui exercent volontairement des
+# identifiants invalides suffisent à déclencher le blocage 429, qui bloque
+# ensuite TOUS les logins (y compris valides) pour le reste de la session.
+os.environ["LOGIN_MAX_ATTEMPTS"] = "1000000"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -73,7 +78,12 @@ def _seed_admin():
                 access_level="H5",
                 authorized_societies=[],
                 authorized_structures=[],
-                password_hash=hash_password("testpass123"),
+                # Doit correspondre à ADMIN_SYSTEM_PASSWORD : on_startup() réinitialise
+                # de force le mot de passe de ce compte à chaque démarrage (y compris à
+                # chaque instanciation de TestClient, donc avant CHAQUE test) dès que
+                # ADMIN_SYSTEM_PASSWORD est défini — un mot de passe différent ici serait
+                # systématiquement écrasé.
+                password_hash=hash_password("test-admin-password"),
                 is_active=True,
             ))
         # Utilisateur RESTREINT à une seule société : role != admin ET access_level != H5,
@@ -120,7 +130,7 @@ def client(db):
 
 @pytest.fixture
 def auth_headers(client):
-    resp = client.post("/api/auth/login", json={"username": "testadmin", "password": "testpass123"})
+    resp = client.post("/api/auth/login", json={"username": "testadmin", "password": "test-admin-password"})
     assert resp.status_code == 200, resp.text
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -153,6 +163,6 @@ def live_client():
 
 @pytest.fixture(scope="module")
 def live_headers(live_client):
-    resp = live_client.post("/api/auth/login", json={"username": "testadmin", "password": "testpass123"})
+    resp = live_client.post("/api/auth/login", json={"username": "testadmin", "password": "test-admin-password"})
     assert resp.status_code == 200, resp.text
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}

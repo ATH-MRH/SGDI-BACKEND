@@ -29,6 +29,10 @@ _SENSITIVE_BEFORE_PAIE = {
 
 _PAIE_COLLECTIONS = {"paieBulletins", "paieElements", "paieClotures", "paieGrilles"}
 
+# Agenda : événements rattachés à une société (module agenda autonome). Ajout
+# conscient et distinct de la paie, à ne pas confondre avec une régression.
+_AGENDA_COLLECTIONS = {"agendaEvents"}
+
 # Témoins non sensibles, représentatifs du reste de l'ERP
 _TEMOINS_LIBRES = {
     "notifications", "activityLog", "workflowTasks", "societesConfig",
@@ -37,8 +41,8 @@ _TEMOINS_LIBRES = {
 
 
 def test_sensitive_list_only_gained_the_paie_collections():
-    """Aucune collection existante n'a été retirée ni ajoutée hors paie."""
-    assert SENSITIVE_SOCIETY_COLLECTIONS - _SENSITIVE_BEFORE_PAIE == _PAIE_COLLECTIONS
+    """Aucune collection existante n'a été retirée ni ajoutée hors paie/agenda."""
+    assert SENSITIVE_SOCIETY_COLLECTIONS - _SENSITIVE_BEFORE_PAIE == _PAIE_COLLECTIONS | _AGENDA_COLLECTIONS
     assert _SENSITIVE_BEFORE_PAIE - SENSITIVE_SOCIETY_COLLECTIONS == set(), \
         "Une collection sensible a été retirée : régression de confidentialité"
 
