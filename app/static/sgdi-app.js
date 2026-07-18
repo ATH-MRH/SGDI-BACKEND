@@ -4211,6 +4211,17 @@ function topbarStructureIcon(key){
   return (MODULE_META[key]?.icon)||"•";
 }
 function topbarStructureTabsHTML(){return""}  // Déplacé dans workspaceTabsBarHTML
+function sgdiEditModeButtonHTML(){
+  if(!session)return"";
+  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession())return"";
+  const locked=sgdiViewModeActive;
+  const label=locked?"Déverrouiller":"Verrouiller";
+  const title=locked?"Déverrouiller le formulaire":"Verrouiller le formulaire";
+  const icon=locked
+    ?`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+    :`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
+  return `<button type="button" id="sgdi-edit-toggle" class="ws-lock-toggle ${locked?"":"unlocked"}" data-no-critical-auth="1" onclick="${locked?"sgdiExitViewMode()":"sgdiEnterViewMode()"}" title="${escapeHTML(title)}" aria-label="${escapeHTML(title)}">${icon}<span>${label}</span></button>`;
+}
 async function refreshWorkspace(){
   const btn=document.querySelector(".ws-refresh-tab");
   try{
@@ -4249,7 +4260,7 @@ function workspaceTabsBarHTML(){
     <a class="ws-quicklaunch-btn" href="ms-excel:" onclick="event.stopPropagation();window.location.href='ms-excel:';return false" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></a>
     <a class="ws-quicklaunch-btn" href="calculator:" onclick="event.stopPropagation();window.location.href='calculator:';return false" title="Calculatrice"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></a>
   </div>`;
-  const sgdiActionsHTML=`<div class="ws-system-actions">${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
+  const sgdiActionsHTML=`<div class="ws-system-actions">${sgdiEditModeButtonHTML()}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
   return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
     <div class="ws-tab-actions">${quickLaunchHTML}${sgdiActionsHTML}</div>
@@ -5941,35 +5952,30 @@ function sgdiExitViewMode(){
   }
 }
 function _sgdiUpdateEditFab(){
+  const toggle=document.getElementById("sgdi-edit-toggle");
+  if(toggle){
+    if(!session||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession())){
+      toggle.style.display="none";
+      toggle.onclick=null;
+    }else{
+      const locked=sgdiViewModeActive;
+      const label=locked?"Déverrouiller":"Verrouiller";
+      const title=locked?"Déverrouiller le formulaire":"Verrouiller le formulaire";
+      const icon=locked
+        ?`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
+        :`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
+      toggle.style.display="";
+      toggle.classList.toggle("unlocked",!locked);
+      toggle.innerHTML=`${icon}<span>${label}</span>`;
+      toggle.onclick=locked?()=>sgdiExitViewMode():()=>sgdiEnterViewMode();
+      toggle.title=title;
+      toggle.setAttribute("aria-label",title);
+    }
+  }
   const fab=document.getElementById("sgdi-edit-fab");
-  if(!fab)return;
-  if(!session){fab.classList.remove("visible");return}
-  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
-    fab.classList.remove("visible","unlocked");
-    fab.onclick=null;
-    fab.title="";
-    return;
-  }
-  fab.classList.add("visible");
-  if(sgdiViewModeActive){
-    fab.classList.remove("unlocked");
-    fab.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Modifier`;
-    fab.onclick=()=>sgdiExitViewMode();
-    fab.title="Déverrouiller le formulaire";
-  }else{
-    fab.classList.add("unlocked");
-    fab.innerHTML=`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>Verrouiller`;
-    fab.onclick=()=>sgdiEnterViewMode();
-    fab.title="Verrouiller le formulaire";
-  }
+  if(fab)fab.remove();
 }
 function sgdiInitEditFab(){
-  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession())return;
-  if(document.getElementById("sgdi-edit-fab"))return;
-  const fab=document.createElement("button");
-  fab.id="sgdi-edit-fab";
-  fab.type="button";
-  document.body.appendChild(fab);
   _sgdiUpdateEditFab();
 }
 function _sgdiNavGuardShow(pendingRoute){

@@ -5095,6 +5095,48 @@ body:has(.company-portal) #app{
 .ws-quicklaunch-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;cursor:pointer;text-decoration:none;opacity:.92;transition:background .15s,opacity .15s,transform .1s}
 .ws-quicklaunch-btn:hover{background:rgba(255,255,255,.16);opacity:1;transform:translateY(-1px)}
 .ws-ql-icon{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;font-size:11px;font-weight:900;color:#fff;line-height:1;font-family:system-ui,sans-serif}
+.ws-lock-toggle{
+  height:30px;
+  min-width:118px;
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  padding:0 12px;
+  border:1px solid rgba(255,255,255,.42);
+  border-radius:8px;
+  background:rgba(1,27,63,.42);
+  color:#fff;
+  font-size:11px;
+  font-weight:950;
+  line-height:1;
+  letter-spacing:.01em;
+  cursor:pointer;
+  box-shadow:0 2px 6px rgba(15,35,63,.16);
+  transition:background .15s,border-color .15s,transform .1s,box-shadow .15s;
+}
+.ws-lock-toggle:hover{
+  background:rgba(1,27,63,.62);
+  border-color:rgba(255,255,255,.62);
+  transform:translateY(-1px);
+  box-shadow:0 4px 10px rgba(15,35,63,.2);
+}
+.ws-lock-toggle.unlocked{
+  background:rgba(22,163,74,.9);
+  border-color:rgba(255,255,255,.55);
+}
+.ws-lock-toggle.unlocked:hover{background:#15803d}
+.ws-lock-toggle svg{
+  width:15px;
+  height:15px;
+  flex:0 0 15px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2.35;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
 .ws-tab-actions{
   height:35px;
   flex:0 0 auto;
@@ -6206,17 +6248,8 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
 
 /* ── Edit FAB ───────────────────────────────────────────── */
 #sgdi-edit-fab{
-  position:fixed;bottom:80px;right:20px;z-index:300;
-  background:#043970;color:#fff;border:none;border-radius:999px;
-  padding:0 18px 0 13px;height:42px;font-size:13px;font-weight:700;
-  cursor:pointer;box-shadow:0 4px 16px rgba(4,57,112,.38);
-  display:none;align-items:center;gap:8px;transition:background .15s,transform .1s;
-  white-space:nowrap;
+  display:none!important;
 }
-#sgdi-edit-fab.visible{display:flex}
-#sgdi-edit-fab:hover{background:#062d5a;transform:translateY(-1px)}
-#sgdi-edit-fab.unlocked{background:#16a34a;box-shadow:0 4px 16px rgba(22,163,74,.35)}
-#sgdi-edit-fab.unlocked:hover{background:#15803d}
 
 /* Assistant de dotation groupée */
 .modal:has(.bulk-dot-wizard){width:min(1080px,94vw)!important;max-width:1080px!important;padding:0!important;overflow:hidden!important}
@@ -7674,10 +7707,7 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
   font-variant-numeric:tabular-nums!important;
 }
 
-/* Sites dashboard: avoid floating controls covering site cards */
-body:has(#view .site-card) #sgdi-edit-fab{
-  display:none!important;
-}
+/* Sites dashboard: keep the assistant away from site card actions */
 body:has(#view .site-card) #atlas-ai-widget{
   right:14px!important;
   bottom:14px!important;
