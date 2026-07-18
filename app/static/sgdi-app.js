@@ -3191,12 +3191,12 @@ function _sgdiSpeakFallback(){
 }
 function isAdminSystemUsernameCandidate(username){
   const u=normalizeAccessCode(username);
-  return u==="ADMIN"||/^ADG\d+$/.test(u);
+  return u==="ADMIN"||/^ADG\d+$/.test(u)||/^ADM\d+$/.test(u);
 }
 function authUserCanOpenAdminSystem(authUser){
   const role=String(authUser?.role||"").toUpperCase();
   const level=String(authUser?.access_level||authUser?.accessLevel||authUser?.niveau||"").toUpperCase();
-  return (role==="ADMIN"||role==="ADM"||role.startsWith("ADM"))&&level==="H5";
+  return (role==="ADMIN"||role==="ADM"||role.startsWith("ADM"))&&level==="H5"&&isAdminSystemUsernameCandidate(authUser?.username);
 }
 async function startAdminSystemSession(password,username){
   const us=await window.SGDI_API.auth.adminSystemLogin(password,username);

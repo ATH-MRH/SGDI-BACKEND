@@ -1,4 +1,5 @@
 import hmac
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from urllib.parse import unquote
@@ -27,11 +28,54 @@ from app.modules.auth.service import authenticate, create_user, update_user
 router = APIRouter()
 
 
+DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
+    "drh": (("DRH",), "DRH"),
+    "ops": (("OPS",), "OPS"),
+    "materiel": (("MAT",), "MATERIEL/EQUIP"),
+    "facturation": (("FAC", "FIN"), "FACTURATION"),
+    "finances": (("FIN", "FAC"), "FINANCES/COMPTA"),
+    "finance": (("FIN", "FAC"), "FINANCES/COMPTA"),
+    "commercial": (("COM",), "COMMERCIAL"),
+    "secretariat": (("SEC",), "SECRETARIAT GENERAL"),
+    "agenda": (("AGD",), "AGENDA"),
+    "pointage": (("PTG",), "POINTAGE"),
+}
+
+
 def _client_ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
     if fwd:
         return fwd.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def _host_subdomain(request: Request) -> str:
+    host = (request.headers.get("host") or "").split(":")[0].strip().lower()
+    if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return ""
+    return host.split(".")[0] if "." in host else ""
+
+
+def _username_prefix(username: str | None) -> str:
+    match = re.match(r"^([A-Z]+)", (username or "").strip().upper())
+    return match.group(1) if match else ""
+
+
+def enforce_subdomain_login_scope(request: Request, user: User) -> None:
+    subdomain = _host_subdomain(request)
+    if not subdomain or subdomain in {"atlas", "sgdi", "www"}:
+        return
+    rule = DEDICATED_LOGIN_RULES.get(subdomain)
+    if rule is None:
+        return
+    prefixes, label = rule
+    if _username_prefix(user.username) in prefixes:
+        return
+    expected = " ou ".join(f"{prefix}xx" for prefix in prefixes)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Ce sous-domaine est réservé aux comptes {label} ({expected}). Utilisez atlas.irongs.com pour le portail central.",
+    )
 
 
 def _enforce_login_rate(ip: str) -> None:
@@ -47,6 +91,11 @@ def _enforce_login_rate(ip: str) -> None:
 def is_admin_role(role: str | None) -> bool:
     value = (role or "").strip().upper()
     return value in {"ADMIN", "ADM", "ADM1", "ADM2"}
+
+
+def is_admin_system_username(username: str | None) -> bool:
+    normalized = (username or "").strip().upper()
+    return normalized == "ADMIN" or normalized.startswith("ADM") or normalized.startswith("ADG")
 
 
 def require_admin(user: User) -> None:
@@ -80,7 +129,7 @@ def find_admin_system_user(db: Session) -> User | None:
             .filter(func.lower(User.username) == username.lower(), User.is_active.is_(True))
             .one_or_none()
         )
-        if user is not None and is_admin_role(user.role):
+        if user is not None and is_admin_role(user.role) and is_admin_system_username(user.username):
             return user
     admins = (
         db.query(User)
@@ -90,9 +139,12 @@ def find_admin_system_user(db: Session) -> User | None:
     )
     active_admins = [user for user in admins if is_admin_role(user.role)]
     for user in active_admins:
-        if (user.access_level or "").strip().upper() == "H5":
+        if (user.access_level or "").strip().upper() == "H5" and is_admin_system_username(user.username):
             return user
-    return active_admins[0] if active_admins else None
+    for user in active_admins:
+        if is_admin_system_username(user.username):
+            return user
+    return None
 
 
 def admin_system_recovery_password_ok(password: str) -> bool:
@@ -111,6 +163,7 @@ def ensure_admin_system_user(db: Session, password: str, username: str | None = 
             and requested_user.is_active
             and is_admin_role(requested_user.role)
             and (requested_user.access_level or "").strip().upper() == "H5"
+            and is_admin_system_username(requested_user.username)
         ):
             return requested_user
         return None
@@ -296,6 +349,7 @@ def login(payload: LoginIn, request: Request, db: Session = Depends(get_db)):
     _enforce_login_rate(ip)
     try:
         token, user = authenticate(db, payload.username, payload.password)
+        enforce_subdomain_login_scope(request, user)
     except HTTPException:
         rate_limit.record_failure(f"login:{ip}", settings.login_window_seconds)
         raise
