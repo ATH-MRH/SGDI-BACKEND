@@ -64,6 +64,11 @@ agenda.irongs.com
 `facturation.irongs.com` ouvre exclusivement le module Facturation.
 `agenda.irongs.com` ouvre le module Agenda.
 
+Important : `atlas.irongs.com` doit pointer vers le service backend SGDI/ATLAS
+qui sert `app/static/index.html`. Il ne doit pas pointer vers une page vitrine
+ou un site marketing séparé, sinon l'utilisateur verra la page de présentation
+au lieu de l'écran de connexion.
+
 ## Convention des identifiants
 
 Les comptes SGDI/ATLAS suivent une nomenclature lisible :
