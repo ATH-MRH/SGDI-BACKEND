@@ -1,6 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from app.core.authz import require_level
 from sqlalchemy import or_, select, delete
 from sqlalchemy.orm import Session
 
@@ -161,14 +162,14 @@ def stores(society: str | None = None, db: Session = Depends(get_db), user: User
     return rows
 
 
-@router.post("/stores", response_model=StoreOut)
+@router.post("/stores", response_model=StoreOut, dependencies=[Depends(require_level("write"))])
 def create_store(payload: StoreCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     service.ensure_store_schema(db)
     _ensure_society_allowed(user, payload.society)
     return service.create_row(db, Store, payload)
 
 
-@router.put("/stores/{store_id}", response_model=StoreOut)
+@router.put("/stores/{store_id}", response_model=StoreOut, dependencies=[Depends(require_level("write"))])
 def update_store(store_id: int, payload: StoreCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     service.ensure_store_schema(db)
     _ensure_store_update_allowed(db.get(Store, store_id), user, payload)
@@ -211,20 +212,20 @@ def suppliers(society: str | None = None, db: Session = Depends(get_db), user: U
     return rows
 
 
-@router.post("/suppliers", response_model=SupplierOut)
+@router.post("/suppliers", response_model=SupplierOut, dependencies=[Depends(require_level("write"))])
 def create_supplier(payload: SupplierCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_row(db, Supplier, payload)
 
 
-@router.put("/suppliers/{supplier_id}", response_model=SupplierOut)
+@router.put("/suppliers/{supplier_id}", response_model=SupplierOut, dependencies=[Depends(require_level("write"))])
 def update_supplier(supplier_id: int, payload: SupplierCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_row_society_allowed(db.get(Supplier, supplier_id), user)
     _ensure_society_allowed(user, payload.society)
     return service.update_row(db, Supplier, supplier_id, payload)
 
 
-@router.delete("/suppliers/{supplier_id}")
+@router.delete("/suppliers/{supplier_id}", dependencies=[Depends(require_level("delete"))])
 def delete_supplier(supplier_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_row_society_allowed(db.get(Supplier, supplier_id), user)
     return service.delete_row(db, Supplier, supplier_id)
@@ -258,13 +259,13 @@ def articles(store_id: int | None = None, category: str | None = None, society: 
     return rows
 
 
-@router.post("/articles", response_model=ArticleOut)
+@router.post("/articles", response_model=ArticleOut, dependencies=[Depends(require_level("write"))])
 def create_article(payload: ArticleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_article(db, payload)
 
 
-@router.put("/articles/{article_id}", response_model=ArticleOut)
+@router.put("/articles/{article_id}", response_model=ArticleOut, dependencies=[Depends(require_level("write"))])
 def update_article(article_id: int, payload: ArticleCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_article_allowed(db, user, article_id)
     _ensure_society_allowed(user, payload.society)
@@ -321,7 +322,7 @@ def movements(article_id: int | None = None, employee_id: int | None = None, db:
     return rows
 
 
-@router.post("/movements", response_model=MovementOut)
+@router.post("/movements", response_model=MovementOut, dependencies=[Depends(require_level("write"))])
 def create_movement(payload: MovementCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     article = _ensure_article_allowed(db, user, payload.article_id)
     store = _ensure_store_allowed(db, user, payload.store_id)
@@ -332,7 +333,7 @@ def create_movement(payload: MovementCreate, db: Session = Depends(get_db), user
     return service.create_movement(db, payload)
 
 
-@router.delete("/movements/{movement_id}")
+@router.delete("/movements/{movement_id}", dependencies=[Depends(require_level("delete"))])
 def delete_movement(movement_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     movement = db.get(StockMovement, movement_id)
     if not movement:
@@ -341,7 +342,7 @@ def delete_movement(movement_id: int, db: Session = Depends(get_db), user: User 
     return service.delete_movement(db, movement_id)
 
 
-@router.post("/dotations", response_model=EquipmentOut | MaterialAssignmentOut)
+@router.post("/dotations", response_model=EquipmentOut | MaterialAssignmentOut, dependencies=[Depends(require_level("write"))])
 def create_dotation(payload: DotationCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     article = _ensure_article_allowed(db, user, payload.article_id)
     employee = _ensure_employee_allowed(db, user, payload.employee_id)
@@ -360,7 +361,7 @@ def employee_equipment(employee_id: int, db: Session = Depends(get_db), user: Us
     return rows
 
 
-@router.post("/equipment/{equipment_id}/return", response_model=EquipmentOut)
+@router.post("/equipment/{equipment_id}/return", response_model=EquipmentOut, dependencies=[Depends(require_level("write"))])
 def return_equipment(equipment_id: int, payload: ReturnEquipmentIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     equipment = db.get(EmployeeEquipment, equipment_id)
     if not equipment:
