@@ -15831,6 +15831,13 @@ function backendAssignmentRefsForSite(site,situationBySite){
 }
 function siteBackendMetricForSite(site,situationBySite){
   const row=siteBackendSituationForSite(site,situationBySite);
+  if(!row){
+    const agents=siteAgentsAffectes(site);
+    const eff=siteEffectifsNorm(site);
+    const contractual=+eff.totalContractuel||0;
+    const realized=agents.length;
+    return {contractual,realized,missing:Math.max(0,contractual-realized),surplus:Math.max(0,realized-contractual),operational:siteIsOperationalByOpeningDate(site),row:null};
+  }
   const contractual=siteBackendNumber(row?.contractual_staff);
   const realized=siteBackendNumber(row?.realized_staff);
   const missing=siteBackendNumber(row?.missing_staff);
@@ -15863,13 +15870,24 @@ function siteSynthKpiHTML({mode,tone="neutral",icon="•",label,value,sub,title}
 }
 function siteSyntheseServerHTML(d,sites){
   if(!d)return"";
-  const siteInstanceAffectation=siteBackendNumber(d.instance_assignment_sites);
-  const siteActif=siteBackendNumber(d.active_sites);
-  const siteOperationnel=siteBackendNumber(d.operational_sites);
-  const effectifGlobal=siteBackendNumber(d.contractual_staff);
-  const effectifRealise=siteBackendNumber(d.realized_staff);
-  const manqueGlobal=siteBackendNumber(d.missing_staff);
-  const surplusGlobal=("surplus_staff" in d)?siteBackendNumber(d.surplus_staff):Math.max(0,effectifRealise-effectifGlobal);
+  let siteInstanceAffectation=siteBackendNumber(d.instance_assignment_sites);
+  let siteActif=siteBackendNumber(d.active_sites);
+  let siteOperationnel=siteBackendNumber(d.operational_sites);
+  let effectifGlobal=siteBackendNumber(d.contractual_staff);
+  let effectifRealise=siteBackendNumber(d.realized_staff);
+  let manqueGlobal=siteBackendNumber(d.missing_staff);
+  let surplusGlobal=("surplus_staff" in d)?siteBackendNumber(d.surplus_staff):Math.max(0,effectifRealise-effectifGlobal);
+  if(Array.isArray(sites)){
+    const situationBySite=siteBackendSituationMap(d);
+    const metrics=sites.map(site=>siteBackendMetricForSite(site,situationBySite));
+    siteActif=sites.length;
+    siteInstanceAffectation=metrics.filter(m=>m.realized===0).length;
+    siteOperationnel=metrics.filter(m=>m.operational).length;
+    effectifGlobal=metrics.reduce((sum,m)=>sum+m.contractual,0);
+    effectifRealise=metrics.reduce((sum,m)=>sum+m.realized,0);
+    manqueGlobal=metrics.reduce((sum,m)=>sum+m.missing,0);
+    surplusGlobal=metrics.reduce((sum,m)=>sum+m.surplus,0);
+  }
   return`<div class="sites-synth-panel">
     <div class="sites-synth-head"><div><span>Vue exploitation</span><h2>Synthèse situation générale des sites</h2></div><button type="button" onclick="filterSitesSituation('all')">Tous les sites</button></div>
     <div id="sites-synth-detail" class="sites-synth-detail" style="display:none"></div>
