@@ -377,7 +377,7 @@ def on_startup() -> None:
             cleaned_drh = drh_service.cleanup_base64_photos(db)
             if cleaned_drh:
                 logger.info("Photos Base64 nettoyées dans les tables DRH: %s ligne(s)", cleaned_drh)
-        admin_username = (settings.admin_initial_username or settings.admin_system_username or "").strip()
+        admin_username = (settings.admin_system_username or settings.admin_initial_username or "ADG01").strip()
         admin = db.query(User).filter(User.username == admin_username).one_or_none() if admin_username else None
         if admin is None and admin_username and settings.admin_initial_password:
             admin = User(

@@ -3186,6 +3186,27 @@ function _sgdiSpeakText(text){
 function _sgdiSpeakFallback(){
   _sgdiSpeakText("Bonjour. Bienvenue dans ATLAS. Sélectionnez une société.");
 }
+function isAdminSystemUsernameCandidate(username){
+  const u=normalizeAccessCode(username);
+  return u==="ADMIN"||/^ADG\d+$/.test(u);
+}
+async function startAdminSystemSession(password){
+  const us=await window.SGDI_API.auth.adminSystemLogin(password);
+  window.__SGDI_BACKEND_ENABLED__=true;
+  const authUser=us?.user||us;
+  session={username:authUser.username||"ADG01",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
+  saveSession(session);
+  const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
+  if(!loaded){
+    sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+    saveSession(null);
+    session=null;
+    sgdiPostgresReady=false;
+    throw new Error("données non chargées");
+  }
+  showDailyValidationCodeIfNeeded();
+  openAdminSystemAccess();
+}
 async function login(u,p,opt={}){
   setLoginBusy(true,"Verification des identifiants...");
   if(sgdiBackendShouldUse()){
@@ -3194,6 +3215,19 @@ async function login(u,p,opt={}){
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
       session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
+      if(!opt.adminSystem&&isAdminSystemUsernameCandidate(session.username)&&isAdmin()){
+        try{
+          await startAdminSystemSession(p);
+          return;
+        }catch(adminErr){
+          sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
+          saveSession(null);
+          session=null;
+          setLoginBusy(false);
+          toast("Accès Administration système refusé : "+(adminErr.message||"compte système non configuré"),"error");
+          return;
+        }
+      }
       saveSession(session);
       // Tentative de rendu immédiat depuis le cache (même utilisateur, < 2h)
       const loginCached=_bootCacheLoad(session.username);
@@ -3233,9 +3267,9 @@ async function login(u,p,opt={}){
   toast("Connexion obligatoire : aucun mode local autorisé","error");return
 }
 function openAdminSystemPasswordModal(form){
-  const username="admin";
+  const username="ADG01";
   openModal(`<h3 class="font-bold text-lg mb-2">Administration système</h3>
-    <p class="text-sm text-slate-500 mb-4">Entrez le mot de passe administrateur.</p>
+    <p class="text-sm text-slate-500 mb-4">Entrez le mot de passe du compte système ${escapeHTML(username)}.</p>
     <form onsubmit="event.preventDefault();validateAdminSystemPassword(this)">
       <input type="hidden" name="username" value="${escapeHTML(username)}"/>
       <label class="label">Mot de passe</label>
@@ -3252,21 +3286,7 @@ async function validateAdminSystemPassword(form){
   if(!password){toast("Mot de passe obligatoire","error");return}
   closeModal();
   try{
-    const us=await window.SGDI_API.auth.adminSystemLogin(password);
-    window.__SGDI_BACKEND_ENABLED__=true;
-    const authUser=us?.user||us;
-    session={username:authUser.username||"admin",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
-    saveSession(session);
-    const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
-    if(!loaded){
-      sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
-      saveSession(null);
-      session=null;
-      sgdiPostgresReady=false;
-      toast("Connexion refusée : données non chargées","error");return;
-    }
-    showDailyValidationCodeIfNeeded();
-    openAdminSystemAccess();
+    await startAdminSystemSession(password);
   }catch(e){
     sessionStorage.removeItem(SGDI_API_TOKEN_KEY);
     saveSession(null);
@@ -15123,19 +15143,21 @@ function sitesSocieteSelectorHTML(sites){
   const selected=sitesPageSocieteFilter();
   const count=(sites||[]).length;
   const locked=!!session?.societe;
-  const socs=societeConfig().custom||SOCIETES;
-  return `<div class="card p-3 mb-4" style="border-left:4px solid #1d4ed8;background:#f8fafc">
-    <div class="flex items-center justify-between gap-3 flex-wrap">
-      <div>
-        <div class="text-xs font-black uppercase tracking-widest text-slate-500">${locked?"Société active":"Filtre société des sites"}</div>
-        <div class="font-black" style="color:#1d4ed8">${escapeHTML(selected||"Toutes les sociétés")}</div>
-        <div class="text-xs text-slate-500">${count} site(s) actif(s) affiché(s) dans la page centrale.</div>
-      </div>
-      ${locked?`<div class="pill pill-blue">Périmètre verrouillé</div>`:`<div class="flex items-end gap-2 flex-wrap">
-        <div><label class="label">Sélectionner société</label><select class="select" onchange="setSitesSocieteFilter(this.value)"><option value="" ${!selected?"selected":""}>Toutes les sociétés</option>${socs.map(s=>`<option value="${escapeHTML(s)}" ${normalizeSocieteName(selected)===normalizeSocieteName(s)?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
-        ${selected&&!session?.societe?`<button type="button" class="btn btn-ghost text-sm" onclick="setSitesSocieteFilter('')">Vue globale</button>`:""}
-      </div>`}
+  const socs=currentAllowedSocietes();
+  return `<div class="sites-society-filter mb-4">
+    <div class="sites-society-filter__summary">
+      <span>${locked?"Périmètre verrouillé":"Périmètre sites"}</span>
+      <strong>${escapeHTML(selected||"Toutes les sociétés autorisées")}</strong>
+      <small>${count} site(s) actif(s) affiché(s)</small>
     </div>
+    ${locked?`<div class="sites-society-filter__locked">Société active</div>`:`<div class="sites-society-filter__control">
+      <label for="sites-society-select">Société</label>
+      <select id="sites-society-select" class="select" onchange="setSitesSocieteFilter(this.value)">
+        <option value="" ${!selected?"selected":""}>Toutes les sociétés autorisées</option>
+        ${socs.map(s=>`<option value="${escapeHTML(s)}" ${normalizeSocieteName(selected)===normalizeSocieteName(s)?"selected":""}>${escapeHTML(s)}</option>`).join("")}
+      </select>
+      ${selected&&!session?.societe?`<button type="button" class="sites-society-filter__reset" onclick="setSitesSocieteFilter('')">Réinitialiser</button>`:""}
+    </div>`}
   </div>`;
 }
 
