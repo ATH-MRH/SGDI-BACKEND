@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.authz import require_level
 from app.core.pagination import paginate_statement
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
@@ -69,20 +70,20 @@ def clients(society: str | None = None, status: str | None = None, db: Session =
     return rows
 
 
-@router.post("/clients", response_model=ClientOut)
+@router.post("/clients", response_model=ClientOut, dependencies=[Depends(require_level("write"))])
 def create_client(payload: ClientCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.create_row(db, Client, payload)
 
 
-@router.put("/clients/{client_id}", response_model=ClientOut)
+@router.put("/clients/{client_id}", response_model=ClientOut, dependencies=[Depends(require_level("write"))])
 def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = _ensure_client_allowed(db, user, client_id)
     _ensure_society_allowed(user, payload.society or existing.society)
     return service.update_row(db, Client, client_id, payload)
 
 
-@router.delete("/clients/{client_id}")
+@router.delete("/clients/{client_id}", dependencies=[Depends(require_level("delete"))])
 def delete_client(client_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_client_allowed(db, user, client_id)
     return service.delete_row(db, Client, client_id)
