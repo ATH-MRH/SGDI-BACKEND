@@ -63,7 +63,10 @@ def authorized_societies(user: User | None) -> list[str]:
 def unrestricted_scope(user: User | None) -> bool:
     if not user:
         return False
-    return user.role == "admin" or user.access_level == "H5"
+    # Définition consolidée (un seul prédicat admin/H5 partout) — voir app/core/authz.py.
+    # Reconnaît désormais aussi les variantes de rôle admin (ADM/ADM1/ADM2) et la casse.
+    from app.core.authz import is_unrestricted
+    return is_unrestricted(user)
 
 
 def effective_societies(user: User | None, society: str | None = None) -> list[str]:

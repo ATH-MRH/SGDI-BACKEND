@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.authz import require_level
+from app.core.authz import is_unrestricted, require_level
 from app.core.pagination import paginate_list, paginate_statement
 from app.db.session import get_db
 from app.modules.erp.service import unrestricted_scope
@@ -94,6 +94,17 @@ def _ensure_site_allowed(db: Session, user: User, site_id: int | None) -> Site |
     if society:
         _ensure_society_allowed(user, society)
     return site
+
+
+def _ensure_global_op(user: User) -> None:
+    """Opérations de masse (génération/clôture sur TOUTES les sociétés) : réservées aux
+    non-restreints (admin / H5). Le service ne sait pas encore générer par société ;
+    tant que ce n'est pas le cas, un utilisateur cloisonné ne peut pas agir globalement."""
+    if not is_unrestricted(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Opération globale (toutes sociétés) réservée à l'administration système",
+        )
 
 
 def _ensure_employee_allowed(db: Session, user: User, employee_id: int | None) -> Employee | None:
@@ -226,8 +237,8 @@ def site_posts(site_id: int | None = None, db: Session = Depends(get_db), user: 
 
 @router.post("/assignments", response_model=AssignmentOut, dependencies=[Depends(require_level("write"))])
 def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    site = _ensure_site_allowed(db, user, payload.site_id) if payload.site_id else None
     employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    site = _ensure_site_allowed(db, user, payload.site_id)
     if site and employee and _site_society(site) and employee.society:
         if _normalize_society(_site_society(site)) != _normalize_society(employee.society):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société employé/site incohérente")
@@ -242,6 +253,7 @@ def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTas
 def update_assignment(assignment_id: int, payload: AssignmentUpdate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(current_user)):
     assignment = service.get_or_404(db, Assignment, assignment_id)
     employee = _ensure_employee_allowed(db, user, assignment.employee_id)
+    _ensure_site_allowed(db, user, assignment.site_id)
     was_active = assignment.active == 1
     going_inactive = payload.active == 0
 
@@ -298,11 +310,13 @@ def assignments(site_id: int | None = None, employee_id: int | None = None, acti
 
 @router.post("/pointage/daily/generate", dependencies=[Depends(require_level("generate"))])
 def generate_daily(presence_date: date | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_global_op(user)
     return service.generate_daily_presence(db, presence_date or date.today())
 
 
 @router.post("/pointage/daily/generate-rotation", dependencies=[Depends(require_level("generate"))])
 def generate_daily_rotation(payload: RotationGenerateRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_global_op(user)
     return service.generate_rotation_daily_presence(db, payload)
 
 
@@ -319,6 +333,7 @@ def pointage_standby(presence_date: date | None = None, society: str | None = No
 
 @router.post("/pointage/daily/close", dependencies=[Depends(require_level("validate"))])
 def close_daily(presence_date: date | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_global_op(user)
     return service.close_daily_presence(db, presence_date or date.today())
 
 
@@ -341,13 +356,20 @@ def daily_presence(presence_date: date | None = None, site_id: int | None = None
 
 @router.post("/pointage/daily", response_model=DailyPresenceOut, dependencies=[Depends(require_level("write"))])
 def create_daily_presence(payload: DailyPresenceCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if hasattr(payload, "site_id") and payload.site_id:
+    _ensure_employee_allowed(db, user, payload.employee_id)
+    if payload.site_id:
         _ensure_site_allowed(db, user, payload.site_id)
     return service.create_row(db, DailyPresence, payload)
 
 
 @router.patch("/pointage/daily/{presence_id}", response_model=DailyPresenceOut, dependencies=[Depends(require_level("write"))])
 def update_daily_presence(presence_id: int, payload: DailyPresenceUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    presence = service.get_or_404(db, DailyPresence, presence_id)
+    _ensure_employee_allowed(db, user, getattr(presence, "employee_id", None))
+    if getattr(presence, "site_id", None):
+        _ensure_site_allowed(db, user, presence.site_id)
+    if getattr(payload, "site_id", None):
+        _ensure_site_allowed(db, user, payload.site_id)  # site cible si on déplace la présence
     return service.update_row(db, DailyPresence, presence_id, payload)
 
 
@@ -367,12 +389,26 @@ def events(status: str | None = None, level: str | None = None, db: Session = De
 
 
 @router.post("/events", response_model=EventOut, dependencies=[Depends(require_level("write"))])
-def create_event(payload: EventCreate, db: Session = Depends(get_db)):
+def create_event(payload: EventCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    if payload.employee_id:
+        _ensure_employee_allowed(db, user, payload.employee_id)
+    if payload.site_id:
+        _ensure_site_allowed(db, user, payload.site_id)
+    if not payload.employee_id and not payload.site_id and not is_unrestricted(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Périmètre requis (site ou employé) pour créer un évènement",
+        )
     return service.create_row(db, Event, payload)
 
 
 @router.post("/events/{event_id}/close", response_model=EventOut, dependencies=[Depends(require_level("validate"))])
-def close_event(event_id: int, action_taken: str | None = None, db: Session = Depends(get_db)):
+def close_event(event_id: int, action_taken: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    event = service.get_or_404(db, Event, event_id)
+    if event.site_id:
+        _ensure_site_allowed(db, user, event.site_id)
+    elif not is_unrestricted(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Évènement hors périmètre")
     return service.close_event(db, event_id, action_taken)
 
 
@@ -398,9 +434,22 @@ def list_movements(
 
 @router.post("/movements", response_model=OpsMovementOut, dependencies=[Depends(require_level("write"))])
 def upsert_movement(payload: OpsMovementCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    scoped = False
+    if payload.employee_id:
+        _ensure_employee_allowed(db, user, payload.employee_id)
+        scoped = True
+    if payload.site_id:
+        _ensure_site_allowed(db, user, payload.site_id)
+        scoped = True
     society = str(payload.society or "").strip()
     if society:
         _ensure_society_allowed(user, society)
+        scoped = True
+    if not scoped and not is_unrestricted(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Périmètre requis (employé, site ou société) pour un mouvement",
+        )
     # mode="json" : les dates deviennent des chaînes ISO, indispensables car le bridge
     # recopie l'item brut dans la colonne JSON data["_legacy"] (un objet date y casse).
     return service.upsert_movement(db, payload.model_dump(mode="json", exclude_unset=True))
