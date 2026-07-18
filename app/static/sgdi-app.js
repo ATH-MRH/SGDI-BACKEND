@@ -4249,10 +4249,10 @@ function workspaceTabsBarHTML(){
     <a class="ws-quicklaunch-btn" href="ms-excel:" onclick="event.stopPropagation();window.location.href='ms-excel:';return false" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></a>
     <a class="ws-quicklaunch-btn" href="calculator:" onclick="event.stopPropagation();window.location.href='calculator:';return false" title="Calculatrice"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></a>
   </div>`;
+  const sgdiActionsHTML=`<div class="ws-system-actions">${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
   return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
-    <div class="ws-tab-actions">${quickLaunchHTML}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}</div>
-    <button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button>
+    <div class="ws-tab-actions">${quickLaunchHTML}${sgdiActionsHTML}</div>
   </div>`;
 }
 function hexToIconBg(hex){
