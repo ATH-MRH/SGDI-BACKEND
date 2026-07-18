@@ -379,7 +379,8 @@ def on_startup() -> None:
                 logger.info("Photos Base64 nettoyées dans les tables DRH: %s ligne(s)", cleaned_drh)
         admin_username = (settings.admin_system_username or settings.admin_initial_username or "ADG01").strip()
         admin = db.query(User).filter(User.username == admin_username).one_or_none() if admin_username else None
-        if admin is None and admin_username and settings.admin_initial_password:
+        admin_reset_password = settings.admin_system_password or settings.admin_initial_password
+        if admin is None and admin_username and admin_reset_password:
             admin = User(
                 username=admin_username,
                 email=None,
@@ -387,11 +388,20 @@ def on_startup() -> None:
                 role="admin",
                 access_level="H5",
                 authorized_societies=[],
-                authorized_structures=[],
-                password_hash=hash_password(settings.admin_initial_password),
+                authorized_structures=["admin"],
+                authorized_sites=[],
+                password_hash=hash_password(admin_reset_password),
                 is_active=True,
             )
             db.add(admin)
+            logger.info("Compte administrateur système initialisé: %s", admin_username)
+        elif admin is not None and settings.admin_system_password:
+            admin.role = "admin"
+            admin.access_level = "H5"
+            admin.authorized_structures = ["admin"]
+            admin.password_hash = hash_password(settings.admin_system_password)
+            admin.is_active = True
+            logger.info("Mot de passe Administration système réinitialisé au démarrage: %s", admin_username)
         elif admin is None:
             logger.warning("Compte administrateur absent: définissez ADMIN_INITIAL_USERNAME et ADMIN_INITIAL_PASSWORD pour le créer au démarrage")
         # Compte module FACTURATION — créé UNIQUEMENT si un mot de passe fort est fourni
