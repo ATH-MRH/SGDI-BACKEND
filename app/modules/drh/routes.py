@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from app.core.authz import require_level
 from fastapi.encoders import jsonable_encoder
 from io import BytesIO
 import unicodedata
@@ -237,7 +238,7 @@ def repair_employee_codes(db: Session = Depends(get_db), user: User = Depends(cu
     return {"updated": updated}
 
 
-@router.post("/employees", response_model=EmployeeOut)
+@router.post("/employees", response_model=EmployeeOut, dependencies=[Depends(require_level("write"))])
 def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     code = (payload.code or "").strip().upper() or service.next_employee_code(db, payload.society)
@@ -258,7 +259,7 @@ def get_employee(employee_id: int, db: Session = Depends(get_db), user: User = D
     return _ensure_employee_allowed(db, user, employee_id)
 
 
-@router.put("/employees/{employee_id}", response_model=EmployeeOut)
+@router.put("/employees/{employee_id}", response_model=EmployeeOut, dependencies=[Depends(require_level("write"))])
 def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = _ensure_employee_allowed(db, user, employee_id)
     _ensure_society_allowed(user, payload.society or existing.society)
@@ -272,7 +273,7 @@ def update_employee(employee_id: int, payload: EmployeeUpdate, db: Session = Dep
     return service.update_row(db, Employee, employee_id, payload)
 
 
-@router.delete("/employees/{employee_id}")
+@router.delete("/employees/{employee_id}", dependencies=[Depends(require_level("delete"))])
 def delete_employee(
     employee_id: int,
     db: Session = Depends(get_db),
@@ -334,13 +335,13 @@ def _action_success(data):
     return {"status": "success", "data": jsonable_encoder(data)}
 
 
-@router.post("/candidates")
+@router.post("/candidates", dependencies=[Depends(require_level("write"))])
 def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return _action_success(service.create_candidate(db, payload, username=user.username))
 
 
-@router.put("/candidates/{candidate_id}")
+@router.put("/candidates/{candidate_id}", dependencies=[Depends(require_level("write"))])
 def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
@@ -348,7 +349,7 @@ def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = 
     return _action_success(service.update_candidate(db, candidate_id, payload))
 
 
-@router.post("/candidates/validate-section")
+@router.post("/candidates/validate-section", dependencies=[Depends(require_level("validate"))])
 def validate_candidate_section(
     payload: CandidateCreate,
     section: str,
@@ -363,14 +364,14 @@ def validate_candidate_section(
     return service.validate_candidate_section(db, payload, section=section, existing_id=candidate_id, username=user.username)
 
 
-@router.post("/candidates/{candidate_id}/validate-final")
+@router.post("/candidates/{candidate_id}/validate-final", dependencies=[Depends(require_level("validate"))])
 def validate_candidate_final(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
     return _action_success(service.validate_candidate_final(db, candidate_id, username=user.username))
 
 
-@router.post("/candidates/{candidate_id}/marquer-contractualisation")
+@router.post("/candidates/{candidate_id}/marquer-contractualisation", dependencies=[Depends(require_level("validate"))])
 def marquer_contractualisation(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """Passe le candidat en 'a_contractualiser' — étape entre réserve et embauche."""
     existing = service.get_or_404(db, Candidate, candidate_id)
@@ -378,7 +379,7 @@ def marquer_contractualisation(candidate_id: int, db: Session = Depends(get_db),
     return _action_success(service.marquer_a_contractualiser(db, candidate_id, username=user.username))
 
 
-@router.delete("/candidates/{candidate_id}")
+@router.delete("/candidates/{candidate_id}", dependencies=[Depends(require_level("delete"))])
 def delete_candidate(
     candidate_id: int,
     db: Session = Depends(get_db),
@@ -391,7 +392,7 @@ def delete_candidate(
     return _action_success(service.delete_row(db, Candidate, candidate_id))
 
 
-@router.post("/candidates/{candidate_id}/recruit")
+@router.post("/candidates/{candidate_id}/recruit", dependencies=[Depends(require_level("validate"))])
 def recruit(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     candidate = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, candidate.society)
@@ -406,13 +407,13 @@ def contracts(employee_id: int | None = None, status: str | None = None, db: Ses
     return _filter_employee_owned_rows(db, user, rows)
 
 
-@router.post("/contracts", response_model=ContractOut)
+@router.post("/contracts", response_model=ContractOut, dependencies=[Depends(require_level("write"))])
 def create_contract(payload: ContractCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, payload.employee_id)
     return service.create_row(db, Contract, payload)
 
 
-@router.put("/contracts/{contract_id}", response_model=ContractOut)
+@router.put("/contracts/{contract_id}", response_model=ContractOut, dependencies=[Depends(require_level("write"))])
 def update_contract(contract_id: int, payload: ContractUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = service.get_or_404(db, Contract, contract_id)
     _ensure_employee_allowed(db, user, existing.employee_id)
@@ -427,20 +428,20 @@ def leaves(employee_id: int | None = None, status: str | None = None, db: Sessio
     return _filter_employee_owned_rows(db, user, rows)
 
 
-@router.post("/leaves", response_model=LeaveOut)
+@router.post("/leaves", response_model=LeaveOut, dependencies=[Depends(require_level("write"))])
 def create_leave(payload: LeaveCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, payload.employee_id)
     return service.create_row(db, Leave, payload)
 
 
-@router.post("/leaves/{leave_id}/approve", response_model=LeaveOut)
+@router.post("/leaves/{leave_id}/approve", response_model=LeaveOut, dependencies=[Depends(require_level("validate"))])
 def approve_leave(leave_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     leave = service.get_or_404(db, Leave, leave_id)
     _ensure_employee_allowed(db, user, leave.employee_id)
     return service.approve_leave(db, leave_id)
 
 
-@router.post("/leaves/{leave_id}/refuse", response_model=LeaveOut)
+@router.post("/leaves/{leave_id}/refuse", response_model=LeaveOut, dependencies=[Depends(require_level("validate"))])
 def refuse_leave(leave_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     leave = service.get_or_404(db, Leave, leave_id)
     _ensure_employee_allowed(db, user, leave.employee_id)
@@ -455,7 +456,7 @@ def sanctions(employee_id: int | None = None, db: Session = Depends(get_db), use
     return _filter_employee_owned_rows(db, user, rows)
 
 
-@router.post("/sanctions", response_model=SanctionOut)
+@router.post("/sanctions", response_model=SanctionOut, dependencies=[Depends(require_level("write"))])
 def create_sanction(payload: SanctionCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, payload.employee_id)
     return service.create_row(db, Sanction, payload)
@@ -468,7 +469,7 @@ def documents(owner_type: str | None = None, owner_id: int | None = None, db: Se
     return _filter_documents(db, user, rows)
 
 
-@router.post("/documents", response_model=DocumentOut)
+@router.post("/documents", response_model=DocumentOut, dependencies=[Depends(require_level("write"))])
 def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_document_allowed(db, user, payload.owner_type, payload.owner_id)
     return service.create_row(db, Document, payload)
@@ -483,7 +484,7 @@ def contract_templates(
     return service.list_rows(db, ContractTemplate, {"contract_type": contract_type, "active": active})
 
 
-@router.post("/contract-templates", response_model=ContractTemplateOut)
+@router.post("/contract-templates", response_model=ContractTemplateOut, dependencies=[Depends(require_level("write"))])
 async def create_contract_template(
     code: Annotated[str, Form()],
     title: Annotated[str, Form()],
@@ -522,7 +523,7 @@ async def create_contract_template(
     return row
 
 
-@router.put("/contract-templates/{template_id}", response_model=ContractTemplateOut)
+@router.put("/contract-templates/{template_id}", response_model=ContractTemplateOut, dependencies=[Depends(require_level("write"))])
 async def update_contract_template(
     template_id: int,
     code: Annotated[str | None, Form()] = None,
@@ -566,7 +567,7 @@ async def update_contract_template(
     return row
 
 
-@router.delete("/contract-templates/{template_id}")
+@router.delete("/contract-templates/{template_id}", dependencies=[Depends(require_level("delete"))])
 def delete_contract_template(template_id: int, db: Session = Depends(get_db)):
     return service.delete_row(db, ContractTemplate, template_id)
 
@@ -586,21 +587,21 @@ def contract_clauses(template_id: int | None = None, db: Session = Depends(get_d
     return service.list_rows(db, ContractConditionalClause, {"template_id": template_id})
 
 
-@router.post("/contract-clauses", response_model=ContractConditionalClauseOut)
+@router.post("/contract-clauses", response_model=ContractConditionalClauseOut, dependencies=[Depends(require_level("write"))])
 def create_contract_clause(payload: ContractConditionalClauseCreate, db: Session = Depends(get_db)):
     if payload.template_id:
         service.get_or_404(db, ContractTemplate, payload.template_id)
     return service.create_row(db, ContractConditionalClause, payload)
 
 
-@router.put("/contract-clauses/{clause_id}", response_model=ContractConditionalClauseOut)
+@router.put("/contract-clauses/{clause_id}", response_model=ContractConditionalClauseOut, dependencies=[Depends(require_level("write"))])
 def update_contract_clause(clause_id: int, payload: ContractConditionalClauseUpdate, db: Session = Depends(get_db)):
     if payload.template_id:
         service.get_or_404(db, ContractTemplate, payload.template_id)
     return service.update_row(db, ContractConditionalClause, clause_id, payload)
 
 
-@router.delete("/contract-clauses/{clause_id}")
+@router.delete("/contract-clauses/{clause_id}", dependencies=[Depends(require_level("delete"))])
 def delete_contract_clause(clause_id: int, db: Session = Depends(get_db)):
     return service.delete_row(db, ContractConditionalClause, clause_id)
 
@@ -613,13 +614,13 @@ def generated_contracts(employee_id: int | None = None, db: Session = Depends(ge
     return _filter_employee_owned_rows(db, user, rows)
 
 
-@router.post("/generated-contracts", response_model=GeneratedContractOut)
+@router.post("/generated-contracts", response_model=GeneratedContractOut, dependencies=[Depends(require_level("write"))])
 def generate_contract(payload: GenerateContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_employee_allowed(db, user, payload.employee_id)
     return service.generate_contract(db, payload, user)
 
 
-@router.post("/generated-contracts/from-form", response_model=GeneratedContractOut)
+@router.post("/generated-contracts/from-form", response_model=GeneratedContractOut, dependencies=[Depends(require_level("write"))])
 def generate_contract_from_form(payload: DirectContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
     return service.generate_contract_from_form(db, payload, user)
