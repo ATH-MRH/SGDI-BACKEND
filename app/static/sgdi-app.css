@@ -5829,7 +5829,36 @@ body:has(.company-portal) #atlas-ai-widget .ai-fab{
   border-width:1px!important;
 }
 .admin-access-card{
-  max-height:calc(100vh - 255px);
+  max-height:calc(100vh - 335px);
+}
+.admin-access-toolbar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.admin-access-toolbar .input{
+  flex:1 1 280px;
+  min-width:240px;
+}
+.admin-access-filter{
+  min-height:38px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:0 12px;
+  border:1px solid #d9e7f5;
+  border-radius:8px;
+  background:#f8fbff;
+  color:#334155;
+  font-size:13px;
+  font-weight:850;
+}
+#admin-right-visible-count{
+  margin-left:auto;
+  color:#64748b;
+  font-size:12px;
+  font-weight:900;
 }
 .admin-access-table thead th{
   position:sticky;
@@ -5866,6 +5895,39 @@ body:has(.company-portal) #atlas-ai-widget .ai-fab{
 }
 .admin-access-table input[type="checkbox"]{
   accent-color:#0f6fd8;
+}
+.admin-access-toggle{
+  display:inline-flex;
+  min-width:88px;
+  min-height:34px;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:5px 8px;
+  border:1px solid #d9e7f5;
+  border-radius:999px;
+  background:#f8fafc;
+  color:#64748b;
+  font-size:10px;
+  font-weight:950;
+  cursor:pointer;
+}
+.admin-access-toggle input{
+  width:16px!important;
+  height:16px!important;
+}
+.admin-access-toggle.is-default{
+  background:#f8fafc;
+}
+.admin-access-toggle.is-exception-allow{
+  border-color:#86efac;
+  background:#dcfce7;
+  color:#166534;
+}
+.admin-access-toggle.is-exception-deny{
+  border-color:#fecaca;
+  background:#fee2e2;
+  color:#991b1b;
 }
 @media(max-width:760px){
   .module-counters-ribbon,

@@ -31387,19 +31387,68 @@ function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
   const colors={agent:"#0f766e",ops:"#043970",dispatch:"#7c3aed",ADM:"#dc2626"};
   const accessRoles=ADMIN_ACCESS_ROLES;
-  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Droits techniques avancés</h1><p class="text-sm text-slate-500 mt-1">À utiliser uniquement pour des exceptions rôle × module. Pour une configuration normale, utilisez les profils d'accès.</p></div>
-    <div class="card p-3 mb-3 bg-blue-50 border border-blue-200 text-sm text-blue-800">Cette matrice règle les droits par type de compte, pas les profils. Les profils restent la méthode principale et lisible.</div>
+  const roleLabels={agent:"Agent",dispatch:"Superviseur",ops:"OPS / RH",ADM:"Admin"};
+  const exceptionKeys=Object.keys(droits).filter(k=>droits[k]!==undefined);
+  const allowExceptions=exceptionKeys.filter(k=>!!droits[k]).length;
+  const denyExceptions=exceptionKeys.length-allowExceptions;
+  const effectiveAllowed=ADMIN_MODULES.reduce((sum,m)=>sum+accessRoles.filter(r=>{const key=m+":"+r;return droits[key]===undefined?canAccessOriginal(m,r):!!droits[key]}).length,0);
+  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Exceptions techniques d'accès</h1><p class="text-sm text-slate-500 mt-1">À utiliser uniquement pour corriger une exception rôle × module. La configuration normale reste dans les profils d'accès.</p></div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Exceptions</div><div class="text-3xl font-black text-amber-700">${exceptionKeys.length}</div><div class="text-xs text-slate-500">Règles personnalisées</div></div>
+      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Autorisations</div><div class="text-3xl font-black text-emerald-700">${allowExceptions}</div><div class="text-xs text-slate-500">Exceptions qui ouvrent</div></div>
+      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Blocages</div><div class="text-3xl font-black text-red-700">${denyExceptions}</div><div class="text-xs text-slate-500">Exceptions qui ferment</div></div>
+      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Droits effectifs</div><div class="text-3xl font-black text-blue-700">${effectiveAllowed}</div><div class="text-xs text-slate-500">Cases autorisées visibles</div></div>
+    </div>
+    <div class="card p-3 mb-3 bg-amber-50 border border-amber-200 text-sm text-amber-900"><b>Attention :</b> cette matrice ne remplace pas les profils. Une case marquée <b>Défaut</b> vient des règles standards ; une case marquée <b>Exception</b> est une règle enregistrée en base.</div>
+    <div class="card p-3 mb-3 admin-access-toolbar">
+      <input id="admin-right-search" class="input" placeholder="Rechercher un module, code ou groupe..." oninput="adminFilterDroitsTable()"/>
+      <label class="admin-access-filter"><input id="admin-right-only-exceptions" type="checkbox" onchange="adminFilterDroitsTable()"/> Exceptions seulement</label>
+      <span id="admin-right-visible-count">${ADMIN_MODULES.length} module(s)</span>
+    </div>
     <div class="card p-0 overflow-x-auto admin-access-card">
       <table class="w-full text-sm admin-access-table">
-        <thead class="bg-slate-50"><tr><th class="text-left p-3">Module</th>${accessRoles.map(r=>`<th class="p-3" style="color:${colors[r]||"#043970"}">${r}</th>`).join("")}</tr></thead>
-        <tbody>${ADMIN_MODULES.map(m=>{const route=adminModuleRoute(m);const label=adminAccessModuleLabel(m);const group=adminAccessModuleGroup(m);return`<tr class="border-t"><td class="p-3 admin-access-module-cell"><button type="button" class="admin-access-module-label" onclick="navigate('${route}')">${escapeHTML(label)}</button><div class="admin-access-module-meta">${escapeHTML(group)}${label!==m?` · Code : ${escapeHTML(m)}`:""}</div></td>${accessRoles.map(r=>{const key=m+":"+r;const def=canAccessOriginal(m,r);const override=droits[key];const enabled=override===undefined?def:override;return`<td class="p-3 text-center"><input type="checkbox" ${enabled?"checked":""} onchange="adminToggleDroit('${m}','${r}',this.checked)" style="width:18px;height:18px;cursor:pointer"/></td>`}).join("")}</tr>`}).join("")}</tbody>
+        <thead class="bg-slate-50"><tr><th class="text-left p-3">Module</th>${accessRoles.map(r=>`<th class="p-3" style="color:${colors[r]||"#043970"}">${escapeHTML(roleLabels[r]||r)}</th>`).join("")}</tr></thead>
+        <tbody>${ADMIN_MODULES.map(m=>{const route=adminModuleRoute(m);const label=adminAccessModuleLabel(m);const group=adminAccessModuleGroup(m);const rowExceptions=accessRoles.filter(r=>droits[m+":"+r]!==undefined).length;const search=normalizedSearchText([m,label,group].join(" "));return`<tr class="border-t" data-admin-right-row data-exceptions="${rowExceptions}" data-search="${escapeHTML(search)}"><td class="p-3 admin-access-module-cell"><button type="button" class="admin-access-module-label" onclick="navigate('${route}')">${escapeHTML(label)}</button><div class="admin-access-module-meta">${escapeHTML(group)}${label!==m?` · Code : ${escapeHTML(m)}`:""}${rowExceptions?` · ${rowExceptions} exception(s)`:""}</div></td>${accessRoles.map(r=>{const key=m+":"+r;const def=canAccessOriginal(m,r);const override=droits[key];const isOverride=override!==undefined;const enabled=isOverride?!!override:def;const state=isOverride?(enabled?"Exception autorisée":"Exception bloquée"):(def?"Défaut autorisé":"Défaut bloqué");const cls=isOverride?(enabled?"is-exception-allow":"is-exception-deny"):"is-default";return`<td class="p-3 text-center"><label class="admin-access-toggle ${cls}" title="${escapeHTML(state)}"><input type="checkbox" ${enabled?"checked":""} onchange="adminToggleDroit('${jsString(m)}','${jsString(r)}',this.checked)"/><span>${isOverride?"Exception":"Défaut"}</span></label></td>`}).join("")}</tr>`}).join("")}</tbody>
       </table>
     </div>
     <div class="mt-4 flex gap-2"><button class="btn btn-secondary" onclick="navigate('admin/niveaux')">Retour aux profils</button><button class="btn btn-ghost" onclick="adminResetDroits()">Réinitialiser aux valeurs par défaut</button></div>`;
 }
 function canAccessOriginal(key,role){const map=defaultAccessMap();const base=adminAccessBaseRole(role);return(map[key]||["admin"]).includes(base)}
-async function adminToggleDroit(m,r,enabled){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");renderView();return}if(!db.droitsAcces)db.droitsAcces={};db.droitsAcces[m+":"+r]=enabled;try{await SGDI.auth.saveAccessRules(Object.entries(db.droitsAcces).map(([k,v])=>{const parts=k.split(":");return{module_key:parts[0],role:parts[1],allowed:!!v}}))}catch(e){toast("Droit PostgreSQL refusé : "+(e.message||e),"error");return}logActivity("Modification droits",m+":"+r+"="+enabled);toast("Droit mis à jour","success")}
-async function adminResetDroits(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}if(!confirm("Réinitialiser tous les droits aux valeurs par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Droits réinitialisés","success");render()}
+function adminFilterDroitsTable(){
+  const q=normalizedSearchText(document.getElementById("admin-right-search")?.value||"");
+  const onlyExceptions=!!document.getElementById("admin-right-only-exceptions")?.checked;
+  let shown=0;
+  document.querySelectorAll("[data-admin-right-row]").forEach(row=>{
+    const matches=!q||String(row.dataset.search||"").includes(q);
+    const hasException=(+row.dataset.exceptions||0)>0;
+    const ok=matches&&(!onlyExceptions||hasException);
+    row.style.display=ok?"":"none";
+    if(ok)shown++;
+  });
+  const count=document.getElementById("admin-right-visible-count");
+  if(count)count.textContent=shown+" module(s)";
+}
+async function adminToggleDroit(m,r,enabled){
+  if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");renderView();return}
+  if(!db.droitsAcces)db.droitsAcces={};
+  const key=m+":"+r;
+  const previous=db.droitsAcces[key];
+  const def=canAccessOriginal(m,r);
+  if(enabled===def)delete db.droitsAcces[key];
+  else db.droitsAcces[key]=enabled;
+  try{
+    await SGDI.auth.saveAccessRules(Object.entries(db.droitsAcces).map(([k,v])=>{const parts=k.split(":");return{module_key:parts[0],role:parts[1],allowed:!!v}}))
+  }catch(e){
+    if(previous===undefined)delete db.droitsAcces[key];else db.droitsAcces[key]=previous;
+    toast("Droit PostgreSQL refusé : "+(e.message||e),"error");
+    renderView();
+    return
+  }
+  logActivity("Modification droits",enabled===def?m+":"+r+"=défaut":m+":"+r+"="+enabled);
+  toast(enabled===def?"Exception retirée : retour au défaut":"Exception enregistrée","success");
+  render();
+}
+async function adminResetDroits(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}const count=Object.keys(db.droitsAcces||{}).length;if(!count){toast("Aucune exception à réinitialiser","info");return}if(!confirm("Supprimer les "+count+" exception(s) techniques et revenir aux droits par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Exceptions supprimées, droits par défaut restaurés","success");render()}
 function renderAdminAccessSocietes(view){
   const access=societeAccessSettings();
   const passwords={...(access.passwords||{})};
