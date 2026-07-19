@@ -17,8 +17,14 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/',
-    name: 'home',
-    component: () => import('@/pages/HomePage.vue'),
+    component: () => import('@/layouts/AppShell.vue'),
+    children: [
+      { path: '', name: 'home', component: () => import('@/pages/HomePage.vue') },
+      { path: 'incidents', redirect: '/incidents/dashboard' },
+      { path: 'incidents/dashboard', name: 'incidents-dashboard', component: () => import('@/pages/incidents/IncidentsDashboard.vue') },
+      { path: 'incidents/site', name: 'incidents-site', component: () => import('@/pages/incidents/IncidentsList.vue'), props: { mode: 'site' } },
+      { path: 'incidents/autres', name: 'incidents-autres', component: () => import('@/pages/incidents/IncidentsList.vue'), props: { mode: 'autres' } },
+    ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
