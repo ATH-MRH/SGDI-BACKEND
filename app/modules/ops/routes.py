@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 import unicodedata
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
@@ -13,7 +13,7 @@ from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.drh.models import Employee
 from app.modules.ops import iron_sync, service
-from app.modules.ops.models import Assignment, DailyPresence, Event, OpsMovement, Site, SitePost
+from app.modules.ops.models import Assignment, DailyPresence, Event, Incident, OpsMovement, Site, SitePost
 from app.modules.ops.schemas import (
     AssignmentCreate,
     AssignmentOut,
@@ -21,6 +21,10 @@ from app.modules.ops.schemas import (
     DailyPresenceCreate,
     DailyPresenceOut,
     DailyPresenceUpdate,
+    IncidentActionIn,
+    IncidentCreate,
+    IncidentOut,
+    IncidentUpdate,
     OpsMovementCreate,
     OpsMovementOut,
     RotationGenerateRequest,
@@ -566,3 +570,235 @@ def upsert_movement(payload: OpsMovementCreate, db: Session = Depends(get_db), u
     # mode="json" : les dates deviennent des chaînes ISO, indispensables car le bridge
     # recopie l'item brut dans la colonne JSON data["_legacy"] (un objet date y casse).
     return service.upsert_movement(db, payload.model_dump(mode="json", exclude_unset=True))
+
+
+# ── Incidents / Main courante ────────────────────────────────────────────────
+# CRUD du modèle `Incident` (parité avec l'ancien `db.incidents` local, mais persistance
+# serveur — corrige la désync multi-PC). Cloisonnement société réel (corrige la fuite
+# permissive « site orphelin => visible partout » de l'ancien front).
+
+_INCIDENT_CLOSED = {"clos", "resolu", "résolu", "cloture", "clôturé", "ferme", "fermé", "closed"}
+_INCIDENT_CRITICAL = {"critique", "majeur", "urgent"}
+_INCIDENT_ACTION_LABELS = {
+    "acquitter": "Acquitté", "escalader": "Escaladé", "cloturer": "Clôturé", "commenter": "Commentaire",
+}
+
+
+def _incident_public(inc: Incident) -> dict:
+    data = inc.data if isinstance(inc.data, dict) else {}
+    return {
+        "id": inc.id,
+        "incident_date": inc.incident_date,
+        "incident_time": inc.incident_time,
+        "event_type": inc.event_type,
+        "category": inc.category,
+        "severity": inc.severity,
+        "subject": inc.subject,
+        "description": inc.description,
+        "consigne": data.get("consigne"),
+        "destinataire": data.get("destinataire"),
+        "actions": data.get("actions") or [],
+        "status": inc.status,
+        "site_id": inc.site_id,
+        "employee_id": inc.employee_id,
+        "society": inc.society,
+        "created_at": getattr(inc, "created_at", None),
+    }
+
+
+def _incident_in_scope(db: Session, user: User, inc: Incident) -> bool:
+    """Visible si : non restreint ; OU société autorisée ; OU site visible ; OU employé dans
+    le périmètre. Contrairement à l'ancien front, un incident sans société/site connu n'est
+    PAS visible pour un utilisateur restreint (corrige la fuite de scope)."""
+    if is_unrestricted(user):
+        return True
+    allowed = set(_allowed_societies(user))
+    visible = _visible_site_ids(db, user)
+    vis = set(visible) if visible is not None else None
+    if not allowed and vis is None:
+        return True  # aucune restriction (société vide + aucun site)
+    if allowed and inc.society and _normalize_society(inc.society) in allowed:
+        return True
+    if vis is not None and inc.site_id and inc.site_id in vis:
+        return True
+    if allowed and inc.employee_id and _employee_in_scope(db, user, inc.employee_id):
+        return True
+    return False
+
+
+def _incident_is_closed(inc: Incident) -> bool:
+    return str(inc.status or "").lower() in _INCIDENT_CLOSED
+
+
+def _incident_is_critical(inc: Incident) -> bool:
+    return str(inc.severity or "").lower() in _INCIDENT_CRITICAL and not _incident_is_closed(inc)
+
+
+@router.get("/incidents/dashboard")
+def incidents_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    rows = [i for i in db.execute(select(Incident)).scalars().all() if _incident_in_scope(db, user, i)]
+    today = date.today()
+    kpis = {
+        "total": len(rows),
+        "site": sum(1 for i in rows if (i.event_type or "site") != "autre"),
+        "autres": sum(1 for i in rows if i.event_type == "autre"),
+        "ouverts": sum(1 for i in rows if not _incident_is_closed(i)),
+        "critiques": sum(1 for i in rows if _incident_is_critical(i)),
+        "clos": sum(1 for i in rows if _incident_is_closed(i)),
+        "aujourdhui": sum(1 for i in rows if i.incident_date == today),
+    }
+    open_rows = sorted(
+        [i for i in rows if not _incident_is_closed(i)],
+        key=lambda i: getattr(i, "created_at", None) or datetime.min,
+        reverse=True,
+    )[:6]
+    return {"kpis": kpis, "alertes": [_incident_public(i) for i in open_rows]}
+
+
+@router.get("/incidents/page")
+def incidents_page(
+    event_type: str | None = None, status: str | None = None, q: str | None = None,
+    page: int = 1, page_size: int = 20,
+    db: Session = Depends(get_db), user: User = Depends(current_user),
+):
+    stmt = select(Incident)
+    if event_type:
+        stmt = stmt.where(Incident.event_type == event_type)
+    if status:
+        stmt = stmt.where(Incident.status == status)
+    rows = [i for i in db.execute(stmt.order_by(Incident.id.desc())).scalars().all() if _incident_in_scope(db, user, i)]
+    if q:
+        ql = q.lower()
+        rows = [i for i in rows if ql in " ".join(str(v or "").lower() for v in (i.subject, i.description, i.category, i.society))]
+    total = len(rows)
+    start = max(page - 1, 0) * page_size
+    items = [_incident_public(i) for i in rows[start:start + page_size]]
+    pages = (total + page_size - 1) // page_size if page_size else 1
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages}
+
+
+@router.get("/incidents", response_model=list[IncidentOut])
+def list_incidents(event_type: str | None = None, status: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    stmt = select(Incident)
+    if event_type:
+        stmt = stmt.where(Incident.event_type == event_type)
+    if status:
+        stmt = stmt.where(Incident.status == status)
+    rows = [i for i in db.execute(stmt.order_by(Incident.id.desc())).scalars().all() if _incident_in_scope(db, user, i)]
+    return [_incident_public(i) for i in rows]
+
+
+@router.get("/incidents/{incident_id}", response_model=IncidentOut)
+def get_incident(incident_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    inc = db.get(Incident, incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident introuvable")
+    if not _incident_in_scope(db, user, inc):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Incident hors périmètre")
+    return _incident_public(inc)
+
+
+@router.post("/incidents", response_model=IncidentOut, dependencies=[Depends(require_level("write"))])
+def create_incident(payload: IncidentCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    if payload.employee_id:
+        _ensure_employee_allowed(db, user, payload.employee_id)
+    if payload.site_id:
+        _ensure_site_allowed(db, user, payload.site_id)
+    if payload.society:
+        _ensure_society_allowed(user, payload.society)
+    if not (payload.employee_id or payload.site_id or payload.society) and not is_unrestricted(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Périmètre requis (site, employé ou société) pour un évènement")
+    now = datetime.utcnow()
+    inc = Incident(
+        incident_date=payload.incident_date or date.today(),
+        incident_time=payload.incident_time,
+        event_type=payload.event_type or "site",
+        category=payload.category,
+        severity=payload.severity,
+        subject=payload.subject,
+        description=payload.description,
+        status=payload.status or "en_cours",
+        site_id=payload.site_id,
+        employee_id=payload.employee_id,
+        society=payload.society,
+        data={
+            "consigne": payload.consigne,
+            "destinataire": payload.destinataire,
+            "actions": [{
+                "date": now.isoformat(),
+                "user": getattr(user, "username", None) or "system",
+                "type": "creation",
+                "note": "Création de l'évènement",
+            }],
+        },
+    )
+    db.add(inc)
+    db.commit()
+    db.refresh(inc)
+    return _incident_public(inc)
+
+
+@router.patch("/incidents/{incident_id}", response_model=IncidentOut, dependencies=[Depends(require_level("write"))])
+def update_incident(incident_id: int, payload: IncidentUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    inc = db.get(Incident, incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident introuvable")
+    if not _incident_in_scope(db, user, inc):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Incident hors périmètre")
+    if payload.site_id:
+        _ensure_site_allowed(db, user, payload.site_id)
+    if payload.employee_id:
+        _ensure_employee_allowed(db, user, payload.employee_id)
+    if payload.society:
+        _ensure_society_allowed(user, payload.society)
+    # Clôture = validation (H3) ; les autres modifications restent en saisie (H2).
+    if payload.status and str(payload.status).lower() in _INCIDENT_CLOSED and not _incident_is_closed(inc):
+        assert_can(user, "validate")
+    for field in ("incident_date", "incident_time", "event_type", "category", "severity", "subject", "description", "status", "site_id", "employee_id", "society"):
+        val = getattr(payload, field)
+        if val is not None:
+            setattr(inc, field, val)
+    data = dict(inc.data if isinstance(inc.data, dict) else {})
+    if payload.consigne is not None:
+        data["consigne"] = payload.consigne
+    if payload.destinataire is not None:
+        data["destinataire"] = payload.destinataire
+    inc.data = data
+    db.commit()
+    db.refresh(inc)
+    return _incident_public(inc)
+
+
+@router.post("/incidents/{incident_id}/action", response_model=IncidentOut, dependencies=[Depends(require_level("write"))])
+def incident_action(incident_id: int, payload: IncidentActionIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    inc = db.get(Incident, incident_id)
+    if not inc:
+        raise HTTPException(status_code=404, detail="Incident introuvable")
+    if not _incident_in_scope(db, user, inc):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Incident hors périmètre")
+    action = str(payload.action or "").lower()
+    if action not in _INCIDENT_ACTION_LABELS:
+        raise HTTPException(status_code=422, detail="Action inconnue")
+    if action == "cloturer":  # clôture = validation (H3)
+        assert_can(user, "validate")
+    data = dict(inc.data if isinstance(inc.data, dict) else {})
+    actions = list(data.get("actions") or [])
+    actions.append({
+        "date": datetime.utcnow().isoformat(),
+        "user": getattr(user, "username", None) or "system",
+        "type": _INCIDENT_ACTION_LABELS[action],
+        "note": payload.note or "",
+    })
+    data["actions"] = actions
+    inc.data = data
+    if action == "acquitter":
+        inc.status = "acquitte"
+    elif action == "cloturer":
+        inc.status = "clos"
+    elif action == "escalader":
+        inc.status = "en_cours"
+        if str(inc.severity or "").lower() != "critique":
+            inc.severity = "majeur"
+    db.commit()
+    db.refresh(inc)
+    return _incident_public(inc)

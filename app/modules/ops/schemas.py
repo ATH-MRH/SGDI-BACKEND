@@ -191,3 +191,68 @@ class OpsMovementOut(OpsMovementCreate):
 
     model_config = {"from_attributes": True}
 
+
+# ── Incidents / Main courante ────────────────────────────────────────────────
+# Parité avec l'ancien modèle local `db.incidents` (frontend). Le modèle backend
+# `Incident` porte les colonnes exactes ; consigne/destinataire/historique vivent
+# dans la colonne JSON `data`.
+
+class IncidentBase(BaseModel):
+    incident_date: date | None = None
+    incident_time: str | None = None
+    event_type: str = "site"            # 'site' (Évènement site) | 'autre'
+    category: str | None = "Sécurité"   # Sécurité/Discipline/Matériel/Client/Accident/Consigne/Autre
+    severity: str | None = "mineur"     # mineur | majeur | critique
+    subject: str | None = None
+    description: str | None = None
+    consigne: str | None = None         # « Conduite à tenir » -> data
+    destinataire: str | None = None     # -> data
+    status: str = "en_cours"            # en_cours | acquitte | clos
+    site_id: int | None = None
+    employee_id: int | None = None
+    society: str | None = None
+
+
+class IncidentCreate(IncidentBase):
+    pass
+
+
+class IncidentUpdate(BaseModel):
+    incident_date: date | None = None
+    incident_time: str | None = None
+    event_type: str | None = None
+    category: str | None = None
+    severity: str | None = None
+    subject: str | None = None
+    description: str | None = None
+    consigne: str | None = None
+    destinataire: str | None = None
+    status: str | None = None
+    site_id: int | None = None
+    employee_id: int | None = None
+    society: str | None = None
+
+
+class IncidentActionIn(BaseModel):
+    action: str                          # acquitter | escalader | cloturer | commenter
+    note: str | None = None
+
+
+class IncidentOut(BaseModel):
+    id: int
+    incident_date: date | None = None
+    incident_time: str | None = None
+    event_type: str | None = None
+    category: str | None = None
+    severity: str | None = None
+    subject: str | None = None
+    description: str | None = None
+    consigne: str | None = None
+    destinataire: str | None = None
+    actions: list[dict[str, Any]] = []
+    status: str
+    site_id: int | None = None
+    employee_id: int | None = None
+    society: str | None = None
+    created_at: datetime | None = None
+
