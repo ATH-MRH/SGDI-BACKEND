@@ -34726,7 +34726,7 @@ function renderPointageSaisie(){
   const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const date=new Date(yr,mo-1,d);const wd=date.getDay();const we=wd===5||wd===6;return`<th class="text-center text-[10px] font-bold ${we?"text-blue-700 bg-blue-100":"text-slate-600"}" style="border:1px solid #e2e8f0;padding:4px 0;width:28px;min-width:28px;max-width:28px">${String(d).padStart(2,"0")}</th>`}).join("");
   const legende=Object.entries(POINTAGE_CODES).map(([k,v])=>`<span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold" style="background:${v.bg};color:${v.color}"><span class="font-mono font-black">${k}</span>${v.label}</span>`).join(" ");
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
-    ${drumMultiHTML([{id:"pt-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:String(mo).padStart(2,"0"),cb:"drumPtMonthSync"},{id:"pt-drum-yr",label:"Année",opts:drumYearOpts(6),selected:String(yr),cb:"drumPtMonthSync"}])}
+    ${supervisorModuleActive()?"":drumMultiHTML([{id:"pt-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:String(mo).padStart(2,"0"),cb:"drumPtMonthSync"},{id:"pt-drum-yr",label:"Année",opts:drumYearOpts(6),selected:String(yr),cb:"drumPtMonthSync"}])}
     ${ptSearchBarHTML()}
     <div class="flex-1"></div>
     ${isDrh?"":`<button class="btn btn-primary text-xs" style="background:#043970;border-color:#043970" onclick="ptValiderTous('${ym}','${soc.replace(/'/g,"\\'")}')">✅ Valider tous les pointages</button>
