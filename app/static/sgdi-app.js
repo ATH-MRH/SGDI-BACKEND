@@ -3318,7 +3318,7 @@ async function login(u,p,opt={}){
         }
       }
       saveSession(session);
-      // Tentative de rendu immédiat depuis le cache (même utilisateur, < 2h)
+      // Tentative de rendu immédiat depuis le cache (même utilisateur, < 3 min)
       const loginCached=_bootCacheLoad(session.username);
       if(loginCached&&!opt.adminSystem){
         setLoginBusy(true,"Ouverture...");
@@ -3331,7 +3331,7 @@ async function login(u,p,opt={}){
         showDailyValidationCodeIfNeeded();
         sgdiSpeakWelcome();
         location.hash="#/select-societe";route();
-        sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db)}).catch(()=>{});
+        sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{if(loaded)_bootCacheSave(session?.username,db);else _bootCacheResyncFailed();}).catch(()=>_bootCacheResyncFailed());
         return;
       }
       setLoginBusy(true,"Ouverture...");
@@ -34816,20 +34816,38 @@ function renderPointageLegende(){
 
 /* ---- INIT ---- */
 // ── Cache démarrage rapide ────────────────────────────────────────────────────
+// Rendu instantané depuis un instantané local très récent, TOUJOURS suivi d'une
+// resynchro immédiate en arrière-plan (voir bootApp/login). Fenêtre de fraîcheur
+// volontairement courte (contrairement à l'ancien TTL de 2h qui pouvait laisser
+// afficher des données fantômes) : au-delà, on repart d'un chargement serveur pur.
+// Les écritures restent bloquées tant que sgdiHydrated n'est pas vrai (donc tant
+// que la resynchro réelle n'a pas confirmé les données), donc aucune sauvegarde
+// ne peut jamais partir sur la base de ce cache d'affichage seul.
 const BOOT_CACHE_KEY="atlas_boot_cache";
-const BOOT_CACHE_TTL=7200000; // 2h
+const BOOT_CACHE_TTL=180000; // 3 min
 const BOOT_CACHE_MAX=3*1024*1024; // 3 MB max
 function _bootCacheLoad(username){
-  // Plus de cache de démarrage : il pouvait servir une base vieille de 2h (données fantômes).
-  // On purge tout cache existant et on charge TOUJOURS frais depuis le serveur.
-  try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}
-  return null;
+  try{
+    const r=localStorage.getItem(BOOT_CACHE_KEY);
+    if(!r)return null;
+    const c=JSON.parse(r);
+    if(c.u!==username)return null;
+    if(Date.now()-c.t>BOOT_CACHE_TTL)return null;
+    return c.d||null;
+  }catch(e){return null}
 }
 function _bootCacheSave(username,data){
-  // Ne rien persister : on repart toujours du serveur (source de vérité).
-  try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}
+  try{
+    const s=JSON.stringify(data);
+    if(s.length>BOOT_CACHE_MAX)return;
+    localStorage.setItem(BOOT_CACHE_KEY,JSON.stringify({u:username,t:Date.now(),d:data}));
+  }catch(e){}
 }
 function _bootCacheClear(){try{localStorage.removeItem(BOOT_CACHE_KEY)}catch(e){}}
+function _bootCacheResyncFailed(){
+  if(typeof toast==="function")toast("Actualisation impossible : les données affichées peuvent être obsolètes. Vérifiez votre connexion.","error");
+  if(typeof sgdiMarkRefreshAvailable==="function")sgdiMarkRefreshAvailable("Resynchronisation échouée");
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function bootApp(){
@@ -34865,7 +34883,8 @@ async function bootApp(){
       // Resync en arrière-plan
       sgdiPullState({silent:true,render:true,force:true,deferSql:true}).then(loaded=>{
         if(loaded)_bootCacheSave(session?.username,db);
-      }).catch(()=>{});
+        else _bootCacheResyncFailed();
+      }).catch(()=>_bootCacheResyncFailed());
       return;
     }
     // Pas de cache : ouverture immédiate, puis chargement données en arrière-plan.
