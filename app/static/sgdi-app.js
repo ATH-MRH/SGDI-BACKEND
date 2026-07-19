@@ -3641,8 +3641,7 @@ function supervisorModuleActive(){
 }
 function supervisorAuthorizedSiteIds(){
   if(!supervisorModuleActive())return null;
-  const ids=new Set((Array.isArray(session?.sitesAutorises)?session.sitesAutorises:[]).map(v=>String(v||"")).filter(Boolean));
-  return ids.size?ids:null;
+  return new Set((Array.isArray(session?.sitesAutorises)?session.sitesAutorises:[]).map(v=>String(v||"")).filter(Boolean));
 }
 function siteInSupervisorScope(site){
   const ids=supervisorAuthorizedSiteIds();
