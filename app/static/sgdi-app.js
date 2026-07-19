@@ -2369,7 +2369,6 @@ function saveDB(){
     }
     try{sgdiRequireServerWrite()}catch(e){sgdiServerOnlyFailure(e.message||String(e));uiSaveState("Sauvegarde refusée","error");if(window._sgdiSaveOverlayShown)closeSaveOverlay();return false}
     if(!sgdiBackendSave()){uiSaveState("Sauvegarde échouée","error");if(window._sgdiSaveOverlayShown)closeSaveOverlay();return false}
-    uiSaveState("Enregistrement en cours...","");
     setTimeout(()=>refreshRealtimeFeed(),0);
     return true;
   }catch(err){
