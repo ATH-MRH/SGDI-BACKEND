@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "jsx": "preserve",
+    "types": ["node"],
+    "paths": {
+      "@sgdi/shared": ["../../packages/shared/src/index.ts"],
+      "@sgdi/shared/*": ["../../packages/shared/src/*"],
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

@@ -80,6 +80,15 @@ def app_version():
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False), name="uploads")
 
+# Préversion v2 — reconstruction frontend (Vue 3 + Vite), stratégie strangler.
+# Servie sous /v2 UNIQUEMENT si le build existe (frontend/apps/admin/dist) ; l'ancien
+# front reste servi à la racine, totalement inchangé (repère de parité). SPA en hash
+# routing (/v2/#/...) : StaticFiles(html=True) suffit, aucun catch-all serveur requis.
+V2_DIST = Path(__file__).resolve().parent.parent / "frontend" / "apps" / "admin" / "dist"
+if V2_DIST.is_dir():
+    app.mount("/v2", StaticFiles(directory=str(V2_DIST), html=True), name="v2")
+    logger.info("Préversion v2 montée sur /v2 (%s)", V2_DIST)
+
 
 @app.middleware("http")
 async def log_slow_requests(request: Request, call_next):

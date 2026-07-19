@@ -1,0 +1,15 @@
+{
+  "name": "sgdi-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Reconstruction frontend SGDI/ATLAS (Vue 3 + Vite, monorepo strangler). L'ancien front (app/static) reste intact comme repère de parité.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:admin": "npm run dev --workspace @sgdi/admin",
+    "build:admin": "npm run build --workspace @sgdi/admin",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

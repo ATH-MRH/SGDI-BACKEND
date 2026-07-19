@@ -1,0 +1,66 @@
+@import '@sgdi/shared/tokens.css';
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--sg-font-sans);
+  font-size: var(--sg-fs-base);
+  color: var(--sg-text);
+  background: var(--sg-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--sg-brand-600); }
+
+/* Composants de base (préfigurent le futur design system) */
+.sg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sg-space-2);
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--sg-brand-600);
+  border: none;
+  border-radius: var(--sg-radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.sg-btn:hover { background: var(--sg-brand-700); }
+.sg-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.sg-field { display: flex; flex-direction: column; gap: var(--sg-space-1); }
+.sg-field label { font-size: var(--sg-fs-sm); color: var(--sg-text-muted); }
+.sg-input {
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--sg-text);
+  background: var(--sg-surface-2);
+  border: 1px solid var(--sg-border);
+  border-radius: var(--sg-radius-sm);
+  outline: none;
+}
+.sg-input:focus { border-color: var(--sg-brand-500); }
+
+.sg-card {
+  background: var(--sg-surface);
+  border: 1px solid var(--sg-border);
+  border-radius: var(--sg-radius-lg);
+  box-shadow: var(--sg-shadow);
+}
+
+.sg-alert {
+  padding: 10px 12px;
+  border-radius: var(--sg-radius-sm);
+  font-size: var(--sg-fs-sm);
+  color: var(--sg-danger);
+  background: color-mix(in srgb, var(--sg-danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sg-danger) 25%, transparent);
+}

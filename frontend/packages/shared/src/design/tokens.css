@@ -1,0 +1,60 @@
+/**
+ * Design tokens SGDI/ATLAS — thème « pro », clair par défaut, sombre via [data-theme="dark"].
+ * Base du futur design system (couleurs, espacements, typo, rayons, ombres).
+ */
+:root {
+  /* Palette de marque */
+  --sg-brand-50: #eef4ff;
+  --sg-brand-100: #d9e6ff;
+  --sg-brand-500: #2563eb;
+  --sg-brand-600: #1d4ed8;
+  --sg-brand-700: #1e40af;
+
+  /* Surfaces & texte (clair) */
+  --sg-bg: #f4f6fb;
+  --sg-surface: #ffffff;
+  --sg-surface-2: #f8fafc;
+  --sg-border: #e2e8f0;
+  --sg-text: #0f172a;
+  --sg-text-muted: #64748b;
+
+  /* États */
+  --sg-success: #16a34a;
+  --sg-warning: #d97706;
+  --sg-danger: #dc2626;
+
+  /* Typographie */
+  --sg-font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --sg-fs-sm: 0.8125rem;
+  --sg-fs-base: 0.9375rem;
+  --sg-fs-lg: 1.125rem;
+  --sg-fs-xl: 1.5rem;
+
+  /* Espacements */
+  --sg-space-1: 4px;
+  --sg-space-2: 8px;
+  --sg-space-3: 12px;
+  --sg-space-4: 16px;
+  --sg-space-6: 24px;
+  --sg-space-8: 32px;
+
+  /* Rayons & ombres */
+  --sg-radius-sm: 6px;
+  --sg-radius: 10px;
+  --sg-radius-lg: 16px;
+  --sg-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --sg-shadow: 0 6px 24px rgba(15, 23, 42, 0.10);
+}
+
+:root[data-theme='dark'] {
+  --sg-bg: #0b1120;
+  --sg-surface: #111827;
+  --sg-surface-2: #0f172a;
+  --sg-border: #1f2a3d;
+  --sg-text: #e5edff;
+  --sg-text-muted: #94a3b8;
+  --sg-brand-50: #16233f;
+  --sg-brand-100: #1c2e52;
+  --sg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sg-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
