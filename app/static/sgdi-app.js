@@ -4111,8 +4111,7 @@ function sgdiModuleHostConfigs(){
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard"},
         {label:"FEUILLE POINTAGE",route:"pointage/feuille"},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs"},
-        {label:"FICHE DE POSITION",route:"fiches"},
-        {label:"SITES À CHARGE",route:"sites/actifs"}
+        {label:"FICHE DE POSITION",route:"fiches"}
       ]
     },
     materiel:{
@@ -5828,7 +5827,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
     ],
     superviseur:[
-      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["SITES À CHARGE","sites/actifs"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
@@ -6025,7 +6024,6 @@ function renderSidebar(){
         {label:"FEUILLE POINTAGE",route:"pointage/feuille",aliases:["pointage"]},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"]},
         {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"]},
-        {label:"SITES À CHARGE",route:"sites/actifs",aliases:["sites"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
       ],
       materiel:[
@@ -34703,13 +34701,13 @@ function renderPointage(view,sub,arg,_skipEnsure){
   if(isDrh&&(sub==="saisie"||sub==="dashboard"))sub="auto";
   if(hideAuto&&sub==="auto")sub="saisie";
   if(sub==="scan")sub="feuille";
-  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto"));
+  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorModuleActive()&&k==="qr"));
   const tabsHTML=allowedTabs.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${l}</button>`).join("");
   const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
   if(sub==="dashboard")body=renderPointageDashboard(isDrh);
   else if(sub==="feuille"){body=renderFeuillePresentQR();}
-  else if(sub==="qr"&&!isDrh){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
+  else if(sub==="qr"&&!isDrh&&!supervisorModuleActive()){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
   else if(sub==="saisie"&&!isDrh)body=renderPointageSaisie();
   else if(sub==="auto")body=renderPointageSaisieAuto();
   else if(sub==="recap")body=renderPointageRecap(arg);
