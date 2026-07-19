@@ -3650,6 +3650,8 @@ function siteInSupervisorScope(site){
   return [site?.id,site?.backendId].some(v=>ids.has(String(v||"")));
 }
 function agentInSupervisorScope(agent){
+  if(!supervisorModuleActive())return true;
+  if(agent&&(String(agent.statut||"").toLowerCase()==="suspendu"||employeeIsFormer(agent)))return false;
   const ids=supervisorAuthorizedSiteIds();
   if(!ids)return true;
   const aff=agentLiveAffectation(agent)||agent?.affectationCourante||{};
@@ -3661,6 +3663,12 @@ function presenceInSupervisorScope(row){
   if(!ids)return true;
   const agent=row?.agentId?(db.agents||[]).find(a=>String(a.id)===String(row.agentId)):null;
   return [row?.siteId,row?.siteBackendId,row?.site_id].some(v=>ids.has(String(v||"")))||(agent&&agentInSupervisorScope(agent));
+}
+function incidentInSupervisorScope(incident){
+  const ids=supervisorAuthorizedSiteIds();
+  if(!ids)return true;
+  const agent=incident?.agentId?(db.agents||[]).find(a=>String(a.id)===String(incident.agentId)):null;
+  return [incident?.siteId,incident?.siteBackendId,incident?.site_id].some(v=>ids.has(String(v||"")))||(agent&&agentInSupervisorScope(agent));
 }
 function activeSitesForCurrentScope(){
   const soc=typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"";
@@ -4402,7 +4410,9 @@ function topbarStructureIcon(key){
 function topbarStructureTabsHTML(){return""}  // Déplacé dans workspaceTabsBarHTML
 function sgdiEditModeButtonHTML(){
   if(!session)return"";
-  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession())return"";
+  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
+    return `<span class="ws-lock-toggle ws-lock-toggle-readonly" title="Mode superviseur terrain : lecture seule" aria-label="Lecture seule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Lecture seule</span></span>`;
+  }
   const locked=sgdiViewModeActive;
   const label=locked?"Déverrouiller":"Verrouiller";
   const title=locked?"Déverrouiller le formulaire":"Verrouiller le formulaire";
@@ -15731,11 +15741,10 @@ function sitePositionFieldHTML(s){
 }
 function sitePositionMarkerIcon(){
   const el=document.createElement("div");
-  el.className="site-position-logo-marker";
+  el.className="site-position-dot-marker";
   el.setAttribute("role","button");
   el.setAttribute("tabindex","0");
   el.title="Position du site";
-  el.innerHTML=`<img src="${SGDI_IRON_SOLUTION_LOGO_SRC}" alt="IRON GLOBAL SOLUTION">`;
   return el;
 }
 function updateSitePositionFormFields(lat,lng){
@@ -16154,14 +16163,22 @@ function openSiteMovementHistoryModal(siteId){
 }
 function openSiteAffectesModal(siteId){
   const site=findSiteByRef(siteId);if(!site)return toast("Site introuvable","error");
+  if(supervisorModuleActive()&&!siteInSupervisorScope(site))return toast("Site non autorisé pour ce superviseur","error");
   const eff=siteEffectifsNorm(site);
   const backend=siteBackendSituationForSite(site);
   const contractuel=siteBackendNumber(backend?.contractual_staff)||(+eff.totalContractuel||0);
   const backendRows=siteBackendAssignmentRows(site);
-  const agents=backendRows||siteAgentsAffectes(site);
+  const agentFromAssignmentRow=row=>findEmployeeByRef(row?.employee_id)||findEmployeeByRef(row?.code)||findEmployeeByRef(row?.matricule)||null;
+  const rowVisible=item=>{
+    const row=item?.employee_id||item?.assignment_id?item:null;
+    const a=row?agentFromAssignmentRow(row):item;
+    if(a&&(String(a.statut||"").toLowerCase()==="suspendu"||employeeIsFormer(a)))return false;
+    if(a&&supervisorModuleActive()&&!agentInSupervisorScope(a))return false;
+    return true;
+  };
+  const agents=(backendRows||siteAgentsAffectes(site)).filter(rowVisible);
   const surplus=contractuel>0&&agents.length>contractuel?agents.slice(contractuel):[];
   const main=contractuel>0&&agents.length>contractuel?agents.slice(0,contractuel):agents;
-  const agentFromAssignmentRow=row=>findEmployeeByRef(row?.employee_id)||findEmployeeByRef(row?.code)||findEmployeeByRef(row?.matricule)||null;
   const agentRow=item=>{
     const row=item?.employee_id||item?.assignment_id?item:null;
     const a=row?agentFromAssignmentRow(row):item;
@@ -16171,16 +16188,82 @@ function openSiteAffectesModal(siteId){
     const poste=row?.position||aff?.poste||a?.fonction||"—";
     const start=row?.start_date||aff?.dateDebut||"";
     const href=a?`#/effectif/agent/${employeeRouteId(a)}`:"#";
-    return`<tr data-searchable><td><a href="${href}" class="font-mono text-amber-600 font-bold hover:underline" onclick="closeModal()">${safe(code)}</a></td><td><a href="${href}" class="hover:underline" onclick="closeModal()">${escapeHTML(name)}</a></td><td class="text-xs">${safe(poste)}</td><td class="text-xs">${formatDate(start)}</td></tr>`;
+    const demandeCell=a?`<td class="text-right"><div class="sup-demande-wrap" style="position:relative;display:inline-block"><button type="button" class="btn btn-ghost text-xs" style="padding:2px 8px;font-weight:900" onclick="event.stopPropagation();toggleSuperviseurDemandeMenu(this,'${jsString(a.id)}')" title="Demande">⋮</button></div></td>`:`<td></td>`;
+    return`<tr data-searchable><td><a href="${href}" class="font-mono text-amber-600 font-bold hover:underline" onclick="closeModal()">${safe(code)}</a></td><td><a href="${href}" class="hover:underline" onclick="closeModal()">${escapeHTML(name)}</a></td><td class="text-xs">${safe(poste)}</td><td class="text-xs">${formatDate(start)}</td>${demandeCell}</tr>`;
   };
   openModal(`<h3 class="font-bold text-lg mb-2">Effectifs affectés</h3>
     <div class="p-3 rounded bg-slate-50 border border-slate-200 mb-4">
       <div class="font-black">${escapeHTML(site.nom||"Site")}</div>
       <div class="text-xs text-slate-500">${escapeHTML(site.indicatif||"—")} · Contractuel : ${contractuel} · Affecté : ${agents.length}</div>
     </div>
-    ${main.length?`<div class="card overflow-hidden mb-3"><div class="px-3 py-2 bg-slate-50 border-b font-semibold text-sm">Effectifs affectés (${main.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th></tr></thead><tbody>${main.map(agentRow).join("")}</tbody></table></div>`:`<div class="text-sm text-slate-500 p-4 rounded bg-slate-50 border text-center mb-3">Aucun employé affecté.</div>`}
-    ${surplus.length?`<div class="card overflow-hidden" style="border-color:#fdba74"><div class="px-3 py-2 border-b font-semibold text-sm" style="background:#fff7ed;color:#c2410c">Effectifs en surplus (+${surplus.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th></tr></thead><tbody>${surplus.map(agentRow).join("")}</tbody></table></div>`:""}
+    ${main.length?`<div class="card overflow-hidden mb-3"><div class="px-3 py-2 bg-slate-50 border-b font-semibold text-sm">Effectifs affectés (${main.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th><th></th></tr></thead><tbody>${main.map(agentRow).join("")}</tbody></table></div>`:`<div class="text-sm text-slate-500 p-4 rounded bg-slate-50 border text-center mb-3">Aucun employé affecté.</div>`}
+    ${surplus.length?`<div class="card overflow-hidden" style="border-color:#fdba74"><div class="px-3 py-2 border-b font-semibold text-sm" style="background:#fff7ed;color:#c2410c">Effectifs en surplus (+${surplus.length})</div><table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th><th></th></tr></thead><tbody>${surplus.map(agentRow).join("")}</tbody></table></div>`:""}
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
+}
+const SUPERVISEUR_DEMANDE_TYPES={
+  sanction:{label:"Sanction",module:"drh",route:"drh/dossiers"},
+  suspension:{label:"Suspension",module:"drh",route:"effectif/suspension"},
+  fin_contrat:{label:"Fin de contrat",module:"drh",route:"contrats/situation"},
+  dotation:{label:"Dotation",module:"materiel",route:"materiel/dotation"},
+  changement_site:{label:"Changement de site",module:"ops",route:"ops/mouvements"}
+};
+function closeSuperviseurDemandeMenu(){
+  document.querySelectorAll(".sup-demande-menu").forEach(m=>m.remove());
+}
+function toggleSuperviseurDemandeMenu(btn,agentId){
+  const already=btn.closest(".sup-demande-wrap")?.querySelector(".sup-demande-menu");
+  closeSuperviseurDemandeMenu();
+  if(already)return;
+  const menu=document.createElement("div");
+  menu.className="sup-demande-menu";
+  menu.innerHTML=`<div class="sup-demande-menu-title">Demande</div>${Object.entries(SUPERVISEUR_DEMANDE_TYPES).map(([type,meta])=>`<button type="button" onclick="openSuperviseurDemandeForm('${jsString(agentId)}','${type}')">${escapeHTML(meta.label)}</button>`).join("")}`;
+  const wrap=btn.closest(".sup-demande-wrap")||btn.parentElement;
+  wrap.appendChild(menu);
+  setTimeout(()=>document.addEventListener("click",closeSuperviseurDemandeMenu,{once:true}),0);
+}
+function openSuperviseurDemandeForm(agentId,type){
+  closeSuperviseurDemandeMenu();
+  const meta=SUPERVISEUR_DEMANDE_TYPES[type];if(!meta)return;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));if(!a){toast("Employé introuvable","error");return}
+  const aff=agentLiveAffectation(a)||{};
+  openModal(`<h3 class="font-bold text-lg mb-1">Demande de ${escapeHTML(meta.label.toLowerCase())}</h3>
+    <p class="text-sm text-slate-500 mb-3">Signalement superviseur terrain, transmis pour traitement.</p>
+    <form onsubmit="event.preventDefault();confirmSuperviseurDemande('${jsString(agentId)}','${type}',this)">
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div><label class="label">Nom</label><input class="input bg-slate-100" value="${escapeHTML(a.nom||"")}" readonly/></div>
+        <div><label class="label">Prénom</label><input class="input bg-slate-100" value="${escapeHTML(a.prenom||"")}" readonly/></div>
+        <div><label class="label">Code</label><input class="input bg-slate-100" value="${escapeHTML(a.matricule||"—")}" readonly/></div>
+        <div><label class="label">Affectation</label><input class="input bg-slate-100" value="${escapeHTML(aff.siteName||"Sans affectation")}" readonly/></div>
+      </div>
+      <label class="label">Compte rendu détaillé *</label>
+      <textarea class="textarea" name="motif" rows="6" required placeholder="Décrivez précisément les faits justifiant cette demande..."></textarea>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Transmettre</button></div>
+    </form>`);
+}
+async function confirmSuperviseurDemande(agentId,type,form){
+  const meta=SUPERVISEUR_DEMANDE_TYPES[type];if(!meta)return;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));if(!a)return;
+  const fd=new FormData(form);
+  const motif=String(fd.get("motif")||"").trim();
+  if(!motif){toast("Le compte rendu détaillé est obligatoire","error");return}
+  const name=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const aff=agentLiveAffectation(a)||{};
+  workflowUpsertTask({
+    id:`sup_demande_${type}_${agentId}_${Date.now()}`,
+    module:meta.module,
+    route:meta.route,
+    employeeId:a.id,
+    candidateName:name,
+    matricule:a.matricule||"",
+    societe:a.societe||"",
+    title:`Demande de ${meta.label.toLowerCase()} — ${name}`,
+    message:`${name} · ${a.matricule||"—"} · ${aff.siteName||"Sans affectation"} · ${motif}`,
+    createdBy:session?.username||"Superviseur",
+    createdAt:new Date().toISOString()
+  });
+  addEmployeeCareerEvent(a,meta.label,{date:today(),motif:`Demande superviseur (${meta.label}) : ${motif}`,source:"superviseur-demande"});
+  if(!(await saveDBAndWaitToast("Demande non confirmée")))return;
+  closeModal();toast("Demande transmise","success");renderView();
 }
 function siteNonAffectesPourSite(site){
   const soc=site?.societe||"";
@@ -16310,12 +16393,12 @@ function siteRecapBlockHTML(site,eff){
         ${tile("Manque",manque,manque?"#dc2626":"#15803d")}
         ${tile("Surplus",surplus,surplus?"#7c3aed":"#94a3b8")}
       </div>
-      ${session?.transverse==="materiel"?"":`<button type="button" class="btn btn-primary" data-site-lock-keep onclick="openSiteAjouterEffectifModal('${jsString(siteEditRouteId(site))}')">Ajouter effectif</button>`}
+      ${session?.transverse==="materiel"||isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-primary" data-site-lock-keep onclick="openSiteAjouterEffectifModal('${jsString(siteEditRouteId(site))}')">Ajouter effectif</button>`}
     </div>
     <div class="site-recap-consignes">
       <span class="site-recap-consignes-label">Consignes et instructions</span>
       <p>${escapeHTML(consignesPreview)}</p>
-      <button type="button" class="btn btn-ghost text-xs" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(site))}')">Voir / gérer</button>
+      ${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-ghost text-xs" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(site))}')">Voir / gérer</button>`}
     </div>
   </div>`;
 }
@@ -16567,7 +16650,7 @@ function sitePosteRowHTML(p,v){
     <td><input class="input" type="number" min="0" name="poste_jour" value="${v.jour||0}" style="max-width:90px" oninput="updateSitePosteTotal(this.closest('tr'))"/></td>
     <td><input class="input" type="number" min="0" name="poste_nuit" value="${v.nuit||0}" style="max-width:90px" oninput="updateSitePosteTotal(this.closest('tr'))"/></td>
     <td><select class="select" name="poste_rotationSystem" onchange="updateSitePosteTotal(this.closest('tr'))"><option value="">—</option>${siteRotationOptionsHTML(v.rotationSystem||"")}</select></td>
-    <td><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('tr').remove();updateSiteEffectifTotalContractuel()">Retirer</button></td>
+    <td>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('tr').remove();updateSiteEffectifTotalContractuel()">Retirer</button>`}</td>
   </tr>`;
 }
 function sitePosteTotalCalc(jour,nuit,rotationSystem){
@@ -16660,7 +16743,7 @@ function siteMaterielRowHTML(item){
     <td style="min-width:180px"><input class="input" name="site_mat_codeSerie" list="${datalistId}" value="${escapeHTML(serialValue)}" placeholder="N° série / réf"/><datalist id="${datalistId}">${serials.map(v=>`<option value="${escapeHTML(v)}"></option>`).join("")}</datalist></td>
     <td style="min-width:130px"><select class="select" name="site_mat_etat"><option value="neuf" ${String(item.etat||"neuf")==="neuf"?"selected":""}>Neuf</option><option value="rénové" ${String(item.etat||"")==="rénové"?"selected":""}>Rénové</option><option value="usagé" ${String(item.etat||"")==="usagé"?"selected":""}>Usagé</option><option value="réformé" ${String(item.etat||"")==="réformé"?"selected":""}>Réformé</option></select></td>
     <td style="min-width:170px"><input class="input" name="site_mat_observation" value="${escapeHTML(item.observation||item.notes||"")}" placeholder="Observation"/><input type="hidden" name="site_mat_backendId" value="${escapeHTML(item.backendId||"")}"/><input type="hidden" name="site_mat_equipmentBackendId" value="${escapeHTML(item.equipmentBackendId||"")}"/></td>
-    <td><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('tr').remove()">Retirer</button></td>
+    <td>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="this.closest('tr').remove()">Retirer</button>`}</td>
   </tr>`;
 }
 async function siteMaterielMagasinChanged(sel){
@@ -17160,11 +17243,12 @@ async function renderSiteForm(view,id){
     }catch(e){console.warn("renderSiteForm: stores preload failed",e);}
   }
   let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),dateOuverture:"",siteOuvertPar:"",nom:"",indicatif:"",telephone:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
+  if(supervisorModuleActive()&&!siteInSupervisorScope(s)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès refusé</h2><p class="text-slate-600">Ce site ne fait pas partie des sites autorisés pour ce superviseur.</p></div>`;return}
   const rotationSystem=inferSiteRotationSystem(s);
   const eff=siteEffectifsNorm(s);
   const canEditSite=siteCanEditFromCurrentModule(s)&&!isOpsSupervisorReadOnlySession();
   const lockNotice=!canEditSite&&!s.isNew?`<div class="site-editor-wide p-3 rounded mb-3" style="background:#f8fafc;border:1px solid #cbd5e1;color:#475569;font-weight:800">Fiche technique site verrouillée après enregistrement.</div>`:"";
-  const siteHeaderActions=s.isNew?"":`<div class="site-editor-wide site-editor-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDocumentsModal('${jsString(siteEditRouteId(s))}')">Documents</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDemandesModal('${jsString(siteEditRouteId(s))}')">Demandes</button>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteCompteRenduForm('${jsString(siteEditRouteId(s))}')">Événements</button>`}<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(s))}')">Consignes générales</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteProceduresModal('${jsString(siteEditRouteId(s))}')">Procédures</button>${isAdminSystemSession()?`<button type="button" class="btn btn-ghost" data-site-lock-keep style="border-color:#fecaca;color:#b91c1c;background:#fff1f2" onclick="archiveSite('${jsString(siteEditRouteId(s))}')">Archiver</button><button type="button" class="btn btn-danger" data-site-lock-keep onclick="deleteSite('${jsString(siteEditRouteId(s))}')">Supprimer</button>`:""}<button class="btn btn-ghost" data-site-lock-keep onclick="navigate('sites/actifs')">← Retour</button></div>`;
+  const siteHeaderActions=s.isNew?"":`<div class="site-editor-wide site-editor-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDocumentsModal('${jsString(siteEditRouteId(s))}')">Documents</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteDemandesModal('${jsString(siteEditRouteId(s))}')">Demandes</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteCompteRenduForm('${jsString(siteEditRouteId(s))}')">Événements</button>`}<button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteConsignesModal('${jsString(siteEditRouteId(s))}')">Consignes générales</button><button type="button" class="btn btn-secondary" data-site-lock-keep onclick="openSiteProceduresModal('${jsString(siteEditRouteId(s))}')">Procédures</button>${isAdminSystemSession()?`<button type="button" class="btn btn-ghost" data-site-lock-keep style="border-color:#fecaca;color:#b91c1c;background:#fff1f2" onclick="archiveSite('${jsString(siteEditRouteId(s))}')">Archiver</button><button type="button" class="btn btn-danger" data-site-lock-keep onclick="deleteSite('${jsString(siteEditRouteId(s))}')">Supprimer</button>`:""}<button class="btn btn-ghost" data-site-lock-keep onclick="navigate('sites/actifs')">← Retour</button></div>`;
   const siteRecap=s.isNew?"":siteRecapBlockHTML(s,eff);
   view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${opsSupervisorReadOnlyNoticeHTML()}${siteRecap}${siteHeaderActions}${lockNotice}
   <form id="site-form" class="site-editor-wide site-form-layout" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
@@ -17181,7 +17265,7 @@ async function renderSiteForm(view,id){
         <div class="p-3 rounded-lg bg-white border border-slate-200"><label class="label">Effectif week-end</label><input class="input" type="number" min="0" name="eff_weekend" value="${eff.weekend}"/></div>
         <div class="p-3 rounded-lg bg-white border border-slate-200"><label class="label">Effectif jours fériés</label><input class="input" type="number" min="0" name="eff_feries" value="${eff.feries}"/></div>
       </div>
-      <div class="flex justify-between items-center mb-2"><h4 class="text-sm font-bold">Liste des postes</h4><button type="button" class="btn btn-secondary text-xs" onclick="addSitePosteRow()">Ajouter poste</button></div>
+      <div class="flex justify-between items-center mb-2"><h4 class="text-sm font-bold">Liste des postes</h4>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary text-xs" onclick="addSitePosteRow()">Ajouter poste</button>`}</div>
       <div class="site-table-scroll mb-4"><table><thead><tr><th>Poste</th><th>Total</th><th>Jour</th><th>Nuit</th><th>Système de rotation</th><th></th></tr></thead><tbody id="site-postes-body">${sitePostesTableHTML(s)}</tbody></table></div>
       <div class="grid grid-2 mb-4">
         <div><label class="label">Heure relève Jour</label><input class="input" type="time" name="heureReleveJour" value="${escapeHTML(s.heureReleveJour||"")}"/></div>
@@ -17196,7 +17280,7 @@ async function renderSiteForm(view,id){
     </div>
     <div class="card p-5 mb-4"><div class="section-banner banner-amber">Affectation des effectifs</div>${siteAffectationGroupesHTML(s)}${siteRotationPlanningSectionHTML(s)}</div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">Équipement et matériel</div>
-      <div class="flex justify-between items-center mb-2"><h4 class="text-sm font-bold">Dotation matériel du site</h4><button type="button" class="btn btn-secondary text-xs" onclick="addSiteMaterielRow()">Ajouter article</button></div>
+      <div class="flex justify-between items-center mb-2"><h4 class="text-sm font-bold">Dotation matériel du site</h4>${isOpsSupervisorReadOnlySession()?"":`<button type="button" class="btn btn-secondary text-xs" onclick="addSiteMaterielRow()">Ajouter article</button>`}</div>
       <div class="site-table-scroll mb-2"><table><thead><tr><th>Magasin</th><th>Article disponible</th><th>Qté</th><th>N° Série / Réf</th><th>État</th><th>Observation</th><th></th></tr></thead><tbody id="site-materiel-body">${siteMaterielTableHTML(s)}</tbody></table></div>
       <div class="text-xs text-slate-500">Les articles sélectionnés doivent être disponibles dans les magasins de la société. À l'enregistrement, les nouvelles lignes créent une dotation site et déduisent le stock.</div>
       ${session?.transverse==="materiel"?`<div class="flex justify-end mt-3"><button type="button" class="btn btn-primary" onclick="saveSiteEquipementOnly('${jsString(s.id)}')">Enregistrer</button></div>`:""}
@@ -17653,6 +17737,7 @@ function renderMainCouranteDashboard(view){
   const incidents=(db.incidents||[]).map(incidentNorm);
   const soc=currentStructureSocieteFilter&&currentStructureSocieteFilter();
   const scoped=incidents.filter(i=>{
+    if(!incidentInSupervisorScope(i))return false;
     if(!soc)return true;
     if(i.societe&&i.societe===soc)return true;
     const site=(db.sites||[]).find(s=>s.id===i.siteId);
@@ -17700,7 +17785,7 @@ async function renderIncidentsServer(view,mode){
   sgdiShowDataLoadingBar("Chargement de la main courante...");
   try{
     const result=await SGDI.events.page({event_type:type,page,page_size:20});
-    const list=(result?.items||result?.data||[]).map(incidentFromApi).filter(Boolean);
+    const list=(result?.items||result?.data||[]).map(incidentFromApi).filter(Boolean).filter(incidentInSupervisorScope);
     list.forEach(i=>sgdiUpsertServerItem("incidents",i));
     const ouverts=list.filter(i=>!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
     const critiques=list.filter(i=>["critique","majeur","urgent"].includes((i.gravite||"").toLowerCase())&&!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
@@ -17719,7 +17804,7 @@ function renderIncidents(view,mode){
   if(mode==="dashboard")return renderMainCouranteDashboard(view);
   if(sgdiAuthToken()&&!window.__sgdiIncidentsLocalFallback){renderIncidentsServer(view,mode);return}
   const type=mode==="autres"?"Autre":"Evenement site";
-  const list=(db.incidents||[]).map(incidentNorm).filter(i=>i.type===type).sort((a,b)=>(b.date+b.heure).localeCompare(a.date+a.heure));
+  const list=(db.incidents||[]).map(incidentNorm).filter(i=>i.type===type&&incidentInSupervisorScope(i)).sort((a,b)=>(b.date+b.heure).localeCompare(a.date+a.heure));
   const ouverts=list.filter(i=>!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
   const critiques=list.filter(i=>["critique","majeur","urgent"].includes((i.gravite||"").toLowerCase())&&!["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
   const clos=list.filter(i=>["clos","resolu","résolu"].includes((i.statut||"").toLowerCase())).length;
@@ -17768,8 +17853,8 @@ function openIncidentModal(mode){
     <div class="grid grid-2 gap-3">
       <div><label class="label">Date</label><input class="input" type="date" name="date" value="${today()}" /></div>
       <div><label class="label">Heure</label><input class="input" type="time" name="heure" value="${new Date().toTimeString().slice(0,5)}" /></div>
-      <div><label class="label">Site</label><select class="select" name="siteId"><option value="">—</option>${db.sites.map(s=>`<option value="${s.id}">${escapeHTML(s.nom)}</option>`).join("")}</select></div>
-      <div><label class="label">Agent concerné</label><select class="select" name="agentId"><option value="">—</option>${db.agents.map(a=>`<option value="${a.id}">${escapeHTML((a.matricule||"")+" - "+a.nom+" "+a.prenom)}</option>`).join("")}</select></div>
+      <div><label class="label">Site</label><select class="select" name="siteId"><option value="">—</option>${db.sites.filter(s=>!supervisorModuleActive()||siteInSupervisorScope(s)).map(s=>`<option value="${s.id}">${escapeHTML(s.nom)}</option>`).join("")}</select></div>
+      <div><label class="label">Agent concerné</label><select class="select" name="agentId"><option value="">—</option>${db.agents.filter(a=>!supervisorModuleActive()||agentInSupervisorScope(a)).map(a=>`<option value="${a.id}">${escapeHTML((a.matricule||"")+" - "+a.nom+" "+a.prenom)}</option>`).join("")}</select></div>
       <div><label class="label">Catégorie</label><select class="select" name="categorie"><option>Sécurité</option><option>Discipline</option><option>Matériel</option><option>Client</option><option>Accident</option><option>Consigne</option><option>Autre</option></select></div>
       <div><label class="label">Niveau d'importance</label><select class="select" name="gravite"><option value="mineur">Normal</option><option value="majeur">Élevée</option><option value="critique">Très élevée</option></select></div>
       <div class="col-span-2"><label class="label">Sujet</label><input class="input" name="sujet"  placeholder="Objet de l'évènement"/></div>
@@ -18862,7 +18947,7 @@ function fichePositionCard(a){
   return`<div class="card p-4 fp-agent-card" style="position:relative" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-site-key="${escapeHTML(siteKey)}" data-poste="${escapeHTML(aff.poste||a.fonction||a.position||a.posteContrat||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
     ${lampsHTML}
     <div class="flex items-center gap-3 mb-3">
-      <div class="avatar" style="width:56px;height:56px;font-size:18px">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div>
+      <div class="avatar" style="width:52px;height:68px;font-size:18px;border-radius:6px;overflow:hidden">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:6px"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div>
       <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule font-mono text-lg font-black leading-tight mt-1" style="${codeStyle}">${safe(a.matricule)}</div></div>
     </div>
     <div class="text-xs space-y-1 mb-3 text-slate-600">

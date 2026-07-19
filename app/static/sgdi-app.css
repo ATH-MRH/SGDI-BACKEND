@@ -659,6 +659,8 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .site-position-logo-marker{width:32px!important;height:32px!important;min-width:32px!important;min-height:32px!important;max-width:32px!important;max-height:32px!important;aspect-ratio:1/1;border:2px solid #fff!important;border-radius:999px!important;background:#fff!important;box-shadow:0 8px 18px rgba(15,23,42,.32);padding:0!important;margin:0!important;overflow:hidden;display:block;cursor:grab;box-sizing:border-box}
   .site-position-logo-marker:active{cursor:grabbing}
   .site-position-logo-marker img{width:100%;height:100%;object-fit:cover;display:block;border-radius:999px}
+  .site-position-dot-marker{width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;max-width:18px!important;max-height:18px!important;aspect-ratio:1/1;border:3px solid #fff!important;border-radius:999px!important;background:#dc2626!important;box-shadow:0 2px 8px rgba(15,23,42,.4);padding:0!important;margin:0!important;display:block;cursor:grab;box-sizing:border-box}
+  .site-position-dot-marker:active{cursor:grabbing}
   .site-position-modal{width:min(1180px,94vw)}
   .site-position-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}
   .site-position-modal-map{height:560px!important;min-height:560px;border:1px solid #cbd5e1;border-radius:8px;background:#e2e8f0}
@@ -716,6 +718,10 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .dialogue-recipient:has(input:checked){background:#dbeafe;border-color:#043970;color:#043970}
   .dialogue-selected-recipients{grid-column:1/3;display:flex;flex-wrap:wrap;gap:5px;min-height:22px;font-size:10.5px;color:#64748b}
   .dialogue-recipient-chip{background:#043970;color:#fff;border-radius:999px;padding:4px 8px;font-weight:900}
+  .sup-demande-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:50;background:#fff;border:1px solid #dbe3ef;border-radius:10px;box-shadow:0 10px 28px rgba(15,23,42,.16);min-width:170px;padding:6px;display:flex;flex-direction:column;gap:2px}
+  .sup-demande-menu-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;padding:4px 8px 6px;border-bottom:1px solid #eef2f8;margin-bottom:2px}
+  .sup-demande-menu button{background:none;border:0;text-align:left;padding:7px 8px;border-radius:7px;font-size:12.5px;font-weight:700;color:#172033;cursor:pointer}
+  .sup-demande-menu button:hover{background:#f1f5f9;color:#043970}
   .site-recap-card{background:#fff;border:1px solid #e1e8f0;border-radius:13px;padding:16px;margin:14px 0;display:flex;flex-direction:column;gap:12px}
   .site-recap-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
   .site-recap-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;flex:1}
@@ -5155,6 +5161,16 @@ body:has(.company-portal) #app{
   border-color:rgba(255,255,255,.55);
 }
 .ws-lock-toggle.unlocked:hover{background:#15803d}
+.ws-lock-toggle-readonly{
+  cursor:default;
+  background:rgba(1,27,63,.25);
+  opacity:.85;
+}
+.ws-lock-toggle-readonly:hover{
+  background:rgba(1,27,63,.25);
+  transform:none;
+  box-shadow:0 2px 6px rgba(15,35,63,.16);
+}
 .ws-lock-toggle svg{
   width:15px;
   height:15px;
