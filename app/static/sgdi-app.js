@@ -502,7 +502,7 @@ async function sgdiAutoSync(reason){
   if(!session||!sgdiAuthToken()||!sgdiPostgresReady)return;
   // Saisie/édition en cours : ne rien recharger du tout (ni données, ni affichage) pour ne
   // jamais écraser le travail. On réessaiera automatiquement dès la fin (enregistré/annulé).
-  if(sgdiDirty||sgdiEditingBlocksRender()){sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;return;}
+  if(sgdiDirty||sgdiEditingBlocksRender()){sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;sgdiMarkRefreshAvailable(reason);return;}
   sgdiAutoSyncRunning=true;
   try{
     const loaded=await sgdiPullState({silent:true,render:false,force:true});
@@ -511,6 +511,7 @@ async function sgdiAutoSync(reason){
       if(sgdiEditingBlocksRender()){
         // Données fraîches déjà en mémoire ; le réaffichage se fera tout seul dès la fin de la saisie.
         sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;
+        sgdiMarkRefreshAvailable(reason);
       }else{
         sgdiAutoRender();
       }
