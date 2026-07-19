@@ -232,7 +232,7 @@ if _CORS_ORIGINS:
 class StaticCacheMiddleware:
     """Ajoute Cache-Control long terme sur les fichiers statiques versionnés."""
 
-    _NO_CACHE_PATHS = {"/static/sw.js", "/static/index.html", "/static/manifest.webmanifest"}
+    _NO_CACHE_PATHS = {"/static/sw.js", "/static/index.html", "/static/manifest.webmanifest", "/static/sgdi-app.js", "/static/sgdi-app.css"}
 
     def __init__(self, app):
         self._app = app
