@@ -8560,42 +8560,6 @@ async function confirmCandidateExcelImport(btn){
     toast("Import backend refusé : "+(e.message||e),"error");
   }
 }
-function renderRecrutementDashboard(view){
-  cleanupDuplicateCandidates(true);
-  const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
-  const allowed=(isDrhModuleContext()&&!socFilter)?drhAuthorizedSocieties():[];
-  let all=(db.candidats||[]).slice();
-  if(socFilter)all=all.filter(c=>c.societe===socFilter);else if(allowed.length)all=all.filter(c=>allowed.includes(c.societe));
-  const reserves=all.filter(c=>candidatIsReserve(c));
-  const ageAlerts=all.filter(candidateHasAgeAlert).length;
-  const favorables=reserves.filter(c=>candidateAvisValue(c.avisDecision)==="Favorable").length;
-  const sansAvis=reserves.filter(c=>!c.avisDecision).length;
-  const byPoste={};reserves.forEach(c=>{const k=candidatePosteLabel(c);byPoste[k]=(byPoste[k]||0)+1});
-  const topPostes=Object.entries(byPoste).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  const reserveRows=reserves.slice().sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
-  const scope=socFilter?escapeHTML(socFilter):(allowed.length?"Sociétés autorisées":"Toutes sociétés");
-  const compactStat=(title,count,sub,route,color)=>`<button type="button" class="candidate-compact-stat" onclick="navigate('${route}')"><span class="candidate-compact-label">${escapeHTML(title)}</span><b style="color:${color}">${count}</b><small>${escapeHTML(sub||"")}</small></button>`;
-  const bar=(label,n,total,color)=>{const pct=total?Math.round(n/total*100):0;return`<button type="button" class="candidate-position-row" onclick="navigate('reserve')" data-searchable><div class="candidate-position-name"><b>${escapeHTML(label)}</b><small>${n} candidat(s)</small></div><div class="candidate-position-bar"><span style="width:${pct}%;background:${color}"></span></div><strong>${pct}%</strong></button>`};
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">CANDIDAT</h1><p class="text-sm text-slate-500">Statistiques et accès rapides · ${scope}</p></div>${candidatImportActionsHTML()}</div>
-    <div class="candidate-compact-dashboard mb-4">
-      ${compactStat("Instance de signature",candidateSignatureInstanceCount(socFilter),"Contrats à signer","contrats/a_contractualiser","#043970")}
-      ${compactStat("Avis favorables",favorables,`${sansAvis} sans avis`,"reserve","#16a34a")}
-      ${compactStat("Alertes âge",ageAlerts,"Moins de 20 ans","reserve","#dc2626")}
-      ${compactStat("Total réserve",reserves.length,"Candidats","reserve","#f59e0b")}
-    </div>
-    <div class="candidate-position-panel mb-4">
-      <div class="candidate-position-head"><span>Postes demandés en réserve</span><b>${reserves.length}</b></div>
-      <div class="candidate-position-list">${topPostes.length?topPostes.map(([k,n])=>bar(k,n,reserves.length,"#f59e0b")).join(""):`<div class="candidate-position-empty">Aucun candidat en réserve.</div>`}</div>
-    </div>
-    <div class="card overflow-hidden mt-4">
-      <div class="flex items-center justify-between gap-3 p-4 border-b border-slate-100 flex-wrap">
-        <div><h3 class="font-black">Liste des candidats en réserve</h3><div class="text-xs text-slate-500">${reserveRows.length} candidat(s) affiché(s) · ${scope}</div></div>
-        <button type="button" class="btn candidate-reserve-page-btn text-xs" onclick="navigate('reserve')">Voir la page réserve</button>
-      </div>
-      ${reserveBulkDeleteBarHTML("reserve",reserveRows.length)}
-      ${reserveRows.length?`<div class="overflow-x-auto"><table><thead><tr>${reserveBulkSelectionHeaderHTML("reserve")}<th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Date</th><th>Statut</th><th></th></tr></thead><tbody>${reserveRows.map(c=>candidateListRowHTML(c,"reserve")).join("")}</tbody></table></div>`:`<div class="p-10 text-center text-slate-500">Aucun candidat en réserve.</div>`}
-    </div>`;
-}
 function recrutementModeToApi(mode){return mode==="archive"?"archive":mode==="reserve"?"reserve":"new"}
 function recrutementPageStorageKey(mode){return "recrutementPage:"+recrutementModeToApi(mode)+":"+((isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"")}
 function recrutementCurrentPage(mode){return Math.max(parseInt(sessionStorage.getItem(recrutementPageStorageKey(mode))||"1",10)||1,1)}
@@ -15628,9 +15592,6 @@ function initSitesDashboardMap(){
     el.innerHTML=`<div class="p-5 text-sm text-red-700 font-semibold">Carte indisponible : ${escapeHTML(e.message||e)}</div>`;
   });
 }
-function renderSitesMapMarkers(siteId){
-  updateSitesMap(siteId);
-}
 async function updateSitesMap(siteId){
   const label=document.getElementById("sites-map-label");
   const open=document.getElementById("sites-map-open");
@@ -16418,14 +16379,6 @@ function siteEffectifsNorm(site){
     weekend:+(e.weekend??0)||0,
     feries:+(e.feries??0)||0
   };
-}
-function renderSiteAgentsByGroup(site,agents){
-  if(!agents.length)return`<div class="text-xs text-slate-500 italic">Aucun.</div>`;
-  const groups={A:[],B:[],C:[],D:[],Auto:[]};
-  agents.forEach(a=>{const aff=opsEmployeeLiveAffectation(a);const g=aff?.groupe||"Auto";(groups[g]||groups.Auto).push(a)});
-  const row=a=>{const aff=opsEmployeeLiveAffectation(a);return`<tr><td><a href="#/effectif/agent/${a.id}" class="font-mono text-amber-600 font-bold hover:underline">${safe(a.matricule)}</a></td><td><a href="#/effectif/agent/${a.id}" class="flex items-center gap-2 hover:underline"><div class="avatar" style="width:28px;height:28px;font-size:11px">${a.photo?`<img src="${a.photo}"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div><span>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span></a></td><td class="text-xs">${safe(aff?.poste)}</td><td class="text-xs">${formatDate(aff?.dateDebut)}</td></tr>`};
-  const block=(g,list)=>`<div class="card p-3" style="background:#f8fafc;border:1px solid #e2e8f0"><div class="flex justify-between items-center mb-2"><h5 class="font-black text-sm">${g==="Auto"?"Non classés":"Groupe "+g}</h5><span class="pill pill-gray">${list.length}</span></div>${list.length?`<table><thead><tr><th>Code</th><th>Nom</th><th>Poste</th><th>Depuis</th></tr></thead><tbody>${list.map(row).join("")}</tbody></table>`:`<div class="text-xs text-slate-500 italic">Aucun employé.</div>`}</div>`;
-  return`<div class="grid grid-2 gap-3">${["A","B","C","D"].map(g=>block(g,groups[g])).join("")}${groups.Auto.length?block("Auto",groups.Auto):""}</div>`;
 }
 function siteRotationFromSystem(sys){
   if(sys==="1/1")return[{jour:"Jour ouvrable",on:true,periode:"jour"},{jour:"Week-end / férié",on:false,periode:"off"}];
@@ -19712,49 +19665,6 @@ function statutMatPill(s){return{"en_stock":"pill-green","attribue":"pill-blue",
 function statutMatLabel(s){return{"en_stock":"En stock","attribue":"Attribué","en_reparation":"En réparation","perdu":"Perdu","reforme":"Réformé"}[s]||s}
 function etatMatPill(e){return{"Neuf":"pill-green","Bon état":"pill-blue","Usé":"pill-amber","Hors service":"pill-red"}[e]||"pill-gray"}
 function nextMatCode(cat){const prefix={"Uniforme":"UN","Chaussures":"CH","Casquette":"CP","Insigne":"IN","Badge":"BD","Talkie-walkie":"TW","Téléphone":"TP","Bâton télescopique":"BT","Menottes":"MN","Lampe torche":"LM","Sifflet":"SF","Détecteur de métaux":"DM","Veste pare-balles":"VP","Imperméable":"IM","Brassard":"BR","Véhicule":"VH","Vélo":"VL","Ordinateur":"OR","Tablette":"TB","Caméra-piéton":"CM","Trousse 1ers secours":"TS","Autre":"AU"}[cat]||"AU";const n=db.materiel.filter(m=>m.code&&m.code.startsWith(prefix+"-")).length+1;return prefix+"-"+String(n).padStart(3,"0")}
-function renderMaterielStats(view){
-  const all=db.materiel||[];
-  const socColors={};
-  const total=all.length;
-  const enStock=all.filter(m=>m.statut==="en_stock").length;
-  const attribues=all.filter(m=>m.statut==="attribue").length;
-  const enRep=all.filter(m=>m.statut==="en_reparation").length;
-  const reformes=all.filter(m=>m.statut==="reforme").length;
-  const perdus=all.filter(m=>m.statut==="perdu").length;
-  const valeur=all.reduce((s,m)=>s+(parseFloat(m.prix)||0),0);
-  const parSoc=SOCIETES.map(s=>({s,n:all.filter(m=>m.societe===s).length,v:all.filter(m=>m.societe===s).reduce((sum,m)=>sum+(parseFloat(m.prix)||0),0)}));
-  const parType={};all.forEach(m=>{const k=m.type||m.categorie||"Non précisé";if(!parType[k])parType[k]={n:0,v:0};parType[k].n++;parType[k].v+=parseFloat(m.prix)||0});
-  const parEtat={};all.forEach(m=>{const k=m.etat||"Non précisé";parEtat[k]=(parEtat[k]||0)+1});
-  const bars=(entries,color)=>{const max=Math.max(1,...entries.map(e=>e[1]));if(!entries.length)return`<div class="text-sm text-slate-400">Aucune donnée.</div>`;return entries.sort((a,b)=>b[1]-a[1]).map(([k,n])=>{const pct=Math.round(n/max*100);return`<div class="text-sm mb-2"><div class="flex justify-between mb-1"><span class="font-medium">${escapeHTML(String(k||"—"))}</span><span class="text-slate-500">${n}</span></div><div class="h-2 bg-slate-100 rounded-full"><div class="h-full rounded-full" style="width:${pct}%;background:${color}"></div></div></div>`}).join("")};
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📈 Matériel — Statistiques</h1>
-    <div class="flex gap-2 mb-4 flex-wrap">
-      <a href="#/materiel/inventaire" class="btn btn-ghost text-sm">📦 Situation</a>
-      <a href="#/materiel/attributions" class="btn btn-ghost text-sm">🎽 Attributions</a>
-      <a href="#/materiel/retours" class="btn btn-ghost text-sm">↩ Retours</a>
-      <a href="#/materiel/stats" class="btn btn-primary text-sm">📈 Statistiques</a>
-    </div>
-    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
-      <div class="card p-4"><div class="text-xs text-slate-500">Articles total</div><div class="text-2xl font-bold">${total}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">En stock</div><div class="text-2xl font-bold text-emerald-700">${enStock}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Attribués</div><div class="text-2xl font-bold text-blue-700">${attribues}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">En réparation</div><div class="text-2xl font-bold text-amber-700">${enRep}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Réformés</div><div class="text-2xl font-bold text-slate-700">${reformes}</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500">Perdus</div><div class="text-2xl font-bold text-red-700">${perdus}</div></div>
-    </div>
-    <div class="grid grid-cols-2 gap-4 mb-4">
-      <div class="card p-5"><h3 class="font-bold mb-3">Articles par société</h3>${bars(parSoc.map(r=>[r.s,r.n]),"#043970")}</div>
-      <div class="card p-5"><h3 class="font-bold mb-3">Articles par type</h3>${bars(Object.entries(parType).map(([k,v])=>[k,v.n]),"#8b5cf6")}</div>
-      <div class="card p-5"><h3 class="font-bold mb-3">Articles par état</h3>${bars(Object.entries(parEtat),"#043970")}</div>
-      <div class="card p-5"><h3 class="font-bold mb-3">Articles par statut</h3>${bars([["En stock",enStock],["Attribué",attribues],["En réparation",enRep],["Réformé",reformes],["Perdu",perdus]],"#043970")}</div>
-    </div>
-    <div class="card p-0 overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50"><tr><th class="text-left p-3">Société</th><th class="p-3">Nb articles</th></tr></thead>
-        <tbody>${parSoc.map(r=>`<tr class="border-t"><td class="p-3 font-semibold">${escapeHTML(r.s)}</td><td class="p-3 text-center">${r.n}</td></tr>`).join("")}
-        <tr class="border-t bg-slate-50 font-bold"><td class="p-3">TOTAL</td><td class="p-3 text-center">${total}</td></tr></tbody>
-      </table>
-    </div>`;
-}
 function sgdiCheckSortantDotationAlert(){
   if(!sgdiAlertModuleAllowed("materiel"))return;
   const soc=currentStructureSocieteFilter()||mySoc()||"";
@@ -21681,39 +21591,6 @@ async function refreshStockArticlesFromPostgres(soc){
   const rows=serverItems(result);
   rows.map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));
   return db.stockArticles;
-}
-async function renderMatSimpleArticlesServer(view){
-  const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-articles",soc||"all");
-  sgdiShowDataLoadingBar("Chargement des articles...");
-  try{const result=await SGDI.stock.articlesPage({society:soc||undefined,page,page_size:25});const arts=serverItems(result).map(articleFromApi);if((result?.total??arts.length)===0){if(soc)db.stockArticles=(db.stockArticles||[]).filter(a=>a.societe&&a.societe!==soc);else db.stockArticles=[];}else{arts.forEach(a=>sgdiUpsertServerItem("stockArticles",a));const freshArtIds=new Set(arts.map(a=>String(a.backendId||"")));db.stockArticles=(db.stockArticles||[]).filter(a=>!a.backendId||(soc&&a.societe&&a.societe!==soc)||freshArtIds.has(String(a.backendId||"")))}
-    const mags=db.magasins||[];const header=matSimpleHeader("articles");
-    view.innerHTML=`${header}<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">ARTICLES</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??arts.length} article(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/article-nouveau')">Nouvel article</button></div><div class="card overflow-x-auto">${arts.length===0?`<div class="p-10 text-center text-slate-500">Aucun article.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Code</th><th class="p-3 text-left">Désignation</th><th class="p-3 text-left">Catégorie</th><th class="p-3 text-left">Magasin</th><th class="p-3 text-center">Stock</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${arts.map(a=>{const q=typeof stockGetActuel==="function"?stockGetActuel(a.id):(parseFloat(a.stockInitial)||0);const mag=mags.find(m=>m.id===a.magasinId);return `<tr class="border-t hover:bg-slate-50"><td class="p-3 font-mono text-xs">${escapeHTML(a.code||"—")}</td><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/article/${a.id}">${escapeHTML(a.designation||"—")}</a></td><td class="p-3 text-xs">${escapeHTML(a.categorie||"—")}</td><td class="p-3 text-xs">${escapeHTML(mag?.nom||"—")}</td><td class="p-3 text-center font-black">${qty(q)}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/article-edit/${a.id}')">Modifier</button></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-articles",soc||"all",result)}`;
-  }catch(e){console.warn("Articles serveur indisponibles",e);window.__sgdiMatArticlesLocalFallback=true;renderMatSimpleArticles(view)}
-}
-async function renderMatSimpleMagasinsServer(view){
-  const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-magasins",soc||"all");
-  sgdiShowDataLoadingBar("Chargement des magasins...");
-  try{
-    // Charge magasins ET articles en parallèle pour que les KPIs soient corrects
-    const [result,articlesRes]=await Promise.all([
-      SGDI.stock.storesPage({society:soc||undefined,page,page_size:18}),
-      (SGDI.stock.articlesPage?SGDI.stock.articlesPage({society:soc||undefined,page:1,page_size:100}).then(serverItems):SGDI.stock.articles(soc?{society:soc}:{})).catch(()=>[])
-    ]);
-    if(Array.isArray(articlesRes)&&articlesRes.length){
-      articlesRes.map(articleFromApi).forEach(a=>sgdiUpsertServerItem("stockArticles",a));
-      const freshArtIds=new Set(articlesRes.map(r=>String(r.id||"")));
-      db.stockArticles=(db.stockArticles||[]).filter(a=>!a.backendId||(soc&&a.societe&&a.societe!==soc)||freshArtIds.has(String(a.backendId||"")));
-    }
-    const mags=serverItems(result).map(storeFromApi);if(mags.length>0){mags.forEach(m=>sgdiUpsertServerItem("magasins",m));const freshIds=new Set(mags.map(m=>String(m.backendId||"")));db.magasins=(db.magasins||[]).filter(m=>!m.backendId||(soc&&m.societe&&m.societe!==soc)||freshIds.has(String(m.backendId||"")));}const header=matSimpleHeader("magasins");
-    view.innerHTML=`${header}<div class="flex justify-between items-center mb-3 flex-wrap gap-2"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">MAGASINS</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??mags.length} magasin(s) · ${soc||"Toutes sociétés"}</p></div><div class="flex gap-2 flex-wrap"><button class="btn btn-secondary" onclick="openMagasinPickerModal('config')">⚙ Configurer</button><button class="btn btn-secondary" onclick="openMagasinPickerModal('edit')">✏ Modifier</button><button class="btn btn-warn" onclick="navigate('materiel/magasin-nouveau')">➕ Nouveau</button></div></div>${mags.length===0?`<div class="card p-10 text-center text-slate-500">Aucun magasin.</div>`:`<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${mags.map(m=>{const st=matSimpleStockMagasin(m.id);return `<div class="card p-5 cursor-pointer hover:shadow-lg transition" onclick="navigate('materiel/magasin/${m.id}')"><div class="flex gap-3 items-center mb-2"><div class="font-bold">${escapeHTML(m.nom||"—")}</div><div class="text-xs text-slate-500 font-mono">${escapeHTML(m.code||"")}</div></div><div class="text-xs text-slate-500 mb-2">${escapeHTML(m.responsable||"")}${m.telephone?` · ${escapeHTML(m.telephone)}`:""}</div><div class="grid grid-cols-2 gap-2 pt-3 border-t text-center"><div><div class="text-[9px] uppercase font-bold text-slate-500">Articles</div><div class="text-lg font-black">${st.nb}</div></div><div><div class="text-[9px] uppercase font-bold text-slate-500">Unités</div><div class="text-lg font-black text-emerald-700">${qty(st.qty)}</div></div></div></div>`}).join("")}</div>`}${sgdiServerPaginationHTML("mat-magasins",soc||"all",result)}`;
-  }catch(e){console.warn("Magasins serveur indisponibles",e);window.__sgdiMatMagasinsLocalFallback=true;renderMatSimpleMagasins(view)}
-}
-async function renderMatSimpleFournisseursServer(view){
-  const soc=matSimpleSocFilter();const page=sgdiServerCurrentPage("mat-fournisseurs",soc||"all");
-  sgdiShowDataLoadingBar("Chargement des fournisseurs...");
-  try{const result=await SGDI.stock.suppliersPage({society:soc||undefined,page,page_size:25});const fours=serverItems(result).map(supplierFromApi);fours.forEach(f=>sgdiUpsertServerItem("fournisseurs",f));const freshFourIds=new Set(fours.map(f=>String(f.backendId||"")));db.fournisseurs=(db.fournisseurs||[]).filter(f=>!f.backendId||(soc&&f.societe&&f.societe!==soc)||freshFourIds.has(String(f.backendId||"")));const header=matSimpleHeader("fournisseurs");
-    view.innerHTML=`${header}<div class="flex justify-between items-center mb-3"><div><h1 class="text-2xl font-bold" style="text-transform:uppercase">FOURNISSEURS</h1><p class="text-slate-500 text-sm" style="text-transform:uppercase">${result?.total??fours.length} fournisseur(s) · ${soc||"Toutes sociétés"}</p></div><button class="btn btn-warn" onclick="navigate('materiel/fournisseur-nouveau')">Nouveau fournisseur</button></div><div class="card overflow-x-auto">${fours.length===0?`<div class="p-10 text-center text-slate-500">Aucun fournisseur.</div>`:`<table class="w-full text-sm"><thead style="background:#043970"><tr><th class="p-3 text-left">Raison sociale</th><th class="p-3 text-left">RC / NIF</th><th class="p-3 text-left">Téléphone</th><th class="p-3 text-left">E-mail</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${fours.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 font-bold"><a class="hover:underline" href="#/materiel/fournisseur/${f.id}">${escapeHTML(f.raisonSociale||"—")}</a></td><td class="p-3 text-xs font-mono">${escapeHTML(f.rc||"—")} ${f.nif?"/ "+escapeHTML(f.nif):""}</td><td class="p-3 text-xs">${escapeHTML(f.telephone||"—")}</td><td class="p-3 text-xs">${escapeHTML(f.email||"—")}</td><td class="p-3 text-right"><button class="btn btn-ghost text-xs" onclick="navigate('materiel/fournisseur-edit/${f.id}')">Modifier</button></td></tr>`).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("mat-fournisseurs",soc||"all",result)}`;
-  }catch(e){console.warn("Fournisseurs serveur indisponibles",e);window.__sgdiMatFournisseursLocalFallback=true;renderMatSimpleFournisseurs(view)}
 }
 // =====================================================================
 // ARTICLES (table simple)
@@ -25956,10 +25833,6 @@ function renderFactCompteClient(view,clientEnc){
     '</div>';
 }
 
-function renderFactFactures(view,arg){
-  if(window.__factureEditId)return renderFactureEditor(view);
-  renderFactureListPage(view);
-}
 function renderFactDashboard(view){
   const factures=bySoc(db.factures||[]);
   const paiements=db.paiements||[];const avoirs=db.avoirs||[];
@@ -31705,50 +31578,6 @@ async function adminToggleDroit(m,r,enabled){
   render();
 }
 async function adminResetDroits(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}const count=Object.keys(db.droitsAcces||{}).length;if(!count){toast("Aucune exception à réinitialiser","info");return}if(!confirm("Supprimer les "+count+" exception(s) techniques et revenir aux droits par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Exceptions supprimées, droits par défaut restaurés","success");render()}
-function renderAdminAccessSocietes(view){
-  const access=societeAccessSettings();
-  const passwords={...(access.passwords||{})};
-  view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🏢 Accès sociétés libres</h1>
-    <form class="card p-5 max-w-4xl" onsubmit="event.preventDefault();saveAdminSocieteAccess(this)">
-      <div class="flex items-start justify-between gap-4 mb-5 flex-wrap">
-        <div>
-          <h3 class="font-bold mb-1">Contrôle d'accès par société</h3>
-          <p class="text-sm text-slate-500">Aucun mot de passe société n'est demandé. Les droits sont gérés par utilisateur.</p>
-        </div>
-        <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 cursor-pointer">
-          <span class="font-bold text-sm text-emerald-700">Accès libre</span>
-        </label>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        ${SOCIETES.map(s=>{const n=normalizeSocieteName(s);const val=passwords[n]||societeAccessPassword(s)||"";return`<div class="p-3 rounded-lg border border-slate-200 bg-white">
-          <label class="label">${escapeHTML(s)}</label>
-          <input class="input" name="pwd_${escapeHTML(n)}" value="${escapeHTML(val)}" placeholder="Mot de passe société"/>
-        </div>`}).join("")}
-      </div>
-      <div class="flex justify-end gap-2 mt-5">
-        <button type="button" class="btn btn-ghost" onclick="renderView()">Annuler</button>
-        <button class="btn btn-primary">Enregistrer les accès</button>
-      </div>
-    </form>`;
-}
-async function saveAdminSocieteAccess(form){
-  const passwords={};
-  SOCIETES.forEach(s=>{
-    const n=normalizeSocieteName(s);
-    const v=(form.elements["pwd_"+n]?.value||"").toString().trim();
-    if(v)passwords[n]=v;
-  });
-  saveSocieteConfig({access:{requirePassword:false,passwords:{}}});
-  try{
-    await persistSocieteConfig();
-    saveDB();
-    logActivity("Paramétrage accès sociétés","Accès libre");
-    toast("Accès sociétés enregistrés dans PostgreSQL","success");
-    renderView();
-  }catch(e){
-    toast("Erreur sauvegarde accès sociétés : "+(e.message||e),"error");
-  }
-}
 function renderAdminCandidatSections(view){
   if(!db.settings)db.settings={};
   const validated=(db.candidats||[]).filter(c=>candidatAllSectionsValid(c)).length;
