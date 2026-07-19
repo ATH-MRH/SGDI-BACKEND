@@ -11,6 +11,11 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true },
   },
   {
+    path: '/select-societe',
+    name: 'select-societe',
+    component: () => import('@/pages/SelectSocietyPage.vue'),
+  },
+  {
     path: '/',
     name: 'home',
     component: () => import('@/pages/HomePage.vue'),
@@ -31,6 +36,10 @@ router.beforeEach((to) => {
   }
   if (to.name === 'login' && session.isAuthenticated) {
     return { name: 'home' };
+  }
+  // Cloisonné à plusieurs sociétés sans société active -> écran de sélection obligatoire.
+  if (session.mustSelectSociety && to.name !== 'select-societe') {
+    return { name: 'select-societe', query: { redirect: to.fullPath } };
   }
   return true;
 });

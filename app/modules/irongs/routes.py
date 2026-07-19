@@ -75,6 +75,22 @@ class PositionCreate(BaseModel):
     society: str | None = None
 
 
+@router.get("/societes")
+def list_societes(user=Depends(current_user)) -> dict[str, list[str]]:
+    """Liste légère des sociétés (référentiel statique), pour l'écran de sélection de
+    société — évite le snapshot global. Un utilisateur cloisonné ne voit que SES sociétés
+    (dans l'ordre du référentiel) ; un non-cloisonné les voit toutes."""
+    allowed = [str(s).strip() for s in (user.authorized_societies or []) if str(s).strip()]
+    if not allowed:
+        return {"societes": SOCIETES}
+    keys = {service._society_key(s) for s in allowed}
+    scoped = [s for s in SOCIETES if service._society_key(s) in keys]
+    # Sociétés autorisées absentes du référentiel statique : on les ajoute par sûreté.
+    scoped_keys = {service._society_key(x) for x in scoped}
+    extra = [s for s in allowed if service._society_key(s) not in scoped_keys]
+    return {"societes": scoped + extra}
+
+
 @router.get("/positions")
 def list_positions(society: str | None = None, db: Session = Depends(get_db)) -> list[dict]:
     _get_postes(db)  # seed if empty

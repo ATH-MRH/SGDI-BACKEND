@@ -1,13 +1,26 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSessionStore } from '@/stores/session';
 
 const session = useSessionStore();
 const router = useRouter();
 
+// Un choix de société existe si l'utilisateur est multi-sociétés ou non cloisonné.
+const canSwitchSociety = computed(
+  () => session.societies.length > 1 || session.isUnrestricted,
+);
+const activeSocietyLabel = computed(
+  () => session.activeSociety ?? 'Toutes les sociétés',
+);
+
 async function logout(): Promise<void> {
   session.logout();
   await router.replace({ name: 'login' });
+}
+
+function switchSociety(): void {
+  router.push({ name: 'select-societe', query: { redirect: '/' } });
 }
 </script>
 
@@ -16,6 +29,17 @@ async function logout(): Promise<void> {
     <header class="home__bar">
       <div class="home__brand">SGDI · ATLAS <span class="home__tag">v2</span></div>
       <div class="home__user">
+        <button
+          v-if="canSwitchSociety"
+          class="home__society"
+          type="button"
+          title="Changer de société"
+          @click="switchSociety"
+        >
+          <span class="home__society-label">{{ activeSocietyLabel }}</span>
+          <span class="home__society-caret">▾</span>
+        </button>
+        <span v-else class="home__society home__society--static">{{ activeSocietyLabel }}</span>
         <span>{{ session.user?.full_name }}</span>
         <span class="home__level">{{ session.user?.access_level ?? '—' }}</span>
         <button class="sg-btn home__logout" @click="logout">Déconnexion</button>
@@ -63,6 +87,22 @@ async function logout(): Promise<void> {
   margin-left: var(--sg-space-2);
 }
 .home__user { display: flex; align-items: center; gap: var(--sg-space-3); }
+.home__society {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sg-space-2);
+  padding: 5px 12px;
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--sg-fs-sm);
+  color: var(--sg-brand-700);
+  background: var(--sg-brand-50);
+  border: 1px solid var(--sg-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.home__society--static { cursor: default; color: var(--sg-text-muted); }
+.home__society-caret { color: var(--sg-text-muted); }
 .home__level {
   font-size: var(--sg-fs-sm);
   color: var(--sg-text-muted);
