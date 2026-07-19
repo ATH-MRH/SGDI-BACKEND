@@ -3022,7 +3022,7 @@ function sgdiSpeakStructure(){
 }
 function sgdiStructureVoiceLabel(mod){
   const adminLabel=isAdminSystemSession()?"Administration système":"Administrateur général";
-  return ({drh:"Direction R H",ops:"O P S",materiel:"Matériel",facturation:"Finances et Comptabilité",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",agenda:"Agenda",pointage:"Pointage",admin:adminLabel,accounting:"Comptabilité",achats:"Achats",ventes:"Ventes"}[mod]||String(mod||"structure").toUpperCase());
+  return ({drh:"Direction R H",ops:"O P S",superviseur:"Superviseur terrain",materiel:"Matériel",facturation:"Finances et Comptabilité",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",agenda:"Agenda",pointage:"Pointage",admin:adminLabel,accounting:"Comptabilité",achats:"Achats",ventes:"Ventes"}[mod]||String(mod||"structure").toUpperCase());
 }
 function sgdiSpeakStructureChosen(mod,label){
   const structure=label||sgdiStructureVoiceLabel(mod);
@@ -3387,7 +3387,7 @@ async function validateAdminSystemPassword(form){
   }
 }
 function defaultStructureAccessPasswords(){return{}}
-function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"AGENDA"}[mod]||String(mod||"").toUpperCase())}
+function structureAccessLabel(mod){return({drh:"DRH",ops:"OPS",superviseur:"SUPERVISEUR",materiel:"MATERIEL/EQUIP",facturation:"FINANCES/COMPTA",commercial:"COMMERCIAL",pointage:"POINTAGE",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"AGENDA"}[mod]||String(mod||"").toUpperCase())}
 function accessSecuritySettings(){
   if(!db.settings)db.settings={};
   const cfg=db.settings.accessSecurity&&typeof db.settings.accessSecurity==="object"?db.settings.accessSecurity:{};
@@ -3589,7 +3589,7 @@ function currentAccessLevelCode(){const u=currentUserRecord();return String(sess
 function isCadreCat01(){return currentAccessLevelCode().toUpperCase().replace(/[\s-]+/g,"_")==="CADRE_CAT_01"}
 function structureSocieteFilterKey(mod){
   const m=mod||session?.transverse||"";
-  return({drh:"drhSociete",ops:"opsSociete",materiel:"mtSociete",pointage:"pointageSociete",facturation:"facturationSociete",commercial:"commercialSociete",secretariat:"secretariatSociete",agenda:"agendaSociete",admin:"adminSocieteActive"}[m])||"moduleSociete";
+  return({drh:"drhSociete",ops:"opsSociete",superviseur:"superviseurSociete",materiel:"mtSociete",pointage:"pointageSociete",facturation:"facturationSociete",commercial:"commercialSociete",secretariat:"secretariatSociete",agenda:"agendaSociete",admin:"adminSocieteActive"}[m])||"moduleSociete";
 }
 function currentStructureSocieteFilter(){
   if(session?.societe)return session.societe;
@@ -3605,7 +3605,7 @@ function storeCurrentStructureSocieteFilter(s){
   try{
     const v=session?.societe||s||"";
     sessionStorage.setItem(structureSocieteFilterKey(),v);
-    ["drhSociete","opsSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","agendaSociete","facturationSociete"].forEach(k=>sessionStorage.setItem(k,v));
+    ["drhSociete","opsSociete","superviseurSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","agendaSociete","facturationSociete"].forEach(k=>sessionStorage.setItem(k,v));
   }catch(e){}
 }
 function setCurrentStructureSocieteFilter(s){
@@ -3636,6 +3636,32 @@ function siteMatchesReference(site,ref){
   const names=new Set([site.nom,site.intitule].filter(Boolean).map(v=>normalizedSearchText(v)));
   return [ref.siteName,ref._site?.nom,ref._site?.intitule,ref.autreAffectation].filter(Boolean).some(v=>names.has(normalizedSearchText(v)));
 }
+function supervisorModuleActive(){
+  return session?.transverse==="superviseur"||normalizeStructureList(session?.structuresAutorisees).includes("superviseur");
+}
+function supervisorAuthorizedSiteIds(){
+  if(!supervisorModuleActive())return null;
+  const ids=new Set((Array.isArray(session?.sitesAutorises)?session.sitesAutorises:[]).map(v=>String(v||"")).filter(Boolean));
+  return ids.size?ids:null;
+}
+function siteInSupervisorScope(site){
+  const ids=supervisorAuthorizedSiteIds();
+  if(!ids)return true;
+  return [site?.id,site?.backendId].some(v=>ids.has(String(v||"")));
+}
+function agentInSupervisorScope(agent){
+  const ids=supervisorAuthorizedSiteIds();
+  if(!ids)return true;
+  const aff=agentLiveAffectation(agent)||agent?.affectationCourante||{};
+  const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
+  return [aff.siteId,aff.siteBackendId,aff.site_id,agent?.siteId,agent?.siteBackendId,site?.id,site?.backendId].some(v=>ids.has(String(v||"")));
+}
+function presenceInSupervisorScope(row){
+  const ids=supervisorAuthorizedSiteIds();
+  if(!ids)return true;
+  const agent=row?.agentId?(db.agents||[]).find(a=>String(a.id)===String(row.agentId)):null;
+  return [row?.siteId,row?.siteBackendId,row?.site_id].some(v=>ids.has(String(v||"")))||(agent&&agentInSupervisorScope(agent));
+}
 function activeSitesForCurrentScope(){
   const soc=typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"";
   return siteOpsSitesForScope(soc);
@@ -3643,7 +3669,7 @@ function activeSitesForCurrentScope(){
 function siteOpsSitesForScope(scopeSoc,extraSites,options){
   const byKey=new Map();
   const add=site=>{
-    if(!site||(!options?.includeInactive&&(site.actif===false||site.active===0||site.statut==="inactif"))||!siteMatchesSociete(site,scopeSoc))return;
+    if(!site||(!options?.includeInactive&&(site.actif===false||site.active===0||site.statut==="inactif"))||!siteMatchesSociete(site,scopeSoc)||!siteInSupervisorScope(site))return;
     const key=String(site.backendId||site.id||site.indicatif||site.nom||Math.random());
     byKey.set(key,{...(byKey.get(key)||{}),...site,actif:site.actif!==false});
   };
@@ -3692,7 +3718,7 @@ function incidentMatchesSociete(incident,soc){
   return false;
 }
 function defaultAccessMap(){
-  const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],"SECRETARIAT GÉNÉRAL":["rh","dispatch","admin"],"AGENDA":["rh","dispatch","agent","admin"],"POINTAGE":["rh","dispatch","admin"],"PORTAIL RH":["rh","dispatch","agent","admin"],"ADMINISTRATEUR GÉNÉRAL":["admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],badge:["rh","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],secretariat:["rh","dispatch","admin"],agenda:["rh","dispatch","agent","admin"],drh:["rh","admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],portail:["rh","dispatch","agent","admin"],parametres:["admin"],admin:["admin"]};
+  const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"SUPERVISEUR":["dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],"SECRETARIAT GÉNÉRAL":["rh","dispatch","admin"],"AGENDA":["rh","dispatch","agent","admin"],"POINTAGE":["rh","dispatch","admin"],"PORTAIL RH":["rh","dispatch","agent","admin"],"ADMINISTRATEUR GÉNÉRAL":["admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],badge:["rh","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],secretariat:["rh","dispatch","admin"],agenda:["rh","dispatch","agent","admin"],drh:["rh","admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],superviseur:["dispatch","admin"],portail:["rh","dispatch","agent","admin"],parametres:["admin"],admin:["admin"]};
   map["ADMINISTRATION SYSTEME"]=map["ADMINISTRATEUR GÉNÉRAL"];
   ["materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement"].forEach(k=>map[k]=map.materiel);
   ["facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation"].forEach(k=>map[k]=map.facturation);
@@ -3709,7 +3735,7 @@ function canAccess(key){
   const r=session.role;
   const level=accessLevelRecord(session.niveau);
   const host=adminModuleHostKey(key);
-  if(isOpsSupervisorReadOnlySession()&&["ops","pointage"].includes(host||String(key||"").toLowerCase()))return true;
+  if(isOpsSupervisorReadOnlySession()&&["ops","pointage","superviseur","sites","drh"].includes(host||String(key||"").toLowerCase()))return true;
   if(level&&!levelAllowsModule(level,key))return false;
   const droits=(db&&db.droitsAcces&&typeof db.droitsAcces==="object")?db.droitsAcces:null;
   if(droits&&Object.keys(droits).length){
@@ -3723,7 +3749,9 @@ function canAccess(key){
   return (map[key]||["admin"]).includes(base);
 }
 function isOpsSupervisorReadOnlySession(){
-  if(!session||session.transverse!=="ops")return false;
+  if(!session)return false;
+  if(session.transverse==="superviseur")return true;
+  if(session.transverse!=="ops")return false;
   const role=String(session.role||"");
   const base=adminAccessBaseRole(role);
   const username=String(session.username||"");
@@ -3743,7 +3771,7 @@ function guardOpsSupervisorMutation(kind,message){
 }
 function opsSupervisorReadOnlyNoticeHTML(){
   if(!isOpsSupervisorReadOnlySession())return"";
-  return `<div class="card p-3 mb-4" style="border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:13px;font-weight:800">Mode superviseur OPS : consultation uniquement. La saisie pointage reste autorisée.</div>`;
+  return `<div class="card p-3 mb-4" style="border-left:4px solid #f59e0b;background:#fffbeb;color:#92400e;font-size:13px;font-weight:800">Mode superviseur terrain : consultation limitée aux sites autorisés. La saisie pointage reste autorisée.</div>`;
 }
 function mySoc(){return session?.societe||""}
 function isDrhModuleContext(){const h=(location.hash||"").slice(2);return session?.transverse==="drh"||h.startsWith("drh")}
@@ -3958,7 +3986,7 @@ function legacyAtlasUsernameSuggestion(username){
 function pickAllSocietes(){
   if(!canUseAllSocietesPortal()){toast("Vue groupe réservée au panneau Administration système","error");return}
   session.societe=null;session.transverse="global";saveSession(session);
-  try{["drhSociete","opsSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","agendaSociete","facturationSociete"].forEach(k=>sessionStorage.removeItem(k))}catch(e){}
+  try{["drhSociete","opsSociete","superviseurSociete","fpSociete","effectifSociete","mtSociete","portalSociete","pointageSociete","ptSociete","fpqSociete","dashSociete","commercialSociete","secretariatSociete","agendaSociete","facturationSociete"].forEach(k=>sessionStorage.removeItem(k))}catch(e){}
   location.hash="#/global-dashboard";route();
 }
 function confirmPickSociete(s,p){selectSocieteDirect(s)}
@@ -3968,18 +3996,19 @@ function changeSociete(){if(!confirm("Changer de société ?"))return;session.so
 function sgdiStructureDefaultRoute(mod){
   if(mod==="facmod")return "facturation/dashboard";
   if(mod==="agenda")return "agenda/dashboard";
+  if(mod==="superviseur")return "superviseur/dashboard";
   return mod==="materiel"?"materiel/dashboard":(mod==="pointage"?"pointage":(mod==="ops"?"ops/dashboard":(mod==="portail"?"portail":mod+"/dashboard")));
 }
 function sgdiWarmModuleSqlSync(mod){
   if(!sgdiAuthToken()||!db)return;
   setTimeout(()=>sgdiBackgroundSqlSync({silent:true,render:true,module:mod}).catch(e=>console.warn("Préchargement module indisponible",e)),30);
 }
-function enterTransverseModule(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","admin","pointage","ops","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdminGeneralSession()){toast("Accès réservé au compte Administration système","error");return}}if(["facturation","commercial","secretariat","drh","materiel","ops","pointage","paie","portail","agenda"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
+function enterTransverseModule(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","admin","pointage","ops","superviseur","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(mod==="admin"){if(!isAdminGeneralSession()){toast("Accès réservé au compte Administration système","error");return}}if(["facturation","commercial","secretariat","drh","materiel","ops","superviseur","pointage","paie","portail","agenda"].includes(mod)){requireStructureAccess(mod,"transverse");return}enterTransverseModuleDirect(mod)}
 function enterTransverseModuleDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;session.societe=null;saveSession(session);try{sessionStorage.removeItem("mtSociete");sessionStorage.setItem("ficheContext",mod)}catch(e){}sgdiWarmModuleSqlSync(mod);const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
-function enterSocieteStructure(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
+function enterSocieteStructure(mod){const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","superviseur","paie","portail","agenda"];if(!ok.includes(mod))return;if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}if(!session?.societe){toast("Sélectionnez d'abord une société","error");return}requireStructureAccess(mod,"societe")}
 function enterSocieteStructureDirect(mod){sgdiSpeakStructureChosenAfterRoute(mod);session.transverse=mod;saveSession(session);try{sessionStorage.setItem("ficheContext",mod)}catch(e){}sgdiWarmModuleSqlSync(mod);const target=sgdiStructureDefaultRoute(mod);location.hash="#/"+target;route()}
 function switchWorkspaceModule(mod){
-  const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","pointage","paie","portail","agenda"];
+  const ok=["facturation","facmod","commercial","secretariat","drh","materiel","ops","superviseur","pointage","paie","portail","agenda"];
   if(!ok.includes(mod))return;
   if(!canAccessStructureKey(mod)){toast("Structure non autorisée pour cet utilisateur","error");return}
   if(session?.societe){session.transverse=mod}else{session.transverse=mod;session.societe=null}
@@ -4016,6 +4045,7 @@ function societePortalModules(){
     ...(isAdminGeneralSession()?[{key:"admin",label:adminPortalLabel,route:"admin/dashboard"}]:[]),
     {key:"drh",label:"R-H",route:"drh/dashboard"},
     {key:"ops",label:"OPS",route:"ops/dashboard"},
+    {key:"superviseur",label:"SUPERVISEUR",route:"superviseur/dashboard"},
     {key:"materiel",label:"MATERIEL",route:"materiel/dashboard"},
     {key:"commercial",label:"COMMERCIAL",route:"commercial/dashboard"},
     {key:"pointage",label:"POINTAGE",route:"pointage/dashboard"},
@@ -4063,6 +4093,19 @@ function sgdiModuleHostConfigs(){
         {label:"BLACKLIST",route:"effectif/blacklist"},
         {label:"SUPERVISION SITE",route:"ops/supervision"},
         {label:"MAIN COURANTE",route:"incidents/dashboard"}
+      ]
+    },
+    superviseur:{
+      key:"superviseur",
+      title:"Portail Superviseur",
+      context:"Supervision terrain et pointage site",
+      homeRoute:"superviseur/dashboard",
+      sections:[
+        {label:"TABLEAU DE BORD",route:"superviseur/dashboard"},
+        {label:"FEUILLE POINTAGE",route:"pointage/feuille"},
+        {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs"},
+        {label:"FICHE DE POSITION",route:"fiches"},
+        {label:"SITES À CHARGE",route:"sites/actifs"}
       ]
     },
     materiel:{
@@ -4163,7 +4206,7 @@ function sgdiModuleHostConfig(){
   const host=String(location.hostname||"").toLowerCase();
   const configs=sgdiModuleHostConfigs();
   const first=host?host.split(".")[0]:"";
-  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",facturation:"facmod"};
+  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",facturation:"facmod",sup:"superviseur",supervisor:"superviseur"};
   const configKey=hostAliases[first]||first;
   // Domaine dédié (ex: drh.sgdi.com, facturation.sgdi.com)
   if(host&&first!=="localhost"&&host!=="127.0.0.1"&&host!=="0.0.0.0"&&host!=="::1"&&first!=="sgdi"&&first!=="www"&&first!=="atlas"){
@@ -4325,6 +4368,7 @@ function structureTopbarItems(){
   const items=[
     {key:"drh",label:"DRH",roles:["rh","admin"]},
     {key:"ops",label:"OPS",roles:["rh","dispatch","admin"]},
+    {key:"superviseur",label:"SUPERVISEUR",roles:["dispatch","admin"]},
     {key:"materiel",label:"MATÉRIEL",roles:["rh","dispatch","admin"]},
     {key:"facturation",label:"FACTURATION",roles:["rh","admin"]},
     {key:"commercial",label:"COMMERCIAL",roles:["rh","admin"]},
@@ -5337,18 +5381,19 @@ function renderInternal(){
       pointage:["pointage","incidents","demandes_structure","documents"],
       paie:["paie","effectif","agents","demandes_structure","documents"],
       ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents"],
+      superviseur:["superviseur","pointage","fiches","agents","sites","effectif","incidents","documents"],
       drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail","documents"],
       global:["global-dashboard","effectif","agents","contrats","fiches","sites","pointage","paie","recrutement","reserve","candidats_archives","dossiers","incidents","conges","demandes_personnel","demandes_structure","rapports","ops","drh","admin","facturation","commercial","secretariat","agenda","materiel","documents"]
     };
     const allowed=allowedByMod[session.transverse]||[session.transverse];
-    if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":session.transverse==="pointage"?"pointage":session.transverse==="ops"?"ops/dashboard":session.transverse==="global"?"global-dashboard":session.transverse+"/dashboard";location.hash="#/"+target;return}
+    if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":session.transverse==="pointage"?"pointage":session.transverse==="ops"?"ops/dashboard":session.transverse==="superviseur"?"superviseur/dashboard":session.transverse==="global"?"global-dashboard":session.transverse+"/dashboard";location.hash="#/"+target;return}
   }
   const app=document.getElementById("app");
   const socColors={};
   const isTrans=!!session.transverse;
-  const transLabels={facturation:"FINANCES & COMPTABILITÉ",facmod:"FACTURATION",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL",pointage:"MODULE POINTAGE",ops:"DIRECTION OPS",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"MODULE AGENDA",paie:"MODULE PAIE",global:"🌐 SITUATION GÉNÉRALE"};
-  const transColors={facturation:"#043970",facmod:"#0f766e",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af",secretariat:"#0f766e",agenda:"#2563eb",paie:"#0f766e",global:"#0f172a"};
-  const transDescs={facturation:"Toutes sociétés confondues",facmod:"Facturation clients · Toutes sociétés",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"OPS · Pointage · Fiches · Sites",secretariat:"Courriers · Notes · Archives · Suivi administratif",agenda:"Planification · Rappels · Suivi quotidien",paie:"Paie · Bulletins · Déclarations · Toutes sociétés",global:"Toutes sociétés confondues — Vue consolidée groupe"};
+  const transLabels={facturation:"FINANCES & COMPTABILITÉ",facmod:"FACTURATION",commercial:"MODULE COMMERCIAL",drh:"Direction R-H",materiel:"MATÉRIEL & ÉQUIPEMENT",admin:isAdminSystemSession()?"ADMINISTRATION SYSTÈME":"ADMINISTRATEUR GÉNÉRAL",pointage:"MODULE POINTAGE",ops:"DIRECTION OPS",superviseur:"MODULE SUPERVISEUR",secretariat:"SECRETARIAT GÉNÉRAL",agenda:"MODULE AGENDA",paie:"MODULE PAIE",global:"🌐 SITUATION GÉNÉRALE"};
+  const transColors={facturation:"#043970",facmod:"#0f766e",commercial:"#8b5cf6",drh:"#043970",materiel:"#043970",admin:"#dc2626",pointage:"#043970",ops:"#1e40af",superviseur:"#0f766e",secretariat:"#0f766e",agenda:"#2563eb",paie:"#0f766e",global:"#0f172a"};
+  const transDescs={facturation:"Toutes sociétés confondues",facmod:"Facturation clients · Toutes sociétés",commercial:"Toutes sociétés confondues",drh:"Toutes sociétés confondues",materiel:"Toutes sociétés confondues",admin:"Paramétrage global du système",pointage:"Pointage mensuel · Toutes sociétés",ops:"OPS · Pointage · Fiches · Sites",superviseur:"Supervision terrain · Sites autorisés · Pointage",secretariat:"Courriers · Notes · Archives · Suivi administratif",agenda:"Planification · Rappels · Suivi quotidien",paie:"Paie · Bulletins · Déclarations · Toutes sociétés",global:"Toutes sociétés confondues — Vue consolidée groupe"};
   const socColor=isTrans?transColors[session.transverse]:(socColors[session.societe]||"#64748b");
   const headerTitle=isTrans?transLabels[session.transverse]:session.societe;
   const headerSub=isTrans?(session.societe?`Société active : ${session.societe}`:transDescs[session.transverse]):"Société active";
@@ -5761,7 +5806,7 @@ function applySidebarOrder(module,items){
   return sorted;
 }
 function sidebarPinnedDefaultOrder(module){
-  if(!["drh","ops"].includes(module))return [];
+  if(!["drh","ops","superviseur"].includes(module))return [];
   const defaults=adminSidebarOrganizerDefaults()[module]||[];
   return defaults.map(row=>row[1]).filter(Boolean);
 }
@@ -5772,6 +5817,9 @@ function adminSidebarOrganizerDefaults(){
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
+    ],
+    superviseur:[
+      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["SITES À CHARGE","sites/actifs"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
@@ -5799,7 +5847,7 @@ function adminSidebarOrganizerDefaults(){
     ]
   };
 }
-function adminSidebarModuleLabel(key){return {drh:"DRH",ops:"OPS",materiel:"Matériel",facturation:"Finances",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",agenda:"Agenda",pointage:"Pointage",admin:"Administration"}[key]||String(key||"").toUpperCase()}
+function adminSidebarModuleLabel(key){return {drh:"DRH",ops:"OPS",superviseur:"Superviseur",materiel:"Matériel",facturation:"Finances",paie:"Paie",commercial:"Commercial",secretariat:"Secrétariat",agenda:"Agenda",pointage:"Pointage",admin:"Administration"}[key]||String(key||"").toUpperCase()}
 function adminCounterOrganizerDefaults(){
   return {
     drh:["EFF. OPÉRATIONNEL","SANS DOTATION","SANS AFFECTATION","EFF. CONGÉ","EFF. MALADIE","EFF. ABSENT","EFF. SUSPENDU","EFF. BLACKLISTÉ","CANDIDAT RÉSERVE"],
@@ -5961,6 +6009,14 @@ function renderSidebar(){
         {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:agents.filter(a=>a.statut==="sortant").length||null},
         {label:"SUPERVISION SITE",route:"ops/supervision",aliases:["ops/supervision"]},
+        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
+      ],
+      superviseur:[
+        {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"]},
+        {label:"FEUILLE POINTAGE",route:"pointage/feuille",aliases:["pointage"]},
+        {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"]},
+        {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"]},
+        {label:"SITES À CHARGE",route:"sites/actifs",aliases:["sites"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
       ],
       materiel:[
@@ -6343,7 +6399,7 @@ function setFicheContext(ctx){try{if(ctx)sessionStorage.setItem("ficheContext",c
 function goBackSmart(){if(history.length>1)history.back();else navigate(session?.transverse?session.transverse+"/dashboard":"dashboard")}
 function ficheContext(){try{return sessionStorage.getItem("ficheContext")||session?.transverse||""}catch(e){return session?.transverse||""}}
 function isDrhFicheContext(){return ficheContext()==="drh"}
-function isOpsFicheContext(){return ficheContext()==="ops"}
+function isOpsFicheContext(){return ficheContext()==="ops"||ficheContext()==="superviseur"}
 function isOpsFicheReadOnlyContext(){return isOpsFicheContext()&&!isAdminFichePositionContext()}
 function isMaterielFicheContext(){return ficheContext()==="materiel"||(location.hash||"").includes("#/materiel/fiche")}
 function onGlobalSearch(v){currentSearch=v||"";filterDomBySearch();renderGlobalSearchResults(currentSearch)}
@@ -7149,7 +7205,7 @@ function renderView(){
       case"fiches":renderFiches(view,sub||"toutes");break;
       case"documents":renderDocumentsArchives(view,sub,arg);break;
       case"badge":if(sub==="verify"&&arg)renderBadgeVerify(view,arg);else renderFiches(view,"badge");break;
-      case"sites":if(!["ops","admin","materiel","global"].includes(session?.transverse)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé OPS / Matériel / Administration système</h2><p class="text-slate-600">La carte Sites est disponible uniquement dans les modules OPS, Matériel ou Administration système.</p></div>`;break}if(sub==="nouveau"&&!arg)renderSiteForm(view,null);else if(sub==="actifs")renderSites(view);else if(sub)renderSiteForm(view,sub);else renderSites(view);break;
+      case"sites":if(!["ops","superviseur","admin","materiel","global"].includes(session?.transverse)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé OPS / Superviseur / Matériel / Administration système</h2><p class="text-slate-600">La carte Sites est disponible uniquement dans les modules autorisés.</p></div>`;break}if(sub==="nouveau"&&!arg)renderSiteForm(view,null);else if(sub==="actifs")renderSites(view);else if(sub)renderSiteForm(view,sub);else renderSites(view);break;
       case"incidents":renderIncidents(view,sub||"dashboard");break;
       case"conges":renderConges(view);break;
       case"portail":if(sub==="comptes")renderPortailComptes(view);else renderPortailPersonnel(view);break;
@@ -7167,6 +7223,7 @@ function renderView(){
       case"custom":renderCustomSidebarPage(view,sub,arg);break;
       case"pointage":renderPointage(view,sub||"dashboard",arg);break;
       case"ops":renderOPS(view,sub||"dashboard",arg);break;
+      case"superviseur":renderSuperviseur(view,sub||"dashboard",arg);break;
       case"secretariat":renderSecretariat(view,sub||"dashboard",arg);break;
       case"agenda":renderAgenda(view,sub||"dashboard",arg);break;
       case"paie":renderPaie(view,sub||"dashboard",arg);break;
@@ -7248,6 +7305,7 @@ function dashboardModuleShortcuts(){
   const modules=[
     {key:"drh",title:"DRH",desc:"Candidatures, contrats, fiches, badges, effectif",metric:()=>`${(db.agents||[]).length} employés`,roles:["rh","admin"]},
     {key:"ops",title:"OPS",desc:"Sites, affectations, mouvements et feuilles de présence",metric:()=>`${(db.sites||[]).filter(s=>s.actif).length} sites`,roles:["rh","dispatch","admin"]},
+    {key:"superviseur",title:"SUPERVISEUR",desc:"Pointage, personnel rattaché et fiches des sites à charge",metric:()=>`${siteOpsSitesForScope(currentStructureSocieteFilter()).length} sites`,roles:["dispatch","admin"]},
     {key:"materiel",title:"MATERIEL / EQUIPEMENT",desc:"Articles, magasins, fournisseurs, dotations, reversements",metric:()=>`${(db.stockArticles||[]).length} articles`,roles:["rh","dispatch","admin"]},
     {key:"facturation",title:"FINANCES / COMPTABILITE",desc:"Factures, paiements, caisse, avances et situation",metric:()=>`${(db.factures||[]).length} factures`,roles:["rh","admin"]},
     {key:"commercial",title:"COMMERCIAL",desc:"Clients, contrats, prestations et opportunités",metric:()=>`${(db.clients||[]).length} clients`,roles:["rh","admin"]},
@@ -12857,7 +12915,7 @@ function effectifSocieteBandHTML(baseList){
   </div>`;
 }
 function isOpsEffectifContext(){
-  return session?.transverse==="ops"||sessionStorage.getItem("ficheContext")==="ops";
+  return session?.transverse==="ops"||session?.transverse==="superviseur"||sessionStorage.getItem("ficheContext")==="ops"||sessionStorage.getItem("ficheContext")==="superviseur";
 }
 function canUseOpsEmployeeActionWorkflows(){
   if(isOpsSupervisorReadOnlySession())return false;
@@ -13008,6 +13066,7 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
 }
 function effectifFilteredData(filter){
   let list=db.agents.slice();let title="Gestion des effectifs";
+  if(supervisorModuleActive())list=list.filter(agentInSupervisorScope);
   if(filter==="operationnels"){title="Effectif opérationnel";list=list.filter(agentIsOperational)}
   else if(filter==="conge"){title="Agents en congé";list=list.filter(a=>db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)))}
   else if(filter==="maladie"){title="Agents en maladie";list=list.filter(a=>db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c)))}
@@ -13370,6 +13429,7 @@ function agentModificationHistoryHTML(a){
 }
 function renderAgentForm(view,id){
   const a=findEmployeeByRef(id);if(!a){toast("Agent introuvable","error");return navigate("effectif/actifs")}
+  if(supervisorModuleActive()&&!agentInSupervisorScope(a)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès refusé</h2><p class="text-slate-600">Cette fiche ne fait pas partie des sites autorisés pour ce superviseur.</p></div>`;return}
   const adminFicheContext=isAdminFichePositionContext();
   const officialLocked=!!(a.fichePositionOfficielle&&a.locked);
   const officialUnlocked=officialLocked&&adminFicheContext;
@@ -18636,7 +18696,7 @@ function renderFiches(view,sub,_skipEnsure){
   const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
   const fpFilter=fpFilters();
   const includeSortants=sub==="archivees"||fpFilter.status==="sortant";
-  let baseList=db.agents.filter(a=>authorizedAgent(a)&&(includeSortants||!ficheAgentIsSortantArchive(a)));let title="Fiches de position — Toutes";
+  let baseList=db.agents.filter(a=>authorizedAgent(a)&&agentInSupervisorScope(a)&&(includeSortants||!ficheAgentIsSortantArchive(a)));let title="Fiches de position — Toutes";
   if(sub==="maladie"){baseList=baseList.filter(a=>ficheAgentInMaladie(a));title="🤒 Fiches de position — En maladie"}
   else if(sub==="conge"){baseList=baseList.filter(a=>ficheAgentInConge(a));title="🏖 Fiches de position — En congé"}
   else if(sub==="suspendu"){baseList=baseList.filter(a=>a.statut==="suspendu");title="⏸ Fiches de position — Suspendu"}
@@ -18652,7 +18712,7 @@ function renderFiches(view,sub,_skipEnsure){
   if(fpFilter.site&&!fpSites.some(s=>fpSiteFilterKeyForSite(s)===fpFilter.site)){sessionStorage.removeItem("fpSite");fpFilter.site=""}
   if(fpFilter.poste&&!fpPostes.some(p=>fpPosteFilterKey(p)===fpPosteFilterKey(fpFilter.poste))){sessionStorage.removeItem("fpPoste");fpFilter.poste=""}
   const list=applyFpPositionFilters(rawList);
-  const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent);
+  const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent).filter(agentInSupervisorScope);
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
   const employeeCounters=sgdiUnifiedEmployeeCounters(safeSocFilter);
   const counterRatioBase=Math.max(1,counterNumericValue(employeeCounters.activeHeadcount)||activeBase.length);
@@ -29968,7 +30028,7 @@ function renderDRHStatsAffectation(view){
 
 /* ============ ADMIN MODULE (transverse, admin only) ============ */
 const ADMIN_MODULES=[
-  "DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","AGENDA","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL",
+  "DRH","OPS","SUPERVISEUR","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","AGENDA","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL",
   "dashboard","dossiers","recrutement","reserve","candidats_archives","drh/social","demandes_personnel","demandes_structure",
   "contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports",
   "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement",
@@ -29976,12 +30036,14 @@ const ADMIN_MODULES=[
   "commercial","commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats",
   "secretariat","secretariat/courriers","secretariat/notes","secretariat/archives","agenda","agenda/liste","agenda/semaine","agenda/rappels",
   "pointage","pointage/recap","pointage/societe","pointage/stats","pointage/legende",
+  "superviseur","superviseur/dashboard",
   "ops","ops/missions","ops/mouvements","ops/supervision","ops/qr","portail","parametres","admin"
 ];
 const ADMIN_PROFILE_MODULES=[
   {key:"dashboard",label:"Tableau de bord"},
   {key:"drh",label:"DRH"},
   {key:"ops",label:"OPS"},
+  {key:"superviseur",label:"Superviseur terrain"},
   {key:"pointage",label:"Pointage"},
   {key:"sites",label:"Sites"},
   {key:"materiel",label:"Matériel / équipement"},
@@ -30019,6 +30081,7 @@ function adminModuleHostKey(key){
   if(["sites","incidents"].includes(lower))return"sites";
   if(["agents","fiches","effectif","badge","contrats","a_contractualiser","dossiers","recrutement","reserve","candidats_archives","demandes_personnel","demandes_structure","conges","rapports","drh/social"].includes(lower))return"drh";
   if(lower.startsWith("ops/"))return"ops";
+  if(lower.startsWith("superviseur/"))return"superviseur";
   if(lower.startsWith("pointage/"))return"pointage";
   if(lower.startsWith("materiel/"))return"materiel";
   if(lower.startsWith("facturation/"))return"facturation";
@@ -30027,10 +30090,10 @@ function adminModuleHostKey(key){
   if(lower.startsWith("agenda/"))return"agenda";
   return lower;
 }
-function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","AGENDA":"agenda/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives",agenda:"agenda/dashboard","agenda/liste":"agenda/liste","agenda/semaine":"agenda/semaine","agenda/rappels":"agenda/rappels","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
+function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","SUPERVISEUR":"superviseur/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","AGENDA":"agenda/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives",agenda:"agenda/dashboard","agenda/liste":"agenda/liste","agenda/semaine":"agenda/semaine","agenda/rappels":"agenda/rappels","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",superviseur:"superviseur/dashboard","superviseur/dashboard":"superviseur/dashboard",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
 function adminAccessModuleLabel(module){
   const labels={
-    "DRH":"DRH","OPS":"OPS","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","AGENDA":"Agenda","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
+    "DRH":"DRH","OPS":"OPS","SUPERVISEUR":"Superviseur terrain","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","AGENDA":"Agenda","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
     dashboard:"Tableau de bord",dossiers:"Dossiers",recrutement:"Recrutement",reserve:"Réserve",candidats_archives:"Candidats archivés","drh/social":"Social DRH",demandes_personnel:"Demandes personnel",demandes_structure:"Demandes structure",
     contrats:"Contrats",a_contractualiser:"À contractualiser",effectif:"Effectifs",agents:"Agents",fiches:"Fiches de position",badge:"Badges",sites:"Sites",incidents:"Incidents",conges:"Congés",paie:"Paie",rapports:"Rapports",
     materiel:"Tableau de bord matériel","materiel/articles":"Articles","materiel/magasins":"Magasins","materiel/fournisseurs":"Fournisseurs","materiel/alertes":"Alertes stock","materiel/dotation":"Dotation employés","materiel/sites-dotation":"Dotation sites","materiel/reversement":"Reversement",
@@ -30039,6 +30102,7 @@ function adminAccessModuleLabel(module){
     secretariat:"Tableau de bord secrétariat","secretariat/courriers":"Courriers","secretariat/notes":"Notes","secretariat/archives":"Archives",
     agenda:"Tableau de bord agenda","agenda/liste":"Liste agenda","agenda/semaine":"Vue semaine","agenda/rappels":"Rappels",
     pointage:"Tableau de bord pointage","pointage/recap":"Récapitulatif","pointage/societe":"Récap société","pointage/stats":"Statistiques pointage","pointage/legende":"Légende et codes",
+    superviseur:"Tableau de bord superviseur","superviseur/dashboard":"Tableau de bord superviseur",
     ops:"Tableau de bord OPS","ops/missions":"Missions","ops/mouvements":"Mouvements","ops/supervision":"Supervision site",portail:"Portail RH",parametres:"Paramètres",admin:"Administration système"
   };
   if(labels[module])return labels[module];
@@ -30046,13 +30110,14 @@ function adminAccessModuleLabel(module){
 }
 function adminAccessModuleGroup(module){
   const m=String(module||"");
-  if(["DRH","OPS","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","AGENDA","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL"].includes(m))return"Module principal";
+  if(["DRH","OPS","SUPERVISEUR","MATERIEL/EQUIP","FINANCES/COMPTA","PAIE","COMMERCIAL","SECRETARIAT GÉNÉRAL","AGENDA","POINTAGE","PORTAIL RH","ADMINISTRATEUR GÉNÉRAL"].includes(m))return"Module principal";
   if(m.startsWith("materiel"))return"Matériel";
   if(m.startsWith("facturation"))return"Finances";
   if(m.startsWith("commercial"))return"Commercial";
   if(m.startsWith("secretariat"))return"Secrétariat";
   if(m.startsWith("agenda"))return"Agenda";
   if(m.startsWith("pointage"))return"Pointage";
+  if(m.startsWith("superviseur"))return"Superviseur";
   if(m.startsWith("ops"))return"OPS";
   if(["dashboard","dossiers","recrutement","reserve","candidats_archives","drh/social","demandes_personnel","demandes_structure","contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports","portail","parametres","admin"].includes(m))return"DRH / système";
   return"Module";
@@ -30060,13 +30125,14 @@ function adminAccessModuleGroup(module){
 const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
-const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"facmod",label:"FACTURATION"},{key:"paie",label:"PAIE"},{key:"commercial",label:"COMMERCIAL"},{key:"secretariat",label:"SECRETARIAT GÉNÉRAL"},{key:"agenda",label:"AGENDA"},{key:"pointage",label:"POINTAGE"},{key:"portail",label:"PORTAIL RH"},{key:"admin",label:"ADMINISTRATION SYSTÈME"}];
+const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"superviseur",label:"SUPERVISEUR"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"facmod",label:"FACTURATION"},{key:"paie",label:"PAIE"},{key:"commercial",label:"COMMERCIAL"},{key:"secretariat",label:"SECRETARIAT GÉNÉRAL"},{key:"agenda",label:"AGENDA"},{key:"pointage",label:"POINTAGE"},{key:"portail",label:"PORTAIL RH"},{key:"admin",label:"ADMINISTRATION SYSTÈME"}];
 function normalizeStructureKey(value){
   const raw=String(value||"").trim();
   const v=raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[_\s-]+/g," ");
   if(["drh","rh","ressources humaines"].includes(v))return"drh";
   if(v.includes("secretariat"))return"secretariat";
   if(["ops","operations","operation"].includes(v))return"ops";
+  if(v.includes("superviseur")||v.includes("supervision terrain"))return"superviseur";
   if(v.includes("materiel")||v.includes("equip"))return"materiel";
   if(v.includes("finance")||v.includes("compta")||v.includes("facturation"))return"facturation";
   if(v.includes("paie")||v.includes("payroll")||v.includes("salaire"))return"paie";
@@ -30188,6 +30254,7 @@ function defaultNiveauxAcces(){
     {code:"H1",label:"H1 - Consultation",description:"Lire et consulter les données autorisées uniquement.",weight:1,color:"#64748b"},
     {code:"H2",label:"H2 - Saisie",description:"Créer et modifier les données courantes sans validation finale.",weight:3,color:"#043970"},
     {code:"H3",label:"H3 - Validation",description:"Valider les formulaires, sections, pointages et opérations métier.",weight:6,color:"#ca8a04"},
+    {code:"SUP_TERRAIN",label:"Superviseur terrain",description:"Accès terrain limité aux sites autorisés : feuille pointage, personnel rattaché, fiches et sites en lecture.",weight:4,color:"#0f766e",roles:["dispatch"],modules:["superviseur","pointage","fiches","agents","effectif","sites"],structures:["superviseur"],actions:["read","update"]},
     {code:"H4",label:"H4 - Supervision",description:"Superviser une structure, corriger, déverrouiller et contrôler les données.",weight:8,color:"#7c3aed"},
     {code:"CADRE_CAT_01",label:"Cadre cat 01",description:"Cadre habilité à basculer d'une société vers les autres structures depuis le bandeau société.",weight:9,color:"#0360a8"},
     {code:"H5",label:"H5 - Administration système",description:"Accès complet aux utilisateurs, droits, paramètres et habilitations.",weight:10,color:"#dc2626"}
@@ -30619,7 +30686,7 @@ function cleanupActionTrimFpq(months){
   renderView();
 }
 
-function accessStructureModules(){return["drh","ops","materiel","facturation","commercial","secretariat","agenda","pointage"]}
+function accessStructureModules(){return["drh","ops","superviseur","materiel","facturation","commercial","secretariat","agenda","pointage"]}
 function renderAdminAccessSecurity(view,section){
   const security=accessSecuritySettings();
   const socAccess=societeAccessSettings();
@@ -31321,7 +31388,7 @@ function adminUserFromApi(u){
 }
 function adminUsernamePrefixForStructure(structure){
   const k=normalizeStructureKey(structure);
-  return ({drh:"DRH",ops:"OPS",materiel:"MAT",facturation:"FIN",facmod:"FAC",commercial:"COM",secretariat:"SEC",agenda:"AGD",pointage:"PTG",portail:"PRH",admin:"ADM"}[k])||"ATL";
+  return ({drh:"DRH",ops:"OPS",superviseur:"SUP",materiel:"MAT",facturation:"FIN",facmod:"FAC",commercial:"COM",secretariat:"SEC",agenda:"AGD",pointage:"PTG",portail:"PRH",admin:"ADM"}[k])||"ATL";
 }
 function adminUsernamePrefixFromForm(form){
   if(!form)return"ATL";
@@ -31347,7 +31414,7 @@ function adminSuggestUsernameForForm(force){
   const input=form.querySelector('[name="username"]');
   if(!input||input.readOnly)return;
   const current=String(input.value||"").trim().toUpperCase();
-  const generatedLike=/^(ADG|ADM|ATL|DRH|OPS|MAT|FIN|FAC|COM|SEC|AGD|PTG|PRH)\d+$/.test(current);
+  const generatedLike=/^(ADG|ADM|ATL|DRH|OPS|SUP|MAT|FIN|FAC|COM|SEC|AGD|PTG|PRH)\d+$/.test(current);
   if(!force&&current&&!generatedLike)return;
   input.value=adminNextUsername(adminUsernamePrefixFromForm(form));
 }
@@ -31363,7 +31430,7 @@ function openAdminUserModal(username){
   openModal(`<h3 class="font-bold text-lg mb-4">${isNew?"➕ Nouvel utilisateur":"✏ Modifier "+escapeHTML(u.username)}</h3>
     <form data-no-critical-auth="1" onsubmit="event.preventDefault();confirmAdminUserByKey('${encodeURIComponent(u.username||"")}')">
       <div class="grid grid-2 gap-3">
-        <div><label class="label">Identifiant *</label><div class="flex gap-2"><input class="input" name="username" value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/>${isNew?`<button type="button" class="btn btn-secondary text-xs" onclick="adminSuggestUsernameForForm(true)">Générer</button>`:""}</div><div class="text-[11px] text-slate-500 mt-1">Convention : DRH01, OPS01, ATL01, ADM01, ADG01.</div></div>
+        <div><label class="label">Identifiant *</label><div class="flex gap-2"><input class="input" name="username" value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/>${isNew?`<button type="button" class="btn btn-secondary text-xs" onclick="adminSuggestUsernameForForm(true)">Générer</button>`:""}</div><div class="text-[11px] text-slate-500 mt-1">Convention : DRH01, OPS01, SUP01, ATL01, ADM01, ADG01.</div></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
         <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
@@ -31459,7 +31526,7 @@ async function confirmAdminUser(originalUsername){
     logActivity("Modification utilisateur",username);
   }
   rememberUserPermissions(username,data.societesAutorisees,data.niveau,data.structuresAutorisees,data.validationCodeEnabled);
-  if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees};saveSession(session)}
+  if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees,societesAutorisees:data.societesAutorisees,sitesAutorises:data.sitesAutorises};saveSession(session)}
   try{await sgdiLoadAuthState()}catch(e){toast("Utilisateur enregistré, rechargement liste impossible : "+(e.message||e),"warning")}
   saveDB();closeModal();toastCenter("Données enregistrées","success");render();
 }
@@ -32870,6 +32937,34 @@ function renderOPS(view,sub,arg){
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">📍</div><div><div class="font-bold text-amber-700">Sites</div><div class="text-xs text-slate-500">Création · Sites actifs</div></div></div></a>
   </div>`;
 }
+function renderSuperviseur(view,sub,arg){
+  if(!canAccess("superviseur")){view.innerHTML=`<div class="card p-6">Accès refusé</div>`;return}
+  if(sub&&sub!=="dashboard"){renderOPS(view,sub,arg);return}
+  const soc=currentStructureSocieteFilter();
+  const sites=siteOpsSitesForScope(soc);
+  const agents=(db.agents||[]).filter(a=>(!soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc))&&agentInSupervisorScope(a)&&!ficheAgentIsSortantArchive(a));
+  const todayRows=(db.feuillePresence||[]).filter(f=>f.date===today()&&(!soc||normalizeSocieteName(f.societe||"")===normalizeSocieteName(soc))&&(!supervisorAuthorizedSiteIds()||supervisorAuthorizedSiteIds().has(String(f.siteBackendId||f.siteId||""))));
+  const pointes=todayRows.filter(f=>fpqPresenceCode(f.heureArrivee)).length;
+  const presents=todayRows.filter(f=>fpqPresenceCode(f.heureArrivee)==="P").length;
+  const absents=todayRows.filter(f=>["A","AB"].includes(fpqPresenceCode(f.heureArrivee))).length;
+  const kpi=(label,value,route,color,desc)=>`<a href="#/${route}" class="card p-4 block" style="text-decoration:none;color:inherit;border-left:4px solid ${color}"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${value}</div><div class="text-xs text-slate-500 mt-1">${desc||""}</div></a>`;
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap">
+    <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Module terrain</div><h1 class="text-2xl font-black uppercase mt-1">Tableau de bord superviseur</h1><p class="text-sm text-slate-500">Sites à charge, personnel rattaché et feuille de pointage quotidienne.</p></div>
+    <div class="flex gap-2 flex-wrap"><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Feuille pointage</button><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('fiches')">Fiches employés</button></div>
+  </div>
+  ${opsSupervisorReadOnlyNoticeHTML()}
+  <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5">
+    ${kpi("Sites à charge",sites.length,"sites/actifs","#0f766e","Périmètre autorisé")}
+    ${kpi("Employés rattachés",agents.length,"effectif/actifs","#043970","Personnel des sites")}
+    ${kpi("Lignes du jour",todayRows.length,"pointage/feuille","#2563eb",formatDate(today()))}
+    ${kpi("Présents",presents,"pointage/feuille","#16a34a",pointes+" pointé(s)")}
+    ${kpi("Absents",absents,"pointage/feuille","#dc2626","Feuille du jour")}
+  </div>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="card p-4"><h3 class="font-black mb-3">Sites à charge</h3>${sites.length?sites.map(s=>`<a href="#/sites/${siteEditRouteId(s)}" class="flex items-center justify-between p-3 rounded border mb-2" style="text-decoration:none;color:inherit;background:#fff"><span><b>${escapeHTML(s.nom||s.intitule||"Site")}</b><br><small class="text-slate-500">${escapeHTML(sitePrimarySociete(s)||"")} · ${escapeHTML(s.commune||s.wilaya||"")}</small></span><span class="pill pill-blue">${(db.agents||[]).filter(a=>agentInSupervisorScope(a)&&siteMatchesReference(s,agentLiveAffectation(a))).length}</span></a>`).join(""):`<div class="text-sm text-slate-500">Aucun site autorisé. Cochez les sites dans Administration système > Utilisateurs.</div>`}</div>
+    <div class="card p-4"><h3 class="font-black mb-3">Personnel rattaché</h3>${agents.length?agents.slice(0,12).map(a=>`<a href="#/agents/${a.id}" class="flex items-center justify-between p-3 rounded border mb-2" style="text-decoration:none;color:inherit;background:#fff"><span><b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</b><br><small class="text-slate-500">${escapeHTML(a.matricule||"")} · ${escapeHTML(agentLiveAffectation(a)?.siteName||"Sans site")}</small></span><span class="pill pill-green">${escapeHTML(employeeDisplayStatus(a).label||a.statut||"")}</span></a>`).join(""):`<div class="text-sm text-slate-500">Aucun employé rattaché aux sites autorisés.</div>`}${agents.length>12?`<button class="btn btn-secondary text-xs mt-2" onclick="navigate('effectif/actifs')">Voir les ${agents.length} employés</button>`:""}</div>
+  </div>`;
+}
 
 function openOpsSocModal(socEncoded,type){
   const soc=decodeURIComponent(socEncoded);
@@ -33384,6 +33479,7 @@ function pointageOperationalAgents(soc){
   const list=(db.agents||[])
     .filter(a=>!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase()))
     .filter(a=>!soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc))
+    .filter(agentInSupervisorScope)
     .filter(agentIsOperational)
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   if(list.length){
@@ -33402,10 +33498,9 @@ function employeeIsPointageEligible(a,soc){
   return !soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
 }
 function pointageEligibleAgents(soc){
-  const authorizedSiteIds=Array.isArray(session?.sitesAutorises)&&session.sitesAutorises.length?new Set(session.sitesAutorises.map(String)):null;
   const list=(db.agents||[])
     .filter(a=>employeeIsPointageEligible(a,soc))
-    .filter(a=>!authorizedSiteIds||authorizedSiteIds.has(String(a.affectationCourante?.siteBackendId||"")))
+    .filter(agentInSupervisorScope)
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   if(list.length){
     window.__pointageEligibleStableAgentsBySoc=window.__pointageEligibleStableAgentsBySoc||{};
@@ -34423,8 +34518,8 @@ function renderFeuillePresentQR(){
   const date=fpqCurrentDate();
   const soc=ptCurrentSoc();
   const dateLabel=new Date(date).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
-  const allFpq=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||normalizeSocieteName(f.societe||"")===normalizeSocieteName(soc)));
-  const fpqForDate=(db.feuillePresence||[]).filter(f=>f.date===date);
+  const allFpq=(db.feuillePresence||[]).filter(f=>f.date===date&&(!soc||normalizeSocieteName(f.societe||"")===normalizeSocieteName(soc))&&presenceInSupervisorScope(f));
+  const fpqForDate=(db.feuillePresence||[]).filter(f=>f.date===date&&presenceInSupervisorScope(f));
   const agents=ptFilterAgents(pointageOperationalAgents(soc));
   agents.sort((a,b)=>(a.nom||"").localeCompare(b.nom||"")||(a.prenom||"").localeCompare(b.prenom||""));
   const findPresenceForAgent=(a)=>fpqForDate.find(x=>
