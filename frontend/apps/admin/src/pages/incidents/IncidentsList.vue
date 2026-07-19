@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import type { Incident, IncidentActionName, SiteRef, EmployeeRef } from '@sgdi/shared';
 import { incidentsApi, referenceApi } from '@/api';
 import { useSessionStore } from '@/stores/session';
-import { isClosed, isCritical, pillClass, cardBorder, formatFR, safe } from '@/utils/incidents';
+import { isClosed, isCritical, pillClass, cardBorder, formatFR, safe, incidentSubject } from '@/utils/incidents';
 import IncidentFormModal from '@/components/incidents/IncidentFormModal.vue';
 import IncidentDetailModal from '@/components/incidents/IncidentDetailModal.vue';
 
@@ -33,7 +33,7 @@ async function loadRefs(): Promise<void> {
       referenceApi.employees(session.activeSociety ?? undefined),
     ]);
     siteMap.value = Object.fromEntries((sites as SiteRef[]).map((s) => [s.id, s.name]));
-    agentMap.value = Object.fromEntries((emps as EmployeeRef[]).map((a) => [a.id, `${a.code} - ${a.last_name} ${a.first_name}`]));
+    agentMap.value = Object.fromEntries((emps as EmployeeRef[]).map((a) => [a.id, `${a.last_name} ${a.first_name}`]));
   } catch {
     /* listes optionnelles */
   }
@@ -74,8 +74,19 @@ const kpi = computed(() => ({
 }));
 
 async function doAction(inc: Incident, action: IncidentActionName): Promise<void> {
+  // Parité legacy : escalade et clôture demandent un motif / une observation.
+  let note: string | undefined;
+  if (action === 'escalader') {
+    const r = window.prompt("Motif / destinataire de l'escalade :");
+    if (r === null) return; // annulé
+    note = r;
+  } else if (action === 'cloturer') {
+    const r = window.prompt('Observation de clôture :');
+    if (r === null) return; // annulé
+    note = r; // observation vide acceptée
+  }
   try {
-    await incidentsApi.action(inc.id, action);
+    await incidentsApi.action(inc.id, action, note);
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Action impossible";
@@ -137,7 +148,7 @@ function go(delta: number): void {
             <span class="sg-pill" :class="pillClass(i.status)">{{ i.status || 'en_cours' }}</span>
             <span class="card__date">{{ formatFR(i.incident_date) }} {{ i.incident_time || '' }}</span>
           </div>
-          <h3 class="card__subject">{{ i.subject || 'Évènement' }}</h3>
+          <h3 class="card__subject">{{ incidentSubject(i) }}</h3>
           <p v-if="i.description" class="card__desc">{{ i.description }}</p>
           <div v-if="i.consigne" class="card__consigne"><strong>Conduite à tenir :</strong> {{ i.consigne }}</div>
           <div class="card__meta">

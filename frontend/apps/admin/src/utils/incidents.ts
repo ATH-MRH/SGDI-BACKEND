@@ -37,6 +37,15 @@ export const STATUSES = [
   { value: 'clos', label: 'Clôturé' },
 ];
 
+/** Repli du sujet (incidentNorm) : sujet, sinon 45 premiers car. de la description, sinon « Évènement ». */
+export function incidentSubject(i: Incident): string {
+  const s = (i.subject ?? '').trim();
+  if (s) return s;
+  const d = (i.description ?? '').trim();
+  if (d) return d.slice(0, 45);
+  return 'Évènement';
+}
+
 export function formatFR(d: string | null): string {
   if (!d) return '—';
   const [y, m, day] = d.split('-');

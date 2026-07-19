@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import type { Incident } from '@sgdi/shared';
 import { incidentsApi } from '@/api';
-import { pillClass, formatFR, formatDateTimeFR, safe } from '@/utils/incidents';
+import { pillClass, formatFR, formatDateTimeFR, safe, incidentSubject } from '@/utils/incidents';
 import ModalDialog from '@/components/ModalDialog.vue';
 
 const props = defineProps<{ incident: Incident; siteName?: string; agentName?: string }>();
@@ -27,7 +27,7 @@ async function sendComment(): Promise<void> {
 </script>
 
 <template>
-  <ModalDialog :title="current.subject || 'Évènement'" wide @close="emit('close')">
+  <ModalDialog :title="incidentSubject(current)" wide @close="emit('close')">
     <div class="det">
       <div class="det__pills">
         <span class="sg-pill" :class="pillClass(current.severity)">{{ current.severity || 'mineur' }}</span>
@@ -47,17 +47,17 @@ async function sendComment(): Promise<void> {
         <h4>Description</h4>
         <p>{{ safe(current.description) }}</p>
       </section>
-      <section v-if="current.consigne" class="det__box">
+      <section class="det__box">
         <h4>Conduite à tenir</h4>
-        <p>{{ current.consigne }}</p>
+        <p>{{ safe(current.consigne) }}</p>
       </section>
 
       <section class="det__hist">
         <h4>Historique</h4>
         <ul v-if="current.actions.length">
           <li v-for="(a, idx) in current.actions" :key="idx">
-            <strong>{{ a.type }}</strong> · {{ formatDateTimeFR(a.date) }} · {{ a.user }}
-            <span v-if="a.note"> — {{ a.note }}</span>
+            <strong>{{ a.type || 'action' }}</strong> · {{ formatDateTimeFR(a.date) }} · {{ a.user }}
+            <span v-if="a.note"><br>{{ a.note }}</span>
           </li>
         </ul>
         <p v-else class="det__muted">Aucune action.</p>

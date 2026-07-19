@@ -1,18 +1,42 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import type { Incident, IncidentDashboard } from '@sgdi/shared';
-import { incidentsApi } from '@/api';
-import { formatFR } from '@/utils/incidents';
+import type { Incident, IncidentDashboard, SiteRef, EmployeeRef } from '@sgdi/shared';
+import { incidentsApi, referenceApi } from '@/api';
+import { useSessionStore } from '@/stores/session';
+import { formatFR, incidentSubject } from '@/utils/incidents';
 import IncidentFormModal from '@/components/incidents/IncidentFormModal.vue';
 import IncidentDetailModal from '@/components/incidents/IncidentDetailModal.vue';
 
 const router = useRouter();
+const session = useSessionStore();
 const data = ref<IncidentDashboard | null>(null);
 const loading = ref(true);
 const error = ref('');
 const showForm = ref(false);
+const formMode = ref<'site' | 'autres'>('site');
 const detail = ref<Incident | null>(null);
+
+const siteMap = ref<Record<number, string>>({});
+const agentMap = ref<Record<number, string>>({});
+
+function openForm(mode: 'site' | 'autres'): void {
+  formMode.value = mode;
+  showForm.value = true;
+}
+
+async function loadRefs(): Promise<void> {
+  try {
+    const [sites, emps] = await Promise.all([
+      referenceApi.sites(session.activeSociety ?? undefined),
+      referenceApi.employees(session.activeSociety ?? undefined),
+    ]);
+    siteMap.value = Object.fromEntries((sites as SiteRef[]).map((s) => [s.id, s.name]));
+    agentMap.value = Object.fromEntries((emps as EmployeeRef[]).map((a) => [a.id, `${a.last_name} ${a.first_name}`]));
+  } catch {
+    /* listes optionnelles */
+  }
+}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -25,7 +49,9 @@ async function load(): Promise<void> {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(async () => {
+  await Promise.all([loadRefs(), load()]);
+});
 
 const KPIS: { key: keyof IncidentDashboard['kpis']; label: string; color: string; to: string }[] = [
   { key: 'total', label: 'Total main courante', color: '#043970', to: '/incidents/site' },
@@ -50,7 +76,7 @@ function onSaved(): void {
         <h1 class="sg-page-title">Main courante — Tableau de bord</h1>
         <p class="sg-page-sub">Synthèse des évènements, incidents, alertes et clôtures.</p>
       </div>
-      <button class="sg-btn" @click="showForm = true">Nouvel évènement</button>
+      <button class="sg-btn" @click="openForm('site')">Nouvel évènement</button>
     </div>
 
     <p v-if="loading" class="sg-page-sub">Chargement…</p>
@@ -70,7 +96,8 @@ function onSaved(): void {
           <div class="dash2__quick">
             <button class="sg-btn sg-btn-secondary sg-btn-sm" @click="router.push('/incidents/site')">Évènements site</button>
             <button class="sg-btn sg-btn-secondary sg-btn-sm" @click="router.push('/incidents/autres')">Évènements autres</button>
-            <button class="sg-btn sg-btn-sm" @click="showForm = true">Créer évènement site</button>
+            <button class="sg-btn sg-btn-sm" @click="openForm('site')">Créer évènement site</button>
+            <button class="sg-btn sg-btn-sm" @click="openForm('autres')">Créer évènement autre</button>
           </div>
         </section>
 
@@ -79,7 +106,7 @@ function onSaved(): void {
           <ul v-if="data.alertes.length" class="alerts">
             <li v-for="a in data.alertes" :key="a.id">
               <button class="alerts__item" @click="detail = a">
-                <span class="alerts__subject">{{ a.subject || 'Évènement' }}</span>
+                <span class="alerts__subject">{{ incidentSubject(a) }}</span>
                 <span class="alerts__meta">{{ formatFR(a.incident_date) }} · {{ a.status }} · {{ a.severity }}</span>
               </button>
             </li>
@@ -89,8 +116,15 @@ function onSaved(): void {
       </div>
     </template>
 
-    <IncidentFormModal v-if="showForm" mode="site" @close="showForm = false" @saved="onSaved" />
-    <IncidentDetailModal v-if="detail" :incident="detail" @close="detail = null" @updated="load" />
+    <IncidentFormModal v-if="showForm" :mode="formMode" @close="showForm = false" @saved="onSaved" />
+    <IncidentDetailModal
+      v-if="detail"
+      :incident="detail"
+      :site-name="detail.site_id ? siteMap[detail.site_id] : undefined"
+      :agent-name="detail.employee_id ? agentMap[detail.employee_id] : undefined"
+      @close="detail = null"
+      @updated="load"
+    />
   </div>
 </template>
 

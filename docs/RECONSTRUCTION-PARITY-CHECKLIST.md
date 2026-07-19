@@ -81,10 +81,10 @@
 - [ ] Documents / Archives (documents archivés par employé) — `#/documents` (`renderDocumentsArchives`) 🔴
 
 ### 05-Incidents/Main courante  (4)
-- [ ] Main courante — Tableau de bord — `#/incidents/dashboard (router: `case"incidents": renderIncidents(view, sub\|\|` (`renderMainCouranteDashboard`)
-- [ ] Main courante — Évènements autres — `#/incidents/autres (dispatch: `case"incidents":renderIncidents(view,sub\|\|"da` (`renderIncidents`)
-- [ ] Main courante — Évènements site — `#/incidents/site (dispatch: `case"incidents":renderIncidents(view,sub\|\|"dash` (`renderIncidents`)
-- [ ] Modal — Nouvel évènement (Main courante / Incidents) — `Modale ouverte par openIncidentModal(mode) (l.17404-17423). Appelée depuis 3 é` (`openIncidentModal`) 🟠
+- [x] Main courante — Tableau de bord — `#/incidents/dashboard` (`renderMainCouranteDashboard`) → v2 IncidentsDashboard.vue + GET /ops/incidents/dashboard · vérifié parité (flotte 4 agents)
+- [x] Main courante — Évènements autres — `#/incidents/autres` (`renderIncidents`) → v2 IncidentsList mode=autres · vérifié parité
+- [x] Main courante — Évènements site — `#/incidents/site` (`renderIncidents`) → v2 IncidentsList mode=site · vérifié parité
+- [x] Modal — Nouvel évènement (Main courante / Incidents) — (`openIncidentModal`) 🟠 → v2 IncidentFormModal.vue + POST /ops/incidents · 13 champs à parité · vérifié
 
 ### 05b-Secrétariat  (5)
 - [ ] Archives (liste) — `#/secretariat/archives` (`renderSecretariat`) 🔴
@@ -95,7 +95,7 @@
 
 ### 06-Sites & Pointage  (14)
 - [ ] Encart évènements fiche Site (bloc "Main courante" — siteEvenementsHTML) — `app/static/sgdi-app.js l.16413 `siteEvenementsHTML(site)` — sous-bloc rendu à ` (`siteEvenementsHTML`) 🟠
-- [ ] Modal — Détail évènement (Main courante) — `viewIncident(id) — app/static/sgdi-app.js l.17431-17446. Pas une route navigat` (`viewIncident`)
+- [x] Modal — Détail évènement (Main courante) — (`viewIncident`) → v2 IncidentDetailModal.vue (pills, grille, description, conduite à tenir, historique, Commenter) · vérifié parité
 - [ ] Pointage — Archives (ARCHIVES POINTAGE) — écran de consultation 100% lec — `#/pointage/archives` (`renderPointageArchives`)
 - [ ] Pointage — Feuille de présence quotidienne (FPQ) — `#/pointage/feuille (alias: #/pointage/scan est réécrit en "feuille" par render` (`renderFeuillePresentQR`) 🟠
 - [ ] Pointage — Légende & codes (onglet "🎨 Légende & codes" du module Pointag — `#/pointage/legende — dispatché par route() (sgdi-app.js:6896) `case"pointage":` (`renderPointageLegende`)

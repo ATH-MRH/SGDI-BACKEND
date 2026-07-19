@@ -80,7 +80,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <ModalDialog title="Nouvel évènement" wide @close="emit('close')">
+  <ModalDialog title="Nouvel évènement main courante" wide @close="emit('close')">
     <form id="incident-form" class="sg-form-grid" @submit.prevent="submit">
       <div class="sg-field">
         <label>Date</label>
