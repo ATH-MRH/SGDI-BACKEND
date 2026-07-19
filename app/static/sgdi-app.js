@@ -12992,7 +12992,7 @@ function applyEffectifSearchInPlace(v){
 function effectifHeaderSearchHTML(filter){
   const q=escapeHTML(effectifSearchValue(filter));
   return `<div class="effectif-header-search">
-    <input class="input text-center" value="${q}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/>
+    <input class="input text-center" data-no-lock value="${q}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/>
     <div id="effectif-search-result-count" class="text-[11px] text-slate-500 mt-1"></div>
   </div>`;
 }
@@ -13045,7 +13045,7 @@ function applyOpsEffectifFilters(list){
 function opsEffectifHeaderSearchHTML(){
   if(!isOpsEffectifContext())return "";
   const q=escapeHTML((opsEffectifFilters().q)||"");
-  return `<input class="input" style="width:320px;max-width:42vw" value="${q}" placeholder="Nom / Prénom / Code" oninput="setOpsEffectifSearch(this.value)"/>`;
+  return `<input class="input" data-no-lock style="width:320px;max-width:42vw" value="${q}" placeholder="Nom / Prénom / Code" oninput="setOpsEffectifSearch(this.value)"/>`;
 }
 function opsEffectifFiltersHTML(sourceList,filteredCount){
   if(!isOpsEffectifContext())return "";
@@ -13058,19 +13058,19 @@ function opsEffectifFiltersHTML(sourceList,filteredCount){
   const val=k=>escapeHTML(f[k]||"");
   return `<div class="card ops-effectif-filter-card">
     <div class="ops-effectif-filter-main">
-      <div><label class="label">Site</label><select class="select" onchange="setOpsEffectifFilter('site',this.value)"><option value="">Tous les sites</option><option value="__none__" ${f.site==="__none__"?"selected":""}>Sans affectation</option>${sites.map(s=>`<option value="${escapeHTML(s.id)}" ${String(f.site||"")===String(s.id)?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`).join("")}</select></div>
-      <div><label class="label">Poste / fonction</label><select class="select" onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
-      <div><label class="label">Situation familiale</label><select class="select" onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
+      <div><label class="label">Site</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('site',this.value)"><option value="">Tous les sites</option><option value="__none__" ${f.site==="__none__"?"selected":""}>Sans affectation</option>${sites.map(s=>`<option value="${escapeHTML(s.id)}" ${String(f.site||"")===String(s.id)?"selected":""}>${escapeHTML(s.nom||s.intitule||"Site")}</option>`).join("")}</select></div>
+      <div><label class="label">Poste / fonction</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('poste',this.value)"><option value="">Toutes fonctions</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${f.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
+      <div><label class="label">Situation familiale</label><select class="select" data-no-lock onchange="setOpsEffectifFilter('situation',this.value)"><option value="">Toutes situations</option>${situations.map(s=>`<option value="${escapeHTML(s)}" ${f.situation===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
       <div class="ops-effectif-filter-actions"><button type="button" class="btn btn-secondary text-xs" onclick="toggleOpsEffectifAdvanced()">${advanced?"Masquer filtres":"Filtres avancés"}</button><button type="button" class="btn btn-ghost text-xs" onclick="resetOpsEffectifFilters()">Réinitialiser</button></div>
     </div>
     <div id="ops-effectif-result-count" class="ops-effectif-result-count">${filteredCount} résultat(s) affiché(s)</div>
     ${advanced?`<div class="ops-effectif-advanced">
-      <div><label class="label">Recrutement du</label><input class="input" type="date" value="${val("recrutFrom")}" onchange="setOpsEffectifFilter('recrutFrom',this.value)"/></div>
-      <div><label class="label">Recrutement au</label><input class="input" type="date" value="${val("recrutTo")}" onchange="setOpsEffectifFilter('recrutTo',this.value)"/></div>
-      <div><label class="label">Naissance du</label><input class="input" type="date" value="${val("birthFrom")}" onchange="setOpsEffectifFilter('birthFrom',this.value)"/></div>
-      <div><label class="label">Naissance au</label><input class="input" type="date" value="${val("birthTo")}" onchange="setOpsEffectifFilter('birthTo',this.value)"/></div>
-      <div><label class="label">Age min</label><input class="input" type="number" min="0" value="${val("ageMin")}" onchange="setOpsEffectifFilter('ageMin',this.value)"/></div>
-      <div><label class="label">Age max</label><input class="input" type="number" min="0" value="${val("ageMax")}" onchange="setOpsEffectifFilter('ageMax',this.value)"/></div>
+      <div><label class="label">Recrutement du</label><input class="input" data-no-lock type="date" value="${val("recrutFrom")}" onchange="setOpsEffectifFilter('recrutFrom',this.value)"/></div>
+      <div><label class="label">Recrutement au</label><input class="input" data-no-lock type="date" value="${val("recrutTo")}" onchange="setOpsEffectifFilter('recrutTo',this.value)"/></div>
+      <div><label class="label">Naissance du</label><input class="input" data-no-lock type="date" value="${val("birthFrom")}" onchange="setOpsEffectifFilter('birthFrom',this.value)"/></div>
+      <div><label class="label">Naissance au</label><input class="input" data-no-lock type="date" value="${val("birthTo")}" onchange="setOpsEffectifFilter('birthTo',this.value)"/></div>
+      <div><label class="label">Age min</label><input class="input" data-no-lock type="number" min="0" value="${val("ageMin")}" onchange="setOpsEffectifFilter('ageMin',this.value)"/></div>
+      <div><label class="label">Age max</label><input class="input" data-no-lock type="number" min="0" value="${val("ageMax")}" onchange="setOpsEffectifFilter('ageMax',this.value)"/></div>
     </div>`:""}
   </div>`;
 }
@@ -13165,7 +13165,7 @@ function effectifListHTML(filter){
   const {list,title,soc,filterSource}=data;
   const actionHeader=filter==="instance_affectation"?"<th>Action</th>":"";
   const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
-  const sortHTML=`<select class="select" onchange="setEffectifSort(this.value)">
+  const sortHTML=`<select class="select" data-no-lock onchange="setEffectifSort(this.value)">
     <option value="nom_asc" ${effectifSort==="nom_asc"?"selected":""}>Nom A → Z</option>
     <option value="nom_desc" ${effectifSort==="nom_desc"?"selected":""}>Nom Z → A</option>
     <option value="recrut_asc" ${effectifSort==="recrut_asc"?"selected":""}>Recrutement (ancien → récent)</option>
@@ -13175,7 +13175,7 @@ function effectifListHTML(filter){
   </select>`;
   const opsHeader=isOpsEffectifContext()?`<div class="card ops-effectif-hero">
     <div class="ops-effectif-title-block"><h1 class="effectif-page-title">${escapeHTML(title)}</h1><p>${list.length} employé(s) · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>
-    <div class="ops-effectif-tools"><input class="input" value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/><label><span>Tri</span>${sortHTML}</label></div>
+    <div class="ops-effectif-tools"><input class="input" data-no-lock value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/><label><span>Tri</span>${sortHTML}</label></div>
   </div>`:isDrhModuleContext()?`<div class="drh-effectif-list-header">
     <div class="drh-effectif-title-block">
       <h1 class="text-2xl font-black effectif-page-title" style="line-height:1.15">${escapeHTML(title)}</h1>
