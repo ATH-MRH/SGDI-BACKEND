@@ -31556,8 +31556,17 @@ function adminSuggestUsernameForForm(force){
   if(!force&&current&&!generatedLike)return;
   input.value=adminNextUsername(adminUsernamePrefixFromForm(form));
 }
-function openAdminUserModal(username){
+async function openAdminUserModal(username){
   username=String(username||"").trim();
+  // Le périmètre "sites autorisés" doit couvrir TOUTES les sociétés, pas seulement
+  // celles déjà chargées en cache local (db.sites ne contient que ce qui a été
+  // parcouru jusqu'ici côté "Sites"). On recharge la liste complète avant d'ouvrir.
+  try{
+    sgdiShowDataLoadingBar("Chargement des sites...");
+    const rows=await SGDI.sites.list({});
+    (Array.isArray(rows)?rows:[]).map(siteFromApi).forEach(s=>sgdiUpsertServerItem("sites",s));
+  }catch(e){console.warn("Liste complète des sites indisponible pour le périmètre sites",e);}
+  finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar();}
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
   const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
@@ -31582,7 +31591,25 @@ function openAdminUserModal(username){
       <label class="label mt-3">Périmètre structures (vide = toutes)</label>
       <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""} onchange="adminSuggestUsernameForForm(false)"/>${escapeHTML(st.label)}</label>`).join("")}</div>
       <label class="label mt-3">Périmètre sites (vide = tous)</label>
-      <div class="grid grid-2 gap-2" style="max-height:180px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{const seen=new Set();return(db.sites||[]).filter(s=>{const k=String(s.backendId||s.id||"");if(!k||seen.has(k))return false;seen.add(k);return s.actif!==false;}).map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="site_${s.backendId||s.id}" value="${s.backendId||s.id}" ${(u.sitesAutorises||[]).includes(Number(s.backendId||s.id))?"checked":""}/>${escapeHTML((s.societe?s.societe+" · ":"")+(s.nom||s.intitule||"Site #"+(s.backendId||s.id)))}</label>`).join("")||`<div class="text-sm text-slate-500">Aucun site chargé.</div>`})()}</div>
+      <div style="max-height:320px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{
+        const seen=new Set();
+        const sites=(db.sites||[]).filter(s=>{const k=String(s.backendId||s.id||"");if(!k||seen.has(k))return false;seen.add(k);return s.actif!==false;});
+        if(!sites.length)return `<div class="text-sm text-slate-500">Aucun site chargé.</div>`;
+        const groups=new Map();
+        sites.forEach(s=>{
+          const soc=sitePrimarySociete(s)||"Sans société";
+          if(!groups.has(soc))groups.set(soc,[]);
+          groups.get(soc).push(s);
+        });
+        const socNames=[...groups.keys()].sort((a,b)=>a.localeCompare(b));
+        return socNames.map(soc=>{
+          const list=groups.get(soc).sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||"")));
+          return `<div class="mb-3">
+            <div class="text-xs font-black uppercase text-slate-500 mb-1 px-1">${escapeHTML(soc)} <span class="text-slate-400 font-normal normal-case">(${list.length} site${list.length>1?"s":""})</span></div>
+            <table class="w-full text-sm" style="border-collapse:collapse"><tbody>${list.map(s=>`<tr><td style="width:28px;border-bottom:1px solid #f1f5f9"><input type="checkbox" name="site_${s.backendId||s.id}" value="${s.backendId||s.id}" ${(u.sitesAutorises||[]).includes(Number(s.backendId||s.id))?"checked":""}/></td><td style="border-bottom:1px solid #f1f5f9;padding:3px 6px">${escapeHTML(s.nom||s.intitule||"Site #"+(s.backendId||s.id))}</td></tr>`).join("")}</tbody></table>
+          </div>`;
+        }).join("");
+      })()}</div>
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
   setTimeout(()=>{previewUserAccessLevel(selectedNiveau);if(isNew)adminSuggestUsernameForForm(false)},0);
