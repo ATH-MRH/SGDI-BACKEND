@@ -14103,6 +14103,7 @@ function openGestionModal(agentId,type){
   const a=db.agents.find(x=>x.id===agentId);if(!a)return;
   const isTrial=type==="Période d'essai";
   const isLeave=type==="Congé";
+  const isMaladie=type==="Maladie";
   const initialTrialEnd=a.dateFinEssai||today();
   const trialDecisionButton=isTrial?`<button type="button" class="btn btn-secondary" onclick="printTrialRenewalDecisionFromForm('${escapeHTML(String(agentId))}',this.form)">Éditer décision</button>`:"";
   const leaveTitleButton=isLeave?`<button type="button" class="btn btn-secondary" onclick="printLeaveTitleFromForm('${escapeHTML(String(agentId))}',this.form)">Éditer titre de congé</button>`:"";
@@ -14111,12 +14112,25 @@ function openGestionModal(agentId,type){
         <div><label class="label">À compter du</label><input class="input" type="date" name="du" value="${today()}" onchange="updateLeaveEndDate()" oninput="updateLeaveEndDate()" /></div>
         <div><label class="label">Date fin du congé</label><input class="input bg-slate-50" type="date" name="au" readonly /></div>
         <div class="col-span-2"><label class="label">Date de reprise</label><input class="input bg-slate-50" type="date" name="reprise" readonly /></div>`:"";
+  const maladieFields=isMaladie?`
+        <div class="col-span-2"><label class="label">Site / Affectation</label><input class="input bg-slate-50" value="${escapeHTML(agentLiveAffectation(a)?.siteName||a.affectationCourante?.siteName||"Sans affectation")}" readonly /></div>
+        <div><label class="label">Du</label><input class="input" type="date" name="du" value="${today()}" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
+        <div><label class="label">Au</label><input class="input" type="date" name="au" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
+        <div class="col-span-2"><label class="label">Nombre de jours</label><input class="input bg-slate-50" name="nbJours" readonly /></div>`:"";
   const trialFields=isTrial?`
         <div><label class="label">Date initiale fin période d'essai</label><input class="input bg-slate-50" type="date" name="du" value="${escapeHTML(initialTrialEnd)}" readonly /></div>
         <div><label class="label">Reconduction</label><select class="select" name="dureeReconduction" onchange="updateTrialRenewalEndDate()" oninput="updateTrialRenewalEndDate()"><option value="1">01 mois</option><option value="2">02 mois</option><option value="3">03 mois</option></select></div>
         <div class="col-span-2"><label class="label">Nouvelle date de fin de période d'essai</label><input class="input bg-slate-50" type="date" name="au" value="${trialRenewalEndDate(initialTrialEnd,1)}" readonly /></div>`:`
-        ${leaveFields||`<div><label class="label">Du</label><input class="input" type="date" name="du" value="${today()}" /></div>
+        ${maladieFields||leaveFields||`<div><label class="label">Du</label><input class="input" type="date" name="du" value="${today()}" /></div>
         <div><label class="label">Au</label><input class="input" type="date" name="au" /></div>`}`;
+  const maladieDocsSection=isMaladie?`
+        <div class="col-span-2">
+          <label class="label">Documents (arrêt de travail, ordonnance…)</label>
+          <input type="hidden" name="documentsJson" id="maladie-docs-json" value="[]"/>
+          <div id="maladie-docs-list" class="flex flex-col gap-1 mb-2"></div>
+          <input id="maladie-doc-file" type="file" accept=".pdf,.doc,.docx,image/*" class="hidden" onchange="handleMaladieDocFile(this)"/>
+          <button type="button" class="btn btn-secondary text-xs" onclick="document.getElementById('maladie-doc-file').click()">📎 Ajouter un document</button>
+        </div>`:"";
   const agentArg=JSON.stringify(String(agentId));
   const typeArg=JSON.stringify(String(type));
   const modalTitle=isLeave?"Nouveau Congé":`${gestionIcon(type)} Nouvelle ${type.toLowerCase()} — ${escapeHTML(a.nom+" "+a.prenom)}`;
@@ -14125,12 +14139,62 @@ function openGestionModal(agentId,type){
       <div class="grid grid-2">
         ${trialFields}
         <div class="col-span-2"><label class="label">Motif / détails</label><textarea class="textarea" rows="2" name="motif" placeholder="Raison, n° arrêt, pièce justificative…"></textarea></div>
+        ${maladieDocsSection}
         <div class="col-span-2"><label class="label">Statut</label><select class="select" name="statut"><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="approuve">Approuvé</option></select></div>
       </div>
       <div class="flex gap-2 justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>${trialDecisionButton}${leaveTitleButton}<button class="btn btn-primary">Enregistrer</button></div>
     </form>`);
   if(isTrial)setTimeout(updateTrialRenewalEndDate,0);
   if(isLeave)setTimeout(updateLeaveEndDate,0);
+  if(isMaladie){setTimeout(updateMaladieDuration,0);setTimeout(maladieDocsRenderList,0);}
+}
+function updateMaladieDuration(){
+  const f=document.querySelector(".modal-bg form");if(!f)return;
+  const du=f.querySelector('[name="du"]')?.value||"";
+  const au=f.querySelector('[name="au"]')?.value||"";
+  const out=f.querySelector('[name="nbJours"]');
+  if(!out)return;
+  if(du&&au&&au>=du){
+    const n=Math.round((new Date(au)-new Date(du))/86400000)+1;
+    out.value=n+" jour"+(n>1?"s":"");
+  }else{
+    out.value="";
+  }
+}
+function maladieDocsState(){
+  const f=document.querySelector(".modal-bg form");if(!f)return[];
+  const inp=f.querySelector("#maladie-docs-json");if(!inp)return[];
+  try{return JSON.parse(inp.value||"[]")}catch(e){return[]}
+}
+function maladieDocsRenderList(){
+  const f=document.querySelector(".modal-bg form");if(!f)return;
+  const list=f.querySelector("#maladie-docs-list");if(!list)return;
+  const docs=maladieDocsState();
+  list.innerHTML=docs.map((d,i)=>`<div class="flex items-center justify-between gap-2 px-2 py-1 rounded" style="background:#f8fafc;border:1px solid #e2e8f0"><span class="text-xs font-semibold truncate">📄 ${escapeHTML(d.name)}</span><div class="flex gap-2 flex-shrink-0"><button type="button" class="btn btn-ghost text-xs" onclick="viewDoc('${d.url}','${escapeHTML(d.name)}')">👁 Voir</button><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="maladieDocRemove(${i})">✕ Retirer</button></div></div>`).join("")||`<div class="text-xs text-slate-400 italic">Aucun document ajouté.</div>`;
+}
+function handleMaladieDocFile(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  if(f.size>5*1024*1024){toast("Fichier > 5 Mo","error");input.value="";return}
+  const form=document.querySelector(".modal-bg form");
+  const jsonInp=form?.querySelector("#maladie-docs-json");
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const docs=maladieDocsState();
+    docs.push({name:f.name,url:e.target.result});
+    if(jsonInp)jsonInp.value=JSON.stringify(docs);
+    maladieDocsRenderList();
+    input.value="";
+    toast("Document ajouté","success");
+  };
+  reader.readAsDataURL(f);
+}
+function maladieDocRemove(idx){
+  const form=document.querySelector(".modal-bg form");
+  const jsonInp=form?.querySelector("#maladie-docs-json");
+  const docs=maladieDocsState();
+  docs.splice(idx,1);
+  if(jsonInp)jsonInp.value=JSON.stringify(docs);
+  maladieDocsRenderList();
 }
 async function confirmGestion(agentId,type){
   if(!canUseEmployeeActionWorkflows()){toast("Action RH non autorisée depuis ce module","error");return}
@@ -14148,6 +14212,11 @@ async function confirmGestion(agentId,type){
     ev.motif=[ev.motif,ev.dureeReconduction?"Reconduction : "+String(ev.dureeReconduction).padStart(2,"0")+" mois":""].filter(Boolean).join(" · ");
     if(ev.au)a.dateFinEssai=ev.au;
   }
+  if(type==="Maladie"){
+    ev.site=agentLiveAffectation(a)?.siteName||a.affectationCourante?.siteName||"";
+    ev.nbJours=fd.get("nbJours")||"";
+    try{ev.documents=JSON.parse(fd.get("documentsJson")||"[]")}catch(e){ev.documents=[]}
+  }
   a.gestionEvents.push(ev);
   // Update agent status based on event type and date coverage
   if(type==="Absence"){
@@ -14158,7 +14227,7 @@ async function confirmGestion(agentId,type){
   }
   // Also create a conge if type is Congé or Maladie
   if(type==="Congé"||type==="Maladie"){
-    db.conges.push({id:uid("cg"),agentId,type:type==="Congé"?"Annuel":"Maladie",du:ev.du,au:ev.au,motif:ev.motif,statut:ev.statut==="en_cours"?"approuve":ev.statut});
+    db.conges.push({id:uid("cg"),agentId,type:type==="Congé"?"Annuel":"Maladie",du:ev.du,au:ev.au,motif:ev.motif,statut:ev.statut==="en_cours"?"approuve":ev.statut,site:ev.site||"",documents:ev.documents||[]});
   }
   try{
     const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
