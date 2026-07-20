@@ -5439,6 +5439,7 @@ function renderInternal(){
       </main>
     </div>
     ${dialogueBoxHTML()}
+    ${typeof maladieRetardSidebarHTML==="function"?maladieRetardSidebarHTML():""}
   </div>`;
   renderSidebar();
   sgdiEnterViewMode(true);
@@ -14114,10 +14115,11 @@ function openGestionModal(agentId,type){
         <div class="col-span-2"><label class="label">Date de reprise</label><input class="input bg-slate-50" type="date" name="reprise" readonly /></div>`:"";
   const maladieFields=isMaladie?`
         <div class="col-span-2"><label class="label">Site / Affectation</label><input class="input bg-slate-50" value="${escapeHTML(agentLiveAffectation(a)?.siteName||a.affectationCourante?.siteName||"Sans affectation")}" readonly /></div>
-        <div class="col-span-2 grid grid-cols-3 gap-3">
+        <div class="col-span-2 grid grid-cols-4 gap-3">
           <div><label class="label">Du</label><input class="input" type="date" name="du" value="${today()}" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
           <div><label class="label">Au</label><input class="input" type="date" name="au" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
           <div><label class="label">Nombre de jours</label><input class="input bg-slate-50" name="nbJours" readonly /></div>
+          <div><label class="label">Date de reprise</label><input class="input bg-slate-50" type="date" name="reprise" readonly /></div>
         </div>`:"";
   const trialFields=isTrial?`
         <div><label class="label">Date initiale fin période d'essai</label><input class="input bg-slate-50" type="date" name="du" value="${escapeHTML(initialTrialEnd)}" readonly /></div>
@@ -14142,25 +14144,132 @@ function openGestionModal(agentId,type){
         ${trialFields}
         <div class="col-span-2"><label class="label">Motif / détails</label><textarea class="textarea" rows="2" name="motif" placeholder="Raison, n° arrêt, pièce justificative…"></textarea></div>
         ${maladieDocsSection}
-        <div class="col-span-2"><label class="label">Statut</label><select class="select" name="statut"><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="approuve">Approuvé</option></select></div>
+        ${isMaladie?`<input type="hidden" name="statut" value="approuve"/>`:`<div class="col-span-2"><label class="label">Statut</label><select class="select" name="statut"><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="approuve">Approuvé</option></select></div>`}
       </div>
-      <div class="flex gap-2 justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>${trialDecisionButton}${leaveTitleButton}<button class="btn btn-primary">Enregistrer</button></div>
+      <div class="flex gap-2 justify-end mt-4">${isMaladie?`<button type="button" class="btn btn-primary" onclick="openMaladieValidationRecap('${escapeHTML(String(agentId))}')">Valider</button>`:""}<button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>${trialDecisionButton}${leaveTitleButton}${isMaladie?"":`<button class="btn btn-primary">Enregistrer</button>`}</div>
     </form>`);
   if(isTrial)setTimeout(updateTrialRenewalEndDate,0);
   if(isLeave)setTimeout(updateLeaveEndDate,0);
   if(isMaladie){setTimeout(updateMaladieDuration,0);setTimeout(maladieDocsRenderList,0);}
+}
+function openMaladieValidationRecap(agentId){
+  const f=document.querySelector(".modal-bg form");if(!f)return;
+  const a=db.agents.find(x=>x.id===agentId);if(!a)return;
+  const fd=new FormData(f);
+  const du=fd.get("du")||"",au=fd.get("au")||"",motif=fd.get("motif")||"",nbJours=fd.get("nbJours")||"",reprise=fd.get("reprise")||"";
+  if(!du||!au){toast("Renseignez les dates Du et Au avant de valider","error");return}
+  let documents=[];try{documents=JSON.parse(fd.get("documentsJson")||"[]")}catch(e){}
+  const payload={agentId,du,au,motif,nbJours,reprise,documents,site:agentLiveAffectation(a)?.siteName||a.affectationCourante?.siteName||""};
+  window.__SGDI_MALADIE_RECAP_PAYLOAD=payload;
+  const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
+  const w=window.open("","sgdi_maladie_recap","width=560,height=680");
+  if(!w){toast("Fenêtre bloquée par le navigateur","error");return}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Récapitulatif maladie</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#0f172a}h2{margin:0 0 16px;color:#043970}.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #e2e8f0}.k{font-weight:700;color:#475569}.v{font-weight:700;text-align:right}.btns{margin-top:24px;display:flex;justify-content:flex-end;gap:8px}button{padding:8px 16px;border-radius:6px;border:0;cursor:pointer;font-weight:700;font-family:inherit}.primary{background:#043970;color:#fff}.ghost{background:#f1f5f9;color:#0f172a}button:disabled{opacity:.5;cursor:not-allowed}</style>
+  </head><body>
+  <h2>MALADIE — ${nom}</h2>
+  <div class="row"><span class="k">Matricule</span><span class="v">${escapeHTML(a.matricule||"—")}</span></div>
+  <div class="row"><span class="k">Durée</span><span class="v">${escapeHTML(nbJours||"—")}</span></div>
+  <div class="row"><span class="k">Du</span><span class="v">${escapeHTML(du)}</span></div>
+  <div class="row"><span class="k">Au</span><span class="v">${escapeHTML(au)}</span></div>
+  <div class="row"><span class="k">Motif</span><span class="v">${escapeHTML(motif||"—")}</span></div>
+  <div class="btns"><button class="ghost" id="sgdi-maladie-cancel">Fermer</button><button class="primary" id="sgdi-maladie-validate">Valider et enregistrer</button></div>
+  <script>
+    document.getElementById("sgdi-maladie-cancel").onclick=function(){window.close()};
+    document.getElementById("sgdi-maladie-validate").onclick=async function(){
+      if(!window.confirm("Confirmer l'enregistrement de cette maladie ?"))return;
+      var btn=this;btn.disabled=true;btn.textContent="Enregistrement...";
+      try{
+        var ok=await window.opener.confirmMaladieFromWindow(${JSON.stringify(agentId)});
+        if(ok){window.close();}else{btn.disabled=false;btn.textContent="Valider et enregistrer";}
+      }catch(e){btn.disabled=false;btn.textContent="Valider et enregistrer";}
+    };
+  <\/script>
+  </body></html>`);
+  w.document.close();
+}
+async function confirmMaladieFromWindow(agentId){
+  const payload=window.__SGDI_MALADIE_RECAP_PAYLOAD;
+  if(!payload||String(payload.agentId)!==String(agentId)){toast("Session de validation expirée, réessayez","error");return false}
+  const a=db.agents.find(x=>x.id===agentId);if(!a)return false;
+  a.gestionEvents=a.gestionEvents||[];
+  const ev={type:"Maladie",du:payload.du,au:payload.au,motif:payload.motif,statut:"approuve",createdAt:today(),site:payload.site,nbJours:payload.nbJours,reprise:payload.reprise,documents:payload.documents||[]};
+  a.gestionEvents.push(ev);
+  db.conges=db.conges||[];
+  db.conges.push({id:uid("cg"),agentId,type:"Maladie",du:ev.du,au:ev.au,motif:ev.motif,statut:"approuve",site:ev.site,documents:ev.documents,reprise:ev.reprise});
+  try{
+    const saved=a.backendId?await SGDI.employees.update(a.backendId,employeeApiPayload(a)):await SGDI.employees.create(employeeApiPayload(a));
+    Object.assign(a,employeeFromApi(saved),a,{backendId:saved?.id||a.backendId});
+  }catch(e){toast("Maladie non enregistrée : "+(e.message||e),"error");return false}
+  if(!(await saveDBAndWaitToast("Maladie non confirmée")))return false;
+  const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const alertMsg=`${nom} (${a.matricule||"—"}) en maladie du ${formatDate(ev.du)} au ${formatDate(ev.au)} · Reprise prévue le ${formatDate(ev.reprise)}.`;
+  ["ops","superviseur"].forEach(mod=>{
+    workflowUpsertTask({
+      id:`maladie_${a.id}_${ev.createdAt}_${mod}`,
+      module:mod,
+      route:"effectif/actifs",
+      employeeId:a.id,
+      candidateName:nom,
+      matricule:a.matricule||"",
+      societe:a.societe||"",
+      title:"Employé en maladie",
+      message:alertMsg,
+      createdBy:session?.username||"DRH",
+      createdAt:new Date().toISOString()
+    });
+  });
+  closeModal();toast("Maladie enregistrée","success");renderView();
+  delete window.__SGDI_MALADIE_RECAP_PAYLOAD;
+  return true;
+}
+function maladieAgentHasReturnedSince(agent,sinceDate){
+  return (db.feuillePresence||[]).some(f=>{
+    if(String(f.date||"")<sinceDate)return false;
+    const matches=String(f.agentId||"")===String(agent.id||"")||String(f.agentBackendId||f.employee_id||"")===String(agent.backendId||"")||(agent.matricule&&String(f.matricule||"")===String(agent.matricule));
+    if(!matches)return false;
+    const code=f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"");
+    return code==="P";
+  });
+}
+function maladieRetardList(){
+  const td=today();
+  return (db.conges||[]).filter(c=>c.type==="Maladie"&&c.statut==="approuve"&&c.reprise&&c.reprise<td).map(c=>{
+    const agent=(db.agents||[]).find(a=>a.id===c.agentId);
+    if(!agent||employeeIsFormer(agent))return null;
+    if(maladieAgentHasReturnedSince(agent,c.reprise))return null;
+    const joursRetard=Math.max(0,Math.round((new Date(td)-new Date(c.reprise))/86400000));
+    return{agent,conge:c,joursRetard};
+  }).filter(Boolean).sort((a,b)=>b.joursRetard-a.joursRetard);
+}
+function maladieRetardSidebarHTML(){
+  if(!["ops","superviseur"].includes(session?.transverse))return"";
+  const list=maladieRetardList();
+  if(!list.length)return"";
+  return `<div class="no-print" style="position:fixed;top:70px;right:0;width:270px;max-height:calc(100vh - 90px);overflow-y:auto;background:#fff;border:1px solid #e2e8f0;border-right:0;border-radius:10px 0 0 10px;box-shadow:-4px 4px 16px rgba(15,23,42,.12);z-index:45">
+    <div style="padding:10px 14px;background:#fef2f2;border-bottom:1px solid #fecaca;color:#991b1b;font-weight:900;font-size:12px;text-transform:uppercase;border-radius:10px 0 0 0">⚠ Reprises en retard (${list.length})</div>
+    <div style="padding:8px">${list.map(({agent,conge,joursRetard})=>`<a href="#/agents/${employeeRouteId(agent)}" style="text-decoration:none;color:inherit;display:block;padding:8px;border-radius:8px;margin-bottom:6px;background:#f8fafc;border:1px solid #e2e8f0">
+      <div style="font-weight:800;font-size:12.5px">${escapeHTML((agent.nom||"")+" "+(agent.prenom||""))}</div>
+      <div style="font-size:10.5px;color:#64748b">${escapeHTML(agent.matricule||"")} · ${escapeHTML(agentLiveAffectation(agent)?.siteName||agent.affectationCourante?.siteName||"—")}</div>
+      <div style="font-size:10.5px;margin-top:3px">Reprise prévue : <b>${formatDate(conge.reprise)}</b></div>
+      <div style="font-size:11px;font-weight:900;color:#dc2626;margin-top:2px">${joursRetard} jour${joursRetard>1?"s":""} de retard</div>
+    </a>`).join("")}</div>
+  </div>`;
 }
 function updateMaladieDuration(){
   const f=document.querySelector(".modal-bg form");if(!f)return;
   const du=f.querySelector('[name="du"]')?.value||"";
   const au=f.querySelector('[name="au"]')?.value||"";
   const out=f.querySelector('[name="nbJours"]');
+  const repriseOut=f.querySelector('[name="reprise"]');
   if(!out)return;
   if(du&&au&&au>=du){
     const n=Math.round((new Date(au)-new Date(du))/86400000)+1;
     out.value=n+" jour"+(n>1?"s":"");
+    if(repriseOut)repriseOut.value=addDays(au,1);
   }else{
     out.value="";
+    if(repriseOut)repriseOut.value="";
   }
 }
 function maladieDocsState(){
