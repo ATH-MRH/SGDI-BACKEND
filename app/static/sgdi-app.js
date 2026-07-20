@@ -11896,7 +11896,7 @@ function openRhEffectifActionModal(action){
     <form onsubmit="event.preventDefault();runRhEffectifAction('${action}',this.agentId.value)">
       <label class="label">Employé concerné</label>
       <select class="select" name="agentId" required>${list.map(a=>`<option value="${escapeHTML(a.id)}">${escapeHTML((a.matricule||"")+" - "+((a.nom||"")+" "+(a.prenom||"")).trim())}</option>`).join("")}</select>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Continuer</button></div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Suivant</button></div>
     </form>`);
 }
 function runRhEffectifAction(action,agentId){
