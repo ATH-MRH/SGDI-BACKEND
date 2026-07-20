@@ -11831,6 +11831,7 @@ function effectifRecapCardsHTML(activeFilter,showTitle,stable){
 function drhEffectifActionsBarHTML(){
   const btns=[
     {k:"detail",           l:"DETAIL",             c:"#1e3a8a"},
+    {k:"maladie",          l:"MALADIE",            c:"#f97316"},
     {k:"conge",            l:"CONGÉ",              c:"#0369a1"},
     {k:"rec_periode_essai",l:"REC/PERIODE D'ESSAI",c:"#7c3aed"},
     {k:"suspendre",        l:"SUSPENDRE",          c:"#dc2626"},
@@ -11862,7 +11863,7 @@ function rhEffectifActionsHTML(){
 }
 function drhEmployeeActionLabels(includeDetail=true){
   const actions=[
-    ["conge","CONGÉ"],["rec_periode_essai","REC/PERIODE D'ESSAI"],["suspendre","SUSPENDRE"],["convoquer","CONVOQUER"],["blacklister","BLACKLISTER"],["mise_en_demeure","MISE EN DEMEURE"],
+    ["maladie","MALADIE"],["conge","CONGÉ"],["rec_periode_essai","REC/PERIODE D'ESSAI"],["suspendre","SUSPENDRE"],["convoquer","CONVOQUER"],["blacklister","BLACKLISTER"],["mise_en_demeure","MISE EN DEMEURE"],
     ["periode_enc","PERIODE E-N-C"],["sanctionner","SANCTIONNER"],["avenant","AVENANT"],["nouveau_contrat","NOUVEAU CONTRAT"],["fin_contrat","FIN DE CONTRAT"]
   ];
   return includeDetail?[["detail","DETAIL"],...actions]:actions;
@@ -11877,7 +11878,7 @@ function employeeFicheRhActionsHTML(a){
   </div>`;
 }
 function rhEffectifActionLabel(action){
-  return {detail:"DETAIL",conge:"CONGÉ",rec_periode_essai:"REC/PERIODE D'ESSAI",suspendre:"SUSPENDRE",lever_suspension:"LEVER SUSPENSION",convoquer:"CONVOQUER",blacklister:"BLACKLISTER",lever_blacklist:"LEVER BLACKLIST",mise_en_demeure:"MISE EN DEMEURE",periode_enc:"PERIODE E-N-C",sanctionner:"SANCTIONNER",avenant:"AVENANT",nouveau_contrat:"NOUVEAU CONTRAT",fin_contrat:"FIN DE RELATION DE TRAVAIL",integrer:"REINTEGRER"}[action]||"ACTION";
+  return {detail:"DETAIL",maladie:"MALADIE",conge:"CONGÉ",rec_periode_essai:"REC/PERIODE D'ESSAI",suspendre:"SUSPENDRE",lever_suspension:"LEVER SUSPENSION",convoquer:"CONVOQUER",blacklister:"BLACKLISTER",lever_blacklist:"LEVER BLACKLIST",mise_en_demeure:"MISE EN DEMEURE",periode_enc:"PERIODE E-N-C",sanctionner:"SANCTIONNER",avenant:"AVENANT",nouveau_contrat:"NOUVEAU CONTRAT",fin_contrat:"FIN DE RELATION DE TRAVAIL",integrer:"REINTEGRER"}[action]||"ACTION";
 }
 function rhEffectifActionType(action){
   return {suspendre:"Suspension",convoquer:"Convocation",mise_en_demeure:"Mise en demeure",periode_enc:"Période E-N-C",fin_contrat:"Fin de contrat"}[action]||"";
@@ -11906,6 +11907,7 @@ function runRhEffectifAction(action,agentId){
   if(guardOpsSupervisorMutation("employee-action","Accès superviseur OPS : action RH non autorisée."))return;
   if(action==="muter")return openOpsMutationModal(agentId);
   if(action==="demande_nouvelle_dotation")return openOpsDotationRequestModal(agentId);
+  if(action==="maladie")return openGestionModal(agentId,"Maladie");
   if(action==="conge")return openGestionModal(agentId,"Congé");
   if(action==="rec_periode_essai")return openGestionModal(agentId,"Période d'essai");
   if(action==="suspendre")return openEmployeeSuspensionModal(agentId);
@@ -11926,6 +11928,7 @@ function runRhEffectifAction(action,agentId){
 function rhEffectifActionStyle(action){
   const colors={
     detail:["#043970","#eff6ff","#bfdbfe"],
+    maladie:["#c2410c","#fff7ed","#fed7aa"],
     conge:["#0369a1","#eff6ff","#bfdbfe"],
     rec_periode_essai:["#7c3aed","#f5f3ff","#ddd6fe"],
     suspendre:["#dc2626","#fef2f2","#fecaca"],
