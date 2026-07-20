@@ -1840,13 +1840,18 @@ function siteSafeSociete(site){
   ]).filter(s=>!isRemovedSociete(s));
   const configured=(typeof societeConfig==="function"?(societeConfig().custom||[]):[]);
   const allowed=uniqueSocieteNames([...(explicit.length?explicit:(typeof currentAllowedSocietes==="function"?currentAllowedSocietes():SOCIETES.slice())),...configured]).filter(s=>!isRemovedSociete(s));
+  // La société DÉJÀ CONNUE du site (si elle existe) prime toujours sur le contexte
+  // ambiant de la personne qui édite/sauvegarde — sinon enregistrer la fiche d'un
+  // site pendant qu'on a une AUTRE société active en réaffecte silencieusement le
+  // propriétaire. Le contexte ambiant ne sert de repli que pour un site qui n'a
+  // encore aucune société connue (nouvelle création).
   const candidates=[
+    site?.societe,site?.society,site?.equipment_plan?.societe,site?.equipment_plan?.society,
     typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"",
     typeof mySoc==="function"?mySoc():"",
     session?.societe||"",
     sessionStorage.getItem("mtSociete")||"",sessionStorage.getItem("opsSociete")||"",sessionStorage.getItem("dashSociete")||"",
     allowed.length===1?allowed[0]:"",
-    site?.societe,site?.society,site?.equipment_plan?.societe,site?.equipment_plan?.society,
     allowed[0]||""
   ].filter(Boolean);
   const found=candidates.find(s=>allowed.some(a=>normalizeSocieteName(a)===normalizeSocieteName(s)));
@@ -17385,7 +17390,7 @@ async function renderSiteForm(view,id){
   const siteRecap=s.isNew?"":siteRecapBlockHTML(s,eff);
   view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${opsSupervisorReadOnlyNoticeHTML()}${siteRecap}${siteHeaderActions}${lockNotice}
   <form id="site-form" class="site-editor-wide site-form-layout" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
-    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
+    <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-3">${isAdminSystemSession()?`<label class="label">Société</label><select class="select" name="societe">${uniqueSocieteNames([...SOCIETES,...((societeConfig().custom)||[])]).map(soc=>`<option value="${escapeHTML(soc)}" ${normalizeSocieteName(s.societe)===normalizeSocieteName(soc)?"selected":""}>${escapeHTML(soc)}</option>`).join("")}</select>`:`<label class="label">Société</label><input class="input bg-slate-50" value="${escapeHTML(s.societe||"—")}" readonly/>`}</div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">S3. Effectifs</div>
       <div class="grid grid-2 mb-4">
@@ -17751,7 +17756,18 @@ async function saveSite(id){
     s={id,actif:true,dateCreation:today(),societe:scopeSociete,rotation:ROTATION_DEFAUT.map(r=>({...r}))};
     db.sites.push(s);
   }
-  s.societe=siteSafeSociete({...s,societe:scopeSociete||s.societe})||scopeSociete;
+  // Ne JAMAIS réécrire silencieusement la société d'un site existant à partir du
+  // contexte courant de l'éditeur (bug source des sites mal rattachés : sauvegarder
+  // une fiche pendant qu'on a une autre société active la faisait basculer). Seule
+  // Administration système peut réaffecter explicitement via le champ "Société" ;
+  // sinon la société déjà connue du site est conservée telle quelle, et seule
+  // l'inférence de contexte s'applique à un site réellement nouveau.
+  const explicitSociete=isAdminSystemSession()?(fd.get("societe")||"").trim():"";
+  if(explicitSociete){
+    s.societe=explicitSociete;
+  }else if(!s.societe){
+    s.societe=siteSafeSociete({...s,societe:scopeSociete})||scopeSociete;
+  }
   s.society=s.societe;
   s.nom=(fd.get("nom")||"").trim();
   if(!s.nom){toast("Dénomination du site obligatoire","error");return}
