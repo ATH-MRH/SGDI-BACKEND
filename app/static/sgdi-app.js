@@ -14114,9 +14114,11 @@ function openGestionModal(agentId,type){
         <div class="col-span-2"><label class="label">Date de reprise</label><input class="input bg-slate-50" type="date" name="reprise" readonly /></div>`:"";
   const maladieFields=isMaladie?`
         <div class="col-span-2"><label class="label">Site / Affectation</label><input class="input bg-slate-50" value="${escapeHTML(agentLiveAffectation(a)?.siteName||a.affectationCourante?.siteName||"Sans affectation")}" readonly /></div>
-        <div><label class="label">Du</label><input class="input" type="date" name="du" value="${today()}" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
-        <div><label class="label">Au</label><input class="input" type="date" name="au" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
-        <div class="col-span-2"><label class="label">Nombre de jours</label><input class="input bg-slate-50" name="nbJours" readonly /></div>`:"";
+        <div class="col-span-2 grid grid-cols-3 gap-3">
+          <div><label class="label">Du</label><input class="input" type="date" name="du" value="${today()}" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
+          <div><label class="label">Au</label><input class="input" type="date" name="au" onchange="updateMaladieDuration()" oninput="updateMaladieDuration()" /></div>
+          <div><label class="label">Nombre de jours</label><input class="input bg-slate-50" name="nbJours" readonly /></div>
+        </div>`:"";
   const trialFields=isTrial?`
         <div><label class="label">Date initiale fin période d'essai</label><input class="input bg-slate-50" type="date" name="du" value="${escapeHTML(initialTrialEnd)}" readonly /></div>
         <div><label class="label">Reconduction</label><select class="select" name="dureeReconduction" onchange="updateTrialRenewalEndDate()" oninput="updateTrialRenewalEndDate()"><option value="1">01 mois</option><option value="2">02 mois</option><option value="3">03 mois</option></select></div>
