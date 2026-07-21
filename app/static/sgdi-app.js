@@ -34845,8 +34845,8 @@ function renderPointageSaisie(){
       <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;font-size:8px;height:18px">${nR}</td>
       <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fef9c3;color:#b45309;font-size:8px;height:18px" title="F1+F2+F3+P/F1+P/F2+P/F3">${nFx||"·"}</td>
       <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d;font-size:8px;height:18px" title="AB+A2+A3 déjà inclus dans A paie">${nAx||"·"}</td>
-      ${isDrh?"":`<td class="text-center" style="border:1px solid #e2e8f0;white-space:nowrap;height:18px">
-        ${isValide?`<button class="btn btn-ghost" style="color:#dc2626;font-size:7px;padding:0 4px" title="Déverrouiller" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔓</button>`:`<button class="btn btn-primary" style="background:#043970;border-color:#043970;font-size:7px;padding:0 4px" title="Valider le pointage" onclick="ptValiderSheet('${a.id}','${ym}')">✅</button>`}
+      ${isDrh?"":`<td class="text-center" style="border:1px solid #e2e8f0;white-space:nowrap;height:18px;padding:1px 2px">
+        ${isValide?`<button class="btn btn-ghost" style="color:#dc2626;font-size:7px;padding:0 4px;height:15px;min-height:0;line-height:15px" title="Déverrouiller" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔓</button>`:`<button class="btn btn-primary" style="background:#043970;border-color:#043970;font-size:7px;padding:0 4px;height:15px;min-height:0;line-height:15px" title="Valider le pointage" onclick="ptValiderSheet('${a.id}','${ym}')">✅</button>`}
       </td>`}
     </tr>`;
   }).join("");
