@@ -5391,7 +5391,7 @@ function renderInternal(){
       agenda:["agenda","incidents","demandes_structure","documents"],
       materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure","documents"],
       admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","agenda","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard"],
-      pointage:["pointage","incidents","demandes_structure","documents"],
+      pointage:["pointage","sites","incidents","demandes_structure","documents"],
       paie:["paie","effectif","agents","demandes_structure","documents"],
       ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents"],
       superviseur:["superviseur","pointage","fiches","agents","sites","effectif","incidents","documents"],
