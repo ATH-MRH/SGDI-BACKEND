@@ -34845,8 +34845,8 @@ function renderPointageSaisie(){
       <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;font-size:8px;height:18px">${nR}</td>
       <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fef9c3;color:#b45309;font-size:8px;height:18px" title="F1+F2+F3+P/F1+P/F2+P/F3">${nFx||"·"}</td>
       <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d;font-size:8px;height:18px" title="AB+A2+A3 déjà inclus dans A paie">${nAx||"·"}</td>
-      ${isDrh?"":`<td class="text-center" style="border:1px solid #e2e8f0;white-space:nowrap;height:18px;padding:1px 2px">
-        ${isValide?`<button class="btn btn-ghost" style="color:#dc2626!important;font-size:7px!important;padding:0 4px!important;padding-inline:4px!important;height:15px!important;min-height:0!important;line-height:15px!important" title="Déverrouiller" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔓</button>`:`<button class="btn btn-primary" style="background:#043970!important;border-color:#043970!important;font-size:7px!important;padding:0 4px!important;padding-inline:4px!important;height:15px!important;min-height:0!important;line-height:15px!important" title="Valider le pointage" onclick="ptValiderSheet('${a.id}','${ym}')">✅</button>`}
+      ${isDrh?"":`<td class="text-center" style="border:1px solid #e2e8f0;white-space:nowrap;height:18px;padding:0">
+        ${isValide?`<button type="button" style="all:unset;display:inline-block;box-sizing:border-box;cursor:pointer;color:#dc2626;font-size:8px;font-weight:800;padding:0 4px;height:18px;line-height:18px" title="Déverrouiller" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔓</button>`:`<button type="button" style="all:unset;display:inline-block;box-sizing:border-box;cursor:pointer;color:#043970;font-size:8px;font-weight:800;padding:0 4px;height:18px;line-height:18px" title="Valider le pointage" onclick="ptValiderSheet('${a.id}','${ym}')">✔ Valider</button>`}
       </td>`}
     </tr>`;
   }).join("");
