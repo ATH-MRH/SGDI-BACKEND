@@ -572,7 +572,21 @@ async function sgdiApi(path,options){
   const url=sgdiApiUrl(path,legacy);
   const headers=sgdiAuthHeaders(opts.headers);
   if(isForm)delete headers["content-type"];
-  const res=await fetch(url,{cache:"no-store",...opts,body,headers});
+  // Sans délai d'expiration, une connexion lente/instable (terrain, mobile) pouvait
+  // laisser fetch() bloqué indéfiniment — écran figé sur "Chargement..." pour toujours,
+  // sans jamais échouer ni permettre un repli/réaffichage. 30s laisse le temps à une
+  // requête normale d'aboutir tout en garantissant qu'un blocage réseau finit par échouer.
+  const _ctrl=opts.signal?null:new AbortController();
+  const _timer=_ctrl?setTimeout(()=>_ctrl.abort(),30000):null;
+  let res;
+  try{
+    res=await fetch(url,{cache:"no-store",...opts,body,headers,signal:opts.signal||_ctrl?.signal});
+  }catch(e){
+    if(e?.name==="AbortError")throw new Error("Délai d'attente dépassé : vérifiez votre connexion puis réessayez.");
+    throw e;
+  }finally{
+    if(_timer)clearTimeout(_timer);
+  }
   const raw=await res.text().catch(()=>"");
   let out={};
   try{out=raw?JSON.parse(raw):{}}catch(e){out={ok:false,error:null}}
@@ -594,7 +608,17 @@ async function sgdiActionApi(path,options){
   const url=sgdiApiUrl(path,legacy);
   const headers=sgdiAuthHeaders(opts.headers);
   if(isForm)delete headers["content-type"];
-  const res=await fetch(url,{cache:"no-store",...opts,body,headers});
+  const _ctrl=opts.signal?null:new AbortController();
+  const _timer=_ctrl?setTimeout(()=>_ctrl.abort(),30000):null;
+  let res;
+  try{
+    res=await fetch(url,{cache:"no-store",...opts,body,headers,signal:opts.signal||_ctrl?.signal});
+  }catch(e){
+    if(e?.name==="AbortError")throw new Error("Délai d'attente dépassé : vérifiez votre connexion puis réessayez.");
+    throw e;
+  }finally{
+    if(_timer)clearTimeout(_timer);
+  }
   const raw=await res.text().catch(()=>"");
   let out={};
   try{out=raw?JSON.parse(raw):{}}catch(e){out={status:"error",error:null}}
@@ -5384,19 +5408,19 @@ function renderInternal(){
     const h=(location.hash||"").slice(2);
     const root=h.split("/")[0];
     const allowedByMod={
-      facturation:["facturation","incidents","demandes_structure","documents"],
-      facmod:["facturation","incidents","demandes_structure","documents"],
-      commercial:["commercial","incidents","demandes_structure","documents"],
-      secretariat:["secretariat","incidents","demandes_structure","documents"],
+      facturation:["facturation","incidents","demandes_structure","documents","agenda"],
+      facmod:["facturation","incidents","demandes_structure","documents","agenda"],
+      commercial:["commercial","incidents","demandes_structure","documents","agenda"],
+      secretariat:["secretariat","incidents","demandes_structure","documents","agenda"],
       agenda:["agenda","incidents","demandes_structure","documents"],
-      materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure","documents"],
+      materiel:["materiel","fiches","agents","effectif","sites","incidents","demandes_structure","documents","agenda"],
       admin:["admin","sites","incidents","demandes_structure","documents","ops","effectif","agents","contrats","fiches","materiel","facturation","commercial","secretariat","agenda","pointage","paie","conges","recrutement","reserve","candidats_archives","dossiers","demandes_personnel","rapports","drh","global-dashboard"],
-      pointage:["pointage","sites","incidents","demandes_structure","documents"],
-      paie:["paie","effectif","agents","demandes_structure","documents"],
-      ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents"],
-      superviseur:["superviseur","pointage","fiches","agents","sites","effectif","incidents","documents"],
-      drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail","documents"],
-      global:["global-dashboard","effectif","agents","contrats","fiches","sites","pointage","paie","recrutement","reserve","candidats_archives","dossiers","incidents","conges","demandes_personnel","demandes_structure","rapports","ops","drh","admin","facturation","commercial","secretariat","agenda","materiel","documents"]
+      pointage:["pointage","sites","incidents","demandes_structure","documents","agenda"],
+      paie:["paie","effectif","agents","demandes_structure","documents","agenda"],
+      ops:["ops","pointage","fiches","agents","sites","effectif","incidents","conges","demandes_structure","documents","agenda"],
+      superviseur:["superviseur","pointage","fiches","agents","sites","effectif","incidents","documents","agenda"],
+      drh:["drh","dashboard","dossiers","recrutement","reserve","candidats_archives","contrats","fiches","effectif","agents","sites","incidents","conges","materiel","paie","rapports","demandes_personnel","demandes_structure","portail","documents","pointage","agenda"],
+      global:["global-dashboard","effectif","agents","contrats","fiches","sites","pointage","paie","recrutement","reserve","candidats_archives","dossiers","incidents","conges","demandes_personnel","demandes_structure","rapports","ops","drh","admin","facturation","commercial","secretariat","agenda","materiel","documents","portail"]
     };
     const allowed=allowedByMod[session.transverse]||[session.transverse];
     if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":session.transverse==="pointage"?"pointage":session.transverse==="ops"?"ops/dashboard":session.transverse==="superviseur"?"superviseur/dashboard":session.transverse==="global"?"global-dashboard":session.transverse+"/dashboard";location.hash="#/"+target;return}
@@ -34744,7 +34768,11 @@ function renderPointage(view,sub,arg,_skipEnsure){
   if(sub!=="qr")ptStopQrTabletTimer();
   if(sub!=="feuille")fpqStopLiveRefresh();
   if(!_skipEnsure){
-    const _r=sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:true});
+    // Pas de force:true ici : des données locales déjà présentes court-circuitent le
+    // rechargement (voir sgdiEnsureEmployeesForDisplay). Avec force:true, CHAQUE
+    // réaffichage (y compris les auto-refresh en arrière-plan) remplaçait la vue par
+    // "Chargement des effectifs…", effaçant l'affichage/saisie en cours de l'utilisateur.
+    const _r=sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc()});
     if(_r&&typeof _r.then==="function"){
       view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;
       _r.then(()=>renderPointage(view,sub,arg,true)).catch(()=>renderPointage(view,sub,arg,true));
