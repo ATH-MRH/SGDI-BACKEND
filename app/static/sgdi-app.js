@@ -4139,7 +4139,6 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard"},
         {label:"FEUILLE POINTAGE",route:"pointage/feuille"},
-        {label:"SAISIE QUOTIDIENNE",route:"pointage/saisie"},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs"},
         {label:"FICHE DE POSITION",route:"fiches"}
       ]
@@ -5863,7 +5862,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
     ],
     superviseur:[
-      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["SAISIE QUOTIDIENNE","pointage/saisie"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
@@ -6058,7 +6057,6 @@ function renderSidebar(){
       superviseur:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"]},
         {label:"FEUILLE POINTAGE",route:"pointage/feuille",aliases:["pointage"]},
-        {label:"SAISIE QUOTIDIENNE",route:"pointage/saisie",aliases:["pointage/saisie"]},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"]},
         {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
