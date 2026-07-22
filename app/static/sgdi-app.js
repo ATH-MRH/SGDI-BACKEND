@@ -4139,7 +4139,7 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard"},
         {label:"FEUILLE POINTAGE",route:"pointage/feuille"},
-        {label:"SAISIE MENSUELLE",route:"pointage/saisie"},
+        {label:"SAISIE QUOTIDIENNE",route:"pointage/saisie"},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs"},
         {label:"FICHE DE POSITION",route:"fiches"}
       ]
@@ -4436,9 +4436,12 @@ function topbarStructureIcon(key){
   return (MODULE_META[key]?.icon)||"•";
 }
 function topbarStructureTabsHTML(){return""}  // Déplacé dans workspaceTabsBarHTML
+function supervisorPointageSaisiePageActive(){
+  return typeof supervisorModuleActive==="function"&&supervisorModuleActive()&&String(location.hash||"").startsWith("#/pointage/saisie");
+}
 function sgdiEditModeButtonHTML(){
   if(!session)return"";
-  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
+  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()&&!supervisorPointageSaisiePageActive()){
     return `<span class="ws-lock-toggle ws-lock-toggle-readonly" title="Mode superviseur terrain : lecture seule" aria-label="Lecture seule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Lecture seule</span></span>`;
   }
   const locked=sgdiViewModeActive;
@@ -5858,7 +5861,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
     ],
     superviseur:[
-      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["SAISIE MENSUELLE","pointage/saisie"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["SAISIE QUOTIDIENNE","pointage/saisie"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
@@ -6053,7 +6056,7 @@ function renderSidebar(){
       superviseur:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"]},
         {label:"FEUILLE POINTAGE",route:"pointage/feuille",aliases:["pointage"]},
-        {label:"SAISIE MENSUELLE",route:"pointage/saisie",aliases:["pointage/saisie"]},
+        {label:"SAISIE QUOTIDIENNE",route:"pointage/saisie",aliases:["pointage/saisie"]},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"]},
         {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
@@ -6314,7 +6317,7 @@ function sgdiExitViewMode(){
 function _sgdiUpdateEditFab(){
   const toggle=document.getElementById("sgdi-edit-toggle");
   if(toggle){
-    if(!session||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession())){
+    if(!session||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()&&!supervisorPointageSaisiePageActive())){
       toggle.style.display="none";
       toggle.onclick=null;
     }else{
@@ -34566,7 +34569,7 @@ function renderPointageSaisieSuperviseur(){
     </section>`;
   };
   return `${filterBar}<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
-    <div><h2 class="text-2xl font-black uppercase">Saisie mensuelle superviseur</h2><p class="text-sm text-slate-500">Personnel rattaché par site d'affectation · ${escapeHTML(monthLabel)} · ${all.length} agent${all.length>1?"s":""}</p></div>
+    <div><h2 class="text-2xl font-black uppercase">Saisie quotidienne superviseur</h2><p class="text-sm text-slate-500">Personnel rattaché par site d'affectation · ${escapeHTML(monthLabel)} · ${all.length} agent${all.length>1?"s":""}</p></div>
     <button type="button" class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Feuille quotidienne</button>
   </div>
   ${groups.map(tableForGroup).join("")}`;
@@ -34875,7 +34878,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
   if(sub==="scan")sub="feuille";
   const supervisorActive=supervisorModuleActive();
   const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorActive&&k==="qr"));
-  const tabsHTML=allowedTabs.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${l}</button>`).join("");
+  const tabsHTML=allowedTabs.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${supervisorActive&&k==="saisie"?"Saisie quotidienne":l}</button>`).join("");
   const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
   if(sub==="dashboard")body=renderPointageDashboard(isDrh);
