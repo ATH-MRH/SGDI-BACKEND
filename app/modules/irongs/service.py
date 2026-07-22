@@ -835,6 +835,40 @@ def _unlock_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) 
     return _replace_and_success(db, "pointages", sheets, {"item": sheet})
 
 
+def _validate_pointage_day(db: Session, agent_id: str, periode: str, day: str, user: Any) -> dict[str, Any]:
+    # Validation PROPRE AU JOUR, distincte de sheet["valide"] (validation mensuelle
+    # DRH/OPS). Utilisée par la vue "Saisie quotidienne" du module Superviseur : valider
+    # un jour ne bloque pas les autres jours du mois, contrairement à _validate_pointage_sheet.
+    if not agent_id or not periode or not day:
+        raise HTTPException(status_code=422, detail="Agent, période et jour obligatoires")
+    day = day.strip().zfill(2)
+    sheets = _collection_list(db, "pointages")
+    sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
+    if not sheet:
+        sheet = {"id": f"pt_{agent_id}_{periode}", "agentId": agent_id, "periode": periode, "days": {}, "createdAt": _now_iso()}
+        sheets.append(sheet)
+    validated_days = dict(sheet.get("validatedDays") or {})
+    validated_days[day] = {"by": _actor_name(user), "at": _now_iso()}
+    sheet["validatedDays"] = validated_days
+    sheet["updatedAt"] = _now_iso()
+    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+
+
+def _unlock_pointage_day(db: Session, agent_id: str, periode: str, day: str, user: Any) -> dict[str, Any]:
+    if not agent_id or not periode or not day:
+        raise HTTPException(status_code=422, detail="Agent, période et jour obligatoires")
+    day = day.strip().zfill(2)
+    sheets = _collection_list(db, "pointages")
+    sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
+    if not sheet:
+        raise HTTPException(status_code=404, detail="Pointage introuvable")
+    validated_days = dict(sheet.get("validatedDays") or {})
+    validated_days.pop(day, None)
+    sheet["validatedDays"] = validated_days
+    sheet["updatedAt"] = _now_iso()
+    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+
+
 def _bulk_pointage(db: Session, periode: str, society: str | None, validate: bool, user: Any) -> dict[str, Any]:
     if not periode:
         raise HTTPException(status_code=422, detail="Période obligatoire")
@@ -901,6 +935,8 @@ def _save_pointage_cell(db: Session, data: dict[str, Any], user: Any) -> dict[st
     ensure_item_allowed_for_user({"societe": sheet.get("societe") or agent.get("societe") or ""}, user, "pointages")
     if sheet.get("valide"):
         raise HTTPException(status_code=422, detail="Pointage mensuel déjà validé")
+    if day in dict(sheet.get("validatedDays") or {}):
+        raise HTTPException(status_code=422, detail="Ce jour est déjà validé")
     days = dict(sheet.get("days") or {})
     sync = dict(sheet.get("fpqSync") or {})
     code = str(data.get("code") or "").strip().upper()
@@ -1203,6 +1239,10 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         return _validate_pointage_sheet(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), user)
     if action == "unlock-pointage":
         return _unlock_pointage_sheet(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), user)
+    if action == "validate-pointage-day":
+        return _validate_pointage_day(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), str(data.get("day") or ""), user)
+    if action == "unlock-pointage-day":
+        return _unlock_pointage_day(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), str(data.get("day") or ""), user)
     if action == "validate-pointage-all":
         return _bulk_pointage(db, str(data.get("periode") or ""), data.get("societe") or None, True, user)
     if action == "unlock-pointage-all":

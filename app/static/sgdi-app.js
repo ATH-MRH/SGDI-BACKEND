@@ -1504,7 +1504,7 @@ function sgdiEnsureEmployeesForDisplay(options){
 }
 async function sgdiRunLegacyAction(action,payload){
   if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
-    const allowed=new Set(["save-pointage-cell","upsert-presence-line","add-presence-agent","validate-pointage"]);
+    const allowed=new Set(["save-pointage-cell","upsert-presence-line","add-presence-agent","validate-pointage","validate-pointage-day","unlock-pointage-day"]);
     if(!allowed.has(String(action||""))){
       toast("Accès superviseur OPS : action non autorisée. Seule la saisie pointage est autorisée.","error");
       throw new Error("Action non autorisée pour SUPERVISEUR OPS");
@@ -4437,7 +4437,9 @@ function topbarStructureIcon(key){
 }
 function topbarStructureTabsHTML(){return""}  // Déplacé dans workspaceTabsBarHTML
 function supervisorPointageSaisiePageActive(){
-  return typeof supervisorModuleActive==="function"&&supervisorModuleActive()&&String(location.hash||"").startsWith("#/pointage/saisie");
+  const onPage=String(location.hash||"").startsWith("#/pointage/saisie");
+  if(!onPage)return false;
+  return (typeof supervisorModuleActive==="function"&&supervisorModuleActive())||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession());
 }
 function sgdiEditModeButtonHTML(){
   if(!session)return"";
@@ -11321,6 +11323,12 @@ function drumFpqDateSync(){
   const m=document.getElementById("fpq-drum-mo")?.value||"";
   const y=document.getElementById("fpq-drum-yr")?.value||"";
   if(d&&m&&y){const maxD=new Date(parseInt(y),parseInt(m),0).getDate();const safeD=Math.min(parseInt(d),maxD);setFpqDate(y+"-"+m+"-"+String(safeD).padStart(2,"0"));}
+}
+function drumPtSupDateSync(){
+  const d=document.getElementById("ptsup-drum-day")?.value||"";
+  const m=document.getElementById("ptsup-drum-mo")?.value||"";
+  const y=document.getElementById("ptsup-drum-yr")?.value||"";
+  if(d&&m&&y){const maxD=new Date(parseInt(y),parseInt(m),0).getDate();const safeD=Math.min(parseInt(d),maxD);setPtSupDate(y+"-"+m+"-"+String(safeD).padStart(2,"0"));}
 }
 function drumMonthOpts(){return[{value:"01",label:"Janvier"},{value:"02",label:"Février"},{value:"03",label:"Mars"},{value:"04",label:"Avril"},{value:"05",label:"Mai"},{value:"06",label:"Juin"},{value:"07",label:"Juillet"},{value:"08",label:"Août"},{value:"09",label:"Septembre"},{value:"10",label:"Octobre"},{value:"11",label:"Novembre"},{value:"12",label:"Décembre"}]}
 function drumYearOpts(n){const y=new Date().getFullYear();return Array.from({length:n||6},(_,i)=>({value:String(y-2+i),label:String(y-2+i)}))}
@@ -33829,6 +33837,9 @@ function setFpqSociete(v){sessionStorage.setItem("fpqSociete",v||"");renderView(
 function setFpqSite(v){sessionStorage.setItem("fpqSite",v||"");renderView()}
 function setFpqStatus(v){sessionStorage.setItem("fpqStatus",v||"");renderView()}
 function setFpqFaction(v){sessionStorage.setItem("fpqFaction",v||"");renderView()}
+/* ---- SAISIE QUOTIDIENNE SUPERVISEUR — date sélectionnée (indépendante du mois DRH/OPS) ---- */
+function ptSupDate(){return sessionStorage.getItem("ptSupDate")||today()}
+function setPtSupDate(v){sessionStorage.setItem("ptSupDate",v||today());renderView()}
 function fpqStatusMatch(f,status){
   const c=fpqPresenceCode(f?.heureArrivee);
   if(!status)return true;
@@ -34509,11 +34520,6 @@ function ptSupervisorSiteLabel(agent){
   const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
   return site?.nom||site?.intitule||aff.siteName||"Sans site affecté";
 }
-function ptSupervisorDailyDay(ym){
-  const td=today();
-  if(String(td||"").slice(0,7)===ym)return String(td).slice(8,10);
-  return "01";
-}
 function ptSupervisorDailyCell(agentId,ym,day,sheet,code,isValide){
   const c=POINTAGE_CODES[code]||{};
   const cur=(sheet?.days||{})[day]||"";
@@ -34523,18 +34529,42 @@ function ptSupervisorDailyCell(agentId,ym,day,sheet,code,isValide){
     ?(isValide?"Pointage déjà validé":"Cliquez sur Déverrouiller avant la saisie")
     :`Saisir ${code} pour le ${day}/${String(ym).slice(5,7)}`;
   return `<td style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${active?(c.bg||"#fff"):(c.bg||"#fff")};color:#0f172a;font-size:10px;font-weight:900">
-    <button type="button" ${disabled?"disabled":""} onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" title="${escapeHTML(title)}" style="width:100%;height:36px;border:0;background:transparent;color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;cursor:${disabled?"not-allowed":"pointer"};opacity:${disabled&&!active?".45":"1"}">${active?code:"·"}</button>
+    <button type="button" ${disabled?"disabled":""} onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" title="${escapeHTML(title)}" style="-webkit-appearance:none;appearance:none;display:flex;align-items:center;justify-content:center;width:100%;height:36px;margin:0;padding:0;border:0;border-radius:0;background:transparent;color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;line-height:1;cursor:${disabled?"not-allowed":"pointer"};opacity:${disabled&&!active?".55":"1"}">${active?code:"·"}</button>
   </td>`;
 }
+function ptSupDayValidated(sheet,day){return !!(sheet?.valide||sheet?.validatedDays?.[String(day).padStart(2,"0")])}
 function ptSupervisorSetDailyCode(agentId,ym,day,code){
   if(sgdiViewModeActive){toast("Saisie verrouillée : cliquez sur Déverrouiller avant de pointer.","error");return}
   const sheet=ptGetSheet(agentId,ym);
-  if(sheet?.valide){toast("Pointage validé : ligne verrouillée.","error");return}
+  if(ptSupDayValidated(sheet,day)){toast("Ce jour est déjà validé : ligne verrouillée.","error");return}
   ptSetCell(agentId,ym,Number(day),code);
   renderView();
 }
+async function ptSupValiderDay(agentId,ym,day){
+  if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
+  try{
+    await sgdiRunLegacyAction("validate-pointage-day",{data:{agentId,periode:ym,day}});
+    await sgdiPullState({silent:true});
+    logActivity&&logActivity("Pointage jour validé","Agent "+agentId+" · "+ym+"-"+day);
+    toast("Journée validée","success");
+    renderView();
+  }catch(e){toast("Validation refusée : "+(e.message||e),"error")}
+}
+async function ptSupDevaliderDay(agentId,ym,day){
+  if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : déverrouillage pointage non autorisé."))return;
+  if(!confirm("Déverrouiller ce jour validé ?"))return;
+  try{
+    await sgdiRunLegacyAction("unlock-pointage-day",{data:{agentId,periode:ym,day}});
+    await sgdiPullState({silent:true});
+    logActivity&&logActivity("Pointage jour déverrouillé","Agent "+agentId+" · "+ym+"-"+day);
+    toast("Journée déverrouillée","success");
+    renderView();
+  }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
+}
 function renderPointageSaisieSuperviseur(){
-  const ym=ptCurrentMonth();
+  const supDate=ptSupDate();
+  const [supYr,supMo,supDay]=supDate.split("-");
+  const ym=`${supYr}-${supMo}`;
   const soc=ptCurrentSoc();
   ptSyncFeuillePresenceMonth(ym);
   const all=ptFilterAgents(pointageEligibleAgents(soc)).sort((x,y)=>{
@@ -34542,7 +34572,7 @@ function renderPointageSaisieSuperviseur(){
     return sx.localeCompare(sy)||(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||"");
   });
   const [yr,mo]=ym.split("-").map(Number);
-  const day=ptSupervisorDailyDay(ym);
+  const day=supDay;
   const dayLabel=`${day}/${String(mo).padStart(2,"0")}/${yr}`;
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const grouped={};
@@ -34553,7 +34583,7 @@ function renderPointageSaisieSuperviseur(){
   });
   const groups=Object.values(grouped).sort((a,b)=>a.label.localeCompare(b.label));
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
-    ${drumMultiHTML([{id:"pt-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:String(mo).padStart(2,"0"),cb:"drumPtMonthSync"},{id:"pt-drum-yr",label:"Année",opts:drumYearOpts(6),selected:String(yr),cb:"drumPtMonthSync"}])}
+    ${drumMultiHTML([{id:"ptsup-drum-day",label:"Jour",opts:drumDayOpts(),selected:supDay||"01",cb:"drumPtSupDateSync"},{id:"ptsup-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:supMo||"01",cb:"drumPtSupDateSync"},{id:"ptsup-drum-yr",label:"Année",opts:drumYearOpts(6),selected:supYr||String(new Date().getFullYear()),cb:"drumPtSupDateSync"}])}
     ${ptSearchBarHTML("Rechercher nom, code, site...")}
     <div class="flex-1"></div>
     <button class="btn btn-ghost text-xs" onclick="window.print()">Imprimer</button>
@@ -34568,10 +34598,10 @@ function renderPointageSaisieSuperviseur(){
   const tableForGroup=(group)=>{
     const rows=group.rows.map((a,i)=>{
       const sheet=ptGetSheet(a.id,ym);
-      const isValide=!!sheet?.valide;
+      const isValide=ptSupDayValidated(sheet,day);
       const action=isValide
-        ?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`
-        :`<button type="button" onclick="ptValiderSheet('${a.id}','${ym}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
+        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé (mois)</span>`:`<button type="button" onclick="ptSupDevaliderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#0f766e;font-size:10px;font-weight:900;cursor:pointer" title="Déverrouiller ce jour">Validé ✓</button>`)
+        :`<button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
       return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
         <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
         <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
