@@ -3666,11 +3666,12 @@ function siteMatchesReference(site,ref){
   return [ref.siteName,ref._site?.nom,ref._site?.intitule,ref.autreAffectation].filter(Boolean).some(v=>names.has(normalizedSearchText(v)));
 }
 function supervisorModuleActive(){
-  return session?.transverse==="superviseur"||normalizeStructureList(session?.structuresAutorisees).includes("superviseur");
+  return session?.transverse==="superviseur"||normalizeStructureList(session?.structuresAutorisees).includes("superviseur")||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession());
 }
 function supervisorAuthorizedSiteIds(){
   if(!supervisorModuleActive())return null;
-  return new Set((Array.isArray(session?.sitesAutorises)?session.sitesAutorises:[]).map(v=>String(v||"")).filter(Boolean));
+  const values=(Array.isArray(session?.sitesAutorises)?session.sitesAutorises:[]).map(v=>String(v||"")).filter(v=>v&&v!=="NaN"&&v!=="null"&&v!=="undefined");
+  return values.length?new Set(values):null;
 }
 function siteInSupervisorScope(site){
   const ids=supervisorAuthorizedSiteIds();
@@ -4443,7 +4444,7 @@ function supervisorPointageSaisiePageActive(){
 function sgdiEditModeButtonHTML(){
   if(!session)return"";
   if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()&&!supervisorPointageSaisiePageActive()){
-    return `<span class="ws-lock-toggle ws-lock-toggle-readonly" title="Mode superviseur terrain : lecture seule" aria-label="Lecture seule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Lecture seule</span></span>`;
+    return `<span id="sgdi-edit-toggle" class="ws-lock-toggle ws-lock-toggle-readonly" title="Mode superviseur terrain : lecture seule" aria-label="Lecture seule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Lecture seule</span></span>`;
   }
   const locked=sgdiViewModeActive;
   const label=locked?"Déverrouiller":"Verrouiller";
@@ -6328,6 +6329,7 @@ function _sgdiUpdateEditFab(){
         ?`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`
         :`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
       toggle.style.display="";
+      toggle.classList.remove("ws-lock-toggle-readonly");
       toggle.classList.toggle("unlocked",!locked);
       toggle.innerHTML=`${icon}<span>${label}</span>`;
       toggle.onclick=locked?()=>sgdiExitViewMode():()=>sgdiEnterViewMode();
@@ -31657,7 +31659,7 @@ async function openAdminUserModal(username){
           const list=groups.get(soc).sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||"")));
           return `<div class="mb-3">
             <div class="text-xs font-black uppercase text-slate-500 mb-1 px-1">${escapeHTML(soc)} <span class="text-slate-400 font-normal normal-case">(${list.length} site${list.length>1?"s":""})</span></div>
-            <table class="w-full text-sm" style="border-collapse:collapse"><tbody>${list.map(s=>`<tr><td style="width:28px;border-bottom:1px solid #f1f5f9"><input type="checkbox" name="site_${s.backendId||s.id}" value="${s.backendId||s.id}" ${(u.sitesAutorises||[]).includes(Number(s.backendId||s.id))?"checked":""}/></td><td style="border-bottom:1px solid #f1f5f9;padding:3px 6px">${escapeHTML(s.nom||s.intitule||"Site #"+(s.backendId||s.id))}</td></tr>`).join("")}</tbody></table>
+            <table class="w-full text-sm" style="border-collapse:collapse"><tbody>${list.map(s=>{const sid=String(s.backendId||s.id||"");const checked=(u.sitesAutorises||[]).map(v=>String(v||"")).includes(sid);return`<tr><td style="width:28px;border-bottom:1px solid #f1f5f9"><input type="checkbox" name="site_${sid}" value="${sid}" ${checked?"checked":""}/></td><td style="border-bottom:1px solid #f1f5f9;padding:3px 6px">${escapeHTML(s.nom||s.intitule||"Site #"+sid)}</td></tr>`}).join("")}</tbody></table>
           </div>`;
         }).join("");
       })()}</div>
@@ -31686,7 +31688,7 @@ async function confirmAdminUser(originalUsername){
   const rawUsername=String(fd.get("username")||"").trim();
   const username=originalUsername?rawUsername:rawUsername.toUpperCase();
   const password=String(fd.get("password")||"");
-  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),sitesAutorises:(db.sites||[]).filter(s=>s.actif!==false&&fd.get("site_"+(s.backendId||s.id))===String(s.backendId||s.id)).map(s=>Number(s.backendId||s.id))};
+  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
@@ -34538,6 +34540,13 @@ function ptSupervisorSetDailyCode(agentId,ym,day,code){
   ptSetCell(agentId,ym,Number(day),code);
   renderView();
 }
+function ptSupervisorAgentsForSoc(soc){
+  const base=(db.agents||[])
+    .filter(a=>employeeIsPointageEligible(a,soc))
+    .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
+  const scoped=base.filter(agentInSupervisorScope);
+  return scoped.length?scoped:base;
+}
 async function ptSupValiderDay(agentId,ym,day){
   if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   try{
@@ -34560,12 +34569,13 @@ async function ptSupDevaliderDay(agentId,ym,day){
   }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
 function renderPointageSaisieSuperviseur(){
+  setTimeout(()=>{if(typeof _sgdiUpdateEditFab==="function")_sgdiUpdateEditFab()},0);
   const supDate=ptSupDate();
   const [supYr,supMo,supDay]=supDate.split("-");
   const ym=`${supYr}-${supMo}`;
   const soc=ptCurrentSoc();
   ptSyncFeuillePresenceMonth(ym);
-  const all=ptFilterAgents(pointageEligibleAgents(soc)).sort((x,y)=>{
+  const all=ptFilterAgents(ptSupervisorAgentsForSoc(soc)).sort((x,y)=>{
     const sx=ptSupervisorSiteLabel(x),sy=ptSupervisorSiteLabel(y);
     return sx.localeCompare(sy)||(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||"");
   });
