@@ -5887,7 +5887,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD PAIE","paie/dashboard"],["EFFECTIF PAIE","effectif/recap"]
     ],
     admin:[
-      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
+      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
     ]
   };
 }
@@ -6156,6 +6156,7 @@ function renderSidebar(){
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard"},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",count:drhAgents.length||null},
         {label:"FICHE DE POSITION",route:"admin/fiches",count:drhAgents.length||null},
+        {label:"CORRECTION POINTAGE",route:"admin/pointages",count:(db.pointages||[]).length||null},
         {label:"POSTES / FONCTIONS",route:"admin/postes",count:POSTES.length||null},
         {label:"SITES",route:"sites/actifs",aliases:["sites"],count:adminSitesActifs||null},
         {label:"MAGASINS",route:"admin/magasins",count:adminMagasinsCount||null},
@@ -30463,7 +30464,7 @@ function ensureNiveauxAcces(){
 function logActivity(action,details){if(!db.activityLog)db.activityLog=[];db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:action,details:details||""});if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);recordOperationFeed(action+(details?" · "+details:""),"Activité système");saveDB()}
 function renderAdmin(view,sub,arg){
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
-  const systemOnly=["menu","counters","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","contrats","candidats"];
+  const systemOnly=["menu","counters","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
@@ -30480,6 +30481,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="niveaux")return renderAdminNiveaux(view);
   if(sub==="postes")return renderAdminPostes(view);
   if(sub==="fiches")return arg?renderAgentForm(view,arg):renderAdminFichesPosition(view);
+  if(sub==="pointages")return renderAdminPointages(view);
   if(sub==="contrats")return renderAdminContratsPersonnel(view);
   if(sub==="magasins")return renderAdminMagasins(view);
   if(sub==="catalogue"||sub==="articles")return renderAdminCatalogue(view);
@@ -30491,6 +30493,129 @@ function renderAdmin(view,sub,arg){
   if(sub==="storage")return renderAdminStorage(view);
   if(sub==="candidats")return renderAdminCandidats(view);
   renderAdminDashboard(view);
+}
+function adminPointageMonth(){return sessionStorage.getItem("adminPointageMonth")||ptCurrentMonth()}
+function adminPointageSociete(){return sessionStorage.getItem("adminPointageSociete")||adminActiveSociete()||""}
+function adminPointageSearch(){return sessionStorage.getItem("adminPointageSearch")||""}
+function adminPointageSet(key,value){
+  if(value)sessionStorage.setItem("adminPointage"+key,value);else sessionStorage.removeItem("adminPointage"+key);
+  if(key==="Societe"||key==="Search")sessionStorage.removeItem("adminPointageAgent");
+  renderView();
+}
+function adminPointageAgents(soc){
+  const q=adminPointageSearch().toLowerCase().trim();
+  return pointageEligibleAgents(soc).filter(adminMatchesSociete).filter(a=>{
+    if(!q)return true;
+    const aff=agentLiveAffectation(a)||a.affectationCourante||{};
+    const hay=[a.nom,a.prenom,a.matricule,a.code,aff.siteName,aff.site].join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+}
+function adminPointageStatusLabel(sheet,day){
+  if(sheet?.valide)return `<span class="pill pill-green">Mois validé</span>`;
+  if(ptSupDayValidated(sheet,day))return `<span class="pill pill-blue">Jour validé</span>`;
+  return `<span class="pill">Modifiable</span>`;
+}
+function renderAdminPointages(view){
+  if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé</h2><p>Cette page est réservée au compte Administration système.</p></div>`;return}
+  const ym=adminPointageMonth();
+  const soc=adminPointageSociete();
+  const agents=adminPointageAgents(soc);
+  const selectedId=sessionStorage.getItem("adminPointageAgent")||agents[0]?.id||"";
+  const agent=agents.find(a=>String(a.id)===String(selectedId))||agents[0]||null;
+  if(agent&&String(agent.id)!==String(selectedId))sessionStorage.setItem("adminPointageAgent",agent.id);
+  const sheet=agent?ptGetSheet(agent.id,ym):null;
+  const days=ptDaysInMonth(ym);
+  const codeOptions=Object.entries(POINTAGE_CODES).map(([k,v])=>`<span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold" style="background:${v.bg};color:${v.color}"><span class="font-mono font-black">${escapeHTML(k)}</span>${escapeHTML(v.label)}</span>`).join(" ");
+  const socOptions=`<option value="" ${!soc?"selected":""}>Toutes les sociétés</option>${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${soc===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}`;
+  const agentOptions=agents.map(a=>`<option value="${escapeHTML(a.id)}" ${agent&&a.id===agent.id?"selected":""}>${escapeHTML((a.nom||"")+" "+(a.prenom||""))} ${a.matricule?`(${escapeHTML(a.matricule)})`:""}</option>`).join("");
+  const rows=agent?Array.from({length:days},(_,i)=>{
+    const d=String(i+1).padStart(2,"0");
+    const date=new Date(Number(ym.slice(0,4)),Number(ym.slice(5,7))-1,i+1);
+    const wd=["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][date.getDay()];
+    const code=(sheet?.days||{})[d]||"";
+    const c=POINTAGE_CODES[code]||{};
+    return `<tr class="border-t">
+      <td class="p-3 font-mono font-black">${d}</td>
+      <td class="p-3 text-sm text-slate-600">${wd}</td>
+      <td class="p-3"><button type="button" onclick="adminPointageOpenDay('${agent.id}','${ym}','${d}')" class="w-full text-left px-3 py-2 rounded-lg font-black" style="border:1px solid ${c.color?c.color+"55":"#dbe3ee"};background:${c.bg||"#f8fafc"};color:${c.color||"#64748b"}">${code?escapeHTML(code):"Aucun code"}</button></td>
+      <td class="p-3 text-sm text-slate-600">${code?escapeHTML(c.label||"Code inconnu"):"-"}</td>
+      <td class="p-3">${adminPointageStatusLabel(sheet,d)}</td>
+      <td class="p-3 text-right"><button type="button" class="btn btn-secondary text-xs" onclick="adminPointageOpenDay('${agent.id}','${ym}','${d}')">Modifier</button></td>
+    </tr>`;
+  }).join(""):"";
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap">
+    <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Correction des pointages</h1><p class="text-sm text-slate-500 mt-1">Modifiez un code journalier sans passer par DRH, OPS ou Superviseur. Les corrections sont enregistrées dans PostgreSQL.</p></div>
+    <button type="button" class="btn btn-ghost" onclick="navigate('admin/dashboard')">Retour configuration</button>
+  </div>
+  <section class="card p-4 mb-4">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div><label class="label">Société</label><select class="select w-full" onchange="adminPointageSet('Societe',this.value)">${socOptions}</select></div>
+      <div><label class="label">Période</label><input class="input w-full" type="month" value="${escapeHTML(ym)}" onchange="adminPointageSet('Month',this.value)"/></div>
+      <div><label class="label">Rechercher</label><input class="input w-full" value="${escapeHTML(adminPointageSearch())}" placeholder="Nom, code, site..." oninput="adminPointageSet('Search',this.value)"/></div>
+      <div><label class="label">Employé</label><select class="select w-full" onchange="adminPointageSet('Agent',this.value)" ${agents.length?"":"disabled"}>${agentOptions||`<option>Aucun employé</option>`}</select></div>
+    </div>
+  </section>
+  ${agent?`<section class="card overflow-hidden">
+    <div class="p-4 flex items-start justify-between gap-3 flex-wrap" style="background:#f8fafc;border-bottom:1px solid #dbe3ee">
+      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Employé sélectionné</div><h2 class="text-xl font-black">${escapeHTML((agent.nom||"")+" "+(agent.prenom||""))} <span class="text-blue-700">${escapeHTML(agent.matricule||agent.code||"")}</span></h2><p class="text-sm text-slate-500">${escapeHTML(agent.societe||"")} · ${escapeHTML(ptSupervisorSiteLabel(agent))}</p></div>
+      <div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-secondary text-xs" onclick="adminPointageValidateMonth('${agent.id}','${ym}')">Valider le mois</button><button type="button" class="btn btn-ghost text-xs" onclick="adminPointageUnlockMonth('${agent.id}','${ym}')">Déverrouiller le mois</button></div>
+    </div>
+    <div class="p-4 text-xs text-slate-500">${codeOptions}</div>
+    <div class="overflow-auto"><table class="w-full text-sm"><thead><tr style="background:#e5e7eb"><th class="p-3 text-left">Jour</th><th class="p-3 text-left">Semaine</th><th class="p-3 text-left">Pointage</th><th class="p-3 text-left">Signification</th><th class="p-3 text-left">Statut</th><th class="p-3 text-right">Action</th></tr></thead><tbody>${rows}</tbody></table></div>
+  </section>`:`<div class="card p-6 text-center text-slate-500">Aucun employé trouvé pour ce périmètre.</div>`}`;
+}
+function adminPointageOpenDay(agentId,ym,day){
+  const agent=(db.agents||[]).find(a=>String(a.id)===String(agentId));
+  const sheet=ptGetSheet(agentId,ym);
+  const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
+  const buttons=Object.entries(POINTAGE_CODES).map(([code,c])=>{
+    const active=code===current;
+    return `<button type="button" onclick="adminPointageApplyDay('${agentId}','${ym}','${day}','${code}')" style="height:40px;min-width:56px;border:${active?`2px solid ${c.color}`:"1px solid #dbe3ee"};background:${c.bg};color:${c.color};font-weight:900;border-radius:8px;cursor:pointer">${escapeHTML(code)}</button>`;
+  }).join("");
+  openModal(`<div style="min-width:360px;max-width:560px">
+    <h3 class="font-black text-lg mb-1">Modifier le pointage</h3>
+    <p class="text-sm text-slate-500 mb-4">${escapeHTML((agent?.nom||"")+" "+(agent?.prenom||""))} · ${escapeHTML(day)}/${escapeHTML(String(ym).slice(5,7))}/${escapeHTML(String(ym).slice(0,4))}</p>
+    <div class="mb-3">${adminPointageStatusLabel(sheet,day)}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${buttons}</div>
+    <div class="flex justify-between gap-2 mt-4"><button type="button" class="btn btn-ghost text-red-700" onclick="adminPointageApplyDay('${agentId}','${ym}','${day}','')">Effacer le code</button><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button></div>
+  </div>`);
+}
+async function adminPointageApplyDay(agentId,ym,day,code){
+  if(!(await ensureAdminSystemApiToken("modifier un pointage")))return;
+  const sheet=ptGetSheet(agentId,ym);
+  const dayKey=String(day).padStart(2,"0");
+  const wasMonth=!!sheet?.valide;
+  const wasDay=!!sheet?.validatedDays?.[dayKey];
+  try{
+    if(wasMonth)await sgdiRunLegacyAction("unlock-pointage",{data:{agentId,periode:ym}});
+    if(wasDay)await sgdiRunLegacyAction("unlock-pointage-day",{data:{agentId,periode:ym,day:dayKey}});
+    let out=null;
+    if((wasDay||wasMonth)&&code)out=await sgdiRunLegacyAction("validate-pointage-day",{data:{agentId,periode:ym,day:dayKey,code}});
+    else out=await sgdiRunLegacyAction("save-pointage-cell",{data:{agentId,periode:ym,day:dayKey,code:code||""}});
+    if(wasMonth)await sgdiRunLegacyAction("validate-pointage",{data:{agentId,periode:ym}});
+    const item=out?.data?.item;
+    if(item){
+      if(!db.pointages)db.pointages=[];
+      const idx=db.pointages.findIndex(p=>String(p.agentId)===String(item.agentId)&&p.periode===item.periode);
+      if(idx>=0)db.pointages[idx]=item;else db.pointages.push(item);
+    }
+    closeModal();
+    await sgdiPullState({silent:true,force:true});
+    logActivity&&logActivity("Correction pointage administration","Agent "+agentId+" · "+ym+"-"+dayKey+" · "+(code||"effacé"));
+    toast("Pointage corrigé dans PostgreSQL","success");
+    renderView();
+  }catch(e){toast("Correction refusée : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}
+}
+async function adminPointageValidateMonth(agentId,ym){
+  if(!(await ensureAdminSystemApiToken("valider un mois de pointage")))return;
+  if(!confirm("Valider le mois de pointage sélectionné ?"))return;
+  try{await sgdiRunLegacyAction("validate-pointage",{data:{agentId,periode:ym}});await sgdiPullState({silent:true,force:true});toast("Mois validé","success");renderView()}catch(e){toast("Validation refusée : "+(e.message||e),"error")}
+}
+async function adminPointageUnlockMonth(agentId,ym){
+  if(!(await ensureAdminSystemApiToken("déverrouiller un mois de pointage")))return;
+  if(!confirm("Déverrouiller le mois de pointage sélectionné ?"))return;
+  try{await sgdiRunLegacyAction("unlock-pointage",{data:{agentId,periode:ym}});await sgdiPullState({silent:true,force:true});toast("Mois déverrouillé","success");renderView()}catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
 function renderAdminCandidats(view){
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé</h2><p>Cette page est réservée au compte Administration système.</p></div>`;return}
@@ -31038,6 +31163,7 @@ async function renderAdminSystemDashboard(view){
 	  </div>
 	  <div class="grid grid-3 gap-3 mt-4">
 	    ${card("Fiches de position","Maintenance contrôlée des fiches employés.","admin/fiches","#0f766e",agents.length,"Métier")}
+	    ${card("Correction pointage","Corriger une journée ou déverrouiller un mois avec traçabilité PostgreSQL.","admin/pointages","#0369a1",(db.pointages||[]).length,"Contrôle")}
 	    ${card("Sites","Édition et archivage des sites.","sites/actifs","#1d4ed8",sitesCount,"Métier")}
 	    ${card("Articles / magasins","Catalogue matériel, magasins et stocks.","admin/articles","#ca8a04",articles.length+magasins.length,"Métier")}
 	    ${card("Modèles documents","Modèles documentaires et rattachements.","admin/document-models","#334155",templates.length,"Métier")}
