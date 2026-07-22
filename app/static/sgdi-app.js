@@ -1504,7 +1504,7 @@ function sgdiEnsureEmployeesForDisplay(options){
 }
 async function sgdiRunLegacyAction(action,payload){
   if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()){
-    const allowed=new Set(["save-pointage-cell","upsert-presence-line","add-presence-agent"]);
+    const allowed=new Set(["save-pointage-cell","upsert-presence-line","add-presence-agent","validate-pointage"]);
     if(!allowed.has(String(action||""))){
       toast("Accès superviseur OPS : action non autorisée. Seule la saisie pointage est autorisée.","error");
       throw new Error("Action non autorisée pour SUPERVISEUR OPS");
@@ -4139,6 +4139,7 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard"},
         {label:"FEUILLE POINTAGE",route:"pointage/feuille"},
+        {label:"SAISIE MENSUELLE",route:"pointage/saisie"},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs"},
         {label:"FICHE DE POSITION",route:"fiches"}
       ]
@@ -5857,7 +5858,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
     ],
     superviseur:[
-      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["SAISIE MENSUELLE","pointage/saisie"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
@@ -6052,6 +6053,7 @@ function renderSidebar(){
       superviseur:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"]},
         {label:"FEUILLE POINTAGE",route:"pointage/feuille",aliases:["pointage"]},
+        {label:"SAISIE MENSUELLE",route:"pointage/saisie",aliases:["pointage/saisie"]},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"]},
         {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
@@ -33769,7 +33771,7 @@ function ptSyncFeuillePresenceMonth(ym){
   return changed;
 }
 async function ptValiderSheet(agentId,ym){
-  if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
+  if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   try{
     await sgdiRunLegacyAction("validate-pointage",{data:{agentId,periode:ym}});
     await sgdiPullState({silent:true});
@@ -34482,6 +34484,93 @@ function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valid
 async function ptClearRow(agentId,ym){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : effacement pointage non autorisé."))return;const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
 function ptCellHTML(agentId,ym,day,code,isWeekend){const c=POINTAGE_CODES[code];const bg=c?c.bg:(isWeekend?"#dbeafe":"");const fg=c?c.color:(isWeekend?"#1e40af":"#64748b");const txt=code||"·";return`<td class="text-center align-middle" style="border:1px solid #e2e8f0;padding:0;width:21px;min-width:21px;max-width:21px;height:18px;background:${bg}"><button onclick="ptOpenCodePicker('${agentId}','${ym}',${day})" title="Cliquer pour choisir le code" style="width:100%;height:18px;border:0;background:transparent;color:${fg};font-weight:800;font-family:ui-monospace,monospace;cursor:pointer;font-size:7px;line-height:1">${txt}</button></td>`}
+function ptSupervisorMonthlyCount(sheet,code){
+  if(!sheet)return 0;
+  const days=Object.values(sheet.days||{});
+  if(code==="R")return days.filter(v=>v==="R").length;
+  if(code==="A1")return days.filter(v=>v==="A"||v==="A1"||v==="AB").length;
+  if(code==="A2")return days.filter(v=>v==="A2").length;
+  if(code==="A3")return days.filter(v=>v==="A3").length;
+  if(code==="F1")return days.filter(v=>v==="F1"||v==="P/F1").length;
+  if(code==="F2")return days.filter(v=>v==="F2"||v==="P/F2").length;
+  if(code==="F3")return days.filter(v=>v==="F3"||v==="P/F3").length;
+  return days.filter(v=>v===code).length;
+}
+function ptSupervisorSiteKey(agent){
+  const aff=agentLiveAffectation(agent)||agent?.affectationCourante||{};
+  const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
+  return site?.id||site?.backendId||aff.siteId||aff.siteBackendId||aff.site_id||aff.siteName||"__sans_site__";
+}
+function ptSupervisorSiteLabel(agent){
+  const aff=agentLiveAffectation(agent)||agent?.affectationCourante||{};
+  const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
+  return site?.nom||site?.intitule||aff.siteName||"Sans site affecté";
+}
+function ptSupervisorMonthlyCell(sheet,code){
+  const c=POINTAGE_CODES[code]||{};
+  const value=ptSupervisorMonthlyCount(sheet,code);
+  return `<td style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${c.bg||"#fff"};color:#0f172a;font-size:10px;font-weight:900">${value||"·"}</td>`;
+}
+function renderPointageSaisieSuperviseur(){
+  const ym=ptCurrentMonth();
+  const soc=ptCurrentSoc();
+  ptSyncFeuillePresenceMonth(ym);
+  const all=ptFilterAgents(pointageEligibleAgents(soc)).sort((x,y)=>{
+    const sx=ptSupervisorSiteLabel(x),sy=ptSupervisorSiteLabel(y);
+    return sx.localeCompare(sy)||(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||"");
+  });
+  const [yr,mo]=ym.split("-").map(Number);
+  const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const grouped={};
+  all.forEach(a=>{
+    const key=ptSupervisorSiteKey(a);
+    if(!grouped[key])grouped[key]={label:ptSupervisorSiteLabel(a),rows:[]};
+    grouped[key].rows.push(a);
+  });
+  const groups=Object.values(grouped).sort((a,b)=>a.label.localeCompare(b.label));
+  const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
+    ${drumMultiHTML([{id:"pt-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:String(mo).padStart(2,"0"),cb:"drumPtMonthSync"},{id:"pt-drum-yr",label:"Année",opts:drumYearOpts(6),selected:String(yr),cb:"drumPtMonthSync"}])}
+    ${ptSearchBarHTML("Rechercher nom, code, site...")}
+    <div class="flex-1"></div>
+    <button class="btn btn-ghost text-xs" onclick="window.print()">Imprimer</button>
+  </div></div>`;
+  if(!all.length)return filterBar+`<div class="card p-8 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé rattaché aux sites autorisés pour ${escapeHTML(soc||"ce périmètre")}.`}</div>`;
+  const headers=`<thead><tr style="background:#e5e7eb;color:#1f2937;text-transform:uppercase;letter-spacing:.08em">
+    <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
+    <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
+    ${["P","R","A1","A2","A3","F1","F2","F3"].map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
+    <th style="border:1px solid #dbe3ee;width:72px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
+  </tr></thead>`;
+  const tableForGroup=(group)=>{
+    const rows=group.rows.map((a,i)=>{
+      const sheet=ptGetSheet(a.id,ym);
+      const isValide=!!sheet?.valide;
+      const action=isValide
+        ?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`
+        :`<button type="button" onclick="ptValiderSheet('${a.id}','${ym}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
+      return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
+        <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
+        <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
+          ${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} <span style="color:#1d70a2;font-family:ui-monospace,monospace;font-size:9px">${escapeHTML(a.matricule||"")}</span>
+        </td>
+        ${["P","R","A1","A2","A3","F1","F2","F3"].map(code=>ptSupervisorMonthlyCell(sheet,code)).join("")}
+        <td style="border:1px solid #dbe3ee;text-align:center;background:#fff;height:38px">${action}</td>
+      </tr>`;
+    }).join("");
+    return `<section class="card p-0 mb-5" style="overflow:hidden;border-color:#d8e4f2">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #dbe3ee">
+        <div style="font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase">${escapeHTML(group.label)}</div>
+        <div style="font-size:11px;font-weight:800;color:#64748b">${group.rows.length} agent${group.rows.length>1?"s":""}</div>
+      </div>
+      <div style="overflow-x:auto"><table style="border-collapse:collapse;width:auto;min-width:604px;font-size:10px">${headers}<tbody>${rows}</tbody></table></div>
+    </section>`;
+  };
+  return `${filterBar}<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
+    <div><h2 class="text-2xl font-black uppercase">Saisie mensuelle superviseur</h2><p class="text-sm text-slate-500">Personnel rattaché par site d'affectation · ${escapeHTML(monthLabel)} · ${all.length} agent${all.length>1?"s":""}</p></div>
+    <button type="button" class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Feuille quotidienne</button>
+  </div>
+  ${groups.map(tableForGroup).join("")}`;
+}
 function ptDonutSVG(slices,total,cx,cy,r,ir){
   if(!total)return`<circle cx="${cx}" cy="${cy}" r="${r}" fill="#f1f5f9"/>`;
   let angle=-Math.PI/2;
@@ -34784,14 +34873,15 @@ function renderPointage(view,sub,arg,_skipEnsure){
   if(isDrh&&(sub==="saisie"||sub==="dashboard"))sub="auto";
   if(hideAuto&&sub==="auto")sub="saisie";
   if(sub==="scan")sub="feuille";
-  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorModuleActive()&&k==="qr"));
+  const supervisorActive=supervisorModuleActive();
+  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorActive&&k==="qr"));
   const tabsHTML=allowedTabs.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${l}</button>`).join("");
   const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
   if(sub==="dashboard")body=renderPointageDashboard(isDrh);
   else if(sub==="feuille"){body=renderFeuillePresentQR();}
   else if(sub==="qr"&&!isDrh&&!supervisorModuleActive()){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
-  else if(sub==="saisie"&&!isDrh)body=renderPointageSaisie();
+  else if(sub==="saisie"&&!isDrh)body=supervisorActive?renderPointageSaisieSuperviseur():renderPointageSaisie();
   else if(sub==="auto")body=renderPointageSaisieAuto();
   else if(sub==="recap")body=renderPointageRecap(arg);
   else if(sub==="societe")body=renderPointageSociete();
