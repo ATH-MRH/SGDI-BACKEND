@@ -34509,10 +34509,29 @@ function ptSupervisorSiteLabel(agent){
   const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
   return site?.nom||site?.intitule||aff.siteName||"Sans site affecté";
 }
-function ptSupervisorMonthlyCell(sheet,code){
+function ptSupervisorDailyDay(ym){
+  const td=today();
+  if(String(td||"").slice(0,7)===ym)return String(td).slice(8,10);
+  return "01";
+}
+function ptSupervisorDailyCell(agentId,ym,day,sheet,code,isValide){
   const c=POINTAGE_CODES[code]||{};
-  const value=ptSupervisorMonthlyCount(sheet,code);
-  return `<td style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${c.bg||"#fff"};color:#0f172a;font-size:10px;font-weight:900">${value||"·"}</td>`;
+  const cur=(sheet?.days||{})[day]||"";
+  const active=cur===code;
+  const disabled=isValide||sgdiViewModeActive;
+  const title=disabled
+    ?(isValide?"Pointage déjà validé":"Cliquez sur Déverrouiller avant la saisie")
+    :`Saisir ${code} pour le ${day}/${String(ym).slice(5,7)}`;
+  return `<td style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${active?(c.bg||"#fff"):(c.bg||"#fff")};color:#0f172a;font-size:10px;font-weight:900">
+    <button type="button" ${disabled?"disabled":""} onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" title="${escapeHTML(title)}" style="width:100%;height:36px;border:0;background:transparent;color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;cursor:${disabled?"not-allowed":"pointer"};opacity:${disabled&&!active?".45":"1"}">${active?code:"·"}</button>
+  </td>`;
+}
+function ptSupervisorSetDailyCode(agentId,ym,day,code){
+  if(sgdiViewModeActive){toast("Saisie verrouillée : cliquez sur Déverrouiller avant de pointer.","error");return}
+  const sheet=ptGetSheet(agentId,ym);
+  if(sheet?.valide){toast("Pointage validé : ligne verrouillée.","error");return}
+  ptSetCell(agentId,ym,Number(day),code);
+  renderView();
 }
 function renderPointageSaisieSuperviseur(){
   const ym=ptCurrentMonth();
@@ -34523,6 +34542,8 @@ function renderPointageSaisieSuperviseur(){
     return sx.localeCompare(sy)||(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||"");
   });
   const [yr,mo]=ym.split("-").map(Number);
+  const day=ptSupervisorDailyDay(ym);
+  const dayLabel=`${day}/${String(mo).padStart(2,"0")}/${yr}`;
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const grouped={};
   all.forEach(a=>{
@@ -34556,7 +34577,7 @@ function renderPointageSaisieSuperviseur(){
         <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
           ${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} <span style="color:#1d70a2;font-family:ui-monospace,monospace;font-size:9px">${escapeHTML(a.matricule||"")}</span>
         </td>
-        ${["P","R","A1","A2","A3","F1","F2","F3"].map(code=>ptSupervisorMonthlyCell(sheet,code)).join("")}
+        ${["P","R","A1","A2","A3","F1","F2","F3"].map(code=>ptSupervisorDailyCell(a.id,ym,day,sheet,code,isValide)).join("")}
         <td style="border:1px solid #dbe3ee;text-align:center;background:#fff;height:38px">${action}</td>
       </tr>`;
     }).join("");
@@ -34569,7 +34590,7 @@ function renderPointageSaisieSuperviseur(){
     </section>`;
   };
   return `${filterBar}<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
-    <div><h2 class="text-2xl font-black uppercase">Saisie quotidienne superviseur</h2><p class="text-sm text-slate-500">Personnel rattaché par site d'affectation · ${escapeHTML(monthLabel)} · ${all.length} agent${all.length>1?"s":""}</p></div>
+    <div><h2 class="text-2xl font-black uppercase">Saisie quotidienne superviseur</h2><p class="text-sm text-slate-500">Personnel rattaché par site d'affectation · ${escapeHTML(dayLabel)} · ${all.length} agent${all.length>1?"s":""}</p></div>
     <button type="button" class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Feuille quotidienne</button>
   </div>
   ${groups.map(tableForGroup).join("")}`;
