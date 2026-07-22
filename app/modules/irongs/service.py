@@ -835,7 +835,7 @@ def _unlock_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) 
     return _replace_and_success(db, "pointages", sheets, {"item": sheet})
 
 
-def _validate_pointage_day(db: Session, agent_id: str, periode: str, day: str, user: Any) -> dict[str, Any]:
+def _validate_pointage_day(db: Session, agent_id: str, periode: str, day: str, user: Any, code: str | None = None) -> dict[str, Any]:
     # Validation PROPRE AU JOUR, distincte de sheet["valide"] (validation mensuelle
     # DRH/OPS). Utilisée par la vue "Saisie quotidienne" du module Superviseur : valider
     # un jour ne bloque pas les autres jours du mois, contrairement à _validate_pointage_sheet.
@@ -847,6 +847,14 @@ def _validate_pointage_day(db: Session, agent_id: str, periode: str, day: str, u
     if not sheet:
         sheet = {"id": f"pt_{agent_id}_{periode}", "agentId": agent_id, "periode": periode, "days": {}, "createdAt": _now_iso()}
         sheets.append(sheet)
+    clean_code = str(code or "").strip().upper()
+    if clean_code:
+        days = dict(sheet.get("days") or {})
+        days[day] = clean_code
+        sheet["days"] = days
+        sync = dict(sheet.get("fpqSync") or {})
+        sync.pop(day, None)
+        sheet["fpqSync"] = sync
     validated_days = dict(sheet.get("validatedDays") or {})
     validated_days[day] = {"by": _actor_name(user), "at": _now_iso()}
     sheet["validatedDays"] = validated_days
@@ -1240,7 +1248,7 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
     if action == "unlock-pointage":
         return _unlock_pointage_sheet(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), user)
     if action == "validate-pointage-day":
-        return _validate_pointage_day(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), str(data.get("day") or ""), user)
+        return _validate_pointage_day(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), str(data.get("day") or ""), user, str(data.get("code") or ""))
     if action == "unlock-pointage-day":
         return _unlock_pointage_day(db, str(data.get("agentId") or ""), str(data.get("periode") or ""), str(data.get("day") or ""), user)
     if action == "validate-pointage-all":

@@ -34537,6 +34537,14 @@ function ptSupervisorSetDailyCode(agentId,ym,day,code){
   ptSetCell(agentId,ym,Number(day),code);
   renderView();
 }
+function ptSupervisorCorrectDailyCode(agentId,ym,day){
+  const sheet=ptGetSheet(agentId,ym);
+  if(ptSupDayValidated(sheet,day)){toast("Ce jour est déjà validé : déverrouillez avant correction.","error");return}
+  const key=String(day).padStart(2,"0");
+  if(!(sheet?.days||{})[key]){toast("Aucun pointage à corriger pour ce jour.","info");return}
+  ptSetCell(agentId,ym,Number(day),"");
+  renderView();
+}
 function ptSupervisorAgentsForSoc(soc){
   const base=(db.agents||[])
     .filter(a=>employeeIsPointageEligible(a,soc))
@@ -34547,7 +34555,15 @@ function ptSupervisorAgentsForSoc(soc){
 async function ptSupValiderDay(agentId,ym,day){
   if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   try{
-    await sgdiRunLegacyAction("validate-pointage-day",{data:{agentId,periode:ym,day}});
+    const code=(ptGetSheet(agentId,ym)?.days||{})[String(day).padStart(2,"0")]||"";
+    if(!code){toast("Sélectionnez d'abord P, R, A1, A2, A3, F1, F2 ou F3 avant de valider.","error");return}
+    const out=await sgdiRunLegacyAction("validate-pointage-day",{data:{agentId,periode:ym,day,code}});
+    const item=out?.data?.item;
+    if(item){
+      if(!db.pointages)db.pointages=[];
+      const idx=db.pointages.findIndex(p=>String(p.agentId)===String(item.agentId)&&p.periode===item.periode);
+      if(idx>=0)db.pointages[idx]=item;else db.pointages.push(item);
+    }
     await sgdiPullState({silent:true});
     logActivity&&logActivity("Pointage jour validé","Agent "+agentId+" · "+ym+"-"+day);
     toast("Journée validée","success");
@@ -34598,7 +34614,7 @@ function renderPointageSaisieSuperviseur(){
     <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
     ${["P","R","A1","A2","A3","F1","F2","F3"].map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
-    <th style="border:1px solid #dbe3ee;width:72px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
+    <th style="border:1px solid #dbe3ee;width:112px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
   </tr></thead>`;
   const tableForGroup=(group)=>{
     const rows=group.rows.map((a,i)=>{
@@ -34606,7 +34622,7 @@ function renderPointageSaisieSuperviseur(){
       const isValide=ptSupDayValidated(sheet,day);
       const action=isValide
         ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`:`<button type="button" onclick="ptSupDevaliderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#0f766e;font-size:10px;font-weight:900;cursor:pointer" title="Déverrouiller ce jour">Validé ✓</button>`)
-        :`<button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
+        :`<div style="display:flex;align-items:center;justify-content:center;gap:6px;height:24px"><button type="button" onclick="ptSupervisorCorrectDailyCode('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#64748b;font-size:10px;font-weight:900;cursor:pointer">Corriger</button><button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button></div>`;
       return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
         <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
         <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
