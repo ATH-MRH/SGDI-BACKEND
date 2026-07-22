@@ -34581,6 +34581,40 @@ async function ptSupDevaliderDay(agentId,ym,day){
     renderView();
   }catch(e){toast("Déverrouillage refusé : "+(e.message||e),"error")}
 }
+function ptSupervisorOpenCorrection(agentId,ym,day){
+  const sheet=ptGetSheet(agentId,ym);
+  if(sheet?.valide){toast("Pointage mensuel validé : correction non autorisée ici.","error");return}
+  if(!ptSupDayValidated(sheet,day)){toast("Aucune validation passée à corriger.","info");return}
+  const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
+  const codes=["P","R","A1","A2","A3","F1","F2","F3"];
+  const buttons=codes.map(code=>{
+    const c=POINTAGE_CODES[code]||{};
+    const active=code===current;
+    return `<button type="button" onclick="ptSupervisorApplyCorrection('${agentId}','${ym}','${day}','${code}')" style="height:38px;min-width:48px;border:${active?`2px solid ${c.color||"#043970"}`:"1px solid #dbe3ee"};background:${c.bg||"#fff"};color:${c.color||"#0f172a"};font-weight:900;border-radius:8px;cursor:pointer">${code}</button>`;
+  }).join("");
+  openModal(`<div style="min-width:320px;max-width:420px">
+    <h3 class="font-black text-lg mb-2">Corriger le pointage</h3>
+    <p class="text-sm text-slate-500 mb-4">Choisissez le nouveau code pour le ${escapeHTML(day)}/${escapeHTML(String(ym).slice(5,7))}. La journée sera revalidée automatiquement.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${buttons}</div>
+    <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button></div>
+  </div>`);
+}
+async function ptSupervisorApplyCorrection(agentId,ym,day,code){
+  try{
+    await sgdiRunLegacyAction("unlock-pointage-day",{data:{agentId,periode:ym,day}});
+    const out=await sgdiRunLegacyAction("validate-pointage-day",{data:{agentId,periode:ym,day,code}});
+    const item=out?.data?.item;
+    if(item){
+      if(!db.pointages)db.pointages=[];
+      const idx=db.pointages.findIndex(p=>String(p.agentId)===String(item.agentId)&&p.periode===item.periode);
+      if(idx>=0)db.pointages[idx]=item;else db.pointages.push(item);
+    }
+    closeModal();
+    await sgdiPullState({silent:true});
+    toast("Pointage corrigé et validé","success");
+    renderView();
+  }catch(e){toast("Correction refusée : "+(e.message||e),"error")}
+}
 function renderPointageSaisieSuperviseur(){
   setTimeout(()=>{if(typeof _sgdiUpdateEditFab==="function")_sgdiUpdateEditFab()},0);
   const supDate=ptSupDate();
@@ -34621,7 +34655,7 @@ function renderPointageSaisieSuperviseur(){
       const sheet=ptGetSheet(a.id,ym);
       const isValide=ptSupDayValidated(sheet,day);
       const action=isValide
-        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`:`<button type="button" onclick="ptSupDevaliderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#dc2626;font-size:10px;font-weight:900;cursor:pointer" title="Déverrouiller ce jour pour corriger">Corriger</button>`)
+        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`:`<button type="button" onclick="ptSupervisorOpenCorrection('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#dc2626;font-size:10px;font-weight:900;cursor:pointer" title="Modifier le pointage validé">Corriger</button>`)
         :`<button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
       return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
         <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
