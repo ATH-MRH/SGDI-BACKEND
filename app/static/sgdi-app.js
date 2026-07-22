@@ -34614,15 +34614,15 @@ function renderPointageSaisieSuperviseur(){
     <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
     ${["P","R","A1","A2","A3","F1","F2","F3"].map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
-    <th style="border:1px solid #dbe3ee;width:112px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
+    <th style="border:1px solid #dbe3ee;width:82px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
   </tr></thead>`;
   const tableForGroup=(group)=>{
     const rows=group.rows.map((a,i)=>{
       const sheet=ptGetSheet(a.id,ym);
       const isValide=ptSupDayValidated(sheet,day);
       const action=isValide
-        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`:`<button type="button" onclick="ptSupDevaliderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#0f766e;font-size:10px;font-weight:900;cursor:pointer" title="Déverrouiller ce jour">Validé ✓</button>`)
-        :`<div style="display:flex;align-items:center;justify-content:center;gap:6px;height:24px"><button type="button" onclick="ptSupervisorCorrectDailyCode('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#64748b;font-size:10px;font-weight:900;cursor:pointer">Corriger</button><button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button></div>`;
+        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`:`<button type="button" onclick="ptSupDevaliderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#dc2626;font-size:10px;font-weight:900;cursor:pointer" title="Déverrouiller ce jour pour corriger">Corriger</button>`)
+        :`<button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
       return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
         <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
         <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
