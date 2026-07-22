@@ -34524,17 +34524,14 @@ function ptSupervisorDailyCell(agentId,ym,day,sheet,code,isValide){
   const c=POINTAGE_CODES[code]||{};
   const cur=(sheet?.days||{})[day]||"";
   const active=cur===code;
-  const disabled=isValide||sgdiViewModeActive;
+  const disabled=!!isValide;
   const title=disabled
-    ?(isValide?"Pointage déjà validé":"Cliquez sur Déverrouiller avant la saisie")
+    ?"Pointage déjà validé"
     :`Saisir ${code} pour le ${day}/${String(ym).slice(5,7)}`;
-  return `<td style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${active?(c.bg||"#fff"):(c.bg||"#fff")};color:#0f172a;font-size:10px;font-weight:900">
-    <button type="button" ${disabled?"disabled":""} onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" title="${escapeHTML(title)}" style="-webkit-appearance:none;appearance:none;display:flex;align-items:center;justify-content:center;width:100%;height:36px;margin:0;padding:0;border:0;border-radius:0;background:transparent;color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;line-height:1;cursor:${disabled?"not-allowed":"pointer"};opacity:${disabled&&!active?".55":"1"}">${active?code:"·"}</button>
-  </td>`;
+  return `<td role="button" tabindex="${disabled?"-1":"0"}" ${disabled?"":`onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')}"`} title="${escapeHTML(title)}" style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${c.bg||"#fff"};color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;line-height:36px;cursor:${disabled?"not-allowed":"pointer"};user-select:none;opacity:${disabled&&!active?".55":"1"}">${active?code:"·"}</td>`;
 }
 function ptSupDayValidated(sheet,day){return !!(sheet?.valide||sheet?.validatedDays?.[String(day).padStart(2,"0")])}
 function ptSupervisorSetDailyCode(agentId,ym,day,code){
-  if(sgdiViewModeActive){toast("Saisie verrouillée : cliquez sur Déverrouiller avant de pointer.","error");return}
   const sheet=ptGetSheet(agentId,ym);
   if(ptSupDayValidated(sheet,day)){toast("Ce jour est déjà validé : ligne verrouillée.","error");return}
   ptSetCell(agentId,ym,Number(day),code);
@@ -34608,7 +34605,7 @@ function renderPointageSaisieSuperviseur(){
       const sheet=ptGetSheet(a.id,ym);
       const isValide=ptSupDayValidated(sheet,day);
       const action=isValide
-        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé (mois)</span>`:`<button type="button" onclick="ptSupDevaliderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#0f766e;font-size:10px;font-weight:900;cursor:pointer" title="Déverrouiller ce jour">Validé ✓</button>`)
+        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`:`<button type="button" onclick="ptSupDevaliderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#0f766e;font-size:10px;font-weight:900;cursor:pointer" title="Déverrouiller ce jour">Validé ✓</button>`)
         :`<button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
       return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
         <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
