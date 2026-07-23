@@ -34725,6 +34725,24 @@ function ptSupervisorOpenCorrection(agentId,ym,day){
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button></div>
   </div>`);
 }
+function ptSupervisorOpenDailyEditor(agentId,ym,day){
+  const sheet=ptGetSheet(agentId,ym);
+  if(ptSupDayValidated(sheet,day))return ptSupervisorOpenCorrection(agentId,ym,day);
+  const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
+  const codes=["P","R","A1","A2","A3","F1","F2","F3"];
+  const buttons=codes.map(code=>{
+    const c=POINTAGE_CODES[code]||{};
+    const active=code===current;
+    return `<button type="button" onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}');closeModal()" style="height:38px;min-width:48px;border:${active?`2px solid ${c.color||"#043970"}`:"1px solid #dbe3ee"};background:${c.bg||"#fff"};color:${c.color||"#0f172a"};font-weight:900;border-radius:8px;cursor:pointer">${code}</button>`;
+  }).join("");
+  openModal(`<div style="min-width:320px;max-width:420px">
+    <h3 class="font-black text-lg mb-2">Modifier le pointage</h3>
+    <p class="text-sm text-slate-500 mb-4">Choisissez le code avant validation pour le ${escapeHTML(day)}/${escapeHTML(String(ym).slice(5,7))}.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${buttons}</div>
+    ${current?`<div style="padding-top:12px;margin-top:12px;border-top:1px solid #e2e8f0"><button type="button" class="btn btn-ghost text-red-700" onclick="ptSetCell('${agentId}','${ym}',${Number(day)},'');closeModal();renderView()">Effacer le code</button></div>`:""}
+    <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button></div>
+  </div>`);
+}
 async function ptSupervisorApplyCorrection(agentId,ym,day,code){
   try{
     await sgdiRunLegacyAction("unlock-pointage-day",{data:{agentId,periode:ym,day}});
@@ -34780,16 +34798,17 @@ function renderPointageSaisieSuperviseur(){
     const rows=group.rows.map((a,i)=>{
       const sheet=ptGetSheet(a.id,ym);
       const isValide=ptSupDayValidated(sheet,day);
-      const action=isValide
-        ?(sheet?.valide?`<span style="display:inline-flex;align-items:center;height:24px;color:#0f766e;font-size:10px;font-weight:900">Validé</span>`:`<button type="button" onclick="ptSupervisorOpenCorrection('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#dc2626;font-size:10px;font-weight:900;cursor:pointer" title="Modifier le pointage validé">Corriger</button>`)
-        :`<button type="button" onclick="ptSupValiderDay('${a.id}','${ym}','${day}')" style="height:24px;border:0;background:transparent;color:#043970;font-size:10px;font-weight:900;cursor:pointer">Valider</button>`;
+      const action=`<div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap">
+        <button type="button" onclick="${isValide?"toast('Cette journée est déjà validée. Utilisez Modifier pour corriger.','info')":`ptSupValiderDay('${a.id}','${ym}','${day}')`}" style="height:24px;border:1px solid ${isValide?"#bbf7d0":"#bfdbfe"};background:${isValide?"#f0fdf4":"#eff6ff"};color:${isValide?"#047857":"#043970"};border-radius:6px;padding:0 7px;font-size:10px;font-weight:900;cursor:pointer">${isValide?"Validé":"Valider"}</button>
+        <button type="button" onclick="ptSupervisorOpenDailyEditor('${a.id}','${ym}','${day}')" style="height:24px;border:1px solid #fed7aa;background:#fff7ed;color:#c2410c;border-radius:6px;padding:0 7px;font-size:10px;font-weight:900;cursor:pointer">Modifier</button>
+      </div>`;
       return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
         <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
         <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
           ${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} <span style="color:#1d70a2;font-family:ui-monospace,monospace;font-size:9px">${escapeHTML(a.matricule||"")}</span>
         </td>
         ${["P","R","A1","A2","A3","F1","F2","F3"].map(code=>ptSupervisorDailyCell(a.id,ym,day,sheet,code,isValide)).join("")}
-        <td style="border:1px solid #dbe3ee;text-align:center;background:#fff;height:38px">${action}</td>
+        <td style="border:1px solid #dbe3ee;text-align:center;background:#fff;height:38px;padding:4px">${action}</td>
       </tr>`;
     }).join("");
     return `<section class="card p-0 mb-5" style="overflow:hidden;border-color:#d8e4f2">
