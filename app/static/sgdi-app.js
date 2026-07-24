@@ -1957,17 +1957,25 @@ function applyAssignmentsToEmployees(assignments){
 }
 async function syncAssignmentsFromPostgres(){
   if(!sgdiAuthToken()||!db||!window.SGDI?.assignments?.page)return;
-  // Le serveur plafonne page_size à 100 quel que soit ce qu'on demande : on boucle sur
-  // les pages pour ne jamais tronquer silencieusement les affectations au-delà de 100.
-  const rows=[];
-  let page=1,pages=1;
-  do{
-    const result=await SGDI.assignments.page({active:1,page,page_size:100});
-    const items=Array.isArray(result?.items)?result.items:Array.isArray(result)?result:[];
-    rows.push(...items);
-    pages=Number(result?.pages)||1;
-    page++;
-  }while(page<=pages);
+  // Le serveur plafonne page_size à 100 quel que soit ce qu'on demande : on récupère la 1ère
+  // page pour connaître le nombre total de pages, puis on charge le reste PAR LOTS EN PARALLÈLE
+  // (au lieu d'une boucle séquentielle page par page, qui pouvait multiplier le temps d'attente
+  // par le nombre de pages — jusqu'à donner l'impression d'un chargement qui ne finit jamais sur
+  // une société avec beaucoup d'affectations).
+  const first=await SGDI.assignments.page({active:1,page:1,page_size:100});
+  const firstItems=Array.isArray(first?.items)?first.items:Array.isArray(first)?first:[];
+  const totalPages=Math.max(1,Number(first?.pages)||1);
+  const rows=[...firstItems];
+  const CONCURRENCY=6;
+  for(let start=2;start<=totalPages;start+=CONCURRENCY){
+    const batch=[];
+    for(let p=start;p<Math.min(start+CONCURRENCY,totalPages+1);p++)batch.push(SGDI.assignments.page({active:1,page:p,page_size:100}));
+    const results=await Promise.all(batch);
+    results.forEach(result=>{
+      const items=Array.isArray(result?.items)?result.items:Array.isArray(result)?result:[];
+      rows.push(...items);
+    });
+  }
   db.assignments=rows.map(assignmentFromApi);
   applyAssignmentsToEmployees(db.assignments);
 }
@@ -33952,6 +33960,9 @@ const FPQ_PRESENCE_OPTIONS=[["P","PRESENT"],["A","ABSENT"],["R","RECUPERATION"],
 // paie propres à DRH/OPS, pas des situations qu'un superviseur constate sur site).
 const PT_SUPERVISOR_CODES=Object.keys(POINTAGE_CODES).filter(k=>!["AB","P/F1","P/F2","P/F3"].includes(k));
 const PT_SUPERVISOR_DAILY_CODES=PT_SUPERVISOR_CODES.filter(k=>!["M","S","A1"].includes(k));
+// Libellés en toutes lettres pour les en-têtes de colonnes de la saisie quotidienne superviseur
+// (demandé explicitement : les superviseurs terrain trouvaient les lettres seules ambiguës).
+const PT_SUPERVISOR_DAILY_HEADER_LABELS={P:"PRESENT",A:"ABSENT",C:"CONGE",R:"RECUPERATION",A2:"ABSENT 2J",A3:"ABSENT 3J"};
 function fpqPresenceCode(value){const v=String(value||"").toUpperCase();return POINTAGE_CODES[v]?v:""}
 function fpqPresenceOptions(value){const cur=fpqPresenceCode(value);return`<option value="">—</option>${FPQ_PRESENCE_OPTIONS.map(([k,l])=>`<option value="${k}" ${cur===k?"selected":""}>${k} = ${l}</option>`).join("")}`}
 function fpqPresenceSelectStyle(value){
@@ -34974,7 +34985,7 @@ function ptSupervisorDailyCell(agentId,ym,day,sheet,code,isValide){
   const title=disabled
     ?"Pointage déjà validé"
     :`Saisir ${code} pour le ${day}/${String(ym).slice(5,7)}`;
-  return `<td role="button" tabindex="${disabled?"-1":"0"}" ${disabled?"":`onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')}"`} title="${escapeHTML(title)}" style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${c.bg||"#fff"};color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;line-height:36px;cursor:${disabled?"not-allowed":"pointer"};user-select:none;opacity:${disabled&&!active?".55":"1"}">${active?code:"·"}</td>`;
+  return `<td role="button" tabindex="${disabled?"-1":"0"}" ${disabled?"":`onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')}"`} title="${escapeHTML(title)}" style="border:1px solid #dbe3ee;text-align:center;width:74px;min-width:74px;height:36px;background:${c.bg||"#fff"};color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;line-height:36px;cursor:${disabled?"not-allowed":"pointer"};user-select:none;opacity:${disabled&&!active?".55":"1"}">${active?code:"·"}</td>`;
 }
 // valide n'est plus qu'un champ dérivé côté backend (couvre-t-il tous les jours de
 // validatedDays ?) : validatedDays est désormais l'unique source de vérité à lire ici.
@@ -35160,7 +35171,7 @@ function renderPointageSaisieSuperviseur(freshNav){
   const headers=`<thead><tr style="background:#e5e7eb;color:#1f2937;text-transform:uppercase;letter-spacing:.08em">
     <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
-    ${PT_SUPERVISOR_DAILY_CODES.map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
+    ${PT_SUPERVISOR_DAILY_CODES.map(k=>`<th style="border:1px solid #dbe3ee;width:74px;padding:10px 4px;text-align:center;font-size:10px;font-weight:900">${PT_SUPERVISOR_DAILY_HEADER_LABELS[k]||k}</th>`).join("")}
     <th style="border:1px solid #dbe3ee;width:150px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
   </tr></thead>`;
   const tableForGroup=(group)=>{
