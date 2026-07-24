@@ -3682,9 +3682,19 @@ function siteMatchesReference(site,ref){
 function supervisorModuleActive(){
   return session?.transverse==="superviseur"||normalizeStructureList(session?.structuresAutorisees).includes("superviseur")||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession());
 }
+function supervisorScopeForUsername(username){
+  const key=String(username||session?.username||"").trim().toLowerCase();
+  if(!key)return null;
+  return (db.supervisorScopes||[]).find(x=>String(x.username||"").trim().toLowerCase()===key)||null;
+}
+function supervisorScopeSiteValues(){
+  const scope=supervisorScopeForUsername();
+  const values=Array.isArray(scope?.siteIds)&&scope.siteIds.length?scope.siteIds:session?.sitesAutorises;
+  return Array.isArray(values)?values:[];
+}
 function supervisorAuthorizedSiteScope(){
   if(!supervisorModuleActive())return null;
-  const values=(Array.isArray(session?.sitesAutorises)?session.sitesAutorises:[]).map(v=>String(v||"")).filter(v=>v&&v!=="NaN"&&v!=="null"&&v!=="undefined");
+  const values=supervisorScopeSiteValues().map(v=>String(v||"")).filter(v=>v&&v!=="NaN"&&v!=="null"&&v!=="undefined");
   if(!values.length)return null;
   const ids=new Set(values);
   const names=new Set(values.map(v=>normalizedSearchText(v)).filter(Boolean));
@@ -3726,6 +3736,33 @@ function incidentInSupervisorScope(incident){
   if(!scope)return true;
   const agent=incident?.agentId?(db.agents||[]).find(a=>String(a.id)===String(incident.agentId)):null;
   return [incident?.siteId,incident?.siteBackendId,incident?.site_id].some(v=>scope.ids.has(String(v||"")))||[incident?.siteName,incident?.site].some(v=>scope.names.has(normalizedSearchText(v||"")))||(agent&&agentInSupervisorScope(agent));
+}
+function supervisorScopeAgentsForSession(soc){
+  const scope=supervisorScopeForUsername();
+  const rows=Array.isArray(scope?.agents)?scope.agents:[];
+  const norm=soc?normalizeSocieteName(soc):"";
+  return rows.filter(a=>!norm||normalizeSocieteName(a.societe||"")===norm).map(a=>({
+    id:a.id||a.agentId||a.backendId||a.matricule||uid("supagent"),
+    backendId:a.backendId||"",
+    matricule:a.matricule||a.code||"",
+    code:a.code||a.matricule||"",
+    nom:a.nom||"",
+    prenom:a.prenom||"",
+    societe:a.societe||"",
+    statut:a.statut||"actif",
+    fonction:a.fonction||a.poste||"",
+    position:a.position||a.fonction||a.poste||"",
+    affectationCourante:{
+      siteId:a.siteId||"",
+      siteBackendId:a.siteBackendId||"",
+      siteName:a.siteName||"",
+      clientName:a.clientName||"",
+      poste:a.poste||a.fonction||"",
+      groupe:a.groupe||"",
+      dateDebut:a.dateDebut||""
+    },
+    _supervisorScopeCache:true
+  }));
 }
 function activeSitesForCurrentScope(){
   const soc=typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"";
@@ -5915,7 +5952,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD PAIE","paie/dashboard"],["EFFECTIF PAIE","effectif/recap"]
     ],
     admin:[
-      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
+      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PÉRIMÈTRES SUPERVISEURS","admin/supervisors"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
     ]
   };
 }
@@ -6191,6 +6228,7 @@ function renderSidebar(){
         {label:"ARTICLES",route:"admin/articles",count:adminArticlesCount||null},
         {label:"MODÈLES DOCUMENTS",route:"admin/document-models",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
         {label:"UTILISATEURS & BLOCAGE",route:"admin/users",gapBefore:true,count:(db.users||[]).length||null},
+        {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",count:(db.supervisorScopes||[]).length||null},
         {label:"DROITS D'ACCÈS",route:"admin/droits",count:Object.keys(db.droitsAcces||{}).length||null},
         {label:"PROFILS D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
         {label:"SÉCURITÉ DES ACCÈS",route:"admin/access"},
@@ -30492,7 +30530,7 @@ function ensureNiveauxAcces(){
 function logActivity(action,details){if(!db.activityLog)db.activityLog=[];db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:action,details:details||""});if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);recordOperationFeed(action+(details?" · "+details:""),"Activité système");saveDB()}
 function renderAdmin(view,sub,arg){
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
-  const systemOnly=["menu","counters","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
+  const systemOnly=["menu","counters","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
@@ -30503,6 +30541,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="messages")return renderAdminMessagesHistory(view);
   if(sub==="sync")return renderAdminSyncSettings(view);
   if(sub==="users")return renderAdminUsers(view);
+  if(sub==="supervisors")return renderAdminSupervisors(view);
   if(sub==="droits")return renderAdminDroits(view);
   if(sub==="document-models")return renderAdminDocumentModels(view);
   if(sub==="sections_candidat")return renderAdminCandidatSections(view);
@@ -30521,6 +30560,110 @@ function renderAdmin(view,sub,arg){
   if(sub==="storage")return renderAdminStorage(view);
   if(sub==="candidats")return renderAdminCandidats(view);
   renderAdminDashboard(view);
+}
+function adminSupervisorUsers(){
+  return (db.users||[]).filter(u=>{
+    const username=String(u.username||"").toUpperCase();
+    const structs=normalizeStructureList(u.structuresAutorisees||u.authorized_structures);
+    return username.startsWith("SUP")||structs.includes("superviseur")||String(u.niveau||"").toUpperCase()==="SUP_TERRAIN";
+  }).sort((a,b)=>String(a.username||"").localeCompare(String(b.username||"")));
+}
+function adminSupervisorSiteScopeFromUser(user){
+  const values=(Array.isArray(user?.sitesAutorises)?user.sitesAutorises:Array.isArray(user?.authorized_sites)?user.authorized_sites:[]).map(v=>String(v||"")).filter(Boolean);
+  const ids=new Set(values);
+  const names=new Set(values.map(v=>normalizedSearchText(v)).filter(Boolean));
+  const sites=(db.sites||[]).filter(site=>{
+    if(site.actif===false||site.active===0)return false;
+    const siteIds=[site.id,site.backendId].map(v=>String(v||"")).filter(Boolean);
+    const siteNames=[site.nom,site.intitule].map(v=>normalizedSearchText(v||"")).filter(Boolean);
+    const ok=siteIds.some(id=>ids.has(id))||siteNames.some(name=>names.has(name));
+    if(ok){siteIds.forEach(id=>ids.add(id));siteNames.forEach(name=>names.add(name))}
+    return ok;
+  });
+  return {ids,names,sites};
+}
+function adminSupervisorBuildScope(user){
+  const scope=adminSupervisorSiteScopeFromUser(user);
+  const agents=(db.agents||[]).filter(a=>{
+    if(!employeeIsPointageEligible(a,""))return false;
+    const aff=agentLiveAffectation(a)||a.affectationCourante||{};
+    const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
+    return [aff.siteId,aff.siteBackendId,aff.site_id,site?.id,site?.backendId].some(v=>scope.ids.has(String(v||"")))||[aff.siteName,aff.site,site?.nom,site?.intitule].some(v=>scope.names.has(normalizedSearchText(v||"")));
+  }).map(a=>{
+    const aff=agentLiveAffectation(a)||a.affectationCourante||{};
+    const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff))||{};
+    return {
+      id:a.id||"",
+      backendId:a.backendId||"",
+      matricule:a.matricule||a.code||"",
+      code:a.code||a.matricule||"",
+      nom:a.nom||"",
+      prenom:a.prenom||"",
+      societe:a.societe||sitePrimarySociete(site)||"",
+      statut:a.statut||"actif",
+      fonction:a.fonction||a.position||aff.poste||"",
+      siteId:aff.siteId||site.id||"",
+      siteBackendId:aff.siteBackendId||aff.site_id||site.backendId||"",
+      siteName:aff.siteName||site.nom||site.intitule||"",
+      clientName:aff.clientName||site.client||"",
+      poste:aff.poste||a.fonction||a.position||"",
+      groupe:aff.groupe||"",
+      dateDebut:aff.dateDebut||""
+    };
+  }).sort((x,y)=>(x.siteName||"").localeCompare(y.siteName||"")||(x.nom||"").localeCompare(y.nom||""));
+  return {
+    id:"supscope_"+String(user.username||"").toLowerCase(),
+    username:user.username||"",
+    nom:user.nom||user.full_name||user.username||"",
+    role:user.role||"",
+    niveau:user.niveau||user.access_level||"",
+    societesAutorisees:Array.isArray(user.societesAutorisees)?user.societesAutorisees:(user.authorized_societies||[]),
+    siteIds:[...scope.ids],
+    sites:scope.sites.map(s=>({id:s.id||"",backendId:s.backendId||"",nom:s.nom||s.intitule||"",societe:sitePrimarySociete(s)||"",client:s.client||""})),
+    agents,
+    updatedAt:new Date().toISOString(),
+    updatedBy:session?.username||""
+  };
+}
+async function adminRebuildSupervisorScope(username,options){
+  const opt=options||{};
+  username=decodeURIComponent(String(username||""));
+  if(!(await ensureAdminSystemApiToken("actualiser le périmètre superviseur")))return;
+  if(opt.reload){
+    try{sgdiShowDataLoadingBar("Chargement des données superviseur...");await sgdiPullEmployees({silent:true});await syncSitesFromPostgres();if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){toast("Chargement incomplet : "+(e.message||e),"warning")}
+    finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar()}
+  }
+  const users=username?[adminUserByUsername(username)].filter(Boolean):adminSupervisorUsers();
+  if(!users.length){toast("Aucun superviseur à actualiser","info");return}
+  if(!Array.isArray(db.supervisorScopes))db.supervisorScopes=[];
+  users.forEach(user=>{
+    const item=adminSupervisorBuildScope(user);
+    const idx=db.supervisorScopes.findIndex(x=>String(x.username||"").toLowerCase()===String(item.username||"").toLowerCase());
+    if(idx>=0)db.supervisorScopes[idx]=item;else db.supervisorScopes.push(item);
+  });
+  if(!(await saveDBAndWaitToast("Périmètre superviseur non enregistré")))return;
+  toast(users.length+" périmètre(s) superviseur actualisé(s)","success");
+  renderView();
+}
+async function renderAdminSupervisors(view){
+  if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6">Accès réservé Administration système</div>`;return}
+  const users=adminSupervisorUsers();
+  const rows=users.map(u=>{
+    const scope=(db.supervisorScopes||[]).find(x=>String(x.username||"").toLowerCase()===String(u.username||"").toLowerCase());
+    const siteCount=Array.isArray(scope?.sites)?scope.sites.length:(Array.isArray(u.sitesAutorises)?u.sitesAutorises.length:0);
+    const agentCount=Array.isArray(scope?.agents)?scope.agents.length:0;
+    const updated=scope?.updatedAt?new Date(scope.updatedAt).toLocaleString("fr-FR"):"Jamais";
+    return `<tr class="border-t">
+      <td class="p-3"><div class="font-black">${escapeHTML(u.username||"")}</div><div class="text-xs text-slate-500">${escapeHTML(u.nom||"")}</div></td>
+      <td class="p-3"><span class="pill pill-blue">${siteCount} site${siteCount>1?"s":""}</span></td>
+      <td class="p-3"><span class="pill pill-green">${agentCount} employé${agentCount>1?"s":""}</span></td>
+      <td class="p-3 text-xs text-slate-500">${escapeHTML(updated)}</td>
+      <td class="p-3 text-right"><div class="flex gap-2 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="adminRebuildSupervisorScope('${encodeURIComponent(u.username||"")}',{reload:true})">Actualiser table</button><button class="btn btn-ghost text-xs" onclick="openAdminUserModalByKey('${encodeURIComponent(u.username||"")}')">Sites autorisés</button></div></td>
+    </tr>`;
+  }).join("");
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Périmètres superviseurs</h1><p class="text-sm text-slate-500 mt-1">Table dédiée de lecture : sites et employés rattachés à chaque superviseur terrain.</p></div><button class="btn btn-primary" onclick="adminRebuildSupervisorScope('',{reload:true})">Actualiser tous les superviseurs</button></div>
+  <div class="card p-4 mb-4" style="border-left:4px solid #0f766e"><div class="font-black">Principe</div><div class="text-sm text-slate-500 mt-1">Les données officielles restent les employés, sites et affectations PostgreSQL. Cette table prépare un périmètre léger pour accélérer et sécuriser l'ouverture de session superviseur.</div></div>
+  <div class="card overflow-hidden"><table class="w-full text-sm"><thead><tr style="background:#e5e7eb"><th class="p-3 text-left">Superviseur</th><th class="p-3 text-left">Sites</th><th class="p-3 text-left">Employés rattachés</th><th class="p-3 text-left">Dernière mise à jour</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="5" class="p-6 text-center text-slate-500">Aucun compte superviseur. Créez un utilisateur SUP avec la structure Superviseur.</td></tr>`}</tbody></table></div>`;
 }
 function adminPointageMonth(){return sessionStorage.getItem("adminPointageMonth")||ptCurrentMonth()}
 function adminPointageSociete(){return sessionStorage.getItem("adminPointageSociete")||adminActiveSociete()||""}
@@ -31191,6 +31334,7 @@ async function renderAdminSystemDashboard(view){
 	  </div>
 	  <div class="grid grid-3 gap-3 mt-4">
 	    ${card("Fiches de position","Maintenance contrôlée des fiches employés.","admin/fiches","#0f766e",agents.length,"Métier")}
+	    ${card("Périmètres superviseurs","Préparer les tables de lecture sites/employés pour les superviseurs terrain.","admin/supervisors","#0f766e",(db.supervisorScopes||[]).length,"Contrôle")}
 	    ${card("Correction pointage","Corriger une journée ou déverrouiller un mois avec traçabilité PostgreSQL.","admin/pointages","#0369a1",(db.pointages||[]).length,"Contrôle")}
 	    ${card("Sites","Édition et archivage des sites.","sites/actifs","#1d4ed8",sitesCount,"Métier")}
 	    ${card("Articles / magasins","Catalogue matériel, magasins et stocks.","admin/articles","#ca8a04",articles.length+magasins.length,"Métier")}
@@ -31897,6 +32041,13 @@ async function confirmAdminUser(originalUsername){
     db.users[idx]=Object.assign({},db.users[idx],data,password?{password}:{});
     logActivity("Modification utilisateur",username);
   }
+  const savedForScope=adminUserByUsername(username);
+  if(savedForScope&&(String(savedForScope.username||"").toUpperCase().startsWith("SUP")||normalizeStructureList(savedForScope.structuresAutorisees).includes("superviseur")||String(savedForScope.niveau||"").toUpperCase()==="SUP_TERRAIN")){
+    if(!Array.isArray(db.supervisorScopes))db.supervisorScopes=[];
+    const item=adminSupervisorBuildScope(savedForScope);
+    const scopeIdx=db.supervisorScopes.findIndex(x=>String(x.username||"").toLowerCase()===String(item.username||"").toLowerCase());
+    if(scopeIdx>=0)db.supervisorScopes[scopeIdx]=item;else db.supervisorScopes.push(item);
+  }
   rememberUserPermissions(username,data.societesAutorisees,data.niveau,data.structuresAutorisees,data.validationCodeEnabled);
   if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees,societesAutorisees:data.societesAutorisees,sitesAutorises:data.sitesAutorises};saveSession(session)}
   try{await sgdiLoadAuthState()}catch(e){toast("Utilisateur enregistré, rechargement liste impossible : "+(e.message||e),"warning")}
@@ -31920,6 +32071,7 @@ async function adminDeleteUser(username){
     }
   }
   db.users=db.users.filter(x=>String(x.username||"").toLowerCase()!==username.toLowerCase());
+  if(Array.isArray(db.supervisorScopes))db.supervisorScopes=db.supervisorScopes.filter(x=>String(x.username||"").toLowerCase()!==username.toLowerCase());
   try{const cache=userPermissionCache();delete cache[username];Object.keys(cache).forEach(k=>{if(k.toLowerCase()===username.toLowerCase())delete cache[k]})}catch(e){}
   logActivity("Suppression utilisateur",username);
   try{await sgdiLoadAuthState()}catch(e){}
@@ -34710,9 +34862,13 @@ function ptSupervisorAgentsForSoc(soc){
   // Ne JAMAIS retomber sur la liste non filtrée : un superviseur sans employé dans son
   // périmètre de sites doit voir une liste vide, pas les employés d'autres sites (même
   // bug fail-open que supervisorAuthorizedSiteIds() corrigé plus tôt cette session).
-  return (db.agents||[])
+  const scoped=(db.agents||[])
     .filter(a=>employeeIsPointageEligible(a,soc))
     .filter(agentInSupervisorScope)
+    .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
+  if(scoped.length)return scoped;
+  return supervisorScopeAgentsForSession(soc)
+    .filter(a=>employeeIsPointageEligible(a,soc))
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
 }
 async function ptSupValiderDay(agentId,ym,day){
