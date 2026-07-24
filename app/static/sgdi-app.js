@@ -1341,6 +1341,12 @@ async function sgdiPullEmployees(options){
       db.agents=backendAgents;
     }
     normalizeEmployeeCodesInDB();
+    // employeeFromApi() reconstruit l'agent depuis /drh/employees, qui n'embarque PAS
+    // l'affectation courante (site/poste) : sans ça, tout écran qui redemande les employés
+    // (Fiche de position, Personnel rattaché…) écrasait des agents déjà correctement liés à
+    // leur site par un rechargement "propre" mais sans site/poste, alors même que db.assignments
+    // contenait déjà la bonne info (chargée par un autre écran plus tôt, ex. Tableau de bord).
+    if(Array.isArray(db.assignments)&&db.assignments.length&&typeof applyAssignmentsToEmployees==="function")applyAssignmentsToEmployees(db.assignments);
     if(opt.render&&typeof sgdiAutoRender==="function")sgdiAutoRender();
     if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
     return db.agents;
@@ -18623,7 +18629,7 @@ async function renderPortailComptes(view){
     ]);
     if(loadSeq!==portalComptesLoadSeq)return;
     const employees=(Array.isArray(employeesRes)?employeesRes:[]).map(e=>e&&e.backendId?e:(typeof employeeFromApi==="function"?employeeFromApi(e):e)).filter(Boolean);
-    if(employees.length){db.agents=dedupeEmployeesByBackendId([...(db.agents||[]),...employees]);normalizeEmployeeCodesInDB();}
+    if(employees.length){db.agents=dedupeEmployeesByBackendId([...(db.agents||[]),...employees]);normalizeEmployeeCodesInDB();if(Array.isArray(db.assignments)&&db.assignments.length&&typeof applyAssignmentsToEmployees==="function")applyAssignmentsToEmployees(db.assignments);}
     const rows=portalComptesBuildRows(Array.isArray(allAccounts)?allAccounts:[],employees.length?employees:(db.agents||[]),soc);
     window._portalComptesRows=rows;
     const sub=document.getElementById("portal-comptes-subtitle");
@@ -33185,17 +33191,26 @@ async function opsImprimerOrdreMouvementCentral(btn){
 async function opsValiderMultiOM(agentIds,form,date,opt={}){
   if(guardOpsSupervisorMutation("mouvement","Accès superviseur OPS : validation mouvement non autorisée."))return;
   showOmSaveOverlay();
-  // 1. Envoyer tous les OM en parallèle
-  const results=await Promise.allSettled(agentIds.map(async aid=>{
-    const {f,patch}=fpqMovementPatchFromForm(date,aid,form);
-    const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId:aid,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
-    const line=result?.data?.item||result?.item||{...f,...patch,date,agentId:aid};
-    const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId:aid};
-    fpqUpsertLocalPresenceLine(line);
-    opsUpsertMovementHistory(movement);
-    if(opt.print)opsPrintMovementDocument(movement,true);
-    return {aid,patch,movement};
-  }));
+  // 1. Envoyer les OM par petits lots concurrents (au lieu de TOUS en parallèle) : le backend
+  // ne tourne qu'avec 2 processus gunicorn (VPS limité, voir gunicorn.conf.py/WEB_CONCURRENCY).
+  // Envoyer 110 requêtes d'un coup sature le serveur et en fait échouer silencieusement une
+  // bonne partie (ex: 45 sur 110) — l'utilisateur voit alors des employés "perdre" leur
+  // affectation alors qu'ils n'ont simplement jamais été enregistrés côté serveur.
+  const OM_CONCURRENCY=2;
+  const results=[];
+  for(let start=0;start<agentIds.length;start+=OM_CONCURRENCY){
+    const batch=agentIds.slice(start,start+OM_CONCURRENCY).map(async aid=>{
+      const {f,patch}=fpqMovementPatchFromForm(date,aid,form);
+      const result=await sgdiRunLegacyAction("save-presence-movement",{data:{date,agentId:aid,employee_id:patch.employee_id,agentBackendId:patch.agentBackendId,matricule:patch.matricule,patch}});
+      const line=result?.data?.item||result?.item||{...f,...patch,date,agentId:aid};
+      const movement=result?.data?.movement||result?.movement||{...line,...patch,date,agentId:aid};
+      fpqUpsertLocalPresenceLine(line);
+      opsUpsertMovementHistory(movement);
+      if(opt.print)opsPrintMovementDocument(movement,true);
+      return {aid,patch,movement};
+    });
+    results.push(...await Promise.allSettled(batch));
+  }
   const saved=results.filter(r=>r.status==="fulfilled").map(r=>r.value);
   const ok=saved.length,fail=agentIds.length-ok;
   // 2. Mise à jour locale immédiate de db.agents

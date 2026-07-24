@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadSgdiApp } = require('./load-app');
 
-const { loadError, T } = loadSgdiApp([
+const { loadError, T, window } = loadSgdiApp([
   'sitePrimarySociete',
   'siteBelongsToPrimarySociete',
   'siteMatchesSociete',
@@ -16,6 +16,9 @@ const { loadError, T } = loadSgdiApp([
   'assignmentFromApi',
   'agentLiveAffectation',
   'normalizeSocieteName',
+  'sgdiPullEmployees',
+  'employeeFromApi',
+  'applyAssignmentsToEmployees',
 ]);
 
 test('sgdi-app.js se charge et expose les fonctions OPS', () => {
@@ -150,6 +153,46 @@ test('assignmentFromApi: sans agent local connu, retombe sur l\'identifiant serv
   t.setDb({ agents: [], sites: [] });
   const a = t.assignmentFromApi({ id: 100, employee_id: 55, site_id: 66 });
   assert.strictEqual(a.agentId, '55');
+});
+
+// ── sgdiPullEmployees ne doit plus effacer l'affectation courante ───────────
+// Bug réel observé : Fiche de position / Personnel rattaché rappellent
+// sgdiEnsureEmployeesForDisplay({force:true}) à chaque affichage, qui appelle
+// sgdiPullEmployees(). employeeFromApi() reconstruit l'agent depuis /drh/employees,
+// qui n'embarque PAS le site/poste — un employé pourtant correctement affecté
+// (visible dans OPS/Mouvement) se retrouvait avec Site/Poste vides après ce refresh,
+// alors que db.assignments contenait déjà la bonne info chargée par un autre écran.
+
+test('sgdiPullEmployees réapplique les affectations déjà connues (ne perd plus site/poste au refresh)', async () => {
+  const t = T();
+  window.sessionStorage.setItem('sgdi_api_token_v1', 'test-token');
+  t.setDb({
+    agents: [],
+    assignments: [{
+      id: 'as1', agentId: '', agentBackendId: 42, siteId: 's1', siteBackendId: 7,
+      siteName: 'DHL Forwarding / Hamoul 01', poste: 'Magasinier', active: true, dateDebut: '2026-01-01',
+    }],
+    sites: [{ id: 's1', backendId: 7, nom: 'DHL Forwarding / Hamoul 01' }],
+  });
+  window.SGDI_API.employees.list = async () => ([
+    { id: 42, code: 'K08', last_name: 'FOUATIH', first_name: 'Ahmed', society: 'IRON GLOBAL SOLUTION', extra: {} },
+  ]);
+  const agents = await t.sgdiPullEmployees({ silent: true });
+  assert.ok(Array.isArray(agents) && agents.length === 1, 'un employé attendu');
+  assert.strictEqual(agents[0].affectationCourante?.siteName, 'DHL Forwarding / Hamoul 01');
+  assert.strictEqual(agents[0].affectationCourante?.poste, 'Magasinier');
+});
+
+test('sgdiPullEmployees sans assignments connus : ne casse rien (pas d\'affectation à réappliquer)', async () => {
+  const t = T();
+  window.sessionStorage.setItem('sgdi_api_token_v1', 'test-token');
+  t.setDb({ agents: [], assignments: [], sites: [] });
+  window.SGDI_API.employees.list = async () => ([
+    { id: 43, code: 'K09', last_name: 'BENALI', first_name: 'Yacine', society: 'IRON GLOBAL SOLUTION', extra: {} },
+  ]);
+  const agents = await t.sgdiPullEmployees({ silent: true });
+  assert.ok(Array.isArray(agents) && agents.length === 1);
+  assert.deepStrictEqual(agents[0].affectationCourante, undefined);
 });
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });
