@@ -1,3 +1,4 @@
+import calendar
 import logging
 import time
 import unicodedata
@@ -456,7 +457,11 @@ def get_database(
         else:
             limit = _COLLECTION_ROW_LIMITS.get(name)
             rows_to_use = items[-limit:] if limit and len(items) > limit else items
-            result[name] = [row.data for row in rows_to_use if row.kind == "item"]
+            values = [row.data for row in rows_to_use if row.kind == "item"]
+            # get_database() lit row.data directement (sans passer par get_collection) :
+            # le rattrapage valide/validatedDays doit donc être appliqué ici aussi, sinon
+            # /api/irongs/db (utilisé par sgdiPullState côté frontend) ne le voit jamais.
+            result[name] = _pointage_backfill_sheets_view(values) if name == "pointages" else values
     if include_sql:
         from app.db.session import SessionLocal
         result.update(sql_bridge.list_all_collections_parallel(SessionLocal))
@@ -529,7 +534,8 @@ def get_collection(db: Session, name: str) -> list[Any] | dict[str, Any]:
         return []
     if len(rows) == 1 and rows[0].kind == "object" and rows[0].item_id == OBJECT_ITEM_ID:
         return deepcopy(rows[0].data) if isinstance(rows[0].data, dict) else {}
-    return [deepcopy(row.data) for row in rows if row.kind == "item"]
+    items = [deepcopy(row.data) for row in rows if row.kind == "item"]
+    return _pointage_backfill_sheets_view(items) if name == "pointages" else items
 
 
 def _validate_legacy_collection(name: str, data: list[Any] | dict[str, Any] | Any) -> None:
@@ -709,6 +715,61 @@ def _require_admin_action(user: Any | None) -> None:
         raise HTTPException(status_code=403, detail="Action réservée RH/Admin/Dispatch")
 
 
+def _pointage_days_in_month(periode: str) -> int:
+    try:
+        year, month = (int(part) for part in str(periode).split("-"))
+        return calendar.monthrange(year, month)[1]
+    except Exception:
+        return 31
+
+
+def _pointage_all_day_keys(periode: str) -> list[str]:
+    return [f"{d:02d}" for d in range(1, _pointage_days_in_month(periode) + 1)]
+
+
+def _pointage_month_fully_validated(sheet: dict[str, Any]) -> bool:
+    validated = sheet.get("validatedDays")
+    if not isinstance(validated, dict):
+        return False
+    return all(day in validated for day in _pointage_all_day_keys(sheet.get("periode") or ""))
+
+
+def _pointage_sync_valide_flag(sheet: dict[str, Any]) -> None:
+    """valide devient un champ DÉRIVÉ de validatedDays (source de vérité unique),
+    au lieu d'un second indicateur indépendant à maintenir en parallèle."""
+    sheet["valide"] = _pointage_month_fully_validated(sheet)
+    if not sheet["valide"]:
+        sheet["valideBy"] = None
+        sheet["valideAt"] = None
+
+
+def _pointage_backfill_sheets_view(items: list[Any]) -> list[Any]:
+    """Rattrapage en LECTURE pour les fiches valide=True antérieures à validatedDays :
+    complète validatedDays pour tous les jours du mois sans jamais muter l'objet
+    d'origine (sûr à appeler sur les lignes non copiées de get_database()). Aucun
+    script de migration nécessaire : la fiche est réécrite avec validatedDays complet
+    dès qu'une mutation existante la touche, en effet de bord naturel."""
+    out: list[Any] = []
+    for item in items:
+        if not isinstance(item, dict) or not item.get("valide"):
+            out.append(item)
+            continue
+        all_days = _pointage_all_day_keys(item.get("periode") or "")
+        validated = item.get("validatedDays")
+        if isinstance(validated, dict) and all(day in validated for day in all_days):
+            out.append(item)
+            continue
+        patched = dict(item)
+        merged = dict(validated) if isinstance(validated, dict) else {}
+        by = item.get("valideBy") or "system"
+        at = item.get("valideAt") or item.get("updatedAt") or _now_iso()
+        for day in all_days:
+            merged.setdefault(day, {"by": by, "at": at})
+        patched["validatedDays"] = merged
+        out.append(patched)
+    return out
+
+
 def _collection_list(db: Session, name: str) -> list[dict[str, Any]]:
     data = get_collection(db, name)
     if not isinstance(data, list):
@@ -815,10 +876,15 @@ def _validate_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any
     if not sheet:
         sheet = {"id": f"pt_{agent_id}_{periode}", "agentId": agent_id, "periode": periode, "days": {}, "createdAt": _now_iso()}
         sheets.append(sheet)
+    by, at = _actor_name(user), _now_iso()
+    validated_days = dict(sheet.get("validatedDays") or {})
+    for day in _pointage_all_day_keys(periode):
+        validated_days.setdefault(day, {"by": by, "at": at})
+    sheet["validatedDays"] = validated_days
     sheet["valide"] = True
-    sheet["valideBy"] = _actor_name(user)
-    sheet["valideAt"] = _now_iso()
-    sheet["updatedAt"] = sheet["valideAt"]
+    sheet["valideBy"] = by
+    sheet["valideAt"] = at
+    sheet["updatedAt"] = at
     return _replace_and_success(db, "pointages", sheets, {"item": sheet})
 
 
@@ -828,6 +894,7 @@ def _unlock_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) 
     sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
     if not sheet:
         raise HTTPException(status_code=404, detail="Pointage introuvable")
+    sheet["validatedDays"] = {}
     sheet["valide"] = False
     sheet["valideBy"] = None
     sheet["valideAt"] = None
@@ -859,6 +926,9 @@ def _validate_pointage_day(db: Session, agent_id: str, periode: str, day: str, u
     validated_days[day] = {"by": _actor_name(user), "at": _now_iso()}
     sheet["validatedDays"] = validated_days
     sheet["updatedAt"] = _now_iso()
+    # Si ce jour complète la couverture du mois, valide se promeut automatiquement
+    # (champ dérivé, cf. _pointage_sync_valide_flag) — pas d'action DRH séparée requise.
+    _pointage_sync_valide_flag(sheet)
     return _replace_and_success(db, "pointages", sheets, {"item": sheet})
 
 
@@ -870,10 +940,17 @@ def _unlock_pointage_day(db: Session, agent_id: str, periode: str, day: str, use
     sheet = next((row for row in sheets if str(row.get("agentId")) == str(agent_id) and row.get("periode") == periode), None)
     if not sheet:
         raise HTTPException(status_code=404, detail="Pointage introuvable")
+    # Le mois est déjà entièrement validé (par DRH/Admin, ou par accumulation de jours) :
+    # déverrouiller UN jour reviendrait à percer un mois verrouillé sans passer par le
+    # contrôle admin de unlock-pointage/unlock-pointage-all. Le libre-service superviseur
+    # reste intact tant que le mois n'est pas complet.
+    if sheet.get("valide"):
+        _require_admin_action(user)
     validated_days = dict(sheet.get("validatedDays") or {})
     validated_days.pop(day, None)
     sheet["validatedDays"] = validated_days
     sheet["updatedAt"] = _now_iso()
+    _pointage_sync_valide_flag(sheet)
     return _replace_and_success(db, "pointages", sheets, {"item": sheet})
 
 
@@ -897,12 +974,18 @@ def _bulk_pointage(db: Session, periode: str, society: str | None, validate: boo
         if not sheet:
             continue
         if validate and not sheet.get("valide"):
+            by, at = _actor_name(user), _now_iso()
+            validated_days = dict(sheet.get("validatedDays") or {})
+            for day in _pointage_all_day_keys(periode):
+                validated_days.setdefault(day, {"by": by, "at": at})
+            sheet["validatedDays"] = validated_days
             sheet["valide"] = True
-            sheet["valideBy"] = _actor_name(user)
-            sheet["valideAt"] = _now_iso()
-            sheet["updatedAt"] = sheet["valideAt"]
+            sheet["valideBy"] = by
+            sheet["valideAt"] = at
+            sheet["updatedAt"] = at
             count += 1
         elif not validate and sheet.get("valide"):
+            sheet["validatedDays"] = {}
             sheet["valide"] = False
             sheet["valideBy"] = None
             sheet["valideAt"] = None

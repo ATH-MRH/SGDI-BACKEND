@@ -33747,6 +33747,11 @@ const POINTAGE_CODES={
   A3:{label:"Absent 3 jours",color:"#7f1d1d",bg:"#f87171"}
 };
 const FPQ_PRESENCE_OPTIONS=[["P","PRESENT"],["A","ABSENT"],["R","RECUPERATION"],["M","MALADIE"],["C","CONGE"],["S","SUSPENDU"],["AB","ABANDON DE POSTE"],["F1","RÉCUP TRAVAILLÉE +1J"],["F2","RÉCUP TRAVAILLÉE +2J"],["F3","RÉCUP TRAVAILLÉE +3J"],["P/F1","MAINTENU EN POSTE +2J"],["P/F2","MAINTENU EN POSTE +3J"],["P/F3","MAINTENU EN POSTE +4J"],["A1","ABSENT 1 JOUR"],["A2","ABSENT 2 JOURS"],["A3","ABSENT 3 JOURS"]];
+// Codes proposés au superviseur dans la saisie quotidienne par site : dérivés de
+// POINTAGE_CODES (une seule liste à maintenir), on exclut AB (dérivé automatiquement
+// par ptNormalizeAbandonDePoste, jamais choisi à la main) et P/F1-3 (ajustements de
+// paie propres à DRH/OPS, pas des situations qu'un superviseur constate sur site).
+const PT_SUPERVISOR_CODES=Object.keys(POINTAGE_CODES).filter(k=>!["AB","P/F1","P/F2","P/F3"].includes(k));
 function fpqPresenceCode(value){const v=String(value||"").toUpperCase();return POINTAGE_CODES[v]?v:""}
 function fpqPresenceOptions(value){const cur=fpqPresenceCode(value);return`<option value="">—</option>${FPQ_PRESENCE_OPTIONS.map(([k,l])=>`<option value="${k}" ${cur===k?"selected":""}>${k} = ${l}</option>`).join("")}`}
 function fpqPresenceSelectStyle(value){
@@ -34670,7 +34675,9 @@ function ptSupervisorDailyCell(agentId,ym,day,sheet,code,isValide){
     :`Saisir ${code} pour le ${day}/${String(ym).slice(5,7)}`;
   return `<td role="button" tabindex="${disabled?"-1":"0"}" ${disabled?"":`onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')}"`} title="${escapeHTML(title)}" style="border:1px solid #dbe3ee;text-align:center;width:36px;min-width:36px;height:36px;background:${c.bg||"#fff"};color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;line-height:36px;cursor:${disabled?"not-allowed":"pointer"};user-select:none;opacity:${disabled&&!active?".55":"1"}">${active?code:"·"}</td>`;
 }
-function ptSupDayValidated(sheet,day){return !!(sheet?.valide||sheet?.validatedDays?.[String(day).padStart(2,"0")])}
+// valide n'est plus qu'un champ dérivé côté backend (couvre-t-il tous les jours de
+// validatedDays ?) : validatedDays est désormais l'unique source de vérité à lire ici.
+function ptSupDayValidated(sheet,day){return !!sheet?.validatedDays?.[String(day).padStart(2,"0")]}
 function ptSupervisorSetDailyCode(agentId,ym,day,code){
   const sheet=ptGetSheet(agentId,ym);
   if(ptSupDayValidated(sheet,day)){toast("Ce jour est déjà validé : ligne verrouillée.","error");return}
@@ -34726,7 +34733,7 @@ function ptSupervisorOpenCorrection(agentId,ym,day){
   if(sheet?.valide){toast("Pointage mensuel validé : correction non autorisée ici.","error");return}
   if(!ptSupDayValidated(sheet,day)){toast("Aucune validation passée à corriger.","info");return}
   const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
-  const codes=["P","R","A1","A2","A3","F1","F2","F3"];
+  const codes=PT_SUPERVISOR_CODES;
   const buttons=codes.map(code=>{
     const c=POINTAGE_CODES[code]||{};
     const active=code===current;
@@ -34743,7 +34750,7 @@ function ptSupervisorOpenDailyEditor(agentId,ym,day){
   const sheet=ptGetSheet(agentId,ym);
   if(ptSupDayValidated(sheet,day))return ptSupervisorOpenCorrection(agentId,ym,day);
   const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
-  const codes=["P","R","A1","A2","A3","F1","F2","F3"];
+  const codes=PT_SUPERVISOR_CODES;
   const buttons=codes.map(code=>{
     const c=POINTAGE_CODES[code]||{};
     const active=code===current;
@@ -34828,7 +34835,7 @@ function renderPointageSaisieSuperviseur(){
   const headers=`<thead><tr style="background:#e5e7eb;color:#1f2937;text-transform:uppercase;letter-spacing:.08em">
     <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
-    ${["P","R","A1","A2","A3","F1","F2","F3"].map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
+    ${PT_SUPERVISOR_CODES.map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
     <th style="border:1px solid #dbe3ee;width:82px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
   </tr></thead>`;
   const tableForGroup=(group)=>{
@@ -34844,7 +34851,7 @@ function renderPointageSaisieSuperviseur(){
         <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
           ${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} <span style="color:#1d70a2;font-family:ui-monospace,monospace;font-size:9px">${escapeHTML(a.matricule||"")}</span>
         </td>
-        ${["P","R","A1","A2","A3","F1","F2","F3"].map(code=>ptSupervisorDailyCell(a.id,ym,day,sheet,code,isValide)).join("")}
+        ${PT_SUPERVISOR_CODES.map(code=>ptSupervisorDailyCell(a.id,ym,day,sheet,code,isValide)).join("")}
         <td style="border:1px solid #dbe3ee;text-align:center;background:#fff;height:38px;padding:4px">${action}</td>
       </tr>`;
     }).join("");
