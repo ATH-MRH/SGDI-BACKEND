@@ -354,6 +354,49 @@ def test_assignments_page_filters(client, auth_headers):
     assert all(a["site_id"] == site_id for a in body["items"])
 
 
+def test_site_restricted_user_only_sees_assignments_of_his_sites(client, db, auth_headers):
+    """Un superviseur terrain restreint par SITE (authorized_sites), sans restriction de
+    société (authorized_societies vide), ne doit recevoir que les affectations de ses sites
+    autorisés — pas celles de toute l'entreprise. Sans ce filtre côté serveur, le module
+    superviseur devait paginer sur l'intégralité des affectations de la société, d'où la
+    lenteur de chargement signalée sur la feuille quotidienne / le pointage mensuel."""
+    from app.core.security import hash_password
+    from app.modules.auth.models import User
+
+    mine = _site(client, auth_headers, "Site Supervise")
+    other = _site(client, auth_headers, "Site Hors Perimetre")
+    emp_mine = _emp(client, auth_headers, "OPS_SUP_IN")
+    emp_other = _emp(client, auth_headers, "OPS_SUP_OUT")
+    _assign(client, auth_headers, emp_mine, mine)
+    _assign(client, auth_headers, emp_other, other)
+
+    user = User(
+        username="site-supervisor",
+        email=None,
+        full_name="Site Supervisor",
+        role="ops",
+        access_level="H2",
+        authorized_societies=[],
+        authorized_sites=[mine],
+        authorized_structures=[],
+        password_hash=hash_password("supervisorpass"),
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+
+    login = client.post("/api/auth/login", json={"username": "site-supervisor", "password": "supervisorpass"})
+    assert login.status_code == 200, login.text
+    sup_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    rows = client.get("/api/ops/assignments", headers=sup_headers).json()
+    assert rows, "Le superviseur devrait voir les affectations de son propre site"
+    assert all(a["site_id"] == mine for a in rows), "Une affectation hors périmètre a fuité"
+
+    page = client.get("/api/ops/assignments/page?page_size=100", headers=sup_headers).json()
+    assert all(a["site_id"] == mine for a in page["items"]), "Une affectation hors périmètre a fuité (page)"
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Pointage journalier
 # ═══════════════════════════════════════════════════════════════════════════

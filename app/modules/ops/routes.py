@@ -122,6 +122,22 @@ def _filter_site_rows(rows: list[Site], user: User, society: str | None = None) 
     return rows
 
 
+def _allowed_assignment_site_ids(db: Session, user: User) -> list[int] | None:
+    """Périmètre de sites pour filtrer les affectations : restriction par site (superviseur
+    terrain) si présente, sinon par société. Sans ce filtre, un superviseur restreint à
+    quelques sites (authorized_sites) mais sans authorized_societies recevait TOUTES les
+    affectations de l'entreprise (des milliers de lignes sur des dizaines de pages), ce qui
+    rendait le chargement du module superviseur extrêmement lent.
+    """
+    site_ids = _authorized_site_ids(user)
+    if site_ids:
+        return site_ids
+    allowed = _allowed_societies(user)
+    if allowed:
+        return [s.id for s in db.execute(select(Site)).scalars().all() if _normalize_society(_site_society(s)) in allowed]
+    return None
+
+
 def _site_matches_query(site: Site, q: str | None) -> bool:
     query = str(q or "").strip().lower()
     if not query:
@@ -265,14 +281,14 @@ def update_assignment(assignment_id: int, payload: AssignmentUpdate, background_
 
 @router.get("/assignments/page")
 def assignments_page(site_id: int | None = None, employee_id: int | None = None, active: int | None = None, q: str | None = None, page: int = 1, page_size: int = 25, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    allowed = _allowed_societies(user)
     stmt = select(Assignment)
     if site_id is not None:
         _ensure_site_allowed(db, user, site_id)
         stmt = stmt.where(Assignment.site_id == site_id)
-    elif allowed:
-        allowed_site_ids = [s.id for s in db.execute(select(Site)).scalars().all() if _normalize_society(_site_society(s)) in allowed]
-        stmt = stmt.where(Assignment.site_id.in_(allowed_site_ids))
+    else:
+        allowed_site_ids = _allowed_assignment_site_ids(db, user)
+        if allowed_site_ids is not None:
+            stmt = stmt.where(Assignment.site_id.in_(allowed_site_ids))
     if employee_id is not None:
         _ensure_employee_allowed(db, user, employee_id)
         stmt = stmt.where(Assignment.employee_id == employee_id)
@@ -288,10 +304,11 @@ def assignments(site_id: int | None = None, employee_id: int | None = None, acti
     if employee_id:
         _ensure_employee_allowed(db, user, employee_id)
     rows = service.list_rows(db, Assignment, {"site_id": site_id, "employee_id": employee_id, "active": active})
-    allowed = _allowed_societies(user)
-    if allowed and not site_id and not employee_id:
-        allowed_site_ids = {s.id for s in db.execute(select(Site)).scalars().all() if _normalize_society(_site_society(s)) in allowed}
-        rows = [row for row in rows if row.site_id in allowed_site_ids]
+    if not site_id and not employee_id:
+        allowed_site_ids = _allowed_assignment_site_ids(db, user)
+        if allowed_site_ids is not None:
+            allowed_set = set(allowed_site_ids)
+            rows = [row for row in rows if row.site_id in allowed_set]
     return rows
 
 
