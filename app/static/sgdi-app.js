@@ -13249,7 +13249,7 @@ function effectifListHTML(filter){
   </select>`;
   const opsHeader=isOpsEffectifContext()?`<div class="card ops-effectif-hero">
     <div class="ops-effectif-title-block"><h1 class="effectif-page-title">${escapeHTML(title)}</h1><p>${list.length} employé(s) · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>
-    <div class="ops-effectif-tools"><input class="input" data-no-lock value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/><label><span>Tri</span>${sortHTML}</label></div>
+    <div class="ops-effectif-tools"><label><span>Recherche</span><input class="input" data-no-lock value="${escapeHTML(effectifSearchValue(filter))}" placeholder="Recherche nom / prénom / code" oninput="setEffectifSearch(this.value,'${escapeHTML(filter||"actifs")}')"/></label><label><span>Tri</span>${sortHTML}</label></div>
   </div>`:isDrhModuleContext()?`<div class="drh-effectif-list-header">
     <div class="drh-effectif-title-block">
       <h1 class="text-2xl font-black effectif-page-title" style="line-height:1.15">${escapeHTML(title)}</h1>
@@ -13546,6 +13546,8 @@ function renderAgentForm(view,id){
   const lifecycleTabs=["futur","actif","ancien"].map(k=>`<button type="button" class="rh-erp-status-tab ${k==="futur"?"is-future":k==="ancien"?"is-old":""} ${lifecycleStatus===k?"is-active":""}">${k==="futur"?"Futur":k==="actif"?"Actif":"Ancien"}</button>`).join("");
   const showVerifications=adminFicheContext||isDrhFicheContext();
   const showPointage=adminFicheContext||isOpsFicheContext();
+  const showHabilitations=!isOpsSupervisorReadOnlySession();
+  const showSanctions=!isOpsSupervisorReadOnlySession();
   const canEditSanctions=adminFicheContext||isDrhFicheContext();
   const canEditAffectations=adminFicheContext||(isOpsFicheContext()&&!opsFicheReadOnly);
   const secMateriel=showVerifications?6:5;
@@ -13569,7 +13571,7 @@ function renderAgentForm(view,id){
   </div>`:"";
   const fpTabs=[
     ["identite","Informations personnelles"],
-    ["habilitations","Habilitations"],
+    ...(showHabilitations?[["habilitations","Habilitations"]]:[]),
     ...((adminFicheContext||isDrhFicheContext())?[["contrat","RH / contrat"]]:[]),
     ["conges","Congés"],
     ["absences","Absences"],
@@ -13578,7 +13580,7 @@ function renderAgentForm(view,id){
     ...(showVerifications?[["verifications","Documents archivés"]]:[]),
     ["materiel","Matériel"],
     ["affectation","Affectation"],
-    ["sanctions","Sanctions"],
+    ...(showSanctions?[["sanctions","Sanctions"]]:[]),
     ...(adminFicheContext||isDrhFicheContext()?[["portail","Portail RH"]]:[])
   ];
   const ficheTopButtonStyle="height:40px;min-width:116px;padding:0 14px;border-radius:0!important;border:1px solid #d7dde8!important;background:linear-gradient(180deg,#ffffff,#eef4fb)!important;color:#082a53!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 3px 9px rgba(15,23,42,.08)!important;font-size:12px!important;font-weight:950!important;letter-spacing:.01em!important;line-height:1.08!important;text-align:center!important;justify-content:center!important";
@@ -13671,9 +13673,9 @@ function renderAgentForm(view,id){
           </fieldset>
         </div>
       </div>
-      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="habilitations" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Habilitations</legend><div class="grid grid-2" style="margin-top:10px">
+      ${showHabilitations?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="habilitations" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Habilitations</legend><div class="grid grid-2" style="margin-top:10px">
         ${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>{const v=a.habilitations?.[k]||"non";return`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="ahab_${k}" value="oui" ${v==="oui"?"checked":""} ${locked?"disabled":""}/> Oui</label><label class="radio-pill"><input type="radio" name="ahab_${k}" value="non" ${v!=="oui"?"checked":""} ${locked?"disabled":""}/> Non</label></div></div>`}).join("")}
-      </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></fieldset></div>
+      </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></fieldset></div>`:""}
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><fieldset class="rh-panel-fieldset rh-contract-fieldset"><legend>RH / contrat</legend><div class="rh-contract-toolbar"><span>Gestion du contrat de l’employé</span><div class="rh-contract-actions">${adminFicheContext?`<button type="button" class="btn text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">✏ Modifier</button>`:(isDrhFicheContext()?`<button type="button" class="btn text-xs" onclick="openDrhContractModal('${a.id}')">✏ Modifier</button>`:"")}<button type="button" class="btn text-xs" onclick="openAvenantModal('general')">＋ Avenant</button><button type="button" class="btn text-xs" onclick="openContratsCreateContract()">＋ Contrat</button></div></div><div class="grid grid-6 rh-contract-grid">
         <div class="col-span-6"><label class="label">Fonction de l'employé</label><select class="select" name="fonction" ${locked?"disabled":""}><option value="">— Choisir fonction —</option>${newContractPosteOptions(a.fonction||a.posteContrat||"").replace('<option value="">— Choisir fonction —</option>',"")}</select></div>
         <div class="col-span-3"><label class="label">Type de contrat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(cleanContractType(a.typeContrat)||ficheContractDocumentType||"CDD")}" readonly/>${locked?"":`<input type="hidden" name="typeContrat" value="${escapeHTML(cleanContractType(a.typeContrat)||"CDD")}"/>`}</div>
@@ -13693,7 +13695,7 @@ function renderAgentForm(view,id){
         ${renderAgentMateriel(a,locked)}
       </fieldset></div>
       <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="affectation" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Affectations sur site</legend>${renderAffectationsHistorique(a,locked,canEditAffectations)}</fieldset></div>
-      <div id="sanctions-section" class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="sanctions" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Sanctions disciplinaires</legend>${renderSanctions(a,locked,canEditSanctions)}</fieldset></div>
+      ${showSanctions?`<div id="sanctions-section" class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="sanctions" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Sanctions disciplinaires</legend>${renderSanctions(a,locked,canEditSanctions)}</fieldset></div>`:""}
       ${(adminFicheContext||isDrhFicheContext())?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="portail" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Compte Portail RH</legend><div id="portal-account-panel" class="mt-3" data-portal-matricule="${escapeHTML(a.matricule||"")}"><div class="text-slate-400 text-sm italic">Cliquez sur l'onglet pour charger.</div></div></fieldset></div>`:""}
       ${locked&&!isDrhFicheContext()?`<div class="card p-4 text-center text-slate-500 text-sm">🔒 ${opsFicheReadOnly?"Lecture simple OPS. Aucune modification, affectation, création, suppression ou ajout de document n'est autorisé depuis cette fiche.":"Fiche de position verrouillée. Aucune modification ni suppression possible depuis ce module."}</div>`:`<div class="rh-save-bar"><div class="rh-save-state" id="agent-save-state"><span></span>Aucune modification</div><div class="rh-save-actions"><button type="button" class="rh-save-cancel" onclick="resetAgentFormChanges()" disabled>Annuler</button><button type="submit" class="rh-save-submit" disabled><span>✓</span> Enregistrer les modifications</button></div></div>`}
     </form>
@@ -13994,33 +13996,36 @@ function renderSanctions(a,locked,canEditSanctions){const s=a.sanctions||[];cons
 
 function renderAgentPointageSituation(a){
   const validPeriod=p=>/^\d{4}-\d{2}$/.test(String(p?.periode||""));
-  const all=(db.pointages||[])
-    .filter(p=>p&&p.agentId===a.id&&validPeriod(p))
-    .slice()
-    .sort((x,y)=>String(y.periode||"").localeCompare(String(x.periode||"")));
-  const now=new Date();const curYM=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-  const curSheet=all.find(p=>p.periode===curYM);
+  const months=new Set((db.pointages||[]).filter(p=>p&&p.agentId===a.id&&validPeriod(p)).map(p=>p.periode));
+  (db.feuillePresence||[]).filter(f=>f?.date&&ptPresenceMatchesAgent(f,a)).forEach(f=>months.add(String(f.date).slice(0,7)));
+  const now=new Date();const curYM=ptCurrentMonth&&ptCurrentMonth()?ptCurrentMonth():now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  months.add(curYM);
+  const all=[...months].filter(p=>/^\d{4}-\d{2}$/.test(p)).sort((x,y)=>String(y||"").localeCompare(String(x||""))).map(ym=>ptReadSheetForAgent(a,ym));
+  const curSheet=ptReadSheetForAgent(a,curYM);
   const curDays=curSheet?Object.keys(curSheet.days||{}).length:0;
-  const nbDaysMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const [curYear,curMonth]=curYM.split("-").map(Number);
+  const nbDaysMonth=ptDaysInMonth(curYM);
   const cnt=k=>(curSheet?Object.values(curSheet.days||{}).filter(v=>v===k).length:0);
   const cP=cnt("P"),cA=cnt("A"),cM=cnt("M"),cS=cnt("S"),cC=cnt("C"),cR=cnt("R");
   const taux=curDays?Math.round(cP*100/curDays):0;
   const tauxAbs=curDays?Math.round((cA+cM)*100/curDays):0;
-  const monthLabel=now.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
-  const validBadge=curSheet&&curSheet.valide?`<span class="pill" style="background:#043970;color:#fff;font-size:11px;padding:3px 8px">🔒 VALIDÉ par ${escapeHTML(curSheet.valideBy||"?")} le ${curSheet.valideAt?new Date(curSheet.valideAt).toLocaleDateString("fr-FR"):""}</span>`:`<span class="pill pill-amber" style="font-size:11px">⏳ Non validé</span>`;
-  const yearStart=now.getFullYear()+"-01";const yearEnd=now.getFullYear()+"-12";
+  const monthLabel=new Date(curYear,curMonth-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const validBadge=curSheet&&curSheet.valide?`<span class="pill" style="background:#043970;color:#fff;font-size:11px;padding:3px 8px">🔒 Pointage mensuel validé par ${escapeHTML(curSheet.valideBy||"?")} le ${curSheet.valideAt?new Date(curSheet.valideAt).toLocaleDateString("fr-FR"):""}</span>`:`<span class="pill pill-amber" style="font-size:11px">Pointage mensuel non validé</span>`;
+  const dataNotice=!curDays?`<div class="card p-3 mb-3 text-sm" style="background:#fffbeb;border-color:#fde68a;color:#92400e">Aucun pointage chargé pour ${escapeHTML(monthLabel)}. Vérifiez la saisie quotidienne ou ouvrez le détail dans le module Pointage.</div>`:"";
+  const yearStart=curYear+"-01";const yearEnd=curYear+"-12";
   const yearSheets=all.filter(p=>p.periode>=yearStart&&p.periode<=yearEnd);
   const yt={P:0,A:0,M:0,S:0,C:0,R:0};yearSheets.forEach(s=>Object.values(s.days||{}).forEach(v=>{if(yt[v]!==undefined)yt[v]++}));
   const ytTotal=Object.values(yt).reduce((a,b)=>a+b,0);
   const cards=[
-    {l:"Présent",k:"P",n:cP,c:"#043970",bg:"#043970"},
+    {l:"Présent",k:"P",n:cP,c:"#043970",bg:"#eff6ff"},
     {l:"Absent",k:"A",n:cA,c:"#ef4444",bg:"#fee2e2"},
-    {l:"Maladie",k:"M",n:cM,c:"#043970",bg:"#043970"},
+    {l:"Maladie",k:"M",n:cM,c:"#043970",bg:"#eef2ff"},
     {l:"Suspendu",k:"S",n:cS,c:"#7c3aed",bg:"#ede9fe"},
-    {l:"Congé",k:"C",n:cC,c:"#043970",bg:"#043970"},
+    {l:"Congé",k:"C",n:cC,c:"#043970",bg:"#f0f9ff"},
     {l:"Repos",k:"R",n:cR,c:"#64748b",bg:"#e2e8f0"}
   ].map(x=>`<div class="card p-3 text-center" style="background:${x.bg}"><div class="text-[10px] uppercase tracking-wider font-semibold" style="color:${x.c}">${x.l} (${x.k})</div><div class="text-2xl font-black" style="color:${x.c}">${x.n}</div></div>`).join("");
-  const histRows=all.slice(0,12).map(p=>{
+  const historySheets=all.filter(p=>p?.valide||Object.keys(p?.days||{}).length);
+  const histRows=historySheets.slice(0,12).map(p=>{
     const cP_=Object.values(p.days||{}).filter(v=>v==="P").length;
     const cA_=Object.values(p.days||{}).filter(v=>v==="A").length;
     const cM_=Object.values(p.days||{}).filter(v=>v==="M").length;
@@ -14031,21 +14036,22 @@ function renderAgentPointageSituation(a){
     const [py,pm]=p.periode.split("-").map(Number);
     const lbl=new Date(py,pm-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
     return`<tr class="border-t"><td class="px-2 py-1 text-xs font-semibold capitalize">${lbl}</td><td class="px-2 py-1 text-center">${p.valide?'<span class="pill" style="background:#043970;color:#fff;font-size:9px;padding:1px 5px">🔒</span>':'<span class="pill pill-amber" style="font-size:9px;padding:1px 5px">⏳</span>'}</td><td class="px-2 py-1 text-center text-emerald-600 font-bold">${cP_}</td><td class="px-2 py-1 text-center text-red-600 font-bold">${cA_}</td><td class="px-2 py-1 text-center text-amber-600 font-bold">${cM_}</td><td class="px-2 py-1 text-center text-violet-600">${cS_}</td><td class="px-2 py-1 text-center text-sky-600">${cC_}</td><td class="px-2 py-1 text-center text-slate-600">${cR_}</td><td class="px-2 py-1 text-center text-xs text-slate-500">${ren} j</td></tr>`;
-  }).join("")||`<tr><td colspan="9" class="px-2 py-3 text-center text-slate-400 text-sm">Aucun pointage enregistré pour cet agent.</td></tr>`;
+  }).join("")||`<tr><td colspan="9" class="px-2 py-3 text-center text-slate-400 text-sm">Aucun pointage chargé pour cet agent.</td></tr>`;
   return`<div class="flex items-center justify-between flex-wrap gap-2 mb-3">
       <div><div class="text-xs text-slate-500 uppercase tracking-wider font-semibold">Mois en cours</div><div class="font-bold text-base capitalize">${monthLabel}</div></div>
-      <div class="flex items-center gap-2 flex-wrap">${validBadge}<button type="button" class="btn btn-secondary text-xs" onclick="navigate('pointage/recap/${a.id}')">📋 Voir détail dans module Pointage →</button></div>
+      <div class="flex items-center gap-2 flex-wrap">${validBadge}<button type="button" class="btn btn-secondary text-xs" onclick="navigate('pointage/recap/${encodeURIComponent(a.id)}')">Voir détail dans module Pointage →</button></div>
     </div>
+    ${dataNotice}
     <div class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">${cards}</div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
       <div class="card p-3" style="background:#043970"><div class="text-[10px] uppercase tracking-wider font-semibold text-emerald-700">Taux de présence</div><div class="text-2xl font-black text-emerald-700">${taux}%</div></div>
       <div class="card p-3" style="background:#fef2f2"><div class="text-[10px] uppercase tracking-wider font-semibold text-red-700">Taux d'absentéisme</div><div class="text-2xl font-black text-red-700">${tauxAbs}%</div></div>
       <div class="card p-3"><div class="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Jours renseignés</div><div class="text-2xl font-black text-cyan-700">${curDays}/${nbDaysMonth}</div></div>
-      <div class="card p-3" style="background:#f5f3ff"><div class="text-[10px] uppercase tracking-wider font-semibold text-violet-700">Total ${now.getFullYear()} (j)</div><div class="text-2xl font-black text-violet-700">${ytTotal}</div></div>
+      <div class="card p-3" style="background:#f5f3ff"><div class="text-[10px] uppercase tracking-wider font-semibold text-violet-700">Total ${curYear} (j)</div><div class="text-2xl font-black text-violet-700">${ytTotal}</div></div>
     </div>
     <h4 class="text-sm font-semibold text-slate-700 mb-2">Historique des 12 derniers pointages mensuels</h4>
     <div style="overflow-x:auto"><table class="w-full text-sm" style="border-collapse:collapse"><thead><tr style="background:#f1f5f9"><th class="text-left px-2 py-2 text-xs font-bold">Période</th><th class="px-2 py-2 text-xs font-bold text-center">Statut</th><th class="px-2 py-2 text-xs font-bold text-center text-emerald-700">P</th><th class="px-2 py-2 text-xs font-bold text-center text-red-700">A</th><th class="px-2 py-2 text-xs font-bold text-center text-amber-700">M</th><th class="px-2 py-2 text-xs font-bold text-center text-violet-700">S</th><th class="px-2 py-2 text-xs font-bold text-center text-sky-700">C</th><th class="px-2 py-2 text-xs font-bold text-center text-slate-700">R</th><th class="px-2 py-2 text-xs font-bold text-center">Renseigné</th></tr></thead><tbody>${histRows}</tbody></table></div>
-    <div class="mt-3 text-xs text-slate-500"><strong>Cumul ${now.getFullYear()} :</strong> P=<span class="font-bold text-emerald-600">${yt.P}</span> · A=<span class="font-bold text-red-600">${yt.A}</span> · M=<span class="font-bold text-amber-600">${yt.M}</span> · S=<span class="font-bold text-violet-600">${yt.S}</span> · C=<span class="font-bold text-sky-600">${yt.C}</span> · R=<span class="font-bold text-slate-600">${yt.R}</span></div>`;
+    <div class="mt-3 text-xs text-slate-500"><strong>Cumul ${curYear} :</strong> P=<span class="font-bold text-emerald-600">${yt.P}</span> · A=<span class="font-bold text-red-600">${yt.A}</span> · M=<span class="font-bold text-amber-600">${yt.M}</span> · S=<span class="font-bold text-violet-600">${yt.S}</span> · C=<span class="font-bold text-sky-600">${yt.C}</span> · R=<span class="font-bold text-slate-600">${yt.R}</span></div>`;
 }
 
 /* ---- GESTION (section 8) ---- */
@@ -34076,6 +34082,35 @@ function ptPresenceAgentId(f){
   const a=(db.agents||[]).find(ag=>refs.includes(String(ag.id||""))||refs.includes(String(ag.backendId||""))||refs.includes(String(ag.matricule||"")));
   return a?.id||String(f?.agentId||"");
 }
+function ptPresenceMatchesAgent(f,a){
+  if(!f||!a)return false;
+  const refs=[f.agentId,f.agentBackendId,f.employee_id,f.matricule].map(x=>String(x||"")).filter(Boolean);
+  return refs.includes(String(a.id||""))||refs.includes(String(a.backendId||""))||refs.includes(String(a.matricule||""));
+}
+function ptSheetFromPresenceForAgent(a,ym){
+  const days={};
+  (db.feuillePresence||[]).forEach(f=>{
+    if(!f?.date||String(f.date).slice(0,7)!==ym||!ptPresenceMatchesAgent(f,a))return;
+    const day=String(f.date).slice(8,10);
+    const code=f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"");
+    if(day&&code&&POINTAGE_CODES[code])days[day]=code;
+  });
+  return {agentId:a?.id||"",periode:ym,societe:a?.societe||"",days,fromPresence:true,valide:false};
+}
+function ptReadSheetForAgent(a,ym){
+  const sheet=ptGetSheet(a?.id,ym);
+  const presence=ptSheetFromPresenceForAgent(a,ym);
+  if(!sheet)return presence;
+  const merged={...sheet,days:{...(presence.days||{}),...(sheet.days||{})}};
+  if(sheet.valide)return sheet;
+  if(sheet.fpqSync){
+    Object.keys(presence.days||{}).forEach(day=>{
+      if(!sheet.days?.[day]||sheet.fpqSync?.[day])merged.days[day]=presence.days[day];
+    });
+  }
+  merged.fromPresence=!!Object.keys(presence.days||{}).length;
+  return merged;
+}
 function ptApplyPresenceLine(f){
   if(!f||!f.date||!f.agentId)return false;
   if(employeePointageBlocked(findEmployeeByRef(ptPresenceAgentId(f)),f.date))return false;
@@ -34155,6 +34190,37 @@ function fpqCurrentSite(){return sessionStorage.getItem("fpqSite")||""}
 function fpqCurrentStatus(){return sessionStorage.getItem("fpqStatus")||""}
 function fpqCurrentFaction(){return sessionStorage.getItem("fpqFaction")||""}
 function setFpqDate(v){sessionStorage.setItem("fpqDate",v||"");renderView()}
+function fpqSetDatePart(part,value){
+  const cur=fpqCurrentDate();
+  let [y,m,d]=String(cur||today()).split("-");
+  if(part==="day")d=String(value||d||"01").padStart(2,"0");
+  if(part==="month")m=String(value||m||"01").padStart(2,"0");
+  if(part==="year")y=String(value||y||new Date().getFullYear());
+  const maxD=new Date(parseInt(y,10),parseInt(m,10),0).getDate();
+  d=String(Math.min(parseInt(d||"1",10),maxD)).padStart(2,"0");
+  setFpqDate(`${y}-${m}-${d}`);
+}
+function fpqDateSelectHTML(date){
+  const [y0,m0,d0]=String(date||today()).split("-");
+  const y=String(y0||new Date().getFullYear());
+  const m=String(m0||"01").padStart(2,"0");
+  const d=String(d0||"01").padStart(2,"0");
+  const maxD=new Date(parseInt(y,10),parseInt(m,10),0).getDate();
+  const years=drumYearOpts(4);
+  if(!years.some(o=>o.value===y))years.push({value:y,label:y});
+  years.sort((a,b)=>parseInt(a.value,10)-parseInt(b.value,10));
+  const select=(label,part,value,opts)=>`<label class="flex flex-col gap-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-500">
+    ${escapeHTML(label)}
+    <select class="select text-sm font-extrabold" style="min-width:108px;height:40px;border-radius:10px" onchange="fpqSetDatePart('${part}',this.value)">
+      ${opts.map(o=>`<option value="${escapeHTML(o.value)}"${o.value===value?" selected":""}>${escapeHTML(o.label)}</option>`).join("")}
+    </select>
+  </label>`;
+  return`<div class="flex flex-wrap items-end gap-2">
+    ${select("Jour","day",d,Array.from({length:maxD},(_,i)=>({value:String(i+1).padStart(2,"0"),label:String(i+1).padStart(2,"0")})))}
+    ${select("Mois","month",m,drumMonthOpts())}
+    ${select("Année","year",y,years)}
+  </div>`;
+}
 function setFpqSociete(v){sessionStorage.setItem("fpqSociete",v||"");renderView()}
 function setFpqSite(v){sessionStorage.setItem("fpqSite",v||"");renderView()}
 function setFpqStatus(v){sessionStorage.setItem("fpqStatus",v||"");renderView()}
@@ -35367,7 +35433,7 @@ function renderFeuillePresentQR(){
       <p class="text-sm text-slate-500 capitalize">${escapeHTML(dateLabel)}</p>
     </div>
     <div class="flex gap-2 flex-wrap items-end">
-      <div>${(()=>{const[dy,dm,dd]=date.split("-");return drumMultiHTML([{id:"fpq-drum-day",label:"Jour",opts:drumDayOpts(),selected:dd||"01",cb:"drumFpqDateSync"},{id:"fpq-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:dm||"01",cb:"drumFpqDateSync"},{id:"fpq-drum-yr",label:"Année",opts:drumYearOpts(4),selected:dy||String(new Date().getFullYear()),cb:"drumFpqDateSync"}]);})()}</div>
+      ${fpqDateSelectHTML(date)}
       ${ptSearchBarHTML("Rechercher nom, matricule…")}
       <button class="btn btn-ghost text-xs" onclick="fpqLiveRefresh()" title="Recharger les données depuis le serveur">↺ Actualiser</button>
       <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
