@@ -35141,15 +35141,15 @@ function renderPointageSaisieSuperviseur(freshNav){
     <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
     ${PT_SUPERVISOR_DAILY_CODES.map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
-    <th style="border:1px solid #dbe3ee;width:82px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
+    <th style="border:1px solid #dbe3ee;width:150px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
   </tr></thead>`;
   const tableForGroup=(group)=>{
     const rows=group.rows.map((a,i)=>{
       const sheet=ptGetSheet(a.id,ym);
       const isValide=ptSupDayValidated(sheet,day);
-      const action=`<div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap">
-        <button type="button" onclick="${isValide?"toast('Cette journée est déjà validée. Utilisez Modifier pour corriger.','info')":`ptSupValiderDay('${a.id}','${ym}','${day}')`}" style="height:24px;border:1px solid ${isValide?"#bbf7d0":"#bfdbfe"};background:${isValide?"#f0fdf4":"#eff6ff"};color:${isValide?"#047857":"#043970"};border-radius:6px;padding:0 7px;font-size:10px;font-weight:900;cursor:pointer">${isValide?"Validé":"Valider"}</button>
-        <button type="button" onclick="ptSupervisorOpenDailyEditor('${a.id}','${ym}','${day}')" style="height:24px;border:1px solid #fed7aa;background:#fff7ed;color:#c2410c;border-radius:6px;padding:0 7px;font-size:10px;font-weight:900;cursor:pointer">Modifier</button>
+      const action=`<div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:nowrap">
+        <button type="button" onclick="${isValide?"toast('Cette journée est déjà validée. Utilisez Modifier pour corriger.','info')":`ptSupValiderDay('${a.id}','${ym}','${day}')`}" style="height:24px;border:1px solid ${isValide?"#bbf7d0":"#bfdbfe"};background:${isValide?"#f0fdf4":"#eff6ff"};color:${isValide?"#047857":"#043970"};border-radius:6px;padding:0 7px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">${isValide?"Validé":"Valider"}</button>
+        <button type="button" onclick="ptSupervisorOpenDailyEditor('${a.id}','${ym}','${day}')" style="height:24px;border:1px solid #fed7aa;background:#fff7ed;color:#c2410c;border-radius:6px;padding:0 7px;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap">Modifier</button>
       </div>`;
       return `<tr style="background:${isValide?"#f0fdf4":"#f8fbff"}">
         <td style="border:1px solid #dbe3ee;text-align:center;height:38px;color:#0f172a;font-size:10px;font-weight:900">${i+1}</td>
