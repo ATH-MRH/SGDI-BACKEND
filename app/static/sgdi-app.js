@@ -34797,11 +34797,13 @@ async function ptSupervisorApplyCorrection(agentId,ym,day,code){
   }catch(e){toast("Correction refusée : "+(e.message||e),"error")}
 }
 let _ptSupervisorDataLoading=false;
-function ptSupervisorEnsureDataForEmptyView(soc){
+function ptSupervisorEnsureDataForEmptyView(soc,force){
   if(_ptSupervisorDataLoading||!sgdiBackendShouldUse()||!sgdiAuthToken())return false;
   const key=normalizeSocieteName(soc||"__all__");
   window.__ptSupervisorReloadAt=window.__ptSupervisorReloadAt||{};
-  if(Date.now()-(window.__ptSupervisorReloadAt[key]||0)<15000)return false;
+  // force=true (arrivée fraîche sur l'onglet, cf. renderPointage) ignore le délai de 15s :
+  // l'utilisateur veut un rechargement immédiat au clic, pas une attente de la boucle de fond.
+  if(!force&&Date.now()-(window.__ptSupervisorReloadAt[key]||0)<15000)return false;
   window.__ptSupervisorReloadAt[key]=Date.now();
   _ptSupervisorDataLoading=true;
   (async()=>{
@@ -34816,13 +34818,17 @@ function ptSupervisorEnsureDataForEmptyView(soc){
   })().finally(()=>{_ptSupervisorDataLoading=false});
   return true;
 }
-function renderPointageSaisieSuperviseur(){
+function renderPointageSaisieSuperviseur(freshNav){
   setTimeout(()=>{if(typeof _sgdiUpdateEditFab==="function")_sgdiUpdateEditFab()},0);
   const supDate=ptSupDate();
   const [supYr,supMo,supDay]=supDate.split("-");
   const ym=`${supYr}-${supMo}`;
   const soc=ptCurrentSoc();
   ptSyncFeuillePresenceMonth(ym);
+  // Arrivée fraîche sur l'onglet "Saisie quotidienne" : on relance tout de suite un
+  // rechargement en arrière-plan (sans attendre les 15s de la boucle de secours), y compris
+  // si des agents s'affichent déjà, pour éviter de montrer des données figées/périmées.
+  if(freshNav)ptSupervisorEnsureDataForEmptyView(soc,true);
   const all=ptFilterAgents(ptSupervisorAgentsForSoc(soc)).sort((x,y)=>{
     const sx=ptSupervisorSiteLabel(x),sy=ptSupervisorSiteLabel(y);
     return sx.localeCompare(sy)||(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||"");
@@ -34845,7 +34851,7 @@ function renderPointageSaisieSuperviseur(){
     <button class="btn btn-ghost text-xs" onclick="window.print()">Imprimer</button>
   </div></div>`;
   if(!all.length){
-    const loading=!ptCurrentSearch()&&ptSupervisorEnsureDataForEmptyView(soc);
+    const loading=!ptCurrentSearch()&&(_ptSupervisorDataLoading||ptSupervisorEnsureDataForEmptyView(soc));
     const ids=supervisorAuthorizedSiteIds();
     const hint=ids&&ids.size?`Sites autorisés : ${[...ids].slice(0,6).map(escapeHTML).join(", ")}${ids.size>6?"...":""}`:"Périmètre sites global ou non renseigné.";
     return filterBar+`<div class="card p-8 text-center text-slate-500">${loading?`Chargement PostgreSQL des employés, sites et affectations...`:ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé rattaché aux sites autorisés pour ${escapeHTML(soc||"ce périmètre")}.`}<div class="text-xs mt-2 text-slate-400">${hint}</div></div>`;
@@ -35170,6 +35176,12 @@ function renderFeuillePresentQR(){
 
 function renderPointage(view,sub,arg,_skipEnsure){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
+  // Détecte une arrivée fraîche sur cet onglet pointage (route différente de la dernière
+  // vue rendue) : sert à déclencher un rechargement instantané, non throttlé, des données
+  // superviseur au clic sur "Saisie quotidienne" au lieu d'attendre la boucle de fond (15s).
+  // Calculé AVANT toute réassignation de sub/arg ci-dessous, et propagé tel quel à l'appel
+  // récursif après sgdiEnsureEmployeesForDisplay pour ne pas perdre le signal.
+  const _ptFreshNav=sgdiLastRenderedPath!==`pointage/${sub||"dashboard"}${arg?"/"+arg:""}`;
   if(sub!=="qr")ptStopQrTabletTimer();
   if(sub!=="feuille")fpqStopLiveRefresh();
   if(!_skipEnsure){
@@ -35197,7 +35209,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
   if(sub==="dashboard")body=renderPointageDashboard(isDrh);
   else if(sub==="feuille"){body=renderFeuillePresentQR();}
   else if(sub==="qr"&&!isDrh&&!supervisorModuleActive()){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
-  else if(sub==="saisie"&&!isDrh)body=supervisorActive?renderPointageSaisieSuperviseur():renderPointageSaisie();
+  else if(sub==="saisie"&&!isDrh)body=supervisorActive?renderPointageSaisieSuperviseur(_ptFreshNav):renderPointageSaisie();
   else if(sub==="auto")body=renderPointageSaisieAuto();
   else if(sub==="recap")body=renderPointageRecap(arg);
   else if(sub==="societe")body=renderPointageSociete();
