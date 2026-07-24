@@ -42,7 +42,17 @@ self.addEventListener("fetch", event => {
     "/finance/", "/erp/", "/ui/", "/irongs/"
   ].some(prefix => url.pathname.startsWith(prefix));
   if (dataRoute) {
-    event.respondWith(fetch(req, { cache: "no-store" }));
+    // Sans délai propre au service worker, une requête backend bloquée reste "Pending"
+    // indéfiniment ici MÊME SI la page a déjà abandonné de son côté (son propre
+    // AbortController n'annule pas ce fetch interne, distinct) — ce qui garde une des
+    // connexions réseau limitées du navigateur occupée et ralentit toutes les autres
+    // requêtes vers ce site par ricochet. On coupe donc ici aussi, un peu plus large que
+    // le délai côté page (30s) pour ne pas le court-circuiter inutilement.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 45000);
+    event.respondWith(
+      fetch(req, { cache: "no-store", signal: ctrl.signal }).finally(() => clearTimeout(timer))
+    );
     return;
   }
 

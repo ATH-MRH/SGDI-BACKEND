@@ -1966,7 +1966,10 @@ async function syncAssignmentsFromPostgres(){
   const firstItems=Array.isArray(first?.items)?first.items:Array.isArray(first)?first:[];
   const totalPages=Math.max(1,Number(first?.pages)||1);
   const rows=[...firstItems];
-  const CONCURRENCY=6;
+  // Limité à 2 requêtes en parallèle : le backend ne tourne qu'avec 2 processus (VPS limité,
+  // voir gunicorn.conf.py/WEB_CONCURRENCY) — envoyer plus de requêtes simultanées que de
+  // workers disponibles ne fait que les entasser sans rien accélérer.
+  const CONCURRENCY=2;
   for(let start=2;start<=totalPages;start+=CONCURRENCY){
     const batch=[];
     for(let p=start;p<Math.min(start+CONCURRENCY,totalPages+1);p++)batch.push(SGDI.assignments.page({active:1,page:p,page_size:100}));
