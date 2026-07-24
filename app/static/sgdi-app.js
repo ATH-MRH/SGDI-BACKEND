@@ -33990,6 +33990,8 @@ function isSupOrUser(){return Array.isArray(session?.sitesAutorises)&&session.si
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.societe||currentStructureSocieteFilter?.()||""}
 function ptCurrentSearch(){return sessionStorage.getItem("ptSearch")||""}
+function ptSupCurrentSiteFilter(){return sessionStorage.getItem("ptSupSiteFilter")||""}
+function setPtSupSiteFilter(v){sessionStorage.setItem("ptSupSiteFilter",v||"");renderView()}
 function setPtMonth(v){sessionStorage.setItem("ptMonth",v||"");renderView()}
 function setPtSociete(v){sessionStorage.setItem("ptSociete",v||"");renderView()}
 function setPtSearch(v){sessionStorage.setItem("ptSearch",v||"");renderView();requestAnimationFrame(()=>{const el=document.getElementById("pt-search-input");if(el){const len=el.value.length;el.focus();try{el.setSelectionRange(len,len)}catch(_){}}})}
@@ -34987,6 +34989,32 @@ function ptSupervisorDailyCell(agentId,ym,day,sheet,code,isValide){
     :`Saisir ${code} pour le ${day}/${String(ym).slice(5,7)}`;
   return `<td role="button" tabindex="${disabled?"-1":"0"}" ${disabled?"":`onclick="ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ptSupervisorSetDailyCode('${agentId}','${ym}','${day}','${code}')}"`} title="${escapeHTML(title)}" style="border:1px solid #dbe3ee;text-align:center;width:74px;min-width:74px;height:36px;background:${c.bg||"#fff"};color:${active?(c.color||"#043970"):"#0f172a"};font-size:10px;font-weight:900;line-height:36px;cursor:${disabled?"not-allowed":"pointer"};user-select:none;opacity:${disabled&&!active?".55":"1"}">${active?code:"·"}</td>`;
 }
+function ptSupervisorObservationCell(agentId,ym,day,sheet,isValide){
+  const current=(sheet?.observations||{})[day]||"";
+  const inputId=`pt-sup-obs-${agentId}-${ym}-${day}`;
+  return `<td style="border:1px solid #dbe3ee;padding:4px 6px;background:#fff">
+    <div style="display:flex;align-items:center;gap:4px">
+      <input type="text" id="${inputId}" value="${escapeHTML(current)}" ${isValide?"disabled":""} placeholder="Note libre..." style="flex:1;min-width:140px;height:26px;border:1px solid #dbe3ee;border-radius:6px;padding:0 6px;font-size:10px;background:${isValide?"#f1f5f9":"#fff"}">
+      <button type="button" ${isValide?"disabled":""} onclick="ptSupervisorSaveObservation('${agentId}','${ym}','${day}')" style="height:26px;border:1px solid #bfdbfe;background:${isValide?"#f1f5f9":"#eff6ff"};color:#043970;border-radius:6px;padding:0 8px;font-size:10px;font-weight:900;cursor:${isValide?"not-allowed":"pointer"};white-space:nowrap">Enregistrer</button>
+    </div>
+  </td>`;
+}
+async function ptSupervisorSaveObservation(agentId,ym,day){
+  const inputId=`pt-sup-obs-${agentId}-${ym}-${day}`;
+  const el=document.getElementById(inputId);
+  const text=(el?.value||"").trim();
+  try{
+    const out=await sgdiRunLegacyAction("save-pointage-observation",{data:{agentId,periode:ym,day,text}});
+    const item=out?.data?.item;
+    if(item){
+      if(!db.pointages)db.pointages=[];
+      const idx=db.pointages.findIndex(p=>String(p.agentId)===String(item.agentId)&&p.periode===item.periode);
+      if(idx>=0)db.pointages[idx]=item;else db.pointages.push(item);
+    }
+    toast("Observation enregistrée","success");
+    renderView();
+  }catch(e){toast("Enregistrement refusé : "+(e.message||e),"error")}
+}
 // valide n'est plus qu'un champ dérivé côté backend (couvre-t-il tous les jours de
 // validatedDays ?) : validatedDays est désormais l'unique source de vérité à lire ici.
 function ptSupDayValidated(sheet,day){return !!sheet?.validatedDays?.[String(day).padStart(2,"0")]}
@@ -35140,10 +35168,21 @@ function renderPointageSaisieSuperviseur(freshNav){
   const ym=`${supYr}-${supMo}`;
   const soc=ptCurrentSoc();
   ptSyncFeuillePresenceMonth(ym);
-  const all=ptFilterAgents(ptSupervisorAgentsForSoc(soc)).sort((x,y)=>{
+  const scopedAgents=ptSupervisorAgentsForSoc(soc);
+  // Options du sélecteur de site : calculées sur le périmètre COMPLET (avant filtre texte),
+  // pour que la liste déroulante ne change pas de contenu selon ce que l'utilisateur tape.
+  const siteOptionsMap={};
+  scopedAgents.forEach(a=>{
+    const key=ptSupervisorSiteKey(a);
+    if(!siteOptionsMap[key])siteOptionsMap[key]=ptSupervisorSiteLabel(a);
+  });
+  const siteOptions=Object.entries(siteOptionsMap).sort((a,b)=>a[1].localeCompare(b[1]));
+  const siteFilter=ptSupCurrentSiteFilter();
+  let all=ptFilterAgents(scopedAgents).sort((x,y)=>{
     const sx=ptSupervisorSiteLabel(x),sy=ptSupervisorSiteLabel(y);
     return sx.localeCompare(sy)||(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||"");
   });
+  if(siteFilter)all=all.filter(a=>ptSupervisorSiteKey(a)===siteFilter);
   if(freshNav&&!all.length)ptSupervisorEnsureDataForEmptyView(soc,true);
   const [yr,mo]=ym.split("-").map(Number);
   const day=supDay;
@@ -35156,9 +35195,17 @@ function renderPointageSaisieSuperviseur(freshNav){
     grouped[key].rows.push(a);
   });
   const groups=Object.values(grouped).sort((a,b)=>a.label.localeCompare(b.label));
+  const siteSelectHTML=`<label class="flex flex-col gap-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-500" style="flex:1;min-width:200px;max-width:280px">
+    Site
+    <select id="ptsup-site-filter" class="input text-sm w-full" style="height:40px;border-radius:10px" onchange="setPtSupSiteFilter(this.value)">
+      <option value="">Tous les sites</option>
+      ${siteOptions.map(([key,label])=>`<option value="${escapeHTML(key)}" ${siteFilter===key?"selected":""}>${escapeHTML(label)}</option>`).join("")}
+    </select>
+  </label>`;
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
     ${ptSupervisorDateSelectHTML(supDay||"01",supMo||"01",supYr||String(new Date().getFullYear()))}
     ${ptSearchBarLabeledHTML("Rechercher nom, code, site...")}
+    ${siteSelectHTML}
     <div class="flex-1"></div>
     <button class="btn btn-ghost text-xs" onclick="window.print()">Imprimer</button>
   </div></div>`;
@@ -35173,6 +35220,7 @@ function renderPointageSaisieSuperviseur(freshNav){
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
     ${PT_SUPERVISOR_DAILY_CODES.map(k=>`<th style="border:1px solid #dbe3ee;width:74px;padding:10px 4px;text-align:center;font-size:10px;font-weight:900">${PT_SUPERVISOR_DAILY_HEADER_LABELS[k]||k}</th>`).join("")}
     <th style="border:1px solid #dbe3ee;width:150px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
+    <th style="border:1px solid #dbe3ee;min-width:220px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Observations</th>
   </tr></thead>`;
   const tableForGroup=(group)=>{
     const rows=group.rows.map((a,i)=>{
@@ -35189,6 +35237,7 @@ function renderPointageSaisieSuperviseur(freshNav){
         </td>
         ${PT_SUPERVISOR_DAILY_CODES.map(code=>ptSupervisorDailyCell(a.id,ym,day,sheet,code,isValide)).join("")}
         <td style="border:1px solid #dbe3ee;text-align:center;background:#fff;height:38px;padding:4px">${action}</td>
+        ${ptSupervisorObservationCell(a.id,ym,day,sheet,isValide)}
       </tr>`;
     }).join("");
     return `<section class="card p-0 mb-5" style="overflow:hidden;border-color:#d8e4f2">

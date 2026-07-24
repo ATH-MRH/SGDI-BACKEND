@@ -1045,6 +1045,46 @@ def _save_pointage_cell(db: Session, data: dict[str, Any], user: Any) -> dict[st
     return _replace_and_success(db, "pointages", sheets, {"item": sheet})
 
 
+def _save_pointage_observation(db: Session, data: dict[str, Any], user: Any) -> dict[str, Any]:
+    agent_id = str(data.get("agentId") or "").strip()
+    periode = str(data.get("periode") or "").strip()
+    day = str(data.get("day") or "").strip().zfill(2)
+    if not agent_id or not periode or not day:
+        raise HTTPException(status_code=422, detail="Agent, période et jour obligatoires")
+    if not day.isdigit() or not 1 <= int(day) <= 31:
+        raise HTTPException(status_code=422, detail="Jour de pointage invalide")
+    agent = _find_pointage_agent(db, agent_id, user)
+    sheets = _collection_list(db, "pointages")
+    sheet = next((row for row in sheets if str(row.get("agentId")) == agent_id and row.get("periode") == periode), None)
+    if not sheet:
+        sheet = {
+            "id": f"pt_{agent_id}_{periode}",
+            "agentId": agent_id,
+            "periode": periode,
+            "societe": agent.get("societe"),
+            "days": {},
+            "createdAt": _now_iso(),
+        }
+        sheets.append(sheet)
+    ensure_item_allowed_for_user({"societe": sheet.get("societe") or agent.get("societe") or ""}, user, "pointages")
+    # Même verrou que le code du jour (_save_pointage_cell) : une observation reste une note liée
+    # à ce jour de pointage, elle est donc gelée dès que le jour/mois est validé (correction admin
+    # via unlock uniquement, comme le reste).
+    if sheet.get("valide"):
+        raise HTTPException(status_code=422, detail="Pointage mensuel déjà validé")
+    if day in dict(sheet.get("validatedDays") or {}):
+        raise HTTPException(status_code=422, detail="Ce jour est déjà validé")
+    observations = dict(sheet.get("observations") or {})
+    text = str(data.get("text") or "").strip()
+    if text:
+        observations[day] = text
+    else:
+        observations.pop(day, None)
+    sheet["observations"] = observations
+    sheet["updatedAt"] = _now_iso()
+    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+
+
 def _clear_pointage_sheet(db: Session, data: dict[str, Any], user: Any) -> dict[str, Any]:
     agent_id = str(data.get("agentId") or "").strip()
     periode = str(data.get("periode") or "").strip()
@@ -1340,6 +1380,8 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         return _bulk_pointage(db, str(data.get("periode") or ""), data.get("societe") or None, False, user)
     if action == "save-pointage-cell":
         return _save_pointage_cell(db, data, user)
+    if action == "save-pointage-observation":
+        return _save_pointage_observation(db, data, user)
     if action == "clear-pointage-sheet":
         return _clear_pointage_sheet(db, data, user)
     if action == "validate-presence-line":
