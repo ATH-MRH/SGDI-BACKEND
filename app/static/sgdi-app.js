@@ -2344,10 +2344,24 @@ function sgdiAutoRepairDB(options){
   }
   return report;
 }
+// Collections coûteuses à recharger dont une réponse VIDE ne doit jamais écraser des
+// données déjà chargées avec succès (une requête SQL lente/en erreur sur UNE seule
+// collection ne doit pas faire "disparaître" les employés/sites déjà affichés le temps
+// qu'une prochaine synchro réussisse — sinon la page se vide puis se recharge en boucle).
+const SGDI_SKIP_EMPTY_ON_HYDRATE=new Set(["agents","sites","clients","magasins","fournisseurs","stockArticles","stockMouvements","opsMouvements","incidents","feuillePresence"]);
 function hydrateDB(source){
   const base=emptyDB();
   const incoming=(source&&typeof source==="object"&&!Array.isArray(source))?source:{};
+  const previous=(db&&typeof db==="object")?db:null;
+  SGDI_SKIP_EMPTY_ON_HYDRATE.forEach(k=>{
+    if(Array.isArray(incoming[k])&&incoming[k].length===0&&Array.isArray(previous?.[k])&&previous[k].length>0){
+      delete incoming[k];
+    }
+  });
   db={...base,...incoming};
+  SGDI_SKIP_EMPTY_ON_HYDRATE.forEach(k=>{
+    if(!(k in incoming)&&Array.isArray(previous?.[k]))db[k]=previous[k];
+  });
   Object.keys(base).forEach(k=>{
     if(Array.isArray(base[k])&&!Array.isArray(db[k]))db[k]=[];
   });
@@ -34693,11 +34707,13 @@ function ptSupervisorCorrectDailyCode(agentId,ym,day){
   renderView();
 }
 function ptSupervisorAgentsForSoc(soc){
-  const base=(db.agents||[])
+  // Ne JAMAIS retomber sur la liste non filtrée : un superviseur sans employé dans son
+  // périmètre de sites doit voir une liste vide, pas les employés d'autres sites (même
+  // bug fail-open que supervisorAuthorizedSiteIds() corrigé plus tôt cette session).
+  return (db.agents||[])
     .filter(a=>employeeIsPointageEligible(a,soc))
+    .filter(agentInSupervisorScope)
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
-  const scoped=base.filter(agentInSupervisorScope);
-  return scoped.length?scoped:base;
 }
 async function ptSupValiderDay(agentId,ym,day){
   if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
@@ -34794,7 +34810,9 @@ function ptSupervisorEnsureDataForEmptyView(soc){
     try{if(typeof syncSitesFromPostgres==="function")await syncSitesFromPostgres()}catch(e){errors.push(e?.message||String(e))}
     try{if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){errors.push(e?.message||String(e))}
     if(errors.length)console.warn("Chargement superviseur incomplet",errors);
-    try{renderView()}catch(_e){}
+    // sgdiAutoRender (au lieu de renderView brut) préserve le défilement — sinon la page
+    // "sautait" à chaque nouvelle tentative de chargement toutes les 15s.
+    try{if(typeof sgdiAutoRender==="function")sgdiAutoRender();else renderView()}catch(_e){}
   })().finally(()=>{_ptSupervisorDataLoading=false});
   return true;
 }
