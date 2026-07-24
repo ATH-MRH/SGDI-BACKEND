@@ -33931,6 +33931,7 @@ const FPQ_PRESENCE_OPTIONS=[["P","PRESENT"],["A","ABSENT"],["R","RECUPERATION"],
 // par ptNormalizeAbandonDePoste, jamais choisi à la main) et P/F1-3 (ajustements de
 // paie propres à DRH/OPS, pas des situations qu'un superviseur constate sur site).
 const PT_SUPERVISOR_CODES=Object.keys(POINTAGE_CODES).filter(k=>!["AB","P/F1","P/F2","P/F3"].includes(k));
+const PT_SUPERVISOR_DAILY_CODES=PT_SUPERVISOR_CODES.filter(k=>!["M","S","A1"].includes(k));
 function fpqPresenceCode(value){const v=String(value||"").toUpperCase();return POINTAGE_CODES[v]?v:""}
 function fpqPresenceOptions(value){const cur=fpqPresenceCode(value);return`<option value="">—</option>${FPQ_PRESENCE_OPTIONS.map(([k,l])=>`<option value="${k}" ${cur===k?"selected":""}>${k} = ${l}</option>`).join("")}`}
 function fpqPresenceSelectStyle(value){
@@ -34989,7 +34990,7 @@ async function ptSupValiderDay(agentId,ym,day){
   if(!supervisorModuleActive()&&guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : validation pointage non autorisée."))return;
   try{
     const code=(ptGetSheet(agentId,ym)?.days||{})[String(day).padStart(2,"0")]||"";
-    if(!code){toast("Sélectionnez d'abord P, R, A1, A2, A3, F1, F2 ou F3 avant de valider.","error");return}
+    if(!code){toast("Sélectionnez d'abord P, A, C, R, F1, F2, F3, A2 ou A3 avant de valider.","error");return}
     const out=await sgdiRunLegacyAction("validate-pointage-day",{data:{agentId,periode:ym,day,code}});
     const item=out?.data?.item;
     if(item){
@@ -35019,7 +35020,7 @@ function ptSupervisorOpenCorrection(agentId,ym,day){
   if(sheet?.valide){toast("Pointage mensuel validé : correction non autorisée ici.","error");return}
   if(!ptSupDayValidated(sheet,day)){toast("Aucune validation passée à corriger.","info");return}
   const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
-  const codes=PT_SUPERVISOR_CODES;
+  const codes=PT_SUPERVISOR_DAILY_CODES;
   const buttons=codes.map(code=>{
     const c=POINTAGE_CODES[code]||{};
     const active=code===current;
@@ -35036,7 +35037,7 @@ function ptSupervisorOpenDailyEditor(agentId,ym,day){
   const sheet=ptGetSheet(agentId,ym);
   if(ptSupDayValidated(sheet,day))return ptSupervisorOpenCorrection(agentId,ym,day);
   const current=(sheet?.days||{})[String(day).padStart(2,"0")]||"";
-  const codes=PT_SUPERVISOR_CODES;
+  const codes=PT_SUPERVISOR_DAILY_CODES;
   const buttons=codes.map(code=>{
     const c=POINTAGE_CODES[code]||{};
     const active=code===current;
@@ -35139,7 +35140,7 @@ function renderPointageSaisieSuperviseur(freshNav){
   const headers=`<thead><tr style="background:#e5e7eb;color:#1f2937;text-transform:uppercase;letter-spacing:.08em">
     <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
-    ${PT_SUPERVISOR_CODES.map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
+    ${PT_SUPERVISOR_DAILY_CODES.map(k=>`<th style="border:1px solid #dbe3ee;width:36px;padding:10px 4px;text-align:center;font-size:11px;font-weight:900">${k}</th>`).join("")}
     <th style="border:1px solid #dbe3ee;width:82px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">Action</th>
   </tr></thead>`;
   const tableForGroup=(group)=>{
@@ -35155,7 +35156,7 @@ function renderPointageSaisieSuperviseur(freshNav){
         <td style="border:1px solid #dbe3ee;padding:0 8px;height:38px;color:#1f2937;font-size:10px;font-weight:900;white-space:nowrap">
           ${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} <span style="color:#1d70a2;font-family:ui-monospace,monospace;font-size:9px">${escapeHTML(a.matricule||"")}</span>
         </td>
-        ${PT_SUPERVISOR_CODES.map(code=>ptSupervisorDailyCell(a.id,ym,day,sheet,code,isValide)).join("")}
+        ${PT_SUPERVISOR_DAILY_CODES.map(code=>ptSupervisorDailyCell(a.id,ym,day,sheet,code,isValide)).join("")}
         <td style="border:1px solid #dbe3ee;text-align:center;background:#fff;height:38px;padding:4px">${action}</td>
       </tr>`;
     }).join("");
