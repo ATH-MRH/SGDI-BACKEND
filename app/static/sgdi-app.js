@@ -2198,7 +2198,7 @@ function sgdiSqlSyncScope(options){
   const opt=options||{};
   const all={drh:true,ops:true,materiel:true,commercial:true};
   if(opt.full||opt.blocking||isAdminSystemSession())return all;
-  const scope={drh:false,ops:false,materiel:false,commercial:false};
+  const scope={drh:false,ops:false,materiel:false,commercial:false,superviseur:false};
   const cfg=typeof sgdiModuleHostConfig==="function"?sgdiModuleHostConfig():null;
   const route=sgdiCurrentRouteRoot();
   const add=(key)=>{
@@ -2208,12 +2208,16 @@ function sgdiSqlSyncScope(options){
     if(["ops","sites","pointage","incidents","missions","mouvement"].includes(key))scope.ops=true;
     if(["materiel","achats"].includes(key))scope.materiel=true;
     if(["commercial","ventes","facturation","facmod"].includes(key))scope.commercial=true;
+    // Bucket dédié : sans ça, "superviseur" ne correspondait à aucune clé ci-dessus et retombait
+    // sur le repli générique drh+ops (tout le personnel + tous les sites + toutes les affectations
+    // de l'entreprise), disproportionné pour un rôle scopé à quelques sites.
+    if(["superviseur"].includes(key))scope.superviseur=true;
   };
   add(opt.module);
   add(cfg?.key);
   add(session?.transverse);
   add(route);
-  if(!scope.drh&&!scope.ops&&!scope.materiel&&!scope.commercial&&session?.societe){
+  if(!scope.drh&&!scope.ops&&!scope.materiel&&!scope.commercial&&!scope.superviseur&&session?.societe){
     scope.drh=true;
     scope.ops=true;
   }
@@ -2265,6 +2269,18 @@ function sgdiSqlSyncTasks(options){
       if(typeof syncAssignmentsFromPostgres==="function")opsTasks.push(syncAssignmentsFromPostgres());
       if(typeof syncOpsMovementsFromPostgres==="function")opsTasks.push(syncOpsMovementsFromPostgres());
       if(opsTasks.length)await Promise.all(opsTasks);
+    })());
+  }
+  if(scope.superviseur){
+    // Scope superviseur : employés filtrés par société (pas l'appel complet company-wide),
+    // sites (pas de filtrage serveur possible) et affectations. Pas de candidats (DRH),
+    // pas de mouvements OPS (le seul écran qui les lit a son propre auto-sync :
+    // ensureOpsMovementSqlSync).
+    tasks.push((async()=>{
+      const soc=session?.societe||"";
+      await sgdiPullEmployees({silent:true,society:soc});
+      await syncSitesFromPostgres();
+      if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres();
     })());
   }
   if(scope.materiel)tasks.push((async()=>{await ensureEmployees();await syncMaterielFromPostgres({full:!!options?.full})})());
@@ -19041,7 +19057,7 @@ function applyFpPositionFilters(list){
 function renderFiches(view,sub,_skipEnsure){
   const fixedSociete=mySoc()||"";
   const socFilter=fixedSociete||(session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||""));
-  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:socFilter,force:true});if(_r&&typeof _r.then==="function"){_r.then(()=>renderFiches(view,sub,true)).catch(()=>renderFiches(view,sub,true));return}}
+  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:socFilter,force:true});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderFiches(view,sub,true)).catch(()=>renderFiches(view,sub,true));return}}
   const allowedSocietes=currentAllowedSocietes();
   const restrictedSocietes=hasExplicitSocieteRestriction();
   const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
@@ -33436,6 +33452,10 @@ function renderSuperviseur(view,sub,arg){
   const soc=currentStructureSocieteFilter();
   const sites=siteOpsSitesForScope(soc);
   const agents=(db.agents||[]).filter(a=>(!soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc))&&agentInSupervisorScope(a)&&!ficheAgentIsSortantArchive(a));
+  // Sites/agents vides ne veut pas forcément dire "aucun périmètre" : peut être le chargement
+  // initial encore en cours. On déclenche/observe le rechargement partagé (déjà utilisé par la
+  // Saisie quotidienne) au lieu d'afficher tout de suite un message d'erreur permanent.
+  const supDataLoading=(!sites.length||!agents.length)&&(typeof _ptSupervisorDataLoading!=="undefined"&&_ptSupervisorDataLoading||(typeof ptSupervisorEnsureDataForEmptyView==="function"&&ptSupervisorEnsureDataForEmptyView(soc)));
   const todayRows=(db.feuillePresence||[]).filter(f=>f.date===today()&&(!soc||normalizeSocieteName(f.societe||"")===normalizeSocieteName(soc))&&(!supervisorAuthorizedSiteIds()||supervisorAuthorizedSiteIds().has(String(f.siteBackendId||f.siteId||""))));
   const pointes=todayRows.filter(f=>fpqPresenceCode(f.heureArrivee)).length;
   const presents=todayRows.filter(f=>fpqPresenceCode(f.heureArrivee)==="P").length;
@@ -33459,9 +33479,9 @@ function renderSuperviseur(view,sub,arg){
       const metric=siteBackendMetricForSite(s);
       const contact=[s.contact?.nom,s.contact?.telephone].filter(Boolean).join(" · ");
       return `<tr><td class="px-3 py-2"><a href="#/sites/${siteEditRouteId(s)}" class="font-semibold" style="color:inherit;text-decoration:none">${escapeHTML(s.nom||s.intitule||"Site")}</a><div class="text-xs text-slate-500">${escapeHTML(sitePrimarySociete(s)||"")} · ${escapeHTML(s.commune||s.wilaya||"")}</div></td><td class="px-3 py-2 text-center font-bold">${metric.contractual||0}</td><td class="px-3 py-2 text-center font-bold">${metric.realized||0}</td><td class="px-3 py-2 text-center font-bold ${metric.surplus>0?"text-orange-600":""}">${metric.surplus>0?"+"+metric.surplus:0}</td><td class="px-3 py-2 text-center font-bold ${metric.missing>0?"text-red-600":""}">${metric.missing>0?"−"+metric.missing:0}</td><td class="px-3 py-2 text-center">${escapeHTML(s.rotationSystem||"—")}</td><td class="px-3 py-2 text-xs text-slate-600">${escapeHTML(contact||"—")}</td></tr>`;
-    }).join("")}</tbody></table></div>`:`<div class="p-4 text-sm text-slate-500">Aucun site autorisé. Cochez les sites dans Administration système > Utilisateurs.</div>`}
+    }).join("")}</tbody></table></div>`:(supDataLoading?`<div class="p-4 text-sm text-slate-500">Chargement des sites et effectifs…</div>`:`<div class="p-4 text-sm text-slate-500">Aucun site autorisé. Cochez les sites dans Administration système > Utilisateurs.</div>`)}
   </div>
-  <div class="card p-4"><h3 class="font-black mb-3">Personnel rattaché</h3>${agents.length?agents.slice(0,12).map(a=>`<a href="#/agents/${a.id}" class="flex items-center justify-between p-3 rounded border mb-2" style="text-decoration:none;color:inherit;background:#fff"><span><b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</b><br><small class="text-slate-500">${escapeHTML(a.matricule||"")} · ${escapeHTML(agentLiveAffectation(a)?.siteName||"Sans site")}</small></span><span class="pill pill-green">${escapeHTML(employeeDisplayStatus(a).label||a.statut||"")}</span></a>`).join(""):`<div class="text-sm text-slate-500">Aucun employé rattaché aux sites autorisés.</div>`}${agents.length>12?`<button class="btn btn-secondary text-xs mt-2" onclick="navigate('effectif/actifs')">Voir les ${agents.length} employés</button>`:""}</div>`;
+  <div class="card p-4"><h3 class="font-black mb-3">Personnel rattaché</h3>${agents.length?agents.slice(0,12).map(a=>`<a href="#/agents/${a.id}" class="flex items-center justify-between p-3 rounded border mb-2" style="text-decoration:none;color:inherit;background:#fff"><span><b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</b><br><small class="text-slate-500">${escapeHTML(a.matricule||"")} · ${escapeHTML(agentLiveAffectation(a)?.siteName||"Sans site")}</small></span><span class="pill pill-green">${escapeHTML(employeeDisplayStatus(a).label||a.statut||"")}</span></a>`).join(""):(supDataLoading?`<div class="text-sm text-slate-500">Chargement des effectifs…</div>`:`<div class="text-sm text-slate-500">Aucun employé rattaché aux sites autorisés.</div>`)}${agents.length>12?`<button class="btn btn-secondary text-xs mt-2" onclick="navigate('effectif/actifs')">Voir les ${agents.length} employés</button>`:""}</div>`;
 }
 
 function openOpsSocModal(socEncoded,type){
