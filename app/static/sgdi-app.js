@@ -4501,14 +4501,14 @@ function topbarStructureIcon(key){
   return (MODULE_META[key]?.icon)||"•";
 }
 function topbarStructureTabsHTML(){return""}  // Déplacé dans workspaceTabsBarHTML
-function supervisorPointageSaisiePageActive(){
-  const onPage=String(location.hash||"").startsWith("#/pointage/saisie");
+function supervisorPointagePageActive(){
+  const onPage=String(location.hash||"").startsWith("#/pointage");
   if(!onPage)return false;
   return (typeof supervisorModuleActive==="function"&&supervisorModuleActive())||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession());
 }
 function sgdiEditModeButtonHTML(){
   if(!session)return"";
-  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()&&!supervisorPointageSaisiePageActive()){
+  if(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()&&!supervisorPointagePageActive()){
     return `<span id="sgdi-edit-toggle" class="ws-lock-toggle ws-lock-toggle-readonly" title="Mode superviseur terrain : lecture seule" aria-label="Lecture seule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span>Lecture seule</span></span>`;
   }
   const locked=sgdiViewModeActive;
@@ -6385,7 +6385,7 @@ function sgdiExitViewMode(){
 function _sgdiUpdateEditFab(){
   const toggle=document.getElementById("sgdi-edit-toggle");
   if(toggle){
-    if(!session||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()&&!supervisorPointageSaisiePageActive())){
+    if(!session||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession()&&!supervisorPointagePageActive())){
       toggle.style.display="none";
       toggle.onclick=null;
     }else{
@@ -33965,6 +33965,17 @@ function ptSearchBarHTML(placeholder){
     <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none">🔍</span>
   </div>`;
 }
+function ptSearchBarLabeledHTML(placeholder,label){
+  const q=ptCurrentSearch();
+  return`<label class="flex flex-col gap-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-500" style="flex:1;min-width:260px;max-width:320px">
+    ${escapeHTML(label||"Recherche")}
+    <div style="position:relative">
+      <input type="search" id="pt-search-input" class="input text-sm w-full" placeholder="${escapeHTML(placeholder||"Rechercher nom, prénom, matricule…")}" value="${escapeHTML(q)}"
+        oninput="setPtSearch(this.value)" style="height:40px;border-radius:10px;padding-left:36px"/>
+      <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;pointer-events:none">🔍</span>
+    </div>
+  </label>`;
+}
 function pointageOperationalAgents(soc){
   const list=(db.agents||[])
     .filter(a=>!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase()))
@@ -35046,7 +35057,7 @@ function renderPointageSaisieSuperviseur(freshNav){
   const groups=Object.values(grouped).sort((a,b)=>a.label.localeCompare(b.label));
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
     ${ptSupervisorDateSelectHTML(supDay||"01",supMo||"01",supYr||String(new Date().getFullYear()))}
-    ${ptSearchBarHTML("Rechercher nom, code, site...")}
+    ${ptSearchBarLabeledHTML("Rechercher nom, code, site...")}
     <div class="flex-1"></div>
     <button class="btn btn-ghost text-xs" onclick="window.print()">Imprimer</button>
   </div></div>`;
