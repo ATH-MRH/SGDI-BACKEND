@@ -34806,12 +34806,26 @@ function ptSupervisorEnsureDataForEmptyView(soc,force){
   if(!force&&Date.now()-(window.__ptSupervisorReloadAt[key]||0)<15000)return false;
   window.__ptSupervisorReloadAt[key]=Date.now();
   _ptSupervisorDataLoading=true;
+  const _t0=Date.now();
   (async()=>{
     const errors=[];
+    const _tEmp0=Date.now();
     try{await sgdiPullEmployees({silent:true,society:soc||""})}catch(e){errors.push(e?.message||String(e))}
-    try{if(typeof syncSitesFromPostgres==="function")await syncSitesFromPostgres()}catch(e){errors.push(e?.message||String(e))}
-    try{if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){errors.push(e?.message||String(e))}
+    const _tEmp=Date.now()-_tEmp0;
+    // Sites et affectations n'ont pas de dépendance l'un sur l'autre (les affectations portent
+    // déjà leur siteId propre) : les lancer en parallèle plutôt qu'en séquence évite d'attendre
+    // la somme des deux appels réseau, ce qui rendait ce rechargement visiblement lent.
+    const _tPar0=Date.now();
+    await Promise.all([
+      (async()=>{try{if(typeof syncSitesFromPostgres==="function")await syncSitesFromPostgres()}catch(e){errors.push(e?.message||String(e))}})(),
+      (async()=>{try{if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){errors.push(e?.message||String(e))}})()
+    ]);
+    const _tPar=Date.now()-_tPar0;
     if(errors.length)console.warn("Chargement superviseur incomplet",errors);
+    // Diagnostic temporaire : si le rechargement complet dépasse 3s, on affiche le détail des
+    // temps par étape (visible sans devtools) pour identifier l'appel réseau réellement lent.
+    const _tTotal=Date.now()-_t0;
+    if(_tTotal>3000&&typeof toast==="function")toast(`Chargement superviseur : ${_tTotal}ms (employés ${_tEmp}ms, sites+affectations ${_tPar}ms)`,"info");
     // sgdiAutoRender (au lieu de renderView brut) préserve le défilement — sinon la page
     // "sautait" à chaque nouvelle tentative de chargement toutes les 15s.
     try{if(typeof sgdiAutoRender==="function")sgdiAutoRender();else renderView()}catch(_e){}
