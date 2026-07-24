@@ -35483,7 +35483,7 @@ function renderFeuillePresentQR(){
     <div class="text-sm text-red-800">${abandonAgents.length} employé(s) sans pointage sur 3 jours consécutifs : ${abandonAgents.slice(0,6).map(a=>escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim()+" · "+(a.matricule||""))).join(" ; ")}${abandonAgents.length>6?" ...":""}</div>
   </div>`:"";
   if(_fpqSortKey){agents.sort((a,b)=>{const fa=findPresenceForAgent(a),fb=findPresenceForAgent(b);let va="",vb="";if(_fpqSortKey==="site"){va=a.affectationCourante?.siteName||fa.siteName||"";vb=b.affectationCourante?.siteName||fb.siteName||"";}else if(_fpqSortKey==="nom"){va=(a.nom||"")+" "+(a.prenom||"");vb=(b.nom||"")+" "+(b.prenom||"");}else if(_fpqSortKey==="code"){va=fa.code||fpqPresenceCode(fa.heureArrivee)||"";vb=fb.code||fpqPresenceCode(fb.heureArrivee)||"";}else if(_fpqSortKey==="arrivee"){va=fa.scanArrivee||fa.heureArrivee||"";vb=fb.scanArrivee||fb.heureArrivee||"";}else if(_fpqSortKey==="depart"){va=fa.scanDepart||fa.heureDepart||"";vb=fb.scanDepart||fb.heureDepart||"";}else if(_fpqSortKey==="etat"){va=fa.valide?"1":"0";vb=fb.valide?"1":"0";}return _fpqSortDir*va.localeCompare(vb);});}
-  const rows=agents.map((a,i)=>{
+  const fpqRowHTML=(a,i,showSite)=>{
     const f=findPresenceForAgent(a);
     const scanA=f.scanArrivee||f.heureArrivee||"";
     const scanD=f.scanDepart||f.heureDepart||"";
@@ -35497,7 +35497,7 @@ function renderFeuillePresentQR(){
     const gpsCell=gpsLat&&gpsLng?`<a href="https://maps.google.com/?q=${gpsLat},${gpsLng}" target="_blank" rel="noopener" class="text-xs font-mono text-blue-700 hover:underline" title="Ouvrir dans Google Maps">${Number(gpsLat).toFixed(5)},${Number(gpsLng).toFixed(5)}</a>`:`<span class="text-xs text-slate-400">—</span>`;
     return`<tr style="border-bottom:1px solid #e2e8f0">
       <td class="px-3 py-2 text-xs text-center text-slate-400 font-mono">${i+1}</td>
-      <td class="px-3 py-2 text-xs font-semibold">${site}</td>
+      ${showSite?`<td class="px-3 py-2 text-xs font-semibold">${site}</td>`:""}
       <td class="px-3 py-2 text-xs"><div class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-[10px] text-slate-400">${escapeHTML(a.matricule||"")}</div></td>
       <td class="px-3 py-2 text-center"><span class="font-mono font-black text-sm px-2 py-1 rounded" style="background:${codeBg};color:${codeColor}">${code||"—"}</span></td>
       <td class="px-3 py-2 text-sm text-center font-mono font-semibold" style="color:${scanA?"#16a34a":"#94a3b8"}">${scanA||"—"}</td>
@@ -35505,7 +35505,33 @@ function renderFeuillePresentQR(){
       <td class="px-3 py-2 text-center">${gpsCell}</td>
       <td class="px-3 py-2 text-center">${valide?`<span class="pill" style="background:#043970;color:#fff;font-size:10px">✓ VALIDÉ</span>`:`<span class="text-xs text-slate-400">En attente</span>`}</td>
     </tr>`;
-  }).join("");
+  };
+  // Superviseur : organiser la feuille par site (une section par site, comme la Feuille
+  // quotidienne) plutôt qu'une liste plate uniquement triable par la colonne SITE.
+  const groupBySite=supervisorModuleActive();
+  const rows=groupBySite?"":agents.map((a,i)=>fpqRowHTML(a,i,true)).join("");
+  let siteGroupsHTML="";
+  if(groupBySite){
+    const grouped={};
+    agents.forEach(a=>{
+      const f=findPresenceForAgent(a);
+      const label=a.affectationCourante?.siteName||f.siteName||"Sans site affecté";
+      const key=a.affectationCourante?.siteId||a.affectationCourante?.siteBackendId||label;
+      if(!grouped[key])grouped[key]={label,rows:[]};
+      grouped[key].rows.push(a);
+    });
+    const siteGroups=Object.values(grouped).sort((a,b)=>a.label.localeCompare(b.label));
+    siteGroupsHTML=siteGroups.map(group=>`<section class="card p-0 mb-4" style="overflow:hidden;border-color:#d8e4f2">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #dbe3ee">
+        <div style="font-size:12px;font-weight:900;color:#0f172a;text-transform:uppercase">${escapeHTML(group.label)}</div>
+        <div style="font-size:11px;font-weight:800;color:#64748b">${group.rows.length} agent${group.rows.length>1?"s":""}</div>
+      </div>
+      <div style="overflow-x:auto"><table class="w-full" style="border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#043970;color:#fff"><th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:40px">N°</th><th class="px-3 py-2 text-left text-xs font-bold" style="border:1px solid #cbd5e1">NOM PRÉNOM</th><th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:60px">CODE</th><th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:110px">HEURE ARRIVÉE</th><th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:110px">HEURE DÉPART</th><th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;white-space:nowrap">POSITION GPS</th><th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:100px">ÉTAT</th></tr></thead>
+        <tbody>${group.rows.map((a,i)=>fpqRowHTML(a,i,false)).join("")}</tbody>
+      </table></div>
+    </section>`).join("");
+  }
   const present=agents.filter(a=>{const f=findPresenceForAgent(a);return !!POINTAGE_CODES[String(f.code||"").toUpperCase()]?.isPresent||fpqPresenceCode(f.heureArrivee)==="P"||!!f.scanArrivee||(!!f.heureArrivee&&!POINTAGE_CODES[String(f.heureArrivee).toUpperCase()]);}).length;
   if(!_fpqIsLiveRefresh) setTimeout(fpqStartLiveRefresh,100);
   return`${abandonBanner}<div class="card p-4 mb-4"><div class="flex items-center justify-between flex-wrap gap-3">
@@ -35532,10 +35558,10 @@ function renderFeuillePresentQR(){
     <div class="card p-3 text-center" style="background:#f0f9ff"><div class="text-xs text-blue-700 font-semibold">Total agents</div><div class="text-2xl font-black text-blue-700">${agents.length}</div></div>
   </div>
   </div>
-  <div class="card p-2"><div style="overflow-x:auto"><table class="w-full" style="border-collapse:collapse;font-size:13px">
+  ${groupBySite?`<div id="fpq-live-tbody">${siteGroupsHTML||`<div class="card p-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</div>`}</div>`:`<div class="card p-2"><div style="overflow-x:auto"><table class="w-full" style="border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#043970;color:#fff">${(()=>{const sk=_fpqSortKey,sd=_fpqSortDir;const th=(label,key,align,w)=>{const act=sk===key;const arr=act?(sd===1?"▲":"▼"):"⇅";return`<th onclick="fpqSetSort('${key}')" class="px-3 py-2 text-${align} text-xs font-bold" style="border:1px solid #cbd5e1;${w?`width:${w};`:""}cursor:pointer;user-select:none;white-space:nowrap">${label} <span style="font-size:9px;opacity:${act?1:.45}">${arr}</span></th>`;};return`<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:40px">N°</th>${th("SITE","site","left")}${th("NOM PRÉNOM","nom","left")}${th("CODE","code","center","60px")}${th("HEURE ARRIVÉE","arrivee","center","110px")}${th("HEURE DÉPART","depart","center","110px")}<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;white-space:nowrap">POSITION GPS</th>${th("ÉTAT","etat","center","100px")}`;})()}</tr></thead>
     <tbody id="fpq-live-tbody">${rows||`<tr><td colspan="8" class="px-3 py-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</td></tr>`}</tbody>
-  </table></div></div>`;
+  </table></div></div>`}`;
 }
 
 function renderPointage(view,sub,arg,_skipEnsure){
