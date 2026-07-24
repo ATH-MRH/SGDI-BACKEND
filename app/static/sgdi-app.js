@@ -3764,6 +3764,12 @@ function supervisorScopeAgentsForSession(soc){
     _supervisorScopeCache:true
   }));
 }
+function supervisorHasUsableScopeCache(soc){
+  const norm=soc?normalizeSocieteName(soc):"";
+  const scopeRows=Array.isArray(supervisorScopeForUsername()?.agents)?supervisorScopeForUsername().agents:[];
+  if(scopeRows.some(a=>!norm||normalizeSocieteName(a.societe||"")===norm))return true;
+  return (db.agents||[]).some(a=>employeeIsPointageEligible(a,soc)&&agentInSupervisorScope(a));
+}
 function activeSitesForCurrentScope(){
   const soc=typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"";
   return siteOpsSitesForScope(soc);
@@ -4204,7 +4210,7 @@ function sgdiModuleHostConfigs(){
       homeRoute:"superviseur/dashboard",
       sections:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard"},
-        {label:"FEUILLE POINTAGE",route:"pointage/feuille"},
+        {label:"POINTAGE MENSUEL",route:"pointage/feuille"},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs"},
         {label:"FICHE DE POSITION",route:"fiches"}
       ]
@@ -5928,7 +5934,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
     ],
     superviseur:[
-      ["TABLEAU DE BORD","superviseur/dashboard"],["FEUILLE POINTAGE","pointage/feuille"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","superviseur/dashboard"],["POINTAGE MENSUEL","pointage/feuille"],["FEUILLE QUOTIDIENNE","pointage/saisie"],["PERSONNEL RATTACHÉ","effectif/actifs"],["FICHE DE POSITION","fiches"],["MAIN COURANTE","incidents/dashboard"]
     ],
     materiel:[
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
@@ -6122,7 +6128,8 @@ function renderSidebar(){
       ],
       superviseur:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"]},
-        {label:"FEUILLE POINTAGE",route:"pointage/feuille",aliases:["pointage"]},
+        {label:"POINTAGE MENSUEL",route:"pointage/feuille",aliases:["pointage"]},
+        {label:"FEUILLE QUOTIDIENNE",route:"pointage/saisie",aliases:["pointage/saisie"]},
         {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"]},
         {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"]},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
@@ -33435,16 +33442,16 @@ function renderSuperviseur(view,sub,arg){
   const absents=todayRows.filter(f=>["A","AB"].includes(fpqPresenceCode(f.heureArrivee))).length;
   const kpi=(label,value,route,color,desc)=>`<a href="#/${route}" class="card p-4 block" style="text-decoration:none;color:inherit;border-left:4px solid ${color}"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${value}</div><div class="text-xs text-slate-500 mt-1">${desc||""}</div></a>`;
   view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap">
-    <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Module terrain</div><h1 class="text-2xl font-black uppercase mt-1">Tableau de bord superviseur</h1><p class="text-sm text-slate-500">Sites à charge, personnel rattaché et feuille de pointage quotidienne.</p></div>
-    <div class="flex gap-2 flex-wrap"><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Feuille pointage</button><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('fiches')">Fiches employés</button></div>
+    <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Module terrain</div><h1 class="text-2xl font-black uppercase mt-1">Tableau de bord superviseur</h1><p class="text-sm text-slate-500">Sites à charge, personnel rattaché, feuille quotidienne et pointage mensuel.</p></div>
+    <div class="flex gap-2 flex-wrap"><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/saisie')">Feuille quotidienne</button><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Pointage mensuel</button><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('fiches')">Fiches employés</button></div>
   </div>
   ${opsSupervisorReadOnlyNoticeHTML()}
   <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5">
     ${kpi("Sites à charge",sites.length,"sites/actifs","#0f766e","Périmètre autorisé")}
     ${kpi("Employés rattachés",agents.length,"effectif/actifs","#043970","Personnel des sites")}
-    ${kpi("Lignes du jour",todayRows.length,"pointage/feuille","#2563eb",formatDate(today()))}
-    ${kpi("Présents",presents,"pointage/feuille","#16a34a",pointes+" pointé(s)")}
-    ${kpi("Absents",absents,"pointage/feuille","#dc2626","Feuille du jour")}
+    ${kpi("Lignes du jour",todayRows.length,"pointage/saisie","#2563eb",formatDate(today()))}
+    ${kpi("Présents",presents,"pointage/saisie","#16a34a",pointes+" pointé(s)")}
+    ${kpi("Absents",absents,"pointage/saisie","#dc2626","Feuille du jour")}
   </div>
   <div class="card overflow-hidden mb-4">
     <h3 class="font-black p-4 pb-0 mb-2">Sites à charge</h3>
@@ -34990,7 +34997,7 @@ async function ptSupValiderDay(agentId,ym,day){
       const idx=db.pointages.findIndex(p=>String(p.agentId)===String(item.agentId)&&p.periode===item.periode);
       if(idx>=0)db.pointages[idx]=item;else db.pointages.push(item);
     }
-    await sgdiPullState({silent:true});
+    else await sgdiPullState({silent:true});
     logActivity&&logActivity("Pointage jour validé","Agent "+agentId+" · "+ym+"-"+day);
     toast("Journée validée","success");
     renderView();
@@ -35054,7 +35061,7 @@ async function ptSupervisorApplyCorrection(agentId,ym,day,code){
       if(idx>=0)db.pointages[idx]=item;else db.pointages.push(item);
     }
     closeModal();
-    await sgdiPullState({silent:true});
+    if(!item)await sgdiPullState({silent:true});
     toast("Pointage corrigé et validé","success");
     renderView();
   }catch(e){toast("Correction refusée : "+(e.message||e),"error")}
@@ -35064,9 +35071,10 @@ function ptSupervisorEnsureDataForEmptyView(soc,force){
   if(_ptSupervisorDataLoading||!sgdiBackendShouldUse()||!sgdiAuthToken())return false;
   const key=normalizeSocieteName(soc||"__all__");
   window.__ptSupervisorReloadAt=window.__ptSupervisorReloadAt||{};
-  // force=true (arrivée fraîche sur l'onglet, cf. renderPointage) ignore le délai de 15s :
-  // l'utilisateur veut un rechargement immédiat au clic, pas une attente de la boucle de fond.
-  if(!force&&Date.now()-(window.__ptSupervisorReloadAt[key]||0)<15000)return false;
+  const hasCache=supervisorHasUsableScopeCache(soc);
+  const ttl=hasCache?120000:30000;
+  if(Date.now()-(window.__ptSupervisorReloadAt[key]||0)<ttl)return false;
+  if(force&&hasCache)return false;
   window.__ptSupervisorReloadAt[key]=Date.now();
   _ptSupervisorDataLoading=true;
   const _t0=Date.now();
@@ -35085,10 +35093,8 @@ function ptSupervisorEnsureDataForEmptyView(soc,force){
     ]);
     const _tPar=Date.now()-_tPar0;
     if(errors.length)console.warn("Chargement superviseur incomplet",errors);
-    // Diagnostic temporaire : si le rechargement complet dépasse 3s, on affiche le détail des
-    // temps par étape (visible sans devtools) pour identifier l'appel réseau réellement lent.
     const _tTotal=Date.now()-_t0;
-    if(_tTotal>3000&&typeof toast==="function")toast(`Chargement superviseur : ${_tTotal}ms (employés ${_tEmp}ms, sites+affectations ${_tPar}ms)`,"info");
+    if(_tTotal>5000&&typeof toast==="function")toast(`Chargement superviseur lent : ${_tTotal}ms`,"info");
     // sgdiAutoRender (au lieu de renderView brut) préserve le défilement — sinon la page
     // "sautait" à chaque nouvelle tentative de chargement toutes les 15s.
     try{if(typeof sgdiAutoRender==="function")sgdiAutoRender();else renderView()}catch(_e){}
@@ -35102,14 +35108,11 @@ function renderPointageSaisieSuperviseur(freshNav){
   const ym=`${supYr}-${supMo}`;
   const soc=ptCurrentSoc();
   ptSyncFeuillePresenceMonth(ym);
-  // Arrivée fraîche sur l'onglet "Saisie quotidienne" : on relance tout de suite un
-  // rechargement en arrière-plan (sans attendre les 15s de la boucle de secours), y compris
-  // si des agents s'affichent déjà, pour éviter de montrer des données figées/périmées.
-  if(freshNav)ptSupervisorEnsureDataForEmptyView(soc,true);
   const all=ptFilterAgents(ptSupervisorAgentsForSoc(soc)).sort((x,y)=>{
     const sx=ptSupervisorSiteLabel(x),sy=ptSupervisorSiteLabel(y);
     return sx.localeCompare(sy)||(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||"");
   });
+  if(freshNav&&!all.length)ptSupervisorEnsureDataForEmptyView(soc,true);
   const [yr,mo]=ym.split("-").map(Number);
   const day=supDay;
   const dayLabel=`${day}/${String(mo).padStart(2,"0")}/${yr}`;
@@ -35165,8 +35168,8 @@ function renderPointageSaisieSuperviseur(freshNav){
     </section>`;
   };
   return `${filterBar}<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
-    <div><h2 class="text-2xl font-black uppercase">Saisie quotidienne superviseur</h2><p class="text-sm text-slate-500">Personnel rattaché par site d'affectation · ${escapeHTML(dayLabel)} · ${all.length} agent${all.length>1?"s":""}</p></div>
-    <button type="button" class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Feuille quotidienne</button>
+    <div><h2 class="text-2xl font-black uppercase">Feuille quotidienne superviseur</h2><p class="text-sm text-slate-500">Personnel rattaché par site d'affectation · ${escapeHTML(dayLabel)} · ${all.length} agent${all.length>1?"s":""}</p></div>
+    <button type="button" class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/feuille')">Pointage mensuel</button>
   </div>
   ${groups.map(tableForGroup).join("")}`;
 }
@@ -35345,7 +35348,7 @@ async function fpqLiveRefresh(){
   try{
     const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
     const data=Array.isArray(res)?res:(res?.data||[]);
-    if(data.length){db.feuillePresence=data;saveDB();}
+    if(data.length)db.feuillePresence=data;
     const scrollY=window.scrollY;
     _fpqIsLiveRefresh=true;
     renderView();
@@ -35363,7 +35366,7 @@ function fpqStartLiveRefresh(){
     const tag=(document.activeElement&&document.activeElement.tagName)||"";
     if(["INPUT","TEXTAREA","SELECT"].includes(tag))return;
     fpqLiveRefresh();
-  },5000);
+  },supervisorModuleActive()?30000:15000);
 }
 function fpqStopLiveRefresh(){clearInterval(_fpqLiveTimer);_fpqLiveTimer=null;}
 
@@ -35455,7 +35458,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   // Détecte une arrivée fraîche sur cet onglet pointage (route différente de la dernière
   // vue rendue) : sert à déclencher un rechargement instantané, non throttlé, des données
-  // superviseur au clic sur "Saisie quotidienne" au lieu d'attendre la boucle de fond (15s).
+  // superviseur au clic sur "Feuille quotidienne" au lieu d'attendre la boucle de fond.
   // Calculé AVANT toute réassignation de sub/arg ci-dessous, et propagé tel quel à l'appel
   // récursif après sgdiEnsureEmployeesForDisplay pour ne pas perdre le signal.
   const _ptFreshNav=sgdiLastRenderedPath!==`pointage/${sub||"dashboard"}${arg?"/"+arg:""}`;
@@ -35479,12 +35482,16 @@ function renderPointage(view,sub,arg,_skipEnsure){
   if(hideAuto&&sub==="auto")sub="saisie";
   if(sub==="scan")sub="feuille";
   const supervisorActive=supervisorModuleActive();
-  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorActive&&k==="qr"));
-  const tabsHTML=allowedTabs.map(([k,l])=>`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${supervisorActive&&k==="saisie"?"Saisie quotidienne":l}</button>`).join("");
+  if(supervisorActive&&sub==="auto")sub="feuille";
+  const allowedTabs=(isDrh?POINTAGE_TABS.filter(([k])=>k!=="saisie"&&k!=="qr"):POINTAGE_TABS).filter(([k])=>!(hideAuto&&k==="auto")).filter(([k])=>!(supervisorActive&&(k==="qr"||k==="auto")));
+  const tabsHTML=allowedTabs.map(([k,l])=>{
+    const label=supervisorActive&&k==="feuille"?"Pointage mensuel":(supervisorActive&&k==="saisie"?"Feuille quotidienne":l);
+    return`<button onclick="navigate('pointage/${k}')" class="px-3 py-2 text-sm font-semibold border-b-2 ${sub===k?"border-cyan-600 text-cyan-700":"border-transparent text-slate-500 hover:text-slate-800"}">${label}</button>`;
+  }).join("");
   const head=sub==="dashboard"?"":`<div class="flex items-center justify-between mb-4 flex-wrap gap-3"><h1 class="text-2xl font-bold">🕒 Pointage du personnel</h1></div><div class="flex gap-1 mb-5 border-b border-slate-200 overflow-x-auto">${tabsHTML}</div>`;
   let body="";
   if(sub==="dashboard")body=renderPointageDashboard(isDrh);
-  else if(sub==="feuille"){body=renderFeuillePresentQR();}
+  else if(sub==="feuille"){body=supervisorActive?renderPointageSaisieAuto():renderFeuillePresentQR();}
   else if(sub==="qr"&&!isDrh&&!supervisorModuleActive()){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
   else if(sub==="saisie"&&!isDrh)body=supervisorActive?renderPointageSaisieSuperviseur(_ptFreshNav):renderPointageSaisie();
   else if(sub==="auto")body=renderPointageSaisieAuto();
@@ -35557,7 +35564,8 @@ function renderPointageSaisie(){
 function renderPointageSaisieAuto(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
   ptNormalizeAbandonsForMonth(ym,soc);
-  const ag=pointageEligibleAgents(soc);
+  const supervisorActive=supervisorModuleActive();
+  const ag=supervisorActive?ptSupervisorAgentsForSoc(soc):pointageEligibleAgents(soc);
   ag.sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
@@ -35580,7 +35588,7 @@ function renderPointageSaisieAuto(){
       <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
     </div>
   </div>
-  <div class="text-[11px] mt-2 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — Reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne.</div>
+  <div class="text-[11px] mt-2 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — ${supervisorActive?"Pointage mensuel actualisé automatiquement par la Feuille quotidienne.":"Reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne."}</div>
   </div>`;
   const filtered=ptFilterAgents(ag);
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
@@ -35620,7 +35628,8 @@ function renderPointageSaisieAuto(){
       <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 4px;text-align:center;position:sticky;left:0;background:#f1f5f9;z-index:3;width:34px;min-width:34px;white-space:nowrap;font-size:8px">N°</th><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:34px;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:22px;text-align:center;font-size:8px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:22px;text-align:center;font-size:8px">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:22px;text-align:center;font-size:8px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:22px;text-align:center;font-size:8px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:22px;text-align:center;font-size:8px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:22px;text-align:center;font-size:8px">R</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
-  return filterBar+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">Saisie automatique — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
+  const title=supervisorActive?"Pointage mensuel":"Saisie automatique";
+  return filterBar+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">${title} — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
     <div style="overflow-x:auto;max-width:100%;pointer-events:none;user-select:none">${tableHTML}</div></div>`;
 }
 let _ptAutoSaisieRefreshing=false;
