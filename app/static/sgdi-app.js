@@ -34151,6 +34151,36 @@ function setFpqFaction(v){sessionStorage.setItem("fpqFaction",v||"");renderView(
 /* ---- SAISIE QUOTIDIENNE SUPERVISEUR — date sélectionnée (indépendante du mois DRH/OPS) ---- */
 function ptSupDate(){return sessionStorage.getItem("ptSupDate")||today()}
 function setPtSupDate(v){sessionStorage.setItem("ptSupDate",v||today());renderView()}
+function ptSupervisorSetDatePart(part,value){
+  const cur=ptSupDate();
+  let [y,m,d]=String(cur||today()).split("-");
+  if(part==="day")d=String(value||d||"01").padStart(2,"0");
+  if(part==="month")m=String(value||m||"01").padStart(2,"0");
+  if(part==="year")y=String(value||y||new Date().getFullYear());
+  const maxD=new Date(parseInt(y,10),parseInt(m,10),0).getDate();
+  d=String(Math.min(parseInt(d||"1",10),maxD)).padStart(2,"0");
+  setPtSupDate(`${y}-${m}-${d}`);
+}
+function ptSupervisorDateSelectHTML(day,month,year){
+  const y=String(year||new Date().getFullYear());
+  const m=String(month||"01").padStart(2,"0");
+  const d=String(day||"01").padStart(2,"0");
+  const maxD=new Date(parseInt(y,10),parseInt(m,10),0).getDate();
+  const years=drumYearOpts(6);
+  if(!years.some(o=>o.value===y))years.push({value:y,label:y});
+  years.sort((a,b)=>parseInt(a.value,10)-parseInt(b.value,10));
+  const select=(label,part,value,opts)=>`<label class="flex flex-col gap-1 text-[10px] font-black uppercase tracking-[.12em] text-slate-500">
+    ${escapeHTML(label)}
+    <select class="select text-sm font-extrabold" style="min-width:118px;height:40px;border-radius:10px" onchange="ptSupervisorSetDatePart('${part}',this.value)">
+      ${opts.map(o=>`<option value="${escapeHTML(o.value)}"${o.value===value?" selected":""}>${escapeHTML(o.label)}</option>`).join("")}
+    </select>
+  </label>`;
+  return`<div class="flex flex-wrap items-end gap-2">
+    ${select("Jour","day",d,Array.from({length:maxD},(_,i)=>({value:String(i+1).padStart(2,"0"),label:String(i+1).padStart(2,"0")})))}
+    ${select("Mois","month",m,drumMonthOpts())}
+    ${select("Année","year",y,years)}
+  </div>`;
+}
 function fpqStatusMatch(f,status){
   const c=fpqPresenceCode(f?.heureArrivee);
   if(!status)return true;
@@ -35015,7 +35045,7 @@ function renderPointageSaisieSuperviseur(freshNav){
   });
   const groups=Object.values(grouped).sort((a,b)=>a.label.localeCompare(b.label));
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
-    ${drumMultiHTML([{id:"ptsup-drum-day",label:"Jour",opts:drumDayOpts(),selected:supDay||"01",cb:"drumPtSupDateSync"},{id:"ptsup-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:supMo||"01",cb:"drumPtSupDateSync"},{id:"ptsup-drum-yr",label:"Année",opts:drumYearOpts(6),selected:supYr||String(new Date().getFullYear()),cb:"drumPtSupDateSync"}])}
+    ${ptSupervisorDateSelectHTML(supDay||"01",supMo||"01",supYr||String(new Date().getFullYear()))}
     ${ptSearchBarHTML("Rechercher nom, code, site...")}
     <div class="flex-1"></div>
     <button class="btn btn-ghost text-xs" onclick="window.print()">Imprimer</button>
