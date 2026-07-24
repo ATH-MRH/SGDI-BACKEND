@@ -3668,36 +3668,50 @@ function siteMatchesReference(site,ref){
 function supervisorModuleActive(){
   return session?.transverse==="superviseur"||normalizeStructureList(session?.structuresAutorisees).includes("superviseur")||(typeof isOpsSupervisorReadOnlySession==="function"&&isOpsSupervisorReadOnlySession());
 }
-function supervisorAuthorizedSiteIds(){
+function supervisorAuthorizedSiteScope(){
   if(!supervisorModuleActive())return null;
   const values=(Array.isArray(session?.sitesAutorises)?session.sitesAutorises:[]).map(v=>String(v||"")).filter(v=>v&&v!=="NaN"&&v!=="null"&&v!=="undefined");
-  return values.length?new Set(values):null;
+  if(!values.length)return null;
+  const ids=new Set(values);
+  const names=new Set(values.map(v=>normalizedSearchText(v)).filter(Boolean));
+  (db.sites||[]).forEach(site=>{
+    const siteIds=[site.id,site.backendId].map(v=>String(v||"")).filter(Boolean);
+    const siteNames=[site.nom,site.intitule].map(v=>normalizedSearchText(v||"")).filter(Boolean);
+    if(siteIds.some(id=>ids.has(id))||siteNames.some(name=>names.has(name))){
+      siteIds.forEach(id=>ids.add(id));
+      siteNames.forEach(name=>names.add(name));
+    }
+  });
+  return {ids,names};
+}
+function supervisorAuthorizedSiteIds(){
+  return supervisorAuthorizedSiteScope()?.ids||null;
 }
 function siteInSupervisorScope(site){
-  const ids=supervisorAuthorizedSiteIds();
-  if(!ids)return true;
-  return [site?.id,site?.backendId].some(v=>ids.has(String(v||"")));
+  const scope=supervisorAuthorizedSiteScope();
+  if(!scope)return true;
+  return [site?.id,site?.backendId].some(v=>scope.ids.has(String(v||"")))||[site?.nom,site?.intitule].some(v=>scope.names.has(normalizedSearchText(v||"")));
 }
 function agentInSupervisorScope(agent){
   if(!supervisorModuleActive())return true;
   if(agent&&(String(agent.statut||"").toLowerCase()==="suspendu"||employeeIsFormer(agent)))return false;
-  const ids=supervisorAuthorizedSiteIds();
-  if(!ids)return true;
+  const scope=supervisorAuthorizedSiteScope();
+  if(!scope)return true;
   const aff=agentLiveAffectation(agent)||agent?.affectationCourante||{};
   const site=(db.sites||[]).find(s=>siteMatchesReference(s,aff));
-  return [aff.siteId,aff.siteBackendId,aff.site_id,agent?.siteId,agent?.siteBackendId,site?.id,site?.backendId].some(v=>ids.has(String(v||"")));
+  return [aff.siteId,aff.siteBackendId,aff.site_id,agent?.siteId,agent?.siteBackendId,site?.id,site?.backendId].some(v=>scope.ids.has(String(v||"")))||[aff.siteName,aff.site,site?.nom,site?.intitule].some(v=>scope.names.has(normalizedSearchText(v||"")));
 }
 function presenceInSupervisorScope(row){
-  const ids=supervisorAuthorizedSiteIds();
-  if(!ids)return true;
+  const scope=supervisorAuthorizedSiteScope();
+  if(!scope)return true;
   const agent=row?.agentId?(db.agents||[]).find(a=>String(a.id)===String(row.agentId)):null;
-  return [row?.siteId,row?.siteBackendId,row?.site_id].some(v=>ids.has(String(v||"")))||(agent&&agentInSupervisorScope(agent));
+  return [row?.siteId,row?.siteBackendId,row?.site_id].some(v=>scope.ids.has(String(v||"")))||[row?.siteName,row?.site].some(v=>scope.names.has(normalizedSearchText(v||"")))||(agent&&agentInSupervisorScope(agent));
 }
 function incidentInSupervisorScope(incident){
-  const ids=supervisorAuthorizedSiteIds();
-  if(!ids)return true;
+  const scope=supervisorAuthorizedSiteScope();
+  if(!scope)return true;
   const agent=incident?.agentId?(db.agents||[]).find(a=>String(a.id)===String(incident.agentId)):null;
-  return [incident?.siteId,incident?.siteBackendId,incident?.site_id].some(v=>ids.has(String(v||"")))||(agent&&agentInSupervisorScope(agent));
+  return [incident?.siteId,incident?.siteBackendId,incident?.site_id].some(v=>scope.ids.has(String(v||"")))||[incident?.siteName,incident?.site].some(v=>scope.names.has(normalizedSearchText(v||"")))||(agent&&agentInSupervisorScope(agent));
 }
 function activeSitesForCurrentScope(){
   const soc=typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"";
@@ -34759,6 +34773,24 @@ async function ptSupervisorApplyCorrection(agentId,ym,day,code){
     renderView();
   }catch(e){toast("Correction refusée : "+(e.message||e),"error")}
 }
+let _ptSupervisorDataLoading=false;
+function ptSupervisorEnsureDataForEmptyView(soc){
+  if(_ptSupervisorDataLoading||!sgdiBackendShouldUse()||!sgdiAuthToken())return false;
+  const key=normalizeSocieteName(soc||"__all__");
+  window.__ptSupervisorReloadAt=window.__ptSupervisorReloadAt||{};
+  if(Date.now()-(window.__ptSupervisorReloadAt[key]||0)<15000)return false;
+  window.__ptSupervisorReloadAt[key]=Date.now();
+  _ptSupervisorDataLoading=true;
+  (async()=>{
+    const errors=[];
+    try{await sgdiPullEmployees({silent:true,society:soc||""})}catch(e){errors.push(e?.message||String(e))}
+    try{if(typeof syncSitesFromPostgres==="function")await syncSitesFromPostgres()}catch(e){errors.push(e?.message||String(e))}
+    try{if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){errors.push(e?.message||String(e))}
+    if(errors.length)console.warn("Chargement superviseur incomplet",errors);
+    try{renderView()}catch(_e){}
+  })().finally(()=>{_ptSupervisorDataLoading=false});
+  return true;
+}
 function renderPointageSaisieSuperviseur(){
   setTimeout(()=>{if(typeof _sgdiUpdateEditFab==="function")_sgdiUpdateEditFab()},0);
   const supDate=ptSupDate();
@@ -34787,7 +34819,12 @@ function renderPointageSaisieSuperviseur(){
     <div class="flex-1"></div>
     <button class="btn btn-ghost text-xs" onclick="window.print()">Imprimer</button>
   </div></div>`;
-  if(!all.length)return filterBar+`<div class="card p-8 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé rattaché aux sites autorisés pour ${escapeHTML(soc||"ce périmètre")}.`}</div>`;
+  if(!all.length){
+    const loading=!ptCurrentSearch()&&ptSupervisorEnsureDataForEmptyView(soc);
+    const ids=supervisorAuthorizedSiteIds();
+    const hint=ids&&ids.size?`Sites autorisés : ${[...ids].slice(0,6).map(escapeHTML).join(", ")}${ids.size>6?"...":""}`:"Périmètre sites global ou non renseigné.";
+    return filterBar+`<div class="card p-8 text-center text-slate-500">${loading?`Chargement PostgreSQL des employés, sites et affectations...`:ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé rattaché aux sites autorisés pour ${escapeHTML(soc||"ce périmètre")}.`}<div class="text-xs mt-2 text-slate-400">${hint}</div></div>`;
+  }
   const headers=`<thead><tr style="background:#e5e7eb;color:#1f2937;text-transform:uppercase;letter-spacing:.08em">
     <th style="border:1px solid #dbe3ee;width:42px;padding:10px 6px;text-align:center;font-size:11px;font-weight:900">N°</th>
     <th style="border:1px solid #dbe3ee;min-width:180px;padding:10px 8px;text-align:left;font-size:11px;font-weight:900">Agent</th>
