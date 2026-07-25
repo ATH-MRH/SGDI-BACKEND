@@ -2249,7 +2249,11 @@ async function sgdiBackgroundSqlSync(options){
     const syncErrors=syncResults.filter(r=>r.status==="rejected").map(r=>r.reason?.message||String(r.reason));
     if(syncErrors.length){
       console.warn("Synchronisation PostgreSQL partielle",syncErrors);
-      if(!opt.silent&&typeof toast==="function")toast("Chargement partiel : "+syncErrors.join(" · "),"warning");
+      // "silent" ne doit couper que les confirmations de routine, jamais les vraies pannes :
+      // TOUS les appelants de sgdiPullState/sgdiBackgroundSqlSync passent silent:true, donc ce
+      // toast ne s'affichait JAMAIS en pratique — un échec de synchro (site/employés/affectations
+      // non chargés) restait invisible, laissant des écrans à 0 sans aucune explication.
+      if(typeof toast==="function")toast("Chargement partiel : "+syncErrors.join(" · "),"warning");
     }
     const purged=typeof purgeRemovedSocieteData==="function"?purgeRemovedSocieteData(db):false;
     if(typeof normalizePostesInDB==="function")normalizePostesInDB();
@@ -33476,7 +33480,7 @@ function renderOPS(view,sub,arg){
       <button type="button" onclick="openOpsStatModal('absents')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#fee2e2;border:1px solid #fca5a5"><div class="text-xs font-black uppercase" style="color:#991b1b">Absents</div><div class="text-3xl font-black mt-1" style="color:#dc2626">${_fpqAbsList.length}</div><div class="text-xs mt-1" style="color:#b91c1c">Feuille du jour</div></button>
       <button type="button" onclick="openOpsStatModal('malades')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#fff7ed;border:1px solid #fed7aa"><div class="text-xs font-black uppercase" style="color:#9a3412">Maladie</div><div class="text-3xl font-black mt-1" style="color:#ea580c">${_fpqMalList.length}</div><div class="text-xs mt-1" style="color:#c2410c">Feuille du jour</div></button>
       <button type="button" onclick="openOpsStatModal('suspendus')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#f5f3ff;border:1px solid #ddd6fe"><div class="text-xs font-black uppercase" style="color:#5b21b6">Suspendus</div><div class="text-3xl font-black mt-1" style="color:#7c3aed">${_fpqSuspList.length}</div><div class="text-xs mt-1" style="color:#6d28d9">Feuille du jour</div></button>
-      <button type="button" onclick="openOpsStatModal('sanctions')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#1f2937;border:1px solid #374151"><div class="text-xs font-black uppercase" style="color:#9ca3af">En sanction</div><div class="text-3xl font-black mt-1" style="color:#f9fafb">${_sanctionList.length}</div><div class="text-xs mt-1" style="color:#9ca3af">Actif</div></button>
+      <button type="button" onclick="openOpsStatModal('sanctions')" class="p-4 rounded-xl text-left cursor-pointer hover:opacity-90 transition" style="background:#7f1d1d;border:1px solid #991b1b"><div class="text-xs font-black uppercase" style="color:#fecaca">En sanction</div><div class="text-3xl font-black mt-1" style="color:#fff">${_sanctionList.length}</div><div class="text-xs mt-1" style="color:#fecaca">Actif</div></button>
     </div>
   </div>
   <div class="card p-5 mb-6 overflow-hidden">
@@ -35618,13 +35622,19 @@ function renderFeuillePresentQR(){
     <button type="button" onclick="fpqOpenDailyCodeModal('')" class="card p-3 text-center" style="background:#fee2e2;cursor:pointer;border:none"><div class="text-xs text-red-700 font-semibold">Non pointés</div><div class="text-2xl font-black text-red-700">${nonPointeCount}</div></button>
     <div class="card p-3 text-center" style="background:#f0f9ff"><div class="text-xs text-blue-700 font-semibold">Total agents</div><div class="text-2xl font-black text-blue-700">${agents.length}</div></div>
   </div>
-  <div class="mt-3">${dailyCodeCardsHTML}</div>
+  <div class="flex items-center justify-between mt-3 mb-1">
+    <div class="text-xs font-black uppercase text-slate-500">Compteurs par code</div>
+    <button type="button" class="btn btn-ghost text-xs" onclick="fpqToggleCodeCards()">${fpqCodeCardsHidden()?"▼ Afficher les compteurs":"▲ Masquer les compteurs"}</button>
+  </div>
+  ${fpqCodeCardsHidden()?"":dailyCodeCardsHTML}
   </div>
   ${groupBySite?`<div id="fpq-live-tbody">${siteGroupsHTML||`<div class="card p-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</div>`}</div>`:`<div class="card p-2"><div style="overflow-x:auto"><table class="w-full" style="border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#043970;color:#fff">${(()=>{const sk=_fpqSortKey,sd=_fpqSortDir;const th=(label,key,align,w)=>{const act=sk===key;const arr=act?(sd===1?"▲":"▼"):"⇅";return`<th onclick="fpqSetSort('${key}')" class="px-3 py-2 text-${align} text-xs font-bold" style="border:1px solid #cbd5e1;${w?`width:${w};`:""}cursor:pointer;user-select:none;white-space:nowrap">${label} <span style="font-size:9px;opacity:${act?1:.45}">${arr}</span></th>`;};return`<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:40px">N°</th>${th("SITE","site","left")}${th("NOM PRÉNOM","nom","left")}${th("CODE","code","center","60px")}${th("HEURE ARRIVÉE","arrivee","center","110px")}${th("HEURE DÉPART","depart","center","110px")}<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;white-space:nowrap">POSITION GPS</th>${th("ÉTAT","etat","center","100px")}`;})()}</tr></thead>
     <tbody id="fpq-live-tbody">${rows||`<tr><td colspan="8" class="px-3 py-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</td></tr>`}</tbody>
   </table></div></div>`}`;
 }
+function fpqCodeCardsHidden(){return sessionStorage.getItem("fpqCodeCardsHidden")==="1"}
+function fpqToggleCodeCards(){sessionStorage.setItem("fpqCodeCardsHidden",fpqCodeCardsHidden()?"":"1");renderView()}
 function fpqOpenDailyCodeModal(code){
   const lists=window._fpqDailyCodeLists||{};
   const key=code||"__none__";
