@@ -2277,11 +2277,14 @@ function sgdiSqlSyncTasks(options){
     if(!employeesTask)employeesTask=sgdiPullEmployees({silent:true});
     return employeesTask;
   };
-  if(scope.drh)tasks.push((async()=>{await ensureEmployees();await syncCandidatesFromPostgres()})());
+  if(scope.drh)tasks.push((async()=>{await Promise.all([ensureEmployees(),syncCandidatesFromPostgres()])})());
   if(scope.ops){
     tasks.push((async()=>{
-      await ensureEmployees();
-      await syncSitesFromPostgres();
+      // Employés et sites n'ont pas de dépendance entre eux : les lancer ensemble (2 requêtes,
+      // la limite déjà utilisée partout ailleurs dans ce fichier) au lieu de les enchaîner l'un
+      // après l'autre économise un aller-retour réseau entier sur ce chargement complet — celui
+      // qui bloque tout l'affichage (renderView) tant qu'il n'est pas terminé.
+      await Promise.all([ensureEmployees(),syncSitesFromPostgres()]);
       const opsTasks=[];
       if(typeof syncAssignmentsFromPostgres==="function")opsTasks.push(syncAssignmentsFromPostgres());
       if(typeof syncOpsMovementsFromPostgres==="function")opsTasks.push(syncOpsMovementsFromPostgres());
