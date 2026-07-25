@@ -2290,14 +2290,18 @@ function sgdiSqlSyncTasks(options){
   }
   if(scope.superviseur){
     // Scope superviseur : employés filtrés par société (pas l'appel complet company-wide),
-    // sites (pas de filtrage serveur possible) et affectations. Pas de candidats (DRH),
-    // pas de mouvements OPS (le seul écran qui les lit a son propre auto-sync :
-    // ensureOpsMovementSqlSync).
+    // sites (filtrés serveur par sites autorisés) et affectations (idem). Pas de candidats
+    // (DRH), pas de mouvements OPS (le seul écran qui les lit a son propre auto-sync :
+    // ensureOpsMovementSqlSync). Les 3 requêtes sont indépendantes au niveau réseau —
+    // sgdiPullEmployees() réapplique db.assignments après coup quel que soit l'ordre
+    // d'arrivée — donc on les lance ensemble au lieu d'attendre les employés avant de
+    // démarrer sites/affectations : ça évite d'ajouter un aller-retour réseau entier au
+    // chargement dès la connexion.
     tasks.push((async()=>{
       const soc=session?.societe||"";
-      await sgdiPullEmployees({silent:true,society:soc});
-      await syncSitesFromPostgres();
-      if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres();
+      const supTasks=[sgdiPullEmployees({silent:true,society:soc}),syncSitesFromPostgres()];
+      if(typeof syncAssignmentsFromPostgres==="function")supTasks.push(syncAssignmentsFromPostgres());
+      await Promise.all(supTasks);
     })());
   }
   if(scope.materiel)tasks.push((async()=>{await ensureEmployees();await syncMaterielFromPostgres({full:!!options?.full})})());
@@ -35158,14 +35162,14 @@ function ptSupervisorEnsureDataForEmptyView(soc,force){
   const _t0=Date.now();
   (async()=>{
     const errors=[];
-    const _tEmp0=Date.now();
-    try{await sgdiPullEmployees({silent:true,society:soc||""})}catch(e){errors.push(e?.message||String(e))}
-    const _tEmp=Date.now()-_tEmp0;
-    // Sites et affectations n'ont pas de dépendance l'un sur l'autre (les affectations portent
-    // déjà leur siteId propre) : les lancer en parallèle plutôt qu'en séquence évite d'attendre
-    // la somme des deux appels réseau, ce qui rendait ce rechargement visiblement lent.
+    // Employés, sites et affectations n'ont pas de dépendance l'un sur l'autre au niveau
+    // réseau (les affectations portent déjà leur siteId propre, et sgdiPullEmployees()
+    // réapplique db.assignments APRÈS coup sur les employés fraîchement chargés, quel que
+    // soit l'ordre d'arrivée) : les lancer tous les 3 en parallèle au lieu d'attendre les
+    // employés avant de démarrer sites/affectations économise un aller-retour réseau entier.
     const _tPar0=Date.now();
     await Promise.all([
+      (async()=>{try{await sgdiPullEmployees({silent:true,society:soc||""})}catch(e){errors.push(e?.message||String(e))}})(),
       (async()=>{try{if(typeof syncSitesFromPostgres==="function")await syncSitesFromPostgres()}catch(e){errors.push(e?.message||String(e))}})(),
       (async()=>{try{if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){errors.push(e?.message||String(e))}})()
     ]);
