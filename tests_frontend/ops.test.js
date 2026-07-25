@@ -19,6 +19,7 @@ const { loadError, T, window } = loadSgdiApp([
   'sgdiPullEmployees',
   'employeeFromApi',
   'applyAssignmentsToEmployees',
+  'isOpsSupervisorReadOnlySession',
 ]);
 
 test('sgdi-app.js se charge et expose les fonctions OPS', () => {
@@ -233,6 +234,35 @@ test('employeeFromApi: sans champs current_* (réponse ancienne/dégradée), ret
     extra: { affectationCourante: { siteId: 'old', siteName: 'Hamoul 1' } },
   });
   assert.strictEqual(a.affectationCourante.siteName, 'Hamoul 1');
+});
+
+// ── isOpsSupervisorReadOnlySession() : lecture seule configurable par compte ────────────
+// Comportement historique : TOUT compte transverse "superviseur" était forcé en lecture
+// seule sans possibilité de le désactiver. Un admin peut maintenant le faire par compte
+// (supervisor_read_only côté serveur -> session.supervisorReadOnly côté client).
+
+test('isOpsSupervisorReadOnlySession: superviseur reste lecture seule par défaut (champ absent)', () => {
+  const t = T();
+  t.setSession({ transverse: 'superviseur' });
+  assert.strictEqual(t.isOpsSupervisorReadOnlySession(), true);
+});
+
+test('isOpsSupervisorReadOnlySession: superviseur reste lecture seule si supervisorReadOnly=true', () => {
+  const t = T();
+  t.setSession({ transverse: 'superviseur', supervisorReadOnly: true });
+  assert.strictEqual(t.isOpsSupervisorReadOnlySession(), true);
+});
+
+test('isOpsSupervisorReadOnlySession: lecture seule désactivée par un admin -> false', () => {
+  const t = T();
+  t.setSession({ transverse: 'superviseur', supervisorReadOnly: false });
+  assert.strictEqual(t.isOpsSupervisorReadOnlySession(), false);
+});
+
+test('isOpsSupervisorReadOnlySession: sans session -> false', () => {
+  const t = T();
+  t.setSession(null);
+  assert.strictEqual(t.isOpsSupervisorReadOnlySession(), false);
 });
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });

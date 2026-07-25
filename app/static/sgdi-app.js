@@ -1693,7 +1693,8 @@ async function sgdiLoadAuthState(){
         sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):[],
         societesAutorisees:socs,
         structuresAutorisees:structs,
-        validationCodeEnabled
+        validationCodeEnabled,
+        supervisorReadOnly:u.supervisor_read_only!==false
       };
     });
   }catch(e){
@@ -3409,7 +3410,7 @@ async function login(u,p,opt={}){
       const us=await window.SGDI_API.auth.login(u,p);
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
-      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures)};
+      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),supervisorReadOnly:authUser.supervisor_read_only!==false};
       if(!opt.adminSystem&&(isAdminSystemUsernameCandidate(session.username)||authUserCanOpenAdminSystem(authUser))&&isAdmin()){
         try{
           await startAdminSystemSession(p,session.username);
@@ -3921,7 +3922,11 @@ function canAccess(key){
 }
 function isOpsSupervisorReadOnlySession(){
   if(!session)return false;
-  if(session.transverse==="superviseur")return true;
+  // Lecture seule par défaut pour tout compte superviseur terrain, sauf si un admin l'a
+  // explicitement désactivée pour ce compte précis (Administration système > Périmètres
+  // superviseurs). supervisorReadOnly!==false : absent/undefined => lecture seule (comportement
+  // historique préservé pour les comptes jamais reconfigurés).
+  if(session.transverse==="superviseur")return session.supervisorReadOnly!==false;
   if(session.transverse!=="ops")return false;
   const role=String(session.role||"");
   const base=adminAccessBaseRole(role);
@@ -30740,6 +30745,19 @@ async function adminRebuildSupervisorScope(username,options){
   toast(users.length+" périmètre(s) superviseur actualisé(s)","success");
   renderView();
 }
+async function adminToggleSupervisorReadOnly(encodedUsername){
+  if(!(await ensureAdminSystemApiToken("modifier le mode lecture seule")))return;
+  const username=decodeURIComponent(String(encodedUsername||""));
+  const u=adminUserByUsername(username);
+  if(!u){toast("Utilisateur introuvable","error");return}
+  const nextReadOnly=!(u.supervisorReadOnly!==false);
+  try{
+    await SGDI.auth.updateUser(username,{supervisor_read_only:nextReadOnly});
+  }catch(e){toast("Modification refusée : "+(e.message||e),"error");return}
+  u.supervisorReadOnly=nextReadOnly;
+  toast(nextReadOnly?"Lecture seule réactivée pour "+username:"Lecture seule désactivée pour "+username,"success");
+  renderView();
+}
 async function renderAdminSupervisors(view){
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6">Accès réservé Administration système</div>`;return}
   const users=adminSupervisorUsers();
@@ -30748,17 +30766,19 @@ async function renderAdminSupervisors(view){
     const siteCount=Array.isArray(scope?.sites)?scope.sites.length:(Array.isArray(u.sitesAutorises)?u.sitesAutorises.length:0);
     const agentCount=Array.isArray(scope?.agents)?scope.agents.length:0;
     const updated=scope?.updatedAt?new Date(scope.updatedAt).toLocaleString("fr-FR"):"Jamais";
+    const readOnly=u.supervisorReadOnly!==false;
     return `<tr class="border-t">
       <td class="p-3"><div class="font-black">${escapeHTML(u.username||"")}</div><div class="text-xs text-slate-500">${escapeHTML(u.nom||"")}</div></td>
       <td class="p-3"><span class="pill pill-blue">${siteCount} site${siteCount>1?"s":""}</span></td>
       <td class="p-3"><span class="pill pill-green">${agentCount} employé${agentCount>1?"s":""}</span></td>
+      <td class="p-3">${readOnly?`<span class="pill" style="background:#fef3c7;color:#92400e">🔒 Lecture seule</span>`:`<span class="pill" style="background:#dcfce7;color:#166534">✏️ Édition autorisée</span>`}</td>
       <td class="p-3 text-xs text-slate-500">${escapeHTML(updated)}</td>
-      <td class="p-3 text-right"><div class="flex gap-2 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="adminRebuildSupervisorScope('${encodeURIComponent(u.username||"")}',{reload:true})">Actualiser table</button><button class="btn btn-ghost text-xs" onclick="openAdminUserModalByKey('${encodeURIComponent(u.username||"")}')">Sites autorisés</button></div></td>
+      <td class="p-3 text-right"><div class="flex gap-2 justify-end flex-wrap"><button class="btn ${readOnly?"btn-primary":"btn-secondary"} text-xs" onclick="adminToggleSupervisorReadOnly('${encodeURIComponent(u.username||"")}')">${readOnly?"Désactiver la lecture seule":"Réactiver la lecture seule"}</button><button class="btn btn-secondary text-xs" onclick="adminRebuildSupervisorScope('${encodeURIComponent(u.username||"")}',{reload:true})">Actualiser table</button><button class="btn btn-ghost text-xs" onclick="openAdminUserModalByKey('${encodeURIComponent(u.username||"")}')">Sites autorisés</button></div></td>
     </tr>`;
   }).join("");
   view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Périmètres superviseurs</h1><p class="text-sm text-slate-500 mt-1">Table dédiée de lecture : sites et employés rattachés à chaque superviseur terrain.</p></div><button class="btn btn-primary" onclick="adminRebuildSupervisorScope('',{reload:true})">Actualiser tous les superviseurs</button></div>
   <div class="card p-4 mb-4" style="border-left:4px solid #0f766e"><div class="font-black">Principe</div><div class="text-sm text-slate-500 mt-1">Les données officielles restent les employés, sites et affectations PostgreSQL. Cette table prépare un périmètre léger pour accélérer et sécuriser l'ouverture de session superviseur.</div></div>
-  <div class="card overflow-hidden"><table class="w-full text-sm"><thead><tr style="background:#e5e7eb"><th class="p-3 text-left">Superviseur</th><th class="p-3 text-left">Sites</th><th class="p-3 text-left">Employés rattachés</th><th class="p-3 text-left">Dernière mise à jour</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="5" class="p-6 text-center text-slate-500">Aucun compte superviseur. Créez un utilisateur SUP avec la structure Superviseur.</td></tr>`}</tbody></table></div>`;
+  <div class="card overflow-hidden"><table class="w-full text-sm"><thead><tr style="background:#e5e7eb"><th class="p-3 text-left">Superviseur</th><th class="p-3 text-left">Sites</th><th class="p-3 text-left">Employés rattachés</th><th class="p-3 text-left">Accès</th><th class="p-3 text-left">Dernière mise à jour</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="6" class="p-6 text-center text-slate-500">Aucun compte superviseur. Créez un utilisateur SUP avec la structure Superviseur.</td></tr>`}</tbody></table></div>`;
 }
 function adminPointageMonth(){return sessionStorage.getItem("adminPointageMonth")||ptCurrentMonth()}
 function adminPointageSociete(){return sessionStorage.getItem("adminPointageSociete")||adminActiveSociete()||""}
@@ -31967,7 +31987,8 @@ function adminUserFromApi(u){
     sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):(Array.isArray(u.sitesAutorises)?u.sitesAutorises:[]),
     societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:(Array.isArray(u.societesAutorisees)?u.societesAutorisees:[]),
     structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees),
-    validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled)
+    validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled),
+    supervisorReadOnly:u.supervisor_read_only!==false
   };
 }
 function adminUsernamePrefixForStructure(structure){

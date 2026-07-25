@@ -18,6 +18,10 @@ class User(Base, TimestampMixin):
     authorized_sites: Mapped[list | None] = mapped_column(JSON, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Superviseur terrain : par défaut lecture seule (comportement historique, non
+    # configurable jusqu'ici — voir isOpsSupervisorReadOnlySession côté frontend). Un admin
+    # peut désactiver cette restriction pour un compte précis depuis Périmètres superviseurs.
+    supervisor_read_only: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 

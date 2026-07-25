@@ -131,3 +131,53 @@ def test_health_db_with_auth(client, auth_headers):
     resp = client.get("/health/db", headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
+
+
+# ── supervisor_read_only : lecture seule superviseur terrain, configurable par admin ────
+
+def test_new_user_defaults_to_supervisor_read_only(client, auth_headers):
+    """Comportement historique préservé : par défaut, lecture seule (True)."""
+    r = client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "sup_default", "role": "ops", "access_level": "H3",
+        "authorized_structures": ["superviseur"], "password": "testpass123",
+    })
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["supervisor_read_only"] is True
+
+
+def test_create_user_can_disable_supervisor_read_only(client, auth_headers):
+    r = client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "sup_editor", "role": "ops", "access_level": "H3",
+        "authorized_structures": ["superviseur"], "password": "testpass123",
+        "supervisor_read_only": False,
+    })
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["supervisor_read_only"] is False
+
+
+def test_update_user_toggles_supervisor_read_only(client, auth_headers):
+    r = client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "sup_toggle", "role": "ops", "access_level": "H3",
+        "authorized_structures": ["superviseur"], "password": "testpass123",
+    })
+    assert r.status_code in (200, 201), r.text
+    assert r.json()["supervisor_read_only"] is True
+
+    r2 = client.patch("/api/auth/users/sup_toggle", headers=auth_headers, json={"supervisor_read_only": False})
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["supervisor_read_only"] is False
+
+    r3 = client.patch("/api/auth/users/sup_toggle", headers=auth_headers, json={"supervisor_read_only": True})
+    assert r3.status_code == 200, r3.text
+    assert r3.json()["supervisor_read_only"] is True
+
+
+def test_login_response_includes_supervisor_read_only(client, auth_headers):
+    client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "sup_login", "role": "ops", "access_level": "H3",
+        "authorized_structures": ["superviseur"], "password": "testpass123",
+        "supervisor_read_only": False,
+    })
+    r = client.post("/api/auth/login", json={"username": "sup_login", "password": "testpass123"})
+    assert r.status_code == 200, r.text
+    assert r.json()["user"]["supervisor_read_only"] is False

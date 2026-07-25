@@ -49,6 +49,7 @@ def create_user(db: Session, payload: UserCreate) -> User:
         authorized_societies=payload.authorized_societies or [],
         authorized_structures=payload.authorized_structures or [],
         authorized_sites=payload.authorized_sites or [],
+        supervisor_read_only=payload.supervisor_read_only,
         password_hash=hash_password(payload.password),
         is_active=True,
     )
@@ -84,6 +85,8 @@ def update_user(db: Session, user: User, payload: UserUpdate) -> User:
         user.authorized_structures = payload.authorized_structures or []
     if payload.authorized_sites is not None:
         user.authorized_sites = payload.authorized_sites or []
+    if payload.supervisor_read_only is not None:
+        user.supervisor_read_only = payload.supervisor_read_only
     if payload.password:
         user.password_hash = hash_password(payload.password)
     if payload.is_active is not None:
