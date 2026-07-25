@@ -2292,16 +2292,15 @@ function sgdiSqlSyncTasks(options){
     // Scope superviseur : employés filtrés par société (pas l'appel complet company-wide),
     // sites (filtrés serveur par sites autorisés) et affectations (idem). Pas de candidats
     // (DRH), pas de mouvements OPS (le seul écran qui les lit a son propre auto-sync :
-    // ensureOpsMovementSqlSync). Les 3 requêtes sont indépendantes au niveau réseau —
-    // sgdiPullEmployees() réapplique db.assignments après coup quel que soit l'ordre
-    // d'arrivée — donc on les lance ensemble au lieu d'attendre les employés avant de
-    // démarrer sites/affectations : ça évite d'ajouter un aller-retour réseau entier au
-    // chargement dès la connexion.
+    // ensureOpsMovementSqlSync). Employés et sites n'ont pas de dépendance entre eux : on les
+    // lance ensemble (2 requêtes, comme partout ailleurs dans ce fichier — voir
+    // syncAssignmentsFromPostgres/opsValiderMultiOM : le pool de connexions DB est dimensionné
+    // pour ~2 requêtes concurrentes par page, pas plus, sous peine de blocages intermittents
+    // sur des endpoints sans rapport). Affectations ensuite, une fois ce lot terminé.
     tasks.push((async()=>{
       const soc=session?.societe||"";
-      const supTasks=[sgdiPullEmployees({silent:true,society:soc}),syncSitesFromPostgres()];
-      if(typeof syncAssignmentsFromPostgres==="function")supTasks.push(syncAssignmentsFromPostgres());
-      await Promise.all(supTasks);
+      await Promise.all([sgdiPullEmployees({silent:true,society:soc}),syncSitesFromPostgres()]);
+      if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres();
     })());
   }
   if(scope.materiel)tasks.push((async()=>{await ensureEmployees();await syncMaterielFromPostgres({full:!!options?.full})})());
@@ -35162,17 +35161,18 @@ function ptSupervisorEnsureDataForEmptyView(soc,force){
   const _t0=Date.now();
   (async()=>{
     const errors=[];
-    // Employés, sites et affectations n'ont pas de dépendance l'un sur l'autre au niveau
-    // réseau (les affectations portent déjà leur siteId propre, et sgdiPullEmployees()
-    // réapplique db.assignments APRÈS coup sur les employés fraîchement chargés, quel que
-    // soit l'ordre d'arrivée) : les lancer tous les 3 en parallèle au lieu d'attendre les
-    // employés avant de démarrer sites/affectations économise un aller-retour réseau entier.
+    // Employés et sites n'ont pas de dépendance entre eux : on les lance ensemble (2
+    // requêtes). Affectations ensuite seulement — sgdiPullEmployees() réapplique
+    // db.assignments après coup, donc l'ordre n'a pas d'importance pour la cohérence des
+    // données, mais on garde le pic de requêtes concurrentes à 2 maximum : le pool de
+    // connexions DB est dimensionné pour ça, pas pour 3-4 requêtes simultanées par page
+    // (voir syncAssignmentsFromPostgres/opsValiderMultiOM — même convention partout ailleurs).
     const _tPar0=Date.now();
     await Promise.all([
       (async()=>{try{await sgdiPullEmployees({silent:true,society:soc||""})}catch(e){errors.push(e?.message||String(e))}})(),
-      (async()=>{try{if(typeof syncSitesFromPostgres==="function")await syncSitesFromPostgres()}catch(e){errors.push(e?.message||String(e))}})(),
-      (async()=>{try{if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){errors.push(e?.message||String(e))}})()
+      (async()=>{try{if(typeof syncSitesFromPostgres==="function")await syncSitesFromPostgres()}catch(e){errors.push(e?.message||String(e))}})()
     ]);
+    try{if(typeof syncAssignmentsFromPostgres==="function")await syncAssignmentsFromPostgres()}catch(e){errors.push(e?.message||String(e))}
     const _tPar=Date.now()-_tPar0;
     if(errors.length)console.warn("Chargement superviseur incomplet",errors);
     const _tTotal=Date.now()-_t0;
