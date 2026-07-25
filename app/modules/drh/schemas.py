@@ -76,6 +76,16 @@ class EmployeeOut(EmployeeBase):
     id: int
     created_at: datetime
     updated_at: datetime | None = None
+    # Affectation active courante (jointure serveur, voir _attach_current_assignments) : évite
+    # au client de reconstruire lui-même le lien employé -> site via un appel séparé à
+    # /ops/assignments, source de désynchronisations (site affiché vide/périmé après un simple
+    # rechargement de la liste des employés).
+    current_assignment_id: int | None = None
+    current_site_id: int | None = None
+    current_site_name: str | None = None
+    current_client_name: str | None = None
+    current_group_code: str | None = None
+    current_position: str | None = None
 
     model_config = {"from_attributes": True}
 

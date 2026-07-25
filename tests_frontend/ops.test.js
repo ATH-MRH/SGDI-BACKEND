@@ -195,4 +195,44 @@ test('sgdiPullEmployees sans assignments connus : ne casse rien (pas d\'affectat
   assert.deepStrictEqual(agents[0].affectationCourante, undefined);
 });
 
+// ── employeeFromApi() lit l'affectation jointe côté serveur ─────────────────
+// /drh/employees renvoie maintenant current_assignment_id/current_site_* (jointure serveur
+// avec Assignment+Site) : le client doit s'en servir directement au lieu de reconstruire le
+// lien employé -> site via une synchro séparée de db.assignments.
+
+test('employeeFromApi: construit affectationCourante depuis les champs current_* du serveur', () => {
+  const a = T().employeeFromApi({
+    id: 42, code: 'K08', last_name: 'FOUATIH', first_name: 'Ahmed', society: 'IRON GLOBAL SOLUTION',
+    current_assignment_id: 900, current_site_id: 7, current_site_name: 'HAMOUL 01 (40K)',
+    current_client_name: 'DHL FORWARDING', current_group_code: 'A', current_position: 'AGENT DE SECURITE',
+    extra: {},
+  });
+  assert.strictEqual(a.affectationCourante.siteId, '7');
+  assert.strictEqual(a.affectationCourante.siteBackendId, 7);
+  assert.strictEqual(a.affectationCourante.siteName, 'HAMOUL 01 (40K)');
+  assert.strictEqual(a.affectationCourante.poste, 'AGENT DE SECURITE');
+  assert.strictEqual(a.affectationCourante.assignmentBackendId, 900);
+});
+
+test('employeeFromApi: current_assignment_id null efface affectationCourante (ne garde pas un ancien site)', () => {
+  // Le bug exact chassé avant ce changement : un employé réaffecté vers un nouveau site
+  // continuait d'afficher l'ancien ("Hamoul 1") parce que le client ne recevait jamais de
+  // confirmation explicite "plus d'affectation" — juste des données qui ne se rafraîchissaient
+  // pas toujours ensemble. Ici le serveur dit explicitement null : on doit vider, pas garder.
+  const a = T().employeeFromApi({
+    id: 43, code: 'K09', last_name: 'BENALI', first_name: 'Yacine', society: 'IRON GLOBAL SOLUTION',
+    current_assignment_id: null, current_site_id: null, current_site_name: null,
+    extra: { affectationCourante: { siteId: 'old', siteName: 'Hamoul 1' } },
+  });
+  assert.strictEqual(Object.keys(a.affectationCourante).length, 0);
+});
+
+test('employeeFromApi: sans champs current_* (réponse ancienne/dégradée), retombe sur extra.affectationCourante', () => {
+  const a = T().employeeFromApi({
+    id: 44, code: 'K10', last_name: 'KADI', first_name: 'Sami', society: 'IRON GLOBAL SOLUTION',
+    extra: { affectationCourante: { siteId: 'old', siteName: 'Hamoul 1' } },
+  });
+  assert.strictEqual(a.affectationCourante.siteName, 'Hamoul 1');
+});
+
 test.after(() => { setTimeout(() => process.exit(0), 50); });

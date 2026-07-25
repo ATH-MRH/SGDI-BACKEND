@@ -1131,6 +1131,25 @@ function employeeFromApi(emp){
   const legacy=extra&&extra._legacy&&typeof extra._legacy==="object"?extra._legacy:{};
   const data={...legacy,...extra};
   const canonicalCode=normalizeEmployeeCodeFormat(emp?.code||data.matricule||data.code||emp?.id||"");
+  // /drh/employees renvoie désormais l'affectation active courante déjà jointe côté serveur
+  // (current_assignment_id/current_site_*) : source de vérité unique, on ne reconstruit plus
+  // ce lien nous-mêmes à partir d'une synchro séparée de db.assignments. Si le serveur confirme
+  // explicitement qu'il n'y a AUCUNE affectation active (current_assignment_id === null), on
+  // vide affectationCourante plutôt que de garder une vieille valeur — c'est précisément ce qui
+  // faisait "réapparaître" un ancien site après une désaffectation.
+  const hasServerAssignmentInfo=emp&&Object.prototype.hasOwnProperty.call(emp,"current_assignment_id");
+  const affectationCourante=hasServerAssignmentInfo
+    ?(emp.current_assignment_id!=null?{
+        ...(data.affectationCourante||{}),
+        siteId:String(emp.current_site_id??""),
+        siteBackendId:emp.current_site_id??null,
+        siteName:emp.current_site_name||"",
+        clientName:emp.current_client_name||"",
+        poste:emp.current_position||data.affectationCourante?.poste||"",
+        groupe:emp.current_group_code||data.affectationCourante?.groupe||"",
+        assignmentBackendId:emp.current_assignment_id
+      }:{})
+    :data.affectationCourante;
   return {
     ...data,
     id:data.id||String(emp.id),
@@ -1159,6 +1178,7 @@ function employeeFromApi(emp){
     dateNaissance:data.dateNaissance||emp.birth_date||"",
     dateRecrutement:data.dateRecrutement||emp.recruit_date||"",
     photo:data.photo||"",
+    affectationCourante,
     extra:data
   };
 }

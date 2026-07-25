@@ -121,6 +121,67 @@ def test_employees_page_search(client, auth_headers):
     assert any("RECHERCHEUNIQUE" in (e.get("first_name") or "").upper() for e in r.json()["items"])
 
 
+def _site(client, h, name, society="Iron Global Securite"):
+    r = client.post("/api/ops/sites", headers=h, json={
+        "name": name, "indicatif": name[:3].upper(), "active": 1,
+        "equipment_plan": {"societe": society},
+    })
+    assert r.status_code in (200, 201), r.text
+    return r.json()["id"]
+
+
+def _assign(client, h, employee_id, site_id, position=None):
+    r = client.post("/api/ops/assignments", headers=h, json={
+        "employee_id": int(employee_id), "site_id": int(site_id),
+        "group_code": "A", "position": position, "start_date": "2026-01-01", "active": 1,
+    })
+    assert r.status_code in (200, 201), r.text
+    return r.json()
+
+
+def test_employees_list_includes_current_assignment(client, auth_headers):
+    """La liste /drh/employees doit inclure le site/poste courant (jointure serveur),
+    sans que le client ait besoin de reconstruire ce lien lui-même côté navigateur."""
+    emp = _emp(client, auth_headers, "DRH_AFF1")
+    site_id = _site(client, auth_headers, "Site Jointure Employe")
+    _assign(client, auth_headers, emp["id"], site_id, position="Agent de sécurité")
+
+    rows = client.get("/api/drh/employees", headers=auth_headers).json()
+    row = next(r for r in rows if r["id"] == emp["id"])
+    assert row["current_site_id"] == site_id
+    assert row["current_site_name"].upper() == "SITE JOINTURE EMPLOYE"
+    assert row["current_position"].upper() == "AGENT DE SÉCURITÉ"
+    assert row["current_group_code"] == "A"
+
+    paged = client.get("/api/drh/employees/page?page_size=100", headers=auth_headers).json()
+    prow = next(r for r in paged["items"] if r["id"] == emp["id"])
+    assert prow["current_site_name"].upper() == "SITE JOINTURE EMPLOYE"
+
+
+def test_employees_list_current_assignment_switches_to_new_site(client, auth_headers):
+    """Après réaffectation vers un nouveau site, le site précédent (désactivé) ne doit
+    plus jamais réapparaître dans le site courant — c'est exactement le bug (site
+    "fantôme" qui revient) qu'on a chassé côté client avant ce changement serveur."""
+    emp = _emp(client, auth_headers, "DRH_AFF2")
+    old_site = _site(client, auth_headers, "Ancien Site")
+    new_site = _site(client, auth_headers, "Nouveau Site")
+    _assign(client, auth_headers, emp["id"], old_site)
+    _assign(client, auth_headers, emp["id"], new_site)
+
+    rows = client.get("/api/drh/employees", headers=auth_headers).json()
+    row = next(r for r in rows if r["id"] == emp["id"])
+    assert row["current_site_id"] == new_site
+    assert row["current_site_name"].upper() == "NOUVEAU SITE"
+
+
+def test_employees_list_no_assignment_has_null_current_site(client, auth_headers):
+    emp = _emp(client, auth_headers, "DRH_NOAFF")
+    rows = client.get("/api/drh/employees", headers=auth_headers).json()
+    row = next(r for r in rows if r["id"] == emp["id"])
+    assert row["current_site_id"] is None
+    assert row["current_site_name"] is None
+
+
 def test_employee_fiche_position(client, auth_headers):
     emp = _emp(client, auth_headers, "DRH_FICHE")
     emp_id = emp.get("id") or emp.get("backendId")

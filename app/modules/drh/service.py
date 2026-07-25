@@ -53,6 +53,46 @@ def employee_society_scope_condition(societies: list[str] | None):
     return or_(Employee.society.in_(values), Employee.id.in_(assigned_employee_ids))
 
 
+def _attach_current_assignments(db: Session, employees: list[Employee]) -> list[Employee]:
+    """Attache l'affectation active courante (site/poste/groupe) à chaque employé, en une
+    seule requête jointe (pas de N+1). Sans ça, le client devait faire un aller-retour séparé
+    sur /ops/assignments puis reconstruire lui-même le lien employé -> site en JavaScript —
+    fragile et source de désynchronisations (site affiché vide ou périmé après un simple
+    rechargement de la liste des employés)."""
+    ids = [e.id for e in employees]
+    by_employee: dict[int, tuple[Assignment, Site]] = {}
+    if ids:
+        rows = db.execute(
+            select(Assignment, Site)
+            .join(Site, Assignment.site_id == Site.id)
+            .where(Assignment.employee_id.in_(ids), Assignment.active == 1)
+            .order_by(Assignment.start_date.desc(), Assignment.id.desc())
+        ).all()
+        for assignment, site in rows:
+            # Plusieurs affectations actives pour le même employé ne devraient pas arriver
+            # (create_assignment désactive les précédentes), mais on garde la plus récente
+            # par sécurité plutôt que de planter ou d'en choisir une au hasard.
+            by_employee.setdefault(assignment.employee_id, (assignment, site))
+    for employee in employees:
+        pair = by_employee.get(employee.id)
+        if pair:
+            assignment, site = pair
+            employee.current_assignment_id = assignment.id
+            employee.current_site_id = site.id
+            employee.current_site_name = site.name
+            employee.current_client_name = site.client_name
+            employee.current_group_code = assignment.group_code
+            employee.current_position = assignment.position
+        else:
+            employee.current_assignment_id = None
+            employee.current_site_id = None
+            employee.current_site_name = None
+            employee.current_client_name = None
+            employee.current_group_code = None
+            employee.current_position = None
+    return employees
+
+
 def list_employees(
     db: Session,
     *,
@@ -66,7 +106,8 @@ def list_employees(
         stmt = stmt.where(scope)
     if status:
         stmt = stmt.where(Employee.status == status)
-    return db.execute(stmt.order_by(Employee.id.desc())).scalars().all()
+    rows = db.execute(stmt.order_by(Employee.id.desc())).scalars().all()
+    return _attach_current_assignments(db, rows)
 
 
 def get_or_404(db: Session, model: Type, row_id: int):
@@ -155,6 +196,7 @@ def list_employees_page(
         items = db.execute(
             stmt.order_by(*order).offset((page - 1) * page_size).limit(page_size)
         ).scalars().all()
+        items = _attach_current_assignments(db, items)
         return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages}
 
     # Chemin avec recherche : filtre SQL large puis affinage Python sur le JSON extra
@@ -173,7 +215,8 @@ def list_employees_page(
     pages = max((total + page_size - 1) // page_size, 1)
     page = min(page, pages)
     start = (page - 1) * page_size
-    return {"items": rows[start:start + page_size], "total": total, "page": page, "page_size": page_size, "pages": pages}
+    page_items = _attach_current_assignments(db, rows[start:start + page_size])
+    return {"items": page_items, "total": total, "page": page, "page_size": page_size, "pages": pages}
 
 
 def _candidate_is_archived(row: Candidate) -> bool:
