@@ -13449,9 +13449,28 @@ function renderEffectif(view,filter,stableMode){
   view.innerHTML=`${cards}${absRecap}<div id="effectif-list-zone">${localHTML}</div>`;
   sgdiApplyActiveEmployeeStyles(view);
   applyEffectifSearchInPlace(effectifSearchValue(filter));
+  if(!sgdiAuthToken())return;
+  if(isOpsEffectifContext()){
+    // effectifListServerHTML() est réservé au style de liste DRH (return null en contexte
+    // OPS/superviseur, voir plus haut) : sans appel de remplacement ici, cet écran (EFFECTIFS
+    // côté OPS, PERSONNEL RATTACHÉ côté superviseur) n'essayait JAMAIS de charger les employés
+    // par lui-même — il se contentait d'afficher ce qui était déjà en mémoire, resté vide tant
+    // que la synchro générale de fond n'avait pas fini (ou avait échoué silencieusement).
+    const r=sgdiEnsureEmployeesForDisplay({society:effectifSocieteFilter()});
+    if(r&&typeof r.then==="function"){
+      r.then(()=>{
+        const zone=document.getElementById("effectif-list-zone");
+        if(!zone)return;
+        zone.innerHTML=effectifListHTML(filter);
+        sgdiApplyActiveEmployeeStyles(zone);
+        applyEffectifSearchInPlace(effectifSearchValue(filter));
+      }).catch(()=>{});
+    }
+    return;
+  }
   // Remplace silencieusement par les données serveur quand elles arrivent
   // En contexte DRH, toutes les données sont déjà en mémoire — pas besoin du rechargement serveur
-  if(!sgdiAuthToken()||!effectifServerSupported(filter)||isDrhModuleContext())return;
+  if(!effectifServerSupported(filter)||isDrhModuleContext())return;
   effectifListServerHTML(filter).then(html=>{
     if(!html)return;
     const zone=document.getElementById("effectif-list-zone");
