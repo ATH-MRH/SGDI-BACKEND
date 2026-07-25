@@ -33375,17 +33375,23 @@ async function renderOpsMouvements(view){
   _renderOpsMouvementsHTML(view);
   // Sync en arrière-plan si nécessaire, puis rafraîchissement discret
   if(sgdiAuthToken()){
+    // ensureOpsMovementSqlSync() ne recharge que sites/affectations/mouvements, JAMAIS les
+    // employés : sans cet appel, si la synchro générale de fond (au login) n'avait pas encore
+    // fini quand on arrive sur cet écran, "Employé(s) à affecter" restait vide indéfiniment,
+    // sans jamais réessayer par lui-même (même trou que sur Effectifs/Personnel rattaché).
+    const empPromise=typeof sgdiEnsureEmployeesForDisplay==="function"?sgdiEnsureEmployeesForDisplay({society:currentStructureSocieteFilter()}):null;
     const needsSync=!window.__sgdiOpsMovementSqlSyncedAt||Date.now()-window.__sgdiOpsMovementSqlSyncedAt>=15000;
-    if(needsSync){
-      try{
-        await ensureOpsMovementSqlSync();
-        if(document.body.contains(view)&&/ops\/mouvements/.test(location.hash)){
-          // Ne pas re-rendre si le formulaire OM est ouvert (protège le scroll et l'état du formulaire)
-          const formOpen=!!view.querySelector('[data-ops-movement-form]');
-          if(formOpen)sgdiRefreshCountersNow({reason:"mvt-sync"});
-          else _renderOpsMouvementsHTML(view);
-        }
-      }catch(e){console.warn("Synchronisation Mouvement indisponible",e)}
+    const tasks=[];
+    if(empPromise&&typeof empPromise.then==="function")tasks.push(empPromise.catch(()=>null));
+    if(needsSync)tasks.push(ensureOpsMovementSqlSync().catch(e=>{console.warn("Synchronisation Mouvement indisponible",e);return null}));
+    if(tasks.length){
+      await Promise.all(tasks);
+      if(document.body.contains(view)&&/ops\/mouvements/.test(location.hash)){
+        // Ne pas re-rendre si le formulaire OM est ouvert (protège le scroll et l'état du formulaire)
+        const formOpen=!!view.querySelector('[data-ops-movement-form]');
+        if(formOpen)sgdiRefreshCountersNow({reason:"mvt-sync"});
+        else _renderOpsMouvementsHTML(view);
+      }
     }
   }
 }

@@ -9,7 +9,7 @@ from typing import Any
 
 import orjson
 from fastapi import HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.modules.irongs.models import SgdiRecord
@@ -616,6 +616,44 @@ def replace_collection(db: Session, name: str, data: list[Any] | dict[str, Any],
     return get_collection(db, name)
 
 
+def _upsert_collection_item_no_commit(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+    """Met à jour/insère UNE seule ligne d'une collection JSON (par id), sans toucher aux
+    autres lignes — au lieu de supprimer puis réinsérer toute la collection pour un seul
+    élément modifié. La collection "pointages" contient une ligne par (agent, mois), parfois
+    plusieurs centaines : chaque case de pointage cliquée réécrivait tout, avec un vrai risque
+    de "duplicate key" entre deux écritures concurrentes sur des lignes DIFFÉRENTES qui
+    n'auraient jamais dû se marcher dessus, et un coût inutile à chaque petite modification."""
+    item = dict(item)
+    item_id = str(item.get("id") or "").strip()
+    if not item_id:
+        raise HTTPException(status_code=422, detail="Identifiant obligatoire pour l'enregistrement ciblé")
+    clean_item = normalize_photo_fields(item, fallback=name)
+    db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id))
+    max_position = db.scalar(select(func.max(SgdiRecord.position)).where(SgdiRecord.collection == name))
+    position = (max_position + 1) if max_position is not None else 0
+    label = str(clean_item.get("nom") or clean_item.get("name") or clean_item.get("code") or "") if isinstance(clean_item, dict) else str(clean_item)
+    db.add(SgdiRecord(collection=name, item_id=item_id, position=position, kind="item", data=clean_item, label=label))
+    return clean_item
+
+
+def upsert_collection_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+    saved = _upsert_collection_item_no_commit(db, name, item)
+    db.commit()
+    _snapshot_cache_invalidate()
+    return saved
+
+
+def delete_collection_item(db: Session, name: str, item_id: str) -> None:
+    db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == str(item_id)))
+    db.commit()
+    _snapshot_cache_invalidate()
+
+
+def _upsert_and_success(db: Session, name: str, item: dict[str, Any], payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    saved = upsert_collection_item(db, name, item)
+    return {"status": "success", "data": payload if payload is not None else {"item": saved}}
+
+
 def list_items(db: Session, name: str) -> list[Any]:
     data = get_collection(db, name)
     if isinstance(data, dict):
@@ -885,7 +923,7 @@ def _validate_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any
     sheet["valideBy"] = by
     sheet["valideAt"] = at
     sheet["updatedAt"] = at
-    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+    return _upsert_and_success(db, "pointages", sheet)
 
 
 def _unlock_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) -> dict[str, Any]:
@@ -899,7 +937,7 @@ def _unlock_pointage_sheet(db: Session, agent_id: str, periode: str, user: Any) 
     sheet["valideBy"] = None
     sheet["valideAt"] = None
     sheet["updatedAt"] = _now_iso()
-    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+    return _upsert_and_success(db, "pointages", sheet)
 
 
 def _validate_pointage_day(db: Session, agent_id: str, periode: str, day: str, user: Any, code: str | None = None) -> dict[str, Any]:
@@ -929,7 +967,7 @@ def _validate_pointage_day(db: Session, agent_id: str, periode: str, day: str, u
     # Si ce jour complète la couverture du mois, valide se promeut automatiquement
     # (champ dérivé, cf. _pointage_sync_valide_flag) — pas d'action DRH séparée requise.
     _pointage_sync_valide_flag(sheet)
-    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+    return _upsert_and_success(db, "pointages", sheet)
 
 
 def _unlock_pointage_day(db: Session, agent_id: str, periode: str, day: str, user: Any) -> dict[str, Any]:
@@ -951,7 +989,7 @@ def _unlock_pointage_day(db: Session, agent_id: str, periode: str, day: str, use
     sheet["validatedDays"] = validated_days
     sheet["updatedAt"] = _now_iso()
     _pointage_sync_valide_flag(sheet)
-    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+    return _upsert_and_success(db, "pointages", sheet)
 
 
 def _bulk_pointage(db: Session, periode: str, society: str | None, validate: bool, user: Any) -> dict[str, Any]:
@@ -1042,7 +1080,7 @@ def _save_pointage_cell(db: Session, data: dict[str, Any], user: Any) -> dict[st
     elif "fpqSync" in sheet:
         sheet["fpqSync"] = {}
     sheet["updatedAt"] = _now_iso()
-    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+    return _upsert_and_success(db, "pointages", sheet)
 
 
 def _save_pointage_observation(db: Session, data: dict[str, Any], user: Any) -> dict[str, Any]:
@@ -1082,7 +1120,7 @@ def _save_pointage_observation(db: Session, data: dict[str, Any], user: Any) -> 
         observations.pop(day, None)
     sheet["observations"] = observations
     sheet["updatedAt"] = _now_iso()
-    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+    return _upsert_and_success(db, "pointages", sheet)
 
 
 def _clear_pointage_sheet(db: Session, data: dict[str, Any], user: Any) -> dict[str, Any]:
@@ -1101,7 +1139,7 @@ def _clear_pointage_sheet(db: Session, data: dict[str, Any], user: Any) -> dict[
     sheet["days"] = {}
     sheet["fpqSync"] = {}
     sheet["updatedAt"] = _now_iso()
-    return _replace_and_success(db, "pointages", sheets, {"item": sheet})
+    return _upsert_and_success(db, "pointages", sheet)
 
 
 def _presence_code(value: Any) -> str:
@@ -1135,7 +1173,7 @@ def _sync_presence_line_to_pointage(db: Session, line: dict[str, Any], validate:
     sheet["days"] = days
     sheet["fpqSync"] = sync
     sheet["updatedAt"] = _now_iso()
-    replace_collection(db, "pointages", sheets)
+    upsert_collection_item(db, "pointages", sheet)
 
 
 def _presence_line_action(db: Session, line_id: str, validate: bool, user: Any) -> dict[str, Any]:
@@ -1153,7 +1191,7 @@ def _presence_line_action(db: Session, line_id: str, validate: bool, user: Any) 
     line["valideAt"] = _now_iso() if validate else None
     line["updatedAt"] = _now_iso()
     _sync_presence_line_to_pointage(db, line, validate)
-    return _replace_and_success(db, "feuillePresence", lines, {"item": line})
+    return _upsert_and_success(db, "feuillePresence", line)
 
 
 def _presence_line_upsert(db: Session, data: dict[str, Any]) -> dict[str, Any]:
@@ -1182,7 +1220,7 @@ def _presence_line_upsert(db: Session, data: dict[str, Any]) -> dict[str, Any]:
     line["date"] = date_value
     line["agentId"] = target_agent_id
     line["updatedAt"] = _now_iso()
-    return _replace_and_success(db, "feuillePresence", lines, {"item": line})
+    return _upsert_and_success(db, "feuillePresence", line)
 
 
 def _movement_history_key(item: dict[str, Any]) -> str:
@@ -1250,8 +1288,8 @@ def _presence_line_delete(db: Session, line_id: str | None, data: dict[str, Any]
     if line.get("valide"):
         raise HTTPException(status_code=422, detail="Ligne validée")
     _sync_presence_line_to_pointage(db, line, False)
-    lines = [row for row in lines if str(row.get("id")) != str(line.get("id"))]
-    return _replace_and_success(db, "feuillePresence", lines, {"deleted": True, "id": line.get("id")})
+    delete_collection_item(db, "feuillePresence", str(line.get("id")))
+    return {"status": "success", "data": {"deleted": True, "id": line.get("id")}}
 
 
 def _create_legacy_item(db: Session, collection: str | None, data: dict[str, Any], user: Any) -> dict[str, Any]:
@@ -1272,8 +1310,7 @@ def _create_legacy_item(db: Session, collection: str | None, data: dict[str, Any
         item["etape"] = _validate_status_value(item.get("etape", "nouveau"), {"nouveau", "qualification", "proposition", "negociation", "gagnee", "perdue"}, "Étape")
         if not str(item.get("intitule") or "").strip():
             raise HTTPException(status_code=422, detail="Intitulé opportunité obligatoire")
-    items.append(item)
-    return _replace_and_success(db, collection, items, {"item": item})
+    return _upsert_and_success(db, collection, item)
 
 
 def _presence_day_close(db: Session, day: str, close: bool, user: Any, motif: str | None = None) -> dict[str, Any]:
@@ -1318,15 +1355,15 @@ def run_legacy_action(db: Session, action: str, payload: Any, user: Any | None =
         field = "etape" if collection == "opportunites" else "statut"
         item[field] = target
         item["updatedAt"] = _now_iso()
-        return _replace_and_success(db, collection, items, {"item": item})
+        return _upsert_and_success(db, collection, item)
 
     if action == "delete-item":
         if collection not in {"prospects", "opportunites", "avenants"}:
             raise HTTPException(status_code=422, detail="Suppression non autorisée pour cette collection")
         items = _collection_list(db, collection)
         _find_item(items, item_id)
-        items = [row for row in items if str(row.get("id")) != str(item_id)]
-        return _replace_and_success(db, collection, items, {"deleted": True, "id": item_id})
+        delete_collection_item(db, collection, str(item_id))
+        return {"status": "success", "data": {"deleted": True, "id": item_id}}
 
     if action == "delete-employee-fiche":
         return _delete_employee_fiche(db, data | {"agentId": item_id}, user)

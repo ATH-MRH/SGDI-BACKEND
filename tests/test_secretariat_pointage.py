@@ -102,6 +102,34 @@ def test_save_pointage_cell_validation(client, auth_headers):
         "data": {"agentId": "inconnu_999", "periode": "2026-03", "day": "5", "code": "P"}}).status_code == 404
 
 
+def test_save_pointage_cell_does_not_touch_other_agents_sheets(client, auth_headers):
+    """save-pointage-cell modifie désormais UNE seule ligne (upsert ciblé) au lieu de
+    réécrire toute la collection "pointages" — sur une base avec beaucoup de feuilles, ce
+    "delete tout + réinsère tout" pour un seul jour modifié causait des collisions de clé
+    unique en production entre deux écritures concurrentes sur des feuilles DIFFÉRENTES.
+    Ce test verrouille que les autres feuilles restent intactes après ce changement."""
+    others = []
+    for i in range(5):
+        emp = _emp(client, auth_headers, f"PT_OTHER{i}")
+        aid = _agent_id(client, auth_headers, emp)
+        _action(client, auth_headers, "save-pointage-cell", {
+            "data": {"agentId": aid, "periode": "2026-03", "day": "10", "code": "P"}})
+        others.append(aid)
+
+    emp = _emp(client, auth_headers, "PT_TARGET")
+    target_aid = _agent_id(client, auth_headers, emp)
+    r = _action(client, auth_headers, "save-pointage-cell", {
+        "data": {"agentId": target_aid, "periode": "2026-03", "day": "12", "code": "A"}})
+    assert r.status_code == 200, r.text
+
+    sheets = _collection(client, auth_headers, "pointages")
+    target_sheet = next(s for s in sheets if str(s.get("agentId")) == target_aid and s.get("periode") == "2026-03")
+    assert target_sheet["days"].get("12") == "A"
+    for aid in others:
+        other_sheet = next(s for s in sheets if str(s.get("agentId")) == aid and s.get("periode") == "2026-03")
+        assert other_sheet["days"].get("10") == "P", "une feuille non concernée a été altérée"
+
+
 def test_validate_and_unlock_pointage(client, auth_headers):
     emp = _emp(client, auth_headers, "PT_VAL")
     aid = _agent_id(client, auth_headers, emp)
