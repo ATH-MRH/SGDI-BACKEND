@@ -35569,6 +35569,31 @@ function renderFeuillePresentQR(){
     </section>`).join("");
   }
   const present=agents.filter(a=>{const f=findPresenceForAgent(a);return !!POINTAGE_CODES[String(f.code||"").toUpperCase()]?.isPresent||fpqPresenceCode(f.heureArrivee)==="P"||!!f.scanArrivee||(!!f.heureArrivee&&!POINTAGE_CODES[String(f.heureArrivee).toUpperCase()]);}).length;
+  // Compteurs par code (Présent/Absent/Congé/Récupération/F1/F2…) : cliquables, ouvrent la
+  // liste des employés concernés — même principe que les cartes cliquables du tableau de
+  // bord OPS (openOpsStatModal), appliqué ici à la feuille du jour plutôt qu'au mois.
+  const _fpqCodeAgentsByCode={};
+  agents.forEach(a=>{
+    const f=findPresenceForAgent(a);
+    const code=String(f.code||"").toUpperCase()||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"");
+    const key=code||"__none__";
+    if(!_fpqCodeAgentsByCode[key])_fpqCodeAgentsByCode[key]=[];
+    _fpqCodeAgentsByCode[key].push({nom:((a.nom||"")+" "+(a.prenom||"")).trim(),mat:a.matricule||"—",site:a.affectationCourante?.siteName||f.siteName||"—"});
+  });
+  window._fpqDailyCodeLists=_fpqCodeAgentsByCode;
+  const nonPointeCount=(_fpqCodeAgentsByCode.__none__||[]).length;
+  const fpqCodeCard=(k)=>{
+    const v=POINTAGE_CODES[k];
+    if(!v)return"";
+    const n=(_fpqCodeAgentsByCode[k]||[]).length;
+    return `<button type="button" onclick="fpqOpenDailyCodeModal('${k.replace(/'/g,"\\'")}')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${n}</b></button>`;
+  };
+  const fpqCodeGroup=(title,codes)=>`<section class="pointage-code-group"><div class="pointage-code-group-title">${escapeHTML(title)}</div><div class="pointage-code-grid">${codes.map(fpqCodeCard).join("")}</div></section>`;
+  const dailyCodeCardsHTML=`<div class="pointage-code-groups">
+    ${fpqCodeGroup("Codes principaux",["P","A","M","C","S","R"])}
+    ${fpqCodeGroup("Absences renforcées",["AB","A1","A2","A3"])}
+    ${fpqCodeGroup("Récupération / maintien",["F1","F2","F3","P/F1","P/F2","P/F3"])}
+  </div>`;
   if(!_fpqIsLiveRefresh) setTimeout(fpqStartLiveRefresh,100);
   return`${abandonBanner}<div class="card p-4 mb-4"><div class="flex items-center justify-between flex-wrap gap-3">
     <div>
@@ -35590,14 +35615,26 @@ function renderFeuillePresentQR(){
   </div>
   <div class="grid grid-cols-3 gap-3 mt-3">
     <div class="card p-3 text-center" style="background:#dcfce7"><div class="text-xs text-green-700 font-semibold">Présents</div><div class="text-2xl font-black text-green-700">${present}</div></div>
-    <div class="card p-3 text-center" style="background:#fee2e2"><div class="text-xs text-red-700 font-semibold">Absents / Non pointés</div><div class="text-2xl font-black text-red-700">${agents.length-present}</div></div>
+    <button type="button" onclick="fpqOpenDailyCodeModal('')" class="card p-3 text-center" style="background:#fee2e2;cursor:pointer;border:none"><div class="text-xs text-red-700 font-semibold">Non pointés</div><div class="text-2xl font-black text-red-700">${nonPointeCount}</div></button>
     <div class="card p-3 text-center" style="background:#f0f9ff"><div class="text-xs text-blue-700 font-semibold">Total agents</div><div class="text-2xl font-black text-blue-700">${agents.length}</div></div>
   </div>
+  <div class="mt-3">${dailyCodeCardsHTML}</div>
   </div>
   ${groupBySite?`<div id="fpq-live-tbody">${siteGroupsHTML||`<div class="card p-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</div>`}</div>`:`<div class="card p-2"><div style="overflow-x:auto"><table class="w-full" style="border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#043970;color:#fff">${(()=>{const sk=_fpqSortKey,sd=_fpqSortDir;const th=(label,key,align,w)=>{const act=sk===key;const arr=act?(sd===1?"▲":"▼"):"⇅";return`<th onclick="fpqSetSort('${key}')" class="px-3 py-2 text-${align} text-xs font-bold" style="border:1px solid #cbd5e1;${w?`width:${w};`:""}cursor:pointer;user-select:none;white-space:nowrap">${label} <span style="font-size:9px;opacity:${act?1:.45}">${arr}</span></th>`;};return`<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:40px">N°</th>${th("SITE","site","left")}${th("NOM PRÉNOM","nom","left")}${th("CODE","code","center","60px")}${th("HEURE ARRIVÉE","arrivee","center","110px")}${th("HEURE DÉPART","depart","center","110px")}<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;white-space:nowrap">POSITION GPS</th>${th("ÉTAT","etat","center","100px")}`;})()}</tr></thead>
     <tbody id="fpq-live-tbody">${rows||`<tr><td colspan="8" class="px-3 py-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</td></tr>`}</tbody>
   </table></div></div>`}`;
+}
+function fpqOpenDailyCodeModal(code){
+  const lists=window._fpqDailyCodeLists||{};
+  const key=code||"__none__";
+  const rows=lists[key]||[];
+  const v=code?POINTAGE_CODES[code]:null;
+  const label=code?(v?.label||code):"Non pointé";
+  const color=v?.color||"#475569";
+  const date=fpqCurrentDate();
+  const body=rows.length?`<table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 uppercase bg-slate-50"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2 text-left">Matricule</th><th class="px-3 py-2 text-left">Site</th></tr></thead><tbody>${rows.map(r=>`<tr><td class="px-3 py-2 font-semibold">${escapeHTML(r.nom)}</td><td class="px-3 py-2 font-mono text-xs">${escapeHTML(r.mat)}</td><td class="px-3 py-2 text-xs text-slate-500">${escapeHTML(r.site)}</td></tr>`).join("")}</tbody></table>`:`<div class="text-center text-slate-400 py-8">Aucun employé dans cette catégorie.</div>`;
+  openModal(`<div class="flex items-center gap-3 mb-4"><div class="text-2xl font-black" style="color:${color}">${rows.length}</div><div><div class="font-black text-sm">${escapeHTML(label)} — ${escapeHTML(formatDate(date))}</div></div></div><div class="overflow-auto" style="max-height:60vh">${body}</div><div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 
 function renderPointage(view,sub,arg,_skipEnsure){
