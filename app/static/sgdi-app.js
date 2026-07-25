@@ -33225,16 +33225,30 @@ async function opsValiderMultiOM(agentIds,form,date,opt={}){
   setTimeout(closeOmSaveOverlay,1800);
   window.__sgdiOpsMovementSqlSyncedAt=Date.now();
   renderView();
-  // 4. Sync SQL en arrière-plan : crée les affectations PostgreSQL pour chaque agent
+  // 4. Sync SQL en arrière-plan : crée les affectations PostgreSQL pour chaque agent.
+  // Le toast de l'étape 3 ("OM validé(s)") ne portait que sur l'enregistrement du mouvement
+  // (document JSON) — PAS sur l'affectation SQL réelle ici. Un échec silencieux ici (ex: site
+  // et société de l'employé incohérents, rejeté par le backend) faisait "réapparaître" l'ancien
+  // site après la prochaine synchro, sans que l'utilisateur ne comprenne pourquoi : il n'y avait
+  // jamais eu d'indication que la correction n'avait pas réellement été enregistrée en base.
   window._sgdiSilentRibbon=true;
   (async()=>{
+    const sqlFailures=[];
     try{
       for(const {aid,patch} of saved){
-        try{await fpqApplyMovementAffectation(date,aid,patch);}catch(e){console.warn("Affectation SQL agent",aid,e);}
+        try{await fpqApplyMovementAffectation(date,aid,patch);}catch(e){
+          console.warn("Affectation SQL agent",aid,e);
+          const emp=typeof opsFindEmployee==="function"?opsFindEmployee(aid):null;
+          sqlFailures.push((emp?`${emp.matricule||emp.code||""} ${(emp.nom||"")+" "+(emp.prenom||"")}`.trim():aid)+" : "+(e?.message||e));
+        }
       }
       await sgdiPullState({silent:true});
     }catch(e){console.warn("Sync multi-OM background:",e);}
-    finally{window._sgdiSilentRibbon=false;sgdiRefreshCountersNow({reason:"multi-om"});}
+    finally{
+      window._sgdiSilentRibbon=false;
+      sgdiRefreshCountersNow({reason:"multi-om"});
+      if(sqlFailures.length&&typeof toast==="function")toast("Affectation NON enregistrée en base pour "+sqlFailures.length+" employé(s) : "+sqlFailures.slice(0,3).join(" · ")+(sqlFailures.length>3?"…":""),"error");
+    }
   })();
 }
 function opsMovementGroupHTML(title,rows,field){
