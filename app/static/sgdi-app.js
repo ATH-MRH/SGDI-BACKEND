@@ -31941,8 +31941,23 @@ function renderAdminMessagesHistory(view){
     '</div></div>'+
     '<div class="card p-0 overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-3">Date</th><th class="text-left p-3">De</th><th class="text-left p-3">Vers</th><th class="text-left p-3">Message</th><th class="text-left p-3">Statut</th><th class="text-left p-3">Pièces jointes</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
+function ensureAdminUsersFresh(){
+  // db.users n'est resynchronisé qu'au login ou après une action d'écriture sur cet écran :
+  // sans ce rafraîchissement actif, un admin peut voir un compte comme "actif" alors qu'il
+  // vient d'être désactivé par un collègue depuis un autre poste, jusqu'à ce qu'il fasse
+  // lui-même une action d'écriture ou recharge la page — dangereux pour une décision de sécurité.
+  if(!sgdiBackendShouldUse()||!sgdiAuthToken())return;
+  const key=String(location.hash||"#/admin/users");
+  if(window.__sgdiAdminUsersFreshKey===key&&Date.now()-(window.__sgdiAdminUsersFreshAt||0)<10000)return;
+  window.__sgdiAdminUsersFreshKey=key;
+  window.__sgdiAdminUsersFreshAt=Date.now();
+  sgdiLoadAuthState().then(()=>{
+    if(String(location.hash||"")===key&&typeof renderView==="function")renderView();
+  }).catch(e=>console.warn("Rechargement utilisateurs impossible",e));
+}
 function renderAdminUsers(view){
   ensureNiveauxAcces();
+  ensureAdminUsersFresh();
   const adminSoc=adminActiveSociete();
   const u=(db.users||[]).filter(adminMatchesSociete);
   view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Utilisateurs</h1><p class="text-sm text-slate-500 mt-1">Un compte se règle simplement : identité, profil d'accès, périmètre sociétés/sites/structures, puis statut actif ou désactivé.</p></div>

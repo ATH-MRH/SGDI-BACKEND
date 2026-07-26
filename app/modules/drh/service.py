@@ -199,7 +199,11 @@ def list_employees_page(
         items = _attach_current_assignments(db, items)
         return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages}
 
-    # Chemin avec recherche : filtre SQL large puis affinage Python sur le JSON extra
+    # Chemin avec recherche : filtre SQL large puis affinage Python sur le JSON extra.
+    # Le préfiltre SQL doit couvrir les MÊMES champs que _employee_matches_text() (y compris
+    # ceux stockés dans extra) : sinon une ligne dont seul le champ JSON correspond à la
+    # recherche (ex: poste stocké uniquement dans extra.poste) est exclue ici avant même
+    # d'atteindre le filtre Python — recherche silencieusement cassée pour ces champs.
     stmt = stmt.where(
         or_(
             Employee.last_name.ilike(f"%{query}%"),
@@ -207,6 +211,10 @@ def list_employees_page(
             Employee.code.ilike(f"%{query}%"),
             Employee.society.ilike(f"%{query}%"),
             Employee.position.ilike(f"%{query}%"),
+            Employee.extra["matricule"].as_string().ilike(f"%{query}%"),
+            Employee.extra["fonction"].as_string().ilike(f"%{query}%"),
+            Employee.extra["poste"].as_string().ilike(f"%{query}%"),
+            Employee.extra["affectationCourante"]["siteName"].as_string().ilike(f"%{query}%"),
         )
     )
     rows = db.execute(stmt.order_by(*order)).scalars().all()
@@ -737,19 +745,22 @@ def delete_employee_direct(db: Session, employee_id: int):
         "beneficiaireAgentId", "retourAgentId", "matricule", "code",
     }
 
-    def matches(row: SgdiRecord) -> bool:
-        if str(row.item_id or "").strip() in refs:
-            return True
-        if not isinstance(row.data, dict):
-            return False
-        return any(str(row.data.get(field) or "").strip() in refs for field in linked_fields)
-
+    # Filtre poussé en SQL (item_id ou l'un des champs JSON liés) au lieu de charger TOUTES
+    # les lignes de ces 11 collections en Python pour les scanner une à une — ces collections
+    # (pointages, feuillePresence...) peuvent contenir des milliers de lignes ; supprimer UN
+    # employé n'a besoin de lire QUE les lignes qui le référencent réellement.
+    refs_list = list(refs)
+    match_condition = or_(
+        SgdiRecord.item_id.in_(refs_list),
+        *[SgdiRecord.data[field].as_string().in_(refs_list) for field in linked_fields],
+    )
     deleted_legacy = 0
-    rows = db.execute(select(SgdiRecord).where(SgdiRecord.collection.in_(linked_collections))).scalars().all()
+    rows = db.execute(
+        select(SgdiRecord).where(SgdiRecord.collection.in_(linked_collections), match_condition)
+    ).scalars().all()
     for row in rows:
-        if matches(row):
-            db.delete(row)
-            deleted_legacy += 1
+        db.delete(row)
+        deleted_legacy += 1
 
     db.delete(employee)
     db.commit()
@@ -1061,6 +1072,12 @@ def next_employee_code(db: Session, society: Any = None) -> str:
 
 
 def next_employee_code_after_conflict(db: Session, society: Any, current_code: Any) -> str:
+    # Même verrou que next_employee_code() : sans lui, deux recrutements concurrents qui
+    # entrent tous les deux dans la boucle de retry après un premier conflit d'unicité
+    # peuvent recalculer le même "prochain code libre" et se re-percuter, jusqu'à épuiser
+    # les 200 tentatives et refuser à tort la création d'un employé légitime.
+    if db.bind.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(20260610)"))
     prefix = str(current_code or "").strip().upper()[:1]
     allowed = employee_code_prefixes_for_society(society)
     if prefix not in allowed:

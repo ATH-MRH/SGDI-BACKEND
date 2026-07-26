@@ -77,6 +77,14 @@ def _is_admin_system_user(user: User, token_payload: dict) -> bool:
     return role in {"ADMIN", "ADM", "ADM1", "ADM2"} and token_payload.get("admin_system") is True
 
 
+def _ensure_contract_admin(user: User) -> None:
+    """Modèles de contrat et clauses conditionnelles : document officiel partagé par toute
+    l'entreprise (chaque contrat généré s'appuie dessus). Un compte "agent" (consultation
+    simple) ne doit pas pouvoir le modifier ou le supprimer."""
+    if str(user.role or "").strip().lower() == "agent":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé aux profils Maîtrise/Cadre/Directeur")
+
+
 def _effective_society_filter(user: User, requested: str | None) -> str | None:
     allowed = _allowed_societies(user)
     if requested:
@@ -496,6 +504,7 @@ async def create_contract_template(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    _ensure_contract_admin(user)
     if not file.filename.lower().endswith(".docx"):
         raise HTTPException(status_code=422, detail="Le modèle doit être un fichier Word .docx")
     if db.execute(select(ContractTemplate).where(ContractTemplate.code == code)).scalar_one_or_none():
@@ -534,7 +543,9 @@ async def update_contract_template(
     description: Annotated[str | None, Form()] = None,
     active: Annotated[int | None, Form()] = None,
     db: Session = Depends(get_db),
+    user: User = Depends(current_user),
 ):
+    _ensure_contract_admin(user)
     row = service.get_or_404(db, ContractTemplate, template_id)
     if code is not None:
         other = db.execute(select(ContractTemplate).where(ContractTemplate.code == code.strip().upper(), ContractTemplate.id != template_id)).scalar_one_or_none()
@@ -567,7 +578,8 @@ async def update_contract_template(
 
 
 @router.delete("/contract-templates/{template_id}")
-def delete_contract_template(template_id: int, db: Session = Depends(get_db)):
+def delete_contract_template(template_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_contract_admin(user)
     return service.delete_row(db, ContractTemplate, template_id)
 
 
@@ -587,21 +599,24 @@ def contract_clauses(template_id: int | None = None, db: Session = Depends(get_d
 
 
 @router.post("/contract-clauses", response_model=ContractConditionalClauseOut)
-def create_contract_clause(payload: ContractConditionalClauseCreate, db: Session = Depends(get_db)):
+def create_contract_clause(payload: ContractConditionalClauseCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_contract_admin(user)
     if payload.template_id:
         service.get_or_404(db, ContractTemplate, payload.template_id)
     return service.create_row(db, ContractConditionalClause, payload)
 
 
 @router.put("/contract-clauses/{clause_id}", response_model=ContractConditionalClauseOut)
-def update_contract_clause(clause_id: int, payload: ContractConditionalClauseUpdate, db: Session = Depends(get_db)):
+def update_contract_clause(clause_id: int, payload: ContractConditionalClauseUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_contract_admin(user)
     if payload.template_id:
         service.get_or_404(db, ContractTemplate, payload.template_id)
     return service.update_row(db, ContractConditionalClause, clause_id, payload)
 
 
 @router.delete("/contract-clauses/{clause_id}")
-def delete_contract_clause(clause_id: int, db: Session = Depends(get_db)):
+def delete_contract_clause(clause_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_contract_admin(user)
     return service.delete_row(db, ContractConditionalClause, clause_id)
 
 

@@ -390,6 +390,41 @@ def test_contract_templates_list(client, auth_headers):
     assert r.status_code == 200 and isinstance(r.json(), list)
 
 
+def _agent_headers(client, db):
+    """Compte role='agent' (consultation simple) — ne doit jamais pouvoir modifier les
+    modèles de contrat ni les clauses conditionnelles (document officiel partagé)."""
+    from app.core.security import hash_password
+    from app.modules.auth.models import User
+    if not db.query(User).filter(User.username == "testagent_contract").first():
+        db.add(User(username="testagent_contract", email=None, full_name="Agent Contrat",
+                     role="agent", access_level="H1", authorized_societies=[], authorized_structures=[],
+                     password_hash=hash_password("testpass123"), is_active=True))
+        db.commit()
+    tok = client.post("/api/auth/login", json={"username": "testagent_contract", "password": "testpass123"})
+    assert tok.status_code == 200, tok.text
+    return {"Authorization": f"Bearer {tok.json()['access_token']}"}
+
+
+def test_agent_role_cannot_write_contract_clauses(client, auth_headers, db):
+    h = _agent_headers(client, db)
+    r = client.post("/api/drh/contract-clauses", headers=h, json={
+        "title": "Clause interdite", "condition_field": "function", "condition_operator": "equals",
+        "condition_value": "X", "content": "Y", "active": 1,
+    })
+    assert r.status_code == 403, r.text
+
+    c = client.post("/api/drh/contract-clauses", headers=auth_headers, json={
+        "title": "Clause admin", "condition_field": "function", "condition_operator": "equals",
+        "condition_value": "X", "content": "Y", "active": 1,
+    })
+    clause_id = c.json()["id"]
+    assert client.put(f"/api/drh/contract-clauses/{clause_id}", headers=h, json={
+        "title": "Modif interdite", "condition_field": "function", "condition_operator": "equals",
+        "condition_value": "X", "content": "Z", "active": 1,
+    }).status_code == 403
+    assert client.delete(f"/api/drh/contract-clauses/{clause_id}", headers=h).status_code == 403
+
+
 def test_generated_contracts_list(client, auth_headers):
     r = client.get("/api/drh/generated-contracts", headers=auth_headers)
     assert r.status_code == 200 and isinstance(r.json(), list)
