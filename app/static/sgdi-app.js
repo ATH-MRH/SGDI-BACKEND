@@ -32201,7 +32201,7 @@ function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
   const colors={agent:"#0f766e",ops:"#043970",dispatch:"#7c3aed",ADM:"#dc2626"};
   const accessRoles=ADMIN_ACCESS_ROLES;
-  const roleLabels={agent:"Agent",dispatch:"Superviseur",ops:"OPS / RH",ADM:"Admin"};
+  const roleLabels={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
   const exceptionKeys=Object.keys(droits).filter(k=>droits[k]!==undefined);
   const allowExceptions=exceptionKeys.filter(k=>!!droits[k]).length;
   const denyExceptions=exceptionKeys.length-allowExceptions;
