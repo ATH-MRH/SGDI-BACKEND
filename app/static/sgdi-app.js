@@ -35197,8 +35197,18 @@ function ptSupervisorOpenCorrection(agentId,ym,day){
     <h3 class="font-black text-lg mb-2">Corriger le pointage</h3>
     <p class="text-sm text-slate-500 mb-4">Choisissez le nouveau code pour le ${escapeHTML(day)}/${escapeHTML(String(ym).slice(5,7))}. La journée sera revalidée automatiquement.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px">${buttons}</div>
+    ${current?`<div style="padding-top:12px;margin-top:12px;border-top:1px solid #e2e8f0"><button type="button" class="btn btn-ghost text-red-700" onclick="ptSupervisorClearCorrection('${agentId}','${ym}','${day}')">Effacer le code</button></div>`:""}
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button></div>
   </div>`);
+}
+async function ptSupervisorClearCorrection(agentId,ym,day){
+  try{
+    await sgdiRunLegacyAction("unlock-pointage-day",{data:{agentId,periode:ym,day}});
+    ptSetCell(agentId,ym,Number(day),"");
+    closeModal();
+    toast("Code de pointage effacé","success");
+    renderView();
+  }catch(e){toast("Effacement refusé : "+(e.message||e),"error")}
 }
 function ptSupervisorOpenDailyEditor(agentId,ym,day){
   const sheet=ptGetSheet(agentId,ym);
