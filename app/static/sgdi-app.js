@@ -32210,15 +32210,17 @@ function renderAdminDroits(view){
   const allowExceptions=exceptionKeys.filter(k=>!!droits[k]).length;
   const denyExceptions=exceptionKeys.length-allowExceptions;
   const effectiveAllowed=ADMIN_MODULES.reduce((sum,m)=>sum+accessRoles.filter(r=>{const key=m+":"+r;return droits[key]===undefined?canAccessOriginal(m,r):!!droits[key]}).length,0);
-  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Exceptions techniques d'accès</h1><p class="text-sm text-slate-500 mt-1">À utiliser uniquement pour corriger une exception rôle × module. La configuration normale reste dans les profils d'accès.</p></div>
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Exceptions</div><div class="text-3xl font-black text-amber-700">${exceptionKeys.length}</div><div class="text-xs text-slate-500">Règles personnalisées</div></div>
-      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Autorisations</div><div class="text-3xl font-black text-emerald-700">${allowExceptions}</div><div class="text-xs text-slate-500">Exceptions qui ouvrent</div></div>
-      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Blocages</div><div class="text-3xl font-black text-red-700">${denyExceptions}</div><div class="text-xs text-slate-500">Exceptions qui ferment</div></div>
-      <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Droits effectifs</div><div class="text-3xl font-black text-blue-700">${effectiveAllowed}</div><div class="text-xs text-slate-500">Cases autorisées visibles</div></div>
+  view.innerHTML=`<div class="mb-2 flex items-start justify-between gap-3 flex-wrap">
+      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-xl font-black mt-0.5">Exceptions techniques d'accès</h1></div>
+      <div class="flex gap-2 flex-wrap text-center">
+        <div class="card px-3 py-1.5"><div class="text-lg font-black text-amber-700 leading-none">${exceptionKeys.length}</div><div class="text-[10px] uppercase font-black text-slate-500">Exceptions</div></div>
+        <div class="card px-3 py-1.5"><div class="text-lg font-black text-emerald-700 leading-none">${allowExceptions}</div><div class="text-[10px] uppercase font-black text-slate-500">Autorisations</div></div>
+        <div class="card px-3 py-1.5"><div class="text-lg font-black text-red-700 leading-none">${denyExceptions}</div><div class="text-[10px] uppercase font-black text-slate-500">Blocages</div></div>
+        <div class="card px-3 py-1.5"><div class="text-lg font-black text-blue-700 leading-none">${effectiveAllowed}</div><div class="text-[10px] uppercase font-black text-slate-500">Droits effectifs</div></div>
+      </div>
     </div>
-    <div class="card p-3 mb-3 bg-amber-50 border border-amber-200 text-sm text-amber-900"><b>Attention :</b> cette matrice ne remplace pas les profils. Une case marquée <b>Défaut</b> vient des règles standards ; une case marquée <b>Exception</b> est une règle enregistrée en base.</div>
-    <div class="card p-3 mb-3 admin-access-toolbar">
+    <div class="card px-3 py-1.5 mb-2 bg-amber-50 border border-amber-200 text-xs text-amber-900">À utiliser uniquement pour corriger une exception rôle × module (la config normale reste dans les profils). <b>Défaut</b> = règle standard, <b>Exception</b> = règle enregistrée en base.</div>
+    <div class="card p-2 mb-2 admin-access-toolbar">
       <input id="admin-right-search" class="input" placeholder="Rechercher un module, code ou groupe..." oninput="adminFilterDroitsTable()"/>
       <label class="admin-access-filter"><input id="admin-right-only-exceptions" type="checkbox" onchange="adminFilterDroitsTable()"/> Exceptions seulement</label>
       <span id="admin-right-visible-count">${ADMIN_MODULES.length} module(s)</span>
