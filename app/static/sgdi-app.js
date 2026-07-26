@@ -30483,6 +30483,10 @@ function adminAccessModuleGroup(module){
 const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
+// Libellés affichés uniquement : les valeurs internes agent/dispatch/ops/ADM restent
+// inchangées partout (logique de rôles) — seul le texte montré à l'écran change.
+const ADMIN_ROLE_DISPLAY_LABELS={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
+function adminRoleDisplayLabel(code){return ADMIN_ROLE_DISPLAY_LABELS[code]||code}
 const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"superviseur",label:"SUPERVISEUR"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"facmod",label:"FACTURATION"},{key:"paie",label:"PAIE"},{key:"commercial",label:"COMMERCIAL"},{key:"secretariat",label:"SECRETARIAT GÉNÉRAL"},{key:"agenda",label:"AGENDA"},{key:"pointage",label:"POINTAGE"},{key:"portail",label:"PORTAIL RH"},{key:"admin",label:"ADMINISTRATION SYSTÈME"}];
 function normalizeStructureKey(value){
   const raw=String(value||"").trim();
@@ -31948,7 +31952,7 @@ function renderAdminUsers(view){
         <div><div class="font-bold">Méthode simple d'attribution</div><div class="text-xs text-slate-500">1. Choisir le profil · 2. Définir le périmètre · 3. Activer ou désactiver · 4. Enregistrer.</div></div>
         <div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="navigate('admin/niveaux')">Configurer les profils</button><button class="btn btn-primary" onclick="openAdminUserModal('')">Nouvel utilisateur</button></div>
       </div>
-      <div class="grid grid-4 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<div class="p-2 rounded-lg" style="background:#fff;border:1px solid #e2e8f0"><div class="font-black text-xs" style="color:${adminRoleColor(code)}">${code} · ${title}</div><div class="text-[11px] text-slate-500">${desc}</div></div>`).join("")}</div>
+      <div class="grid grid-4 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<div class="p-2 rounded-lg" style="background:#fff;border:1px solid #e2e8f0"><div class="font-black text-xs" style="color:${adminRoleColor(code)}">${adminRoleDisplayLabel(code)} · ${title}</div><div class="text-[11px] text-slate-500">${desc}</div></div>`).join("")}</div>
     </div>
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
@@ -32047,7 +32051,7 @@ async function openAdminUserModal(username){
         <div><label class="label">Identifiant *</label><div class="flex gap-2"><input class="input" name="username" value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/>${isNew?`<button type="button" class="btn btn-secondary text-xs" onclick="adminSuggestUsernameForForm(true)">Générer</button>`:""}</div><div class="text-[11px] text-slate-500 mt-1">Convention : DRH01, OPS01, SUP01, ATL01, ADM01, ADG01.</div></div>
         <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
-        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${r} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
+        <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${escapeHTML(adminRoleDisplayLabel(r))} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
         <div><label class="label">Profil d'accès *</label><select class="input" name="niveau" onchange="previewUserAccessLevel(this.value);adminSuggestUsernameForForm(false)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
         <div><label class="label">Statut</label><select class="input" name="actif"><option value="true" ${u.actif!==false?"selected":""}>Actif</option><option value="false" ${u.actif===false?"selected":""}>Désactivé</option></select></div>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
@@ -32201,7 +32205,7 @@ function renderAdminDroits(view){
   const droits=db.droitsAcces||{};
   const colors={agent:"#0f766e",ops:"#043970",dispatch:"#7c3aed",ADM:"#dc2626"};
   const accessRoles=ADMIN_ACCESS_ROLES;
-  const roleLabels={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
+  const roleLabels=ADMIN_ROLE_DISPLAY_LABELS;
   const exceptionKeys=Object.keys(droits).filter(k=>droits[k]!==undefined);
   const allowExceptions=exceptionKeys.filter(k=>!!droits[k]).length;
   const denyExceptions=exceptionKeys.length-allowExceptions;
@@ -32320,10 +32324,7 @@ function openAdminNiveauModal(code){
   const n=isNew?{code:"",label:"",description:"",weight:5,color:"#043970",roles:[],modules:[],actions:["read"],societes:[],structures:[],sensitive:[]}:db.niveauxAcces.find(x=>x.code===code);
   if(!n){toast("Niveau introuvable","error");return}
   const roles=normalizeAdminLevelList(n.roles,ADMIN_ACCESS_ROLES);
-  // Libellés affichés uniquement (les valeurs internes agent/dispatch/ops/ADM restent
-  // inchangées : utilisées partout ailleurs pour la logique de rôles).
-  const roleDisplayLabels={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
-  const roleItems=ADMIN_ACCESS_ROLES.map(r=>({key:r,label:roleDisplayLabels[r]||r}));
+  const roleItems=ADMIN_ACCESS_ROLES.map(r=>({key:r,label:adminRoleDisplayLabel(r)}));
   const modules=normalizeAdminProfileModules(n.modules);
   const actions=normalizeAdminLevelList(n.actions,ADMIN_LEVEL_ACTIONS.map(a=>a.key));
   const societes=normalizeAdminLevelList(n.societes,SOCIETES);
