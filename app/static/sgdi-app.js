@@ -35736,7 +35736,11 @@ function renderPointage(view,sub,arg,_skipEnsure){
     }
   }
   const isDrh=session?.transverse==="drh";
-  const hideAuto=isSupOrUser();
+  // isSupOrUser() détecte un compte restreint par site (authorized_sites) pour masquer
+  // "Saisie automatique" en contexte terrain OPS/superviseur — mais un compte DRH peut avoir
+  // des sites restreints pour une tout autre raison (accès effectif limité) sans être un
+  // superviseur terrain : ça masquait l'onglet à tort pour DRH.
+  const hideAuto=!isDrh&&isSupOrUser();
   if(isDrh&&(sub==="saisie"||sub==="dashboard"))sub="auto";
   if(hideAuto&&sub==="auto")sub="saisie";
   if(sub==="scan")sub="feuille";
