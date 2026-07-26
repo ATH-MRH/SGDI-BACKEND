@@ -32320,6 +32320,10 @@ function openAdminNiveauModal(code){
   const n=isNew?{code:"",label:"",description:"",weight:5,color:"#043970",roles:[],modules:[],actions:["read"],societes:[],structures:[],sensitive:[]}:db.niveauxAcces.find(x=>x.code===code);
   if(!n){toast("Niveau introuvable","error");return}
   const roles=normalizeAdminLevelList(n.roles,ADMIN_ACCESS_ROLES);
+  // Libellés affichés uniquement (les valeurs internes agent/dispatch/ops/ADM restent
+  // inchangées : utilisées partout ailleurs pour la logique de rôles).
+  const roleDisplayLabels={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
+  const roleItems=ADMIN_ACCESS_ROLES.map(r=>({key:r,label:roleDisplayLabels[r]||r}));
   const modules=normalizeAdminProfileModules(n.modules);
   const actions=normalizeAdminLevelList(n.actions,ADMIN_LEVEL_ACTIONS.map(a=>a.key));
   const societes=normalizeAdminLevelList(n.societes,SOCIETES);
@@ -32335,7 +32339,7 @@ function openAdminNiveauModal(code){
         <div><label class="label">Couleur</label><input class="input" name="color" type="color" value="${escapeHTML(n.color||"#043970")}"/></div>
       </div>
       <div><label class="label">Description</label><textarea class="input" name="description" rows="2" placeholder="Expliquez le périmètre de ce profil">${escapeHTML(n.description||"")}</textarea></div>
-      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">1. Types de compte compatibles</div>${adminNiveauCheckGrid("roles",ADMIN_ACCESS_ROLES,roles,4)}</div>
+      <div class="card p-3 bg-slate-50"><div class="font-black mb-2">1. Types de compte compatibles</div>${adminNiveauCheckGrid("roles",roleItems,roles,4)}</div>
       <div class="card p-3 bg-slate-50"><div class="font-black mb-2">2. Modules autorisés</div><div class="text-xs text-slate-500 mb-2">Une coche sur OPS couvre aussi missions, mouvements et supervision OPS. Vide = droits par défaut du type de compte.</div>${adminNiveauCheckGrid("modules",ADMIN_PROFILE_MODULES,modules,3)}</div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="card p-3 bg-slate-50"><div class="font-black mb-2">3. Sociétés par défaut</div><div class="text-xs text-slate-500 mb-2">Vide = toutes, sauf restriction dans la fiche utilisateur.</div>${adminNiveauCheckGrid("societes",SOCIETES,societes,1)}</div>
