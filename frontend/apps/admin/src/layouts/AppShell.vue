@@ -10,11 +10,11 @@ const canSwitchSociety = computed(() => session.societies.length > 1 || session.
 const activeSocietyLabel = computed(() => session.activeSociety ?? 'Toutes les sociétés');
 
 const nav = [
-  { label: 'Accueil', to: '/', icon: '⌂' },
-  { label: 'Main courante', to: '/incidents/dashboard', icon: '⚑', match: '/incidents' },
-  { label: 'Recrutement', to: '/recrutement', icon: '👤', match: '/recrutement' },
-  { label: 'Effectif', to: '/effectif', icon: '👥', match: '/effectif' },
-  { label: 'DRH', to: '/drh/dashboard', icon: '📊', match: '/drh' },
+  { label: 'Accueil', to: '/' },
+  { label: 'Main courante', to: '/incidents/dashboard', match: '/incidents' },
+  { label: 'Recrutement', to: '/recrutement', match: '/recrutement' },
+  { label: 'Effectif', to: '/effectif', match: '/effectif' },
+  { label: 'DRH', to: '/drh/dashboard', match: '/drh' },
 ];
 
 async function logout(): Promise<void> {
@@ -35,7 +35,7 @@ async function logout(): Promise<void> {
           class="shell__link"
           :class="{ 'shell__link--active': $route.path.startsWith(item.match ?? item.to) && (item.match || $route.path === item.to) }"
         >
-          <span class="shell__ico">{{ item.icon }}</span>{{ item.label }}
+          {{ item.label }}
         </RouterLink>
       </nav>
       <div class="shell__side-foot">v2 · préversion</div>

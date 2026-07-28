@@ -107,14 +107,14 @@ export function statusPill(e: Employee): { label: string; cls: string } {
 }
 
 /** Les 7 KPI (libellés/couleurs/route exacts de la fiche SPEC). K7 blacklist = drapeau strict. */
-export const EFFECTIF_KPIS: { key: string; label: string; icon: string; color: string; filter: string }[] = [
-  { key: 'operationnels', label: 'Opérationnel', icon: '👮', color: '#16a34a', filter: 'operationnels' },
-  { key: 'conge', label: 'En congé', icon: '🏖', color: '#0360a8', filter: 'conge' },
-  { key: 'maladie', label: 'En maladie', icon: '🤒', color: '#f97316', filter: 'maladie' },
-  { key: 'absents', label: 'En absence', icon: '❌', color: '#dc2626', filter: 'absents' },
-  { key: 'suspension', label: 'Suspendu', icon: '⏸', color: '#7c3aed', filter: 'suspension' },
-  { key: 'sortant', label: 'Sortant', icon: '➡', color: '#475569', filter: 'sortant' },
-  { key: 'blacklist', label: 'BLACKLIST', icon: '⛔', color: '#111827', filter: 'blacklist' },
+export const EFFECTIF_KPIS: { key: string; label: string; color: string; filter: string }[] = [
+  { key: 'operationnels', label: 'Opérationnel', color: '#16a34a', filter: 'operationnels' },
+  { key: 'conge', label: 'En congé', color: '#0360a8', filter: 'conge' },
+  { key: 'maladie', label: 'En maladie', color: '#f97316', filter: 'maladie' },
+  { key: 'absents', label: 'En absence', color: '#dc2626', filter: 'absents' },
+  { key: 'suspension', label: 'Suspendu', color: '#7c3aed', filter: 'suspension' },
+  { key: 'sortant', label: 'Sortant', color: '#475569', filter: 'sortant' },
+  { key: 'blacklist', label: 'BLACKLIST', color: '#111827', filter: 'blacklist' },
 ];
 
 /**

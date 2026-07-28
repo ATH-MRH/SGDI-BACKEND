@@ -11,7 +11,7 @@ import {
   congesRows, absencesRows, gestionRows, sanctions, affectations, affectationCourante,
   contratsHistorique, dotation, documentsMap, isBlacklisted,
   daysBetween, joursInclusif, addDays, contractEndDate, formatMoney,
-  gestionIcon, gestionPillClass, gestionStatusClass, gestionStatusLabel,
+  gestionPillClass, gestionStatusClass, gestionStatusLabel,
   type FicheForm, type Legacy,
 } from '@/utils/employeeFiche';
 
@@ -111,8 +111,8 @@ const essaiBadge = computed(() => {
   const fin = form.value?.dateFinEssai;
   const d = daysBetween(new Date().toISOString().slice(0, 10), fin);
   if (d == null) return null;
-  if (d < 0) return { label: `Période d'essai TERMINÉE (${fdate(fin)})`, cls: 'sg-pill--gray' };
-  return { label: `🕒 Fin d'essai ${fdate(fin)} — ${d} j restants`, cls: d <= 15 ? 'sg-pill--red' : 'sg-pill--green' };
+  if (d < 0) return { label: `Période d'essai terminée (${fdate(fin)})`, cls: 'sg-pill--gray' };
+  return { label: `Fin d'essai ${fdate(fin)} — ${d} j restants`, cls: d <= 15 ? 'sg-pill--red' : 'sg-pill--green' };
 });
 // Alerte dotation non reversée +72h (sortant).
 const dotation72hAlert = computed(() => {
@@ -229,10 +229,10 @@ function fdate(v: unknown): string {
     <div class="ef-top">
       <button class="sg-btn sg-btn-ghost sg-btn-sm" @click="goBack">← Retour</button>
       <div class="ef-top__actions">
-        <button v-if="!editMode" class="sg-btn sg-btn-sm" @click="editMode = true">✎ Modifier</button>
+        <button v-if="!editMode" class="sg-btn sg-btn-sm" @click="editMode = true">Modifier</button>
         <template v-else>
           <button class="sg-btn sg-btn-ghost sg-btn-sm" :disabled="saving" @click="cancelEdit">Annuler</button>
-          <button class="sg-btn sg-btn-sm" :disabled="!dirty || saving" @click="save">{{ saving ? 'Enregistrement…' : '✓ Enregistrer' }}</button>
+          <button class="sg-btn sg-btn-sm" :disabled="!dirty || saving" @click="save">{{ saving ? 'Enregistrement…' : 'Enregistrer' }}</button>
         </template>
       </div>
     </div>
@@ -268,10 +268,10 @@ function fdate(v: unknown): string {
       <!-- Chips -->
       <div class="ef-chips">
         <span class="sg-pill" :class="pill.cls">{{ pill.label }}</span>
-        <span v-if="isBlacklisted(employee)" class="sg-pill sg-pill--red">⛔ BLACK LIST</span>
-        <span v-if="dotation72hAlert" class="sg-pill sg-pill--red ef-blink">⚠ ALERTE — DOTATION NON REVERSÉE +72H</span>
+        <span v-if="isBlacklisted(employee)" class="sg-pill sg-pill--red">BLACK LIST</span>
+        <span v-if="dotation72hAlert" class="sg-pill sg-pill--red ef-blink">DOTATION NON REVERSÉE +72H</span>
         <span v-if="essaiBadge" class="sg-pill" :class="essaiBadge.cls">{{ essaiBadge.label }}</span>
-        <span v-if="locked" class="sg-pill sg-pill--gray">🔒 Fiche officielle verrouillée</span>
+        <span v-if="locked" class="sg-pill sg-pill--gray">Fiche officielle verrouillée</span>
         <span v-else class="sg-pill sg-pill--green">Modification autorisée</span>
       </div>
 
@@ -281,7 +281,7 @@ function fdate(v: unknown): string {
         <div class="ef-comp__body">
           <div class="ef-comp__count">{{ comp.filled }}/20 informations renseignées</div>
           <div v-if="missingLabel" class="ef-comp__missing">À compléter : {{ missingLabel }}</div>
-          <div v-else class="ef-comp__missing">Fiche complète ✓</div>
+          <div v-else class="ef-comp__missing">Fiche complète</div>
         </div>
       </div>
 
@@ -342,7 +342,7 @@ function fdate(v: unknown): string {
               <tr v-if="!form.famille.length"><td colspan="6" class="ef-empty-cell">Aucun membre.</td></tr>
             </tbody>
           </table>
-          <button v-if="editable" class="sg-btn sg-btn-ghost sg-btn-sm" @click="addFamille">＋ Ajouter un membre</button>
+          <button v-if="editable" class="sg-btn sg-btn-ghost sg-btn-sm" @click="addFamille">+ Ajouter un membre</button>
         </div>
       </section>
 
@@ -442,7 +442,7 @@ function fdate(v: unknown): string {
             <thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th></tr></thead>
             <tbody>
               <tr v-for="(g, i) in carriereList" :key="i">
-                <td><span class="sg-pill" :class="gestionPillClass(g.type)">{{ gestionIcon(g.type) }} {{ g.type || '—' }}</span></td><td>{{ fdate(g.du) }}</td><td>{{ fdate(g.au) }}</td>
+                <td><span class="sg-pill" :class="gestionPillClass(g.type)">{{ g.type || '—' }}</span></td><td>{{ fdate(g.du) }}</td><td>{{ fdate(g.au) }}</td>
                 <td>{{ joursInclusif(g.du, g.au) }}</td><td>{{ g.motif || '—' }}</td><td><span class="sg-pill" :class="gestionStatusClass(g.__statut)">{{ gestionStatusLabel(g.__statut) }}</span></td>
               </tr>
               <tr v-if="!carriereList.length"><td colspan="6" class="ef-empty-cell">Aucun événement enregistré.</td></tr>
@@ -472,7 +472,7 @@ function fdate(v: unknown): string {
 
       <!-- ONGLET 9 · MATERIEL -->
       <section v-show="activeTab === 'materiel'" class="sg-card ef-pane">
-        <p v-if="dotation72hAlert" class="sg-alert ef-blink">⚠ Dotation non reversée depuis plus de 72h.</p>
+        <p v-if="dotation72hAlert" class="sg-alert ef-blink">Dotation non reversée depuis plus de 72h.</p>
         <div class="ef-kpi3">
           <div class="ef-kpi3__c"><span>{{ dotationList.length }}</span>Articles attribués</div>
           <div class="ef-kpi3__c ef-kpi3__pills"><div class="ef-cat-pills"><span v-for="c in dotationCategories" :key="c" class="sg-pill sg-pill--gray">{{ c }}</span><span v-if="!dotationCategories.length">—</span></div>Catégories</div>

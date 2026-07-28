@@ -74,7 +74,7 @@ const alerte72 = computed(() => rows.value.filter((r) => (r.h ?? 0) >= 72).lengt
         <div class="rv-kpi" :class="{ 'rv-blink': alerte72 > 0 }" style="color:#dc2626"><span>{{ alerte72 }}</span>Alerte ≥72h</div>
       </div>
 
-      <p v-if="alerte72 > 0" class="sg-alert rv-blink">⚠ {{ alerte72 }} dotation(s) non reversée(s) depuis plus de 72h.</p>
+      <p v-if="alerte72 > 0" class="sg-alert rv-blink">{{ alerte72 }} dotation(s) non reversée(s) depuis plus de 72h.</p>
 
       <div v-if="!rows.length" class="sg-card rv-empty">Aucun reversement en attente.</div>
       <div v-else class="sg-card rv-tablewrap">

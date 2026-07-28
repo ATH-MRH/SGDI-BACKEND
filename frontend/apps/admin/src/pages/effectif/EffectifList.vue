@@ -151,12 +151,12 @@ function openFiche(e: Employee): void {
       <button
         v-for="k in EFFECTIF_KPIS" :key="k.key"
         class="ef-kpi" :class="{ 'ef-kpi--active': filter === k.filter }"
-        :style="{ '--kpi': k.color, borderColor: filter === k.filter ? k.color : k.color + '22' }"
+        :style="{ borderColor: filter === k.filter ? k.color : k.color + '22' }"
         @click="goToFilter(k.filter)"
       >
-        <span class="ef-kpi__ico" :style="{ color: k.color }">{{ k.icon }}</span>
         <span class="ef-kpi__num" :style="{ color: k.color }">{{ kpiCounts[k.filter] ?? 0 }}</span>
         <span class="ef-kpi__lbl">{{ k.label }}</span>
+        <span class="ef-kpi__bar" :style="{ background: k.color }"></span>
       </button>
     </div>
 
@@ -236,10 +236,11 @@ function openFiche(e: Employee): void {
   min-height: 120px; padding: var(--sg-space-3); background: var(--sg-surface);
   border: 2px solid; border-radius: var(--sg-radius); cursor: pointer; font: inherit;
 }
+.ef-kpi { position: relative; }
 .ef-kpi:hover { background: var(--sg-surface-2); }
-.ef-kpi__ico { font-size: 30px; line-height: 1; }
 .ef-kpi__num { font-size: 30px; font-weight: 900; line-height: 1; }
 .ef-kpi__lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--sg-text-muted); text-align: center; }
+.ef-kpi__bar { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--sg-radius) 0 0 var(--sg-radius); }
 
 .ef-toolbar { display: flex; flex-wrap: wrap; gap: var(--sg-space-3); align-items: center; margin-bottom: 6px; }
 .ef-search { flex: 1; min-width: 220px; text-align: center; }

@@ -228,10 +228,10 @@ async function deleteCandidate(c: Candidate): Promise<void> {
     <ModalDialog v-if="actionsFor" title="Actions candidat" @close="actionsFor = null">
       <p class="sg-page-sub">{{ fullName(actionsFor) }} · {{ societe(actionsFor) || '—' }}</p>
       <div class="rc-actions">
-        <button class="sg-btn sg-btn-secondary" @click="openFiche(actionsFor!)">👁 Afficher</button>
-        <button class="sg-btn sg-btn-secondary" @click="openFiche(actionsFor!, true)">✎ Modifier</button>
-        <button class="sg-btn sg-btn-ghost" @click="archiveFor = actionsFor; actionsFor = null">🗄 Archiver</button>
-        <button class="sg-btn sg-btn-ghost rc-danger" @click="deleteCandidate(actionsFor!)">🗑 Supprimer</button>
+        <button class="sg-btn sg-btn-secondary" @click="openFiche(actionsFor!)">Afficher</button>
+        <button class="sg-btn sg-btn-secondary" @click="openFiche(actionsFor!, true)">Modifier</button>
+        <button class="sg-btn sg-btn-ghost" @click="archiveFor = actionsFor; actionsFor = null">Archiver</button>
+        <button class="sg-btn sg-btn-ghost rc-danger" @click="deleteCandidate(actionsFor!)">Supprimer</button>
       </div>
     </ModalDialog>
 

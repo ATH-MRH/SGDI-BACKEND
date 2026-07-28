@@ -19,7 +19,6 @@ const router = useRouter();
       <h2>Modules disponibles</h2>
       <div class="home__mods">
         <button class="home__mod" @click="router.push('/incidents/dashboard')">
-          <span class="home__mod-ico">⚑</span>
           <span class="home__mod-label">Main courante</span>
           <span class="home__mod-desc">Incidents, évènements, alertes, clôtures</span>
         </button>

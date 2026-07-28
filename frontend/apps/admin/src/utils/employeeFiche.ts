@@ -258,24 +258,23 @@ export const isBlacklisted = (e: Employee): boolean => {
   return Boolean(l.blacklist || l.blacklistContractBlocked || l.contractBlocked);
 };
 
-// --- Onglet Carrière : icône + couleur par type d'événement (parité gestionIcon/gestionPillClass) ---
-const GESTION_META: Record<string, { icon: string; cls: string }> = {
-  Recrutement: { icon: '🎯', cls: 'sg-pill--green' },
-  Dotation: { icon: '📦', cls: 'sg-pill--blue' },
-  Affectation: { icon: '📍', cls: 'sg-pill--blue' },
-  Congé: { icon: '🏖', cls: 'sg-pill--blue' },
-  Maladie: { icon: '🤒', cls: 'sg-pill--amber' },
-  Absence: { icon: '❌', cls: 'sg-pill--red' },
-  Suspension: { icon: '⏸', cls: 'sg-pill--purple' },
-  'Mise en demeure': { icon: '⚠', cls: 'sg-pill--red' },
-  'Période E-N-C': { icon: '🕒', cls: 'sg-pill--amber' },
-  "Période d'essai": { icon: '🕒', cls: 'sg-pill--amber' },
-  'Fin de contrat': { icon: '🚪', cls: 'sg-pill--gray' },
-  Sanction: { icon: '⚖', cls: 'sg-pill--amber' },
-  Blacklist: { icon: '⛔', cls: 'sg-pill--gray' },
+// --- Onglet Carrière : couleur de pastille par type d'événement ---
+const GESTION_CLASS: Record<string, string> = {
+  Recrutement: 'sg-pill--green',
+  Dotation: 'sg-pill--blue',
+  Affectation: 'sg-pill--blue',
+  Congé: 'sg-pill--blue',
+  Maladie: 'sg-pill--amber',
+  Absence: 'sg-pill--red',
+  Suspension: 'sg-pill--purple',
+  'Mise en demeure': 'sg-pill--red',
+  'Période E-N-C': 'sg-pill--amber',
+  "Période d'essai": 'sg-pill--amber',
+  'Fin de contrat': 'sg-pill--gray',
+  Sanction: 'sg-pill--amber',
+  Blacklist: 'sg-pill--gray',
 };
-export function gestionIcon(type: unknown): string { return GESTION_META[str(type)]?.icon ?? '•'; }
-export function gestionPillClass(type: unknown): string { return GESTION_META[str(type)]?.cls ?? 'sg-pill--gray'; }
+export function gestionPillClass(type: unknown): string { return GESTION_CLASS[str(type)] ?? 'sg-pill--gray'; }
 export function gestionStatusClass(statut: unknown): string {
   const s = str(statut).toLowerCase();
   if (s === 'current') return 'sg-pill--green';

@@ -222,7 +222,7 @@ async function validerFiche(): Promise<void> {
   busy.value = true;
   try {
     await candidatesApi.validateFinal(candidateId.value!);
-    info.value = '✓ Fiche de position validée — candidat en réserve';
+    info.value = 'Fiche de position validée — candidat en réserve';
     router.push('/reserve');
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Validation finale refusée';
@@ -398,7 +398,7 @@ const heroTitle = computed(() => {
             <label>CV</label>
             <div class="cv-zone">
               <input type="file" accept=".pdf,.doc,.docx,image/*" @change="(e) => readFile(e, 'cv_url', 'cv_name')" />
-              <span v-if="form.cv_name" class="cv-name">✅ {{ form.cv_name }}</span>
+              <span v-if="form.cv_name" class="cv-name">{{ form.cv_name }}</span>
             </div>
           </div>
         </fieldset>
@@ -459,7 +459,7 @@ const heroTitle = computed(() => {
                 </select>
                 <button type="button" class="sg-btn sg-btn-ghost sg-btn-sm exp-x" @click="removeExp(i)">✕</button>
               </div>
-              <button type="button" class="sg-btn sg-btn-ghost sg-btn-sm" @click="addExp">＋ Ajouter une expérience</button>
+              <button type="button" class="sg-btn sg-btn-ghost sg-btn-sm" @click="addExp">+ Ajouter une expérience</button>
             </div>
           </fieldset>
 
