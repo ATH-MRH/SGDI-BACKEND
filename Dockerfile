@@ -7,6 +7,14 @@ COPY app/static/*.js ./
 RUN for f in *.js; do case "$f" in *.min.js) ;; *) echo "check $f" && node --check "$f" ;; esac; done \
     && echo ok > /check/passed
 
+# --- Etape de build du frontend v2 (Vue 3 + Vite, monorepo). ---
+# Compile apps/admin ; sortie statique servie par FastAPI sous /v2. Si le front est casse
+# (typecheck/build), l'image echoue ici -> Coolify garde l'ancien conteneur (pas de /v2 casse).
+FROM node:20-alpine AS webbuild
+WORKDIR /web
+COPY frontend/ ./
+RUN npm install --no-audit --no-fund && npm run build:admin
+
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -32,6 +40,8 @@ COPY migrations ./migrations
 COPY alembic.ini .
 COPY gunicorn.conf.py .
 COPY start.sh .
+# Bundle frontend v2 -> servi par FastAPI sous /v2 (mount conditionnel dans app/main.py).
+COPY --from=webbuild /web/apps/admin/dist ./frontend/apps/admin/dist
 
 RUN useradd --create-home --shell /usr/sbin/nologin sgdi \
     && chown -R sgdi:sgdi /app \

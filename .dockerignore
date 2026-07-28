@@ -9,6 +9,8 @@ scripts/__pycache__
 *.sqlite
 *.db
 node_modules
+**/node_modules
+frontend/**/dist
 tests
 docs
 uploads
