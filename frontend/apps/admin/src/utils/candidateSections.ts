@@ -60,7 +60,7 @@ export const SECTIONS: SectionDef[] = [
     fields: [
       { name: 'nom', label: 'Nom *', type: 'text', required: true },
       { name: 'prenom', label: 'Prénom *', type: 'text', required: true },
-      { name: 'dateNaissance', label: 'Date de naissance *', type: 'date', required: true, note: 'Âge minimum requis : 20 ans révolus.' },
+      { name: 'dateNaissance', label: 'Date de naissance *', type: 'date', required: true, note: 'Âge minimum requis : 20 ans révolus à la date d\'enregistrement.' },
       { name: 'lieuNaissance', label: 'Lieu de naissance *', type: 'text', required: true },
       { name: 'sexe', label: 'Sexe *', type: 'select', options: opt(['M', 'F']), required: true },
       { name: 'situation', label: 'Situation familiale *', type: 'select', options: opt(SITUATIONS), required: true },
@@ -124,7 +124,14 @@ export const SECTIONS: SectionDef[] = [
   { key: 'experience', title: 'G. Expérience professionnelle', banner: 'green', etape: 2, required: [], fields: [] },
 ];
 
-export const DUREES_CONTRAT = ['1 mois', '2 mois', '3 mois', '6 mois', '12 mois', '24 mois', 'CDI'];
+// Durées de contrat — format legacy (valeurs 'Nd'/'Nm').
+export const DUREES_CONTRAT: { value: string; label: string }[] = [
+  { value: '7d', label: '7 jours' }, { value: '15d', label: '15 jours' },
+  { value: '1m', label: '1 mois' }, { value: '2m', label: '2 mois' }, { value: '3m', label: '3 mois' },
+  { value: '4m', label: '4 mois' }, { value: '5m', label: '5 mois' }, { value: '6m', label: '6 mois' },
+  { value: '7m', label: '7 mois' }, { value: '8m', label: '8 mois' }, { value: '9m', label: '9 mois' },
+  { value: '10m', label: '10 mois' }, { value: '11m', label: '11 mois' }, { value: '12m', label: '12 mois' },
+];
 
 export const ETAPE1_KEYS = ['identification', 'militaire', 'poste', 'avis'];
 export const ETAPE2_KEYS = ['contact', 'habilitations', 'experience'];

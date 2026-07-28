@@ -73,8 +73,9 @@ const pageRows = computed(() => {
   return rows.value.slice(start, start + pageSize.value);
 });
 
-function openFiche(c: Candidate): void {
+function openFiche(c: Candidate, edit = false): void {
   const base = props.mode === 'archive' ? 'candidats_archives' : props.mode === 'reserve' ? 'reserve' : 'recrutement';
+  if (edit) sessionStorage.setItem(`candidatAutoEdit:${c.id}`, '1'); // ouverture directe en édition
   router.push(`/${base}/${c.id}`);
 }
 function addCandidate(): void {
@@ -228,7 +229,7 @@ async function deleteCandidate(c: Candidate): Promise<void> {
       <p class="sg-page-sub">{{ fullName(actionsFor) }} · {{ societe(actionsFor) || '—' }}</p>
       <div class="rc-actions">
         <button class="sg-btn sg-btn-secondary" @click="openFiche(actionsFor!)">👁 Afficher</button>
-        <button class="sg-btn sg-btn-secondary" @click="openFiche(actionsFor!)">✎ Modifier</button>
+        <button class="sg-btn sg-btn-secondary" @click="openFiche(actionsFor!, true)">✎ Modifier</button>
         <button class="sg-btn sg-btn-ghost" @click="archiveFor = actionsFor; actionsFor = null">🗄 Archiver</button>
         <button class="sg-btn sg-btn-ghost rc-danger" @click="deleteCandidate(actionsFor!)">🗑 Supprimer</button>
       </div>

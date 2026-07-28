@@ -51,10 +51,12 @@
 - [ ] Statistiques par thème — `#/drh/stats_theme` (`renderDRHStatsTheme`)
 
 ### 02-Recrutement  (5)
-- [ ] Candidats archivés (onglet "Archives" du hub Recrutement / Candidats) — `#/candidats_archives (liste) — #/candidats_archives/{id} délègue à renderCandi` (`renderRecrutement`)
-- [ ] Candidats en réserve (liste + actions) — onglet "Réserve" du module Recr — `#/reserve  (dispatch ligne 8863 du switch de renderView : case "reserve" → si ` (`renderRecrutement`)
-- [ ] Fiche candidat (dossier) — formulaire de dossier candidat en 2 étapes /  — `#/recrutement/{id} (alias exacts : #/reserve/{id}, #/candidats_archives/{id} p` (`renderCandidatForm`)
-- [ ] Nouvelles candidatures (onglet "new" de l'écran unifié Recrutement / Can — `#/recrutement (alias équivalents : #/recrutement/liste, #/recrutement/candidat` (`renderRecrutement`)
+- [x] Candidats archivés (onglet "Archives") — `#/candidats_archives` → v2 RecrutementList mode=archive · vérifié parité (flotte 4 agents)
+- [x] Candidats en réserve (liste + actions) — `#/reserve` → v2 RecrutementList mode=reserve + modale actions · vérifié parité
+- [x] Fiche candidat (dossier, 2 étapes / 7 sections) — `#/recrutement|reserve|candidats_archives/{id}` → v2 CandidateFiche.vue (les ~50 champs, validation séquentielle + mensurations, verrouillage/modifier, validation finale, recruit/archive/activer) · vérifié parité
+- [x] Nouvelles candidatures (onglet "new") — `#/recrutement` → v2 RecrutementList mode=new · vérifié parité
+<!-- Recrutement — DIFFÉRÉ (documenté, non oublié) : import Excel (XLSX), suppression en masse, filtres archives, autosave, déverrouillage ADM1, pastilles de section, code mort KPI. Réception demandes personnel/structure = increment suivant. -->
+
 - [ ] Réception demandes & réclamations (Demandes Personnel — Portail RH) — `#/demandes_personnel/dashboard (alias sub-route #/demandes_personnel/alertes ;` (`renderDemandesPersonnel`) 🟠
 
 ### 02-Recrutement & Demandes  (2)

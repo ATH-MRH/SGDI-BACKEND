@@ -22,6 +22,7 @@ const candidateId = ref<number | null>(null);
 const loading = ref(true);
 const error = ref('');
 const busy = ref(false);
+const editMode = ref(false); // déverrouille les sections validées pour correction
 
 const form = reactive<Record<string, unknown>>({
   serviceMilitaire: 'Non',
@@ -33,6 +34,9 @@ const form = reactive<Record<string, unknown>>({
 });
 const sectionValidations = ref<Record<string, { by: string; at: string }>>({});
 const positions = ref<{ value: string; label: string }[]>([]);
+const langueAutreOn = ref(false);
+// Habilitations : défaut 'non' pour les 4 paires de radios (parité).
+HABILITATIONS.forEach((h) => { if (!form[h.name]) form[h.name] = 'non'; });
 
 const etape1 = SECTIONS.filter((s) => s.etape === 1);
 const etape2 = SECTIONS.filter((s) => s.etape === 2);
@@ -50,8 +54,14 @@ function fieldOptions(f: FieldDef): { value: string; label: string }[] {
     if (cur && !positions.value.some((o) => o.value === cur)) base.splice(1, 0, { value: cur, label: cur });
     return base;
   }
-  if (f.name === 'dureeContrat') return [{ value: '', label: '—' }, ...DUREES_CONTRAT.map((v) => ({ value: v, label: v }))];
+  if (f.name === 'dureeContrat') return [{ value: '', label: '—' }, ...DUREES_CONTRAT];
   return f.options ?? [];
+}
+
+// Champ désactivé : section militaire quand serviceMilitaire !== 'Oui' (parité toggle).
+function fieldDisabled(sec: { key: string }, f: FieldDef): boolean {
+  if (sec.key === 'militaire' && f.name !== 'serviceMilitaire') return form.serviceMilitaire !== 'Oui';
+  return false;
 }
 
 function populate(c: Candidate): void {
@@ -66,6 +76,8 @@ function populate(c: Candidate): void {
   form.avisCommentaire = c.recruiter_opinion ?? d.avisCommentaire ?? '';
   if (!Array.isArray(form.langues)) form.langues = [];
   if (!form.serviceMilitaire) form.serviceMilitaire = 'Non';
+  HABILITATIONS.forEach((h) => { if (!form[h.name]) form[h.name] = 'non'; });
+  langueAutreOn.value = Boolean(form.langueAutre);
   sectionValidations.value = (d.sectionValidations as Record<string, { by: string; at: string }>) ?? {};
 }
 
@@ -79,8 +91,16 @@ async function load(): Promise<void> {
       candidate.value = await candidatesApi.get(routeId.value);
       candidateId.value = candidate.value.id;
       populate(candidate.value);
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Candidat introuvable';
+      // Ouverture en édition directe depuis la modale « Modifier » de la réserve.
+      if (sessionStorage.getItem(`candidatAutoEdit:${routeId.value}`) === '1') {
+        editMode.value = true;
+        sessionStorage.removeItem(`candidatAutoEdit:${routeId.value}`);
+      }
+    } catch {
+      // Candidat introuvable -> retour à la liste (jamais de fiche vide trompeuse).
+      error.value = 'Candidat introuvable';
+      router.replace(route.path.includes('candidats_archives') ? '/candidats_archives' : '/reserve');
+      return;
     }
   }
   loading.value = false;
@@ -110,7 +130,9 @@ function payload(): CandidateInput {
     society: session.activeSociety ?? (String(form.societe ?? '') || null),
     expected_salary: Number.isNaN(salaire) || salaire <= 0 ? null : salaire,
     recruiter_opinion: String(form.avisCommentaire ?? '') || null,
-    status: candidate.value?.status || (reserveDirect.value ? 'reserve' : 'nouvelle'),
+    // Ne JAMAIS forcer 'reserve' prématurément : le backend le refuse tant que les sections
+    // ne sont pas validées. Le passage en réserve se fait via validate-final.
+    status: candidate.value?.status || 'nouvelle',
     data: collectData(),
   };
 }
@@ -163,6 +185,16 @@ const isArchivedCandidate = computed(() => (candidate.value?.status ?? '').toLow
 async function validateSection(key: string): Promise<void> {
   const missing = sectionMissing(key);
   if (missing.length) { error.value = `Champs obligatoires manquants : ${missing.join(', ')}`; return; }
+  // Âge >= 20 ans révolus (contrôle client immédiat, aussi imposé serveur).
+  if (key === 'identification') {
+    const bd = String(form.dateNaissance ?? '');
+    if (/^\d{4}-\d{2}-\d{2}/.test(bd)) {
+      const b = new Date(bd); const n = new Date();
+      let age = n.getFullYear() - b.getFullYear();
+      if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) age--;
+      if (age < 20) { error.value = "Le candidat doit avoir au moins 20 ans à la date d'enregistrement"; return; }
+    }
+  }
   if (!(await save(false))) return;
   busy.value = true;
   error.value = '';
@@ -251,6 +283,20 @@ async function activer(): Promise<void> {
   }
 }
 
+async function supprimer(): Promise<void> {
+  if (!candidateId.value) return;
+  if (!window.confirm(`Supprimer définitivement ${String(form.nom ?? '')} ${String(form.prenom ?? '')} ?`)) return;
+  busy.value = true;
+  try {
+    await candidatesApi.remove(candidateId.value);
+    router.push('/recrutement');
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Suppression impossible';
+  } finally {
+    busy.value = false;
+  }
+}
+
 function toggleLangue(l: string): void {
   const arr = (form.langues as string[]) ?? [];
   form.langues = arr.includes(l) ? arr.filter((x) => x !== l) : [...arr, l];
@@ -279,7 +325,10 @@ const heroTitle = computed(() => {
         <h1 class="sg-page-title fiche-title">{{ heroTitle }}</h1>
         <p class="sg-page-sub">Recrutement / réserve · dossier candidat</p>
       </div>
-      <button class="sg-btn" :disabled="busy" @click="save(true)">Enregistrer</button>
+      <div class="fiche-head-actions">
+        <button v-if="validatedCount > 0 && !editMode" class="sg-btn sg-btn-secondary" @click="editMode = true">Modifier</button>
+        <button class="sg-btn" :disabled="busy" @click="save(true)">Enregistrer</button>
+      </div>
     </div>
 
     <p v-if="error" class="sg-alert">{{ error }}</p>
@@ -294,8 +343,8 @@ const heroTitle = computed(() => {
       </div>
 
       <div class="stepper">
-        <span class="stepper__item stepper__item--active">1. Candidature</span>
-        <span class="stepper__item">2. Fiche de renseignement</span>
+        <span class="stepper__item" :class="{ 'stepper__item--active': validatedCount < 4 }">1. Candidature</span>
+        <span class="stepper__item" :class="{ 'stepper__item--active': validatedCount >= 4 }">2. Fiche de renseignement</span>
       </div>
 
       <!-- Sections étape 1 -->
@@ -307,7 +356,7 @@ const heroTitle = computed(() => {
           <span v-else class="sg-pill sg-pill--gray">En attente</span>
         </header>
 
-        <fieldset :disabled="isValidated(sec.key) || !isAvailable(sec.key)" class="fiche-fields">
+        <fieldset :disabled="(isValidated(sec.key) && !editMode) || !isAvailable(sec.key)" class="fiche-fields">
           <!-- Photo (identification) -->
           <div v-if="sec.key === 'identification'" class="sg-field photo-field">
             <label>Photo</label>
@@ -328,6 +377,10 @@ const heroTitle = computed(() => {
               <label v-for="l in LANGUES" :key="l" class="langue-chk">
                 <input type="checkbox" :checked="((form.langues as string[]) || []).includes(l)" @change="toggleLangue(l)" /> {{ l }}
               </label>
+              <label class="langue-chk">
+                <input type="checkbox" v-model="langueAutreOn" @change="form.langueAutre = langueAutreOn ? form.langueAutre : ''" /> Autre
+              </label>
+              <input v-if="langueAutreOn" v-model="form.langueAutre" class="sg-input langue-autre" placeholder="Précisez" />
             </div>
           </div>
 
@@ -377,9 +430,9 @@ const heroTitle = computed(() => {
             <span v-else class="sg-pill sg-pill--gray">En attente</span>
           </header>
 
-          <fieldset :disabled="isValidated(sec.key) || !isAvailable(sec.key)" class="fiche-fields">
+          <fieldset :disabled="(isValidated(sec.key) && !editMode) || !isAvailable(sec.key)" class="fiche-fields">
             <!-- Section 5 : coordonnées -->
-            <CandidateField v-for="f in sec.fields" :key="f.name" :field="{ ...f, options: fieldOptions(f) }" :model="form" />
+            <CandidateField v-for="f in sec.fields" :key="f.name" :field="{ ...f, options: fieldOptions(f) }" :model="form" :disabled="fieldDisabled(sec, f)" />
 
             <!-- Section 6 : habilitations (4 paires de radios) -->
             <template v-if="sec.key === 'habilitations'">
@@ -429,6 +482,7 @@ const heroTitle = computed(() => {
         <span class="fiche-footer__spacer"></span>
         <button v-if="isArchivedCandidate" class="sg-btn" style="background:var(--sg-success)" :disabled="busy" @click="activer">Activer</button>
         <button v-else class="sg-btn sg-btn-ghost fiche-danger" :disabled="!candidateId || busy" @click="showArchive = true">Archiver candidat</button>
+        <button class="sg-btn sg-btn-ghost fiche-danger" :disabled="!candidateId || busy" @click="supprimer">Supprimer</button>
       </div>
     </template>
 
