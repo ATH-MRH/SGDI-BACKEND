@@ -207,7 +207,7 @@ export function contractEndDate(startISO: string, duree: string): string {
   const mMonth = /^(\d+)\s*m/i.exec(duree);
   const mDay = /^(\d+)\s*[dj]/i.exec(duree);
   if (mMonth) { d.setMonth(d.getMonth() + Number(mMonth[1])); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); }
-  if (mDay) { d.setDate(d.getDate() + Number(mDay[1]) - 1); return d.toISOString().slice(0, 10); }
+  if (mDay) { return addDays(startISO, Number(mDay[1])); } // parité addDays legacy (sans -1)
   return ''; // Indéterminée / inconnu → pas de fin auto
 }
 
@@ -278,21 +278,30 @@ export function gestionIcon(type: unknown): string { return GESTION_META[str(typ
 export function gestionPillClass(type: unknown): string { return GESTION_META[str(type)]?.cls ?? 'sg-pill--gray'; }
 export function gestionStatusClass(statut: unknown): string {
   const s = str(statut).toLowerCase();
-  if (s === 'current' || s === 'en cours' || s === 'en_cours') return 'sg-pill--amber';
-  if (s === 'termine' || s === 'terminé' || s === 'clos') return 'sg-pill--gray';
+  if (s === 'current') return 'sg-pill--green';
+  if (s === 'en cours' || s === 'en_cours') return 'sg-pill--amber';
   return 'sg-pill--gray';
 }
-/** Événements de carrière triés (du desc), avec statut par défaut 'terminé' + marquage affectation actuelle. */
+export function gestionStatusLabel(statut: unknown): string {
+  return str(statut) === 'current' ? 'En cours' : (str(statut) || 'terminé');
+}
+/**
+ * Événements de carrière triés (du desc). Marque comme « current » le PREMIER événement
+ * d'affectation sans date de fin quand une affectation live existe (parité gestionHistoriqueDisplayRows).
+ */
 export function gestionRows(e: Employee): Legacy[] {
   const aff = affectationCourante(e);
-  const rows = arr(getLegacy(e).gestionEvents).map((g): Legacy => {
-    const isCurrentAff = str(g.type) === 'Affectation' && !g.au && aff.siteName && str(g.motif).includes(str(aff.siteName));
-    return {
-      ...g,
-      __statut: isCurrentAff ? 'en cours' : (str(g.statut) || 'terminé'),
-    };
+  const hasLive = Boolean(aff.siteId || aff.siteName);
+  const sorted = arr(getLegacy(e).gestionEvents)
+    .slice()
+    .sort((a, b) => str(b.du || b.createdAt).localeCompare(str(a.du || a.createdAt)));
+  let activeShown = false;
+  return sorted.map((g): Legacy => {
+    const isAff = str(g.type).toLowerCase().includes('affectation');
+    const isCurrent = hasLive && isAff && !g.au && !activeShown;
+    if (isCurrent) activeShown = true;
+    return { ...g, __statut: isCurrent ? 'current' : (str(g.statut) || 'terminé') };
   });
-  return rows.sort((a, b) => str(b.du || b.createdAt).localeCompare(str(a.du || a.createdAt)));
 }
 
 /** Complétude sur 20 champs → % + liste des LIBELLÉS manquants. */

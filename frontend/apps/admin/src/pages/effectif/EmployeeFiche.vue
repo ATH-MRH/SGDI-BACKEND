@@ -11,7 +11,7 @@ import {
   congesRows, absencesRows, gestionRows, sanctions, affectations, affectationCourante,
   contratsHistorique, dotation, documentsMap, isBlacklisted,
   daysBetween, joursInclusif, addDays, contractEndDate, formatMoney,
-  gestionIcon, gestionPillClass, gestionStatusClass,
+  gestionIcon, gestionPillClass, gestionStatusClass, gestionStatusLabel,
   type FicheForm, type Legacy,
 } from '@/utils/employeeFiche';
 
@@ -139,7 +139,7 @@ const congesApprouves = computed(() => congesList.value.filter((c) => String(c.s
 const congesAttente = computed(() => congesList.value.filter((c) => ['instance', 'en_attente'].includes(String(c.statut).toLowerCase())).length);
 const absEnCours = computed(() => absencesList.value.filter((c) => {
   const s = String(c.statut).toLowerCase();
-  return s === 'en_cours' || (s === 'approuve' && c.du && inRange(c.du, c.au));
+  return (s === 'en_cours' || s === 'approuve') && inRange(c.du, c.au);
 }).length);
 const absMaladie = computed(() => absencesList.value.filter((c) => String(c.type).toLowerCase() === 'maladie').length);
 
@@ -443,7 +443,7 @@ function fdate(v: unknown): string {
             <tbody>
               <tr v-for="(g, i) in carriereList" :key="i">
                 <td><span class="sg-pill" :class="gestionPillClass(g.type)">{{ gestionIcon(g.type) }} {{ g.type || '—' }}</span></td><td>{{ fdate(g.du) }}</td><td>{{ fdate(g.au) }}</td>
-                <td>{{ joursInclusif(g.du, g.au) }}</td><td>{{ g.motif || '—' }}</td><td><span class="sg-pill" :class="gestionStatusClass(g.__statut)">{{ g.__statut || 'terminé' }}</span></td>
+                <td>{{ joursInclusif(g.du, g.au) }}</td><td>{{ g.motif || '—' }}</td><td><span class="sg-pill" :class="gestionStatusClass(g.__statut)">{{ gestionStatusLabel(g.__statut) }}</span></td>
               </tr>
               <tr v-if="!carriereList.length"><td colspan="6" class="ef-empty-cell">Aucun événement enregistré.</td></tr>
             </tbody>

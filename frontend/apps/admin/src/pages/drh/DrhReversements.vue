@@ -14,7 +14,7 @@ const all = ref<Employee[]>([]);
 const loading = ref(true);
 const error = ref('');
 
-const SORTANT = ['sortant', 'archive', 'demissionne', 'licencie'];
+// Reversements : le legacy filtre strictement statut==='sortant' + finRelationAt renseigné.
 
 async function load(): Promise<void> {
   loading.value = true; error.value = '';
@@ -48,7 +48,7 @@ const rows = computed(() =>
     .filter((e) => {
       const l = getLegacy(e);
       const st = (String(l.statut ?? e.status ?? '')).toLowerCase();
-      return SORTANT.includes(st) && dotation(e).length > 0 && !l.finRelationDotationReversee;
+      return st === 'sortant' && Boolean(l.finRelationAt) && dotation(e).length > 0 && !l.finRelationDotationReversee;
     })
     .map((e) => ({ e, h: elapsedH(e) }))
     .sort((a, b) => (b.h ?? 0) - (a.h ?? 0)),

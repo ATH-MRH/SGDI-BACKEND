@@ -21,7 +21,7 @@ export const prenom = (e: Employee): string => s(legacy(e).prenom) || e.first_na
 export const matricule = (e: Employee): string => s(legacy(e).matricule) || e.code || '';
 export const telephone = (e: Employee): string => s(legacy(e).telephone) || e.phone || '';
 export const societe = (e: Employee): string => s(legacy(e).societe) || e.society || '';
-// Pas de repli 'actif' : un statut vide reste vide (aligné sur employeeStatusKey legacy).
+// Pas de repli 'actif' : un statut vide reste vide (toLowerCase brut ; pas de mapping de synonymes).
 export const statut = (e: Employee): string => (s(legacy(e).statut) || e.status || '').toLowerCase();
 export const photo = (e: Employee): string => s(legacy(e).photo);
 export const dateNaissance = (e: Employee): string => s(legacy(e).dateNaissance) || e.birth_date || '';
@@ -66,7 +66,8 @@ function isFormer(e: Employee): boolean {
   if (SORTANT_STATUTS.includes(statut(e))) return true;
   const l = legacy(e);
   const ds = s(l.dateSortie) || s(l.departAt);
-  if (/^\d{4}-\d{2}-\d{2}/.test(ds) && ds.slice(0, 10) <= todayISO()) return true;
+  // Date de sortie renseignée : former seulement si déjà passée (une sortie future ≠ former).
+  if (/^\d{4}-\d{2}-\d{2}/.test(ds)) return ds.slice(0, 10) <= todayISO();
   return Boolean(l.finRelationAt);
 }
 
