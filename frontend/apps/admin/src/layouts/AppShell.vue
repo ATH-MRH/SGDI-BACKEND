@@ -14,6 +14,7 @@ const nav = [
   { label: 'Main courante', to: '/incidents/dashboard', icon: '⚑', match: '/incidents' },
   { label: 'Recrutement', to: '/recrutement', icon: '👤', match: '/recrutement' },
   { label: 'Effectif', to: '/effectif', icon: '👥', match: '/effectif' },
+  { label: 'DRH', to: '/drh/dashboard', icon: '📊', match: '/drh' },
 ];
 
 async function logout(): Promise<void> {
