@@ -5,8 +5,10 @@ import type { Candidate, CandidateInput } from '@sgdi/shared';
 import { candidatesApi, referenceApi } from '@/api';
 import { useSessionStore } from '@/stores/session';
 import CandidateField from '@/components/candidates/CandidateField.vue';
-import { SECTIONS, ETAPE1_KEYS, LANGUES, DUREES_CONTRAT } from '@/utils/candidateSections';
+import ModalDialog from '@/components/ModalDialog.vue';
+import { SECTIONS, LANGUES, DUREES_CONTRAT, MOTIFS_DEPART, HABILITATIONS, SERVER_ORDER } from '@/utils/candidateSections';
 import type { FieldDef } from '@/utils/candidateSections';
+import { candidateAvis } from '@/utils/candidates';
 
 const route = useRoute();
 const router = useRouter();
@@ -33,6 +35,12 @@ const sectionValidations = ref<Record<string, { by: string; at: string }>>({});
 const positions = ref<{ value: string; label: string }[]>([]);
 
 const etape1 = SECTIONS.filter((s) => s.etape === 1);
+const etape2 = SECTIONS.filter((s) => s.etape === 2);
+
+// Expérience professionnelle — lignes répétables.
+const experience = ref<Record<string, string>[]>([{ exp_employeur: '', exp_poste: '', exp_du: '', exp_au: '', exp_salaire: '', exp_motif: '' }]);
+function addExp(): void { experience.value.push({ exp_employeur: '', exp_poste: '', exp_du: '', exp_au: '', exp_salaire: '', exp_motif: '' }); }
+function removeExp(i: number): void { experience.value.splice(i, 1); if (!experience.value.length) addExp(); }
 
 // Options dynamiques pour certains champs.
 function fieldOptions(f: FieldDef): { value: string; label: string }[] {
@@ -49,6 +57,7 @@ function fieldOptions(f: FieldDef): { value: string; label: string }[] {
 function populate(c: Candidate): void {
   const d = (c.data ?? {}) as Record<string, unknown>;
   Object.assign(form, d);
+  if (Array.isArray(d.experience) && d.experience.length) experience.value = d.experience as Record<string, string>[];
   form.nom = c.last_name ?? d.nom ?? '';
   form.prenom = c.first_name ?? d.prenom ?? '';
   form.telephone = c.phone ?? d.telephone ?? '';
@@ -84,6 +93,8 @@ function collectData(): Record<string, unknown> {
   if (form.serviceMilitaire !== 'Oui') {
     data.armeService = ''; data.nombreAnneesService = ''; data.dateIncorporation = ''; data.dateRadiation = '';
   }
+  // Expérience : on filtre les lignes vides (sans employeur ET sans poste).
+  data.experience = experience.value.filter((r) => (r.exp_employeur || '').trim() || (r.exp_poste || '').trim());
   data.sectionValidations = sectionValidations.value;
   return data;
 }
@@ -140,12 +151,14 @@ function sectionMissing(key: string): string[] {
 
 const validatedCount = computed(() => Object.keys(sectionValidations.value).filter((k) => k !== 'mensurations').length);
 const isValidated = (key: string): boolean => Boolean(sectionValidations.value[key]);
+/** Séquencement serveur (inclut la section fantôme 'mensurations' après identification). */
 const isAvailable = (key: string): boolean => {
-  const order = ETAPE1_KEYS;
-  const idx = order.indexOf(key);
+  const idx = SERVER_ORDER.indexOf(key);
   if (idx <= 0) return true;
-  return order.slice(0, idx).every((k) => isValidated(k));
+  return SERVER_ORDER.slice(0, idx).every((k) => isValidated(k));
 };
+const allValidated = computed(() => validatedCount.value >= 7);
+const isArchivedCandidate = computed(() => (candidate.value?.status ?? '').toLowerCase().includes('archiv'));
 
 async function validateSection(key: string): Promise<void> {
   const missing = sectionMissing(key);
@@ -166,6 +179,73 @@ async function validateSection(key: string): Promise<void> {
     info.value = 'Section validée';
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Validation refusée';
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function validerFiche(): Promise<void> {
+  if (!allValidated.value) { error.value = 'Toutes les sections doivent être validées.'; return; }
+  if (!candidateId.value && !(await save(false))) return;
+  busy.value = true;
+  try {
+    await candidatesApi.validateFinal(candidateId.value!);
+    info.value = '✓ Fiche de position validée — candidat en réserve';
+    router.push('/reserve');
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Validation finale refusée';
+  } finally {
+    busy.value = false;
+  }
+}
+
+// Envoi au contrat (avis favorable obligatoire).
+async function recruter(): Promise<void> {
+  if (candidateAvis(candidate.value ?? ({ data: form } as never)) !== 'Favorable') {
+    error.value = 'Avis favorable obligatoire pour envoyer au contrat'; return;
+  }
+  if (!candidateId.value) return;
+  busy.value = true;
+  try {
+    await candidatesApi.marquerContractualisation(candidateId.value);
+    info.value = 'Candidat envoyé au contrat (à contractualiser)';
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Envoi au contrat refusé';
+  } finally {
+    busy.value = false;
+  }
+}
+
+// Archive / activation.
+const showArchive = ref(false);
+const archiveMotif = ref('');
+const archiveComment = ref('');
+const ARCHIVE_MOTIFS = ['Dossier incomplet', 'Profil non conforme', 'Âge non conforme', 'Poste non disponible', 'Candidat non joignable', 'Désistement du candidat', 'Avis défavorable', 'Doublon', 'Autre'];
+async function confirmArchive(): Promise<void> {
+  if (!archiveMotif.value) { error.value = "Choisissez un motif d'archivage"; return; }
+  if (!candidateId.value) { error.value = "Enregistrez d'abord le candidat avant de l'archiver"; return; }
+  busy.value = true;
+  try {
+    const data = { ...collectData(), motifArchive: archiveMotif.value, commentaireArchive: archiveComment.value, archivedAt: new Date().toISOString() };
+    await candidatesApi.update(candidateId.value, { status: 'archive', data });
+    showArchive.value = false;
+    router.push('/candidats_archives');
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Archivage refusé';
+  } finally {
+    busy.value = false;
+  }
+}
+async function activer(): Promise<void> {
+  if (!candidateId.value || !window.confirm('Réactiver ce candidat (retour en réserve) ?')) return;
+  busy.value = true;
+  try {
+    const data: Record<string, unknown> = { ...collectData(), fichePositionValidee: true };
+    delete data.motifArchive; delete data.commentaireArchive; delete data.archivedAt;
+    await candidatesApi.update(candidateId.value, { status: 'reserve', data });
+    router.push('/reserve');
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Activation refusée';
   } finally {
     busy.value = false;
   }
@@ -282,11 +362,94 @@ const heroTitle = computed(() => {
         </footer>
       </section>
 
-      <div class="sg-card fiche-etape2-lock" v-if="validatedCount < 4">
+      <!-- Étape 2 : débloquée quand les 4 sections de l'étape 1 sont validées -->
+      <div v-if="validatedCount < 4" class="sg-card fiche-etape2-lock">
         <strong>Étape 2 — Fiche de renseignement</strong>
         <p class="sg-page-sub">Validez les 4 sections de l'étape 1 pour débloquer l'étape 2 (coordonnées, habilitations, expérience).</p>
       </div>
+
+      <template v-else>
+        <section v-for="sec in etape2" :key="sec.key" class="sg-card fiche-section" :class="`banner-${sec.banner}`">
+          <header class="fiche-section__head">
+            <h3>{{ sec.title }}</h3>
+            <span v-if="isValidated(sec.key)" class="sg-pill sg-pill--green">Validée</span>
+            <span v-else-if="isAvailable(sec.key)" class="sg-pill sg-pill--amber">À valider</span>
+            <span v-else class="sg-pill sg-pill--gray">En attente</span>
+          </header>
+
+          <fieldset :disabled="isValidated(sec.key) || !isAvailable(sec.key)" class="fiche-fields">
+            <!-- Section 5 : coordonnées -->
+            <CandidateField v-for="f in sec.fields" :key="f.name" :field="{ ...f, options: fieldOptions(f) }" :model="form" />
+
+            <!-- Section 6 : habilitations (4 paires de radios) -->
+            <template v-if="sec.key === 'habilitations'">
+              <div v-for="h in HABILITATIONS" :key="h.name" class="sg-field">
+                <label>{{ h.label }}</label>
+                <div class="radios">
+                  <label><input type="radio" value="oui" v-model="form[h.name]" /> Oui</label>
+                  <label><input type="radio" value="non" v-model="form[h.name]" /> Non</label>
+                </div>
+              </div>
+            </template>
+
+            <!-- Section 7 : expérience (lignes répétables) -->
+            <div v-if="sec.key === 'experience'" class="sg-col-span-2 exp-list">
+              <div v-for="(row, i) in experience" :key="i" class="exp-row">
+                <input v-model="row.exp_employeur" class="sg-input" placeholder="Employeur" />
+                <input v-model="row.exp_poste" class="sg-input" placeholder="Poste" />
+                <input v-model="row.exp_du" type="date" class="sg-input" />
+                <input v-model="row.exp_au" type="date" class="sg-input" />
+                <input v-model="row.exp_salaire" class="sg-input" inputmode="decimal" placeholder="Salaire" />
+                <select v-model="row.exp_motif" class="sg-select">
+                  <option value="">— Motif de départ —</option>
+                  <option v-for="m in MOTIFS_DEPART" :key="m" :value="m">{{ m }}</option>
+                </select>
+                <button type="button" class="sg-btn sg-btn-ghost sg-btn-sm exp-x" @click="removeExp(i)">✕</button>
+              </div>
+              <button type="button" class="sg-btn sg-btn-ghost sg-btn-sm" @click="addExp">＋ Ajouter une expérience</button>
+            </div>
+          </fieldset>
+
+          <footer class="fiche-section__foot">
+            <span v-if="isValidated(sec.key)" class="fiche-section__ok">
+              Section validée le {{ new Date(sectionValidations[sec.key].at).toLocaleDateString('fr-FR') }}
+            </span>
+            <button v-else-if="isAvailable(sec.key)" class="sg-btn sg-btn-sm" :disabled="busy" @click="validateSection(sec.key)">Valider la section</button>
+            <span v-else class="sg-page-sub">Validez d'abord la section précédente.</span>
+          </footer>
+        </section>
+      </template>
+
+      <!-- Barre d'actions globale -->
+      <div class="sg-card fiche-footer">
+        <button v-if="allValidated && !isArchivedCandidate" class="sg-btn fiche-final" :disabled="busy" @click="validerFiche">
+          VALIDER FICHE CANDIDAT
+        </button>
+        <button v-if="!isArchivedCandidate && candidateId" class="sg-btn sg-btn-secondary" :disabled="busy" @click="recruter">Envoyer au contrat</button>
+        <span class="fiche-footer__spacer"></span>
+        <button v-if="isArchivedCandidate" class="sg-btn" style="background:var(--sg-success)" :disabled="busy" @click="activer">Activer</button>
+        <button v-else class="sg-btn sg-btn-ghost fiche-danger" :disabled="!candidateId || busy" @click="showArchive = true">Archiver candidat</button>
+      </div>
     </template>
+
+    <!-- Modale archiver -->
+    <ModalDialog v-if="showArchive" title="Archiver candidat" @close="showArchive = false">
+      <div class="sg-field">
+        <label>Motif *</label>
+        <select v-model="archiveMotif" class="sg-select">
+          <option value="">— Choisir un motif —</option>
+          <option v-for="m in ARCHIVE_MOTIFS" :key="m" :value="m">{{ m }}</option>
+        </select>
+      </div>
+      <div class="sg-field" style="margin-top:12px">
+        <label>Commentaire</label>
+        <textarea v-model="archiveComment" class="sg-textarea" rows="3" placeholder="Précision facultative"></textarea>
+      </div>
+      <template #footer>
+        <button class="sg-btn sg-btn-ghost" @click="showArchive = false">Annuler</button>
+        <button class="sg-btn fiche-danger" @click="confirmArchive">Archiver candidat</button>
+      </template>
+    </ModalDialog>
   </div>
 </template>
 
@@ -319,4 +482,12 @@ const heroTitle = computed(() => {
 .cv-zone { display: flex; align-items: center; gap: var(--sg-space-3); }
 .cv-name { font-size: var(--sg-fs-sm); color: var(--sg-success); }
 .fiche-etape2-lock { padding: var(--sg-space-6); opacity: 0.8; }
+.exp-list { display: flex; flex-direction: column; gap: var(--sg-space-2); }
+.exp-row { display: grid; grid-template-columns: 1.2fr 1.2fr 0.9fr 0.9fr 0.9fr 1.1fr auto; gap: 8px; align-items: center; }
+@media (max-width: 900px) { .exp-row { grid-template-columns: 1fr 1fr; } }
+.exp-x { color: var(--sg-danger); }
+.fiche-footer { position: sticky; bottom: 0; display: flex; align-items: center; gap: var(--sg-space-2); padding: var(--sg-space-3) var(--sg-space-4); }
+.fiche-footer__spacer { flex: 1; }
+.fiche-final { background: var(--sg-success); font-weight: 800; }
+.fiche-danger { color: var(--sg-danger); }
 </style>

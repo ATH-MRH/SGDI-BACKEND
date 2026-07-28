@@ -120,9 +120,13 @@ export const SECTIONS: SectionDef[] = [
       { name: 'contactUrgenceTel', label: 'Téléphone *', type: 'phone', required: true, placeholder: '0000 00 00 00', maxlength: 13 },
     ],
   },
+  { key: 'habilitations', title: 'F. Habilitations', banner: 'amber', etape: 2, required: [], fields: [] },
+  { key: 'experience', title: 'G. Expérience professionnelle', banner: 'green', etape: 2, required: [], fields: [] },
 ];
 
 export const DUREES_CONTRAT = ['1 mois', '2 mois', '3 mois', '6 mois', '12 mois', '24 mois', 'CDI'];
 
 export const ETAPE1_KEYS = ['identification', 'militaire', 'poste', 'avis'];
-export const ALL_SECTION_KEYS = SECTIONS.map((s) => s.key); // sans habilitations/experience (rendus à part)
+export const ETAPE2_KEYS = ['contact', 'habilitations', 'experience'];
+/** Ordre serveur (avec la section fantôme 'mensurations' après identification). */
+export const SERVER_ORDER = ['identification', 'mensurations', 'militaire', 'poste', 'avis', 'contact', 'habilitations', 'experience'];
