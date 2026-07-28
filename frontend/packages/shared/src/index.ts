@@ -5,6 +5,8 @@ export type { AuthApi } from './api/auth';
 export { createReferenceApi } from './api/reference';
 export type { ReferenceApi } from './api/reference';
 export type { SiteRef, EmployeeRef } from './api/reference';
+export { createCandidatesApi } from './api/candidates';
+export type { CandidatesApi, Candidate, CandidateInput } from './api/candidates';
 export { createIncidentsApi } from './api/incidents';
 export type {
   IncidentsApi,

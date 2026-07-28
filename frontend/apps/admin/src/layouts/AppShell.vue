@@ -12,6 +12,7 @@ const activeSocietyLabel = computed(() => session.activeSociety ?? 'Toutes les s
 const nav = [
   { label: 'Accueil', to: '/', icon: '⌂' },
   { label: 'Main courante', to: '/incidents/dashboard', icon: '⚑', match: '/incidents' },
+  { label: 'Recrutement', to: '/recrutement', icon: '👤', match: '/recrutement' },
 ];
 
 async function logout(): Promise<void> {

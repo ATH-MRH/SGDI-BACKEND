@@ -2,7 +2,7 @@
  * Instance API de l'app admin. Le jeton est stocké en localStorage (source de vérité),
  * lu par le client à chaque requête ; un 401 nettoie le jeton et renvoie au login.
  */
-import { ApiClient, createAuthApi, createReferenceApi, createIncidentsApi } from '@sgdi/shared';
+import { ApiClient, createAuthApi, createReferenceApi, createIncidentsApi, createCandidatesApi } from '@sgdi/shared';
 
 const TOKEN_KEY = 'sgdi_token';
 
@@ -27,3 +27,4 @@ export const apiClient = new ApiClient({
 export const authApi = createAuthApi(apiClient);
 export const referenceApi = createReferenceApi(apiClient);
 export const incidentsApi = createIncidentsApi(apiClient);
+export const candidatesApi = createCandidatesApi(apiClient);
