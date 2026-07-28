@@ -6,7 +6,7 @@ import { employeesApi } from '@/api';
 import { useSessionStore } from '@/stores/session';
 import {
   nom, prenom, matricule, telephone, societe, poste, siteName,
-  dateRecrutement, photo, fullName, statut, statusPill, matchesFilter,
+  dateRecrutement, photo, fullName, statusPill, matchesFilter, kpiCount,
   EFFECTIF_KPIS,
 } from '@/utils/employees';
 import { formatFR } from '@/utils/incidents';
@@ -90,7 +90,7 @@ onMounted(load);
 // KPI comptés localement sur la liste chargée.
 const kpiCounts = computed(() => {
   const m: Record<string, number> = {};
-  for (const k of EFFECTIF_KPIS) m[k.filter] = all.value.filter((e) => matchesFilter(e, k.filter)).length;
+  for (const k of EFFECTIF_KPIS) m[k.filter] = kpiCount(all.value, k.filter);
   return m;
 });
 
@@ -100,10 +100,11 @@ const filtered = computed(() => all.value.filter((e) => matchesFilter(e, props.f
 const searched = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return filtered.value;
-  return filtered.value.filter((e) =>
-    `${nom(e)} ${prenom(e)} ${matricule(e)} ${societe(e)} ${poste(e)} ${siteName(e)} ${telephone(e)} ${dateRecrutement(e)}`
-      .toLowerCase().includes(q),
-  );
+  return filtered.value.filter((e) => {
+    const iso = dateRecrutement(e);
+    return `${nom(e)} ${prenom(e)} ${matricule(e)} ${societe(e)} ${poste(e)} ${siteName(e)} ${telephone(e)} ${iso} ${iso ? formatFR(iso.slice(0, 10)) : ''} ${statusPill(e).label}`
+      .toLowerCase().includes(q);
+  });
 });
 
 const collator = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' });
@@ -202,7 +203,7 @@ function openFiche(e: Employee): void {
                   </div>
                 </div>
               </td>
-              <td><span class="ef-code" :class="{ 'ef-code--op': statut(e) === 'actif' }">{{ matricule(e) || '—' }}</span></td>
+              <td><span class="ef-code">{{ matricule(e) || '—' }}</span></td>
               <td class="ef-xs">{{ societe(e) || '—' }}</td>
               <td class="ef-xs">{{ poste(e) || '—' }}</td>
               <td class="ef-xs">{{ siteName(e) || '—' }}</td>
@@ -261,7 +262,6 @@ function openFiche(e: Employee): void {
 .ef-name { font-weight: 700; }
 .ef-phone { font-size: 11px; color: var(--sg-text-muted); }
 .ef-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 800; color: #b45309; }
-.ef-code--op { color: #16a34a; }
 .ef-xs { font-size: 12px; color: var(--sg-text); }
 .ef-foot { display: flex; align-items: center; justify-content: space-between; padding: 12px; color: var(--sg-text-muted); }
 .ef-foot__nav { display: flex; gap: var(--sg-space-2); }

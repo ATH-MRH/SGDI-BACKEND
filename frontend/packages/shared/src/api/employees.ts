@@ -36,6 +36,19 @@ export interface Employee {
 
 export type EmployeeInput = Partial<Omit<Employee, 'id' | 'created_at' | 'updated_at'>>;
 
+/** Fiche de position agrégée (collections DB dédiées). */
+export interface FichePosition {
+  employee: Employee;
+  contracts: Record<string, unknown>[];
+  leaves: Record<string, unknown>[];
+  sanctions: Record<string, unknown>[];
+  documents: Record<string, unknown>[];
+  assignments: Record<string, unknown>[];
+  pointage: Record<string, unknown>[];
+  events: Record<string, unknown>[];
+  equipment: Record<string, unknown>[];
+}
+
 export function createEmployeesApi(client: ApiClient) {
   return {
     page(params: { mode?: string; society?: string; q?: string; page?: number; page_size?: number }): Promise<Paginated<Employee>> {
@@ -46,6 +59,9 @@ export function createEmployeesApi(client: ApiClient) {
     },
     get(id: number): Promise<Employee> {
       return client.get<Employee>(`/drh/employees/${id}`);
+    },
+    fichePosition(id: number): Promise<FichePosition> {
+      return client.get<FichePosition>(`/drh/employees/${id}/fiche-position`);
     },
     create(body: EmployeeInput): Promise<Employee> {
       return client.post<Employee>('/drh/employees', body);

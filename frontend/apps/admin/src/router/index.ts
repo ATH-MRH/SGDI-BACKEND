@@ -37,6 +37,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'effectif/agent/:id', name: 'employee-fiche', component: () => import('@/pages/effectif/EmployeeFiche.vue') },
       { path: 'agents/:id', name: 'employee-fiche-agents', component: () => import('@/pages/effectif/EmployeeFiche.vue') },
       { path: 'drh/dashboard', name: 'drh-dashboard', component: () => import('@/pages/drh/DrhDashboard.vue') },
+      { path: 'drh/reversements', name: 'drh-reversements', component: () => import('@/pages/drh/DrhReversements.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },

@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { Employee } from '@sgdi/shared';
+import type { Employee, FichePosition } from '@sgdi/shared';
 import { employeesApi } from '@/api';
 import { ageYears, statut, statusPill } from '@/utils/employees';
 import { formatFR } from '@/utils/incidents';
 import {
-  WILAYAS, BANQUES_ALGERIE, SITUATIONS, SEXES, HABILITATIONS, DOCUMENTS,
+  WILAYAS, BANQUES_ALGERIE, SITUATIONS, SEXES, DUREES_CONTRAT, HABILITATIONS, DOCUMENTS,
   hydrateForm, buildPayload, completeness, completenessRingClass,
-  conges, absencesEvents, gestionEvents, sanctions, affectations, affectationCourante,
+  congesRows, absencesRows, gestionRows, sanctions, affectations, affectationCourante,
   contratsHistorique, dotation, documentsMap, isBlacklisted,
-  type FicheForm,
+  daysBetween, joursInclusif, addDays, contractEndDate, formatMoney,
+  gestionIcon, gestionPillClass, gestionStatusClass,
+  type FicheForm, type Legacy,
 } from '@/utils/employeeFiche';
 
 const route = useRoute();
@@ -18,6 +20,7 @@ const router = useRouter();
 const id = Number(route.params.id);
 
 const employee = ref<Employee | null>(null);
+const fiche = ref<FichePosition | null>(null);
 const form = ref<FicheForm | null>(null);
 const snapshot = ref('');
 const loading = ref(true);
@@ -46,6 +49,8 @@ const locked = computed(() => (employee.value?.locked ?? 1) === 1);
 const editable = computed(() => editMode.value && !saving.value);
 const dirty = computed(() => form.value != null && JSON.stringify(form.value) !== snapshot.value);
 
+const leaves = computed<Legacy[] | null>(() => (fiche.value?.leaves ?? null) as Legacy[] | null);
+
 async function load(): Promise<void> {
   loading.value = true; error.value = '';
   try {
@@ -53,6 +58,8 @@ async function load(): Promise<void> {
     employee.value = e;
     form.value = hydrateForm(e);
     snapshot.value = JSON.stringify(form.value);
+    // Source DB pour congés/absences (best-effort, non bloquant).
+    try { fiche.value = await employeesApi.fichePosition(id); } catch { fiche.value = null; }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Chargement impossible';
   } finally {
@@ -61,12 +68,114 @@ async function load(): Promise<void> {
 }
 onMounted(load);
 
+// Recalculs auto onglet contrat (fin de contrat / fin d'essai) tant qu'on édite.
+watch(() => (form.value ? [form.value.dateRecrutement, form.value.dureeContrat, form.value.dureeEssai] : null), () => {
+  if (!editable.value || !form.value) return;
+  const fin = contractEndDate(form.value.dateRecrutement, form.value.dureeContrat);
+  if (fin) form.value.dateFinContrat = fin;
+  form.value.dateFinEssai = form.value.dateRecrutement && form.value.dureeEssai
+    ? addDays(form.value.dateRecrutement, form.value.dureeEssai) : form.value.dateFinEssai;
+});
+
 const comp = computed(() => (form.value && employee.value ? completeness(form.value, employee.value) : { pct: 0, filled: 0, missing: [] }));
+const missingLabel = computed(() => {
+  const m = comp.value.missing;
+  if (!m.length) return '';
+  return m.slice(0, 3).join(', ') + (m.length > 3 ? ` et ${m.length - 3} autre(s)` : '');
+});
 const age = computed(() => (employee.value ? ageYears(employee.value) : null));
 const pill = computed(() => (employee.value ? statusPill(employee.value) : { label: '', cls: '' }));
 
+// Ancienneté (Y/M/D) depuis la date de recrutement.
+const anciennete = computed(() => {
+  const d = form.value?.dateRecrutement;
+  if (!d || !/^\d{4}-\d{2}-\d{2}/.test(d)) return '';
+  const s = new Date(d.slice(0, 10)); const n = new Date();
+  let y = n.getFullYear() - s.getFullYear();
+  let mo = n.getMonth() - s.getMonth();
+  let dd = n.getDate() - s.getDate();
+  if (dd < 0) mo--;
+  if (mo < 0) { y--; mo += 12; }
+  return `${y} an(s) ${mo} mois`;
+});
+
+// Badge fin de contrat : J-x (rouge ≤30j) / Expiré J+x.
+const finContratBadge = computed(() => {
+  const d = daysBetween(new Date().toISOString().slice(0, 10), form.value?.dateFinContrat);
+  if (d == null) return null;
+  if (d < 0) return { label: `Expiré J+${Math.abs(d)}`, cls: 'sg-pill--red' };
+  return { label: `J-${d}`, cls: d <= 30 ? 'sg-pill--red' : 'sg-pill--amber' };
+});
+// Badge fin d'essai : j restants / terminée.
+const essaiBadge = computed(() => {
+  const fin = form.value?.dateFinEssai;
+  const d = daysBetween(new Date().toISOString().slice(0, 10), fin);
+  if (d == null) return null;
+  if (d < 0) return { label: `Période d'essai TERMINÉE (${fdate(fin)})`, cls: 'sg-pill--gray' };
+  return { label: `🕒 Fin d'essai ${fdate(fin)} — ${d} j restants`, cls: d <= 15 ? 'sg-pill--red' : 'sg-pill--green' };
+});
+// Alerte dotation non reversée +72h (sortant).
+const dotation72hAlert = computed(() => {
+  const l = (employee.value?.extra as Legacy | null)?._legacy as Legacy | undefined;
+  if (!l) return false;
+  const isSortant = ['sortant', 'archive', 'demissionne', 'licencie'].includes(statut(employee.value as Employee));
+  const finAt = l.finRelationAt ? new Date(String(l.finRelationAt)).getTime() : NaN;
+  if (!isSortant || Number.isNaN(finAt) || l.finRelationDotationReversee) return false;
+  return (Date.now() - finAt) >= 72 * 3600 * 1000;
+});
+
+const congesList = computed(() => (employee.value ? congesRows(employee.value, leaves.value) : []));
+const absencesList = computed(() => (employee.value ? absencesRows(employee.value, leaves.value) : []));
+const carriereList = computed(() => (employee.value ? gestionRows(employee.value) : []));
+const dotationList = computed(() => (employee.value ? dotation(employee.value) : []));
+const todayISO = new Date().toISOString().slice(0, 10);
+function inRange(du: unknown, au: unknown): boolean {
+  const d = String(du ?? '').slice(0, 10);
+  const a = String(au ?? '').slice(0, 10);
+  return (!d || d <= todayISO) && (!a || a >= todayISO);
+}
+// KPI congés / absences.
+const congesApprouves = computed(() => congesList.value.filter((c) => String(c.statut).toLowerCase() === 'approuve').length);
+const congesAttente = computed(() => congesList.value.filter((c) => ['instance', 'en_attente'].includes(String(c.statut).toLowerCase())).length);
+const absEnCours = computed(() => absencesList.value.filter((c) => {
+  const s = String(c.statut).toLowerCase();
+  return s === 'en_cours' || (s === 'approuve' && c.du && inRange(c.du, c.au));
+}).length);
+const absMaladie = computed(() => absencesList.value.filter((c) => String(c.type).toLowerCase() === 'maladie').length);
+
+// Matériel : 3 KPI + bannière.
+const dotationCategories = computed(() => [...new Set(dotationList.value.map((m) => String(m.categorie ?? m.category ?? '')).filter(Boolean))]);
+const dotationValeur = computed(() => dotationList.value.reduce((s, m) => s + (Number(m.valeur ?? 0) || 0), 0));
+
+// Pills lecture (congés / absences).
+function congePillClass(s: unknown): string {
+  const v = String(s).toLowerCase();
+  if (v === 'approuve') return 'sg-pill--green';
+  if (v === 'refuse') return 'sg-pill--red';
+  return 'sg-pill--amber';
+}
+function absTypePillClass(t: unknown): string {
+  const v = String(t).toLowerCase();
+  if (v === 'suspension') return 'sg-pill--red';
+  if (v === 'maladie') return 'sg-pill--amber';
+  return 'sg-pill--gray';
+}
+function sanctionPillClass(t: unknown): string {
+  const v = String(t);
+  if (v === 'Licenciement') return 'sg-pill--red';
+  if (v === 'Blâme' || v === 'Avertissement écrit') return 'sg-pill--amber';
+  return 'sg-pill--gray';
+}
+
+// Famille : garantir au minimum 4 lignes à l'entrée en édition (padding, pas dans un computed).
+watch(editMode, (on) => {
+  if (on && form.value) {
+    while (form.value.famille.length < 4) form.value.famille.push({ nom: '', prenom: '', dateNaissance: '', commentaire: '' });
+  }
+});
+
 function addFamille(): void {
-  form.value?.famille.push({ nom: '', prenom: '', ddn: '', commentaire: '' });
+  form.value?.famille.push({ nom: '', prenom: '', dateNaissance: '', commentaire: '' });
 }
 function removeFamille(i: number): void {
   form.value?.famille.splice(i, 1);
@@ -140,7 +249,7 @@ function fdate(v: unknown): string {
         </div>
         <div class="ef-profile__grid">
           <div><span class="ef-lbl">Code</span><span class="ef-code" :class="{ 'ef-code--op': statut(employee) === 'actif' }">{{ employee.code || '—' }}</span></div>
-          <div><span class="ef-lbl">Recrutement</span>{{ fdate(form.dateRecrutement) }}</div>
+          <div><span class="ef-lbl">Recrutement</span>{{ fdate(form.dateRecrutement) }}<span v-if="anciennete" class="ef-sub"> ({{ anciennete }})</span></div>
           <div><span class="ef-lbl">Nom</span>{{ form.nom || '—' }}</div>
           <div><span class="ef-lbl">Prénom</span>{{ form.prenom || '—' }}</div>
           <div><span class="ef-lbl">Téléphone</span>{{ form.telephone || '—' }}</div>
@@ -148,7 +257,11 @@ function fdate(v: unknown): string {
           <div><span class="ef-lbl">Âge</span>{{ age != null ? age + ' ans' : '—' }}</div>
           <div><span class="ef-lbl">Catégorie</span>{{ form.fonction || '—' }}</div>
           <div><span class="ef-lbl">Affectation</span>{{ affectationCourante(employee).siteName || 'Sans affectation' }}</div>
-          <div><span class="ef-lbl">Fin de contrat</span>{{ fdate(form.dateFinContrat) }}</div>
+          <div>
+            <span class="ef-lbl">Fin de contrat</span>
+            {{ fdate(form.dateFinContrat) }}
+            <span v-if="finContratBadge" class="sg-pill" :class="finContratBadge.cls">{{ finContratBadge.label }}</span>
+          </div>
         </div>
       </div>
 
@@ -156,6 +269,8 @@ function fdate(v: unknown): string {
       <div class="ef-chips">
         <span class="sg-pill" :class="pill.cls">{{ pill.label }}</span>
         <span v-if="isBlacklisted(employee)" class="sg-pill sg-pill--red">⛔ BLACK LIST</span>
+        <span v-if="dotation72hAlert" class="sg-pill sg-pill--red ef-blink">⚠ ALERTE — DOTATION NON REVERSÉE +72H</span>
+        <span v-if="essaiBadge" class="sg-pill" :class="essaiBadge.cls">{{ essaiBadge.label }}</span>
         <span v-if="locked" class="sg-pill sg-pill--gray">🔒 Fiche officielle verrouillée</span>
         <span v-else class="sg-pill sg-pill--green">Modification autorisée</span>
       </div>
@@ -165,7 +280,7 @@ function fdate(v: unknown): string {
         <div class="ef-ring" :class="completenessRingClass(comp.pct)">{{ comp.pct }}%</div>
         <div class="ef-comp__body">
           <div class="ef-comp__count">{{ comp.filled }}/20 informations renseignées</div>
-          <div v-if="comp.missing.length" class="ef-comp__missing">À compléter : {{ comp.missing.join(', ') }}</div>
+          <div v-if="missingLabel" class="ef-comp__missing">À compléter : {{ missingLabel }}</div>
           <div v-else class="ef-comp__missing">Fiche complète ✓</div>
         </div>
       </div>
@@ -219,8 +334,8 @@ function fdate(v: unknown): string {
               <tr v-for="(m, i) in form.famille" :key="i">
                 <td><input v-model="m.nom" class="sg-input sg-input-sm" :disabled="!editable" /></td>
                 <td><input v-model="m.prenom" class="sg-input sg-input-sm" :disabled="!editable" /></td>
-                <td><input v-model="m.ddn" class="sg-input sg-input-sm" type="date" :disabled="!editable" /></td>
-                <td>{{ familleAge(m.ddn) }}</td>
+                <td><input v-model="m.dateNaissance" class="sg-input sg-input-sm" type="date" :disabled="!editable" /></td>
+                <td>{{ familleAge(m.dateNaissance) }}</td>
                 <td><input v-model="m.commentaire" class="sg-input sg-input-sm" :disabled="!editable" /></td>
                 <td v-if="editable"><button class="sg-btn sg-btn-ghost sg-btn-sm" @click="removeFamille(i)">×</button></td>
               </tr>
@@ -256,10 +371,10 @@ function fdate(v: unknown): string {
           <label class="sg-field"><span>Type de contrat</span><input v-model="form.typeContrat" class="sg-input" :disabled="!editable" /></label>
           <label class="sg-field"><span>Salaire net</span><input v-model="form.salaireNet" class="sg-input" inputmode="decimal" placeholder="45 000,00" :disabled="!editable" /></label>
           <label class="sg-field"><span>Date début contrat</span><input v-model="form.dateRecrutement" class="sg-input" type="date" :disabled="!editable" /></label>
-          <label class="sg-field"><span>Durée du contrat</span><input v-model="form.dureeContrat" class="sg-input" :disabled="!editable" /></label>
-          <label class="sg-field"><span>Fin de contrat</span><input v-model="form.dateFinContrat" class="sg-input" type="date" :disabled="!editable" /></label>
+          <label class="sg-field"><span>Durée du contrat</span><select v-model="form.dureeContrat" class="sg-select" :disabled="!editable"><option value="">—</option><option v-for="d in DUREES_CONTRAT" :key="d" :value="d">{{ d }}</option></select></label>
+          <label class="sg-field"><span>Fin de contrat</span><input :value="fdate(form.dateFinContrat)" class="sg-input" readonly disabled /></label>
           <label class="sg-field"><span>Durée période d'essai (jours)</span><input v-model.number="form.dureeEssai" class="sg-input" type="number" min="0" :disabled="!editable" /></label>
-          <label class="sg-field"><span>Fin essai</span><input v-model="form.dateFinEssai" class="sg-input" type="date" :disabled="!editable" /></label>
+          <label class="sg-field"><span>Fin essai</span><input :value="fdate(form.dateFinEssai)" class="sg-input" readonly disabled /></label>
         </div>
         <h3 class="ef-h3">Historique des contrats</h3>
         <div class="ef-tablewrap">
@@ -268,7 +383,7 @@ function fdate(v: unknown): string {
             <tbody>
               <tr v-for="(c, i) in contratsHistorique(employee)" :key="i">
                 <td>{{ c.reference || '—' }}</td><td>{{ c.type || '—' }}</td><td>{{ fdate(c.debut) }}</td>
-                <td>{{ c.duree || '—' }}</td><td>{{ fdate(c.fin) }}</td><td>{{ c.salaireNet || '—' }}</td>
+                <td>{{ c.duree || '—' }}</td><td>{{ fdate(c.fin) }}</td><td>{{ formatMoney(c.salaireNet) }}</td>
                 <td><span class="sg-pill sg-pill--gray">{{ c.statut || '—' }}</span></td>
               </tr>
               <tr v-if="!contratsHistorique(employee).length"><td colspan="7" class="ef-empty-cell">Aucun contrat.</td></tr>
@@ -280,19 +395,19 @@ function fdate(v: unknown): string {
       <!-- ONGLET 4 · CONGES -->
       <section v-show="activeTab === 'conges'" class="sg-card ef-pane">
         <div class="ef-kpi3">
-          <div class="ef-kpi3__c"><span>{{ conges(employee).length }}</span>Total congés</div>
-          <div class="ef-kpi3__c"><span>{{ conges(employee).filter((c) => String(c.statut).toLowerCase() === 'approuve').length }}</span>Approuvés</div>
-          <div class="ef-kpi3__c"><span>{{ conges(employee).filter((c) => String(c.statut).toLowerCase().includes('attente')).length }}</span>En attente</div>
+          <div class="ef-kpi3__c"><span>{{ congesList.length }}</span>Total congés</div>
+          <div class="ef-kpi3__c"><span>{{ congesApprouves }}</span>Approuvés</div>
+          <div class="ef-kpi3__c"><span>{{ congesAttente }}</span>En attente</div>
         </div>
         <div class="ef-tablewrap">
           <table class="ef-table">
             <thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Statut</th><th>Motif</th></tr></thead>
             <tbody>
-              <tr v-for="(c, i) in conges(employee)" :key="i">
+              <tr v-for="(c, i) in congesList" :key="i">
                 <td>{{ c.type || '—' }}</td><td>{{ fdate(c.du) }}</td><td>{{ fdate(c.au) }}</td>
-                <td>{{ c.jours || '—' }}</td><td><span class="sg-pill sg-pill--gray">{{ c.statut || '—' }}</span></td><td>{{ c.motif || '—' }}</td>
+                <td>{{ joursInclusif(c.du, c.au) }}</td><td><span class="sg-pill" :class="congePillClass(c.statut)">{{ c.statut || '—' }}</span></td><td>{{ c.motif || '—' }}</td>
               </tr>
-              <tr v-if="!conges(employee).length"><td colspan="6" class="ef-empty-cell">Aucun congé enregistré.</td></tr>
+              <tr v-if="!congesList.length"><td colspan="6" class="ef-empty-cell">Aucun congé enregistré.</td></tr>
             </tbody>
           </table>
         </div>
@@ -301,19 +416,19 @@ function fdate(v: unknown): string {
       <!-- ONGLET 5 · ABSENCES -->
       <section v-show="activeTab === 'absences'" class="sg-card ef-pane">
         <div class="ef-kpi3">
-          <div class="ef-kpi3__c"><span>{{ absencesEvents(employee).length }}</span>Total absences</div>
-          <div class="ef-kpi3__c"><span>{{ absencesEvents(employee).filter((c) => String(c.statut).toLowerCase().includes('cours')).length }}</span>En cours</div>
-          <div class="ef-kpi3__c"><span>{{ absencesEvents(employee).filter((c) => String(c.type).toLowerCase() === 'maladie').length }}</span>Maladie</div>
+          <div class="ef-kpi3__c"><span>{{ absencesList.length }}</span>Total absences</div>
+          <div class="ef-kpi3__c"><span>{{ absEnCours }}</span>En cours</div>
+          <div class="ef-kpi3__c"><span>{{ absMaladie }}</span>Maladie</div>
         </div>
         <div class="ef-tablewrap">
           <table class="ef-table">
             <thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Statut</th><th>Source</th><th>Motif</th></tr></thead>
             <tbody>
-              <tr v-for="(c, i) in absencesEvents(employee)" :key="i">
-                <td><span class="sg-pill sg-pill--gray">{{ c.type || '—' }}</span></td><td>{{ fdate(c.du) }}</td><td>{{ fdate(c.au) }}</td>
-                <td>{{ c.jours || '—' }}</td><td>{{ c.statut || '—' }}</td><td>{{ c.source || '—' }}</td><td>{{ c.motif || '—' }}</td>
+              <tr v-for="(c, i) in absencesList" :key="i">
+                <td><span class="sg-pill" :class="absTypePillClass(c.type)">{{ c.type || '—' }}</span></td><td>{{ fdate(c.du) }}</td><td>{{ fdate(c.au) }}</td>
+                <td>{{ joursInclusif(c.du, c.au) }}</td><td>{{ c.statut || '—' }}</td><td>{{ c.source || '—' }}</td><td>{{ c.motif || '—' }}</td>
               </tr>
-              <tr v-if="!absencesEvents(employee).length"><td colspan="7" class="ef-empty-cell">Aucune absence enregistrée.</td></tr>
+              <tr v-if="!absencesList.length"><td colspan="7" class="ef-empty-cell">Aucune absence enregistrée.</td></tr>
             </tbody>
           </table>
         </div>
@@ -326,11 +441,11 @@ function fdate(v: unknown): string {
           <table class="ef-table">
             <thead><tr><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th></tr></thead>
             <tbody>
-              <tr v-for="(g, i) in gestionEvents(employee)" :key="i">
-                <td><span class="sg-pill sg-pill--gray">{{ g.type || '—' }}</span></td><td>{{ fdate(g.du) }}</td><td>{{ fdate(g.au) }}</td>
-                <td>{{ g.jours || '—' }}</td><td>{{ g.motif || '—' }}</td><td><span class="sg-pill sg-pill--gray">{{ g.statut || '—' }}</span></td>
+              <tr v-for="(g, i) in carriereList" :key="i">
+                <td><span class="sg-pill" :class="gestionPillClass(g.type)">{{ gestionIcon(g.type) }} {{ g.type || '—' }}</span></td><td>{{ fdate(g.du) }}</td><td>{{ fdate(g.au) }}</td>
+                <td>{{ joursInclusif(g.du, g.au) }}</td><td>{{ g.motif || '—' }}</td><td><span class="sg-pill" :class="gestionStatusClass(g.__statut)">{{ g.__statut || 'terminé' }}</span></td>
               </tr>
-              <tr v-if="!gestionEvents(employee).length"><td colspan="6" class="ef-empty-cell">Aucun événement enregistré.</td></tr>
+              <tr v-if="!carriereList.length"><td colspan="6" class="ef-empty-cell">Aucun événement enregistré.</td></tr>
             </tbody>
           </table>
         </div>
@@ -357,16 +472,22 @@ function fdate(v: unknown): string {
 
       <!-- ONGLET 9 · MATERIEL -->
       <section v-show="activeTab === 'materiel'" class="sg-card ef-pane">
+        <p v-if="dotation72hAlert" class="sg-alert ef-blink">⚠ Dotation non reversée depuis plus de 72h.</p>
+        <div class="ef-kpi3">
+          <div class="ef-kpi3__c"><span>{{ dotationList.length }}</span>Articles attribués</div>
+          <div class="ef-kpi3__c ef-kpi3__pills"><div class="ef-cat-pills"><span v-for="c in dotationCategories" :key="c" class="sg-pill sg-pill--gray">{{ c }}</span><span v-if="!dotationCategories.length">—</span></div>Catégories</div>
+          <div class="ef-kpi3__c"><span>{{ formatMoney(dotationValeur) }}</span>Valeur dotation</div>
+        </div>
         <h3 class="ef-h3">Dotation matériel</h3>
         <div class="ef-tablewrap">
           <table class="ef-table">
-            <thead><tr><th>Date dotation</th><th>Code</th><th>Article</th><th>Qté</th><th>Prix unitaire</th><th>Valeur</th><th>Motif</th><th>N° bon</th><th>Date reversement</th></tr></thead>
+            <thead><tr><th>Date dotation</th><th>Code</th><th>Article</th><th>Qté</th><th>Prix unitaire</th><th>Valeur</th><th>Motif</th><th>N° bon</th><th>Date reversement</th><th>Motif reversement</th></tr></thead>
             <tbody>
-              <tr v-for="(m, i) in dotation(employee)" :key="i">
+              <tr v-for="(m, i) in dotationList" :key="i">
                 <td>{{ fdate(m.date) }}</td><td>{{ m.code || '—' }}</td><td>{{ m.article || '—' }}</td><td>{{ m.quantite || m.qte || '—' }}</td>
-                <td>{{ m.prixUnitaire || '—' }}</td><td>{{ m.valeur || '—' }}</td><td>{{ m.motif || '—' }}</td><td>{{ m.numeroBon || '—' }}</td><td>{{ fdate(m.dateReversement) }}</td>
+                <td>{{ formatMoney(m.prixUnitaire) }}</td><td>{{ formatMoney(m.valeur) }}</td><td>{{ m.motif || '—' }}</td><td>{{ m.numeroBon || '—' }}</td><td>{{ fdate(m.dateReversement) }}</td><td>{{ m.motifReversement || '—' }}</td>
               </tr>
-              <tr v-if="!dotation(employee).length"><td colspan="9" class="ef-empty-cell">Aucune dotation enregistrée.</td></tr>
+              <tr v-if="!dotationList.length"><td colspan="10" class="ef-empty-cell">Aucune dotation enregistrée.</td></tr>
             </tbody>
           </table>
         </div>
@@ -382,11 +503,11 @@ function fdate(v: unknown): string {
               <tr v-if="affectationCourante(employee).siteName">
                 <td><span class="sg-pill sg-pill--green">Actuelle</span></td>
                 <td>{{ affectationCourante(employee).siteName }}</td><td>{{ affectationCourante(employee).poste || '—' }}</td>
-                <td>{{ fdate(affectationCourante(employee).du) }}</td><td>—</td><td>{{ affectationCourante(employee).motif || '—' }}</td>
+                <td>{{ fdate(affectationCourante(employee).dateDebut) }}</td><td>—</td><td>{{ affectationCourante(employee).motifChangement || '—' }}</td>
               </tr>
               <tr v-for="(a, i) in affectations(employee)" :key="i">
                 <td>Affectation {{ affectations(employee).length - i }}</td><td>{{ a.siteName || '—' }}</td><td>{{ a.poste || '—' }}</td>
-                <td>{{ fdate(a.du) }}</td><td>{{ fdate(a.au) }}</td><td>{{ a.motif || '—' }}</td>
+                <td>{{ fdate(a.dateDebut) }}</td><td>{{ fdate(a.dateFin) }}</td><td>{{ a.motifChangement || '—' }}</td>
               </tr>
               <tr v-if="!affectations(employee).length && !affectationCourante(employee).siteName"><td colspan="6" class="ef-empty-cell">Aucune.</td></tr>
             </tbody>
@@ -402,8 +523,8 @@ function fdate(v: unknown): string {
             <thead><tr><th>Infraction</th><th>Site</th><th>Indicatif</th><th>Faute</th><th>Sanction</th><th>Mise à pied</th><th>Début</th><th>Reprise</th></tr></thead>
             <tbody>
               <tr v-for="(s, i) in sanctions(employee)" :key="i">
-                <td>{{ s.infraction || '—' }}</td><td>{{ s.site || '—' }}</td><td>{{ s.indicatif || '—' }}</td><td>{{ s.faute || '—' }}</td>
-                <td><span class="sg-pill sg-pill--amber">{{ s.sanction || '—' }}</span></td><td>{{ s.misePied || '—' }}</td><td>{{ fdate(s.debut) }}</td><td>{{ fdate(s.reprise) }}</td>
+                <td>{{ fdate(s.dateInfraction || s.date) }}</td><td>{{ s.site || '—' }}</td><td>{{ s.indicatif || '—' }}</td><td>{{ s.faute || '—' }}</td>
+                <td><span class="sg-pill" :class="sanctionPillClass(s.type)">{{ s.type || '—' }}</span></td><td>{{ s.joursMiseAPied ? s.joursMiseAPied + ' j' : '—' }}</td><td>{{ fdate(s.dateDebut) }}</td><td>{{ fdate(s.dateReprise) }}</td>
               </tr>
               <tr v-if="!sanctions(employee).length"><td colspan="8" class="ef-empty-cell">Aucune.</td></tr>
             </tbody>
@@ -431,9 +552,12 @@ function fdate(v: unknown): string {
 @media (min-width: 900px) { .ef-profile__grid { grid-template-columns: repeat(5, 1fr); } }
 .ef-profile__grid > div { display: flex; flex-direction: column; }
 .ef-lbl { font-size: 10px; text-transform: uppercase; color: var(--sg-text-muted); font-weight: 700; }
+.ef-sub { color: var(--sg-text-muted); font-size: 11px; }
 .ef-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 800; color: #b45309; }
 .ef-code--op { color: #16a34a; }
-.ef-chips { display: flex; flex-wrap: wrap; gap: var(--sg-space-2); margin: var(--sg-space-3) 0; }
+.ef-chips { display: flex; flex-wrap: wrap; gap: var(--sg-space-2); margin: var(--sg-space-3) 0; align-items: center; }
+.ef-blink { animation: ef-blink 1.1s ease-in-out infinite; }
+@keyframes ef-blink { 50% { opacity: 0.45; } }
 .ef-comp { display: flex; align-items: center; gap: var(--sg-space-4); padding: var(--sg-space-4); margin-bottom: var(--sg-space-4); }
 .ef-ring { width: 64px; height: 64px; border-radius: 999px; display: grid; place-items: center; font-weight: 900; color: #fff; flex-shrink: 0; }
 .ef-ring.good { background: #16a34a; } .ef-ring.medium { background: #f97316; } .ef-ring.low { background: #dc2626; }
@@ -463,6 +587,8 @@ function fdate(v: unknown): string {
 .ef-kpi3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sg-space-3); margin-bottom: var(--sg-space-3); }
 .ef-kpi3__c { display: flex; flex-direction: column; align-items: center; padding: var(--sg-space-3); background: var(--sg-surface-2); border-radius: var(--sg-radius); font-size: 11px; text-transform: uppercase; color: var(--sg-text-muted); font-weight: 700; }
 .ef-kpi3__c span { font-size: 26px; font-weight: 900; color: var(--sg-text); }
+.ef-kpi3__pills { justify-content: center; }
+.ef-cat-pills { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-bottom: 4px; }
 .ef-progress { height: 8px; background: var(--sg-surface-2); border-radius: 999px; overflow: hidden; margin-bottom: var(--sg-space-3); }
 .ef-progress__bar { height: 100%; background: #16a34a; }
 .ef-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--sg-space-3); }

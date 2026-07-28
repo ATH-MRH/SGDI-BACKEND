@@ -108,6 +108,8 @@ a { color: var(--sg-brand-600); }
 .sg-pill--amber { color: #b45309; background: #fef3c7; }
 .sg-pill--green { color: #047857; background: #d1fae5; }
 .sg-pill--gray { color: #475569; background: #e2e8f0; }
+.sg-pill--blue { color: #0369a1; background: #e0f2fe; }
+.sg-pill--purple { color: #6d28d9; background: #ede9fe; }
 
 /* Grille KPI */
 .sg-kpis { display: grid; gap: var(--sg-space-3); }
