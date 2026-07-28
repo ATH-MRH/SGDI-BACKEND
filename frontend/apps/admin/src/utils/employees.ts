@@ -101,6 +101,8 @@ export function statusPill(e: Employee): { label: string; cls: string } {
   const st = statut(e);
   if (SORTANT_STATUTS.includes(st)) return { label: 'SORTANT', cls: 'sg-pill--gray' };
   if (st === 'suspendu' || st === 'suspension') return { label: 'SUSPENDU', cls: 'sg-pill--amber' };
+  if (st === 'conge' || st === 'congé' || st === 'en_conge') return { label: 'CONGÉ', cls: 'sg-pill--blue' };
+  if (st === 'maladie') return { label: 'MALADIE', cls: 'sg-pill--amber' };
   if (st === 'absent' || st === 'abandon') return { label: st.toUpperCase(), cls: 'sg-pill--red' };
   if (st === 'actif') return { label: 'ACTIF', cls: 'sg-pill--green' };
   return { label: st.toUpperCase() || '—', cls: 'sg-pill--gray' };

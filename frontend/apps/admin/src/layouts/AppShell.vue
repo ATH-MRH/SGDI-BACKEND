@@ -14,6 +14,7 @@ const nav = [
   { label: 'Main courante', to: '/incidents/dashboard', match: '/incidents' },
   { label: 'Recrutement', to: '/recrutement', match: '/recrutement' },
   { label: 'Effectif', to: '/effectif', match: '/effectif' },
+  { label: 'Fiche de position', to: '/fiches', match: '/fiches' },
   { label: 'DRH', to: '/drh/dashboard', match: '/drh' },
 ];
 
