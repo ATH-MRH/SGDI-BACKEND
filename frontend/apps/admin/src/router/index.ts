@@ -33,6 +33,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'effectif', name: 'effectif', component: () => import('@/pages/effectif/EffectifList.vue'), props: { filter: 'actifs' } },
       { path: 'effectif/:filter(operationnels|conge|maladie|absents|suspension|instance_affectation|sortant|blacklist)', name: 'effectif-filter', component: () => import('@/pages/effectif/EffectifList.vue'), props: true },
       { path: 'agents', redirect: '/effectif' },
+      { path: 'effectif/agent/:id', name: 'employee-fiche', component: () => import('@/pages/effectif/EmployeeFiche.vue') },
+      { path: 'agents/:id', name: 'employee-fiche-agents', component: () => import('@/pages/effectif/EmployeeFiche.vue') },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/' },
