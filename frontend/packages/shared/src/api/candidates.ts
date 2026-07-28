@@ -44,11 +44,15 @@ export function createCandidatesApi(client: ApiClient) {
     list(params?: { society?: string; status?: string }): Promise<Candidate[]> {
       return client.get<Candidate[]>('/drh/candidates', { query: params });
     },
+    get(id: number): Promise<Candidate> {
+      return client.get<Candidate>(`/drh/candidates/${id}`);
+    },
+    // create/update renvoient { status, data: candidat } — on déballe .data.
     create(body: CandidateInput): Promise<Candidate> {
-      return client.post<Candidate>('/drh/candidates', body);
+      return client.post<{ status: string; data: Candidate }>('/drh/candidates', body).then((r) => r.data);
     },
     update(id: number, body: CandidateInput): Promise<Candidate> {
-      return client.put<Candidate>(`/drh/candidates/${id}`, body);
+      return client.put<{ status: string; data: Candidate }>(`/drh/candidates/${id}`, body).then((r) => r.data);
     },
     validateSection(section: string, body: CandidateInput, candidateId?: number): Promise<unknown> {
       const query: Record<string, string | number> = { section };

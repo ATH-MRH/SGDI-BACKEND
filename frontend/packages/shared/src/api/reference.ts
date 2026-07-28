@@ -29,6 +29,10 @@ export function createReferenceApi(client: ApiClient) {
     employees(society?: string): Promise<EmployeeRef[]> {
       return client.get<EmployeeRef[]>('/drh/employees', { query: society ? { society } : undefined });
     },
+    /** GET /api/irongs/positions → postes/fonctions (select « Poste souhaité »). */
+    positions(society?: string): Promise<{ id: number; name: string; society: string | null }[]> {
+      return client.get<{ id: number; name: string; society: string | null }[]>('/irongs/positions', { query: society ? { society } : undefined });
+    },
   };
 }
 

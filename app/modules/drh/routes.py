@@ -353,6 +353,13 @@ def _action_success(data):
     return {"status": "success", "data": jsonable_encoder(data)}
 
 
+@router.get("/candidates/{candidate_id}", response_model=CandidateOut)
+def get_candidate(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    existing = service.get_or_404(db, Candidate, candidate_id)
+    _ensure_society_allowed(user, existing.society)
+    return existing
+
+
 @router.post("/candidates", dependencies=[Depends(require_level("write"))])
 def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)

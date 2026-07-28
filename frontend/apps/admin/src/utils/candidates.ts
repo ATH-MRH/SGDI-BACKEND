@@ -82,7 +82,8 @@ export const fullName = (c: Candidate): string => `${c.last_name ?? ''} ${c.firs
 /** Alerte NIN non conforme (importé) et alerte âge < 20 ans. */
 export function ninAlert(c: Candidate): boolean {
   const nin = ds(c, 'nin').replace(/\s/g, '');
-  return Boolean(nin) && !/^\d{18}$/.test(nin) && Boolean(d(c, 'imported'));
+  // Backend : NIN = exactement 10 chiffres (sinon alerte, tolérée pour les imports).
+  return Boolean(nin) && !/^\d{10}$/.test(nin);
 }
 export function ageYears(c: Candidate): number | null {
   const bd = ds(c, 'dateNaissance');
