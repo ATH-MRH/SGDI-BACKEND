@@ -13,6 +13,7 @@ const nav = [
   { label: 'Accueil', to: '/', icon: '⌂' },
   { label: 'Main courante', to: '/incidents/dashboard', icon: '⚑', match: '/incidents' },
   { label: 'Recrutement', to: '/recrutement', icon: '👤', match: '/recrutement' },
+  { label: 'Effectif', to: '/effectif', icon: '👥', match: '/effectif' },
 ];
 
 async function logout(): Promise<void> {
