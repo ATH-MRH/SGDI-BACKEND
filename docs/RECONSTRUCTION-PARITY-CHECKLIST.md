@@ -26,11 +26,15 @@
 - [ ] Sélection société (Portail ATLAS) — `#/select-societe` (`renderSocieteSelector`) 🟠
 
 ### 01-Effectif & Agents  (5)
-- [ ] Cartes KPI DRH — Tableau de bord DRH « Synthèse générale » — `#/drh/dashboard (aussi #/drh sans sous-route, et tout sous-onglet DRH inconnu ` (`renderDRHDashboard`)
+- [x] Cartes KPI DRH — Tableau de bord DRH « Synthèse générale » — `#/drh/dashboard` → v2 DrhDashboard.vue + GET /drh/dashboard (KPI statuts+candidats, ratios RH 5 barres, alerte fin contrat ≤90j, fins d'essai) · vérifié parité (flotte 5 tr. + re-vérif)
 - [ ] Droits acquis congés (DRH) — écran « CONGÉS » du portail DRH — `#/drh/conges  (router: switch(root) case "drh" → renderDRH(view, sub\|\|"dashb` (`renderDRHCongesPersonnel`)
 - [ ] Préparation opérationnelle (Employés non opérationnels + étapes bloquant — `#/effectif/preparation — dispatché par renderView() (sgdi-app.js:6875) : `case` (`renderOperationalPreparation`)
-- [ ] Récapitulatif / Liste des effectifs (GRH — Gestion des effectifs) — `#/effectif (alias #/effectif/recap et #/effectif/<sous-filtre>) — dispatch rou` (`renderEffectif`) 🟠
-- [ ] Éléments sortants (ÉLÉMENTS SORTANTS) — liste en lecture seule des emplo — `#/effectif/sortants (dispatch : sgdi-app.js:6875 — `case"effectif": ... else i` (`renderElementsSortants`)
+- [x] Récapitulatif / Liste des effectifs (GRH — Gestion des effectifs) — `#/effectif` (+ `#/effectif/<sous-filtre>`, `#/agents`) → v2 EffectifList.vue (7 KPI, 9 sous-filtres, colonnes C1-C6, recherche, tri, pagination) + fiche 12 onglets EmployeeFiche.vue (round-trip extra._legacy + fiche-position DB) · vérifié parité (flotte 5 tr. + re-vérif, 39 écarts corrigés)
+- [x] Éléments sortants (ÉLÉMENTS SORTANTS) — liste en lecture seule des emplo — `#/effectif/sortants` → v2 SortantsList.vue · vérifié parité
+<!-- Effectif — DIFFÉRÉ (documenté, non oublié) : contexte OPS/DRH/Admin (colonnes OPS naissance/âge/situation, barre 12 actions DRH, cases admin/fiches), onglets Pointage/Portail (stubs lazy), upload photo/documents + modales avenant/contrat/sanction/affectation/reversement (écritures avancées), pagination serveur (→ locale), select commune par wilaya (→ input libre). E7 Reversements dotation = #/drh/reversements construit (lecture seule ; action 'Marquer reversée' différée). -->
+
+<!-- Réf. E7 Reversements dotation → voir 01c-DRH « DRH — Reversements en attente » (#/drh/reversement) : écran lecture construit sous #/drh/reversements. -->
+
 
 ### 01b-Tableaux de bord  (2)
 - [ ] Situation générale — Groupe (tableau de bord consolidé multi-sociétés, l — `#/global-dashboard` (`renderGlobalDashboard`)
@@ -39,7 +43,7 @@
 ### 01c-DRH sous-vues  (12)
 - [ ] DRH — Mise en demeure (dotation non reversée, sortants) — `#/drh/mise_en_demeure` (`renderDRHMiseEnDemeure`) 🔴
 - [ ] DRH — Période d'essai — `#/drh/essai` (`renderDRHPeriodeEssai`) 🟠
-- [ ] DRH — Reversements en attente (dotation) — `#/drh/reversement` (`renderDRHReversementEnAttente`) 🟠
+- [x] DRH — Reversements en attente (dotation) — `#/drh/reversements` → v2 DrhReversements.vue (3 KPI Total/<72h/≥72h clignotant, tri délai, état vide) · lecture vérifiée ; action « Marquer reversée » différée
 - [ ] DRH — Service social (liste CNAS/Chifa) — `#/drh/social` (`renderDRHSocial`) 🔴
 - [ ] DRH — Service social, fiche agent (détail) — `#/drh/social/{id}` (`renderDRHSocialAgent`) 🟠
 - [ ] Statistiques RH (tableau multi-graphes) — `#/drh/stats` (`renderDRHStats`) 🔴
@@ -239,7 +243,7 @@
 - [ ] Contrats du personnel (modèles Word) — Administration système > CONTRAT — `#/admin/contrats` (`renderAdminContratsPersonnel`)
 - [ ] Droits techniques avancés (matrice module × type de compte) — Administra — `#/admin/droits` (`renderAdminDroits`)
 - [ ] Fiche de position (Administration système) — liste/maintenance des fiche — `#/admin/fiches` (`renderAdminFichesPosition`)
-- [ ] Fiche de position employé (agent form) — `#/effectif/agent/:id · alias #/agents/:id` (`renderAgentForm`)
+- [x] Fiche de position employé (agent form) — `#/effectif/agent/:id · alias #/agents/:id` → v2 EmployeeFiche.vue (12 onglets, complétude 20 champs, round-trip extra._legacy + fiche-position DB, sauvegarde) · vérifié parité (39 écarts corrigés)
 - [ ] Fiches de position (annuaire) — liste/annuaire des employés avec cartes  — `#/fiches (alias #/fiches/toutes). Sous-routes gérées par le même dispatcher `c` (`renderFiches`)
 - [ ] Fil d'actualité admin (Administration — Fil d'actualité) — `#/admin/feed` (`renderAdminFeed`) 🟠
 - [ ] Gestion des candidats (nettoyage) — Administration système — `#/admin/candidats` (`renderAdminCandidats`)
