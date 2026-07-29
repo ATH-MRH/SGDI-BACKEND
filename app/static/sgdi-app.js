@@ -1348,9 +1348,6 @@ async function sgdiPullEmployees(options){
     const scopeNorm=opt.society?normalizeSocieteName(opt.society):"";
     const previousAgents=Array.isArray(db?.agents)?db.agents:[];
     let employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
-    if(opt.society&&Array.isArray(employees)&&employees.length===0){
-      employees=await window.SGDI_API.employees.list({});
-    }
     if(!Array.isArray(employees))return null;
     const backendAgents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
     if(scopeNorm){
@@ -1510,6 +1507,8 @@ function sgdiEnsureEmployeesForDisplay(options){
   window.__sgdiEnsuredAt=window.__sgdiEnsuredAt||{};
   if(opt.force){
     if(Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<10000)return null;
+  }else if(Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<60000){
+    return null;
   }else if(localCount>0&&(localEligible>0||backendCount<=0)){
     return null;
   }
@@ -36097,13 +36096,26 @@ function renderPointageSaisieAuto(){
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const weekdayShort=["D","L","M","Me","J","V","S"];
   const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;return`<th style="border:1px solid #e2e8f0;padding:1px 0;width:24px;min-width:24px;max-width:24px;text-align:center;font-size:7px;font-weight:700;${we?"color:#1e40af;background:#dbeafe":"color:#64748b"}"><div>${String(d).padStart(2,"0")}</div><div style="font-size:6px;line-height:8px;opacity:.8">${weekdayShort[wd]}</div></th>`;}).join("");
-  const fpqGetForAgent=(a,dateStr)=>(db.feuillePresence||[]).find(x=>
-    x.date===dateStr&&(
-      String(x.agentId||"")===String(a.id||"")||
-      String(x.agentBackendId||x.employee_id||"")===String(a.backendId||"")||
-      String(x.matricule||"")===String(a.matricule||"")
-    )
-  )||{};
+  const presenceIndex=new Map();
+  (db.feuillePresence||[]).forEach(x=>{
+    const date=String(x?.date||"");
+    if(date.slice(0,7)!==ym)return;
+    [x.agentId,x.agentBackendId,x.employee_id,x.matricule].forEach(ref=>{
+      if(ref!==undefined&&ref!==null&&ref!=="")presenceIndex.set(`${date}|${String(ref)}`,x);
+    });
+  });
+  const fpqGetForAgent=(a,dateStr)=>{
+    const refs=[a.id,a.backendId,a.matricule];
+    for(const ref of refs){
+      if(ref===undefined||ref===null||ref==="")continue;
+      const row=presenceIndex.get(`${dateStr}|${String(ref)}`);
+      if(row)return row;
+    }
+    return{};
+  };
+  const sheetIndex=new Map(
+    (db.pointages||[]).filter(sheet=>sheet?.periode===ym).map(sheet=>[String(sheet.agentId||""),sheet])
+  );
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-end gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
     <div style="flex:1;min-width:180px;max-width:320px"><label class="label">Recherche</label>${ptSearchBarHTML()}</div>
@@ -36120,7 +36132,7 @@ function renderPointageSaisieAuto(){
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
   const rows=filtered.map((a,idx)=>{
     let nP=0,nA=0,nM=0,nS=0,nC=0,nR=0;
-    const sheet=ptGetSheet(a.id,ym);
+    const sheet=sheetIndex.get(String(a.id||""));
     const cells=Array.from({length:days},(_,i)=>{
       const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;
       const day=String(d).padStart(2,"0");
@@ -36236,7 +36248,7 @@ async function ptAutoSaisieRefresh(){
   const btn=document.getElementById("pt-auto-refresh-btn");
   if(btn){btn.disabled=true;btn.textContent="…";}
   try{
-    await sgdiPullEmployees({silent:true}).catch(()=>null);
+    await sgdiPullEmployees({silent:true,society:ptCurrentSoc()}).catch(()=>null);
     const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
