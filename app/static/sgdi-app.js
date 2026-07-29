@@ -4694,7 +4694,7 @@ function workspaceTabsBarHTML(){
     <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('agenda')" title="Agenda"><span class="ws-ql-icon" style="background:#0078d4;font-size:13px">📅</span></button>
     <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('calculator')" title="Calculatrice SGDI"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></button>
   </div>`;
-  const sgdiActionsHTML=`<div class="ws-system-actions">${sgdiEditModeButtonHTML()}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
+  const sgdiActionsHTML=`<div class="ws-system-actions">${sgdiEditModeButtonHTML()}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab" onclick="openCurrentInNewTab()" title="Ouvrir cette page dans un nouvel onglet" aria-label="Ouvrir cette page dans un nouvel onglet">↗</button><button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
   return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
     <div class="ws-tab-actions">${quickLaunchHTML}${sgdiActionsHTML}</div>
@@ -7294,8 +7294,45 @@ function navigatePreserveScroll(route){
 }
 function openInNewTab(route){
   const hash="#/"+String(route||"").replace(/^#?\/?/,"");
-  window.open(location.pathname+location.search+hash,"_blank","noopener,noreferrer");
+  const child=window.open("about:blank","_blank");
+  if(!child){if(typeof toast==="function")toast("Autorisez les fenêtres pop-up pour ouvrir un nouvel onglet","error");return null}
+  try{
+    for(let index=0;index<sessionStorage.length;index++){
+      const key=sessionStorage.key(index);
+      if(key&&key!=="sgdiRealtimeClientId")child.sessionStorage.setItem(key,sessionStorage.getItem(key)||"");
+    }
+    child.sessionStorage.setItem("sgdiRealtimeClientId","rt_"+Date.now()+"_"+Math.random().toString(36).slice(2));
+    child.location.replace(location.origin+location.pathname+location.search+hash);
+    child.opener=null;
+  }catch(e){
+    child.location.href=location.pathname+location.search+hash;
+  }
+  return child;
 }
+function openCurrentInNewTab(){return openInNewTab((location.hash||"#/dashboard").replace(/^#\/?/,""))}
+function sgdiNavigationRouteFromElement(target){
+  const element=target?.closest?.("[data-route],a[href^='#/'],button[onclick*='navigate('],[role='button'][onclick*='navigate(']");
+  if(!element||element.closest(".nav-newtab-btn"))return"";
+  const dataRoute=element.getAttribute("data-route");
+  if(dataRoute)return dataRoute;
+  const href=element.getAttribute("href")||"";
+  if(href.startsWith("#/"))return href.slice(2);
+  const onclick=element.getAttribute("onclick")||"";
+  const match=onclick.match(/\bnavigate\(\s*(['"])(.*?)\1/);
+  return match?match[2]:"";
+}
+document.addEventListener("click",event=>{
+  if(event.button!==0||(!event.ctrlKey&&!event.metaKey&&!event.shiftKey))return;
+  const route=sgdiNavigationRouteFromElement(event.target);
+  if(!route)return;
+  event.preventDefault();event.stopImmediatePropagation();openInNewTab(route);
+},true);
+document.addEventListener("auxclick",event=>{
+  if(event.button!==1)return;
+  const route=sgdiNavigationRouteFromElement(event.target);
+  if(!route)return;
+  event.preventDefault();event.stopImmediatePropagation();openInNewTab(route);
+},true);
 function sidebarNavigate(event,route){
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
   if(event){
