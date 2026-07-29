@@ -6174,6 +6174,7 @@ function renderSidebar(){
         {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!soc||a.societe===soc).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length||null},
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:(()=>{const soc=drhActiveSocieteFilter();return (db.agents||[]).filter(a=>a.statut==="sortant"&&(!soc||a.societe===soc)).length||null})()}
       ],
