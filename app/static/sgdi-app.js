@@ -35964,7 +35964,12 @@ function renderPointagePlanning7J(){
   const learningDays=Math.min(7,elapsed);
   const ready=elapsed>=8;
   const sites=[...new Set(model.rows.map(r=>(r.real||r.expected)?.siteName).filter(Boolean))].sort();
-  const siteFilter=ptPlanningSiteFilter(),statusFilter=ptPlanningStatusFilter();
+  const storedSiteFilter=ptPlanningSiteFilter(),storedStatusFilter=ptPlanningStatusFilter();
+  const validStatuses=["present","absent","permutation","horaire_modifie","site_modifie","rotation_modifiee","depart_manquant","imprevu","attendu"];
+  const siteFilter=sites.includes(storedSiteFilter)?storedSiteFilter:"";
+  const statusFilter=validStatuses.includes(storedStatusFilter)?storedStatusFilter:"";
+  if(storedSiteFilter&&!siteFilter)sessionStorage.removeItem("ptPlanningSite");
+  if(storedStatusFilter&&!statusFilter)sessionStorage.removeItem("ptPlanningStatus");
   const visible=model.rows.filter(r=>{
     const row=r.real||r.expected;
     return (!siteFilter||row?.siteName===siteFilter)&&(!statusFilter||r.status===statusFilter);
@@ -36011,7 +36016,7 @@ function renderPointagePlanning7J(){
   <div class="card p-4 mb-4"><div class="flex flex-wrap gap-3 items-end">
     <div><label class="label">Date analysée</label><input class="input" type="date" value="${date}" onchange="ptPlanningSetDate(this.value)"></div>
     <div><label class="label">Site</label><select class="select" onchange="ptPlanningSetSite(this.value)"><option value="">Tous les sites</option>${sites.map(s=>`<option ${s===siteFilter?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
-    <div><label class="label">Statut</label><select class="select" onchange="ptPlanningSetStatus(this.value)"><option value="">Tous les statuts</option>${["present","absent","permutation","horaire_modifie","site_modifie","rotation_modifiee","depart_manquant","imprevu","attendu"].map(s=>`<option value="${s}" ${s===statusFilter?"selected":""}>${escapeHTML(ptPlanningStatusLabel(s))}</option>`).join("")}</select></div>
+    <div><label class="label">Statut</label><select class="select" onchange="ptPlanningSetStatus(this.value)"><option value="">Tous les statuts</option>${validStatuses.map(s=>`<option value="${s}" ${s===statusFilter?"selected":""}>${escapeHTML(ptPlanningStatusLabel(s))}</option>`).join("")}</select></div>
     <button class="btn btn-secondary" onclick="ptPlanningRefreshNow()">↺ Actualiser</button>
   </div></div>
   <div class="card p-0 overflow-hidden"><div style="overflow:auto"><table class="w-full text-sm"><thead><tr style="background:#043970;color:#fff"><th class="p-3 text-left">NOM PRÉNOM</th><th class="p-3 text-left">CODE</th><th class="p-3 text-left">SITE</th><th class="p-3 text-left">DATE</th><th class="p-3 text-center">H ARRIVÉE</th><th class="p-3 text-center">H DÉPART</th><th class="p-3 text-center">ÉTAT</th><th class="p-3 text-left">OBSERVATION / ALERTE</th></tr></thead><tbody>${rowsHTML||`<tr><td colspan="8" class="p-8 text-center text-slate-500">Aucun planning appris pour cette date. Le système utilise la journée correspondante sept jours auparavant.</td></tr>`}</tbody></table></div></div>`;
