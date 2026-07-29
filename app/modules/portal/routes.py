@@ -7,7 +7,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
@@ -16,6 +16,7 @@ from app.core.security import create_access_token, decode_token, hash_password, 
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
+from app.modules.drh.models import Employee
 from app.modules.irongs import service
 from app.modules.irongs.sql_bridge import employee_by_ref, upsert_presence
 from app.modules.ops.models import Assignment, DailyPresence, Site
@@ -25,7 +26,11 @@ router = APIRouter()
 
 PORTAL_TOKEN_TTL = 60 * 24  # 24 heures
 PORTAL_TEMPORARY_PASSWORD = "123456"
-ATTENDANCE_QR_TTL_SECONDS = 10
+ATTENDANCE_QR_REFRESH_SECONDS = 10
+# Mobile browsers may suspend JavaScript briefly when the screen locks or the
+# application is backgrounded. Keep a short server-side grace period while the
+# displayed QR is still replaced every ten seconds and remains single-use.
+ATTENDANCE_QR_TTL_SECONDS = 120
 ATTENDANCE_NEW_ARRIVAL_DELAY = timedelta(hours=8)
 
 
@@ -554,7 +559,7 @@ def create_employee_attendance_qr(
     db: Session = Depends(get_db),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """Issue a signed, single-use employee QR valid for ten seconds."""
+    """Issue a signed, single-use employee QR, refreshed every ten seconds."""
     matricule = _portal_identity(authorization)
     employee = employee_by_ref(db, matricule)
     if not employee:
@@ -579,42 +584,17 @@ def create_employee_attendance_qr(
     )
     return {
         "token": token,
-        "expires_in": ATTENDANCE_QR_TTL_SECONDS,
-        "expires_at": int(now.timestamp()) + ATTENDANCE_QR_TTL_SECONDS,
+        "expires_in": ATTENDANCE_QR_REFRESH_SECONDS,
+        "expires_at": int(now.timestamp()) + ATTENDANCE_QR_REFRESH_SECONDS,
+        "valid_until": int(now.timestamp()) + ATTENDANCE_QR_TTL_SECONDS,
     }
 
 
-@router.post("/attendance-qr/scan", status_code=status.HTTP_201_CREATED)
-def scan_employee_attendance_qr(
-    payload: dict[str, Any],
-    db: Session = Depends(get_db),
-    scanner: User = Depends(current_user),
-) -> dict[str, Any]:
-    """Validate a supervisor scan and write it directly to the shared attendance sheet."""
-    token = _clean_text(payload.get("token"))
-    if not token:
-        raise HTTPException(status_code=400, detail="QR obligatoire")
-    try:
-        qr = decode_token(token)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="QR expiré ou invalide")
-    if not qr.get("attendance_qr") or not qr.get("nonce"):
-        raise HTTPException(status_code=400, detail="Ce QR n'est pas un QR de pointage employé")
-
-    nonce = str(qr["nonce"])
-    used = next(
-        (
-            row for row in service.list_items(db, "attendanceQrScans")
-            if isinstance(row, dict) and row.get("nonce") == nonce
-        ),
-        None,
-    )
-    if used:
-        raise HTTPException(status_code=409, detail="Ce QR a déjà été utilisé")
-
-    employee = employee_by_ref(db, str(qr.get("sub") or ""))
-    if not employee or int(qr.get("employee_id") or 0) != employee.id:
-        raise HTTPException(status_code=404, detail="Employé introuvable")
+def _register_attendance(db: Session, employee: Any, scanner: User, nonce: str, source: str) -> dict[str, Any]:
+    """Logique de pointage partagée entre le scan QR et la saisie manuelle (employé sans
+    smartphone) : bascule arrivée/départ, écrit la feuille de présence partagée, construit
+    la réponse affichée au pointeur. `nonce` identifie l'événement dans attendanceQrScans
+    (pour la déduplication QR et l'historique arrivée/départ, quelle que soit la source)."""
     blocked_reason = _employee_portal_block_reason(employee)
     if blocked_reason:
         raise HTTPException(status_code=403, detail=f"Pointage refusé : {blocked_reason}")
@@ -689,7 +669,7 @@ def scan_employee_attendance_qr(
         "code": "P",
         "valide": True,
         "valideAt": now.isoformat(),
-        "source": "portail-rh-employee-qr",
+        "source": source,
         "scannedBy": scanner.username,
         "scannedByUserId": scanner.id,
         "scanCycles": [
@@ -762,6 +742,115 @@ def scan_employee_attendance_qr(
         },
         "record": result,
     }
+
+
+@router.post("/attendance-qr/scan", status_code=status.HTTP_201_CREATED)
+def scan_employee_attendance_qr(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    scanner: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Validate a supervisor scan and write it directly to the shared attendance sheet."""
+    token = _clean_text(payload.get("token"))
+    if not token:
+        raise HTTPException(status_code=400, detail="QR obligatoire")
+    try:
+        qr = decode_token(token)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="QR expiré ou invalide")
+    if not qr.get("attendance_qr") or not qr.get("nonce"):
+        raise HTTPException(status_code=400, detail="Ce QR n'est pas un QR de pointage employé")
+
+    nonce = str(qr["nonce"])
+    used = next(
+        (
+            row for row in service.list_items(db, "attendanceQrScans")
+            if isinstance(row, dict) and row.get("nonce") == nonce
+        ),
+        None,
+    )
+    if used:
+        raise HTTPException(status_code=409, detail="Ce QR a déjà été utilisé")
+
+    employee = employee_by_ref(db, str(qr.get("sub") or ""))
+    if not employee or int(qr.get("employee_id") or 0) != employee.id:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-qr")
+
+
+def _employee_search_result(db: Session, employee: Employee) -> dict[str, Any]:
+    extra = employee.extra if isinstance(employee.extra, dict) else {}
+    legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+    photo = next(
+        (
+            _clean_text(extra.get(key) or legacy.get(key))
+            for key in ("photo", "photoUrl", "photoData", "photo_url")
+            if extra.get(key) or legacy.get(key)
+        ),
+        "",
+    )
+    assignment = db.execute(
+        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
+    ).scalars().first()
+    site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
+    return {
+        "id": employee.id,
+        "matricule": employee.code,
+        "nom": employee.last_name,
+        "prenom": employee.first_name,
+        "photo": photo,
+        "societe": employee.society or "",
+        "poste": employee.position or "",
+        "statut": employee.status or "",
+        "site": (site.name or site.indicatif or "") if site else "",
+    }
+
+
+@router.get("/attendance-manual/search")
+def search_employee_for_manual_attendance(
+    q: str = "",
+    db: Session = Depends(get_db),
+    scanner: User = Depends(current_user),
+) -> list[dict[str, Any]]:
+    """Recherche par code ou nom/prénom pour le pointage manuel (employé sans smartphone,
+    ou QR illisible) : le pointeur tape le code ou le nom donné par l'employé, choisit la
+    bonne fiche dans la liste, puis confirme le pointage via /attendance-manual/scan."""
+    query = _clean_text(q)
+    if len(query) < 2:
+        return []
+    like = f"%{query}%"
+    stmt = (
+        select(Employee)
+        .where(
+            Employee.status == "actif",
+            or_(
+                Employee.code.ilike(like),
+                Employee.first_name.ilike(like),
+                Employee.last_name.ilike(like),
+                (Employee.last_name + " " + Employee.first_name).ilike(like),
+                (Employee.first_name + " " + Employee.last_name).ilike(like),
+            ),
+        )
+        .order_by(Employee.last_name, Employee.first_name)
+        .limit(8)
+    )
+    rows = db.execute(stmt).scalars().all()
+    return [_employee_search_result(db, row) for row in rows]
+
+
+@router.post("/attendance-manual/scan", status_code=status.HTTP_201_CREATED)
+def manual_employee_attendance_scan(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    scanner: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Pointage saisi par le pointeur au nom d'un employé sans smartphone (identifié par
+    code ou nom via /attendance-manual/search), au lieu d'un scan QR."""
+    employee = employee_by_ref(db, payload.get("employee_id"))
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    nonce = f"manual-{secrets.token_urlsafe(12)}"
+    return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-manuel")
 
 
 @router.get("/pointages/{matricule}")

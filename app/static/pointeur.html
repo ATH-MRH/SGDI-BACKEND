@@ -47,13 +47,24 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .result{display:none;margin-top:14px;border-radius:17px;padding:15px;border:1px solid}
 .result.show{display:block}.result.success{background:#dcfce7;border-color:#86efac;color:#14532d}.result.error{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}.result.warning{background:#fef3c7;border-color:#fcd34d;color:#78350f}
 .result-kicker{font-size:11px;font-weight:900;letter-spacing:.08em}.result-name{font-size:19px;font-weight:950;margin:3px 0}.result-meta{font-size:13px;font-weight:650}
-.employee-result{display:flex;align-items:center;gap:18px}.employee-photo{width:118px;height:118px;border-radius:20px;object-fit:cover;border:4px solid rgba(255,255,255,.8);box-shadow:0 8px 20px rgba(15,23,42,.15);background:#fff}.employee-photo-fallback{width:118px;height:118px;border-radius:20px;display:grid;place-items:center;background:#fff;color:var(--navy);font-size:36px;font-weight:950;border:4px solid rgba(255,255,255,.8)}.result-company{font-size:12px;margin-top:7px;font-weight:800}.result-status{display:inline-block;margin-top:8px;background:#16a34a;color:#fff;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:950}
+.employee-result{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}.employee-photo{width:172px;height:172px;border-radius:24px;object-fit:cover;border:4px solid rgba(255,255,255,.8);box-shadow:0 8px 20px rgba(15,23,42,.15);background:#fff}.employee-photo-fallback{width:172px;height:172px;border-radius:24px;display:grid;place-items:center;background:#fff;color:var(--navy);font-size:50px;font-weight:950;border:4px solid rgba(255,255,255,.8)}.result-company{font-size:12px;margin-top:7px;font-weight:800}.result-status{display:inline-block;margin-top:8px;background:#16a34a;color:#fff;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:950}
 .history{background:#fff;border:1px solid var(--line);border-radius:18px;margin-top:14px;overflow:hidden}
-.history-head{padding:13px 15px;border-bottom:1px solid var(--line);font-size:13px;font-weight:900;display:flex;justify-content:space-between}.history-head span{color:var(--muted);font-weight:650}
-.scan-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid #eef2f7}.scan-row:last-child{border:0}.scan-name{font-size:13px;font-weight:850}.scan-meta{font-size:11px;color:var(--muted);margin-top:2px}.scan-action{font-size:11px;font-weight:900;border-radius:999px;padding:5px 8px;background:#dcfce7;color:#166534}
+.history-head{padding:13px 15px;border-bottom:1px solid var(--line);font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:space-between;gap:10px}.history-head span{color:var(--muted);font-weight:650}.history-head-right{display:flex;align-items:center;gap:8px}
+.sort-select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:11px;font-weight:800;color:var(--navy);background:#fff}
+.scan-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid #eef2f7}.scan-row:last-child{border:0}.scan-name{font-size:13px;font-weight:850}.scan-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.scan-times{display:flex;gap:6px;flex-shrink:0}.scan-time-pill{font-size:10px;font-weight:900;border-radius:999px;padding:5px 8px;white-space:nowrap;background:#eef2f7;color:#94a3b8}.scan-time-pill.set.arrivee{background:#dcfce7;color:#166534}.scan-time-pill.set.depart{background:#fee2e2;color:#7f1d1d}
 .empty{text-align:center;color:#94a3b8;padding:24px;font-size:13px}
+.manual-panel{margin-top:14px;border-top:1px dashed var(--line);padding-top:14px}
+.manual-results{margin-top:10px;max-height:280px;overflow:auto}
+.manual-result-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#fff;cursor:pointer}
+.manual-result-row:active{background:#eef4fb}
+.manual-result-name{font-size:13px;font-weight:850}.manual-result-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.manual-empty{text-align:center;color:#94a3b8;font-size:12px;padding:14px}
+.pointer-btn{display:block;width:154px;height:154px;border-radius:50%;margin:20px auto 8px;border:0;background:linear-gradient(135deg,var(--green),#0f7a3a);color:#fff;font-size:19px;font-weight:950;letter-spacing:.04em;box-shadow:0 14px 34px rgba(22,163,74,.35);cursor:pointer}
+.pointer-btn:active{transform:scale(.97)}.pointer-btn:disabled{opacity:.6}
+.manual-back{width:100%;border:0;background:none;color:var(--muted);font-weight:800;padding:8px;cursor:pointer;font-size:13px}
 @media(min-width:760px){.work-grid{grid-template-columns:minmax(0,1.45fr) minmax(310px,.75fr)}.history{margin-top:0}.scanner-card{padding:22px}.result-name{font-size:25px}.scan-row{padding:15px}}
-@media(max-width:759px){.employee-photo,.employee-photo-fallback{width:82px;height:82px;border-radius:15px}.employee-result{gap:12px}}
+@media(max-width:759px){.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
@@ -97,9 +108,33 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
         <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">📷 UTILISER LA CAMÉRA</button>
         <div id="result" class="result"></div>
+        <button id="manualToggleBtn" class="secondary" onclick="toggleManualPanel()">🔤 SAISIE MANUELLE (SANS SMARTPHONE)</button>
+        <div id="manualPanel" class="manual-panel hidden">
+          <div id="manualSearchStep">
+            <label for="manualQuery">Code ou nom / prénom de l'employé</label>
+            <input id="manualQuery" autocomplete="off" placeholder="Ex. PTG04 ou Belkacem" oninput="onManualQueryInput()">
+            <div id="manualResults" class="manual-results"></div>
+          </div>
+          <div id="manualCardStep" class="hidden">
+            <div id="manualCard"></div>
+            <button id="manualPointerBtn" class="pointer-btn" onclick="confirmManualPointage()">POINTER</button>
+            <button class="manual-back" onclick="resetManualPanel()">← Changer d'employé</button>
+          </div>
+        </div>
       </section>
       <section class="history">
-        <div class="history-head">10 DERNIERS PASSAGES <span id="scanCount">0</span></div>
+        <div class="history-head">
+          <span>10 DERNIERS PASSAGES</span>
+          <div class="history-head-right">
+            <select id="historySort" class="sort-select" onchange="renderHistory()">
+              <option value="recent">Récent</option>
+              <option value="nom">Nom</option>
+              <option value="arrivee">Heure d'arrivée</option>
+              <option value="depart">Heure de départ</option>
+            </select>
+            <span id="scanCount">0</span>
+          </div>
+        </div>
         <div id="historyList"><div class="empty">Aucun QR scanné.</div></div>
       </section>
     </div>
@@ -142,6 +177,7 @@ function enterApp(){
 async function logout(){
   await stopScanner();
   localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
+  closeManualPanel();resetManualPanel();
   document.getElementById("appView").classList.add("hidden");
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("password").value="";
@@ -192,6 +228,26 @@ async function stopScanner(){
   const active=scanner;scanner=null;
   if(active){try{await active.stop()}catch(e){}try{await active.clear()}catch(e){}}
 }
+function recordScanEntry(data){
+  const employee=data.employee||{};
+  const matricule=employee.matricule||"";
+  const name=[employee.nom,employee.prenom].filter(Boolean).join(" ")||"Employé";
+  const heure=data.heure||"";
+  const action=data.action==="depart"?"depart":"arrivee";
+  let entry=matricule?sessionScans.find(row=>row.matricule===matricule):null;
+  if(entry)sessionScans.splice(sessionScans.indexOf(entry),1);
+  else entry={matricule,arrivee:"",depart:""};
+  entry.name=name;
+  entry.site=data.site||employee.site||entry.site||"";
+  entry.photo=employee.photo||entry.photo||"";
+  entry.societe=employee.societe||entry.societe||"";
+  entry.poste=employee.poste||entry.poste||"";
+  entry.statut=employee.statut||entry.statut||"";
+  entry[action]=heure;
+  sessionScans.unshift(entry);
+  sessionScans=sessionScans.slice(0,10);
+  return {name,matricule,action,heure,site:entry.site,photo:entry.photo,societe:entry.societe,poste:entry.poste,statut:entry.statut};
+}
 async function onQr(token){
   if(scanBusy)return;
   scanBusy=true;
@@ -200,9 +256,7 @@ async function onQr(token){
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
-    const employee=data.employee||{};
-    const entry={name:[employee.nom,employee.prenom].filter(Boolean).join(" ")||"Employé",matricule:employee.matricule||"",action:data.action||"arrivee",heure:data.heure||"",site:data.site||employee.site||"",photo:employee.photo||"",societe:employee.societe||"",poste:employee.poste||"",statut:employee.statut||""};
-    sessionScans.unshift(entry);sessionScans=sessionScans.slice(0,10);
+    const entry=recordScanEntry(data);
     showResult(entry,"success");renderHistory();playTone(true);navigator.vibrate?.([80,40,80]);
   }catch(error){showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
@@ -228,34 +282,125 @@ function showResult(data,type){
   }else el.innerHTML=`<div class="result-kicker">SCAN REFUSÉ</div><div class="result-name">${esc(data.message)}</div>`;
   clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),7000);
 }
+function sortedScans(){
+  const list=sessionScans.slice();
+  const mode=document.getElementById("historySort")?.value||"recent";
+  if(mode==="nom")return list.sort((a,b)=>a.name.localeCompare(b.name,"fr"));
+  if(mode==="arrivee")return list.sort((a,b)=>(b.arrivee||"").localeCompare(a.arrivee||""));
+  if(mode==="depart")return list.sort((a,b)=>(b.depart||"").localeCompare(a.depart||""));
+  return list;
+}
 function renderHistory(){
   document.getElementById("scanCount").textContent=String(sessionScans.length);
-  document.getElementById("historyList").innerHTML=sessionScans.length?sessionScans.map(row=>`<div class="scan-row"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")} · ${esc(row.heure)}</div></div><div class="scan-action">${row.action==="depart"?"DÉPART":"ARRIVÉE"}</div></div>`).join(""):'<div class="empty">Aucun QR scanné.</div>';
+  const rows=sortedScans();
+  document.getElementById("historyList").innerHTML=rows.length?rows.map(row=>`<div class="scan-row"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div class="scan-times"><div class="scan-time-pill arrivee${row.arrivee?" set":""}">${row.arrivee?"ARR "+esc(row.arrivee):"ARR —"}</div><div class="scan-time-pill depart${row.depart?" set":""}">${row.depart?"DÉP "+esc(row.depart):"DÉP —"}</div></div></div>`).join(""):'<div class="empty">Aucun QR scanné.</div>';
+}
+let manualResults=[];
+let manualSelected=null;
+let manualSearchTimer=null;
+function isManualPanelOpen(){return !document.getElementById("manualPanel").classList.contains("hidden")}
+function toggleManualPanel(){
+  const panel=document.getElementById("manualPanel");
+  if(panel.classList.contains("hidden")){
+    panel.classList.remove("hidden");
+    document.getElementById("manualToggleBtn").textContent="✕ FERMER LA SAISIE MANUELLE";
+    resetManualPanel();
+    document.getElementById("manualQuery").focus({preventScroll:true});
+  }else{
+    closeManualPanel();
+  }
+}
+function closeManualPanel(){
+  document.getElementById("manualPanel").classList.add("hidden");
+  document.getElementById("manualToggleBtn").textContent="🔤 SAISIE MANUELLE (SANS SMARTPHONE)";
+}
+function resetManualPanel(){
+  manualSelected=null;manualResults=[];
+  document.getElementById("manualQuery").value="";
+  document.getElementById("manualResults").innerHTML="";
+  document.getElementById("manualSearchStep").classList.remove("hidden");
+  document.getElementById("manualCardStep").classList.add("hidden");
+}
+function onManualQueryInput(){
+  clearTimeout(manualSearchTimer);
+  const query=document.getElementById("manualQuery").value.trim();
+  if(query.length<2){manualResults=[];document.getElementById("manualResults").innerHTML="";return}
+  manualSearchTimer=setTimeout(()=>runManualSearch(query),300);
+}
+async function runManualSearch(query){
+  try{
+    const response=await fetch("/api/portal/attendance-manual/search?q="+encodeURIComponent(query),{headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(response.status===401){logout();return}
+    const rows=await response.json().catch(()=>[]);
+    manualResults=Array.isArray(rows)?rows:[];
+    renderManualResults();
+  }catch(e){document.getElementById("manualResults").innerHTML='<div class="manual-empty">Recherche indisponible.</div>'}
+}
+function renderManualResults(){
+  const el=document.getElementById("manualResults");
+  if(!manualResults.length){el.innerHTML='<div class="manual-empty">Aucun employé trouvé.</div>';return}
+  el.innerHTML=manualResults.map((row,index)=>`<div class="manual-result-row" onclick="selectManualResult(${index})"><div><div class="manual-result-name">${esc(row.nom)} ${esc(row.prenom)}</div><div class="manual-result-meta">${esc(row.matricule)} · ${esc(row.site||"Site non renseigné")}</div></div><div>›</div></div>`).join("");
+}
+function selectManualResult(index){
+  manualSelected=manualResults[index];
+  if(!manualSelected)return;
+  const initials=[manualSelected.prenom,manualSelected.nom].filter(Boolean).map(v=>v[0]).join("").toUpperCase();
+  const photo=manualSelected.photo?`<img class="employee-photo" src="${esc(manualSelected.photo)}" alt="Photo de ${esc(manualSelected.nom)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
+  document.getElementById("manualCard").innerHTML=`<div class="employee-result">${photo}<div><div class="result-name">${esc(manualSelected.nom)} ${esc(manualSelected.prenom)}</div><div class="result-meta">CODE ${esc(manualSelected.matricule)} · ${esc(manualSelected.site||"Site non renseigné")}</div><div class="result-company">${esc(manualSelected.societe||"Société non renseignée")}${manualSelected.poste?" · "+esc(manualSelected.poste):""}</div></div></div>`;
+  document.getElementById("manualSearchStep").classList.add("hidden");
+  document.getElementById("manualCardStep").classList.remove("hidden");
+}
+async function confirmManualPointage(){
+  if(!manualSelected||scanBusy)return;
+  scanBusy=true;
+  const button=document.getElementById("manualPointerBtn");
+  button.disabled=true;
+  try{
+    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:manualSelected.id})});
+    const data=await response.json().catch(()=>({}));
+    if(response.status===401){logout();throw new Error("Session expirée")}
+    if(!response.ok)throw new Error(data.detail||"Pointage refusé");
+    const entry=recordScanEntry(data);
+    showResult(entry,"success");renderHistory();playTone(true);navigator.vibrate?.([80,40,80]);
+    closeManualPanel();
+  }catch(error){showResult({message:error.message||"Pointage impossible"},"error");playTone(false);navigator.vibrate?.(180)}
+  finally{scanBusy=false;button.disabled=false}
 }
 function acceptUsbQr(value){
   const token=String(value||"").trim();qrKeyBuffer="";
+  const input=document.getElementById("wedgeInput");
+  if(input)input.value="";
   if(token.length>=20)onQr(token);
 }
+document.getElementById("wedgeInput").addEventListener("input",event=>{
+  if(!pointerSession||cameraMode)return;
+  qrKeyBuffer=event.target.value;
+  qrLastKeyAt=Date.now();
+});
 document.addEventListener("keydown",event=>{
   if(!pointerSession||cameraMode||event.ctrlKey||event.metaKey||event.altKey)return;
+  if(isManualPanelOpen())return;
   const now=Date.now();
   if(now-qrLastKeyAt>250)qrKeyBuffer="";
   qrLastKeyAt=now;
   if(event.key==="Enter"||event.key==="Tab"){
-    if(qrKeyBuffer){event.preventDefault();acceptUsbQr(qrKeyBuffer)}
+    const input=document.getElementById("wedgeInput");
+    const value=input?.value||qrKeyBuffer;
+    if(value){event.preventDefault();acceptUsbQr(value)}
     return;
   }
+  if(event.target?.id==="wedgeInput")return;
   if(event.key.length===1){
     qrKeyBuffer+=event.key;
     if(qrKeyBuffer.length>4096)qrKeyBuffer=qrKeyBuffer.slice(-4096);
   }
 });
 document.addEventListener("paste",event=>{
-  if(!pointerSession||cameraMode)return;
+  if(!pointerSession||cameraMode||isManualPanelOpen())return;
   const value=event.clipboardData?.getData("text")||"";
   if(value){event.preventDefault();acceptUsbQr(value)}
 });
-document.addEventListener("click",()=>{if(pointerSession&&!cameraMode)document.getElementById("wedgeInput")?.focus({preventScroll:true})});
+document.addEventListener("click",()=>{if(pointerSession&&!cameraMode&&!isManualPanelOpen())document.getElementById("wedgeInput")?.focus({preventScroll:true})});
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopScanner();else if(pointerSession)setupScanMode()});
 window.addEventListener("beforeunload",stopScanner);
 document.addEventListener("DOMContentLoaded",()=>{
