@@ -24,6 +24,7 @@ from app.modules.ops.models import Assignment, DailyPresence, Site
 router = APIRouter()
 
 PORTAL_TOKEN_TTL = 60 * 24  # 24 heures
+PORTAL_TEMPORARY_PASSWORD = "123456"
 ATTENDANCE_QR_TTL_SECONDS = 10
 ATTENDANCE_NEW_ARRIVAL_DELAY = timedelta(hours=8)
 
@@ -92,6 +93,45 @@ def _norm_date(value: Any) -> str:
         except ValueError:
             pass
     return raw[:10]
+
+
+def _employee_portal_block_reason(employee: Any, on_date: str | None = None) -> str:
+    """Return why an employee cannot use the HR portal or attendance QR."""
+    if not employee:
+        return ""
+    if isinstance(employee, dict):
+        status_value = employee.get("statut") or employee.get("status") or ""
+        extra = employee
+    else:
+        status_value = getattr(employee, "status", "") or ""
+        extra = employee.extra if isinstance(getattr(employee, "extra", None), dict) else {}
+    status_key = _norm_text(status_value)
+    blocked_statuses = (
+        "suspend",
+        "sortant",
+        "inact",
+        "blacklist",
+        "archive",
+        "demission",
+        "licenc",
+        "mise a pied",
+        "mis a pied",
+    )
+    if any(marker in status_key for marker in blocked_statuses):
+        return "Compte portail suspendu : situation administrative non active"
+
+    legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+    sanctions = extra.get("sanctions") or legacy.get("sanctions") or []
+    target_date = on_date or datetime.now(ZoneInfo("Africa/Algiers")).date().isoformat()
+    if isinstance(sanctions, list):
+        for sanction in sanctions:
+            if not isinstance(sanction, dict) or "mise a pied" not in _norm_text(sanction.get("type")):
+                continue
+            start = _norm_date(sanction.get("dateMiseAPiedDebut") or sanction.get("dateDebut"))
+            end = _norm_date(sanction.get("dateMiseAPiedFin"))
+            if start and start <= target_date and (not end or target_date <= end):
+                return f"Compte portail suspendu pour mise à pied jusqu'au {end or 'terme de la décision'}"
+    return ""
 
 
 def _agent_field(agent: dict[str, Any], *keys: str) -> str:
@@ -279,6 +319,8 @@ def portal_self_register(payload: dict[str, Any], request: Request, db: Session 
         "prenom": _agent_field(agent, "prenom", "prénom"),
         "societe": _agent_field(agent, "societe"),
         "active": True,
+        "mustChangePassword": False,
+        "passwordChangedAt": datetime.now(timezone.utc).isoformat(),
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "createdBy": "self-registration",
     }
@@ -321,7 +363,11 @@ def portal_self_reset_password(payload: dict[str, Any], request: Request, db: Se
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail. Créez d'abord un compte.")
 
-    service.update_item(db, "portalAccounts", account["id"], {"passwordHash": hash_password(password)})
+    service.update_item(db, "portalAccounts", account["id"], {
+        "passwordHash": hash_password(password),
+        "mustChangePassword": False,
+        "passwordChangedAt": datetime.now(timezone.utc).isoformat(),
+    })
     return {"ok": True, "message": "Mot de passe réinitialisé avec succès"}
 
 
@@ -513,9 +559,12 @@ def create_employee_attendance_qr(
     employee = employee_by_ref(db, matricule)
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    status_value = str(employee.status or "").strip().casefold()
-    if status_value and any(word in status_value for word in ("suspend", "inact", "sortant", "blacklist")):
-        raise HTTPException(status_code=403, detail="Le compte de cet employé n'est pas actif")
+    blocked_reason = _employee_portal_block_reason(employee)
+    if blocked_reason:
+        raise HTTPException(status_code=403, detail=blocked_reason)
+    account = _find_portal_account(db, matricule)
+    if account and account.get("mustChangePassword"):
+        raise HTTPException(status_code=403, detail="Modifiez d'abord votre mot de passe provisoire")
     now = datetime.now(timezone.utc)
     nonce = secrets.token_urlsafe(12)
     token = create_access_token(
@@ -566,9 +615,9 @@ def scan_employee_attendance_qr(
     employee = employee_by_ref(db, str(qr.get("sub") or ""))
     if not employee or int(qr.get("employee_id") or 0) != employee.id:
         raise HTTPException(status_code=404, detail="Employé introuvable")
-    status_value = str(employee.status or "").strip().casefold()
-    if status_value and any(word in status_value for word in ("suspend", "inact", "sortant", "blacklist")):
-        raise HTTPException(status_code=403, detail="Pointage refusé : employé inactif")
+    blocked_reason = _employee_portal_block_reason(employee)
+    if blocked_reason:
+        raise HTTPException(status_code=403, detail=f"Pointage refusé : {blocked_reason}")
 
     tz = ZoneInfo("Africa/Algiers")
     now = datetime.now(tz)
@@ -806,6 +855,12 @@ def _find_portal_account(db: Session, matricule: str) -> dict[str, Any] | None:
     return next((a for a in accounts if isinstance(a, dict) and _norm_text(a.get("matricule", "")) == m), None)
 
 
+def _public_portal_account(account: dict[str, Any]) -> dict[str, Any]:
+    result = {k: v for k, v in account.items() if k != "passwordHash"}
+    result["temporaryPassword"] = PORTAL_TEMPORARY_PASSWORD if account.get("mustChangePassword") else ""
+    return result
+
+
 @router.get("/accounts")
 def list_portal_accounts(
     societe: str | None = None,
@@ -817,7 +872,7 @@ def list_portal_accounts(
     if societe:
         s = _norm_text(societe)
         rows = [a for a in rows if _norm_text(a.get("societe", "")) == s]
-    return [{k: v for k, v in a.items() if k != "passwordHash"} for a in rows]
+    return [_public_portal_account(a) for a in rows]
 
 
 @router.post("/accounts", status_code=status.HTTP_201_CREATED)
@@ -827,11 +882,8 @@ def create_portal_account(
     admin: User = Depends(current_user),
 ) -> dict[str, Any]:
     matricule_raw = _clean_text(payload.get("matricule"))
-    password = _clean_text(payload.get("password"))
-    if not matricule_raw or not password:
-        raise HTTPException(status_code=400, detail="Matricule et mot de passe obligatoires")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Mot de passe trop court (minimum 6 caractères)")
+    if not matricule_raw:
+        raise HTTPException(status_code=400, detail="Matricule obligatoire")
 
     agents = service.list_items(db, "agents")
     agent = next(
@@ -849,16 +901,19 @@ def create_portal_account(
         "id": username,
         "username": username,
         "matricule": _agent_field(agent, "matricule", "code"),
-        "passwordHash": hash_password(password),
+        "passwordHash": hash_password(PORTAL_TEMPORARY_PASSWORD),
         "nom": _agent_field(agent, "nom"),
         "prenom": _agent_field(agent, "prenom", "prénom"),
         "societe": _agent_field(agent, "societe"),
         "active": True,
+        "mustChangePassword": True,
+        "temporaryPasswordIssuedAt": datetime.now(timezone.utc).isoformat(),
+        "passwordChangedAt": "",
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "createdBy": admin.username,
     }
     created = service.create_item(db, "portalAccounts", account)
-    return {k: v for k, v in created.items() if k != "passwordHash"}
+    return _public_portal_account(created)
 
 
 @router.get("/accounts/{matricule}")
@@ -870,7 +925,7 @@ def get_portal_account(
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
-    return {k: v for k, v in account.items() if k != "passwordHash"}
+    return _public_portal_account(account)
 
 
 @router.put("/accounts/{matricule}/password")
@@ -880,14 +935,17 @@ def reset_portal_password(
     db: Session = Depends(get_db),
     admin: User = Depends(current_user),
 ) -> dict[str, Any]:
-    password = _clean_text(payload.get("password"))
-    if not password or len(password) < 6:
-        raise HTTPException(status_code=400, detail="Mot de passe invalide (minimum 6 caractères)")
     account = _find_portal_account(db, matricule)
     if not account:
         raise HTTPException(status_code=404, detail="Aucun compte portail pour cet employé")
-    updated = service.update_item(db, "portalAccounts", account["id"], {"passwordHash": hash_password(password)})
-    return {k: v for k, v in updated.items() if k != "passwordHash"}
+    issued_at = datetime.now(timezone.utc).isoformat()
+    updated = service.update_item(db, "portalAccounts", account["id"], {
+        "passwordHash": hash_password(PORTAL_TEMPORARY_PASSWORD),
+        "mustChangePassword": True,
+        "temporaryPasswordIssuedAt": issued_at,
+        "passwordChangedAt": "",
+    })
+    return _public_portal_account(updated)
 
 
 @router.delete("/accounts/{matricule}")
@@ -925,11 +983,15 @@ def portal_login(payload: dict[str, Any], request: Request, db: Session = Depend
         raise HTTPException(status_code=403, detail="Identifiant ou mot de passe incorrect")
 
     matricule = account["matricule"]
+    employee_row = employee_by_ref(db, matricule)
     agents = service.list_items(db, "agents")
     agent = next(
         (a for a in agents if isinstance(a, dict) and _norm_text(_agent_field(a, "matricule", "code")) == _norm_text(matricule)),
         None,
     )
+    blocked_reason = _employee_portal_block_reason(employee_row or agent)
+    if blocked_reason:
+        raise HTTPException(status_code=403, detail=blocked_reason)
 
     portal_token = create_access_token(subject=matricule, claims={"portal": True}, ttl_minutes=PORTAL_TOKEN_TTL)
     employee: dict[str, Any] = {
@@ -946,7 +1008,11 @@ def portal_login(payload: dict[str, Any], request: Request, db: Session = Depend
         "dateNaissance": _agent_field(agent, "dateNaissance", "birth_date", "birthDate") if agent else "",
         "photo": _agent_field(agent, "photo", "photoUrl", "photoData", "photo_url") if agent else "",
     }
-    return {"portal_token": portal_token, "employee": employee}
+    return {
+        "portal_token": portal_token,
+        "employee": employee,
+        "must_change_password": bool(account.get("mustChangePassword")),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -982,8 +1048,15 @@ def portal_change_password(
     if not verify_password(old_password, account.get("passwordHash", "")):
         raise HTTPException(status_code=403, detail="Mot de passe actuel incorrect")
 
-    service.update_item(db, "portalAccounts", account["id"], {"passwordHash": hash_password(new_password)})
-    return {"ok": True}
+    if new_password == PORTAL_TEMPORARY_PASSWORD:
+        raise HTTPException(status_code=400, detail="Choisissez un mot de passe différent du mot de passe provisoire")
+    changed_at = datetime.now(timezone.utc).isoformat()
+    service.update_item(db, "portalAccounts", account["id"], {
+        "passwordHash": hash_password(new_password),
+        "mustChangePassword": False,
+        "passwordChangedAt": changed_at,
+    })
+    return {"ok": True, "passwordChangedAt": changed_at}
 
 
 # ─────────────────────────────────────────────────────────────────

@@ -2379,6 +2379,7 @@
           site: toFrenchSource(employee.site || ''),
         },
         portalToken: data.portal_token || '',
+        mustChangePassword: !!data.must_change_password,
         since: Date.now()
       };
       setSessionV2(sessionData, remember);
@@ -2425,13 +2426,19 @@
   /* ================ CHANGER MOT DE PASSE ============== */
   /* ================================================== */
   function openChangePassword() {
-    document.getElementById('cp-old').value = '';
+    document.getElementById('cp-old').value = currentUser?.mustChangePassword ? '123456' : '';
     document.getElementById('cp-new').value = '';
     document.getElementById('cp-new2').value = '';
     document.getElementById('pwdAlert').classList.remove('show');
     document.getElementById('pwdModal').classList.add('show');
   }
   function closePwdModal() {
+    if (currentUser?.mustChangePassword) {
+      const a = document.getElementById('pwdAlert');
+      a.textContent = 'Vous devez modifier le mot de passe provisoire avant de continuer.';
+      a.classList.add('show');
+      return;
+    }
     document.getElementById('pwdModal').classList.remove('show');
   }
   async function changePassword() {
@@ -2456,7 +2463,13 @@
         try { const p = await res.json(); detail = p.detail || detail; } catch (e) {}
         return showA(detail);
       }
-      closePwdModal();
+      currentUser.mustChangePassword = false;
+      const session = getSessionV2();
+      if (session) {
+        session.mustChangePassword = false;
+        setSessionV2(session, !!localStorage.getItem(SESSION_V2_KEY));
+      }
+      document.getElementById('pwdModal').classList.remove('show');
       toast('Mot de passe mis à jour');
     } catch (err) {
       showA('Erreur réseau. Vérifiez votre connexion.');
@@ -2530,7 +2543,7 @@
       session.profile.site = normalizedSite;
       setSessionV2(session, !!localStorage.getItem(SESSION_V2_KEY));
     }
-    currentUser = { key, profile: session.profile, portalToken: session.portalToken || '' };
+    currentUser = { key, profile: session.profile, portalToken: session.portalToken || '', mustChangePassword: !!session.mustChangePassword };
 
     document.getElementById('authView').classList.add('hidden');
     document.getElementById('appView').classList.remove('hidden');
@@ -2542,6 +2555,14 @@
     loadProfileForm();
     renderHistory();
     refreshCurrentUserFromPostgres().then(() => renderInbox(false, true));
+    if (currentUser.mustChangePassword) {
+      setTimeout(() => {
+        openChangePassword();
+        const alert = document.getElementById('pwdAlert');
+        alert.textContent = 'Première connexion : remplacez obligatoirement le mot de passe provisoire 123456.';
+        alert.classList.add('show');
+      }, 100);
+    }
   }
 
   function updateUserChip() {

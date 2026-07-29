@@ -13932,7 +13932,7 @@ async function loadPortalAccountSection(matricule){
       panel.innerHTML=`<div class="p-3 rounded bg-slate-50 text-slate-500 text-sm mb-4">Aucun compte portail pour cet employé.</div>`
         +(isAdminSystemSession()?`<form onsubmit="event.preventDefault();createPortalAccount('${escapeHTML(matricule)}',this)" class="grid grid-2 gap-3 max-w-lg">
           <div><label class="label">Identifiant</label><input class="input" name="username" value="${escapeHTML(matricule.toLowerCase())}" required /></div>
-          <div><label class="label">Mot de passe initial</label><input class="input" type="password" name="password" placeholder="Minimum 6 caractères" required minlength="6" /></div>
+          <div><label class="label">Mot de passe provisoire</label><input class="input font-mono font-bold" value="123456" readonly /></div>
           <div class="col-span-2"><button type="submit" class="btn btn-primary">Créer le compte portail</button></div>
         </form>`:"");
     }else if(res.ok){
@@ -13941,11 +13941,13 @@ async function loadPortalAccountSection(matricule){
           <span class="pill ${acc.active?"pill-green":"pill-red"}">${acc.active?"Actif":"Désactivé"}</span>
           <span class="text-sm">Identifiant : <b class="font-mono">${escapeHTML(acc.username||"—")}</b></span>
           <span class="text-sm text-slate-500">Créé le ${acc.createdAt?formatDate(acc.createdAt):"—"} par <b>${escapeHTML(acc.createdBy||"—")}</b></span>
+        </div>
+        <div class="p-3 rounded mb-4 text-sm" style="background:${acc.mustChangePassword?"#fef3c7":"#dcfce7"};color:${acc.mustChangePassword?"#92400e":"#166534"}">
+          ${acc.mustChangePassword?`<b>Changement obligatoire.</b> Mot de passe provisoire : <b class="font-mono">123456</b>`:`<b>Mot de passe personnel configuré ✓</b>${acc.passwordChangedAt?` · Modifié le ${new Date(acc.passwordChangedAt).toLocaleString("fr-FR")}`:""}`}
         </div>`
-        +(isAdminSystemSession()?`<form onsubmit="event.preventDefault();resetPortalPassword('${escapeHTML(matricule)}',this)" class="flex gap-3 items-end flex-wrap mb-4">
-          <div><label class="label">Nouveau mot de passe</label><input class="input" type="password" name="password" placeholder="Minimum 6 caractères" required minlength="6" style="min-width:220px" /></div>
-          <button type="submit" class="btn btn-secondary">Réinitialiser mot de passe</button>
-        </form>
+        +(isAdminSystemSession()?`<div class="flex gap-3 items-center flex-wrap mb-4">
+          <button type="button" class="btn btn-secondary" onclick="resetPortalPassword('${escapeHTML(matricule)}')">Réinitialiser à 123456</button>
+        </div>
         <button type="button" class="btn btn-danger text-xs" onclick="deletePortalAccount('${escapeHTML(matricule)}')">Supprimer le compte portail</button>`:"");
     }else{
       const err=await res.json().catch(()=>({}));
@@ -13959,20 +13961,19 @@ async function loadPortalAccountSection(matricule){
 async function createPortalAccount(matricule,form){
   const token=sgdiAuthToken();
   const username=form.querySelector('[name="username"]').value.trim();
-  const password=form.querySelector('[name="password"]').value;
   try{
-    const res=await fetch("/api/portal/accounts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({matricule,username,password})});
+    const res=await fetch("/api/portal/accounts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({matricule,username})});
     if(res.ok){toast("Compte portail créé","success");loadPortalAccountSection(matricule)}
     else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur création","error")}
   }catch(err){toast("Erreur réseau","error")}
 }
 
-async function resetPortalPassword(matricule,form){
+async function resetPortalPassword(matricule){
+  if(!confirm(`Réinitialiser le mot de passe de ${matricule} à 123456 ?`))return;
   const token=sgdiAuthToken();
-  const password=form.querySelector('[name="password"]').value;
   try{
-    const res=await fetch(`/api/portal/accounts/${encodeURIComponent(matricule)}/password`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({password})});
-    if(res.ok){toast("Mot de passe réinitialisé","success");form.reset()}
+    const res=await fetch(`/api/portal/accounts/${encodeURIComponent(matricule)}/password`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:"{}"});
+    if(res.ok){toast("Mot de passe réinitialisé à 123456","success");loadPortalAccountSection(matricule)}
     else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur","error")}
   }catch(err){toast("Erreur réseau","error")}
 }
@@ -18657,10 +18658,7 @@ async function renderPortailComptes(view){
           <label class="text-xs text-slate-500 block mb-1">Matricule</label>
           <input type="text" name="matricule" class="input text-sm" placeholder="Ex: A01" required style="width:120px" />
         </div>
-        <div>
-          <label class="text-xs text-slate-500 block mb-1">Mot de passe</label>
-          <input type="password" name="password" class="input text-sm" placeholder="Min. 6 caractères" required minlength="6" style="width:170px" />
-        </div>
+        <div><label class="text-xs text-slate-500 block mb-1">Mot de passe provisoire</label><input class="input text-sm font-mono font-bold" value="123456" readonly style="width:170px" /></div>
         <button type="submit" class="btn btn-primary" ${canManage?"":"disabled"}>Créer le compte</button>
         <div class="text-xs text-slate-500">Astuce : utilisez le bouton “Créer” dans la ligne d'un employé sans compte.</div>
       </form>
@@ -18676,8 +18674,8 @@ async function renderPortailComptes(view){
         </select>
       </div>
       <table id="portal-comptes-table">
-        <thead><tr><th>Matricule</th><th>Nom & Prénom</th><th>Société</th><th class="text-center">Statut</th><th class="text-right">Action</th></tr></thead>
-        <tbody id="portal-comptes-body"><tr><td colspan="5" class="text-center text-slate-400 p-6">Chargement des comptes...</td></tr></tbody>
+        <thead><tr><th>Matricule</th><th>Nom & Prénom</th><th>Société</th><th class="text-center">Compte</th><th class="text-center">Mot de passe</th><th class="text-right">Action</th></tr></thead>
+        <tbody id="portal-comptes-body"><tr><td colspan="6" class="text-center text-slate-400 p-6">Chargement des comptes...</td></tr></tbody>
       </table>
     </div>`;
   const token=sgdiAuthToken();
@@ -18724,7 +18722,7 @@ function portalComptesFilter(){
   if(status==="disabled")filtered=filtered.filter(r=>r.account&&r.account.active===false);
   const tbody=document.getElementById("portal-comptes-body");
   if(!tbody)return;
-  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="5" class="text-center text-slate-400 p-4">${(window._portalComptesRows||[]).length===0?"Aucun employé ni compte portail trouvé.":"Aucun résultat."}</td></tr>`;return}
+  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="6" class="text-center text-slate-400 p-4">${(window._portalComptesRows||[]).length===0?"Aucun employé ni compte portail trouvé.":"Aucun résultat."}</td></tr>`;return}
   const canManage=portalComptesCanManage();
   tbody.innerHTML=filtered.map(r=>{
     const acc=r.account||{};
@@ -18736,24 +18734,21 @@ function portalComptesFilter(){
     const badge=hasAccount
       ?`<span class="pill ${acc.active!==false?"pill-green":"pill-red"}">${acc.active!==false?"Actif":"Désactivé"}</span>`
       :`<span class="pill pill-amber">Sans compte</span>`;
+    const passwordState=!hasAccount?"—":acc.mustChangePassword
+      ?`<div><span class="pill pill-amber">À modifier</span><div class="font-mono font-bold text-xs mt-1">123456</div></div>`
+      :`<div><span class="pill pill-green">Configuré ✓</span>${acc.passwordChangedAt?`<div class="text-[10px] text-slate-500 mt-1">${new Date(acc.passwordChangedAt).toLocaleString("fr-FR")}</div>`:""}</div>`;
     const action=!canManage?`<span class="text-xs text-slate-400">Lecture seule</span>`:(hasAccount?`<div class="flex gap-1 justify-end flex-wrap">
-      <form onsubmit="event.preventDefault();portalComptesResetPwd('${jsString(mRaw)}',this)" class="flex gap-1">
-        <input type="password" name="password" class="input text-xs" placeholder="Nouveau mdp" required minlength="6" style="width:130px" />
-        <button type="submit" class="btn btn-secondary text-xs">Réinit. MDP</button>
-      </form>
+      <button type="button" class="btn btn-secondary text-xs" onclick="portalComptesResetPwd('${jsString(mRaw)}')">Réinit. 123456</button>
       <button class="btn btn-primary text-xs" onclick="portalComptesNotify('${jsString(mRaw)}')">Notifier</button>
       <button class="btn btn-danger text-xs" onclick="portalComptesDelete('${jsString(mRaw)}')">Supprimer</button>
     </div>`:`<button class="btn btn-primary text-xs" onclick="portalComptesQuickCreate('${jsString(mRaw)}')">Créer</button>`);
-    return`<tr><td class="font-mono font-bold text-xs">${m}</td><td class="font-semibold">${nom}</td><td class="text-xs text-slate-500">${soc}</td><td class="text-center">${badge}</td><td>${action}</td></tr>`;
+    return`<tr><td class="font-mono font-bold text-xs">${m}</td><td class="font-semibold">${nom}</td><td class="text-xs text-slate-500">${soc}</td><td class="text-center">${badge}</td><td class="text-center">${passwordState}</td><td>${action}</td></tr>`;
   }).join("");
 }
 
 function portalComptesQuickCreate(matricule){
-  const pwd=prompt(`Mot de passe initial pour ${matricule} :`, "");
-  if(pwd===null)return;
-  const password=String(pwd||"");
-  if(password.length<6){toast("Mot de passe trop court (minimum 6 caractères)","error");return}
-  portalComptesCreatePayload({matricule,password});
+  if(!confirm(`Créer le compte ${matricule} avec le mot de passe provisoire 123456 ?`))return;
+  portalComptesCreatePayload({matricule});
 }
 function portalComptesUpsertAccount(account){
   const rows=window._portalComptesRows||[];
@@ -18787,12 +18782,11 @@ async function portalComptesCreateNew(form){
   if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
   const token=sgdiAuthToken();
   const matricule=form.querySelector('[name="matricule"]').value.trim().toUpperCase();
-  const password=form.querySelector('[name="password"]').value;
-  if(!matricule||!password){toast("Matricule et mot de passe requis","error");return}
+  if(!matricule){toast("Matricule requis","error");return}
   const btn=form.querySelector('button[type="submit"]');
   if(btn){btn.disabled=true;btn.textContent="Création...";}
   try{
-    const ok=await portalComptesCreatePayload({matricule,password},false);
+    const ok=await portalComptesCreatePayload({matricule},false);
     if(ok)form.reset();
   }catch(err){toast("Erreur réseau","error")}
   finally{if(btn){btn.disabled=false;btn.textContent="Créer le compte";}}
@@ -18816,13 +18810,16 @@ async function portalComptesCreatePayload(payload,showNetworkToast=true){
 }
 
 
-async function portalComptesResetPwd(matricule,form){
+async function portalComptesResetPwd(matricule){
   if(!portalComptesCanManage()){toast("Accès réservé DRH / Administration","error");return}
+  if(!confirm(`Réinitialiser le mot de passe de ${matricule} à 123456 ?`))return;
   const token=sgdiAuthToken();
-  const password=form.querySelector('[name="password"]').value;
   try{
-    const res=await fetch(`/api/portal/accounts/${encodeURIComponent(matricule)}/password`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({password})});
-    if(res.ok){toast("Mot de passe réinitialisé","success");form.reset()}
+    const res=await fetch(`/api/portal/accounts/${encodeURIComponent(matricule)}/password`,{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:"{}"});
+    if(res.ok){
+      const account=await res.json().catch(()=>null);if(account)portalComptesUpsertAccount(account);
+      toast("Mot de passe réinitialisé à 123456","success");
+    }
     else{const err=await res.json().catch(()=>({}));toast(err.detail||"Erreur","error")}
   }catch(err){toast("Erreur réseau","error")}
 }
