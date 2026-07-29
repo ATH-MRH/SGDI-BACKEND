@@ -777,7 +777,13 @@
   }
   .employee-qr-shell::before { border-top-color:#0d6ecc; border-left-color:#0d6ecc; }
   .employee-qr-shell::after { border-right-color:#22c55e; border-bottom-color:#22c55e; }
-  #employeeQrCode img,#employeeQrCode canvas { display:block!important; width:204px!important; height:204px!important; }
+  #employeeQrCode {
+    width:204px; height:204px; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  /* qrcode.min.js produit un canvas et une image de secours : un seul rendu doit être visible. */
+  #employeeQrCode canvas { display:block!important; width:204px!important; height:204px!important; margin:auto; }
+  #employeeQrCode img { display:none!important; }
   .qr-loading { color:#94a3b8; font-size:.8rem; padding:70px 14px; }
   .qr-timer-row { display:flex; justify-content:center; align-items:center; gap:8px; margin-top:14px; color:#475569; font-size:.78rem; }
   .qr-timer-track { width:112px; height:5px; border-radius:99px; background:#e2e8f0; overflow:hidden; }
@@ -795,6 +801,10 @@
     border:1px solid #d5e2ef; background:#fff; color:#043970; border-radius:14px;
     padding:12px; font:inherit; font-size:.78rem; font-weight:800; cursor:pointer;
   }
+  .attendance-action.scan {
+    grid-column:1 / -1; background:#043970; border-color:#043970; color:white;
+    font-size:.88rem; box-shadow:0 8px 22px rgba(4,57,112,.2);
+  }
   @media(max-width:640px) {
     header { position:relative; border-radius:0 0 22px 22px; }
     .header-content { padding:14px 0 17px; align-items:center; }
@@ -804,7 +814,8 @@
     .header-name-block .name { font-size:1rem; }
     .header-right-cluster .language-switcher { display:none; }
     .employee-qr-shell { width:218px; height:218px; }
-    #employeeQrCode img,#employeeQrCode canvas { width:192px!important; height:192px!important; }
+    #employeeQrCode { width:192px; height:192px; }
+    #employeeQrCode canvas { width:192px!important; height:192px!important; }
   }
 
   /* Portail menu screen */
@@ -1081,6 +1092,7 @@
           </table>
         </section>
         <div class="attendance-actions">
+          <button class="attendance-action scan" onclick="switchTab('pointage')">📷 SCANNER UN QR DE PRÉSENCE</button>
           <button class="attendance-action" onclick="switchTab('portail')">☰ PORTAIL RH</button>
           <button class="attendance-action" onclick="renderHomeTab()">↻ ACTUALISER</button>
         </div>
