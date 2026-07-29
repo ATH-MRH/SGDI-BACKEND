@@ -1092,7 +1092,7 @@
           </table>
         </section>
         <div class="attendance-actions">
-          <button class="attendance-action scan" onclick="switchTab('pointage')">📷 SCANNER UN QR DE PRÉSENCE</button>
+          <button class="attendance-action scan" onclick="openEmployeeQrScanner()">📷 SCANNER UN QR DE PRÉSENCE</button>
           <button class="attendance-action" onclick="switchTab('portail')">☰ PORTAIL RH</button>
           <button class="attendance-action" onclick="renderHomeTab()">↻ ACTUALISER</button>
         </div>
@@ -1786,6 +1786,8 @@
   let employeeQrRefreshTimer = null;
   let employeeQrCountdownTimer = null;
   let employeeQrExpiresAt = 0;
+  let _portalQrScanner = null;
+  let _portalQrBusy = false;
 
   const TYPE_LABELS = {
     attestation: 'Attestation de travail',
@@ -2598,6 +2600,7 @@
 
   function switchTab(name) {
     if (name !== 'home') stopEmployeeQr();
+    if (name !== 'pointage' && _portalQrScanner) portalStopQrScan();
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + name).classList.add('active');
@@ -2623,6 +2626,14 @@
       rondeInit();
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function openEmployeeQrScanner() {
+    switchTab('pointage');
+    requestAnimationFrame(() => {
+      document.getElementById('qr-scan-card')?.scrollIntoView({ block: 'start' });
+      portalStartQrScan();
+    });
   }
 
   function stopEmployeeQr() {
@@ -3731,12 +3742,10 @@
   boot();
 
   // ── QR Scan Portail ────────────────────────────────────────────────────────
-  let _portalQrScanner = null;
-  let _portalQrBusy = false;
-
   async function portalStartQrScan() {
     const reader = document.getElementById('portal-qr-reader');
     if (!reader) return;
+    if (_portalQrScanner) return;
     const openBtn = document.getElementById('qr-open-btn');
     const stopBtn = document.getElementById('qr-stop-btn');
     if (openBtn) openBtn.style.display = 'none';
