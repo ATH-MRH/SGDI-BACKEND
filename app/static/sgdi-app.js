@@ -5996,7 +5996,7 @@ function sidebarPinnedDefaultOrder(module){
 function adminSidebarOrganizerDefaults(){
   return {
     drh:[
-      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["DEMANDES PERSONNEL","demandes_personnel/dashboard"]
+      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"]
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
@@ -6174,7 +6174,7 @@ function renderSidebar(){
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"]},
         {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!soc||a.societe===soc).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
-        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+        {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:(()=>{const soc=drhActiveSocieteFilter();return (db.agents||[]).filter(a=>a.statut==="sortant"&&(!soc||a.societe===soc)).length||null})()}
       ],
@@ -6327,7 +6327,19 @@ function renderSidebar(){
     const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
     const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
     const items=sidebarItemsWithAgendaShortcut(mod,mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems));
-    renderItems(applySidebarOrder(mod,items));
+    const orderedItems=applySidebarOrder(mod,items);
+    // PORTAIL RH doit toujours rester immédiatement sous AGENDA, même si un ancien
+    // ordre personnalisé du menu plaçait encore "Demandes personnel" ailleurs.
+    if(mod==="drh"){
+      const portailIdx=orderedItems.findIndex(i=>i.route==="demandes_personnel/dashboard");
+      const agendaIdx=orderedItems.findIndex(i=>i.route==="agenda/dashboard");
+      if(portailIdx>=0&&agendaIdx>=0){
+        const [portailItem]=orderedItems.splice(portailIdx,1);
+        const updatedAgendaIdx=orderedItems.findIndex(i=>i.route==="agenda/dashboard");
+        orderedItems.splice(updatedAgendaIdx+1,0,portailItem);
+      }
+    }
+    renderItems(orderedItems);
     restoreSidebarScroll();
     return;
   }
