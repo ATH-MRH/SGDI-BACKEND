@@ -34127,7 +34127,7 @@ function fpqRelieveDueWithoutPointage(f){
   if(!m)return false;
   return now.getHours()*60+now.getMinutes()>=((+m[1]||0)*60+(+m[2]||0));
 }
-const POINTAGE_TABS=[["feuille","📋 Feuille quotidienne"],["saisie","📝 Saisie manuelle"],["auto","🤖 Saisie automatique"],["recap","👤 Récap par agent"],["societe","🏢 Récap par société"],["stats","📈 Statistiques"],["legende","🎨 Légende & codes"],["qr","📲 QR par site"]];
+const POINTAGE_TABS=[["feuille","📋 Feuille quotidienne"],["saisie","📝 Saisie manuelle"],["auto","🤖 Saisie automatique"],["planning","🧠 Planning 7 jours"],["recap","👤 Récap par agent"],["societe","🏢 Récap par société"],["stats","📈 Statistiques"],["legende","🎨 Légende & codes"],["qr","📲 QR par site"]];
 function isSupOrUser(){return Array.isArray(session?.sitesAutorises)&&session.sitesAutorises.length>0}
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.societe||currentStructureSocieteFilter?.()||""}
@@ -35760,6 +35760,7 @@ function fpqOpenDailyCodeModal(code){
 function renderPointage(view,sub,arg,_skipEnsure){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="auto"&&typeof ptEmployeeQrStop==="function")ptEmployeeQrStop();
+  if(sub!=="planning")ptPlanningStopMonitor();
   // Détecte une arrivée fraîche sur cet onglet pointage (route différente de la dernière
   // vue rendue) : sert à déclencher un rechargement instantané, non throttlé, des données
   // superviseur au clic sur "Feuille quotidienne" au lieu d'attendre la boucle de fond.
@@ -35803,6 +35804,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
   else if(sub==="qr"&&!isDrh&&!supervisorModuleActive()){body=renderPointageQRGen();setTimeout(ptStartQrTabletTimer,100);}
   else if(sub==="saisie"&&!isDrh)body=supervisorActive?renderPointageSaisieSuperviseur(_ptFreshNav):renderPointageSaisie();
   else if(sub==="auto")body=renderPointageSaisieAuto();
+  else if(sub==="planning"){body=renderPointagePlanning7J();setTimeout(ptPlanningStartMonitor,100);}
   else if(sub==="recap")body=renderPointageRecap(arg);
   else if(sub==="societe")body=renderPointageSociete();
   else if(sub==="stats")body=renderPointageStats();
@@ -35811,6 +35813,208 @@ function renderPointage(view,sub,arg,_skipEnsure){
   else body=isDrh?renderPointageSaisieAuto():renderPointageSaisie();
   if(["auto","saisie"].includes(sub))body=ptEmployeeQrScanCard()+body;
   view.innerHTML=head+body;
+}
+let _ptPlanningMonitor=null;
+let _ptPlanningRefreshing=false;
+function ptPlanningStopMonitor(){if(_ptPlanningMonitor){clearInterval(_ptPlanningMonitor);_ptPlanningMonitor=null}}
+function ptPlanningStartMonitor(){
+  ptPlanningStopMonitor();
+  _ptPlanningMonitor=setInterval(async()=>{
+    if(_ptPlanningRefreshing)return;
+    _ptPlanningRefreshing=true;
+    try{
+      const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
+      const data=Array.isArray(res)?res:(res?.data||[]);
+      if(Array.isArray(data))db.feuillePresence=data;
+      const route=String(location.hash||"");
+      if(route.includes("pointage/planning"))renderView();
+    }catch(e){}finally{_ptPlanningRefreshing=false}
+  },30000);
+}
+function ptPlanningDateShift(dateStr,days){
+  const d=new Date(`${dateStr}T12:00:00`);d.setDate(d.getDate()+days);return d.toISOString().slice(0,10);
+}
+function ptPlanningMinutes(value){
+  const match=String(value||"").match(/(\d{1,2}):(\d{2})/);
+  return match?(+match[1]*60)+(+match[2]):null;
+}
+function ptPlanningTime(value){
+  const match=String(value||"").match(/(\d{1,2}):(\d{2})/);
+  return match?`${String(+match[1]).padStart(2,"0")}:${match[2]}`:"";
+}
+function ptPlanningAgentForPresence(f){
+  return (db.agents||[]).find(a=>
+    String(a.id||"")===String(f.agentId||"")||
+    String(a.backendId||"")===String(f.agentBackendId||f.employee_id||"")||
+    (a.matricule&&String(a.matricule)===String(f.matricule||""))
+  );
+}
+function ptPlanningCycles(){
+  const cycles=[];
+  (db.feuillePresence||[]).forEach(f=>{
+    const agent=ptPlanningAgentForPresence(f);if(!agent)return;
+    const raw=Array.isArray(f.scanCycles)?f.scanCycles:[];
+    if(raw.length){
+      const grouped={};
+      raw.forEach((event,index)=>{
+        const key=String(event.cycle||Math.floor(index/2)+1);
+        if(!grouped[key])grouped[key]={};
+        if(event.action==="arrivee")grouped[key].arrival=ptPlanningTime(event.heure||event.scannedAt?.slice(11,16));
+        if(event.action==="depart")grouped[key].depart=ptPlanningTime(event.heure||event.scannedAt?.slice(11,16));
+        grouped[key].date=String(event.scannedAt||f.date||"").slice(0,10)||f.date;
+      });
+      Object.entries(grouped).forEach(([cycle,row])=>cycles.push({
+        agent,agentId:agent.id,date:row.date||f.date,cycle:+cycle||1,arrival:row.arrival||"",depart:row.depart||"",
+        siteId:f.siteBackendId||f.siteId||"",siteName:f.siteName||agent.affectationCourante?.siteName||"—",
+        group:f.groupe||f.rotationGroupe||agent.affectationCourante?.groupe||"",source:f
+      }));
+      return;
+    }
+    const arrival=ptPlanningTime(f.scanArrivee||f.lastScanArrivee||(f.heureArrivee!=="P"?f.heureArrivee:""));
+    const depart=ptPlanningTime(f.scanDepart||f.heureDepart);
+    if(arrival||depart)cycles.push({
+      agent,agentId:agent.id,date:f.date,cycle:1,arrival,depart,
+      siteId:f.siteBackendId||f.siteId||"",siteName:f.siteName||agent.affectationCourante?.siteName||"—",
+      group:f.groupe||f.rotationGroupe||agent.affectationCourante?.groupe||"",source:f
+    });
+  });
+  return cycles.sort((a,b)=>(a.date+a.arrival).localeCompare(b.date+b.arrival));
+}
+function ptPlanningSelectedDate(){return sessionStorage.getItem("ptPlanningDate")||today()}
+function ptPlanningSetDate(value){sessionStorage.setItem("ptPlanningDate",value||today());renderView()}
+function ptPlanningSiteFilter(){return sessionStorage.getItem("ptPlanningSite")||""}
+function ptPlanningSetSite(value){sessionStorage.setItem("ptPlanningSite",value||"");renderView()}
+function ptPlanningStatusFilter(){return sessionStorage.getItem("ptPlanningStatus")||""}
+function ptPlanningSetStatus(value){sessionStorage.setItem("ptPlanningStatus",value||"");renderView()}
+function ptPlanningBuild(date){
+  const cycles=ptPlanningCycles();
+  const sourceDate=ptPlanningDateShift(date,-7);
+  const learned=cycles.filter(c=>c.date===sourceDate);
+  const actual=cycles.filter(c=>c.date===date);
+  const tolerance=30;
+  const now=new Date();
+  const usedActual=new Set();
+  const rows=learned.map((expected,learnedIndex)=>{
+    const same=actual.filter(a=>String(a.agentId)===String(expected.agentId));
+    const occurrence=learned.slice(0,learnedIndex+1).filter(e=>String(e.agentId)===String(expected.agentId)).length-1;
+    const real=same[occurrence]||null;
+    if(real)usedActual.add(real);
+    const expectedArrival=expected.arrival;
+    const expectedDepart=expected.depart;
+    let status="attendu",observation="",severity="normal";
+    const expStart=new Date(`${date}T${expectedArrival||"23:59"}:00`);
+    if(real?.arrival){
+      status="present";
+      const delta=Math.abs((ptPlanningMinutes(real.arrival)??0)-(ptPlanningMinutes(expectedArrival)??0));
+      if(expectedArrival&&delta>tolerance){status="horaire_modifie";severity="warning";observation=`Horaire différent : prévu ${expectedArrival}, constaté ${real.arrival}.`;}
+      if(String(real.siteId||real.siteName)!==String(expected.siteId||expected.siteName)){status="site_modifie";severity="warning";observation+=`${observation?" ":""}Site différent : prévu ${expected.siteName}, constaté ${real.siteName}.`;}
+      if(expected.group&&real.group&&String(expected.group)!==String(real.group)){status="rotation_modifiee";severity="warning";observation+=`${observation?" ":""}Changement de rotation ${expected.group} → ${real.group}.`;}
+      if(expectedDepart&&!real.depart&&now>new Date(`${date}T${expectedDepart}:00`)){status="depart_manquant";severity="danger";observation+=`${observation?" ":""}Départ non pointé.`;}
+    }else if(now>new Date(expStart.getTime()+tolerance*60000)){
+      status="absent";severity="danger";observation="Aucune arrivée enregistrée après l’heure prévue.";
+    }
+    return {expected,real,status,observation,severity};
+  });
+  actual.filter(real=>!usedActual.has(real)).forEach(real=>{
+    rows.push({expected:null,real,status:"imprevu",severity:"info",observation:"Présence non prévue par le planning appris."});
+  });
+  rows.forEach(row=>{
+    if(!row.expected||!row.real?.arrival)return;
+    const exp=row.expected,real=row.real;
+    const other=rows.find(candidate=>{
+      if(candidate===row||!candidate.expected||!candidate.real?.arrival)return false;
+      const otherExp=candidate.expected,otherReal=candidate.real;
+      const expectedTimesDiffer=Math.abs((ptPlanningMinutes(exp.arrival)??-9999)-(ptPlanningMinutes(otherExp.arrival)??9999))>tolerance;
+      const timeSwap=expectedTimesDiffer&&Math.abs((ptPlanningMinutes(real.arrival)??-9999)-(ptPlanningMinutes(otherExp.arrival)??9999))<=tolerance&&
+        Math.abs((ptPlanningMinutes(otherReal.arrival)??-9999)-(ptPlanningMinutes(exp.arrival)??9999))<=tolerance;
+      const expectedSitesDiffer=String(exp.siteId||exp.siteName)!==String(otherExp.siteId||otherExp.siteName);
+      const siteSwap=expectedSitesDiffer&&String(real.siteId||real.siteName)===String(otherExp.siteId||otherExp.siteName)&&
+        String(otherReal.siteId||otherReal.siteName)===String(exp.siteId||exp.siteName);
+      return timeSwap||siteSwap;
+    });
+    if(other){
+      const timeSwap=Math.abs((ptPlanningMinutes(exp.arrival)??-9999)-(ptPlanningMinutes(other.expected.arrival)??9999))>tolerance&&
+        Math.abs((ptPlanningMinutes(real.arrival)??-9999)-(ptPlanningMinutes(other.expected.arrival)??9999))<=tolerance;
+      const siteSwap=String(exp.siteId||exp.siteName)!==String(other.expected.siteId||other.expected.siteName)&&
+        String(real.siteId||real.siteName)===String(other.expected.siteId||other.expected.siteName);
+      const kinds=[timeSwap?"horaire":"",siteSwap?"site/rotation":""].filter(Boolean).join(" et ");
+      row.status="permutation";row.severity="danger";
+      row.observation=`⚠ Permutation de ${kinds} détectée avec ${(other.expected.agent.nom||"")+" "+(other.expected.agent.prenom||"")}.`;
+    }
+  });
+  return {cycles,sourceDate,learned,actual,rows};
+}
+function ptPlanningStatusLabel(status){
+  return({attendu:"Attendu",present:"Présent",absent:"Absent",horaire_modifie:"Horaire modifié",site_modifie:"Site modifié",rotation_modifiee:"Rotation modifiée",depart_manquant:"Départ manquant",imprevu:"Présence imprévue",permutation:"Permutation détectée"}[status]||status);
+}
+function renderPointagePlanning7J(){
+  const date=ptPlanningSelectedDate();
+  const model=ptPlanningBuild(date);
+  const allDates=[...new Set(model.cycles.map(c=>c.date))].sort();
+  const firstDate=allDates[0]||date;
+  const elapsed=Math.max(0,Math.floor((new Date(`${today()}T12:00:00`)-new Date(`${firstDate}T12:00:00`))/86400000)+1);
+  const learningDays=Math.min(7,elapsed);
+  const ready=elapsed>=8;
+  const sites=[...new Set(model.rows.map(r=>(r.real||r.expected)?.siteName).filter(Boolean))].sort();
+  const siteFilter=ptPlanningSiteFilter(),statusFilter=ptPlanningStatusFilter();
+  const visible=model.rows.filter(r=>{
+    const row=r.real||r.expected;
+    return (!siteFilter||row?.siteName===siteFilter)&&(!statusFilter||r.status===statusFilter);
+  });
+  const alerts=model.rows.filter(r=>["danger","warning"].includes(r.severity));
+  const counts={
+    present:model.rows.filter(r=>r.real?.arrival).length,
+    absent:model.rows.filter(r=>r.status==="absent").length,
+    permutations:model.rows.filter(r=>r.status==="permutation").length,
+    anomalies:alerts.length
+  };
+  const badge=r=>{
+    const colors={danger:["#fee2e2","#991b1b"],warning:["#fef3c7","#92400e"],info:["#dbeafe","#1e40af"],normal:["#dcfce7","#166534"]}[r.severity]||["#f1f5f9","#475569"];
+    return`<span class="pill" style="background:${colors[0]};color:${colors[1]}">${escapeHTML(ptPlanningStatusLabel(r.status))}</span>`;
+  };
+  const rowsHTML=visible.map(r=>{
+    const row=r.real||r.expected,a=row.agent;
+    return`<tr>
+      <td class="p-3"><div class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div></td>
+      <td class="p-3 font-mono text-xs">${escapeHTML(a.matricule||"—")}</td>
+      <td class="p-3 text-xs">${escapeHTML(row.siteName||"—")}</td>
+      <td class="p-3 text-xs">${escapeHTML(date)}</td>
+      <td class="p-3 text-center font-mono font-bold">${escapeHTML(r.real?.arrival||"—")}</td>
+      <td class="p-3 text-center font-mono font-bold">${escapeHTML(r.real?.depart||"—")}</td>
+      <td class="p-3 text-center">${badge(r)}</td>
+      <td class="p-3 text-xs" style="max-width:340px">${escapeHTML(r.observation||"Conforme au planning appris.")}</td>
+    </tr>`;
+  }).join("");
+  return`<div class="card p-5 mb-4" style="background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff">
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div><div class="text-xs font-black uppercase tracking-widest" style="opacity:.75">Moteur de présence</div><h2 class="text-2xl font-black">Planning intelligent — apprentissage 7 jours</h2><p class="text-sm mt-1" style="opacity:.8">Référence du ${formatDate(model.sourceDate)} · Actualisation automatique toutes les 30 secondes</p></div>
+      <div class="px-4 py-2 rounded-xl text-center" style="background:rgba(255,255,255,.14)"><div class="text-2xl font-black">${learningDays}/7</div><div class="text-[10px] uppercase font-bold">${ready?"Planning opérationnel":"Apprentissage"}</div></div>
+    </div>
+    <div class="mt-4 rounded-full overflow-hidden" style="height:7px;background:rgba(255,255,255,.2)"><div style="height:100%;width:${learningDays/7*100}%;background:#4ade80"></div></div>
+  </div>
+  ${!ready?`<div class="card p-4 mb-4" style="background:#fef3c7;border-color:#fcd34d"><b>Phase d’apprentissage :</b> le planning automatique sera pleinement opérationnel après sept journées complètes. Les scans sont déjà mémorisés.</div>`:""}
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div class="card p-4 text-center" style="background:#dcfce7"><div class="text-xs font-bold text-green-700">Présents</div><div class="text-2xl font-black text-green-700">${counts.present}</div></div>
+    <div class="card p-4 text-center" style="background:#fee2e2"><div class="text-xs font-bold text-red-700">Absents</div><div class="text-2xl font-black text-red-700">${counts.absent}</div></div>
+    <div class="card p-4 text-center" style="background:#fef3c7"><div class="text-xs font-bold text-amber-700">Anomalies</div><div class="text-2xl font-black text-amber-700">${counts.anomalies}</div></div>
+    <div class="card p-4 text-center" style="background:#ede9fe"><div class="text-xs font-bold text-violet-700">Permutations</div><div class="text-2xl font-black text-violet-700">${counts.permutations}</div></div>
+  </div>
+  ${alerts.length?`<div class="card p-4 mb-4" style="border:2px solid #ef4444;background:#fff7f7"><div class="font-black text-red-700 mb-2">⚠ ALERTES DE PRÉSENCE (${alerts.length})</div>${alerts.slice(0,8).map(r=>`<div class="py-2 border-b border-red-100 text-sm"><b>${escapeHTML(((r.real||r.expected).agent.nom||"")+" "+((r.real||r.expected).agent.prenom||""))}</b> — ${escapeHTML(r.observation)}</div>`).join("")}</div>`:""}
+  <div class="card p-4 mb-4"><div class="flex flex-wrap gap-3 items-end">
+    <div><label class="label">Date analysée</label><input class="input" type="date" value="${date}" onchange="ptPlanningSetDate(this.value)"></div>
+    <div><label class="label">Site</label><select class="select" onchange="ptPlanningSetSite(this.value)"><option value="">Tous les sites</option>${sites.map(s=>`<option ${s===siteFilter?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
+    <div><label class="label">Statut</label><select class="select" onchange="ptPlanningSetStatus(this.value)"><option value="">Tous les statuts</option>${["present","absent","permutation","horaire_modifie","site_modifie","rotation_modifiee","depart_manquant","imprevu","attendu"].map(s=>`<option value="${s}" ${s===statusFilter?"selected":""}>${escapeHTML(ptPlanningStatusLabel(s))}</option>`).join("")}</select></div>
+    <button class="btn btn-secondary" onclick="ptPlanningRefreshNow()">↺ Actualiser</button>
+  </div></div>
+  <div class="card p-0 overflow-hidden"><div style="overflow:auto"><table class="w-full text-sm"><thead><tr style="background:#043970;color:#fff"><th class="p-3 text-left">NOM PRÉNOM</th><th class="p-3 text-left">CODE</th><th class="p-3 text-left">SITE</th><th class="p-3 text-left">DATE</th><th class="p-3 text-center">H ARRIVÉE</th><th class="p-3 text-center">H DÉPART</th><th class="p-3 text-center">ÉTAT</th><th class="p-3 text-left">OBSERVATION / ALERTE</th></tr></thead><tbody>${rowsHTML||`<tr><td colspan="8" class="p-8 text-center text-slate-500">Aucun planning appris pour cette date. Le système utilise la journée correspondante sept jours auparavant.</td></tr>`}</tbody></table></div></div>`;
+}
+async function ptPlanningRefreshNow(){
+  if(_ptPlanningRefreshing)return;_ptPlanningRefreshing=true;
+  try{
+    const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
+    const data=Array.isArray(res)?res:(res?.data||[]);if(Array.isArray(data))db.feuillePresence=data;
+    toast("Planning et alertes actualisés","success");renderView();
+  }catch(e){toast("Actualisation indisponible","error")}finally{_ptPlanningRefreshing=false}
 }
 function renderPointageSaisie(){
   const isDrh=session?.transverse==="drh";

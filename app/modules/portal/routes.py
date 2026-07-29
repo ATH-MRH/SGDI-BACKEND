@@ -2,7 +2,7 @@ import math
 import re
 import secrets
 import unicodedata
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -25,6 +25,7 @@ router = APIRouter()
 
 PORTAL_TOKEN_TTL = 60 * 24  # 24 heures
 ATTENDANCE_QR_TTL_SECONDS = 10
+ATTENDANCE_NEW_ARRIVAL_DELAY = timedelta(hours=8)
 
 
 def _ip(request: Request) -> str:
@@ -571,20 +572,55 @@ def scan_employee_attendance_qr(
 
     tz = ZoneInfo("Africa/Algiers")
     now = datetime.now(tz)
-    today_str = now.strftime("%Y-%m-%d")
+    scan_date_str = now.strftime("%Y-%m-%d")
     heure = now.strftime("%H:%M:%S")
+    employee_scans = sorted(
+        (
+            row for row in service.list_items(db, "attendanceQrScans")
+            if isinstance(row, dict)
+            and str(row.get("employeeId") or "") == str(employee.id)
+            and row.get("action") in {"arrivee", "depart"}
+            and row.get("scannedAt")
+        ),
+        key=lambda row: str(row.get("scannedAt")),
+    )
+    last_event = employee_scans[-1] if employee_scans else None
+    last_arrival = next((row for row in reversed(employee_scans) if row.get("action") == "arrivee"), None)
+    action = "depart" if last_event and last_event.get("action") == "arrivee" else "arrivee"
+    cycle_number = sum(1 for row in employee_scans if row.get("action") == "arrivee") + (1 if action == "arrivee" else 0)
+    presence_date_str = scan_date_str
+    if action == "depart" and last_arrival:
+        presence_date_str = str(last_arrival.get("scannedAt"))[:10] or scan_date_str
+    if action == "arrivee" and last_arrival:
+        try:
+            last_arrival_at = datetime.fromisoformat(str(last_arrival["scannedAt"]).replace("Z", "+00:00"))
+            if last_arrival_at.tzinfo is None:
+                last_arrival_at = last_arrival_at.replace(tzinfo=tz)
+            remaining = ATTENDANCE_NEW_ARRIVAL_DELAY - (now - last_arrival_at.astimezone(tz))
+        except (TypeError, ValueError):
+            remaining = timedelta(0)
+        if remaining > timedelta(0):
+            remaining_minutes = max(1, int(remaining.total_seconds() // 60) + 1)
+            hours, minutes = divmod(remaining_minutes, 60)
+            wait_label = f"{hours} h {minutes:02d}" if hours else f"{minutes} min"
+            raise HTTPException(
+                status_code=409,
+                detail=f"Nouvelle arrivée disponible dans {wait_label}. Le départ précédent est bien enregistré.",
+            )
+
     existing = db.execute(
         select(DailyPresence).where(
-            DailyPresence.presence_date == now.date(),
+            DailyPresence.presence_date == datetime.fromisoformat(presence_date_str).date(),
             DailyPresence.employee_id == employee.id,
         ).order_by(DailyPresence.id.desc())
     ).scalars().first()
     legacy = ((existing.data or {}).get("_legacy") if existing and isinstance(existing.data, dict) else {}) or {}
-    has_arrival = bool(existing and (existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee")))
-    has_departure = bool(existing and (existing.departure_time or legacy.get("scanDepart") or legacy.get("heureDepart")))
-    action = "depart" if has_arrival and not has_departure else "arrivee"
-    if has_departure:
-        raise HTTPException(status_code=409, detail="Arrivée et départ déjà enregistrés aujourd'hui")
+    # Compatibilité avec les pointages créés avant l'historique multi-cycles.
+    if not employee_scans and existing:
+        has_arrival = bool(existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee"))
+        has_departure = bool(existing.departure_time or legacy.get("scanDepart") or legacy.get("heureDepart"))
+        action = "depart" if has_arrival and not has_departure else "arrivee"
+        cycle_number = 1
 
     assignment = db.execute(
         select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
@@ -592,7 +628,7 @@ def scan_employee_attendance_qr(
     site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
     site_name = (site.name or site.indicatif or "") if site else ""
     item: dict[str, Any] = {
-        "date": today_str,
+        "date": presence_date_str,
         "agentId": str(employee.id),
         "employee_id": employee.id,
         "agentBackendId": employee.id,
@@ -607,10 +643,22 @@ def scan_employee_attendance_qr(
         "source": "portail-rh-employee-qr",
         "scannedBy": scanner.username,
         "scannedByUserId": scanner.id,
+        "scanCycles": [
+            *(legacy.get("scanCycles") if isinstance(legacy.get("scanCycles"), list) else []),
+            {
+                "action": action,
+                "heure": heure,
+                "scannedAt": now.isoformat(),
+                "scannedBy": scanner.username,
+                "cycle": cycle_number,
+            },
+        ],
     }
     if action == "arrivee":
-        item["heureArrivee"] = "P"
-        item["scanArrivee"] = heure
+        if not existing or not existing.arrival_time:
+            item["heureArrivee"] = "P"
+            item["scanArrivee"] = heure
+        item["lastScanArrivee"] = heure
     else:
         item["heureDepart"] = heure
         item["scanDepart"] = heure
@@ -628,7 +676,9 @@ def scan_employee_attendance_qr(
         "employeeId": employee.id,
         "matricule": employee.code,
         "action": action,
+        "cycle": cycle_number,
         "scannedAt": now.isoformat(),
+        "site": site_name,
         "scannedBy": scanner.username,
         "scannedByUserId": scanner.id,
     })
@@ -636,8 +686,9 @@ def scan_employee_attendance_qr(
     return {
         "success": True,
         "action": action,
+        "cycle": cycle_number,
         "heure": heure,
-        "date": today_str,
+        "date": scan_date_str,
         "site": site_name,
         "employee": {
             "id": employee.id,
@@ -661,11 +712,33 @@ def list_pointages_personnel(matricule: str, db: Session = Depends(get_db), _: s
         for p in pointages
         if isinstance(p, dict) and _clean_text(p.get("matricule")).lower() == key
     ]
+    attendance_events = [
+        event
+        for event in service.list_items(db, "attendanceQrScans")
+        if isinstance(event, dict) and _clean_text(event.get("matricule")).lower() == key
+    ]
+    attendance_dates: set[str] = set()
+    for event in attendance_events:
+        scanned_at = _clean_text(event.get("scannedAt"))
+        scan_date = scanned_at[:10]
+        attendance_dates.add(scan_date)
+        rows.append({
+            "id": f"attendance-{event.get('id')}",
+            "date": scan_date,
+            "createdAt": scanned_at,
+            "heure": scanned_at[11:19],
+            "action": event.get("action") or "arrivee",
+            "cycle": event.get("cycle") or 1,
+            "site": event.get("site") or "",
+            "source": "employee-qr",
+        })
     if employee:
         daily_rows = db.execute(
             select(DailyPresence).where(DailyPresence.employee_id == employee.id).order_by(DailyPresence.presence_date.desc(), DailyPresence.id.desc())
         ).scalars().all()
         for row in daily_rows:
+            if row.presence_date.isoformat() in attendance_dates:
+                continue
             legacy = ((row.data or {}).get("_legacy") if isinstance(row.data, dict) else {}) or {}
             if row.arrival_time == "P" or legacy.get("code") == "P" or legacy.get("scanArrivee"):
                 arrival = _clean_text(legacy.get("scanArrivee"))
