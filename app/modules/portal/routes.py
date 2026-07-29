@@ -683,6 +683,16 @@ def scan_employee_attendance_qr(
         "scannedByUserId": scanner.id,
     })
     db.commit()
+    employee_extra = employee.extra if isinstance(employee.extra, dict) else {}
+    employee_legacy = employee_extra.get("_legacy") if isinstance(employee_extra.get("_legacy"), dict) else {}
+    employee_photo = next(
+        (
+            _clean_text(employee_extra.get(key) or employee_legacy.get(key))
+            for key in ("photo", "photoUrl", "photoData", "photo_url")
+            if employee_extra.get(key) or employee_legacy.get(key)
+        ),
+        "",
+    )
     return {
         "success": True,
         "action": action,
@@ -695,6 +705,11 @@ def scan_employee_attendance_qr(
             "matricule": employee.code,
             "nom": employee.last_name,
             "prenom": employee.first_name,
+            "photo": employee_photo,
+            "societe": employee.society or "",
+            "poste": employee.position or "",
+            "statut": employee.status or "",
+            "site": site_name,
         },
         "record": result,
     }

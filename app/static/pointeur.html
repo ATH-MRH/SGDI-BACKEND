@@ -29,11 +29,11 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .error.show{display:block}
 .app{min-height:100vh;padding-bottom:28px}
 .top{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px;box-shadow:0 10px 30px rgba(4,57,112,.25)}
-.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:520px;margin:auto}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1080px;margin:auto}
 .brand{display:flex;align-items:center;gap:11px}.brand-logo{width:48px;height:48px;border-radius:15px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:grid;place-items:center;font-weight:900}
 .brand-title{font-size:19px;font-weight:950;letter-spacing:.08em}.brand-user{font-size:12px;opacity:.8;margin-top:2px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 11px;font-weight:750}
-.main{max-width:520px;margin:0 auto;padding:16px}
+.main{max-width:1080px;margin:0 auto;padding:16px}.work-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
 .status{display:flex;align-items:center;justify-content:center;gap:7px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:900;margin:0 auto 13px;width:max-content}
 .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.3}}
 .scanner-card{background:#fff;border:1px solid var(--line);border-radius:21px;padding:15px;box-shadow:0 12px 34px rgba(4,57,112,.09)}
@@ -42,14 +42,19 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 #reader video{object-fit:cover!important;border-radius:16px}
 .camera-msg{color:#fff;font-size:13px;text-align:center;padding:30px}
 .secondary{width:100%;border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:12px;font-weight:850;margin-top:11px}
+.usb-reader{min-height:310px;border-radius:18px;background:linear-gradient(145deg,#031f3e,#07549a);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;position:relative;overflow:hidden}
+.usb-reader:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,rgba(77,174,255,.3),transparent 48%);pointer-events:none}.usb-icon{font-size:72px;position:relative}.usb-title{font-size:24px;font-weight:950;margin-top:10px;position:relative}.usb-hint{font-size:14px;opacity:.8;max-width:440px;margin-top:7px;position:relative}.usb-ready{margin-top:20px;border:1px solid rgba(134,239,172,.55);background:rgba(22,163,74,.22);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;position:relative}.wedge-input{position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;opacity:0}
 .result{display:none;margin-top:14px;border-radius:17px;padding:15px;border:1px solid}
 .result.show{display:block}.result.success{background:#dcfce7;border-color:#86efac;color:#14532d}.result.error{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}.result.warning{background:#fef3c7;border-color:#fcd34d;color:#78350f}
 .result-kicker{font-size:11px;font-weight:900;letter-spacing:.08em}.result-name{font-size:19px;font-weight:950;margin:3px 0}.result-meta{font-size:13px;font-weight:650}
+.employee-result{display:flex;align-items:center;gap:18px}.employee-photo{width:118px;height:118px;border-radius:20px;object-fit:cover;border:4px solid rgba(255,255,255,.8);box-shadow:0 8px 20px rgba(15,23,42,.15);background:#fff}.employee-photo-fallback{width:118px;height:118px;border-radius:20px;display:grid;place-items:center;background:#fff;color:var(--navy);font-size:36px;font-weight:950;border:4px solid rgba(255,255,255,.8)}.result-company{font-size:12px;margin-top:7px;font-weight:800}.result-status{display:inline-block;margin-top:8px;background:#16a34a;color:#fff;border-radius:999px;padding:5px 9px;font-size:11px;font-weight:950}
 .history{background:#fff;border:1px solid var(--line);border-radius:18px;margin-top:14px;overflow:hidden}
 .history-head{padding:13px 15px;border-bottom:1px solid var(--line);font-size:13px;font-weight:900;display:flex;justify-content:space-between}.history-head span{color:var(--muted);font-weight:650}
 .scan-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid #eef2f7}.scan-row:last-child{border:0}.scan-name{font-size:13px;font-weight:850}.scan-meta{font-size:11px;color:var(--muted);margin-top:2px}.scan-action{font-size:11px;font-weight:900;border-radius:999px;padding:5px 8px;background:#dcfce7;color:#166534}
 .empty{text-align:center;color:#94a3b8;padding:24px;font-size:13px}
-@media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader{min-height:270px}.brand-title{font-size:17px}}
+@media(min-width:760px){.work-grid{grid-template-columns:minmax(0,1.45fr) minmax(310px,.75fr)}.history{margin-top:0}.scanner-card{padding:22px}.result-name{font-size:25px}.scan-row{padding:15px}}
+@media(max-width:759px){.employee-photo,.employee-photo-fallback{width:82px;height:82px;border-radius:15px}.employee-result{gap:12px}}
+@media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 </head>
@@ -77,17 +82,27 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
   </header>
   <main class="main">
     <div class="status"><span class="dot"></span> SCANNER ACTIF</div>
-    <section class="scanner-card">
-      <div class="scanner-title">Scannez le QR employé</div>
-      <p class="scanner-hint">Présentez le QR dans le cadre. La validation est automatique.</p>
-      <div id="reader"><div class="camera-msg">Ouverture de la caméra arrière…</div></div>
-      <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
-      <div id="result" class="result"></div>
-    </section>
-    <section class="history">
-      <div class="history-head">SCANS DE CETTE SESSION <span id="scanCount">0</span></div>
-      <div id="historyList"><div class="empty">Aucun QR scanné.</div></div>
-    </section>
+    <input id="wedgeInput" class="wedge-input" autocomplete="off" aria-label="Lecteur QR USB">
+    <div class="work-grid">
+      <section class="scanner-card">
+        <div class="scanner-title" id="scannerTitle">Scannez le QR employé</div>
+        <p class="scanner-hint" id="scannerHint">La validation est automatique.</p>
+        <div id="usbReader" class="usb-reader hidden">
+          <div class="usb-icon">▣</div>
+          <div class="usb-title">Présentez le QR à la douchette</div>
+          <div class="usb-hint">Le lecteur USB est prêt. La fiche de l’employé apparaîtra automatiquement après la lecture.</div>
+          <div class="usb-ready"><span class="dot" style="display:inline-block;margin-right:7px"></span> EN ATTENTE D’UN QR</div>
+        </div>
+        <div id="reader"><div class="camera-msg">Ouverture de la caméra arrière…</div></div>
+        <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
+        <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">📷 UTILISER LA CAMÉRA</button>
+        <div id="result" class="result"></div>
+      </section>
+      <section class="history">
+        <div class="history-head">10 DERNIERS PASSAGES <span id="scanCount">0</span></div>
+        <div id="historyList"><div class="empty">Aucun QR scanné.</div></div>
+      </section>
+    </div>
   </main>
 </section>
 
@@ -97,8 +112,12 @@ let pointerSession=null;
 let scanner=null;
 let scanBusy=false;
 let sessionScans=[];
+let qrKeyBuffer="";
+let qrLastKeyAt=0;
+let cameraMode=false;
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
+function isMobileDevice(){return matchMedia("(max-width:759px)").matches||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)}
 function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
 async function login(){
   const button=document.getElementById("loginBtn");
@@ -118,7 +137,7 @@ function enterApp(){
   document.getElementById("appView").classList.remove("hidden");
   const user=pointerSession?.user||{};
   document.getElementById("userLabel").textContent=(user.full_name||user.username||"Pointeur")+" · "+(user.username||"");
-  requestAnimationFrame(startScanner);
+  requestAnimationFrame(setupScanMode);
 }
 async function logout(){
   await stopScanner();
@@ -126,6 +145,29 @@ async function logout(){
   document.getElementById("appView").classList.add("hidden");
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("password").value="";
+}
+function setupScanMode(){
+  cameraMode=isMobileDevice();
+  const usb=document.getElementById("usbReader"),reader=document.getElementById("reader"),cameraButton=document.getElementById("cameraModeBtn");
+  if(cameraMode){
+    usb.classList.add("hidden");reader.classList.remove("hidden");cameraButton.classList.add("hidden");
+    document.getElementById("scannerHint").textContent="Présentez le QR dans le cadre. La validation est automatique.";
+    startScanner();
+  }else{
+    stopScanner();usb.classList.remove("hidden");reader.classList.add("hidden");cameraButton.classList.remove("hidden");
+    document.getElementById("scannerTitle").textContent="Borne de pointage QR";
+    document.getElementById("scannerHint").textContent="Douchette USB active · aucune action à effectuer.";
+    document.getElementById("wedgeInput").focus({preventScroll:true});
+  }
+}
+function enableCameraMode(){
+  cameraMode=true;
+  document.getElementById("usbReader").classList.add("hidden");
+  document.getElementById("reader").classList.remove("hidden");
+  document.getElementById("cameraModeBtn").classList.add("hidden");
+  document.getElementById("scannerTitle").textContent="Scannez le QR employé";
+  document.getElementById("scannerHint").textContent="Présentez le QR dans le cadre. La validation est automatique.";
+  startScanner();
 }
 async function startScanner(){
   if(scanner)return;
@@ -159,25 +201,62 @@ async function onQr(token){
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
     const employee=data.employee||{};
-    const entry={name:[employee.nom,employee.prenom].filter(Boolean).join(" ")||"Employé",matricule:employee.matricule||"",action:data.action||"arrivee",heure:data.heure||"",site:data.site||""};
-    sessionScans.unshift(entry);sessionScans=sessionScans.slice(0,30);
-    showResult(entry,"success");renderHistory();navigator.vibrate?.([80,40,80]);
-  }catch(error){showResult({message:error.message||"QR invalide"},"error");navigator.vibrate?.(180)}
+    const entry={name:[employee.nom,employee.prenom].filter(Boolean).join(" ")||"Employé",matricule:employee.matricule||"",action:data.action||"arrivee",heure:data.heure||"",site:data.site||employee.site||"",photo:employee.photo||"",societe:employee.societe||"",poste:employee.poste||"",statut:employee.statut||""};
+    sessionScans.unshift(entry);sessionScans=sessionScans.slice(0,10);
+    showResult(entry,"success");renderHistory();playTone(true);navigator.vibrate?.([80,40,80]);
+  }catch(error){showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
+}
+function playTone(success){
+  try{
+    const AudioContext=window.AudioContext||window.webkitAudioContext,ctx=new AudioContext();
+    const oscillator=ctx.createOscillator(),gain=ctx.createGain();
+    oscillator.connect(gain);gain.connect(ctx.destination);oscillator.type="sine";
+    oscillator.frequency.value=success?880:190;gain.gain.setValueAtTime(.12,ctx.currentTime);
+    const duration=success?0.18:0.4;
+    gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+duration);
+    oscillator.start();oscillator.stop(ctx.currentTime+duration);oscillator.onended=()=>ctx.close();
+  }catch(e){}
 }
 function showResult(data,type){
   const el=document.getElementById("result");el.className="result show "+type;
   if(type==="success"){
     const action=data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE";
-    el.innerHTML=`<div class="result-kicker">${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div>`;
+    const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
+    const photo=data.photo?`<img class="employee-photo" src="${esc(data.photo)}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
+    el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
   }else el.innerHTML=`<div class="result-kicker">SCAN REFUSÉ</div><div class="result-name">${esc(data.message)}</div>`;
-  clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),3500);
+  clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),7000);
 }
 function renderHistory(){
   document.getElementById("scanCount").textContent=String(sessionScans.length);
   document.getElementById("historyList").innerHTML=sessionScans.length?sessionScans.map(row=>`<div class="scan-row"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")} · ${esc(row.heure)}</div></div><div class="scan-action">${row.action==="depart"?"DÉPART":"ARRIVÉE"}</div></div>`).join(""):'<div class="empty">Aucun QR scanné.</div>';
 }
-document.addEventListener("visibilitychange",()=>{if(document.hidden)stopScanner();else if(pointerSession)startScanner()});
+function acceptUsbQr(value){
+  const token=String(value||"").trim();qrKeyBuffer="";
+  if(token.length>=20)onQr(token);
+}
+document.addEventListener("keydown",event=>{
+  if(!pointerSession||cameraMode||event.ctrlKey||event.metaKey||event.altKey)return;
+  const now=Date.now();
+  if(now-qrLastKeyAt>250)qrKeyBuffer="";
+  qrLastKeyAt=now;
+  if(event.key==="Enter"||event.key==="Tab"){
+    if(qrKeyBuffer){event.preventDefault();acceptUsbQr(qrKeyBuffer)}
+    return;
+  }
+  if(event.key.length===1){
+    qrKeyBuffer+=event.key;
+    if(qrKeyBuffer.length>4096)qrKeyBuffer=qrKeyBuffer.slice(-4096);
+  }
+});
+document.addEventListener("paste",event=>{
+  if(!pointerSession||cameraMode)return;
+  const value=event.clipboardData?.getData("text")||"";
+  if(value){event.preventDefault();acceptUsbQr(value)}
+});
+document.addEventListener("click",()=>{if(pointerSession&&!cameraMode)document.getElementById("wedgeInput")?.focus({preventScroll:true})});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)stopScanner();else if(pointerSession)setupScanMode()});
 window.addEventListener("beforeunload",stopScanner);
 document.addEventListener("DOMContentLoaded",()=>{
   try{pointerSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){pointerSession=null}
