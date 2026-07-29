@@ -39,6 +39,7 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "secretariat": (("SEC",), "SECRETARIAT GENERAL"),
     "agenda": (("AGD",), "AGENDA"),
     "pointage": (("PTG",), "POINTAGE"),
+    "pointeur": (("PTG", "OPS", "SUP"), "POINTEUR"),
 }
 
 
