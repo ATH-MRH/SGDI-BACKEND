@@ -35842,12 +35842,23 @@ function ptPlanningTime(value){
   const match=String(value||"").match(/(\d{1,2}):(\d{2})/);
   return match?`${String(+match[1]).padStart(2,"0")}:${match[2]}`:"";
 }
+function ptPlanningActiveSociete(){
+  return normalizeSocieteName(
+    (typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"")||
+    (typeof drhActiveSocieteFilter==="function"?drhActiveSocieteFilter():"")||
+    session?.societe||""
+  );
+}
+function ptPlanningAgentInActiveSociete(agent){
+  const societe=ptPlanningActiveSociete();
+  return !!agent&&(!societe||normalizeSocieteName(agent.societe||agent.society||"")===societe);
+}
 function ptPlanningAgentForPresence(f){
-  return (db.agents||[]).find(a=>
+  return (db.agents||[]).find(a=>ptPlanningAgentInActiveSociete(a)&&(
     String(a.id||"")===String(f.agentId||"")||
     String(a.backendId||"")===String(f.agentBackendId||f.employee_id||"")||
     (a.matricule&&String(a.matricule)===String(f.matricule||""))
-  );
+  ));
 }
 function ptPlanningCycles(){
   const cycles=[];
