@@ -737,6 +737,76 @@
   }
   .home-portal-btn:hover { background: #043970; color: white; }
 
+  .employee-status {
+    display:inline-flex; align-items:center; gap:6px; width:max-content;
+    padding:4px 10px; border-radius:999px; background:rgba(34,197,94,.18);
+    color:#dcfce7; font-size:.7rem; font-weight:900; letter-spacing:.08em;
+  }
+  .employee-status::before {
+    content:""; width:8px; height:8px; border-radius:50%; background:#4ade80;
+    animation:employeeActivePulse 1.25s infinite;
+  }
+  .employee-status.inactive { background:rgba(239,68,68,.2); color:#fee2e2; }
+  .employee-status.inactive::before { background:#f87171; animation:none; }
+  @keyframes employeeActivePulse {
+    0%,100% { opacity:1; box-shadow:0 0 0 0 rgba(74,222,128,.65); }
+    55% { opacity:.35; box-shadow:0 0 0 7px rgba(74,222,128,0); }
+  }
+  .employee-code-line { color:rgba(255,255,255,.76); font-size:.72rem; font-weight:650; }
+  .employee-code-line strong { color:white; letter-spacing:.06em; }
+  .attendance-home {
+    min-height:calc(100vh - 132px); padding:18px 16px 34px;
+    background:linear-gradient(180deg,#f8fbff 0%,#eef4fa 100%);
+  }
+  .attendance-qr-card {
+    max-width:420px; margin:0 auto 14px; padding:20px 18px 16px;
+    background:#fff; border:1px solid #dbe7f3; border-radius:22px;
+    box-shadow:0 16px 42px rgba(4,57,112,.11); text-align:center;
+  }
+  .attendance-eyebrow { color:#0d6ecc; font-size:.7rem; font-weight:900; letter-spacing:.12em; }
+  .attendance-title { margin:4px 0 2px; color:#0f2742; font-size:1.25rem; font-weight:850; }
+  .attendance-subtitle { margin:0 auto 14px; color:#64748b; font-size:.8rem; max-width:300px; }
+  .employee-qr-shell {
+    width:230px; height:230px; margin:0 auto; padding:12px; position:relative;
+    border:1px solid #d8e5f1; border-radius:18px; background:white;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .employee-qr-shell::before,.employee-qr-shell::after {
+    content:""; position:absolute; inset:-5px; border-radius:22px; pointer-events:none;
+    border:2px solid transparent;
+  }
+  .employee-qr-shell::before { border-top-color:#0d6ecc; border-left-color:#0d6ecc; }
+  .employee-qr-shell::after { border-right-color:#22c55e; border-bottom-color:#22c55e; }
+  #employeeQrCode img,#employeeQrCode canvas { display:block!important; width:204px!important; height:204px!important; }
+  .qr-loading { color:#94a3b8; font-size:.8rem; padding:70px 14px; }
+  .qr-timer-row { display:flex; justify-content:center; align-items:center; gap:8px; margin-top:14px; color:#475569; font-size:.78rem; }
+  .qr-timer-track { width:112px; height:5px; border-radius:99px; background:#e2e8f0; overflow:hidden; }
+  .qr-timer-fill { height:100%; width:100%; background:#22c55e; border-radius:inherit; transition:width .9s linear; }
+  .qr-sec { min-width:28px; font-weight:850; color:#0d6ecc; }
+  .qr-security-note { margin-top:10px; color:#64748b; font-size:.7rem; }
+  .attendance-history-card {
+    max-width:420px; margin:0 auto 14px; background:white; border:1px solid #dbe7f3;
+    border-radius:18px; overflow:hidden; box-shadow:0 8px 24px rgba(4,57,112,.07);
+  }
+  .attendance-history-head { display:flex; justify-content:space-between; padding:12px 14px; font-size:.74rem; font-weight:850; color:#0f2742; }
+  .attendance-history-head span:last-child { color:#64748b; font-weight:650; }
+  .attendance-actions { max-width:420px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .attendance-action {
+    border:1px solid #d5e2ef; background:#fff; color:#043970; border-radius:14px;
+    padding:12px; font:inherit; font-size:.78rem; font-weight:800; cursor:pointer;
+  }
+  @media(max-width:640px) {
+    header { position:relative; border-radius:0 0 22px 22px; }
+    .header-content { padding:14px 0 17px; align-items:center; }
+    .header-employee-photo { width:66px; height:66px; border-radius:50%; }
+    .header-ddn { display:none; }
+    .header-name-block { padding:0; gap:3px; }
+    .header-name-block .name { font-size:1rem; }
+    .header-right-cluster .language-switcher { display:none; }
+    .employee-qr-shell { width:218px; height:218px; }
+    #employeeQrCode img,#employeeQrCode canvas { width:192px!important; height:192px!important; }
+  }
+
   /* Portail menu screen */
   .portail-menu-title {
     text-align: center;
@@ -821,6 +891,7 @@
   .auth-form.active { display: block; }
 </style>
 <script src="/static/html5-qrcode.min.js" defer></script>
+<script src="/static/qrcode.min.js" defer></script>
 </head>
 <body>
 
@@ -955,7 +1026,8 @@
       <div class="header-employee-photo" id="headerEmployeePhoto">--</div>
       <div class="header-name-block">
         <div class="name" id="userName">--</div>
-        <div class="header-code-badge" id="headerEmployeeCode">--</div>
+        <div class="employee-code-line">CODE EMPLOYÉ · <strong id="headerEmployeeCode">--</strong></div>
+        <div class="employee-status" id="headerEmployeeStatus">ACTIF</div>
         <div class="header-ddn">DDN : <span id="headerDDN">--</span></div>
       </div>
       <div class="header-right-cluster">
@@ -975,30 +1047,25 @@
     <!-- ============ HOME / POINTAGE ============ -->
     <div class="tab-content active" id="tab-home">
 
-      <!-- Fingerprint / tap to point -->
-      <div class="fp-area">
-        <div class="fp-frame-wrap" onclick="switchTab('pointage')" title="Pointer ma présence">
-          <span class="fp-corner fp-corner-tl"></span>
-          <span class="fp-corner fp-corner-tr"></span>
-          <span class="fp-corner fp-corner-bl"></span>
-          <span class="fp-corner fp-corner-br"></span>
-          <svg class="fp-icon-svg" viewBox="0 0 100 125" fill="none" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-            <path d="M50,52 C44,48 40,42 40,36 C40,28 44,22 50,22 C56,22 60,28 60,36 C60,42 56,48 50,52"/>
-            <path d="M33,66 C22,56 18,44 18,36 C18,16 32,4 50,4 C68,4 82,16 82,36 C82,44 78,56 67,66"/>
-            <path d="M14,80 C2,67 -2,52 2,36 C7,12 26,-2 50,-2 C74,-2 93,12 98,36 C102,52 98,67 86,80"/>
-            <path d="M33,70 C30,82 34,94 44,100"/>
-            <path d="M14,86 C10,100 16,112 28,118"/>
-            <path d="M67,70 C70,82 66,94 56,100"/>
-            <path d="M86,86 C90,100 84,112 72,118"/>
-            <path d="M44,108 C42,114 46,120 50,121 C54,120 58,114 56,108"/>
-          </svg>
-        </div>
-        <p class="fp-hint">Appuyez pour pointer votre présence</p>
-      </div>
+      <div class="attendance-home">
+        <section class="attendance-qr-card">
+          <div class="attendance-eyebrow">POINTAGE SÉCURISÉ</div>
+          <h1 class="attendance-title">Présentez ce QR au responsable</h1>
+          <p class="attendance-subtitle">Le chef de groupe le scanne depuis son compte ATLAS.</p>
+          <div class="employee-qr-shell">
+            <div id="employeeQrCode"><div class="qr-loading">Création du QR sécurisé…</div></div>
+          </div>
+          <div class="qr-timer-row">
+            <span>Nouveau code dans</span>
+            <div class="qr-timer-track"><div class="qr-timer-fill" id="employeeQrProgress"></div></div>
+            <span class="qr-sec" id="employeeQrSeconds">10 s</span>
+          </div>
+          <div class="qr-security-note" id="employeeQrStatus">QR personnel · signé · utilisable une seule fois</div>
+        </section>
 
-      <!-- Attendance history table -->
-      <div class="home-hist-wrap">
-        <table class="home-hist-table">
+        <section class="attendance-history-card">
+          <div class="attendance-history-head"><span>MES DERNIERS POINTAGES</span><span>Arrivée / Départ</span></div>
+          <table class="home-hist-table">
           <thead>
             <tr>
               <th>DATE</th>
@@ -1011,12 +1078,12 @@
           <tbody id="homeHistBody">
             <tr><td colspan="5" style="text-align:center;padding:20px;color:#94a3b8;font-size:.8rem">Chargement...</td></tr>
           </tbody>
-        </table>
-      </div>
-
-      <!-- Button to portal menu -->
-      <div style="padding:24px 16px 32px;text-align:center;">
-        <button class="home-portal-btn" onclick="switchTab('portail')">PORTAIL RH</button>
+          </table>
+        </section>
+        <div class="attendance-actions">
+          <button class="attendance-action" onclick="switchTab('portail')">☰ PORTAIL RH</button>
+          <button class="attendance-action" onclick="renderHomeTab()">↻ ACTUALISER</button>
+        </div>
       </div>
 
     </div>
@@ -1704,6 +1771,9 @@
   let currentUser = null;
   let selectedType = null;
   let lastReceipt = null;
+  let employeeQrRefreshTimer = null;
+  let employeeQrCountdownTimer = null;
+  let employeeQrExpiresAt = 0;
 
   const TYPE_LABELS = {
     attestation: 'Attestation de travail',
@@ -2468,8 +2538,10 @@
     const verifiedLight = document.getElementById('accountVerifiedLight');
     const headerPhoto = document.getElementById('headerEmployeePhoto');
     const headerCode = document.getElementById('headerEmployeeCode');
+    const headerStatus = document.getElementById('headerEmployeeStatus');
     const code = p.matricule || p.code || currentUser.key || '--';
-    const suspended = String(p.statut || '').toLowerCase().includes('suspend');
+    const employeeStatus = String(p.statut || '').toLowerCase();
+    const suspended = ['suspend', 'inact', 'sortant', 'blacklist'].some(v => employeeStatus.includes(v));
     if (p.photo) {
       if (headerPhoto) headerPhoto.innerHTML = `<img src="${escapeHtml(p.photo)}" alt="Photo ${escapeHtml(p.prenom || '')} ${escapeHtml(p.nom || '')}">`;
     } else {
@@ -2479,8 +2551,11 @@
     document.getElementById('userSite').textContent = suspended ? 'Situation : suspendu' : 'Compte employé';
     if (headerCode) {
       headerCode.textContent = code;
-      headerCode.classList.toggle('suspended', suspended);
-      headerCode.title = suspended ? 'Employé suspendu' : 'Code employé validé';
+      headerCode.title = 'Code employé';
+    }
+    if (headerStatus) {
+      headerStatus.textContent = suspended ? 'INACTIF' : 'ACTIF';
+      headerStatus.classList.toggle('inactive', suspended);
     }
     if (verifiedLight) {
       verifiedLight.classList.toggle('on', p.verified === true);
@@ -2510,6 +2585,7 @@
   }
 
   function switchTab(name) {
+    if (name !== 'home') stopEmployeeQr();
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + name).classList.add('active');
@@ -2537,9 +2613,72 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function stopEmployeeQr() {
+    clearTimeout(employeeQrRefreshTimer);
+    clearInterval(employeeQrCountdownTimer);
+    employeeQrRefreshTimer = null;
+    employeeQrCountdownTimer = null;
+  }
+
+  function updateEmployeeQrCountdown() {
+    const remaining = Math.max(0, employeeQrExpiresAt - Date.now());
+    const seconds = Math.max(0, Math.ceil(remaining / 1000));
+    const secondsEl = document.getElementById('employeeQrSeconds');
+    const progressEl = document.getElementById('employeeQrProgress');
+    if (secondsEl) secondsEl.textContent = seconds + ' s';
+    if (progressEl) progressEl.style.width = Math.min(100, remaining / 100) + '%';
+  }
+
+  async function refreshEmployeeQr() {
+    if (!currentUser || !document.getElementById('tab-home')?.classList.contains('active')) return;
+    const target = document.getElementById('employeeQrCode');
+    const statusEl = document.getElementById('employeeQrStatus');
+    if (!target) return;
+    try {
+      const response = await fetch(location.origin + '/api/portal/attendance-qr', {
+        cache: 'no-store',
+        headers: portalAuthHeaders()
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'QR indisponible');
+      if (!window.QRCode) {
+        employeeQrRefreshTimer = setTimeout(refreshEmployeeQr, 300);
+        return;
+      }
+      target.innerHTML = '';
+      new QRCode(target, {
+        text: data.token,
+        width: 204,
+        height: 204,
+        colorDark: '#062f5d',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+      employeeQrExpiresAt = Number(data.expires_at || 0) * 1000;
+      if (!employeeQrExpiresAt) employeeQrExpiresAt = Date.now() + 10000;
+      if (statusEl) statusEl.textContent = 'QR personnel · signé · utilisable une seule fois';
+      clearInterval(employeeQrCountdownTimer);
+      employeeQrCountdownTimer = setInterval(updateEmployeeQrCountdown, 250);
+      updateEmployeeQrCountdown();
+      clearTimeout(employeeQrRefreshTimer);
+      employeeQrRefreshTimer = setTimeout(refreshEmployeeQr, Math.max(500, employeeQrExpiresAt - Date.now()));
+    } catch (error) {
+      target.innerHTML = '<div class="qr-loading" style="color:#dc2626">' + escapeHtml(error.message || 'QR indisponible') + '</div>';
+      if (statusEl) statusEl.textContent = 'Nouvelle tentative dans quelques secondes…';
+      clearTimeout(employeeQrRefreshTimer);
+      employeeQrRefreshTimer = setTimeout(refreshEmployeeQr, 4000);
+    }
+  }
+
+  function startEmployeeQr() {
+    stopEmployeeQr();
+    refreshEmployeeQr();
+  }
+
   async function renderHomeTab() {
     const body = document.getElementById('homeHistBody');
     if (!body) return;
+    startEmployeeQr();
     body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#94a3b8;font-size:.8rem">Chargement...</td></tr>';
     try {
       const rows = await loadPortalPointages();

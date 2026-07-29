@@ -35759,6 +35759,7 @@ function fpqOpenDailyCodeModal(code){
 
 function renderPointage(view,sub,arg,_skipEnsure){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
+  if(sub!=="auto"&&typeof ptEmployeeQrStop==="function")ptEmployeeQrStop();
   // Détecte une arrivée fraîche sur cet onglet pointage (route différente de la dernière
   // vue rendue) : sert à déclencher un rechargement instantané, non throttlé, des données
   // superviseur au clic sur "Feuille quotidienne" au lieu d'attendre la boucle de fond.
@@ -35808,6 +35809,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
   else if(sub==="legende")body=renderPointageLegende();
   else if(sub==="archives")body=renderPointageArchives();
   else body=isDrh?renderPointageSaisieAuto():renderPointageSaisie();
+  if(["auto","saisie"].includes(sub))body=ptEmployeeQrScanCard()+body;
   view.innerHTML=head+body;
 }
 function renderPointageSaisie(){
@@ -35938,6 +35940,77 @@ function renderPointageSaisieAuto(){
   const title=supervisorActive?"Pointage mensuel":"Saisie automatique";
   return filterBar+`<div class="card p-2"><div class="text-sm font-semibold mb-2 px-2">${title} — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
     <div style="overflow-x:auto;max-width:100%;pointer-events:none;user-select:none">${tableHTML}</div></div>`;
+}
+function ptEmployeeQrScanCard(){
+  return`<div class="card p-4 mb-4" style="border:1px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#fff)">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div><div class="text-xs font-black uppercase tracking-widest" style="color:#0d6ecc">Pointage terrain</div><h3 class="font-black text-lg">Scanner le QR d’un employé</h3><p class="text-xs text-slate-500">Le scan alimente immédiatement la saisie automatique DRH et OPS.</p></div>
+      <button class="btn btn-primary" id="pt-employee-qr-open" onclick="ptEmployeeQrStart()">📷 Ouvrir le scanner</button>
+    </div>
+    <div id="pt-employee-qr-reader" style="display:none;max-width:420px;margin:16px auto 0;border-radius:14px;overflow:hidden"></div>
+    <div id="pt-employee-qr-result" class="text-sm text-center mt-3"></div>
+  </div>`;
+}
+let _ptEmployeeQrScanner=null;
+let _ptEmployeeQrBusy=false;
+async function ptEmployeeQrStart(){
+  const reader=document.getElementById("pt-employee-qr-reader");
+  const button=document.getElementById("pt-employee-qr-open");
+  const result=document.getElementById("pt-employee-qr-result");
+  if(!reader)return;
+  if(result)result.textContent="";
+  try{
+    if(window.sgdiLoadHtml5QR)await window.sgdiLoadHtml5QR();
+    if(!window.Html5Qrcode)throw new Error("Scanner QR indisponible");
+    await ptEmployeeQrStop();
+    reader.style.display="block";
+    if(button){button.textContent="✕ Fermer le scanner";button.onclick=ptEmployeeQrStop;}
+    _ptEmployeeQrScanner=new Html5Qrcode("pt-employee-qr-reader");
+    await _ptEmployeeQrScanner.start(
+      {facingMode:"environment"},
+      {fps:12,qrbox:{width:250,height:250},aspectRatio:1},
+      decoded=>ptEmployeeQrSubmit(decoded),
+      ()=>{}
+    );
+  }catch(e){
+    if(result){result.textContent=e.message||"Impossible d’ouvrir la caméra";result.style.color="#dc2626";}
+    if(button){button.textContent="📷 Ouvrir le scanner";button.onclick=ptEmployeeQrStart;}
+  }
+}
+async function ptEmployeeQrStop(){
+  const scanner=_ptEmployeeQrScanner;
+  _ptEmployeeQrScanner=null;
+  if(scanner){try{await scanner.stop()}catch(e){}try{await scanner.clear()}catch(e){}}
+  const reader=document.getElementById("pt-employee-qr-reader");
+  const button=document.getElementById("pt-employee-qr-open");
+  if(reader){reader.style.display="none";reader.innerHTML="";}
+  if(button){button.textContent="📷 Ouvrir le scanner";button.onclick=ptEmployeeQrStart;}
+}
+async function ptEmployeeQrSubmit(token){
+  if(_ptEmployeeQrBusy)return;
+  _ptEmployeeQrBusy=true;
+  const result=document.getElementById("pt-employee-qr-result");
+  try{
+    const response=await fetch("/api/portal/attendance-qr/scan",{
+      method:"POST",
+      headers:{"Content-Type":"application/json",Authorization:`Bearer ${sgdiAuthToken()}`},
+      body:JSON.stringify({token})
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.detail||"Pointage refusé");
+    await ptEmployeeQrStop();
+    const employee=data.employee||{};
+    const name=[employee.nom,employee.prenom].filter(Boolean).join(" ");
+    const action=data.action==="depart"?"DÉPART":"ARRIVÉE";
+    if(result){result.innerHTML=`<div style="padding:12px;border-radius:10px;background:#dcfce7;color:#166534;font-weight:800">✓ ${escapeHTML(name)} · ${action} ${escapeHTML(data.heure||"")}</div>`;}
+    toast(`${name} · ${action} enregistré`,"success");
+    await sgdiPullState({silent:true,force:true}).catch(()=>null);
+    setTimeout(()=>renderView(),900);
+  }catch(e){
+    if(result){result.textContent=e.message||"QR invalide";result.style.color="#dc2626";}
+  }finally{
+    setTimeout(()=>{_ptEmployeeQrBusy=false},1200);
+  }
 }
 let _ptAutoSaisieRefreshing=false;
 async function ptAutoSaisieRefresh(){

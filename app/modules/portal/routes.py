@@ -1,5 +1,6 @@
 import math
 import re
+import secrets
 import unicodedata
 from datetime import datetime, timezone
 from typing import Any
@@ -23,6 +24,7 @@ from app.modules.ops.models import Assignment, DailyPresence, Site
 router = APIRouter()
 
 PORTAL_TOKEN_TTL = 60 * 24  # 24 heures
+ATTENDANCE_QR_TTL_SECONDS = 10
 
 
 def _ip(request: Request) -> str:
@@ -55,6 +57,18 @@ def _require_portal_token(matricule: str, authorization: str | None = Header(def
     if payload.get("sub") != matricule:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé")
     return matricule
+
+
+def _portal_identity(authorization: str | None) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token portail requis")
+    try:
+        payload = decode_token(authorization.removeprefix("Bearer "))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token portail invalide")
+    if not payload.get("portal") or not payload.get("sub"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token non autorisé pour le portail")
+    return str(payload["sub"])
 
 
 def _clean_text(value: Any) -> str:
@@ -488,6 +502,153 @@ def create_pointage_qr(payload: dict[str, Any], db: Session = Depends(get_db), a
     }
 
 
+@router.get("/attendance-qr")
+def create_employee_attendance_qr(
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Issue a signed, single-use employee QR valid for ten seconds."""
+    matricule = _portal_identity(authorization)
+    employee = employee_by_ref(db, matricule)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    status_value = str(employee.status or "").strip().casefold()
+    if status_value and any(word in status_value for word in ("suspend", "inact", "sortant", "blacklist")):
+        raise HTTPException(status_code=403, detail="Le compte de cet employé n'est pas actif")
+    now = datetime.now(timezone.utc)
+    nonce = secrets.token_urlsafe(12)
+    token = create_access_token(
+        subject=employee.code,
+        claims={
+            "attendance_qr": True,
+            "employee_id": employee.id,
+            "nonce": nonce,
+            "iat": int(now.timestamp()),
+        },
+        ttl_seconds=ATTENDANCE_QR_TTL_SECONDS,
+    )
+    return {
+        "token": token,
+        "expires_in": ATTENDANCE_QR_TTL_SECONDS,
+        "expires_at": int(now.timestamp()) + ATTENDANCE_QR_TTL_SECONDS,
+    }
+
+
+@router.post("/attendance-qr/scan", status_code=status.HTTP_201_CREATED)
+def scan_employee_attendance_qr(
+    payload: dict[str, Any],
+    db: Session = Depends(get_db),
+    scanner: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Validate a supervisor scan and write it directly to the shared attendance sheet."""
+    token = _clean_text(payload.get("token"))
+    if not token:
+        raise HTTPException(status_code=400, detail="QR obligatoire")
+    try:
+        qr = decode_token(token)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="QR expiré ou invalide")
+    if not qr.get("attendance_qr") or not qr.get("nonce"):
+        raise HTTPException(status_code=400, detail="Ce QR n'est pas un QR de pointage employé")
+
+    nonce = str(qr["nonce"])
+    used = next(
+        (
+            row for row in service.list_items(db, "attendanceQrScans")
+            if isinstance(row, dict) and row.get("nonce") == nonce
+        ),
+        None,
+    )
+    if used:
+        raise HTTPException(status_code=409, detail="Ce QR a déjà été utilisé")
+
+    employee = employee_by_ref(db, str(qr.get("sub") or ""))
+    if not employee or int(qr.get("employee_id") or 0) != employee.id:
+        raise HTTPException(status_code=404, detail="Employé introuvable")
+    status_value = str(employee.status or "").strip().casefold()
+    if status_value and any(word in status_value for word in ("suspend", "inact", "sortant", "blacklist")):
+        raise HTTPException(status_code=403, detail="Pointage refusé : employé inactif")
+
+    tz = ZoneInfo("Africa/Algiers")
+    now = datetime.now(tz)
+    today_str = now.strftime("%Y-%m-%d")
+    heure = now.strftime("%H:%M:%S")
+    existing = db.execute(
+        select(DailyPresence).where(
+            DailyPresence.presence_date == now.date(),
+            DailyPresence.employee_id == employee.id,
+        ).order_by(DailyPresence.id.desc())
+    ).scalars().first()
+    legacy = ((existing.data or {}).get("_legacy") if existing and isinstance(existing.data, dict) else {}) or {}
+    has_arrival = bool(existing and (existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee")))
+    has_departure = bool(existing and (existing.departure_time or legacy.get("scanDepart") or legacy.get("heureDepart")))
+    action = "depart" if has_arrival and not has_departure else "arrivee"
+    if has_departure:
+        raise HTTPException(status_code=409, detail="Arrivée et départ déjà enregistrés aujourd'hui")
+
+    assignment = db.execute(
+        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
+    ).scalars().first()
+    site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
+    site_name = (site.name or site.indicatif or "") if site else ""
+    item: dict[str, Any] = {
+        "date": today_str,
+        "agentId": str(employee.id),
+        "employee_id": employee.id,
+        "agentBackendId": employee.id,
+        "matricule": employee.code,
+        "societe": employee.society or "",
+        "agentName": " ".join([employee.last_name or "", employee.first_name or ""]).strip(),
+        "statut": "present",
+        "status": "present",
+        "code": "P",
+        "valide": True,
+        "valideAt": now.isoformat(),
+        "source": "portail-rh-employee-qr",
+        "scannedBy": scanner.username,
+        "scannedByUserId": scanner.id,
+    }
+    if action == "arrivee":
+        item["heureArrivee"] = "P"
+        item["scanArrivee"] = heure
+    else:
+        item["heureDepart"] = heure
+        item["scanDepart"] = heure
+    if assignment:
+        item.update({
+            "siteBackendId": assignment.site_id,
+            "siteId": assignment.site_id,
+            "siteName": site_name,
+            "groupe": assignment.group_code or "",
+        })
+    result = upsert_presence(db, item, "feuillePresence")
+    service.create_item(db, "attendanceQrScans", {
+        "id": nonce,
+        "nonce": nonce,
+        "employeeId": employee.id,
+        "matricule": employee.code,
+        "action": action,
+        "scannedAt": now.isoformat(),
+        "scannedBy": scanner.username,
+        "scannedByUserId": scanner.id,
+    })
+    db.commit()
+    return {
+        "success": True,
+        "action": action,
+        "heure": heure,
+        "date": today_str,
+        "site": site_name,
+        "employee": {
+            "id": employee.id,
+            "matricule": employee.code,
+            "nom": employee.last_name,
+            "prenom": employee.first_name,
+        },
+        "record": result,
+    }
+
+
 @router.get("/pointages/{matricule}")
 def list_pointages_personnel(matricule: str, db: Session = Depends(get_db), _: str = Depends(_require_portal_token)) -> dict[str, Any]:
     key = _clean_text(matricule).lower()
@@ -507,12 +668,24 @@ def list_pointages_personnel(matricule: str, db: Session = Depends(get_db), _: s
         for row in daily_rows:
             legacy = ((row.data or {}).get("_legacy") if isinstance(row.data, dict) else {}) or {}
             if row.arrival_time == "P" or legacy.get("code") == "P" or legacy.get("scanArrivee"):
+                arrival = _clean_text(legacy.get("scanArrivee"))
                 rows.append({
                     "id": f"qr-{row.id}",
                     "date": row.presence_date.isoformat(),
-                    "createdAt": f"{row.presence_date.isoformat()}T{legacy.get('scanArrivee') or '00:00'}:00",
-                    "heure": legacy.get("scanArrivee") or "",
-                    "action": "presence",
+                    "createdAt": f"{row.presence_date.isoformat()}T{arrival or '00:00:00'}",
+                    "heure": arrival,
+                    "action": "arrivee",
+                    "site": legacy.get("siteName") or "",
+                    "source": "qr",
+                })
+            departure = _clean_text(legacy.get("scanDepart") or row.departure_time)
+            if departure:
+                rows.append({
+                    "id": f"qr-depart-{row.id}",
+                    "date": row.presence_date.isoformat(),
+                    "createdAt": f"{row.presence_date.isoformat()}T{departure}",
+                    "heure": departure,
+                    "action": "depart",
                     "site": legacy.get("siteName") or "",
                     "source": "qr",
                 })
@@ -683,6 +856,7 @@ def portal_login(payload: dict[str, Any], request: Request, db: Session = Depend
         "poste": _agent_field(agent, "fonction", "poste") if agent else "",
         "departement": _agent_field(agent, "departement", "service") if agent else "",
         "dateNaissance": _agent_field(agent, "dateNaissance", "birth_date", "birthDate") if agent else "",
+        "photo": _agent_field(agent, "photo", "photoUrl", "photoData", "photo_url") if agent else "",
     }
     return {"portal_token": portal_token, "employee": employee}
 

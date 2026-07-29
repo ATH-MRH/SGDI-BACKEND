@@ -42,8 +42,16 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def create_access_token(subject: str, claims: dict[str, Any] | None = None, ttl_minutes: int | None = None) -> str:
-    expires = datetime.now(timezone.utc) + timedelta(minutes=ttl_minutes if ttl_minutes is not None else settings.jwt_expires_minutes)
+def create_access_token(
+    subject: str,
+    claims: dict[str, Any] | None = None,
+    ttl_minutes: int | None = None,
+    ttl_seconds: int | None = None,
+) -> str:
+    ttl = timedelta(seconds=ttl_seconds) if ttl_seconds is not None else timedelta(
+        minutes=ttl_minutes if ttl_minutes is not None else settings.jwt_expires_minutes
+    )
+    expires = datetime.now(timezone.utc) + ttl
     header = {"typ": "JWT", "alg": "HS256"}
     payload = {"sub": subject, "exp": int(expires.timestamp()), **(claims or {})}
     head = _b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
