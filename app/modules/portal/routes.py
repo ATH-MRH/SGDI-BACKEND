@@ -20,6 +20,7 @@ from app.modules.drh.models import Employee
 from app.modules.irongs import service
 from app.modules.irongs.sql_bridge import employee_by_ref, upsert_presence
 from app.modules.ops.models import Assignment, DailyPresence, Site
+from app.modules.ops.routes import _allowed_assignment_site_ids
 
 
 router = APIRouter()
@@ -590,7 +591,14 @@ def create_employee_attendance_qr(
     }
 
 
-def _register_attendance(db: Session, employee: Any, scanner: User, nonce: str, source: str) -> dict[str, Any]:
+def _register_attendance(
+    db: Session,
+    employee: Any,
+    scanner: User,
+    nonce: str,
+    source: str,
+    observation: str = "",
+) -> dict[str, Any]:
     """Logique de pointage partagée entre le scan QR et la saisie manuelle (employé sans
     smartphone) : bascule arrivée/départ, écrit la feuille de présence partagée, construit
     la réponse affichée au pointeur. `nonce` identifie l'événement dans attendanceQrScans
@@ -603,6 +611,7 @@ def _register_attendance(db: Session, employee: Any, scanner: User, nonce: str, 
     now = datetime.now(tz)
     scan_date_str = now.strftime("%Y-%m-%d")
     heure = now.strftime("%H:%M:%S")
+    observation = _clean_text(observation)[:500]
     employee_scans = sorted(
         (
             row for row in service.list_items(db, "attendanceQrScans")
@@ -644,6 +653,12 @@ def _register_attendance(db: Session, employee: Any, scanner: User, nonce: str, 
         ).order_by(DailyPresence.id.desc())
     ).scalars().first()
     legacy = ((existing.data or {}).get("_legacy") if existing and isinstance(existing.data, dict) else {}) or {}
+    existing_notes = _clean_text((existing.notes if existing else "") or legacy.get("observations"))
+    observation_line = (
+        f"[{heure} · {scanner.username} · {'DÉPART' if action == 'depart' else 'ARRIVÉE'}] {observation}"
+        if observation
+        else ""
+    )
     # Compatibilité avec les pointages créés avant l'historique multi-cycles.
     if not employee_scans and existing:
         has_arrival = bool(existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee"))
@@ -680,9 +695,12 @@ def _register_attendance(db: Session, employee: Any, scanner: User, nonce: str, 
                 "scannedAt": now.isoformat(),
                 "scannedBy": scanner.username,
                 "cycle": cycle_number,
+                **({"observation": observation} if observation else {}),
             },
         ],
     }
+    if observation_line:
+        item["observations"] = "\n".join(part for part in (existing_notes, observation_line) if part)
     if action == "arrivee":
         if not existing or not existing.arrival_time:
             item["heureArrivee"] = "P"
@@ -704,12 +722,15 @@ def _register_attendance(db: Session, employee: Any, scanner: User, nonce: str, 
         "nonce": nonce,
         "employeeId": employee.id,
         "matricule": employee.code,
+        "agentName": item["agentName"],
         "action": action,
         "cycle": cycle_number,
         "scannedAt": now.isoformat(),
         "site": site_name,
+        "siteId": assignment.site_id if assignment else None,
         "scannedBy": scanner.username,
         "scannedByUserId": scanner.id,
+        **({"observation": observation} if observation else {}),
     })
     db.commit()
     employee_extra = employee.extra if isinstance(employee.extra, dict) else {}
@@ -729,6 +750,7 @@ def _register_attendance(db: Session, employee: Any, scanner: User, nonce: str, 
         "heure": heure,
         "date": scan_date_str,
         "site": site_name,
+        "observation": observation,
         "employee": {
             "id": employee.id,
             "matricule": employee.code,
@@ -776,6 +798,45 @@ def scan_employee_attendance_qr(
     if not employee or int(qr.get("employee_id") or 0) != employee.id:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-qr")
+
+
+@router.get("/attendance-feed")
+def attendance_feed(
+    since: str | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[dict[str, Any]]:
+    """Flux des derniers pointages (arrivée/départ), pour l'écran de supervision temps réel
+    (interrogé par polling toutes les quelques secondes). Filtré selon le même périmètre
+    sites/société qu'un superviseur OPS (_allowed_assignment_site_ids) : un compte restreint
+    à certains sites ne voit que leurs pointages, pas ceux de toute l'entreprise."""
+    limit = max(1, min(limit, 200))
+    allowed_site_ids = _allowed_assignment_site_ids(db, user)
+    rows = [row for row in service.list_items(db, "attendanceQrScans") if isinstance(row, dict)]
+    if allowed_site_ids is not None:
+        allowed = set(allowed_site_ids)
+        rows = [row for row in rows if row.get("siteId") in allowed]
+    since_value = _clean_text(since)
+    if since_value:
+        rows = [row for row in rows if _clean_text(row.get("scannedAt")) > since_value]
+    rows.sort(key=lambda row: _clean_text(row.get("scannedAt")), reverse=True)
+    return [
+        {
+            "id": row.get("id"),
+            "employee_id": row.get("employeeId"),
+            "matricule": row.get("matricule") or "",
+            "nom": row.get("agentName") or "",
+            "action": row.get("action") or "arrivee",
+            "cycle": row.get("cycle") or 1,
+            "site": row.get("site") or "",
+            "site_id": row.get("siteId"),
+            "scanned_at": row.get("scannedAt") or "",
+            "scanned_by": row.get("scannedBy") or "",
+            "observation": row.get("observation") or "",
+        }
+        for row in rows[:limit]
+    ]
 
 
 def _employee_search_result(db: Session, employee: Employee) -> dict[str, Any]:
@@ -850,7 +911,14 @@ def manual_employee_attendance_scan(
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     nonce = f"manual-{secrets.token_urlsafe(12)}"
-    return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-manuel")
+    return _register_attendance(
+        db,
+        employee,
+        scanner,
+        nonce,
+        "portail-rh-employee-manuel",
+        _clean_text(payload.get("observation")),
+    )
 
 
 @router.get("/pointages/{matricule}")
