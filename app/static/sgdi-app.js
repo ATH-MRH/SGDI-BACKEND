@@ -35794,6 +35794,7 @@ function fpqOpenDailyCodeModal(code){
 function renderPointage(view,sub,arg,_skipEnsure){
   if(!canAccess("pointage")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="auto"&&typeof ptEmployeeQrStop==="function")ptEmployeeQrStop();
+  if(sub!=="auto")ptAutoSaisieStopLiveRefresh();
   if(sub!=="planning")ptPlanningStopMonitor();
   // Détecte une arrivée fraîche sur cet onglet pointage (route différente de la dernière
   // vue rendue) : sert à déclencher un rechargement instantané, non throttlé, des données
@@ -35847,6 +35848,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
   else body=isDrh?renderPointageSaisieAuto():renderPointageSaisie();
   if(["auto","saisie"].includes(sub))body=ptEmployeeQrScanCard()+body;
   view.innerHTML=head+body;
+  if(sub==="auto")setTimeout(ptAutoSaisieStartLiveRefresh,100);
 }
 let _ptPlanningMonitor=null;
 let _ptPlanningRefreshing=false;
@@ -36164,7 +36166,7 @@ function renderPointageSaisieAuto(){
       <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
     </div>
   </div>
-  <div class="text-[11px] mt-2 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — ${supervisorActive?"Pointage mensuel actualisé automatiquement par la Feuille quotidienne.":"Reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne."}</div>
+  <div class="text-[11px] mt-2 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — ${supervisorActive?"Pointage mensuel actualisé automatiquement par la Feuille quotidienne.":"Synchronisation automatique toutes les 10 secondes · reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne."}</div>
   </div>`;
   const filtered=ptFilterAgents(ag);
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
@@ -36280,13 +36282,34 @@ async function ptEmployeeQrSubmit(token){
   }
 }
 let _ptAutoSaisieRefreshing=false;
+let _ptAutoSaisieLiveTimer=null;
+function ptAutoSaisieStopLiveRefresh(){
+  if(_ptAutoSaisieLiveTimer){clearInterval(_ptAutoSaisieLiveTimer);_ptAutoSaisieLiveTimer=null}
+}
+async function ptAutoSaisieLiveRefresh(){
+  if(_ptAutoSaisieRefreshing||document.hidden||sgdiDirty||document.querySelector(".modal-bg"))return;
+  const route=String(location.hash||"");
+  if(!route.includes("pointage/auto")){ptAutoSaisieStopLiveRefresh();return}
+  _ptAutoSaisieRefreshing=true;
+  try{
+    const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
+    const data=Array.isArray(res)?res:(res?.data||[]);
+    if(Array.isArray(data))db.feuillePresence=data;
+    const scrollY=window.scrollY;
+    renderView();
+    requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+  }catch(e){}finally{_ptAutoSaisieRefreshing=false}
+}
+function ptAutoSaisieStartLiveRefresh(){
+  ptAutoSaisieStopLiveRefresh();
+  _ptAutoSaisieLiveTimer=setInterval(ptAutoSaisieLiveRefresh,10000);
+}
 async function ptAutoSaisieRefresh(){
   if(_ptAutoSaisieRefreshing)return;
   _ptAutoSaisieRefreshing=true;
   const btn=document.getElementById("pt-auto-refresh-btn");
   if(btn){btn.disabled=true;btn.textContent="…";}
   try{
-    await sgdiPullEmployees({silent:true,society:ptCurrentSoc()}).catch(()=>null);
     const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
