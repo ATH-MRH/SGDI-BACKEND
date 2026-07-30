@@ -56,7 +56,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .scan-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid #eef2f7}.scan-row:last-child{border:0}.scan-name{font-size:13px;font-weight:850}.scan-meta{font-size:11px;color:var(--muted);margin-top:2px}
 .scan-times{display:flex;gap:6px;flex-shrink:0}.scan-time-pill{font-size:10px;font-weight:900;border-radius:999px;padding:5px 8px;white-space:nowrap;background:#eef2f7;color:#94a3b8}.scan-time-pill.set.arrivee{background:#dcfce7;color:#166534}.scan-time-pill.set.depart{background:#fee2e2;color:#7f1d1d}
 .empty{text-align:center;color:#94a3b8;padding:24px;font-size:13px}
-.manual-panel{margin-top:14px;border-top:1px dashed var(--line);padding-top:14px}
+.manual-panel{margin:0;padding:0}.manual-heading{text-align:center;font-size:22px;font-weight:950;padding:12px 0 10px;border-bottom:1px dashed var(--line);margin-bottom:20px}
 .manual-results{margin-top:10px;max-height:280px;overflow:auto}
 .manual-result-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 13px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:#fff;cursor:pointer}
 .manual-result-row:active{background:#eef4fb}
@@ -65,8 +65,15 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .pointer-btn{display:block;width:154px;height:154px;border-radius:50%;margin:20px auto 8px;border:0;background:linear-gradient(135deg,var(--green),#0f7a3a);color:#fff;font-size:19px;font-weight:950;letter-spacing:.04em;box-shadow:0 14px 34px rgba(22,163,74,.35);cursor:pointer}
 .pointer-btn:active{transform:scale(.97)}.pointer-btn:disabled{opacity:.6}
 .manual-back{width:100%;border:0;background:none;color:var(--muted);font-weight:800;padding:8px;cursor:pointer;font-size:13px}
+.scanner-card.manual-mode{min-height:calc(100vh - 145px)}
+.scanner-card.manual-mode>.scanner-title,.scanner-card.manual-mode>.scanner-hint,.scanner-card.manual-mode>#usbReader,.scanner-card.manual-mode>#reader,.scanner-card.manual-mode>#restartBtn,.scanner-card.manual-mode>.action-row,.scanner-card.manual-mode>.generate-qr-btn,.scanner-card.manual-mode>#result{display:none!important}
+.scanner-card.manual-mode #manualSearchStep{max-width:620px;margin:55px auto 0}
+.scanner-card.manual-mode #manualCardStep{padding-top:0;text-align:center}
+.scanner-card.manual-mode .employee-photo,.scanner-card.manual-mode .employee-photo-fallback{width:240px;height:240px;border-radius:30px;font-size:64px}
+.scanner-card.manual-mode .result-name{font-size:28px;margin-top:22px}.scanner-card.manual-mode .result-meta{font-size:14px;font-weight:850}.scanner-card.manual-mode .result-company{font-size:13px;text-transform:uppercase}
+.scanner-card.manual-mode .pointer-btn{width:164px;height:164px;margin-top:20px}.scanner-card.manual-mode .manual-back{width:auto;margin:4px auto 0;display:block}
 .generate-qr-btn{width:60%;min-width:250px;margin-top:11px}
-@media(min-width:760px){.work-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.history{margin-top:0;min-height:538px}.result-name{font-size:25px}.scan-row{padding:15px}}
+@media(min-width:760px){.work-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch}.history{margin-top:0;min-height:calc(100vh - 145px)}.result-name{font-size:25px}.scan-row{padding:15px}}
 @media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.main{padding:16px}.status{margin:0 auto 13px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 </style>
@@ -98,7 +105,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     <div class="status"><span class="dot"></span> SCANNER ACTIF</div>
     <input id="wedgeInput" class="wedge-input" autocomplete="off" aria-label="Lecteur QR USB">
     <div class="work-grid">
-      <section class="scanner-card">
+      <section id="scannerCard" class="scanner-card">
         <div class="scanner-title" id="scannerTitle">Scannez le QR employé</div>
         <p class="scanner-hint" id="scannerHint">La validation est automatique.</p>
         <div id="usbReader" class="usb-reader hidden">
@@ -117,6 +124,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         <button id="generateQrBtn" class="secondary generate-qr-btn">GÉNÉRER CODE QR</button>
         <div id="result" class="result"></div>
         <div id="manualPanel" class="manual-panel hidden">
+          <div class="manual-heading">SAISIE MANUELLE</div>
           <div id="manualSearchStep">
             <label for="manualQuery">Code ou nom / prénom de l'employé</label>
             <input id="manualQuery" autocomplete="off" placeholder="Ex. PTG04 ou Belkacem" oninput="onManualQueryInput()">
@@ -321,7 +329,7 @@ function toggleManualPanel(){
   const panel=document.getElementById("manualPanel");
   if(panel.classList.contains("hidden")){
     panel.classList.remove("hidden");
-    document.getElementById("manualToggleBtn").textContent="✕ FERMER LA SAISIE MANUELLE";
+    document.getElementById("scannerCard").classList.add("manual-mode");
     resetManualPanel();
     document.getElementById("manualQuery").focus({preventScroll:true});
   }else{
@@ -330,6 +338,7 @@ function toggleManualPanel(){
 }
 function closeManualPanel(){
   document.getElementById("manualPanel").classList.add("hidden");
+  document.getElementById("scannerCard").classList.remove("manual-mode");
   document.getElementById("manualToggleBtn").textContent="🔤 SAISIE MANUELLE (SANS SMARTPHONE)";
 }
 function resetManualPanel(){
