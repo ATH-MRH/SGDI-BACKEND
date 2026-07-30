@@ -64,6 +64,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .manual-empty{text-align:center;color:#94a3b8;font-size:12px;padding:14px}
 .pointer-btn{display:block;width:154px;height:154px;border-radius:50%;margin:20px auto 8px;border:0;background:linear-gradient(135deg,var(--green),#0f7a3a);color:#fff;font-size:19px;font-weight:950;letter-spacing:.04em;box-shadow:0 14px 34px rgba(22,163,74,.35);cursor:pointer}
 .pointer-btn:active{transform:scale(.97)}.pointer-btn:disabled{opacity:.6}
+.manual-feedback{display:none;max-width:520px;margin:14px auto 0;padding:11px 14px;border-radius:12px;font-size:13px;font-weight:850;text-align:center}.manual-feedback.show{display:block}.manual-feedback.success{background:#dcfce7;color:#166534;border:1px solid #86efac}.manual-feedback.error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
 .manual-back{width:100%;border:0;background:none;color:var(--muted);font-weight:800;padding:8px;cursor:pointer;font-size:13px}
 .scanner-card.manual-mode{min-height:calc(100vh - 145px)}
 .scanner-card.manual-mode>.scanner-title,.scanner-card.manual-mode>.scanner-hint,.scanner-card.manual-mode>#usbReader,.scanner-card.manual-mode>#reader,.scanner-card.manual-mode>#restartBtn,.scanner-card.manual-mode>.action-row,.scanner-card.manual-mode>.generate-qr-btn,.scanner-card.manual-mode>#result{display:none!important}
@@ -132,7 +133,8 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
           </div>
           <div id="manualCardStep" class="hidden">
             <div id="manualCard"></div>
-            <button id="manualPointerBtn" class="pointer-btn" onclick="confirmManualPointage()">POINTER</button>
+            <button id="manualPointerBtn" type="button" class="pointer-btn" onclick="confirmManualPointage()">POINTER</button>
+            <div id="manualFeedback" class="manual-feedback" role="status" aria-live="polite"></div>
             <button class="manual-back" onclick="resetManualPanel()">← Changer d'employé</button>
           </div>
         </div>
@@ -345,6 +347,8 @@ function resetManualPanel(){
   manualSelected=null;manualResults=[];
   document.getElementById("manualQuery").value="";
   document.getElementById("manualResults").innerHTML="";
+  const feedback=document.getElementById("manualFeedback");
+  feedback.textContent="";feedback.className="manual-feedback";
   document.getElementById("manualSearchStep").classList.remove("hidden");
   document.getElementById("manualCardStep").classList.add("hidden");
 }
@@ -381,17 +385,30 @@ async function confirmManualPointage(){
   if(!manualSelected||scanBusy)return;
   scanBusy=true;
   const button=document.getElementById("manualPointerBtn");
-  button.disabled=true;
+  const feedback=document.getElementById("manualFeedback");
+  button.disabled=true;button.textContent="POINTAGE…";
+  feedback.textContent="";feedback.className="manual-feedback";
   try{
-    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:manualSelected.id})});
+    const employeeRef=manualSelected.id||manualSelected.matricule;
+    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:employeeRef})});
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
     const entry=recordScanEntry(data);
     showResult(entry,"success");renderHistory();playTone(true);navigator.vibrate?.([80,40,80]);
-    closeManualPanel();
-  }catch(error){showResult({message:error.message||"Pointage impossible"},"error");playTone(false);navigator.vibrate?.(180)}
-  finally{scanBusy=false;button.disabled=false}
+    feedback.textContent=(entry.action==="depart"?"DÉPART":"ARRIVÉE")+" ENREGISTRÉE À "+entry.heure;
+    feedback.className="manual-feedback show success";
+    button.textContent="ENREGISTRÉ";
+    setTimeout(()=>{if(isManualPanelOpen())resetManualPanel()},1800);
+  }catch(error){
+    const message=error.message||"Pointage impossible";
+    feedback.textContent=message;feedback.className="manual-feedback show error";
+    showResult({message},"error");playTone(false);navigator.vibrate?.(180);
+    button.textContent="RÉESSAYER";
+  }finally{
+    scanBusy=false;
+    button.disabled=false;
+  }
 }
 function acceptUsbQr(value){
   const token=String(value||"").trim();qrKeyBuffer="";
