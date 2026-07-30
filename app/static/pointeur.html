@@ -42,6 +42,8 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 #reader video{object-fit:cover!important;border-radius:16px}
 .camera-msg{color:#fff;font-size:13px;text-align:center;padding:30px}
 .secondary{width:100%;border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:12px;font-weight:850;margin-top:11px}
+.action-row{display:flex;gap:10px}.action-row .secondary{margin-top:0}
+.idle-society{font-size:11px;font-weight:900;letter-spacing:.06em;opacity:.85;position:relative;margin-bottom:10px}
 .usb-reader{min-height:310px;border-radius:18px;background:linear-gradient(145deg,#031f3e,#07549a);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;position:relative;overflow:hidden}
 .usb-reader:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 30%,rgba(77,174,255,.3),transparent 48%);pointer-events:none}.usb-icon{font-size:72px;position:relative}.usb-title{font-size:24px;font-weight:950;margin-top:10px;position:relative}.usb-hint{font-size:14px;opacity:.8;max-width:440px;margin-top:7px;position:relative}.usb-ready{margin-top:20px;border:1px solid rgba(134,239,172,.55);background:rgba(22,163,74,.22);border-radius:999px;padding:9px 16px;font-size:12px;font-weight:900;position:relative}.wedge-input{position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;opacity:0}
 .result{display:none;margin-top:14px;border-radius:17px;padding:15px;border:1px solid}
@@ -99,6 +101,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         <div class="scanner-title" id="scannerTitle">Scannez le QR employé</div>
         <p class="scanner-hint" id="scannerHint">La validation est automatique.</p>
         <div id="usbReader" class="usb-reader hidden">
+          <div id="usbReaderSociety" class="idle-society hidden"></div>
           <div class="usb-icon">▣</div>
           <div class="usb-title">Présentez le QR à la douchette</div>
           <div class="usb-hint">Le lecteur USB est prêt. La fiche de l’employé apparaîtra automatiquement après la lecture.</div>
@@ -106,9 +109,11 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         </div>
         <div id="reader"><div class="camera-msg">Ouverture de la caméra arrière…</div></div>
         <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
-        <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">📷 UTILISER LA CAMÉRA</button>
+        <div class="action-row">
+          <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">📷 UTILISER LA CAMÉRA</button>
+          <button id="manualToggleBtn" class="secondary" onclick="toggleManualPanel()">🔤 SAISIE MANUELLE (SANS SMARTPHONE)</button>
+        </div>
         <div id="result" class="result"></div>
-        <button id="manualToggleBtn" class="secondary" onclick="toggleManualPanel()">🔤 SAISIE MANUELLE (SANS SMARTPHONE)</button>
         <div id="manualPanel" class="manual-panel hidden">
           <div id="manualSearchStep">
             <label for="manualQuery">Code ou nom / prénom de l'employé</label>
@@ -126,11 +131,15 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         <div class="history-head">
           <span>10 DERNIERS PASSAGES</span>
           <div class="history-head-right">
-            <select id="historySort" class="sort-select" onchange="renderHistory()">
+            <select id="historySortField" class="sort-select" onchange="renderHistory()">
               <option value="recent">Récent</option>
               <option value="nom">Nom</option>
               <option value="arrivee">Heure d'arrivée</option>
               <option value="depart">Heure de départ</option>
+            </select>
+            <select id="historySortOrder" class="sort-select" onchange="renderHistory()">
+              <option value="desc">Décroissant</option>
+              <option value="asc">Croissant</option>
             </select>
             <span id="scanCount">0</span>
           </div>
@@ -172,6 +181,10 @@ function enterApp(){
   document.getElementById("appView").classList.remove("hidden");
   const user=pointerSession?.user||{};
   document.getElementById("userLabel").textContent=(user.full_name||user.username||"Pointeur")+" · "+(user.username||"");
+  const societies=Array.isArray(user.authorized_societies)?user.authorized_societies.filter(Boolean):[];
+  const societyEl=document.getElementById("usbReaderSociety");
+  societyEl.textContent=societies.length?"SOCIÉTÉ : "+societies.join(" / ").toUpperCase():"";
+  societyEl.classList.toggle("hidden",!societies.length);
   requestAnimationFrame(setupScanMode);
 }
 async function logout(){
@@ -284,11 +297,14 @@ function showResult(data,type){
 }
 function sortedScans(){
   const list=sessionScans.slice();
-  const mode=document.getElementById("historySort")?.value||"recent";
-  if(mode==="nom")return list.sort((a,b)=>a.name.localeCompare(b.name,"fr"));
-  if(mode==="arrivee")return list.sort((a,b)=>(b.arrivee||"").localeCompare(a.arrivee||""));
-  if(mode==="depart")return list.sort((a,b)=>(b.depart||"").localeCompare(a.depart||""));
-  return list;
+  const mode=document.getElementById("historySortField")?.value||"recent";
+  const asc=(document.getElementById("historySortOrder")?.value||"desc")==="asc";
+  let sorted=list;
+  if(mode==="nom")sorted=list.sort((a,b)=>a.name.localeCompare(b.name,"fr"));
+  else if(mode==="arrivee")sorted=list.sort((a,b)=>(a.arrivee||"").localeCompare(b.arrivee||""));
+  else if(mode==="depart")sorted=list.sort((a,b)=>(a.depart||"").localeCompare(b.depart||""));
+  else return asc?list.slice().reverse():list;
+  return asc?sorted:sorted.reverse();
 }
 function renderHistory(){
   document.getElementById("scanCount").textContent=String(sessionScans.length);
