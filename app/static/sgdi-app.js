@@ -5088,8 +5088,6 @@ function moduleCountersRibbonHTML(){
     const absents=counterNumericValue(empCounters.absent);
     const susp=counterNumericValue(empCounters.suspended);
     const blacklist=counterNumericValue(empCounters.blacklisted);
-    const reserveCandidates=counterNumericValue(erpDrh.candidates_reserve);
-    const reserveTotal=Math.max(1,counterNumericValue(erpDrh.candidates_total));
     const missionEnCours=counterNumericValue(erpOps.missions_current);
     const missionTotal=Math.max(1,missionEnCours);
     const opsSiteCounter={label:"NBR SITE",value:counterNumericValue(erpOps.sites_active),color:"#043970",route:"sites/actifs",sub:"site(s)"};
@@ -6251,8 +6249,6 @@ function renderSidebar(){
 
     // Compteurs DRH
     const drhTotalAgents=srvEmp?.non_archived??srvEmp?.total??(drhAgents.filter(a=>!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase())).length);
-    const drhCandidatsActifs=srvDrh?.recrutement?.reserve??srv?.erp?.drh?.candidates_reserve??drhCandidates.filter(c=>candidatIsReserve(c)).length;
-    const drhRecrutementCandidats=srvDrh?.recrutement?.total??srv?.erp?.drh?.candidates_total??drhCandidates.length;
     const drhAContractualiser=drhCandidates.filter(candidateCanGoToContract).length;
     const drhIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,drhSoc)).length;
 
