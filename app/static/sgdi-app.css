@@ -1757,7 +1757,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   /* ----- CONTRACT SUMMARY CLEAN LAYOUT ----- */
   .contract-summary-panel{
     display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
     gap:10px;
     margin:0 0 16px;
     font-family:Arial,sans-serif;
@@ -1786,8 +1786,8 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   }
   .contract-summary-metrics{
     display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(72px,1fr));
-    gap:8px;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:6px;
     align-items:stretch;
   }
   .contract-metric{
