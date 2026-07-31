@@ -8498,6 +8498,7 @@ function candidatImportActionsHTML(mode="reserve"){
 }
 function candidateBulkDeleteMode(mode){
   if(mode!=="reserve"&&mode!=="new")return false;
+  if(mode==="new")return true;
   return sessionStorage.getItem("candidateBulkDeleteMode:"+mode)==="1"||sessionStorage.getItem("reserveBulkDeleteMode")==="1"&&mode==="reserve";
 }
 function setCandidateBulkDeleteMode(mode,v){sessionStorage.setItem("candidateBulkDeleteMode:"+mode,v?"1":"0");if(mode==="reserve")sessionStorage.setItem("reserveBulkDeleteMode",v?"1":"0");renderView()}
@@ -8511,7 +8512,7 @@ function reserveBulkSelectionCellHTML(c,mode){
 function reserveBulkDeleteBarHTML(mode,count){
   if(!candidateBulkDeleteMode(mode))return "";
   return `<div class="card p-3 mb-3 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border:1px solid #fed7aa">
-    <div class="text-sm text-slate-700"><b>Mode suppression activé.</b> Cochez uniquement les candidats à supprimer.</div>
+    <div class="text-sm text-slate-700"><b>${mode==="new"?"Sélection des candidatures.":"Mode suppression activé."}</b> Cochez uniquement les candidats à supprimer.</div>
     <div class="flex gap-2 items-center flex-wrap"><label class="btn btn-ghost text-xs flex items-center gap-2"><input type="checkbox" onchange="document.querySelectorAll('[data-reserve-delete-id]').forEach(x=>x.checked=this.checked)"/> Tout sélectionner (${count||0})</label><button type="button" class="btn btn-danger text-xs" onclick="deleteSelectedReserveCandidates()">Supprimer la sélection</button></div>
   </div>`;
 }
@@ -9021,7 +9022,7 @@ function candidateListRowHTML(c,mode){
     <td>${candidateAvisSelectHTML(c)}</td>
     <td class="text-xs">${archived?`${formatDate(c.archivedAt||c.updatedAt||c.createdAt)}<div class="text-[11px] text-slate-500">${escapeHTML(c.motifArchive||"—")}</div>`:formatDate(c.createdAt)}</td>
     <td>${archived?'<span class="pill pill-gray">Archivé</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
-    <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<a class="btn btn-ghost text-xs" href="#/${route}/${escapeHTML(c.id)}">Ouvrir →</a>`}</td>
+    <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<div class="flex items-center justify-end gap-1"><a class="btn btn-ghost text-xs" href="#/${route}/${escapeHTML(c.id)}">Ouvrir →</a>${mode==="new"?`<button type="button" class="btn btn-danger text-xs" onclick="deleteCandidat('${jsString(c.id)}')" title="Supprimer ce candidat">Supprimer</button>`:""}</div>`}</td>
   </tr>`;
 }
 function reserveFunctionPanelOpen(){return sessionStorage.getItem("reserveFunctionPanel")==="1"}
@@ -9094,7 +9095,7 @@ async function renderRecrutementServer(view,mode){
   const st=mode==="archive"?"Dossiers archivés depuis les nouvelles candidatures et les candidats en réserve.":mode==="reserve"?"Candidats validés, en attente de recrutement.":"Candidats à présélectionner pour la fiche de renseignement.";
   const socFilter=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||sessionStorage.getItem("dashSociete")||"";
   const page=recrutementCurrentPage(mode);
-  const pageSize=mode==="reserve"?15:25;
+  const pageSize=mode==="new"?500:mode==="reserve"?15:25;
   const addButton=mode==="reserve"?candidatImportActionsHTML("reserve"):(mode==="new"?candidatImportActionsHTML("new"):"");
   const alreadyRendered=!!(view.querySelector('[data-recruitment-view]'));
   if(!alreadyRendered){
@@ -9903,18 +9904,25 @@ async function deleteSelectedReserveCandidates(){
   if(!selected.length){toast("Cochez au moins un candidat à supprimer","error");return}
   if(!confirm(`Supprimer définitivement ${selected.length} candidat(s) sélectionné(s) ?`))return;
   let ok=0,failed=0;
-  for(const item of selected){
-    const c=findCandidatById(item.id)||(db.candidats||[]).find(x=>String(x.backendId||"")===String(item.backendId||""));
-    if(!c){failed++;continue}
-    try{
-      await deleteCandidateFromPostgres(c);
-      removeCandidatLocal(c,item.id||c.id);
-      ok++;
-    }catch(e){
-      const msg=String(e&&e.message||e||"");
-      if(/not found|introuvable|404/i.test(msg)){removeCandidatLocal(c,item.id||c.id);ok++}
-      else{failed++;console.warn("Suppression candidat sélectionné refusée",c,e)}
-    }
+  const targets=selected.map(item=>({
+    item,
+    candidate:findCandidatById(item.id)||(db.candidats||[]).find(x=>String(x.backendId||"")===String(item.backendId||""))
+  }));
+  const batchSize=12;
+  for(let i=0;i<targets.length;i+=batchSize){
+    const batch=targets.slice(i,i+batchSize);
+    const results=await Promise.allSettled(batch.map(async target=>{
+      const c=target.candidate;
+      if(!c)throw new Error("Candidat introuvable");
+      try{await deleteCandidateFromPostgres(c)}
+      catch(e){if(!sgdiIsNotFoundError(e))throw e}
+      removeCandidatLocal(c,target.item.id||c.id);
+      return c;
+    }));
+    results.forEach((result,index)=>{
+      if(result.status==="fulfilled")ok++;
+      else{failed++;console.warn("Suppression candidat sélectionné refusée",batch[index].candidate,result.reason)}
+    });
   }
   await sgdiPullState({silent:true,render:false,force:true,light:true}).catch(e=>console.warn("Rafraîchissement après suppression sélection réserve",e));
   toastCenter(`${ok} CANDIDAT(S) SUPPRIMÉ(S)${failed?` · ${failed} échec(s)`:""}`,failed?"error":"success");
