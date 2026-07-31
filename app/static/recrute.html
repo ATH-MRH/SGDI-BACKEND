@@ -77,12 +77,17 @@ tr:last-child td{border-bottom:0}
 .banner.error{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5}
 .banner a{color:inherit;font-weight:900;text-decoration:underline}
 .modal-backdrop{position:fixed;inset:0;background:rgba(4,20,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;z-index:50}
-.modal{width:100%;max-width:560px;background:#fff;border-radius:22px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.3)}
+.modal{width:100%;max-width:1040px;background:#fff;border-radius:22px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.3)}
 .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .modal-head h2{font-size:19px;margin:0}
 .modal-close{border:0;background:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1}
 .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
 .field-grid .full{grid-column:1/-1}
+.form-section{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:12px;background:#fbfdff}
+.form-section-title{font-size:14px;font-weight:950;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.form-section-sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+.photo-field{display:flex;align-items:center;gap:15px}.photo-preview{width:94px;height:110px;border:2px dashed #bfd1e3;border-radius:14px;object-fit:cover;background:#eef4f9;display:grid;place-items:center;color:#789;font-weight:900;overflow:hidden}.photo-preview img{width:100%;height:100%;object-fit:cover}
+.checkbox-row{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:750;color:#42566f}.checkbox-row input{width:auto;height:auto}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:center;text-align:center}}
 </style>
@@ -133,20 +138,37 @@ tr:last-child td{border-bottom:0}
 
 <div id="modalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeCandidateForm()">
   <div class="modal">
-    <div class="modal-head"><h2 id="modalTitle">Nouveau candidat</h2><button class="modal-close" onclick="closeCandidateForm()">✕</button></div>
+    <div class="modal-head"><div><h2 id="modalTitle">Fiche de renseignement candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">Renseignez l’identité, les coordonnées et le profil professionnel.</div></div><button class="modal-close" onclick="closeCandidateForm()">✕</button></div>
     <form id="candidateForm" onsubmit="event.preventDefault();submitCandidateForm()">
       <div class="field-grid">
-        <div><label for="fLastName">Nom</label><input id="fLastName" required></div>
-        <div><label for="fFirstName">Prénom</label><input id="fFirstName" required></div>
-        <div><label for="fPhone">Téléphone</label><input id="fPhone"></div>
-        <div><label for="fEmail">Email</label><input id="fEmail" type="email"></div>
-        <div class="full"><label for="fPosition">Poste souhaité</label><input id="fPosition"></div>
-        <div><label for="fSociety">Société</label><select id="fSociety"></select></div>
-        <div><label for="fSalary">Salaire prévu</label><input id="fSalary" type="number" min="0" step="1000"></div>
-        <div><label for="fAvis">Avis</label><select id="fAvis"><option value="">—</option><option value="Favorable">Favorable</option><option value="Défavorable">Défavorable</option><option value="Instance">Instance</option></select></div>
-        <div><label for="fAvisDate">Date avis</label><input id="fAvisDate" type="date"></div>
-        <div><label for="fRecruteur">Recruteur</label><input id="fRecruteur"></div>
-        <div class="full"><label for="fComment">Commentaire</label><textarea id="fComment"></textarea></div>
+        <section class="form-section"><div class="form-section-title">1. Identification du candidat</div><div class="form-section-sub">État civil et informations personnelles</div><div class="field-grid">
+          <div class="full photo-field"><div class="photo-preview" id="photoPreview">PHOTO</div><div style="flex:1"><label for="fPhoto">Photo d’identité</label><input id="fPhoto" type="file" accept="image/*" onchange="previewCandidatePhoto(this)"><input id="fPhotoData" type="hidden"></div></div>
+          <div><label for="fLastName">Nom *</label><input id="fLastName" required></div><div><label for="fFirstName">Prénom *</label><input id="fFirstName" required></div>
+          <div><label for="fBirthDate">Date de naissance</label><input id="fBirthDate" type="date"></div><div><label for="fBirthPlace">Lieu de naissance</label><input id="fBirthPlace"></div>
+          <div><label for="fSex">Sexe</label><select id="fSex"><option value="">—</option><option value="M">Masculin</option><option value="F">Féminin</option></select></div><div><label for="fFamilyStatus">Situation familiale</label><select id="fFamilyStatus"><option value="">—</option><option>Célibataire</option><option>Marié(e)</option><option>Divorcé(e)</option><option>Veuf(ve)</option></select></div>
+          <div><label for="fChildren">Nombre d’enfants</label><input id="fChildren" type="number" min="0"></div><div><label for="fBlood">Groupe sanguin</label><select id="fBlood"><option value="">—</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+          <div><label for="fFather">Nom du père</label><input id="fFather"></div><div><label for="fMother">Nom de la mère</label><input id="fMother"></div>
+          <div><label for="fNin">NIN</label><input id="fNin" maxlength="20"></div><div><label for="fCnas">N° CNAS</label><input id="fCnas" maxlength="20"></div>
+        </div></section>
+        <section class="form-section"><div class="form-section-title">2. Coordonnées</div><div class="form-section-sub">Adresse et personne à contacter en cas d’urgence</div><div class="field-grid">
+          <div><label for="fPhone">Téléphone</label><input id="fPhone" inputmode="tel"></div><div><label for="fEmail">Email</label><input id="fEmail" type="email"></div>
+          <div class="full"><label for="fAddress">Adresse</label><input id="fAddress"></div><div><label for="fCommune">Commune</label><input id="fCommune"></div><div><label for="fWilaya">Wilaya</label><input id="fWilaya"></div>
+          <div><label for="fEmergencyName">Contact d’urgence</label><input id="fEmergencyName"></div><div><label for="fEmergencyRelation">Lien avec le candidat</label><input id="fEmergencyRelation"></div><div><label for="fEmergencyPhone">Téléphone d’urgence</label><input id="fEmergencyPhone" inputmode="tel"></div>
+        </div></section>
+        <section class="form-section"><div class="form-section-title">3. Candidature et profil</div><div class="form-section-sub">Poste souhaité, expérience et informations opérationnelles</div><div class="field-grid">
+          <div><label for="fPosition">Poste souhaité</label><input id="fPosition"></div><div><label for="fSociety">Société</label><select id="fSociety"></select></div>
+          <div><label for="fSalary">Salaire prévu (DA/mois)</label><input id="fSalary" type="number" min="0" step="1000"></div><div><label for="fContractDuration">Durée du contrat</label><input id="fContractDuration" placeholder="Ex. 12 mois, CDI"></div>
+          <div><label for="fSource">Source de candidature</label><input id="fSource" placeholder="ANEM, recommandation…"></div><div><label for="fMilitary">Service militaire</label><select id="fMilitary"><option value="">—</option><option>Oui</option><option>Non</option><option>Exempté</option><option>Sursitaire</option></select></div>
+          <div><label for="fHeight">Taille (cm)</label><input id="fHeight" type="number" min="0"></div><div><label for="fShoeSize">Pointure</label><input id="fShoeSize" type="number" min="0"></div>
+          <div><label for="fShirtSize">Taille chemise</label><select id="fShirtSize"><option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>XXXL</option></select></div><div><label for="fLanguages">Langues parlées</label><input id="fLanguages" placeholder="Arabe, Français…"></div>
+          <div class="full"><label for="fExperience">Expérience professionnelle</label><textarea id="fExperience" placeholder="Employeurs, postes occupés, périodes et motifs de départ"></textarea></div>
+          <div class="full"><label for="fNotes">Notes du recruteur</label><textarea id="fNotes"></textarea></div>
+        </div></section>
+        <section class="form-section"><div class="form-section-title">4. Avis du recruteur</div><div class="field-grid">
+          <div><label for="fAvis">Décision</label><select id="fAvis"><option value="">—</option><option value="Favorable">Favorable</option><option value="Défavorable">Défavorable</option><option value="Instance">Instance</option></select></div>
+          <div><label for="fAvisDate">Date de l’avis</label><input id="fAvisDate" type="date"></div><div><label for="fRecruteur">Recruteur</label><input id="fRecruteur"></div>
+          <div class="full"><label for="fComment">Commentaire / motivation</label><textarea id="fComment"></textarea></div>
+        </div></section>
       </div>
       <div id="formError" class="error"></div>
       <div class="modal-actions">
@@ -271,7 +293,7 @@ async function loadTab(tab){
     const params=new URLSearchParams({mode:tab,page:String(state.page),page_size:"25"});
     if(state.q)params.set("q",state.q);
     if(activeSociety)params.set("society",activeSociety);
-    const result=await apiFetch("/drh/candidates/page?"+params.toString());
+    const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
     state.items=result.items||[];
     state.total=result.total||0;
     state.page=result.page||1;
@@ -366,7 +388,7 @@ async function deleteSelected(){
   if(!selectedIds.size)return;
   if(!confirm(`Supprimer ${selectedIds.size} candidat(s) sélectionné(s) ? Cette action est irréversible.`))return;
   const ids=[...selectedIds];
-  const results=await Promise.allSettled(ids.map(id=>apiFetch(`/drh/candidates/${id}`,{method:"DELETE"})));
+  const results=await Promise.allSettled(ids.map(id=>apiFetch(`/api/drh/candidates/${id}`,{method:"DELETE"})));
   const failed=results.filter(r=>r.status==="rejected").length;
   selectedIds.clear();
   showBanner(failed?`${ids.length-failed} candidat(s) supprimé(s), ${failed} échec(s).`:`${ids.length} candidat(s) supprimé(s).`,failed?"error":"success");
@@ -375,7 +397,7 @@ async function deleteSelected(){
 async function deleteCandidate(id){
   if(!confirm("Supprimer ce candidat ? Cette action est irréversible."))return;
   try{
-    await apiFetch(`/drh/candidates/${id}`,{method:"DELETE"});
+    await apiFetch(`/api/drh/candidates/${id}`,{method:"DELETE"});
     showBanner("Candidat supprimé.","success");
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error")}
@@ -384,18 +406,29 @@ async function changeAvis(id,value){
   const item=tabState[activeTab].items.find(row=>row.id===id);
   if(!item)return;
   try{
-    await apiFetch(`/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:{...(item.data||{}),avisDecision:value,avisDate:today()}})});
+    await apiFetch(`/api/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:{...(item.data||{}),avisDecision:value,avisDate:today()}})});
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error");loadTab(activeTab)}
 }
 async function markReadyForContract(id){
   try{
-    await apiFetch(`/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
+    await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
     showBanner('Candidat prêt pour contractualisation. Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error")}
 }
 
+function candidateField(id,value){const el=document.getElementById(id);if(el)el.value=value??""}
+function renderCandidatePhoto(value){
+  const box=document.getElementById("photoPreview");if(!box)return;
+  box.innerHTML=value?`<img src="${esc(value)}" alt="Photo du candidat">`:"PHOTO";
+}
+function previewCandidatePhoto(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  if(file.size>3*1024*1024){showFormError("La photo ne doit pas dépasser 3 Mo.");input.value="";return}
+  const reader=new FileReader();reader.onload=()=>{candidateField("fPhotoData",reader.result);renderCandidatePhoto(reader.result)};reader.readAsDataURL(file);
+}
+function showFormError(message){const el=document.getElementById("formError");el.textContent=message;el.classList.add("show")}
 function openCandidateForm(id){
   editingCandidateId=id;
   document.getElementById("formError").classList.remove("show");
@@ -404,22 +437,22 @@ function openCandidateForm(id){
     const item=Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===id);
     document.getElementById("modalTitle").textContent="Modifier le candidat";
     if(item){
-      document.getElementById("fLastName").value=item.last_name||"";
-      document.getElementById("fFirstName").value=item.first_name||"";
-      document.getElementById("fPhone").value=item.phone||"";
-      document.getElementById("fEmail").value=item.email||"";
-      document.getElementById("fPosition").value=item.desired_position||"";
+      candidateField("fLastName",item.last_name);candidateField("fFirstName",item.first_name);
+      candidateField("fPhone",item.phone);candidateField("fEmail",item.email);candidateField("fPosition",item.desired_position);
       if(item.society)document.getElementById("fSociety").value=item.society;
-      document.getElementById("fSalary").value=item.expected_salary||"";
+      candidateField("fSalary",item.expected_salary);
       const data=item.data||{};
-      document.getElementById("fAvis").value=data.avisDecision||"";
-      document.getElementById("fAvisDate").value=data.avisDate||"";
-      document.getElementById("fRecruteur").value=data.avisRecruteur||"";
-      document.getElementById("fComment").value=data.avisCommentaire||"";
+      const fields={fBirthDate:"dateNaissance",fBirthPlace:"lieuNaissance",fSex:"sexe",fFamilyStatus:"situation",fChildren:"nombreEnfants",fBlood:"groupeSanguin",fFather:"nomPere",fMother:"nomMere",fNin:"nin",fCnas:"numeroCnas",fAddress:"adresse",fCommune:"commune",fWilaya:"wilaya",fEmergencyName:"contactUrgenceNom",fEmergencyRelation:"contactUrgenceLien",fEmergencyPhone:"contactUrgenceTel",fContractDuration:"dureeContrat",fSource:"source",fMilitary:"serviceMilitaire",fHeight:"taille",fShoeSize:"pointure",fShirtSize:"tailleChemise",fExperience:"experienceTexte",fNotes:"notes",fAvis:"avisDecision",fAvisDate:"avisDate",fRecruteur:"avisRecruteur",fComment:"avisCommentaire"};
+      Object.entries(fields).forEach(([field,key])=>candidateField(field,data[key]));
+      candidateField("fLanguages",Array.isArray(data.langues)?data.langues.join(", "):data.langues);
+      const photo=data.photo||data.photoData||"";candidateField("fPhotoData",photo);renderCandidatePhoto(photo);
     }
   }else{
-    document.getElementById("modalTitle").textContent="Nouveau candidat";
+    document.getElementById("modalTitle").textContent="Fiche de renseignement candidat";
     if(activeSociety)document.getElementById("fSociety").value=activeSociety;
+    candidateField("fAvisDate",today());
+    candidateField("fRecruteur",recruteSession?.user?.full_name||recruteSession?.user?.username||"");
+    renderCandidatePhoto("");
   }
   document.getElementById("modalBackdrop").classList.remove("hidden");
 }
@@ -449,6 +482,11 @@ async function submitCandidateForm(){
     expected_salary:document.getElementById("fSalary").value?Number(document.getElementById("fSalary").value):null,
     data:{
       ...(existing?.data||{}),
+      photo:document.getElementById("fPhotoData").value,
+      nom:lastName,prenom:firstName,telephone:document.getElementById("fPhone").value.trim(),email:document.getElementById("fEmail").value.trim(),posteSouhaite:document.getElementById("fPosition").value.trim(),salairePrevu:document.getElementById("fSalary").value?Number(document.getElementById("fSalary").value):null,
+      dateNaissance:document.getElementById("fBirthDate").value,lieuNaissance:document.getElementById("fBirthPlace").value.trim(),sexe:document.getElementById("fSex").value,situation:document.getElementById("fFamilyStatus").value,nombreEnfants:document.getElementById("fChildren").value?Number(document.getElementById("fChildren").value):0,groupeSanguin:document.getElementById("fBlood").value,nomPere:document.getElementById("fFather").value.trim(),nomMere:document.getElementById("fMother").value.trim(),nin:document.getElementById("fNin").value.trim(),numeroCnas:document.getElementById("fCnas").value.trim(),
+      adresse:document.getElementById("fAddress").value.trim(),commune:document.getElementById("fCommune").value.trim(),wilaya:document.getElementById("fWilaya").value.trim(),contactUrgenceNom:document.getElementById("fEmergencyName").value.trim(),contactUrgenceLien:document.getElementById("fEmergencyRelation").value.trim(),contactUrgenceTel:document.getElementById("fEmergencyPhone").value.trim(),
+      dureeContrat:document.getElementById("fContractDuration").value.trim(),source:document.getElementById("fSource").value.trim(),serviceMilitaire:document.getElementById("fMilitary").value,taille:document.getElementById("fHeight").value,pointure:document.getElementById("fShoeSize").value,tailleChemise:document.getElementById("fShirtSize").value,langues:document.getElementById("fLanguages").value.split(",").map(x=>x.trim()).filter(Boolean),experienceTexte:document.getElementById("fExperience").value.trim(),notes:document.getElementById("fNotes").value.trim(),
       avisDecision:document.getElementById("fAvis").value,
       avisDate:document.getElementById("fAvisDate").value,
       avisRecruteur:document.getElementById("fRecruteur").value.trim(),
@@ -458,11 +496,11 @@ async function submitCandidateForm(){
   button.disabled=true;button.textContent="Enregistrement…";
   try{
     if(editingCandidateId){
-      await apiFetch(`/drh/candidates/${editingCandidateId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      await apiFetch(`/api/drh/candidates/${editingCandidateId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       showBanner("Candidat mis à jour.","success");
     }else{
       payload.status="nouvelle";
-      await apiFetch("/drh/candidates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      await apiFetch("/api/drh/candidates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       showBanner("Candidat ajouté.","success");
     }
     closeCandidateForm();
