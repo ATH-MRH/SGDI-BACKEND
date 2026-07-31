@@ -10296,6 +10296,13 @@ function renderContratsDashboard(view){
         contractMetric("Signés",signedAvenants.length,"#16a34a",false,"navigate('contrats/avenants')")
       ],false)}
     </div>
+    ${toContract.length?`<div class="card p-4 mb-4" style="background:#eff6ff;border:2px solid #2563eb">
+      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <div><div class="font-black text-blue-700 uppercase">Candidat en instance de contrat</div><div class="text-xs text-blue-700">${toContract.length} candidat(s) en cours de contractualisation — contrat pas encore créé</div></div>
+        <button type="button" class="btn btn-primary text-xs" onclick="navigate('contrats/a_contractualiser')">Voir la liste</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${toContract.map(c=>`<a href="#/contrats/nouveau/${c.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #bfdbfe;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b><span class="pill pill-blue">${safe(candidatePosteLabel(c))}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(c.societe||"—")}</div></a>`).join("")}</div>
+    </div>`:""}
     ${contractSituationListHTML(agents,today_,{title:"Liste des contrats",subtitle:`${agents.length} agent(s) avec situation contrat${socFilter?` · ${socFilter}`:""}`})}`;
 }
 
