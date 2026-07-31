@@ -30835,6 +30835,82 @@ function adminRecruitmentDuplicate(c){
     return name&&normalizedSearchText(`${a.nom||""} ${a.prenom||""}`)===name;
   })||null;
 }
+function adminRecruitmentCandidateDuplicateKey(c){
+  const society=normalizeSocieteName(c?.societe||"");
+  const nin=normalizeEmployeeNin(c?.nin);
+  if(nin&&nin.length>=6)return{key:`nin|${society}|${nin}`,reason:"Même NIN"};
+  const phone=String(c?.telephone||c?.phone||"").replace(/\D/g,"");
+  if(phone.length>=7)return{key:`phone|${society}|${phone}`,reason:"Même téléphone"};
+  const name=normalizedSearchText(`${c?.nom||""} ${c?.prenom||""}`);
+  if(name)return{key:`name|${society}|${name}`,reason:"Même nom, prénom et société"};
+  return{key:"",reason:""};
+}
+function adminRecruitmentCandidateRichness(c){
+  const fields=["nom","prenom","nin","telephone","email","dateNaissance","lieuNaissance","societe","posteSouhaite","posteContrat","dateRecrutement","adresse","wilaya","commune"];
+  return fields.reduce((score,key)=>score+(String(c?.[key]||"").trim()?1:0),0)+candidateCompletenessScore(c);
+}
+function adminRecruitmentDuplicateGroups(){
+  const groups=new Map();
+  adminRecruitmentCandidates().forEach(c=>{
+    const match=adminRecruitmentCandidateDuplicateKey(c);
+    if(!match.key)return;
+    if(!groups.has(match.key))groups.set(match.key,{reason:match.reason,items:[]});
+    groups.get(match.key).items.push(c);
+  });
+  return [...groups.values()].filter(group=>group.items.length>1).map(group=>{
+    const sorted=group.items.slice().sort((a,b)=>{
+      const score=adminRecruitmentCandidateRichness(b)-adminRecruitmentCandidateRichness(a);
+      if(score)return score;
+      const date=String(a.createdAt||a.created_at||"").localeCompare(String(b.createdAt||b.created_at||""));
+      if(date)return date;
+      return Number(a.backendId||Number.MAX_SAFE_INTEGER)-Number(b.backendId||Number.MAX_SAFE_INTEGER);
+    });
+    return{...group,keep:sorted[0],remove:sorted.slice(1)};
+  });
+}
+function openAdminRecruitmentDuplicates(){
+  const groups=adminRecruitmentDuplicateGroups();
+  if(!groups.length){toast("Aucun doublon de candidature détecté","success");return}
+  const removeCount=groups.reduce((sum,g)=>sum+g.remove.length,0);
+  const candidateLabel=c=>escapeHTML(((c?.nom||"")+" "+(c?.prenom||"")).trim()||"Identité à compléter");
+  openModal(`<h3 class="font-black text-xl mb-2">Doublons de candidatures</h3><p class="text-sm text-slate-600 mb-4"><b>${groups.length}</b> groupe(s) détecté(s), soit <b>${removeCount}</b> copie(s) à supprimer. La fiche la plus complète est conservée dans chaque groupe.</p>
+    <div style="max-height:52vh;overflow:auto">${groups.map((group,index)=>`<div class="card p-3 mb-3" style="border-left:4px solid #dc2626"><div class="text-xs font-black text-red-700 uppercase mb-2">Groupe ${index+1} · ${escapeHTML(group.reason)}</div><div class="p-2 rounded bg-emerald-50 mb-2"><span class="pill pill-green">Conservée</span> <b>${candidateLabel(group.keep)}</b><div class="text-[11px] text-slate-500 mt-1">${escapeHTML(group.keep.societe||"Société non renseignée")} · fiche ${adminRecruitmentCandidateRichness(group.keep)} points</div></div>${group.remove.map(c=>`<div class="p-2 rounded bg-red-50 mb-1"><span class="pill pill-red">Supprimée</span> ${candidateLabel(c)}<div class="text-[11px] text-slate-500 mt-1">${escapeHTML(c.societe||"Société non renseignée")} · fiche ${adminRecruitmentCandidateRichness(c)} points</div></div>`).join("")}</div>`).join("")}</div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-danger" onclick="deleteAdminRecruitmentDuplicates(this)">Supprimer ${removeCount} doublon(s)</button></div>`);
+}
+async function deleteAdminRecruitmentDuplicates(btn){
+  if(!isAdminSystemSession()){toast("Action réservée à Administration système","error");return}
+  const groups=adminRecruitmentDuplicateGroups();
+  const targets=groups.flatMap(group=>group.remove);
+  if(!targets.length){closeModal();toast("Aucun doublon à supprimer","info");return}
+  if(!confirm(`Supprimer définitivement ${targets.length} copie(s) en doublon ?\n\nLa fiche la plus complète de chaque groupe sera conservée.`))return;
+  if(btn){btn.disabled=true;btn.textContent="Suppression en cours…"}
+  let ok=0,failed=0;
+  for(let i=0;i<targets.length;i++){
+    const c=targets[i];
+    if(btn)btn.textContent=`Suppression… ${i+1}/${targets.length}`;
+    try{
+      await deleteCandidateFromPostgres(c);
+      adminRecruitmentSelection.delete(adminRecruitmentCandidateKey(c));
+      removeCandidatLocal(c,c.id||c.backendId);
+      ok++;
+    }catch(e){
+      if(sgdiIsNotFoundError(e)){
+        adminRecruitmentSelection.delete(adminRecruitmentCandidateKey(c));
+        removeCandidatLocal(c,c.id||c.backendId);
+        ok++;
+      }else{
+        failed++;
+        console.warn("Suppression doublon candidat refusée",c,e);
+      }
+    }
+  }
+  await sgdiPullState({silent:true,render:false,force:true,light:true}).catch(()=>null);
+  logActivity("Nettoyage doublons recrutement",`${ok} copie(s) supprimée(s)${failed?` · ${failed} échec(s)`:""}`);
+  closeModal();
+  toastCenter(`${ok} DOUBLON(S) SUPPRIMÉ(S)${failed?` · ${failed} ÉCHEC(S)`:""}`,failed?"error":"success");
+  renderSidebar();
+  renderView();
+}
 function adminRecruitmentSelectedCandidates(){
   const keys=new Set(adminRecruitmentSelection);
   return adminRecruitmentCandidates().filter(c=>keys.has(adminRecruitmentCandidateKey(c)));
@@ -30879,7 +30955,9 @@ function renderAdminRecruitment(view){
   const statuses=[...new Set(all.map(c=>String(c.statut||c.status||"nouveau").toLowerCase()))].sort();
   const incomplete=candidates.filter(c=>adminRecruitmentMissingFields(c).length).length;
   const duplicates=candidates.filter(adminRecruitmentDuplicate).length;
-  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Recrutement groupé</h1><p class="text-sm text-slate-500 mt-1">Sélectionnez librement les candidats à transformer en employés. Une fiche incomplète est créée puis signalée à compléter, sans bloquer le processus.</p></div><div class="pill pill-blue">${all.length} candidat(s) disponible(s)</div></div>
+  const candidateDuplicateGroups=adminRecruitmentDuplicateGroups();
+  const candidateDuplicateCopies=candidateDuplicateGroups.reduce((sum,g)=>sum+g.remove.length,0);
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Recrutement groupé</h1><p class="text-sm text-slate-500 mt-1">Sélectionnez librement les candidats à transformer en employés. Une fiche incomplète est créée puis signalée à compléter, sans bloquer le processus.</p></div><div class="flex gap-2 items-center flex-wrap"><div class="pill pill-blue">${all.length} candidat(s) disponible(s)</div><button type="button" class="btn ${candidateDuplicateCopies?"btn-danger":"btn-secondary"} text-xs" onclick="openAdminRecruitmentDuplicates()">Nettoyer les doublons${candidateDuplicateCopies?` (${candidateDuplicateCopies})`:""}</button></div></div>
   ${adminSocieteSelectorHTML("Le recrutement et l'attribution des codes respectent la société active.")}
   <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
     <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Affichés</div><div class="text-3xl font-black text-blue-800">${candidates.length}</div></div>
