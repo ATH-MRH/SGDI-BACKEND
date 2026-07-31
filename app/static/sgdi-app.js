@@ -34620,11 +34620,32 @@ function isSupOrUser(){return Array.isArray(session?.sitesAutorises)&&session.si
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
 function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.societe||currentStructureSocieteFilter?.()||""}
 function ptCurrentSearch(){return sessionStorage.getItem("ptSearch")||""}
+function ptCurrentSort(){return sessionStorage.getItem("ptSort")||"nom"}
+function ptCurrentSortOrder(){return sessionStorage.getItem("ptSortOrder")||"asc"}
 function ptSupCurrentSiteFilter(){return sessionStorage.getItem("ptSupSiteFilter")||""}
 function setPtSupSiteFilter(v){sessionStorage.setItem("ptSupSiteFilter",v||"");renderView()}
 function setPtMonth(v){sessionStorage.setItem("ptMonth",v||"");renderView()}
 function setPtSociete(v){sessionStorage.setItem("ptSociete",v||"");renderView()}
 function setPtSearch(v){sessionStorage.setItem("ptSearch",v||"");renderView();requestAnimationFrame(()=>{const el=document.getElementById("pt-search-input");if(el){const len=el.value.length;el.focus();try{el.setSelectionRange(len,len)}catch(_){}}})}
+function setPtSort(v){sessionStorage.setItem("ptSort",v||"nom");renderView()}
+function setPtSortOrder(v){sessionStorage.setItem("ptSortOrder",v||"asc");renderView()}
+function ptAgentSortValue(a,field){
+  const affect=typeof agentLiveAffectation==="function"?agentLiveAffectation(a):null;
+  if(field==="code")return a.matricule||a.code||"";
+  if(field==="site")return affect?.siteName||a.affectationCourante?.siteName||"";
+  if(field==="groupe")return affect?.groupe||affect?.groupCode||a.affectationCourante?.groupe||"";
+  if(field==="poste")return affect?.poste||a.fonction||a.poste||"";
+  return `${a.nom||""} ${a.prenom||""}`;
+}
+function ptSortAgents(agents){
+  const field=ptCurrentSort(),direction=ptCurrentSortOrder()==="desc"?-1:1;
+  return agents.slice().sort((a,b)=>direction*String(ptAgentSortValue(a,field)).localeCompare(String(ptAgentSortValue(b,field)),"fr",{numeric:true,sensitivity:"base"})||String(a.matricule||"").localeCompare(String(b.matricule||""),"fr",{numeric:true}));
+}
+function ptSortControlsHTML(){
+  const field=ptCurrentSort(),order=ptCurrentSortOrder();
+  const options=[["nom","Nom / prénom"],["code","Code employé"],["site","Site"],["groupe","Groupe"],["poste","Poste"]];
+  return`<div style="min-width:150px"><label class="label">Trier par</label><select class="select text-xs" onchange="setPtSort(this.value)">${options.map(([v,l])=>`<option value="${v}" ${field===v?"selected":""}>${l}</option>`).join("")}</select></div><div style="min-width:135px"><label class="label">Ordre</label><select class="select text-xs" onchange="setPtSortOrder(this.value)"><option value="asc" ${order==="asc"?"selected":""}>A → Z / 0 → 9</option><option value="desc" ${order==="desc"?"selected":""}>Z → A / 9 → 0</option></select></div>`;
+}
 function ptFilterAgents(agents){
   const q=(ptCurrentSearch()||"").toLowerCase().trim();
   if(!q)return agents;
@@ -36536,6 +36557,7 @@ function renderPointageSaisie(){
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
     ${supervisorModuleActive()?"":drumMultiHTML([{id:"pt-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:String(mo).padStart(2,"0"),cb:"drumPtMonthSync"},{id:"pt-drum-yr",label:"Année",opts:drumYearOpts(6),selected:String(yr),cb:"drumPtMonthSync"}])}
     ${ptSearchBarHTML()}
+    ${ptSortControlsHTML()}
     <div class="flex-1"></div>
     ${isDrh?"":`<button class="btn btn-primary text-xs" style="background:#043970;border-color:#043970" onclick="ptValiderTous('${ym}','${soc.replace(/'/g,"\\'")}')">✅ Valider tous les pointages</button>
     <button class="btn btn-ghost text-xs" onclick="ptDevaliderTous('${ym}','${soc.replace(/'/g,"\\'")}')">🔓 Tout déverrouiller</button>`}
@@ -36544,7 +36566,7 @@ function renderPointageSaisie(){
   <div class="mt-3 flex flex-wrap items-center gap-2 text-xs"><span class="font-semibold text-slate-600">Légende :</span>${legende}</div>
   ${isDrh?"":`<div class="text-[11px] text-slate-500 mt-2">Astuce : <strong>Clic</strong> sur une case = cycle des codes (·→P→A→M→S→C→R) · <strong>Clic droit</strong> = saisir directement · <strong>✅ Valider</strong> verrouille le pointage</div>`}
   </div>`;
-  const filtered=ptFilterAgents(ag);
+  const filtered=ptSortAgents(ptFilterAgents(ag));
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
   const rows=filtered.map((a,idx)=>{
     const sheet=ptGetSheet(a.id,ym);
@@ -36613,6 +36635,7 @@ function renderPointageSaisieAuto(){
   const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-end gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
     <div style="flex:1;min-width:180px;max-width:320px"><label class="label">Recherche</label>${ptSearchBarHTML()}</div>
+    ${ptSortControlsHTML()}
     <div class="flex-1"></div>
     <div class="flex gap-2">
       <button class="btn btn-primary text-xs" id="pt-auto-refresh-btn" onclick="ptAutoSaisieRefresh()">↺ Actualiser</button>
@@ -36622,7 +36645,7 @@ function renderPointageSaisieAuto(){
   </div>
   <div class="text-[11px] mt-2 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — ${supervisorActive?"Pointage mensuel actualisé automatiquement par la Feuille quotidienne.":"Synchronisation automatique toutes les 10 secondes · reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne."}</div>
   </div>`;
-  const filtered=ptFilterAgents(ag);
+  const filtered=ptSortAgents(ptFilterAgents(ag));
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
   const rows=filtered.map((a,idx)=>{
     let nP=0,nA=0,nM=0,nS=0,nC=0,nR=0;
