@@ -401,7 +401,6 @@ function avisCell(item){
 }
 function rowActions(item){
   const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
-  if(activeTab==="new")actions.push(`<button type="button" class="link-btn danger" onclick="deleteCandidate(${item.id})">Supprimer</button>`);
   if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
   return `<div class="row-actions">${actions.join("")}</div>`;
 }
@@ -478,14 +477,6 @@ async function deleteSelected(){
   selectedIds.clear();
   showBanner(failed?`${ids.length-failed} candidat(s) supprimé(s), ${failed} échec(s).`:`${ids.length} candidat(s) supprimé(s).`,failed?"error":"success");
   loadTab(activeTab);
-}
-async function deleteCandidate(id){
-  if(!confirm("Supprimer ce candidat ? Cette action est irréversible."))return;
-  try{
-    await apiFetch(`/api/drh/candidates/${id}`,{method:"DELETE"});
-    showBanner("Candidat supprimé.","success");
-    loadTab(activeTab);
-  }catch(error){showBanner(esc(error.message),"error")}
 }
 async function changeAvis(id,value){
   const item=tabState[activeTab].items.find(row=>row.id===id);
