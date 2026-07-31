@@ -1505,11 +1505,12 @@ function sgdiEnsureEmployeesForDisplay(options){
   // Sans force -> court-circuit habituel si des données locales existent déjà.
   const _ensureKey=scopeNorm||"__all";
   window.__sgdiEnsuredAt=window.__sgdiEnsuredAt||{};
+  const backendShowsMissing=backendCount>0&&localCount<backendCount;
   if(opt.force){
     if(Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<10000)return null;
-  }else if(Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<60000){
+  }else if(!backendShowsMissing&&Date.now()-(window.__sgdiEnsuredAt[_ensureKey]||0)<60000){
     return null;
-  }else if(localCount>0&&(localEligible>0||backendCount<=0)){
+  }else if(!backendShowsMissing&&localCount>0&&(localEligible>0||backendCount<=0)){
     return null;
   }
   if(!opt.force&&backendCount<=0)return null;
@@ -36284,7 +36285,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
     // rechargement (voir sgdiEnsureEmployeesForDisplay). Avec force:true, CHAQUE
     // réaffichage (y compris les auto-refresh en arrière-plan) remplaçait la vue par
     // "Chargement des effectifs…", effaçant l'affichage/saisie en cours de l'utilisateur.
-    const _r=sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc()});
+    const _r=sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:_ptFreshNav});
     if(_r&&typeof _r.then==="function"){
       view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;
       _r.then(()=>renderPointage(view,sub,arg,true)).catch(()=>renderPointage(view,sub,arg,true));
@@ -36760,6 +36761,7 @@ async function ptEmployeeQrSubmit(token){
 }
 let _ptAutoSaisieRefreshing=false;
 let _ptAutoSaisieLiveTimer=null;
+let _ptAutoEmployeesSyncedAt=0;
 function ptAutoSaisieStopLiveRefresh(){
   if(_ptAutoSaisieLiveTimer){clearInterval(_ptAutoSaisieLiveTimer);_ptAutoSaisieLiveTimer=null}
 }
@@ -36769,7 +36771,12 @@ async function ptAutoSaisieLiveRefresh(){
   if(!route.includes("pointage/auto")){ptAutoSaisieStopLiveRefresh();return}
   _ptAutoSaisieRefreshing=true;
   try{
-    const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
+    const refreshPeople=Date.now()-_ptAutoEmployeesSyncedAt>60000;
+    const [res]=await Promise.all([
+      sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false}),
+      refreshPeople?sgdiPullEmployees({silent:true,society:ptCurrentSoc()}):Promise.resolve(null)
+    ]);
+    if(refreshPeople){await syncAssignmentsFromPostgres();_ptAutoEmployeesSyncedAt=Date.now()}
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
     const scrollY=window.scrollY;
@@ -36787,7 +36794,11 @@ async function ptAutoSaisieRefresh(){
   const btn=document.getElementById("pt-auto-refresh-btn");
   if(btn){btn.disabled=true;btn.textContent="…";}
   try{
-    const res=await sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false});
+    const [res]=await Promise.all([
+      sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false}),
+      sgdiPullEmployees({silent:true,society:ptCurrentSoc()})
+    ]);
+    await syncAssignmentsFromPostgres();_ptAutoEmployeesSyncedAt=Date.now();
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
     const scrollY=window.scrollY;

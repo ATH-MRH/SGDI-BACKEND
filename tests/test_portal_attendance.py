@@ -174,3 +174,30 @@ def test_attendance_feed_site_restricted_supervisor_only_sees_own_site(client, a
     rows = feed.json()
     assert any(str(item["employee_id"]) == str(emp_mine) for item in rows)
     assert not any(str(item["employee_id"]) == str(emp_other) for item in rows)
+
+
+def test_manual_search_and_scan_respect_pointer_site_scope(client, auth_headers, db):
+    from app.core.security import hash_password
+    from app.modules.auth.models import User
+
+    mine = _site(client, auth_headers, "Site Pointeur Autorise")
+    other = _site(client, auth_headers, "Site Pointeur Interdit")
+    emp_mine = _emp(client, auth_headers, "PTS01", fn="Samir", ln="Autorise")
+    emp_other = _emp(client, auth_headers, "PTS02", fn="Samir", ln="Interdit")
+    _assign(client, auth_headers, emp_mine, mine)
+    _assign(client, auth_headers, emp_other, other)
+    pointer = User(
+        username="pointer-site-scope", full_name="Pointeur site", role="ops", access_level="H2",
+        authorized_societies=[], authorized_sites=[mine], authorized_structures=["pointage"],
+        password_hash=hash_password("pointerpass"), is_active=True,
+    )
+    db.add(pointer); db.commit()
+    login = client.post("/api/auth/login", json={"username": "pointer-site-scope", "password": "pointerpass"})
+    pointer_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    allowed = client.get("/api/portal/attendance-manual/search?q=PTS01", headers=pointer_headers)
+    forbidden = client.get("/api/portal/attendance-manual/search?q=PTS02", headers=pointer_headers)
+    assert any(row["id"] == emp_mine for row in allowed.json())
+    assert forbidden.json() == []
+    direct_scan = client.post("/api/portal/attendance-manual/scan", headers=pointer_headers, json={"employee_id": emp_other})
+    assert direct_scan.status_code == 403

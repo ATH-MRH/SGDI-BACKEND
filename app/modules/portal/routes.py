@@ -65,6 +65,21 @@ def _authorized_work_minutes(db: Session, assignment: Assignment | None, site: S
     return int(explicit.group(1)) * 60 if explicit else 8 * 60
 
 
+def _ensure_attendance_employee_scope(db: Session, scanner: User, employee: Employee) -> None:
+    allowed_site_ids = _allowed_assignment_site_ids(db, scanner)
+    if allowed_site_ids is None:
+        return
+    permitted = db.execute(
+        select(Assignment.id).where(
+            Assignment.employee_id == employee.id,
+            Assignment.active == 1,
+            Assignment.site_id.in_(allowed_site_ids),
+        )
+    ).scalar_one_or_none() if allowed_site_ids else None
+    if not permitted:
+        raise HTTPException(status_code=403, detail="Employé hors du périmètre société/site du pointeur")
+
+
 def _ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
     if fwd:
@@ -871,6 +886,7 @@ def scan_employee_attendance_qr(
     employee = employee_by_ref(db, str(qr.get("sub") or ""))
     if not employee or int(qr.get("employee_id") or 0) != employee.id:
         raise HTTPException(status_code=404, detail="Employé introuvable")
+    _ensure_attendance_employee_scope(db, scanner, employee)
     return _register_attendance(db, employee, scanner, nonce, "portail-rh-employee-qr")
 
 
@@ -970,6 +986,21 @@ def search_employee_for_manual_attendance(
         .limit(8)
     )
     rows = db.execute(stmt).scalars().all()
+    allowed_site_ids = _allowed_assignment_site_ids(db, scanner)
+    if allowed_site_ids is not None:
+        allowed = set(allowed_site_ids)
+        employee_ids = {row.id for row in rows}
+        permitted_employee_ids = {
+            assignment.employee_id
+            for assignment in db.execute(
+                select(Assignment).where(
+                    Assignment.employee_id.in_(employee_ids),
+                    Assignment.active == 1,
+                    Assignment.site_id.in_(allowed),
+                )
+            ).scalars().all()
+        } if employee_ids and allowed else set()
+        rows = [row for row in rows if row.id in permitted_employee_ids]
     return [_employee_search_result(db, row) for row in rows]
 
 
@@ -984,6 +1015,7 @@ def manual_employee_attendance_scan(
     employee = employee_by_ref(db, payload.get("employee_id"))
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
+    _ensure_attendance_employee_scope(db, scanner, employee)
     nonce = f"manual-{secrets.token_urlsafe(12)}"
     return _register_attendance(
         db,
