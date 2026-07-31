@@ -4363,6 +4363,7 @@ function sgdiModuleHostConfigs(){
       homeRoute:"admin/dashboard",
       sections:[
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard"},
+        {label:"RECRUTEMENT",route:"admin/recrutement"},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs"},
         {label:"FICHE DE POSITION",route:"admin/fiches"},
         {label:"SITES",route:"sites/actifs"},
@@ -6379,6 +6380,7 @@ function renderSidebar(){
       ],
       admin:isAdminSystemSession()?[
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard"},
+        {label:"RECRUTEMENT",route:"admin/recrutement",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length||null},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",count:drhAgents.length||null},
         {label:"FICHE DE POSITION",route:"admin/fiches",count:drhAgents.length||null},
         {label:"CORRECTION POINTAGE",route:"admin/pointages",count:(db.pointages||[]).length||null},
@@ -11976,6 +11978,7 @@ function buildAgentFromContractCandidate(c,fd){
   const agent={
     id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,numeroCnas:c.numeroCnas||"",sexe:c.sexe,situation:c.situation,groupeSanguin:c.groupeSanguin||"",telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
     salairePrevu:parseMoneyInput(c.salairePrevu)||0,avisDecision:c.avisDecision||"",avisDate:c.avisDate||"",avisRecruteur:c.avisRecruteur||"",avisCommentaire:c.avisCommentaire||"",
+    ficheACompleter:!!c.ficheACompleter,recruitmentIncompleteFields:Array.isArray(c.recruitmentIncompleteFields)?c.recruitmentIncompleteFields.slice():[],
     typeContrat:cleanContractType(contractValue(fd,"typeContrat",c.typeContrat||""))||"CDD",dureeEssai,dureeContrat,dateFinContrat,salaireNet,banque:contractValue(fd,"banque",c.banque||""),iban:contractValue(fd,"iban",c.iban||""),
     dateRecrutement,dateFinEssai,
     periodeEssaiContrat:contractValue(fd,"periodeEssai",c.periodeEssaiContrat||""),
@@ -30763,13 +30766,221 @@ function ensureNiveauxAcces(){
   return db.niveauxAcces.sort((a,b)=>(Number(a.weight)||0)-(Number(b.weight)||0));
 }
 function logActivity(action,details){if(!db.activityLog)db.activityLog=[];db.activityLog.unshift({id:uid("log"),date:new Date().toISOString(),user:session?session.username:"system",action:action,details:details||""});if(db.activityLog.length>500)db.activityLog=db.activityLog.slice(0,500);recordOperationFeed(action+(details?" · "+details:""),"Activité système");saveDB()}
+const adminRecruitmentSelection=new Set();
+function adminRecruitmentCandidateKey(c){
+  return String(c?.backendId||c?.id||"");
+}
+function adminRecruitmentCandidates(){
+  const society=adminActiveSociete();
+  return (db.candidats||[]).filter(c=>{
+    const status=String(c?.statut||c?.status||"").toLowerCase();
+    if(candidatIsArchived(c)||["embauche","recrute","recruté"].includes(status))return false;
+    return !society||normalizeSocieteName(c.societe)===normalizeSocieteName(society);
+  });
+}
+function adminRecruitmentFilters(){
+  try{return JSON.parse(sessionStorage.getItem("adminRecruitmentFilters")||"{}")||{}}catch(e){return{}}
+}
+function setAdminRecruitmentFilter(key,value){
+  const filters=adminRecruitmentFilters();
+  filters[key]=String(value||"");
+  sessionStorage.setItem("adminRecruitmentFilters",JSON.stringify(filters));
+  renderView();
+}
+function resetAdminRecruitmentFilters(){
+  sessionStorage.removeItem("adminRecruitmentFilters");
+  renderView();
+}
+function adminRecruitmentFilteredCandidates(){
+  const filters=adminRecruitmentFilters();
+  const q=normalizedSearchText(filters.q||"");
+  return adminRecruitmentCandidates().filter(c=>{
+    if(filters.societe&&normalizeSocieteName(c.societe)!==normalizeSocieteName(filters.societe))return false;
+    if(filters.poste&&candidatePosteLabel(c)!==filters.poste)return false;
+    if(filters.etat&&String(c.statut||c.status||"nouveau").toLowerCase()!==filters.etat)return false;
+    if(q&&!normalizedSearchText([c.nom,c.prenom,c.nin,c.telephone,c.societe,candidatePosteLabel(c)].join(" ")).includes(q))return false;
+    return true;
+  }).sort((a,b)=>String((a.nom||"")+" "+(a.prenom||"")).localeCompare(String((b.nom||"")+" "+(b.prenom||"")),"fr"));
+}
+function adminRecruitmentMissingFields(c){
+  const fields=[];
+  if(!String(c?.nom||"").trim())fields.push("nom");
+  if(!String(c?.prenom||"").trim())fields.push("prénom");
+  if(!String(c?.societe||"").trim())fields.push("société");
+  if(!String(candidatePosteCleanValue(c?.posteContrat)||candidatePosteCleanValue(c?.posteSouhaite)||"").trim())fields.push("poste");
+  if(!String(c?.telephone||"").trim())fields.push("téléphone");
+  if(!String(c?.dateNaissance||"").trim())fields.push("date de naissance");
+  if(!String(c?.dateRecrutement||"").trim())fields.push("date de recrutement");
+  return fields;
+}
+function adminRecruitmentCandidateForCreation(c){
+  const missing=adminRecruitmentMissingFields(c);
+  return {
+    ...c,
+    nom:String(c?.nom||"").trim()||"NOM À COMPLÉTER",
+    prenom:String(c?.prenom||"").trim()||"PRÉNOM À COMPLÉTER",
+    societe:String(c?.societe||"").trim()||adminActiveSociete()||"SOCIÉTÉ À COMPLÉTER",
+    ficheACompleter:missing.length>0,
+    recruitmentIncompleteFields:missing
+  };
+}
+function adminRecruitmentDuplicate(c){
+  const nin=normalizeEmployeeNin(c?.nin);
+  const phone=String(c?.telephone||"").replace(/\D/g,"");
+  const name=normalizedSearchText(`${c?.nom||""} ${c?.prenom||""}`);
+  return (db.agents||[]).find(a=>{
+    if(nin&&normalizeEmployeeNin(a.nin)===nin)return true;
+    const agentPhone=String(a.telephone||"").replace(/\D/g,"");
+    if(phone.length>=7&&agentPhone===phone)return true;
+    return name&&normalizedSearchText(`${a.nom||""} ${a.prenom||""}`)===name;
+  })||null;
+}
+function adminRecruitmentSelectedCandidates(){
+  const keys=new Set(adminRecruitmentSelection);
+  return adminRecruitmentCandidates().filter(c=>keys.has(adminRecruitmentCandidateKey(c)));
+}
+function toggleAdminRecruitmentCandidate(key,checked){
+  if(checked)adminRecruitmentSelection.add(String(key));
+  else adminRecruitmentSelection.delete(String(key));
+  updateAdminRecruitmentSelectionUI();
+}
+function toggleAdminRecruitmentVisible(checked){
+  adminRecruitmentFilteredCandidates().forEach(c=>{
+    const key=adminRecruitmentCandidateKey(c);
+    if(checked)adminRecruitmentSelection.add(key);else adminRecruitmentSelection.delete(key);
+  });
+  document.querySelectorAll(".admin-recruit-candidate").forEach(input=>{input.checked=!!checked});
+  updateAdminRecruitmentSelectionUI();
+}
+function clearAdminRecruitmentSelection(){
+  adminRecruitmentSelection.clear();
+  document.querySelectorAll(".admin-recruit-candidate").forEach(input=>{input.checked=false});
+  updateAdminRecruitmentSelectionUI();
+}
+function updateAdminRecruitmentSelectionUI(){
+  const count=adminRecruitmentSelectedCandidates().length;
+  const counter=document.getElementById("admin-recruitment-selected-count");
+  if(counter)counter.textContent=`${count} candidat(s) sélectionné(s)`;
+  const btn=document.getElementById("admin-recruitment-submit");
+  if(btn){btn.disabled=!count;btn.textContent=count?`Recruter la sélection (${count})`:"Recruter la sélection"}
+  const visible=[...document.querySelectorAll(".admin-recruit-candidate")];
+  const checked=visible.filter(x=>x.checked).length;
+  document.querySelectorAll(".admin-recruit-select-all").forEach(input=>{
+    input.checked=!!visible.length&&checked===visible.length;
+    input.indeterminate=checked>0&&checked<visible.length;
+  });
+}
+function renderAdminRecruitment(view){
+  const candidates=adminRecruitmentFilteredCandidates();
+  const all=adminRecruitmentCandidates();
+  const filters=adminRecruitmentFilters();
+  const societies=[...new Set(all.map(c=>c.societe||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
+  const postes=[...new Set(all.map(candidatePosteLabel).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"fr"));
+  const statuses=[...new Set(all.map(c=>String(c.statut||c.status||"nouveau").toLowerCase()))].sort();
+  const incomplete=candidates.filter(c=>adminRecruitmentMissingFields(c).length).length;
+  const duplicates=candidates.filter(adminRecruitmentDuplicate).length;
+  view.innerHTML=`<div class="mb-5 flex items-start justify-between gap-3 flex-wrap"><div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Recrutement groupé</h1><p class="text-sm text-slate-500 mt-1">Sélectionnez librement les candidats à transformer en employés. Une fiche incomplète est créée puis signalée à compléter, sans bloquer le processus.</p></div><div class="pill pill-blue">${all.length} candidat(s) disponible(s)</div></div>
+  ${adminSocieteSelectorHTML("Le recrutement et l'attribution des codes respectent la société active.")}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Affichés</div><div class="text-3xl font-black text-blue-800">${candidates.length}</div></div>
+    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Fiches à compléter</div><div class="text-3xl font-black text-amber-700">${incomplete}</div><div class="text-xs text-slate-500">Non bloquant</div></div>
+    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Doublons potentiels</div><div class="text-3xl font-black text-red-700">${duplicates}</div><div class="text-xs text-slate-500">Confirmation demandée</div></div>
+  </div>
+  <div class="card p-4 mb-4"><div class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+    <div class="md:col-span-2"><label class="label">Recherche</label><input class="input" value="${escapeHTML(filters.q||"")}" placeholder="Nom, prénom, téléphone, NIN…" onchange="setAdminRecruitmentFilter('q',this.value)"/></div>
+    <div><label class="label">Société</label><select class="select" onchange="setAdminRecruitmentFilter('societe',this.value)"><option value="">Toutes</option>${societies.map(s=>`<option value="${escapeHTML(s)}" ${filters.societe===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></div>
+    <div><label class="label">Poste</label><select class="select" onchange="setAdminRecruitmentFilter('poste',this.value)"><option value="">Tous</option>${postes.map(p=>`<option value="${escapeHTML(p)}" ${filters.poste===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
+    <div><label class="label">État</label><select class="select" onchange="setAdminRecruitmentFilter('etat',this.value)"><option value="">Tous</option>${statuses.map(s=>`<option value="${escapeHTML(s)}" ${filters.etat===s?"selected":""}>${escapeHTML(s.toUpperCase())}</option>`).join("")}</select></div>
+  </div><div class="flex justify-end mt-3"><button class="btn btn-ghost text-xs" onclick="resetAdminRecruitmentFilters()">Réinitialiser les filtres</button></div></div>
+  <div class="card p-3 mb-3 flex items-center justify-between gap-3 flex-wrap" style="background:#eff6ff;border-color:#bfdbfe">
+    <div class="flex items-center gap-4 flex-wrap"><label class="flex items-center gap-2 text-sm font-black"><input type="checkbox" class="admin-recruit-select-all" onchange="toggleAdminRecruitmentVisible(this.checked)" style="width:17px;height:17px"/> Tout sélectionner (${candidates.length})</label><button class="btn btn-ghost text-xs" onclick="clearAdminRecruitmentSelection()">Tout désélectionner</button><span id="admin-recruitment-selected-count" class="text-sm font-black text-blue-800">${adminRecruitmentSelectedCandidates().length} candidat(s) sélectionné(s)</span></div>
+    <button type="button" id="admin-recruitment-submit" class="btn btn-success" onclick="openAdminRecruitmentConfirmation()" ${adminRecruitmentSelectedCandidates().length?"":"disabled"}>Recruter la sélection${adminRecruitmentSelectedCandidates().length?` (${adminRecruitmentSelectedCandidates().length})`:""}</button>
+  </div>
+  <div class="card overflow-hidden">${candidates.length?`<table><thead><tr><th style="width:42px;text-align:center"><input type="checkbox" class="admin-recruit-select-all" onchange="toggleAdminRecruitmentVisible(this.checked)" style="width:17px;height:17px"/></th><th>Candidat</th><th>Société</th><th>Poste</th><th>État du dossier</th><th>Doublon</th><th></th></tr></thead><tbody>${candidates.map(c=>{
+    const key=adminRecruitmentCandidateKey(c),missing=adminRecruitmentMissingFields(c),duplicate=adminRecruitmentDuplicate(c);
+    return `<tr><td class="text-center"><input type="checkbox" class="admin-recruit-candidate" value="${escapeHTML(key)}" ${adminRecruitmentSelection.has(key)?"checked":""} onchange="toggleAdminRecruitmentCandidate('${jsString(key)}',this.checked)" style="width:17px;height:17px"/></td><td><div class="font-black">${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim()||"Identité à compléter")}</div><div class="text-xs text-slate-500">${escapeHTML(formatPhoneSGDI(c.telephone)||"Téléphone non renseigné")}</div></td><td class="text-xs">${safe(c.societe)}</td><td class="text-xs">${safe(candidatePosteLabel(c))}</td><td>${missing.length?`<span class="pill pill-amber">À compléter</span><div class="text-[10px] text-amber-700 mt-1">${escapeHTML(missing.join(", "))}</div>`:`<span class="pill pill-green">Prêt</span>`}</td><td>${duplicate?`<span class="pill pill-red">Potentiel</span><div class="text-[10px] text-red-700 mt-1">${escapeHTML(((duplicate.nom||"")+" "+(duplicate.prenom||"")).trim())} · ${escapeHTML(duplicate.matricule||"")}</div>`:`<span class="pill pill-gray">—</span>`}</td><td class="text-right"><a class="btn btn-ghost text-xs" href="#/recrutement/${escapeHTML(c.id)}">Ouvrir →</a></td></tr>`;
+  }).join("")}</tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucun candidat avec ces filtres.</div>`}</div>`;
+  requestAnimationFrame(updateAdminRecruitmentSelectionUI);
+}
+function openAdminRecruitmentConfirmation(){
+  const list=adminRecruitmentSelectedCandidates();
+  if(!list.length){toast("Sélectionnez au moins un candidat","error");return}
+  const incomplete=list.filter(c=>adminRecruitmentMissingFields(c).length);
+  const duplicates=list.filter(adminRecruitmentDuplicate);
+  openModal(`<h3 class="font-black text-xl mb-2">Confirmer le recrutement groupé</h3><p class="text-sm text-slate-600 mb-4"><b>${list.length}</b> candidat(s) seront transformés en employés avec attribution automatique des codes et lancement du processus opérationnel.</p>
+    <div class="grid grid-cols-3 gap-2 mb-4"><div class="p-3 rounded-lg bg-emerald-50 text-center"><div class="text-2xl font-black text-emerald-700">${list.length-duplicates.length}</div><div class="text-xs">Sans doublon</div></div><div class="p-3 rounded-lg bg-amber-50 text-center"><div class="text-2xl font-black text-amber-700">${incomplete.length}</div><div class="text-xs">À compléter, créés quand même</div></div><div class="p-3 rounded-lg bg-red-50 text-center"><div class="text-2xl font-black text-red-700">${duplicates.length}</div><div class="text-xs">Doublons potentiels</div></div></div>
+    ${duplicates.length?`<div class="card p-3 mb-4" style="border-color:#fecaca;background:#fef2f2"><div class="font-black text-red-800 text-sm mb-2">Doublons à vérifier</div>${duplicates.slice(0,8).map(c=>{const a=adminRecruitmentDuplicate(c);return`<div class="text-xs py-1">${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim())} ↔ <b>${escapeHTML(((a?.nom||"")+" "+(a?.prenom||"")).trim())}</b> (${escapeHTML(a?.matricule||"")})</div>`}).join("")}${duplicates.length>8?`<div class="text-xs mt-1">+ ${duplicates.length-8} autre(s)</div>`:""}</div>`:""}
+    <div class="flex justify-end gap-2 flex-wrap"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button>${duplicates.length?`<button class="btn btn-secondary" onclick="recruitAdminSelectedCandidates(this,false)">Recruter sans les doublons</button>`:""}<button class="btn btn-success" onclick="recruitAdminSelectedCandidates(this,true)">Recruter ${duplicates.length?"tout malgré les alertes":"la sélection"}</button></div>`);
+}
+async function recruitAdminSelectedCandidates(btn,includeDuplicates){
+  let list=adminRecruitmentSelectedCandidates();
+  if(!includeDuplicates)list=list.filter(c=>!adminRecruitmentDuplicate(c));
+  if(!list.length){closeModal();toast("Aucun candidat à recruter après contrôle des doublons","info");return}
+  if(btn){btn.disabled=true;btn.textContent="Synchronisation des employés…"}
+  await sgdiPullEmployees({silent:true}).catch(()=>null);
+  const usedCodes=new Set((db.agents||[]).map(a=>normalizeEmployeeCodeFormat(a.matricule||a.code)).filter(Boolean));
+  const matricules=list.map(c=>{
+    const soc=c.societe||adminActiveSociete()||"";
+    let code="";
+    outer:for(const prefix of matriculePrefixesForSociete(soc)){
+      for(let i=1;i<=999;i++){
+        const candidateCode=prefix+String(i).padStart(2,"0");
+        if(!usedCodes.has(candidateCode)){code=candidateCode;break outer}
+      }
+    }
+    code=code||((matriculePrefixesForSociete(soc)[0]||"A")+Date.now().toString().slice(-5));
+    usedCodes.add(normalizeEmployeeCodeFormat(code));
+    return code;
+  });
+  let ok=0,failed=0;
+  const errors=[];
+  const createdAgents=[];
+  for(let i=0;i<list.length;i+=10){
+    if(btn)btn.textContent=`Création en cours… ${Math.min(i+10,list.length)}/${list.length}`;
+    const batch=list.slice(i,i+10),codes=matricules.slice(i,i+10);
+    const results=await Promise.allSettled(batch.map((c,j)=>recruitContractCandidateToEmployee(adminRecruitmentCandidateForCreation(c),null,codes[j])));
+    results.forEach((result,index)=>{
+      if(result.status==="fulfilled"){ok++;createdAgents.push(result.value);adminRecruitmentSelection.delete(adminRecruitmentCandidateKey(batch[index]))}
+      else{failed++;errors.push(result.reason?.message||String(result.reason))}
+    });
+  }
+  try{if(ok)await sgdiBackendSaveAndWait()}catch(e){failed++;errors.push("Synchronisation finale : "+(e.message||e))}
+  let portalFailed=0;
+  if(createdAgents.length){
+    if(btn)btn.textContent="Création des comptes Portail RH…";
+    for(const agent of createdAgents){
+      try{
+        const res=await fetch("/api/portal/accounts",{
+          method:"POST",
+          headers:{"Content-Type":"application/json",Authorization:`Bearer ${sgdiAuthToken()}`},
+          body:JSON.stringify({matricule:agent.matricule})
+        });
+        if(!res.ok&&res.status!==409){
+          portalFailed++;
+          const detail=await res.json().catch(()=>({}));
+          errors.push(`${agent.matricule||"Employé"} : ${detail.detail||"compte Portail RH non créé"}`);
+        }
+      }catch(e){
+        portalFailed++;
+        errors.push(`${agent.matricule||"Employé"} : compte Portail RH non créé`);
+      }
+    }
+  }
+  logActivity("Recrutement groupé",`${ok} employé(s) créé(s)${failed?` · ${failed} échec(s)`:""}`);
+  closeModal();
+  toastCenter(`${ok} EMPLOYÉ(S) CRÉÉ(S)${failed?` · ${failed} ÉCHEC(S)`:""}${portalFailed?` · ${portalFailed} COMPTE(S) PORTAIL À REPRENDRE`:""}`,failed||portalFailed?"error":"success");
+  if(errors.length)toast(errors.slice(0,3).join(" ; ")+(errors.length>3?` ; +${errors.length-3} autre(s)`:""),"error");
+  renderSidebar();
+  renderView();
+}
 function renderAdmin(view,sub,arg){
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
-  const systemOnly=["menu","counters","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
+  const systemOnly=["menu","counters","recrutement","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
   if(sub==="counters")return renderAdminCountersMenu(view);
+  if(sub==="recrutement")return renderAdminRecruitment(view);
   if(sub==="effectifs")return renderAdminEffectifsConfig(view);
   if(["access","access_sgdi","access_societes","access_structures","access_code"].includes(sub))return renderAdminAccessSecurity(view,sub);
   if(sub==="feed")return renderAdminFeed(view);
@@ -31576,6 +31787,7 @@ async function renderAdminSystemDashboard(view){
 	    <div class="card p-4"><div class="text-xs uppercase font-black text-slate-500">Règles fines</div><div class="text-3xl font-black text-amber-700">${rightsCount}</div><div class="text-xs text-slate-500">Exceptions</div></div>
 	  </div>
 	  <div class="grid grid-2 gap-4">
+	    ${card("Recrutement groupé","Sélectionner librement les candidats et lancer leur création complète, même avec une fiche à compléter.","admin/recrutement","#16a34a",(db.candidats||[]).filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length,"Recrutement")}
 	    ${card("Utilisateurs","Créer, bloquer et rattacher chaque compte à un profil et un périmètre.","admin/users","#043970",users.length,"1. Comptes")}
 	    ${card("Profils d'accès","Définir les modules visibles et le référentiel d'actions par profil.","admin/niveaux","#7c3aed",profileCount,"2. Droits")}
 	    ${card("Périmètres & sécurité","Sociétés, structures, code journalier et règles de sécurité.","admin/access","#0891b2","", "3. Périmètres")}
