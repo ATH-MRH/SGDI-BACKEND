@@ -61,11 +61,6 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .search-box{flex:1;min-width:220px;position:relative}
 .search-box input{height:44px}
-.bulk-bar{display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:11px 15px;margin-bottom:12px;font-size:13px}
-.bulk-bar.show{display:flex}
-.bulk-bar b{font-weight:900}
-input[type="checkbox"]{width:16px;height:16px;flex-shrink:0}
-.check-all{display:flex;align-items:center;gap:8px;font-weight:800;font-size:12px;white-space:nowrap}
 .table-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:850;padding:12px 14px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
@@ -141,10 +136,6 @@ tr:last-child td{border-bottom:0}
       <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
       <button class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
     </div>
-    <div id="bulkBar" class="bulk-bar">
-      <label class="check-all"><input type="checkbox" id="selectAllBox" onchange="toggleSelectAll(this.checked)"> Tout sélectionner (<span id="selectedCount">0</span>)</label>
-      <button class="danger" onclick="deleteSelected()">Supprimer la sélection</button>
-    </div>
     <div class="table-card">
       <div id="listWrap"><div class="empty">Chargement…</div></div>
       <div class="pagination" id="pagination"></div>
@@ -213,7 +204,6 @@ const tabState={
   reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""},
   archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""}
 };
-let selectedIds=new Set();
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function jsStr(value){return String(value).replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
@@ -289,7 +279,6 @@ function renderTabs(){
 function switchTab(tab,force){
   if(activeTab===tab&&!force)return;
   activeTab=tab;
-  selectedIds.clear();
   document.getElementById("searchInput").value=tabState[tab].q||"";
   document.getElementById("addCandidateBtn").classList.toggle("hidden",tab!=="new");
   renderTabs();
@@ -407,23 +396,17 @@ function rowActions(item){
 function renderList(){
   const state=tabState[activeTab];
   const filtered=filteredItems(activeTab);
-  const bulkBar=document.getElementById("bulkBar");
-  bulkBar.classList.toggle("show",activeTab==="new"&&filtered.length>0);
   if(!filtered.length){
     document.getElementById("listWrap").innerHTML='<div class="empty">Aucun candidat.</div>';
-    updateSelectedCount();
     return;
   }
   const pages=Math.max(Math.ceil(filtered.length/PAGE_SIZE),1);
   if(state.page>pages)state.page=pages;
   const pageItems=filtered.slice((state.page-1)*PAGE_SIZE,state.page*PAGE_SIZE);
-  const checkboxCol=activeTab==="new";
   document.getElementById("listWrap").innerHTML=`<table><thead><tr>
-    ${checkboxCol?'<th style="width:36px"></th>':""}
     <th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Statut</th><th>Date</th><th></th>
   </tr></thead><tbody>
   ${pageItems.map(item=>`<tr data-id="${item.id}">
-    ${checkboxCol?`<td onclick="event.stopPropagation()"><input type="checkbox" data-select-id="${item.id}" ${selectedIds.has(item.id)?"checked":""} onchange="toggleSelectOne(${item.id},this.checked)"></td>`:""}
     <td><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${esc(item.desired_position||"Poste non renseigné")}${item.email?" · "+esc(item.email):""}</div></td>
     <td>${esc(item.desired_position||"—")}</td>
     <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
@@ -434,7 +417,6 @@ function renderList(){
     <td>${rowActions(item)}</td>
   </tr>`).join("")}
   </tbody></table>`;
-  updateSelectedCount();
 }
 function renderPagination(){
   const state=tabState[activeTab];
@@ -452,31 +434,6 @@ function gotoPage(page){
   tabState[activeTab].page=page;
   renderList();
   renderPagination();
-}
-function toggleSelectAll(checked){
-  const filtered=filteredItems(activeTab);
-  if(checked)filtered.forEach(item=>selectedIds.add(item.id));
-  else selectedIds.clear();
-  renderList();
-}
-function toggleSelectOne(id,checked){
-  if(checked)selectedIds.add(id);else selectedIds.delete(id);
-  updateSelectedCount();
-}
-function updateSelectedCount(){
-  document.getElementById("selectedCount").textContent=String(selectedIds.size);
-  const filtered=filteredItems(activeTab);
-  document.getElementById("selectAllBox").checked=filtered.length>0&&filtered.every(item=>selectedIds.has(item.id));
-}
-async function deleteSelected(){
-  if(!selectedIds.size)return;
-  if(!confirm(`Supprimer ${selectedIds.size} candidat(s) sélectionné(s) ? Cette action est irréversible.`))return;
-  const ids=[...selectedIds];
-  const results=await Promise.allSettled(ids.map(id=>apiFetch(`/api/drh/candidates/${id}`,{method:"DELETE"})));
-  const failed=results.filter(r=>r.status==="rejected").length;
-  selectedIds.clear();
-  showBanner(failed?`${ids.length-failed} candidat(s) supprimé(s), ${failed} échec(s).`:`${ids.length} candidat(s) supprimé(s).`,failed?"error":"success");
-  loadTab(activeTab);
 }
 async function changeAvis(id,value){
   const item=tabState[activeTab].items.find(row=>row.id===id);
