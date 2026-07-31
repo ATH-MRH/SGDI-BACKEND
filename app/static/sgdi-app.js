@@ -4644,8 +4644,11 @@ function sgdiEffectifExportList(filter){
   return{...data,list};
 }
 async function sgdiExportEffectifExcel(){
-  const filter=sgdiCurrentEffectifFilter()||sessionStorage.getItem("effectifStableFilter")||"actifs";
-  if(filter==="recap"||String(filter).startsWith("preparation")){
+  let filter=sgdiCurrentEffectifFilter()||sessionStorage.getItem("effectifStableFilter")||"actifs";
+  // La route /effectif/recap affiche en réalité la liste stable sélectionnée
+  // (actifs, absents, suspension, etc.). L'export doit reprendre cette liste.
+  if(filter==="recap")filter=sessionStorage.getItem("effectifStableFilter")||"actifs";
+  if(String(filter).startsWith("preparation")){
     if(typeof toast==="function")toast("Ouvrez une liste d'employés pour l'exporter","info");
     return;
   }
