@@ -132,13 +132,48 @@ tr:last-child td{border-bottom:0}
     <div id="banner"></div>
     <div id="countersRow" class="counters-row"></div>
     <div class="tabs" id="tabs"></div>
-    <div class="toolbar">
-      <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
-      <button class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
+    <div id="candidatesView">
+      <div class="toolbar">
+        <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
+        <button class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
+      </div>
+      <div class="table-card">
+        <div id="listWrap"><div class="empty">Chargement…</div></div>
+        <div class="pagination" id="pagination"></div>
+      </div>
     </div>
-    <div class="table-card">
-      <div id="listWrap"><div class="empty">Chargement…</div></div>
-      <div class="pagination" id="pagination"></div>
+    <div id="contractView" class="hidden">
+      <div class="table-card" style="padding:20px;margin-bottom:16px">
+        <h2 style="margin:0 0 4px;font-size:17px">Contrat à établir</h2>
+        <p style="margin:0 0 10px;font-size:12px;color:var(--muted)">Cliquez sur "Recruter" depuis un candidat pour préparer son contrat ici.</p>
+        <div id="contractFormEmpty" class="empty" style="padding:20px 0">Aucun candidat sélectionné pour le moment.</div>
+        <form id="contractForm" class="hidden" onsubmit="event.preventDefault();submitContractForm()">
+          <div class="field-grid">
+            <div class="full"><label>Candidat</label><input id="ctCandidateName" readonly style="background:#f8fafc;font-weight:800"></div>
+            <div><label>Poste</label><input id="ctPosition" readonly style="background:#f8fafc"></div>
+            <div><label>Société</label><input id="ctSociety" readonly style="background:#f8fafc"></div>
+            <div><label>Type de contrat</label><select id="ctType" onchange="onContractTypeChange()"><option value="CDD">CDD</option><option value="CDI">CDI</option><option value="CIDD">CIDD</option><option value="CTA">CTA</option><option value="APPRENTISSAGE">Apprentissage</option></select></div>
+            <div><label>Date de début</label><input id="ctStart" type="date" onchange="updateContractEndDate()"></div>
+            <div id="ctDurationWrap"><label>Durée du contrat</label><select id="ctDuration" onchange="updateContractEndDate()"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option><option value="36">36 mois</option></select></div>
+            <div><label>Date de fin</label><input id="ctEnd" type="date" readonly style="background:#f8fafc"></div>
+            <div><label>Salaire net (DA/mois)</label><input id="ctSalary" type="number" min="0" step="1000"></div>
+            <div><label>N° CNAS</label><input id="ctCnas" maxlength="20"></div>
+            <div><label>Mode de paiement</label><select id="ctPaymentMode"><option>Virement bancaire</option><option>Espèces</option><option>Chèque</option></select></div>
+            <div><label>Banque</label><input id="ctBank"></div>
+            <div><label>RIB / IBAN</label><input id="ctIban"></div>
+          </div>
+          <div id="contractFormError" class="error"></div>
+          <div class="modal-actions">
+            <button type="button" class="secondary" onclick="cancelContractForm()">Annuler</button>
+            <button type="submit" class="primary" id="establishContractBtn">Établir contrat</button>
+          </div>
+        </form>
+      </div>
+      <div class="table-card">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--line);font-weight:900;font-size:14px">Liste des contrats</div>
+        <div id="contractListWrap"><div class="empty">Chargement…</div></div>
+        <div class="pagination" id="contractPagination"></div>
+      </div>
     </div>
   </main>
 </section>
@@ -196,7 +231,8 @@ let searchTimer=null;
 const TABS=[
   {key:"new",label:"Nouvelles candidatures"},
   {key:"reserve",label:"Réserve"},
-  {key:"archive",label:"Archives"}
+  {key:"archive",label:"Archives"},
+  {key:"contrat",label:"Contrat"}
 ];
 const PAGE_SIZE=25;
 const tabState={
@@ -274,14 +310,22 @@ async function apiFetch(path,options={}){
 }
 
 function renderTabs(){
-  document.getElementById("tabs").innerHTML=TABS.map(t=>`<button type="button" class="tab-btn${activeTab===t.key?" active":""}" onclick="switchTab('${t.key}')">${esc(t.label)} <span class="count">${tabState[t.key].total}</span></button>`).join("");
+  document.getElementById("tabs").innerHTML=TABS.map(t=>{
+    const count=tabState[t.key]?`<span class="count">${tabState[t.key].total}</span>`:"";
+    return `<button type="button" class="tab-btn${activeTab===t.key?" active":""}" onclick="switchTab('${t.key}')">${esc(t.label)} ${count}</button>`;
+  }).join("");
 }
 function switchTab(tab,force){
   if(activeTab===tab&&!force)return;
   activeTab=tab;
+  renderTabs();
+  const isContract=tab==="contrat";
+  document.getElementById("candidatesView").classList.toggle("hidden",isContract);
+  document.getElementById("contractView").classList.toggle("hidden",!isContract);
+  document.getElementById("countersRow").classList.toggle("hidden",isContract);
+  if(isContract){loadContractsList();return}
   document.getElementById("searchInput").value=tabState[tab].q||"";
   document.getElementById("addCandidateBtn").classList.toggle("hidden",tab!=="new");
-  renderTabs();
   loadTab(tab);
 }
 function onSearchInput(){
@@ -390,7 +434,7 @@ function avisCell(item){
 }
 function rowActions(item){
   const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
-  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="recruitCandidate(${item.id})">Recruter</button>`);
+  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openContractForCandidate(${item.id})">Recruter</button>`);
   if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
   return `<div class="row-actions">${actions.join("")}</div>`;
 }
@@ -452,21 +496,165 @@ async function markReadyForContract(id){
   }catch(error){showBanner(esc(error.message),"error")}
 }
 const CANDIDATE_SECTIONS=["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"];
-async function recruitCandidate(id){
+const CONTRACT_TYPES=["CDD","CDI","CIDD","CTA","APPRENTISSAGE"];
+let contractCandidate=null;
+let contractReturnTab="new";
+function addMonths(dateStr,months){
+  const d=new Date((dateStr||today())+"T00:00:00");
+  d.setMonth(d.getMonth()+Number(months||0));
+  return d.toISOString().slice(0,10);
+}
+function onContractTypeChange(){
+  const isCdi=document.getElementById("ctType").value==="CDI";
+  document.getElementById("ctDurationWrap").classList.toggle("hidden",isCdi);
+  updateContractEndDate();
+}
+function updateContractEndDate(){
+  const isCdi=document.getElementById("ctType").value==="CDI";
+  if(isCdi){document.getElementById("ctEnd").value="";return}
+  const start=document.getElementById("ctStart").value||today();
+  const months=Number(document.getElementById("ctDuration").value||12);
+  document.getElementById("ctEnd").value=addMonths(start,months);
+}
+function openContractForCandidate(id){
   const item=Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===id);
   if(!item)return;
-  const fullName=`${item.last_name||""} ${item.first_name||""}`.trim();
-  if(!confirm(`Recruter ${fullName} ? Un employé et un contrat seront créés immédiatement. Cette action est irréversible depuis cet écran.`))return;
+  contractCandidate=item;
+  contractReturnTab=activeTab==="contrat"?contractReturnTab:activeTab;
+  const data=item.data||{};
+  document.getElementById("contractFormEmpty").classList.add("hidden");
+  document.getElementById("contractForm").classList.remove("hidden");
+  document.getElementById("ctCandidateName").value=`${item.last_name||""} ${item.first_name||""}`.trim();
+  document.getElementById("ctPosition").value=item.desired_position||"";
+  document.getElementById("ctSociety").value=item.society||"";
+  const savedType=String(data.typeContrat||"").toUpperCase();
+  document.getElementById("ctType").value=CONTRACT_TYPES.includes(savedType)?savedType:"CDD";
+  document.getElementById("ctStart").value=today();
+  document.getElementById("ctDuration").value="12";
+  document.getElementById("ctSalary").value=item.expected_salary||"";
+  document.getElementById("ctCnas").value=data.numeroCnas||"";
+  document.getElementById("ctPaymentMode").value=data.modePaiement||"Virement bancaire";
+  document.getElementById("ctBank").value=data.banque||"";
+  document.getElementById("ctIban").value=data.iban||"";
+  document.getElementById("contractFormError").classList.remove("show");
+  onContractTypeChange();
+  switchTab("contrat",true);
+}
+function resetContractForm(){
+  contractCandidate=null;
+  document.getElementById("contractForm").classList.add("hidden");
+  document.getElementById("contractFormEmpty").classList.remove("hidden");
+}
+function cancelContractForm(){
+  resetContractForm();
+  switchTab(contractReturnTab,true);
+}
+async function submitContractForm(){
+  if(!contractCandidate)return;
+  const errorEl=document.getElementById("contractFormError");
+  errorEl.classList.remove("show");
+  const type=document.getElementById("ctType").value;
+  const start=document.getElementById("ctStart").value;
+  const end=document.getElementById("ctEnd").value;
+  if(!start){errorEl.textContent="Date de début obligatoire.";errorEl.classList.add("show");return}
+  if(type!=="CDI"&&!end){errorEl.textContent="Durée du contrat obligatoire.";errorEl.classList.add("show");return}
+  const id=contractCandidate.id;
+  const fullName=`${contractCandidate.last_name||""} ${contractCandidate.first_name||""}`.trim();
+  if(!confirm(`Établir le contrat de ${fullName} ? Un employé sera créé immédiatement. Cette action est irréversible depuis cet écran.`))return;
+  const button=document.getElementById("establishContractBtn");
+  button.disabled=true;button.textContent="Enregistrement…";
   try{
     const stamp={by:recruteSession?.user?.username||"recrutement",at:new Date().toISOString()};
     const sectionValidations={};
     CANDIDATE_SECTIONS.forEach(key=>{sectionValidations[key]=stamp});
-    await apiFetch(`/api/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:{...(item.data||{}),sectionValidations,fichePositionValidee:true}})});
+    const salaryInput=document.getElementById("ctSalary").value;
+    const salary=salaryInput?Number(salaryInput):(contractCandidate.expected_salary||0);
+    await apiFetch(`/api/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      expected_salary:salary,
+      data:{
+        ...(contractCandidate.data||{}),
+        sectionValidations,
+        fichePositionValidee:true,
+        typeContrat:type,
+        dateFinContrat:type==="CDI"?"":end,
+        numeroCnas:document.getElementById("ctCnas").value.trim(),
+        modePaiement:document.getElementById("ctPaymentMode").value,
+        banque:document.getElementById("ctBank").value.trim(),
+        iban:document.getElementById("ctIban").value.trim()
+      }
+    })});
     const result=await apiFetch(`/api/drh/candidates/${id}/recruit`,{method:"POST"});
     const employee=result.data||{};
-    showBanner(`Candidat recruté : employé ${esc(employee.code||"")} créé pour ${esc(fullName)}.`,"success");
-    loadTab(activeTab);
-  }catch(error){showBanner(esc(error.message),"error")}
+    showBanner(`Contrat établi : employé ${esc(employee.code||"")} créé pour ${esc(fullName)}.`,"success");
+    resetContractForm();
+    switchTab(contractReturnTab,true);
+  }catch(error){
+    errorEl.textContent=error.message||"Établissement du contrat impossible";
+    errorEl.classList.add("show");
+  }finally{
+    button.disabled=false;button.textContent="Établir contrat";
+  }
+}
+const CONTRACT_PAGE_SIZE=25;
+let contractsState={items:[],page:1};
+function contractTypeLabel(value){
+  return {CDD:"CDD",CDI:"CDI",CIDD:"CIDD",CTA:"CTA",APPRENTISSAGE:"Apprentissage"}[String(value||"").toUpperCase()]||value||"—";
+}
+async function loadContractsList(){
+  document.getElementById("contractListWrap").innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const empParams=new URLSearchParams();
+    if(activeSociety)empParams.set("society",activeSociety);
+    const [contracts,employees]=await Promise.all([
+      apiFetch("/api/drh/contracts"),
+      apiFetch("/api/drh/employees?"+empParams.toString())
+    ]);
+    const empMap=new Map((Array.isArray(employees)?employees:[]).map(e=>[e.id,e]));
+    contractsState.items=(Array.isArray(contracts)?contracts:[]).map(c=>({...c,employee:empMap.get(c.employee_id)||null})).sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||"")));
+    contractsState.page=1;
+    renderContractsList();
+  }catch(error){
+    document.getElementById("contractListWrap").innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
+  }
+}
+function renderContractsList(){
+  const items=contractsState.items;
+  if(!items.length){
+    document.getElementById("contractListWrap").innerHTML='<div class="empty">Aucun contrat.</div>';
+    document.getElementById("contractPagination").innerHTML="";
+    return;
+  }
+  const pages=Math.max(Math.ceil(items.length/CONTRACT_PAGE_SIZE),1);
+  if(contractsState.page>pages)contractsState.page=pages;
+  const pageItems=items.slice((contractsState.page-1)*CONTRACT_PAGE_SIZE,contractsState.page*CONTRACT_PAGE_SIZE);
+  document.getElementById("contractListWrap").innerHTML=`<table><thead><tr>
+    <th>Employé</th><th>Poste</th><th>Type</th><th>Début</th><th>Fin</th><th>Salaire net</th><th>Statut</th>
+  </tr></thead><tbody>
+  ${pageItems.map(c=>{
+    const emp=c.employee;
+    const name=emp?`${emp.last_name||""} ${emp.first_name||""}`.trim():`Employé #${c.employee_id}`;
+    const code=emp&&emp.code?` · ${esc(emp.code)}`:"";
+    return `<tr>
+      <td><div class="cand-name">${esc(name)}${code}</div></td>
+      <td>${esc(c.position||"—")}</td>
+      <td><span class="pill pill-indigo">${esc(contractTypeLabel(c.contract_type))}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${esc(c.start_date||"—")}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(c.end_date||"Indéterminée")}</td>
+      <td>${c.salary_net?Number(c.salary_net).toLocaleString("fr-FR")+" DA":"—"}</td>
+      <td><span class="pill ${c.status==="actif"?"pill-green":"pill-gray"}">${esc(c.status||"—")}</span></td>
+    </tr>`;
+  }).join("")}
+  </tbody></table>`;
+  document.getElementById("contractPagination").innerHTML=`
+    <div>${items.length} contrat(s) · page ${contractsState.page}/${pages}</div>
+    <div class="btns">
+      <button ${contractsState.page<=1?"disabled":""} onclick="gotoContractPage(${contractsState.page-1})">Précédent</button>
+      <button ${contractsState.page>=pages?"disabled":""} onclick="gotoContractPage(${contractsState.page+1})">Suivant</button>
+    </div>`;
+}
+function gotoContractPage(page){
+  contractsState.page=page;
+  renderContractsList();
 }
 
 function candidateField(id,value){const el=document.getElementById(id);if(el)el.value=value??""}
