@@ -35,6 +35,20 @@ def test_manual_search_finds_by_name(client, auth_headers):
     assert row["nom"] == "RACHEDI" and row["prenom"] == "SOFIANE"
 
 
+def test_light_attendance_employees_returns_active_employee_and_assignment(client, auth_headers, db):
+    site_id = _site(client, auth_headers, "Site Referentiel Leger")
+    emp_id = _emp(client, auth_headers, "PTL01", fn="Lina", ln="Legere")
+    _assign(client, auth_headers, emp_id, site_id)
+    response = client.get(f"/api/portal/attendance-employees?society={SOCIETY}", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    matches = [item for item in response.json() if item["id"] == emp_id]
+    assert matches, response.json()
+    row = matches[0]
+    assert row["matricule"] == "PTL01"
+    assert row["assignment"]["site_id"] == site_id
+    assert row["assignment"]["site_name"] == "SITE REFERENTIEL LEGER"
+
+
 def test_manual_search_too_short_returns_empty(client, auth_headers):
     r = client.get("/api/portal/attendance-manual/search?q=a", headers=auth_headers)
     assert r.status_code == 200

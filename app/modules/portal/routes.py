@@ -80,6 +80,58 @@ def _ensure_attendance_employee_scope(db: Session, scanner: User, employee: Empl
         raise HTTPException(status_code=403, detail="Employé hors du périmètre société/site du pointeur")
 
 
+@router.get("/attendance-employees")
+def attendance_employees(
+    society: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[dict[str, Any]]:
+    """Référentiel léger du pointage : même table Employee que Pointeur, sans les lourdes
+    fiches RH `extra`. Il évite que le téléchargement de plusieurs Mo masque tout OPS/DRH."""
+    def society_key(value: Any) -> str:
+        text = unicodedata.normalize("NFD", _clean_text(value).upper())
+        return " ".join("".join(ch for ch in text if unicodedata.category(ch) != "Mn").split())
+
+    requested_key = society_key(society)
+    authorized_societies = user.authorized_societies if isinstance(user.authorized_societies, list) else []
+    allowed_keys = {society_key(value) for value in authorized_societies if society_key(value)}
+    if requested_key and allowed_keys and requested_key not in allowed_keys:
+        raise HTTPException(status_code=403, detail="Société non autorisée")
+    effective_keys = {requested_key} if requested_key else allowed_keys
+    employees = db.execute(select(Employee).order_by(Employee.last_name, Employee.first_name)).scalars().all()
+    employees = [row for row in employees if not _employee_portal_block_reason(row)]
+    if effective_keys:
+        employees = [row for row in employees if society_key(row.society) in effective_keys]
+
+    employee_ids = [row.id for row in employees]
+    assignments = db.execute(
+        select(Assignment).where(Assignment.employee_id.in_(employee_ids), Assignment.active == 1)
+        .order_by(Assignment.id.desc())
+    ).scalars().all() if employee_ids else []
+    current_assignment: dict[int, Assignment] = {}
+    for assignment in assignments:
+        current_assignment.setdefault(assignment.employee_id, assignment)
+    explicit_sites = {
+        int(value) for value in (user.authorized_sites if isinstance(user.authorized_sites, list) else [])
+        if str(value).strip().isdigit()
+    }
+    if explicit_sites:
+        employees = [row for row in employees if current_assignment.get(row.id) and current_assignment[row.id].site_id in explicit_sites]
+    site_ids = {assignment.site_id for assignment in current_assignment.values() if assignment.site_id}
+    sites = {row.id: row for row in db.execute(select(Site).where(Site.id.in_(site_ids))).scalars().all()} if site_ids else {}
+    return [{
+        "id": row.id, "matricule": row.code, "nom": row.last_name, "prenom": row.first_name,
+        "societe": row.society or "", "statut": row.status or "", "poste": row.position or "",
+        "assignment": ({
+            "id": current_assignment[row.id].id,
+            "site_id": current_assignment[row.id].site_id,
+            "site_name": (sites.get(current_assignment[row.id].site_id).name if sites.get(current_assignment[row.id].site_id) else ""),
+            "groupe": current_assignment[row.id].group_code or "",
+            "poste": current_assignment[row.id].position or row.position or "",
+        } if row.id in current_assignment else None),
+    } for row in employees]
+
+
 def _ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
     if fwd:

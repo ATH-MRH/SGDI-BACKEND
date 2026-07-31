@@ -1372,6 +1372,31 @@ async function sgdiPullEmployees(options){
   }
   return null;
 }
+let ptLightEmployeesLoading=false;
+function ptLightEmployeesKey(soc){return normalizeSocieteName(soc||"__all__")}
+function ptLightEmployeeFromApi(row){
+  const existing=(db.agents||[]).find(a=>String(a.backendId||"")===String(row.id)||String(a.matricule||"")===String(row.matricule||""))||{};
+  const assignment=row.assignment||null;
+  return {...existing,id:existing.id||String(row.id),backendId:row.id,matricule:row.matricule||existing.matricule||"",code:row.matricule||existing.code||"",nom:row.nom||existing.nom||"",prenom:row.prenom||existing.prenom||"",societe:row.societe||existing.societe||"",statut:row.statut||existing.statut||"actif",fonction:row.poste||existing.fonction||"",position:row.poste||existing.position||"",affectationCourante:assignment?{...(existing.affectationCourante||{}),assignmentBackendId:assignment.id,siteId:String(assignment.site_id||""),siteBackendId:assignment.site_id||null,siteName:assignment.site_name||"",groupe:assignment.groupe||"",poste:assignment.poste||row.poste||""}:{}};
+}
+async function ptPullLightEmployees(soc){
+  const rows=await sgdiApi("/portal/attendance-employees"+(soc?"?society="+encodeURIComponent(soc):""),{legacy:false});
+  if(!Array.isArray(rows))throw new Error("Référentiel pointage invalide");
+  window.__ptLightEmployees=window.__ptLightEmployees||{};
+  const mapped=rows.map(ptLightEmployeeFromApi);
+  window.__ptLightEmployees[ptLightEmployeesKey(soc)]=mapped;
+  window.__ptLightEmployeesAt=window.__ptLightEmployeesAt||{};
+  window.__ptLightEmployeesAt[ptLightEmployeesKey(soc)]=Date.now();
+  return mapped;
+}
+function ptLightEmployeesForSoc(soc){return window.__ptLightEmployees?.[ptLightEmployeesKey(soc)]||null}
+function ptEnsureLightEmployees(soc,force){
+  if(ptLightEmployeesLoading||!sgdiAuthToken())return null;
+  const key=ptLightEmployeesKey(soc),cached=ptLightEmployeesForSoc(soc),age=Date.now()-(window.__ptLightEmployeesAt?.[key]||0);
+  if(cached&&(!force||age<10000)&&age<60000)return null;
+  ptLightEmployeesLoading=true;
+  return ptPullLightEmployees(soc).finally(()=>{ptLightEmployeesLoading=false});
+}
 function dedupeEmployeesByBackendId(list){
   const byBackend=new Map();
   const out=[];
@@ -5082,7 +5107,6 @@ function moduleCountersRibbonHTML(){
       {label:"EFF. SUSPENDU",value:susp,color:"#7c3aed",route:"effectif/suspension",pctBase:total},
       ...prepCounters,
       {label:"EFF. BLACKLISTÉ",value:blacklist,color:"#111827",route:"effectif/blacklist",pctBase:total},
-      {label:"CANDIDAT RÉSERVE",value:reserveCandidates,color:"#0ea5e9",route:"reserve",pctBase:reserveTotal},
       ...(module==="drh"?[]:[{label:"MISSION EN COURS",value:missionEnCours,color:"#7c3aed",route:"ops/missions",pctBase:missionTotal}])
     ]);
   }
@@ -6255,7 +6279,6 @@ function renderSidebar(){
     const sidebarByModule={
       drh:[
         {label:"TABLEAU DE BORD",route:"drh/dashboard"},
-        {label:"RECRUTEMENT / CANDIDATS",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"],count:drhRecrutementCandidats||drhCandidatsActifs||null},
         {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],count:drhAContractualiser||null},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"]},
@@ -34698,7 +34721,8 @@ function employeeIsPointageEligible(a,soc){
   return !soc||normalizeSocieteName(a.societe)===normalizeSocieteName(soc);
 }
 function pointageEligibleAgents(soc){
-  const list=(db.agents||[])
+  const source=ptLightEmployeesForSoc(soc)||(db.agents||[]);
+  const list=source
     .filter(a=>employeeIsPointageEligible(a,soc))
     .filter(agentInSupervisorScope)
     .sort((x,y)=>(x.nom||"").localeCompare(y.nom||"")||(x.prenom||"").localeCompare(y.prenom||""));
@@ -36285,7 +36309,7 @@ function renderPointage(view,sub,arg,_skipEnsure){
     // rechargement (voir sgdiEnsureEmployeesForDisplay). Avec force:true, CHAQUE
     // réaffichage (y compris les auto-refresh en arrière-plan) remplaçait la vue par
     // "Chargement des effectifs…", effaçant l'affichage/saisie en cours de l'utilisateur.
-    const _r=sgdiEnsureEmployeesForDisplay({society:ptCurrentSoc(),force:_ptFreshNav});
+    const _r=ptEnsureLightEmployees(ptCurrentSoc(),_ptFreshNav);
     if(_r&&typeof _r.then==="function"){
       view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;
       _r.then(()=>renderPointage(view,sub,arg,true)).catch(()=>renderPointage(view,sub,arg,true));
@@ -36774,9 +36798,9 @@ async function ptAutoSaisieLiveRefresh(){
     const refreshPeople=Date.now()-_ptAutoEmployeesSyncedAt>60000;
     const [res]=await Promise.all([
       sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false}),
-      refreshPeople?sgdiPullEmployees({silent:true,society:ptCurrentSoc()}):Promise.resolve(null)
+      refreshPeople?ptPullLightEmployees(ptCurrentSoc()):Promise.resolve(null)
     ]);
-    if(refreshPeople){await syncAssignmentsFromPostgres();_ptAutoEmployeesSyncedAt=Date.now()}
+    if(refreshPeople)_ptAutoEmployeesSyncedAt=Date.now();
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
     const scrollY=window.scrollY;
@@ -36796,9 +36820,9 @@ async function ptAutoSaisieRefresh(){
   try{
     const [res]=await Promise.all([
       sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false}),
-      sgdiPullEmployees({silent:true,society:ptCurrentSoc()})
+      ptPullLightEmployees(ptCurrentSoc())
     ]);
-    await syncAssignmentsFromPostgres();_ptAutoEmployeesSyncedAt=Date.now();
+    _ptAutoEmployeesSyncedAt=Date.now();
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
     const scrollY=window.scrollY;
