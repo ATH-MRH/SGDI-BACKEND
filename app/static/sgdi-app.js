@@ -30675,9 +30675,22 @@ const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
 // inchangées partout (logique de rôles) — seul le texte montré à l'écran change.
 const ADMIN_ROLE_DISPLAY_LABELS={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
 function adminRoleDisplayLabel(code){return ADMIN_ROLE_DISPLAY_LABELS[code]||code}
-const ADMIN_STRUCTURES=[{key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"superviseur",label:"SUPERVISEUR"},{key:"materiel",label:"MATERIEL/EQUIP"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"facmod",label:"FACTURATION"},{key:"paie",label:"PAIE"},{key:"commercial",label:"COMMERCIAL"},{key:"secretariat",label:"SECRETARIAT GÉNÉRAL"},{key:"agenda",label:"AGENDA"},{key:"pointage",label:"POINTAGE"},{key:"portail",label:"PORTAIL RH"},{key:"admin",label:"ADMINISTRATION SYSTÈME"}];
+const ADMIN_PRIMARY_STRUCTURES=[
+  {key:"drh",label:"DRH"},{key:"ops",label:"OPS"},{key:"materiel",label:"MATERIEL/EQUIP"},
+  {key:"commercial",label:"COMMERCIAL"},{key:"facturation",label:"FINANCES/COMPTA"},{key:"secretariat",label:"SECRETARIAT GÉNÉRAL"}
+];
+const ADMIN_FUNCTION_ACCESS=[
+  {key:"superviseur",label:"SUPERVISEUR"},{key:"pointeur",label:"POINTEUR"},{key:"gestionnaire_rh",label:"GESTIONNAIRE RH"},
+  {key:"recruteur",label:"RECRUTEUR"},{key:"acheteur",label:"ACHETEUR"},{key:"admin",label:"ADMINISTRATION SYSTÈME"},
+  {key:"facmod",label:"FACTURATION"},{key:"recrutement",label:"RECRUTEMENT"},{key:"agenda",label:"AGENDA"},
+  {key:"stock",label:"GESTION DE STOCK"},{key:"paie",label:"PAIE"},{key:"contrats",label:"GESTION CONTRAT"},
+  {key:"portail",label:"PORTAIL RH"},{key:"conges",label:"GESTION DE CONGÉ"},{key:"pointage",label:"POINTAGE"},
+  {key:"achat_appro",label:"ACHAT APPRO"}
+];
+const ADMIN_STRUCTURES=[...ADMIN_PRIMARY_STRUCTURES,...ADMIN_FUNCTION_ACCESS];
 function normalizeStructureKey(value){
   const raw=String(value||"").trim();
+  if(ADMIN_STRUCTURES.some(s=>s.key===raw))return raw;
   const v=raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[_\s-]+/g," ");
   if(["drh","rh","ressources humaines"].includes(v))return"drh";
   if(v.includes("secretariat"))return"secretariat";
@@ -30697,8 +30710,16 @@ function normalizeStructureList(list){const out=[];(Array.isArray(list)?list:[])
 function adminStructureLabel(key){const k=normalizeStructureKey(key);const x=ADMIN_STRUCTURES.find(s=>s.key===k);return x?x.label:String(key||"").toUpperCase()}
 function userAllowedStructures(user){return normalizeStructureList(user&&user.structuresAutorisees)}
 function currentAllowedStructures(){return userAllowedStructures(currentUserRecord()||session)}
-function canAccessModuleHostKey(key){const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||allowed.includes(normalized)||(normalized==="paie"&&allowed.includes("drh")))}
-function canAccessStructureKey(key){if(isAdmin())return true;const allowed=currentAllowedStructures();const normalized=normalizeStructureKey(key);return !allowed.length||allowed.includes(normalized)||(normalized==="paie"&&allowed.includes("drh"))}
+const ADMIN_ACCESS_IMPLICATIONS={
+  drh:["gestionnaire_rh","recruteur","recrutement","contrats","conges"],
+  pointage:["pointeur"],portail:["gestionnaire_rh"],materiel:["acheteur","stock","achat_appro"],
+  facmod:["facturation"],facturation:["facmod"]
+};
+function adminAccessIncludes(allowed,key){
+  return allowed.includes(key)||(ADMIN_ACCESS_IMPLICATIONS[key]||[]).some(alias=>allowed.includes(alias));
+}
+function canAccessModuleHostKey(key){const normalized=normalizeStructureKey(key);if(isAdminGeneralSession())return true;if(isAdminSystemSession())return true;const allowed=currentAllowedStructures();return !!normalized&&(!allowed.length||adminAccessIncludes(allowed,normalized)||(normalized==="paie"&&allowed.includes("drh")))}
+function canAccessStructureKey(key){if(isAdmin())return true;const allowed=currentAllowedStructures();const normalized=normalizeStructureKey(key);return !allowed.length||adminAccessIncludes(allowed,normalized)||(normalized==="paie"&&allowed.includes("drh"))}
 function adminAccessBaseRole(role){const r=String(role||"").trim();const u=r.toUpperCase();if(u.startsWith("AG"))return"agent";if(u.startsWith("CAD")||u==="RH")return"ops";if(u.startsWith("SUP"))return"dispatch";if(u.startsWith("ADM")||u==="ADMIN")return"admin";return r.toLowerCase()}
 function normalizeAdminUserRole(role){const b=adminAccessBaseRole(role);if(b==="admin")return"ADM";if(b==="dispatch")return"dispatch";if(b==="ops"||b==="rh")return"ops";return"agent"}
 function adminRoleColor(role){const b=normalizeAdminUserRole(role);if(b==="agent")return"#0f766e";if(b==="ops")return"#043970";if(b==="dispatch")return"#7c3aed";if(b==="ADM")return"#dc2626";return"#64748b"}
@@ -32593,9 +32614,15 @@ async function openAdminUserModal(username){
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #fecaca;background:#fef2f2"><input type="checkbox" name="peutReactiverSortant" ${u.peutReactiverSortant?"checked":""}/> Peut réactiver un employé SORTANT</label>
       </div>
       <label class="label mt-3">Périmètre sociétés (vide = toutes)</label>
-      <div class="grid grid-2 gap-2">${SOCIETES.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/>${escapeHTML(s)}</label>`).join("")}</div>
-      <label class="label mt-3">Périmètre structures (vide = toutes)</label>
-      <div class="grid grid-2 gap-2">${ADMIN_STRUCTURES.map(st=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${normalizeStructureList(u.structuresAutorisees).includes(st.key)?"checked":""} onchange="adminSuggestUsernameForForm(false)"/>${escapeHTML(st.label)}</label>`).join("")}</div>
+      <div class="admin-access-societies">${SOCIETES.map(s=>`<label><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/><span>${escapeHTML(s)}</span></label>`).join("")}</div>
+      <div class="admin-access-separator"></div>
+      <label class="label">Périmètre structures (vide = toutes)</label>
+      <div class="admin-access-primary">${ADMIN_PRIMARY_STRUCTURES.map(st=>adminAccessCheckboxHTML(st,u)).join("")}</div>
+      <div class="admin-access-separator"></div>
+      <div class="admin-access-functions">
+        <div>${ADMIN_FUNCTION_ACCESS.slice(0,6).map(st=>adminAccessCheckboxHTML(st,u)).join("")}</div>
+        <div>${ADMIN_FUNCTION_ACCESS.slice(6).map(st=>adminAccessCheckboxHTML(st,u)).join("")}</div>
+      </div>
       <label class="label mt-3">Périmètre sites (vide = tous)</label>
       <div style="max-height:320px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{
         const seen=new Set();
@@ -32619,6 +32646,10 @@ async function openAdminUserModal(username){
       <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">💾 Enregistrer</button></div>
     </form>`);
   setTimeout(()=>{previewUserAccessLevel(selectedNiveau);if(isNew)adminSuggestUsernameForForm(false)},0);
+}
+function adminAccessCheckboxHTML(st,user){
+  const selected=normalizeStructureList(user&&user.structuresAutorisees).includes(st.key);
+  return `<label><input type="checkbox" name="struct_${st.key}" value="${escapeHTML(st.key)}" ${selected?"checked":""} onchange="adminSuggestUsernameForForm(false)"/><span>${escapeHTML(st.label)}</span></label>`;
 }
 function previewUserAccessLevel(code){
   const n=ensureNiveauxAcces().find(x=>x.code===code);

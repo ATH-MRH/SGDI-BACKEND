@@ -363,7 +363,14 @@ def _user_matches_module(user: User, module: str) -> bool:
     role = str(user.role or "").strip().lower()
     level = str(user.access_level or "").strip().lower()
     structures = {s.lower() for s in _normalized_list(user.authorized_structures)}
-    if module in structures or "admin" in structures:
+    module_aliases = {
+        "drh": {"gestionnaire_rh", "recruteur", "recrutement", "contrats", "conges"},
+        "pointage": {"pointeur"},
+        "portail": {"gestionnaire_rh"},
+        "materiel": {"acheteur", "stock", "achat_appro"},
+        "facturation": {"facmod"},
+    }
+    if module in structures or "admin" in structures or bool(structures & module_aliases.get(module, set())):
         return True
     if role in {"admin", "adm", "adm1", "adm2"} or level.startswith("adm"):
         return True
