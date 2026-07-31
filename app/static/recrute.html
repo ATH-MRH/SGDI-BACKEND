@@ -390,6 +390,7 @@ function avisCell(item){
 }
 function rowActions(item){
   const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
+  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="recruitCandidate(${item.id})">Recruter</button>`);
   if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
   return `<div class="row-actions">${actions.join("")}</div>`;
 }
@@ -447,6 +448,23 @@ async function markReadyForContract(id){
   try{
     await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
     showBanner('Candidat prêt pour contractualisation. Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
+    loadTab(activeTab);
+  }catch(error){showBanner(esc(error.message),"error")}
+}
+const CANDIDATE_SECTIONS=["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"];
+async function recruitCandidate(id){
+  const item=Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===id);
+  if(!item)return;
+  const fullName=`${item.last_name||""} ${item.first_name||""}`.trim();
+  if(!confirm(`Recruter ${fullName} ? Un employé et un contrat seront créés immédiatement. Cette action est irréversible depuis cet écran.`))return;
+  try{
+    const stamp={by:recruteSession?.user?.username||"recrutement",at:new Date().toISOString()};
+    const sectionValidations={};
+    CANDIDATE_SECTIONS.forEach(key=>{sectionValidations[key]=stamp});
+    await apiFetch(`/api/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:{...(item.data||{}),sectionValidations,fichePositionValidee:true}})});
+    const result=await apiFetch(`/api/drh/candidates/${id}/recruit`,{method:"POST"});
+    const employee=result.data||{};
+    showBanner(`Candidat recruté : employé ${esc(employee.code||"")} créé pour ${esc(fullName)}.`,"success");
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error")}
 }
