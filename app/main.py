@@ -160,6 +160,10 @@ def ensure_schema_upgrades() -> None:
             for name, sql_type in daily_presence_columns.items():
                 if name not in columns:
                     connection.execute(text(f"ALTER TABLE daily_presence ADD COLUMN {name} {sql_type}"))
+        if "assignments" in tables:
+            columns = {col["name"] for col in inspector.get_columns("assignments")}
+            if "rotation_id" not in columns:
+                connection.execute(text("ALTER TABLE assignments ADD COLUMN rotation_id INTEGER REFERENCES rotation_templates(id)"))
         if "irongs_collections" in tables and "sgdi_records" in tables:
             existing = connection.execute(text("SELECT COUNT(*) FROM sgdi_records")).scalar() or 0
             if existing == 0:
@@ -523,6 +527,15 @@ def portal_rh_mobile() -> FileResponse:
 def pointer_mobile() -> FileResponse:
     return FileResponse(
         STATIC_DIR / "pointeur.html",
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
+
+
+@app.get("/supervision", include_in_schema=False, name="attendance_supervision")
+def attendance_supervision() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "supervision.html",
         media_type="text/html; charset=utf-8",
         headers={"Cache-Control": "no-cache, max-age=0"},
     )

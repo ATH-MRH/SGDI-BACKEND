@@ -6,7 +6,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.modules.drh.models import Employee
-from app.modules.ops.models import Assignment, DailyPresence, Event, OpsMovement, Site, SitePost
+from app.modules.ops.models import Assignment, DailyPresence, Event, OpsMovement, RotationTemplate, Site, SitePost, SiteRotation
 
 
 def list_rows(db: Session, model: Type, filters: dict[str, Any] | None = None):
@@ -295,6 +295,25 @@ def rotation_for_date(rotation_system: str | None, group_code: str | None, work_
     return {"on": on, "period": period, "faction": period if on else "repos", "recovery": 0 if on else 1}
 
 
+def configured_rotation_for_date(rotation: RotationTemplate, group_code: str | None, work_date: date, base_date: date) -> dict[str, Any]:
+    days = rotation.cycle_days if isinstance(rotation.cycle_days, list) else []
+    length = max(1, min(rotation.cycle_length or len(days) or 1, len(days) or 1))
+    offsets = rotation.group_offsets if isinstance(rotation.group_offsets, dict) else {}
+    group = (group_code or "A").strip().upper()
+    try: offset = int(offsets.get(group, 0))
+    except (TypeError, ValueError): offset = 0
+    index = ((work_date - base_date).days + offset) % length
+    day = days[index] if index < len(days) and isinstance(days[index], dict) else {}
+    state = str(day.get("status") or day.get("type") or "repos").strip().lower()
+    on = state in {"travail", "work", "jour", "nuit", "matin", "apres_midi", "après-midi"}
+    period = str(day.get("label") or day.get("period") or state)
+    return {
+        "on": on, "period": period, "faction": period if on else "repos",
+        "recovery": 0 if on else 1, "start_time": day.get("start_time") or "",
+        "end_time": day.get("end_time") or "", "cycle_day": index + 1,
+    }
+
+
 def generate_rotation_daily_presence(db: Session, payload: Any):
     presence_date = payload.presence_date or date.today()
     stmt = select(Assignment).where(
@@ -319,7 +338,9 @@ def generate_rotation_daily_presence(db: Session, payload: Any):
             skipped += 1
             continue
         active_site_ids.add(site.id)
-        rot = rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
+        rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
+        rot = configured_rotation_for_date(rotation, assignment.group_code, presence_date, assignment.start_date) if rotation and rotation.active else rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
+        rotation_name = rotation.name if rotation else site.rotation_system
         existing = db.execute(select(DailyPresence).where(DailyPresence.presence_date == presence_date, DailyPresence.employee_id == assignment.employee_id).order_by(DailyPresence.id.desc())).scalars().first()
         if not rot["on"]:
             standby.append({
@@ -331,7 +352,7 @@ def generate_rotation_daily_presence(db: Session, payload: Any):
                 "site_id": site.id,
                 "site_name": site.name,
                 "group_code": assignment.group_code,
-                "rotation_system": site.rotation_system,
+                "rotation_system": rotation_name,
                 "reason": "Récupération / astreinte disponible",
             })
             continue
@@ -346,13 +367,13 @@ def generate_rotation_daily_presence(db: Session, payload: Any):
         row.group_code = assignment.group_code
         row.status = row.status or "present"
         row.generated = 1
-        row.rotation_system = site.rotation_system
+        row.rotation_system = rotation_name
         row.rotation_group = assignment.group_code
         row.rotation_period = rot["period"]
         row.faction = rot["faction"]
         row.recovery = 0
         row.standby = 0
-        row.data = {"generated_by": "rotation", "position": assignment.position, "site_name": site.name}
+        row.data = {"generated_by": "rotation", "rotation_id": assignment.rotation_id, "position": assignment.position, "site_name": site.name, "expected_arrival": rot.get("start_time", ""), "expected_departure": rot.get("end_time", ""), "cycle_day": rot.get("cycle_day")}
         if existing:
             updated += 1
         else:
@@ -387,7 +408,8 @@ def standby_personnel(db: Session, presence_date: date, society: str | None = No
         site_society = site.equipment_plan.get("societe") if isinstance(site.equipment_plan, dict) else None
         if society and employee.society != society and site_society != society:
             continue
-        rot = rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
+        rotation = db.get(RotationTemplate, assignment.rotation_id) if assignment.rotation_id else None
+        rot = configured_rotation_for_date(rotation, assignment.group_code, presence_date, assignment.start_date) if rotation and rotation.active else rotation_for_date(site.rotation_system, assignment.group_code, presence_date, assignment.start_date)
         if rot["on"]:
             continue
         rows.append({
@@ -399,7 +421,7 @@ def standby_personnel(db: Session, presence_date: date, society: str | None = No
             "site_id": site.id,
             "site_name": site.name,
             "group_code": assignment.group_code,
-            "rotation_system": site.rotation_system,
+            "rotation_system": rotation.name if rotation else site.rotation_system,
             "period": rot["period"],
             "reason": "Récupération / astreinte disponible",
         })

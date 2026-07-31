@@ -12,7 +12,7 @@ from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.drh.models import Employee
 from app.modules.ops import iron_sync, service
-from app.modules.ops.models import Assignment, DailyPresence, Event, OpsMovement, Site, SitePost
+from app.modules.ops.models import Assignment, DailyPresence, Event, OpsMovement, RotationTemplate, Site, SitePost, SiteRotation
 from app.modules.ops.schemas import (
     AssignmentCreate,
     AssignmentOut,
@@ -23,6 +23,10 @@ from app.modules.ops.schemas import (
     OpsMovementCreate,
     OpsMovementOut,
     RotationGenerateRequest,
+    RotationTemplateCreate,
+    RotationTemplateOut,
+    SiteRotationCreate,
+    SiteRotationOut,
     EventCreate,
     EventOut,
     SiteCreate,
@@ -34,6 +38,64 @@ from app.modules.ops.schemas import (
 
 
 router = APIRouter(dependencies=[Depends(current_user)])
+
+
+@router.get("/rotations", response_model=list[RotationTemplateOut])
+def list_rotations(db: Session = Depends(get_db)):
+    return db.execute(select(RotationTemplate).order_by(RotationTemplate.active.desc(), RotationTemplate.name)).scalars().all()
+
+
+@router.post("/rotations", response_model=RotationTemplateOut, status_code=status.HTTP_201_CREATED)
+def create_rotation(payload: RotationTemplateCreate, db: Session = Depends(get_db)):
+    if payload.cycle_length < 7 or payload.cycle_length > 366:
+        raise HTTPException(status_code=400, detail="Le cycle doit contenir entre 7 et 366 jours")
+    if len(payload.cycle_days) != payload.cycle_length:
+        raise HTTPException(status_code=400, detail="Le nombre de journées doit correspondre à la durée du cycle")
+    if db.execute(select(RotationTemplate).where(RotationTemplate.code == payload.code)).scalars().first():
+        raise HTTPException(status_code=409, detail="Ce code rotation existe déjà")
+    row = RotationTemplate(**payload.model_dump())
+    db.add(row); db.commit(); db.refresh(row)
+    return row
+
+
+@router.put("/rotations/{rotation_id}", response_model=RotationTemplateOut)
+def update_rotation(rotation_id: int, payload: RotationTemplateCreate, db: Session = Depends(get_db)):
+    row = db.get(RotationTemplate, rotation_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Rotation introuvable")
+    if payload.cycle_length < 7 or payload.cycle_length > 366 or len(payload.cycle_days) != payload.cycle_length:
+        raise HTTPException(status_code=400, detail="Cycle invalide")
+    duplicate = db.execute(select(RotationTemplate).where(RotationTemplate.code == payload.code, RotationTemplate.id != rotation_id)).scalars().first()
+    if duplicate:
+        raise HTTPException(status_code=409, detail="Ce code rotation existe déjà")
+    for key, value in payload.model_dump().items(): setattr(row, key, value)
+    db.commit(); db.refresh(row)
+    return row
+
+
+@router.get("/site-rotations", response_model=list[SiteRotationOut])
+def list_site_rotations(site_id: int | None = None, db: Session = Depends(get_db)):
+    stmt = select(SiteRotation).order_by(SiteRotation.start_date.desc(), SiteRotation.id.desc())
+    if site_id: stmt = stmt.where(SiteRotation.site_id == site_id)
+    return db.execute(stmt).scalars().all()
+
+
+@router.post("/site-rotations", response_model=SiteRotationOut, status_code=status.HTTP_201_CREATED)
+def create_site_rotation(payload: SiteRotationCreate, db: Session = Depends(get_db)):
+    if not db.get(Site, payload.site_id) or not db.get(RotationTemplate, payload.rotation_id):
+        raise HTTPException(status_code=404, detail="Site ou rotation introuvable")
+    if payload.end_date and payload.end_date < payload.start_date:
+        raise HTTPException(status_code=400, detail="La date de fin précède la date de début")
+    row = SiteRotation(**payload.model_dump())
+    db.add(row); db.commit(); db.refresh(row)
+    return row
+
+
+@router.delete("/site-rotations/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_site_rotation(link_id: int, db: Session = Depends(get_db)):
+    row = db.get(SiteRotation, link_id)
+    if not row: raise HTTPException(status_code=404, detail="Association introuvable")
+    db.delete(row); db.commit()
 
 
 def _allowed_societies(user: User) -> list[str]:
@@ -243,6 +305,11 @@ def site_posts(site_id: int | None = None, db: Session = Depends(get_db), user: 
 def create_assignment(payload: AssignmentCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user: User = Depends(current_user)):
     site = _ensure_site_allowed(db, user, payload.site_id) if payload.site_id else None
     employee = _ensure_employee_allowed(db, user, payload.employee_id)
+    if payload.rotation_id:
+        rotation = db.get(RotationTemplate, payload.rotation_id)
+        link = db.execute(select(SiteRotation).where(SiteRotation.site_id == payload.site_id, SiteRotation.rotation_id == payload.rotation_id, SiteRotation.active == 1)).scalars().first()
+        if not rotation or not link:
+            raise HTTPException(status_code=400, detail="Cette rotation n'est pas active sur ce site")
     if site and employee and _site_society(site) and employee.society:
         if _normalize_society(_site_society(site)) != _normalize_society(employee.society):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société employé/site incohérente")

@@ -40,12 +40,37 @@ class SitePost(Base, TimestampMixin):
     total_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
+class RotationTemplate(Base, TimestampMixin):
+    __tablename__ = "rotation_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(150), index=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    cycle_length: Mapped[int] = mapped_column(Integer, default=7)
+    cycle_days: Mapped[list | None] = mapped_column(JSON)
+    group_offsets: Mapped[dict | None] = mapped_column(JSON)
+    active: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class SiteRotation(Base, TimestampMixin):
+    __tablename__ = "site_rotations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    rotation_id: Mapped[int] = mapped_column(ForeignKey("rotation_templates.id", ondelete="CASCADE"), index=True)
+    start_date: Mapped[date] = mapped_column(Date, index=True)
+    end_date: Mapped[date | None] = mapped_column(Date, index=True)
+    active: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class Assignment(Base, TimestampMixin):
     __tablename__ = "assignments"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), index=True)
     site_id: Mapped[int] = mapped_column(ForeignKey("sites.id", ondelete="CASCADE"), index=True)
+    rotation_id: Mapped[int | None] = mapped_column(ForeignKey("rotation_templates.id", ondelete="SET NULL"), index=True)
     group_code: Mapped[str] = mapped_column(String(20), default="A", index=True)
     position: Mapped[str | None] = mapped_column(String(150))
     start_date: Mapped[date] = mapped_column(Date)
@@ -127,4 +152,3 @@ class Incident(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(40), default="ouvert", index=True)
     society: Mapped[str | None] = mapped_column(String(120), index=True)
     data: Mapped[dict | None] = mapped_column(JSON)
-

@@ -33,6 +33,11 @@ ATTENDANCE_QR_REFRESH_SECONDS = 10
 # displayed QR is still replaced every ten seconds and remains single-use.
 ATTENDANCE_QR_TTL_SECONDS = 120
 ATTENDANCE_NEW_ARRIVAL_DELAY = timedelta(hours=8)
+# Un cycle non fermé ne doit pas rester actif indéfiniment. La limite standard
+# couvre les postes de nuit ; les sites en rotation 24 h bénéficient d'une
+# fenêtre plus large afin que le départ du lendemain ferme bien leur arrivée.
+ATTENDANCE_OPEN_CYCLE_MAX = timedelta(hours=16)
+ATTENDANCE_OPEN_24H_CYCLE_MAX = timedelta(hours=30)
 
 
 def _ip(request: Request) -> str:
@@ -612,6 +617,21 @@ def _register_attendance(
     scan_date_str = now.strftime("%Y-%m-%d")
     heure = now.strftime("%H:%M:%S")
     observation = _clean_text(observation)[:500]
+    assignment = db.execute(
+        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
+    ).scalars().first()
+    site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
+    site_name = (site.name or site.indicatif or "") if site else ""
+
+    def scan_datetime(row: dict[str, Any] | None) -> datetime | None:
+        if not row or not row.get("scannedAt"):
+            return None
+        try:
+            value = datetime.fromisoformat(str(row["scannedAt"]).replace("Z", "+00:00"))
+            return (value.replace(tzinfo=tz) if value.tzinfo is None else value).astimezone(tz)
+        except (TypeError, ValueError):
+            return None
+
     employee_scans = sorted(
         (
             row for row in service.list_items(db, "attendanceQrScans")
@@ -624,19 +644,23 @@ def _register_attendance(
     )
     last_event = employee_scans[-1] if employee_scans else None
     last_arrival = next((row for row in reversed(employee_scans) if row.get("action") == "arrivee"), None)
-    action = "depart" if last_event and last_event.get("action") == "arrivee" else "arrivee"
+    last_arrival_at = scan_datetime(last_arrival)
+    rotation = _clean_text(getattr(site, "rotation_system", "") if site else "")
+    open_cycle_max = ATTENDANCE_OPEN_24H_CYCLE_MAX if "24" in rotation else ATTENDANCE_OPEN_CYCLE_MAX
+    open_arrival = (
+        last_arrival
+        if last_event is last_arrival
+        and last_arrival_at is not None
+        and timedelta(0) <= now - last_arrival_at <= open_cycle_max
+        else None
+    )
+    action = "depart" if open_arrival else "arrivee"
     cycle_number = sum(1 for row in employee_scans if row.get("action") == "arrivee") + (1 if action == "arrivee" else 0)
     presence_date_str = scan_date_str
-    if action == "depart" and last_arrival:
-        presence_date_str = str(last_arrival.get("scannedAt"))[:10] or scan_date_str
+    if action == "depart" and open_arrival:
+        presence_date_str = str(open_arrival.get("scannedAt"))[:10] or scan_date_str
     if action == "arrivee" and last_arrival:
-        try:
-            last_arrival_at = datetime.fromisoformat(str(last_arrival["scannedAt"]).replace("Z", "+00:00"))
-            if last_arrival_at.tzinfo is None:
-                last_arrival_at = last_arrival_at.replace(tzinfo=tz)
-            remaining = ATTENDANCE_NEW_ARRIVAL_DELAY - (now - last_arrival_at.astimezone(tz))
-        except (TypeError, ValueError):
-            remaining = timedelta(0)
+        remaining = ATTENDANCE_NEW_ARRIVAL_DELAY - (now - last_arrival_at) if last_arrival_at else timedelta(0)
         if remaining > timedelta(0):
             remaining_minutes = max(1, int(remaining.total_seconds() // 60) + 1)
             hours, minutes = divmod(remaining_minutes, 60)
@@ -653,24 +677,25 @@ def _register_attendance(
         ).order_by(DailyPresence.id.desc())
     ).scalars().first()
     legacy = ((existing.data or {}).get("_legacy") if existing and isinstance(existing.data, dict) else {}) or {}
-    existing_notes = _clean_text((existing.notes if existing else "") or legacy.get("observations"))
-    observation_line = (
-        f"[{heure} · {scanner.username} · {'DÉPART' if action == 'depart' else 'ARRIVÉE'}] {observation}"
-        if observation
-        else ""
-    )
+    arrival_at_for_departure = last_arrival_at if action == "depart" else None
     # Compatibilité avec les pointages créés avant l'historique multi-cycles.
     if not employee_scans and existing:
         has_arrival = bool(existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee"))
         has_departure = bool(existing.departure_time or legacy.get("scanDepart") or legacy.get("heureDepart"))
         action = "depart" if has_arrival and not has_departure else "arrivee"
         cycle_number = 1
-
-    assignment = db.execute(
-        select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
-    ).scalars().first()
-    site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
-    site_name = (site.name or site.indicatif or "") if site else ""
+        if action == "depart":
+            legacy_arrival = existing.arrival_time or legacy.get("scanArrivee") or legacy.get("heureArrivee")
+            try:
+                arrival_at_for_departure = datetime.combine(existing.presence_date, datetime.strptime(str(legacy_arrival), "%H:%M:%S").time(), tz)
+            except (TypeError, ValueError):
+                arrival_at_for_departure = None
+    existing_notes = _clean_text((existing.notes if existing else "") or legacy.get("observations"))
+    observation_line = (
+        f"[{heure} · {scanner.username} · {'DÉPART' if action == 'depart' else 'ARRIVÉE'}] {observation}"
+        if observation
+        else ""
+    )
     item: dict[str, Any] = {
         "date": presence_date_str,
         "agentId": str(employee.id),
@@ -743,11 +768,24 @@ def _register_attendance(
         ),
         "",
     )
+    duration_minutes = (
+        max(0, int((now - arrival_at_for_departure).total_seconds() // 60))
+        if action == "depart" and arrival_at_for_departure
+        else None
+    )
+    duration_label = ""
+    if duration_minutes is not None:
+        duration_hours, remaining_minutes = divmod(duration_minutes, 60)
+        duration_label = f"{duration_hours} h {remaining_minutes:02d} min"
     return {
         "success": True,
         "action": action,
         "cycle": cycle_number,
         "heure": heure,
+        "arrival_time": arrival_at_for_departure.strftime("%H:%M:%S") if arrival_at_for_departure else (heure if action == "arrivee" else ""),
+        "departure_time": heure if action == "depart" else "",
+        "duration_minutes": duration_minutes,
+        "duration_label": duration_label,
         "date": scan_date_str,
         "site": site_name,
         "observation": observation,

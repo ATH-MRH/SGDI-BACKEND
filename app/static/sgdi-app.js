@@ -4364,6 +4364,7 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard"},
         {label:"RECRUTEMENT",route:"admin/recrutement"},
+        {label:"ROTATIONS",route:"admin/rotations"},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs"},
         {label:"FICHE DE POSITION",route:"admin/fiches"},
         {label:"SITES",route:"sites/actifs"},
@@ -31084,14 +31085,58 @@ async function recruitAdminSelectedCandidates(btn,includeDuplicates){
   renderSidebar();
   renderView();
 }
+
+let adminRotationData={rotations:[],links:[]};
+function adminRotationCycleRows(count,days){
+  const n=Math.max(7,Math.min(366,parseInt(count)||7));
+  const source=Array.isArray(days)?days:[];
+  return Array.from({length:n},(_,i)=>{const d=source[i]||{};return `<tr><td class="font-black">J${i+1}</td><td><select class="select rotation-day-status"><option value="travail" ${d.status==="travail"?"selected":""}>Travail</option><option value="repos" ${d.status==="repos"||!d.status?"selected":""}>Repos</option></select></td><td><input class="input rotation-day-start" type="time" value="${escapeHTML(d.start_time||"08:00")}"/></td><td><input class="input rotation-day-end" type="time" value="${escapeHTML(d.end_time||"16:00")}"/></td><td><input class="input rotation-day-label" value="${escapeHTML(d.label||"")}" placeholder="Jour, nuit…"/></td></tr>`}).join("");
+}
+function rebuildAdminRotationDays(){const body=document.getElementById("rotation-cycle-days");if(body)body.innerHTML=adminRotationCycleRows(document.getElementById("rotation-cycle-length")?.value)}
+function parseRotationOffsets(value){const out={};String(value||"A:0").split(",").forEach(part=>{const [g,n]=part.split(":");if(g?.trim())out[g.trim().toUpperCase()]=parseInt(n)||0});return out}
+async function saveAdminRotation(){
+  const rows=[...document.querySelectorAll("#rotation-cycle-days tr")];
+  const payload={code:document.getElementById("rotation-code").value.trim().toUpperCase(),name:document.getElementById("rotation-name").value.trim().toUpperCase(),description:document.getElementById("rotation-description").value.trim(),cycle_length:rows.length,group_offsets:parseRotationOffsets(document.getElementById("rotation-groups").value),cycle_days:rows.map(row=>({status:row.querySelector(".rotation-day-status").value,start_time:row.querySelector(".rotation-day-start").value,end_time:row.querySelector(".rotation-day-end").value,label:row.querySelector(".rotation-day-label").value.trim()})),active:1};
+  if(!payload.code||!payload.name){toast("Code et nom obligatoires","error");return}
+  try{await sgdiApi("/ops/rotations",{method:"POST",body:payload,legacy:false});toast("Rotation créée","success");renderView()}catch(e){toast(e.message||String(e),"error")}
+}
+async function linkAdminRotation(){
+  const payload={site_id:parseInt(document.getElementById("rotation-link-site").value),rotation_id:parseInt(document.getElementById("rotation-link-template").value),start_date:document.getElementById("rotation-link-start").value,end_date:document.getElementById("rotation-link-end").value||null,active:1};
+  if(!payload.site_id||!payload.rotation_id||!payload.start_date){toast("Site, rotation et date de début obligatoires","error");return}
+  try{await sgdiApi("/ops/site-rotations",{method:"POST",body:payload,legacy:false});toast("Rotation associée au site","success");renderView()}catch(e){toast(e.message||String(e),"error")}
+}
+async function assignEmployeeRotation(){
+  const link=adminRotationData.links.find(x=>String(x.id)===document.getElementById("rotation-employee-link").value);
+  const payload={employee_id:parseInt(document.getElementById("rotation-employee").value),site_id:link?.site_id,rotation_id:link?.rotation_id,group_code:(document.getElementById("rotation-employee-group").value||"A").toUpperCase(),start_date:document.getElementById("rotation-employee-start").value,position:null,change_reason:"Affectation depuis Administration système > Rotations",active:1};
+  if(!payload.employee_id||!link||!payload.start_date){toast("Employé, rotation/site et date obligatoires","error");return}
+  try{await sgdiApi("/ops/assignments",{method:"POST",body:payload,legacy:false});toast("Employé affecté à la rotation","success")}catch(e){toast(e.message||String(e),"error")}
+}
+async function removeAdminSiteRotation(id){if(!confirm("Retirer cette rotation du site ? Les présences historiques seront conservées."))return;try{await sgdiApi("/ops/site-rotations/"+id,{method:"DELETE",legacy:false});toast("Association retirée","success");renderView()}catch(e){toast(e.message||String(e),"error")}}
+async function renderAdminRotations(view){
+  view.innerHTML=`<div class="card p-8 text-center">Chargement des rotations…</div>`;
+  try{const [rotations,links]=await Promise.all([sgdiApi("/ops/rotations",{legacy:false}),sgdiApi("/ops/site-rotations",{legacy:false})]);adminRotationData={rotations,links}}catch(e){view.innerHTML=`<div class="card p-6 text-red-700">${escapeHTML(e.message||String(e))}</div>`;return}
+  const rotations=adminRotationData.rotations,links=adminRotationData.links;
+  const sites=(db.sites||[]).filter(s=>s.actif!==false&&s.active!==0&&adminDataMatchesSociete(s));
+  const agents=(db.agents||[]).filter(adminMatchesSociete);
+  const siteId=s=>parseInt(s.backendId||s.id),agentId=a=>parseInt(a.backendId||a.employee_id||a.id);
+  const siteName=id=>sites.find(s=>siteId(s)===Number(id))?.nom||sites.find(s=>siteId(s)===Number(id))?.name||`Site ${id}`;
+  const rotName=id=>rotations.find(r=>r.id===Number(id))?.name||`Rotation ${id}`;
+  view.innerHTML=`<div class="mb-5"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Rotations</h1><p class="text-sm text-slate-500 mt-1">Plusieurs rotations peuvent fonctionner simultanément sur un même site. Le contrôle des conflits s'effectue au niveau de l'employé.</p></div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5"><div class="card p-4"><div class="text-xs font-black text-slate-500 uppercase">Modèles</div><div class="text-3xl font-black text-violet-700">${rotations.length}</div></div><div class="card p-4"><div class="text-xs font-black text-slate-500 uppercase">Associations site</div><div class="text-3xl font-black text-blue-700">${links.length}</div></div><div class="card p-4"><div class="text-xs font-black text-slate-500 uppercase">Horizon</div><div class="text-3xl font-black text-emerald-700">∞</div><div class="text-xs text-slate-500">Calcul à la demande</div></div></div>
+  <div class="card p-5 mb-5"><h2 class="font-black text-xl mb-4">1. Créer un système de rotation</h2><div class="grid grid-cols-1 md:grid-cols-4 gap-3"><div><label class="label">Code</label><input id="rotation-code" class="input" placeholder="ROT-24-48"/></div><div><label class="label">Nom</label><input id="rotation-name" class="input" placeholder="Rotation 24/48"/></div><div><label class="label">Durée du cycle (jours)</label><input id="rotation-cycle-length" class="input" type="number" min="7" max="366" value="7" onchange="rebuildAdminRotationDays()"/></div><div><label class="label">Décalage des groupes</label><input id="rotation-groups" class="input" value="A:0,B:1,C:2"/></div></div><div class="mt-3"><label class="label">Description</label><input id="rotation-description" class="input" placeholder="Organisation et règles particulières"/></div><div class="overflow-auto mt-4" style="max-height:390px"><table><thead><tr><th>Jour</th><th>État</th><th>Début prévu</th><th>Fin prévue</th><th>Libellé</th></tr></thead><tbody id="rotation-cycle-days">${adminRotationCycleRows(7)}</tbody></table></div><div class="flex justify-end mt-4"><button class="btn btn-success" onclick="saveAdminRotation()">Créer la rotation</button></div></div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5"><div class="card p-5"><h2 class="font-black text-xl mb-4">2. Associer au site</h2><label class="label">Site</label><select id="rotation-link-site" class="select mb-3"><option value="">Choisir…</option>${sites.map(s=>`<option value="${siteId(s)}">${escapeHTML(s.nom||s.name||"")}</option>`).join("")}</select><label class="label">Rotation</label><select id="rotation-link-template" class="select mb-3"><option value="">Choisir…</option>${rotations.filter(r=>r.active).map(r=>`<option value="${r.id}">${escapeHTML(r.code)} · ${escapeHTML(r.name)}</option>`).join("")}</select><div class="grid grid-cols-2 gap-3"><div><label class="label">Date d'effet</label><input id="rotation-link-start" class="input" type="date" value="${today()}"/></div><div><label class="label">Fin éventuelle</label><input id="rotation-link-end" class="input" type="date"/></div></div><button class="btn btn-primary w-full mt-4" onclick="linkAdminRotation()">Associer au site</button></div>
+  <div class="card p-5"><h2 class="font-black text-xl mb-4">3. Affecter un employé</h2><label class="label">Employé</label><select id="rotation-employee" class="select mb-3"><option value="">Choisir…</option>${agents.map(a=>`<option value="${agentId(a)}">${escapeHTML(a.matricule||a.code||"")} · ${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</option>`).join("")}</select><label class="label">Site et rotation</label><select id="rotation-employee-link" class="select mb-3"><option value="">Choisir…</option>${links.filter(l=>l.active).map(l=>`<option value="${l.id}">${escapeHTML(siteName(l.site_id))} · ${escapeHTML(rotName(l.rotation_id))}</option>`).join("")}</select><div class="grid grid-cols-2 gap-3"><div><label class="label">Groupe</label><input id="rotation-employee-group" class="input" value="A"/></div><div><label class="label">Date d'effet</label><input id="rotation-employee-start" class="input" type="date" value="${today()}"/></div></div><button class="btn btn-success w-full mt-4" onclick="assignEmployeeRotation()">Affecter l'employé</button></div></div>
+  <div class="card overflow-hidden"><div class="p-4 font-black">Rotations actives par site</div>${links.length?`<table><thead><tr><th>Site</th><th>Rotation</th><th>Du</th><th>Au</th><th></th></tr></thead><tbody>${links.map(l=>`<tr><td class="font-black">${escapeHTML(siteName(l.site_id))}</td><td>${escapeHTML(rotName(l.rotation_id))}</td><td>${formatDate(l.start_date)}</td><td>${l.end_date?formatDate(l.end_date):"Sans limite"}</td><td class="text-right"><button class="btn btn-danger text-xs" onclick="removeAdminSiteRotation(${l.id})">Retirer</button></td></tr>`).join("")}</tbody></table>`:`<div class="p-8 text-center text-slate-500">Aucune rotation associée.</div>`}</div>`;
+}
 function renderAdmin(view,sub,arg){
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
-  const systemOnly=["menu","counters","recrutement","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
+  const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
   if(sub==="counters")return renderAdminCountersMenu(view);
   if(sub==="recrutement")return renderAdminRecruitment(view);
+  if(sub==="rotations")return renderAdminRotations(view);
   if(sub==="effectifs")return renderAdminEffectifsConfig(view);
   if(["access","access_sgdi","access_societes","access_structures","access_code"].includes(sub))return renderAdminAccessSecurity(view,sub);
   if(sub==="feed")return renderAdminFeed(view);
@@ -31899,6 +31944,7 @@ async function renderAdminSystemDashboard(view){
 	  </div>
 	  <div class="grid grid-2 gap-4">
 	    ${card("Recrutement groupé","Sélectionner librement les candidats et lancer leur création complète, même avec une fiche à compléter.","admin/recrutement","#16a34a",(db.candidats||[]).filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length,"Recrutement")}
+	    ${card("Rotations","Créer les cycles, les associer aux sites et affecter les employés par groupe.","admin/rotations","#7c3aed","∞","Planification")}
 	    ${card("Utilisateurs","Créer, bloquer et rattacher chaque compte à un profil et un périmètre.","admin/users","#043970",users.length,"1. Comptes")}
 	    ${card("Profils d'accès","Définir les modules visibles et le référentiel d'actions par profil.","admin/niveaux","#7c3aed",profileCount,"2. Droits")}
 	    ${card("Périmètres & sécurité","Sociétés, structures, code journalier et règles de sécurité.","admin/access","#0891b2","", "3. Périmètres")}

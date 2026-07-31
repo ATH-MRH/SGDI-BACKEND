@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 _UPPERCASE_FIELDS = {"name", "client_name", "commune", "wilaya", "position", "society", "indicatif"}
 
@@ -83,6 +83,7 @@ class SitePostOut(SitePostCreate):
 class AssignmentCreate(_UpperMixin):
     employee_id: int
     site_id: int
+    rotation_id: int | None = None
     group_code: str = "A"
     position: str | None = None
     start_date: date
@@ -98,9 +99,38 @@ class AssignmentOut(AssignmentCreate):
 
 
 class AssignmentUpdate(BaseModel):
+    rotation_id: int | None = None
     end_date: date | None = None
     change_reason: str | None = None
     active: int | None = None
+
+
+class RotationTemplateCreate(_UpperMixin):
+    code: str
+    name: str
+    description: str | None = None
+    cycle_length: int
+    cycle_days: list[dict[str, Any]]
+    group_offsets: dict[str, int] = Field(default_factory=lambda: {"A": 0})
+    active: int = 1
+
+
+class RotationTemplateOut(RotationTemplateCreate):
+    id: int
+    model_config = {"from_attributes": True}
+
+
+class SiteRotationCreate(BaseModel):
+    site_id: int
+    rotation_id: int
+    start_date: date
+    end_date: date | None = None
+    active: int = 1
+
+
+class SiteRotationOut(SiteRotationCreate):
+    id: int
+    model_config = {"from_attributes": True}
 
 
 class DailyPresenceCreate(BaseModel):
@@ -190,4 +220,3 @@ class OpsMovementOut(OpsMovementCreate):
     id: int
 
     model_config = {"from_attributes": True}
-

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#043970">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Supervision ATLAS">
+<title>SUPERVISION POINTAGE — ATLAS</title>
+<link rel="icon" href="/static/sgdi-icon-192.png">
+<link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
+<style>
+:root{--navy:#043970;--blue:#0d6ecc;--green:#16a34a;--red:#dc2626;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input{font:inherit}
+.hidden{display:none!important}
+.login{min-height:100vh;padding:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(155deg,#032f60,#0d6ecc)}
+.login-card{width:100%;max-width:390px;background:#fff;border-radius:26px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+.logo{width:72px;height:72px;border-radius:22px;margin:0 auto 16px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;display:grid;place-items:center;font-size:22px;font-weight:900}
+h1{font-size:23px;text-align:center;margin:0}.login-sub{text-align:center;color:var(--muted);margin:7px 0 24px;font-size:14px}
+label{display:block;font-size:12px;font-weight:800;color:#42566f;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+input{width:100%;height:52px;border:1px solid var(--line);border-radius:13px;padding:0 14px;color:var(--ink);background:#fff;font-size:16px}
+input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
+.primary{width:100%;border:0;border-radius:14px;background:var(--navy);color:#fff;padding:15px;font-weight:900;margin-top:18px;cursor:pointer}
+.error{display:none;margin-top:13px;border-radius:11px;padding:11px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:700}
+.error.show{display:block}
+.app{min-height:100vh;padding-bottom:28px}
+.top{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px;box-shadow:0 10px 30px rgba(4,57,112,.25)}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1200px;margin:auto}
+.brand{display:flex;align-items:center;gap:11px}.brand-logo{width:48px;height:48px;border-radius:15px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:grid;place-items:center;font-weight:900}
+.brand-title{font-size:19px;font-weight:950;letter-spacing:.06em}.brand-user{font-size:12px;opacity:.8;margin-top:2px}
+.logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 11px;font-weight:750;cursor:pointer}
+.main{max-width:1200px;margin:0 auto;padding:16px}
+.status-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.status{display:flex;align-items:center;gap:7px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:900}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.3}}
+.updated-at{font-size:12px;color:var(--muted);font-weight:700}
+.kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.kpi-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;text-align:center;box-shadow:0 8px 20px rgba(4,57,112,.06)}
+.kpi-value{font-size:30px;font-weight:950;line-height:1.1}.kpi-label{font-size:12px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+.kpi-card.entrees .kpi-value{color:#166534}.kpi-card.sorties .kpi-value{color:#7f1d1d}.kpi-card.presents .kpi-value{color:var(--navy)}
+.feed-card{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.09)}
+.feed-head{padding:14px 18px;border-bottom:1px solid var(--line);font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.feed-head span{color:var(--muted);font-weight:650}
+.feed-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 18px;border-bottom:1px solid #eef2f7;transition:background .4s}
+.feed-row:last-child{border:0}
+.feed-row.flash{background:#fef9c3}
+.feed-name{font-size:14px;font-weight:850}.feed-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.feed-obs{font-size:11px;color:#78350f;background:#fef3c7;border-radius:8px;padding:3px 7px;margin-top:4px;display:inline-block}
+.feed-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.feed-action{font-size:11px;font-weight:950;border-radius:999px;padding:6px 11px;white-space:nowrap}
+.feed-action.arrivee{background:#dcfce7;color:#166534}.feed-action.depart{background:#fee2e2;color:#7f1d1d}
+.feed-time{font-size:13px;font-weight:800;min-width:64px;text-align:right}
+.empty{text-align:center;color:#94a3b8;padding:40px 20px;font-size:14px}
+@media(max-width:759px){.kpi-row{grid-template-columns:1fr 1fr 1fr;gap:8px}.kpi-card{padding:11px}.kpi-value{font-size:22px}.feed-row{padding:11px 14px}.feed-time{min-width:52px}}
+@media(max-width:420px){.kpi-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<section id="loginView" class="login">
+  <form class="login-card" onsubmit="event.preventDefault();login()">
+    <div class="logo">SV</div>
+    <h1>SUPERVISION POINTAGE</h1>
+    <p class="login-sub">Suivi en temps réel des opérations de pointage</p>
+    <label for="username">Identifiant</label>
+    <input id="username" autocomplete="username" autocapitalize="characters" required placeholder="Identifiant superviseur">
+    <label for="password">Mot de passe</label>
+    <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+    <button id="loginBtn" class="primary">SE CONNECTER</button>
+    <div id="loginError" class="error"></div>
+  </form>
+</section>
+
+<section id="appView" class="app hidden">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand"><div class="brand-logo">SV</div><div><div class="brand-title">SUPERVISION POINTAGE</div><div class="brand-user" id="userLabel">—</div></div></div>
+      <button class="logout" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+  <main class="main">
+    <div class="status-row">
+      <div class="status"><span class="dot"></span> MISE À JOUR AUTOMATIQUE</div>
+      <div class="updated-at" id="updatedAt">En attente…</div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi-card entrees"><div class="kpi-value" id="kpiEntrees">0</div><div class="kpi-label">Arrivées aujourd'hui</div></div>
+      <div class="kpi-card sorties"><div class="kpi-value" id="kpiSorties">0</div><div class="kpi-label">Départs aujourd'hui</div></div>
+      <div class="kpi-card presents"><div class="kpi-value" id="kpiPresents">0</div><div class="kpi-label">Présents actuellement</div></div>
+    </div>
+    <section class="feed-card">
+      <div class="feed-head"><span>FLUX DES POINTAGES</span><span id="feedCount">0 évènement</span></div>
+      <div id="feedList"><div class="empty">Aucun pointage pour l'instant.</div></div>
+    </section>
+  </main>
+</section>
+
+<script>
+const SESSION_KEY="atlas_supervision_session";
+const POLL_INTERVAL_MS=4000;
+const MAX_ROWS=200;
+let supSession=null;
+let pollTimer=null;
+let feedRows=[];
+let lastSeenAt="";
+let knownIds=new Set();
+
+function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
+function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
+
+async function login(){
+  const button=document.getElementById("loginBtn");
+  button.disabled=true;button.textContent="CONNEXION…";showLoginError("");
+  try{
+    const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:document.getElementById("username").value.trim(),password:document.getElementById("password").value})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.detail||"Connexion refusée");
+    supSession={token:data.access_token,user:data.user};
+    localStorage.setItem(SESSION_KEY,JSON.stringify(supSession));
+    enterApp();
+  }catch(error){showLoginError(error.message||"Connexion impossible")}
+  finally{button.disabled=false;button.textContent="SE CONNECTER"}
+}
+function enterApp(){
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
+  const user=supSession?.user||{};
+  document.getElementById("userLabel").textContent=(user.full_name||user.username||"Superviseur")+" · "+(user.username||"");
+  feedRows=[];lastSeenAt="";knownIds=new Set();
+  renderFeed();
+  pollFeed();
+  clearInterval(pollTimer);
+  pollTimer=setInterval(pollFeed,POLL_INTERVAL_MS);
+}
+function logout(){
+  clearInterval(pollTimer);pollTimer=null;
+  localStorage.removeItem(SESSION_KEY);supSession=null;
+  document.getElementById("appView").classList.add("hidden");
+  document.getElementById("loginView").classList.remove("hidden");
+  document.getElementById("password").value="";
+}
+async function pollFeed(){
+  if(!supSession)return;
+  try{
+    const params=new URLSearchParams({limit:"100"});
+    if(lastSeenAt)params.set("since",lastSeenAt);
+    const response=await fetch("/api/portal/attendance-feed?"+params.toString(),{headers:{Authorization:"Bearer "+supSession.token}});
+    if(response.status===401){logout();return}
+    if(!response.ok)return;
+    const rows=await response.json().catch(()=>[]);
+    if(Array.isArray(rows)&&rows.length){
+      const fresh=rows.filter(row=>row.id&&!knownIds.has(row.id));
+      fresh.forEach(row=>knownIds.add(row.id));
+      feedRows=[...fresh,...feedRows].slice(0,MAX_ROWS);
+      const newest=rows[0]?.scanned_at||"";
+      if(newest>lastSeenAt)lastSeenAt=newest;
+      if(fresh.length)renderFeed(fresh.map(row=>row.id));
+      else renderFeed();
+    }
+    document.getElementById("updatedAt").textContent="Dernière mise à jour : "+new Date().toLocaleTimeString("fr-FR");
+  }catch(error){
+    document.getElementById("updatedAt").textContent="Connexion au serveur interrompue…";
+  }
+}
+function todayStr(){
+  return new Date().toISOString().slice(0,10);
+}
+function renderFeed(flashIds){
+  const today=todayStr();
+  const todays=feedRows.filter(row=>String(row.scanned_at||"").slice(0,10)===today);
+  document.getElementById("kpiEntrees").textContent=String(todays.filter(row=>row.action==="arrivee").length);
+  document.getElementById("kpiSorties").textContent=String(todays.filter(row=>row.action==="depart").length);
+  const lastByEmployee=new Map();
+  todays.slice().reverse().forEach(row=>lastByEmployee.set(row.employee_id,row.action));
+  const present=[...lastByEmployee.values()].filter(action=>action==="arrivee").length;
+  document.getElementById("kpiPresents").textContent=String(present);
+  document.getElementById("feedCount").textContent=feedRows.length+(feedRows.length>1?" évènements":" évènement");
+  const flashSet=new Set(flashIds||[]);
+  document.getElementById("feedList").innerHTML=feedRows.length?feedRows.map(row=>{
+    const heure=String(row.scanned_at||"").slice(11,16)||"—";
+    const obs=row.observation?`<div class="feed-obs">${esc(row.observation)}</div>`:"";
+    return `<div class="feed-row${flashSet.has(row.id)?" flash":""}"><div><div class="feed-name">${esc(row.nom||"Employé")}</div><div class="feed-meta">${esc(row.matricule)} · ${esc(row.site||"Site non renseigné")} · pointé par ${esc(row.scanned_by||"—")}</div>${obs}</div><div class="feed-right"><span class="feed-action ${row.action==="depart"?"depart":"arrivee"}">${row.action==="depart"?"DÉPART":"ARRIVÉE"}</span><span class="feed-time">${esc(heure)}</span></div></div>`;
+  }).join(""):'<div class="empty">Aucun pointage pour l\'instant.</div>';
+  if(flashSet.size){
+    setTimeout(()=>{document.querySelectorAll(".feed-row.flash").forEach(el=>el.classList.remove("flash"))},2500);
+  }
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){clearInterval(pollTimer);pollTimer=null}
+  else if(supSession){pollFeed();clearInterval(pollTimer);pollTimer=setInterval(pollFeed,POLL_INTERVAL_MS)}
+});
+document.addEventListener("DOMContentLoaded",()=>{
+  try{supSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){supSession=null}
+  if(supSession?.token)enterApp();
+});
+</script>
+</body>
+</html>

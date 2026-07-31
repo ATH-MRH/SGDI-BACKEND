@@ -66,7 +66,12 @@ def test_manual_scan_toggles_arrival_then_departure(client, auth_headers):
 
     r2 = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={"employee_id": emp_id})
     assert r2.status_code == 201, r2.text
-    assert r2.json()["action"] == "depart"
+    body2 = r2.json()
+    assert body2["action"] == "depart"
+    assert body2["arrival_time"] == body1["heure"]
+    assert body2["departure_time"] == body2["heure"]
+    assert body2["duration_minutes"] >= 0
+    assert " h " in body2["duration_label"]
 
 
 def test_manual_scan_unknown_employee_404(client, auth_headers):
@@ -121,6 +126,12 @@ def test_attendance_feed_since_filters_older_events(client, auth_headers):
 def test_attendance_feed_requires_auth(client):
     r = client.get("/api/portal/attendance-feed")
     assert r.status_code == 401
+
+
+def test_supervision_route_serves_html(client):
+    r = client.get("/supervision")
+    assert r.status_code == 200
+    assert "SUPERVISION POINTAGE" in r.text
 
 
 def test_attendance_feed_site_restricted_supervisor_only_sees_own_site(client, auth_headers, db):
