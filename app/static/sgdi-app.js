@@ -10475,8 +10475,8 @@ function contractSituationListHTML(agents,today_,options){
     </div>
     <div class="p-4 border-b border-slate-100">
       <div class="flex items-end gap-4">
-        <div><label class="label">Fin d'essai</label>${drumPickerHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
-        <div><label class="label">Fin de contrat</label>${drumPickerHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
+        <div><label class="label">Fin d'essai</label>${filterSelectHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}])}</div>
+        <div><label class="label">Fin de contrat</label>${filterSelectHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}])}</div>
         <div class="pb-1"><button type="button" class="btn btn-ghost" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
       </div>
     </div>
@@ -10528,8 +10528,8 @@ function renderContrats(view,mode){
       <div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-sm">🔎 Filtres</h3><div class="text-xs text-slate-500"><span id="ct-shown">${agents.length}</span> / ${agents.length} agents affichés</div></div>
       <div class="mb-3"><input id="flt-search" type="search" class="input w-full" placeholder="Rechercher par nom, prénom ou matricule…" oninput="applyContratFilters()"/></div>
       <div class="flex items-end gap-4 mb-3">
-        <div><label class="label">Fin d'essai</label>${drumPickerHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
-        <div><label class="label">Fin de contrat</label>${drumPickerHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}],"")}</div>
+        <div><label class="label">Fin d'essai</label>${filterSelectHTML("flt-essai",[{value:"",label:"Tous"},{value:"passed",label:"Terminée"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}])}</div>
+        <div><label class="label">Fin de contrat</label>${filterSelectHTML("flt-contrat",[{value:"",label:"Tous"},{value:"passed",label:"Expiré"},{value:"upcoming",label:"À venir"},{value:"30",label:"≤ 30 jours"},{value:"60",label:"≤ 60 jours"},{value:"90",label:"≤ 90 jours"},{value:"none",label:"Sans date"}])}</div>
         <div class="pb-1"><button type="button" class="btn btn-ghost" onclick="resetContratFilters()">↺ Réinitialiser</button></div>
       </div>
     </div>
@@ -11597,6 +11597,9 @@ function ensureDrumCSS(){
   s.textContent=`.sgdi-drum{display:inline-flex;flex-direction:column;align-items:center;width:100px;gap:1px;position:relative}.drum-btn{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:10px;line-height:1;padding:3px 0;width:100%;text-align:center;border-radius:4px;transition:background .1s}.drum-btn:hover{background:#f1f5f9;color:#0f172a}.drum-win{width:100%;border-radius:8px;border:1px solid #e2e8f0;background:#fff;overflow:hidden;cursor:ns-resize}.drum-cell{height:30px;line-height:30px;text-align:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;transition:background .1s}.drum-empty{height:30px}.drum-sel{font-weight:700;color:#043970;background:#eff6ff;font-size:13px}.drum-adj{color:#94a3b8;font-size:11px}.drum-adj:hover{background:#f8fafc;color:#334155}.drum-multi{display:flex;align-items:flex-start;gap:4px}.drum-multi-col{display:flex;flex-direction:column;align-items:center;gap:2px}.drum-multi-label{font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em}`;
   document.head.appendChild(s);
 }
+function filterSelectHTML(id,opts){
+  return `<select id="${id}" class="select" onchange="applyContratFilters()">${opts.map(o=>`<option value="${escapeHTML(o.value)}">${escapeHTML(o.label)}</option>`).join("")}</select>`;
+}
 function drumPickerHTML(id,opts,selected,cb){
   _drumOpts[id]=opts;if(cb)_drumCallbacks[id]=cb;ensureDrumCSS();
   const idx=Math.max(0,opts.findIndex(o=>o.value===(selected||"")));
@@ -11709,7 +11712,7 @@ function applyContratFilters(){
   const sh=document.getElementById("ct-shown");if(sh)sh.textContent=shown;
   refreshContractSituationRowNumbers(document.getElementById("ct-tbody"));
 }
-function resetContratFilters(){window.__contractQuickFilter="";document.querySelectorAll(".contract-metric-click.is-selected").forEach(el=>el.classList.remove("is-selected"));["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});drumRender("flt-essai");drumRender("flt-contrat");applyContratFilters()}
+function resetContratFilters(){window.__contractQuickFilter="";document.querySelectorAll(".contract-metric-click.is-selected").forEach(el=>el.classList.remove("is-selected"));["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});applyContratFilters()}
 function setContratQuickFilter(type){
   resetContratFilters();
   if(type==="all"){
