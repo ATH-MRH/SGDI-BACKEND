@@ -19,7 +19,7 @@ from app.modules.auth.models import User
 from app.modules.drh.models import Employee
 from app.modules.irongs import service
 from app.modules.irongs.sql_bridge import employee_by_ref, upsert_presence
-from app.modules.ops.models import Assignment, DailyPresence, Site
+from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids
 
 
@@ -38,6 +38,31 @@ ATTENDANCE_NEW_ARRIVAL_DELAY = timedelta(hours=8)
 # fenêtre plus large afin que le départ du lendemain ferme bien leur arrivée.
 ATTENDANCE_OPEN_CYCLE_MAX = timedelta(hours=16)
 ATTENDANCE_OPEN_24H_CYCLE_MAX = timedelta(hours=30)
+
+
+def _authorized_work_minutes(db: Session, assignment: Assignment | None, site: Site | None, work_date: Any) -> int:
+    """Durée autorisée issue du cycle configuré, avec repli sur l'ancien régime du site."""
+    if assignment and assignment.rotation_id:
+        rotation = db.get(RotationTemplate, assignment.rotation_id)
+        days = rotation.cycle_days if rotation and isinstance(rotation.cycle_days, list) else []
+        if rotation and days:
+            offsets = rotation.group_offsets if isinstance(rotation.group_offsets, dict) else {}
+            try: offset = int(offsets.get((assignment.group_code or "A").upper(), 0))
+            except (TypeError, ValueError): offset = 0
+            index = ((work_date - assignment.start_date).days + offset) % max(1, min(rotation.cycle_length, len(days)))
+            day = days[index] if isinstance(days[index], dict) else {}
+            start, end = str(day.get("start_time") or ""), str(day.get("end_time") or "")
+            try:
+                start_minutes = int(start[:2]) * 60 + int(start[3:5])
+                end_minutes = int(end[:2]) * 60 + int(end[3:5])
+                return (end_minutes - start_minutes) % (24 * 60) or 24 * 60
+            except (TypeError, ValueError):
+                pass
+    system = _clean_text(getattr(site, "rotation_system", "") if site else "").lower()
+    if "24/48" in system: return 24 * 60
+    if "3x8" in system: return 8 * 60
+    explicit = re.search(r"(?:^|\D)(8|12|16|24)\s*h?(?:\D|$)", system)
+    return int(explicit.group(1)) * 60 if explicit else 8 * 60
 
 
 def _ip(request: Request) -> str:
@@ -696,6 +721,14 @@ def _register_attendance(
         if observation
         else ""
     )
+    worked_minutes = (
+        max(0, int((now - arrival_at_for_departure).total_seconds() // 60))
+        if action == "depart" and arrival_at_for_departure else None
+    )
+    authorized_minutes = _authorized_work_minutes(
+        db, assignment, site, (arrival_at_for_departure or now).date()
+    )
+    overtime_minutes = max(0, worked_minutes - authorized_minutes) if worked_minutes is not None else 0
     item: dict[str, Any] = {
         "date": presence_date_str,
         "agentId": str(employee.id),
@@ -723,6 +756,8 @@ def _register_attendance(
                 **({"observation": observation} if observation else {}),
             },
         ],
+        "authorizedMinutes": authorized_minutes,
+        **({"workedMinutes": worked_minutes, "overtimeMinutes": overtime_minutes, "overtimeAlert": True} if overtime_minutes else {}),
     }
     if observation_line:
         item["observations"] = "\n".join(part for part in (existing_notes, observation_line) if part)
@@ -756,6 +791,8 @@ def _register_attendance(
         "scannedBy": scanner.username,
         "scannedByUserId": scanner.id,
         **({"observation": observation} if observation else {}),
+        "authorizedMinutes": authorized_minutes,
+        **({"workedMinutes": worked_minutes, "overtimeMinutes": overtime_minutes, "overtimeAlert": True} if overtime_minutes else {}),
     })
     db.commit()
     employee_extra = employee.extra if isinstance(employee.extra, dict) else {}
@@ -768,11 +805,7 @@ def _register_attendance(
         ),
         "",
     )
-    duration_minutes = (
-        max(0, int((now - arrival_at_for_departure).total_seconds() // 60))
-        if action == "depart" and arrival_at_for_departure
-        else None
-    )
+    duration_minutes = worked_minutes
     duration_label = ""
     if duration_minutes is not None:
         duration_hours, remaining_minutes = divmod(duration_minutes, 60)
@@ -786,6 +819,9 @@ def _register_attendance(
         "departure_time": heure if action == "depart" else "",
         "duration_minutes": duration_minutes,
         "duration_label": duration_label,
+        "authorized_minutes": authorized_minutes,
+        "overtime_minutes": overtime_minutes,
+        "overtime_alert": overtime_minutes > 0,
         "date": scan_date_str,
         "site": site_name,
         "observation": observation,

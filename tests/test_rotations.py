@@ -1,4 +1,8 @@
 from datetime import date
+from types import SimpleNamespace
+
+from app.modules.ops.models import RotationTemplate
+from app.modules.portal.routes import _authorized_work_minutes
 
 
 def _rotation_payload(code: str, work_day: int = 0):
@@ -38,3 +42,19 @@ def test_rotation_requires_complete_cycle(client, auth_headers):
     payload["cycle_days"] = payload["cycle_days"][:-1]
     response = client.post("/api/ops/rotations", headers=auth_headers, json=payload)
     assert response.status_code == 400
+
+
+def test_authorized_hours_follow_employee_rotation(db):
+    rotation = RotationTemplate(
+        code="ROT-12H", name="Rotation douze heures", cycle_length=7,
+        cycle_days=[{"status": "travail", "start_time": "07:00", "end_time": "19:00"}] * 7,
+        group_offsets={"A": 0}, active=1,
+    )
+    db.add(rotation); db.commit(); db.refresh(rotation)
+    assignment = SimpleNamespace(rotation_id=rotation.id, group_code="A", start_date=date.today())
+    assert _authorized_work_minutes(db, assignment, None, date.today()) == 12 * 60
+
+
+def test_authorized_hours_fallback_supports_legacy_site(db):
+    site = SimpleNamespace(rotation_system="16H")
+    assert _authorized_work_minutes(db, None, site, date.today()) == 16 * 60

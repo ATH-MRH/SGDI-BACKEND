@@ -57,6 +57,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .sort-select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:11px;font-weight:800;color:var(--navy);background:#fff}
 .scan-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;border-bottom:1px solid #eef2f7}.scan-row:last-child{border:0}.scan-name{font-size:13px;font-weight:850}.scan-meta{font-size:11px;color:var(--muted);margin-top:2px}
 .scan-row.group-separator{margin-top:76px;border-top:1px solid #bfdbfe}
+.scan-row.overtime-alert{background:#fee2e2;border:2px solid #ef4444;animation:overtimeBlink .85s ease-in-out infinite}.scan-row.overtime-alert .scan-name{color:#991b1b}.overtime-label{color:#b91c1c;font-size:9px;font-weight:950;white-space:nowrap}@keyframes overtimeBlink{50%{background:#fff;box-shadow:inset 0 0 0 2px #ef4444,0 0 14px rgba(239,68,68,.35)}}
 .scan-times{display:flex;align-items:center;gap:6px;flex-shrink:0}.scan-time-pill{font-size:10px;font-weight:900;border-radius:999px;padding:5px 8px;white-space:nowrap;background:#eef2f7;color:#94a3b8}.scan-time-pill.set.arrivee{background:#dcfce7;color:#166534}.scan-time-pill.set.depart{background:#fee2e2;color:#7f1d1d}.scan-duration{font-size:10px;font-weight:900;color:#334155;white-space:nowrap;min-width:76px;text-align:right}
 .empty{text-align:center;color:#94a3b8;padding:24px;font-size:13px}
 .manual-panel{margin:0;padding:0}.manual-heading{text-align:center;font-size:22px;font-weight:950;padding:12px 0 10px;border-bottom:1px dashed var(--line);margin-bottom:20px}
@@ -302,14 +303,17 @@ function recordScanEntry(data){
     entry.arrivee=data.arrival_time||heure;
     entry.depart="";
     entry.duration="";
+    entry.overtime=false;entry.overtimeMinutes=0;
   }else{
     entry.arrivee=data.arrival_time||entry.arrivee||"";
     entry.depart=data.departure_time||heure;
     entry.duration=data.duration_label||"";
+    entry.overtime=!!data.overtime_alert;
+    entry.overtimeMinutes=Number(data.overtime_minutes||0);
   }
   sessionScans.unshift(entry);
   sessionScans=sessionScans.slice(0,10);
-  return {name,matricule,action,heure,site:entry.site,photo:entry.photo,societe:entry.societe,poste:entry.poste,statut:entry.statut};
+  return {name,matricule,action,heure,site:entry.site,photo:entry.photo,societe:entry.societe,poste:entry.poste,statut:entry.statut,overtime:entry.overtime,overtimeMinutes:entry.overtimeMinutes};
 }
 async function onQr(token){
   if(scanBusy)return;
@@ -320,7 +324,7 @@ async function onQr(token){
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
     const entry=recordScanEntry(data);
-    showResult(entry,"success");renderHistory();playTone(true);navigator.vibrate?.([80,40,80]);
+    showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
   }catch(error){showResult({message:error.message||"QR invalide"},"error");playTone(false);navigator.vibrate?.(180)}
   finally{setTimeout(()=>{scanBusy=false},1800)}
 }
@@ -337,11 +341,11 @@ function playTone(success){
 }
 function showResult(data,type){
   const el=document.getElementById("result");el.className="result show "+type;
-  if(type==="success"){
+  if(type==="success"||type==="warning"){
     const action=data.action==="depart"?"DÉPART ENREGISTRÉ":"ARRIVÉE ENREGISTRÉE";
     const initials=String(data.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase();
     const photo=data.photo?`<img class="employee-photo" src="${esc(data.photo)}" alt="Photo de ${esc(data.name)}">`:`<div class="employee-photo-fallback">${esc(initials)}</div>`;
-    el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
+    el.innerHTML=`<div class="employee-result">${photo}<div><div class="result-kicker">${data.overtime?"⚠ VOLUME HORAIRE DÉPASSÉ":""}${data.overtime?" · ":""}${action}</div><div class="result-name">${esc(data.name)}</div><div class="result-meta">CODE ${esc(data.matricule)} · ${esc(data.site||"Site non renseigné")} · ${esc(data.heure)}</div><div class="result-company">${esc(data.societe||"Société non renseignée")}${data.poste?" · "+esc(data.poste):""}</div><span class="result-status">${esc(String(data.statut||"ACTIF").toUpperCase())}</span></div></div>`;
   }else el.innerHTML=`<div class="result-kicker">SCAN REFUSÉ</div><div class="result-name">${esc(data.message)}</div>`;
   clearTimeout(showResult.timer);showResult.timer=setTimeout(()=>el.classList.remove("show"),7000);
 }
@@ -367,7 +371,7 @@ function renderHistory(){
   document.getElementById("entrantCount").textContent=String(sessionScans.filter(row=>row.arrivee).length).padStart(2,"0");
   document.getElementById("sortantCount").textContent=String(sessionScans.filter(row=>row.depart).length).padStart(2,"0");
   document.getElementById("presentCount").textContent=String(sessionScans.filter(row=>row.arrivee&&!row.depart).length).padStart(2,"0");
-  document.getElementById("historyList").innerHTML=ordered.length?ordered.map((row,index)=>`<div class="scan-row${index===firstCompletedIndex?" group-separator":""}"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div class="scan-times"><div class="scan-time-pill arrivee${row.arrivee?" set":""}">${row.arrivee?"ARR "+esc(row.arrivee):"ARR —"}</div><div class="scan-time-pill depart${row.depart?" set":""}">${row.depart?"DÉP "+esc(row.depart):"DÉP —"}</div><div class="scan-duration">${row.duration?esc(row.duration):""}</div></div></div>`).join(""):'<div class="empty">Aucun QR scanné.</div>';
+  document.getElementById("historyList").innerHTML=ordered.length?ordered.map((row,index)=>`<div class="scan-row${index===firstCompletedIndex?" group-separator":""}${row.overtime?" overtime-alert":""}"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div class="scan-times"><div class="scan-time-pill arrivee${row.arrivee?" set":""}">${row.arrivee?"ARR "+esc(row.arrivee):"ARR —"}</div><div class="scan-time-pill depart${row.depart?" set":""}">${row.depart?"DÉP "+esc(row.depart):"DÉP —"}</div><div class="scan-duration">${row.duration?esc(row.duration):""}</div>${row.overtime?`<div class="overtime-label">⚠ +${Math.floor(row.overtimeMinutes/60)} h ${String(row.overtimeMinutes%60).padStart(2,"0")}</div>`:""}</div></div>`).join(""):'<div class="empty">Aucun QR scanné.</div>';
 }
 let manualResults=[];
 let manualSelected=null;
@@ -443,7 +447,7 @@ async function confirmManualPointage(){
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
     const entry=recordScanEntry(data);
-    showResult(entry,"success");renderHistory();playTone(true);navigator.vibrate?.([80,40,80]);
+    showResult(entry,entry.overtime?"warning":"success");renderHistory();playTone(!entry.overtime);navigator.vibrate?.(entry.overtime?[180,80,180]:[80,40,80]);
     feedback.textContent=(entry.action==="depart"?"DÉPART":"ARRIVÉE")+" ENREGISTRÉE À "+entry.heure;
     feedback.className="manual-feedback show success";
     button.textContent="ENREGISTRÉ";
