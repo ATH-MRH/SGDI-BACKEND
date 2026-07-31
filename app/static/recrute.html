@@ -42,6 +42,17 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .society-select{height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:var(--ink);font-size:12px;font-weight:800;padding:0 10px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 12px;font-weight:750;cursor:pointer}
 .main{max-width:1200px;margin:0 auto;padding:16px}
+.counters-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px}
+.counter-group{flex:1;min-width:260px}
+.counter-group-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:8px}
+.counter-chips{display:flex;gap:8px;flex-wrap:wrap}
+.counter-chip{border:1px solid var(--line);background:#fff;border-radius:12px;padding:8px 12px;cursor:pointer;font-size:12px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:8px}
+.counter-chip .n{background:#eef2f7;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:900;color:var(--navy)}
+.counter-chip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.counter-chip.active .n{background:rgba(255,255,255,.25);color:#fff}
+.counter-chip.favorable.active{background:#166534;border-color:#166534}
+.counter-chip.defavorable.active{background:#7f1d1d;border-color:#7f1d1d}
+.counter-chip.instance.active{background:#92400e;border-color:#92400e}
 .tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .tab-btn{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:999px;padding:9px 16px;font-weight:850;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px}
 .tab-btn .count{background:#eef2f7;color:var(--muted);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:900}
@@ -62,8 +73,11 @@ tr:last-child td{border-bottom:0}
 .cand-name{font-weight:850}
 .cand-email{font-size:11px;color:var(--muted);margin-top:2px}
 .pill{display:inline-block;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:900;white-space:nowrap}
-.pill-blue{background:#dbeafe;color:#1d4ed8}.pill-amber{background:#fef3c7;color:#92400e}.pill-gray{background:#e5e7eb;color:#374151}.pill-indigo{background:#e0e7ff;color:#3730a3}
-.avis-select{height:36px;font-size:12px;font-weight:800;padding:0 8px;border-radius:9px}
+.pill-blue{background:#dbeafe;color:#1d4ed8}.pill-amber{background:#fef3c7;color:#92400e}.pill-gray{background:#e5e7eb;color:#374151}.pill-indigo{background:#e0e7ff;color:#3730a3}.pill-green{background:#dcfce7;color:#166534}.pill-red{background:#fee2e2;color:#7f1d1d}
+.avis-select{height:36px;font-size:12px;font-weight:800;padding:0 8px;border-radius:9px;border:1px solid var(--line);background:#fff;color:var(--ink)}
+.avis-select.favorable{background:#dcfce7;border-color:#86efac;color:#166534}
+.avis-select.defavorable{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}
+.avis-select.instance{background:#fef3c7;border-color:#fcd34d;color:#92400e}
 .row-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
 .link-btn{border:0;background:none;color:var(--blue);font-weight:850;font-size:12px;cursor:pointer;padding:6px 8px}
 .link-btn.danger{color:var(--red)}
@@ -120,6 +134,7 @@ tr:last-child td{border-bottom:0}
   </header>
   <main class="main">
     <div id="banner"></div>
+    <div id="countersRow" class="counters-row"></div>
     <div class="tabs" id="tabs"></div>
     <div class="toolbar">
       <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
@@ -165,7 +180,7 @@ tr:last-child td{border-bottom:0}
           <div class="full"><label for="fNotes">Notes du recruteur</label><textarea id="fNotes"></textarea></div>
         </div></section>
         <section class="form-section"><div class="form-section-title">4. Avis du recruteur</div><div class="field-grid">
-          <div><label for="fAvis">Décision</label><select id="fAvis"><option value="">—</option><option value="Favorable">Favorable</option><option value="Défavorable">Défavorable</option><option value="Instance">Instance</option></select></div>
+          <div><label for="fAvis">Décision</label><select id="fAvis" class="avis-select" style="width:100%" onchange="this.className='avis-select '+avisClass(this.value)"><option value="">—</option><option value="Favorable">Favorable</option><option value="Défavorable">Défavorable</option><option value="Instance">Instance</option></select></div>
           <div><label for="fAvisDate">Date de l’avis</label><input id="fAvisDate" type="date"></div><div><label for="fRecruteur">Recruteur</label><input id="fRecruteur"></div>
           <div class="full"><label for="fComment">Commentaire / motivation</label><textarea id="fComment"></textarea></div>
         </div></section>
@@ -191,14 +206,16 @@ const TABS=[
   {key:"reserve",label:"Réserve"},
   {key:"archive",label:"Archives"}
 ];
+const PAGE_SIZE=25;
 const tabState={
-  new:{page:1,pages:1,total:0,q:"",items:[]},
-  reserve:{page:1,pages:1,total:0,q:"",items:[]},
-  archive:{page:1,pages:1,total:0,q:"",items:[]}
+  new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""},
+  reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""},
+  archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""}
 };
 let selectedIds=new Set();
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
+function jsStr(value){return String(value).replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
 function today(){return new Date().toISOString().slice(0,10)}
 function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
 function showBanner(message,type){
@@ -283,26 +300,78 @@ function onSearchInput(){
   searchTimer=setTimeout(()=>{
     tabState[activeTab].q=value;
     tabState[activeTab].page=1;
-    loadTab(activeTab);
-  },350);
+    renderList();renderPagination();
+  },250);
 }
 async function loadTab(tab){
   const state=tabState[tab];
   if(tab===activeTab)document.getElementById("listWrap").innerHTML='<div class="empty">Chargement…</div>';
   try{
-    const params=new URLSearchParams({mode:tab,page:String(state.page),page_size:"25"});
-    if(state.q)params.set("q",state.q);
+    const params=new URLSearchParams({mode:tab,page:"1",page_size:"100"});
     if(activeSociety)params.set("society",activeSociety);
     const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
     state.items=result.items||[];
     state.total=result.total||0;
-    state.page=result.page||1;
-    state.pages=result.pages||1;
     renderTabs();
-    if(tab===activeTab){renderList();renderPagination()}
+    if(tab===activeTab){renderCounters();renderList();renderPagination()}
   }catch(error){
     if(tab===activeTab)document.getElementById("listWrap").innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
   }
+}
+function matchesSearch(item,q){
+  if(!q)return true;
+  const needle=q.trim().toLowerCase();
+  if(!needle)return true;
+  const haystack=[item.last_name,item.first_name,item.phone,item.email,item.desired_position].map(v=>String(v||"").toLowerCase()).join(" ");
+  return haystack.includes(needle);
+}
+function filteredItems(tab){
+  const state=tabState[tab];
+  return state.items.filter(item=>{
+    if(!matchesSearch(item,state.q))return false;
+    if(state.posteFilter&&(item.desired_position||"Poste non renseigné")!==state.posteFilter)return false;
+    if(state.avisFilter){
+      const avis=(item.data&&item.data.avisDecision)||"Non évalué";
+      if(avis!==state.avisFilter)return false;
+    }
+    return true;
+  });
+}
+function setPosteFilter(value){
+  const state=tabState[activeTab];
+  state.posteFilter=state.posteFilter===value?"":value;
+  state.page=1;
+  renderCounters();renderList();renderPagination();
+}
+function setAvisFilter(value){
+  const state=tabState[activeTab];
+  state.avisFilter=state.avisFilter===value?"":value;
+  state.page=1;
+  renderCounters();renderList();renderPagination();
+}
+function renderCounters(){
+  const state=tabState[activeTab];
+  const posteCounts=new Map();
+  const avisCounts=new Map([["Favorable",0],["Défavorable",0],["Instance",0],["Non évalué",0]]);
+  state.items.forEach(item=>{
+    const poste=item.desired_position||"Poste non renseigné";
+    posteCounts.set(poste,(posteCounts.get(poste)||0)+1);
+    const avis=(item.data&&item.data.avisDecision)||"Non évalué";
+    avisCounts.set(avis,(avisCounts.get(avis)||0)+1);
+  });
+  const posteChips=[...posteCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([label,count])=>
+    `<button type="button" class="counter-chip${state.posteFilter===label?" active":""}" onclick="setPosteFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`
+  ).join("")||'<span style="font-size:12px;color:var(--muted)">—</span>';
+  const avisChips=["Favorable","Défavorable","Instance","Non évalué"].map(label=>{
+    const count=avisCounts.get(label)||0;
+    const cls=label==="Favorable"?"favorable":label==="Défavorable"?"defavorable":label==="Instance"?"instance":"";
+    return `<button type="button" class="counter-chip ${cls}${state.avisFilter===label?" active":""}" onclick="setAvisFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`;
+  }).join("");
+  const note=state.total>state.items.length?`<div class="full" style="font-size:11px;color:var(--muted);margin-top:2px">Compteurs basés sur les ${state.items.length} candidats les plus récents (${state.total} au total) — affinez la recherche pour réduire la liste.</div>`:"";
+  document.getElementById("countersRow").innerHTML=`
+    <div class="counter-group"><div class="counter-group-title">Par poste</div><div class="counter-chips">${posteChips}</div></div>
+    <div class="counter-group"><div class="counter-group-title">Par avis</div><div class="counter-chips">${avisChips}</div></div>
+    ${note}`;
 }
 function statusPill(item){
   const status=String(item.status||"").toLowerCase();
@@ -310,12 +379,19 @@ function statusPill(item){
   if(status==="reserve"||activeTab==="reserve")return '<span class="pill pill-amber">Réserve</span>';
   return '<span class="pill pill-blue">Nouvelle</span>';
 }
+function avisClass(value){
+  if(value==="Favorable")return "favorable";
+  if(value==="Défavorable")return "defavorable";
+  if(value==="Instance")return "instance";
+  return "";
+}
 function avisCell(item){
   const value=(item.data&&item.data.avisDecision)||"";
   if(activeTab==="archive"){
-    return value?`<span class="pill ${value==="Favorable"?"pill-blue":"pill-gray"}">${esc(value)}</span>`:"—";
+    const pillClass=value==="Favorable"?"pill-green":value==="Défavorable"?"pill-red":value==="Instance"?"pill-amber":"pill-gray";
+    return value?`<span class="pill ${pillClass}">${esc(value)}</span>`:"—";
   }
-  return `<select class="avis-select" onchange="changeAvis(${item.id},this.value)">
+  return `<select class="avis-select ${avisClass(value)}" onchange="changeAvis(${item.id},this.value);this.className='avis-select '+avisClass(this.value)">
     <option value=""${value?"":" selected"}>—</option>
     <option value="Favorable"${value==="Favorable"?" selected":""}>Favorable</option>
     <option value="Défavorable"${value==="Défavorable"?" selected":""}>Défavorable</option>
@@ -330,21 +406,25 @@ function rowActions(item){
 }
 function renderList(){
   const state=tabState[activeTab];
+  const filtered=filteredItems(activeTab);
   const bulkBar=document.getElementById("bulkBar");
-  bulkBar.classList.toggle("show",activeTab==="new"&&state.items.length>0);
-  if(!state.items.length){
+  bulkBar.classList.toggle("show",activeTab==="new"&&filtered.length>0);
+  if(!filtered.length){
     document.getElementById("listWrap").innerHTML='<div class="empty">Aucun candidat.</div>';
     updateSelectedCount();
     return;
   }
+  const pages=Math.max(Math.ceil(filtered.length/PAGE_SIZE),1);
+  if(state.page>pages)state.page=pages;
+  const pageItems=filtered.slice((state.page-1)*PAGE_SIZE,state.page*PAGE_SIZE);
   const checkboxCol=activeTab==="new";
   document.getElementById("listWrap").innerHTML=`<table><thead><tr>
     ${checkboxCol?'<th style="width:36px"></th>':""}
     <th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Statut</th><th>Date</th><th></th>
   </tr></thead><tbody>
-  ${state.items.map(item=>`<tr data-id="${item.id}">
+  ${pageItems.map(item=>`<tr data-id="${item.id}">
     ${checkboxCol?`<td onclick="event.stopPropagation()"><input type="checkbox" data-select-id="${item.id}" ${selectedIds.has(item.id)?"checked":""} onchange="toggleSelectOne(${item.id},this.checked)"></td>`:""}
-    <td><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${esc(item.email||"")}</div></td>
+    <td><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${esc(item.desired_position||"Poste non renseigné")}${item.email?" · "+esc(item.email):""}</div></td>
     <td>${esc(item.desired_position||"—")}</td>
     <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
     <td>${esc(item.phone||"—")}</td>
@@ -358,20 +438,24 @@ function renderList(){
 }
 function renderPagination(){
   const state=tabState[activeTab];
-  document.getElementById("pagination").innerHTML=state.items.length?`
-    <div>${state.total} candidat(s) · page ${state.page}/${state.pages}</div>
+  const filtered=filteredItems(activeTab);
+  const pages=Math.max(Math.ceil(filtered.length/PAGE_SIZE),1);
+  if(state.page>pages)state.page=pages;
+  document.getElementById("pagination").innerHTML=filtered.length?`
+    <div>${filtered.length} candidat(s) · page ${state.page}/${pages}</div>
     <div class="btns">
       <button ${state.page<=1?"disabled":""} onclick="gotoPage(${state.page-1})">Précédent</button>
-      <button ${state.page>=state.pages?"disabled":""} onclick="gotoPage(${state.page+1})">Suivant</button>
+      <button ${state.page>=pages?"disabled":""} onclick="gotoPage(${state.page+1})">Suivant</button>
     </div>`:"";
 }
 function gotoPage(page){
   tabState[activeTab].page=page;
-  loadTab(activeTab);
+  renderList();
+  renderPagination();
 }
 function toggleSelectAll(checked){
-  const state=tabState[activeTab];
-  if(checked)state.items.forEach(item=>selectedIds.add(item.id));
+  const filtered=filteredItems(activeTab);
+  if(checked)filtered.forEach(item=>selectedIds.add(item.id));
   else selectedIds.clear();
   renderList();
 }
@@ -381,8 +465,8 @@ function toggleSelectOne(id,checked){
 }
 function updateSelectedCount(){
   document.getElementById("selectedCount").textContent=String(selectedIds.size);
-  const state=tabState[activeTab];
-  document.getElementById("selectAllBox").checked=state.items.length>0&&state.items.every(item=>selectedIds.has(item.id));
+  const filtered=filteredItems(activeTab);
+  document.getElementById("selectAllBox").checked=filtered.length>0&&filtered.every(item=>selectedIds.has(item.id));
 }
 async function deleteSelected(){
   if(!selectedIds.size)return;
@@ -454,6 +538,8 @@ function openCandidateForm(id){
     candidateField("fRecruteur",recruteSession?.user?.full_name||recruteSession?.user?.username||"");
     renderCandidatePhoto("");
   }
+  const avisSelect=document.getElementById("fAvis");
+  avisSelect.className="avis-select "+avisClass(avisSelect.value);
   document.getElementById("modalBackdrop").classList.remove("hidden");
 }
 function closeCandidateForm(){
