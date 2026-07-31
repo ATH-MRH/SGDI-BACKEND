@@ -4615,6 +4615,88 @@ function sgdiOpenQuickApp(key){
       if(typeof toast==="function")toast((err&&err.message)||("Impossible d'ouvrir "+app.label),"error");
     });
 }
+function sgdiCurrentEffectifFilter(){
+  const match=String(location.hash||"").match(/^#\/effectif(?:\/([^/?#]+))?/);
+  if(!match)return"";
+  return match[1]?decodeURIComponent(match[1]):(sessionStorage.getItem("effectifStableFilter")||"actifs");
+}
+function sgdiExcelSafeFilename(value){
+  return String(value||"effectifs")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-zA-Z0-9_-]+/g,"_")
+    .replace(/^_+|_+$/g,"")
+    .toLowerCase()||"effectifs";
+}
+function sgdiEffectifExportList(filter){
+  const data=effectifFilteredData(filter||"actifs");
+  let list=(data.list||[]).slice();
+  const q=String(effectifSearchValue(filter||"actifs")||"").trim().toLowerCase();
+  if(q){
+    list=list.filter(a=>{
+      const aff=agentLiveAffectation(a)||{};
+      return [
+        a.matricule,a.nom,a.prenom,a.telephone,a.societe,a.fonction,a.position,
+        aff.poste,a.affectationCourante?.poste,aff.siteName,a.affectationCourante?.siteName,
+        a.dateRecrutement,a.dateNaissance,a.situation,a.statut
+      ].map(v=>String(v||"").toLowerCase()).join(" ").includes(q);
+    });
+  }
+  return{...data,list};
+}
+async function sgdiExportEffectifExcel(){
+  const filter=sgdiCurrentEffectifFilter()||sessionStorage.getItem("effectifStableFilter")||"actifs";
+  if(filter==="recap"||String(filter).startsWith("preparation")){
+    if(typeof toast==="function")toast("Ouvrez une liste d'employés pour l'exporter","info");
+    return;
+  }
+  const data=sgdiEffectifExportList(filter);
+  if(!data.list.length){
+    if(typeof toast==="function")toast("Aucun employé à exporter avec les filtres actuels","warn");
+    return;
+  }
+  try{
+    if(typeof window.sgdiLoadXLSX!=="function")throw new Error("Module Excel indisponible");
+    await window.sgdiLoadXLSX();
+    const rows=data.list.map(a=>{
+      const aff=agentLiveAffectation(a)||{};
+      return{
+        "CODE":a.matricule||"",
+        "NOM":a.nom||"",
+        "PRÉNOM":a.prenom||"",
+        "SOCIÉTÉ":a.societe||"",
+        "POSTE":aff.poste||a.affectationCourante?.poste||a.fonction||a.position||"",
+        "SITE":aff.siteName||a.affectationCourante?.siteName||"",
+        "TÉLÉPHONE":a.telephone||"",
+        "DATE DE NAISSANCE":a.dateNaissance||"",
+        "DATE DE RECRUTEMENT":a.dateRecrutement||"",
+        "SITUATION":a.situation||"",
+        "STATUT":String(a.statut||"").toUpperCase()
+      };
+    });
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws["!cols"]=[
+      {wch:12},{wch:24},{wch:24},{wch:28},{wch:26},{wch:34},
+      {wch:18},{wch:19},{wch:21},{wch:20},{wch:14}
+    ];
+    ws["!autofilter"]={ref:ws["!ref"]};
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Effectifs");
+    const society=data.soc||"toutes_societes";
+    const filename=`effectifs_${sgdiExcelSafeFilename(society)}_${today()}.xlsx`;
+    XLSX.writeFile(wb,filename);
+    if(typeof toast==="function")toast(`${rows.length} employé(s) exporté(s) dans Excel`,"success");
+  }catch(err){
+    console.error("Export Excel des effectifs impossible",err);
+    if(typeof toast==="function")toast("Export Excel impossible : "+(err?.message||err),"error");
+  }
+}
+function sgdiTopbarExcelAction(){
+  if(sgdiCurrentEffectifFilter()){
+    sgdiExportEffectifExcel();
+    return;
+  }
+  sgdiOpenQuickApp("excel");
+}
 function openSgdiCalculatorModal(){
   const keys=["7","8","9","/","4","5","6","*","1","2","3","-","0",".","=","+","C","⌫"];
   openModal(`<h3 class="font-bold text-lg mb-3">Calculatrice</h3>
@@ -4690,7 +4772,7 @@ function workspaceTabsBarHTML(){
   if(!session)return"";
   const quickLaunchHTML=`<div class="ws-quicklaunch-group">
     <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('word')" title="Microsoft Word"><span class="ws-ql-icon" style="background:#2b579a">W</span></button>
-    <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('excel')" title="Microsoft Excel"><span class="ws-ql-icon" style="background:#217346">X</span></button>
+    <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiTopbarExcelAction()" title="Télécharger la liste affichée au format Excel"><span class="ws-ql-icon" style="background:#217346">X</span></button>
     <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('agenda')" title="Agenda"><span class="ws-ql-icon" style="background:#0078d4;font-size:13px">📅</span></button>
     <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('calculator')" title="Calculatrice SGDI"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></button>
   </div>`;
