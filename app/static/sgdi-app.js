@@ -1265,6 +1265,9 @@ function candidateContractAgentProxy(c){
     nomMere:c.nomMere||"",
     nin:c.nin||"",
     numeroCnas:c.numeroCnas||"",
+    modePaiement:c.modePaiement||"",
+    banque:c.banque||"",
+    iban:c.iban||"",
     telephone:c.telephone||"",
     adresse:c.adresse||"",
     commune:c.commune||"",
@@ -10992,6 +10995,10 @@ function employeeNewContractDefaults(a){
     client:a?.client||site?.client||"",
     salaireNet:a?.salaireNet||a?.salaire||"",
     salaireLettres:"",
+    numeroCnas:a?.numeroCnas||"",
+    modePaiement:a?.modePaiement||"Virement bancaire",
+    banque:a?.banque||"",
+    iban:a?.iban||"",
     missions:a?.missionsContrat||"",
     observation:""
   };
@@ -11083,6 +11090,10 @@ function employeeNewContractDraftFromForm(form){
     client:String(fd.get("client")==="__autre__"?fd.get("clientAutre")||"":fd.get("client")||"").trim(),
     salaireNet,
     salaireLettres:String(fd.get("salaireLettres")||moneyToFrenchWords(fd.get("salaireNet"))).trim(),
+    numeroCnas:String(fd.get("numeroCnas")||a?.numeroCnas||"").trim(),
+    modePaiement:String(fd.get("modePaiement")||"Virement bancaire").trim(),
+    banque:String(fd.get("banque")||"").trim(),
+    iban:String(fd.get("iban")||"").trim(),
     missions:String(fd.get("missions")||"").trim(),
     articleOverrides:employeeNewContractArticleOverridesFromForm(form),
     observation:String(fd.get("observation")||"").trim()
@@ -11866,6 +11877,10 @@ function renderContractualisation(view,id){
           <div><label class="label">Date fin contrat</label><input class="input bg-slate-50" type="date" name="dateFin" value="${escapeHTML(p.dateFin)}" readonly/></div>
           <div><label class="label">Salaire net</label><input class="input" name="salaireNet" inputmode="decimal" oninput="updateNewContractSalaryWords(this,false)" onblur="updateNewContractSalaryWords(this,true)" value="${p.salaireNet?escapeHTML(formatMoneyInputValue(p.salaireNet)):""}"/></div>
           <div class="md:col-span-2"><label class="label">Salaire en lettres</label><input class="input bg-slate-50" name="salaireLettres" value="${escapeHTML(moneyToFrenchWords(p.salaireNet))}" readonly/></div>
+          <div><label class="label">N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(p.numeroCnas||"")}"/></div>
+          <div><label class="label">Mode de paiement</label><select class="select" name="modePaiement">${["Virement bancaire","Espèces","Chèque"].map(m=>`<option value="${m}" ${(p.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")}</select></div>
+          <div><label class="label">Banque</label><input class="input" name="banque" value="${escapeHTML(p.banque||"")}"/></div>
+          <div><label class="label">RIB / IBAN</label><input class="input" name="iban" value="${escapeHTML(p.iban||"")}"/></div>
           <div class="md:col-span-2"><label class="label">Mission et attributions</label><textarea class="textarea" name="missions" rows="3" placeholder="Texte à ajouter dans l'article 6">${escapeHTML(p.missions||"")}</textarea></div>
           <div class="md:col-span-2"><button type="button" class="btn btn-secondary" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles du contrat</button></div>
           <div id="new-contract-articles-editor" class="md:col-span-2 hidden"></div>
@@ -11961,6 +11976,10 @@ async function confirmCandidateNewContract(form,id){
   c.commune=draft.commune||c.commune||"";
   c.missionsContrat=draft.missions||c.missionsContrat||"";
   c.articleOverridesContrat=draft.articleOverrides||c.articleOverridesContrat||{};
+  c.numeroCnas=draft.numeroCnas||c.numeroCnas||"";
+  c.modePaiement=draft.modePaiement||c.modePaiement||"";
+  c.banque=draft.banque||c.banque||"";
+  c.iban=draft.iban||c.iban||"";
   try{
     const agent=await recruitContractCandidateToEmployee(c,candidateNewContractFormData(form,draft));
     agent.periodeEssaiContrat=draft.periodeEssai;
@@ -11971,6 +11990,10 @@ async function confirmCandidateNewContract(form,id){
     agent.commune=draft.commune||agent.commune||"";
     agent.missionsContrat=draft.missions||agent.missionsContrat||"";
     agent.articleOverridesContrat=draft.articleOverrides||agent.articleOverridesContrat||{};
+    agent.numeroCnas=draft.numeroCnas||agent.numeroCnas||"";
+    agent.modePaiement=draft.modePaiement||agent.modePaiement||"";
+    agent.banque=draft.banque||agent.banque||"";
+    agent.iban=draft.iban||agent.iban||"";
     await sgdiBackendSaveAndWait();
     openEmployeeContractReviewWindow(agent,{...draft,a:agent});
     toastCenter("CONTRAT VALIDÉ ET EMPLOYÉ CRÉÉ","success");
@@ -12005,7 +12028,7 @@ function buildAgentFromContractCandidate(c,fd){
   const matricule=nextMatricule(db.agents,c.societe);
   const salaireNet=parseMoneyInput(contractValue(fd,"salaireNet",c.salaireNet||c.salairePrevu||""))||0;
   const agent={
-    id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,numeroCnas:c.numeroCnas||"",sexe:c.sexe,situation:c.situation,groupeSanguin:c.groupeSanguin||"",telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
+    id:uid("ag"),matricule,photo:c.photo,nom:c.nom,prenom:c.prenom,dateNaissance:c.dateNaissance,lieuNaissance:c.lieuNaissance,nomPere:c.nomPere,nomMere:c.nomMere,nin:c.nin,numeroCnas:contractValue(fd,"numeroCnas",c.numeroCnas||""),modePaiement:contractValue(fd,"modePaiement",c.modePaiement||"Virement bancaire"),sexe:c.sexe,situation:c.situation,groupeSanguin:c.groupeSanguin||"",telephone:c.telephone,email:c.email,adresse:c.adresse,commune:c.commune,wilaya:c.wilaya,contactUrgenceNom:c.contactUrgenceNom,contactUrgenceTel:c.contactUrgenceTel,contactUrgenceLien:c.contactUrgenceLien,taille:c.taille,pointure:c.pointure,tailleChemise:c.tailleChemise,exServices:c.exServices,exServicesPrecision:c.exServicesPrecision,sport:c.sport,sportPrecision:c.sportPrecision,habilitations:c.habilitations,langues:c.langues,langueAutre:c.langueAutre,experience:c.experience,posteSouhaite:c.posteSouhaite,posteContrat,fonction:posteContrat,societe:c.societe,
     salairePrevu:parseMoneyInput(c.salairePrevu)||0,avisDecision:c.avisDecision||"",avisDate:c.avisDate||"",avisRecruteur:c.avisRecruteur||"",avisCommentaire:c.avisCommentaire||"",
     ficheACompleter:!!c.ficheACompleter,recruitmentIncompleteFields:Array.isArray(c.recruitmentIncompleteFields)?c.recruitmentIncompleteFields.slice():[],
     typeContrat:cleanContractType(contractValue(fd,"typeContrat",c.typeContrat||""))||"CDD",dureeEssai,dureeContrat,dateFinContrat,salaireNet,banque:contractValue(fd,"banque",c.banque||""),iban:contractValue(fd,"iban",c.iban||""),
