@@ -13127,6 +13127,29 @@ function employeeRowActionsButton(a){
 function closeEmployeeRowActions(){
   document.querySelectorAll("#employee-row-actions-menu").forEach(menu=>menu.remove());
 }
+function positionEmployeeActionsMenu(menu,anchorRect,alignRight){
+  if(!menu||!anchorRect)return;
+  const margin=12;
+  const gap=6;
+  const viewportWidth=Math.max(document.documentElement.clientWidth||0,window.innerWidth||0);
+  const viewportHeight=Math.max(document.documentElement.clientHeight||0,window.innerHeight||0);
+  const maxHeight=Math.max(180,viewportHeight-margin*2);
+  menu.style.maxHeight=maxHeight+"px";
+  menu.style.overflowY="auto";
+  menu.style.overscrollBehavior="contain";
+  menu.style.maxWidth=Math.max(220,viewportWidth-margin*2)+"px";
+  const measured=menu.getBoundingClientRect();
+  const menuWidth=Math.min(measured.width,viewportWidth-margin*2);
+  const menuHeight=Math.min(measured.height,maxHeight);
+  let left=alignRight?anchorRect.right-menuWidth:anchorRect.left;
+  left=Math.max(margin,Math.min(left,viewportWidth-menuWidth-margin));
+  let top=anchorRect.bottom+gap;
+  if(top+menuHeight>viewportHeight-margin)top=anchorRect.top-menuHeight-gap;
+  top=Math.max(margin,Math.min(top,viewportHeight-menuHeight-margin));
+  menu.style.left=Math.round(left)+"px";
+  menu.style.right="auto";
+  menu.style.top=Math.round(top)+"px";
+}
 document.addEventListener("click",event=>{
   const menu=document.getElementById("employee-row-actions-menu");
   if(!menu)return;
@@ -13143,9 +13166,10 @@ function openEmployeeRowActions(event,agentId){
   const rect=btn.getBoundingClientRect();
   const menu=document.createElement("div");
   menu.id="employee-row-actions-menu";
-  menu.style.cssText=`position:fixed;z-index:99999;min-width:210px;background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:6px;right:${Math.max(12,window.innerWidth-rect.right)}px;top:${Math.min(rect.bottom+6,window.innerHeight-320)}px`;
+  menu.style.cssText="position:fixed;z-index:99999;min-width:210px;background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:6px";
   menu.innerHTML=labels.map(([k,l])=>`<button type="button" class="btn btn-ghost text-xs justify-start w-full" style="text-align:left;margin:2px 0;${rhEffectifActionStyle(k)}" onclick="closeEmployeeRowActions();runRhEffectifAction('${k}','${escapeHTML(agentId)}')">${l}</button>`).join("");
   document.body.appendChild(menu);
+  positionEmployeeActionsMenu(menu,rect,true);
   setTimeout(()=>document.addEventListener("click",closeEmployeeRowActions,{once:true}),0);
 }
 function opsEmployeeActionLabels(){
@@ -13165,7 +13189,7 @@ function openEmployeeStatusActions(event,agentId,actionContext){
   const rect=btn.getBoundingClientRect();
   const menu=document.createElement("div");
   menu.id="employee-row-actions-menu";
-  menu.style.cssText=`position:fixed;z-index:99999;min-width:280px;background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:6px;left:${Math.max(12,Math.min(rect.left,window.innerWidth-300))}px;top:${Math.min(rect.bottom+6,window.innerHeight-360)}px`;
+  menu.style.cssText="position:fixed;z-index:99999;min-width:280px;background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:6px";
   menu.innerHTML=`<div class="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">${isContractContext?"Action contrat":isOpsEffectifContext()?"Action OPS":"Action RH"}</div>`+labels.map(([k,l])=>{
     const disabled=k==="integrer"&&!canIntegrer;
     const extra=disabled?"opacity:.45;cursor:not-allowed;filter:grayscale(1);":"";
@@ -13174,6 +13198,7 @@ function openEmployeeStatusActions(event,agentId,actionContext){
     return `<button type="button" class="btn btn-ghost text-xs justify-start w-full" ${disabled?"aria-disabled=\"true\"":""} style="text-align:left;margin:2px 0;${rhEffectifActionStyle(k)};${extra}" ${click}>${l}</button>`;
   }).join("");
   document.body.appendChild(menu);
+  positionEmployeeActionsMenu(menu,rect,false);
   setTimeout(()=>document.addEventListener("click",closeEmployeeRowActions,{once:true}),0);
 }
 function renderEffectifRecap(view){
