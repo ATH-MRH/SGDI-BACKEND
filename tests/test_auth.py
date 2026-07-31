@@ -97,6 +97,30 @@ def test_ops_subdomain_rejects_drh_prefix(client, db):
     assert resp.status_code == 403
 
 
+def test_recrute_subdomain_accepts_rec_prefix(client, db):
+    _add_test_user(db, "REC01", "REC01", role="rh", access_level="H3", structures=["drh"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "REC01", "password": "REC01"},
+        headers={"host": "recrute.irongs.com"},
+    )
+
+    assert resp.status_code == 200, resp.text
+
+
+def test_recrute_subdomain_rejects_other_prefix(client, db):
+    _add_test_user(db, "OPS03", "OPS03", role="ops", access_level="H3", structures=["ops"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "OPS03", "password": "OPS03"},
+        headers={"host": "recrute.irongs.com"},
+    )
+
+    assert resp.status_code == 403
+
+
 def test_protected_endpoint_without_token(client):
     resp = client.get("/api/accounting/comptes")
     assert resp.status_code == 401

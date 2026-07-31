@@ -40,6 +40,7 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "agenda": (("AGD",), "AGENDA"),
     "pointage": (("PTG",), "POINTAGE"),
     "pointeur": (("PTG", "OPS", "SUP"), "POINTEUR"),
+    "recrute": (("REC",), "RECRUTEMENT"),
 }
 
 

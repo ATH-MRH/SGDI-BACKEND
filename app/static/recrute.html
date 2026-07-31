@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#043970">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Recrutement ATLAS">
+<title>RECRUTEMENT — ATLAS</title>
+<link rel="icon" href="/static/sgdi-icon-192.png">
+<link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
+<style>
+:root{--navy:#043970;--blue:#0d6ecc;--green:#16a34a;--red:#dc2626;--amber:#d97706;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit}
+.hidden{display:none!important}
+.login{min-height:100vh;padding:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(155deg,#032f60,#0d6ecc)}
+.login-card{width:100%;max-width:390px;background:#fff;border-radius:26px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+.logo{width:72px;height:72px;border-radius:22px;margin:0 auto 16px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;display:grid;place-items:center;font-size:20px;font-weight:900}
+h1{font-size:22px;text-align:center;margin:0}.login-sub{text-align:center;color:var(--muted);margin:7px 0 24px;font-size:14px}
+label{display:block;font-size:12px;font-weight:800;color:#42566f;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:13px;padding:0 14px;color:var(--ink);background:#fff;font-size:15px}
+input,select{height:48px}
+textarea{padding:10px 14px;min-height:80px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
+.primary{border:0;border-radius:14px;background:var(--navy);color:#fff;padding:13px 18px;font-weight:900;cursor:pointer}
+.login .primary{width:100%;margin-top:18px}
+.secondary{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:11px 16px;font-weight:850;cursor:pointer}
+.danger{border:0;border-radius:12px;background:var(--red);color:#fff;padding:11px 16px;font-weight:850;cursor:pointer}
+.error{display:none;margin-top:13px;border-radius:11px;padding:11px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:700}
+.error.show{display:block}
+.app{min-height:100vh;padding-bottom:40px}
+.top{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px;box-shadow:0 10px 30px rgba(4,57,112,.25)}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1200px;margin:auto;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px}.brand-logo{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:grid;place-items:center;font-weight:900}
+.brand-title{font-size:18px;font-weight:950;letter-spacing:.06em}.brand-user{font-size:12px;opacity:.8;margin-top:2px}
+.top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.society-badge{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:800}
+.society-select{height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:var(--ink);font-size:12px;font-weight:800;padding:0 10px}
+.logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 12px;font-weight:750;cursor:pointer}
+.main{max-width:1200px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.tab-btn{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:999px;padding:9px 16px;font-weight:850;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:7px}
+.tab-btn .count{background:#eef2f7;color:var(--muted);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:900}
+.tab-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.tab-btn.active .count{background:rgba(255,255,255,.2);color:#fff}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.search-box{flex:1;min-width:220px;position:relative}
+.search-box input{height:44px}
+.bulk-bar{display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:11px 15px;margin-bottom:12px;font-size:13px}
+.bulk-bar.show{display:flex}
+.bulk-bar b{font-weight:900}
+.check-all{display:flex;align-items:center;gap:8px;font-weight:800;font-size:12px}
+.table-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.07)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:850;padding:12px 14px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid #eef2f7;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.cand-name{font-weight:850}
+.cand-email{font-size:11px;color:var(--muted);margin-top:2px}
+.pill{display:inline-block;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:900;white-space:nowrap}
+.pill-blue{background:#dbeafe;color:#1d4ed8}.pill-amber{background:#fef3c7;color:#92400e}.pill-gray{background:#e5e7eb;color:#374151}.pill-indigo{background:#e0e7ff;color:#3730a3}
+.avis-select{height:36px;font-size:12px;font-weight:800;padding:0 8px;border-radius:9px}
+.row-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.link-btn{border:0;background:none;color:var(--blue);font-weight:850;font-size:12px;cursor:pointer;padding:6px 8px}
+.link-btn.danger{color:var(--red)}
+.empty{text-align:center;color:#94a3b8;padding:40px 20px;font-size:14px}
+.pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;font-size:12px;color:var(--muted)}
+.pagination .btns{display:flex;gap:8px}
+.pagination button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 12px;font-weight:800;cursor:pointer;font-size:12px}
+.pagination button:disabled{opacity:.4;cursor:default}
+.banner{border-radius:14px;padding:13px 16px;margin-bottom:14px;font-size:13px;font-weight:700}
+.banner.success{background:#dcfce7;color:#14532d;border:1px solid #86efac}
+.banner.error{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5}
+.banner a{color:inherit;font-weight:900;text-decoration:underline}
+.modal-backdrop{position:fixed;inset:0;background:rgba(4,20,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;z-index:50}
+.modal{width:100%;max-width:560px;background:#fff;border-radius:22px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.3)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.modal-head h2{font-size:19px;margin:0}
+.modal-close{border:0;background:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.field-grid .full{grid-column:1/-1}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+@media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:center;text-align:center}}
+</style>
+</head>
+<body>
+<section id="loginView" class="login">
+  <form class="login-card" onsubmit="event.preventDefault();login()">
+    <div class="logo">REC</div>
+    <h1>RECRUTEMENT ATLAS</h1>
+    <p class="login-sub">Gestion des candidatures</p>
+    <label for="username">Identifiant</label>
+    <input id="username" autocomplete="username" autocapitalize="characters" required placeholder="REC01">
+    <label for="password">Mot de passe</label>
+    <input id="password" type="password" autocomplete="current-password" required placeholder="••••••••">
+    <button id="loginBtn" class="primary">SE CONNECTER</button>
+    <div id="loginError" class="error"></div>
+  </form>
+</section>
+
+<section id="appView" class="app hidden">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand"><div class="brand-logo">REC</div><div><div class="brand-title">RECRUTEMENT</div><div class="brand-user" id="userLabel">—</div></div></div>
+      <div class="top-actions">
+        <span id="societyBadge" class="society-badge hidden"></span>
+        <select id="societySelect" class="society-select hidden" onchange="onSocietyChange()"></select>
+        <button class="logout" onclick="logout()">Déconnexion</button>
+      </div>
+    </div>
+  </header>
+  <main class="main">
+    <div id="banner"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="toolbar">
+      <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
+      <button class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
+    </div>
+    <div id="bulkBar" class="bulk-bar">
+      <label class="check-all"><input type="checkbox" id="selectAllBox" onchange="toggleSelectAll(this.checked)"> Tout sélectionner (<span id="selectedCount">0</span>)</label>
+      <button class="danger" onclick="deleteSelected()">Supprimer la sélection</button>
+    </div>
+    <div class="table-card">
+      <div id="listWrap"><div class="empty">Chargement…</div></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </main>
+</section>
+
+<div id="modalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeCandidateForm()">
+  <div class="modal">
+    <div class="modal-head"><h2 id="modalTitle">Nouveau candidat</h2><button class="modal-close" onclick="closeCandidateForm()">✕</button></div>
+    <form id="candidateForm" onsubmit="event.preventDefault();submitCandidateForm()">
+      <div class="field-grid">
+        <div><label for="fLastName">Nom</label><input id="fLastName" required></div>
+        <div><label for="fFirstName">Prénom</label><input id="fFirstName" required></div>
+        <div><label for="fPhone">Téléphone</label><input id="fPhone"></div>
+        <div><label for="fEmail">Email</label><input id="fEmail" type="email"></div>
+        <div class="full"><label for="fPosition">Poste souhaité</label><input id="fPosition"></div>
+        <div><label for="fSociety">Société</label><select id="fSociety"></select></div>
+        <div><label for="fSalary">Salaire prévu</label><input id="fSalary" type="number" min="0" step="1000"></div>
+        <div><label for="fAvis">Avis</label><select id="fAvis"><option value="">—</option><option value="Favorable">Favorable</option><option value="Défavorable">Défavorable</option><option value="Instance">Instance</option></select></div>
+        <div><label for="fAvisDate">Date avis</label><input id="fAvisDate" type="date"></div>
+        <div><label for="fRecruteur">Recruteur</label><input id="fRecruteur"></div>
+        <div class="full"><label for="fComment">Commentaire</label><textarea id="fComment"></textarea></div>
+      </div>
+      <div id="formError" class="error"></div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="closeCandidateForm()">Annuler</button>
+        <button type="submit" class="primary" id="saveBtn">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const SESSION_KEY="atlas_recrute_session";
+let recruteSession=null;
+let activeTab="new";
+let activeSociety="";
+let editingCandidateId=null;
+let searchTimer=null;
+const TABS=[
+  {key:"new",label:"Nouvelles candidatures"},
+  {key:"reserve",label:"Réserve"},
+  {key:"archive",label:"Archives"}
+];
+const tabState={
+  new:{page:1,pages:1,total:0,q:"",items:[]},
+  reserve:{page:1,pages:1,total:0,q:"",items:[]},
+  archive:{page:1,pages:1,total:0,q:"",items:[]}
+};
+let selectedIds=new Set();
+
+function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
+function today(){return new Date().toISOString().slice(0,10)}
+function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
+function showBanner(message,type){
+  document.getElementById("banner").innerHTML=message?`<div class="banner ${type}">${message}</div>`:"";
+}
+
+async function login(){
+  const button=document.getElementById("loginBtn");
+  button.disabled=true;button.textContent="CONNEXION…";showLoginError("");
+  try{
+    const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:document.getElementById("username").value.trim(),password:document.getElementById("password").value})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.detail||"Connexion refusée");
+    recruteSession={token:data.access_token,user:data.user};
+    localStorage.setItem(SESSION_KEY,JSON.stringify(recruteSession));
+    enterApp();
+  }catch(error){showLoginError(error.message||"Connexion impossible")}
+  finally{button.disabled=false;button.textContent="SE CONNECTER"}
+}
+function logout(){
+  localStorage.removeItem(SESSION_KEY);recruteSession=null;
+  document.getElementById("appView").classList.add("hidden");
+  document.getElementById("loginView").classList.remove("hidden");
+  document.getElementById("password").value="";
+}
+function enterApp(){
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
+  const user=recruteSession?.user||{};
+  document.getElementById("userLabel").textContent=(user.full_name||user.username||"Recruteur")+" · "+(user.username||"");
+  const societies=Array.isArray(user.authorized_societies)?user.authorized_societies.filter(Boolean):[];
+  const badge=document.getElementById("societyBadge"),select=document.getElementById("societySelect");
+  if(societies.length>1){
+    select.innerHTML=societies.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    activeSociety=societies[0];
+    select.value=activeSociety;
+    select.classList.remove("hidden");
+    badge.classList.add("hidden");
+  }else{
+    activeSociety=societies[0]||"";
+    if(activeSociety){badge.textContent=activeSociety;badge.classList.remove("hidden")}
+    select.classList.add("hidden");
+  }
+  populateFormSocieties(societies);
+  renderTabs();
+  switchTab("new",true);
+}
+function onSocietyChange(){
+  activeSociety=document.getElementById("societySelect").value||"";
+  Object.keys(tabState).forEach(k=>{tabState[k].page=1});
+  loadTab(activeTab);
+}
+function populateFormSocieties(societies){
+  const select=document.getElementById("fSociety");
+  const list=societies.length?societies:[activeSociety].filter(Boolean);
+  select.innerHTML=list.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")||'<option value="">—</option>';
+}
+
+async function apiFetch(path,options={}){
+  const response=await fetch(path,{...options,headers:{...(options.headers||{}),Authorization:"Bearer "+recruteSession.token}});
+  if(response.status===401){logout();throw new Error("Session expirée")}
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.detail||"Une erreur est survenue");
+  return data;
+}
+
+function renderTabs(){
+  document.getElementById("tabs").innerHTML=TABS.map(t=>`<button type="button" class="tab-btn${activeTab===t.key?" active":""}" onclick="switchTab('${t.key}')">${esc(t.label)} <span class="count">${tabState[t.key].total}</span></button>`).join("");
+}
+function switchTab(tab,force){
+  if(activeTab===tab&&!force)return;
+  activeTab=tab;
+  selectedIds.clear();
+  document.getElementById("searchInput").value=tabState[tab].q||"";
+  document.getElementById("addCandidateBtn").classList.toggle("hidden",tab!=="new");
+  renderTabs();
+  loadTab(tab);
+}
+function onSearchInput(){
+  clearTimeout(searchTimer);
+  const value=document.getElementById("searchInput").value;
+  searchTimer=setTimeout(()=>{
+    tabState[activeTab].q=value;
+    tabState[activeTab].page=1;
+    loadTab(activeTab);
+  },350);
+}
+async function loadTab(tab){
+  const state=tabState[tab];
+  if(tab===activeTab)document.getElementById("listWrap").innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const params=new URLSearchParams({mode:tab,page:String(state.page),page_size:"25"});
+    if(state.q)params.set("q",state.q);
+    if(activeSociety)params.set("society",activeSociety);
+    const result=await apiFetch("/drh/candidates/page?"+params.toString());
+    state.items=result.items||[];
+    state.total=result.total||0;
+    state.page=result.page||1;
+    state.pages=result.pages||1;
+    renderTabs();
+    if(tab===activeTab){renderList();renderPagination()}
+  }catch(error){
+    if(tab===activeTab)document.getElementById("listWrap").innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
+  }
+}
+function statusPill(item){
+  const status=String(item.status||"").toLowerCase();
+  if(activeTab==="archive")return '<span class="pill pill-gray">Archivé</span>';
+  if(status==="reserve"||activeTab==="reserve")return '<span class="pill pill-amber">Réserve</span>';
+  return '<span class="pill pill-blue">Nouvelle</span>';
+}
+function avisCell(item){
+  const value=(item.data&&item.data.avisDecision)||"";
+  if(activeTab==="archive"){
+    return value?`<span class="pill ${value==="Favorable"?"pill-blue":"pill-gray"}">${esc(value)}</span>`:"—";
+  }
+  return `<select class="avis-select" onchange="changeAvis(${item.id},this.value)">
+    <option value=""${value?"":" selected"}>—</option>
+    <option value="Favorable"${value==="Favorable"?" selected":""}>Favorable</option>
+    <option value="Défavorable"${value==="Défavorable"?" selected":""}>Défavorable</option>
+    <option value="Instance"${value==="Instance"?" selected":""}>Instance</option>
+  </select>`;
+}
+function rowActions(item){
+  const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
+  if(activeTab==="new")actions.push(`<button type="button" class="link-btn danger" onclick="deleteCandidate(${item.id})">Supprimer</button>`);
+  if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
+  return `<div class="row-actions">${actions.join("")}</div>`;
+}
+function renderList(){
+  const state=tabState[activeTab];
+  const bulkBar=document.getElementById("bulkBar");
+  bulkBar.classList.toggle("show",activeTab==="new"&&state.items.length>0);
+  if(!state.items.length){
+    document.getElementById("listWrap").innerHTML='<div class="empty">Aucun candidat.</div>';
+    updateSelectedCount();
+    return;
+  }
+  const checkboxCol=activeTab==="new";
+  document.getElementById("listWrap").innerHTML=`<table><thead><tr>
+    ${checkboxCol?'<th style="width:36px"></th>':""}
+    <th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Statut</th><th>Date</th><th></th>
+  </tr></thead><tbody>
+  ${state.items.map(item=>`<tr data-id="${item.id}">
+    ${checkboxCol?`<td onclick="event.stopPropagation()"><input type="checkbox" data-select-id="${item.id}" ${selectedIds.has(item.id)?"checked":""} onchange="toggleSelectOne(${item.id},this.checked)"></td>`:""}
+    <td><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${esc(item.email||"")}</div></td>
+    <td>${esc(item.desired_position||"—")}</td>
+    <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
+    <td>${esc(item.phone||"—")}</td>
+    <td>${avisCell(item)}</td>
+    <td>${statusPill(item)}</td>
+    <td style="font-size:11px;color:var(--muted)">${esc((item.created_at||"").slice(0,10))}</td>
+    <td>${rowActions(item)}</td>
+  </tr>`).join("")}
+  </tbody></table>`;
+  updateSelectedCount();
+}
+function renderPagination(){
+  const state=tabState[activeTab];
+  document.getElementById("pagination").innerHTML=state.items.length?`
+    <div>${state.total} candidat(s) · page ${state.page}/${state.pages}</div>
+    <div class="btns">
+      <button ${state.page<=1?"disabled":""} onclick="gotoPage(${state.page-1})">Précédent</button>
+      <button ${state.page>=state.pages?"disabled":""} onclick="gotoPage(${state.page+1})">Suivant</button>
+    </div>`:"";
+}
+function gotoPage(page){
+  tabState[activeTab].page=page;
+  loadTab(activeTab);
+}
+function toggleSelectAll(checked){
+  const state=tabState[activeTab];
+  if(checked)state.items.forEach(item=>selectedIds.add(item.id));
+  else selectedIds.clear();
+  renderList();
+}
+function toggleSelectOne(id,checked){
+  if(checked)selectedIds.add(id);else selectedIds.delete(id);
+  updateSelectedCount();
+}
+function updateSelectedCount(){
+  document.getElementById("selectedCount").textContent=String(selectedIds.size);
+  const state=tabState[activeTab];
+  document.getElementById("selectAllBox").checked=state.items.length>0&&state.items.every(item=>selectedIds.has(item.id));
+}
+async function deleteSelected(){
+  if(!selectedIds.size)return;
+  if(!confirm(`Supprimer ${selectedIds.size} candidat(s) sélectionné(s) ? Cette action est irréversible.`))return;
+  const ids=[...selectedIds];
+  const results=await Promise.allSettled(ids.map(id=>apiFetch(`/drh/candidates/${id}`,{method:"DELETE"})));
+  const failed=results.filter(r=>r.status==="rejected").length;
+  selectedIds.clear();
+  showBanner(failed?`${ids.length-failed} candidat(s) supprimé(s), ${failed} échec(s).`:`${ids.length} candidat(s) supprimé(s).`,failed?"error":"success");
+  loadTab(activeTab);
+}
+async function deleteCandidate(id){
+  if(!confirm("Supprimer ce candidat ? Cette action est irréversible."))return;
+  try{
+    await apiFetch(`/drh/candidates/${id}`,{method:"DELETE"});
+    showBanner("Candidat supprimé.","success");
+    loadTab(activeTab);
+  }catch(error){showBanner(esc(error.message),"error")}
+}
+async function changeAvis(id,value){
+  const item=tabState[activeTab].items.find(row=>row.id===id);
+  if(!item)return;
+  try{
+    await apiFetch(`/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:{...(item.data||{}),avisDecision:value,avisDate:today()}})});
+    loadTab(activeTab);
+  }catch(error){showBanner(esc(error.message),"error");loadTab(activeTab)}
+}
+async function markReadyForContract(id){
+  try{
+    await apiFetch(`/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
+    showBanner('Candidat prêt pour contractualisation. Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
+    loadTab(activeTab);
+  }catch(error){showBanner(esc(error.message),"error")}
+}
+
+function openCandidateForm(id){
+  editingCandidateId=id;
+  document.getElementById("formError").classList.remove("show");
+  document.getElementById("candidateForm").reset();
+  if(id){
+    const item=Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===id);
+    document.getElementById("modalTitle").textContent="Modifier le candidat";
+    if(item){
+      document.getElementById("fLastName").value=item.last_name||"";
+      document.getElementById("fFirstName").value=item.first_name||"";
+      document.getElementById("fPhone").value=item.phone||"";
+      document.getElementById("fEmail").value=item.email||"";
+      document.getElementById("fPosition").value=item.desired_position||"";
+      if(item.society)document.getElementById("fSociety").value=item.society;
+      document.getElementById("fSalary").value=item.expected_salary||"";
+      const data=item.data||{};
+      document.getElementById("fAvis").value=data.avisDecision||"";
+      document.getElementById("fAvisDate").value=data.avisDate||"";
+      document.getElementById("fRecruteur").value=data.avisRecruteur||"";
+      document.getElementById("fComment").value=data.avisCommentaire||"";
+    }
+  }else{
+    document.getElementById("modalTitle").textContent="Nouveau candidat";
+    if(activeSociety)document.getElementById("fSociety").value=activeSociety;
+  }
+  document.getElementById("modalBackdrop").classList.remove("hidden");
+}
+function closeCandidateForm(){
+  document.getElementById("modalBackdrop").classList.add("hidden");
+  editingCandidateId=null;
+}
+async function submitCandidateForm(){
+  const button=document.getElementById("saveBtn");
+  const errorEl=document.getElementById("formError");
+  errorEl.classList.remove("show");
+  const lastName=document.getElementById("fLastName").value.trim();
+  const firstName=document.getElementById("fFirstName").value.trim();
+  if(lastName.length<2||firstName.length<2){
+    errorEl.textContent="Nom et prénom obligatoires (2 caractères minimum).";
+    errorEl.classList.add("show");
+    return;
+  }
+  const existing=editingCandidateId?Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===editingCandidateId):null;
+  const payload={
+    last_name:lastName,
+    first_name:firstName,
+    phone:document.getElementById("fPhone").value.trim(),
+    email:document.getElementById("fEmail").value.trim(),
+    desired_position:document.getElementById("fPosition").value.trim(),
+    society:document.getElementById("fSociety").value||activeSociety||"",
+    expected_salary:document.getElementById("fSalary").value?Number(document.getElementById("fSalary").value):null,
+    data:{
+      ...(existing?.data||{}),
+      avisDecision:document.getElementById("fAvis").value,
+      avisDate:document.getElementById("fAvisDate").value,
+      avisRecruteur:document.getElementById("fRecruteur").value.trim(),
+      avisCommentaire:document.getElementById("fComment").value.trim()
+    }
+  };
+  button.disabled=true;button.textContent="Enregistrement…";
+  try{
+    if(editingCandidateId){
+      await apiFetch(`/drh/candidates/${editingCandidateId}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      showBanner("Candidat mis à jour.","success");
+    }else{
+      payload.status="nouvelle";
+      await apiFetch("/drh/candidates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      showBanner("Candidat ajouté.","success");
+    }
+    closeCandidateForm();
+    loadTab(activeTab);
+  }catch(error){
+    errorEl.textContent=error.message||"Enregistrement impossible";
+    errorEl.classList.add("show");
+  }finally{
+    button.disabled=false;button.textContent="Enregistrer";
+  }
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  try{recruteSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){recruteSession=null}
+  if(recruteSession?.token)enterApp();
+});
+</script>
+</body>
+</html>
