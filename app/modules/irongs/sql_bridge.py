@@ -230,6 +230,7 @@ def shrink_employee_extra(row: Employee) -> bool:
     if not extra:
         return False
     legacy = flatten_employee_extra(extra)
+    legacy = normalize_photo_fields(legacy, fallback=row.code or str(row.id))
     if isinstance(legacy.get("documents"), dict):
         legacy["documents"] = externalize_employee_documents(
             legacy["documents"], fallback=row.code or str(row.id))

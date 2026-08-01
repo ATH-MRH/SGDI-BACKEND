@@ -157,6 +157,28 @@ def test_migration_batch_counts(db, uploads):
     assert sql_bridge.migrate_flatten_employees(db)["changed"] == 0
 
 
+def test_migration_externalizes_leftover_base64_photo(db, uploads):
+    """Une photo restee en base64 dans extra._legacy.photo (ancienne ligne, anterieure a
+    l'externalisation des photos) doit etre deplacee sur disque par la migration, pas
+    seulement l'emboitement _legacy et les documents."""
+    gros_photo = "data:image/jpeg;base64," + base64.b64encode(b"PHOTO-BINAIRE").decode()
+    row = Employee(code="MIGPHOTO", first_name="P", last_name="Hoto",
+                   society="Iron Global Securite", status="actif",
+                   extra={"fonction": "AGENT", "_legacy": {"nom": "Hoto", "photo": gros_photo}})
+    db.add(row)
+    db.flush()
+
+    changed = sql_bridge.shrink_employee_extra(row)
+    db.flush()
+
+    assert changed is True
+    assert ";base64," not in json.dumps(row.extra), "la photo base64 est restee en base"
+    item = sql_bridge.employee_to_item(row)
+    assert item["photo"].startswith("/uploads/photos/"), item["photo"]
+    # Idempotent : un 2e passage ne change plus rien
+    assert sql_bridge.shrink_employee_extra(row) is False
+
+
 def test_migration_preserves_document_only_in_deep_legacy(db, uploads):
     """Un document présent UNIQUEMENT dans un niveau profond doit survivre à la migration."""
     node = {"nom": "DEEP", "_legacy": {"nom": "DEEP", "_legacy": {
