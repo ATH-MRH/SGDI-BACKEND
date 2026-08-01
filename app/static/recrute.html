@@ -150,7 +150,7 @@ tr:last-child td{border-bottom:0}
         <form id="contractForm" class="hidden" onsubmit="event.preventDefault();submitContractForm()">
           <div class="field-grid">
             <div class="full"><label>Candidat</label><input id="ctCandidateName" readonly style="background:#f8fafc;font-weight:800"></div>
-            <div><label>Poste</label><input id="ctPosition" readonly style="background:#f8fafc"></div>
+            <div><label>Poste</label><select id="ctPosition"><option value="">— Choisir —</option></select></div>
             <div><label>Société</label><input id="ctSociety" readonly style="background:#f8fafc"></div>
             <div><label>Type de contrat</label><select id="ctType" onchange="onContractTypeChange()"><option value="CDD">CDD</option><option value="CDI">CDI</option><option value="CIDD">CIDD</option><option value="CTA">CTA</option><option value="APPRENTISSAGE">Apprentissage</option></select></div>
             <div><label>Date de début</label><input id="ctStart" type="date" onchange="updateContractEndDate()"></div>
@@ -292,19 +292,26 @@ function enterApp(){
   switchTab("new",true);
 }
 const POSITIONS_FALLBACK=["Agent administratif","Agent d'entretien","Agent de bureau","Agent de prévention et de sécurité","Agent polyvalent","Cariste","Chauffeur","Chef d'équipe","Chef de groupe","Chef de poste","Chef de site","Contrôleur","Coordinateur","Hôtesse d'accueil","Inspecteur","Maître-chien","Manutentionnaire","Magasinier","Superviseur"];
+let positionOptionsList=POSITIONS_FALLBACK;
+const POSITION_SELECT_IDS=["fPosition","ctPosition"];
 async function loadPositionOptions(){
   let names=POSITIONS_FALLBACK;
   try{
     const rows=await apiFetch("/api/irongs/positions"+(activeSociety?`?society=${encodeURIComponent(activeSociety)}`:""));
     if(Array.isArray(rows)&&rows.length)names=[...new Set(rows.map(r=>r.name).filter(Boolean))];
   }catch(e){/* garde la liste de repli locale */}
-  const select=document.getElementById("fPosition");
-  const current=select.value;
-  select.innerHTML='<option value="">— Choisir —</option>'+names.sort((a,b)=>a.localeCompare(b,"fr")).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
-  if(current)setPositionValue(current);
+  positionOptionsList=names.sort((a,b)=>a.localeCompare(b,"fr"));
+  POSITION_SELECT_IDS.forEach(id=>{
+    const select=document.getElementById(id);
+    if(!select)return;
+    const current=select.value;
+    select.innerHTML='<option value="">— Choisir —</option>'+positionOptionsList.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    if(current)setPositionValue(id,current);
+  });
 }
-function setPositionValue(value){
-  const select=document.getElementById("fPosition");
+function setPositionValue(id,value){
+  const select=document.getElementById(id);
+  if(!select)return;
   if(!value){select.value="";return}
   if(![...select.options].some(o=>o.value===value)){
     select.insertAdjacentHTML("beforeend",`<option value="${esc(value)}">${esc(value)}</option>`);
@@ -546,7 +553,7 @@ function openContractForCandidate(id){
   document.getElementById("contractFormEmpty").classList.add("hidden");
   document.getElementById("contractForm").classList.remove("hidden");
   document.getElementById("ctCandidateName").value=`${item.last_name||""} ${item.first_name||""}`.trim();
-  document.getElementById("ctPosition").value=item.desired_position||"";
+  setPositionValue("ctPosition",item.desired_position||"");
   document.getElementById("ctSociety").value=item.society||"";
   const savedType=String(data.typeContrat||"").toUpperCase();
   document.getElementById("ctType").value=CONTRACT_TYPES.includes(savedType)?savedType:"CDD";
@@ -698,7 +705,7 @@ function openCandidateForm(id){
     document.getElementById("modalTitle").textContent="Modifier le candidat";
     if(item){
       candidateField("fLastName",item.last_name);candidateField("fFirstName",item.first_name);
-      candidateField("fPhone",item.phone);candidateField("fEmail",item.email);candidateField("fPosition",item.desired_position);
+      candidateField("fPhone",item.phone);candidateField("fEmail",item.email);setPositionValue("fPosition",item.desired_position||"");
       if(item.society)document.getElementById("fSociety").value=item.society;
       candidateField("fSalary",item.expected_salary);
       const data=item.data||{};
