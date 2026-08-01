@@ -3074,7 +3074,7 @@ function uiFocusFirstInvalid(root){
 }
 function commandRoutes(){
   const base=[
-    ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Ajouter candidats","reserve"],["Candidats archives","candidats_archives"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/feuille"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
+    ["Tableau de bord","dashboard"],["DRH","drh/dashboard"],["Fiches de position","fiches"],["Badge","fiches/badge"],["Effectif","effectif/actifs"],["OPS","ops/dashboard"],["Pointage","pointage/saisie"],["Feuille de presence","pointage/feuille"],["Materiel et equipement","materiel/dashboard"],["Articles stock","materiel/articles"],["Magasins","materiel/magasins"],["Fournisseurs","materiel/fournisseurs"],["Commercial","commercial/dashboard"],["Clients","commercial/clients"],["Prestations","commercial/prestations"],["Finances","facturation/dashboard"]
   ];
   if(isAdminGeneralSession())base.push([isAdminSystemSession()?"Administration système":"Administrateur général","admin/dashboard"],["Utilisateurs","admin/users"]);
   return base.filter(([_,r])=>canAccess(r.split("/")[0])||r.startsWith(session?.transverse||""));
@@ -4112,11 +4112,9 @@ function renderGlobalDashboard(view){
   const today_=today();
   const allAgents=(db.agents||[]).filter(a=>a.statut!=="archive");
   const allSites=(db.sites||[]).filter(s=>s?.actif!==false&&s?.active!==0);
-  const allCandidats=(db.candidats||[]).filter(candidatIsActive);
   const totalEffectif=allAgents.length;
   const totalActifs=allAgents.filter(a=>a.statut==="actif").length;
   const totalSites=allSites.length;
-  const totalAContractualiser=allCandidats.filter(candidateCanGoToContract).length;
   const socRows=SOCIETES.map(soc=>{
     const ag=allAgents.filter(a=>normalizeSocieteName(a.societe)===normalizeSocieteName(soc));
     const actifs=ag.filter(a=>a.statut==="actif").length;
@@ -4156,11 +4154,10 @@ function renderGlobalDashboard(view){
         <p style="font-size:13px;color:#94a3b8;margin:4px 0 0">Consolidation de toutes les sociétés · ${SOCIETES.length} sociétés</p>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
       ${KPI("Effectif total",totalEffectif,"#0f172a",`${SOCIETES.length} sociétés`)}
       ${KPI("Agents actifs",totalActifs,"#16a34a")}
       ${KPI("Sites actifs",totalSites,"#2563eb")}
-      ${KPI("À contractualiser",totalAContractualiser,totalAContractualiser>0?"#d97706":"#94a3b8")}
     </div>
     <div style="background:white;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
       <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9;font-size:12px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.06em">Détail par société</div>
@@ -4271,7 +4268,6 @@ function sgdiModuleHostConfigs(){
 	      homeRoute:"drh/dashboard",
 	      sections:[
 	        {label:"TABLEAU DE BORD",route:"drh/dashboard"},
-	        {label:"RECRUTEMENT / CANDIDATS",route:"recrutement/candidats"},
 	        {label:"CONTRATS",route:"contrats/dashboard"},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap"},
@@ -6252,7 +6248,6 @@ function renderSidebar(){
 
     // Compteurs DRH
     const drhTotalAgents=srvEmp?.non_archived??srvEmp?.total??(drhAgents.filter(a=>!["sortant","demissionne","licencie","archive"].includes(String(a.statut||"").toLowerCase())).length);
-    const drhAContractualiser=drhCandidates.filter(candidateCanGoToContract).length;
     const drhIncidents=(db.incidents||[]).filter(i=>i.statut!=="clos"&&incidentMatchesSociete(i,drhSoc)).length;
 
     // Compteurs OPS
@@ -6278,7 +6273,7 @@ function renderSidebar(){
     const sidebarByModule={
       drh:[
         {label:"TABLEAU DE BORD",route:"drh/dashboard"},
-        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],count:drhAContractualiser||null},
+        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"]},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"]},
         {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!soc||a.societe===soc).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
@@ -6388,7 +6383,6 @@ function renderSidebar(){
         {label:"CONTRATS",route:"contrats/situation",aliases:["contrats"]},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"SITES",route:"sites/actifs",aliases:["sites"]},
-        {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"]},
         {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length||null},
         {label:"DRH",route:"drh/dashboard",aliases:["drh"],gapBefore:true},
         {label:"OPS",route:"ops/dashboard",aliases:["ops"]},
@@ -6425,7 +6419,7 @@ function renderSidebar(){
       ]:[
         {label:"COCKPIT DG",route:"admin/dashboard"},
         {label:"VUE SOCIÉTÉS",route:"admin/dashboard"},
-        {label:"ALERTES CRITIQUES",route:"contrats/situation",count:drhAContractualiser||null},
+        {label:"ALERTES CRITIQUES",route:"contrats/situation"},
         {label:"SYNTHÈSE RH",route:"effectif/recap",count:drhAgents.length||null},
         {label:"SYNTHÈSE OPS",route:"ops/dashboard",count:opsIncidents.length||null},
         {label:"SYNTHÈSE MATÉRIEL",route:"materiel/dashboard",count:(db.stockArticles||[]).length||null},
@@ -6753,7 +6747,6 @@ function globalSearchItems(){
   const make=(type,label,arr,routeFn,titleFn,metaFn)=>Array.isArray(arr)?arr.map(o=>({type,label,obj:o,route:routeFn(o),title:titleFn(o),meta:metaFn(o),text:deepSearchText(o)})):[];
   const rows=[
     ...make("agent","Employé",db.agents,o=>`effectif/agent/${o.id}`,o=>`${o.matricule||""} ${o.nom||""} ${o.prenom||""}`.trim(),o=>`${o.societe||""} · ${o.fonction||o.poste||""} · ${o.statut||""}`),
-    ...make("candidat","Candidat",db.candidats,o=>candidatIsArchived(o)?`candidats_archives/${o.id}`:candidatIsReserve(o)?`reserve/${o.id}`:`recrutement/${o.id}`,o=>`${o.nom||""} ${o.prenom||""}`.trim(),o=>`${o.societe||""} · ${o.posteSouhaite||""} · ${o.wilaya||""}`),
     ...make("site","Site",db.sites,o=>`sites/${o.id}`,o=>o.nom||o.site||"Site",o=>`${o.societe||""} · ${o.client||""} · ${o.adresse||""}`),
     ...make("article","Article",db.stockArticles,o=>`materiel/article/${o.id}`,o=>`${o.code||""} ${o.designation||o.nom||""}`.trim(),o=>`${o.societe||""} · ${o.categorie||""} · ${o.sousCategorie||""}`),
     ...make("fournisseur","Fournisseur",db.fournisseurs,o=>`materiel/fournisseur/${o.id}`,o=>o.nom||o.raisonSociale||"Fournisseur",o=>`${o.societe||""} · ${o.tel||o.telephone||""} · ${o.email||""}`),
@@ -7454,52 +7447,12 @@ function sidebarNavigate(event,route){
   }
   const path=(location.hash||"#/dashboard").slice(2);
   const target=String(route||"").replace(/^#?\/?/,"");
-  if(target==="recrutement/candidats"){
-    if(path==="recrutement/candidats"||path==="recrutement"||path==="recrutement/liste"){
-      syncSidebarActiveState();
-      refreshModuleCountersRibbon();
-      return;
-    }
-    switchRecruitmentTab(event,"recrutement/candidats","new");
-    return;
-  }
   if(path===target||sidebarRouteActive(path,target)){
     syncSidebarActiveState();
     refreshModuleCountersRibbon();
     return;
   }
   navigate(target);
-}
-function switchRecruitmentTab(event,route,mode){
-  if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
-  if(event){
-    event.preventDefault();
-    event.stopPropagation();
-  }
-  const target="#/"+String(route||"").replace(/^#?\/?/,"");
-  sgdiNextScrollRestore=sgdiScrollSnapshot();
-  try{
-    sgdiMarkUserNavigation();
-    uiProgressStart();
-    if(location.hash!==target)history.pushState(null,"",target);
-    sgdiResetViewScroll=false;
-    sgdiLastRenderedPath=target.slice(2);
-    syncSidebarActiveState();
-    refreshModuleCountersRibbon();
-    const view=document.getElementById("view");
-    if(view)renderRecrutement(view,mode||"new");
-  }catch(e){
-    console.error(e);
-    navigatePreserveScroll(route);
-    return;
-  }finally{
-    uiProgressDone();
-    if(sgdiNextScrollRestore){
-      const next=sgdiNextScrollRestore;
-      sgdiNextScrollRestore=null;
-      sgdiRestoreScrollPosition(next);
-    }
-  }
 }
 
 function renderView(){
@@ -7533,17 +7486,10 @@ function renderView(){
     switch(root){
       case"dashboard":renderDashboard(view);break;
       case"dossiers":renderDossiers(view);break;
-      case"recrutement":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub==="liste"||sub==="candidats")renderRecrutement(view,"new");else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"new");break;
-      case"reserve":if(sub==="nouveau")renderCandidatForm(view,null,{reserveDirect:true});else if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"reserve");break;
-      case"candidats_archives":if(sub)renderCandidatForm(view,sub);else renderRecrutement(view,"archive");break;
       case"contrats":
-        if(sub==="dashboard")renderContratsDashboard(view);
-        else if(sub==="a_contractualiser"&&!arg)renderContrats(view,"a_contractualiser");
-        else if(sub==="avenants")renderAvenants(view);
+        if(sub==="avenants")renderAvenants(view);
         else if(sub==="situation"||sub==="clients")renderContrats(view,"situation");
         else if(sub==="nouveau_contrat")renderNouveauContratDirect(view);
-        else if(sub==="nouveau"&&arg)renderContractualisation(view,arg);
-        else if(sub)renderContractualisation(view,sub);
         else renderContratsDashboard(view);
         break;
       case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else if(sub==="sortants")renderElementsSortants(view);else renderEffectif(view,sub||"actifs");break;
@@ -7677,8 +7623,6 @@ function renderDashboard(view){
   const matchSoc=a=>!filter||a.societe===filter;
   const agentsSoc=(db.agents||[]).filter(matchSoc);
   const agentsActifs=agentsSoc.filter(a=>a.statut==="actif");
-  const candidatsReserve=(db.candidats||[]).filter(c=>candidatIsReserve(c)&&(!filter||c.societe===filter));
-  const candidatsNouveaux=(db.candidats||[]).filter(c=>candidatIsNew(c)&&(!filter||c.societe===filter));
   const enConge=db.agents.filter(a=>matchSoc(a)&&db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)));
   const enMaladie=db.agents.filter(a=>matchSoc(a)&&db.conges.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c)));
   const absents=db.agents.filter(a=>a.statut==="absent"&&matchSoc(a));
@@ -7713,7 +7657,6 @@ function renderDashboard(view){
   view.innerHTML=`<div class="dash-shell">
     <section class="dash-kpi-grid">
       ${dashboardKpi("Effectif actif",agentsActifs.length,`${agentsSoc.length} total`,"effectif/actifs","ok")}
-      ${dashboardKpi("Candidats",candidatsReserve.length,`${candidatsNouveaux.length} à compléter`,"reserve","info")}
       ${dashboardKpi("Pointage du jour",fpRate+"%",`${fpPointes}/${fpToday.length||0} lignes`,"pointage/feuille",fpRate<80&&fpToday.length?"warn":"ok")}
       ${dashboardKpi("Absence / maladie",absents.length+enMaladie.length,`${absents.length} absence · ${enMaladie.length} maladie`,"effectif/absents",(absents.length+enMaladie.length)?"danger":"ok")}
       ${dashboardKpi("Congés",enConge.length,`${nbCongesPending} en attente`,"conges",nbCongesPending?"warn":"ok")}
@@ -7752,7 +7695,6 @@ function renderDashboard(view){
       <div class="dash-panel">
         <div class="dash-panel-head"><div class="dash-panel-title">Actions fréquentes</div><span class="text-xs text-slate-500">Accès direct</span></div>
         <div class="dash-panel-body"><div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-          ${dashboardAction("Candidats en réserve","Liste et activation","reserve")}
           ${dashboardAction("Générer présence","Pointage du jour","pointage/feuille")}
           ${dashboardAction("Ordre de mouvement","Mouvement personnel","ops/mouvements")}
           ${dashboardAction("Dotation matériel","Sortie stock personnel","materiel/dotation")}
@@ -7792,14 +7734,14 @@ function kpiCardLink(label,val,icon,color,href){const c={amber:"#043970",blue:"#
 
 /* ---- DOSSIERS ---- */
 function renderDossiers(view){
-  const people=[...db.agents.map(a=>({type:"agent",id:a.id,nom:`${a.nom} ${a.prenom}`,matricule:a.matricule,photo:a.photo,societe:a.societe,statut:a.statut,cvFile:a.cvFile,documents:a.documents||{}})),...db.candidats.map(c=>({type:"candidat",id:c.id,nom:`${c.nom} ${c.prenom}`,matricule:"—",photo:c.photo,societe:c.societe,statut:c.statut,cvFile:c.cvFile,documents:c.documents||{}}))];
+  const people=db.agents.map(a=>({type:"agent",id:a.id,nom:`${a.nom} ${a.prenom}`,matricule:a.matricule,photo:a.photo,societe:a.societe,statut:a.statut,cvFile:a.cvFile,documents:a.documents||{}}));
   const totalPieces=people.reduce((s,p)=>s+Object.keys(p.documents||{}).length+(p.cvFile?1:0),0);
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">📁 Dossier administratif</h1>
-    <p class="text-slate-500 text-sm mb-6">Archive de toutes les pièces téléversées — candidats et agents.</p>
-    <div class="grid grid-4 mb-6">${kpiCard("Dossiers agents",db.agents.length,"👮","amber")}${kpiCard("Candidats",db.candidats.length,"📝","indigo")}${kpiCard("Pièces archivées",totalPieces,"📄","blue")}${kpiCard("Sociétés",SOCIETES.length,"🏢","green")}</div>
+    <p class="text-slate-500 text-sm mb-6">Archive de toutes les pièces téléversées — agents.</p>
+    <div class="grid grid-3 mb-6">${kpiCard("Dossiers agents",db.agents.length,"👮","amber")}${kpiCard("Pièces archivées",totalPieces,"📄","blue")}${kpiCard("Sociétés",SOCIETES.length,"🏢","green")}</div>
     <div class="card overflow-hidden"><table>
-      <thead><tr><th>Personne</th><th>Type</th><th>Matricule</th><th>Société</th><th>Pièces</th><th>Complétude</th><th></th></tr></thead>
-      <tbody>${people.map(p=>{const nb=Object.keys(p.documents||{}).length+(p.cvFile?1:0);const pct=Math.min(100,Math.round(nb/10*100));const link=p.type==="agent"?`#/agents/${p.id}`:`#/reserve/${p.id}`;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${p.photo?`<img src="${p.photo}"/>`:escapeHTML(p.nom.slice(0,1))}</div>${escapeHTML(p.nom)}</div></td><td>${p.type==="agent"?'<span class="pill pill-green">Agent</span>':'<span class="pill pill-indigo">Candidat</span>'}</td><td class="font-mono">${safe(p.matricule)}</td><td class="text-xs">${safe(p.societe)}</td><td><div class="flex flex-wrap gap-1">${p.cvFile?'<span class="pill pill-blue">CV</span>':''}${Object.keys(p.documents||{}).map(k=>`<span class="pill pill-gray">${k.slice(0,4)}</span>`).join("")}</div></td><td><div class="h-2 bg-slate-100 rounded-full w-24"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div><div class="text-xs text-slate-500 mt-1">${pct}%</div></td><td><a class="btn btn-ghost text-xs" href="${link}">Ouvrir →</a></td></tr>`}).join("")}</tbody>
+      <thead><tr><th>Personne</th><th>Matricule</th><th>Société</th><th>Pièces</th><th>Complétude</th><th></th></tr></thead>
+      <tbody>${people.map(p=>{const nb=Object.keys(p.documents||{}).length+(p.cvFile?1:0);const pct=Math.min(100,Math.round(nb/10*100));return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${p.photo?`<img src="${p.photo}"/>`:escapeHTML(p.nom.slice(0,1))}</div>${escapeHTML(p.nom)}</div></td><td class="font-mono">${safe(p.matricule)}</td><td class="text-xs">${safe(p.societe)}</td><td><div class="flex flex-wrap gap-1">${p.cvFile?'<span class="pill pill-blue">CV</span>':''}${Object.keys(p.documents||{}).map(k=>`<span class="pill pill-gray">${k.slice(0,4)}</span>`).join("")}</div></td><td><div class="h-2 bg-slate-100 rounded-full w-24"><div class="h-full bg-amber-500 rounded-full" style="width:${pct}%"></div></div><div class="text-xs text-slate-500 mt-1">${pct}%</div></td><td><a class="btn btn-ghost text-xs" href="#/agents/${p.id}">Ouvrir →</a></td></tr>`}).join("")}</tbody>
     </table></div>`;
 }
 
@@ -10234,8 +10176,6 @@ function printAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)r
 function renderContratsDashboard(view){
   const socFilter=currentStructureSocieteFilter();
   const agents=(db.agents||[]).filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
-  const candidates=(db.candidats||[]).filter(c=>!socFilter||c.societe===socFilter);
-  const toContract=candidates.filter(candidateCanGoToContract);
   const avenants=(db.avenants||[]).filter(av=>{const a=(db.agents||[]).find(x=>x.id===av.agentId);return !socFilter||a?.societe===socFilter});
   const signedAvenants=avenants.filter(a=>a.statut==="signe");
   const today_=today();
@@ -10260,7 +10200,7 @@ function renderContratsDashboard(view){
     <h3>${escapeHTML(title)}</h3>
     <div class="contract-summary-metrics">${items.join("")}</div>
   </section>`;
-  const contractActions=`<div class="contract-actions-row contract-title-actions flex gap-4 flex-wrap justify-end items-center"><button type="button" class="contract-title-link" onclick="openAvenantModal('general')">+ Créer avenant</button><button type="button" class="contract-title-link" onclick="openContratsCreateContract()">+ Créer contrat</button></div>`;
+  const contractActions=`<div class="contract-actions-row contract-title-actions flex gap-4 flex-wrap justify-end items-center"><button type="button" class="contract-title-link" onclick="openAvenantModal('general')">+ Créer avenant</button><button type="button" class="contract-title-link" onclick="openEmployeeNewContractModal()">+ Créer contrat</button></div>`;
   view.innerHTML=`
     <div class="mb-4 flex items-center justify-between gap-3 flex-wrap">
       <div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div>
@@ -10291,18 +10231,10 @@ function renderContratsDashboard(view){
       ],cddExpire+cdd30+cdd90>0)}
       ${contractGroup("Renouvellement",[
         contractMetric("CDD expirés",cddExpire,"#dc2626",true,"setContratQuickFilter('cddExpired')"),
-        contractMetric("À contract.",toContract.length,"#043970",false,"navigate('contrats/a_contractualiser')"),
         contractMetric("Avenants",avenants.length,"#7c3aed",false,"navigate('contrats/avenants')"),
         contractMetric("Signés",signedAvenants.length,"#16a34a",false,"navigate('contrats/avenants')")
       ],false)}
     </div>
-    ${toContract.length?`<div class="card p-4 mb-4" style="background:#eff6ff;border:2px solid #2563eb">
-      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div><div class="font-black text-blue-700 uppercase">Candidat en instance de contrat</div><div class="text-xs text-blue-700">${toContract.length} candidat(s) en cours de contractualisation — contrat pas encore créé</div></div>
-        <button type="button" class="btn btn-primary text-xs" onclick="navigate('contrats/a_contractualiser')">Voir la liste</button>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${toContract.map(c=>`<a href="#/contrats/nouveau/${c.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #bfdbfe;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b><span class="pill pill-blue">${safe(candidatePosteLabel(c))}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(c.societe||"—")}</div></a>`).join("")}</div>
-    </div>`:""}
     ${contractSituationListHTML(agents,today_,{title:"Liste des contrats",subtitle:`${agents.length} agent(s) avec situation contrat${socFilter?` · ${socFilter}`:""}`})}`;
 }
 
@@ -10496,17 +10428,6 @@ function contractSituationListHTML(agents,today_,options){
 
 function renderContrats(view,mode){
   const socFilter=currentStructureSocieteFilter();
-  if(mode==="a_contractualiser"){
-    const list=db.candidats.filter(c=>candidateCanGoToContract(c)&&(!socFilter||c.societe===socFilter));
-    view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-6 flex-wrap">
-      <div><h1 class="text-2xl font-bold mb-2">📋 À contractualiser</h1><p class="text-slate-500 text-sm">Candidats retenus.</p></div>
-      <div class="contract-actions-row flex gap-2 flex-wrap justify-end items-center"><button type="button" class="btn btn-success text-xs" ${list.length?"":"disabled"} onclick="openRecruitAllContractCandidatesModal()">Recruter tous</button><button type="button" class="btn btn-secondary text-xs contract-import-btn" onclick="openContractExcelImport()">Importer Excel</button><button type="button" class="btn contract-create-btn" onclick="openContratsCreateContract()">+ Créer contrat</button></div>
-    </div>
-    ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun.</div>`:`<div class="card overflow-hidden"><table>
-      <thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Vérifs.</th><th></th></tr></thead>
-      <tbody>${list.map(c=>{const v=["ActeNaissance","CertifResidence","CasierJudiciaire","AptitudeMedicale","BulletinANEM","ChequeBarre","PieceIdentite","FicheFamiliale","FicheIndividuelle"].filter(k=>c["verif"+k]).length;return`<tr data-searchable><td><div class="flex items-center gap-2"><div class="avatar">${c.photo?`<img src="${c.photo}"/>`:escapeHTML(c.prenom.slice(0,1))}</div>${escapeHTML(c.nom+" "+c.prenom)}</div></td><td>${safe(candidatePosteLabel(c))}</td><td><span class="pill pill-indigo">${safe(c.societe)}</span></td><td><span class="pill ${v===9?"pill-green":"pill-amber"}">${v}/9</span></td><td class="text-right">${candidateBlackListMatch(c)?`<span class="pill" style="background:#111827;color:#fff">⛔ BLACKLIST</span>`:`<a class="btn btn-primary text-xs" href="#/contrats/nouveau/${c.id}">RECRUTER →</a>`}</td></tr>`}).join("")}</tbody></table></div>`}`;
-    return;
-  }
   if(ensureContratsEmployeesFresh(view))return;
   const agents=sortContractSituationAgents(db.agents.filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter)));
   const today_=today();
@@ -10543,55 +10464,6 @@ function renderContrats(view,mode){
     <div class="card overflow-hidden"><table>
     <thead>${contractSituationHeadersHTML()}</thead>
     <tbody id="ct-tbody">${contractSituationRowsHTML(agents,today_)}</tbody></table></div>`;
-}
-function openCreateContratDirectModal(){
-  const soc=currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
-  const reserves=(db.candidats||[]).filter(c=>candidateCanGoToContract(c)&&(!soc||c.societe===soc));
-  openModal(`<h3 class="font-bold text-lg mb-4">Créer contrat</h3>
-    <form onsubmit="event.preventDefault();startContractFromReserve(this.candidatId.value)">
-      ${session?.societe?`<div class="p-3 rounded-lg border border-blue-200 bg-blue-50 mb-3"><div class="text-xs font-black uppercase text-slate-500">Société active</div><div class="font-black text-blue-900">${escapeHTML(session.societe)}</div></div>`:`<label class="label">Choisir société</label>
-      <select class="select mb-3" name="societe" onchange="setCurrentStructureSocieteFilter(this.value)">
-        <option value="">Toutes les sociétés</option>
-        ${SOCIETES.map(s=>`<option value="${escapeHTML(s)}" ${soc===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}
-      </select>`}
-      <label class="label">Candidat en réserve</label>
-      <select class="select" name="candidatId" autofocus>
-        <option value="">— Choisir un candidat —</option>
-        ${reserves.map(c=>`<option value="${c.id}">${escapeHTML((c.nom||"")+" "+(c.prenom||""))} · ${escapeHTML(c.nin||"NIN non renseigné")} · ${escapeHTML(c.societe||"")}</option>`).join("")}
-      </select>
-      ${reserves.length?`<div class="text-xs text-slate-500 mt-2">${reserves.length} candidat(s) en réserve${soc?` · ${escapeHTML(soc)}`:""}.</div>`:`<div class="text-sm text-red-700 mt-3">Aucun candidat en réserve${soc?` pour ${escapeHTML(soc)}`:""}.</div>`}
-      <div class="flex justify-end gap-2 mt-4">
-        <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-        <button class="btn btn-primary" ${reserves.length?"":"disabled"}>Continuer contrat</button>
-      </div>
-    </form>`);
-}
-function openContratsCreateContract(){
-  const soc=currentStructureSocieteFilter()||mySoc()||sessionStorage.getItem("dashSociete")||"";
-  const pending=(db.candidats||[])
-    .filter(c=>candidateCanGoToContract(c)&&(!soc||c.societe===soc))
-    .sort((a,b)=>String((a.nom||"")+" "+(a.prenom||"")).localeCompare(String((b.nom||"")+" "+(b.prenom||"")),"fr"));
-  if(pending.length===1){
-    navigate(`contrats/nouveau/${pending[0].id}`);
-    return;
-  }
-  if(pending.length>1){
-    openModal(`<h3 class="font-bold text-lg mb-4">Candidat en attente de contrat</h3>
-      <form onsubmit="event.preventDefault();const id=this.candidatId.value;if(!id){toast('Choisissez un candidat','error');return}closeModal();navigate('contrats/nouveau/'+id)">
-        <label class="label">Sélectionner le candidat</label>
-        <select class="select" name="candidatId" autofocus>
-          <option value="">— Choisir un candidat —</option>
-          ${pending.map(c=>`<option value="${escapeHTML(c.id)}">${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).toUpperCase())} · ${escapeHTML(c.posteContrat||candidatePosteLabel(c))} · ${escapeHTML(c.societe||"")}</option>`).join("")}
-        </select>
-        <div class="text-xs text-slate-500 mt-2">${pending.length} candidat(s) en attente de contrat${soc?` · ${escapeHTML(soc)}`:""}.</div>
-        <div class="flex justify-end gap-2 mt-4">
-          <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-          <button class="btn btn-primary">Continuer</button>
-        </div>
-      </form>`);
-    return;
-  }
-  toast("Aucun candidat en attente de contrat. Sélectionnez un employé depuis Gestion des effectifs pour créer un nouveau contrat.","warning");
 }
 function directContractPayload(form){
   const fd=new FormData(form);
@@ -10784,7 +10656,6 @@ function renderNouveauContratDirect(view){
       <p class="text-sm text-slate-500 mb-5">Le bouton Créer contrat utilise maintenant le même formulaire que Gestion des effectifs > Nouveau contrat.</p>
       <div class="flex justify-center gap-2 flex-wrap">
         <button type="button" class="btn btn-primary" onclick="openEmployeeNewContractModal()">Créer contrat</button>
-        <button type="button" class="btn btn-secondary" onclick="openContractExcelImport()">Importer Excel</button>
         <button type="button" class="btn btn-ghost" onclick="navigate('contrats/dashboard')">Retour</button>
       </div>
     </div>
@@ -11586,17 +11457,6 @@ function clearDirectContractSignature(){
   if(state){state.textContent="Signature en attente";state.className="text-xs text-slate-500"}
   previewDirectContract(f);
 }
-function startContractFromReserve(id){
-  if(!id){toast("Choisissez un candidat en réserve","error");return}
-  const c=findCandidatById(id);
-  if(!c){toast("Candidat introuvable","error");return}
-  c.statut="a_contractualiser";
-  c.updatedAt=new Date().toISOString();
-  saveDB();closeModal();navigate(`contrats/nouveau/${c.id}`);
-  if(c.backendId&&sgdiBackendShouldUse()&&sgdiAuthToken()){
-    SGDI.drh.marquerContractualisation(c.backendId).catch(()=>{});
-  }
-}
 const _drumOpts={};const _drumCallbacks={};const _drumWheelLast={};
 function ensureDrumCSS(){
   if(document.getElementById("sgdi-drum-css"))return;
@@ -12123,57 +11983,6 @@ async function embaucherCandidat(id){
     toast("Recrutement non enregistré dans le backend : "+(e.message||e),"error");
   }
 }
-function openRecruitAllContractCandidatesModal(){
-  const socFilter=currentStructureSocieteFilter();
-  const list=(db.candidats||[]).filter(c=>candidateCanGoToContract(c)&&(!socFilter||c.societe===socFilter));
-  const blocked=list.filter(candidateBlackListMatch).length;
-  openModal(`<div class="text-center p-2">
-    <h3 class="font-black text-lg mb-3">RECRUTER TOUS</h3>
-    <p class="text-sm text-slate-700 mb-3">Voulez vous recruter automatiquement <b>${list.length}</b> candidat(s) à contractualiser ?</p>
-    ${blocked?`<div class="text-xs text-red-700 mb-3">${blocked} candidat(s) blacklisté(s) seront refusés.</div>`:""}
-    <div class="flex justify-center gap-3">
-      <button type="button" class="btn btn-danger" onclick="closeModal()">NON</button>
-      <button type="button" class="btn btn-success" onclick="recruitAllContractCandidates(this)">OUI</button>
-    </div>
-  </div>`);
-}
-async function recruitAllContractCandidates(btn){
-  const socFilter=currentStructureSocieteFilter();
-  const list=(db.candidats||[]).filter(c=>candidateCanGoToContract(c)&&(!socFilter||c.societe===socFilter));
-  if(!list.length){closeModal();toast("Aucun candidat à recruter","info");return}
-  if(btn){btn.disabled=true;btn.textContent="Synchronisation des employés…"}
-  await sgdiPullEmployees({silent:true}).catch(()=>null);
-  const usedCodes=new Set((db.agents||[]).map(a=>normalizeEmployeeCodeFormat(a.matricule||a.code)).filter(Boolean));
-  const preMatricules=list.map(c=>{
-    const soc=c.societe||socFilter||"";
-    let code;
-    const prefixes=matriculePrefixesForSociete(soc);
-    outer:for(const L of prefixes){for(let i=1;i<=200;i++){const mc=L+String(i).padStart(2,"0");if(!usedCodes.has(mc)){code=mc;break outer}}}
-    code=code||((matriculePrefixesForSociete(soc)[0]||"A")+"200");
-    usedCodes.add(code.toUpperCase());
-    return code;
-  });
-  if(btn)btn.textContent="Recrutement en cours…";
-  let ok=0,failed=0;
-  const errors=[];
-  const BATCH=15;
-  for(let i=0;i<list.length;i+=BATCH){
-    if(btn)btn.textContent=`Recrutement en cours… ${Math.min(i+BATCH,list.length)}/${list.length}`;
-    const batch=list.slice(i,i+BATCH);
-    const batchMat=preMatricules.slice(i,i+BATCH);
-    const results=await Promise.allSettled(batch.map((c,j)=>recruitContractCandidateToEmployee(c,null,batchMat[j])));
-    results.forEach((r,idx)=>{
-      if(r.status==="fulfilled"){ok++}
-      else{failed++;errors.push(r.reason?.message||String(r.reason));console.warn("Recrutement groupé refusé",batch[idx],r.reason)}
-    });
-  }
-  try{if(ok)await sgdiBackendSaveAndWait()}catch(e){failed++;errors.push("Sauvegarde workflow : "+(e.message||e))}
-  closeModal();
-  toastCenter(`${ok} EMPLOYÉ(S) CRÉÉ(S)${failed?` · ${failed} échec(s)`:""}`,failed?"error":"success");
-  if(errors.length)toast(errors.slice(0,3).join(" ; ")+(errors.length>3?` ; +${errors.length-3} autre(s)`:""),"error");
-  navigate("contrats/situation");
-}
-
 /* ---- EFFECTIF ---- */
 function effectifSocieteFilter(){
   if(mySoc())return mySoc();
@@ -13994,7 +13803,7 @@ function renderAgentForm(view,id){
       ${showHabilitations?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="habilitations" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Habilitations</legend><div class="grid grid-2" style="margin-top:10px">
         ${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>{const v=a.habilitations?.[k]||"non";return`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="ahab_${k}" value="oui" ${v==="oui"?"checked":""} ${locked?"disabled":""}/> Oui</label><label class="radio-pill"><input type="radio" name="ahab_${k}" value="non" ${v!=="oui"?"checked":""} ${locked?"disabled":""}/> Non</label></div></div>`}).join("")}
       </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></fieldset></div>`:""}
-      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><fieldset class="rh-panel-fieldset rh-contract-fieldset"><legend>RH / contrat</legend><div class="rh-contract-toolbar"><span>Gestion du contrat de l’employé</span><div class="rh-contract-actions">${adminFicheContext?`<button type="button" class="btn text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">✏ Modifier</button>`:(isDrhFicheContext()?`<button type="button" class="btn text-xs" onclick="openDrhContractModal('${a.id}')">✏ Modifier</button>`:"")}<button type="button" class="btn text-xs" onclick="openAvenantModal('general')">＋ Avenant</button><button type="button" class="btn text-xs" onclick="openContratsCreateContract()">＋ Contrat</button></div></div><div class="grid grid-6 rh-contract-grid">
+      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><fieldset class="rh-panel-fieldset rh-contract-fieldset"><legend>RH / contrat</legend><div class="rh-contract-toolbar"><span>Gestion du contrat de l’employé</span><div class="rh-contract-actions">${adminFicheContext?`<button type="button" class="btn text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">✏ Modifier</button>`:(isDrhFicheContext()?`<button type="button" class="btn text-xs" onclick="openDrhContractModal('${a.id}')">✏ Modifier</button>`:"")}<button type="button" class="btn text-xs" onclick="openAvenantModal('general')">＋ Avenant</button><button type="button" class="btn text-xs" onclick="openEmployeeNewContractModal()">＋ Contrat</button></div></div><div class="grid grid-6 rh-contract-grid">
         <div class="col-span-6"><label class="label">Fonction de l'employé</label><select class="select" name="fonction" ${locked?"disabled":""}><option value="">— Choisir fonction —</option>${newContractPosteOptions(a.fonction||a.posteContrat||"").replace('<option value="">— Choisir fonction —</option>',"")}</select></div>
         <div class="col-span-3"><label class="label">Type de contrat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(cleanContractType(a.typeContrat)||ficheContractDocumentType||"CDD")}" readonly/>${locked?"":`<input type="hidden" name="typeContrat" value="${escapeHTML(cleanContractType(a.typeContrat)||"CDD")}"/>`}</div>
         <div class="col-span-3"><label class="label">Salaire net</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(a.salaireNet||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)" ${locked?"disabled":""}/></div>
@@ -30190,7 +29999,6 @@ function drhDemandesPersonnelList(){
     return true;
   });
 }
-function drhCandidatesList(){return drhApplySocieteFilter(db.candidats||[])}
 function drhAgentsList(){return drhApplySocieteFilter(db.agents||[])}
 function drhResolvedAgentSite(agent,sites=db.sites||[]){
   const aff=agentLiveAffectation(agent);
@@ -30220,7 +30028,6 @@ function renderDRHDashboard(view){
   sgdiEnsureEmployeesForDisplay({society:selSoc,force:true});
   const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];
   const ag=drhAgentsList();
-  const ca=drhCandidatesList();
   const agIds=new Set(ag.map(a=>a.id));
   const co=selSoc?allCo.filter(c=>agIds.has(c.agentId)):allCo;
   const siteIds=new Set(ag.map(a=>agentLiveAffectation(a)?.siteId).filter(Boolean));
@@ -30233,10 +30040,6 @@ function renderDRHDashboard(view){
   const absents=ag.filter(a=>a.statut==="absent").length;
   const susp=ag.filter(a=>a.statut==="suspendu").length;
   const sortants=ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length;
-  const candNouv=ca.filter(candidatIsNew).length;
-  const candReserve=ca.filter(c=>candidatIsActive(c)&&candidatIsReserve(c)).length;
-  const candArchives=ca.filter(c=>candidatIsArchived(c)).length;
-  const candTotal=Math.max(1,ca.length);
   const actifsBase=Math.max(1,ag.length);
   const salaires=ag.filter(a=>a.statut==="actif").map(a=>Number(a.salaire||a.salaireNet||0)).filter(n=>n>0);
   const masseSalaires=salaires.reduce((s,n)=>s+n,0);
@@ -30250,7 +30053,6 @@ function renderDRHDashboard(view){
   const contratsExpires=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d<0});
   const contratsFin30=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(employeePositionContractEndDate(a)||"").localeCompare(String(employeePositionContractEndDate(b)||"")));
-  const candPct=n=>Math.round((n/candTotal)*100);
   const srvEmp=sgdiErpEmployeeCounters(selSoc);
   const srvDrh=sgdiErpModuleCounters("drh",selSoc);
   const srvOps=sgdiErpModuleCounters("ops",selSoc);
@@ -30260,12 +30062,9 @@ function renderDRHDashboard(view){
   const dashMaladie=srvEmp?.sick_leave_current??enMaladie;
   const dashAbsents=srvEmp?.absent??absents;
   const dashSusp=srvEmp?.suspended??susp;
-  const dashCandTotal=srvDrh?.candidates_total??(candNouv+candReserve);
-  const dashCandReserve=srvDrh?.candidates_reserve??candReserve;
   const dashSites=srvOps?.sites_active??srvOps?.sites_total??sites;
   const dashIncidents=srvOps?.events_open??incidentsOuverts;
   const dashBase=Math.max(1,dashEmployees);
-  const dashCandPct=n=>Math.round((n/Math.max(1,srvDrh?.candidates_total??candTotal))*100);
   const progressRow=(label,value,total,color)=>`<div class="dashboard-compact-progress">
       <div class="flex justify-between text-sm mb-1"><span class="font-semibold">${escapeHTML(label)}</span><span class="text-slate-500">${value} / ${total} · ${total?Math.round(value/total*100):0}%</span></div>
       <div class="dashboard-compact-bar"><span style="width:${total?Math.round(value/total*100):0}%;background:${color}"></span></div>
@@ -30284,8 +30083,6 @@ function renderDRHDashboard(view){
   const seriesMaladies=months.map(m=>co.filter(c=>c.type==="Maladie"&&monthOf(c.du||c.createdAt)===m).length);
   const seriesAbsences=months.map(m=>ag.filter(a=>a.statut==="absent"&&monthOf(a.updatedAt||a.createdAt)===m).length);
   const seriesSuspensions=months.map(m=>ag.filter(a=>a.statut==="suspendu"&&monthOf(a.updatedAt||a.createdAt)===m).length);
-  const seriesReserve=months.map(m=>ca.filter(c=>candidatIsReserve(c)&&monthOf(c.fichePositionValideeAt||c.updatedAt||c.createdAt)===m).length);
-  const seriesCandidats=seriesReserve;
   const seriesDemandes=months.map(m=>demandesList.filter(d=>monthOf(d.createdAt||d.date||d.submittedAt)===m).length);
   const seriesIncidents=months.map(m=>inc.filter(i=>monthOf(i.date||i.createdAt)===m).length);
   const seriesContrats=months.map(m=>ag.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
@@ -30311,14 +30108,11 @@ function renderDRHDashboard(view){
   const showPayrollCounters=typeof isAdminSystemSession==="function"&&isAdminSystemSession();
   const drhKpi=(label,value,sub,route,color,icon)=>`<a href="${route}" class="drh-erp-kpi" style="--kpi-color:${color};text-decoration:none"><span class="drh-erp-kpi-icon">${icon}</span><span class="drh-erp-kpi-copy"><span class="drh-erp-kpi-label">${escapeHTML(label)}</span><strong>${value}</strong><small>${escapeHTML(sub)}</small></span></a>`;
   view.innerHTML=`<div class="drh-erp-head">
-      <div><h1>Synthèse générale</h1><p>${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${dashEmployees} employés · ${dashCandReserve} candidats · ${dashSites} sites</p></div>
+      <div><h1>Synthèse générale</h1><p>${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${dashEmployees} employés · ${dashSites} sites</p></div>
       <div class="drh-erp-head-pills"><span>${dashActifs} actifs</span><span>${dashIncidents} incidents ouverts</span></div>
     </div>
     ${drhTabs("dashboard")}
     <div class="drh-erp-kpi-grid mb-4">
-      ${drhKpi("Recrutement / candidats",dashCandTotal,"Dossiers actifs","#/recrutement/candidats","#4f46e5","R")}
-      ${drhKpi("Réserve",dashCandReserve,"En attente de recrutement","#/reserve","#0284c7","R")}
-      ${drhKpi("Archivés",candArchives,`${dashCandPct(candArchives)}% du vivier`,"#/candidats_archives","#475569","A")}
       ${drhKpi("Demandes",demandesPersonnel,"Personnel à traiter","#/demandes_personnel/dashboard","#0891b2","D")}
       ${drhKpi("Congés attente",congesAttente,"Validation DRH","#/conges","#d97706","C")}
       ${drhKpi("Sortants",sortants,"Éléments sortants","#/effectif/sortants","#dc2626","S")}
@@ -30364,7 +30158,6 @@ function renderDRHDashboard(view){
         ${miniCurve("Maladies",dashMaladie,seriesMaladies,"#c2410c","#/conges")}
         ${miniCurve("Absences",dashAbsents,seriesAbsences,"#dc2626","#/pointage/feuille")}
         ${miniCurve("Suspensions",dashSusp,seriesSuspensions,"#7c3aed","#/effectif/actifs")}
-        ${miniCurve("Candidats",dashCandTotal,seriesCandidats,"#4f46e5","#/recrutement/candidats")}
         ${miniCurve("Demandes",demandesPersonnel,seriesDemandes,"#0891b2","#/demandes_personnel/dashboard")}
         ${miniCurve("Incidents",dashIncidents,seriesIncidents,"#b91c1c","#/incidents/site")}
         ${miniCurve("Contrats",contratsAlerte.length,seriesContrats,"#ea580c","#/contrats/situation")}
@@ -30374,7 +30167,6 @@ function renderDRHDashboard(view){
 }
 function renderDRHStats(view){
   const ag=drhAgentsList();
-  const ca=drhCandidatesList();
   const co=db.conges||[];
   const demandes=drhDemandesPersonnelList();
   const incidents=db.incidents||[];
@@ -30402,8 +30194,6 @@ function renderDRHStats(view){
   const seriesConges=months.map(m=>co.filter(c=>c.type!=="Maladie"&&monthOf(c.du||c.createdAt)===m).length);
   const seriesMaladie=months.map(m=>co.filter(c=>c.type==="Maladie"&&monthOf(c.du||c.createdAt)===m).length);
   const seriesAbsences=months.map(m=>ag.filter(a=>a.statut==="absent"&&monthOf(a.updatedAt||a.createdAt)===m).length);
-  const seriesCandidats=months.map(m=>ca.filter(c=>candidatIsActive(c)&&monthOf(c.createdAt||c.updatedAt)===m).length);
-  const seriesReserve=months.map(m=>ca.filter(c=>candidatIsActive(c)&&candidatIsReserve(c)&&monthOf(c.fichePositionValideeAt||c.updatedAt||c.createdAt)===m).length);
   const seriesDemandes=months.map(m=>demandes.filter(d=>monthOf(d.createdAt||d.date||d.submittedAt)===m).length);
   const seriesIncidents=months.map(m=>incidents.filter(i=>monthOf(i.date||i.createdAt)===m).length);
   const seriesContrats=months.map(m=>ag.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
@@ -30450,9 +30240,8 @@ function renderDRHStats(view){
   const kpi=(label,value,sub,color)=>`<div class="card p-4"><div class="text-xs text-slate-500 uppercase">${escapeHTML(label)}</div><div class="text-3xl font-black mt-1" style="color:${color}">${value}</div><div class="text-xs text-slate-500 mt-1">${escapeHTML(sub||"")}</div></div>`;
   view.innerHTML=`<div class="mb-5"><h1 class="text-2xl font-black sentence-case-title">Statistiques RH</h1><p class="text-sm text-slate-500">Tableau analytique multi-graphes · ${drhActiveSocieteFilter()?escapeHTML(drhActiveSocieteFilter()):"Toutes sociétés autorisées"}</p></div>
     ${drhTabs("stats")}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
       ${kpi("Effectif total",ag.length,"Employés visibles","#043970")}
-      ${kpi("Candidats actifs",ca.filter(candidatIsActive).length,"Non recrutés","#4f46e5")}
       ${kpi("Fonctions",Object.keys(parFonc).length,"Postes distincts","#047857")}
       ${kpi("Salaire moyen",money(moyenneSal),"CDD actifs","#0f766e")}
     </div>
@@ -30470,7 +30259,6 @@ function renderDRHStats(view){
       ${drhChartCard("Répartition par catégorie","Catégories RH",drhSvgDonut(Object.entries(parCat)))}
       ${drhChartCard("Répartition par thème","Thèmes RH",drhSvgDonut(Object.entries(parTheme)))}
       ${drhChartCard("Distribution salaire","Tranches de rémunération",drhSvgStacked(trancheRows))}
-      ${drhChartCard("Courbe candidats / réserve","Pipeline recrutement",drhSvgGroupedBars(months,[{name:"Candidats",values:seriesCandidats},{name:"Réserve",values:seriesReserve}]))}
       ${drhChartCard("Échéances contrats","Fins de contrat par mois",drhSvgLine(seriesContrats,months,"#dc2626",true))}
       ${drhChartCard("Affectation sites","Top sites par effectif",topSites.length?drhBars(topSites,"#0891b2"):`<div class="text-sm text-slate-400">Aucune affectation enregistrée.</div>`)}
       ${drhChartCard("Statistiques par client","Effectif rattaché par client",topClients.length?drhBars(topClients,"#7c3aed"):`<div class="text-sm text-slate-400">Aucun client renseigné.</div>`)}
@@ -31082,9 +30870,9 @@ function renderAdminRecruitment(view){
     <div class="flex items-center gap-4 flex-wrap"><label class="flex items-center gap-2 text-sm font-black"><input type="checkbox" class="admin-recruit-select-all" onchange="toggleAdminRecruitmentVisible(this.checked)" style="width:17px;height:17px"/> Tout sélectionner (${candidates.length})</label><button class="btn btn-ghost text-xs" onclick="clearAdminRecruitmentSelection()">Tout désélectionner</button><span id="admin-recruitment-selected-count" class="text-sm font-black text-blue-800">${adminRecruitmentSelectedCandidates().length} candidat(s) sélectionné(s)</span></div>
     <button type="button" id="admin-recruitment-submit" class="btn btn-success" onclick="openAdminRecruitmentConfirmation()" ${adminRecruitmentSelectedCandidates().length?"":"disabled"}>Recruter la sélection${adminRecruitmentSelectedCandidates().length?` (${adminRecruitmentSelectedCandidates().length})`:""}</button>
   </div>
-  <div class="card overflow-hidden">${candidates.length?`<table><thead><tr><th style="width:42px;text-align:center"><input type="checkbox" class="admin-recruit-select-all" onchange="toggleAdminRecruitmentVisible(this.checked)" style="width:17px;height:17px"/></th><th>Candidat</th><th>Société</th><th>Poste</th><th>État du dossier</th><th>Doublon</th><th></th></tr></thead><tbody>${candidates.map(c=>{
+  <div class="card overflow-hidden">${candidates.length?`<table><thead><tr><th style="width:42px;text-align:center"><input type="checkbox" class="admin-recruit-select-all" onchange="toggleAdminRecruitmentVisible(this.checked)" style="width:17px;height:17px"/></th><th>Candidat</th><th>Société</th><th>Poste</th><th>État du dossier</th><th>Doublon</th></tr></thead><tbody>${candidates.map(c=>{
     const key=adminRecruitmentCandidateKey(c),missing=adminRecruitmentMissingFields(c),duplicate=adminRecruitmentDuplicate(c);
-    return `<tr><td class="text-center"><input type="checkbox" class="admin-recruit-candidate" value="${escapeHTML(key)}" ${adminRecruitmentSelection.has(key)?"checked":""} onchange="toggleAdminRecruitmentCandidate('${jsString(key)}',this.checked)" style="width:17px;height:17px"/></td><td><div class="font-black">${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim()||"Identité à compléter")}</div><div class="text-xs text-slate-500">${escapeHTML(formatPhoneSGDI(c.telephone)||"Téléphone non renseigné")}</div></td><td class="text-xs">${safe(c.societe)}</td><td class="text-xs">${safe(candidatePosteLabel(c))}</td><td>${missing.length?`<span class="pill pill-amber">À compléter</span><div class="text-[10px] text-amber-700 mt-1">${escapeHTML(missing.join(", "))}</div>`:`<span class="pill pill-green">Prêt</span>`}</td><td>${duplicate?`<span class="pill pill-red">Potentiel</span><div class="text-[10px] text-red-700 mt-1">${escapeHTML(((duplicate.nom||"")+" "+(duplicate.prenom||"")).trim())} · ${escapeHTML(duplicate.matricule||"")}</div>`:`<span class="pill pill-gray">—</span>`}</td><td class="text-right"><a class="btn btn-ghost text-xs" href="#/recrutement/${escapeHTML(c.id)}">Ouvrir →</a></td></tr>`;
+    return `<tr><td class="text-center"><input type="checkbox" class="admin-recruit-candidate" value="${escapeHTML(key)}" ${adminRecruitmentSelection.has(key)?"checked":""} onchange="toggleAdminRecruitmentCandidate('${jsString(key)}',this.checked)" style="width:17px;height:17px"/></td><td><div class="font-black">${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim()||"Identité à compléter")}</div><div class="text-xs text-slate-500">${escapeHTML(formatPhoneSGDI(c.telephone)||"Téléphone non renseigné")}</div></td><td class="text-xs">${safe(c.societe)}</td><td class="text-xs">${safe(candidatePosteLabel(c))}</td><td>${missing.length?`<span class="pill pill-amber">À compléter</span><div class="text-[10px] text-amber-700 mt-1">${escapeHTML(missing.join(", "))}</div>`:`<span class="pill pill-green">Prêt</span>`}</td><td>${duplicate?`<span class="pill pill-red">Potentiel</span><div class="text-[10px] text-red-700 mt-1">${escapeHTML(((duplicate.nom||"")+" "+(duplicate.prenom||"")).trim())} · ${escapeHTML(duplicate.matricule||"")}</div>`:`<span class="pill pill-gray">—</span>`}</td></tr>`;
   }).join("")}</tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucun candidat avec ces filtres.</div>`}</div>`;
   requestAnimationFrame(updateAdminRecruitmentSelectionUI);
 }
@@ -32034,8 +31822,7 @@ async function renderAdminSystemDashboard(view){
 	    ${card("Modèles documents","Modèles documentaires et rattachements.","admin/document-models","#334155",templates.length,"Métier")}
 	    ${card("Candidats","Contrôle des sections et nettoyage candidat.","admin/candidats","#b91c1c",(db.candidats||[]).length,"Métier")}
 	  </div>
-  <div class="mt-4">${(()=>{const dups=findDuplicateMatricules();return`<button type="button" class="w-full card p-4 text-left flex items-center justify-between gap-3 hover:bg-slate-50 transition" onclick="openDuplicateMatriculesModal()" style="border-left:5px solid ${dups.length?"#dc2626":"#16a34a"}"><div><div class="text-xs font-black uppercase text-slate-500">Intégrité des codes employés</div><div class="text-sm text-slate-600 mt-1">${dups.length?`${dups.length} code(s) en doublon détecté(s) — cliquez pour corriger`:"Aucun doublon détecté · tous les codes sont uniques"}</div></div><div class="text-2xl font-black" style="color:${dups.length?"#dc2626":"#16a34a"}">${dups.length||"✓"}</div></button>`})()}</div>
-  <div class="mt-4 card p-5" style="border-left:5px solid #0369a1"><div class="text-xs font-black uppercase text-slate-500 mb-3">Actions Contrats</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-success text-xs" onclick="openRecruitAllContractCandidatesModal()">Recruter tous</button><button type="button" class="btn btn-secondary text-xs" onclick="openContractExcelImport()">Importer Excel</button></div></div>`;
+  <div class="mt-4">${(()=>{const dups=findDuplicateMatricules();return`<button type="button" class="w-full card p-4 text-left flex items-center justify-between gap-3 hover:bg-slate-50 transition" onclick="openDuplicateMatriculesModal()" style="border-left:5px solid ${dups.length?"#dc2626":"#16a34a"}"><div><div class="text-xs font-black uppercase text-slate-500">Intégrité des codes employés</div><div class="text-sm text-slate-600 mt-1">${dups.length?`${dups.length} code(s) en doublon détecté(s) — cliquez pour corriger`:"Aucun doublon détecté · tous les codes sont uniques"}</div></div><div class="text-2xl font-black" style="color:${dups.length?"#dc2626":"#16a34a"}">${dups.length||"✓"}</div></button>`})()}</div>`;
 }
 
 function adminEffectifTextList(value){return (Array.isArray(value)?value:[]).join("\n")}
