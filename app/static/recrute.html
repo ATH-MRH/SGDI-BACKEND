@@ -152,7 +152,7 @@ tr:last-child td{border-bottom:0}
             <div class="full"><label>Candidat</label><input id="ctCandidateName" readonly style="background:#f8fafc;font-weight:800"></div>
             <div><label>Poste</label><select id="ctPosition"><option value="">— Choisir —</option></select></div>
             <div><label>Société</label><input id="ctSociety" readonly style="background:#f8fafc"></div>
-            <div><label>Type de contrat</label><select id="ctType" onchange="onContractTypeChange()"><option value="CDD">CDD</option><option value="CDI">CDI</option><option value="CIDD">CIDD</option><option value="CTA">CTA</option><option value="APPRENTISSAGE">Apprentissage</option></select></div>
+            <div><label>Type de contrat</label><select id="ctType" onchange="onContractTypeChange()" disabled><option value="CDD">CDD</option></select></div>
             <div><label>Date de début</label><input id="ctStart" type="date" onchange="updateContractEndDate()"></div>
             <div id="ctDurationWrap"><label>Durée du contrat</label><select id="ctDuration" onchange="updateContractEndDate()"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option><option value="36">36 mois</option></select></div>
             <div><label>Date de fin</label><input id="ctEnd" type="date" readonly style="background:#f8fafc"></div>
@@ -524,7 +524,7 @@ async function markReadyForContract(id){
   }catch(error){showBanner(esc(error.message),"error")}
 }
 const CANDIDATE_SECTIONS=["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"];
-const CONTRACT_TYPES=["CDD","CDI","CIDD","CTA","APPRENTISSAGE"];
+const CONTRACT_TYPES=["CDD"];
 let contractCandidate=null;
 let contractReturnTab="new";
 function addMonths(dateStr,months){
