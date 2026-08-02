@@ -26126,7 +26126,7 @@ function factureVoirApercu(fId){
   const companyNIF=param.nif||"";
   const companyAI=param.ai||"";
   const companyNIS=param.nis||"";
-  const companyLogo=param.logo||"";
+  const companyLogo=param.logo||(normalizeSocieteName(soc).includes("SECURITE")?"/static/iron-securite-logo.png":normalizeSocieteName(soc).includes("SOLUTION")?"/static/iron-solution-logo.png":"");
   const sp=f?factureStatutPaye(f):{paye:0,avoir:0,reste:totalTTC,statut:"emise"};
   const isPaid=sp.statut==="payee";const isLate=sp.statut==="echue";
   const stampLabel=isLate?"EN RETARD":(!isPaid&&totalTTC>0?"NON PAYÉE":"");
@@ -26143,46 +26143,47 @@ function factureVoirApercu(fId){
     '</tr>'
   ).join("");
   const montantEnLettres=typeof moneyToFrenchWords==="function"?moneyToFrenchWords(totalTTC):"";
-  const html='<div class="modal-box" style="max-width:900px;width:98vw;padding:0;overflow:hidden">'+
+  const statusLabel=String(f?.statut||"brouillon").toLowerCase()==="brouillon"?"BROUILLON":(isPaid?"PAYÉE":(isLate?"EN RETARD":"À PAYER"));
+  const statusColor=statusLabel==="PAYÉE"?"#15803d":statusLabel==="EN RETARD"?"#dc2626":statusLabel==="BROUILLON"?"#64748b":"#d97706";
+  const qrPayload=["IRON GROUP — FACTURE","Société: "+companyName,"N°: "+numero,"Date: "+fmtD(date),"Client: "+clientNom,"Total TTC: "+DZD(totalTTC),"Statut: "+statusLabel,"Identifiant: "+(f?.id||"APERÇU")].join("\n");
+  const html='<div class="modal-box" style="max-width:960px;width:98vw;padding:0;overflow:hidden">'+
+    '<style>@media print{@page{size:A4 portrait;margin:9mm}body *{visibility:hidden!important}#fact-print-area,#fact-print-area *{visibility:visible!important}#fact-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;padding:0!important;background:#fff!important}.modal-bg{position:static!important;background:#fff!important}.fact-pdf-sheet{box-shadow:none!important;border:0!important;min-height:277mm!important}.no-print{display:none!important}}</style>'+
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">'+
     '<div style="font-weight:800;font-size:14px;color:#0f2d5a">'+escapeHTML(numero)+'</div>'+
     '<div style="display:flex;gap:8px">'+
-    '<button onclick="window.print()" style="background:#f59e0b;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">🖨 Imprimer</button>'+
+    '<button onclick="window.print()" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">🖨 Imprimer / Enregistrer PDF</button>'+
     '<button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;line-height:1">✕</button>'+
     '</div></div>'+
-    '<div id="fact-print-area" style="padding:24px 28px;overflow:auto;max-height:80vh">'+
+    '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
+    '<section class="fact-pdf-sheet" style="position:relative;max-width:794px;min-height:1080px;margin:auto;background:#fff;padding:32px 36px 28px;box-shadow:0 10px 30px rgba(15,23,42,.12);font-family:Arial,Helvetica,sans-serif;color:#172033">'+
+    '<div style="position:absolute;right:36px;top:105px;transform:rotate(-8deg);border:3px solid '+statusColor+';color:'+statusColor+';border-radius:6px;padding:7px 15px;font-size:15px;font-weight:900;letter-spacing:1.5px;opacity:.82">'+statusLabel+'</div>'+
     // Company header
-    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;position:relative;overflow:hidden;padding:12px;border:1px solid #e5e7eb;border-radius:6px">'+
-    (stampLabel?'<div style="position:absolute;top:14px;left:-35px;width:160px;background:'+stampColor+';color:#fff;transform:rotate(-45deg);text-align:center;padding:5px 0;font-weight:900;font-size:11px;letter-spacing:1px;box-shadow:0 2px 4px rgba(0,0,0,.2)">'+stampLabel+'</div>':"")+
-    '<div style="padding-left:'+(stampLabel?"30px":"0")+';font-size:12px;color:#374151;line-height:1.8">'+
-    (companyName?'<div style="font-weight:900;font-size:15px;color:#111827;margin-bottom:4px">'+escapeHTML(companyName)+'</div>':"")+
+    '<div style="display:grid;grid-template-columns:92px 1fr 205px;gap:16px;align-items:center;border-bottom:3px solid #043970;padding-bottom:14px;margin-bottom:18px">'+
+    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="width:82px;height:82px;object-fit:contain" alt="Logo '+escapeHTML(companyName)+'"/>':'<div></div>')+
+    '<div style="font-size:10px;color:#475569;line-height:1.55">'+
+    (companyName?'<div style="font-weight:900;font-size:17px;color:#043970;margin-bottom:5px;text-transform:uppercase">'+escapeHTML(companyName)+'</div>':"")+
     (companyAddr?'<div>'+escapeHTML(companyAddr)+'</div>':"")+
-    (companyRC?'<div>RC# '+escapeHTML(companyRC)+'</div>':"")+
-    (companyNIF?'<div>NIF# '+escapeHTML(companyNIF)+'</div>':"")+
-    (companyAI?'<div>AI# '+escapeHTML(companyAI)+'</div>':"")+
-    (companyNIS?'<div>NIS# '+escapeHTML(companyNIS)+'</div>':"")+
+    '<div style="margin-top:3px">'+[companyRC&&("RC : "+companyRC),companyNIF&&("NIF : "+companyNIF),companyAI&&("AI : "+companyAI),companyNIS&&("NIS : "+companyNIS)].filter(Boolean).map(escapeHTML).join(" · ")+'</div>'+
     '</div>'+
-    (companyLogo?'<img src="'+escapeHTML(companyLogo)+'" style="height:70px;object-fit:contain" alt="Logo"/>':"<div></div>")+
+    '<div style="display:grid;grid-template-columns:1fr 58px;gap:9px;align-items:center;text-align:right"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="font-family:monospace;font-size:13px;font-weight:800;margin-top:5px">'+escapeHTML(numero)+'</div><div style="font-size:11px;color:#64748b;margin-top:4px">Émise le '+fmtD(date)+'</div>'+(dateEcheance?'<div style="font-size:11px;color:#64748b">Échéance : '+fmtD(dateEcheance)+'</div>':"")+'</div><div><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
     '</div>'+
-    // Separator title
-    '<div style="text-align:center;font-size:18px;font-weight:900;color:#111827;margin:14px 0;letter-spacing:2px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;padding:8px 0">Facture</div>'+
     // Destinataire + info
-    '<div style="display:grid;grid-template-columns:1fr auto;gap:16px;margin-bottom:16px">'+
-    '<div style="font-size:12px;color:#374151;line-height:1.8">'+
-    '<div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:4px">Destinataire</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 240px;gap:18px;margin-bottom:18px">'+
+    '<div style="font-size:11px;color:#374151;line-height:1.65;border-left:4px solid #f2c500;background:#f8fafc;padding:11px 14px;border-radius:0 6px 6px 0">'+
+    '<div style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">Facturé à</div>'+
     (clientNom?'<div style="font-weight:900;font-size:13px;color:#111827">'+escapeHTML(clientNom)+'</div>':"")+
     (adresse?'<div>'+escapeHTML(adresse)+'</div>':"")+
     (rc?'<div>RC# '+escapeHTML(rc)+'</div>':"")+
     (nif?'<div>NIF# '+escapeHTML(nif)+'</div>':"")+
     '</div>'+
-    '<table style="border-collapse:collapse;font-size:12px;align-self:start;border:1px solid #e5e7eb">'+
+    '<table style="border-collapse:collapse;font-size:11px;align-self:start;border:1px solid #dbe3ef;border-radius:6px;overflow:hidden">'+
     (afficherDate?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb">Date :</td><td style="padding:5px 10px;font-weight:700;border-bottom:1px solid #e5e7eb">'+fmtD(date)+'</td></tr>':"")+
     '<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb">Numéro :</td><td style="padding:5px 10px;font-weight:700;font-family:monospace;border-bottom:1px solid #e5e7eb">'+escapeHTML(numero)+'</td></tr>'+
     (dateEcheance?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb">Échéance :</td><td style="padding:5px 10px;font-weight:700;border-bottom:1px solid #e5e7eb">'+fmtD(dateEcheance)+'</td></tr>':"")+
     (remarque?'<tr><td style="padding:5px 10px;color:#6b7280" colspan="2">Remarque :<br><span style="font-weight:600;color:#111827">'+escapeHTML(remarque)+'</span></td></tr>':"")+
     '</table></div>'+
     // Articles table
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:0;border:1px solid #e5e7eb">'+
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:0;border:1px solid #dbe3ef">'+
     '<thead><tr>'+
     '<th style="'+thC+';min-width:200px">Désignation</th>'+
     '<th style="'+thC+';text-align:center;width:80px">Unité</th>'+
@@ -26193,7 +26194,7 @@ function factureVoirApercu(fId){
     '<tfoot>'+
     '<tr style="border-top:2px solid #e5e7eb"><td colspan="4" style="padding:7px 10px;text-align:right;font-weight:700;font-size:12px;color:#374151">Total HT</td><td style="padding:7px 10px;text-align:right;font-weight:700;font-size:12px;font-family:monospace">'+DZD(totalHT)+'</td></tr>'+
     '<tr><td colspan="4" style="padding:7px 10px;text-align:right;font-size:12px;color:#374151">Total TVA</td><td style="padding:7px 10px;text-align:right;font-size:12px;font-family:monospace">'+DZD(totalTVA)+'</td></tr>'+
-    '<tr style="background:#111827"><td colspan="4" style="padding:10px;text-align:right;font-weight:900;font-size:14px;color:#fff">Total TTC</td><td style="padding:10px;text-align:right;font-weight:900;font-size:15px;color:#fff;font-family:monospace">'+DZD(totalTTC)+'</td></tr>'+
+    '<tr style="background:#043970"><td colspan="4" style="padding:12px;text-align:right;font-weight:900;font-size:14px;color:#fff">TOTAL TTC</td><td style="padding:12px;text-align:right;font-weight:900;font-size:16px;color:#fff!important;background:#043970;font-family:monospace;white-space:nowrap">'+DZD(totalTTC)+'</td></tr>'+
     '</tfoot></table>'+
     (montantEnLettres?
       '<div style="margin-top:14px;padding:10px 14px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc">'+
@@ -26201,9 +26202,14 @@ function factureVoirApercu(fId){
       '<span style="font-size:12px;font-style:italic;font-weight:700;color:#111827">'+escapeHTML(montantEnLettres.toUpperCase()+' DINARS ALGÉRIENS')+'</span>'+
       '</div>':"")+
     (texteSupp?'<div style="margin-top:10px;padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#6b7280">'+escapeHTML(texteSupp).replace(/\n/g,"<br>")+'</div>':"")+
-    '<div style="margin-top:20px;text-align:right;font-size:12px;font-weight:700;color:#374151">La Direction Commerciale</div>'+
-    '</div></div>';
+    '<div style="display:grid;grid-template-columns:1fr 180px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">Cachet et signature</div></div>'+
+    '<footer style="position:absolute;left:36px;right:36px;bottom:20px;border-top:1px solid #dbe3ef;padding-top:7px;display:flex;justify-content:space-between;font-size:8.5px;color:#64748b"><span>'+escapeHTML(companyName)+'</span><span>Document généré par IRON GROUP · Page 1</span></footer>'+
+    '</section></div></div>';
   openModal(html);
+  Promise.resolve(typeof sgdiLoadQRLib==="function"?sgdiLoadQRLib():null).then(()=>{
+    const target=document.getElementById("fact-verification-qr");if(!target||!window.QRCode)return;
+    target.innerHTML="";new QRCode(target,{text:qrPayload,width:50,height:50,colorDark:"#043970",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+  }).catch(e=>console.warn("QR facture indisponible",e));
 }
 
 function renderFactureEditor(view){
