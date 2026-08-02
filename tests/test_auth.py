@@ -125,6 +125,11 @@ def test_fac_subdomain_remains_active(client, db):
 
     assert resp.status_code == 200, resp.text
 
+    root = client.get("/", headers={"host": "fac.irongs.com"})
+    assert root.status_code == 200
+    assert "FACTURATION — IRON GROUP" in root.text
+    assert "facturation-manifest.webmanifest" in root.text
+
 
 def test_recrute_subdomain_accepts_rec_prefix(client, db):
     _add_test_user(db, "REC01", "REC01", role="rh", access_level="H3", structures=["drh"])

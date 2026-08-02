@@ -484,6 +484,10 @@ def _is_recrute_host(host: str) -> bool:
     return host.split(":")[0].lower() == "recrute.irongs.com"
 
 
+def _is_fac_host(host: str) -> bool:
+    return host.split(":")[0].lower() == "fac.irongs.com"
+
+
 def _portal_mobile_urls(request: Request) -> list[str]:
     scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
     host = request.headers.get("host", "").split(":")[0].lower()
@@ -1119,6 +1123,12 @@ def frontend(request: Request) -> HTMLResponse:
     if _is_recrute_host(host):
         return FileResponse(
             STATIC_DIR / "recrute.html",
+            media_type="text/html; charset=utf-8",
+            headers={"Cache-Control": "no-cache, max-age=0"},
+        )
+    if _is_fac_host(host):
+        return FileResponse(
+            STATIC_DIR / "facturation.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )
