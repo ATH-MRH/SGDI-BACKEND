@@ -9163,10 +9163,11 @@ async function recruterCandidat(id,btn){
     btn.setAttribute("aria-busy","true");
   }
   toast("Préparation du contrat...","info");
-  const draft={...c,statut:"a_contractualiser"};
   try{
-    await persistCandidateToPostgres(draft);
-    Object.assign(c,draft);
+    const backendId=sqlBackendId(c.backendId);
+    if(!backendId)throw new Error("Candidature non enregistrée dans PostgreSQL");
+    const saved=await SGDI.rh.marquerContractualisation(backendId);
+    Object.assign(c,candidateFromApi(saved));
     toast("Candidat envoyé vers contractualisation","success");
     navigate(`contrats/nouveau/${c.id}`);
     setTimeout(()=>sgdiPullState({silent:true,render:false,force:true,light:true}).catch(e=>console.warn("Synchronisation recrutement différée indisponible",e)),250);
@@ -9943,12 +9944,6 @@ function validateCandidatSection(key,data){
   if(data.dateNaissance&&candidatAgeAtSave(data.dateNaissance)<20){toast("Le candidat doit avoir au moins 20 ans à la date d'enregistrement","error");return false}
   return true;
 }
-async function ensureHiddenMensurationsBackendValidation(draft){
-  if(!draft||candidatSectionIsValidated(draft,"mensurations"))return draft.sectionValidations||{};
-  const result=await SGDI.rh.validateCandidateSection(candidateApiPayload(draft),"mensurations",sqlBackendId(draft.backendId));
-  draft.sectionValidations={...(draft.sectionValidations||{}),...(result.data?.sectionValidations||{})};
-  return draft.sectionValidations;
-}
 async function validateCandidatSectionAction(id,key){
   const lockKey=candidatValidationLockKey(id,key);
   if(candidatValidationLocks.has(lockKey)){toast("Validation déjà en cours, veuillez patienter","warning");return}
@@ -9983,11 +9978,9 @@ async function validateCandidatSectionAction(id,key){
   delete draft.isNew;
   let validation;
   try{
-    if(key!=="identification")await ensureHiddenMensurationsBackendValidation(draft);
     validation=await SGDI.rh.validateCandidateSection(candidateApiPayload(draft),key,sqlBackendId(draft.backendId));
     draft.sectionValidations={...(draft.sectionValidations||{}),...(validation.data?.sectionValidations||{})};
     draft.sectionValidations[key]=draft.sectionValidations[key]||{by:session?.username||"system",at:new Date().toISOString(),source:"frontend-confirmed"};
-    if(key==="identification")await ensureHiddenMensurationsBackendValidation(draft);
   }catch(e){
     toast("Validation backend refusée : "+(e.message||e),"error");
     candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return
@@ -11927,9 +11920,8 @@ async function recruitContractCandidateToEmployee(c,fd,overrideMatricule){
   if(candidateBlackListMatch(c))throw new Error(`${(c.nom||"")+" "+(c.prenom||"")} : personne inscrite sur BLACKLIST`);
   if(!candidateHasMinimumData(c))throw new Error(`${(c.nom||"")+" "+(c.prenom||"")} : nom/prénom manquants`);
   const agent=buildAgentFromContractCandidate(c,fd);
-  if(overrideMatricule)agent.matricule=overrideMatricule;
-  if(!Array.isArray(db.agents))db.agents=[];
-  if(!db.agents.some(a=>a.id===agent.id))db.agents.push(agent);
+  const backendId=sqlBackendId(c.backendId);
+  if(!backendId)throw new Error("Candidature non enregistrée dans PostgreSQL");
   const validNin=validEmployeeNinOrNull(agent.nin);
   if(agent.nin&&!validNin){
     agent.ninInvalidOriginal=String(agent.nin||"").trim();
@@ -11946,21 +11938,17 @@ async function recruitContractCandidateToEmployee(c,fd,overrideMatricule){
     sourceId:`recrutement_${c.backendId||c.id||agent.id}`,
     details:{candidateId:c.id||"",candidateBackendId:c.backendId||"",societe:agent.societe||"",matricule:agent.matricule||""}
   });
-  const existingByNin=agent.nin?await findEmployeeByNin(agent.nin):null;
-  let savedEmployee;
-  if(existingByNin&&sqlBackendId(existingByNin.backendId)){
-    const merged={...existingByNin,...agent,id:existingByNin.id,backendId:existingByNin.backendId,matricule:existingByNin.matricule||agent.matricule};
-    savedEmployee=await SGDI.employees.update(existingByNin.backendId,employeeApiPayload(merged));
-    Object.assign(agent,employeeFromApi(savedEmployee),merged,{backendId:savedEmployee?.id||existingByNin.backendId});
-  }else{
-    savedEmployee=await SGDI.employees.create(employeeApiPayload(agent));
-    const fromApi=employeeFromApi(savedEmployee);
-    Object.assign(agent,agent,fromApi,{backendId:savedEmployee?.id||agent.backendId,matricule:fromApi.matricule||agent.matricule});
-  }
-  if(sqlBackendId(c.backendId)){
-    const updatedCandidate={...c,statut:"embauche",status:"embauche",convertedEmployeeId:agent.backendId||agent.id,convertedAt:new Date().toISOString()};
-    await SGDI.rh.updateCandidate(c.backendId,candidateApiPayload(updatedCandidate));
-  }
+  // Le serveur est l'unique autorité pour créer l'employé et son contrat. Cette
+  // opération est transactionnelle et idempotente : aucun doublon n'est possible.
+  Object.assign(c,agent,{
+    id:c.id,backendId:c.backendId,statut:"a_contractualiser",status:"a_contractualiser",
+    salairePrevu:agent.salaireNet,typeContrat:agent.typeContrat,dateRecrutement:agent.dateRecrutement,
+    dateFinContrat:agent.dateFinContrat,dateFinEssai:agent.dateFinEssai,dureeEssai:agent.dureeEssai
+  });
+  await SGDI.rh.updateCandidate(backendId,candidateApiPayload(c));
+  const savedEmployee=await SGDI.rh.recruitCandidate(backendId);
+  const fromApi=employeeFromApi(savedEmployee);
+  Object.assign(agent,agent,fromApi,{backendId:savedEmployee?.id||fromApi.backendId,matricule:fromApi.matricule||agent.matricule});
   if(!Array.isArray(db.agents))db.agents=[];
   const existingIndex=db.agents.findIndex(a=>String(a.backendId||"")===String(agent.backendId||"")||normalizeEmployeeNin(a.nin)&&normalizeEmployeeNin(a.nin)===normalizeEmployeeNin(agent.nin));
   if(existingIndex>=0)db.agents[existingIndex]=agent;else db.agents.push(agent);

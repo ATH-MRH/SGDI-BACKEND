@@ -403,7 +403,7 @@ def delete_candidate(
 def recruit(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     candidate = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, candidate.society)
-    return _action_success(service.recruit_candidate(db, candidate_id))
+    return _action_success(service.recruit_candidate(db, candidate_id, username=user.username))
 
 
 @router.get("/contracts", response_model=list[ContractOut])

@@ -26,13 +26,13 @@ def _cand(client, h, first="Jamel", last="Cand", society="Iron Global Securite",
     return r.json()["data"]
 
 
-# 8 sections de la fiche de position (ordre imposé par le service)
-_SECTIONS = ["identification", "mensurations", "militaire", "poste",
+# 7 sections visibles de la fiche de position (ordre imposé par le service)
+_SECTIONS = ["identification", "militaire", "poste",
              "avis", "contact", "habilitations", "experience"]
 
 
 def _full_candidate_data(nom="RECRUE", prenom="Karim"):
-    """Données complètes couvrant tous les champs obligatoires des 8 sections."""
+    """Données complètes couvrant tous les champs obligatoires des 7 sections."""
     return {
         "nom": nom, "prenom": prenom,
         "dateNaissance": "1990-05-15", "lieuNaissance": "Alger",
@@ -44,7 +44,7 @@ def _full_candidate_data(nom="RECRUE", prenom="Karim"):
         "adresse": "Rue 1", "commune": "Bab Ezzouar", "wilaya": "Alger",
         "contactUrgenceLien": "epouse", "contactUrgenceNom": "Sara",
         "contactUrgenceTel": "0550998877",
-        # Les 8 sections marquées validées (persistées dès la création)
+        # Les 7 sections marquées validées (persistées dès la création)
         "sectionValidations": {s: {"by": "system", "at": "2026-01-10T00:00:00"} for s in _SECTIONS},
     }
 
@@ -238,12 +238,57 @@ def test_candidate_full_recruitment_workflow(client, auth_headers):
     assert contracts.status_code == 200
     assert len(contracts.json()) >= 1, "Le recrutement doit générer un contrat"
 
+    # Un second clic/retry réseau est idempotent : même salarié, aucun contrat en double.
+    retry = client.post(f"/api/drh/candidates/{cid}/recruit", headers=auth_headers)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["data"]["id"] == emp_id
+    contracts_after_retry = client.get(f"/api/drh/contracts?employee_id={emp_id}", headers=auth_headers)
+    assert len(contracts_after_retry.json()) == len(contracts.json())
+
+    candidate = next(row for row in client.get("/api/drh/candidates", headers=auth_headers).json() if row["id"] == cid)
+    assert candidate["data"]["convertedEmployeeId"] == emp_id
+    assert emp["father_name"].upper() == "AHMED"
+    assert emp["birth_date"] == "1990-05-15"
+
 
 def test_recruit_rejects_non_validated_candidate(client, auth_headers):
     """Un candidat dont la fiche n'est pas validée ne peut PAS être recruté (422)."""
     c = _cand(client, auth_headers, first="NonValide")
     r = client.post(f"/api/drh/candidates/{c['id']}/recruit", headers=auth_headers)
     assert r.status_code == 422, r.text
+
+
+def test_recruit_requires_contractualisation_state(client, auth_headers):
+    cid = _make_reserve_candidate(client, auth_headers, nom="ETAT", prenom="Valide")
+    r = client.post(f"/api/drh/candidates/{cid}/recruit", headers=auth_headers)
+    assert r.status_code == 422, r.text
+
+
+def test_validate_section_persists_on_existing_candidate(client, auth_headers):
+    data = _full_candidate_data(nom="PERSISTE", prenom="Section")
+    data.pop("sectionValidations")
+    c = _cand(client, auth_headers, first="Section", last="PERSISTE", data=data)
+    body = {
+        "first_name": "Section", "last_name": "PERSISTE",
+        "society": "Iron Global Securite", "data": data,
+    }
+    r = client.post(
+        f"/api/drh/candidates/validate-section?section=identification&candidate_id={c['id']}",
+        headers=auth_headers, json=body,
+    )
+    assert r.status_code == 200, r.text
+    saved = next(row for row in client.get("/api/drh/candidates", headers=auth_headers).json() if row["id"] == c["id"])
+    assert saved["data"]["sectionValidations"]["identification"]["by"]
+
+
+def test_candidate_accepts_18_digit_nin(client, auth_headers):
+    data = _full_candidate_data(nom="NINLONG", prenom="Dixhuit")
+    data["nin"] = "123456789012345678"
+    r = client.post("/api/drh/candidates", headers=auth_headers, json={
+        "first_name": "Dixhuit", "last_name": "NINLONG",
+        "society": "Iron Global Securite", "status": "nouvelle", "data": data,
+    })
+    assert r.status_code in (200, 201), r.text
 
 
 def test_marquer_contractualisation_requires_reserve(client, auth_headers):

@@ -7,7 +7,7 @@ def test_full_contract_flow(client, auth_headers):
     assert r.status_code in (200, 201), r.text
     cid = r.json()["data"]["id"]
 
-    sections = ["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"]
+    sections = ["identification","militaire","poste","avis","contact","habilitations","experience"]
     stamp = {"by": "recruteur", "at": "2026-08-01T10:00:00"}
     r2 = client.put(f"/api/drh/candidates/{cid}", headers=auth_headers, json={
         "expected_salary": 48000,
@@ -23,6 +23,11 @@ def test_full_contract_flow(client, auth_headers):
         },
     })
     assert r2.status_code == 200, r2.text
+
+    reserve = client.post(f"/api/drh/candidates/{cid}/validate-final", headers=auth_headers)
+    assert reserve.status_code == 200, reserve.text
+    mark = client.post(f"/api/drh/candidates/{cid}/marquer-contractualisation", headers=auth_headers)
+    assert mark.status_code == 200, mark.text
 
     r3 = client.post(f"/api/drh/candidates/{cid}/recruit", headers=auth_headers)
     assert r3.status_code == 200, r3.text

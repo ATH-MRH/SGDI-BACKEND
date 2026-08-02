@@ -348,6 +348,12 @@ def _candidate_sections(data: dict[str, Any]) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
+# La fiche affichée comporte sept sections. « mensurations » était autrefois une
+# section technique cachée ; ses champs appartiennent désormais à identification.
+CANDIDATE_SECTIONS = ["identification", "militaire", "poste", "avis", "contact", "habilitations", "experience"]
+CANDIDATE_LEGACY_SECTIONS = {"mensurations"}
+
+
 def _normalized_list(values: Any) -> list[str]:
     if not isinstance(values, list):
         return []
@@ -550,8 +556,8 @@ def _validate_candidate_form_rules(values: dict[str, Any], existing: Candidate |
 
     nin = _candidate_text(data.get("nin"))
     nin_alert_authorized = _candidate_bool(data.get("importNinWarning")) or _candidate_bool(data.get("ninAlert"))
-    if nin and not re.fullmatch(r"\d{10}", nin) and not nin_alert_authorized:
-        raise HTTPException(status_code=422, detail="Le NIN doit contenir exactement 10 chiffres")
+    if nin and not re.fullmatch(r"(?:\d{10}|\d{18})", nin) and not nin_alert_authorized:
+        raise HTTPException(status_code=422, detail="Le NIN doit contenir 10 ou 18 chiffres")
     age = _candidate_age_on_save(data.get("dateNaissance"))
     age_alert_authorized = _candidate_bool(data.get("importAgeWarning")) or _candidate_bool(data.get("ageAlert"))
     if age is not None and age < 20 and not age_alert_authorized:
@@ -567,8 +573,8 @@ def _validate_candidate_transition(values: dict[str, Any], existing: Candidate |
     status_value = values.get("status", existing.status if existing else "nouvelle")
     status_norm = _candidate_status(status_value)
     sections = _candidate_sections(data)
-    all_sections = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "habilitations", "experience"]
-    etape1 = ["identification", "mensurations", "militaire", "poste", "avis"]
+    all_sections = CANDIDATE_SECTIONS
+    etape1 = ["identification", "militaire", "poste", "avis"]
 
     if _candidate_bool(data.get("fichePositionValidee")) or status_norm in {"reserve", "a_contractualiser", "embauche"}:
         missing = [key for key in all_sections if not sections.get(key)]
@@ -605,7 +611,18 @@ def validate_candidate_section(db: Session, payload: Any, section: str, existing
     values = payload.model_dump(exclude_unset=True)
     existing = get_or_404(db, Candidate, existing_id) if existing_id else None
     data = _candidate_data(values, existing)
-    order = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "habilitations", "experience"]
+    if section in CANDIDATE_LEGACY_SECTIONS:
+        # Compatibilité avec les anciens clients encore en cache : cette section
+        # n'est plus requise et ne bloque aucune transition.
+        sections = dict(_candidate_sections(data))
+        sections[section] = {"by": username or "system", "at": datetime.utcnow().isoformat(), "legacy": True}
+        data["sectionValidations"] = sections
+        if existing:
+            existing.data = normalize_photo_fields(data, fallback=str(existing.id))
+            db.commit()
+            db.refresh(existing)
+        return {"status": "success", "data": {"section": section, "sectionValidations": sections, "next": None}}
+    order = CANDIDATE_SECTIONS
     if section not in order:
         raise HTTPException(status_code=422, detail="Section inconnue")
     sections = dict(_candidate_sections(data))
@@ -617,6 +634,19 @@ def validate_candidate_section(db: Session, payload: Any, section: str, existing
     sections[section] = {"by": username or "system", "at": datetime.utcnow().isoformat()}
     data["sectionValidations"] = sections
     values["data"] = data
+    if existing:
+        field_map = {
+            "first_name": "prenom", "last_name": "nom", "phone": "telephone",
+            "email": "email", "desired_position": "posteSouhaite", "society": "societe",
+            "expected_salary": "salairePrevu", "recruiter_opinion": "avisCommentaire",
+        }
+        for column, data_key in field_map.items():
+            value = values.get(column, data.get(data_key))
+            if value is not None:
+                setattr(existing, column, value)
+        existing.data = normalize_photo_fields(data, fallback=str(existing.id))
+        db.commit()
+        db.refresh(existing)
     return {"status": "success", "data": {"section": section, "sectionValidations": sections, "next": order[idx + 1] if idx + 1 < len(order) else None}}
 
 def marquer_a_contractualiser(db: Session, candidate_id: int, username: str | None = None):
@@ -642,7 +672,7 @@ def validate_candidate_final(db: Session, candidate_id: int, username: str | Non
     row = get_or_404(db, Candidate, candidate_id)
     data = row.data if isinstance(row.data, dict) else {}
     sections = _candidate_sections(data)
-    order = ["identification", "mensurations", "militaire", "poste", "avis", "contact", "habilitations", "experience"]
+    order = CANDIDATE_SECTIONS
     missing = [key for key in order if not sections.get(key)]
     if missing:
         raise HTTPException(status_code=422, detail="Fiche candidat refusée : sections non validées (" + ", ".join(missing) + ")")
@@ -784,10 +814,35 @@ def drh_dashboard(db: Session):
     }
 
 
-def recruit_candidate(db: Session, candidate_id: int):
-    candidate = get_or_404(db, Candidate, candidate_id)
-    _validate_candidate_transition({"status": "embauche", "data": candidate.data or {}}, candidate)
+def _candidate_date(value: Any) -> date | None:
+    try:
+        return date.fromisoformat(str(value or "")[:10]) if value else None
+    except ValueError:
+        return None
+
+
+def _candidate_int(value: Any) -> int:
+    try:
+        return max(int(value or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def recruit_candidate(db: Session, candidate_id: int, username: str | None = None):
+    candidate = db.execute(
+        select(Candidate).where(Candidate.id == candidate_id).with_for_update()
+    ).scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
     data = candidate.data if isinstance(candidate.data, dict) else {}
+    converted_id = data.get("convertedEmployeeId")
+    if candidate.status == "embauche" and converted_id:
+        employee = db.get(Employee, int(converted_id))
+        if employee:
+            return employee
+    if candidate.status != "a_contractualiser":
+        raise HTTPException(status_code=422, detail="Le candidat doit être à contractualiser avant son recrutement")
+    _validate_candidate_transition({"status": "embauche", "data": candidate.data or {}}, candidate)
     next_code = next_employee_code(db, candidate.society)
     recruit_date = date.today()
 
@@ -813,17 +868,21 @@ def recruit_candidate(db: Session, candidate_id: int):
         code=next_code,
         first_name=candidate.first_name,
         last_name=candidate.last_name,
-        phone=candidate.phone,
-        email=candidate.email,
-        position=candidate.desired_position,
-        society=candidate.society,
-        salary_net=candidate.expected_salary or 0,
+        father_name=data.get("nomPere"), mother_name=data.get("nomMere"),
+        nin=_candidate_text(data.get("nin")) or None,
+        birth_date=_candidate_date(data.get("dateNaissance")), birth_place=data.get("lieuNaissance"),
+        family_status=data.get("situation"), children_count=_candidate_int(data.get("nombreEnfants")),
+        phone=candidate.phone or data.get("telephone"), email=candidate.email or data.get("email"),
+        address=data.get("adresse"), commune=data.get("commune"), wilaya=data.get("wilaya"),
+        position=candidate.desired_position or data.get("posteContrat") or data.get("posteSouhaite"),
+        society=candidate.society or data.get("societe"),
+        salary_net=candidate.expected_salary or data.get("salaireNet") or data.get("salairePrevu") or 0,
         contract_type=contract_type,
         status="actif",
         recruit_date=recruit_date,
         trial_end_date=trial_end,
         contract_end_date=contract_end,
-        extra=candidate.data or {},
+        extra=_prepare_employee_extra({**data, "sourceCandidateId": candidate.id}, fallback=str(candidate.id)),
     )
     candidate.status = "embauche"
     candidate.data = {
@@ -831,21 +890,27 @@ def recruit_candidate(db: Session, candidate_id: int):
         "statut": "embauche",
         "status": "embauche",
         "convertedAt": datetime.utcnow().isoformat(),
+        "convertedBy": username or "system",
     }
     db.add(employee)
     db.flush()
+    candidate.data = {**candidate.data, "convertedEmployeeId": employee.id}
     contract = Contract(
         employee_id=employee.id,
         contract_type=contract_type,
-        position=candidate.desired_position,
+        position=employee.position,
         start_date=recruit_date,
         end_date=contract_end,
         trial_end_date=trial_end,
-        salary_net=candidate.expected_salary or 0,
+        salary_net=employee.salary_net,
         status="actif",
     )
     db.add(contract)
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Recrutement refusé : {_postgres_error_detail(exc)}") from exc
     db.refresh(employee)
     return employee
 
