@@ -26016,6 +26016,7 @@ function factureEditorUpdateWorkflow(){
 }
 async function factureEditorSave(options){
   options=options||{};
+  clearTimeout(factureDraftTimer);
   const gv=id=>document.getElementById(id)?.value||"";
   const validate=options.validate===true;
   if(validate&&!factureEditorValidate())return null;
@@ -26070,7 +26071,16 @@ async function factureEditorSave(options){
   const creating=!existing;
   if(existing){Object.assign(existing,data);}else{db.factures.push(data);window.__factureEditId=data.id;}
   try{
-    const saved=await sgdiApi("/api/irongs/collections/factures/items"+(creating?"":"/"+encodeURIComponent(data.id)),{method:creating?"POST":"PUT",body:{data},legacy:false});
+    let saved;
+    try{
+      saved=await sgdiApi("/api/irongs/collections/factures/items"+(creating?"":"/"+encodeURIComponent(data.id)),{method:creating?"POST":"PUT",body:{data},legacy:false});
+    }catch(writeError){
+      // Compatibilité avec les anciennes factures stockées avant l'API par élément :
+      // si l'identifiant local n'existe pas encore côté serveur, on le crée.
+      const missing=/introuvable|not found|404/i.test(String(writeError?.message||writeError||""));
+      if(creating||!missing)throw writeError;
+      saved=await sgdiApi("/api/irongs/collections/factures/items",{method:"POST",body:{data},legacy:false});
+    }
     if(saved&&typeof saved==="object")Object.assign(data,saved);
     const state=document.getElementById("fact-draft-state");if(state)state.textContent=validate?"Facture validée":"Enregistré à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
     if(!options.silent)toast(validate?"Facture "+numero+" validée et numérotée":"Brouillon enregistré","success");
