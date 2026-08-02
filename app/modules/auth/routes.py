@@ -32,7 +32,6 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "drh": (("DRH",), "DRH"),
     "ops": (("OPS",), "OPS"),
     "materiel": (("MAT",), "MATERIEL/EQUIP"),
-    "facturation": (("FAC", "FIN"), "FACTURATION"),
     "fac": (("FAC", "FIN"), "FACTURATION"),
     "finances": (("FIN", "FAC"), "FINANCES/COMPTA"),
     "finance": (("FIN", "FAC"), "FINANCES/COMPTA"),
@@ -68,6 +67,11 @@ def enforce_subdomain_login_scope(request: Request, user: User) -> None:
     subdomain = _host_subdomain(request)
     if not subdomain or subdomain in {"atlas", "sgdi", "www"}:
         return
+    if subdomain == "facturation":
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Ce portail a été supprimé. Utilisez fac.irongs.com.",
+        )
     rule = DEDICATED_LOGIN_RULES.get(subdomain)
     if rule is None:
         return

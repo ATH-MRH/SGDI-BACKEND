@@ -97,6 +97,31 @@ def test_ops_subdomain_rejects_drh_prefix(client, db):
     assert resp.status_code == 403
 
 
+def test_old_facturation_subdomain_is_retired(client, db):
+    _add_test_user(db, "FAC98", "FAC98", role="ops", access_level="H3", structures=["facturation"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "FAC98", "password": "FAC98"},
+        headers={"host": "facturation.irongs.com"},
+    )
+
+    assert resp.status_code == 410
+    assert "fac.irongs.com" in resp.json()["detail"]
+
+
+def test_fac_subdomain_remains_active(client, db):
+    _add_test_user(db, "FAC99", "FAC99", role="ops", access_level="H3", structures=["facturation"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "FAC99", "password": "FAC99"},
+        headers={"host": "fac.irongs.com"},
+    )
+
+    assert resp.status_code == 200, resp.text
+
+
 def test_recrute_subdomain_accepts_rec_prefix(client, db):
     _add_test_user(db, "REC01", "REC01", role="rh", access_level="H3", structures=["drh"])
 

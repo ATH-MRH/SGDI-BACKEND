@@ -4458,6 +4458,7 @@ function sgdiModuleHostConfig(){
   const host=String(location.hostname||"").toLowerCase();
   const configs=sgdiModuleHostConfigs();
   const first=host?host.split(".")[0]:"";
+  if(first==="facturation")return null;
   const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",facturation:"facmod",fac:"facmod",sup:"superviseur",supervisor:"superviseur"};
   const configKey=hostAliases[first]||first;
   // Domaine dédié (ex: drh.sgdi.com, facturation.sgdi.com)
