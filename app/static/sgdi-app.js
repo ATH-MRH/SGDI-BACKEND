@@ -4506,7 +4506,11 @@ function renderFacStandaloneShell(){
     </div>
   </div>`;
   renderFacStandaloneNav();
-  sgdiEnterViewMode(true);renderView();renderOverlayHost();sgdiSyncOverlayState();
+  // Le portail Facturation est un espace de travail autonome : il ne possède pas
+  // le bouton ATLAS « Déverrouiller ». Il doit donc démarrer directement en édition.
+  sgdiViewModeActive=false;
+  document.body.classList.remove("sgdi-view-mode");
+  renderView();renderOverlayHost();sgdiSyncOverlayState();
 }
 function sgdiApplyModuleHostSession(redirect){
   const cfg=sgdiModuleHostConfig();
