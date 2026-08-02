@@ -29954,7 +29954,18 @@ function drhMatchSoc(row,selected){
   const value=String(row&&row.societe||"").trim();
   return selected===DRH_NO_SOCIETE?!value:value===selected;
 }
-function setDrhSociete(s){try{sessionStorage.setItem("drhSociete",s||"")}catch(e){}render()}
+function setDrhSociete(s){
+  try{
+    sessionStorage.setItem("drhSociete",s||"");
+    sessionStorage.removeItem("ptSociete");
+    sessionStorage.removeItem("ptSearch");
+  }catch(e){}
+  window.__ptLightEmployees={};
+  window.__ptLightEmployeesAt={};
+  window.__pointageEligibleStableAgentsBySoc={};
+  _ptAutoEmployeesSyncedAt=0;
+  render();
+}
 function drhAuthorizedSocieties(){
   const u=typeof currentUserRecord==="function"?currentUserRecord():null;
   const list=Array.isArray(u?.societesAutorisees)?u.societesAutorisees:[];
@@ -34477,7 +34488,12 @@ function fpqRelieveDueWithoutPointage(f){
 const POINTAGE_TABS=[["feuille","📋 Feuille quotidienne"],["saisie","📝 Saisie manuelle"],["auto","🤖 Saisie automatique"],["planning","🧠 Planning 7 jours"],["recap","👤 Récap par agent"],["societe","🏢 Récap par société"],["stats","📈 Statistiques"],["legende","🎨 Légende & codes"],["qr","📲 QR par site"]];
 function isSupOrUser(){return Array.isArray(session?.sitesAutorises)&&session.sitesAutorises.length>0}
 function ptCurrentMonth(){const v=sessionStorage.getItem("ptMonth");if(v)return v;const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
-function ptCurrentSoc(){return sessionStorage.getItem("ptSociete")||session?.societe||currentStructureSocieteFilter?.()||""}
+function ptCurrentSoc(){
+  // Dans DRH, la société active du module est la source de vérité. Un ancien
+  // ptSociete conservé par le navigateur ne doit jamais masquer ses pointages.
+  if(session?.transverse==="drh"&&typeof drhActiveSocieteFilter==="function")return drhActiveSocieteFilter()||"";
+  return sessionStorage.getItem("ptSociete")||currentStructureSocieteFilter?.()||session?.societe||"";
+}
 function ptCurrentSearch(){return sessionStorage.getItem("ptSearch")||""}
 function ptCurrentSort(){return sessionStorage.getItem("ptSort")||"nom"}
 function ptCurrentSortOrder(){return sessionStorage.getItem("ptSortOrder")||"asc"}
@@ -36504,6 +36520,7 @@ function renderPointageSaisieAuto(){
     </div>
   </div>
   <div class="text-[11px] mt-2 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — ${supervisorActive?"Pointage mensuel actualisé automatiquement par la Feuille quotidienne.":"Synchronisation automatique toutes les 10 secondes · reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne."}</div>
+  <div id="pt-auto-sync-error" class="mt-3 p-3 rounded-lg text-xs font-bold" style="display:${_ptAutoSaisieError?"block":"none"};background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">${_ptAutoSaisieError?`Synchronisation impossible : ${escapeHTML(_ptAutoSaisieError)}`:""}</div>
   </div>`;
   const filtered=ptSortAgents(ptFilterAgents(ag));
   if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
@@ -36621,6 +36638,7 @@ async function ptEmployeeQrSubmit(token){
 let _ptAutoSaisieRefreshing=false;
 let _ptAutoSaisieLiveTimer=null;
 let _ptAutoEmployeesSyncedAt=0;
+let _ptAutoSaisieError="";
 function ptAutoSaisieStopLiveRefresh(){
   if(_ptAutoSaisieLiveTimer){clearInterval(_ptAutoSaisieLiveTimer);_ptAutoSaisieLiveTimer=null}
 }
@@ -36638,13 +36656,19 @@ async function ptAutoSaisieLiveRefresh(){
     if(refreshPeople)_ptAutoEmployeesSyncedAt=Date.now();
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
+    _ptAutoSaisieError="";
     const scrollY=window.scrollY;
     renderView();
     requestAnimationFrame(()=>window.scrollTo(0,scrollY));
-  }catch(e){}finally{_ptAutoSaisieRefreshing=false}
+  }catch(e){
+    _ptAutoSaisieError=e?.message||"Impossible de charger les pointages DRH.";
+    const box=document.getElementById("pt-auto-sync-error");
+    if(box){box.textContent="Synchronisation impossible : "+_ptAutoSaisieError;box.style.display="block";}
+  }finally{_ptAutoSaisieRefreshing=false}
 }
 function ptAutoSaisieStartLiveRefresh(){
   ptAutoSaisieStopLiveRefresh();
+  setTimeout(ptAutoSaisieLiveRefresh,0);
   _ptAutoSaisieLiveTimer=setInterval(ptAutoSaisieLiveRefresh,10000);
 }
 async function ptAutoSaisieRefresh(){
@@ -36660,11 +36684,12 @@ async function ptAutoSaisieRefresh(){
     _ptAutoEmployeesSyncedAt=Date.now();
     const data=Array.isArray(res)?res:(res?.data||[]);
     if(Array.isArray(data))db.feuillePresence=data;
+    _ptAutoSaisieError="";
     const scrollY=window.scrollY;
     renderView();
     requestAnimationFrame(()=>window.scrollTo(0,scrollY));
     if(typeof toast==="function")toast("Pointage actualisé","success");
-  }catch(e){toast("Actualisation indisponible","error");}
+  }catch(e){_ptAutoSaisieError=e?.message||"Actualisation indisponible";toast("Actualisation indisponible : "+_ptAutoSaisieError,"error");}
   finally{_ptAutoSaisieRefreshing=false;if(btn){btn.disabled=false;btn.textContent="↺ Actualiser";}}
 }
 function ptAutoApercu(){
