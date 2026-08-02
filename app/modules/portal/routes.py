@@ -980,12 +980,21 @@ def attendance_feed(
     if since_value:
         rows = [row for row in rows if _clean_text(row.get("scannedAt")) > since_value]
     rows.sort(key=lambda row: _clean_text(row.get("scannedAt")), reverse=True)
+    employee_ids = {
+        int(row.get("employeeId")) for row in rows
+        if str(row.get("employeeId") or "").strip().isdigit()
+    }
+    employees_by_id = {
+        employee.id: employee for employee in db.execute(
+            select(Employee).where(Employee.id.in_(employee_ids))
+        ).scalars().all()
+    } if employee_ids else {}
     return [
         {
             "id": row.get("id"),
             "employee_id": row.get("employeeId"),
-            "matricule": row.get("matricule") or "",
-            "nom": row.get("agentName") or "",
+            "matricule": row.get("matricule") or (employees_by_id.get(int(row.get("employeeId"))).code if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else ""),
+            "nom": row.get("agentName") or (" ".join(filter(None, [employees_by_id.get(int(row.get("employeeId"))).last_name, employees_by_id.get(int(row.get("employeeId"))).first_name])).strip() if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else "Employé inconnu"),
             "action": row.get("action") or "arrivee",
             "cycle": row.get("cycle") or 1,
             "site": row.get("site") or "",

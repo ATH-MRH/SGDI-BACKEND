@@ -154,6 +154,22 @@ def test_attendance_feed_keeps_only_last_48_hours(client, auth_headers, db):
     assert not any(row["id"] == old_id for row in rows)
 
 
+def test_attendance_feed_restores_missing_employee_identity(client, auth_headers, db):
+    emp_id = _emp(client, auth_headers, "PTF-ID", fn="Nora", ln="Identite")
+    event_id = "attendance-missing-identity"
+    irongs_service.create_item(db, "attendanceQrScans", {
+        "id": event_id, "nonce": event_id, "employeeId": emp_id,
+        "action": "arrivee", "cycle": 1,
+        "scannedAt": datetime.now(timezone.utc).isoformat(),
+        "site": "Site identité", "siteId": None, "scannedBy": "test",
+    })
+    rows = client.get("/api/portal/attendance-feed?limit=200", headers=auth_headers).json()
+    row = next(item for item in rows if item["id"] == event_id)
+    assert row["matricule"] == "PTF-ID"
+    assert "IDENTITE" in row["nom"].upper()
+    assert "NORA" in row["nom"].upper()
+
+
 def test_attendance_feed_requires_auth(client):
     r = client.get("/api/portal/attendance-feed")
     assert r.status_code == 401
