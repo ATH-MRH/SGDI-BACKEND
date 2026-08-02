@@ -504,9 +504,11 @@ async function sgdiAutoSync(reason){
   // jamais écraser le travail. On réessaiera automatiquement dès la fin (enregistré/annulé).
   if(sgdiDirty||sgdiEditingBlocksRender()){sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;sgdiMarkRefreshAvailable(reason);return;}
   sgdiAutoSyncRunning=true;
+  sgdiSetSyncStatus("syncing");
   try{
     const loaded=await sgdiPullState({silent:true,render:false,force:true});
     if(loaded){
+      if(sgdiCurrentModuleKey()==="drh")await sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true});
       try{await sgdiRefreshCountersNow({reason:"auto-sync"});}catch(e){}
       if(sgdiEditingBlocksRender()){
         // Données fraîches déjà en mémoire ; le réaffichage se fera tout seul dès la fin de la saisie.
@@ -515,10 +517,12 @@ async function sgdiAutoSync(reason){
       }else{
         sgdiAutoRender();
       }
-    }
+      sgdiSetSyncStatus("ok");
+    }else sgdiSetSyncStatus("error",_sgdiLastPullError||"Aucune réponse du serveur");
   }catch(e){
     console.warn("Auto-sync SGDI échouée",e);
     sgdiPendingAutoRender=true;sgdiPendingAutoRenderReason=reason;
+    sgdiSetSyncStatus("error",e.message||e);
   }finally{
     sgdiAutoSyncRunning=false;
   }
@@ -886,6 +890,17 @@ let sgdiEventsLastPull=0;
 let sgdiLastUserNavigationAt=0;
 let sgdiAppVersion=null;
 let sgdiLastRemoteStatsSignature="";
+let sgdiSyncStatus={state:"idle",at:0,error:""};
+function sgdiSetSyncStatus(state,error){
+  sgdiSyncStatus={state:state||"idle",at:Date.now(),error:error?String(error):""};
+  try{document.querySelectorAll("[data-sgdi-sync-status]").forEach(el=>{el.outerHTML=sgdiSyncStatusHTML()})}catch(_e){}
+}
+function sgdiSyncStatusHTML(){
+  const state=sgdiSyncStatus.state||"idle";
+  const cfg=state==="syncing"?["Actualisation…","#d97706","#fffbeb"]:state==="error"?["Serveur indisponible","#dc2626","#fef2f2"]:["Synchronisé","#047857","#ecfdf5"];
+  const stamp=sgdiSyncStatus.at?new Date(sgdiSyncStatus.at).toLocaleTimeString("fr-DZ",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—";
+  return `<span data-sgdi-sync-status title="${escapeHTML(sgdiSyncStatus.error||"")}" style="display:inline-flex;align-items:center;gap:6px;border:1px solid ${cfg[1]}33;background:${cfg[2]};color:${cfg[1]};border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800"><i style="width:7px;height:7px;border-radius:50%;background:${cfg[1]}"></i>${cfg[0]} · ${stamp}</span>`;
+}
 async function sgdiCheckAppVersion(){
   try{
     const r=await fetch("/api/version",{cache:"no-store"});
@@ -929,8 +944,8 @@ function sgdiAutoRefreshSettings(){
   if(!db.settings||typeof db.settings!=="object")db.settings={};
   const cfg=db.settings.autoRefresh&&typeof db.settings.autoRefresh==="object"?db.settings.autoRefresh:{};
   const configured=Number(cfg.intervalSeconds);
-  const raw=(!cfg.updatedBy&&configured===10)?60:configured;
-  const intervalSeconds=Math.min(120,Math.max(30,Number.isFinite(raw)&&raw>0?Math.round(raw):60));
+  const raw=(!cfg.updatedBy&&configured===10)?15:configured;
+  const intervalSeconds=Math.min(120,Math.max(15,Number.isFinite(raw)&&raw>0?Math.round(raw):15));
   return{enabled:cfg.enabled!==false,intervalSeconds};
 }
 async function sgdiStartEventStream(){
@@ -1020,9 +1035,12 @@ function sgdiScheduleAutoRefresh(){
     await sgdiCheckRemoteChanges();
   },cfg.intervalSeconds*1000);
 }
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden&&session&&sgdiAuthToken()&&sgdiPostgresReady&&!sgdiDirty)sgdiAutoSync("Retour sur le module");
+});
 function saveAdminAutoRefreshSettings(form){
   if(!db.settings||typeof db.settings!=="object")db.settings={};
-  const seconds=Math.min(120,Math.max(30,parseInt(form.intervalSeconds.value||"60",10)||60));
+  const seconds=Math.min(120,Math.max(15,parseInt(form.intervalSeconds.value||"15",10)||15));
   db.settings.autoRefresh={enabled:!!form.enabled.checked,intervalSeconds:seconds,updatedAt:new Date().toISOString(),updatedBy:session?.username||""};
   sgdiScheduleAutoRefresh();
   if(saveDB())toast("Paramètres d'actualisation enregistrés","success");
@@ -1618,6 +1636,38 @@ function sgdiRememberSidebarStats(stats){
   // Ne rien persister : les compteurs viennent toujours frais du serveur.
 }
 window.SGDI_SIDEBAR_STATS=sgdiLoadCachedSidebarStats();
+window.SGDI_DRH_STATS_BY_SOCIETY=window.SGDI_DRH_STATS_BY_SOCIETY||{};
+let sgdiDrhStatsLoading={};
+async function sgdiRefreshDrhStats(society,options){
+  const soc=String(society||"").trim();
+  const key=soc||"__all";
+  const opt=options||{};
+  const cached=window.SGDI_DRH_STATS_BY_SOCIETY[key];
+  if(!opt.force&&cached&&Date.now()-Number(cached._fetchedAt||0)<15000)return cached;
+  if(sgdiDrhStatsLoading[key])return sgdiDrhStatsLoading[key];
+  sgdiDrhStatsLoading[key]=(async()=>{
+    try{
+      const stats=await window.SGDI_API.ui.sidebarStats(soc?{society:soc}:{});
+      stats._fetchedAt=Date.now();
+      window.SGDI_DRH_STATS_BY_SOCIETY[key]=stats;
+      sgdiSetSyncStatus("ok");
+      window.dispatchEvent(new CustomEvent("sgdi:drh-stats",{detail:{society:soc,stats}}));
+      return stats;
+    }catch(error){
+      sgdiSetSyncStatus("error",error.message||error);
+      console.warn("Statistiques DRH indisponibles",error);
+      return cached||null;
+    }finally{delete sgdiDrhStatsLoading[key]}
+  })();
+  return sgdiDrhStatsLoading[key];
+}
+window.sgdiRefreshDrhStats=sgdiRefreshDrhStats;
+window.addEventListener("sgdi:drh-stats",()=>{
+  const hash=String(location.hash||"");
+  if((hash==="#/drh"||hash.startsWith("#/drh/dashboard")||hash==="#/dashboard")&&!sgdiEditingBlocksRender()){
+    try{renderView()}catch(_e){}
+  }
+});
 function sgdiActiveStatsSociety(){
   try{
     return (typeof currentStructureSocieteFilter==="function"&&currentStructureSocieteFilter())||session?.societe||(typeof mySoc==="function"&&mySoc())||"";
@@ -4916,10 +4966,11 @@ function moduleCountersRibbon(items){
   return `<div class="module-counters-ribbon drh-workforce-ribbon no-print" style="--ribbon-count:${Math.min(Math.max(ordered.length,1),12)};height:auto!important;min-height:68px!important;overflow-y:visible!important" data-no-lang="1">${ordered.map(i=>moduleCounterItemHTML(i,total)).join("")}</div>`;
 }
 function sgdiBackendStatsForScope(scopeSoc){
-  const stats=window.SGDI_SIDEBAR_STATS;
+  const scope=String(scopeSoc||"").trim();
+  const scoped=window.SGDI_DRH_STATS_BY_SOCIETY?.[scope||"__all"];
+  const stats=scoped||window.SGDI_SIDEBAR_STATS;
   if(!stats||typeof stats!=="object")return null;
   const active=String(stats.scope?.active_society||"").trim();
-  const scope=String(scopeSoc||"").trim();
   if(scope&&active&&active!==scope)return null;
   if(scope&&!active)return null;
   if(!scope&&active)return null;
@@ -30024,6 +30075,7 @@ function drhSiteBucketsFromAgents(agents,sites=db.sites||[]){
 }
 function renderDRHDashboard(view){
   const selSoc=drhActiveSocieteFilter();
+  sgdiRefreshDrhStats(selSoc).catch(()=>null);
   sgdiEnsureEmployeesForDisplay({society:selSoc,force:true});
   const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];
   const ag=drhAgentsList();
@@ -30108,7 +30160,7 @@ function renderDRHDashboard(view){
   const drhKpi=(label,value,sub,route,color,icon)=>`<a href="${route}" class="drh-erp-kpi" style="--kpi-color:${color};text-decoration:none"><span class="drh-erp-kpi-icon">${icon}</span><span class="drh-erp-kpi-copy"><span class="drh-erp-kpi-label">${escapeHTML(label)}</span><strong>${value}</strong><small>${escapeHTML(sub)}</small></span></a>`;
   view.innerHTML=`<div class="drh-erp-head">
       <div><h1>Synthèse générale</h1><p>${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${dashEmployees} employés · ${dashSites} sites</p></div>
-      <div class="drh-erp-head-pills"><span>${dashActifs} actifs</span><span>${dashIncidents} incidents ouverts</span></div>
+      <div class="drh-erp-head-pills"><span>${dashActifs} actifs</span><span>${dashIncidents} incidents ouverts</span>${sgdiSyncStatusHTML()}<button class="btn btn-ghost text-xs" onclick="sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true}).then(()=>sgdiAutoSync('Synchronisation forcée'))">Forcer la synchronisation</button></div>
     </div>
     ${drhTabs("dashboard")}
     <div class="drh-erp-kpi-grid mb-4">
