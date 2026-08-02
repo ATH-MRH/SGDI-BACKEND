@@ -955,7 +955,24 @@ def attendance_feed(
     à certains sites ne voit que leurs pointages, pas ceux de toute l'entreprise."""
     limit = max(1, min(limit, 200))
     allowed_site_ids = _allowed_assignment_site_ids(db, user)
-    rows = [row for row in service.list_items(db, "attendanceQrScans") if isinstance(row, dict)]
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+
+    def within_retention(row: dict[str, Any]) -> bool:
+        raw = _clean_text(row.get("scannedAt"))
+        if not raw:
+            return False
+        try:
+            scanned_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if scanned_at.tzinfo is None:
+                scanned_at = scanned_at.replace(tzinfo=timezone.utc)
+            return scanned_at.astimezone(timezone.utc) >= cutoff
+        except ValueError:
+            return False
+
+    rows = [
+        row for row in service.list_items(db, "attendanceQrScans")
+        if isinstance(row, dict) and within_retention(row)
+    ]
     if allowed_site_ids is not None:
         allowed = set(allowed_site_ids)
         rows = [row for row in rows if row.get("siteId") in allowed]

@@ -4,6 +4,10 @@ Couvre /api/portal/attendance-qr/scan (via le refactor _register_attendance) et 
 nouveaux endpoints /api/portal/attendance-manual/search + /attendance-manual/scan,
 ajoutés pour les employés sans smartphone (le pointeur tape le code/nom, puis confirme).
 """
+from datetime import datetime, timedelta, timezone
+
+from app.modules.irongs import service as irongs_service
+
 SOCIETY = "Iron Global Securite"
 
 
@@ -137,6 +141,19 @@ def test_attendance_feed_since_filters_older_events(client, auth_headers):
     assert any(str(item["employee_id"]) == str(emp_id) for item in feed_past)
 
 
+def test_attendance_feed_keeps_only_last_48_hours(client, auth_headers, db):
+    old_id = "attendance-old-49h"
+    irongs_service.create_item(db, "attendanceQrScans", {
+        "id": old_id, "nonce": old_id, "employeeId": 999999,
+        "matricule": "OLD49", "agentName": "Ancien Passage",
+        "action": "arrivee", "cycle": 1,
+        "scannedAt": (datetime.now(timezone.utc) - timedelta(hours=49)).isoformat(),
+        "site": "Ancien site", "siteId": None, "scannedBy": "test",
+    })
+    rows = client.get("/api/portal/attendance-feed?limit=200", headers=auth_headers).json()
+    assert not any(row["id"] == old_id for row in rows)
+
+
 def test_attendance_feed_requires_auth(client):
     r = client.get("/api/portal/attendance-feed")
     assert r.status_code == 401
@@ -152,6 +169,9 @@ def test_recrute_route_serves_html(client):
     r = client.get("/recrute")
     assert r.status_code == 200
     assert "RECRUTEMENT" in r.text
+    assert 'id="ctSalary" type="number" min="1" step="1000" required' in r.text
+    assert "validateContractRequiredFields" in r.text
+    assert "/marquer-contractualisation" in r.text
 
 
 def test_attendance_feed_site_restricted_supervisor_only_sees_own_site(client, auth_headers, db):

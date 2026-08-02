@@ -26,6 +26,8 @@ input,select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;
 input,select{height:36px}
 textarea{padding:7px 10px;min-height:64px;resize:vertical}
 input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
+.field-invalid{border-color:#dc2626!important;background:#fff1f2!important;box-shadow:0 0 0 3px rgba(220,38,38,.14)!important}
+label.field-label-invalid{color:#b91c1c!important}
 .primary{border:0;border-radius:14px;background:var(--navy);color:#fff;padding:13px 18px;font-weight:900;cursor:pointer}
 .login .primary{width:100%;margin-top:18px}
 .secondary{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:11px 16px;font-weight:850;cursor:pointer}
@@ -150,15 +152,15 @@ tr:last-child td{border-bottom:0}
         <form id="contractForm" class="hidden" onsubmit="event.preventDefault();submitContractForm()">
           <div class="field-grid">
             <div class="full"><label>Candidat</label><input id="ctCandidateName" readonly style="background:#f8fafc;font-weight:800"></div>
-            <div><label>Poste</label><select id="ctPosition"><option value="">— Choisir —</option></select></div>
+            <div><label>Poste</label><select id="ctPosition" required><option value="">— Choisir —</option></select></div>
             <div><label>Société</label><input id="ctSociety" readonly style="background:#f8fafc"></div>
             <div><label>Type de contrat</label><select id="ctType" onchange="onContractTypeChange()" disabled><option value="CDD">CDD</option></select></div>
-            <div><label>Date de début</label><input id="ctStart" type="date" onchange="updateContractEndDate()"></div>
-            <div id="ctDurationWrap"><label>Durée du contrat</label><select id="ctDuration" onchange="updateContractEndDate()"><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option><option value="36">36 mois</option></select></div>
+            <div><label>Date de début</label><input id="ctStart" type="date" onchange="updateContractEndDate()" required></div>
+            <div id="ctDurationWrap"><label>Durée du contrat</label><select id="ctDuration" onchange="updateContractEndDate()" required><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option><option value="36">36 mois</option></select></div>
             <div><label>Date de fin</label><input id="ctEnd" type="date" readonly style="background:#f8fafc"></div>
-            <div><label>Salaire net (DA/mois)</label><input id="ctSalary" type="number" min="0" step="1000"></div>
-            <div><label>N° CNAS</label><input id="ctCnas" maxlength="20"></div>
-            <div><label>Mode de paiement</label><select id="ctPaymentMode"><option>Virement bancaire</option><option>Espèces</option><option>Chèque</option></select></div>
+            <div><label>Salaire net (DA/mois)</label><input id="ctSalary" type="number" min="1" step="1000" required></div>
+            <div><label>N° CNAS</label><input id="ctCnas" maxlength="20" required></div>
+            <div><label>Mode de paiement</label><select id="ctPaymentMode" required><option>Virement bancaire</option><option>Espèces</option><option>Chèque</option></select></div>
             <div><label>Banque</label><input id="ctBank"></div>
             <div><label>RIB / IBAN</label><input id="ctIban"></div>
           </div>
@@ -577,10 +579,41 @@ function cancelContractForm(){
   resetContractForm();
   switchTab(contractReturnTab,true);
 }
+function clearContractFieldErrors(){
+  document.querySelectorAll("#contractForm .field-invalid").forEach(el=>{el.classList.remove("field-invalid");el.removeAttribute("aria-invalid")});
+  document.querySelectorAll("#contractForm .field-label-invalid").forEach(el=>el.classList.remove("field-label-invalid"));
+}
+function validateContractRequiredFields(){
+  clearContractFieldErrors();
+  const type=document.getElementById("ctType").value;
+  const payment=document.getElementById("ctPaymentMode").value;
+  const fields=[
+    ["ctPosition","Poste"],["ctStart","Date de début"],["ctSalary","Salaire net"],
+    ["ctCnas","N° CNAS"],["ctPaymentMode","Mode de paiement"]
+  ];
+  if(type!=="CDI")fields.push(["ctDuration","Durée du contrat"],["ctEnd","Date de fin"]);
+  if(payment==="Virement bancaire")fields.push(["ctBank","Banque"],["ctIban","RIB / IBAN"]);
+  const missing=[];
+  fields.forEach(([id,label])=>{
+    const field=document.getElementById(id);
+    const empty=!String(field?.value||"").trim()||(id==="ctSalary"&&Number(field.value)<=0);
+    if(!empty)return;
+    missing.push(label);
+    field?.classList.add("field-invalid");field?.setAttribute("aria-invalid","true");
+    field?.closest("div")?.querySelector("label")?.classList.add("field-label-invalid");
+  });
+  if(missing.length){
+    const first=document.querySelector("#contractForm .field-invalid");
+    first?.focus({preventScroll:false});first?.scrollIntoView({behavior:"smooth",block:"center"});
+  }
+  return missing;
+}
 async function submitContractForm(){
   if(!contractCandidate)return;
   const errorEl=document.getElementById("contractFormError");
   errorEl.classList.remove("show");
+  const missing=validateContractRequiredFields();
+  if(missing.length){errorEl.textContent="Champs obligatoires à compléter : "+missing.join(", ")+".";errorEl.classList.add("show");return}
   const type=document.getElementById("ctType").value;
   const start=document.getElementById("ctStart").value;
   const end=document.getElementById("ctEnd").value;
@@ -598,6 +631,7 @@ async function submitContractForm(){
     const salaryInput=document.getElementById("ctSalary").value;
     const salary=salaryInput?Number(salaryInput):(contractCandidate.expected_salary||0);
     await apiFetch(`/api/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      desired_position:document.getElementById("ctPosition").value,
       expected_salary:salary,
       data:{
         ...(contractCandidate.data||{}),
@@ -611,6 +645,8 @@ async function submitContractForm(){
         iban:document.getElementById("ctIban").value.trim()
       }
     })});
+    await apiFetch(`/api/drh/candidates/${id}/validate-final`,{method:"POST"});
+    await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
     const result=await apiFetch(`/api/drh/candidates/${id}/recruit`,{method:"POST"});
     const employee=result.data||{};
     showBanner(`Contrat établi : employé ${esc(employee.code||"")} créé pour ${esc(fullName)}.`,"success");
@@ -783,6 +819,15 @@ async function submitCandidateForm(){
 }
 
 document.addEventListener("DOMContentLoaded",()=>{
+  const contractForm=document.getElementById("contractForm");
+  contractForm?.addEventListener("input",event=>{
+    const field=event.target;
+    if(field?.value){field.classList.remove("field-invalid");field.removeAttribute("aria-invalid");field.closest("div")?.querySelector("label")?.classList.remove("field-label-invalid")}
+  });
+  contractForm?.addEventListener("change",event=>{
+    const field=event.target;
+    if(field?.value){field.classList.remove("field-invalid");field.removeAttribute("aria-invalid");field.closest("div")?.querySelector("label")?.classList.remove("field-label-invalid")}
+  });
   try{recruteSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){recruteSession=null}
   if(recruteSession?.token)enterApp();
 });

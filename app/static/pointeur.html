@@ -157,7 +157,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       </section>
       <section class="history">
         <div class="history-head">
-          <span>10 DERNIERS PASSAGES</span>
+          <span>PASSAGES DES 48 DERNIÈRES HEURES</span>
           <div class="history-head-right">
             <select id="historySortField" class="sort-select" onchange="renderHistory()">
               <option value="recent">Récent</option>
@@ -188,6 +188,7 @@ let qrKeyBuffer="";
 let qrLastKeyAt=0;
 let cameraMode=false;
 let headerClockTimer=null;
+let historyRefreshTimer=null;
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function isMobileDevice(){return matchMedia("(max-width:759px)").matches||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)}
@@ -228,11 +229,15 @@ function enterApp(){
   societyEl.textContent=societies.length?"SOCIÉTÉ : "+societies.join(" / ").toUpperCase():"";
   societyEl.classList.toggle("hidden",!societies.length);
   startHeaderClock();
+  loadHistory();
+  clearInterval(historyRefreshTimer);
+  historyRefreshTimer=setInterval(loadHistory,15000);
   requestAnimationFrame(setupScanMode);
 }
 async function logout(){
   await stopScanner();
   clearInterval(headerClockTimer);headerClockTimer=null;
+  clearInterval(historyRefreshTimer);historyRefreshTimer=null;
   localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
   closeManualPanel();resetManualPanel();
   document.getElementById("appView").classList.add("hidden");
@@ -291,10 +296,15 @@ function recordScanEntry(data){
   const name=[employee.nom,employee.prenom].filter(Boolean).join(" ")||"Employé";
   const heure=data.heure||"";
   const action=data.action==="depart"?"depart":"arrivee";
-  let entry=matricule?sessionScans.find(row=>row.matricule===matricule):null;
+  const cycle=Number(data.cycle||1);
+  const scanDate=data.date||new Date().toISOString().slice(0,10);
+  let entry=matricule?sessionScans.find(row=>row.matricule===matricule&&Number(row.cycle||1)===cycle):null;
   if(entry)sessionScans.splice(sessionScans.indexOf(entry),1);
   else entry={matricule,arrivee:"",depart:"",duration:""};
   entry.name=name;
+  entry.cycle=cycle;
+  entry.date=scanDate;
+  entry.sortAt=new Date().toISOString();
   entry.site=data.site||employee.site||entry.site||"";
   entry.photo=employee.photo||entry.photo||"";
   entry.societe=employee.societe||entry.societe||"";
@@ -313,8 +323,31 @@ function recordScanEntry(data){
     entry.overtimeMinutes=Number(data.overtime_minutes||0);
   }
   sessionScans.unshift(entry);
-  sessionScans=sessionScans.slice(0,10);
+  sessionScans=sessionScans.slice(0,200);
   return {name,matricule,action,heure,site:entry.site,photo:entry.photo,societe:entry.societe,poste:entry.poste,statut:entry.statut,overtime:entry.overtime,overtimeMinutes:entry.overtimeMinutes};
+}
+async function loadHistory(){
+  if(!pointerSession?.token)return;
+  try{
+    const response=await fetch("/api/portal/attendance-feed?limit=200",{headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(response.status===401){logout();return}
+    if(!response.ok)throw new Error("Historique indisponible");
+    const events=await response.json();
+    const grouped=new Map();
+    (Array.isArray(events)?events:[]).forEach(event=>{
+      const key=String(event.employee_id||event.matricule||"")+"|"+String(event.cycle||1);
+      const at=String(event.scanned_at||"");
+      let row=grouped.get(key);
+      if(!row){row={matricule:event.matricule||"",name:event.nom||"Employé",site:event.site||"",cycle:event.cycle||1,date:at.slice(0,10),arrivee:"",depart:"",duration:"",sortAt:at};grouped.set(key,row)}
+      row.sortAt=String(row.sortAt||"")>at?row.sortAt:at;
+      row.site=event.site||row.site;
+      const time=at.slice(11,19);
+      if(event.action==="depart")row.depart=time;
+      else row.arrivee=time;
+    });
+    sessionScans=[...grouped.values()].sort((a,b)=>String(b.sortAt||"").localeCompare(String(a.sortAt||""))).slice(0,200);
+    renderHistory();
+  }catch(error){console.warn("Historique pointeur 48 h indisponible",error)}
 }
 async function onQr(token){
   if(scanBusy)return;
@@ -358,7 +391,7 @@ function sortedScans(){
   if(mode==="nom")sorted=list.sort((a,b)=>a.name.localeCompare(b.name,"fr"));
   else if(mode==="arrivee")sorted=list.sort((a,b)=>(a.arrivee||"").localeCompare(b.arrivee||""));
   else if(mode==="depart")sorted=list.sort((a,b)=>(a.depart||"").localeCompare(b.depart||""));
-  else return asc?list.slice().reverse():list;
+  else sorted=list.sort((a,b)=>String(a.sortAt||"").localeCompare(String(b.sortAt||"")));
   return asc?sorted:sorted.reverse();
 }
 function renderHistory(){
@@ -372,7 +405,7 @@ function renderHistory(){
   document.getElementById("entrantCount").textContent=String(sessionScans.filter(row=>row.arrivee).length).padStart(2,"0");
   document.getElementById("sortantCount").textContent=String(sessionScans.filter(row=>row.depart).length).padStart(2,"0");
   document.getElementById("presentCount").textContent=String(sessionScans.filter(row=>row.arrivee&&!row.depart).length).padStart(2,"0");
-  document.getElementById("historyList").innerHTML=ordered.length?ordered.map((row,index)=>`<div class="scan-row${index===firstCompletedIndex?" group-separator":""}${row.overtime?" overtime-alert":""}"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div class="scan-times"><div class="scan-time-pill arrivee${row.arrivee?" set":""}">${row.arrivee?"ARR "+esc(row.arrivee):"ARR —"}</div><div class="scan-time-pill depart${row.depart?" set":""}">${row.depart?"DÉP "+esc(row.depart):"DÉP —"}</div><div class="scan-duration">${row.duration?esc(row.duration):""}</div>${row.overtime?`<div class="overtime-label">⚠ +${Math.floor(row.overtimeMinutes/60)} h ${String(row.overtimeMinutes%60).padStart(2,"0")}</div>`:""}</div></div>`).join(""):'<div class="empty">Aucun QR scanné.</div>';
+  document.getElementById("historyList").innerHTML=ordered.length?ordered.map((row,index)=>`<div class="scan-row${index===firstCompletedIndex?" group-separator":""}${row.overtime?" overtime-alert":""}"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")}${row.date?" · "+esc(new Date(row.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})):""}</div></div><div class="scan-times"><div class="scan-time-pill arrivee${row.arrivee?" set":""}">${row.arrivee?"ARR "+esc(row.arrivee):"ARR —"}</div><div class="scan-time-pill depart${row.depart?" set":""}">${row.depart?"DÉP "+esc(row.depart):"DÉP —"}</div><div class="scan-duration">${row.duration?esc(row.duration):""}</div>${row.overtime?`<div class="overtime-label">⚠ +${Math.floor(row.overtimeMinutes/60)} h ${String(row.overtimeMinutes%60).padStart(2,"0")}</div>`:""}</div></div>`).join(""):'<div class="empty">Aucun passage durant les dernières 48 heures.</div>';
 }
 let manualResults=[];
 let manualSelected=null;
