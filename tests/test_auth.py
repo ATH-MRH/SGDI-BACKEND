@@ -106,8 +106,12 @@ def test_old_facturation_subdomain_is_retired(client, db):
         headers={"host": "facturation.irongs.com"},
     )
 
-    assert resp.status_code == 410
-    assert "fac.irongs.com" in resp.json()["detail"]
+    assert resp.status_code == 404
+    assert resp.text == "Not Found"
+
+    root = client.get("/", headers={"host": "facturation.irongs.com"})
+    assert root.status_code == 404
+    assert root.text == "Not Found"
 
 
 def test_fac_subdomain_remains_active(client, db):

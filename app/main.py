@@ -83,6 +83,9 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOADS_ROOT), check_dir=False),
 
 @app.middleware("http")
 async def log_slow_requests(request: Request, call_next):
+    host = (request.headers.get("host") or "").split(":")[0].strip().lower()
+    if host == "facturation.irongs.com":
+        return HTMLResponse("Not Found", status_code=404, headers={"Cache-Control": "no-store"})
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -479,10 +482,6 @@ def _is_pointer_host(host: str) -> bool:
 
 def _is_recrute_host(host: str) -> bool:
     return host.split(":")[0].lower() == "recrute.irongs.com"
-
-
-def _is_retired_facturation_host(host: str) -> bool:
-    return host.split(":")[0].lower() == "facturation.irongs.com"
 
 
 def _portal_mobile_urls(request: Request) -> list[str]:
@@ -1111,12 +1110,6 @@ def _build_index_html() -> str:
 @app.get("/", include_in_schema=False)
 def frontend(request: Request) -> HTMLResponse:
     host = request.headers.get("host", "").split(":")[0].lower()
-    if _is_retired_facturation_host(host):
-        return HTMLResponse(
-            "<h1>Portail supprimé</h1><p>Utilisez désormais <a href='https://fac.irongs.com'>fac.irongs.com</a>.</p>",
-            status_code=410,
-            headers={"Cache-Control": "no-store"},
-        )
     if _is_pointer_host(host):
         return FileResponse(
             STATIC_DIR / "pointeur.html",
