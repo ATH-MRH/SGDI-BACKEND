@@ -527,6 +527,24 @@ def portal_rh_mobile() -> FileResponse:
     )
 
 
+@app.get("/pointeur-sw.js", include_in_schema=False)
+def pointeur_sw() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "pointeur-sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache, max-age=0"},
+    )
+
+
+@app.get("/pointeur-manifest.webmanifest", include_in_schema=False)
+def pointeur_manifest() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "pointeur-manifest.webmanifest",
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
+
+
 @app.get("/pointeur", include_in_schema=False, name="pointer_mobile")
 def pointer_mobile() -> FileResponse:
     return FileResponse(

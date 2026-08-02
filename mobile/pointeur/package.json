@@ -1,0 +1,21 @@
+{
+  "name": "pointeur-atlas-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Coquille Capacitor (Android/iOS) qui charge pointeur.irongs.com",
+  "scripts": {
+    "sync": "cap sync",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0"
+  }
+}

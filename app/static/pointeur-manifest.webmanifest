@@ -1,0 +1,26 @@
+{
+  "name": "Pointeur ATLAS",
+  "short_name": "Pointeur",
+  "description": "Pointage des agents par scan QR ou badge",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#edf3f8",
+  "theme_color": "#043970",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/static/sgdi-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/sgdi-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
