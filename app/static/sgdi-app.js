@@ -4478,6 +4478,36 @@ function sgdiModuleHostDefaultRoute(){
   return cfg.key==="admin"?"#/module-portal":"#/select-societe";
 }
 function sgdiModuleHostRequiresSociete(cfg){return !!cfg&&cfg.key!=="admin"}
+function facStandaloneNavItems(){return[
+  ["⌂","Tableau de bord","facturation/dashboard"],["♙","Clients","facturation/clients"],
+  ["▤","Devis","facturation/devis"],["▧","Factures","facturation/factures"],
+  ["✓","Paiements","facturation/paiements"],["↗","Avances","facturation/avances"],
+  ["↩","Avoirs","facturation/avoirs"],["◫","Caisse","facturation/caisse"],
+  ["◷","Balance âgée","facturation/balance"],["≡","Situation","facturation/situation"]
+]}
+function renderFacStandaloneNav(){
+  const nav=document.getElementById("sidebar-nav");if(!nav)return;
+  const path=(location.hash||"#/facturation/dashboard").slice(2);
+  nav.innerHTML=`<div class="fac-nav-title">Navigation Facturation</div>`+facStandaloneNavItems().map(([icon,label,route])=>`<button type="button" class="fac-nav-link ${sidebarRouteActive(path,route)?"active":""}" data-route="${route}" onclick="sidebarNavigate(event,'${route}')"><span class="fac-nav-icon">${icon}</span><span>${label}</span></button>`).join("");
+}
+function renderFacStandaloneShell(){
+  const app=document.getElementById("app");
+  const soc=session?.societe||"Société non sélectionnée";
+  const user=session?.nom||session?.username||"Utilisateur";
+  document.body.dataset.soc="";
+  app.innerHTML=`<div class="fac-standalone-shell">
+    <header class="fac-standalone-header no-print">
+      <div class="fac-brand"><div class="fac-brand-mark">FAC</div><div><h1>FACTURATION</h1><small>Gestion autonome des ventes et règlements</small></div></div>
+      <div class="fac-header-context"><strong>${escapeHTML(soc)}</strong><div class="fac-header-actions"><button type="button" onclick="changeSociete()" title="Changer de société"><span>⌂</span> Société</button><button type="button" onclick="logout()" title="Déconnexion"><span>⏻</span> Déconnexion</button></div></div>
+    </header>
+    <div class="fac-standalone-body">
+      <nav class="fac-nav no-print" id="sidebar-nav"></nav>
+      <main class="fac-main"><div class="fac-main-head"><h2>Espace Facturation</h2><span>${escapeHTML(user)} · Synchronisé avec le serveur</span></div><div id="view"></div></main>
+    </div>
+  </div>`;
+  renderFacStandaloneNav();
+  sgdiEnterViewMode(true);renderView();renderOverlayHost();sgdiSyncOverlayState();
+}
 function sgdiApplyModuleHostSession(redirect){
   const cfg=sgdiModuleHostConfig();
   if(!cfg||!session)return null;
@@ -5702,7 +5732,10 @@ function renderInternal(){
     if(hostOk===false){renderModuleHostAccessDenied(hostCfg);return}
     if(sgdiModuleHostRequiresSociete(hostCfg)&&!session.societe){renderModuleHostSocieteSelector(hostCfg);return}
     const hostPath=(location.hash||"").replace(/^#\/?/,"");
-    if(["","login","select-societe","societe-portal","dashboard","module-portal"].includes(hostPath)){renderModuleHostPortal(hostCfg);return}
+    if(["","login","select-societe","societe-portal","dashboard","module-portal"].includes(hostPath)){
+      if(hostCfg.skipPortal&&session.societe){location.hash="#/"+hostCfg.homeRoute;return}
+      renderModuleHostPortal(hostCfg);return
+    }
   }
   if(!session.societe && !session.transverse){renderSocieteSelector();return}
   if(session.societe&&!session.transverse&&["societe-portal","dashboard"].includes((location.hash||"").slice(2)||"dashboard")){
@@ -5729,6 +5762,9 @@ function renderInternal(){
     };
     const allowed=allowedByMod[session.transverse]||[session.transverse];
     if(!allowed.includes(root)){const target=session.transverse==="materiel"?"materiel/dashboard":session.transverse==="pointage"?"pointage":session.transverse==="ops"?"ops/dashboard":session.transverse==="superviseur"?"superviseur/dashboard":session.transverse==="global"?"global-dashboard":session.transverse+"/dashboard";location.hash="#/"+target;return}
+  }
+  if(window.__FAC_AUTONOMOUS_APP__&&session.transverse==="facmod"){
+    renderFacStandaloneShell();return;
   }
   const app=document.getElementById("app");
   const socColors={};
@@ -6208,6 +6244,7 @@ function adminCounterOrganizerDefaults(){
 
 function sidebarRouteActive(path,route){return path===route||path.startsWith(route+"/")}
 function renderSidebar(){
+  if(window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod"){renderFacStandaloneNav();return}
   // Applique le thème de société sur <body data-soc="..."> pour le CSS sidebar
   const _themeSoc=session?.societe||(typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"");
   document.body.dataset.soc=/s[eé]curit/i.test(_themeSoc||"")?"igs":"";
@@ -25513,6 +25550,7 @@ const STATUTS_FACTURE=["emise","partielle","payee","echue","annulee"];
 const ETAPES_OPP=["nouveau","qualification","proposition","negociation","gagnee","perdue"];
 const STATUTS_PROSPECT=["nouveau","contacte","interesse","rdv_planifie","rdv_realise","converti","perdu"];
 function factTabs(active){
+  if(window.__FAC_AUTONOMOUS_APP__)return "";
   const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["devis","Devis","facturation/devis"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
   return '<nav style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e2e8f0;overflow-x:auto">'+tabs.map(([k,l,r])=>{const on=active===k;return'<a href="#/'+r+'" style="display:inline-block;padding:9px 14px;font-size:11px;font-weight:700;white-space:nowrap;text-decoration:none;border-bottom:2px solid '+(on?"#0f2d5a":"transparent")+';color:'+(on?"#0f2d5a":"#64748b")+';margin-bottom:-2px;'+(on?"background:#f8fafc;":"")+'">'+(l)+'</a>';}).join("")+"</nav>";
 }
