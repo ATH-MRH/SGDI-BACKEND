@@ -6009,8 +6009,9 @@ function renderSocieteSelector(){
   stripCryptogrammes(document.getElementById("app"));
 }
 function nextDevisNum(){const n=(db.devis||[]).length+1;const y=new Date().getFullYear();return"DEV-"+y+"-"+String(n).padStart(4,"0")}
-function nextFactureNum(){const list=db.factures||[];const seq=list.length+1;const d=new Date();const mm=String(d.getMonth()+1).padStart(2,"0");const yy=String(d.getFullYear()).slice(2);return"FAC"+String(seq).padStart(4,"0")+"/"+mm+"/"+yy;}
+function nextFactureNum(){const list=(db.factures||[]).filter(f=>f.statut!=="brouillon"&&f.numero&&f.numero!=="BROUILLON");const seq=list.reduce((m,f)=>Math.max(m,parseInt(String(f.numero).match(/^FAC(\d+)/)?.[1])||0),0)+1;const d=new Date();const mm=String(d.getMonth()+1).padStart(2,"0");const yy=String(d.getFullYear()).slice(2);return"FAC"+String(seq).padStart(4,"0")+"/"+mm+"/"+yy;}
 function factStatutDisplay(f){
+  if(f.statut==="brouillon")return{label:"Brouillon",bg:"#e2e8f0",color:"#475569"};
   const sp=factureStatutPaye(f);const st=f.statut==="annulee"?"annulee":sp.statut;
   if(st==="payee"){const pays=(db.paiements||[]).filter(p=>p.factureId===f.id).sort((a,b)=>(b.date||"").localeCompare(a.date||""));const ld=pays[0]?.date;return{label:"Payé"+(ld?" le "+formatDateFR(ld):""),bg:"#22c55e",color:"#fff"};}
   if(st==="partielle")return{label:"Partiellement payé",bg:"#f97316",color:"#fff"};
@@ -25758,6 +25759,23 @@ function factureEditorCalcTotals(){
   const s=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=formatDZD(v);};
   s("fact-r-ht",totalHT);s("fact-r-tva",totalTVA);s("fact-r-ttc",ttc);
 }
+function factureComputeLinesTotals(lignes,tvaPct){
+  let totalHT=0;let sectionHT=0;
+  (lignes||[]).forEach(l=>{
+    const type=l.type||"article";
+    if(type==="article"){
+      const lt=Number(l.totalHT)||((Number(l.qte||l.quantite)||0)*(Number(l.prixUnitHT||l.prixUnitaire)||0));
+      totalHT+=lt;sectionHT+=lt;
+    }else if(type==="remise"){
+      const amt=sectionHT*(Number(l.remisePct)||0)/100;
+      l.totalHT=-amt;totalHT-=amt;sectionHT-=amt;
+    }else if(type==="soustotal"){
+      sectionHT=0;
+    }
+  });
+  const totalTVA=totalHT*(Number(tvaPct)||0)/100;
+  return{totalHT,totalTVA,totalTTC:totalHT+totalTVA};
+}
 function factureEditorLigneAdd(type){
   document.getElementById("fact-add-menu")?.remove();
   const tbody=document.getElementById("fact-lignes-body");if(!tbody)return;
@@ -25810,13 +25828,13 @@ function factureEditorLigneRemove(btn){
 }
 
 function factureCalcEcheance(){
-  const depot=document.getElementById("fact-dateDepot")?.value;
+  const dateFacture=document.getElementById("fact-date")?.value;
   const echeance=document.getElementById("fact-echeance")?.value||"";
   const echDate=document.getElementById("fact-echDate");
   if(!echDate)return;
   const jours=parseInt(echeance);
-  if(!depot||!jours){echDate.value="";return;}
-  const d=new Date(depot);d.setDate(d.getDate()+jours);
+  if(!dateFacture||!jours){echDate.value="";return;}
+  const d=new Date(dateFacture+"T12:00:00");d.setDate(d.getDate()+jours);
   echDate.value=d.toISOString().slice(0,10);
 }
 function factureEditorClientChange(sel){
@@ -25910,12 +25928,50 @@ function factureEditorRenderClientInfo(c){
     (ai?'<div>AI: '+escapeHTML(ai)+'</div>':"")+
     '</div>';
 }
-async function factureEditorSave(){
+let factureDraftTimer=null;
+function factureEditorMarkInvalid(el){
+  if(!el)return;
+  el.style.borderColor="#ef4444";el.style.background="#fff7f7";
+  el.addEventListener("input",()=>{el.style.borderColor="";el.style.background=""},{once:true});
+}
+function factureEditorValidate(){
+  const errors=[];
+  const client=document.getElementById("fact-clientId");
+  const objet=document.getElementById("fact-objet");
+  if(!client?.value){errors.push("Sélectionnez un client.");factureEditorMarkInvalid(client);}
+  if(!(objet?.value||"").trim()){errors.push("Renseignez l’objet de la facture.");factureEditorMarkInvalid(objet);}
+  const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
+  if(!rows.length)errors.push("Ajoutez au moins un article.");
+  rows.forEach((tr,i)=>{
+    const d=tr.querySelector(".fact-ligne-desig"),p=tr.querySelector(".fact-ligne-prix"),q=tr.querySelector(".fact-ligne-qte");
+    if(!(d?.value||"").trim()){errors.push("Article "+(i+1)+" : désignation obligatoire.");factureEditorMarkInvalid(d);}
+    if(parseFrNum(p?.value)<=0){errors.push("Article "+(i+1)+" : prix unitaire obligatoire.");factureEditorMarkInvalid(p);}
+    if((parseFloat(q?.value)||0)<=0){errors.push("Article "+(i+1)+" : quantité obligatoire.");factureEditorMarkInvalid(q);}
+  });
+  if(errors.length){toast(errors[0],"error");return false;}
+  return true;
+}
+function factureEditorScheduleDraft(){
+  const state=document.getElementById("fact-draft-state");if(state)state.textContent="Modifications en attente…";
+  clearTimeout(factureDraftTimer);
+  factureDraftTimer=setTimeout(()=>factureEditorSave({draft:true,silent:true}),1400);
+}
+async function factureEditorSave(options){
+  options=options||{};
   const gv=id=>document.getElementById(id)?.value||"";
-  const numero=gv("fact-numero"),date=gv("fact-date")||today();
+  const validate=options.validate===true;
+  if(validate&&!factureEditorValidate())return null;
+  if(validate&&!confirm("Valider et numéroter cette facture ? Après validation, elle sera considérée comme émise."))return null;
+  const date=gv("fact-date")||today();
   const dateEcheance=gv("fact-echDate")||"";
   const dateDepot=gv("fact-dateDepot")||"";
-  const statut=gv("fact-statut")||"emise";
+  const id=window.__factureEditId;
+  db.factures=db.factures||[];
+  let existing=db.factures.find(x=>x.id===id);
+  const wasValidated=existing&&existing.statut!=="brouillon";
+  if(options.draft&&wasValidated){const state=document.getElementById("fact-draft-state");if(state)state.textContent="Facture validée";return existing;}
+  const statut=validate?"emise":(existing?.statut||"brouillon");
+  const numero=validate&&(!existing?.numero||existing.numero==="BROUILLON")?nextFactureNum():(existing?.numero||gv("fact-numero")||"BROUILLON");
   const remarque=(gv("fact-remarque")||gv("fact-objet")||"").trim();
   const objet=(gv("fact-objet")||gv("fact-remarque")||"").trim();
   const modeReglement=gv("fact-mode")||"A terme";
@@ -25947,16 +26003,24 @@ async function factureEditorSave(){
       if(designation||prixUnitHT)lignes.push({id:uid("fl"),type:"article",designation,unite,qte,prixUnitHT,prixUnitaire:prixUnitHT,quantite:qte,tva:tvaPct,totalHT});
     }
   });
-  const montantHT=lignes.reduce((s,l)=>s+(l.totalHT||0),0);
-  const tvaAmt=montantHT*tvaPct/100;
-  const montantTTC=montantHT+tvaAmt;
+  const totals=factureComputeLinesTotals(lignes,tvaPct);
+  const montantHT=totals.totalHT;
+  const tvaAmt=totals.totalTVA;
+  const montantTTC=totals.totalTTC;
   const echeance=gv("fact-echeance")||"";
-  db.factures=db.factures||[];
-  const id=window.__factureEditId;
-  let existing=db.factures.find(x=>x.id===id);
-  const data={id:existing?.id||uid("fc"),numero,date,dateDepot,dateEcheance,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
+  const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:validate?new Date().toISOString():(existing?.validatedAt||"")};
   if(existing){Object.assign(existing,data);}else{db.factures.push(data);window.__factureEditId=data.id;}
-  try{await sgdiApi("/api/irongs/collections/factures",{method:"PUT",body:{data:db.factures},legacy:false});toast("Facture "+numero+" enregistrée","success");renderView();}catch(e){toast("Erreur : "+(e.message||e),"error");}
+  try{
+    await sgdiApi("/api/irongs/collections/factures",{method:"PUT",body:{data:db.factures},legacy:false});
+    const state=document.getElementById("fact-draft-state");if(state)state.textContent=validate?"Facture validée":"Brouillon enregistré";
+    if(!options.silent)toast(validate?"Facture "+numero+" validée et numérotée":"Brouillon enregistré","success");
+    if(validate)renderView();
+    return data;
+  }catch(e){
+    const state=document.getElementById("fact-draft-state");if(state)state.textContent="Échec de sauvegarde";
+    if(!options.silent)toast("Erreur : "+(e.message||e),"error");
+    return null;
+  }
 }
 function factureVoirApercu(fId){
   const id=fId||window.__factureEditId;
@@ -25974,17 +26038,24 @@ function factureVoirApercu(fId){
   const afficherDate=document.getElementById("fact-afficherDate")?.checked!==false;
   const lignes=[];
   document.querySelectorAll(".fact-ligne-row").forEach(tr=>{
+    const type=tr.dataset.type||"article";
     const desig=(tr.querySelector(".fact-ligne-desig")?.value||"").trim();
-    const prix=parseFloat(tr.querySelector(".fact-ligne-prix")?.value)||0;
-    const qte=parseFloat(tr.querySelector(".fact-ligne-qte")?.value)||0;
-    const tva=parseFloat(tr.querySelector(".fact-ligne-tva")?.value)||0;
-    if(desig||prix)lignes.push({designation:desig,qte,prixUnitHT:prix,prixUnitaire:prix,quantite:qte,tva,totalHT:qte*prix});
+    if(type==="remise")lignes.push({type,designation:desig||"Remise commerciale",remisePct:parseFloat(tr.querySelector(".fact-ligne-remise-pct")?.value)||0});
+    else if(type==="soustotal")lignes.push({type});
+    else if(type==="commentaire"){if(desig)lignes.push({type,designation:desig});}
+    else{
+      const prix=parseFrNum(tr.querySelector(".fact-ligne-prix")?.value);
+      const qte=parseFloat(tr.querySelector(".fact-ligne-qte")?.value)||0;
+      if(desig||prix)lignes.push({type:"article",designation:desig,unite:tr.querySelector(".fact-ligne-unite")?.value||"",qte,prixUnitHT:prix,prixUnitaire:prix,quantite:qte,totalHT:qte*prix});
+    }
   });
   const useLines=lignes.length?lignes:(f?.lignes||[]);
   if(!useLines.length&&(f?.designation||f?.prixUnitaire)){useLines.push({designation:f.designation||"",qte:f.quantite||1,prixUnitHT:f.prixUnitaire||0,prixUnitaire:f.prixUnitaire||0,tva:f.tva||19,totalHT:(f.quantite||1)*(f.prixUnitaire||0)});}
-  const totalHT=useLines.reduce((s,l)=>s+(l.totalHT||0),0);
-  const totalTVA=useLines.reduce((s,l)=>s+((l.totalHT||0)*(l.tva||0)/100),0);
-  const totalTTC=totalHT+totalTVA;
+  const tvaPct=parseFloat(document.getElementById("fact-tva-global")?.value)||19;
+  const previewTotals=factureComputeLinesTotals(useLines,tvaPct);
+  const totalHT=previewTotals.totalHT;
+  const totalTVA=previewTotals.totalTVA;
+  const totalTTC=previewTotals.totalTTC;
   const DZD=v=>(v||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" DZD";
   const fmtD=v=>v?(()=>{try{return new Date(v).toLocaleDateString("fr-FR");}catch(e){return v;}})():"";
   const soc=mySoc();
@@ -26002,12 +26073,12 @@ function factureVoirApercu(fId){
   const stampColor=isLate?"#f97316":"#ef4444";
   const tdC="padding:7px 10px;border-bottom:1px solid #e5e7eb";
   const thC="padding:8px 10px;background:#4b5563;color:#fff;font-size:11px;font-weight:700;text-align:left";
-  const lignesRows=useLines.map((l,i)=>
+  const lignesRows=useLines.filter(l=>(l.type||"article")!=="soustotal").map((l,i)=>
     '<tr style="background:'+(i%2===0?"#fff":"#f9fafb")+';border-bottom:1px solid #e5e7eb">'+
-    '<td style="'+tdC+';font-size:12px">'+escapeHTML(l.designation||"")+'</td>'+
+    '<td style="'+tdC+';font-size:12px">'+escapeHTML(l.designation||"")+(l.type==="remise"?' ('+escapeHTML(String(l.remisePct||0))+' %)':'')+'</td>'+
     '<td style="'+tdC+';text-align:center;font-size:12px;color:#6b7280">'+escapeHTML(l.unite||"")+'</td>'+
-    '<td style="'+tdC+';text-align:right;font-size:12px;font-family:monospace">'+DZD(l.prixUnitHT||l.prixUnitaire||0)+'</td>'+
-    '<td style="'+tdC+';text-align:center;font-size:12px">'+escapeHTML(String(l.qte||l.quantite||0))+'</td>'+
+    '<td style="'+tdC+';text-align:right;font-size:12px;font-family:monospace">'+(l.type==="remise"?'—':DZD(l.prixUnitHT||l.prixUnitaire||0))+'</td>'+
+    '<td style="'+tdC+';text-align:center;font-size:12px">'+(l.type==="remise"?'—':escapeHTML(String(l.qte||l.quantite||0)))+'</td>'+
     '<td style="'+tdC+';text-align:right;font-weight:700;font-size:12px;font-family:monospace">'+DZD(l.totalHT||0)+'</td>'+
     '</tr>'
   ).join("");
@@ -26078,7 +26149,7 @@ function factureVoirApercu(fId){
 function renderFactureEditor(view){
   const id=window.__factureEditId;const isNew=!id||id==="new";
   let f=isNew?null:(db.factures||[]).find(x=>x.id===id);
-  if(!f){const nid=uid("fc");f={id:nid,numero:nextFactureNum(),date:today(),societe:mySoc()||"",dateEcheance:"",statut:"emise",clientId:"",clientNom:"",client:"",adresseClient:"",nif:"",rc:"",email:"",remarque:"",objet:"",lignes:[],montantHT:0,tvaAmt:0,montantTTC:0,ttc:0,modeReglement:"A terme",afficherDate:true,texteSupp:"",createdAt:new Date().toISOString()};if(isNew)window.__factureEditId=f.id;}
+  if(!f){const nid=uid("fc");f={id:nid,numero:"BROUILLON",date:today(),societe:mySoc()||"",dateEcheance:"",statut:"brouillon",clientId:"",clientNom:"",client:"",adresseClient:"",nif:"",rc:"",email:"",remarque:"",objet:"",lignes:[],montantHT:0,tvaAmt:0,montantTTC:0,ttc:0,modeReglement:"A terme",afficherDate:true,texteSupp:"",createdAt:new Date().toISOString()};if(isNew)window.__factureEditId=f.id;}
   let lignes=f.lignes&&f.lignes.length?f.lignes:[];
   if(!lignes.length&&(f.designation||f.prixUnitaire)){const pu=f.prixUnitaire||0,q=f.quantite||1;lignes=[{id:uid("fl"),designation:f.designation||f.objet||"",qte:q,prixUnitHT:pu,prixUnitaire:pu,quantite:q,tva:f.tva||19,totalHT:q*pu}];}
   const sp=isNew?{paye:0,avoir:0,reste:0,statut:"emise"}:factureStatutPaye(f);
@@ -26108,6 +26179,9 @@ function renderFactureEditor(view){
     (isNew?"":' <span style="margin-left:6px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:'+sd.bg+';color:'+sd.color+'">'+escapeHTML(sd.label)+'</span>')+
     '</div>'+
     factTabs("factures")+
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px">'+
+    ['1 · Client','2 · Articles et calculs','3 · Aperçu et validation'].map((x,i)=>'<div style="padding:7px 10px;border-radius:6px;background:'+(i===2?'#ecfdf5':'#eff6ff')+';color:'+(i===2?'#047857':'#1d4ed8')+';font-size:11px;font-weight:800;text-align:center;border:1px solid '+(i===2?'#a7f3d0':'#bfdbfe')+'">'+x+'</div>').join('')+
+    '</div><div id="fact-draft-state" style="font-size:10px;color:#64748b;text-align:right;padding-top:4px">'+(f.statut==='brouillon'?'Brouillon sauvegardé automatiquement':'Facture validée')+'</div>'+
     '</div>'+
     // MAIN LAYOUT
     '<div class="rh-op-layout" style="align-items:start">'+
@@ -26192,8 +26266,8 @@ function renderFactureEditor(view){
     '<div>'+
     '<fieldset class="rh-op-box" style="position:sticky;top:10px">'+
     '<legend>Informations</legend>'+
-    fl('Référence','<input id="fact-numero" style="'+FI+';font-family:monospace;font-weight:700" value="'+escapeHTML(f.numero||"")+'">') +
-    fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'">') +
+    fl('Référence','<input id="fact-numero" readonly style="'+FI+';font-family:monospace;font-weight:700;background:#f8fafc" value="'+escapeHTML(f.numero||"BROUILLON")+'">') +
+    fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()">') +
     fl('Échéance',
       '<select id="fact-echeance" style="'+FI+'" onchange="factureCalcEcheance()">'+
       ['','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+( v||'— Sans —')+'</option>').join("")+
@@ -26209,14 +26283,18 @@ function renderFactureEditor(view){
     '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-top:1px solid #e2e8f0;margin-top:4px"><span style="font-weight:800;color:#0f172a">Reste dû</span><span style="font-weight:900;color:'+(sp.reste>0?"#f97316":"#059669")+'">'+money(sp.reste)+'</span></div>'+
     '</div>':"" )+
     '<div style="display:grid;gap:6px;margin-top:12px">'+
-    '<button onclick="factureVoirApercu()" style="background:#f8fafc;border:1.5px solid #bfdbfe;border-radius:5px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;color:#1d4ed8;width:100%">Voir</button>'+
-    '<button onclick="factureEditorSave()" style="background:#043970;color:#fff;border:none;border-radius:5px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Enregistrer</button>'+
+    '<button onclick="factureVoirApercu()" style="background:#f8fafc;border:1.5px solid #bfdbfe;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;color:#1d4ed8;width:100%">Aperçu PDF</button>'+
+    (f.statut==='brouillon'?'<button onclick="factureEditorSave({draft:true})" style="background:#fff;color:#043970;border:1.5px solid #043970;border-radius:5px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Enregistrer le brouillon</button><button onclick="factureEditorSave({validate:true})" style="background:#047857;color:#fff;border:none;border-radius:5px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;width:100%">Valider et numéroter</button>':'')+
     (!isNew&&sp.reste>0?'<button onclick="openPaiementModal(\''+f.id+'\')" style="background:#22c55e;color:#fff;border:none;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Encaisser</button>':"")+
     (!isNew?'<button onclick="openAvoirModal(\''+f.id+'\')" style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:5px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;color:#7c3aed;width:100%">Émettre un avoir</button>':"")+
     '</div>'+
     '</fieldset>'+
     '</div>'+
     '</div>';
+  if(f.statut==="brouillon"){
+    view.addEventListener("input",e=>{if(e.target.matches("input,select,textarea"))factureEditorScheduleDraft();});
+    view.addEventListener("change",e=>{if(e.target.matches("input,select,textarea"))factureEditorScheduleDraft();});
+  }
   setTimeout(()=>{
     factureEditorCalcTotals();
     document.querySelectorAll(".fact-ligne-desig").forEach(devisEditorAutoResize);
@@ -26244,7 +26322,7 @@ function renderFactureEditor(view){
 }
 
 function renderFactBalance(view){
-  const list=bySoc(db.factures||[]);
+  const list=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon");
   const byClient={};
   list.forEach(f=>{
     const client=f.client||f.clientNom||"—";
@@ -26296,7 +26374,7 @@ function renderFactBalance(view){
 
 function renderFactCompteClient(view,clientEnc){
   const clientNom=decodeURIComponent(clientEnc||"");
-  const factures=(db.factures||[]).filter(f=>(f.client||f.clientNom||"")===(clientNom)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const factures=(db.factures||[]).filter(f=>f.statut!=="brouillon"&&(f.client||f.clientNom||"")===(clientNom)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const paiements=(db.paiements||[]).filter(p=>factures.some(f=>f.id===p.factureId)).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   let totFact=0,totEnc=0;
   factures.forEach(f=>{totFact+=(f.ttc||f.montantTTC||0);const sp=factureStatutPaye(f);totEnc+=sp.paye;});
@@ -26349,7 +26427,7 @@ function renderFactCompteClient(view,clientEnc){
 }
 
 function renderFactDashboard(view){
-  const factures=bySoc(db.factures||[]);
+  const factures=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon");
   const paiements=db.paiements||[];const avoirs=db.avoirs||[];
   const factIds=new Set(factures.map(f=>f.id));
   const myPaiements=paiements.filter(p=>factIds.has(p.factureId));
@@ -26485,7 +26563,7 @@ async function confirmAvoir(factureId){
   closeModal();toast("Avoir "+num+" émis ("+money(m)+")","success");renderView();
 }
 function renderFactPaiements(view){
-  const factIds=new Set(bySoc(db.factures||[]).map(f=>f.id));
+  const factIds=new Set(bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon").map(f=>f.id));
   const list=(db.paiements||[]).filter(p=>factIds.has(p.factureId)).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const total=list.reduce((s,p)=>s+(p.montant||0),0);
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">💳 Paiements reçus</h1><p class="text-slate-500 text-sm">${list.length} paiements · Total ${money(total)}</p></div></div>
@@ -26525,7 +26603,7 @@ async function confirmAvance(){
 }
 async function deleteAvance(id){if(!confirm("Supprimer ?"))return;db.avances=db.avances.filter(a=>a.id!==id);if(!(await saveDBAndWaitToast("Suppression avance non confirmée")))return;renderView()}
 function renderFactAvoirs(view){
-  const factIds=new Set(bySoc(db.factures||[]).map(f=>f.id));
+  const factIds=new Set(bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon").map(f=>f.id));
   const list=(db.avoirs||[]).filter(a=>factIds.has(a.factureId)).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const total=list.reduce((s,a)=>s+(a.montant||0),0);
   view.innerHTML=`<div class="flex justify-between items-center mb-2"><div><h1 class="text-2xl font-bold">↩️ Avoirs</h1><p class="text-slate-500 text-sm">${list.length} avoirs · Total ${money(total)}</p></div></div>
@@ -26697,7 +26775,7 @@ function renderFactStock(view){
     </div>`;
 }
 function renderFactSituation(view){
-  const factures=bySoc(db.factures||[]);const factIds=new Set(factures.map(f=>f.id));const paiements=(db.paiements||[]).filter(p=>factIds.has(p.factureId));const avoirs=(db.avoirs||[]).filter(a=>factIds.has(a.factureId));
+  const factures=bySoc(db.factures||[]).filter(f=>f.statut!=="brouillon");const factIds=new Set(factures.map(f=>f.id));const paiements=(db.paiements||[]).filter(p=>factIds.has(p.factureId));const avoirs=(db.avoirs||[]).filter(a=>factIds.has(a.factureId));
   const clients={};factures.forEach(f=>{const k=f.client||"—";if(!clients[k])clients[k]={ttc:0,paye:0,avoir:0,reste:0,nb:0};clients[k].nb++;clients[k].ttc+=(f.ttc||0)});
   paiements.forEach(p=>{const f=factures.find(x=>x.id===p.factureId);if(!f)return;const k=f.client||"—";if(clients[k])clients[k].paye+=(p.montant||0)});
   avoirs.forEach(a=>{const f=factures.find(x=>x.id===a.factureId);if(!f)return;const k=f.client||"—";if(clients[k])clients[k].avoir+=(a.montant||0)});

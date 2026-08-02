@@ -6,7 +6,7 @@ const assert = require('node:assert');
 const { loadSgdiApp } = require('./load-app');
 
 const { loadError, T } = loadSgdiApp([
-  'clientMontantTTC', 'nextDevisNum', 'nextFactureNum', 'factureStatutPaye', 'setDb',
+  'clientMontantTTC', 'nextDevisNum', 'nextFactureNum', 'factureStatutPaye', 'factureComputeLinesTotals', 'setDb',
 ]);
 
 test('sgdi-app.js se charge et expose les calculs facturation', () => {
@@ -50,6 +50,26 @@ test('nextFactureNum : format FACNNNN/MM/AA', () => {
   const num = t.nextFactureNum();
   assert.match(num, /^FAC\d{4}\/\d{2}\/\d{2}$/);
   assert.ok(num.startsWith('FAC0001/'), num);
+});
+
+test('nextFactureNum : les brouillons ne consomment pas de numéro définitif', () => {
+  const t = T();
+  t.setDb({ factures: [
+    { id: 'draft', numero: 'BROUILLON', statut: 'brouillon' },
+    { id: 'issued', numero: 'FAC0004/07/26', statut: 'emise' },
+  ] });
+  assert.match(t.nextFactureNum(), /^FAC0005\/\d{2}\/\d{2}$/);
+});
+
+test('factureComputeLinesTotals : applique remise, TVA et TTC au montant sauvegardé', () => {
+  const t = T();
+  const totals = t.factureComputeLinesTotals([
+    { type: 'article', qte: 2, prixUnitHT: 1000, totalHT: 2000 },
+    { type: 'remise', remisePct: 10 },
+  ], 19);
+  assert.strictEqual(totals.totalHT, 1800);
+  assert.strictEqual(totals.totalTVA, 342);
+  assert.strictEqual(totals.totalTTC, 2142);
 });
 
 // ── Statut de paiement d'une facture (le cœur) ───────────────────────────────
