@@ -26126,7 +26126,8 @@ function factureVoirApercu(fId){
   const companyNIF=param.nif||"";
   const companyAI=param.ai||"";
   const companyNIS=param.nis||"";
-  const companyLogo=param.logo||(normalizeSocieteName(soc).includes("SECURITE")?"/static/iron-securite-logo.png":normalizeSocieteName(soc).includes("SOLUTION")?"/static/iron-solution-logo.png":"");
+  const normalizedInvoiceSociety=normalizeSocieteName(soc).toLowerCase();
+  const companyLogo=param.logo||(normalizedInvoiceSociety.includes("securite")?"/static/iron-securite-logo.png":normalizedInvoiceSociety.includes("solution")?"/static/iron-solution-logo.png":"");
   const sp=f?factureStatutPaye(f):{paye:0,avoir:0,reste:totalTTC,statut:"emise"};
   const isPaid=sp.statut==="payee";const isLate=sp.statut==="echue";
   const stampLabel=isLate?"EN RETARD":(!isPaid&&totalTTC>0?"NON PAYÉE":"");
@@ -26151,7 +26152,7 @@ function factureVoirApercu(fId){
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">'+
     '<div style="font-weight:800;font-size:14px;color:#0f2d5a">'+escapeHTML(numero)+'</div>'+
     '<div style="display:flex;gap:8px">'+
-    '<button onclick="window.print()" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">🖨 Imprimer / Enregistrer PDF</button>'+
+    '<button onclick="facturePrintApercu()" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">🖨 Imprimer / Enregistrer PDF</button>'+
     '<button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;line-height:1">✕</button>'+
     '</div></div>'+
     '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
@@ -26165,7 +26166,7 @@ function factureVoirApercu(fId){
     (companyAddr?'<div>'+escapeHTML(companyAddr)+'</div>':"")+
     '<div style="margin-top:3px">'+[companyRC&&("RC : "+companyRC),companyNIF&&("NIF : "+companyNIF),companyAI&&("AI : "+companyAI),companyNIS&&("NIS : "+companyNIS)].filter(Boolean).map(escapeHTML).join(" · ")+'</div>'+
     '</div>'+
-    '<div style="display:grid;grid-template-columns:1fr 58px;gap:9px;align-items:center;text-align:right"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="font-family:monospace;font-size:13px;font-weight:800;margin-top:5px">'+escapeHTML(numero)+'</div><div style="font-size:11px;color:#64748b;margin-top:4px">Émise le '+fmtD(date)+'</div>'+(dateEcheance?'<div style="font-size:11px;color:#64748b">Échéance : '+fmtD(dateEcheance)+'</div>':"")+'</div><div><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 58px;gap:9px;align-items:center;text-align:right"><div><div style="font-size:27px;font-weight:900;color:#043970;letter-spacing:2px">FACTURE</div><div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:800;margin-top:5px">'+escapeHTML(numero)+'</div><div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#64748b;margin-top:4px">Émise le '+fmtD(date)+'</div>'+(dateEcheance?'<div style="font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#64748b">Échéance : '+fmtD(dateEcheance)+'</div>':"")+'</div><div><div id="fact-verification-qr" style="width:58px;height:58px;padding:3px;border:1px solid #dbe3ef;background:#fff"></div><div style="font-size:7px;color:#64748b;text-align:center;margin-top:2px">SCAN FACTURE</div></div></div>'+
     '</div>'+
     // Destinataire + info
     '<div style="display:grid;grid-template-columns:1fr 240px;gap:18px;margin-bottom:18px">'+
@@ -26177,10 +26178,10 @@ function factureVoirApercu(fId){
     (nif?'<div>NIF# '+escapeHTML(nif)+'</div>':"")+
     '</div>'+
     '<table style="border-collapse:collapse;font-size:11px;align-self:start;border:1px solid #dbe3ef;border-radius:6px;overflow:hidden">'+
-    (afficherDate?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb">Date :</td><td style="padding:5px 10px;font-weight:700;border-bottom:1px solid #e5e7eb">'+fmtD(date)+'</td></tr>':"")+
-    '<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb">Numéro :</td><td style="padding:5px 10px;font-weight:700;font-family:monospace;border-bottom:1px solid #e5e7eb">'+escapeHTML(numero)+'</td></tr>'+
-    (dateEcheance?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb">Échéance :</td><td style="padding:5px 10px;font-weight:700;border-bottom:1px solid #e5e7eb">'+fmtD(dateEcheance)+'</td></tr>':"")+
-    (remarque?'<tr><td style="padding:5px 10px;color:#6b7280" colspan="2">Remarque :<br><span style="font-weight:600;color:#111827">'+escapeHTML(remarque)+'</span></td></tr>':"")+
+    (afficherDate?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Date :</td><td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;font:700 10px Arial,Helvetica,sans-serif">'+fmtD(date)+'</td></tr>':"")+
+    '<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Numéro :</td><td style="padding:5px 10px;font:700 10px Arial,Helvetica,sans-serif;border-bottom:1px solid #e5e7eb">'+escapeHTML(numero)+'</td></tr>'+
+    (dateEcheance?'<tr><td style="padding:5px 10px;color:#6b7280;border-bottom:1px solid #e5e7eb;font:10px Arial,Helvetica,sans-serif">Échéance :</td><td style="padding:5px 10px;border-bottom:1px solid #e5e7eb;font:700 10px Arial,Helvetica,sans-serif">'+fmtD(dateEcheance)+'</td></tr>':"")+
+    (remarque?'<tr><td style="padding:5px 10px;color:#6b7280;font:10px Arial,Helvetica,sans-serif" colspan="2">Objet :<br><span style="font:700 10px Arial,Helvetica,sans-serif;color:#111827">'+escapeHTML(remarque)+'</span></td></tr>':"")+
     '</table></div>'+
     // Articles table
     '<table style="width:100%;border-collapse:collapse;margin-bottom:0;border:1px solid #dbe3ef">'+
@@ -26210,6 +26211,16 @@ function factureVoirApercu(fId){
     const target=document.getElementById("fact-verification-qr");if(!target||!window.QRCode)return;
     target.innerHTML="";new QRCode(target,{text:qrPayload,width:50,height:50,colorDark:"#043970",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   }).catch(e=>console.warn("QR facture indisponible",e));
+}
+function facturePrintApercu(){
+  const source=document.getElementById("fact-print-area");if(!source){toast("Aperçu introuvable","error");return}
+  const printable=source.cloneNode(true);
+  const sourceCanvases=source.querySelectorAll("canvas"),printCanvases=printable.querySelectorAll("canvas");
+  printCanvases.forEach((canvas,i)=>{try{const img=document.createElement("img");img.src=sourceCanvases[i].toDataURL("image/png");img.width=sourceCanvases[i].width;img.height=sourceCanvases[i].height;canvas.replaceWith(img)}catch(e){}});
+  const popup=window.open("","_blank","width=980,height=900");if(!popup){toast("Autorisez les fenêtres contextuelles pour imprimer","error");return}
+  popup.document.open();popup.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><base href="'+escapeHTML(location.origin)+'/"><title>Facture — IRON GROUP</title><style>@page{size:A4 portrait;margin:9mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}.fact-pdf-sheet{width:192mm!important;min-height:279mm!important;margin:0 auto!important;padding:8mm 9mm 7mm!important;box-shadow:none!important;border:0!important}img,canvas{max-width:100%}button{display:none!important}</style></head><body>'+printable.innerHTML+'</body></html>');popup.document.close();
+  const printWhenReady=()=>{const images=Array.from(popup.document.images);Promise.all(images.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=img.onerror=resolve}))).then(()=>setTimeout(()=>{popup.focus();popup.print()},250))};
+  if(popup.document.readyState==="complete")printWhenReady();else popup.onload=printWhenReady;
 }
 
 function renderFactureEditor(view){
