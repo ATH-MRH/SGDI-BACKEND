@@ -6767,7 +6767,11 @@ document.addEventListener("change",sgdiNoteFormInput,{passive:true});
 function navigate(r){
   if(sgdiFormHasUnsavedChanges&&!sgdiViewModeActive){_sgdiNavGuardShow(r);return}
   sgdiFormHasUnsavedChanges=false;
-  sgdiEnterViewMode(true);
+  // Le portail Facturation autonome gère lui-même le verrouillage par statut :
+  // brouillon modifiable, facture validée en lecture seule.
+  if(window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod"){
+    sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");
+  }else sgdiEnterViewMode(true);
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
   try{
     sgdiMarkUserNavigation();
@@ -7635,7 +7639,7 @@ function renderView(){
     setTimeout(()=>{applyLanguagePreference(view);sgdiScrubInvalidCandidateFunctionArtifacts(view)},0);
   });
 }
-window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;sgdiEnterViewMode(true);render()});
+window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;if(window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod"){sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");}else sgdiEnterViewMode(true);render()});
 window.addEventListener("popstate",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;
@@ -26203,6 +26207,9 @@ function factureVoirApercu(fId){
 }
 
 function renderFactureEditor(view){
+  // Ne jamais hériter du verrou global ATLAS dans fac.irongs.com. Le statut de la
+  // facture est le seul arbitre de l'édition dans ce module autonome.
+  if(window.__FAC_AUTONOMOUS_APP__){sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");}
   const id=window.__factureEditId;const isNew=!id||id==="new";
   let f=isNew?null:(db.factures||[]).find(x=>x.id===id);
   if(!f){const nid=uid("fc");f={id:nid,numero:"BROUILLON",date:today(),societe:mySoc()||"",dateEcheance:"",statut:"brouillon",clientId:"",clientNom:"",client:"",adresseClient:"",nif:"",rc:"",email:"",remarque:"",objet:"",lignes:[],montantHT:0,tvaAmt:0,montantTTC:0,ttc:0,modeReglement:"A terme",afficherDate:true,texteSupp:"",createdAt:new Date().toISOString()};if(isNew)window.__factureEditId=f.id;}
@@ -26221,7 +26228,7 @@ function renderFactureEditor(view){
   const LB="display:block;font-size:11px;color:#6b7280;margin-bottom:4px";
   const INP="border:1px solid #e5e7eb;border-radius:5px;padding:8px 10px;font-size:13px;width:100%;box-sizing:border-box;outline:none;background:#fff";
   const sd=factStatutDisplay(f);
-  const isDraft=f.statut==="brouillon";
+  const isDraft=!f.statut||String(f.statut).toLowerCase()==="brouillon";
   const FL='display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px;align-items:center;margin-bottom:7px';
   const FS='font-size:11px;color:#334155;font-weight:900;line-height:1.15';
   const FI='height:25px;min-height:25px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;width:100%;box-sizing:border-box;outline:none;background:#fff;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)';
@@ -26237,7 +26244,7 @@ function renderFactureEditor(view){
     factTabs("factures")+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px">'+
     ['1 · Client','2 · Articles et calculs','3 · Aperçu et validation'].map((x,i)=>'<div id="'+['fact-step-client','fact-step-lines','fact-step-validation'][i]+'" style="padding:7px 10px;border-radius:6px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:800;text-align:center;border:1px solid #bfdbfe">'+x+'</div>').join('')+
-    '</div><div id="fact-draft-state" style="font-size:10px;color:#64748b;text-align:right;padding-top:4px">'+(f.statut==='brouillon'?'Brouillon sauvegardé automatiquement':'Facture validée')+'</div>'+
+    '</div><div id="fact-draft-state" style="font-size:10px;color:#64748b;text-align:right;padding-top:4px">'+(isDraft?'Brouillon sauvegardé automatiquement':'Facture validée')+'</div>'+
     '</div>'+
     // MAIN LAYOUT
     '<div class="rh-op-layout" style="align-items:start">'+
@@ -26347,7 +26354,7 @@ function renderFactureEditor(view){
     '</fieldset>'+
     '</div>'+
     '</div>';
-  if(f.statut==="brouillon"){
+  if(isDraft){
     view.addEventListener("input",e=>{if(e.target.matches("input,select,textarea")){factureEditorUpdateWorkflow();factureEditorScheduleDraft();}});
     view.addEventListener("change",e=>{if(e.target.matches("input,select,textarea")){factureEditorUpdateWorkflow();factureEditorScheduleDraft();}});
   }else{
