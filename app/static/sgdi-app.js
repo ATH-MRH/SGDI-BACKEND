@@ -25876,6 +25876,28 @@ function factureEditorClientChange(sel){
   }
   factureEditorRenderClientInfo(c);
 }
+function factureEditorClientSearch(input){
+  const results=document.getElementById("fact-client-results");
+  const hidden=document.getElementById("fact-clientId");
+  if(!results||!hidden)return;
+  const selectedName=document.getElementById("fact-clientNom")?.value||"";
+  if(input.value.trim()!==selectedName.trim())hidden.value="";
+  const q=normalizedSearchText(input.value);
+  const clients=(db.clients||[]).filter(c=>(!mySoc()||c.societe===mySoc())&&(!q||normalizedSearchText([c.nom,c.rc,c.nif,c.email].join(" ")).includes(q))).slice(0,12);
+  results.innerHTML=clients.length?clients.map(c=>
+    '<button type="button" onmousedown="event.preventDefault();factureEditorChooseClient(\''+jsString(c.id)+'\')" style="display:block;width:100%;padding:9px 12px;border:0;border-bottom:1px solid #f1f5f9;background:#fff;text-align:left;cursor:pointer">'+
+    '<span style="display:block;font-size:12px;font-weight:800;color:#0f172a">'+escapeHTML(c.nom||"Client sans nom")+'</span>'+
+    '<span style="display:block;font-size:10px;color:#64748b;margin-top:2px">'+escapeHTML([c.rc&&("RC "+c.rc),c.nif&&("NIF "+c.nif)].filter(Boolean).join(" · ")||"Cliquer pour sélectionner")+'</span></button>'
+  ).join(""):'<div style="padding:12px;color:#94a3b8;font-size:12px">Aucun client trouvé</div>';
+  results.style.display="block";
+}
+function factureEditorChooseClient(id){
+  const c=(db.clients||[]).find(x=>String(x.id)===String(id));if(!c)return;
+  const hidden=document.getElementById("fact-clientId"),search=document.getElementById("fact-client-search"),results=document.getElementById("fact-client-results");
+  if(hidden)hidden.value=c.id;if(search){search.value=c.nom||"";search.style.borderColor="";search.style.background="";}if(results)results.style.display="none";
+  factureEditorClientChange({value:c.id});factureEditorScheduleDraft();
+}
+function factureEditorClientSearchClose(){setTimeout(()=>{const r=document.getElementById("fact-client-results");if(r)r.style.display="none";},150);}
 function factureEditorSelectSite(btn){
   const nom=btn.dataset.nom||"";
   const isSelected=btn.dataset.selected==="1";
@@ -25937,8 +25959,9 @@ function factureEditorMarkInvalid(el){
 function factureEditorValidate(){
   const errors=[];
   const client=document.getElementById("fact-clientId");
+  const clientSearch=document.getElementById("fact-client-search");
   const objet=document.getElementById("fact-objet");
-  if(!client?.value){errors.push("Sélectionnez un client.");factureEditorMarkInvalid(client);}
+  if(!client?.value){errors.push("Recherchez puis sélectionnez un client.");factureEditorMarkInvalid(clientSearch);}
   if(!(objet?.value||"").trim()){errors.push("Renseignez l’objet de la facture.");factureEditorMarkInvalid(objet);}
   const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
   if(!rows.length)errors.push("Ajoutez au moins un article.");
@@ -26156,7 +26179,6 @@ function renderFactureEditor(view){
   const paiements=(db.paiements||[]).filter(p=>p.factureId===f.id);
   const avoirs=(db.avoirs||[]).filter(a=>a.factureId===f.id);
   const clients=(db.clients||[]).filter(c=>!mySoc()||c.societe===mySoc());
-  const clientOpts='<option value="">Rechercher...</option>'+clients.map(c=>'<option value="'+escapeHTML(c.id)+'" '+((f.clientId===c.id||f.client===c.nom||f.clientNom===c.nom)?"selected":"")+'>'+escapeHTML(c.nom||"")+'</option>').join("");
   const selClient=clients.find(c=>c.id===f.clientId||c.nom===f.client||c.nom===f.clientNom);
   const modes=["A terme","Virement bancaire","Chèque","Espèces","Carte bancaire","Mixte"];
   const modeOpts=modes.map(m=>'<option '+(f.modeReglement===m?"selected":"")+'>'+escapeHTML(m)+'</option>').join("");
@@ -26190,8 +26212,8 @@ function renderFactureEditor(view){
     // Client fieldset
     '<fieldset class="rh-op-box" style="margin-bottom:10px">'+
     '<legend>Client</legend>'+
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
-    '<select id="fact-clientId" class="select" style="flex:1;height:28px!important;font-size:12px!important" onchange="factureEditorClientChange(this)">'+clientOpts+'</select>'+
+    '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">'+
+    '<div style="position:relative;flex:1"><input type="hidden" id="fact-clientId" value="'+escapeHTML(f.clientId||selClient?.id||"")+'"><input id="fact-client-search" class="input" autocomplete="off" value="'+escapeHTML(selClient?.nom||f.client||f.clientNom||"")+'" placeholder="Rechercher par nom, RC ou NIF…" onfocus="factureEditorClientSearch(this)" oninput="factureEditorClientSearch(this)" onblur="factureEditorClientSearchClose()" style="width:100%;height:34px!important;font-size:12px!important;padding-right:34px"><span style="position:absolute;right:11px;top:8px;color:#64748b;pointer-events:none">⌕</span><div id="fact-client-results" style="display:none;position:absolute;top:38px;left:0;right:0;z-index:80;max-height:280px;overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:7px;box-shadow:0 12px 30px rgba(15,23,42,.16)"></div></div>'+
     '<a onclick="factureEditorClose()" style="color:#f59e0b;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap">+ NOUVEAU CLIENT</a>'+
     '</div>'+
     '<input type="hidden" id="fact-clientNom" value="'+escapeHTML(f.client||f.clientNom||"")+'">'+
