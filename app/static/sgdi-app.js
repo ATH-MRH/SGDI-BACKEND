@@ -26132,15 +26132,15 @@ function factureVoirApercu(fId){
   const isPaid=sp.statut==="payee";const isLate=sp.statut==="echue";
   const stampLabel=isLate?"EN RETARD":(!isPaid&&totalTTC>0?"NON PAYÉE":"");
   const stampColor=isLate?"#f97316":"#ef4444";
-  const tdC="padding:7px 10px;border-bottom:1px solid #e5e7eb";
-  const thC="padding:8px 10px;background:#4b5563;color:#fff;font-size:11px;font-weight:700;text-align:left";
+  const tdC="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-family:Arial,Helvetica,sans-serif;font-size:10px";
+  const thC="padding:8px 10px;background:#4b5563;color:#fff;font-family:Arial,Helvetica,sans-serif;font-size:10px;font-weight:700;text-align:left";
   const lignesRows=useLines.filter(l=>(l.type||"article")!=="soustotal").map((l,i)=>
     '<tr style="background:'+(i%2===0?"#fff":"#f9fafb")+';border-bottom:1px solid #e5e7eb">'+
-    '<td style="'+tdC+';font-size:12px">'+escapeHTML(l.designation||"")+(l.type==="remise"?' ('+escapeHTML(String(l.remisePct||0))+' %)':'')+'</td>'+
-    '<td style="'+tdC+';text-align:center;font-size:12px;color:#6b7280">'+escapeHTML(l.unite||"")+'</td>'+
-    '<td style="'+tdC+';text-align:right;font-size:12px;font-family:monospace">'+(l.type==="remise"?'—':DZD(l.prixUnitHT||l.prixUnitaire||0))+'</td>'+
-    '<td style="'+tdC+';text-align:center;font-size:12px">'+(l.type==="remise"?'—':escapeHTML(String(l.qte||l.quantite||0)))+'</td>'+
-    '<td style="'+tdC+';text-align:right;font-weight:700;font-size:12px;font-family:monospace">'+DZD(l.totalHT||0)+'</td>'+
+    '<td style="'+tdC+'">'+escapeHTML(l.designation||"")+(l.type==="remise"?' ('+escapeHTML(String(l.remisePct||0))+' %)':'')+'</td>'+
+    '<td style="'+tdC+';text-align:center;color:#6b7280">'+escapeHTML(l.unite||"")+'</td>'+
+    '<td style="'+tdC+';text-align:right">'+(l.type==="remise"?'—':DZD(l.prixUnitHT||l.prixUnitaire||0))+'</td>'+
+    '<td style="'+tdC+';text-align:center">'+(l.type==="remise"?'—':escapeHTML(String(l.qte||l.quantite||0)))+'</td>'+
+    '<td style="'+tdC+';text-align:right;font-weight:700">'+DZD(l.totalHT||0)+'</td>'+
     '</tr>'
   ).join("");
   const montantEnLettres=typeof moneyToFrenchWords==="function"?moneyToFrenchWords(totalTTC):"";
@@ -26193,14 +26193,14 @@ function factureVoirApercu(fId){
     '<th style="'+thC+';text-align:right;width:140px">Montant</th>'+
     '</tr></thead><tbody>'+lignesRows+'</tbody>'+
     '<tfoot>'+
-    '<tr style="border-top:2px solid #e5e7eb"><td colspan="4" style="padding:7px 10px;text-align:right;font-weight:700;font-size:12px;color:#374151">Total HT</td><td style="padding:7px 10px;text-align:right;font-weight:700;font-size:12px;font-family:monospace">'+DZD(totalHT)+'</td></tr>'+
-    '<tr><td colspan="4" style="padding:7px 10px;text-align:right;font-size:12px;color:#374151">Total TVA</td><td style="padding:7px 10px;text-align:right;font-size:12px;font-family:monospace">'+DZD(totalTVA)+'</td></tr>'+
-    '<tr style="background:#043970"><td colspan="4" style="padding:12px;text-align:right;font-weight:900;font-size:14px;color:#fff">TOTAL TTC</td><td style="padding:12px;text-align:right;font-weight:900;font-size:16px;color:#fff!important;background:#043970;font-family:monospace;white-space:nowrap">'+DZD(totalTTC)+'</td></tr>'+
+    '<tr style="border-top:2px solid #e5e7eb"><td colspan="4" style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif;color:#374151">Total HT</td><td style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif">'+DZD(totalHT)+'</td></tr>'+
+    '<tr><td colspan="4" style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif;color:#374151">Total TVA</td><td style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif">'+DZD(totalTVA)+'</td></tr>'+
+    '<tr style="background:#043970"><td colspan="4" style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#fff">TOTAL TTC</td><td style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#fff!important;background:#043970;white-space:nowrap">'+DZD(totalTTC)+'</td></tr>'+
     '</tfoot></table>'+
     (montantEnLettres?
       '<div style="margin-top:14px;padding:10px 14px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc">'+
-      '<span style="font-size:11px;font-weight:900;color:#374151;letter-spacing:0.5px">ARRÊTÉE LA PRÉSENTE FACTURE À LA SOMME DE :</span><br>'+
-      '<span style="font-size:12px;font-style:italic;font-weight:700;color:#111827">'+escapeHTML(montantEnLettres.toUpperCase()+' DINARS ALGÉRIENS')+'</span>'+
+      '<span style="font:900 10px Arial,Helvetica,sans-serif;color:#374151;letter-spacing:0.3px">ARRÊTÉE LA PRÉSENTE FACTURE À LA SOMME DE :</span><br>'+
+      '<span style="font:italic 700 10px Arial,Helvetica,sans-serif;color:#111827;line-height:1.55">'+escapeHTML(montantEnLettres.toUpperCase()+' DINARS ALGÉRIENS')+'</span>'+
       '</div>':"")+
     (texteSupp?'<div style="margin-top:10px;padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;color:#6b7280">'+escapeHTML(texteSupp).replace(/\n/g,"<br>")+'</div>':"")+
     '<div style="display:grid;grid-template-columns:1fr 180px;gap:30px;margin-top:28px;align-items:end"><div style="font-size:9px;color:#64748b;line-height:1.55"><b style="color:#334155">Conditions de règlement</b><br>Mode : '+escapeHTML(f?.modeReglement||"À terme")+(dateEcheance?'<br>Échéance : '+fmtD(dateEcheance):"")+'</div><div style="height:80px;border-top:1px solid #94a3b8;text-align:center;padding-top:7px;font-size:11px;font-weight:800">Cachet et signature</div></div>'+
