@@ -4412,6 +4412,7 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
         {label:"CLIENTS",route:"facturation/clients"},
+        {label:"DEVIS",route:"facturation/devis"},
         {label:"FACTURES",route:"facturation/factures"},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES",route:"facturation/avances"},
@@ -4457,7 +4458,7 @@ function sgdiModuleHostConfig(){
   const host=String(location.hostname||"").toLowerCase();
   const configs=sgdiModuleHostConfigs();
   const first=host?host.split(".")[0]:"";
-  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",facturation:"facmod",sup:"superviseur",supervisor:"superviseur"};
+  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",facturation:"facmod",fac:"facmod",sup:"superviseur",supervisor:"superviseur"};
   const configKey=hostAliases[first]||first;
   // Domaine dédié (ex: drh.sgdi.com, facturation.sgdi.com)
   if(host&&first!=="localhost"&&host!=="127.0.0.1"&&host!=="0.0.0.0"&&host!=="::1"&&first!=="sgdi"&&first!=="www"&&first!=="atlas"){
@@ -7607,17 +7608,21 @@ setInterval(()=>{if(session&&sgdiPostgresReady)refreshDemandesPersonnelFromPostg
 
 /* ---- LOGIN ---- */
 function renderLogin(){
+  const hostCfg=sgdiModuleHostConfig();
+  const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.title||"ATLAS";
+  const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":"Suite de gestion intégrée";
+  try{document.title=hostCfg?.key==="facmod"?"FACTURATION — IRON GROUP":"ATLAS — Suite de gestion intégrée"}catch(_e){}
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page">
     <main class="sgdi-login-main">
       <section class="sgdi-login-visual" aria-label="Présentation ATLAS">
-        <div class="sgdi-login-brand"><span>ATLA</span><i>S</i></div>
-        <p class="sgdi-login-kicker">Suite de gestion intégrée</p>
+        <div class="sgdi-login-brand">${hostCfg?.key==="facmod"?`<span>FAC</span><i>.</i>`:`<span>ATLA</span><i>S</i>`}</div>
+        <p class="sgdi-login-kicker">${escapeHTML(dedicatedKicker)}</p>
       </section>
       <section class="sgdi-login-panel">
         <div class="sgdi-login-panel-head">
           <span class="sgdi-login-chip">Accès sécurisé</span>
           <h1>Connexion</h1>
-          <p>Connectez-vous à votre espace ATLAS.</p>
+          <p>Connectez-vous à votre espace ${escapeHTML(dedicatedTitle)}.</p>
         </div>
         <form id="login-form" class="sgdi-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
           <label class="sgdi-login-field">
@@ -25508,7 +25513,7 @@ const STATUTS_FACTURE=["emise","partielle","payee","echue","annulee"];
 const ETAPES_OPP=["nouveau","qualification","proposition","negociation","gagnee","perdue"];
 const STATUTS_PROSPECT=["nouveau","contacte","interesse","rdv_planifie","rdv_realise","converti","perdu"];
 function factTabs(active){
-  const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
+  const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["devis","Devis","facturation/devis"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
   return '<nav style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e2e8f0;overflow-x:auto">'+tabs.map(([k,l,r])=>{const on=active===k;return'<a href="#/'+r+'" style="display:inline-block;padding:9px 14px;font-size:11px;font-weight:700;white-space:nowrap;text-decoration:none;border-bottom:2px solid '+(on?"#0f2d5a":"transparent")+';color:'+(on?"#0f2d5a":"#64748b")+';margin-bottom:-2px;'+(on?"background:#f8fafc;":"")+'">'+(l)+'</a>';}).join("")+"</nav>";
 }
 function factureStatutPaye(f){const pa=(db.paiements||[]).filter(p=>p.factureId===f.id).reduce((s,p)=>s+(p.montant||0),0);const av=(db.avoirs||[]).filter(a=>a.factureId===f.id).reduce((s,a)=>s+(a.montant||0),0);const reste=Math.max(0,(f.ttc||0)-pa-av);let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}

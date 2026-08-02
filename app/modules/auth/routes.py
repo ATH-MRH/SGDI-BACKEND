@@ -33,6 +33,7 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "ops": (("OPS",), "OPS"),
     "materiel": (("MAT",), "MATERIEL/EQUIP"),
     "facturation": (("FAC", "FIN"), "FACTURATION"),
+    "fac": (("FAC", "FIN"), "FACTURATION"),
     "finances": (("FIN", "FAC"), "FINANCES/COMPTA"),
     "finance": (("FIN", "FAC"), "FINANCES/COMPTA"),
     "commercial": (("COM",), "COMMERCIAL"),
