@@ -13096,13 +13096,13 @@ function openEmployeeStatusActions(event,agentId,actionContext){
   const rect=btn.getBoundingClientRect();
   const menu=document.createElement("div");
   menu.id="employee-row-actions-menu";
-  menu.style.cssText="position:fixed;z-index:99999;min-width:280px;background:#fff;border:1px solid #dbe3ef;border-radius:8px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:6px";
+  menu.style.cssText="position:fixed;z-index:99999;width:min(310px,calc(100vw - 24px));min-width:0;max-width:310px;background:#fff;border:1px solid #dbe3ef;border-radius:12px;box-shadow:0 18px 45px rgba(15,23,42,.18);padding:8px;overflow-x:hidden";
   menu.innerHTML=`<div class="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">${isContractContext?"Action contrat":isOpsEffectifContext()?"Action OPS":"Action RH"}</div>`+labels.map(([k,l])=>{
     const disabled=k==="integrer"&&!canIntegrer;
     const extra=disabled?"opacity:.45;cursor:not-allowed;filter:grayscale(1);":"";
     const disabledMsg=k==="integrer"&&isSortant&&!canUserReactiverSortant()?"Réactivation SORTANT non autorisée — habilitation requise":"Intégration active uniquement pour un employé suspendu";
     const click=disabled?`onclick="event.preventDefault();toast('${disabledMsg}','warn')"`:`onclick="runRhEffectifAction('${k}','${escapeHTML(agentId)}')"`;
-    return `<button type="button" class="btn btn-ghost text-xs justify-start w-full" ${disabled?"aria-disabled=\"true\"":""} style="text-align:left;margin:2px 0;${rhEffectifActionStyle(k)};${extra}" ${click}>${l}</button>`;
+    return `<button type="button" class="btn btn-ghost text-xs justify-start" ${disabled?"aria-disabled=\"true\"":""} style="display:flex;width:100%;max-width:100%;text-align:left;margin:2px 0;${rhEffectifActionStyle(k)};${extra}" ${click}>${l}</button>`;
   }).join("");
   document.body.appendChild(menu);
   positionEmployeeActionsMenu(menu,rect,false);
