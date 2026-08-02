@@ -169,7 +169,9 @@ def test_recrute_route_serves_html(client):
     r = client.get("/recrute")
     assert r.status_code == 200
     assert "RECRUTEMENT" in r.text
-    assert 'id="ctSalary" type="number" min="1" step="1000" required' in r.text
+    assert 'id="ctSalary" type="text" inputmode="decimal"' in r.text
+    assert 'placeholder="30 000,00 DZD"' in r.text
+    assert "parseSalaryDzd" in r.text
     assert "validateContractRequiredFields" in r.text
     assert "/marquer-contractualisation" in r.text
 

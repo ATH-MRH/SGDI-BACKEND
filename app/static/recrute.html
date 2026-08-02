@@ -158,7 +158,7 @@ tr:last-child td{border-bottom:0}
             <div><label>Date de début</label><input id="ctStart" type="date" onchange="updateContractEndDate()" required></div>
             <div id="ctDurationWrap"><label>Durée du contrat</label><select id="ctDuration" onchange="updateContractEndDate()" required><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option><option value="36">36 mois</option></select></div>
             <div><label>Date de fin</label><input id="ctEnd" type="date" readonly style="background:#f8fafc"></div>
-            <div><label>Salaire net (DA/mois)</label><input id="ctSalary" type="number" min="1" step="1000" required></div>
+            <div><label>Salaire net (DZD/mois)</label><input id="ctSalary" type="text" inputmode="decimal" placeholder="30 000,00 DZD" onfocus="editSalaryDzd(this)" onblur="formatSalaryDzdField(this)" required></div>
             <div><label>N° CNAS</label><input id="ctCnas" maxlength="20" required></div>
             <div><label>Mode de paiement</label><select id="ctPaymentMode" required><option>Virement bancaire</option><option>Espèces</option><option>Chèque</option></select></div>
             <div><label>Banque</label><input id="ctBank"></div>
@@ -246,6 +246,23 @@ const tabState={
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function jsStr(value){return String(value).replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
 function today(){return new Date().toISOString().slice(0,10)}
+function parseSalaryDzd(value){
+  let text=String(value??"").toUpperCase().replace(/DZD/g,"").replace(/\s/g,"").trim();
+  if(!text)return 0;
+  if(text.includes(","))text=text.replace(/\./g,"").replace(",",".");
+  const amount=Number(text.replace(/[^0-9.-]/g,""));
+  return Number.isFinite(amount)?amount:0;
+}
+function formatSalaryDzd(value){
+  const amount=parseSalaryDzd(value);
+  return amount>0?amount.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" DZD":"";
+}
+function formatSalaryDzdField(field){if(field)field.value=formatSalaryDzd(field.value)}
+function editSalaryDzd(field){
+  if(!field)return;
+  const amount=parseSalaryDzd(field.value);
+  field.value=amount>0?String(amount).replace(".",","):"";
+}
 function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
 function showBanner(message,type){
   document.getElementById("banner").innerHTML=message?`<div class="banner ${type}">${message}</div>`:"";
@@ -561,7 +578,7 @@ function openContractForCandidate(id){
   document.getElementById("ctType").value=CONTRACT_TYPES.includes(savedType)?savedType:"CDD";
   document.getElementById("ctStart").value=today();
   document.getElementById("ctDuration").value="12";
-  document.getElementById("ctSalary").value=item.expected_salary||"";
+  document.getElementById("ctSalary").value=formatSalaryDzd(item.expected_salary||"");
   document.getElementById("ctCnas").value=data.numeroCnas||"";
   document.getElementById("ctPaymentMode").value=data.modePaiement||"Virement bancaire";
   document.getElementById("ctBank").value=data.banque||"";
@@ -596,7 +613,7 @@ function validateContractRequiredFields(){
   const missing=[];
   fields.forEach(([id,label])=>{
     const field=document.getElementById(id);
-    const empty=!String(field?.value||"").trim()||(id==="ctSalary"&&Number(field.value)<=0);
+    const empty=!String(field?.value||"").trim()||(id==="ctSalary"&&parseSalaryDzd(field.value)<=0);
     if(!empty)return;
     missing.push(label);
     field?.classList.add("field-invalid");field?.setAttribute("aria-invalid","true");
@@ -629,7 +646,7 @@ async function submitContractForm(){
     const sectionValidations={};
     CANDIDATE_SECTIONS.forEach(key=>{sectionValidations[key]=stamp});
     const salaryInput=document.getElementById("ctSalary").value;
-    const salary=salaryInput?Number(salaryInput):(contractCandidate.expected_salary||0);
+    const salary=salaryInput?parseSalaryDzd(salaryInput):(contractCandidate.expected_salary||0);
     await apiFetch(`/api/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
       desired_position:document.getElementById("ctPosition").value,
       expected_salary:salary,
@@ -704,7 +721,7 @@ function renderContractsList(){
       <td><span class="pill pill-indigo">${esc(contractTypeLabel(c.contract_type))}</span></td>
       <td style="font-size:11px;color:var(--muted)">${esc(c.start_date||"—")}</td>
       <td style="font-size:11px;color:var(--muted)">${esc(c.end_date||"Indéterminée")}</td>
-      <td>${c.salary_net?Number(c.salary_net).toLocaleString("fr-FR")+" DA":"—"}</td>
+      <td>${c.salary_net?formatSalaryDzd(c.salary_net):"—"}</td>
       <td><span class="pill ${c.status==="actif"?"pill-green":"pill-gray"}">${esc(c.status||"—")}</span></td>
     </tr>`;
   }).join("")}
