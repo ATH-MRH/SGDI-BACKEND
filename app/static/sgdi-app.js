@@ -26198,14 +26198,14 @@ function factureVoirApercu(fId){
     '<thead><tr>'+
     '<th style="'+thC+';min-width:200px">Désignation</th>'+
     '<th style="'+thC+';text-align:center;width:80px">Unité</th>'+
-    '<th style="'+thC+';text-align:right;width:130px">P.U.</th>'+
+    '<th style="'+thC+';text-align:right;width:130px">P.U./HT</th>'+
     '<th style="'+thC+';text-align:center;width:70px">Quantité</th>'+
     '<th style="'+thC+';text-align:right;width:140px">Montant</th>'+
     '</tr></thead><tbody>'+lignesRows+'</tbody>'+
     '<tfoot>'+
     '<tr style="border-top:2px solid #e5e7eb"><td colspan="4" style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif;color:#374151">Total HT</td><td style="padding:7px 10px;text-align:right;font:700 10px Arial,Helvetica,sans-serif">'+DZD(totalHT)+'</td></tr>'+
     '<tr><td colspan="4" style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif;color:#374151">Total TVA</td><td style="padding:7px 10px;text-align:right;font:10px Arial,Helvetica,sans-serif">'+DZD(totalTVA)+'</td></tr>'+
-    '<tr style="background:#043970"><td colspan="4" style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#fff">TOTAL TTC</td><td style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#fff!important;background:#043970;white-space:nowrap">'+DZD(totalTTC)+'</td></tr>'+
+    '<tr style="background:#e8f1fb;border-top:2px solid #043970;border-bottom:2px solid #043970"><td colspan="4" style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#043970!important">TOTAL TTC</td><td style="padding:10px;text-align:right;font:900 10px Arial,Helvetica,sans-serif;color:#043970!important;background:#e8f1fb;white-space:nowrap">'+DZD(totalTTC)+'</td></tr>'+
     '</tfoot></table>'+
     (montantEnLettres?
       '<div style="margin-top:14px;padding:10px 14px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc">'+
