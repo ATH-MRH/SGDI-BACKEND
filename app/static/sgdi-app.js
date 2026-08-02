@@ -25880,20 +25880,31 @@ function factureEditorClientChange(sel){
   }
   factureEditorRenderClientInfo(c);
 }
-function factureEditorClientSearch(input){
+let factureClientSearchTimer=null;
+function factureEditorRenderClientResults(clients){
   const results=document.getElementById("fact-client-results");
-  const hidden=document.getElementById("fact-clientId");
-  if(!results||!hidden)return;
-  const selectedName=document.getElementById("fact-clientNom")?.value||"";
-  if(input.value.trim()!==selectedName.trim())hidden.value="";
-  const q=normalizedSearchText(input.value);
-  const clients=(db.clients||[]).filter(c=>(!mySoc()||c.societe===mySoc())&&(!q||normalizedSearchText([c.nom,c.rc,c.nif,c.email].join(" ")).includes(q))).slice(0,12);
+  if(!results)return;
   results.innerHTML=clients.length?clients.map(c=>
     '<button type="button" onmousedown="event.preventDefault();factureEditorChooseClient(\''+jsString(c.id)+'\')" style="display:block;width:100%;padding:9px 12px;border:0;border-bottom:1px solid #f1f5f9;background:#fff;text-align:left;cursor:pointer">'+
     '<span style="display:block;font-size:12px;font-weight:800;color:#0f172a">'+escapeHTML(c.nom||"Client sans nom")+'</span>'+
     '<span style="display:block;font-size:10px;color:#64748b;margin-top:2px">'+escapeHTML([c.rc&&("RC "+c.rc),c.nif&&("NIF "+c.nif)].filter(Boolean).join(" · ")||"Cliquer pour sélectionner")+'</span></button>'
   ).join(""):'<div style="padding:12px;color:#94a3b8;font-size:12px">Aucun client trouvé</div>';
   results.style.display="block";
+}
+function factureEditorClientSearch(input){
+  const hidden=document.getElementById("fact-clientId");if(!hidden)return;
+  const selectedName=document.getElementById("fact-clientNom")?.value||"";
+  if(input.value.trim()!==selectedName.trim())hidden.value="";
+  const q=normalizedSearchText(input.value);
+  const clients=(db.clients||[]).filter(c=>(!mySoc()||c.societe===mySoc())&&(!q||normalizedSearchText([c.nom,c.rc,c.nif,c.email].join(" ")).includes(q))).slice(0,12);
+  factureEditorRenderClientResults(clients);
+  clearTimeout(factureClientSearchTimer);
+  factureClientSearchTimer=setTimeout(async()=>{try{
+    const response=await SGDI.commercial.clientsPage({society:mySoc()||undefined,q:input.value.trim()||undefined,page:1,page_size:20});
+    const remote=serverItems(response).map(clientFromApi);
+    remote.forEach(c=>sgdiUpsertServerItem("clients",c));
+    if(document.activeElement===input)factureEditorRenderClientResults(remote);
+  }catch(e){console.warn("Recherche client serveur indisponible",e)}},250);
 }
 function factureEditorChooseClient(id){
   const c=(db.clients||[]).find(x=>String(x.id)===String(id));if(!c)return;
@@ -25902,6 +25913,14 @@ function factureEditorChooseClient(id){
   factureEditorClientChange({value:c.id});factureEditorScheduleDraft();
 }
 function factureEditorClientSearchClose(){setTimeout(()=>{const r=document.getElementById("fact-client-results");if(r)r.style.display="none";},150);}
+function factureEditorNewClient(){
+  openModal('<h3 class="font-bold text-lg mb-3">Nouveau client</h3><form onsubmit="event.preventDefault();factureEditorCreateClient(this)"><div class="grid grid-2 gap-3"><div class="col-span-2"><label class="label">Nom / raison sociale *</label><input class="input" name="nom" required autofocus></div><div><label class="label">RC</label><input class="input" name="rc"></div><div><label class="label">NIF</label><input class="input" name="nif"></div><div><label class="label">Téléphone</label><input class="input" name="tel"></div><div><label class="label">E-mail</label><input class="input" type="email" name="email"></div><div class="col-span-2"><label class="label">Adresse</label><input class="input" name="adresse"></div></div><div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Créer et sélectionner</button></div></form>');
+}
+async function factureEditorCreateClient(form){
+  const fd=new FormData(form),c={nom:String(fd.get("nom")||"").trim(),societe:mySoc()||"",statut:"actif",rc:String(fd.get("rc")||"").trim(),nif:String(fd.get("nif")||"").trim(),tel:String(fd.get("tel")||"").trim(),email:String(fd.get("email")||"").trim(),adresse:String(fd.get("adresse")||"").trim()};
+  if(!c.nom){toast("Le nom du client est obligatoire","error");return}
+  try{const saved=clientFromApi(await SGDI.commercial.createClient(clientApiPayload(c)));sgdiUpsertServerItem("clients",saved);closeModal();factureEditorChooseClient(saved.id);toast("Client créé et sélectionné","success")}catch(e){toast("Création impossible : "+(e.message||e),"error")}
+}
 function factureEditorSelectSite(btn){
   const nom=btn.dataset.nom||"";
   const isSelected=btn.dataset.selected==="1";
@@ -25983,6 +26002,14 @@ function factureEditorScheduleDraft(){
   clearTimeout(factureDraftTimer);
   factureDraftTimer=setTimeout(()=>factureEditorSave({draft:true,silent:true}),1400);
 }
+function factureEditorUpdateWorkflow(){
+  const clientOk=!!document.getElementById("fact-clientId")?.value;
+  const rows=Array.from(document.querySelectorAll('.fact-ligne-row[data-type="article"]'));
+  const linesOk=rows.length>0&&rows.every(r=>(r.querySelector(".fact-ligne-desig")?.value||"").trim()&&parseFrNum(r.querySelector(".fact-ligne-prix")?.value)>0&&(parseFloat(r.querySelector(".fact-ligne-qte")?.value)||0)>0);
+  const objectOk=!!(document.getElementById("fact-objet")?.value||"").trim();
+  [["fact-step-client",clientOk],["fact-step-lines",linesOk],["fact-step-validation",clientOk&&linesOk&&objectOk]].forEach(([id,ok])=>{const e=document.getElementById(id);if(e){e.style.background=ok?"#ecfdf5":"#eff6ff";e.style.color=ok?"#047857":"#1d4ed8";e.style.borderColor=ok?"#a7f3d0":"#bfdbfe"}});
+  const b=document.getElementById("fact-validate-btn");if(b){b.disabled=!(clientOk&&linesOk&&objectOk);b.style.opacity=b.disabled?".45":"1";b.title=b.disabled?"Sélectionnez un client, renseignez l’objet et au moins un article complet":""}
+}
 async function factureEditorSave(options){
   options=options||{};
   const gv=id=>document.getElementById(id)?.value||"";
@@ -26036,10 +26063,12 @@ async function factureEditorSave(options){
   const montantTTC=totals.totalTTC;
   const echeance=gv("fact-echeance")||"";
   const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:validate?new Date().toISOString():(existing?.validatedAt||"")};
+  const creating=!existing;
   if(existing){Object.assign(existing,data);}else{db.factures.push(data);window.__factureEditId=data.id;}
   try{
-    await sgdiApi("/api/irongs/collections/factures",{method:"PUT",body:{data:db.factures},legacy:false});
-    const state=document.getElementById("fact-draft-state");if(state)state.textContent=validate?"Facture validée":"Brouillon enregistré";
+    const saved=await sgdiApi("/api/irongs/collections/factures/items"+(creating?"":"/"+encodeURIComponent(data.id)),{method:creating?"POST":"PUT",body:{data},legacy:false});
+    if(saved&&typeof saved==="object")Object.assign(data,saved);
+    const state=document.getElementById("fact-draft-state");if(state)state.textContent=validate?"Facture validée":"Enregistré à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
     if(!options.silent)toast(validate?"Facture "+numero+" validée et numérotée":"Brouillon enregistré","success");
     if(validate)renderView();
     return data;
@@ -26192,6 +26221,7 @@ function renderFactureEditor(view){
   const LB="display:block;font-size:11px;color:#6b7280;margin-bottom:4px";
   const INP="border:1px solid #e5e7eb;border-radius:5px;padding:8px 10px;font-size:13px;width:100%;box-sizing:border-box;outline:none;background:#fff";
   const sd=factStatutDisplay(f);
+  const isDraft=f.statut==="brouillon";
   const FL='display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px;align-items:center;margin-bottom:7px';
   const FS='font-size:11px;color:#334155;font-weight:900;line-height:1.15';
   const FI='height:25px;min-height:25px;padding:2px 8px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;width:100%;box-sizing:border-box;outline:none;background:#fff;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)';
@@ -26201,12 +26231,12 @@ function renderFactureEditor(view){
     '<div style="position:sticky;top:0;z-index:50;background:#f1f5f9;padding-bottom:2px;margin-bottom:10px">'+
     '<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#6b7280;padding:8px 0 4px">'+
     '<a onclick="factureEditorClose()" style="color:#f59e0b;font-weight:700;cursor:pointer;text-decoration:none">Factures</a>'+
-    '<span>/</span><span style="color:#111827;font-weight:700">'+(isNew?"Nouvelle facture":escapeHTML(f.numero||""))+'</span>'+
-    (isNew?"":' <span style="margin-left:6px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:'+sd.bg+';color:'+sd.color+'">'+escapeHTML(sd.label)+'</span>')+
+    '<span>/</span><span style="color:#111827;font-weight:700">'+(isDraft?"Brouillon":escapeHTML(f.numero||"Facture"))+'</span>'+
+    (!isDraft?' <span style="margin-left:6px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:'+sd.bg+';color:'+sd.color+'">'+escapeHTML(sd.label)+'</span>':"")+
     '</div>'+
     factTabs("factures")+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px">'+
-    ['1 · Client','2 · Articles et calculs','3 · Aperçu et validation'].map((x,i)=>'<div style="padding:7px 10px;border-radius:6px;background:'+(i===2?'#ecfdf5':'#eff6ff')+';color:'+(i===2?'#047857':'#1d4ed8')+';font-size:11px;font-weight:800;text-align:center;border:1px solid '+(i===2?'#a7f3d0':'#bfdbfe')+'">'+x+'</div>').join('')+
+    ['1 · Client','2 · Articles et calculs','3 · Aperçu et validation'].map((x,i)=>'<div id="'+['fact-step-client','fact-step-lines','fact-step-validation'][i]+'" style="padding:7px 10px;border-radius:6px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:800;text-align:center;border:1px solid #bfdbfe">'+x+'</div>').join('')+
     '</div><div id="fact-draft-state" style="font-size:10px;color:#64748b;text-align:right;padding-top:4px">'+(f.statut==='brouillon'?'Brouillon sauvegardé automatiquement':'Facture validée')+'</div>'+
     '</div>'+
     // MAIN LAYOUT
@@ -26218,7 +26248,7 @@ function renderFactureEditor(view){
     '<legend>Client</legend>'+
     '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px">'+
     '<div style="position:relative;flex:1"><input type="hidden" id="fact-clientId" value="'+escapeHTML(f.clientId||selClient?.id||"")+'"><input id="fact-client-search" class="input" autocomplete="off" value="'+escapeHTML(selClient?.nom||f.client||f.clientNom||"")+'" placeholder="Rechercher par nom, RC ou NIF…" onfocus="factureEditorClientSearch(this)" oninput="factureEditorClientSearch(this)" onblur="factureEditorClientSearchClose()" style="width:100%;height:34px!important;font-size:12px!important;padding-right:34px"><span style="position:absolute;right:11px;top:8px;color:#64748b;pointer-events:none">⌕</span><div id="fact-client-results" style="display:none;position:absolute;top:38px;left:0;right:0;z-index:80;max-height:280px;overflow:auto;background:#fff;border:1px solid #cbd5e1;border-radius:7px;box-shadow:0 12px 30px rgba(15,23,42,.16)"></div></div>'+
-    '<a onclick="factureEditorClose()" style="color:#f59e0b;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap">+ NOUVEAU CLIENT</a>'+
+    '<a onclick="factureEditorNewClient()" style="color:#f59e0b;font-weight:700;cursor:pointer;font-size:12px;white-space:nowrap">+ NOUVEAU CLIENT</a>'+
     '</div>'+
     '<input type="hidden" id="fact-clientNom" value="'+escapeHTML(f.client||f.clientNom||"")+'">'+
     '<input type="hidden" id="fact-adresse" value="'+escapeHTML(f.adresseClient||"")+'">'+
@@ -26294,35 +26324,39 @@ function renderFactureEditor(view){
     '<legend>Informations</legend>'+
     fl('Référence','<input id="fact-numero" readonly style="'+FI+';font-family:monospace;font-weight:700;background:#f8fafc" value="'+escapeHTML(f.numero||"BROUILLON")+'">') +
     fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()">') +
-    fl('Échéance',
+    fl('Délai paiement',
       '<select id="fact-echeance" style="'+FI+'" onchange="factureCalcEcheance()">'+
       ['','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+( v||'— Sans —')+'</option>').join("")+
       '</select>') +
     fl('Mode paiement','<select id="fact-mode" style="'+FI+'">'+modeOpts+'</select>') +
-    fl('Date dépôt','<input id="fact-dateDepot" type="date" style="'+FI+'" value="'+escapeHTML(f.dateDepot||"")+'" onchange="factureCalcEcheance()">') +
-    fl('Date limite','<input id="fact-echDate" type="date" style="'+FI+';background:#f9fafb;color:#6b7280" value="'+escapeHTML(f.dateEcheance||"")+'" readonly>') +
+    fl('Dépôt client','<input id="fact-dateDepot" type="date" style="'+FI+'" value="'+escapeHTML(f.dateDepot||"")+'">') +
+    fl('Date échéance','<input id="fact-echDate" type="date" style="'+FI+';background:#f9fafb;color:#6b7280" value="'+escapeHTML(f.dateEcheance||"")+'" readonly>') +
     '<div style="margin-top:6px"><span style="'+FS+'">Remarque</span><textarea id="fact-remarque" class="input" style="width:100%;resize:vertical;min-height:60px;font-size:11px;line-height:1.5;height:auto!important;margin-top:4px" placeholder="SERVICE DE GARDIENNAGE - Période: Mars 2026">'+escapeHTML(f.remarque||f.objet||"")+'</textarea></div>'+
-    (!isNew?
+    (!isDraft?
     '<div style="border-top:1px solid #bfdbfe;margin-top:10px;padding-top:8px">'+
     '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px"><span style="color:#6b7280;font-weight:700">Montant TTC</span><span style="font-weight:700;font-family:monospace">'+money(f.ttc||f.montantTTC||0)+'</span></div>'+
     '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px"><span style="color:#059669;font-weight:700">Encaissé</span><span style="font-weight:700;color:#059669;font-family:monospace">'+money(sp.paye)+'</span></div>'+
     '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;border-top:1px solid #e2e8f0;margin-top:4px"><span style="font-weight:800;color:#0f172a">Reste dû</span><span style="font-weight:900;color:'+(sp.reste>0?"#f97316":"#059669")+'">'+money(sp.reste)+'</span></div>'+
     '</div>':"" )+
     '<div style="display:grid;gap:6px;margin-top:12px">'+
-    '<button onclick="factureVoirApercu()" style="background:#f8fafc;border:1.5px solid #bfdbfe;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;color:#1d4ed8;width:100%">Aperçu PDF</button>'+
-    (f.statut==='brouillon'?'<button onclick="factureEditorSave({draft:true})" style="background:#fff;color:#043970;border:1.5px solid #043970;border-radius:5px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Enregistrer le brouillon</button><button onclick="factureEditorSave({validate:true})" style="background:#047857;color:#fff;border:none;border-radius:5px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;width:100%">Valider et numéroter</button>':'')+
-    (!isNew&&sp.reste>0?'<button onclick="openPaiementModal(\''+f.id+'\')" style="background:#22c55e;color:#fff;border:none;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Encaisser</button>':"")+
-    (!isNew?'<button onclick="openAvoirModal(\''+f.id+'\')" style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:5px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;color:#7c3aed;width:100%">Émettre un avoir</button>':"")+
+    '<button onclick="factureVoirApercu()" style="background:#f8fafc;border:1.5px solid #bfdbfe;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;color:#1d4ed8;width:100%">Aperçu et imprimer PDF</button>'+
+    (isDraft?'<button onclick="factureEditorSave({draft:true})" style="background:#fff;color:#043970;border:1.5px solid #043970;border-radius:5px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Enregistrer le brouillon</button><button id="fact-validate-btn" onclick="factureEditorSave({validate:true})" style="background:#047857;color:#fff;border:none;border-radius:5px;padding:10px;font-size:12px;font-weight:800;cursor:pointer;width:100%">Valider et numéroter</button>':'<div style="padding:8px;border-radius:6px;background:#f1f5f9;color:#475569;font-size:11px;font-weight:700;text-align:center">Facture validée — lecture seule</div><button onclick="factureDuplicateDraft(\''+f.id+'\')" style="background:#fff;border:1px solid #cbd5e1;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer">Dupliquer en brouillon</button>')+
+    (!isDraft&&sp.reste>0?'<button onclick="openPaiementModal(\''+f.id+'\')" style="background:#22c55e;color:#fff;border:none;border-radius:5px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;width:100%">Encaisser</button>':"")+
+    (!isDraft?'<button onclick="openAvoirModal(\''+f.id+'\')" style="background:#f5f3ff;border:1.5px solid #ddd6fe;border-radius:5px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;color:#7c3aed;width:100%">Émettre un avoir</button>':"")+
     '</div>'+
     '</fieldset>'+
     '</div>'+
     '</div>';
   if(f.statut==="brouillon"){
-    view.addEventListener("input",e=>{if(e.target.matches("input,select,textarea"))factureEditorScheduleDraft();});
-    view.addEventListener("change",e=>{if(e.target.matches("input,select,textarea"))factureEditorScheduleDraft();});
+    view.addEventListener("input",e=>{if(e.target.matches("input,select,textarea")){factureEditorUpdateWorkflow();factureEditorScheduleDraft();}});
+    view.addEventListener("change",e=>{if(e.target.matches("input,select,textarea")){factureEditorUpdateWorkflow();factureEditorScheduleDraft();}});
+  }else{
+    view.querySelectorAll("input:not([type=hidden]),select,textarea").forEach(el=>{el.disabled=true;el.setAttribute("aria-disabled","true")});
   }
   setTimeout(()=>{
     factureEditorCalcTotals();
+    factureEditorUpdateWorkflow();
+    renderFacStandaloneNav();
     document.querySelectorAll(".fact-ligne-desig").forEach(devisEditorAutoResize);
     if(selClient)factureEditorRenderClientInfo(selClient);
     else if(f.client||f.clientNom){factureEditorRenderClientInfo({nom:f.client||f.clientNom,rc:f.rc||f.clientRc||"",nif:f.nif||""});}
@@ -26540,7 +26574,17 @@ async function deleteDevis(id){if(!confirm("Supprimer ce devis ?"))return;db.dev
 async function convertDevisToFacture(id){const d=db.devis.find(x=>x.id===id);if(!d)return;const num=nextFactureNum();db.factures=db.factures||[];db.factures.push({id:uid("fc"),numero:num,date:today(),societe:d.societe,echeance:30,client:d.client,adresseClient:d.adresseClient||"",nif:"",email:d.email||"",objet:d.objet,designation:d.designation||"",quantite:d.quantite,prixUnitaire:d.prixUnitaire,tva:d.tva,remise:d.remise,totalHT:d.totalHT,tvaAmt:d.tvaAmt,ttc:d.ttc,modeReglement:"Virement bancaire",observations:"Issu du devis "+d.numero,statut:"emise",categorie:d.categorie||"",theme:d.theme||"",structure:d.structure||"",createdBy:session.username,createdAt:new Date().toISOString(),sourceDevisId:d.id});d.statut="accepte";if(!(await saveDBAndWaitToast("Conversion devis non confirmée")))return;toast("Facture "+num+" créée","success");navigate("facturation/factures")}
 function __renderFactFacturesOLD_REMOVED(view){
 }
-async function deleteFacture(id){if(!confirm("Supprimer cette facture (et ses paiements/avoirs) ?"))return;db.factures=db.factures.filter(f=>f.id!==id);db.paiements=(db.paiements||[]).filter(p=>p.factureId!==id);db.avoirs=(db.avoirs||[]).filter(a=>a.factureId!==id);if(!(await saveDBAndWaitToast("Suppression facture non confirmée")))return;renderView();toast("Supprimé","success")}
+async function deleteFacture(id){
+  const f=(db.factures||[]).find(x=>x.id===id);if(!f)return;
+  if(f.statut!=="brouillon"){toast("Une facture validée ne peut pas être supprimée. Émettez un avoir.","error");return}
+  if(!confirm("Supprimer définitivement ce brouillon ?"))return;
+  try{await sgdiApi("/api/irongs/collections/factures/items/"+encodeURIComponent(id),{method:"DELETE",legacy:false});db.factures=db.factures.filter(x=>x.id!==id);renderView();toast("Brouillon supprimé","success")}catch(e){toast("Suppression impossible : "+(e.message||e),"error")}
+}
+async function factureDuplicateDraft(id){
+  const source=(db.factures||[]).find(x=>x.id===id);if(!source)return;
+  const copy={...source,id:uid("fc"),numero:"BROUILLON",statut:"brouillon",validatedAt:"",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),lignes:(source.lignes||[]).map(l=>({...l,id:uid("fl")}))};
+  try{const saved=await sgdiApi("/api/irongs/collections/factures/items",{method:"POST",body:{data:copy},legacy:false});Object.assign(copy,saved||{});db.factures.push(copy);window.__factureEditId=copy.id;navigate("facturation/factures/edit");toast("Copie créée en brouillon","success")}catch(e){toast("Duplication impossible : "+(e.message||e),"error")}
+}
 function openPaiementModal(factureId){
   const f=db.factures.find(x=>x.id===factureId);if(!f)return;const sp=factureStatutPaye(f);
   openModal(`<h3 class="font-bold text-lg mb-3">💳 Encaisser un paiement</h3>
