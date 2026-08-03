@@ -6,7 +6,7 @@ const assert = require('node:assert');
 const { loadSgdiApp } = require('./load-app');
 
 const { loadError, T } = loadSgdiApp([
-  'clientMontantTTC', 'nextDevisNum', 'nextFactureNum', 'factureStatutPaye', 'factureComputeLinesTotals', 'setDb',
+  'clientMontantTTC', 'nextDevisNum', 'nextFactureNum', 'factureStatutPaye', 'factureComputeLinesTotals', 'factureClientPaymentDefaults', 'setDb',
 ]);
 
 test('sgdi-app.js se charge et expose les calculs facturation', () => {
@@ -137,6 +137,12 @@ test('factureStatutPaye : arrondit le reste au centime pour le paiement intégra
   t.setDb({ paiements: [], avoirs: [] });
   const result = t.factureStatutPaye({ id: 'f-round', ttc: 898058.728, statut: 'emise' });
   assert.equal(result.reste, 898058.73);
+});
+
+test('factureClientPaymentDefaults : reprend les conditions client et calcule les dates', () => {
+  const t = T();
+  const result = t.factureClientPaymentDefaults({modePaiement:'Virement bancaire',delaiPaiement:'30 jours',delaiDepotFacture:'3',remarqueFacture:'Bon de commande obligatoire'},'2026-08-03');
+  assert.equal(JSON.stringify(result),JSON.stringify({echeance:'30 jours',modeReglement:'Virement bancaire',dateDepot:'2026-08-06',dateEcheance:'2026-09-02',remarque:'Bon de commande obligatoire'}));
 });
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });

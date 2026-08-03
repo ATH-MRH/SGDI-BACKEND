@@ -25855,9 +25855,22 @@ function factureCalcEcheance(){
   const echDate=document.getElementById("fact-echDate");
   if(!echDate)return;
   const jours=parseInt(echeance);
-  if(!dateFacture||!jours){echDate.value="";return;}
+  if(!dateFacture||Number.isNaN(jours)){echDate.value="";return;}
   const d=new Date(dateFacture+"T12:00:00");d.setDate(d.getDate()+jours);
   echDate.value=d.toISOString().slice(0,10);
+}
+function factureClientPaymentDefaults(c,dateFacture){
+  const delayLabel=String(c?.delaiPaiement||"").trim();
+  const paymentDays=/immédiat|immediat/i.test(delayLabel)?0:(parseInt(delayLabel,10)||0);
+  const depositDays=Math.max(0,parseInt(c?.delaiDepotFacture,10)||0);
+  const base=dateFacture||today();
+  return{
+    echeance:paymentDays?paymentDays+" jours":(/immédiat|immediat/i.test(delayLabel)?"0 jours":""),
+    modeReglement:c?.modePaiement||"A terme",
+    dateDepot:base?addDays(base,depositDays):"",
+    dateEcheance:base&&(/immédiat|immediat/i.test(delayLabel)||paymentDays)?addDays(base,paymentDays):"",
+    remarque:c?.remarqueFacture||c?.conditionsPaiement||""
+  };
 }
 function factureEditorClientChange(sel){
   const c=(db.clients||[]).find(x=>x.id===sel.value);if(!c)return;
@@ -25865,6 +25878,10 @@ function factureEditorClientChange(sel){
   sv("fact-clientNom",c.nom||"");sv("fact-adresse",c.adresseClient||c.adresse||"");
   sv("fact-nif",c.nif||"");sv("fact-rc",c.rc||"");sv("fact-email",c.email||"");
   sv("fact-siteNom","");
+  const defaults=factureClientPaymentDefaults(c,document.getElementById("fact-date")?.value||today());
+  sv("fact-echeance",defaults.echeance);sv("fact-mode",defaults.modeReglement);
+  sv("fact-dateDepot",defaults.dateDepot);sv("fact-echDate",defaults.dateEcheance);
+  sv("fact-remarque",defaults.remarque);
   // Objet ← Prestations et Services Fournis
   const objetEl=document.getElementById("fact-objet");
   if(objetEl){const prest=(c.prestationsServices||"").trim();if(prest)objetEl.value=prest;}
@@ -25932,10 +25949,10 @@ function factureEditorChooseClient(id){
 }
 function factureEditorClientSearchClose(){setTimeout(()=>{const r=document.getElementById("fact-client-results");if(r)r.style.display="none";},150);}
 function factureEditorNewClient(){
-  openModal('<h3 class="font-bold text-lg mb-3">Nouveau client</h3><form onsubmit="event.preventDefault();factureEditorCreateClient(this)"><div class="grid grid-2 gap-3"><div class="col-span-2"><label class="label">Nom / raison sociale *</label><input class="input" name="nom" required autofocus></div><div><label class="label">RC</label><input class="input" name="rc"></div><div><label class="label">NIF</label><input class="input" name="nif"></div><div><label class="label">Téléphone</label><input class="input" name="tel"></div><div><label class="label">E-mail</label><input class="input" type="email" name="email"></div><div class="col-span-2"><label class="label">Adresse</label><input class="input" name="adresse"></div></div><div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Créer et sélectionner</button></div></form>');
+  openModal('<h3 class="font-bold text-lg mb-3">Nouveau client</h3><form onsubmit="event.preventDefault();factureEditorCreateClient(this)"><div class="grid grid-2 gap-3"><div class="col-span-2"><label class="label">Nom / raison sociale *</label><input class="input" name="nom" required autofocus></div><div><label class="label">RC</label><input class="input" name="rc"></div><div><label class="label">NIF</label><input class="input" name="nif"></div><div><label class="label">Téléphone</label><input class="input" name="tel"></div><div><label class="label">E-mail</label><input class="input" type="email" name="email"></div><div class="col-span-2"><label class="label">Adresse</label><input class="input" name="adresse"></div><div><label class="label">Mode de paiement</label><select class="select" name="modePaiement"><option>Virement bancaire</option><option>Chèque</option><option>Espèces</option><option>Traite</option></select></div><div><label class="label">Délai de paiement</label><select class="select" name="delaiPaiement"><option>Paiement immédiat</option><option selected>30 jours</option><option>45 jours</option><option>60 jours</option><option>90 jours</option></select></div><div><label class="label">Dépôt après facturation</label><select class="select" name="delaiDepotFacture"><option value="0">Le jour même</option><option value="1">1 jour</option><option value="3">3 jours</option><option value="5">5 jours</option><option value="7">7 jours</option><option value="15">15 jours</option></select></div><div class="col-span-2"><label class="label">Mention habituelle de facture</label><textarea class="input" name="remarqueFacture" rows="2"></textarea></div></div><div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Créer et sélectionner</button></div></form>');
 }
 async function factureEditorCreateClient(form){
-  const fd=new FormData(form),c={nom:String(fd.get("nom")||"").trim(),societe:mySoc()||"",statut:"actif",rc:String(fd.get("rc")||"").trim(),nif:String(fd.get("nif")||"").trim(),tel:String(fd.get("tel")||"").trim(),email:String(fd.get("email")||"").trim(),adresse:String(fd.get("adresse")||"").trim()};
+  const fd=new FormData(form),c={nom:String(fd.get("nom")||"").trim(),societe:mySoc()||"",statut:"actif",rc:String(fd.get("rc")||"").trim(),nif:String(fd.get("nif")||"").trim(),tel:String(fd.get("tel")||"").trim(),email:String(fd.get("email")||"").trim(),adresse:String(fd.get("adresse")||"").trim(),modePaiement:String(fd.get("modePaiement")||"Virement bancaire"),delaiPaiement:String(fd.get("delaiPaiement")||"30 jours"),delaiDepotFacture:String(fd.get("delaiDepotFacture")||"0"),remarqueFacture:String(fd.get("remarqueFacture")||"").trim()};
   if(!c.nom){toast("Le nom du client est obligatoire","error");return}
   try{const saved=clientFromApi(await SGDI.commercial.createClient(clientApiPayload(c)));sgdiUpsertServerItem("clients",saved);closeModal();factureEditorChooseClient(saved.id);toast("Client créé et sélectionné","success")}catch(e){toast("Création impossible : "+(e.message||e),"error")}
 }
@@ -26299,7 +26316,7 @@ function renderFactureEditor(view){
   const avoirs=(db.avoirs||[]).filter(a=>a.factureId===f.id);
   const clients=(db.clients||[]).filter(c=>!mySoc()||c.societe===mySoc());
   const selClient=clients.find(c=>c.id===f.clientId||c.nom===f.client||c.nom===f.clientNom);
-  const modes=["A terme","Virement bancaire","Chèque","Espèces","Carte bancaire","Mixte"];
+  const modes=["A terme","Virement bancaire","Chèque","Espèces","Carte bancaire","Traite","Prélèvement automatique","Mixte"];
   const modeOpts=modes.map(m=>'<option '+(f.modeReglement===m?"selected":"")+'>'+escapeHTML(m)+'</option>').join("");
   const lignesHTML=lignes.map(l=>factureEditorLigneHTML(l)).join("");
   const lignesEmpty=lignes.length===0;
@@ -26412,7 +26429,7 @@ function renderFactureEditor(view){
     fl('Date facture','<input id="fact-date" type="date" style="'+FI+'" value="'+escapeHTML(f.date||today())+'" onchange="factureCalcEcheance()">') +
     fl('Délai paiement',
       '<select id="fact-echeance" style="'+FI+'" onchange="factureCalcEcheance()">'+
-      ['','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+( v||'— Sans —')+'</option>').join("")+
+      ['','0 jours','15 jours','30 jours','45 jours','60 jours','90 jours'].map(v=>'<option value="'+v+'" '+(f.echeance===v?'selected':'')+'>'+(v==='0 jours'?'Paiement immédiat':(v||'— Sans —'))+'</option>').join("")+
       '</select>') +
     fl('Mode paiement','<select id="fact-mode" style="'+FI+'">'+modeOpts+'</select>') +
     fl('Dépôt client','<input id="fact-dateDepot" type="date" style="'+FI+'" value="'+escapeHTML(f.dateDepot||"")+'">') +
@@ -28183,9 +28200,10 @@ function openClientModal(id,readOnly=false){
       <div class="rh-op-grid" style="margin-bottom:10px">
         ${lbl("Mode de paiement",sel("modePaiement",["Virement bancaire","Chèque","Espèces","Traite","Prélèvement automatique"].map(m=>`<option value="${m}" ${(c?.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")))}
         ${lbl("Délai de paiement",sel("delaiPaiement",["Paiement immédiat","30 jours","45 jours","60 jours","90 jours","Sur échéancier"].map(d=>`<option value="${d}" ${(c?.delaiPaiement||"30 jours")===d?"selected":""}>${d}</option>`).join("")))}
-
+        ${lbl("Dépôt après facturation",sel("delaiDepotFacture",[["0","Le jour même"],["1","1 jour"],["3","3 jours"],["5","5 jours"],["7","7 jours"],["15","15 jours"]].map(([v,l])=>`<option value="${v}" ${String(c?.delaiDepotFacture||"0")===v?"selected":""}>${l}</option>`).join("")))}
       </div>
       ${lbl("Conditions particulières",`<textarea class="input" name="conditionsPaiement" rows="2" style="width:100%;margin-top:4px" placeholder="Ex: 50% à la commande, solde à la livraison..." required>${escapeHTML(c?.conditionsPaiement||"")}</textarea>`)}
+      ${lbl("Mention habituelle sur les factures",`<textarea class="input" name="remarqueFacture" rows="2" style="width:100%;margin-top:4px" placeholder="Mention automatiquement reprise sur chaque nouvelle facture">${escapeHTML(c?.remarqueFacture||"")}</textarea>`)}
       <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;padding-top:12px;border-top:1px solid #e2e8f0">
         <div style="display:flex;align-items:center;gap:8px">
           <input type="checkbox" id="contrat-valide-chk" name="contratValide" value="1" ${c?.contratValide?"checked":""} style="width:16px;height:16px;cursor:pointer"/>
@@ -28311,7 +28329,7 @@ async function confirmClient(id,options={}){
   const hasContractSites=fd.get("ct_nbrSite")!==null;
   if(hasContractSites)tech_sites=cts_sites;
   const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
-  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
+  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
   try{if(options.requireExisting)await updateExistingClientToPostgres(c);else await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");
