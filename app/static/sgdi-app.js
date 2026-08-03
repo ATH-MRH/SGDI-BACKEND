@@ -3971,7 +3971,7 @@ function defaultAccessMap(){
   const map={"DRH":["rh","admin"],"OPS":["rh","dispatch","admin"],"SUPERVISEUR":["dispatch","admin"],"MATERIEL/EQUIP":["rh","dispatch","admin"],"FINANCES/COMPTA":["rh","admin"],"COMMERCIAL":["rh","admin"],"SECRETARIAT GÉNÉRAL":["rh","dispatch","admin"],"AGENDA":["rh","dispatch","agent","admin"],"POINTAGE":["rh","dispatch","admin"],"PORTAIL RH":["rh","dispatch","agent","admin"],"ADMINISTRATEUR GÉNÉRAL":["admin"],dashboard:["rh","dispatch","agent","admin"],dossiers:["rh","admin"],recrutement:["rh","admin"],reserve:["rh","admin"],candidats_archives:["rh","admin"],demandes_personnel:["rh","admin"],demandes_structure:["rh","dispatch","admin"],contrats:["rh","admin"],a_contractualiser:["rh","admin"],effectif:["rh","dispatch","admin"],agents:["rh","dispatch","admin","agent"],fiches:["rh","dispatch","admin"],badge:["rh","admin"],sites:["rh","dispatch","admin"],incidents:["rh","dispatch","agent","admin"],conges:["rh","dispatch","agent","admin"],paie:["rh","admin"],rapports:["rh","dispatch","admin"],materiel:["rh","dispatch","admin"],facturation:["rh","admin"],commercial:["rh","admin"],secretariat:["rh","dispatch","admin"],agenda:["rh","dispatch","agent","admin"],drh:["rh","admin"],pointage:["rh","dispatch","admin"],ops:["rh","dispatch","admin"],superviseur:["dispatch","admin"],portail:["rh","dispatch","agent","admin"],parametres:["admin"],admin:["admin"]};
   map["ADMINISTRATION SYSTEME"]=map["ADMINISTRATEUR GÉNÉRAL"];
   ["materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement"].forEach(k=>map[k]=map.materiel);
-  ["facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation"].forEach(k=>map[k]=map.facturation);
+  ["facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation"].forEach(k=>map[k]=map.facturation);
   ["commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/devis","commercial/catalogue","commercial/tarifs","commercial/stats"].forEach(k=>map[k]=map.commercial);
   ["secretariat/courriers","secretariat/notes","secretariat/archives"].forEach(k=>map[k]=map.secretariat);
   ["agenda/dashboard","agenda/liste","agenda/semaine","agenda/rappels"].forEach(k=>map[k]=map.agenda);
@@ -4412,7 +4412,6 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
         {label:"CLIENTS",route:"facturation/clients"},
-        {label:"DEVIS",route:"facturation/devis"},
         {label:"FACTURES",route:"facturation/factures"},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES",route:"facturation/avances"},
@@ -4480,7 +4479,7 @@ function sgdiModuleHostDefaultRoute(){
 function sgdiModuleHostRequiresSociete(cfg){return !!cfg&&cfg.key!=="admin"}
 function facStandaloneNavItems(){return[
   ["⌂","Tableau de bord","facturation/dashboard"],["♙","Clients","facturation/clients"],
-  ["▤","Devis","facturation/devis"],["▧","Factures","facturation/factures"],
+  ["▧","Factures","facturation/factures"],
   ["✓","Paiements","facturation/paiements"],["↗","Avances","facturation/avances"],
   ["↩","Avoirs","facturation/avoirs"],["◫","Caisse","facturation/caisse"],
   ["◷","Balance âgée","facturation/balance"],["≡","Situation","facturation/situation"]
@@ -5280,7 +5279,6 @@ function moduleCountersRibbonHTML(){
     const fin=sgdiBackendModuleCounters("facturation",scopeSoc);
     if(!fin)return"";
     return moduleCountersRibbon([
-      {label:"DEVIS",value:counterNumericValue(fin.quotes_total),color:"#0ea5e9",route:"facturation/devis"},
       {label:"FACTURES",value:counterNumericValue(fin.invoices_total),color:"#043970",route:"facturation/factures"},
       {label:"PAIEMENTS",value:counterNumericValue(fin.payments_total),color:"#047857",route:"facturation/paiements"},
       {label:"FACTURES ÉCHUES",value:counterNumericValue(fin.overdue_invoices),color:"#dc2626",route:"facturation/factures"},
@@ -6209,7 +6207,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
     ],
     facturation:[
-      ["TABLEAU DE BORD","facturation/dashboard"],["CLIENTS","facturation/clients"],["DEVIS","facturation/devis"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
+      ["TABLEAU DE BORD","facturation/dashboard"],["CLIENTS","facturation/clients"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
     ],
     commercial:[
       ["TABLEAU DE BORD","commercial/dashboard"],["CLIENT","commercial/clients"],["PROSPECTS","commercial/prospects"],["OPPORTUNITÉS","commercial/opportunites"],["VISITES / SUIVI","commercial/visites"],["CATALOGUE PRESTATIONS","commercial/catalogue"],["TARIFICATION","commercial/tarifs"],["STATISTIQUES","commercial/stats"]
@@ -6854,7 +6852,7 @@ function globalSearchItems(){
     ...make("incident","Evènement",db.incidents,o=>`incidents`,o=>o.titre||o.type||"Evènement",o=>`${o.statut||""} · ${formatDate(o.date||o.createdAt)}`),
     ...make("conge","Congé",db.conges,o=>`conges`,o=>o.type||"Congé",o=>`${o.statut||""} · ${formatDate(o.du)} - ${formatDate(o.au)}`),
     ...make("facture","Facture",db.factures,o=>`facturation/factures`,o=>o.numero||o.num||"Facture",o=>`${o.societe||""} · ${o.client||""} · ${money(o.total||o.montant)}`),
-    ...make("devis","Devis",db.devis,o=>`facturation/devis`,o=>o.numero||o.num||"Devis",o=>`${o.societe||""} · ${o.client||""} · ${money(o.total||o.montant)}`)
+    ...make("devis","Devis",db.devis,o=>`commercial/devis`,o=>o.numero||o.num||"Devis",o=>`${o.societe||""} · ${o.client||""} · ${money(o.total||o.montant)}`)
   ];
   if(isAdminGeneralSession())rows.push(...make("user","Utilisateur",db.users,o=>`admin/users`,o=>`${o.username||""} ${o.nom||""}`.trim(),o=>`${o.role||""} · ${o.niveau||""}`));
   return rows.filter(globalSearchScopeAllows);
@@ -7545,6 +7543,9 @@ function sidebarNavigate(event,route){
   }
   const path=(location.hash||"#/dashboard").slice(2);
   const target=String(route||"").replace(/^#?\/?/,"");
+  // Le clic direct sur « Factures » ouvre toujours le centre de gestion,
+  // jamais le dernier éditeur resté en mémoire.
+  if(target==="facturation/factures")delete window.__factureEditId;
   if(path===target||sidebarRouteActive(path,target)){
     syncSidebarActiveState();
     refreshModuleCountersRibbon();
@@ -25560,7 +25561,7 @@ const ETAPES_OPP=["nouveau","qualification","proposition","negociation","gagnee"
 const STATUTS_PROSPECT=["nouveau","contacte","interesse","rdv_planifie","rdv_realise","converti","perdu"];
 function factTabs(active){
   if(window.__FAC_AUTONOMOUS_APP__)return "";
-  const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["devis","Devis","facturation/devis"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
+  const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
   return '<nav style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e2e8f0;overflow-x:auto">'+tabs.map(([k,l,r])=>{const on=active===k;return'<a href="#/'+r+'" style="display:inline-block;padding:9px 14px;font-size:11px;font-weight:700;white-space:nowrap;text-decoration:none;border-bottom:2px solid '+(on?"#0f2d5a":"transparent")+';color:'+(on?"#0f2d5a":"#64748b")+';margin-bottom:-2px;'+(on?"background:#f8fafc;":"")+'">'+(l)+'</a>';}).join("")+"</nav>";
 }
 function factureStatutPaye(f){const pa=(db.paiements||[]).filter(p=>p.factureId===f.id).reduce((s,p)=>s+(p.montant||0),0);const av=(db.avoirs||[]).filter(a=>a.factureId===f.id).reduce((s,a)=>s+(a.montant||0),0);const reste=Math.max(0,(f.ttc||0)-pa-av);let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
@@ -25569,7 +25570,7 @@ function statutDevisPill(s){return{"brouillon":"pill-gray","envoye":"pill-blue",
 function renderFacturation(view,sub,arg){
   if(sub==="dashboard")return renderFactDashboard(view);
   if(sub==="clients")return renderFactClients(view);
-  if(sub==="devis")return renderFactDevis(view,arg);
+  if(sub==="devis"){navigate("commercial/devis");return;}
   if(sub==="factures"){if(window.__factureEditId)return renderFactureEditor(view);return renderFactureListPage(view);}
   if(sub==="paiements")return renderFactPaiements(view);
   if(sub==="avances")return renderFactAvances(view);
@@ -25640,11 +25641,16 @@ function factureEditorClose(){delete window.__factureEditId;navigate("facturatio
 
 function renderFactureListPage(view){
   const list=bySoc(db.factures||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const drafts=list.filter(f=>String(f.statut||"").toLowerCase()==="brouillon");
+  const issued=list.filter(f=>String(f.statut||"").toLowerCase()!=="brouillon");
+  const totalIssued=issued.reduce((sum,f)=>sum+Number(f.ttc||f.montantTTC||0),0);
+  const outstanding=issued.reduce((sum,f)=>sum+factureStatutPaye(f).reste,0);
   const thS="padding:10px 12px;font-size:11px;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;text-align:left;white-space:nowrap;background:#fff";
   const rows=list.map(f=>{
     const sp=factureStatutPaye(f);const ttcV=f.ttc||f.montantTTC||0;
     const sd=factStatutDisplay(f);const rc=f.clientRc||f.rc||"";
-    return '<tr data-searchable style="border-bottom:1px solid #f1f5f9;cursor:pointer" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'" onclick="factureEditorOpen(\''+f.id+'\')" >'+
+    const rowStatus=String(f.statut||"").toLowerCase()==="brouillon"?"brouillon":sp.statut;
+    return '<tr data-searchable data-fact-status="'+escapeHTML(rowStatus)+'" style="border-bottom:1px solid #f1f5f9;cursor:pointer" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'" onclick="factureEditorOpen(\''+f.id+'\')" >'+
     '<td style="padding:10px 12px;font-family:monospace;font-size:12px;color:#1d4ed8;font-weight:700">'+safe(f.numero||"")+'</td>'+
     '<td style="padding:10px 12px"><div style="font-weight:700;font-size:12px;color:#0f172a">'+escapeHTML(f.client||f.clientNom||"")+'</div>'+(rc?'<div style="font-size:10px;color:#94a3b8;margin-top:1px">RC# '+escapeHTML(rc)+'</div>':"")+
     '</td>'+
@@ -25655,17 +25661,21 @@ function renderFactureListPage(view){
     '<td style="padding:10px 12px;font-size:12px;color:#94a3b8">'+formatDate(f.createdAt||f.date)+'</td>'+
     '<td style="padding:10px 12px;text-align:right" onclick="event.stopPropagation()"><div style="display:flex;gap:6px;justify-content:flex-end;align-items:center">'+
     '<button title="Voir" style="background:none;border:none;cursor:pointer;font-size:15px;color:#64748b;padding:2px 4px" onclick="factureEditorOpen(\''+f.id+'\')">👁</button>'+
-    '<button title="Modifier" style="background:none;border:none;cursor:pointer;font-size:14px;color:#64748b;padding:2px 4px" onclick="factureEditorOpen(\''+f.id+'\')">✏️</button>'+
-    '<button title="Supprimer" style="background:none;border:none;cursor:pointer;font-size:14px;color:#ef4444;padding:2px 4px" onclick="deleteFacture(\''+f.id+'\')">🗑</button>'+
+    (String(f.statut||"").toLowerCase()==="brouillon"?'<button title="Modifier le brouillon" style="background:none;border:none;cursor:pointer;font-size:14px;color:#64748b;padding:2px 4px" onclick="factureEditorOpen(\''+f.id+'\')">✏️</button><button title="Supprimer le brouillon" style="background:none;border:none;cursor:pointer;font-size:14px;color:#ef4444;padding:2px 4px" onclick="deleteFacture(\''+f.id+'\')">🗑</button>':'')+
     '</div></td></tr>';
   }).join("");
   view.innerHTML=
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
-    '<div style="display:flex;align-items:center;gap:8px;color:#64748b;font-size:13px"><a href="#/facturation/dashboard" style="color:#64748b;text-decoration:none">Accueil</a><span> / </span><span style="color:#0f2d5a;font-weight:700">Factures</span></div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:16px">'+
+    '<div><div style="display:flex;align-items:center;gap:8px;color:#64748b;font-size:12px;margin-bottom:4px"><a href="#/facturation/dashboard" style="color:#64748b;text-decoration:none">Accueil</a><span>/</span><span style="color:#0f2d5a;font-weight:700">Factures</span></div><h1 style="margin:0;color:#0f2d5a;font-size:24px;font-weight:900">Gestion des factures</h1><p style="margin:3px 0 0;color:#64748b;font-size:12px">Créez une facture ou consultez les factures émises.</p></div>'+
+    '<button onclick="factureEditorOpen()" style="background:#043970;color:#fff;border:0;border-radius:7px;padding:11px 18px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap">+ NOUVELLE FACTURE</button>'+
     '</div>'+
     factTabs("factures")+
+    '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px">'+
+    [['Toutes',list.length,'#043970'],['Brouillons',drafts.length,'#64748b'],['Factures émises',issued.length,'#047857'],['Reste à encaisser',money(outstanding),'#d97706']].map(k=>'<div class="card" style="padding:13px 15px"><div style="font-size:10px;font-weight:800;text-transform:uppercase;color:#64748b">'+k[0]+'</div><div style="font-size:19px;font-weight:900;color:'+k[2]+';margin-top:4px">'+k[1]+'</div></div>').join('')+
+    '</div>'+
     '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-    '<input type="text" placeholder="Rechercher des factures..." oninput="filterFactureList(this.value)" style="flex:1;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;font-size:13px;outline:none" id="fact-search">'+
+    '<input type="text" placeholder="Rechercher par numéro, client ou date…" oninput="filterFactureList()" style="flex:1;border:1px solid #e2e8f0;border-radius:6px;padding:9px 12px;font-size:12px;outline:none" id="fact-search">'+
+    '<select id="fact-status-filter" onchange="filterFactureList()" style="min-width:170px;border:1px solid #e2e8f0;border-radius:6px;padding:9px 12px;font-size:12px;background:#fff"><option value="">Tous les statuts</option><option value="brouillon">Brouillons</option><option value="emise">Émises</option><option value="partielle">Partiellement payées</option><option value="payee">Payées</option><option value="echue">Échues</option></select>'+
     '</div>'+
     '<div class="card" style="overflow:auto">'+
     (list.length===0?'<div style="padding:60px;text-align:center;color:#94a3b8"><div style="font-size:48px;margin-bottom:12px">🧾</div><div style="font-weight:700;font-size:15px">Aucune facture</div><button onclick="factureEditorOpen()" style="margin-top:16px;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer">+ Créer une facture</button></div>':
@@ -25677,9 +25687,13 @@ function renderFactureListPage(view){
     '</tr></thead><tbody id="fact-list-body">'+rows+'</tbody></table>')+
     '</div>';
 }
-function filterFactureList(q){
+function filterFactureList(){
+  const q=(document.getElementById("fact-search")?.value||"").trim().toLowerCase();
+  const status=document.getElementById("fact-status-filter")?.value||"";
   document.querySelectorAll("#fact-list-body tr").forEach(tr=>{
-    tr.style.display=q&&!tr.textContent.toLowerCase().includes(q.toLowerCase())?"none":"";
+    const actual=tr.dataset.factStatus||"";
+    const statusOk=!status||(status==="emise"?actual!=="brouillon":actual===status);
+    tr.style.display=statusOk&&(!q||tr.textContent.toLowerCase().includes(q))?"":"none";
   });
 }
 
@@ -30675,7 +30689,7 @@ const ADMIN_MODULES=[
   "dashboard","dossiers","recrutement","reserve","candidats_archives","drh/social","demandes_personnel","demandes_structure",
   "contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports",
   "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement",
-  "facturation","facturation/devis","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
+  "facturation","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
   "commercial","commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats",
   "secretariat","secretariat/courriers","secretariat/notes","secretariat/archives","agenda","agenda/liste","agenda/semaine","agenda/rappels",
   "pointage","pointage/recap","pointage/societe","pointage/stats","pointage/legende",
@@ -30733,14 +30747,14 @@ function adminModuleHostKey(key){
   if(lower.startsWith("agenda/"))return"agenda";
   return lower;
 }
-function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","SUPERVISEUR":"superviseur/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","AGENDA":"agenda/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/devis":"facturation/devis","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives",agenda:"agenda/dashboard","agenda/liste":"agenda/liste","agenda/semaine":"agenda/semaine","agenda/rappels":"agenda/rappels","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",superviseur:"superviseur/dashboard","superviseur/dashboard":"superviseur/dashboard",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
+function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","SUPERVISEUR":"superviseur/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","AGENDA":"agenda/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard","commercial/devis":"commercial/devis",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives",agenda:"agenda/dashboard","agenda/liste":"agenda/liste","agenda/semaine":"agenda/semaine","agenda/rappels":"agenda/rappels","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",superviseur:"superviseur/dashboard","superviseur/dashboard":"superviseur/dashboard",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
 function adminAccessModuleLabel(module){
   const labels={
     "DRH":"DRH","OPS":"OPS","SUPERVISEUR":"Superviseur terrain","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","AGENDA":"Agenda","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
     dashboard:"Tableau de bord",dossiers:"Dossiers",recrutement:"Recrutement",reserve:"Réserve",candidats_archives:"Candidats archivés","drh/social":"Social DRH",demandes_personnel:"Demandes personnel",demandes_structure:"Demandes structure",
     contrats:"Contrats",a_contractualiser:"À contractualiser",effectif:"Effectifs",agents:"Agents",fiches:"Fiches de position",badge:"Badges",sites:"Sites",incidents:"Incidents",conges:"Congés",paie:"Paie",rapports:"Rapports",
     materiel:"Tableau de bord matériel","materiel/articles":"Articles","materiel/magasins":"Magasins","materiel/fournisseurs":"Fournisseurs","materiel/alertes":"Alertes stock","materiel/dotation":"Dotation employés","materiel/sites-dotation":"Dotation sites","materiel/reversement":"Reversement",
-    facturation:"Tableau de bord finances","facturation/devis":"Devis","facturation/factures":"Factures","facturation/paiements":"Paiements","facturation/avances":"Avances","facturation/avoirs":"Avoirs","facturation/caisse":"Caisse","facturation/situation":"Situation client",
+    facturation:"Tableau de bord finances","commercial/devis":"Devis","facturation/factures":"Factures","facturation/paiements":"Paiements","facturation/avances":"Avances","facturation/avoirs":"Avoirs","facturation/caisse":"Caisse","facturation/situation":"Situation client",
     commercial:"Tableau de bord commercial","commercial/prospects":"Prospects","commercial/clients":"Clients","commercial/opportunites":"Opportunités","commercial/visites":"Visites","commercial/catalogue":"Catalogue","commercial/tarifs":"Tarifs","commercial/stats":"Statistiques commerciales",
     secretariat:"Tableau de bord secrétariat","secretariat/courriers":"Courriers","secretariat/notes":"Notes","secretariat/archives":"Archives",
     agenda:"Tableau de bord agenda","agenda/liste":"Liste agenda","agenda/semaine":"Vue semaine","agenda/rappels":"Rappels",

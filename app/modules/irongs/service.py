@@ -10,6 +10,7 @@ from typing import Any
 import orjson
 from fastapi import HTTPException
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.irongs.models import SgdiRecord
@@ -661,14 +662,25 @@ def list_items(db: Session, name: str) -> list[Any]:
     return data
 
 
+def _upsert_sql_collection_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
+    db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
+    try:
+        out = sql_bridge.upsert_item(db, name, item)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Conflit d'enregistrement : un numéro ou identifiant identique est déjà utilisé par un autre élément.",
+        )
+    _snapshot_cache_invalidate()
+    return out
+
+
 def create_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
     item = normalize_photo_fields(dict(item), fallback=name)
     if name in sql_bridge.SQL_COLLECTIONS:
-        db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
-        out = sql_bridge.upsert_item(db, name, dict(item))
-        db.commit()
-        _snapshot_cache_invalidate()
-        return out
+        return _upsert_sql_collection_item(db, name, dict(item))
     item = _ensure_id(dict(item), name)
     item_id = str(item["id"])
     exists = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
@@ -682,6 +694,11 @@ def create_item(db: Session, name: str, item: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_item(db: Session, name: str, item_id: str) -> dict[str, Any]:
+    if name in sql_bridge.SQL_COLLECTIONS:
+        for row in sql_bridge.list_collection(db, name):
+            if isinstance(row, dict) and str(row.get("id")) == str(item_id):
+                return row
+        raise HTTPException(status_code=404, detail="Élément introuvable")
     row = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
     if not row or not isinstance(row.data, dict):
         raise HTTPException(status_code=404, detail="Élément introuvable")
@@ -691,13 +708,9 @@ def get_item(db: Session, name: str, item_id: str) -> dict[str, Any]:
 def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], partial: bool = True) -> dict[str, Any]:
     patch = normalize_photo_fields(dict(patch), fallback=item_id)
     if name in sql_bridge.SQL_COLLECTIONS:
-        db.execute(delete(SgdiRecord).where(SgdiRecord.collection == name))
         data = dict(patch)
         data.setdefault("id", item_id)
-        out = sql_bridge.upsert_item(db, name, data)
-        db.commit()
-        _snapshot_cache_invalidate()
-        return out
+        return _upsert_sql_collection_item(db, name, data)
     row = db.execute(select(SgdiRecord).where(SgdiRecord.collection == name, SgdiRecord.item_id == item_id)).scalar_one_or_none()
     if not row or not isinstance(row.data, dict):
         raise HTTPException(status_code=404, detail="Élément introuvable")

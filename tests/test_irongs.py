@@ -82,6 +82,22 @@ def test_roundtrip_finance(client, auth_headers, name, payload, check):
     assert row.get(key) == val
 
 
+def test_multiple_invoice_drafts_can_be_saved(client, auth_headers):
+    """Le libellé BROUILLON ne doit jamais violer l'unicité du numéro comptable."""
+    first = _post_item(client, auth_headers, "factures", {
+        "id": "draft_multi_1", "numero": "BROUILLON", "statut": "brouillon",
+        "date": "2026-08-03", "societe": SOC, "client": "Client A", "ttc": 1000,
+    })
+    second = _post_item(client, auth_headers, "factures", {
+        "id": "draft_multi_2", "numero": "BROUILLON", "statut": "brouillon",
+        "date": "2026-08-03", "societe": SOC, "client": "Client B", "ttc": 2000,
+    })
+    assert first["numero"] == second["numero"] == "BROUILLON"
+    rows = _collection(client, auth_headers, "factures")
+    assert _find(rows, "id", "draft_multi_1") is not None
+    assert _find(rows, "id", "draft_multi_2") is not None
+
+
 def test_roundtrip_stock_article(client, auth_headers):
     """stockArticles conserve le legacy complet (colonne attributes) -> round-trip sans perte.
     NB : magasins/fournisseurs, eux, sont gérés par le module MATÉRIEL (/api/materiel/stores,

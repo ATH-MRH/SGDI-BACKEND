@@ -507,7 +507,11 @@ def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: s
         db.add(row)
     row.external_id = external
     if isinstance(row, Invoice):
-        row.number = item.get("numero") or item.get("number")
+        raw_number = str(item.get("numero") or item.get("number") or "").strip()
+        # Plusieurs brouillons doivent pouvoir coexister. La colonne number est
+        # unique : « BROUILLON » n'est donc pas un numéro comptable et reste NULL
+        # jusqu'à la validation/numérotation définitive.
+        row.number = None if not raw_number or raw_number.upper() == "BROUILLON" else raw_number
         row.invoice_date = as_date(item.get("date"))
         row.society = item.get("societe")
         row.client_name = item.get("client")
