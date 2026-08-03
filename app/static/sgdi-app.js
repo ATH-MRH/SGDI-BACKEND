@@ -835,7 +835,7 @@ async function sgdiPullState(options){
       let remote;try{remote=await sgdiApi(snapshotPath,{method:"GET",legacy:false,signal:_dbCtrl.signal})}finally{clearTimeout(_dbTimer)}
       if(remote&&typeof remote==="object"&&!Array.isArray(remote)){
         window.__SGDI_BACKEND_ENABLED__=true;
-        const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents"];
+        const _sqlKeys=["agents","employees","stockMouvements","stockArticles","magasins","fournisseurs","sites","candidats","clients","assignments","affectations","feuillePresence","contrats","opsMouvements","incidents","factures","paiements","avances","avoirs","caisse"];
         const _prevSQL=opt.light&&db?Object.fromEntries(_sqlKeys.filter(k=>Array.isArray(db[k])&&db[k].length).map(k=>[k,db[k]])):null;
         // Attend qu'un cycle de sync des collections SQL déjà en cours (sites,
         // affectations...) se termine avant de remplacer db en bloc.
@@ -2490,7 +2490,7 @@ function sgdiAutoRepairDB(options){
 // données déjà chargées avec succès (une requête SQL lente/en erreur sur UNE seule
 // collection ne doit pas faire "disparaître" les employés/sites déjà affichés le temps
 // qu'une prochaine synchro réussisse — sinon la page se vide puis se recharge en boucle).
-const SGDI_SKIP_EMPTY_ON_HYDRATE=new Set(["agents","sites","clients","magasins","fournisseurs","stockArticles","stockMouvements","opsMouvements","incidents","feuillePresence"]);
+const SGDI_SKIP_EMPTY_ON_HYDRATE=new Set(["agents","sites","clients","magasins","fournisseurs","stockArticles","stockMouvements","opsMouvements","incidents","feuillePresence","factures","paiements","avances","avoirs","caisse"]);
 function hydrateDB(source){
   const base=emptyDB();
   const incoming=(source&&typeof source==="object"&&!Array.isArray(source))?source:{};
@@ -25668,7 +25668,7 @@ function renderFactureListPage(view){
   view.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:16px">'+
     '<div><div style="display:flex;align-items:center;gap:8px;color:#64748b;font-size:12px;margin-bottom:4px"><a href="#/facturation/dashboard" style="color:#64748b;text-decoration:none">Accueil</a><span>/</span><span style="color:#0f2d5a;font-weight:700">Factures</span></div><h1 style="margin:0;color:#0f2d5a;font-size:24px;font-weight:900">Gestion des factures</h1><p style="margin:3px 0 0;color:#64748b;font-size:12px">Créez une facture ou consultez les factures émises.</p></div>'+
-    '<button onclick="factureEditorOpen()" style="background:#043970;color:#fff;border:0;border-radius:7px;padding:11px 18px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap">+ NOUVELLE FACTURE</button>'+
+    '<div style="display:flex;gap:8px;align-items:center"><button onclick="importFacturesExcel()" style="background:#fff;color:#047857;border:1px solid #10b981;border-radius:7px;padding:10px 16px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap">⬆ IMPORTER EXCEL</button><button onclick="factureEditorOpen()" style="background:#043970;color:#fff;border:0;border-radius:7px;padding:11px 18px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap">+ NOUVELLE FACTURE</button></div>'+
     '</div>'+
     factTabs("factures")+
     '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px">'+
@@ -25687,6 +25687,41 @@ function renderFactureListPage(view){
     '<th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;background:#fff"></th>'+
     '</tr></thead><tbody id="fact-list-body">'+rows+'</tbody></table>')+
     '</div>';
+}
+function factureImportKey(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"");}
+function factureImportValue(row,aliases){
+  const keys=Object.keys(row||{});const wanted=new Set(aliases.map(factureImportKey));
+  const key=keys.find(k=>wanted.has(factureImportKey(k)));return key===undefined?"":row[key];
+}
+function factureImportDate(value){
+  if(value instanceof Date&&!isNaN(value))return value.toISOString().slice(0,10);
+  if(typeof value==="number"&&window.XLSX?.SSF?.parse_date_code){const d=XLSX.SSF.parse_date_code(value);if(d)return `${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`;}
+  const s=String(value||"").trim();if(!s)return today();
+  const m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);if(m){const y=m[3].length===2?"20"+m[3]:m[3];return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;}
+  return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(0,10):today();
+}
+async function importFacturesExcel(){
+  try{await window.sgdiLoadXLSX();}catch(_e){return toast("Impossible de charger le lecteur Excel","error");}
+  const input=document.createElement("input");input.type="file";input.accept=".xlsx,.xls,.csv";
+  input.onchange=()=>{const file=input.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=async e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});if(!rows.length)throw new Error("Le fichier ne contient aucune facture");
+      let imported=0,skipped=0,failed=0;db.factures=db.factures||[];
+      const known=new Set(db.factures.map(f=>String(f.numero||"").trim().toUpperCase()).filter(Boolean));
+      for(const row of rows){
+        const numero=String(factureImportValue(row,["Référence","Reference","Numéro","Numero","N° facture","Facture"] )||"").trim();
+        const client=String(factureImportValue(row,["Client","Nom client","Raison sociale"] )||"").trim();
+        if(!numero&&!client){skipped++;continue;}if(numero&&known.has(numero.toUpperCase())){skipped++;continue;}
+        const ht=parseFrNum(factureImportValue(row,["Total HT","Montant HT","HT"]));
+        const ttc=parseFrNum(factureImportValue(row,["Total TTC","Montant TTC","TTC","Montant"]));
+        const rawEcheance=factureImportValue(row,["Date échéance","Date echeance","Échéance","Echeance"]);
+        const data={id:uid("fc_import"),numero:numero||"BROUILLON",date:factureImportDate(factureImportValue(row,["Date facture","Date"])),societe:mySoc()||"",client,clientNom:client,objet:String(factureImportValue(row,["Objet","Libellé","Libelle","Description"] )||"").trim(),statut:numero?"emise":"brouillon",totalHT:ht,montantHT:ht,ttc:ttc||ht,montantTTC:ttc||ht,modeReglement:String(factureImportValue(row,["Mode paiement","Mode de paiement","Règlement","Reglement"] )||"A terme"),dateEcheance:rawEcheance?factureImportDate(rawEcheance):"",createdAt:new Date().toISOString(),lignes:[]};
+        try{const saved=await sgdiApi("/api/irongs/collections/factures/items",{method:"POST",body:{data},legacy:false});db.factures.push(saved&&typeof saved==="object"?saved:data);if(numero)known.add(numero.toUpperCase());imported++;}catch(err){console.error("Import facture",numero,err);failed++;}
+      }
+      renderView();toast(`${imported} facture(s) importée(s)${skipped?` · ${skipped} ignorée(s)`:""}${failed?` · ${failed} en erreur`:""}`,failed?"warning":"success");
+    }catch(err){toast("Import impossible : "+(err.message||err),"error");}
+  };reader.readAsArrayBuffer(file);};input.click();
 }
 function filterFactureList(){
   const q=(document.getElementById("fact-search")?.value||"").trim().toLowerCase();
