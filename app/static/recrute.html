@@ -36,14 +36,14 @@ label.field-label-invalid{color:#b91c1c!important}
 .error.show{display:block}
 .app{min-height:100vh;padding-bottom:40px}
 .top{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px;box-shadow:0 10px 30px rgba(4,57,112,.25)}
-.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1200px;margin:auto;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:11px}.brand-logo{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:grid;place-items:center;font-weight:900}
-.brand-title{font-size:18px;font-weight:950;letter-spacing:.06em}.brand-user{font-size:12px;opacity:.8;margin-top:2px}
-.top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1680px;margin:auto;flex-wrap:nowrap}
+.brand{display:flex;align-items:center;gap:11px;flex-shrink:0}.brand-logo{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:grid;place-items:center;font-weight:900;flex-shrink:0}
+.brand-title{font-size:18px;font-weight:950;letter-spacing:.06em;white-space:nowrap}.brand-user{font-size:12px;opacity:.8;margin-top:2px;white-space:nowrap}
+.top-actions{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;flex-shrink:0}
 .society-badge{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:800}
 .society-select{height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:var(--ink);font-size:12px;font-weight:800;padding:0 10px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 12px;font-weight:750;cursor:pointer}
-.main{max-width:1200px;margin:0 auto;padding:16px}
+.main{max-width:1680px;margin:0 auto;padding:16px 28px}
 .counters-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px}
 .counter-group{flex:1;min-width:260px}
 .counter-group-title{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:8px}
@@ -76,8 +76,8 @@ tr:last-child td{border-bottom:0}
 .avis-select.favorable{background:#dcfce7;border-color:#86efac;color:#166534}
 .avis-select.defavorable{background:#fee2e2;border-color:#fca5a5;color:#7f1d1d}
 .avis-select.instance{background:#fef3c7;border-color:#fcd34d;color:#92400e}
-.row-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
-.link-btn{border:0;background:none;color:var(--blue);font-weight:850;font-size:12px;cursor:pointer;padding:6px 8px}
+.row-actions{display:flex;align-items:center;gap:2px;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap}
+.link-btn{border:0;background:none;color:var(--blue);font-weight:850;font-size:11px;cursor:pointer;padding:6px 5px}
 .link-btn.danger{color:var(--red)}
 .empty{text-align:center;color:#94a3b8;padding:40px 20px;font-size:14px}
 .pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;font-size:12px;color:var(--muted)}
@@ -121,7 +121,7 @@ tr:last-child td{border-bottom:0}
 .exp-add-btn{align-self:flex-start;margin-top:2px;background:#fff;border:1px solid var(--line);color:var(--navy);border-radius:9px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer}
 @media(max-width:640px){.exp-head{display:none}.exp-row{grid-template-columns:1fr;gap:4px;padding:8px;border:1px solid var(--line);border-radius:10px}.exp-row-remove{justify-self:end}}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
-@media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:center;text-align:center}}
+@media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
 </style>
 </head>
 <body>
