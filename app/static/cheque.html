@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Impression Chèques — Banques Algériennes</title>
+<style>
+:root{--navy:#043970;--blue:#0d6ecc;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8;--green:#16a34a}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+h1{font-size:20px;margin:0}
+.topbar{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.topbar .sub{font-size:12px;opacity:.85;margin-top:2px}
+.wrap{max-width:1100px;margin:0 auto;padding:20px}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 8px 24px rgba(4,57,112,.06)}
+.card h2{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin:0 0 14px;font-weight:800}
+label{display:block;font-size:11px;font-weight:800;color:#42566f;margin:12px 0 5px;text-transform:uppercase;letter-spacing:.04em}
+label:first-child{margin-top:0}
+input[type=text],input[type=number],select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:14px;color:var(--ink);background:#fff;font-family:inherit}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
+.row{display:flex;gap:10px}
+.row>div{flex:1}
+.btn{border:0;border-radius:9px;padding:10px 14px;font-weight:800;font-size:13px;cursor:pointer;background:var(--navy);color:#fff}
+.btn.ghost{background:#fff;border:1px solid var(--line);color:var(--navy)}
+.btn.small{padding:6px 10px;font-size:11px}
+.btn:hover{opacity:.9}
+.actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.hint{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+.check-lettres-box{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13px;background:#f8fafc;min-height:38px}
+.toggle-row{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--muted)}
+.toggle-row input{width:auto}
+
+/* Aperçu chèque à l'écran */
+.preview-outer{overflow:auto;background:#dfe7ee;border-radius:16px;padding:20px;display:flex;justify-content:center}
+.cheque-page{background:#fff;box-shadow:0 4px 20px rgba(0,0,0,.15);position:relative}
+.cheque-block{position:absolute;border:1.5px dashed #94a3b8}
+.field{position:absolute;white-space:nowrap;font-family:"Courier New",monospace;line-height:1}
+.field.calib{outline:1px dashed #dc2626;cursor:move}
+.calib-panel{margin-top:14px;border-top:1px dashed var(--line);padding-top:14px}
+.calib-field-row{display:grid;grid-template-columns:1.2fr 60px 60px 50px 26px;gap:6px;align-items:center;margin-bottom:6px;font-size:11px}
+.calib-field-row input{padding:4px 6px;font-size:11px}
+.calib-field-row span{font-weight:800;color:var(--navy)}
+.mm-grid{position:absolute;inset:0;background-image:linear-gradient(to right, rgba(148,163,184,.35) 1px, transparent 1px),linear-gradient(to bottom, rgba(148,163,184,.35) 1px, transparent 1px);background-size:10mm 10mm}
+
+/* Impression */
+@media print{
+  body *{visibility:hidden!important}
+  #printSheet, #printSheet *{visibility:visible!important}
+  #printSheet{position:absolute;left:0;top:0}
+  @page{margin:0;size:auto}
+  .no-print{display:none!important}
+}
+#printSheet{display:none}
+</style>
+</head>
+<body>
+
+<div class="topbar no-print">
+  <div>
+    <h1>🖨️ Impression Chèques — Banques Algériennes</h1>
+    <div class="sub">Outil autonome, local, sans lien avec ATLAS — les réglages sont sauvegardés uniquement dans ce navigateur</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <select id="bankSelect" style="min-width:220px"></select>
+    <button class="btn ghost small" onclick="addBank()">+ Banque</button>
+  </div>
+</div>
+
+<div class="wrap no-print">
+  <div class="grid">
+
+    <div class="card">
+      <h2>Champs du chèque</h2>
+      <label>Bénéficiaire (payez à l'ordre de)</label>
+      <input type="text" id="fBeneficiaire" placeholder="Nom du bénéficiaire" oninput="renderPreview()">
+
+      <label>Montant en chiffres (DA)</label>
+      <input type="text" id="fMontant" placeholder="ex: 125000,50" inputmode="decimal" oninput="onMontantChange()">
+
+      <label>Montant en toutes lettres</label>
+      <div class="check-lettres-box" id="montantLettresPreview">—</div>
+      <div class="toggle-row">
+        <input type="checkbox" id="fLettresManuel" onchange="onLettresManuelToggle()">
+        <label style="margin:0;text-transform:none;font-weight:600;color:var(--muted)">Modifier le texte en lettres manuellement</label>
+      </div>
+      <textarea id="fMontantLettresManuel" rows="2" style="display:none;margin-top:6px" oninput="renderPreview()"></textarea>
+
+      <label>Ville d'émission</label>
+      <input type="text" id="fVille" placeholder="ex: Alger" oninput="renderPreview()">
+
+      <label>Date d'émission</label>
+      <input type="date" id="fDate" oninput="renderPreview()">
+
+      <div class="actions">
+        <button class="btn" onclick="doPrint()">🖨️ Imprimer le chèque</button>
+        <button class="btn ghost" onclick="clearForm()">Effacer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Aperçu (à l'échelle réelle)</h2>
+      <div class="preview-outer">
+        <div class="cheque-page" id="chequePage">
+          <div class="cheque-block" id="chequeBlock"></div>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <input type="checkbox" id="calibToggle" onchange="onCalibToggle()">
+        <label style="margin:0;text-transform:none;font-weight:600;color:var(--muted)">Mode calibrage (ajuster la position des champs pour cette banque)</label>
+      </div>
+
+      <div id="calibPanel" class="calib-panel" style="display:none">
+        <div class="row">
+          <div>
+            <label>Largeur chèque (mm)</label>
+            <input type="number" id="cfgW" step="1" oninput="onGeomChange()">
+          </div>
+          <div>
+            <label>Hauteur chèque (mm)</label>
+            <input type="number" id="cfgH" step="1" oninput="onGeomChange()">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Décalage page — X (mm)</label>
+            <input type="number" id="cfgOffX" step="0.5" oninput="onGeomChange()">
+          </div>
+          <div>
+            <label>Décalage page — Y (mm)</label>
+            <input type="number" id="cfgOffY" step="0.5" oninput="onGeomChange()">
+          </div>
+        </div>
+        <div class="hint">Le « décalage page » place le chèque sur la feuille imprimée (utile si ton imprimante n'imprime pas exactement au bord). Les champs ci-dessous se positionnent ensuite à l'intérieur du chèque.</div>
+
+        <div class="calib-field-row" style="margin-top:12px;font-weight:800;color:var(--muted)">
+          <span style="color:var(--muted)">Champ</span><span>X mm</span><span>Y mm</span><span>Taille</span><span></span>
+        </div>
+        <div id="calibFieldsList"></div>
+
+        <div class="actions">
+          <button class="btn ghost small" onclick="printCalibGrid()">🖨️ Imprimer une grille de repérage (mm)</button>
+          <button class="btn ghost small" onclick="resetBankConfig()">Réinitialiser cette banque</button>
+        </div>
+        <div class="hint">Astuce de calibrage : imprime la grille sur une feuille blanche, place-la derrière un vrai chèque de cette banque devant une fenêtre (à contre-jour) pour repérer en mm où se trouvent chaque ligne, puis reporte les valeurs ci-dessus.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Feuille d'impression réelle (invisible à l'écran, seule visible au print) -->
+<div id="printSheet">
+  <div class="cheque-page" id="printChequePage">
+    <div class="cheque-block" id="printChequeBlock"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = "chequeDZ_config_v1";
+
+const DEFAULT_BANKS = [
+  "BNA — Banque Nationale d'Algérie",
+  "BEA — Banque Extérieure d'Algérie",
+  "BADR — Banque de l'Agriculture et du Développement Rural",
+  "BDL — Banque de Développement Local",
+  "CPA — Crédit Populaire d'Algérie",
+  "CNEP-Banque",
+  "AGB — Gulf Bank Algeria",
+  "Société Générale Algérie",
+  "BNP Paribas El Djazair",
+  "Natixis Algérie",
+  "Al Baraka Bank Algérie",
+  "Al Salam Bank Algeria",
+  "Trust Bank Algeria",
+  "Fransabank El-Djazair",
+  "Arab Banking Corporation Algeria (ABC)",
+  "Housing Bank for Trade and Finance - Algérie"
+];
+
+// Champs positionnables. x/y = coin haut-gauche du texte, en mm, relatif au coin haut-gauche du chèque.
+const FIELD_DEFS = [
+  {key:"montantChiffres", label:"Montant (chiffres)", x:145, y:12, size:12, bold:true},
+  {key:"montantLettres1", label:"Montant lettres — ligne 1", x:10, y:22, size:10, bold:false},
+  {key:"montantLettres2", label:"Montant lettres — ligne 2", x:10, y:30, size:10, bold:false},
+  {key:"beneficiaire",    label:"Bénéficiaire",             x:10, y:40, size:11, bold:false},
+  {key:"ville",           label:"Ville d'émission",          x:15, y:60, size:10, bold:false},
+  {key:"dateJour",        label:"Date — jour",               x:100, y:60, size:10, bold:false},
+  {key:"dateMois",        label:"Date — mois",               x:112, y:60, size:10, bold:false},
+  {key:"dateAnnee",       label:"Date — année",               x:124, y:60, size:10, bold:false}
+];
+
+const DEFAULT_GEOM = { w: 175, h: 80, offX: 10, offY: 10 };
+
+let cfg = loadConfig();
+let currentBank = null;
+
+function loadConfig(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if(raw && raw.banks) return raw;
+  }catch(e){}
+  const banks = {};
+  DEFAULT_BANKS.forEach(name => banks[name] = freshBankConfig());
+  return { bankList: DEFAULT_BANKS.slice(), banks };
+}
+
+function freshBankConfig(){
+  const fields = {};
+  FIELD_DEFS.forEach(f => fields[f.key] = {x:f.x, y:f.y, size:f.size});
+  return { ...DEFAULT_GEOM, fields };
+}
+
+function saveConfig(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+}
+
+function currentBankConfig(){
+  if(!cfg.banks[currentBank]) cfg.banks[currentBank] = freshBankConfig();
+  return cfg.banks[currentBank];
+}
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+// ---------- Sélecteur de banque ----------
+function populateBankSelect(){
+  const sel = document.getElementById("bankSelect");
+  sel.innerHTML = cfg.bankList.map(b => `<option value="${esc(b)}">${esc(b)}</option>`).join("");
+  if(!currentBank || !cfg.bankList.includes(currentBank)) currentBank = cfg.bankList[0];
+  sel.value = currentBank;
+  sel.onchange = () => { currentBank = sel.value; onBankChanged(); };
+}
+
+function addBank(){
+  const name = prompt("Nom de la nouvelle banque :");
+  if(!name || !name.trim()) return;
+  const clean = name.trim();
+  if(!cfg.bankList.includes(clean)) cfg.bankList.push(clean);
+  cfg.banks[clean] = cfg.banks[clean] || freshBankConfig();
+  saveConfig();
+  currentBank = clean;
+  populateBankSelect();
+  onBankChanged();
+}
+
+function onBankChanged(){
+  renderCalibFields();
+  renderGeomInputs();
+  renderPreview();
+}
+
+// ---------- Montant en lettres (français, DA / centimes) ----------
+const UNITS = ["zéro","un","deux","trois","quatre","cinq","six","sept","huit","neuf","dix",
+  "onze","douze","treize","quatorze","quinze","seize","dix-sept","dix-huit","dix-neuf"];
+const TENS = ["", "", "vingt","trente","quarante","cinquante","soixante","soixante-dix","quatre-vingt","quatre-vingt-dix"];
+
+function twoDigitsToWords(n){
+  if(n < 20) return UNITS[n];
+  const t = Math.floor(n/10), u = n%10;
+  if(t === 7 || t === 9){
+    const base = TENS[t-1];
+    if(u === 0) return base + "-dix";
+    if(t === 7 && u === 1) return base + " et onze";
+    return base + "-" + UNITS[10+u];
+  }
+  if(u === 0) return TENS[t] + (t===8?"s":"");
+  if(u === 1 && (t===2||t===3||t===4||t===5||t===6)) return TENS[t] + " et un";
+  return TENS[t] + "-" + UNITS[u];
+}
+
+function threeDigitsToWords(n){
+  const c = Math.floor(n/100), rest = n%100;
+  let out = "";
+  if(c > 0){
+    out += (c===1 ? "cent" : UNITS[c] + " cent");
+    if(c > 1 && rest === 0) out += "s";
+  }
+  if(rest > 0) out += (out ? " " : "") + twoDigitsToWords(rest);
+  return out || "zéro";
+}
+
+function integerToWords(n){
+  if(n === 0) return "zéro";
+  const groups = [
+    {value:1000000000, singular:"milliard", plural:"milliards"},
+    {value:1000000, singular:"million", plural:"millions"},
+    {value:1000, singular:"mille", plural:"mille"}
+  ];
+  let out = "";
+  let remaining = Math.floor(n);
+  for(const g of groups){
+    const count = Math.floor(remaining / g.value);
+    if(count > 0){
+      let part;
+      if(g.value === 1000){
+        part = (count === 1) ? "mille" : threeDigitsToWords(count) + " mille";
+      } else {
+        part = threeDigitsToWords(count) + " " + (count === 1 ? g.singular : g.plural);
+      }
+      out += (out ? " " : "") + part;
+      remaining -= count * g.value;
+    }
+  }
+  if(remaining > 0) out += (out ? " " : "") + threeDigitsToWords(remaining);
+  return out.trim();
+}
+
+function montantEnLettres(montantStr){
+  const cleaned = String(montantStr||"").replace(/\s/g,"").replace(",", ".");
+  const val = parseFloat(cleaned);
+  if(!isFinite(val) || val < 0) return "";
+  const dinars = Math.floor(val);
+  const centimes = Math.round((val - dinars) * 100);
+  let out = capitalize(integerToWords(dinars)) + (dinars <= 1 ? " dinar algérien" : " dinars algériens");
+  if(centimes > 0){
+    out += " et " + integerToWords(centimes) + (centimes <= 1 ? " centime" : " centimes");
+  }
+  return out;
+}
+
+function capitalize(s){ return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+function onMontantChange(){
+  if(!document.getElementById("fLettresManuel").checked){
+    const words = montantEnLettres(document.getElementById("fMontant").value);
+    document.getElementById("montantLettresPreview").textContent = words || "—";
+  }
+  renderPreview();
+}
+
+function onLettresManuelToggle(){
+  const manuel = document.getElementById("fLettresManuel").checked;
+  const box = document.getElementById("montantLettresPreview");
+  const ta = document.getElementById("fMontantLettresManuel");
+  if(manuel){
+    ta.value = box.textContent === "—" ? "" : box.textContent;
+    ta.style.display = "block";
+    box.style.display = "none";
+  } else {
+    ta.style.display = "none";
+    box.style.display = "block";
+    onMontantChange();
+  }
+  renderPreview();
+}
+
+function getMontantLettresText(){
+  return document.getElementById("fLettresManuel").checked
+    ? document.getElementById("fMontantLettresManuel").value
+    : document.getElementById("montantLettresPreview").textContent;
+}
+
+// ---------- Calibrage ----------
+function onCalibToggle(){
+  const on = document.getElementById("calibToggle").checked;
+  document.getElementById("calibPanel").style.display = on ? "block" : "none";
+  renderPreview();
+}
+
+function renderGeomInputs(){
+  const g = currentBankConfig();
+  document.getElementById("cfgW").value = g.w;
+  document.getElementById("cfgH").value = g.h;
+  document.getElementById("cfgOffX").value = g.offX;
+  document.getElementById("cfgOffY").value = g.offY;
+}
+
+function onGeomChange(){
+  const g = currentBankConfig();
+  g.w = Number(document.getElementById("cfgW").value) || DEFAULT_GEOM.w;
+  g.h = Number(document.getElementById("cfgH").value) || DEFAULT_GEOM.h;
+  g.offX = Number(document.getElementById("cfgOffX").value) || 0;
+  g.offY = Number(document.getElementById("cfgOffY").value) || 0;
+  saveConfig();
+  renderPreview();
+}
+
+function renderCalibFields(){
+  const g = currentBankConfig();
+  const list = document.getElementById("calibFieldsList");
+  list.innerHTML = FIELD_DEFS.map(f => {
+    const v = g.fields[f.key] || {x:f.x,y:f.y,size:f.size};
+    return `<div class="calib-field-row">
+      <span>${esc(f.label)}</span>
+      <input type="number" step="0.5" value="${v.x}" onchange="setFieldPos('${f.key}','x',this.value)">
+      <input type="number" step="0.5" value="${v.y}" onchange="setFieldPos('${f.key}','y',this.value)">
+      <input type="number" step="1" value="${v.size}" onchange="setFieldPos('${f.key}','size',this.value)">
+      <span></span>
+    </div>`;
+  }).join("");
+}
+
+function setFieldPos(key, prop, value){
+  const g = currentBankConfig();
+  if(!g.fields[key]) g.fields[key] = {x:0,y:0,size:10};
+  g.fields[key][prop] = Number(value) || 0;
+  saveConfig();
+  renderPreview();
+}
+
+function resetBankConfig(){
+  if(!confirm("Réinitialiser les positions de cette banque aux valeurs par défaut ?")) return;
+  cfg.banks[currentBank] = freshBankConfig();
+  saveConfig();
+  renderCalibFields();
+  renderGeomInputs();
+  renderPreview();
+}
+
+// ---------- Rendu de l'aperçu / de l'impression ----------
+const MM = "mm"; // unité CSS directe
+
+function fieldValues(){
+  const dateStr = document.getElementById("fDate").value; // yyyy-mm-dd
+  let jour="", mois="", annee="";
+  if(dateStr){
+    const [y,m,d] = dateStr.split("-");
+    jour = d; mois = m;
+    let yearNum = parseInt(y, 10);
+    if(yearNum < 100) yearNum += 2000; // le champ date natif tronque parfois l'année (ex: "0026")
+    annee = String(yearNum);
+  }
+  const lettres = getMontantLettresText();
+  const words = lettres.split(" ");
+  const mid = Math.ceil(words.length/2);
+  return {
+    beneficiaire: document.getElementById("fBeneficiaire").value,
+    montantChiffres: document.getElementById("fMontant").value ? document.getElementById("fMontant").value + " DA" : "",
+    montantLettres1: words.slice(0,mid).join(" "),
+    montantLettres2: words.slice(mid).join(" "),
+    ville: document.getElementById("fVille").value,
+    dateJour: jour, dateMois: mois, dateAnnee: annee
+  };
+}
+
+function buildChequeHTML(g, calib){
+  const vals = fieldValues();
+  return FIELD_DEFS.map(f => {
+    const pos = g.fields[f.key] || {x:f.x,y:f.y,size:f.size};
+    const value = vals[f.key] || "";
+    const cls = calib ? "field calib" : "field";
+    return `<div class="${cls}" data-key="${f.key}" style="left:${pos.x}${MM};top:${pos.y}${MM};font-size:${pos.size}pt;font-weight:${f.bold?900:400}">${esc(value)}</div>`;
+  }).join("");
+}
+
+function renderPreview(){
+  const g = currentBankConfig();
+  const calib = document.getElementById("calibToggle").checked;
+
+  const page = document.getElementById("chequePage");
+  page.style.width = (g.w + g.offX*2) + MM;
+  page.style.height = (g.h + g.offY*2) + MM;
+
+  const block = document.getElementById("chequeBlock");
+  block.style.left = g.offX + MM;
+  block.style.top = g.offY + MM;
+  block.style.width = g.w + MM;
+  block.style.height = g.h + MM;
+  block.innerHTML = (calib ? '<div class="mm-grid" id="mmGrid"></div>' : "") + buildChequeHTML(g, calib);
+}
+
+function doPrint(){
+  const g = currentBankConfig();
+  const page = document.getElementById("printChequePage");
+  page.style.width = (g.w + g.offX*2) + MM;
+  page.style.height = (g.h + g.offY*2) + MM;
+  const block = document.getElementById("printChequeBlock");
+  block.style.left = g.offX + MM;
+  block.style.top = g.offY + MM;
+  block.style.width = g.w + MM;
+  block.style.height = g.h + MM;
+  block.style.border = "none";
+  block.innerHTML = buildChequeHTML(g, false);
+  document.getElementById("printSheet").style.display = "block";
+  window.print();
+  setTimeout(() => { document.getElementById("printSheet").style.display = "none"; }, 300);
+}
+
+function printCalibGrid(){
+  const g = currentBankConfig();
+  const page = document.getElementById("printChequePage");
+  page.style.width = (g.w + g.offX*2) + MM;
+  page.style.height = (g.h + g.offY*2) + MM;
+  const block = document.getElementById("printChequeBlock");
+  block.style.left = g.offX + MM;
+  block.style.top = g.offY + MM;
+  block.style.width = g.w + MM;
+  block.style.height = g.h + MM;
+  block.style.border = "1px solid #000";
+  block.innerHTML = '<div class="mm-grid" style="background-image:linear-gradient(to right, rgba(0,0,0,.5) 1px, transparent 1px),linear-gradient(to bottom, rgba(0,0,0,.5) 1px, transparent 1px)"></div>' + buildChequeHTML(g, false);
+  document.getElementById("printSheet").style.display = "block";
+  window.print();
+  setTimeout(() => { document.getElementById("printSheet").style.display = "none"; }, 300);
+}
+
+function clearForm(){
+  document.getElementById("fBeneficiaire").value = "";
+  document.getElementById("fMontant").value = "";
+  document.getElementById("fVille").value = "";
+  document.getElementById("fDate").value = "";
+  document.getElementById("fLettresManuel").checked = false;
+  document.getElementById("fMontantLettresManuel").value = "";
+  document.getElementById("montantLettresPreview").textContent = "—";
+  onLettresManuelToggle();
+  renderPreview();
+}
+
+// ---------- Init ----------
+populateBankSelect();
+renderCalibFields();
+renderGeomInputs();
+renderPreview();
+</script>
+</body>
+</html>
