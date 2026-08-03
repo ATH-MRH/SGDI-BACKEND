@@ -25607,7 +25607,7 @@ async function renderFactClients(view){
       const ttc=ht*1.19;
       const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+clientSiteEffectif(site),0);
       const nbrSite=clientNbrSites(c);
-      return '<tr data-searchable style="'+(alert?"background:#fff7ed;":"")+'cursor:pointer" onclick="openClientModal(\''+c.id+'\',true)">'+
+      return '<tr data-searchable style="'+(alert?"background:#fff7ed;":"")+'cursor:pointer" onclick="openClientModal(\''+c.id+'\')">'+
         '<td class="font-semibold" style="color:#1d4ed8">'+escapeHTML(c.nom||"")+'</td>'+
         '<td class="text-xs">'+escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")+'</td>'+
         '<td class="text-xs">'+escapeHTML(c.contact||"")+'</td>'+
@@ -28061,7 +28061,6 @@ function sgdiTabSwitch(id,idx){
   document.querySelectorAll(`[id^="${id}-panel-"]`).forEach((p,i)=>p.style.display=i===idx?"block":"none");
 }
 function openClientModal(id,readOnly=false){
-  if(!readOnly&&(session?.transverse==="facmod"||session?.transverse==="facturation")){toast("Modification clients non autorisée dans ce module","error");return;}
   const c=(db.clients||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id));
   const isEdit=!!c;
   if(c?.nom)pageTabSetLabel(c.nom);
