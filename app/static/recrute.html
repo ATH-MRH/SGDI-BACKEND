@@ -201,7 +201,7 @@ tr:last-child td{border-bottom:0}
         </div></section>
         <section class="form-section"><div class="form-section-title">3. Candidature et profil</div><div class="form-section-sub">Poste souhaité, expérience et informations opérationnelles</div><div class="field-grid">
           <div><label for="fPosition">Poste souhaité</label><select id="fPosition"><option value="">— Choisir —</option></select></div><div><label for="fSociety">Société</label><select id="fSociety"></select></div>
-          <div><label for="fSalary">Salaire prévu (DA/mois)</label><input id="fSalary" type="number" min="0" step="1000"></div><div><label for="fContractDuration">Durée du contrat</label><input id="fContractDuration" placeholder="Ex. 12 mois, CDI"></div>
+          <div><label for="fSalary">Salaire prévu (DA/mois)</label><input id="fSalary" type="text" inputmode="decimal" placeholder="00 000,00" onfocus="editSalaryDzd(this)" onblur="formatSalaryPlainField(this)"></div><div><label for="fContractDuration">Durée du contrat</label><input id="fContractDuration" placeholder="Ex. 12 mois, CDI"></div>
           <div><label for="fSource">Source de candidature</label><input id="fSource" placeholder="ANEM, recommandation…"></div><div><label for="fMilitary">Service militaire</label><select id="fMilitary"><option value="">—</option><option>Oui</option><option>Non</option><option>Exempté</option><option>Sursitaire</option></select></div>
           <div><label for="fHeight">Taille (cm)</label><input id="fHeight" type="number" min="0"></div><div><label for="fShoeSize">Pointure</label><input id="fShoeSize" type="number" min="0"></div>
           <div><label for="fShirtSize">Taille chemise</label><select id="fShirtSize"><option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>XXXL</option></select></div><div><label for="fLanguages">Langues parlées</label><input id="fLanguages" placeholder="Arabe, Français…"></div>
@@ -258,6 +258,11 @@ function formatSalaryDzd(value){
   return amount>0?amount.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" DZD":"";
 }
 function formatSalaryDzdField(field){if(field)field.value=formatSalaryDzd(field.value)}
+function formatSalaryPlain(value){
+  const amount=parseSalaryDzd(value);
+  return amount>0?amount.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}):"";
+}
+function formatSalaryPlainField(field){if(field)field.value=formatSalaryPlain(field.value)}
 function editSalaryDzd(field){
   if(!field)return;
   const amount=parseSalaryDzd(field.value);
@@ -481,9 +486,28 @@ function avisCell(item){
 }
 function rowActions(item){
   const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
+  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openCandidateConvocation(${item.id})">Convoquer</button>`);
   if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openContractForCandidate(${item.id})">Recruter</button>`);
   if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
   return `<div class="row-actions">${actions.join("")}</div>`;
+}
+let convocationCandidate=null;
+function openCandidateConvocation(id){
+  const item=tabState[activeTab]?.items?.find(row=>Number(row.id)===Number(id));if(!item)return;
+  convocationCandidate=item;
+  document.getElementById("convocationModal")?.remove();
+  const modal=document.createElement("div");modal.id="convocationModal";modal.className="modal-backdrop";
+  const nextDay=new Date(Date.now()+86400000).toISOString().slice(0,10);
+  modal.innerHTML=`<div class="modal" style="max-width:620px"><div class="modal-head"><div><h2>Convoquer le candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc((item.last_name||"")+" "+(item.first_name||""))}</div></div><button type="button" class="modal-close" onclick="closeCandidateConvocation()">×</button></div><form onsubmit="event.preventDefault();saveCandidateConvocation(this)"><div class="field-grid" style="margin-top:18px"><div><label>Date de convocation</label><input name="date" type="date" min="${today()}" value="${nextDay}" required></div><div><label>Heure</label><input name="heure" type="time" value="09:00" required></div><div class="full"><label>Lieu</label><input name="lieu" value="Siège de la société" required></div><div class="full"><label>Objet / motif</label><textarea name="motif" required placeholder="Entretien de recrutement, complément de dossier…">Entretien de recrutement</textarea></div></div><div id="convocationError" class="error"></div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateConvocation()">Annuler</button><button type="submit" class="primary" style="width:auto;margin-top:0">Enregistrer la convocation</button></div></form></div>`;
+  modal.addEventListener("click",e=>{if(e.target===modal)closeCandidateConvocation()});document.body.appendChild(modal);
+}
+function closeCandidateConvocation(){document.getElementById("convocationModal")?.remove();convocationCandidate=null;}
+async function saveCandidateConvocation(form){
+  const item=convocationCandidate;if(!item)return;const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="ENREGISTREMENT…";
+  const data={...(item.data||{})};const history=Array.isArray(data.convocations)?data.convocations.slice():[];
+  const convocation={id:"conv_"+Date.now(),date:form.date.value,heure:form.heure.value,lieu:form.lieu.value.trim(),motif:form.motif.value.trim(),statut:"planifiee",createdAt:new Date().toISOString(),createdBy:recruteSession?.user?.username||""};
+  history.push(convocation);data.convocations=history;data.derniereConvocation=convocation;data.avisDecision="Instance";data.avisDate=today();
+  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateConvocation();showBanner(`Convocation enregistrée pour le ${esc(convocation.date)} à ${esc(convocation.heure)}.`,"success");loadTab(activeTab);}catch(error){const el=document.getElementById("convocationError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer la convocation";}
 }
 function renderList(){
   const state=tabState[activeTab];
@@ -760,7 +784,7 @@ function openCandidateForm(id){
       candidateField("fLastName",item.last_name);candidateField("fFirstName",item.first_name);
       candidateField("fPhone",item.phone);candidateField("fEmail",item.email);setPositionValue("fPosition",item.desired_position||"");
       if(item.society)document.getElementById("fSociety").value=item.society;
-      candidateField("fSalary",item.expected_salary);
+      candidateField("fSalary",formatSalaryPlain(item.expected_salary));
       const data=item.data||{};
       const fields={fBirthDate:"dateNaissance",fBirthPlace:"lieuNaissance",fSex:"sexe",fFamilyStatus:"situation",fChildren:"nombreEnfants",fBlood:"groupeSanguin",fFather:"nomPere",fMother:"nomMere",fNin:"nin",fCnas:"numeroCnas",fAddress:"adresse",fCommune:"commune",fWilaya:"wilaya",fEmergencyName:"contactUrgenceNom",fEmergencyRelation:"contactUrgenceLien",fEmergencyPhone:"contactUrgenceTel",fContractDuration:"dureeContrat",fSource:"source",fMilitary:"serviceMilitaire",fHeight:"taille",fShoeSize:"pointure",fShirtSize:"tailleChemise",fExperience:"experienceTexte",fNotes:"notes",fAvis:"avisDecision",fAvisDate:"avisDate",fRecruteur:"avisRecruteur",fComment:"avisCommentaire"};
       Object.entries(fields).forEach(([field,key])=>candidateField(field,data[key]));
