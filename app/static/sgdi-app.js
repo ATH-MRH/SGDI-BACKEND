@@ -26176,7 +26176,8 @@ function factureVoirApercu(fId){
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">'+
     '<div style="font-weight:800;font-size:14px;color:#0f2d5a">'+escapeHTML(numero)+'</div>'+
     '<div style="display:flex;gap:8px">'+
-    '<button onclick="facturePrintApercu()" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">🖨 Imprimer / Enregistrer PDF</button>'+
+    '<button onclick="facturePrintApercu()" style="background:#043970;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">🖨 Imprimer</button>'+
+    '<button onclick="factureTelechargerPDF()" style="background:#047857;color:#fff;border:none;border-radius:7px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer">📥 Télécharger PDF</button>'+
     '<button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;line-height:1">✕</button>'+
     '</div></div>'+
     '<div id="fact-print-area" style="padding:22px;overflow:auto;max-height:80vh;background:#eef2f7">'+
@@ -26245,6 +26246,43 @@ function facturePrintApercu(){
   popup.document.open();popup.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><base href="'+escapeHTML(location.origin)+'/"><title>Facture — IRON GROUP</title><style>@page{size:A4 portrait;margin:9mm}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}.fact-pdf-sheet{width:192mm!important;min-height:279mm!important;margin:0 auto!important;padding:8mm 9mm 7mm!important;box-shadow:none!important;border:0!important}img,canvas{max-width:100%}button{display:none!important}</style></head><body>'+printable.innerHTML+'</body></html>');popup.document.close();
   const printWhenReady=()=>{const images=Array.from(popup.document.images);Promise.all(images.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=img.onerror=resolve}))).then(()=>setTimeout(()=>{popup.focus();popup.print()},250))};
   if(popup.document.readyState==="complete")printWhenReady();else popup.onload=printWhenReady;
+}
+async function factureTelechargerPDF(){
+  const source=document.getElementById("fact-print-area");if(!source){toast("Aperçu introuvable","error");return}
+  const sheet=source.querySelector(".fact-pdf-sheet");if(!sheet){toast("Aperçu introuvable","error");return}
+  if(typeof html2canvas==="undefined"||!window.jspdf?.jsPDF){toast("Génération PDF indisponible : librairie non chargée","error");return}
+  const clone=sheet.cloneNode(true);
+  const sourceCanvases=sheet.querySelectorAll("canvas"),cloneCanvases=clone.querySelectorAll("canvas");
+  cloneCanvases.forEach((canvas,i)=>{try{const img=document.createElement("img");img.src=sourceCanvases[i].toDataURL("image/png");img.width=sourceCanvases[i].width;img.height=sourceCanvases[i].height;canvas.replaceWith(img)}catch(e){}});
+  clone.style.boxShadow="none";clone.style.margin="0";
+  const holder=document.createElement("div");
+  holder.style.cssText="position:fixed;left:-9999px;top:0;background:#fff";
+  holder.appendChild(clone);
+  document.body.appendChild(holder);
+  try{
+    const canvasEl=await html2canvas(clone,{scale:2,useCORS:true,backgroundColor:"#ffffff"});
+    const imgData=canvasEl.toDataURL("image/png");
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({unit:"mm",format:"a4",orientation:"portrait"});
+    const pageWidth=210,pageHeight=297;
+    const imgWidth=pageWidth,imgHeight=canvasEl.height*imgWidth/canvasEl.width;
+    let heightLeft=imgHeight,position=0;
+    pdf.addImage(imgData,"PNG",0,position,imgWidth,imgHeight);
+    heightLeft-=pageHeight;
+    while(heightLeft>0){
+      position=heightLeft-imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData,"PNG",0,position,imgWidth,imgHeight);
+      heightLeft-=pageHeight;
+    }
+    const numero=(document.getElementById("fact-numero")?.value||"facture").trim().replace(/[^\w\-]+/g,"_")||"facture";
+    pdf.save("Facture_"+numero+".pdf");
+  }catch(e){
+    console.error("Erreur génération PDF facture",e);
+    toast("Erreur lors de la génération du PDF : "+(e.message||e),"error");
+  }finally{
+    holder.remove();
+  }
 }
 
 function renderFactureEditor(view){
