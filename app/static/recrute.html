@@ -100,6 +100,13 @@ tr:last-child td{border-bottom:0}
 .form-section-sub{font-size:12px;color:var(--muted);margin-bottom:8px}
 .photo-field{display:flex;align-items:center;gap:15px}.photo-preview{width:94px;height:110px;border:2px dashed #bfd1e3;border-radius:14px;object-fit:cover;background:#eef4f9;display:grid;place-items:center;color:#789;font-weight:900;overflow:hidden}.photo-preview img{width:100%;height:100%;object-fit:cover}
 .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:750;color:#42566f}.checkbox-row input{width:auto;height:auto}
+.exp-table{display:flex;flex-direction:column;gap:6px}
+.exp-head,.exp-row{display:grid;grid-template-columns:1.3fr 1fr 1fr 1.1fr 1.3fr 26px;gap:6px;align-items:center}
+.exp-head{font-size:10px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:0 2px}
+.exp-row input{margin:0}
+.exp-row-remove{background:none;border:0;color:#dc2626;font-size:15px;font-weight:900;cursor:pointer;padding:0;line-height:1}
+.exp-add-btn{align-self:flex-start;margin-top:2px;background:#fff;border:1px solid var(--line);color:var(--navy);border-radius:9px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer}
+@media(max-width:640px){.exp-head{display:none}.exp-row{grid-template-columns:1fr;gap:4px;padding:8px;border:1px solid var(--line);border-radius:10px}.exp-row-remove{justify-self:end}}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:center;text-align:center}}
 </style>
@@ -205,7 +212,13 @@ tr:last-child td{border-bottom:0}
           <div><label for="fSource">Source de candidature</label><input id="fSource" placeholder="ANEM, recommandation…"></div><div><label for="fMilitary">Service militaire</label><select id="fMilitary"><option value="">—</option><option>Oui</option><option>Non</option><option>Exempté</option><option>Sursitaire</option></select></div>
           <div><label for="fHeight">Taille (cm)</label><input id="fHeight" type="number" min="0"></div><div><label for="fShoeSize">Pointure</label><input id="fShoeSize" type="number" min="0"></div>
           <div><label for="fShirtSize">Taille chemise</label><select id="fShirtSize"><option value="">—</option><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option><option>XXL</option><option>XXXL</option></select></div><div><label for="fLanguages">Langues parlées</label><input id="fLanguages" placeholder="Arabe, Français…"></div>
-          <div class="full"><label for="fExperience">Expérience professionnelle</label><textarea id="fExperience" placeholder="Employeurs, postes occupés, périodes et motifs de départ"></textarea></div>
+          <div class="full"><label>Expérience professionnelle</label>
+            <div class="exp-table">
+              <div class="exp-head"><span>Société</span><span>Du</span><span>Au</span><span>Poste</span><span>Motif de départ</span><span></span></div>
+              <div id="experienceRows"></div>
+              <button type="button" class="exp-add-btn" onclick="addExperienceRow()">+ Ajouter une ligne</button>
+            </div>
+          </div>
           <div class="full"><label for="fNotes">Notes du recruteur</label><textarea id="fNotes"></textarea></div>
         </div></section>
         <section class="form-section"><div class="form-section-title">4. Avis du recruteur</div><div class="field-grid">
@@ -763,6 +776,36 @@ function gotoContractPage(page){
 }
 
 function candidateField(id,value){const el=document.getElementById(id);if(el)el.value=value??""}
+function experienceRowHTML(row){
+  row=row||{};
+  return `<div class="exp-row">
+    <input class="exp-societe" placeholder="Société" value="${esc(row.societe||"")}">
+    <input class="exp-du" type="date" value="${esc(row.du||"")}">
+    <input class="exp-au" type="date" value="${esc(row.au||"")}">
+    <input class="exp-poste" placeholder="Poste" value="${esc(row.poste||"")}">
+    <input class="exp-motif" placeholder="Motif de départ" value="${esc(row.motif||"")}">
+    <button type="button" class="exp-row-remove" onclick="this.closest('.exp-row').remove()" title="Supprimer cette ligne">✕</button>
+  </div>`;
+}
+function addExperienceRow(row){
+  const container=document.getElementById("experienceRows");
+  if(container)container.insertAdjacentHTML("beforeend",experienceRowHTML(row));
+}
+function setExperienceRows(rows){
+  const container=document.getElementById("experienceRows");
+  if(!container)return;
+  container.innerHTML="";
+  (Array.isArray(rows)&&rows.length?rows:[{}]).forEach(r=>addExperienceRow(r));
+}
+function collectExperienceRows(){
+  return Array.from(document.querySelectorAll("#experienceRows .exp-row")).map(row=>({
+    societe:row.querySelector(".exp-societe").value.trim(),
+    du:row.querySelector(".exp-du").value,
+    au:row.querySelector(".exp-au").value,
+    poste:row.querySelector(".exp-poste").value.trim(),
+    motif:row.querySelector(".exp-motif").value.trim(),
+  })).filter(r=>r.societe||r.du||r.au||r.poste||r.motif);
+}
 function renderCandidatePhoto(value){
   const box=document.getElementById("photoPreview");if(!box)return;
   box.innerHTML=value?`<img src="${esc(value)}" alt="Photo du candidat">`:"PHOTO";
@@ -786,9 +829,10 @@ function openCandidateForm(id){
       if(item.society)document.getElementById("fSociety").value=item.society;
       candidateField("fSalary",formatSalaryPlain(item.expected_salary));
       const data=item.data||{};
-      const fields={fBirthDate:"dateNaissance",fBirthPlace:"lieuNaissance",fSex:"sexe",fFamilyStatus:"situation",fChildren:"nombreEnfants",fBlood:"groupeSanguin",fFather:"nomPere",fMother:"nomMere",fNin:"nin",fCnas:"numeroCnas",fAddress:"adresse",fCommune:"commune",fWilaya:"wilaya",fEmergencyName:"contactUrgenceNom",fEmergencyRelation:"contactUrgenceLien",fEmergencyPhone:"contactUrgenceTel",fContractDuration:"dureeContrat",fSource:"source",fMilitary:"serviceMilitaire",fHeight:"taille",fShoeSize:"pointure",fShirtSize:"tailleChemise",fExperience:"experienceTexte",fNotes:"notes",fAvis:"avisDecision",fAvisDate:"avisDate",fRecruteur:"avisRecruteur",fComment:"avisCommentaire"};
+      const fields={fBirthDate:"dateNaissance",fBirthPlace:"lieuNaissance",fSex:"sexe",fFamilyStatus:"situation",fChildren:"nombreEnfants",fBlood:"groupeSanguin",fFather:"nomPere",fMother:"nomMere",fNin:"nin",fCnas:"numeroCnas",fAddress:"adresse",fCommune:"commune",fWilaya:"wilaya",fEmergencyName:"contactUrgenceNom",fEmergencyRelation:"contactUrgenceLien",fEmergencyPhone:"contactUrgenceTel",fContractDuration:"dureeContrat",fSource:"source",fMilitary:"serviceMilitaire",fHeight:"taille",fShoeSize:"pointure",fShirtSize:"tailleChemise",fNotes:"notes",fAvis:"avisDecision",fAvisDate:"avisDate",fRecruteur:"avisRecruteur",fComment:"avisCommentaire"};
       Object.entries(fields).forEach(([field,key])=>candidateField(field,data[key]));
       candidateField("fLanguages",Array.isArray(data.langues)?data.langues.join(", "):data.langues);
+      setExperienceRows(Array.isArray(data.experience)&&data.experience.length?data.experience:(data.experienceTexte?[{motif:data.experienceTexte}]:[]));
       const photo=data.photo||data.photoData||"";candidateField("fPhotoData",photo);renderCandidatePhoto(photo);
     }
   }else{
@@ -797,6 +841,7 @@ function openCandidateForm(id){
     candidateField("fAvisDate",today());
     candidateField("fRecruteur",recruteSession?.user?.full_name||recruteSession?.user?.username||"");
     renderCandidatePhoto("");
+    setExperienceRows([]);
   }
   const avisSelect=document.getElementById("fAvis");
   avisSelect.className="avis-select "+avisClass(avisSelect.value);
@@ -825,14 +870,14 @@ async function submitCandidateForm(){
     email:document.getElementById("fEmail").value.trim(),
     desired_position:document.getElementById("fPosition").value.trim(),
     society:document.getElementById("fSociety").value||activeSociety||"",
-    expected_salary:document.getElementById("fSalary").value?Number(document.getElementById("fSalary").value):null,
+    expected_salary:parseSalaryDzd(document.getElementById("fSalary").value)||null,
     data:{
       ...(existing?.data||{}),
       photo:document.getElementById("fPhotoData").value,
-      nom:lastName,prenom:firstName,telephone:document.getElementById("fPhone").value.trim(),email:document.getElementById("fEmail").value.trim(),posteSouhaite:document.getElementById("fPosition").value.trim(),salairePrevu:document.getElementById("fSalary").value?Number(document.getElementById("fSalary").value):null,
+      nom:lastName,prenom:firstName,telephone:document.getElementById("fPhone").value.trim(),email:document.getElementById("fEmail").value.trim(),posteSouhaite:document.getElementById("fPosition").value.trim(),salairePrevu:parseSalaryDzd(document.getElementById("fSalary").value)||null,
       dateNaissance:document.getElementById("fBirthDate").value,lieuNaissance:document.getElementById("fBirthPlace").value.trim(),sexe:document.getElementById("fSex").value,situation:document.getElementById("fFamilyStatus").value,nombreEnfants:document.getElementById("fChildren").value?Number(document.getElementById("fChildren").value):0,groupeSanguin:document.getElementById("fBlood").value,nomPere:document.getElementById("fFather").value.trim(),nomMere:document.getElementById("fMother").value.trim(),nin:document.getElementById("fNin").value.trim(),numeroCnas:document.getElementById("fCnas").value.trim(),
       adresse:document.getElementById("fAddress").value.trim(),commune:document.getElementById("fCommune").value.trim(),wilaya:document.getElementById("fWilaya").value.trim(),contactUrgenceNom:document.getElementById("fEmergencyName").value.trim(),contactUrgenceLien:document.getElementById("fEmergencyRelation").value.trim(),contactUrgenceTel:document.getElementById("fEmergencyPhone").value.trim(),
-      dureeContrat:document.getElementById("fContractDuration").value.trim(),source:document.getElementById("fSource").value.trim(),serviceMilitaire:document.getElementById("fMilitary").value,taille:document.getElementById("fHeight").value,pointure:document.getElementById("fShoeSize").value,tailleChemise:document.getElementById("fShirtSize").value,langues:document.getElementById("fLanguages").value.split(",").map(x=>x.trim()).filter(Boolean),experienceTexte:document.getElementById("fExperience").value.trim(),notes:document.getElementById("fNotes").value.trim(),
+      dureeContrat:document.getElementById("fContractDuration").value.trim(),source:document.getElementById("fSource").value.trim(),serviceMilitaire:document.getElementById("fMilitary").value,taille:document.getElementById("fHeight").value,pointure:document.getElementById("fShoeSize").value,tailleChemise:document.getElementById("fShirtSize").value,langues:document.getElementById("fLanguages").value.split(",").map(x=>x.trim()).filter(Boolean),experience:collectExperienceRows(),notes:document.getElementById("fNotes").value.trim(),
       avisDecision:document.getElementById("fAvis").value,
       avisDate:document.getElementById("fAvisDate").value,
       avisRecruteur:document.getElementById("fRecruteur").value.trim(),
