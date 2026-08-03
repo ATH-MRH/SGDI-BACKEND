@@ -25622,7 +25622,8 @@ async function renderFactClients(view){
     }).join("");
     const total=result?.total??list.length;
     view.innerHTML=factTabs("clients")+
-      '<div class="flex justify-between items-center mb-3"><div style="display:flex;align-items:center;gap:12px"><h1 class="text-2xl font-bold">Clients</h1><span style="background:#0f2d5a;color:#fff;font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px">'+total+'</span></div></div>'+
+      '<div class="flex justify-between items-center mb-3"><div style="display:flex;align-items:center;gap:12px"><h1 class="text-2xl font-bold">Clients</h1><span style="background:#0f2d5a;color:#fff;font-size:13px;font-weight:800;padding:3px 12px;border-radius:20px">'+total+'</span></div>'+
+      '<div style="display:flex;gap:8px;align-items:center"><button onclick="importClientsExcel()" style="background:#fff;color:#047857;border:1px solid #10b981;border-radius:7px;padding:10px 16px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap">⬆ IMPORTER EXCEL</button></div></div>'+
       '<div class="card overflow-x-auto">'+
       (list.length===0?'<div class="p-10 text-center text-slate-500">Aucun client.</div>':
       '<table><thead><tr>'+
@@ -25740,6 +25741,42 @@ async function importFacturesExcel(){
         try{const saved=await sgdiApi("/api/irongs/collections/factures/items",{method:"POST",body:{data},legacy:false});db.factures.push(saved&&typeof saved==="object"?saved:data);if(numero)known.add(numero.toUpperCase());imported++;}catch(err){console.error("Import facture",numero,err);failed++;}
       }
       renderView();toast(`${imported} facture(s) importée(s)${skipped?` · ${skipped} ignorée(s)`:""}${failed?` · ${failed} en erreur`:""}`,failed?"warning":"success");
+    }catch(err){toast("Import impossible : "+(err.message||err),"error");}
+  };reader.readAsArrayBuffer(file);};input.click();
+}
+async function importClientsExcel(){
+  try{await window.sgdiLoadXLSX();}catch(_e){return toast("Impossible de charger le lecteur Excel","error");}
+  const input=document.createElement("input");input.type="file";input.accept=".xlsx,.xls,.csv";
+  input.onchange=()=>{const file=input.files?.[0];if(!file)return;const reader=new FileReader();reader.onload=async e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});if(!rows.length)throw new Error("Le fichier ne contient aucun client");
+      let imported=0,skipped=0,failed=0;db.clients=db.clients||[];
+      const known=new Set(db.clients.map(c=>factureImportKey(c.nom||"")).filter(Boolean));
+      for(const row of rows){
+        const nom=String(factureImportValue(row,["Nom","Client","Raison sociale","Nom / raison sociale"])||"").trim();
+        if(!nom){skipped++;continue;}
+        if(known.has(factureImportKey(nom))){skipped++;continue;}
+        const c={
+          nom,
+          raisonSociale:String(factureImportValue(row,["Raison sociale"])||"").trim(),
+          societe:mySoc()||"",
+          statut:"actif",
+          contact:String(factureImportValue(row,["Contact","Nom contact"])||"").trim(),
+          tel:String(factureImportValue(row,["Tel","Téléphone","Telephone"])||"").trim(),
+          email:String(factureImportValue(row,["Email","E-mail","Mail"])||"").trim(),
+          adresse:String(factureImportValue(row,["Adresse"])||"").trim(),
+          wilaya:String(factureImportValue(row,["Wilaya"])||"").trim(),
+          commune:String(factureImportValue(row,["Commune"])||"").trim(),
+          nif:String(factureImportValue(row,["NIF"])||"").trim(),
+          rc:String(factureImportValue(row,["RC"])||"").trim(),
+          prestationsServices:String(factureImportValue(row,["Prestation","Prestations","Prestations et Services Fournis"])||"").trim(),
+          modePaiement:String(factureImportValue(row,["Mode paiement","Mode de paiement"])||"Virement bancaire").trim(),
+          delaiPaiement:String(factureImportValue(row,["Délai paiement","Delai paiement"])||"30 jours").trim(),
+        };
+        try{await persistClientToPostgres(c);db.clients.push(c);known.add(factureImportKey(nom));imported++;}catch(err){console.error("Import client",nom,err);failed++;}
+      }
+      renderView();toast(`${imported} client(s) importé(s)${skipped?` · ${skipped} ignoré(s)`:""}${failed?` · ${failed} en erreur`:""}`,failed?"warning":"success");
     }catch(err){toast("Import impossible : "+(err.message||err),"error");}
   };reader.readAsArrayBuffer(file);};input.click();
 }
