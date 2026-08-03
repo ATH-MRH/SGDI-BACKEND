@@ -101,6 +101,13 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .live-feed-badge.in{background:#16a34a;color:#fff}
 .live-feed-badge.out{background:#d97706;color:#fff}
 .live-feed-empty{text-align:center;color:#94a3b8;font-size:12px;padding:30px 10px}
+.lamp{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle;flex-shrink:0}
+.lamp-green-blink{background:#22c55e;animation:lampBlink 1s step-start infinite}
+.lamp-orange-blink{background:#f97316;animation:lampBlink 1s step-start infinite}
+.lamp-orange-fixed{background:#f97316}
+.lamp-red-blink{background:#dc2626;animation:lampBlink .6s step-start infinite}
+.lamp-red-fixed{background:#dc2626;box-shadow:0 0 8px 2px rgba(220,38,38,.6)}
+@keyframes lampBlink{50%{opacity:.15}}
 @media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.header-clock{position:static;transform:none;font-size:13px;letter-spacing:.02em;margin-top:9px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:center}.presence-summary{width:100%;font-size:13px}.presence-summary span{min-width:0;flex:1;padding:0 6px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 </style>
@@ -383,6 +390,7 @@ function recordScanEntry(data){
   sessionScans=sessionScans.slice(0,200);
   return {name,matricule,action,heure,site:entry.site,photo:entry.photo,societe:entry.societe,poste:entry.poste,statut:entry.statut,overtime:entry.overtime,overtimeMinutes:entry.overtimeMinutes};
 }
+let presenceAlertsData=[];
 async function loadAttendanceAlerts(){
   if(!pointerSession?.token)return;
   try{
@@ -390,8 +398,28 @@ async function loadAttendanceAlerts(){
     if(response.status===401){logout();return}
     if(!response.ok)throw new Error("Alertes indisponibles");
     const data=await response.json();
-    renderAttendanceAlerts(data.presence_alerts||[],data.weekly_alerts||[]);
+    presenceAlertsData=data.presence_alerts||[];
+    renderAttendanceAlerts(presenceAlertsData,data.weekly_alerts||[]);
+    renderLiveFeed();
   }catch(error){console.warn("Alertes de présence indisponibles",error)}
+}
+// Seuils de la lampe de présence (durée continue sur site, indépendant du régime de
+// rotation) : >8h vert clignotant, >12h orange clignotant, >16h orange fixe,
+// >=22h (24h-2h) rouge clignotant, >=24h rouge fixe.
+function lampClassForMinutes(m){
+  if(m>=1440)return"lamp-red-fixed";
+  if(m>=1320)return"lamp-red-blink";
+  if(m>=960)return"lamp-orange-fixed";
+  if(m>=720)return"lamp-orange-blink";
+  if(m>=480)return"lamp-green-blink";
+  return null;
+}
+function lampHTMLForMatricule(matricule){
+  if(!matricule)return"";
+  const alert=presenceAlertsData.find(a=>a.matricule&&a.matricule===matricule);
+  if(!alert)return"";
+  const cls=lampClassForMinutes(alert.elapsed_minutes);
+  return cls?`<span class="lamp ${cls}" title="${Math.floor(alert.elapsed_minutes/60)} h ${String(alert.elapsed_minutes%60).padStart(2,"0")} sur site"></span>`:"";
 }
 function renderAttendanceAlerts(presenceAlerts,weeklyAlerts){
   const bar=document.getElementById("attendanceAlertsBar");
@@ -501,7 +529,8 @@ function renderLiveFeed(){
   list.innerHTML=rows.length?rows.map(row=>{
     const isIn=row.arrivee&&!row.depart;
     const time=row.depart||row.arrivee||"";
-    return `<div class="live-feed-row ${isIn?"live-in":"live-out"}"><div><div class="live-feed-name">${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div style="text-align:right"><span class="live-feed-badge ${isIn?"in":"out"}">${isIn?"ENTRÉE":"SORTIE"}</span><div class="live-feed-meta" style="margin-top:4px">${esc(time)}</div></div></div>`;
+    const lamp=isIn?lampHTMLForMatricule(row.matricule):"";
+    return `<div class="live-feed-row ${isIn?"live-in":"live-out"}"><div><div class="live-feed-name">${lamp}${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div style="text-align:right"><span class="live-feed-badge ${isIn?"in":"out"}">${isIn?"ENTRÉE":"SORTIE"}</span><div class="live-feed-meta" style="margin-top:4px">${esc(time)}</div></div></div>`;
   }).join(""):'<div class="live-feed-empty">Aucun pointage récent.</div>';
 }
 let manualResults=[];
