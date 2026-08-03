@@ -25651,7 +25651,9 @@ function renderFactureListPage(view){
     const sp=factureStatutPaye(f);const ttcV=f.ttc||f.montantTTC||0;
     const sd=factStatutDisplay(f);const rc=f.clientRc||f.rc||"";
     const rowStatus=String(f.statut||"").toLowerCase()==="brouillon"?"brouillon":sp.statut;
-    return '<tr data-searchable data-fact-status="'+escapeHTML(rowStatus)+'" style="border-bottom:1px solid #f1f5f9;cursor:pointer" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'" onclick="factureEditorOpen(\''+f.id+'\')" >'+
+    const imported=f.sourceImport==="excel"||String(f.id||"").startsWith("fc_import_");
+    return '<tr data-searchable data-fact-id="'+escapeHTML(f.id||"")+'" data-fact-imported="'+(imported?"1":"0")+'" data-fact-status="'+escapeHTML(rowStatus)+'" style="border-bottom:1px solid #f1f5f9;cursor:pointer" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'" onclick="factureEditorOpen(\''+f.id+'\')" >'+
+    '<td style="padding:10px 8px;text-align:center" onclick="event.stopPropagation()">'+(imported?'<input type="checkbox" class="fact-import-check" value="'+escapeHTML(f.id||"")+'" onchange="factureImportSelectionUpdate()" aria-label="Sélectionner la facture importée">':'')+'</td>'+
     '<td style="padding:10px 12px;font-family:monospace;font-size:12px;color:#1d4ed8;font-weight:700">'+safe(f.numero||"")+'</td>'+
     '<td style="padding:10px 12px"><div style="font-weight:700;font-size:12px;color:#0f172a">'+escapeHTML(f.client||f.clientNom||"")+'</div>'+(rc?'<div style="font-size:10px;color:#94a3b8;margin-top:1px">RC# '+escapeHTML(rc)+'</div>':"")+
     '</td>'+
@@ -25678,15 +25680,33 @@ function renderFactureListPage(view){
     '<input type="text" placeholder="Rechercher par numéro, client ou date…" oninput="filterFactureList()" style="flex:1;border:1px solid #e2e8f0;border-radius:6px;padding:9px 12px;font-size:12px;outline:none" id="fact-search">'+
     '<select id="fact-status-filter" onchange="filterFactureList()" style="min-width:170px;border:1px solid #e2e8f0;border-radius:6px;padding:9px 12px;font-size:12px;background:#fff"><option value="">Tous les statuts</option><option value="brouillon">Brouillons</option><option value="emise">Émises</option><option value="partielle">Partiellement payées</option><option value="payee">Payées</option><option value="echue">Échues</option></select>'+
     '</div>'+
+    '<div id="fact-import-actions" style="display:'+(list.some(f=>f.sourceImport==="excel"||String(f.id||"").startsWith("fc_import_"))?"flex":"none")+';align-items:center;gap:10px;margin:-2px 0 10px;padding:9px 12px;border:1px solid #d1fae5;background:#ecfdf5;border-radius:7px"><label style="display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#065f46"><input type="checkbox" id="fact-import-check-all" onchange="factureImportSelectAll(this.checked)"> Tout sélectionner les factures importées</label><span id="fact-import-selection-count" style="font-size:11px;color:#64748b">0 sélectionnée</span><button id="fact-import-delete-btn" disabled onclick="deleteSelectedImportedFactures()" style="margin-left:auto;background:#dc2626;color:#fff;border:0;border-radius:6px;padding:8px 13px;font-size:11px;font-weight:800;cursor:pointer;opacity:.45">Supprimer la sélection</button></div>'+
     '<div class="card" style="overflow:auto">'+
     (list.length===0?'<div style="padding:60px;text-align:center;color:#94a3b8"><div style="font-size:48px;margin-bottom:12px">🧾</div><div style="font-weight:700;font-size:15px">Aucune facture</div><button onclick="factureEditorOpen()" style="margin-top:16px;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer">+ Créer une facture</button></div>':
     '<table style="width:100%;border-collapse:collapse" id="fact-list-table"><thead><tr>'+
-    '<th style="'+thS+'">Référence</th><th style="'+thS+'">Client</th>'+
+    '<th style="'+thS+';width:34px"></th><th style="'+thS+'">Référence</th><th style="'+thS+'">Client</th>'+
     '<th style="'+thS+';text-align:right">Montant</th><th style="'+thS+';text-align:right">Montant Payé</th>'+
     '<th style="'+thS+'">Etat</th><th style="'+thS+'">Date</th><th style="'+thS+'">Créé le</th>'+
     '<th style="padding:10px 12px;border-bottom:2px solid #e2e8f0;background:#fff"></th>'+
     '</tr></thead><tbody id="fact-list-body">'+rows+'</tbody></table>')+
     '</div>';
+}
+function factureImportSelectionUpdate(){
+  const all=Array.from(document.querySelectorAll(".fact-import-check"));const checked=all.filter(x=>x.checked);
+  const count=document.getElementById("fact-import-selection-count");if(count)count.textContent=checked.length+" sélectionnée"+(checked.length>1?"s":"");
+  const btn=document.getElementById("fact-import-delete-btn");if(btn){btn.disabled=!checked.length;btn.style.opacity=checked.length?"1":".45";}
+  const master=document.getElementById("fact-import-check-all");if(master){master.checked=!!all.length&&checked.length===all.length;master.indeterminate=checked.length>0&&checked.length<all.length;}
+}
+function factureImportSelectAll(checked){document.querySelectorAll('.fact-import-check').forEach(x=>{const tr=x.closest("tr");if(!tr||tr.style.display!=="none")x.checked=checked;});factureImportSelectionUpdate();}
+async function deleteSelectedImportedFactures(){
+  const ids=Array.from(document.querySelectorAll(".fact-import-check:checked")).map(x=>x.value);if(!ids.length)return;
+  const paid=new Set((db.paiements||[]).map(p=>String(p.factureId||p.invoiceId||"")));const blocked=ids.filter(id=>paid.has(String(id)));const removable=ids.filter(id=>!paid.has(String(id)));
+  if(!removable.length)return toast("Suppression impossible : ces factures possèdent des paiements associés","error");
+  const note=blocked.length?`\n${blocked.length} facture(s) avec paiement seront conservées.`:"";
+  if(!confirm(`Supprimer définitivement ${removable.length} facture(s) importée(s) ?${note}`))return;
+  let deleted=0,failed=0;
+  for(const id of removable){try{await sgdiApi("/api/irongs/collections/factures/items/"+encodeURIComponent(id),{method:"DELETE",legacy:false});db.factures=db.factures.filter(f=>String(f.id)!==String(id));deleted++;}catch(e){console.error("Suppression facture importée",id,e);failed++;}}
+  renderView();toast(`${deleted} facture(s) importée(s) supprimée(s)${blocked.length?` · ${blocked.length} protégée(s)`:""}${failed?` · ${failed} en erreur`:""}`,failed?"warning":"success");
 }
 function factureImportKey(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"");}
 function factureImportValue(row,aliases){
@@ -25707,7 +25727,7 @@ async function importFacturesExcel(){
     try{
       const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array",cellDates:true});const ws=wb.Sheets[wb.SheetNames[0]];
       const rows=XLSX.utils.sheet_to_json(ws,{defval:"",raw:true});if(!rows.length)throw new Error("Le fichier ne contient aucune facture");
-      let imported=0,skipped=0,failed=0;db.factures=db.factures||[];
+      let imported=0,skipped=0,failed=0;db.factures=db.factures||[];const importBatchId="fact_import_"+Date.now();
       const known=new Set(db.factures.map(f=>String(f.numero||"").trim().toUpperCase()).filter(Boolean));
       for(const row of rows){
         const numero=String(factureImportValue(row,["Référence","Reference","Numéro","Numero","N° facture","Facture"] )||"").trim();
@@ -25716,7 +25736,7 @@ async function importFacturesExcel(){
         const ht=parseFrNum(factureImportValue(row,["Total HT","Montant HT","HT"]));
         const ttc=parseFrNum(factureImportValue(row,["Total TTC","Montant TTC","TTC","Montant"]));
         const rawEcheance=factureImportValue(row,["Date échéance","Date echeance","Échéance","Echeance"]);
-        const data={id:uid("fc_import"),numero:numero||"BROUILLON",date:factureImportDate(factureImportValue(row,["Date facture","Date"])),societe:mySoc()||"",client,clientNom:client,objet:String(factureImportValue(row,["Objet","Libellé","Libelle","Description"] )||"").trim(),statut:numero?"emise":"brouillon",totalHT:ht,montantHT:ht,ttc:ttc||ht,montantTTC:ttc||ht,modeReglement:String(factureImportValue(row,["Mode paiement","Mode de paiement","Règlement","Reglement"] )||"A terme"),dateEcheance:rawEcheance?factureImportDate(rawEcheance):"",createdAt:new Date().toISOString(),lignes:[]};
+        const data={id:uid("fc_import"),numero:numero||"BROUILLON",date:factureImportDate(factureImportValue(row,["Date facture","Date"])),societe:mySoc()||"",client,clientNom:client,objet:String(factureImportValue(row,["Objet","Libellé","Libelle","Description"] )||"").trim(),statut:numero?"emise":"brouillon",totalHT:ht,montantHT:ht,ttc:ttc||ht,montantTTC:ttc||ht,modeReglement:String(factureImportValue(row,["Mode paiement","Mode de paiement","Règlement","Reglement"] )||"A terme"),dateEcheance:rawEcheance?factureImportDate(rawEcheance):"",createdAt:new Date().toISOString(),sourceImport:"excel",importBatchId,lignes:[]};
         try{const saved=await sgdiApi("/api/irongs/collections/factures/items",{method:"POST",body:{data},legacy:false});db.factures.push(saved&&typeof saved==="object"?saved:data);if(numero)known.add(numero.toUpperCase());imported++;}catch(err){console.error("Import facture",numero,err);failed++;}
       }
       renderView();toast(`${imported} facture(s) importée(s)${skipped?` · ${skipped} ignorée(s)`:""}${failed?` · ${failed} en erreur`:""}`,failed?"warning":"success");
@@ -31862,6 +31882,7 @@ function renderAdminStorage(view){
   const logCount=(db.activityLog||[]).length;
   const pointagesCount=(db.pointages||[]).length;
   const fpqCount=(db.feuillePresence||[]).length;
+  const importedInvoices=(db.factures||[]).filter(f=>f.sourceImport==="excel"||String(f.id||"").startsWith("fc_import_"));
   view.innerHTML=`<h1 class="text-2xl font-bold mb-2">🧹 Stockage PostgreSQL</h1>
     <p class="text-slate-500 text-sm mb-3">Les données métier sont sauvegardées dans PostgreSQL via l'API backend. Le navigateur ne sert pas de source de données.</p>
     <div class="card p-5 mb-4">
@@ -31875,6 +31896,10 @@ function renderAdminStorage(view){
       <table class="w-full text-sm"><thead class="bg-slate-50"><tr><th class="text-left p-2">Section</th><th class="text-right p-2">Taille</th><th class="text-right p-2">% du total</th></tr></thead>
         <tbody>${stats.parts.slice(0,12).map(p=>{const kb=Math.round(p.bytes/1024);const ppct=Math.round(p.bytes/Math.max(1,stats.total)*100);return`<tr class="border-t"><td class="p-2 font-mono text-xs">${escapeHTML(p.k)}</td><td class="p-2 text-right font-bold">${kb} Ko</td><td class="p-2 text-right text-slate-600">${ppct}%</td></tr>`}).join("")}</tbody>
       </table>
+    </div>
+    <div class="card p-5 mb-4" style="border:1px solid #fecaca">
+      <div class="flex items-start justify-between gap-3 flex-wrap mb-3"><div><h3 class="font-bold text-lg">🗑 Suppression des données importées</h3><p class="text-xs text-slate-500 mt-1">Sélection contrôlée des factures provenant d'un fichier Excel. Les factures associées à un paiement sont protégées.</p></div><span class="pill pill-blue">${importedInvoices.length} facture(s)</span></div>
+      ${importedInvoices.length?`<div class="flex items-center justify-between gap-3 p-3 rounded-md mb-2" style="background:#fef2f2"><label class="flex items-center gap-2 text-sm font-black"><input type="checkbox" id="admin-imported-invoices-all" onchange="adminImportedInvoicesSelectAll(this.checked)"> Tout sélectionner</label><button type="button" id="admin-imported-invoices-delete" class="btn btn-danger text-xs" disabled onclick="adminDeleteSelectedImportedInvoices()">Supprimer la sélection</button></div><div style="max-height:280px;overflow:auto;border:1px solid #e2e8f0;border-radius:7px">${importedInvoices.map(f=>`<label class="flex items-center gap-3 p-3 border-b hover:bg-slate-50"><input type="checkbox" class="admin-imported-invoice-check" value="${escapeHTML(f.id||"")}" onchange="adminImportedInvoicesSelectionUpdate()"><span class="font-mono text-xs font-black">${escapeHTML(f.numero||"BROUILLON")}</span><span class="text-xs flex-1">${escapeHTML(f.client||f.clientNom||"Client non renseigné")}</span><span class="text-xs font-bold">${money(f.ttc||f.montantTTC||0)}</span></label>`).join("")}</div>`:`<div class="p-4 rounded-md text-sm text-slate-500" style="background:#f8fafc">Aucune donnée importée par Excel.</div>`}
     </div>
     <div class="card p-5 mb-4">
       <h3 class="font-bold mb-3">🧹 Actions de nettoyage</h3>
@@ -31918,6 +31943,19 @@ function renderAdminStorage(view){
         <div class="text-xs text-sky-700"><b>💡 Conseil :</b> Les photos sont désormais automatiquement compressées (≤ 800px, JPEG 72%) à l'upload. Ceci ne s'applique qu'aux nouvelles photos.</div>
       </div>
     </div>`;
+}
+function adminImportedInvoicesSelectionUpdate(){
+  const all=Array.from(document.querySelectorAll(".admin-imported-invoice-check"));const checked=all.filter(x=>x.checked);const btn=document.getElementById("admin-imported-invoices-delete");if(btn)btn.disabled=!checked.length;const master=document.getElementById("admin-imported-invoices-all");if(master){master.checked=!!all.length&&checked.length===all.length;master.indeterminate=checked.length>0&&checked.length<all.length;}
+}
+function adminImportedInvoicesSelectAll(value){document.querySelectorAll(".admin-imported-invoice-check").forEach(x=>x.checked=value);adminImportedInvoicesSelectionUpdate();}
+async function adminDeleteSelectedImportedInvoices(){
+  if(!isAdminSystemSession())return toast("Action réservée à l'Administration système","error");
+  const ids=Array.from(document.querySelectorAll(".admin-imported-invoice-check:checked")).map(x=>x.value);if(!ids.length)return;
+  const paid=new Set((db.paiements||[]).map(p=>String(p.factureId||p.invoiceId||"")));const blocked=ids.filter(id=>paid.has(String(id)));const removable=ids.filter(id=>!paid.has(String(id)));
+  if(!removable.length)return toast("Toutes les factures sélectionnées possèdent un paiement associé","error");
+  if(!confirm(`Supprimer définitivement ${removable.length} facture(s) importée(s) ?${blocked.length?`\n${blocked.length} facture(s) avec paiement seront conservées.`:""}`))return;
+  let ok=0,failed=0;for(const id of removable){try{await sgdiApi("/api/irongs/collections/factures/items/"+encodeURIComponent(id),{method:"DELETE",legacy:false});db.factures=db.factures.filter(f=>String(f.id)!==String(id));ok++;}catch(e){failed++;}}
+  logActivity("Suppression données importées",`${ok} facture(s) Excel supprimée(s)${blocked.length?` · ${blocked.length} protégée(s)`:""}`);toast(`${ok} supprimée(s)${failed?` · ${failed} erreur(s)`:""}`,failed?"warning":"success");renderView();
 }
 function renderAdminMagasins(view){
   if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6 text-red-700 font-bold">Accès refusé.</div>`;return}
@@ -32254,6 +32292,7 @@ async function renderAdminSystemDashboard(view){
 	    ${card("Articles / magasins","Catalogue matériel, magasins et stocks.","admin/articles","#ca8a04",articles.length+magasins.length,"Métier")}
 	    ${card("Modèles documents","Modèles documentaires et rattachements.","admin/document-models","#334155",templates.length,"Métier")}
 	    ${card("Candidats","Contrôle des sections et nettoyage candidat.","admin/candidats","#b91c1c",(db.candidats||[]).length,"Métier")}
+	    ${card("Suppression de données","Sélectionner avec des cases à cocher les données importées à supprimer.","admin/storage","#dc2626",(db.factures||[]).filter(f=>f.sourceImport==="excel"||String(f.id||"").startsWith("fc_import_")).length,"Contrôle")}
 	  </div>
   <div class="mt-4">${(()=>{const dups=findDuplicateMatricules();return`<button type="button" class="w-full card p-4 text-left flex items-center justify-between gap-3 hover:bg-slate-50 transition" onclick="openDuplicateMatriculesModal()" style="border-left:5px solid ${dups.length?"#dc2626":"#16a34a"}"><div><div class="text-xs font-black uppercase text-slate-500">Intégrité des codes employés</div><div class="text-sm text-slate-600 mt-1">${dups.length?`${dups.length} code(s) en doublon détecté(s) — cliquez pour corriger`:"Aucun doublon détecté · tous les codes sont uniques"}</div></div><div class="text-2xl font-black" style="color:${dups.length?"#dc2626":"#16a34a"}">${dups.length||"✓"}</div></button>`})()}</div>`;
 }
@@ -34375,6 +34414,10 @@ function renderOPS(view,sub,arg){
       <button type="button" onclick="openOpsStatModal('sanctions')" class="p-2 rounded-lg text-left cursor-pointer hover:opacity-90 transition" style="background:#7f1d1d;border:1px solid #991b1b"><div class="text-[10px] font-black uppercase" style="color:#fecaca">En sanction</div><div class="text-lg font-black mt-0.5" style="color:#fff">${_sanctionList.length}</div><div class="text-[10px] mt-0.5" style="color:#fecaca">Actif</div></button>
     </div>
   </div>
+  <div class="card p-5 mb-4" id="opsAttendanceAlertsCard">
+    <div class="text-xs font-black uppercase text-slate-500 mb-3">⚠️ Alertes de présence — temps réel</div>
+    <div id="opsAttendanceAlertsBody" class="text-sm text-slate-400">Chargement…</div>
+  </div>
   <div class="card p-5 mb-6 overflow-hidden">
     <div class="flex items-center justify-between mb-3">
       <h3 class="font-black">📍 Présents par site — aujourd'hui</h3>
@@ -34387,6 +34430,26 @@ function renderOPS(view,sub,arg){
     <a href="#/fiches/toutes" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">🪪</div><div><div class="font-bold text-emerald-700">Fiches de position</div><div class="text-xs text-slate-500">Toutes · Actifs · Archivées</div></div></div></a>
     <a href="#/sites/actifs" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">📍</div><div><div class="font-bold text-amber-700">Sites</div><div class="text-xs text-slate-500">Création · Sites actifs</div></div></div></a>
   </div>`;
+  clearInterval(window._opsAttendanceAlertsTimer);
+  loadOpsAttendanceAlerts();
+  window._opsAttendanceAlertsTimer=setInterval(loadOpsAttendanceAlerts,60000);
+}
+async function loadOpsAttendanceAlerts(){
+  const body=document.getElementById("opsAttendanceAlertsBody");
+  if(!body){clearInterval(window._opsAttendanceAlertsTimer);return}
+  try{
+    const data=await sgdiApi("/api/portal/attendance-alerts");
+    const presence=data.presence_alerts||[],weekly=data.weekly_alerts||[];
+    if(!presence.length&&!weekly.length){body.innerHTML='<span class="text-slate-400">Aucune alerte en cours.</span>';return}
+    const chip=(color,bg,border,text)=>`<span class="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold" style="background:${bg};color:${color};border:1px solid ${border}">${text}</span>`;
+    const presenceHTML=presence.map(a=>{
+      const h=Math.floor(a.elapsed_minutes/60),m=String(a.elapsed_minutes%60).padStart(2,"0");
+      const styles={8:["#854d0e","#fef9c3","#fde68a"],12:["#9a3412","#ffedd5","#fdba74"],16:["#991b1b","#fee2e2","#fca5a5"]}[a.threshold_hours]||["#334155","#f1f5f9","#e2e8f0"];
+      return chip(...styles,`⚠ ${escapeHTML(a.nom)} · ${escapeHTML(a.matricule)} · ${h} h ${m}${a.site?" · "+escapeHTML(a.site):""}`);
+    }).join(" ");
+    const weeklyHTML=weekly.map(a=>chip("#5b21b6","#ede9fe","#ddd6fe",`📅 ${escapeHTML(a.nom)} · ${escapeHTML(a.matricule)} · ${a.week_hours} h cette semaine`)).join(" ");
+    body.innerHTML=`<div class="flex flex-wrap gap-2 mb-2">${presenceHTML}</div><div class="flex flex-wrap gap-2">${weeklyHTML}</div>`;
+  }catch(e){body.innerHTML='<span class="text-slate-400">Alertes indisponibles.</span>';console.warn("Alertes de présence indisponibles",e)}
 }
 function renderSuperviseur(view,sub,arg){
   if(!canAccess("superviseur")){view.innerHTML=`<div class="card p-6">Accès refusé</div>`;return}
