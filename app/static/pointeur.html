@@ -89,6 +89,18 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .scanner-card.manual-mode .pointer-btn{width:164px;height:164px;margin-top:20px}.scanner-card.manual-mode .manual-back{width:auto;margin:4px auto 0;display:block}
 .generate-qr-btn{width:60%;min-width:250px;margin-top:11px}
 @media(min-width:760px){.work-grid{grid-template-columns:minmax(0,1fr);align-items:stretch}.history{margin-top:0;min-height:calc(100vh - 210px)}.result-name{font-size:25px}.scan-row{padding:15px}}
+@media(min-width:1100px){.work-grid{grid-template-columns:minmax(0,1fr) 360px}.history{grid-column:1/-1}}
+#liveFeedCard{display:flex;flex-direction:column;min-height:0}
+.live-feed-list{overflow:auto;flex:1;display:flex;flex-direction:column;gap:8px}
+.live-feed-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#f8fafc}
+.live-feed-row.live-in{border-color:#bbf7d0;background:#f0fdf4}
+.live-feed-row.live-out{border-color:#fed7aa;background:#fff7ed}
+.live-feed-name{font-size:12px;font-weight:850}
+.live-feed-meta{font-size:10px;color:var(--muted);margin-top:1px}
+.live-feed-badge{font-size:10px;font-weight:950;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.live-feed-badge.in{background:#16a34a;color:#fff}
+.live-feed-badge.out{background:#d97706;color:#fff}
+.live-feed-empty{text-align:center;color:#94a3b8;font-size:12px;padding:30px 10px}
 @media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.header-clock{position:static;transform:none;font-size:13px;letter-spacing:.02em;margin-top:9px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:center}.presence-summary{width:100%;font-size:13px}.presence-summary span{min-width:0;flex:1;padding:0 6px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 </style>
@@ -177,6 +189,11 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
           </div>
         </div>
       </section>
+      <aside id="liveFeedCard" class="scanner-card pointer-panel" data-pointer-panel="scanner">
+        <div class="scanner-title" style="font-size:16px">🔴 Pointage en direct</div>
+        <p class="scanner-hint">Se met à jour automatiquement</p>
+        <div id="liveFeedList" class="live-feed-list"></div>
+      </aside>
       <section class="history pointer-panel hidden" data-pointer-panel="history">
         <div class="history-head">
           <span>PASSAGES DES 48 DERNIÈRES HEURES</span>
@@ -221,7 +238,7 @@ function updateHeaderClock(){
   if(!el)return;
   const now=new Date();
   const date=now.toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"});
-  const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+  const time=now.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
   el.textContent=date+" — "+time;
 }
 function startHeaderClock(){
@@ -475,6 +492,17 @@ function renderHistory(){
   document.getElementById("sortantCount").textContent=String(sessionScans.filter(row=>row.depart).length).padStart(2,"0");
   document.getElementById("presentCount").textContent=String(sessionScans.filter(row=>row.arrivee&&!row.depart).length).padStart(2,"0");
   document.getElementById("historyList").innerHTML=ordered.length?ordered.map((row,index)=>`<div class="scan-row${index===firstCompletedIndex?" group-separator":""}${row.overtime?" overtime-alert":""}"><div><div class="scan-name">${esc(row.name)}</div><div class="scan-meta">${esc(row.matricule)} · ${esc(row.site||"—")}${row.date?" · "+esc(new Date(row.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"short"})):""}</div></div><div class="scan-times"><div class="scan-time-pill arrivee${row.arrivee?" set":""}">${row.arrivee?"ARR "+esc(row.arrivee):"ARR —"}</div><div class="scan-time-pill depart${row.depart?" set":""}">${row.depart?"DÉP "+esc(row.depart):"DÉP —"}</div><div class="scan-duration">${row.duration?esc(row.duration):""}</div>${row.overtime?`<div class="overtime-label">⚠ +${Math.floor(row.overtimeMinutes/60)} h ${String(row.overtimeMinutes%60).padStart(2,"0")}</div>`:""}</div></div>`).join(""):'<div class="empty">Aucun passage durant les dernières 48 heures.</div>';
+  renderLiveFeed();
+}
+function renderLiveFeed(){
+  const list=document.getElementById("liveFeedList");
+  if(!list)return;
+  const rows=sessionScans.slice(0,8);
+  list.innerHTML=rows.length?rows.map(row=>{
+    const isIn=row.arrivee&&!row.depart;
+    const time=row.depart||row.arrivee||"";
+    return `<div class="live-feed-row ${isIn?"live-in":"live-out"}"><div><div class="live-feed-name">${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div style="text-align:right"><span class="live-feed-badge ${isIn?"in":"out"}">${isIn?"ENTRÉE":"SORTIE"}</span><div class="live-feed-meta" style="margin-top:4px">${esc(time)}</div></div></div>`;
+  }).join(""):'<div class="live-feed-empty">Aucun pointage récent.</div>';
 }
 let manualResults=[];
 let manualSelected=null;
