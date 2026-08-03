@@ -181,6 +181,11 @@ def delete_item(name: str, item_id: str, db: Session = Depends(get_db), user=Dep
     return service.delete_item(db, name, item_id)
 
 
+@router.post("/factures/{item_id}/valider")
+def valider_facture(item_id: str, db: Session = Depends(get_db), user=Depends(current_user)) -> dict[str, Any]:
+    return service.valider_facture(db, item_id, user)
+
+
 @router.post("/actions/{action}")
 def legacy_action(
     action: str,

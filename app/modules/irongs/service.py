@@ -705,6 +705,14 @@ def get_item(db: Session, name: str, item_id: str) -> dict[str, Any]:
     return deepcopy(row.data)
 
 
+def valider_facture(db: Session, item_id: str, user: Any | None) -> dict[str, Any]:
+    existing = get_item(db, "factures", item_id)
+    ensure_item_allowed_for_user(existing, user, "factures")
+    result = sql_bridge.validate_invoice(db, item_id)
+    _snapshot_cache_invalidate()
+    return result
+
+
 def update_item(db: Session, name: str, item_id: str, patch: dict[str, Any], partial: bool = True) -> dict[str, Any]:
     patch = normalize_photo_fields(dict(patch), fallback=item_id)
     if name in sql_bridge.SQL_COLLECTIONS:

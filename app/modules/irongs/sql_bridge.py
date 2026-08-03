@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.commercial.models import Client
@@ -536,6 +538,56 @@ def upsert_finance(db: Session, model: type, item: dict[str, Any], collection: s
         row.entry_date = as_date(item.get("date")); row.society = item.get("societe"); row.category = item.get("categorie"); row.label = item.get("libelle") or item.get("label"); row.amount = as_float(item.get("montant")); row.entry_type = item.get("type")
     row.data = {"_legacy": deepcopy(item), "collection": collection}
     db.flush()
+    return simple_raw(row)
+
+
+def _next_invoice_number(db: Session) -> str:
+    d = date.today()
+    mm, yy = f"{d.month:02d}", f"{d.year % 100:02d}"
+    seq = 0
+    for (number,) in db.execute(select(Invoice.number).where(Invoice.number.isnot(None))).all():
+        m = re.match(r"^FAC(\d+)", str(number or ""))
+        if m:
+            seq = max(seq, int(m.group(1)))
+    return f"FAC{seq + 1:04d}/{mm}/{yy}"
+
+
+def validate_invoice(db: Session, item_id: str) -> dict[str, Any]:
+    """Attribue le numéro définitif d'une facture de façon atomique côté serveur.
+
+    Calculer ce numéro dans le navigateur (ancien comportement) pouvait faire entrer
+    en collision deux factures validées presque en même temps (deux onglets/sessions),
+    provoquant un crash sur la contrainte d'unicité de `number`. Ici, chaque tentative
+    est isolée dans un savepoint : en cas de collision on relance avec le numéro suivant
+    au lieu de laisser planter la requête.
+    """
+    row = db.execute(select(Invoice).where(Invoice.external_id == str(item_id))).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Facture introuvable")
+    if row.number and row.status != "brouillon":
+        return simple_raw(row)
+    for _ in range(5):
+        candidate = _next_invoice_number(db)
+        savepoint = db.begin_nested()
+        try:
+            row.number = candidate
+            row.status = "emise"
+            legacy = dict((row.data or {}).get("_legacy") or {})
+            legacy["numero"] = candidate
+            legacy["statut"] = "emise"
+            legacy["validatedAt"] = datetime.utcnow().isoformat()
+            row.data = {**(row.data or {}), "_legacy": legacy, "collection": "factures"}
+            db.flush()
+            savepoint.commit()
+            break
+        except IntegrityError:
+            savepoint.rollback()
+    else:
+        raise HTTPException(
+            status_code=409,
+            detail="Impossible d'attribuer un numéro de facture unique après plusieurs tentatives, réessayez.",
+        )
+    db.commit()
     return simple_raw(row)
 
 

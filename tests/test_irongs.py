@@ -98,6 +98,69 @@ def test_multiple_invoice_drafts_can_be_saved(client, auth_headers):
     assert _find(rows, "id", "draft_multi_2") is not None
 
 
+def test_valider_facture_attribue_un_numero_atomique(client, auth_headers):
+    """La numérotation se fait côté serveur (POST /factures/{id}/valider), plus dans le navigateur."""
+    _post_item(client, auth_headers, "factures", {
+        "id": "draft_val_1", "numero": "BROUILLON", "statut": "brouillon",
+        "date": "2026-08-03", "societe": SOC, "client": "Client Val", "ttc": 500,
+    })
+    r = client.post("/api/irongs/factures/draft_val_1/valider", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    validated = r.json()
+    assert validated["numero"].startswith("FAC")
+    assert validated["statut"] == "emise"
+    rows = _collection(client, auth_headers, "factures")
+    assert _find(rows, "id", "draft_val_1")["numero"] == validated["numero"]
+
+
+def test_valider_facture_est_idempotente(client, auth_headers):
+    """Rejouer la validation d'une facture déjà validée renvoie le même numéro (pas d'erreur, pas de réattribution)."""
+    _post_item(client, auth_headers, "factures", {
+        "id": "draft_val_2", "numero": "BROUILLON", "statut": "brouillon",
+        "date": "2026-08-03", "societe": SOC, "client": "Client Val2", "ttc": 700,
+    })
+    r1 = client.post("/api/irongs/factures/draft_val_2/valider", headers=auth_headers)
+    assert r1.status_code == 200, r1.text
+    r2 = client.post("/api/irongs/factures/draft_val_2/valider", headers=auth_headers)
+    assert r2.status_code == 200, r2.text
+    assert r1.json()["numero"] == r2.json()["numero"]
+
+
+def test_valider_facture_contourne_un_numero_deja_pris(client, auth_headers, db):
+    """Si le prochain numéro calculé est déjà pris (collision), le serveur doit
+    automatiquement essayer le suivant au lieu de planter."""
+    import re as _re
+    from sqlalchemy import select
+    from app.modules.finance_models import Invoice
+    from datetime import date as _date
+
+    # Numéro "suivant" tel que le serveur le calculerait maintenant, à partir des
+    # numéros déjà réellement attribués (peut varier selon l'ordre des tests).
+    seq = 0
+    for (number,) in db.execute(select(Invoice.number).where(Invoice.number.isnot(None))).all():
+        m = _re.match(r"^FAC(\d+)", str(number or ""))
+        if m:
+            seq = max(seq, int(m.group(1)))
+    mm, yy = f"{_date.today().month:02d}", f"{_date.today().year % 100:02d}"
+    taken_number = f"FAC{seq + 1:04d}/{mm}/{yy}"
+    db.add(Invoice(external_id="already_using_next_seq", number=taken_number, society=SOC))
+    db.commit()
+
+    _post_item(client, auth_headers, "factures", {
+        "id": "draft_val_3", "numero": "BROUILLON", "statut": "brouillon",
+        "date": "2026-08-03", "societe": SOC, "client": "Client Val3", "ttc": 300,
+    })
+    r = client.post("/api/irongs/factures/draft_val_3/valider", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["numero"] != taken_number
+    assert r.json()["numero"].startswith("FAC")
+
+
+def test_valider_facture_introuvable(client, auth_headers):
+    r = client.post("/api/irongs/factures/inconnue-xyz/valider", headers=auth_headers)
+    assert r.status_code == 404
+
+
 def test_roundtrip_stock_article(client, auth_headers):
     """stockArticles conserve le legacy complet (colonne attributes) -> round-trip sans perte.
     NB : magasins/fournisseurs, eux, sont gérés par le module MATÉRIEL (/api/materiel/stores,
