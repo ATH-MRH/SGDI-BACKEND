@@ -98,6 +98,19 @@ tr:last-child td{border-bottom:0}
 .form-section{grid-column:1/-1;border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:12px;background:#fbfdff}
 .form-section-title{font-size:14px;font-weight:950;color:var(--navy);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
 .form-section-sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+#modalBackdrop .modal{font-family:Arial,sans-serif}
+#candidateForm{font-family:Arial,sans-serif;font-size:9px}
+#candidateForm label{font-family:Arial,sans-serif;font-size:9px;margin:7px 0 4px;letter-spacing:.035em}
+#candidateForm input,#candidateForm select,#candidateForm textarea{font-family:Arial,sans-serif;font-size:9px;border-radius:7px;padding-left:8px;padding-right:8px}
+#candidateForm input,#candidateForm select{height:29px}
+#candidateForm textarea{min-height:48px;padding-top:6px;padding-bottom:6px}
+#candidateForm .field-grid{gap:0 10px}
+#candidateForm .form-section{padding:11px 13px;margin-top:8px;border-radius:12px}
+#candidateForm .form-section-title{font-family:Arial,sans-serif;font-size:11px;margin-bottom:2px}
+#candidateForm .form-section-sub{font-family:Arial,sans-serif;font-size:9px;margin-bottom:5px}
+#candidateForm .photo-preview{width:76px;height:88px;border-radius:11px;font-size:10px}
+#candidateForm .photo-field{gap:11px}
+#candidateForm .checkbox-row,#candidateForm .exp-add-btn{font-family:Arial,sans-serif;font-size:9px}
 .photo-field{display:flex;align-items:center;gap:15px}.photo-preview{width:94px;height:110px;border:2px dashed #bfd1e3;border-radius:14px;object-fit:cover;background:#eef4f9;display:grid;place-items:center;color:#789;font-weight:900;overflow:hidden}.photo-preview img{width:100%;height:100%;object-fit:cover}
 .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;font-weight:750;color:#42566f}.checkbox-row input{width:auto;height:auto}
 .exp-table{display:flex;flex-direction:column;gap:6px}
@@ -474,7 +487,16 @@ function renderCounters(){
 }
 function statusPill(item){
   const status=String(item.status||"").toLowerCase();
-  if(activeTab==="archive")return '<span class="pill pill-gray">Archivé</span>';
+  const avis=(item.data&&item.data.avisDecision)||"";
+  const convoque=!!(item.data&&item.data.derniereConvocation);
+  if(activeTab==="archive"){
+    if(avis==="Favorable")return '<span class="pill pill-green">Accepté</span>';
+    if(avis==="Défavorable")return '<span class="pill pill-red">Refusé</span>';
+    return '<span class="pill pill-gray">Archivé</span>';
+  }
+  if(avis==="Favorable")return '<span class="pill pill-green">Accepté</span>';
+  if(avis==="Défavorable")return '<span class="pill pill-red">Refusé</span>';
+  if(avis==="Instance")return convoque?'<span class="pill pill-indigo">Convoqué</span>':'<span class="pill pill-amber">Instance</span>';
   if(status==="reserve"||activeTab==="reserve")return '<span class="pill pill-amber">Réserve</span>';
   return '<span class="pill pill-blue">Nouvelle</span>';
 }
@@ -533,17 +555,17 @@ function renderList(){
   if(state.page>pages)state.page=pages;
   const pageItems=filtered.slice((state.page-1)*PAGE_SIZE,state.page*PAGE_SIZE);
   document.getElementById("listWrap").innerHTML=`<table><thead><tr>
-    <th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Avis</th><th>Statut</th><th>Date</th><th></th>
+    <th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Statut</th><th>Date</th><th></th><th>Avis</th>
   </tr></thead><tbody>
   ${pageItems.map(item=>`<tr data-id="${item.id}">
     <td><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${esc(item.desired_position||"Poste non renseigné")}${item.email?" · "+esc(item.email):""}</div></td>
     <td>${esc(item.desired_position||"—")}</td>
     <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
     <td>${esc(item.phone||"—")}</td>
-    <td>${avisCell(item)}</td>
     <td>${statusPill(item)}</td>
     <td style="font-size:11px;color:var(--muted)">${esc((item.created_at||"").slice(0,10))}</td>
     <td>${rowActions(item)}</td>
+    <td>${avisCell(item)}</td>
   </tr>`).join("")}
   </tbody></table>`;
 }
