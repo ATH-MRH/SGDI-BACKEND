@@ -121,6 +121,12 @@ tr:last-child td{border-bottom:0}
 .exp-add-btn{align-self:flex-start;margin-top:2px;background:#fff;border:1px solid var(--line);color:var(--navy);border-radius:9px;padding:6px 12px;font-size:11px;font-weight:800;cursor:pointer}
 @media(max-width:640px){.exp-head{display:none}.exp-row{grid-template-columns:1fr;gap:4px;padding:8px;border:1px solid var(--line);border-radius:10px}.exp-row-remove{justify-self:end}}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.interview-grid{display:grid;grid-template-columns:1fr 92px;gap:8px 14px;align-items:center;margin-top:14px}
+.interview-grid label{margin:0;font-size:12px;text-transform:none;letter-spacing:0}
+.interview-grid select{height:34px;font-weight:850;text-align:center}
+.interview-score{margin-top:14px;padding:13px 16px;border-radius:12px;background:#eff6ff;color:var(--navy);display:flex;align-items:center;justify-content:space-between;font-weight:900}
+.interview-score strong{font-size:22px}
+@media(max-width:900px){.main{padding:14px}.row-actions{flex-wrap:wrap;justify-content:flex-start}}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
 </style>
 </head>
@@ -272,6 +278,10 @@ const tabState={
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function jsStr(value){return String(value).replace(/\\/g,"\\\\").replace(/'/g,"\\'")}
 function today(){return new Date().toISOString().slice(0,10)}
+function formatDateFr(value){
+  const match=String(value||"").slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match?`${match[3]}/${match[2]}/${match[1]}`:(value||"—");
+}
 function parseSalaryDzd(value){
   let text=String(value??"").toUpperCase().replace(/DZD/g,"").replace(/\s/g,"").trim();
   if(!text)return 0;
@@ -522,6 +532,7 @@ function avisCell(item){
 function rowActions(item){
   const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
   if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openCandidateConvocation(${item.id})">Convoquer</button>`);
+  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openCandidateInterview(${item.id})">Entretien</button>`);
   if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openContractForCandidate(${item.id})">Recruter</button>`);
   if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
   return `<div class="row-actions">${actions.join("")}</div>`;
@@ -544,6 +555,46 @@ async function saveCandidateConvocation(form){
   history.push(convocation);data.convocations=history;data.derniereConvocation=convocation;data.avisDecision="Instance";data.avisDate=today();
   try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateConvocation();showBanner(`Convocation enregistrée pour le ${esc(convocation.date)} à ${esc(convocation.heure)}.`,"success");loadTab(activeTab);}catch(error){const el=document.getElementById("convocationError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer la convocation";}
 }
+const INTERVIEW_CRITERIA=[
+  ["identite","Identité et complétude du dossier"],
+  ["coordonnees","Coordonnées et disponibilité"],
+  ["profil","Profil et adéquation au poste"],
+  ["experience","Expérience professionnelle"],
+  ["competences","Compétences et habilitations"],
+  ["motivation","Motivation et projet professionnel"],
+  ["communication","Communication et présentation"],
+  ["contraintes","Disponibilité et contraintes opérationnelles"]
+];
+let interviewCandidate=null;
+function interviewOptions(value){
+  return ['<option value="">— /5</option>',...Array.from({length:6},(_,n)=>`<option value="${n}"${Number(value)===n?" selected":""}>${n} / 5</option>`)].join("");
+}
+function updateInterviewScore(){
+  const fields=Array.from(document.querySelectorAll("#interviewForm .interview-note"));
+  const values=fields.map(field=>field.value===""?null:Number(field.value)).filter(value=>value!==null);
+  const average=values.length?values.reduce((sum,value)=>sum+value,0)/values.length:0;
+  const output=document.getElementById("interviewAverage");if(output)output.textContent=`${average.toFixed(2).replace(".",",")} / 5`;
+}
+function openCandidateInterview(id){
+  const item=tabState[activeTab]?.items?.find(row=>Number(row.id)===Number(id));if(!item)return;
+  interviewCandidate=item;
+  document.getElementById("interviewModal")?.remove();
+  const previous=item.data?.dernierEntretien||{};const notes=previous.notes||{};
+  const modal=document.createElement("div");modal.id="interviewModal";modal.className="modal-backdrop";
+  modal.innerHTML=`<div class="modal" style="max-width:760px"><div class="modal-head"><div><h2>Entretien du candidat</h2><div style="font-size:12px;color:var(--muted);margin-top:4px">${esc((item.last_name||"")+" "+(item.first_name||""))} · ${esc(item.desired_position||"Poste non renseigné")}</div></div><button type="button" class="modal-close" onclick="closeCandidateInterview()">×</button></div><form id="interviewForm" onsubmit="event.preventDefault();saveCandidateInterview(this)"><div class="field-grid"><div><label>Date de l’entretien</label><input name="date" type="date" value="${esc(previous.date||today())}" required></div><div><label>Recruteur</label><input name="recruteur" value="${esc(previous.recruteur||recruteSession?.user?.full_name||recruteSession?.user?.username||"")}" required></div></div><div class="interview-grid">${INTERVIEW_CRITERIA.map(([key,label])=>`<label for="score_${key}">${esc(label)}</label><select class="interview-note" id="score_${key}" name="${key}" onchange="updateInterviewScore()" required>${interviewOptions(notes[key])}</select>`).join("")}</div><div class="interview-score"><span>Note globale de l’entretien</span><strong id="interviewAverage">0,00 / 5</strong></div><div class="field-grid"><div><label>Recommandation</label><select name="recommandation" required><option value="">— Choisir —</option>${["Favorable","À revoir","Défavorable"].map(value=>`<option${previous.recommandation===value?" selected":""}>${value}</option>`).join("")}</select></div><div><label>Prochaine étape</label><select name="prochaineEtape"><option value="">—</option>${["Recruter","Second entretien","Mettre en réserve","Refuser"].map(value=>`<option${previous.prochaineEtape===value?" selected":""}>${value}</option>`).join("")}</select></div><div class="full"><label>Appréciation du recruteur</label><textarea name="appreciation" required placeholder="Points forts, réserves, comportement observé…">${esc(previous.appreciation||"")}</textarea></div></div><div id="interviewError" class="error"></div><div class="modal-actions"><button type="button" class="secondary" onclick="closeCandidateInterview()">Annuler</button><button type="submit" class="primary" style="width:auto;margin-top:0">Enregistrer l’entretien</button></div></form></div>`;
+  modal.addEventListener("click",event=>{if(event.target===modal)closeCandidateInterview()});document.body.appendChild(modal);updateInterviewScore();
+}
+function closeCandidateInterview(){document.getElementById("interviewModal")?.remove();interviewCandidate=null;}
+async function saveCandidateInterview(form){
+  const item=interviewCandidate;if(!item)return;
+  const notes={};for(const [key] of INTERVIEW_CRITERIA)notes[key]=Number(form.elements[key].value);
+  const moyenne=Object.values(notes).reduce((sum,value)=>sum+value,0)/INTERVIEW_CRITERIA.length;
+  const entretien={id:"ent_"+Date.now(),date:form.date.value,recruteur:form.recruteur.value.trim(),notes,moyenne:Number(moyenne.toFixed(2)),recommandation:form.recommandation.value,prochaineEtape:form.prochaineEtape.value,appreciation:form.appreciation.value.trim(),createdAt:new Date().toISOString(),createdBy:recruteSession?.user?.username||""};
+  const data={...(item.data||{})};const history=Array.isArray(data.entretiens)?data.entretiens.slice():[];history.push(entretien);data.entretiens=history;data.dernierEntretien=entretien;
+  if(entretien.recommandation==="Favorable")data.avisDecision="Favorable";else if(entretien.recommandation==="Défavorable")data.avisDecision="Défavorable";else data.avisDecision="Instance";data.avisDate=entretien.date;data.avisRecruteur=entretien.recruteur;data.avisCommentaire=entretien.appreciation;
+  const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="ENREGISTREMENT…";
+  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateInterview();showBanner(`Entretien du ${esc(formatDateFr(entretien.date))} enregistré · note ${String(entretien.moyenne).replace(".",",")} / 5.`,"success");loadTab(activeTab);}catch(error){const el=document.getElementById("interviewError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer l’entretien";}
+}
 function renderList(){
   const state=tabState[activeTab];
   const filtered=filteredItems(activeTab);
@@ -563,7 +614,7 @@ function renderList(){
     <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
     <td>${esc(item.phone||"—")}</td>
     <td>${statusPill(item)}</td>
-    <td style="font-size:11px;color:var(--muted)">${esc((item.created_at||"").slice(0,10))}</td>
+    <td style="font-size:11px;color:var(--muted);white-space:nowrap">${esc(formatDateFr(item.created_at))}</td>
     <td>${rowActions(item)}</td>
     <td>${avisCell(item)}</td>
   </tr>`).join("")}
