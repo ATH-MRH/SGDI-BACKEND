@@ -6022,20 +6022,20 @@ function factStatutDisplay(f){
   return{label:"Non payée",bg:"#f97316",color:"#fff"};
 }
 function formatDateFR(d){if(!d)return"";try{const dt=new Date(d);return dt.getDate()+" "+["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"][dt.getMonth()]+" "+dt.getFullYear();}catch(e){return d;}}
-function factChartSVG(factures,year){
+function factChartSVG(factures,paiements,year){
   const months=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Aoû","Sep","Oct","Nov","Déc"];
-  const data=Array(12).fill(0);
-  factures.forEach(f=>{if(!f.date)return;const d=new Date(f.date);if(d.getFullYear()===year)data[d.getMonth()]+=(f.ttc||f.montantTTC||0);});
-  const max=Math.max(...data,1);
-  const W=560,H=160,bW=28,gap=14,pL=10,pB=20;
+  const billed=Array(12).fill(0),collected=Array(12).fill(0),current=Array(12).fill(0);
+  const now=today(),invoiceById=new Map(factures.map(f=>[f.id,f]));
+  factures.forEach(f=>{if(!f.date)return;const d=new Date(f.date);if(d.getFullYear()!==year)return;const m=d.getMonth();billed[m]+=(f.ttc||f.montantTTC||0);const sp=factureStatutPaye(f);const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");if(sp.reste>0.01&&(!due||due>=now))current[m]+=sp.reste;});
+  (paiements||[]).forEach(p=>{if(!invoiceById.has(p.factureId)||!p.date)return;const d=new Date(p.date);if(d.getFullYear()===year)collected[d.getMonth()]+=(Number(p.montant)||0);});
+  const max=Math.max(...billed,...collected,...current,1);
+  const W=650,H=175,groupW=50,bW=12,gap=4,pL=10,pB=28;
   let bars="",labels="";
-  data.forEach((v,i)=>{
-    const x=pL+i*(bW+gap);const bh=Math.max(2,(v/max)*(H-pB-10));const y=H-pB-bh;
-    bars+='<rect x="'+x+'" y="'+y+'" width="'+bW+'" height="'+bh+'" rx="3" fill="#3b82f6" opacity="0.85"/>';
-    labels+='<text x="'+(x+bW/2)+'" y="'+(H-4)+'" text-anchor="middle" font-size="9" fill="#94a3b8">'+months[i]+'</text>';
-    if(v>0)bars+='<text x="'+(x+bW/2)+'" y="'+(y-3)+'" text-anchor="middle" font-size="8" fill="#475569">'+(v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(0)+"k":v.toFixed(0))+'</text>';
+  billed.forEach((_,i)=>{
+    const x=pL+i*groupW;[[billed[i],"#3b82f6"],[collected[i],"#10b981"],[current[i],"#f59e0b"]].forEach(([v,color],j)=>{const bh=v>0?Math.max(2,(v/max)*(H-pB-14)):0;const bx=x+j*(bW+gap),y=H-pB-bh;bars+='<rect x="'+bx+'" y="'+y+'" width="'+bW+'" height="'+bh+'" rx="2" fill="'+color+'" opacity="0.9"/>';});
+    labels+='<text x="'+(x+20)+'" y="'+(H-8)+'" text-anchor="middle" font-size="9" fill="#64748b">'+months[i]+'</text>';
   });
-  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:180px">'+bars+labels+'</svg>';
+  return '<div style="display:flex;gap:16px;font-size:10px;font-weight:700;margin-bottom:6px"><span style="color:#3b82f6">■ Facturé</span><span style="color:#10b981">■ Encaissé</span><span style="color:#f59e0b">■ Créances courantes</span></div><svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:190px">'+bars+labels+'</svg>';
 }
 function openDevisModal(){
   const num=nextDevisNum();
@@ -26623,6 +26623,11 @@ function renderFactDashboard(view){
   const barTotal=totalEncaisse+curCr+lateCr||1;
   const pEnc=Math.round(totalEncaisse/barTotal*100),pCur=Math.round(curCr/barTotal*100),pLate=Math.round(lateCr/barTotal*100);
   const totalVentes=totalFact;
+  const yearInvoices=factures.filter(f=>new Date(f.date||"").getFullYear()===curYear);
+  const yearInvoiceIds=new Set(yearInvoices.map(f=>f.id));
+  const yearCollected=myPaiements.filter(p=>yearInvoiceIds.has(p.factureId)&&new Date(p.date||"").getFullYear()===curYear).reduce((s,p)=>s+(Number(p.montant)||0),0);
+  const yearCurrent=yearInvoices.reduce((s,f)=>{const sp=factureStatutPaye(f);const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");return s+(sp.reste>0.01&&(!due||due>=now)?sp.reste:0)},0);
+  const pct=v=>totalVentes>0?Math.round(v/totalVentes*1000)/10:0;
   const unpaidSorted=unpaid.sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,10);
   const nbTotal=unpaid.length,nbLate=unpaid.filter(f=>{const e=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||30):"");return e&&e<now;}).length;
   view.innerHTML=
@@ -26651,7 +26656,13 @@ function renderFactDashboard(view){
     '<div style="display:flex;gap:24px;margin-bottom:12px">'+
     '<div><div style="font-size:11px;color:#3b82f6;font-weight:700">Total des ventes</div><div style="font-size:18px;font-weight:900;color:#111827">'+money(totalVentes)+'</div></div>'+
     '</div>'+
-    factChartSVG(factures,curYear)+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px;align-items:start">'+
+    '<div>'+factChartSVG(factures,myPaiements,curYear)+'</div>'+
+    '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-top:24px"><div style="padding:9px 11px;background:#f8fafc;font-size:11px;font-weight:800;color:#334155">Répartition annuelle</div><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="padding:7px;text-align:left;color:#64748b">Indicateur</th><th style="padding:7px;text-align:right;color:#64748b">Montant</th><th style="padding:7px;text-align:right;color:#64748b">%</th></tr></thead><tbody>'+
+    '<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;color:#3b82f6;font-weight:700">Facturé</td><td style="padding:8px;text-align:right;font-family:monospace">'+money(totalVentes)+'</td><td style="padding:8px;text-align:right;font-weight:900">'+(totalVentes>0?'100':'0')+' %</td></tr>'+
+    '<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;color:#059669;font-weight:700">Encaissé</td><td style="padding:8px;text-align:right;font-family:monospace">'+money(yearCollected)+'</td><td style="padding:8px;text-align:right;font-weight:900">'+pct(yearCollected)+' %</td></tr>'+
+    '<tr style="border-top:1px solid #e2e8f0"><td style="padding:8px;color:#d97706;font-weight:700">Créances courantes</td><td style="padding:8px;text-align:right;font-family:monospace">'+money(yearCurrent)+'</td><td style="padding:8px;text-align:right;font-weight:900">'+pct(yearCurrent)+' %</td></tr>'+
+    '</tbody></table></div></div>'+
     '</div>'+
     '</div>'+
     // RIGHT
