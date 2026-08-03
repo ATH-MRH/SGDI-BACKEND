@@ -26060,8 +26060,12 @@ async function factureEditorSave(options){
   let existing=db.factures.find(x=>x.id===id);
   const wasValidated=existing&&existing.statut!=="brouillon";
   if(options.draft&&wasValidated){const state=document.getElementById("fact-draft-state");if(state)state.textContent="Facture validée";return existing;}
-  const statut=validate?"emise":(existing?.statut||"brouillon");
-  const numero=validate&&(!existing?.numero||existing.numero==="BROUILLON")?nextFactureNum():(existing?.numero||gv("fact-numero")||"BROUILLON");
+  // Le numéro définitif et le passage à "émise" ne sont JAMAIS décidés ici : calculé côté
+  // navigateur, un numéro pouvait entrer en collision avec celui d'un autre onglet/session
+  // validé au même moment (contrainte d'unicité en base). Le serveur les attribue de façon
+  // atomique via /factures/{id}/valider, appelé juste après cet enregistrement des champs.
+  const statut=existing?.statut||"brouillon";
+  const numero=existing?.numero||gv("fact-numero")||"BROUILLON";
   const remarque=(gv("fact-remarque")||gv("fact-objet")||"").trim();
   const objet=(gv("fact-objet")||gv("fact-remarque")||"").trim();
   const modeReglement=gv("fact-mode")||"A terme";
@@ -26098,7 +26102,7 @@ async function factureEditorSave(options){
   const tvaAmt=totals.totalTVA;
   const montantTTC=totals.totalTTC;
   const echeance=gv("fact-echeance")||"";
-  const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:validate?new Date().toISOString():(existing?.validatedAt||"")};
+  const data={id:existing?.id||id||uid("fc"),numero,date,dateDepot,dateEcheance,statut,remarque,objet,societe:mySoc()||"",clientId,clientNom,client:clientNom,siteNom,adresseClient,nif,rc,clientRc:rc,email,modeReglement,echeance,texteSupp,lignes,montantHT,totalHT:montantHT,tvaAmt,montantTTC,ttc:montantTTC,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),validatedAt:existing?.validatedAt||""};
   const creating=!existing;
   if(existing){Object.assign(existing,data);}else{db.factures.push(data);window.__factureEditId=data.id;}
   try{
@@ -26113,12 +26117,20 @@ async function factureEditorSave(options){
       saved=await sgdiApi("/api/irongs/collections/factures/items",{method:"POST",body:{data},legacy:false});
     }
     if(saved&&typeof saved==="object")Object.assign(data,saved);
-    const state=document.getElementById("fact-draft-state");if(state)state.textContent=validate?"Facture validée":"Enregistré à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-    if(!options.silent)toast(validate?"Facture "+numero+" validée et numérotée":"Brouillon enregistré","success");
-    if(validate)renderView();
+    if(validate){
+      const validated=await sgdiApi("/api/irongs/factures/"+encodeURIComponent(data.id)+"/valider",{method:"POST",legacy:false});
+      Object.assign(data,validated);
+      if(existing)Object.assign(existing,validated);
+      const state=document.getElementById("fact-draft-state");if(state)state.textContent="Facture validée";
+      if(!options.silent)toast("Facture "+validated.numero+" validée et numérotée","success");
+      renderView();
+      return data;
+    }
+    const state=document.getElementById("fact-draft-state");if(state)state.textContent="Enregistré à "+new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    if(!options.silent)toast("Brouillon enregistré","success");
     return data;
   }catch(e){
-    const state=document.getElementById("fact-draft-state");if(state)state.textContent="Échec de sauvegarde";
+    const state=document.getElementById("fact-draft-state");if(state)state.textContent=validate?"Échec de la validation":"Échec de sauvegarde";
     if(!options.silent)toast("Erreur : "+(e.message||e),"error");
     return null;
   }
@@ -26674,7 +26686,25 @@ function renderFactDevis(view){
 }
 async function updateDevisStatut(id,s){const d=db.devis.find(x=>x.id===id);if(d){d.statut=s;if(!(await saveDBAndWaitToast("Statut devis non confirmé")))return;toast("Statut mis à jour","success")}}
 async function deleteDevis(id){if(!confirm("Supprimer ce devis ?"))return;db.devis=db.devis.filter(d=>d.id!==id);if(!(await saveDBAndWaitToast("Suppression devis non confirmée")))return;renderView();toast("Supprimé","success")}
-async function convertDevisToFacture(id){const d=db.devis.find(x=>x.id===id);if(!d)return;const num=nextFactureNum();db.factures=db.factures||[];db.factures.push({id:uid("fc"),numero:num,date:today(),societe:d.societe,echeance:30,client:d.client,adresseClient:d.adresseClient||"",nif:"",email:d.email||"",objet:d.objet,designation:d.designation||"",quantite:d.quantite,prixUnitaire:d.prixUnitaire,tva:d.tva,remise:d.remise,totalHT:d.totalHT,tvaAmt:d.tvaAmt,ttc:d.ttc,modeReglement:"Virement bancaire",observations:"Issu du devis "+d.numero,statut:"emise",categorie:d.categorie||"",theme:d.theme||"",structure:d.structure||"",createdBy:session.username,createdAt:new Date().toISOString(),sourceDevisId:d.id});d.statut="accepte";if(!(await saveDBAndWaitToast("Conversion devis non confirmée")))return;toast("Facture "+num+" créée","success");navigate("facturation/factures")}
+async function convertDevisToFacture(id){
+  const d=db.devis.find(x=>x.id===id);if(!d)return;
+  // Le numéro définitif n'est plus calculé ici : la facture est d'abord créée en
+  // brouillon, puis /factures/{id}/valider l'attribue de façon atomique côté serveur
+  // (évite une collision si deux devis sont convertis au même moment).
+  const fid=uid("fc");
+  db.factures=db.factures||[];
+  db.factures.push({id:fid,numero:"BROUILLON",date:today(),societe:d.societe,echeance:30,client:d.client,adresseClient:d.adresseClient||"",nif:"",email:d.email||"",objet:d.objet,designation:d.designation||"",quantite:d.quantite,prixUnitaire:d.prixUnitaire,tva:d.tva,remise:d.remise,totalHT:d.totalHT,tvaAmt:d.tvaAmt,ttc:d.ttc,modeReglement:"Virement bancaire",observations:"Issu du devis "+d.numero,statut:"brouillon",categorie:d.categorie||"",theme:d.theme||"",structure:d.structure||"",createdBy:session.username,createdAt:new Date().toISOString(),sourceDevisId:d.id});
+  d.statut="accepte";
+  if(!(await saveDBAndWaitToast("Conversion devis non confirmée")))return;
+  try{
+    const validated=await sgdiApi("/api/irongs/factures/"+encodeURIComponent(fid)+"/valider",{method:"POST",legacy:false});
+    const f=db.factures.find(x=>x.id===fid);if(f)Object.assign(f,validated);
+    toast("Facture "+validated.numero+" créée","success");
+  }catch(e){
+    toast("Devis converti, mais numérotation de la facture impossible : "+(e.message||e),"error");
+  }
+  navigate("facturation/factures");
+}
 function __renderFactFacturesOLD_REMOVED(view){
 }
 async function deleteFacture(id){
@@ -28122,6 +28152,24 @@ function openClientModal(id,readOnly=false){
       <button type="button" style="margin-top:6px;padding:6px 14px;border:1.5px dashed #bfdbfe;border-radius:6px;background:#f0f6ff;color:#1d4ed8;font-size:12px;font-weight:700;cursor:pointer" onclick="prospAddReunion(this,'negos')">+ Ajouter une réunion</button>
     </fieldset>
   `;
+  const tabFacturation=`
+    <fieldset class="rh-op-box" style="margin-bottom:12px">
+      <legend>Paramètres repris automatiquement sur les factures</legend>
+      <div class="rh-op-grid">
+        ${lbl("Mode de paiement",sel("modePaiement",["Virement bancaire","Chèque","Espèces","Traite","Prélèvement automatique"].map(m=>`<option value="${m}" ${(c?.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")))}
+        ${lbl("Délai de paiement",sel("delaiPaiement",["Paiement immédiat","30 jours","45 jours","60 jours","90 jours","Sur échéancier"].map(d=>`<option value="${d}" ${(c?.delaiPaiement||"30 jours")===d?"selected":""}>${d}</option>`).join("")))}
+        ${lbl("Dépôt client après facturation",sel("delaiDepotFacture",[["0","Le jour même"],["1","1 jour"],["3","3 jours"],["5","5 jours"],["7","7 jours"],["15","15 jours"]].map(([v,l])=>`<option value="${v}" ${String(c?.delaiDepotFacture||"0")===v?"selected":""}>${l}</option>`).join("")))}
+      </div>
+      ${lbl("Conditions particulières",`<textarea class="input" name="conditionsPaiement" rows="2" style="width:100%;margin-top:4px" placeholder="Ex: 50% à la commande, solde à la livraison...">${escapeHTML(c?.conditionsPaiement||"")}</textarea>`)}
+      ${lbl("Mention habituelle sur les factures",`<textarea class="input" name="remarqueFacture" rows="2" style="width:100%;margin-top:4px" placeholder="Mention automatiquement reprise sur chaque nouvelle facture">${escapeHTML(c?.remarqueFacture||"")}</textarea>`)}
+    </fieldset>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+      <div style="padding:12px;border:1px solid #dbeafe;border-radius:8px;background:#eff6ff"><b style="font-size:12px;color:#1e3a8a">Référence</b><p style="font-size:11px;color:#64748b;margin-top:4px">Attribuée lors de la validation de chaque facture.</p></div>
+      <div style="padding:12px;border:1px solid #dbeafe;border-radius:8px;background:#eff6ff"><b style="font-size:12px;color:#1e3a8a">Date de facture</b><p style="font-size:11px;color:#64748b;margin-top:4px">Renseignée sur chaque nouvelle facture.</p></div>
+      <div style="padding:12px;border:1px solid #d1fae5;border-radius:8px;background:#ecfdf5"><b style="font-size:12px;color:#065f46">Date d’échéance</b><p style="font-size:11px;color:#64748b;margin-top:4px">Calculée automatiquement depuis la date et le délai.</p></div>
+    </div>
+    <div style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" onclick="saveClientInPlace()">Enregistrer les paramètres de facturation</button></div>
+  `;
   const tabContrat=`<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
     <button type="button" class="btn btn-primary" style="padding:8px 18px;font-size:12px;font-weight:700;background:#0f2d5a;border-color:#0f2d5a" onclick="clientCreerContrat('${id||""}')">Créer contrat</button>
     <button type="button" class="btn btn-ghost" style="padding:8px 18px;font-size:12px;font-weight:700;border:1.5px solid #7c3aed;color:#7c3aed" onclick="clientCreerAvenant('${id||""}')">Créer avenant</button>
@@ -28195,14 +28243,6 @@ function openClientModal(id,readOnly=false){
       return `<div style="margin-top:12px"><span style="font-size:11px;color:#334155;font-weight:900;display:block;margin-bottom:6px">Sites</span><input type="hidden" id="cts-sites-json" name="cts_sites" value="${escapeHTML(JSON.stringify(ctsSites))}"/>${nbrSel}<div id="cts-sites-container"><div class="cts-tabs" style="display:flex;gap:2px;border-bottom:1px solid #e2e8f0;margin-bottom:2px">${tabBtns}</div><div class="cts-panels">${panels}</div></div></div>`;
     })()}
     <div style="margin-top:16px;border:1px solid #e2e8f0;border-radius:10px;padding:14px;background:#f8fafc">
-      <span style="font-size:11px;color:#334155;font-weight:900;display:block;margin-bottom:10px">Conditions de paiement</span>
-      <div class="rh-op-grid" style="margin-bottom:10px">
-        ${lbl("Mode de paiement",sel("modePaiement",["Virement bancaire","Chèque","Espèces","Traite","Prélèvement automatique"].map(m=>`<option value="${m}" ${(c?.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")))}
-        ${lbl("Délai de paiement",sel("delaiPaiement",["Paiement immédiat","30 jours","45 jours","60 jours","90 jours","Sur échéancier"].map(d=>`<option value="${d}" ${(c?.delaiPaiement||"30 jours")===d?"selected":""}>${d}</option>`).join("")))}
-        ${lbl("Dépôt après facturation",sel("delaiDepotFacture",[["0","Le jour même"],["1","1 jour"],["3","3 jours"],["5","5 jours"],["7","7 jours"],["15","15 jours"]].map(([v,l])=>`<option value="${v}" ${String(c?.delaiDepotFacture||"0")===v?"selected":""}>${l}</option>`).join("")))}
-      </div>
-      ${lbl("Conditions particulières",`<textarea class="input" name="conditionsPaiement" rows="2" style="width:100%;margin-top:4px" placeholder="Ex: 50% à la commande, solde à la livraison..." required>${escapeHTML(c?.conditionsPaiement||"")}</textarea>`)}
-      ${lbl("Mention habituelle sur les factures",`<textarea class="input" name="remarqueFacture" rows="2" style="width:100%;margin-top:4px" placeholder="Mention automatiquement reprise sur chaque nouvelle facture">${escapeHTML(c?.remarqueFacture||"")}</textarea>`)}
       <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;padding-top:12px;border-top:1px solid #e2e8f0">
         <div style="display:flex;align-items:center;gap:8px">
           <input type="checkbox" id="contrat-valide-chk" name="contratValide" value="1" ${c?.contratValide?"checked":""} style="width:16px;height:16px;cursor:pointer"/>
@@ -28233,6 +28273,7 @@ function openClientModal(id,readOnly=false){
     </div>
     ${sgdiTabsHTML([
       {label:"Information",content:tabIdentification},
+      {label:"Facturation",content:tabFacturation},
       {label:"Contrat",content:tabContrat},
       {label:"Données techniques",content:(()=>{
         const nbrSite=clientNbrSites(c);
