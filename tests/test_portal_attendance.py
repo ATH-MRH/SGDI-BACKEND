@@ -279,19 +279,6 @@ def test_recrute_route_serves_html(client):
     assert "/marquer-contractualisation" in r.text
 
 
-def test_cheque_route_serves_html(client):
-    r = client.get("/cheque")
-    assert r.status_code == 200
-    assert "Impression Chèques" in r.text
-    assert "BNA" in r.text
-
-
-def test_cheque_host_serves_same_page(client):
-    r = client.get("/", headers={"Host": "cheque.irongs.com"})
-    assert r.status_code == 200
-    assert "Impression Chèques" in r.text
-
-
 def test_attendance_feed_site_restricted_supervisor_only_sees_own_site(client, auth_headers, db):
     from app.core.security import hash_password
     from app.modules.auth.models import User

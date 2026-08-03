@@ -488,10 +488,6 @@ def _is_fac_host(host: str) -> bool:
     return host.split(":")[0].lower() == "fac.irongs.com"
 
 
-def _is_cheque_host(host: str) -> bool:
-    return host.split(":")[0].lower() == "cheque.irongs.com"
-
-
 def _portal_mobile_urls(request: Request) -> list[str]:
     scheme = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
     host = request.headers.get("host", "").split(":")[0].lower()
@@ -578,15 +574,6 @@ def attendance_supervision() -> FileResponse:
 def recrute_mobile() -> FileResponse:
     return FileResponse(
         STATIC_DIR / "recrute.html",
-        media_type="text/html; charset=utf-8",
-        headers={"Cache-Control": "no-cache, max-age=0"},
-    )
-
-
-@app.get("/cheque", include_in_schema=False, name="cheque_dz")
-def cheque_dz() -> FileResponse:
-    return FileResponse(
-        STATIC_DIR / "cheque.html",
         media_type="text/html; charset=utf-8",
         headers={"Cache-Control": "no-cache, max-age=0"},
     )
@@ -1142,12 +1129,6 @@ def frontend(request: Request) -> HTMLResponse:
     if _is_fac_host(host):
         return FileResponse(
             STATIC_DIR / "facturation.html",
-            media_type="text/html; charset=utf-8",
-            headers={"Cache-Control": "no-cache, max-age=0"},
-        )
-    if _is_cheque_host(host):
-        return FileResponse(
-            STATIC_DIR / "cheque.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )
