@@ -5,6 +5,7 @@ nouveaux endpoints /api/portal/attendance-manual/search + /attendance-manual/sca
 ajoutés pour les employés sans smartphone (le pointeur tape le code/nom, puis confirme).
 """
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.modules.irongs import service as irongs_service
 
@@ -172,6 +173,92 @@ def test_attendance_feed_restores_missing_employee_identity(client, auth_headers
 
 def test_attendance_feed_requires_auth(client):
     r = client.get("/api/portal/attendance-feed")
+    assert r.status_code == 401
+
+
+def _scan_event(db, *, event_id, emp_id, matricule, name, action, hours_ago, site="", site_id=None):
+    irongs_service.create_item(db, "attendanceQrScans", {
+        "id": event_id, "nonce": event_id, "employeeId": emp_id,
+        "matricule": matricule, "agentName": name,
+        "action": action, "cycle": 1,
+        "scannedAt": (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat(),
+        "site": site, "siteId": site_id, "scannedBy": "test",
+    })
+
+
+def test_attendance_alerts_flags_8h_12h_16h_thresholds(client, auth_headers, db):
+    _scan_event(db, event_id="alert-8h", emp_id=910001, matricule="AL8H", name="Huit Heures", action="arrivee", hours_ago=9)
+    _scan_event(db, event_id="alert-12h", emp_id=910002, matricule="AL12H", name="Douze Heures", action="arrivee", hours_ago=13)
+    _scan_event(db, event_id="alert-16h", emp_id=910003, matricule="AL16H", name="Seize Heures", action="arrivee", hours_ago=18)
+    _scan_event(db, event_id="alert-none", emp_id=910004, matricule="ALNONE", name="Cinq Heures", action="arrivee", hours_ago=5)
+
+    r = client.get("/api/portal/attendance-alerts", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    by_matricule = {a["matricule"]: a for a in r.json()["presence_alerts"]}
+    assert by_matricule["AL8H"]["threshold_hours"] == 8
+    assert by_matricule["AL12H"]["threshold_hours"] == 12
+    assert by_matricule["AL16H"]["threshold_hours"] == 16
+    assert "ALNONE" not in by_matricule
+
+
+def test_attendance_alerts_ignores_completed_shift(client, auth_headers, db):
+    _scan_event(db, event_id="done-arr", emp_id=910010, matricule="ALDONE", name="Parti", action="arrivee", hours_ago=20)
+    _scan_event(db, event_id="done-dep", emp_id=910010, matricule="ALDONE", name="Parti", action="depart", hours_ago=1)
+    r = client.get("/api/portal/attendance-alerts", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    assert not any(a["matricule"] == "ALDONE" for a in r.json()["presence_alerts"])
+
+
+def test_attendance_alerts_thresholds_are_absolute_regardless_of_site_rotation(client, auth_headers, db):
+    """Consigne produit : seuils absolus pour tout le monde, peu importe le régime de
+    rotation du site (contrairement à overtime_alert, qui lui compare à la durée autorisée)."""
+    site_std = _site(client, auth_headers, "Site Standard Alerte")
+    site_24 = _site(client, auth_headers, "Site Rotation24 Alerte")
+    r24 = client.put(f"/api/ops/sites/{site_24}", headers=auth_headers, json={"rotation_system": "24/48"})
+    assert r24.status_code == 200, r24.text
+    r_std = client.put(f"/api/ops/sites/{site_std}", headers=auth_headers, json={"rotation_system": "8h"})
+    assert r_std.status_code == 200, r_std.text
+
+    _scan_event(db, event_id="std-20h", emp_id=910020, matricule="ALSTD", name="Site Standard", action="arrivee", hours_ago=20, site_id=int(site_std))
+    _scan_event(db, event_id="rot24-20h", emp_id=910021, matricule="ALROT24", name="Site Rotation24", action="arrivee", hours_ago=20, site_id=int(site_24))
+
+    r = client.get("/api/portal/attendance-alerts", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    by_matricule = {a["matricule"]: a for a in r.json()["presence_alerts"]}
+    assert by_matricule["ALSTD"]["threshold_hours"] == 16
+    assert by_matricule["ALROT24"]["threshold_hours"] == 16
+
+
+def test_compute_attendance_alerts_weekly_total_counts_completed_shifts_only():
+    """Logique pure testée avec un `now` maîtrisé (indépendant de l'heure réelle
+    d'exécution des tests, contrairement à un test tout-HTTP proche d'un lundi minuit)."""
+    from app.modules.portal.routes import _compute_attendance_alerts
+    tz = ZoneInfo("Africa/Algiers")
+    now = datetime(2026, 8, 7, 18, 0, tzinfo=tz)  # vendredi 18h
+    monday_9am = datetime(2026, 8, 3, 9, 0, tzinfo=tz)
+    rows = []
+    for i in range(3):
+        arr = monday_9am + timedelta(days=i)
+        dep = arr + timedelta(hours=14)
+        rows.append({"employeeId": 910030, "matricule": "ALWEEK", "agentName": "Semaine Chargee", "action": "arrivee", "scannedAt": arr.isoformat()})
+        rows.append({"employeeId": 910030, "matricule": "ALWEEK", "agentName": "Semaine Chargee", "action": "depart", "scannedAt": dep.isoformat()})
+    result = _compute_attendance_alerts(rows, now, tz)
+    by_matricule = {a["matricule"]: a for a in result["weekly_alerts"]}
+    assert "ALWEEK" in by_matricule
+    assert by_matricule["ALWEEK"]["week_hours"] >= 40
+
+
+def test_attendance_alerts_excludes_in_progress_shift_from_weekly_total(client, auth_headers, db):
+    # Une seule arrivée sans départ : vacation en cours, ne doit pas compter dans le total
+    # hebdomadaire, consigne explicite du produit — même si elle est déjà longue.
+    _scan_event(db, event_id="week-open", emp_id=910040, matricule="ALOPEN", name="Encore Present", action="arrivee", hours_ago=2)
+    r = client.get("/api/portal/attendance-alerts", headers=auth_headers)
+    assert r.status_code == 200, r.text
+    assert not any(a["matricule"] == "ALOPEN" for a in r.json()["weekly_alerts"])
+
+
+def test_attendance_alerts_requires_auth(client):
+    r = client.get("/api/portal/attendance-alerts")
     assert r.status_code == 401
 
 

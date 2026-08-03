@@ -1007,6 +1007,116 @@ def attendance_feed(
     ]
 
 
+def _parse_scan_at(value: Any, tz: ZoneInfo) -> datetime | None:
+    raw = _clean_text(value)
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return (parsed.replace(tzinfo=tz) if parsed.tzinfo is None else parsed).astimezone(tz)
+    except ValueError:
+        return None
+
+
+def _compute_attendance_alerts(rows: list[dict[str, Any]], now: datetime, tz: ZoneInfo) -> dict[str, Any]:
+    """Logique pure (sans accès DB) : isolée pour pouvoir être testée avec un `now`
+    maîtrisé, sans dépendre de l'heure réelle d'exécution des tests."""
+    parsed_rows: list[tuple[datetime, dict[str, Any]]] = []
+    for row in rows:
+        at = _parse_scan_at(row.get("scannedAt"), tz)
+        if at:
+            parsed_rows.append((at, row))
+
+    by_employee: dict[str, list[tuple[datetime, dict[str, Any]]]] = {}
+    for at, row in parsed_rows:
+        key = str(row.get("employeeId") or row.get("matricule") or "")
+        if key:
+            by_employee.setdefault(key, []).append((at, row))
+
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    presence_alerts: list[dict[str, Any]] = []
+    weekly_alerts: list[dict[str, Any]] = []
+
+    for events in by_employee.values():
+        events.sort(key=lambda pair: pair[0])
+        last_at, last_row = events[-1]
+
+        # Seuils absolus (8h/12h/16h) : s'appliquent à tout le monde de la même façon,
+        # peu importe la durée de vacation normalement prévue pour le site/poste — objectif
+        # sécurité/fatigue, pas contractuel (contrairement à overtime_alert au départ).
+        if last_row.get("action") == "arrivee":
+            elapsed = now - last_at
+            if elapsed >= timedelta(0):
+                elapsed_minutes = int(elapsed.total_seconds() // 60)
+                threshold = 16 if elapsed_minutes >= 960 else 12 if elapsed_minutes >= 720 else 8 if elapsed_minutes >= 480 else 0
+                if threshold:
+                    presence_alerts.append({
+                        "employee_id": last_row.get("employeeId"),
+                        "matricule": last_row.get("matricule") or "",
+                        "nom": last_row.get("agentName") or "Employé",
+                        "site": last_row.get("site") or "",
+                        "arrival_at": last_at.isoformat(),
+                        "elapsed_minutes": elapsed_minutes,
+                        "threshold_hours": threshold,
+                    })
+
+        # Total hebdomadaire : uniquement les vacations terminées (paires arrivée→départ)
+        # depuis lundi. Une arrivée sans départ correspondant est la vacation en cours,
+        # volontairement exclue (déjà couverte par l'alerte de présence ci-dessus).
+        open_arrival_at: datetime | None = None
+        week_minutes = 0
+        for at, row in events:
+            if at < week_start:
+                continue
+            if row.get("action") == "arrivee":
+                open_arrival_at = at
+            elif row.get("action") == "depart" and open_arrival_at is not None:
+                week_minutes += max(0, int((at - open_arrival_at).total_seconds() // 60))
+                open_arrival_at = None
+        if week_minutes >= 2400:
+            weekly_alerts.append({
+                "employee_id": last_row.get("employeeId"),
+                "matricule": last_row.get("matricule") or "",
+                "nom": last_row.get("agentName") or "Employé",
+                "week_minutes": week_minutes,
+                "week_hours": round(week_minutes / 60, 1),
+            })
+
+    presence_alerts.sort(key=lambda a: -a["elapsed_minutes"])
+    weekly_alerts.sort(key=lambda a: -a["week_minutes"])
+    return {"presence_alerts": presence_alerts, "weekly_alerts": weekly_alerts}
+
+
+@router.get("/attendance-alerts")
+def attendance_alerts(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Alertes de présence prolongée (seuils absolus 8h/12h/16h, pour repérer un agent
+    resté trop longtemps sur site quel que soit son régime de rotation) et de
+    dépassement hebdomadaire (40h de vacations déjà terminées depuis lundi, la
+    vacation en cours n'est pas comptée). Recalculé à partir du même journal
+    attendanceQrScans que /attendance-feed (aucune donnée dédiée), avec le même
+    filtrage par périmètre sites/société via _allowed_assignment_site_ids."""
+    tz = ZoneInfo("Africa/Algiers")
+    now = datetime.now(tz)
+    allowed_site_ids = _allowed_assignment_site_ids(db, user)
+
+    # 4 jours de recul : assez large pour couvrir une vacation ouverte depuis avant-hier
+    # (rotations longues comprises), sans avoir à charger tout l'historique.
+    cutoff = now - timedelta(days=4)
+    rows = [
+        row for row in service.list_items(db, "attendanceQrScans")
+        if isinstance(row, dict) and row.get("action") in {"arrivee", "depart"}
+    ]
+    if allowed_site_ids is not None:
+        allowed = set(allowed_site_ids)
+        rows = [row for row in rows if row.get("siteId") in allowed]
+    rows = [row for row in rows if (_parse_scan_at(row.get("scannedAt"), tz) or cutoff) >= cutoff]
+
+    return _compute_attendance_alerts(rows, now, tz)
+
+
 def _employee_search_result(db: Session, employee: Employee) -> dict[str, Any]:
     extra = employee.extra if isinstance(employee.extra, dict) else {}
     legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
