@@ -26348,6 +26348,7 @@ function renderFactureEditor(view){
     '<a onclick="factureEditorClose()" style="color:#f59e0b;font-weight:700;cursor:pointer;text-decoration:none">Factures</a>'+
     '<span>/</span><span style="color:#111827;font-weight:700">'+(isDraft?"Brouillon":escapeHTML(f.numero||"Facture"))+'</span>'+
     (!isDraft?' <span style="margin-left:6px;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:'+sd.bg+';color:'+sd.color+'">'+escapeHTML(sd.label)+'</span>':"")+
+    '<button type="button" onclick="factureEditorOpen()" style="margin-left:auto;background:#043970;color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(4,57,112,.2)">+ Nouvelle facture</button>'+
     '</div>'+
     factTabs("factures")+
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px">'+
