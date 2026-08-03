@@ -445,7 +445,11 @@ def simple_raw(row: Any) -> dict[str, Any]:
     # leurs colonnes SQL sont intactes. Sans ces replis, la société paraît vide : le
     # filtre d'autorisation masque alors la facture et elle semble « disparue ».
     society = getattr(row, "society", None)
-    if society and not item.get("societe"):
+    # La colonne relationnelle est la source canonique. Certaines anciennes
+    # factures conservent dans _legacy la société qui était active au moment
+    # d'une migration/importation ; privilégier ce JSON périmé les masque dans
+    # l'historique de leur véritable société.
+    if society:
         item["societe"] = society
     if isinstance(row, Invoice):
         item.update({
@@ -927,17 +931,15 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
         rows = db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()
         items = [simple_raw(r) for r in rows]
         if name == "factures":
-            # Dernier filet de récupération pour les factures historiques créées
-            # avant l'enregistrement obligatoire de la société : on la déduit du
-            # client uniquement si son nom correspond à une société unique.
+            # Rattachement canonique des factures historiques. Le client est la
+            # référence métier fiable : si son nom correspond à une seule société,
+            # il corrige aussi un ancien rattachement erroné (pas seulement vide).
             client_societies: dict[str, set[str]] = {}
             for client in db.execute(select(Client)).scalars().all():
                 key = " ".join(str(client.name or "").strip().casefold().split())
                 if key and client.society:
                     client_societies.setdefault(key, set()).add(client.society)
             for item in items:
-                if item.get("societe"):
-                    continue
                 key = " ".join(str(item.get("client") or item.get("clientNom") or "").strip().casefold().split())
                 candidates = client_societies.get(key, set())
                 if len(candidates) == 1:

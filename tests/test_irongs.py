@@ -114,6 +114,20 @@ def test_facture_ancienne_reconstruite_depuis_les_colonnes_sql(client, auth_head
     assert inferred is not None
     assert inferred["societe"] == SOC
 
+    # Une migration historique a pu estampiller la facture avec une mauvaise
+    # société. Le rattachement unique du client doit la restaurer dans le bon
+    # historique au lieu de la masquer définitivement.
+    db.add(Invoice(
+        external_id="legacy_invoice_wrong_society", number="FAC0997/08/26",
+        invoice_date=date(2026, 8, 1), society="ANCIENNE SOCIETE",
+        client_name="CLIENT SOCIETE DEDUITE", status="emise", total_ttc=700,
+        data={"_legacy": {"id": "legacy_invoice_wrong_society", "societe": "SOCIETE ERRONEE"}},
+    ))
+    db.commit()
+    corrected = _find(_collection(client, auth_headers, "factures"), "numero", "FAC0997/08/26")
+    assert corrected is not None
+    assert corrected["societe"] == SOC
+
 
 def test_multiple_invoice_drafts_can_be_saved(client, auth_headers):
     """Le libellé BROUILLON ne doit jamais violer l'unicité du numéro comptable."""
