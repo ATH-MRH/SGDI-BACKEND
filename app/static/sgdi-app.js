@@ -25564,7 +25564,7 @@ function factTabs(active){
   const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
   return '<nav style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e2e8f0;overflow-x:auto">'+tabs.map(([k,l,r])=>{const on=active===k;return'<a href="#/'+r+'" style="display:inline-block;padding:9px 14px;font-size:11px;font-weight:700;white-space:nowrap;text-decoration:none;border-bottom:2px solid '+(on?"#0f2d5a":"transparent")+';color:'+(on?"#0f2d5a":"#64748b")+';margin-bottom:-2px;'+(on?"background:#f8fafc;":"")+'">'+(l)+'</a>';}).join("")+"</nav>";
 }
-function factureStatutPaye(f){const pa=(db.paiements||[]).filter(p=>p.factureId===f.id).reduce((s,p)=>s+(p.montant||0),0);const av=(db.avoirs||[]).filter(a=>a.factureId===f.id).reduce((s,a)=>s+(a.montant||0),0);const reste=Math.max(0,(f.ttc||0)-pa-av);let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
+function factureStatutPaye(f){const cents=v=>Math.round((Number(v)||0)*100)/100;const pa=cents((db.paiements||[]).filter(p=>p.factureId===f.id).reduce((s,p)=>s+(Number(p.montant)||0),0));const av=cents((db.avoirs||[]).filter(a=>a.factureId===f.id).reduce((s,a)=>s+(Number(a.montant)||0),0));const reste=cents(Math.max(0,(Number(f.ttc)||0)-pa-av));let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
 function statutFactPill(s){return{"emise":"pill-blue","partielle":"pill-amber","payee":"pill-green","echue":"pill-red","annulee":"pill-gray"}[s]||"pill-gray"}
 function statutDevisPill(s){return{"brouillon":"pill-gray","envoye":"pill-blue","accepte":"pill-green","refuse":"pill-red","expire":"pill-amber"}[s]||"pill-gray"}
 function renderFacturation(view,sub,arg){
@@ -26640,7 +26640,7 @@ function openPaiementModal(factureId){
     <form onsubmit="event.preventDefault();confirmPaiement('${factureId}')">
       <div class="grid grid-2 gap-3">
         <div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" /></div>
-        <div><label class="label">Montant (DA) *</label><input class="input" type="number" step="0.01" name="montant" value="${sp.reste.toFixed(2)}" max="${sp.reste}" /></div>
+        <div><label class="label">Montant (DA) *</label><input class="input" type="number" step="0.01" min="0.01" name="montant" value="${sp.reste.toFixed(2)}" max="${sp.reste.toFixed(2)}" /></div>
         <div><label class="label">Mode *</label><select class="select" name="mode" >${MODES_PAIEMENT.map(m=>`<option>${m}</option>`).join("")}</select></div>
         <div><label class="label">Référence</label><input class="input" name="reference" placeholder="N° chèque, virement..."/></div>
         <div class="col-span-2"><label class="label">Notes</label><textarea class="input" name="notes" rows="2"></textarea></div>

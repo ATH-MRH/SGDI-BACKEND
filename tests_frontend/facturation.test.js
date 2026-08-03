@@ -132,4 +132,11 @@ test('factureStatutPaye : ignore les paiements/avoirs d\'une autre facture', () 
   assert.strictEqual(r.statut, 'emise');
 });
 
+test('factureStatutPaye : arrondit le reste au centime pour le paiement intégral', () => {
+  const t = T();
+  t.setDb({ paiements: [], avoirs: [] });
+  const result = t.factureStatutPaye({ id: 'f-round', ttc: 898058.728, statut: 'emise' });
+  assert.equal(result.reste, 898058.73);
+});
+
 test.after(() => { setTimeout(() => process.exit(0), 50); });
