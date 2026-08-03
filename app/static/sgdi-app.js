@@ -25640,7 +25640,8 @@ function factureEditorOpen(id){window.__factureEditId=id||"new";navigate("factur
 function factureEditorClose(){delete window.__factureEditId;navigate("facturation/factures");}
 
 function renderFactureListPage(view){
-  const list=bySoc(db.factures||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const activeSoc=normalizeSocieteName(mySoc());
+  const list=(db.factures||[]).filter(f=>!activeSoc||normalizeSocieteName(f?.societe)===activeSoc).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const drafts=list.filter(f=>String(f.statut||"").toLowerCase()==="brouillon");
   const issued=list.filter(f=>String(f.statut||"").toLowerCase()!=="brouillon");
   const totalIssued=issued.reduce((sum,f)=>sum+Number(f.ttc||f.montantTTC||0),0);

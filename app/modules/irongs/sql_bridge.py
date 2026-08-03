@@ -441,6 +441,25 @@ def simple_raw(row: Any) -> dict[str, Any]:
     item = dict((getattr(row, "data", None) or {}).get("_legacy") or {})
     item["id"] = item.get("id") or getattr(row, "external_id", None) or str(row.id)
     item["backendId"] = row.id
+    # Les anciennes lignes finance peuvent avoir un JSON _legacy incomplet alors que
+    # leurs colonnes SQL sont intactes. Sans ces replis, la société paraît vide : le
+    # filtre d'autorisation masque alors la facture et elle semble « disparue ».
+    society = getattr(row, "society", None)
+    if society and not item.get("societe"):
+        item["societe"] = society
+    if isinstance(row, Invoice):
+        item.update({
+            "numero": item.get("numero") or row.number or "BROUILLON",
+            "date": item.get("date") or date_out(row.invoice_date),
+            "client": item.get("client") or row.client_name or "",
+            "clientNom": item.get("clientNom") or row.client_name or "",
+            "objet": item.get("objet") or row.subject or "",
+            "statut": item.get("statut") or row.status or "brouillon",
+            "totalHT": item.get("totalHT") if item.get("totalHT") is not None else as_float(row.total_ht),
+            "ttc": item.get("ttc") if item.get("ttc") is not None else as_float(row.total_ttc),
+            "montantTTC": item.get("montantTTC") if item.get("montantTTC") is not None else as_float(row.total_ttc),
+            "createdAt": item.get("createdAt") or date_out(getattr(row, "created_at", None)),
+        })
     return item
 
 
@@ -904,7 +923,26 @@ def list_collection(db: Session, name: str) -> list[dict[str, Any]]:
     if name == "feuillePresence":
         cutoff = date.today() - timedelta(days=90)
         return [presence_to_item(r) for r in db.execute(select(DailyPresence).where(DailyPresence.presence_date >= cutoff).order_by(DailyPresence.id)).scalars().all() if (r.data or {}).get("collection") != "pointages"]
-    if name in FINANCE_MODELS: return [simple_raw(r) for r in db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()]
+    if name in FINANCE_MODELS:
+        rows = db.execute(select(FINANCE_MODELS[name]).order_by(FINANCE_MODELS[name].id)).scalars().all()
+        items = [simple_raw(r) for r in rows]
+        if name == "factures":
+            # Dernier filet de récupération pour les factures historiques créées
+            # avant l'enregistrement obligatoire de la société : on la déduit du
+            # client uniquement si son nom correspond à une société unique.
+            client_societies: dict[str, set[str]] = {}
+            for client in db.execute(select(Client)).scalars().all():
+                key = " ".join(str(client.name or "").strip().casefold().split())
+                if key and client.society:
+                    client_societies.setdefault(key, set()).add(client.society)
+            for item in items:
+                if item.get("societe"):
+                    continue
+                key = " ".join(str(item.get("client") or item.get("clientNom") or "").strip().casefold().split())
+                candidates = client_societies.get(key, set())
+                if len(candidates) == 1:
+                    item["societe"] = next(iter(candidates))
+        return items
     if name in STOCK_MODELS: return [stock_raw(r) for r in db.execute(select(STOCK_MODELS[name]).order_by(STOCK_MODELS[name].id)).scalars().all()]
     if name in {"assignments", "affectations"}:
         # NE PAS envoyer l'historique inactif (des dizaines de milliers de lignes qui gonflent

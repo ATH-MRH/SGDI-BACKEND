@@ -82,6 +82,39 @@ def test_roundtrip_finance(client, auth_headers, name, payload, check):
     assert row.get(key) == val
 
 
+def test_facture_ancienne_reconstruite_depuis_les_colonnes_sql(client, auth_headers, db):
+    """Une facture dont le JSON legacy est incomplet ne doit pas disparaître : les
+    colonnes SQL restent la source de secours pour l'affichage et le filtre société."""
+    from datetime import date
+    from app.modules.finance_models import Invoice
+    from app.modules.commercial.models import Client
+
+    db.add(Invoice(
+        external_id="legacy_sql_only_invoice", number="FAC0999/08/26",
+        invoice_date=date(2026, 8, 1), society=SOC, client_name="CLIENT HISTORIQUE",
+        subject="Prestation historique", status="emise", total_ht=1000,
+        total_ttc=1190, data={"collection": "factures", "_legacy": {"id": "legacy_sql_only_invoice"}},
+    ))
+    db.commit()
+
+    row = _find(_collection(client, auth_headers, "factures"), "numero", "FAC0999/08/26")
+    assert row is not None
+    assert row["societe"] == SOC
+    assert row["client"] == "CLIENT HISTORIQUE"
+    assert row["ttc"] == 1190
+
+    db.add(Client(name="CLIENT SOCIETE DEDUITE", society=SOC, status="actif"))
+    db.add(Invoice(
+        external_id="legacy_invoice_without_society", number="FAC0998/08/26",
+        invoice_date=date(2026, 8, 1), society=None, client_name="CLIENT SOCIETE DEDUITE",
+        status="emise", total_ttc=500, data={"_legacy": {"id": "legacy_invoice_without_society"}},
+    ))
+    db.commit()
+    inferred = _find(_collection(client, auth_headers, "factures"), "numero", "FAC0998/08/26")
+    assert inferred is not None
+    assert inferred["societe"] == SOC
+
+
 def test_multiple_invoice_drafts_can_be_saved(client, auth_headers):
     """Le libellé BROUILLON ne doit jamais violer l'unicité du numéro comptable."""
     first = _post_item(client, auth_headers, "factures", {
