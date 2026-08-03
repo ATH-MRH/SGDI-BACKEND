@@ -25600,14 +25600,11 @@ async function renderFactClients(view){
   }
   try{
     const rows=list.map(c=>{
-      const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;
-      const alert=d!==null&&d<=30;
-      const finCell=c.dateFinContrat?'<span class="pill '+(d<0?"pill-red":d<=30?"pill-amber":"pill-green")+'">'+formatDate(c.dateFinContrat)+(d<0?" · expiré":d<=30?" · J-"+d:"")+'</span>':"—";
       const ht=(c.lignesFacturation||[]).reduce((s,l)=>s+(Number(l.prixUnitaire)||0)*(Number(l.qte)||1),0);
       const ttc=ht*1.19;
       const totalEffectif=(c.tech_sites||[]).reduce((s,site)=>s+clientSiteEffectif(site),0);
       const nbrSite=clientNbrSites(c);
-      return '<tr data-searchable style="'+(alert?"background:#fff7ed;":"")+'cursor:pointer" onclick="openClientModal(\''+c.id+'\')">'+
+      return '<tr data-searchable style="cursor:pointer" onclick="openClientModal(\''+c.id+'\')">'+
         '<td class="font-semibold" style="color:#1d4ed8">'+escapeHTML(c.nom||"")+'</td>'+
         '<td class="text-xs">'+escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")+'</td>'+
         '<td class="text-xs">'+escapeHTML(c.contact||"")+'</td>'+
@@ -25616,7 +25613,6 @@ async function renderFactClients(view){
         '<td class="font-bold" style="text-align:center">'+nbrSite+'</td>'+
         '<td class="font-bold" style="text-align:center;color:#043970">'+totalEffectif+'</td>'+
         '<td class="font-mono font-bold" style="text-align:right;white-space:nowrap;color:#043970">'+(ttc>0?formatDZD(ttc):"—")+'</td>'+
-        '<td class="text-xs">'+finCell+'</td>'+
         '<td><span class="pill '+(c.statut==="actif"?"pill-green":"pill-gray")+'">'+safe(c.statut)+'</span></td>'+
         '</tr>';
     }).join("");
@@ -25629,7 +25625,7 @@ async function renderFactClients(view){
       '<table><thead><tr>'+
       '<th>Nom</th><th>Prestation fournie</th><th>Contact</th><th>Tel</th><th>Wilaya</th>'+
       '<th style="text-align:center">Nbr site</th><th style="text-align:center">Total eff.</th>'+
-      '<th style="text-align:right">Montant TTC</th><th>Fin contrat</th><th>Statut</th>'+
+      '<th style="text-align:right">Montant TTC</th><th>Statut</th>'+
       '</tr></thead><tbody>'+rows+'</tbody></table>')+
       '</div>'+(result?sgdiServerPaginationHTML("fact-clients",soc||"all",result):"");
   }catch(e){
