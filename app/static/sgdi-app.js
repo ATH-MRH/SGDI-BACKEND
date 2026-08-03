@@ -26645,12 +26645,11 @@ function renderFactDashboard(view){
     '</div></div>'+
     '<div class="card" style="padding:20px">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
-    '<div style="font-size:14px;font-weight:700;color:#111827">Ventes et dépenses</div>'+
+    '<div style="font-size:14px;font-weight:700;color:#111827">Ventes</div>'+
     '<div style="font-size:12px;color:#6b7280">Année fiscale <strong>'+curYear+'</strong></div>'+
     '</div>'+
     '<div style="display:flex;gap:24px;margin-bottom:12px">'+
     '<div><div style="font-size:11px;color:#3b82f6;font-weight:700">Total des ventes</div><div style="font-size:18px;font-weight:900;color:#111827">'+money(totalVentes)+'</div></div>'+
-    '<div><div style="font-size:11px;color:#ef4444;font-weight:700">Total des dépenses</div><div style="font-size:18px;font-weight:900;color:#111827">'+money(0)+'</div></div>'+
     '</div>'+
     factChartSVG(factures,curYear)+
     '</div>'+
