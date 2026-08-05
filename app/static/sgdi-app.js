@@ -4419,6 +4419,17 @@ function sgdiModuleHostConfigs(){
         {label:"CAISSE",route:"facturation/caisse"}
       ]
     },
+    paie:{
+      key:"paie",
+      title:"Portail PAIE",
+      context:"Gestion des salaires et bulletins",
+      homeRoute:"paie/dashboard",
+      skipPortal:true,
+      sections:[
+        {label:"TABLEAU DE BORD",route:"paie/dashboard"},
+        {label:"EFFECTIF PAIE",route:"effectif/recap"}
+      ]
+    },
     agenda:{
       key:"agenda",
       title:"Portail Agenda",
@@ -4507,6 +4518,35 @@ function renderFacStandaloneShell(){
   renderFacStandaloneNav();
   // Le portail Facturation est un espace de travail autonome : il ne possède pas
   // le bouton ATLAS « Déverrouiller ». Il doit donc démarrer directement en édition.
+  sgdiViewModeActive=false;
+  document.body.classList.remove("sgdi-view-mode");
+  renderView();renderOverlayHost();sgdiSyncOverlayState();
+}
+function paieStandaloneNavItems(){return[
+  ["⌂","Tableau de bord","paie/dashboard"],
+  ["♙","Effectif paie","effectif/recap"]
+]}
+function renderPaieStandaloneNav(){
+  const nav=document.getElementById("sidebar-nav");if(!nav)return;
+  const path=(location.hash||"#/paie/dashboard").slice(2);
+  nav.innerHTML=`<div class="paie-nav-title">Navigation Paie</div>`+paieStandaloneNavItems().map(([icon,label,route])=>`<button type="button" class="paie-nav-link ${sidebarRouteActive(path,route)?"active":""}" data-route="${route}" onclick="sidebarNavigate(event,'${route}')"><span class="paie-nav-icon">${icon}</span><span>${label}</span></button>`).join("");
+}
+function renderPaieStandaloneShell(){
+  const app=document.getElementById("app");
+  const soc=session?.societe||"Société non sélectionnée";
+  const user=session?.nom||session?.username||"Utilisateur";
+  document.body.dataset.soc="";
+  app.innerHTML=`<div class="paie-standalone-shell">
+    <header class="paie-standalone-header no-print">
+      <div class="paie-brand"><div class="paie-brand-mark">PAIE</div><div><h1>PAIE</h1><small>Salaires, déclarations et bulletins</small></div></div>
+      <div class="paie-header-context"><strong>${escapeHTML(soc)}</strong><div class="paie-header-actions"><button type="button" onclick="changeSociete()" title="Changer de société"><span>⌂</span> Société</button><button type="button" onclick="logout()" title="Déconnexion"><span>⏻</span> Déconnexion</button></div></div>
+    </header>
+    <div class="paie-standalone-body">
+      <nav class="paie-nav no-print" id="sidebar-nav"></nav>
+      <main class="paie-main"><div class="paie-main-head"><h2>Espace Paie</h2><span>${escapeHTML(user)} · Synchronisé avec le serveur</span></div><div id="view"></div></main>
+    </div>
+  </div>`;
+  renderPaieStandaloneNav();
   sgdiViewModeActive=false;
   document.body.classList.remove("sgdi-view-mode");
   renderView();renderOverlayHost();sgdiSyncOverlayState();
@@ -5768,6 +5808,9 @@ function renderInternal(){
   if(window.__FAC_AUTONOMOUS_APP__&&session.transverse==="facmod"){
     renderFacStandaloneShell();return;
   }
+  if(window.__PAIE_AUTONOMOUS_APP__&&session.transverse==="paie"){
+    renderPaieStandaloneShell();return;
+  }
   const app=document.getElementById("app");
   const socColors={};
   const isTrans=!!session.transverse;
@@ -6248,6 +6291,7 @@ function adminCounterOrganizerDefaults(){
 function sidebarRouteActive(path,route){return path===route||path.startsWith(route+"/")}
 function renderSidebar(){
   if(window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod"){renderFacStandaloneNav();return}
+  if(window.__PAIE_AUTONOMOUS_APP__&&session?.transverse==="paie"){renderPaieStandaloneNav();return}
   // Applique le thème de société sur <body data-soc="..."> pour le CSS sidebar
   const _themeSoc=session?.societe||(typeof currentStructureSocieteFilter==="function"?currentStructureSocieteFilter():"");
   document.body.dataset.soc=/s[eé]curit/i.test(_themeSoc||"")?"igs":"";
@@ -6767,7 +6811,7 @@ function navigate(r){
   sgdiFormHasUnsavedChanges=false;
   // Le portail Facturation autonome gère lui-même le verrouillage par statut :
   // brouillon modifiable, facture validée en lecture seule.
-  if(window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod"){
+  if((window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod")||(window.__PAIE_AUTONOMOUS_APP__&&session?.transverse==="paie")){
     sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");
   }else sgdiEnterViewMode(true);
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
@@ -7640,7 +7684,7 @@ function renderView(){
     setTimeout(()=>{applyLanguagePreference(view);sgdiScrubInvalidCandidateFunctionArtifacts(view)},0);
   });
 }
-window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;if(window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod"){sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");}else sgdiEnterViewMode(true);render()});
+window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;if((window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod")||(window.__PAIE_AUTONOMOUS_APP__&&session?.transverse==="paie")){sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");}else sgdiEnterViewMode(true);render()});
 window.addEventListener("popstate",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;

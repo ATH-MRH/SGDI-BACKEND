@@ -155,6 +155,22 @@ def test_recrute_subdomain_rejects_other_prefix(client, db):
     assert resp.status_code == 403
 
 
+def test_paie_subdomain_serves_autonomous_module_and_accepts_paie_user(client, db):
+    _add_test_user(db, "PAIE01", "PAIE01", role="paie", access_level="H3", structures=["paie"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "PAIE01", "password": "PAIE01"},
+        headers={"host": "paie.irongs.com"},
+    )
+
+    assert resp.status_code == 200, resp.text
+    root = client.get("/", headers={"host": "paie.irongs.com"})
+    assert root.status_code == 200
+    assert "PAIE — IRON GROUP" in root.text
+    assert "paie-manifest.webmanifest" in root.text
+
+
 def test_protected_endpoint_without_token(client):
     resp = client.get("/api/accounting/comptes")
     assert resp.status_code == 401

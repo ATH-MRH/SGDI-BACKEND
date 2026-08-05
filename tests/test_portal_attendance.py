@@ -279,6 +279,13 @@ def test_recrute_route_serves_html(client):
     assert "/marquer-contractualisation" in r.text
 
 
+def test_paie_route_serves_autonomous_html(client):
+    r = client.get("/paie")
+    assert r.status_code == 200
+    assert "PAIE — IRON GROUP" in r.text
+    assert "__PAIE_AUTONOMOUS_APP__" in r.text
+
+
 def test_cheque_route_serves_html(client):
     r = client.get("/cheque")
     assert r.status_code == 200
