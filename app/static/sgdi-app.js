@@ -24977,7 +24977,7 @@ function stockExportCSV(){
 }
 
 /* ---- PAIE ---- */
-function defaultPaieConfig(){return{snmg:24000,heuresMois:173.33,tauxCnasSalarie:9,tauxCnasPatronal:25,tauxOeuvresSociales:0.5,abattementIRG:40,abattementMinMensuel:1000,abattementMaxMensuel:1500,primeNuit:3000,primePanier:0,primeTransport:0,optimisationPanierMax:0,optimisationTransportMax:0,retenueAbsenceJour:0}}
+function defaultPaieConfig(){return{regulatoryVersion:"DZ-2026-01",effectiveFrom:"2026-01-01",snmg:24000,heuresMois:173.33,joursOuvrablesMois:22,tauxCnasSalarie:9,tauxCnasPatronal:25,tauxOeuvresSociales:0.5,abattementIRG:40,abattementMinMensuel:1000,abattementMaxMensuel:1500,tauxIRGNonMensuel:10,majorationHeuresSup:50,primeNuit:3000,primePanier:0,primeTransport:0,optimisationPanierMax:0,optimisationTransportMax:0,retenueAbsenceJour:0}}
 function paieConfig(){
   if(!db.paieConfig)db.paieConfig=defaultPaieConfig();
   db.paieConfig={...defaultPaieConfig(),...db.paieConfig};
@@ -24993,10 +24993,13 @@ function defaultPaieRubriques(){
     {id:"rub_prime_transport",code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,system:true,actif:true},
     {id:"rub_panier_variable",code:"PANIER_VAR",libelle:"Prime panier variable",type:"gain",imposable:false,cotisable:false,system:false,actif:true},
     {id:"rub_transport_variable",code:"TRANS_VAR",libelle:"Prime transport variable",type:"gain",imposable:false,cotisable:false,system:false,actif:true},
-    {id:"rub_absence",code:"ABS",libelle:"Retenue absence",type:"retenue",imposable:false,cotisable:false,system:true,actif:true},
+    {id:"rub_absence",code:"ABS",libelle:"Retenue absence",type:"retenue",imposable:true,cotisable:true,system:true,actif:true},
     {id:"rub_avance",code:"AVS",libelle:"Avance sur salaire",type:"retenue",imposable:false,cotisable:false,system:false,actif:true},
-    {id:"rub_rappel",code:"RAPPEL",libelle:"Rappel salaire",type:"gain",imposable:true,cotisable:true,system:false,actif:true},
-    {id:"rub_prime_exceptionnelle",code:"PRIME",libelle:"Prime exceptionnelle",type:"gain",imposable:true,cotisable:true,system:false,actif:true}
+    {id:"rub_rappel",code:"RAPPEL",libelle:"Rappel salaire",type:"gain",imposable:true,cotisable:true,taxMode:"separe10",system:false,actif:true},
+    {id:"rub_prime_exceptionnelle",code:"PRIME",libelle:"Prime exceptionnelle",type:"gain",imposable:true,cotisable:true,taxMode:"separe10",system:false,actif:true},
+    {id:"rub_heures_sup",code:"HS50",libelle:"Heures supplémentaires (+50% minimum)",type:"gain",imposable:true,cotisable:true,system:false,actif:true},
+    {id:"rub_repos_ferie",code:"RF",libelle:"Travail repos / jour férié",type:"gain",imposable:true,cotisable:true,system:false,actif:true},
+    {id:"rub_nuit_heures",code:"NUIT",libelle:"Majoration heures de nuit",type:"gain",imposable:true,cotisable:true,system:false,actif:true}
   ];
 }
 function paieEnsure(){
@@ -25005,7 +25008,7 @@ function paieEnsure(){
   if(!Array.isArray(db.paieBulletins))db.paieBulletins=[];
   if(!Array.isArray(db.paieClotures))db.paieClotures=[];
   if(!Array.isArray(db.paieGrilles))db.paieGrilles=[];
-  defaultPaieRubriques().forEach(r=>{if(!db.paieRubriques.some(x=>x.id===r.id||x.code===r.code))db.paieRubriques.push({...r})});
+  defaultPaieRubriques().forEach(r=>{const existing=db.paieRubriques.find(x=>x.id===r.id||x.code===r.code);if(!existing)db.paieRubriques.push({...r});else if(r.system||["RAPPEL","PRIME"].includes(r.code))Object.assign(existing,{...r,id:existing.id||r.id})});
 }
 function paieAgentFonction(a){return normalizePosteValue(a?.fonction||a?.poste||a?.affectationCourante?.poste||a?.posteContrat||"Non précisé")}
 function paieGrilleForAgent(a){
@@ -25050,7 +25053,7 @@ function irgBaremeMensuel(base){
   if(b>320000)irg+=(b-320000)*0.35;
   return Math.max(0,Math.round(irg));
 }
-function irgSalaireAlgerie(netImposable,cfg){
+function irgSalaireAlgerie(netImposable,cfg,profile){
   const base=Math.max(0,Number(netImposable)||0);
   if(base<=30000)return{irgBrut:0,abattement:0,irg:0,formule:"Exonération <= 30 000 DA"};
   const irgBrut=irgBaremeMensuel(base);
@@ -25062,7 +25065,24 @@ function irgSalaireAlgerie(netImposable,cfg){
     irgApres=Math.max(0,(irgApres*(137/51))-(27925/8));
     formule="Formule spéciale 30 001 - 35 000 DA";
   }
+  const special=profile&&(profile.handicape===true||profile.retraite===true||["handicape","retraite"].includes(String(profile.categoriePaie||"").toLowerCase()));
+  if(special&&base>30000&&base<42500){
+    irgApres=Math.max(0,(irgApres*(93/61))-(81213/41));
+    formule="Formule spéciale handicapé / retraité 30 001 - 42 500 DA";
+  }
   return{irgBrut,abattement,irg:Math.round(irgApres),formule};
+}
+function paiePeriodBounds(ym){
+  const clean=/^\d{4}-\d{2}$/.test(String(ym||""))?String(ym):today().slice(0,7);
+  const [y,m]=clean.split("-").map(Number);const last=new Date(y,m,0).getDate();
+  return{start:`${clean}-01`,end:`${clean}-${String(last).padStart(2,"0")}`,days:last};
+}
+function paieEmploymentRatio(a,ym){
+  const p=paiePeriodBounds(ym);let start=String(a?.dateRecrutement||a?.dateEntree||p.start).slice(0,10);let end=String(a?.dateSortie||a?.departAt||p.end).slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||start<p.start)start=p.start;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(end)||end>p.end)end=p.end;
+  if(start>p.end||end<p.start||end<start)return 0;
+  return Math.max(0,Math.min(1,((new Date(end+"T12:00:00")-new Date(start+"T12:00:00"))/86400000+1)/p.days));
 }
 function calcPaieAgent(a,ym){
   const cfg=paieConfig();
@@ -25071,46 +25091,59 @@ function calcPaieAgent(a,ym){
   const salaireNetContractuel=Number(a.salaireNet||0)||0;
   const brutBase=paieBaseBruteForAgent(a);
   const primeNuit=a.affectationCourante?.horaire==="Nuit"?Number(cfg.primeNuit||0):0;
-  const joursAbsencePaie=paiePointageAbsenceDays(a,period);
-  const retenueAbsencePointage=Math.max(0,Math.round(joursAbsencePaie*(Number(cfg.retenueAbsenceJour||0)||0)));
+  const absenceInfo=paiePointageAbsenceInfo(a,period);const joursAbsencePaie=absenceInfo.days;
+  const employmentRatio=paieEmploymentRatio(a,period);
+  const baseProratisee=Math.round(brutBase*employmentRatio);
+  const joursReference=Math.max(1,Number(cfg.joursOuvrablesMois)||22);
+  const retenueJour=Number(cfg.retenueAbsenceJour||0)>0?Number(cfg.retenueAbsenceJour):baseProratisee/joursReference;
+  const retenueAbsencePointage=Math.max(0,Math.min(baseProratisee,Math.round(joursAbsencePaie*retenueJour)));
   const fixedElements=[
-    {code:"BASE",libelle:"Salaire de base",type:"gain",imposable:true,cotisable:true,montant:brutBase},
+    {code:"BASE",libelle:"Salaire de base proratisé",type:"gain",imposable:true,cotisable:true,montant:baseProratisee},
     {code:"PN",libelle:"Prime de nuit",type:"gain",imposable:true,cotisable:true,montant:primeNuit},
     {code:"PANIER",libelle:"Prime panier",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primePanier||0)},
     {code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primeTransport||0)},
-    {code:"ABS",libelle:`Retenue absence pointage (${joursAbsencePaie} j)`,type:"retenue",imposable:false,cotisable:false,montant:retenueAbsencePointage,auto:true}
+    {code:"ABS",libelle:`Retenue absence pointage (${joursAbsencePaie} j)`,type:"retenue",imposable:true,cotisable:true,montant:retenueAbsencePointage,auto:true}
   ].filter(x=>Number(x.montant||0)>0);
   const variableElements=paieElementsFor(a.id,period).map(e=>{
     const r=(db.paieRubriques||[]).find(x=>x.id===e.rubriqueId)||{};
-    return{code:r.code||"",libelle:r.libelle||"Rubrique",type:r.type||"gain",imposable:r.imposable!==false,cotisable:r.cotisable!==false,montant:Number(e.montant||0),note:e.note||""};
+    return{code:r.code||"",libelle:r.libelle||"Rubrique",type:r.type||"gain",imposable:r.imposable!==false,cotisable:r.cotisable!==false,taxMode:r.taxMode||"mensuel",montant:Number(e.montant||0),note:e.note||""};
   }).filter(x=>x.montant>0);
   const elements=[...fixedElements,...variableElements];
   const gains=elements.filter(e=>e.type!=="retenue").reduce((s,e)=>s+e.montant,0);
-  const primes=Math.max(0,gains-brutBase);
+  const primes=Math.max(0,gains-baseProratisee);
   const retenuesRubriques=elements.filter(e=>e.type==="retenue").reduce((s,e)=>s+e.montant,0);
   const gainsCotisables=elements.filter(e=>e.type!=="retenue"&&e.cotisable!==false).reduce((s,e)=>s+e.montant,0);
   const retenuesCotisables=elements.filter(e=>e.type==="retenue"&&e.cotisable!==false).reduce((s,e)=>s+e.montant,0);
   const gainsNonCotisablesImposables=elements.filter(e=>e.type!=="retenue"&&e.cotisable===false&&e.imposable!==false).reduce((s,e)=>s+e.montant,0);
   const gainsNonCotisablesNonImposables=elements.filter(e=>e.type!=="retenue"&&e.cotisable===false&&e.imposable===false).reduce((s,e)=>s+e.montant,0);
   const brutCotisable=Math.max(0,gainsCotisables-retenuesCotisables);
-  const cnasSalarie=Math.round(brutCotisable*(Number(cfg.tauxCnasSalarie||0)/100));
+  const paidRatio=Math.max(0,employmentRatio-(joursAbsencePaie/joursReference));
+  const assietteCnasMinimum=Math.round(Number(cfg.snmg||0)*Math.min(employmentRatio,paidRatio));
+  const assietteCnas=brutCotisable>0?Math.max(brutCotisable,assietteCnasMinimum):0;
+  const cnasSalarie=Math.round(assietteCnas*(Number(cfg.tauxCnasSalarie||0)/100));
+  const gainsSepares=elements.filter(e=>e.type!=="retenue"&&e.imposable!==false&&e.taxMode==="separe10").reduce((s,e)=>s+e.montant,0);
+  const partCnasSeparee=assietteCnas>0?cnasSalarie*Math.min(1,gainsSepares/assietteCnas):0;
+  const baseIRGSeparable=Math.max(0,gainsSepares-partCnasSeparee);
+  const irgNonMensuel=Math.round(baseIRGSeparable*(Number(cfg.tauxIRGNonMensuel||10)/100));
   const netSocial=Math.max(0,brutCotisable-cnasSalarie+gainsNonCotisablesImposables);
-  const baseIRG=netSocial;
-  const irgCalc=irgSalaireAlgerie(baseIRG,cfg);
+  const baseIRG=Math.max(0,netSocial-baseIRGSeparable);
+  const irgCalc=irgSalaireAlgerie(baseIRG,cfg,a);
   const abat=irgCalc.abattement;
-  const irg=irgCalc.irg;
-  const netAPayer=Math.max(0,netSocial-irg+gainsNonCotisablesNonImposables-retenuesRubriques);
-  const cnasPatronal=Math.round(brutCotisable*(Number(cfg.tauxCnasPatronal||0)/100));
-  const oeuvresSociales=Math.round(brutCotisable*(Number(cfg.tauxOeuvresSociales||0)/100));
+  const irg=irgCalc.irg+irgNonMensuel;
+  const retenuesPostNet=elements.filter(e=>e.type==="retenue"&&e.cotisable===false&&e.imposable===false).reduce((s,e)=>s+e.montant,0);
+  const netAPayer=Math.max(0,netSocial-irg+gainsNonCotisablesNonImposables-retenuesPostNet);
+  const cnasPatronal=Math.round(assietteCnas*(Number(cfg.tauxCnasPatronal||0)/100));
+  const oeuvresSociales=Math.round(assietteCnas*(Number(cfg.tauxOeuvresSociales||0)/100));
   const coutEmployeur=gains+cnasPatronal+oeuvresSociales;
-  return{salaireNetContractuel,brutBase,primeNuit,primes,gains,joursAbsencePaie,retenueAbsencePointage,absences:retenuesRubriques,retenuesRubriques,elements,brutCotisable,cnasSalarie,netSocial,abat,baseIRG,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
+  return{salaireNetContractuel,brutBase,baseProratisee,employmentRatio,pointageDisponible:absenceInfo.available,primeNuit,primes,gains,joursAbsencePaie,retenueAbsencePointage,absences:retenuesRubriques,retenuesRubriques,retenuesPostNet,elements,brutCotisable,assietteCnasMinimum,assietteCnas,cnasSalarie,netSocial,abat,baseIRG,baseIRGSeparable,irgNonMensuel,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
 }
-function paiePointageAbsenceDays(a,ym){
+function paiePointageAbsenceInfo(a,ym){
   try{
     const sh=ptGetSheet(a?.id,ym);
-    return typeof ptAbsencePayrollDays==="function"?ptAbsencePayrollDays(sh):0;
-  }catch(e){return 0}
+    return{available:!!sh,days:sh&&typeof ptAbsencePayrollDays==="function"?ptAbsencePayrollDays(sh):0};
+  }catch(e){console.error("PAIE: pointage absence indisponible",e);return{available:false,days:0,error:String(e?.message||e)}}
 }
+function paiePointageAbsenceDays(a,ym){return paiePointageAbsenceInfo(a,ym).days}
 function paieNetFromBase(base,cfg){
   const brut=Math.max(0,Number(base)||0);
   const cnas=Math.round(brut*(Number(cfg.tauxCnasSalarie||0)/100));
@@ -25181,7 +25214,7 @@ function setPaieFilter(k,v){
 async function savePaieConfig(){
   const f=document.getElementById("paie-config-form");if(!f)return;
   const fd=new FormData(f);const cfg=paieConfig();
-  ["snmg","heuresMois","tauxCnasSalarie","tauxCnasPatronal","tauxOeuvresSociales","abattementIRG","abattementMinMensuel","abattementMaxMensuel","primeNuit","primePanier","primeTransport","optimisationPanierMax","optimisationTransportMax","retenueAbsenceJour"].forEach(k=>cfg[k]=parseMoneyInput(fd.get(k))||0);
+  ["snmg","heuresMois","joursOuvrablesMois","tauxCnasSalarie","tauxCnasPatronal","tauxOeuvresSociales","tauxIRGNonMensuel","majorationHeuresSup","abattementIRG","abattementMinMensuel","abattementMaxMensuel","primeNuit","primePanier","primeTransport","optimisationPanierMax","optimisationTransportMax","retenueAbsenceJour"].forEach(k=>cfg[k]=parseMoneyInput(fd.get(k))||0);
   db.paieConfig=cfg;
   if(!(await saveDBAndWaitToast("Paramètres paie non confirmés")))return;
   toast("Paramètres paie enregistrés","success");renderView();
@@ -25210,19 +25243,40 @@ function paieExportIRG(){
   paieDownloadCSV(rows,"irg-"+ym+".csv");
 }
 function paieBulletinSnapshot(a,c,ym){
-  return{id:uid("bp"),ym,agentId:a.id,matricule:a.matricule||"",agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),societe:a.societe||"",poste:a.fonction||a.affectationCourante?.poste||"",typeContrat:cleanContractType(a.typeContrat),config:{...paieConfig()},calcul:JSON.parse(JSON.stringify(c)),createdAt:new Date().toISOString(),createdBy:session?.username||""};
+  return{id:uid("bp"),ym,agentId:a.id,matricule:a.matricule||"",agentName:((a.nom||"")+" "+(a.prenom||"")).trim(),societe:a.societe||"",poste:a.fonction||a.affectationCourante?.poste||"",typeContrat:cleanContractType(a.typeContrat),regulatoryVersion:paieConfig().regulatoryVersion,config:{...paieConfig()},calcul:JSON.parse(JSON.stringify(c)),createdAt:new Date().toISOString(),createdBy:session?.username||""};
+}
+function paieEligibleAgents(ym,soc){
+  return(db.agents||[]).filter(a=>a.statut!=="archive"&&paieEmploymentRatio(a,ym)>0&&(!soc||a.societe===soc));
+}
+function paieValidationForAgents(agents,ym){
+  const errors=[],warnings=[];
+  agents.forEach(a=>{
+    const who=`${a.matricule||"Sans code"} · ${((a.nom||"")+" "+(a.prenom||"")).trim()||"Employé"}`;const c=calcPaieAgent(a,ym);
+    if(!a.matricule)errors.push(`${who} : matricule manquant`);
+    if(!a.societe)errors.push(`${who} : société manquante`);
+    if(!(Number(c.brutBase)>0))errors.push(`${who} : base salariale nulle`);
+    if(!c.pointageDisponible)errors.push(`${who} : feuille de pointage ${ym} absente`);
+    if(!Number.isFinite(c.netAPayer)||!Number.isFinite(c.cnasSalarie)||!Number.isFinite(c.irg))errors.push(`${who} : calcul invalide`);
+    if(!a.numeroCnas&&!a.cnas)warnings.push(`${who} : numéro CNAS manquant`);
+    if(!a.typeContrat)warnings.push(`${who} : type de contrat manquant`);
+    if(c.assietteCnas>c.brutCotisable)warnings.push(`${who} : assiette CNAS relevée au minimum légal proratisé`);
+  });
+  return{errors,warnings};
 }
 async function paieCloseMonth(){
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
   const soc=sessionStorage.getItem("paieSociete")||"";
   if(paieIsClosed(ym,soc)){toast("Ce mois de paie est déjà clôturé","error");return}
-  let agents=(db.agents||[]).filter(a=>a.statut==="actif");if(soc)agents=agents.filter(a=>a.societe===soc);
+  const agents=paieEligibleAgents(ym,soc);
   if(!agents.length){toast("Aucun employé à clôturer","error");return}
-  if(!confirm(`Clôturer la paie ${paieMonthLabel(ym)}${soc?" · "+soc:""} ?\n\nLes bulletins seront figés et les éléments du mois ne seront plus modifiables.`))return;
+  const validation=paieValidationForAgents(agents,ym);
+  if(validation.errors.length){alert(`CLÔTURE BLOQUÉE — ${validation.errors.length} erreur(s)\n\n${validation.errors.slice(0,20).join("\n")}${validation.errors.length>20?`\n… et ${validation.errors.length-20} autre(s)`:""}`);return}
+  const warningText=validation.warnings.length?`\n\nAVERTISSEMENTS (${validation.warnings.length})\n${validation.warnings.slice(0,12).join("\n")}`:"";
+  if(!confirm(`Clôturer la paie ${paieMonthLabel(ym)}${soc?" · "+soc:""} ?\n\nContrôles bloquants réussis pour ${agents.length} salarié(s).${warningText}\n\nLes bulletins seront figés et les éléments du mois ne seront plus modifiables.`))return;
   paieEnsure();
   db.paieBulletins=(db.paieBulletins||[]).filter(b=>!(b.ym===ym&&(!soc||b.societe===soc)));
   agents.forEach(a=>db.paieBulletins.push(paieBulletinSnapshot(a,calcPaieAgent(a,ym),ym)));
-  db.paieClotures.push({id:uid("clp"),ym,societe:soc,closedAt:new Date().toISOString(),closedBy:session?.username||"",bulletins:agents.length});
+  db.paieClotures.push({id:uid("clp"),ym,societe:soc,closedAt:new Date().toISOString(),closedBy:session?.username||"",validatedBy:session?.username||"",regulatoryVersion:paieConfig().regulatoryVersion,bulletins:agents.length,warnings:validation.warnings});
   if(!(await saveDBAndWaitToast("Clôture paie non confirmée")))return;
   toast("Paie clôturée et bulletins historisés","success");renderView();
 }
@@ -25521,12 +25575,11 @@ function renderPaie(view,sub,arg){
   const lockedSoc=paieActiveSocieteScope();
   const soc=lockedSoc||(sessionStorage.getItem("paieSociete")||"");
   if(lockedSoc)sessionStorage.removeItem("paieSociete");
-  let agents=db.agents.filter(a=>a.statut==="actif");
-  if(soc)agents=agents.filter(a=>a.societe===soc);
+  const agents=paieEligibleAgents(ym,soc);
   const closed=paieClosedInfo(ym,soc);
   const lines=agents.map(a=>({a,c:paieCalcForAgent(a,ym)}));
   const sum=k=>lines.reduce((s,x)=>s+(Number(x.c[k])||0),0);
-  const anomalies=lines.filter(x=>x.c.brutCotisable<cfg.snmg);
+  const anomalies=lines.filter(x=>x.c.brutCotisable<x.c.assietteCnasMinimum||!x.c.pointageDisponible||!(x.c.brutBase>0));
   const paieSocieteField=lockedSoc
     ? `<div><label class="label">Société</label><div class="input bg-slate-50 font-bold">${escapeHTML(lockedSoc)}</div></div>`
     : `<div><label class="label">Société</label><select class="select" onchange="setPaieFilter('Societe',this.value)"><option value="">Toutes</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${s}</option>`).join("")}</select></div>`;
@@ -25567,9 +25620,12 @@ function renderPaie(view,sub,arg){
     <form id="paie-config-form" class="grid grid-6 mt-4">
       <div class="col-span-2"><label class="label">SNMG</label><input class="input" name="snmg" value="${formatMoneyInputValue(cfg.snmg)}" onblur="formatMoneyField(this)"/></div>
       <div class="col-span-2"><label class="label">Heures / mois</label><input class="input" name="heuresMois" value="${cfg.heuresMois}"/></div>
+      <div><label class="label">Jours ouvrables / mois</label><input class="input" name="joursOuvrablesMois" value="${cfg.joursOuvrablesMois}"/></div>
       <div><label class="label">CNAS salarié %</label><input class="input" name="tauxCnasSalarie" value="${cfg.tauxCnasSalarie}"/></div>
       <div><label class="label">CNAS patronal %</label><input class="input" name="tauxCnasPatronal" value="${cfg.tauxCnasPatronal}"/></div>
       <div><label class="label">Œuvres sociales %</label><input class="input" name="tauxOeuvresSociales" value="${cfg.tauxOeuvresSociales}"/></div>
+      <div><label class="label">IRG primes/rappels %</label><input class="input" name="tauxIRGNonMensuel" value="${cfg.tauxIRGNonMensuel}"/></div>
+      <div><label class="label">Majoration HS min. %</label><input class="input" name="majorationHeuresSup" value="${cfg.majorationHeuresSup}"/></div>
       <div><label class="label">Abattement IRG %</label><input class="input" name="abattementIRG" value="${cfg.abattementIRG}"/></div>
       <div><label class="label">Abatt. min/mois</label><input class="input" name="abattementMinMensuel" value="${formatMoneyInputValue(cfg.abattementMinMensuel)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Abatt. max/mois</label><input class="input" name="abattementMaxMensuel" value="${formatMoneyInputValue(cfg.abattementMaxMensuel)}" onblur="formatMoneyField(this)"/></div>
@@ -25578,13 +25634,13 @@ function renderPaie(view,sub,arg){
       <div><label class="label">Prime transport</label><input class="input" name="primeTransport" value="${formatMoneyInputValue(cfg.primeTransport)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Panier max optimisation</label><input class="input" name="optimisationPanierMax" value="${formatMoneyInputValue(cfg.optimisationPanierMax)}" onblur="formatMoneyField(this)"/></div>
       <div><label class="label">Transport max optimisation</label><input class="input" name="optimisationTransportMax" value="${formatMoneyInputValue(cfg.optimisationTransportMax)}" onblur="formatMoneyField(this)"/></div>
-      <div class="col-span-6 text-xs text-slate-500">IRG intégré : barème progressif mensuel 0 / 23 / 27 / 30 / 33 / 35%, exonération salaire jusqu'à 30 000 DA, abattement IRG ${qty(cfg.abattementIRG)}% plafonné entre ${money(cfg.abattementMinMensuel)} et ${money(cfg.abattementMaxMensuel)}, formule spéciale 30 001 - 35 000 DA. Les primes imposables/non imposables et cas particuliers restent à valider avec la comptabilité.</div>
+      <div class="col-span-6 text-xs text-slate-500"><b>Référentiel ${escapeHTML(cfg.regulatoryVersion||"DZ")}</b> · IRG mensuel 0 / 23 / 27 / 30 / 33 / 35%, exonération jusqu'à 30 000 DA, abattement ${qty(cfg.abattementIRG)}% plafonné entre ${money(cfg.abattementMinMensuel)} et ${money(cfg.abattementMaxMensuel)}, formules spéciales et retenue distincte des primes/rappels. Toute modification doit être validée par le responsable paie.</div>
       <div class="col-span-6"><button type="button" class="btn btn-primary" onclick="savePaieConfig()">Enregistrer paramètres</button></div>
     </form>
   </details>
   <div class="card overflow-hidden"><div class="overflow-x-auto"><table>
-    <thead><tr><th>Code</th><th>Employé</th><th>Société</th><th>Contrat</th><th class="text-right">Base</th><th class="text-right">Primes</th><th class="text-right">Brut cotisable</th><th class="text-right">CNAS sal.</th><th class="text-right">Base IRG</th><th class="text-right">IRG</th><th class="text-right">Net à payer</th><th class="text-right">Coût employeur</th><th>Alerte</th><th></th></tr></thead>
-    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="14" class="text-center text-slate-500 p-6">Aucun employé actif.</td></tr>`:lines.map(({a,c})=>{const typeContrat=cleanContractType(a.typeContrat);const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,typeContrat,c.brutCotisable,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.oeuvresSociales,c.coutEmployeur];return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/paie/agent/${employeeRouteId(a)}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(typeContrat)}</span></td><td class="text-right">${money(c.brutBase)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${c.brutCotisable<cfg.snmg?`<span class="pill pill-red">SNMG</span>`:`<span class="pill pill-green">OK</span>`}</td><td><div class="flex gap-1 flex-wrap"><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${a.id}')">Éléments</button><button class="btn btn-primary text-xs" onclick="navigate('paie/agent/${employeeRouteId(a)}')">Dossier</button><button class="btn btn-secondary text-xs" onclick="previewPaieFiche('${a.id}')">Bulletin</button></div></td></tr>`}).join("")}</tbody>
+    <thead><tr><th>Code</th><th>Employé</th><th>Société</th><th>Contrat</th><th class="text-right">Base proratisée</th><th class="text-right">Primes</th><th class="text-right">Brut cotisable</th><th class="text-right">Assiette CNAS</th><th class="text-right">CNAS sal.</th><th class="text-right">Base IRG</th><th class="text-right">IRG</th><th class="text-right">Net à payer</th><th class="text-right">Coût employeur</th><th>Alerte</th><th></th></tr></thead>
+    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="15" class="text-center text-slate-500 p-6">Aucun salarié à payer sur cette période.</td></tr>`:lines.map(({a,c})=>{const typeContrat=cleanContractType(a.typeContrat);const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,typeContrat,c.brutCotisable,c.assietteCnas,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.oeuvresSociales,c.coutEmployeur];const issues=[!c.pointageDisponible?"POINTAGE":null,!(c.brutBase>0)?"BASE":null,c.assietteCnas>c.brutCotisable?"CNAS MIN":null].filter(Boolean);return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/paie/agent/${employeeRouteId(a)}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(typeContrat)}</span></td><td class="text-right">${money(c.baseProratisee)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right font-bold">${money(c.assietteCnas)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${issues.length?issues.map(i=>`<span class="pill pill-red">${i}</span>`).join(" "):`<span class="pill pill-green">OK</span>`}</td><td><div class="flex gap-1 flex-wrap"><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${a.id}')">Éléments</button><button class="btn btn-primary text-xs" onclick="navigate('paie/agent/${employeeRouteId(a)}')">Dossier</button><button class="btn btn-secondary text-xs" onclick="previewPaieFiche('${a.id}')">Bulletin</button></div></td></tr>`}).join("")}</tbody>
   </table></div></div>
   <div class="text-xs text-slate-500 mt-3">Note : ce module automatise les calculs standards. Les cas particuliers (avantages en nature, indemnités imposables/non imposables, temps partiel, dispositifs aidés, rappels) doivent être validés par votre comptable ou gestionnaire paie.</div>`;
 }
@@ -30613,6 +30669,7 @@ function renderDRHDashboard(view){
   const seriesMaladies=months.map(m=>co.filter(c=>c.type==="Maladie"&&monthOf(c.du||c.createdAt)===m).length);
   const seriesAbsences=months.map(m=>ag.filter(a=>a.statut==="absent"&&monthOf(a.updatedAt||a.createdAt)===m).length);
   const seriesSuspensions=months.map(m=>ag.filter(a=>a.statut==="suspendu"&&monthOf(a.updatedAt||a.createdAt)===m).length);
+  const seriesDemissions=months.map(m=>ag.filter(a=>a.statut==="demissionne"&&monthOf(a.dateSortie||a.departAt||a.updatedAt)===m).length);
   const seriesDemandes=months.map(m=>demandesList.filter(d=>monthOf(d.createdAt||d.date||d.submittedAt)===m).length);
   const seriesIncidents=months.map(m=>inc.filter(i=>monthOf(i.date||i.createdAt)===m).length);
   const seriesContrats=months.map(m=>ag.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
@@ -30688,6 +30745,7 @@ function renderDRHDashboard(view){
         ${miniCurve("Maladies",dashMaladie,seriesMaladies,"#c2410c","#/conges")}
         ${miniCurve("Absences",dashAbsents,seriesAbsences,"#dc2626","#/pointage/feuille")}
         ${miniCurve("Suspensions",dashSusp,seriesSuspensions,"#7c3aed","#/effectif/actifs")}
+        ${miniCurve("Démissions",seriesDemissions[seriesDemissions.length-1],seriesDemissions,"#be123c","#/effectif/sortants")}
         ${miniCurve("Demandes",demandesPersonnel,seriesDemandes,"#0891b2","#/demandes_personnel/dashboard")}
         ${miniCurve("Incidents",dashIncidents,seriesIncidents,"#b91c1c","#/incidents/site")}
         ${miniCurve("Contrats",contratsAlerte.length,seriesContrats,"#ea580c","#/contrats/situation")}
