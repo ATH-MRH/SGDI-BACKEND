@@ -484,7 +484,8 @@ function renderCounters(){
   const posteChips=[...posteCounts.entries()].sort((a,b)=>b[1]-a[1]).map(([label,count])=>
     `<button type="button" class="counter-chip${state.posteFilter===label?" active":""}" onclick="setPosteFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`
   ).join("")||'<span style="font-size:12px;color:var(--muted)">—</span>';
-  const avisChips=["Favorable","Défavorable","Instance","Non évalué"].map(label=>{
+  const tousAvisChip=`<button type="button" class="counter-chip${state.avisFilter?"":" active"}" onclick="setAvisFilter('')">Tous <span class="n">${state.items.length}</span></button>`;
+  const avisChips=tousAvisChip+["Favorable","Défavorable","Instance","Non évalué"].map(label=>{
     const count=avisCounts.get(label)||0;
     const cls=label==="Favorable"?"favorable":label==="Défavorable"?"defavorable":label==="Instance"?"instance":"";
     return `<button type="button" class="counter-chip ${cls}${state.avisFilter===label?" active":""}" onclick="setAvisFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`;
