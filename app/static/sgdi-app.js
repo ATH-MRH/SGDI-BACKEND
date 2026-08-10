@@ -25011,15 +25011,15 @@ function paieEnsure(){
   defaultPaieRubriques().forEach(r=>{const existing=db.paieRubriques.find(x=>x.id===r.id||x.code===r.code);if(!existing)db.paieRubriques.push({...r});else if(r.system||["RAPPEL","PRIME"].includes(r.code))Object.assign(existing,{...r,id:existing.id||r.id})});
 }
 function paieAgentFonction(a){return normalizePosteValue(a?.fonction||a?.poste||a?.affectationCourante?.poste||a?.posteContrat||"Non précisé")}
-function paieGrilleForAgent(a){
+function paieGrilleForAgent(a,ym){
   paieEnsure();
-  const fn=paieAgentFonction(a);
-  return (db.paieGrilles||[]).find(g=>String(g.fonction||"").toLowerCase()===String(fn||"").toLowerCase()&&(!g.societe||!a?.societe||g.societe===a.societe))||
-    (db.paieGrilles||[]).find(g=>String(g.fonction||"").toLowerCase()===String(fn||"").toLowerCase())||null;
+  const fn=paieAgentFonction(a),period=String(ym||sessionStorage.getItem("paieMois")||today().slice(0,7));
+  const rows=(db.paieGrilles||[]).filter(g=>String(g.fonction||"").toLowerCase()===String(fn||"").toLowerCase()&&(!g.societe||!a?.societe||g.societe===a.societe)&&(!g.categorie||String(g.categorie)===String(a?.categoriePaie||""))&&(!g.echelon||String(g.echelon)===String(a?.echelonPaie||""))&&(!g.dateDebut||String(g.dateDebut).slice(0,7)<=period)&&(!g.dateFin||String(g.dateFin).slice(0,7)>=period));
+  return rows.sort((x,y)=>Number(!!y.societe)-Number(!!x.societe)||Number(!!y.echelon)-Number(!!x.echelon)||String(y.dateDebut||"").localeCompare(String(x.dateDebut||"")))[0]||null;
 }
-function paieGrilleBounds(a){
+function paieGrilleBounds(a,ym){
   const cfg=paieConfig();
-  const g=paieGrilleForAgent(a);
+  const g=paieGrilleForAgent(a,ym);
   return{fonction:paieAgentFonction(a),grille:g,min:Math.max(Number(cfg.snmg||0),Number(g?.min||0)||0),max:Number(g?.max||0)||0,reference:Number(g?.reference||0)||0};
 }
 function paieIsClosed(ym,societe){
@@ -25089,19 +25089,20 @@ function calcPaieAgent(a,ym){
   paieEnsure();
   const period=ym||sessionStorage.getItem("paieMois")||today().slice(0,7);
   const salaireNetContractuel=Number(a.salaireNet||0)||0;
-  const brutBase=paieBaseBruteForAgent(a);
-  const primeNuit=a.affectationCourante?.horaire==="Nuit"?Number(cfg.primeNuit||0):0;
+  const brutBase=paieBaseBruteForAgent(a,period);
   const absenceInfo=paiePointageAbsenceInfo(a,period);const joursAbsencePaie=absenceInfo.days;
   const employmentRatio=paieEmploymentRatio(a,period);
   const baseProratisee=Math.round(brutBase*employmentRatio);
   const joursReference=Math.max(1,Number(cfg.joursOuvrablesMois)||22);
+  const paidRatio=Math.max(0,employmentRatio-(joursAbsencePaie/joursReference));
+  const primeNuit=a.affectationCourante?.horaire==="Nuit"?Math.round(Number(cfg.primeNuit||0)*paidRatio):0;
   const retenueJour=Number(cfg.retenueAbsenceJour||0)>0?Number(cfg.retenueAbsenceJour):baseProratisee/joursReference;
   const retenueAbsencePointage=Math.max(0,Math.min(baseProratisee,Math.round(joursAbsencePaie*retenueJour)));
   const fixedElements=[
     {code:"BASE",libelle:"Salaire de base proratisé",type:"gain",imposable:true,cotisable:true,montant:baseProratisee},
     {code:"PN",libelle:"Prime de nuit",type:"gain",imposable:true,cotisable:true,montant:primeNuit},
-    {code:"PANIER",libelle:"Prime panier",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primePanier||0)},
-    {code:"TRANS",libelle:"Prime transport",type:"gain",imposable:false,cotisable:false,montant:Number(cfg.primeTransport||0)},
+    {code:"PANIER",libelle:"Remboursement panier",type:"gain",imposable:false,cotisable:false,montant:Math.round(Number(cfg.primePanier||0)*paidRatio)},
+    {code:"TRANS",libelle:"Remboursement transport",type:"gain",imposable:false,cotisable:false,montant:Math.round(Number(cfg.primeTransport||0)*paidRatio)},
     {code:"ABS",libelle:`Retenue absence pointage (${joursAbsencePaie} j)`,type:"retenue",imposable:true,cotisable:true,montant:retenueAbsencePointage,auto:true}
   ].filter(x=>Number(x.montant||0)>0);
   const variableElements=paieElementsFor(a.id,period).map(e=>{
@@ -25117,7 +25118,6 @@ function calcPaieAgent(a,ym){
   const gainsNonCotisablesImposables=elements.filter(e=>e.type!=="retenue"&&e.cotisable===false&&e.imposable!==false).reduce((s,e)=>s+e.montant,0);
   const gainsNonCotisablesNonImposables=elements.filter(e=>e.type!=="retenue"&&e.cotisable===false&&e.imposable===false).reduce((s,e)=>s+e.montant,0);
   const brutCotisable=Math.max(0,gainsCotisables-retenuesCotisables);
-  const paidRatio=Math.max(0,employmentRatio-(joursAbsencePaie/joursReference));
   const assietteCnasMinimum=Math.round(Number(cfg.snmg||0)*Math.min(employmentRatio,paidRatio));
   const assietteCnas=brutCotisable>0?Math.max(brutCotisable,assietteCnasMinimum):0;
   const cnasSalarie=Math.round(assietteCnas*(Number(cfg.tauxCnasSalarie||0)/100));
@@ -25134,8 +25134,9 @@ function calcPaieAgent(a,ym){
   const netAPayer=Math.max(0,netSocial-irg+gainsNonCotisablesNonImposables-retenuesPostNet);
   const cnasPatronal=Math.round(assietteCnas*(Number(cfg.tauxCnasPatronal||0)/100));
   const oeuvresSociales=Math.round(assietteCnas*(Number(cfg.tauxOeuvresSociales||0)/100));
-  const coutEmployeur=gains+cnasPatronal+oeuvresSociales;
-  return{salaireNetContractuel,brutBase,baseProratisee,employmentRatio,pointageDisponible:absenceInfo.available,primeNuit,primes,gains,joursAbsencePaie,retenueAbsencePointage,absences:retenuesRubriques,retenuesRubriques,retenuesPostNet,elements,brutCotisable,assietteCnasMinimum,assietteCnas,cnasSalarie,netSocial,abat,baseIRG,baseIRGSeparable,irgNonMensuel,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
+  const remunerationBruteDue=Math.max(0,gains-retenuesCotisables);
+  const coutEmployeur=remunerationBruteDue+cnasPatronal+oeuvresSociales;
+  return{salaireNetContractuel,brutBase,baseProratisee,employmentRatio,pointageDisponible:absenceInfo.available,primeNuit,primes,gains,remunerationBruteDue,joursAbsencePaie,retenueAbsencePointage,absences:retenuesRubriques,retenuesRubriques,retenuesPostNet,elements,brutCotisable,assietteCnasMinimum,assietteCnas,cnasSalarie,netSocial,abat,baseIRG,baseIRGSeparable,irgNonMensuel,irgBrut:irgCalc.irgBrut,irgFormule:irgCalc.formule,irg,netAPayer,cnasPatronal,oeuvresSociales,coutEmployeur};
 }
 function paiePointageAbsenceInfo(a,ym){
   try{
@@ -25153,12 +25154,13 @@ function paieNetFromBase(base,cfg){
   const oeuvresSociales=Math.round(brut*(Number(cfg.tauxOeuvresSociales||0)/100));
   return{brutCotisable:brut,cnasSalarie:cnas,baseIRG:netSocial,irg:irgCalc.irg,netAPayer:Math.max(0,netSocial-irgCalc.irg),cnasPatronal,oeuvresSociales,coutEmployeur:brut+cnasPatronal+oeuvresSociales};
 }
-function paieBaseBruteForAgent(a){
+function paieBaseBruteForAgent(a,ym){
   const explicit=Number(a?.salaireBase||a?.paieBaseBrute||0)||0;
   if(explicit>0)return explicit;
   const netContractuel=Number(a?.salaireNet||0)||0;
   if(netContractuel>0)return paieOptimizeFromNet(netContractuel,a).base||0;
-  return 0;
+  const grid=paieGrilleForAgent(a,ym);
+  return Number(grid?.reference||grid?.min||0)||0;
 }
 function paieOptimizeFromNet(targetNet,agent){
   const cfg=paieConfig();
@@ -25212,15 +25214,19 @@ function setPaieFilter(k,v){
   renderView();
 }
 async function savePaieConfig(){
+  if(typeof isAdmin==="function"&&!isAdmin()){toast("Modification des paramètres réglementaires réservée à l'administration système","error");return}
   const f=document.getElementById("paie-config-form");if(!f)return;
   const fd=new FormData(f);const cfg=paieConfig();
   ["snmg","heuresMois","joursOuvrablesMois","tauxCnasSalarie","tauxCnasPatronal","tauxOeuvresSociales","tauxIRGNonMensuel","majorationHeuresSup","abattementIRG","abattementMinMensuel","abattementMaxMensuel","primeNuit","primePanier","primeTransport","optimisationPanierMax","optimisationTransportMax","retenueAbsenceJour"].forEach(k=>cfg[k]=parseMoneyInput(fd.get(k))||0);
+  if(cfg.snmg<=0||cfg.heuresMois<=0||cfg.joursOuvrablesMois<=0||cfg.tauxCnasSalarie<0||cfg.tauxCnasPatronal<0||cfg.majorationHeuresSup<50){toast("Paramètres réglementaires invalides (majoration HS minimale : 50 %)","error");return}
+  if(!confirm(`Enregistrer le référentiel ${cfg.regulatoryVersion} ?\n\nCette modification influencera tous les bulletins non clôturés. Les mois déjà clôturés resteront figés.`))return;
   db.paieConfig=cfg;
+  if(typeof logActivity==="function")logActivity("Modification paramètres paie",cfg.regulatoryVersion||"Référentiel DZ");
   if(!(await saveDBAndWaitToast("Paramètres paie non confirmés")))return;
   toast("Paramètres paie enregistrés","success");renderView();
 }
 function paieExportCSV(){
-  const rows=[["Code","Employé","Société","Contrat","Brut cotisable","CNAS salarié","Base IRG","IRG","Net à payer","CNAS patronal","Œuvres sociales","Coût employeur"]];
+  const rows=[["Code","Employé","Société","Contrat","Brut cotisable","Assiette CNAS","CNAS salarié","Base IRG","IRG","Net à payer","CNAS patronal","Œuvres sociales","Coût employeur"]];
   document.querySelectorAll("#paie-tbody tr[data-paierow]").forEach(r=>rows.push(JSON.parse(r.dataset.csv)));
   paieDownloadCSV(rows,"paie-"+(sessionStorage.getItem("paieMois")||today().slice(0,7))+".csv");
 }
@@ -25232,14 +25238,14 @@ function paieExportCNAS(){
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
   const rows=[["Période","Matricule","Nom","Société","Brut cotisable","Taux salarié","Cotisation salarié","Taux employeur","Cotisation employeur","Taux œuvres sociales","Cotisation œuvres sociales","Total patronal"]];
   document.querySelectorAll("#paie-tbody tr[data-paierow]").forEach(r=>{
-    const csv=JSON.parse(r.dataset.csv);rows.push([ym,csv[0],csv[1],csv[2],csv[4],paieConfig().tauxCnasSalarie,csv[5],paieConfig().tauxCnasPatronal,csv[9],paieConfig().tauxOeuvresSociales,csv[10],Number(csv[9]||0)+Number(csv[10]||0)]);
+    const csv=JSON.parse(r.dataset.csv);rows.push([ym,csv[0],csv[1],csv[2],csv[5],paieConfig().tauxCnasSalarie,csv[6],paieConfig().tauxCnasPatronal,csv[10],paieConfig().tauxOeuvresSociales,csv[11],Number(csv[10]||0)+Number(csv[11]||0)]);
   });
   paieDownloadCSV(rows,"cnas-"+ym+".csv");
 }
 function paieExportIRG(){
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
   const rows=[["Période","Matricule","Nom","Société","Base IRG","IRG retenu","Net à payer"]];
-  document.querySelectorAll("#paie-tbody tr[data-paierow]").forEach(r=>{const csv=JSON.parse(r.dataset.csv);rows.push([ym,csv[0],csv[1],csv[2],csv[6],csv[7],csv[8]])});
+  document.querySelectorAll("#paie-tbody tr[data-paierow]").forEach(r=>{const csv=JSON.parse(r.dataset.csv);rows.push([ym,csv[0],csv[1],csv[2],csv[7],csv[8],csv[9]])});
   paieDownloadCSV(rows,"irg-"+ym+".csv");
 }
 function paieBulletinSnapshot(a,c,ym){
@@ -25265,7 +25271,8 @@ function paieValidationForAgents(agents,ym){
 }
 async function paieCloseMonth(){
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
-  const soc=sessionStorage.getItem("paieSociete")||"";
+  const soc=paieActiveSocieteScope()||sessionStorage.getItem("paieSociete")||"";
+  if(!soc&&!paieActiveSocieteScope()){toast("Sélectionnez une société avant de clôturer la paie","error");return}
   if(paieIsClosed(ym,soc)){toast("Ce mois de paie est déjà clôturé","error");return}
   const agents=paieEligibleAgents(ym,soc);
   if(!agents.length){toast("Aucun employé à clôturer","error");return}
@@ -25274,10 +25281,11 @@ async function paieCloseMonth(){
   const warningText=validation.warnings.length?`\n\nAVERTISSEMENTS (${validation.warnings.length})\n${validation.warnings.slice(0,12).join("\n")}`:"";
   if(!confirm(`Clôturer la paie ${paieMonthLabel(ym)}${soc?" · "+soc:""} ?\n\nContrôles bloquants réussis pour ${agents.length} salarié(s).${warningText}\n\nLes bulletins seront figés et les éléments du mois ne seront plus modifiables.`))return;
   paieEnsure();
+  const previousBulletins=[...(db.paieBulletins||[])],previousClotures=[...(db.paieClotures||[])];
   db.paieBulletins=(db.paieBulletins||[]).filter(b=>!(b.ym===ym&&(!soc||b.societe===soc)));
   agents.forEach(a=>db.paieBulletins.push(paieBulletinSnapshot(a,calcPaieAgent(a,ym),ym)));
   db.paieClotures.push({id:uid("clp"),ym,societe:soc,closedAt:new Date().toISOString(),closedBy:session?.username||"",validatedBy:session?.username||"",regulatoryVersion:paieConfig().regulatoryVersion,bulletins:agents.length,warnings:validation.warnings});
-  if(!(await saveDBAndWaitToast("Clôture paie non confirmée")))return;
+  if(!(await saveDBAndWaitToast("Clôture paie non confirmée"))){db.paieBulletins=previousBulletins;db.paieClotures=previousClotures;return}
   toast("Paie clôturée et bulletins historisés","success");renderView();
 }
 function paieFicheHTML(agentId,ym){
@@ -25303,8 +25311,10 @@ function paieFicheHTML(agentId,ym){
       <div class="bp-box"><h3>Salarié</h3>
         <div class="bp-line"><span>Nom et prénom</span><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b></div>
         <div class="bp-line"><span>Matricule</span><b>${escapeHTML(a.matricule||"—")}</b></div>
+        <div class="bp-line"><span>N° CNAS</span><b>${escapeHTML(a.numeroCnas||a.cnas||"—")}</b></div>
         <div class="bp-line"><span>Contrat</span><b>${escapeHTML(cleanContractType(a.typeContrat)||"—")}</b></div>
         <div class="bp-line"><span>Date recrutement</span><b>${formatDate(a.dateRecrutement)}</b></div>
+        <div class="bp-line"><span>Catégorie / échelon</span><b>${escapeHTML([a.categoriePaie,a.echelonPaie].filter(Boolean).join(" / ")||"—")}</b></div>
       </div>
     </div>
     <table>
@@ -25313,12 +25323,14 @@ function paieFicheHTML(agentId,ym){
         ${(c.elements||[]).filter(e=>e.type!=="retenue").map(e=>ligne(e.libelle||e.code||"Gain",money(e.montant),e.cotisable===false?"Non cot.":"",money(e.montant),"")).join("")||ligne("Salaire de base",money(c.brutBase),"",money(c.brutBase),"")}
         ${(c.elements||[]).filter(e=>e.type==="retenue").map(e=>ligne(e.libelle||e.code||"Retenue",money(e.montant),e.cotisable?"Cot.":"", "",money(e.montant))).join("")}
         ${ligne("Brut cotisable",money(c.brutCotisable),"","<b>"+money(c.brutCotisable)+"</b>","")}
-        ${ligne("CNAS salarié",money(c.brutCotisable),qty(cfg.tauxCnasSalarie)+" %","",money(c.cnasSalarie))}
+        ${ligne("Assiette CNAS",money(c.assietteCnas||c.brutCotisable),"","<b>"+money(c.assietteCnas||c.brutCotisable)+"</b>","")}
+        ${ligne("CNAS salarié",money(c.assietteCnas||c.brutCotisable),qty(cfg.tauxCnasSalarie)+" %","",money(c.cnasSalarie))}
         ${ligne("Net social",money(c.netSocial),"","<b>"+money(c.netSocial)+"</b>","")}
         ${ligne("Base IRG / net imposable",money(c.baseIRG),"","<b>"+money(c.baseIRG)+"</b>","")}
         ${ligne("IRG brut",money(c.baseIRG),"Barème","","<span class=\"bp-muted\">"+money(c.irgBrut)+"</span>")}
         ${ligne("Abattement IRG",money(c.irgBrut),qty(cfg.abattementIRG)+" %","<span class=\"bp-muted\">"+money(c.abat)+"</span>","")}
         ${ligne("IRG retenu",money(c.baseIRG),escapeHTML(c.irgFormule||"Barème"),"",money(c.irg))}
+        ${c.irgNonMensuel?ligne("Dont IRG primes/rappels",money(c.baseIRGSeparable),qty(cfg.tauxIRGNonMensuel||10)+" %","",money(c.irgNonMensuel)):""}
       </tbody>
       <tfoot>
         <tr><th colspan="3" class="r">Totaux</th><th class="r">${money(totalGains)}</th><th class="r">${money(totalRetenues)}</th></tr>
@@ -25326,6 +25338,8 @@ function paieFicheHTML(agentId,ym){
     </table>
     <div class="bp-grid" style="margin-top:12px">
       <div class="bp-box"><h3>Charges patronales</h3>
+        <div class="bp-line"><span>Base proratisée</span><b>${money(c.baseProratisee||c.brutBase)}</b></div>
+        <div class="bp-line"><span>Absences pointage</span><b>${qty(c.joursAbsencePaie||0)} jour(s)</b></div>
         <div class="bp-line"><span>CNAS patronal</span><b>${money(c.cnasPatronal)}</b></div>
         <div class="bp-line"><span>Œuvres sociales</span><b>${money(c.oeuvresSociales)}</b></div>
         <div class="bp-line"><span>Coût employeur</span><b>${money(c.coutEmployeur)}</b></div>
@@ -25367,6 +25381,8 @@ async function savePaieAgentSalary(agentId){
   a.salaireBase=parseMoneyInput(fd.get("salaireBase"))||0;
   a.paieBaseBrute=a.salaireBase;
   a.typeContrat=cleanContractType(fd.get("typeContrat"))||a.typeContrat||"";
+  a.categoriePaie=String(fd.get("categoriePaie")||"").trim();
+  a.echelonPaie=String(fd.get("echelonPaie")||"").trim();
   a.paieMode=String(fd.get("paieMode")||"Mensuel").trim();
   a.paieObservation=String(fd.get("paieObservation")||"").trim();
   a.updatedAt=today();
@@ -25383,7 +25399,7 @@ function renderPaieAgent(view,agentId){
   const ym=sessionStorage.getItem("paieMois")||today().slice(0,7);
   const c=paieCalcForAgent(a,ym);
   const aff=agentLiveAffectation(a)||{};
-  const bounds=paieGrilleBounds(a);
+  const bounds=paieGrilleBounds(a,ym);
   const closed=paieIsClosed(ym,a.societe);
   const agentLabel=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim()||"Employé");
   view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
@@ -25404,6 +25420,8 @@ function renderPaieAgent(view,agentId){
         <div><label class="label">Base brute paie</label><input class="input" name="salaireBase" value="${formatMoneyInputValue(paieBaseBruteForAgent(a)||0)}" onblur="formatMoneyField(this)" ${closed?"readonly":""}/></div>
         <div><label class="label">Contrat</label><select class="select" name="typeContrat" ${closed?"disabled":""}>${TYPES_CONTRAT.map(t=>`<option ${cleanContractType(a.typeContrat)===t?"selected":""}>${escapeHTML(t)}</option>`).join("")}</select></div>
         <div><label class="label">Mode de paie</label><select class="select" name="paieMode" ${closed?"disabled":""}>${["Mensuel","Horaire","Journalier"].map(m=>`<option ${String(a.paieMode||"Mensuel")===m?"selected":""}>${m}</option>`).join("")}</select></div>
+        <div><label class="label">Catégorie salariale</label><input class="input" name="categoriePaie" value="${escapeHTML(a.categoriePaie||"")}" ${closed?"readonly":""}/></div>
+        <div><label class="label">Échelon</label><input class="input" name="echelonPaie" value="${escapeHTML(a.echelonPaie||"")}" ${closed?"readonly":""}/></div>
         <div><label class="label">Poste</label><div class="input bg-slate-50">${escapeHTML(paieAgentFonction(a)||"—")}</div></div>
         <div><label class="label">Site actuel</label><div class="input bg-slate-50">${escapeHTML(aff.siteName||"—")}</div></div>
         <div><label class="label">Grille fonction</label><div class="input bg-slate-50">${bounds?`${escapeHTML(bounds.fonction)} · ${money(bounds.min)}${bounds.max?" / "+money(bounds.max):""}`:"SNMG"}</div></div>
@@ -25421,11 +25439,11 @@ function renderPaieAgent(view,agentId){
 }
 function paieRubriquesHTML(){
   paieEnsure();
-  return `<div class="overflow-x-auto"><table><thead><tr><th>Code</th><th>Libellé</th><th>Type</th><th>Cotisable</th><th>Imposable</th><th>Actif</th><th></th></tr></thead><tbody>${(db.paieRubriques||[]).map(r=>`<tr><td class="font-mono text-xs">${escapeHTML(r.code||"")}</td><td>${escapeHTML(r.libelle||"")}</td><td><span class="pill ${r.type==="retenue"?"pill-red":"pill-green"}">${escapeHTML(r.type||"gain")}</span></td><td>${r.cotisable!==false?"Oui":"Non"}</td><td>${r.imposable!==false?"Oui":"Non"}</td><td>${r.actif!==false?"Oui":"Non"}</td><td>${r.system?`<span class="text-xs text-slate-400">Système</span>`:`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="paieDeleteRubrique('${r.id}')">Supprimer</button>`}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="overflow-x-auto"><table><thead><tr><th>Code</th><th>Libellé</th><th>Type</th><th>Cotisable</th><th>Imposable</th><th>Traitement IRG</th><th>Référence</th><th>Actif</th><th></th></tr></thead><tbody>${(db.paieRubriques||[]).map(r=>`<tr><td class="font-mono text-xs">${escapeHTML(r.code||"")}</td><td>${escapeHTML(r.libelle||"")}</td><td><span class="pill ${r.type==="retenue"?"pill-red":"pill-green"}">${escapeHTML(r.type||"gain")}</span></td><td>${r.cotisable!==false?"Oui":"Non"}</td><td>${r.imposable!==false?"Oui":"Non"}</td><td>${r.taxMode==="separe10"?"Retenue séparée 10 %":"Barème mensuel"}</td><td class="text-xs">${escapeHTML(r.referenceLegale||"—")}</td><td>${r.actif!==false?"Oui":"Non"}</td><td>${r.system?`<span class="text-xs text-slate-400">Système</span>`:`<button type="button" class="btn btn-ghost text-xs text-red-600" onclick="paieDeleteRubrique('${r.id}')">Supprimer</button>`}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function paieGrillesHTML(){
   paieEnsure();
-  return `<div class="overflow-x-auto"><table><thead><tr><th>Fonction</th><th>Société</th><th>Min base</th><th>Référence</th><th>Max base</th><th></th></tr></thead><tbody>${(db.paieGrilles||[]).map(g=>`<tr><td class="font-bold">${escapeHTML(g.fonction||"")}</td><td>${escapeHTML(g.societe||"Toutes")}</td><td>${money(g.min||0)}</td><td>${money(g.reference||0)}</td><td>${g.max?money(g.max):"—"}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="paieDeleteGrille('${g.id}')">Supprimer</button></td></tr>`).join("")||`<tr><td colspan="6" class="text-center text-slate-500 p-4">Aucune grille. Le système utilise le SNMG comme minimum.</td></tr>`}</tbody></table></div>`;
+  return `<div class="overflow-x-auto"><table><thead><tr><th>Fonction</th><th>Société</th><th>Catégorie</th><th>Échelon</th><th>Applicable</th><th>Min base</th><th>Référence</th><th>Max base</th><th></th></tr></thead><tbody>${(db.paieGrilles||[]).slice().sort((a,b)=>String(a.fonction||"").localeCompare(String(b.fonction||""),"fr")||String(a.categorie||"").localeCompare(String(b.categorie||""),"fr")||String(a.echelon||"").localeCompare(String(b.echelon||""),"fr")).map(g=>`<tr><td class="font-bold">${escapeHTML(g.fonction||"")}</td><td>${escapeHTML(g.societe||"Toutes")}</td><td>${escapeHTML(g.categorie||"Toutes")}</td><td>${escapeHTML(g.echelon||"Tous")}</td><td class="text-xs">${g.dateDebut?formatDate(g.dateDebut):"Sans début"} → ${g.dateFin?formatDate(g.dateFin):"Sans fin"}</td><td>${money(g.min||0)}</td><td class="font-bold">${money(g.reference||g.min||0)}</td><td>${g.max?money(g.max):"—"}</td><td><button class="btn btn-ghost text-xs text-red-600" onclick="paieDeleteGrille('${g.id}')">Supprimer</button></td></tr>`).join("")||`<tr><td colspan="9" class="text-center text-slate-500 p-4">Aucune grille. Le système utilise le SNMG comme minimum.</td></tr>`}</tbody></table></div>`;
 }
 function openPaieGrilleModal(){
   const fonctions=[...new Set([...POSTES,...(db.agents||[]).map(paieAgentFonction).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,"fr"));
@@ -25433,6 +25451,10 @@ function openPaieGrilleModal(){
     <div class="grid grid-2 gap-3">
       <div><label class="label">Fonction / poste</label><input class="input" name="fonction" list="paie-fonctions-list" required placeholder="Agent de sécurité"/><datalist id="paie-fonctions-list">${fonctions.map(f=>`<option value="${escapeHTML(f)}"></option>`).join("")}</datalist></div>
       <div><label class="label">Société</label><select class="select" name="societe"><option value="">Toutes sociétés</option>${SOCIETES.map(s=>`<option>${escapeHTML(s)}</option>`).join("")}</select></div>
+      <div><label class="label">Catégorie</label><input class="input" name="categorie" placeholder="Ex : Exécution, Maîtrise, Cadre"/></div>
+      <div><label class="label">Échelon</label><input class="input" name="echelon" placeholder="Ex : 01, 02, A, B"/></div>
+      <div><label class="label">Applicable du</label><input class="input" type="date" name="dateDebut" required value="${today()}"/></div>
+      <div><label class="label">Applicable au</label><input class="input" type="date" name="dateFin"/></div>
       <div><label class="label">Salaire base minimum</label><input class="input" name="min" required onblur="formatMoneyField(this)" placeholder="Ex : 35 000,00"/></div>
       <div><label class="label">Salaire base référence</label><input class="input" name="reference" onblur="formatMoneyField(this)" placeholder="Ex : 45 000,00"/></div>
       <div><label class="label">Salaire base maximum</label><input class="input" name="max" onblur="formatMoneyField(this)" placeholder="Ex : 70 000,00"/></div>
@@ -25444,9 +25466,13 @@ async function paieSaveGrille(form){
   paieEnsure();
   const fd=new FormData(form);const fonction=normalizePosteValue(String(fd.get("fonction")||"").trim());
   if(!fonction){toast("Fonction obligatoire","error");return}
-  const societe=String(fd.get("societe")||"").trim();
-  db.paieGrilles=(db.paieGrilles||[]).filter(g=>!(String(g.fonction||"").toLowerCase()===fonction.toLowerCase()&&String(g.societe||"")===societe));
-  db.paieGrilles.push({id:uid("pg"),fonction,societe,min:parseMoneyInput(fd.get("min"))||0,reference:parseMoneyInput(fd.get("reference"))||0,max:parseMoneyInput(fd.get("max"))||0,createdAt:new Date().toISOString(),createdBy:session?.username||""});
+  const societe=String(fd.get("societe")||"").trim(),categorie=String(fd.get("categorie")||"").trim(),echelon=String(fd.get("echelon")||"").trim();
+  const dateDebut=String(fd.get("dateDebut")||""),dateFin=String(fd.get("dateFin")||"");const min=parseMoneyInput(fd.get("min"))||0,reference=parseMoneyInput(fd.get("reference"))||min,max=parseMoneyInput(fd.get("max"))||0;
+  if(dateFin&&dateFin<dateDebut){toast("La date de fin précède la date de début","error");return}
+  if(min<Number(paieConfig().snmg||0)||reference<min||(max>0&&(reference>max||min>max))){toast("Montants invalides : minimum ≥ SNMG et min ≤ référence ≤ max","error");return}
+  const overlaps=(db.paieGrilles||[]).some(g=>String(g.fonction||"").toLowerCase()===fonction.toLowerCase()&&String(g.societe||"")===societe&&String(g.categorie||"")===categorie&&String(g.echelon||"")===echelon&&(!dateFin||!g.dateDebut||g.dateDebut<=dateFin)&&(!g.dateFin||g.dateFin>=dateDebut));
+  if(overlaps){toast("Une ligne identique de la grille couvre déjà cette période","error");return}
+  db.paieGrilles.push({id:uid("pg"),fonction,societe,categorie,echelon,dateDebut,dateFin,min,reference,max,createdAt:new Date().toISOString(),createdBy:session?.username||""});
   if(!(await saveDBAndWaitToast("Grille salariale non confirmée")))return;
   closeModal();toast("Grille salariale enregistrée","success");renderView();
 }
@@ -25462,6 +25488,8 @@ function openPaieRubriqueModal(){
       <div><label class="label">Code</label><input class="input" name="code" required placeholder="EX : PRIME_SITE"/></div>
       <div><label class="label">Libellé</label><input class="input" name="libelle" required placeholder="Prime de site"/></div>
       <div><label class="label">Type</label><select class="select" name="type"><option value="gain">Gain</option><option value="retenue">Retenue</option></select></div>
+      <div><label class="label">Traitement IRG</label><select class="select" name="taxMode"><option value="mensuel">Barème mensuel</option><option value="separe10">Retenue séparée 10 %</option></select></div>
+      <div class="col-span-2"><label class="label">Référence légale / justification</label><input class="input" name="referenceLegale" placeholder="Obligatoire si exonérée de CNAS ou d'IRG"/></div>
       <label class="flex items-center gap-2 mt-6"><input type="checkbox" name="cotisable" checked/> Cotisable CNAS</label>
       <label class="flex items-center gap-2"><input type="checkbox" name="imposable" checked/> Imposable IRG</label>
       <label class="flex items-center gap-2"><input type="checkbox" name="actif" checked/> Active</label>
@@ -25474,7 +25502,9 @@ async function paieSaveRubrique(form){
   const fd=new FormData(form);const code=String(fd.get("code")||"").trim().toUpperCase();const libelle=String(fd.get("libelle")||"").trim();
   if(!code||!libelle){toast("Code et libellé obligatoires","error");return}
   if((db.paieRubriques||[]).some(r=>String(r.code||"").toUpperCase()===code)){toast("Code rubrique déjà existant","error");return}
-  db.paieRubriques.push({id:uid("rub"),code,libelle,type:fd.get("type")||"gain",cotisable:fd.get("cotisable")==="on",imposable:fd.get("imposable")==="on",actif:fd.get("actif")==="on",system:false});
+  const cotisable=fd.get("cotisable")==="on",imposable=fd.get("imposable")==="on",referenceLegale=String(fd.get("referenceLegale")||"").trim();
+  if((!cotisable||!imposable)&&!referenceLegale){toast("Une exonération CNAS ou IRG exige une référence légale / justification","error");return}
+  db.paieRubriques.push({id:uid("rub"),code,libelle,type:fd.get("type")||"gain",cotisable,imposable,taxMode:fd.get("taxMode")||"mensuel",referenceLegale,actif:fd.get("actif")==="on",system:false});
   if(!(await saveDBAndWaitToast("Rubrique paie non confirmée")))return;
   closeModal();toast("Rubrique ajoutée","success");renderView();
 }
@@ -29276,7 +29306,7 @@ function openGrilleSalaire(){
         fieldHTML("gs-rend","Prime de rendement (DZD)","0","step=\"0.01\"")+
         fieldHTML("gs-panier","Prime de panier / repas (DZD)","0","step=\"0.01\"")+
         fieldHTML("gs-transport","Indemnité de transport (DZD)","0","step=\"0.01\"")+
-        fieldHTML("gs-hs25","Heures supplémentaires +25% (nombre d\'heures)","0","step=\"0.5\"")+
+        fieldHTML("gs-hs25","Heures supplémentaires tranche 1 (+50% minimum)","0","step=\"0.5\"")+
         fieldHTML("gs-hs50","Heures supplémentaires +50% (nombre d\'heures)","0","step=\"0.5\"")+
         fieldHTML("gs-autres","Autres primes (DZD)","0","step=\"0.01\"")+
       '</div>'+
@@ -29301,27 +29331,15 @@ function grilleSalaireUpdate(){
   // I. Brut
   const iep=Math.min(sb*Math.min(anc,25)/100,sb*0.25);
   const tauxH=sb/173.33;
-  const mhs25=tauxH*1.25*hs25, mhs50=tauxH*1.50*hs50;
+  const mhs25=tauxH*1.50*hs25, mhs50=tauxH*1.50*hs50;
   const sbg=sb+iep+rend+panier+transport+mhs25+mhs50+autres;
 
   // II. Retenues salariales
   const cnasSal=sbg*0.09;
   const netApCnas=sbg-cnasSal;
-  const abatt=Math.max(1000,netApCnas*0.10);
-  const nfi=Math.max(0,netApCnas-abatt);
-
-  // IRG barème progressif mensuel 2024
-  const BR=[[0,30000,0,"0 – 30 000"],[30000,100000,0.20,"30 001 – 100 000"],
-    [100000,300000,0.30,"100 001 – 300 000"],[300000,Infinity,0.35,"> 300 000"]];
-  const irgD=[];let irg=0;
-  for(const[min,max,rate,lbl]of BR){
-    if(nfi<=min)break;
-    const p=Math.min(nfi,max===Infinity?nfi:max)-min;
-    const m=p*rate; irg+=m;
-    if(p>0)irgD.push({lbl,rate,p,m});
-    if(max===Infinity)break;
-  }
-  irg=Math.round(irg*100)/100;
+  const nfi=Math.max(0,netApCnas);
+  const irgResult=irgSalaireAlgerie(nfi,paieConfig());
+  const abatt=irgResult.abattement,irg=irgResult.irg,irgD=[];
   const totalRet=cnasSal+irg, net=sbg-totalRet;
 
   // IV. Charges patronales
@@ -29339,7 +29357,7 @@ function grilleSalaireUpdate(){
   const irgRows=irgD.length?irgD.map(t=>
     '<tr style="background:#fef9c3"><td style="padding:3px 10px 3px 22px;font-size:11px;color:#92400e">Tranche '+t.lbl+' DZD ('+Math.round(t.rate*100)+'%)</td>'+
     '<td style="padding:3px 10px;text-align:right;font-size:11px;color:#92400e">'+DZD(t.m)+'</td></tr>'
-  ).join(""):'<tr style="background:#dcfce7"><td colspan="2" style="padding:4px 10px 4px 22px;font-size:11px;color:#15803d">Exonéré — RNF ≤ 20 000 DZD</td></tr>';
+  ).join(""):'<tr style="background:#dcfce7"><td colspan="2" style="padding:4px 10px 4px 22px;font-size:11px;color:#15803d">'+irgResult.formule+'</td></tr>';
 
   const html=
     '<table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-family:sans-serif">'+
@@ -29347,7 +29365,7 @@ function grilleSalaireUpdate(){
     row("Salaire de base",sb)+
     (iep>0?row("IEP ("+Math.min(anc,25)+" an"+(anc>1?"s":"")+" × 1%)",iep):"") +
     (rend>0?row("Prime de rendement",rend):"")+
-    (mhs25>0?row("H. Supp. +25% ("+hs25+"h × "+Math.round(tauxH)+"×1,25)",mhs25):"")+
+    (mhs25>0?row("H. Supp. +50% ("+hs25+"h × "+Math.round(tauxH)+"×1,50)",mhs25):"")+
     (mhs50>0?row("H. Supp. +50% ("+hs50+"h × "+Math.round(tauxH)+"×1,50)",mhs50):"")+
     (panier>0?row("Prime de panier / repas",panier):"")+
     (transport>0?row("Indemnité de transport",transport):"")+
@@ -29357,9 +29375,9 @@ function grilleSalaireUpdate(){
     sec("II. Retenues salariales")+
     row("CNAS salariale (9% × SBG)",cnasSal)+
     row("Net après CNAS salariale",netApCnas,false,"","#475569")+
-    row("Abattement professionnel (10%, min 1 000 DZD)",abatt)+
+    row("Abattement IRG (40%, min 1 000 / max 1 500 DZD)",abatt)+
     row("Revenu Net Fiscal (RNF)",nfi,false,"","#475569")+
-    '<tr style="background:#fef9c3"><td style="padding:5px 10px;font-weight:700;color:#854d0e">IRG — Barème progressif mensuel (LF 2024)</td>'+
+    '<tr style="background:#fef9c3"><td style="padding:5px 10px;font-weight:700;color:#854d0e">IRG — Barème mensuel réglementaire</td>'+
     '<td style="padding:5px 10px;text-align:right;font-weight:700;color:#854d0e">'+DZD(irg)+'</td></tr>'+
     irgRows+
     row("TOTAL RETENUES SALARIALES",totalRet,true,"#f8fafc","#dc2626")+
@@ -29485,22 +29503,10 @@ function devisCalcCout(){
 }
 
 function calcIRGAlgerie(salaireB){
-  // Loi de Finances 2024 — Art. 104 CGI — Barème mensuel : 0-30k=0% / 30k-100k=20% / 100k-300k=30% / >300k=35%
-  // Base imposable : Brut − CNAS salariale (9%) − abattement professionnel (10%, min 1 000 DZD/mois)
+  // Moteur unique PAIE : assiette nette de CNAS, barème mensuel algérien en vigueur.
   const cnasSal=salaireB*0.09;
   const netApCnas=salaireB-cnasSal;
-  const abatt=Math.max(1000,netApCnas*0.10);
-  const nfi=Math.max(0,netApCnas-abatt);
-  // Barème mensuel progressif
-  const t=[[30000,0],[100000,0.20],[300000,0.30],[Infinity,0.35]];
-  let irg=0,prev=0;
-  for(const[max,rate]of t){
-    if(nfi<=prev)break;
-    irg+=(Math.min(nfi,max)-prev)*rate;
-    prev=max;
-    if(max===Infinity)break;
-  }
-  return Math.round(irg*100)/100;
+  return irgSalaireAlgerie(Math.max(0,netApCnas),paieConfig()).irg;
 }
 
 function devisCalcCoutRowHTML(n){
