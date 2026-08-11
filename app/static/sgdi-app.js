@@ -25028,7 +25028,7 @@ function defaultPaieRubriques(){
     {id:"rub_transport_variable",code:"TRANS_VAR",libelle:"Prime transport variable",type:"gain",imposable:false,cotisable:false,system:false,actif:true},
     {id:"rub_absence",code:"ABS",libelle:"Retenue absence",type:"retenue",imposable:true,cotisable:true,system:true,actif:true},
     {id:"rub_avance",code:"AVS",libelle:"Avance sur salaire",type:"retenue",imposable:false,cotisable:false,system:false,actif:true},
-    {id:"rub_rappel",code:"RAPPEL",libelle:"Rappel salaire",type:"gain",imposable:true,cotisable:true,taxMode:"separe10",system:false,actif:true},
+    {id:"rub_rappel",code:"RAPPEL",libelle:"Rappel salaire",type:"gain",imposable:true,cotisable:true,taxMode:"mensuel",system:false,actif:true},
     {id:"rub_prime_exceptionnelle",code:"PRIME",libelle:"Prime exceptionnelle",type:"gain",imposable:true,cotisable:true,taxMode:"separe10",system:false,actif:true},
     {id:"rub_heures_sup",code:"HS50",libelle:"Heures supplémentaires (+50% minimum)",type:"gain",imposable:true,cotisable:true,system:false,actif:true},
     {id:"rub_repos_ferie",code:"RF",libelle:"Travail repos / jour férié",type:"gain",imposable:true,cotisable:true,system:false,actif:true},
