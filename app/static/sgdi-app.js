@@ -7698,8 +7698,41 @@ setInterval(fpqAutoRefreshRelieveAlert,30000);
 setInterval(()=>{if(session&&sgdiPostgresReady)refreshDemandesPersonnelFromPostgres({silent:true})},60000);
 
 /* ---- LOGIN ---- */
+function renderPaieStandaloneLogin(){
+  try{document.title="PAIE — IRON GROUP"}catch(_e){}
+  document.getElementById("app").innerHTML=`<div class="paie-login-page">
+    <section class="paie-login-brand-panel" aria-label="Présentation du module PAIE">
+      <div class="paie-login-brand-content">
+        <div class="paie-login-logo"><div class="paie-login-logo-mark">PAIE</div><div><strong>IRON GROUP</strong><span>Gestion sociale et salariale</span></div></div>
+        <h1>La paie, <span>simple et maîtrisée.</span></h1>
+        <p class="paie-login-lead">Un espace autonome pour préparer les salaires, contrôler les éléments variables et produire les bulletins de paie.</p>
+        <div class="paie-login-features">
+          <div class="paie-login-feature"><b>Calcul sécurisé</b><span>Contrôles des bases, cotisations et retenues.</span></div>
+          <div class="paie-login-feature"><b>Bulletins</b><span>Édition et suivi mensuel par salarié.</span></div>
+          <div class="paie-login-feature"><b>Grilles salariales</b><span>Barèmes centralisés et règles cohérentes.</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="paie-login-access-panel">
+      <div class="paie-login-card">
+        <span class="paie-login-chip">Accès PAIE sécurisé</span>
+        <h2>Connexion</h2>
+        <p class="paie-login-card-sub">Accédez à votre espace de gestion de la paie.</p>
+        <form id="login-form" class="paie-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
+          <label class="paie-login-field"><span>Identifiant</span><div class="paie-login-input-wrap"><input name="username" autocomplete="username" autofocus required placeholder="Votre identifiant"></div></label>
+          <label class="paie-login-field"><span>Mot de passe</span><div class="paie-login-input-wrap"><input type="password" name="password" autocomplete="current-password" required placeholder="Votre mot de passe"><button type="button" class="paie-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button></div></label>
+          <label class="paie-login-remember"><input type="checkbox" checked> Mémoriser cette session</label>
+        </form>
+        <button class="sgdi-login-submit paie-login-submit" type="submit" form="login-form">Se connecter</button>
+        <div class="sgdi-login-status paie-login-status" hidden aria-live="polite"></div>
+        <div class="paie-login-footer"><span>● Connexion chiffrée</span><button type="button" class="paie-login-forgot" onclick="toast('Contactez l\'administrateur système pour réinitialiser le mot de passe','info')">Mot de passe oublié ?</button></div>
+      </div>
+    </section>
+  </div>`;
+}
 function renderLogin(){
   const hostCfg=sgdiModuleHostConfig();
+  if(hostCfg?.key==="paie"){renderPaieStandaloneLogin();return}
   const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.title||"ATLAS";
   const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":"Suite de gestion intégrée";
   try{document.title=hostCfg?.key==="facmod"?"FACTURATION — IRON GROUP":"ATLAS — Suite de gestion intégrée"}catch(_e){}
