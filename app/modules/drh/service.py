@@ -693,14 +693,13 @@ def validate_candidate_section(db: Session, payload: Any, section: str, existing
 
 def marquer_a_contractualiser(db: Session, candidate_id: int, username: str | None = None):
     row = get_or_404(db, Candidate, candidate_id)
-    if row.status not in ("reserve", "a_contractualiser"):
-        raise HTTPException(status_code=422, detail="Le candidat doit être en réserve pour être contractualisé")
     data = row.data if isinstance(row.data, dict) else {}
-    if not data.get("fichePositionValidee"):
-        raise HTTPException(status_code=422, detail="La fiche de position doit être validée avant la contractualisation")
+    if row.status in ("archive", "embauche"):
+        raise HTTPException(status_code=409, detail="Ce dossier ne peut pas être transmis à la contractualisation")
     row.status = "a_contractualiser"
     row.data = {
         **data,
+        "ficheACompleter": not bool(data.get("fichePositionValidee")),
         "statut": "a_contractualiser",
         "contractualisationAt": datetime.utcnow().isoformat(),
         "contractualisationBy": username or "system",

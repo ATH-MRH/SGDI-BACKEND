@@ -6238,7 +6238,7 @@ function sidebarPinnedDefaultOrder(module){
 function adminSidebarOrganizerDefaults(){
   return {
     drh:[
-      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"]
+      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"]
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
@@ -7639,6 +7639,8 @@ function renderView(){
         if(sub==="avenants")renderAvenants(view);
         else if(sub==="situation"||sub==="clients")renderContrats(view,"situation");
         else if(sub==="nouveau_contrat")renderNouveauContratDirect(view);
+        else if(sub==="a_contractualiser"&&arg)renderContractualisation(view,arg);
+        else if(sub==="a_contractualiser")renderContractsToEstablish(view);
         else renderContratsDashboard(view);
         break;
       case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else if(sub==="sortants")renderElementsSortants(view);else renderEffectif(view,sub||"actifs");break;
@@ -9194,7 +9196,7 @@ function candidateSignatureInstanceCount(socFilter){
 }
 function candidateSignatureInstanceCounterHTML(socFilter){
   const count=candidateSignatureInstanceCount(socFilter);
-  return `<button type="button" class="card p-4 text-left kpi-clickable recruitment-stable-kpi" onclick="navigate('contrats/a_contractualiser')"><div class="text-xs text-slate-500 uppercase">Instance de signature</div><div class="text-3xl font-bold mt-1">${count}</div><div class="text-xs text-slate-400">Contrats à signer</div></button>`;
+  return `<button type="button" class="card p-4 text-left kpi-clickable recruitment-stable-kpi" onclick="navigate('contrats/a_contractualiser')"><div class="text-xs text-slate-500 uppercase">Contrats à établir</div><div class="text-3xl font-bold mt-1">${count}</div><div class="text-xs text-slate-400">Dossiers transmis par Recrutement</div></button>`;
 }
 
 function recrutementUnifiedTabsHTML(mode,socFilter){
@@ -10352,6 +10354,15 @@ function avenantHTML(av){
 function previewAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;openModal(`<div style="max-height:82vh;overflow:auto;background:#fff">${avenantHTML(av)}</div><div class="flex justify-end gap-2 mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary" onclick="printAvenant('${id}')">Imprimer</button></div>`)}
 function printAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)return;const a=db.agents.find(x=>x.id===av.agentId)||{};const w=window.open("","_blank","width=900,height=700");if(!w){toast("Fenêtre d'impression bloquée par le navigateur","error");return}const html=`<!doctype html><html><head><title>${escapeHTML(av.numero||"Avenant")}</title></head><body><main>${avenantHTML(av)}</main></body></html>`;w.document.write(prepareEmployeeDocumentForValidation(html,{agentId:a.id,title:"Avenant",category:"Avenants",type:"avenant",reference:av.numero||"",date:av.dateAvenant||today()},"Valider avenant"));w.document.close()}
 
+function contractsToEstablishCandidates(){
+  const soc=currentStructureSocieteFilter();
+  return (db.candidats||[]).filter(c=>String(c.statut||c.status||"").toLowerCase()==="a_contractualiser"&&(!soc||c.societe===soc));
+}
+function renderContractsToEstablish(view){
+  const candidates=contractsToEstablishCandidates();
+  view.innerHTML=`<div class="mb-4 flex items-center justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">Contrats à établir</h1><p class="text-sm text-slate-500">Dossiers transmis par Recrutement. Aucun employé n'est créé avant validation du premier contrat.</p></div><span class="pill pill-amber">${candidates.length} en attente</span></div>
+  <div class="card overflow-hidden"><table class="table"><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Transmission</th><th>Action</th></tr></thead><tbody>${candidates.length?candidates.map(c=>`<tr><td><b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b></td><td>${escapeHTML(c.posteSouhaite||c.posteContrat||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(c.telephone||"—")}</td><td>${escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today()))}</td><td><button class="btn btn-primary" onclick="navigate('contrats/a_contractualiser/${jsString(c.id)}')">Établir le contrat</button></td></tr>`).join(""):`<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun contrat à établir.</td></tr>`}</tbody></table></div>`;
+}
 function renderContratsDashboard(view){
   const socFilter=currentStructureSocieteFilter();
   const agents=(db.agents||[]).filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
@@ -10379,7 +10390,8 @@ function renderContratsDashboard(view){
     <h3>${escapeHTML(title)}</h3>
     <div class="contract-summary-metrics">${items.join("")}</div>
   </section>`;
-  const contractActions=`<div class="contract-actions-row contract-title-actions flex gap-4 flex-wrap justify-end items-center"><button type="button" class="contract-title-link" onclick="openAvenantModal('general')">+ Créer avenant</button><button type="button" class="contract-title-link" onclick="openEmployeeNewContractModal()">+ Créer contrat</button></div>`;
+  const pendingContracts=contractsToEstablishCandidates().length;
+  const contractActions=`<div class="contract-actions-row contract-title-actions flex gap-4 flex-wrap justify-end items-center"><button type="button" class="contract-title-link" onclick="navigate('contrats/a_contractualiser')">Contrats à établir (${pendingContracts})</button><button type="button" class="contract-title-link" onclick="openAvenantModal('general')">+ Créer avenant</button><button type="button" class="contract-title-link" onclick="openEmployeeNewContractModal()">+ Créer contrat</button></div>`;
   view.innerHTML=`
     <div class="mb-4 flex items-center justify-between gap-3 flex-wrap">
       <div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div>
@@ -11941,7 +11953,7 @@ function renderContractualisation(view,id){
           <div id="new-contract-articles-editor" class="md:col-span-2 hidden"></div>
           <div class="md:col-span-2"><label class="label">Observation</label><textarea class="textarea" name="observation" rows="3"></textarea></div>
         </div>
-        <div class="flex justify-between gap-2 mt-4 flex-wrap"><div class="text-sm text-slate-500">Après validation DRH, l'agent sera créé sans affectation site. L'affectation reste confiée au module OPS.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeNewContractFromForm(this.form)">Éditer contrat</button><button class="btn btn-success" data-no-critical-auth="1">Valider RH et embaucher</button></div></div>
+        <div class="flex justify-between gap-2 mt-4 flex-wrap"><div class="text-sm text-slate-500">La validation crée le code employé, le premier contrat archivé et la fiche de position. L'affectation site reste confiée à OPS.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeNewContractFromForm(this.form)">Aperçu avant validation</button><button class="btn btn-success" data-no-critical-auth="1">Valider et créer l'employé</button></div></div>
       </form>
     </div>
   </div>`;
@@ -12049,6 +12061,14 @@ async function confirmCandidateNewContract(form,id){
     agent.modePaiement=draft.modePaiement||agent.modePaiement||"";
     agent.banque=draft.banque||agent.banque||"";
     agent.iban=draft.iban||agent.iban||"";
+    try{
+      const generated=await SGDI.rh.generateContractFromForm(employeeNewContractPayload({...draft,a:agent}));
+      agent.generatedContractId=generated?.id||"";
+      agent.generatedContractReference=generated?.reference||"";
+    }catch(archiveError){
+      console.warn("Archivage automatique du contrat indisponible",archiveError);
+      toast("Employé créé, mais l'archivage Word du contrat doit être relancé depuis son dossier.","error");
+    }
     await sgdiBackendSaveAndWait();
     openEmployeeContractReviewWindow(agent,{...draft,a:agent});
     toastCenter("CONTRAT VALIDÉ ET EMPLOYÉ CRÉÉ","success");
@@ -31111,7 +31131,7 @@ function adminAccessModuleLabel(module){
   const labels={
     "DRH":"DRH","OPS":"OPS","SUPERVISEUR":"Superviseur terrain","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","AGENDA":"Agenda","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
     dashboard:"Tableau de bord",dossiers:"Dossiers",recrutement:"Recrutement",reserve:"Réserve",candidats_archives:"Candidats archivés","drh/social":"Social DRH",demandes_personnel:"Demandes personnel",demandes_structure:"Demandes structure",
-    contrats:"Contrats",a_contractualiser:"À contractualiser",effectif:"Effectifs",agents:"Agents",fiches:"Fiches de position",badge:"Badges",sites:"Sites",incidents:"Incidents",conges:"Congés",paie:"Paie",rapports:"Rapports",
+    contrats:"Contrats",a_contractualiser:"Contrats à établir",effectif:"Effectifs",agents:"Agents",fiches:"Fiches de position",badge:"Badges",sites:"Sites",incidents:"Incidents",conges:"Congés",paie:"Paie",rapports:"Rapports",
     materiel:"Tableau de bord matériel","materiel/articles":"Articles","materiel/magasins":"Magasins","materiel/fournisseurs":"Fournisseurs","materiel/alertes":"Alertes stock","materiel/dotation":"Dotation employés","materiel/sites-dotation":"Dotation sites","materiel/reversement":"Reversement",
     facturation:"Tableau de bord finances","commercial/devis":"Devis","facturation/factures":"Factures","facturation/paiements":"Paiements","facturation/avances":"Avances","facturation/avoirs":"Avoirs","facturation/caisse":"Caisse","facturation/situation":"Situation client",
     commercial:"Tableau de bord commercial","commercial/prospects":"Prospects","commercial/clients":"Clients","commercial/opportunites":"Opportunités","commercial/visites":"Visites","commercial/catalogue":"Catalogue","commercial/tarifs":"Tarifs","commercial/stats":"Statistiques commerciales",

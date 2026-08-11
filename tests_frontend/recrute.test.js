@@ -33,9 +33,10 @@ test("tableau de bord recrutement: indicateurs et accès rapides", () => {
   assert.match(source, /Contrats à établir/);
 });
 
-test("contrats recrutement: affiche les candidats prêts, pas l'historique des contrats", () => {
-  assert.match(source, /Candidats prêts à contractualiser/);
-  assert.match(source, /function loadContractReadyCandidates\(/);
-  assert.doesNotMatch(source, /function loadContractsList\(/);
-  assert.doesNotMatch(source, />Liste des contrats</);
+test("recrutement: transmet le candidat à la DRH sans créer employé ni contrat", () => {
+  assert.match(source, /function transmitCandidateToDrh\(/);
+  assert.match(source, /marquer-contractualisation/);
+  assert.match(source, /Aucun employé et aucun contrat ne seront créés/);
+  assert.doesNotMatch(source, /onclick="openContractForCandidate\(\$\{item\.id\}\)">Recruter/);
+  assert.doesNotMatch(source, /\{key:"contrat",label:"Contrat"\}/);
 });

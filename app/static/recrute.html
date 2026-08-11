@@ -304,8 +304,7 @@ let searchTimer=null;
 const TABS=[
   {key:"new",label:"Nouvelles candidatures"},
   {key:"reserve",label:"Réserve"},
-  {key:"archive",label:"Archives"},
-  {key:"contrat",label:"Contrat"}
+  {key:"archive",label:"Archives"}
 ];
 const RECRUTE_WILAYAS=[
   ["01","Adrar"],["02","Chlef"],["03","Laghouat"],["04","Oum El Bouaghi"],["05","Batna"],["06","Béjaïa"],["07","Biskra"],["08","Béchar"],["09","Blida"],["10","Bouira"],["11","Tamanrasset"],["12","Tébessa"],["13","Tlemcen"],["14","Tiaret"],["15","Tizi Ouzou"],["16","Alger"],["17","Djelfa"],["18","Jijel"],["19","Sétif"],["20","Saïda"],["21","Skikda"],["22","Sidi Bel Abbès"],["23","Annaba"],["24","Guelma"],["25","Constantine"],["26","Médéa"],["27","Mostaganem"],["28","M'Sila"],["29","Mascara"],["30","Ouargla"],["31","Oran"],["32","El Bayadh"],["33","Illizi"],["34","Bordj Bou Arreridj"],["35","Boumerdès"],["36","El Tarf"],["37","Tindouf"],["38","Tissemsilt"],["39","El Oued"],["40","Khenchela"],["41","Souk Ahras"],["42","Tipaza"],["43","Mila"],["44","Aïn Defla"],["45","Naâma"],["46","Aïn Témouchent"],["47","Ghardaïa"],["48","Relizane"],["49","Timimoun"],["50","Bordj Badji Mokhtar"],["51","Ouled Djellal"],["52","Béni Abbès"],["53","In Salah"],["54","In Guezzam"],["55","Touggourt"],["56","Djanet"],["57","El M'Ghair"],["58","El Meniaa"]
@@ -520,7 +519,7 @@ async function renderRecruitDashboard(refresh=false){
       <div class="dashboard-panel"><h3>Accès rapides</h3>
         <button class="primary" style="width:100%;margin-bottom:9px" onclick="showRecruitSection('candidates');openCandidateForm(null)">+ Ajouter un candidat</button>
         <button class="secondary" style="width:100%;margin-bottom:9px" onclick="showRecruitSection('announcements');openAnnouncementForm()">+ Créer une annonce</button>
-        <button class="secondary" style="width:100%" onclick="showRecruitSection('candidates');switchTab('contrat',true)">Contrats à établir</button>
+        <button class="secondary" style="width:100%" onclick="window.open('https://atlas.irongs.com/#/contrats/a_contractualiser','_blank','noopener')">Ouvrir « Contrats à établir » dans la DRH</button>
       </div>
     </div>`;
 }
@@ -785,7 +784,7 @@ function rowActions(item){
   const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
   if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openCandidateConvocation(${item.id})">Convoquer</button>`);
   if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openCandidateInterview(${item.id})">Entretien</button>`);
-  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openContractForCandidate(${item.id})">Recruter</button>`);
+  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="transmitCandidateToDrh(${item.id})">Recruter</button>`);
   if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
   return `<div class="row-actions">${actions.join("")}</div>`;
 }
@@ -901,6 +900,17 @@ async function markReadyForContract(id){
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error")}
 }
+async function transmitCandidateToDrh(id){
+  const item=tabState[activeTab]?.items?.find(row=>Number(row.id)===Number(id));
+  if(!item)return;
+  const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
+  if(!confirm(`Transmettre le dossier de ${fullName} à la DRH pour établir son premier contrat ?\n\nAucun employé et aucun contrat ne seront créés à cette étape.`))return;
+  try{
+    await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
+    showBanner(`Dossier de ${esc(fullName)} transmis à la DRH. Il est maintenant visible dans « Contrats à établir ».`,"success");
+    await loadTab(activeTab);
+  }catch(error){showBanner(esc(error.message||"Transmission à la DRH impossible"),"error")}
+}
 const CANDIDATE_SECTIONS=["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"];
 const CONTRACT_TYPES=["CDD","CDI","CIDD","CTA","APPRENTISSAGE"];
 let contractCandidate=null;
@@ -986,6 +996,8 @@ function validateContractRequiredFields(){
 }
 async function submitContractForm(){
   if(!contractCandidate)return;
+  await transmitCandidateToDrh(contractCandidate.id);
+  return;
   const errorEl=document.getElementById("contractFormError");
   errorEl.classList.remove("show");
   const missing=validateContractRequiredFields();
