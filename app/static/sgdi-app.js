@@ -36675,7 +36675,7 @@ function renderPointageDashboard(isDrh){
       ${fpqPresents?`<span>🟢 Aujourd'hui : <strong>${fpqPresents}</strong> présent(s) sur ${ag.length}</span>`:""}
     </div>
   </div>`;
-  return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">POINTAGE - TABLEAU DE BORD</h1><p class="text-sm text-slate-500">Synthèse mensuelle et feuille de présence quotidienne · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>${isDrh?"":`<div class="flex gap-2"><button class="topbar-dialogue-btn pointage-dialogue-style-btn pointage-daily-blink-btn" onclick="navigate('pointage/feuille')">Feuille quotidienne</button><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/saisie')">Saisie manuelle</button></div>`}</div>
+  return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">POINTAGE - TABLEAU DE BORD</h1><p class="text-sm text-slate-500">Synthèse mensuelle et feuille de présence quotidienne · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>${isDrh?"":`<div class="flex gap-2"><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/saisie')">Pointage quotidien</button></div>`}</div>
     <div class="grid grid-6 gap-3 mb-5">
       ${kpi("Agents suivis",ag.length,isDrh?"pointage/recap":"pointage/saisie","#043970","Effectif filtré")}
       ${isDrh?"":kpi("Présents aujourd'hui",fpqPresents,"pointage/feuille","#16a34a",fpqRate+"% · "+formatDate(todayDate))}
