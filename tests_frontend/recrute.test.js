@@ -32,3 +32,10 @@ test("tableau de bord recrutement: indicateurs et accès rapides", () => {
   assert.match(source, /Annonces publiées/);
   assert.match(source, /Contrats à établir/);
 });
+
+test("contrats recrutement: affiche les candidats prêts, pas l'historique des contrats", () => {
+  assert.match(source, /Candidats prêts à contractualiser/);
+  assert.match(source, /function loadContractReadyCandidates\(/);
+  assert.doesNotMatch(source, /function loadContractsList\(/);
+  assert.doesNotMatch(source, />Liste des contrats</);
+});

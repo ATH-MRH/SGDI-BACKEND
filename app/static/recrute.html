@@ -233,9 +233,8 @@ tr:last-child td{border-bottom:0}
         </form>
       </div>
       <div class="table-card">
-        <div style="padding:14px 18px;border-bottom:1px solid var(--line);font-weight:900;font-size:14px">Liste des contrats</div>
-        <div id="contractListWrap"><div class="empty">Chargement…</div></div>
-        <div class="pagination" id="contractPagination"></div>
+        <div class="section-head" style="padding:14px 18px;margin:0;border-bottom:1px solid var(--line)"><div><h2 style="font-size:15px">Candidats prêts à contractualiser</h2><p>Uniquement les candidats validés qui attendent l’établissement de leur contrat.</p></div><a class="secondary" href="https://atlas.irongs.com/#/contrats/dashboard" target="_blank" rel="noopener" style="text-decoration:none">Ouvrir DRH → Contrats</a></div>
+        <div id="contractReadyWrap"><div class="empty">Chargement…</div></div>
       </div>
        </div>
       </section>
@@ -619,7 +618,7 @@ function switchTab(tab,force){
   document.getElementById("candidatesView").classList.toggle("hidden",isContract);
   document.getElementById("contractView").classList.toggle("hidden",!isContract);
   document.getElementById("countersRow").classList.toggle("hidden",isContract);
-  if(isContract){loadContractsList();return}
+  if(isContract){loadContractReadyCandidates();return}
   document.getElementById("searchInput").value=tabState[tab].q||"";
   document.getElementById("addCandidateBtn").classList.toggle("hidden",tab!=="new");
   loadTab(tab);
@@ -924,7 +923,7 @@ function updateContractEndDate(){
   document.getElementById("ctEnd").value=addMonths(start,months);
 }
 function openContractForCandidate(id){
-  const item=Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===id);
+  const item=Object.values(tabState).flatMap(s=>s.items).concat(contractReadyCandidates).find(row=>row.id===id);
   if(!item)return;
   contractCandidate=item;
   contractReturnTab=activeTab==="contrat"?contractReturnTab:activeTab;
@@ -1047,66 +1046,37 @@ async function submitContractForm(){
     button.disabled=false;button.textContent="Établir contrat";
   }
 }
-const CONTRACT_PAGE_SIZE=25;
-let contractsState={items:[],page:1};
-function contractTypeLabel(value){
-  return {CDD:"CDD",CDI:"CDI",CIDD:"CIDD",CTA:"CTA",APPRENTISSAGE:"Apprentissage"}[String(value||"").toUpperCase()]||value||"—";
-}
-async function loadContractsList(){
-  document.getElementById("contractListWrap").innerHTML='<div class="empty">Chargement…</div>';
+let contractReadyCandidates=[];
+async function loadContractReadyCandidates(){
+  const wrap=document.getElementById("contractReadyWrap");
+  if(!wrap)return;
+  wrap.innerHTML='<div class="empty">Chargement…</div>';
   try{
-    const empParams=new URLSearchParams();
-    if(activeSociety)empParams.set("society",activeSociety);
-    const [contracts,employees]=await Promise.all([
-      apiFetch("/api/drh/contracts"),
-      apiFetch("/api/drh/employees?"+empParams.toString())
-    ]);
-    const empMap=new Map((Array.isArray(employees)?employees:[]).map(e=>[e.id,e]));
-    contractsState.items=(Array.isArray(contracts)?contracts:[]).map(c=>({...c,employee:empMap.get(c.employee_id)||null})).sort((a,b)=>String(b.created_at||"").localeCompare(String(a.created_at||"")));
-    contractsState.page=1;
-    renderContractsList();
+    const params=new URLSearchParams({status:"a_contractualiser"});if(activeSociety)params.set("society",activeSociety);
+    const result=await apiFetch("/api/drh/candidates?"+params.toString());contractReadyCandidates=Array.isArray(result)?result:[];renderContractReadyCandidates();
   }catch(error){
-    document.getElementById("contractListWrap").innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
+    wrap.innerHTML=`<div class="empty">Erreur de chargement : ${esc(error.message)}</div>`;
   }
 }
-function renderContractsList(){
-  const items=contractsState.items;
+function renderContractReadyCandidates(){
+  const wrap=document.getElementById("contractReadyWrap");if(!wrap)return;
+  const items=contractReadyCandidates;
   if(!items.length){
-    document.getElementById("contractListWrap").innerHTML='<div class="empty">Aucun contrat.</div>';
-    document.getElementById("contractPagination").innerHTML="";
+    wrap.innerHTML='<div class="empty">Aucun candidat en attente de contractualisation.</div>';
     return;
   }
-  const pages=Math.max(Math.ceil(items.length/CONTRACT_PAGE_SIZE),1);
-  if(contractsState.page>pages)contractsState.page=pages;
-  const pageItems=items.slice((contractsState.page-1)*CONTRACT_PAGE_SIZE,contractsState.page*CONTRACT_PAGE_SIZE);
-  document.getElementById("contractListWrap").innerHTML=`<table><thead><tr>
-    <th>Employé</th><th>Poste</th><th>Type</th><th>Début</th><th>Fin</th><th>Salaire net</th><th>Statut</th>
+  wrap.innerHTML=`<table><thead><tr>
+    <th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Validation</th><th>Action</th>
   </tr></thead><tbody>
-  ${pageItems.map(c=>{
-    const emp=c.employee;
-    const name=emp?`${emp.last_name||""} ${emp.first_name||""}`.trim():`Employé #${c.employee_id}`;
-    const code=emp&&emp.code?` · ${esc(emp.code)}`:"";
+  ${items.map(item=>{
+    const name=`${item.last_name||""} ${item.first_name||""}`.trim();
     return `<tr>
-      <td><div class="cand-name">${esc(name)}${code}</div></td>
-      <td>${esc(c.position||"—")}</td>
-      <td><span class="pill pill-indigo">${esc(contractTypeLabel(c.contract_type))}</span></td>
-      <td style="font-size:11px;color:var(--muted)">${esc(c.start_date||"—")}</td>
-      <td style="font-size:11px;color:var(--muted)">${esc(c.end_date||"Indéterminée")}</td>
-      <td>${c.salary_net?formatSalaryDzd(c.salary_net):"—"}</td>
-      <td><span class="pill ${c.status==="actif"?"pill-green":"pill-gray"}">${esc(c.status||"—")}</span></td>
+      <td><div class="cand-name">${esc(name)}</div><div class="cand-email">${esc(item.email||"Dossier candidat")}</div></td>
+      <td>${esc(item.desired_position||"—")}</td><td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td><td>${esc(item.phone||"—")}</td>
+      <td><span class="pill pill-green">Prêt</span></td><td><button class="primary" style="padding:9px 13px" onclick="openContractForCandidate(${Number(item.id)})">Préparer le contrat</button></td>
     </tr>`;
   }).join("")}
   </tbody></table>`;
-  document.getElementById("contractPagination").innerHTML=`
-    <div>${items.length} contrat(s) · page ${contractsState.page}/${pages}</div>
-    <div class="btns">
-      <button ${contractsState.page<=1?"disabled":""} onclick="gotoContractPage(${contractsState.page-1})">Précédent</button>
-      <button ${contractsState.page>=pages?"disabled":""} onclick="gotoContractPage(${contractsState.page+1})">Suivant</button>
-    </div>`;
-}
-function gotoContractPage(page){
-  contractsState.page=page;
-  renderContractsList();
 }
 
 function candidateField(id,value){const el=document.getElementById(id);if(el)el.value=value??""}
