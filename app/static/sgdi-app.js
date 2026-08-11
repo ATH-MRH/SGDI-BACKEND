@@ -34873,7 +34873,9 @@ function openOpsMissionModal(id){
         <div id="ops-mission-employee-info" class="md:col-span-2"></div>
         <div class="md:col-span-2"><label class="label">Lieu de la mission</label><input class="input" name="lieu" value="${escapeHTML(m.lieu||"")}" required/></div>
         <div><label class="label">Date début de la mission</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(m.dateDebut||today())}" required onchange="updateOpsMissionDays()" oninput="updateOpsMissionDays()"/></div>
+        <div><label class="label">Heure de début</label><input class="input" type="time" name="heureDebut" value="${escapeHTML(m.heureDebut||"00:00")}" required/></div>
         <div><label class="label">Date fin de la mission</label><input class="input" type="date" name="dateFin" value="${escapeHTML(m.dateFin||today())}" required onchange="updateOpsMissionDays()" oninput="updateOpsMissionDays()"/></div>
+        <div><label class="label">Heure de fin</label><input class="input" type="time" name="heureFin" value="${escapeHTML(m.heureFin||"23:59")}" required/></div>
         <div class="md:col-span-2"><label class="label">Nombre de jour</label><input class="input bg-slate-50 font-bold" name="nombreJours" value="${escapeHTML(String(missionDayCount(m.dateDebut||today(),m.dateFin||today())||""))}" readonly/><div id="ops-mission-days-hint" class="text-xs text-slate-500 mt-1">${escapeHTML(missionDureeLabel(m)||"")}</div></div>
         <div class="md:col-span-2"><label class="label">Motif de la mission</label><textarea class="input" name="motif" rows="3" required>${escapeHTML(m.motif||m.objet||"")}</textarea></div>
         <div><label class="label">Moyens de transport</label><input class="input" name="transport" value="${escapeHTML(m.transport||"")}" placeholder="Véhicule, taxi, transport personnel..."/></div>
@@ -34885,14 +34887,108 @@ function openOpsMissionModal(id){
     </form>`);
   setTimeout(()=>{updateOpsMissionEmployeeInfo();updateOpsMissionDays()},30);
 }
+function opsMissionEndDate(m){
+  if(!m?.dateFin)return null;
+  const d=new Date(`${m.dateFin}T${m.heureFin||"23:59"}:00`);
+  return isNaN(d)?null:d;
+}
+function opsMissionStatus(m){
+  if(m?.statut==="cloturee")return{key:"cloturee",label:"Clôturée",cls:"pill-gray"};
+  const now=new Date(),start=m?.dateDebut?new Date(`${m.dateDebut}T${m.heureDebut||"00:00"}:00`):null,end=opsMissionEndDate(m);
+  if(start&&!isNaN(start)&&start>now)return{key:"planifiee",label:"Planifiée",cls:"pill-amber"};
+  if(end&&end<now)return{key:"terminee",label:"À clôturer",cls:"pill-red"};
+  return{key:"encours",label:"En cours",cls:"pill-green"};
+}
+function opsMissionNeedsEndAlert(m){
+  if(!m||m.statut==="cloturee"||m.extensionDeclinedAt)return false;
+  const end=opsMissionEndDate(m);if(!end)return false;
+  const remaining=end.getTime()-Date.now();
+  return remaining>=0&&remaining<=86400000;
+}
+function opsMissionJournalRowsHTML(m,readOnly){
+  const rows=(Array.isArray(m.journal)?m.journal:[]).slice().sort((a,b)=>(String(b.date||"")+String(b.heure||"")).localeCompare(String(a.date||"")+String(a.heure||"")));
+  if(!rows.length)return`<tr><td colspan="6" class="p-8 text-center text-slate-500">Aucun événement enregistré pour cette mission.</td></tr>`;
+  return rows.map(row=>`<tr><td class="text-xs whitespace-nowrap">${formatDate(row.date)}</td><td class="font-mono text-xs">${escapeHTML(row.heure||"—")}</td><td><span class="pill ${row.type==="Urgence"?"pill-red":row.type==="Incident"?"pill-amber":"pill-gray"}">${escapeHTML(row.type||"Information")}</span></td><td style="white-space:pre-wrap">${escapeHTML(row.detail||"")}</td><td class="text-xs text-slate-500">${escapeHTML(row.auteur||"—")}</td><td class="text-right">${readOnly?"":`<button class="btn btn-ghost text-xs" type="button" onclick="deleteOpsMissionJournalEntry('${escapeHTML(m.id)}','${escapeHTML(row.id)}')">Supprimer</button>`}</td></tr>`).join("");
+}
+function openOpsMissionDetail(id){
+  const m=(db.missions||[]).find(x=>String(x.id)===String(id));
+  if(!m){toast("Mission introuvable","error");return}
+  if(!Array.isArray(m.journal))m.journal=[];
+  if(!Array.isArray(m.prolongations))m.prolongations=[];
+  const a=(db.agents||[]).find(x=>String(x.id)===String(m.agentId))||{};
+  const full=((a.nom||"")+" "+(a.prenom||"")).trim()||m.agentName||"—";
+  const status=opsMissionStatus(m),readOnly=isOpsSupervisorReadOnlySession();
+  const alert=opsMissionNeedsEndAlert(m)?`<div class="p-4 rounded-xl mb-4 flex items-center justify-between gap-3 flex-wrap" style="background:#fff7ed;border:1px solid #fb923c"><div><div class="font-black text-orange-800">⚠ FIN DE MISSION DANS MOINS DE 24 HEURES</div><div class="text-sm text-orange-700">Fin prévue le ${formatDate(m.dateFin)} à ${escapeHTML(m.heureFin||"23:59")}. Voulez-vous prolonger la mission ?</div></div>${readOnly?"":`<div class="flex gap-2"><button class="btn btn-primary" onclick="openOpsMissionExtension('${escapeHTML(m.id)}')">OUI</button><button class="btn btn-ghost" onclick="declineOpsMissionExtension('${escapeHTML(m.id)}')">NON</button></div>`}</div>`:"";
+  openModal(`<div class="flex items-start justify-between gap-4 mb-4 flex-wrap"><div><div class="text-xs uppercase font-black tracking-widest text-slate-500">Suivi opérationnel</div><h2 class="text-2xl font-black">${escapeHTML(m.numero||"MISSION OPS")}</h2><div class="text-sm text-slate-500">${escapeHTML(full)} · ${escapeHTML(a.matricule||"")} · ${escapeHTML(m.lieu||"—")}</div></div><div class="flex gap-2 items-center"><span class="pill ${status.cls}">${status.label}</span><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div></div>
+    ${alert}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4"><div class="card p-3"><div class="text-xs text-slate-500 uppercase font-bold">Début</div><div class="font-black">${formatDate(m.dateDebut)} · ${escapeHTML(m.heureDebut||"00:00")}</div></div><div class="card p-3"><div class="text-xs text-slate-500 uppercase font-bold">Fin prévue</div><div class="font-black">${formatDate(m.dateFin)} · ${escapeHTML(m.heureFin||"23:59")}</div></div><div class="card p-3"><div class="text-xs text-slate-500 uppercase font-bold">Responsable</div><div class="font-black">${escapeHTML(m.responsable||session?.username||"OPS")}</div></div><div class="card p-3"><div class="text-xs text-slate-500 uppercase font-bold">Prolongations</div><div class="font-black">${m.prolongations.length}</div></div></div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section class="lg:col-span-2 card overflow-hidden"><div class="p-4 border-b flex justify-between items-center"><div><h3 class="font-black">Déroulement de la mission</h3><div class="text-xs text-slate-500">Journal chronologique, horodaté et attribué</div></div></div><div class="overflow-auto" style="max-height:48vh"><table><thead><tr><th>Date</th><th>Heure</th><th>Type</th><th>Détail</th><th>Auteur</th><th></th></tr></thead><tbody>${opsMissionJournalRowsHTML(m,readOnly)}</tbody></table></div></section>
+      <aside class="card p-4">${readOnly?opsSupervisorReadOnlyNoticeHTML():`<h3 class="font-black mb-3">Ajouter un événement</h3><form onsubmit="event.preventDefault();addOpsMissionJournalEntry('${escapeHTML(m.id)}',this)"><div class="grid grid-cols-2 gap-2"><div><label class="label">Date</label><input class="input" type="date" name="date" value="${today()}" required></div><div><label class="label">Heure</label><input class="input" type="time" name="heure" value="${new Date().toTimeString().slice(0,5)}" required></div></div><label class="label mt-3">Nature</label><select class="select" name="type"><option>Information</option><option>Instruction</option><option>Incident</option><option>Urgence</option></select><label class="label mt-3">Détail opérationnel</label><textarea class="input" name="detail" rows="6" required placeholder="Décrivez précisément l'action, le constat ou l'instruction..."></textarea><button class="btn btn-primary w-full mt-3">Ajouter au journal</button></form><div class="border-t mt-5 pt-4 grid gap-2"><button class="btn btn-secondary" onclick="openOpsMissionExtension('${escapeHTML(m.id)}')">Prolonger la mission</button>${m.statut==="cloturee"?"":`<button class="btn btn-primary" style="background:#166534" onclick="openOpsMissionClosure('${escapeHTML(m.id)}')">Clôturer la mission</button>`}</div>`}</aside>
+    </div>`);
+  setTimeout(()=>{const modal=document.querySelector("#modal-host .modal");if(modal)modal.style.cssText="width:calc(100vw - 32px);max-width:none;height:calc(100vh - 32px);overflow:auto;padding:24px"},0);
+}
+async function addOpsMissionJournalEntry(id,form){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : suivi mission non autorisé."))return;
+  const m=(db.missions||[]).find(x=>String(x.id)===String(id));if(!m)return;
+  const fd=new FormData(form),detail=String(fd.get("detail")||"").trim();if(!detail)return;
+  if(!Array.isArray(m.journal))m.journal=[];
+  m.journal.push({id:uid("mission_event"),date:String(fd.get("date")||today()),heure:String(fd.get("heure")||""),type:String(fd.get("type")||"Information"),detail,auteur:session?.username||"OPS",createdAt:new Date().toISOString()});
+  m.updatedAt=new Date().toISOString();
+  if(!(await saveDBAndWaitToast("Événement de mission non confirmé")))return;
+  toast("Événement ajouté au journal","success");openOpsMissionDetail(id);
+}
+async function deleteOpsMissionJournalEntry(id,eventId){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : suppression non autorisée."))return;
+  if(!confirm("Supprimer cette ligne du journal ?"))return;
+  const m=(db.missions||[]).find(x=>String(x.id)===String(id));if(!m)return;
+  m.journal=(m.journal||[]).filter(x=>String(x.id)!==String(eventId));
+  if(!(await saveDBAndWaitToast("Suppression non confirmée")))return;openOpsMissionDetail(id);
+}
+function openOpsMissionExtension(id){
+  const m=(db.missions||[]).find(x=>String(x.id)===String(id));if(!m)return;
+  openModal(`<h3 class="font-black text-xl mb-1">Prolonger la mission</h3><p class="text-sm text-slate-500 mb-4">La période précédente sera conservée dans l'historique.</p><form onsubmit="event.preventDefault();saveOpsMissionExtension('${escapeHTML(id)}',this)"><div class="grid grid-cols-2 gap-3"><div><label class="label">Nouvelle date de fin</label><input class="input" type="date" name="dateFin" min="${escapeHTML(m.dateFin||today())}" value="${escapeHTML(m.dateFin||today())}" required></div><div><label class="label">Nouvelle heure de fin</label><input class="input" type="time" name="heureFin" value="${escapeHTML(m.heureFin||"23:59")}" required></div></div><label class="label mt-3">Motif de la prolongation</label><textarea class="input" name="motif" rows="4" required></textarea><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsMissionDetail('${escapeHTML(id)}')">Annuler</button><button class="btn btn-primary">Confirmer la prolongation</button></div></form>`);
+}
+async function saveOpsMissionExtension(id,form){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : prolongation non autorisée."))return;
+  const m=(db.missions||[]).find(x=>String(x.id)===String(id));if(!m)return;
+  const fd=new FormData(form),dateFin=String(fd.get("dateFin")||""),heureFin=String(fd.get("heureFin")||"");
+  const nextEnd=new Date(`${dateFin}T${heureFin}:00`),currentEnd=opsMissionEndDate(m);
+  if(isNaN(nextEnd)||currentEnd&&nextEnd<=currentEnd){toast("La nouvelle fin doit être postérieure à la fin actuelle","error");return}
+  if(!Array.isArray(m.prolongations))m.prolongations=[];if(!Array.isArray(m.journal))m.journal=[];
+  const motif=String(fd.get("motif")||"").trim(),now=new Date().toISOString();
+  m.prolongations.push({id:uid("extension"),ancienneDateFin:m.dateFin,ancienneHeureFin:m.heureFin||"23:59",nouvelleDateFin:dateFin,nouvelleHeureFin:heureFin,motif,auteur:session?.username||"OPS",createdAt:now});
+  m.journal.push({id:uid("mission_event"),date:today(),heure:new Date().toTimeString().slice(0,5),type:"Instruction",detail:`Mission prolongée du ${formatDate(m.dateFin)} ${m.heureFin||"23:59"} au ${formatDate(dateFin)} ${heureFin}. Motif : ${motif}`,auteur:session?.username||"OPS",createdAt:now});
+  m.dateFin=dateFin;m.heureFin=heureFin;m.nombreJours=missionDayCount(m.dateDebut,m.dateFin);m.duree=missionDureeLabel(m);m.extensionDeclinedAt="";m.updatedAt=now;
+  if(!(await saveDBAndWaitToast("Prolongation non confirmée")))return;toast("Mission prolongée","success");openOpsMissionDetail(id);renderSidebar();
+}
+async function declineOpsMissionExtension(id){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : décision non autorisée."))return;
+  const m=(db.missions||[]).find(x=>String(x.id)===String(id));if(!m)return;
+  const now=new Date().toISOString();m.extensionDeclinedAt=now;if(!Array.isArray(m.journal))m.journal=[];
+  m.journal.push({id:uid("mission_event"),date:today(),heure:new Date().toTimeString().slice(0,5),type:"Information",detail:"Prolongation refusée. La mission prendra fin à la date prévue.",auteur:session?.username||"OPS",createdAt:now});
+  if(!(await saveDBAndWaitToast("Décision non confirmée")))return;toast("Fin de mission maintenue","success");openOpsMissionDetail(id);
+}
+function openOpsMissionClosure(id){
+  openModal(`<h3 class="font-black text-xl mb-1">Clôturer la mission</h3><p class="text-sm text-slate-500 mb-4">Le compte rendu final sera conservé dans le journal opérationnel.</p><form onsubmit="event.preventDefault();closeOpsMission('${escapeHTML(id)}',this)"><label class="label">Résultat</label><select class="select" name="resultat" required><option value="accomplie">Mission accomplie</option><option value="partielle">Partiellement accomplie</option><option value="non_accomplie">Non accomplie</option></select><label class="label mt-3">Compte rendu final</label><textarea class="input" name="rapport" rows="7" required></textarea><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="openOpsMissionDetail('${escapeHTML(id)}')">Annuler</button><button class="btn btn-primary">Valider la clôture</button></div></form>`);
+}
+async function closeOpsMission(id,form){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : clôture non autorisée."))return;
+  const m=(db.missions||[]).find(x=>String(x.id)===String(id));if(!m)return;
+  const fd=new FormData(form),now=new Date().toISOString(),resultat=String(fd.get("resultat")||"accomplie"),rapport=String(fd.get("rapport")||"").trim();if(!rapport)return;
+  m.statut="cloturee";m.cloture={resultat,rapport,auteur:session?.username||"OPS",date:now};if(!Array.isArray(m.journal))m.journal=[];
+  m.journal.push({id:uid("mission_event"),date:today(),heure:new Date().toTimeString().slice(0,5),type:"Information",detail:`Clôture — ${resultat.replaceAll("_"," ")} : ${rapport}`,auteur:session?.username||"OPS",createdAt:now});m.updatedAt=now;
+  if(!(await saveDBAndWaitToast("Clôture non confirmée")))return;toast("Mission clôturée","success");openOpsMissionDetail(id);renderSidebar();
+}
 function renderOpsMissions(view,arg){
   if(!db.missions)db.missions=[];
   const opsReadOnly=isOpsSupervisorReadOnlySession();
   const soc=currentStructureSocieteFilter();
   const missions=(db.missions||[]).filter(m=>!soc||m.societe===soc).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
-  const activeMissions=missions.filter(x=>(!x.dateFin||x.dateFin>=today())&&(!x.dateDebut||x.dateDebut<=today()));
+  const activeMissions=missions.filter(x=>opsMissionStatus(x).key==="encours");
   const plannedMissions=missions.filter(x=>x.dateDebut&&x.dateDebut>today());
   const urgentMissions=missions.filter(x=>/urgent|intervention/i.test([x.motif,x.nature,x.objet,x.consignes].join(" ")));
+  const endingMissions=missions.filter(opsMissionNeedsEndAlert);
   const withEmployee=missions.filter(x=>x.agentId).length;
   const missionKpi=(label,n,color,sub)=>`<div class="card p-4 text-left" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Suivi missions"}</div></div>`;
   view.innerHTML=`<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
@@ -34900,6 +34996,7 @@ function renderOpsMissions(view,arg){
     ${opsReadOnly?"":`<button class="btn btn-secondary" onclick="openOpsMissionModal()">＋ Nouvelle mission</button>`}
   </div>
   ${opsSupervisorReadOnlyNoticeHTML()}
+  ${endingMissions.length?`<div class="card p-4 mb-4" style="background:#fff7ed;border:1px solid #fb923c"><div class="font-black text-orange-800 mb-2">⚠ ${endingMissions.length} mission${endingMissions.length>1?"s":""} se termine${endingMissions.length>1?"nt":""} dans moins de 24 heures</div><div class="flex gap-2 flex-wrap">${endingMissions.map(m=>`<button class="btn btn-ghost text-xs" onclick="openOpsMissionDetail('${escapeHTML(m.id)}')">${escapeHTML(m.numero||"Mission")} · Décider OUI/NON</button>`).join("")}</div></div>`:""}
   <div class="grid grid-4 gap-3 mb-5">
     ${missionKpi("Total missions",missions.length,"#043970","Toutes les missions")}
     ${missionKpi("En cours",activeMissions.length,"#16a34a","Actives aujourd'hui")}
@@ -34909,9 +35006,13 @@ function renderOpsMissions(view,arg){
   <div class="card p-5 overflow-hidden">
     <div class="flex items-center justify-between mb-3 gap-2 flex-wrap"><h3 class="font-black">Liste des missions OPS</h3><span class="pill">${missions.length} mission${missions.length>1?"s":""}</span></div>
     <table><thead><tr><th>N°</th><th>Employé</th><th>Lieu</th><th>Début</th><th>Fin</th><th>Motif</th><th class="text-right">Actions</th></tr></thead><tbody>
-      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—";return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}</td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}</td><td class="text-xs">${formatDate(x.dateFin)}</td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button></div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
+      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—",status=opsMissionStatus(x);return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}<div class="mt-1"><span class="pill ${status.cls}">${status.label}</span></div></td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}<br><span class="text-slate-500">${escapeHTML(x.heureDebut||"00:00")}</span></td><td class="text-xs">${formatDate(x.dateFin)}<br><span class="text-slate-500">${escapeHTML(x.heureFin||"23:59")}</span></td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-primary text-xs" onclick="openOpsMissionDetail('${escapeHTML(x.id)}')">Détail</button><button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button></div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
     </tbody></table>
   </div>`;
+  if(endingMissions.length){
+    const alertKey="ops-mission-ending-"+endingMissions.map(m=>m.id).sort().join("-");
+    if(!sessionStorage.getItem(alertKey))setTimeout(()=>{sessionStorage.setItem(alertKey,"1");toast(`${endingMissions.length} mission${endingMissions.length>1?"s se terminent":" se termine"} dans moins de 24 heures`,"warning")},150);
+  }
   if(arg&&!opsReadOnly)setTimeout(()=>openOpsMissionModal(arg),50);
 }
 async function saveOpsMission(id,form,openDoc){
@@ -34933,9 +35034,13 @@ async function saveOpsMission(id,form,openDoc){
   m.agentName=a?((a.nom||"")+" "+(a.prenom||"")).trim():(m.agentName||"");
   m.lieu=(fd.get("lieu")||"").trim();
   m.dateDebut=fd.get("dateDebut")||"";
+  m.heureDebut=fd.get("heureDebut")||m.heureDebut||"00:00";
   m.dateFin=fd.get("dateFin")||"";
+  m.heureFin=fd.get("heureFin")||m.heureFin||"23:59";
   const missionDays=missionDayCount(m.dateDebut,m.dateFin);
   if(!missionDays){toast("Date fin de mission invalide","error");if(docWindow)docWindow.close();return}
+  const missionStart=new Date(`${m.dateDebut}T${m.heureDebut}:00`),missionEnd=new Date(`${m.dateFin}T${m.heureFin}:00`);
+  if(isNaN(missionStart)||isNaN(missionEnd)||missionEnd<=missionStart){toast("La fin de mission doit être postérieure au début","error");if(docWindow)docWindow.close();return}
   m.nombreJours=missionDays;
   m.motif=(fd.get("motif")||"").trim();
   m.objet=m.motif;

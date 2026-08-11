@@ -20,6 +20,9 @@ const { loadError, T, window } = loadSgdiApp([
   'employeeFromApi',
   'applyAssignmentsToEmployees',
   'isOpsSupervisorReadOnlySession',
+  'opsMissionEndDate',
+  'opsMissionStatus',
+  'opsMissionNeedsEndAlert',
 ]);
 
 test('sgdi-app.js se charge et expose les fonctions OPS', () => {
@@ -28,6 +31,20 @@ test('sgdi-app.js se charge et expose les fonctions OPS', () => {
   for (const name of ['sitePrimarySociete', 'siteMatchesSociete', 'siteFromApi']) {
     assert.ok(t[name], `${name} introuvable`);
   }
+});
+
+test('missions OPS: statut et alerte de fin dans les 24 heures', () => {
+  const t = T();
+  const soon = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  const dateFin = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(soon.getDate()).padStart(2, '0')}`;
+  const heureFin = `${String(soon.getHours()).padStart(2, '0')}:${String(soon.getMinutes()).padStart(2, '0')}`;
+  const mission = { dateDebut: '2020-01-01', dateFin, heureFin };
+  assert.strictEqual(t.opsMissionStatus(mission).key, 'encours');
+  assert.strictEqual(t.opsMissionNeedsEndAlert(mission), true);
+  mission.extensionDeclinedAt = new Date().toISOString();
+  assert.strictEqual(t.opsMissionNeedsEndAlert(mission), false, 'un refus explicite acquitte l’alerte');
+  mission.statut = 'cloturee';
+  assert.strictEqual(t.opsMissionStatus(mission).key, 'cloturee');
 });
 
 // ── Rattachement d'un site à sa société ──────────────────────────────────────
