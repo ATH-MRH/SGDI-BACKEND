@@ -25643,6 +25643,15 @@ function renderPaie(view,sub,arg){
   const lines=agents.map(a=>({a,c:paieCalcForAgent(a,ym)}));
   const sum=k=>lines.reduce((s,x)=>s+(Number(x.c[k])||0),0);
   const anomalies=lines.filter(x=>x.c.brutCotisable<x.c.assietteCnasMinimum||!x.c.pointageDisponible||!(x.c.brutBase>0));
+  const salairesNets=lines.map(x=>Number(x.c.netAPayer)||0).filter(value=>value>0);
+  const salaireMoyenNet=salairesNets.length?Math.round(salairesNets.reduce((total,value)=>total+value,0)/salairesNets.length):0;
+  const tranchesSalairePaie=[
+    ["< 30k",salairesNets.filter(value=>value<30000).length],
+    ["30k-45k",salairesNets.filter(value=>value>=30000&&value<45000).length],
+    ["45k-60k",salairesNets.filter(value=>value>=45000&&value<60000).length],
+    ["60k-80k",salairesNets.filter(value=>value>=60000&&value<80000).length],
+    ["80k+",salairesNets.filter(value=>value>=80000).length]
+  ];
   const paieSocieteField=lockedSoc
     ? `<div><label class="label">Société</label><div class="input bg-slate-50 font-bold">${escapeHTML(lockedSoc)}</div></div>`
     : `<div><label class="label">Société</label><select class="select" onchange="setPaieFilter('Societe',this.value)"><option value="">Toutes</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${s}</option>`).join("")}</select></div>`;
@@ -25668,6 +25677,10 @@ function renderPaie(view,sub,arg){
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">IRG retenu</div><div class="text-2xl font-black text-purple-700">${money(sum("irg"))}</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Jours abs. pointage</div><div class="text-2xl font-black text-red-700">${qty(sum("joursAbsencePaie"))}</div><div class="text-[10px] text-slate-500">A inclut AB</div></div>
     <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Alertes SNMG</div><div class="text-2xl font-black ${anomalies.length?"text-red-700":"text-emerald-700"}">${anomalies.length}</div></div>
+  </div>
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
+    <div class="card p-5"><div class="text-xs text-slate-500 uppercase">Salaire moyen</div><div class="text-3xl font-black mt-2" style="color:#0f766e">${money(salaireMoyenNet)}</div><div class="text-xs text-slate-500 mt-2">Net à payer · ${salairesNets.length} salarié(s) · ${escapeHTML(paieMonthLabel(ym))}</div></div>
+    <div class="xl:col-span-2">${drhChartCard("Distribution salaire","Tranches du net à payer · "+paieMonthLabel(ym),drhSvgStacked(tranchesSalairePaie))}</div>
   </div>
   ${anomalies.length?`<div class="card p-4 mb-4" style="background:#fef2f2;border:2px solid #dc2626"><div class="font-black text-red-700 mb-2">Alerte SNMG</div><div class="text-sm text-red-700">${anomalies.length} agent(s) ont un brut cotisable inférieur au SNMG ${money(cfg.snmg)}.</div></div>`:""}
   ${paieOptimizerHTML(agents,ym)}
@@ -30812,9 +30825,6 @@ function renderDRHStats(view){
     ["Suspendus",ag.filter(a=>a.statut==="suspendu").length],
     ["Sortants",ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length]
   ];
-  const salaires=ag.filter(a=>a.statut==="actif").map(a=>Number(a.salaire||a.salaireNet)||0).filter(s=>s>0);
-  const masseSal=salaires.reduce((s,n)=>s+n,0);
-  const moyenneSal=salaires.length?Math.round(masseSal/salaires.length):0;
   const seriesEffectif=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)).length);
   const seriesRecrutements=months.map(m=>ag.filter(a=>monthOf(a.dateRecrutement)===m).length);
   const seriesDeparts=months.map(m=>ag.filter(a=>monthOf(a.dateSortie||a.departAt||a.updatedAt)===m&&["sortant","demissionne","licencie"].includes(a.statut)).length);
@@ -30825,13 +30835,6 @@ function renderDRHStats(view){
   const seriesIncidents=months.map(m=>incidents.filter(i=>monthOf(i.date||i.createdAt)===m).length);
   const seriesContrats=months.map(m=>ag.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
   const seriesMasse=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)&&a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire||a.salaireNet)||0),0));
-  const trancheRows=[
-    ["< 30k",salaires.filter(s=>s<30000).length],
-    ["30k-45k",salaires.filter(s=>s>=30000&&s<45000).length],
-    ["45k-60k",salaires.filter(s=>s>=45000&&s<60000).length],
-    ["60k-80k",salaires.filter(s=>s>=60000&&s<80000).length],
-    ["80k+",salaires.filter(s=>s>=80000).length]
-  ];
   const topFonc=Object.entries(parFonc).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const operationalAg=drhOperationalAgents(ag);
   const topSites=drhSiteBucketsFromAgents(ag,sites).map(r=>[r.label,r.actif]).slice(0,8);
@@ -30867,10 +30870,9 @@ function renderDRHStats(view){
   const kpi=(label,value,sub,color)=>`<div class="card p-4"><div class="text-xs text-slate-500 uppercase">${escapeHTML(label)}</div><div class="text-3xl font-black mt-1" style="color:${color}">${value}</div><div class="text-xs text-slate-500 mt-1">${escapeHTML(sub||"")}</div></div>`;
   view.innerHTML=`<div class="mb-5"><h1 class="text-2xl font-black sentence-case-title">Statistiques RH</h1><p class="text-sm text-slate-500">Tableau analytique multi-graphes · ${drhActiveSocieteFilter()?escapeHTML(drhActiveSocieteFilter()):"Toutes sociétés autorisées"}</p></div>
     ${drhTabs("stats")}
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+    <div class="grid grid-cols-2 gap-3 mb-4">
       ${kpi("Effectif total",ag.length,"Employés visibles","#043970")}
       ${kpi("Fonctions",Object.keys(parFonc).length,"Postes distincts","#047857")}
-      ${kpi("Salaire moyen",money(moyenneSal),"CDD actifs","#0f766e")}
     </div>
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
       ${drhChartCard("Courbe effectif","Évolution mensuelle",drhSvgLine(seriesEffectif,months,"#043970",true))}
@@ -30885,7 +30887,6 @@ function renderDRHStats(view){
       ${drhChartCard("Barres horizontales par fonction","Top fonctions",drhBars(topFonc,"#047857"))}
       ${drhChartCard("Répartition par catégorie","Catégories RH",drhSvgDonut(Object.entries(parCat)))}
       ${drhChartCard("Répartition par thème","Thèmes RH",drhSvgDonut(Object.entries(parTheme)))}
-      ${drhChartCard("Distribution salaire","Tranches de rémunération",drhSvgStacked(trancheRows))}
       ${drhChartCard("Échéances contrats","Fins de contrat par mois",drhSvgLine(seriesContrats,months,"#dc2626",true))}
       ${drhChartCard("Affectation sites","Top sites par effectif",topSites.length?drhBars(topSites,"#0891b2"):`<div class="text-sm text-slate-400">Aucune affectation enregistrée.</div>`)}
       ${drhChartCard("Statistiques par client","Effectif rattaché par client",topClients.length?drhBars(topClients,"#7c3aed"):`<div class="text-sm text-slate-400">Aucun client renseigné.</div>`)}
