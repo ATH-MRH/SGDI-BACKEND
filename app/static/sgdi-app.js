@@ -11030,6 +11030,12 @@ function employeeValidContractBlockReason(a){
   if(type==="CDI"&&a.dateRecrutement)return `Impossible de créer un nouveau contrat : ${((a.nom||"")+" "+(a.prenom||"")).trim()||"cet employé"} a déjà un CDI en cours depuis le ${formatDate(a.dateRecrutement)}.`;
   return "";
 }
+function employeeNewContractTarget(agentId){
+  const requested=String(agentId==null?"":agentId).trim();
+  if(requested)return findEmployeeByRef(requested)||null;
+  const targets=rhEffectifActionTargets();
+  return targets.find(a=>!employeeValidContractBlockReason(a))||targets[0]||null;
+}
 function employeeNewContractDefaults(a){
   const site=directContractSiteFromEmployee(a);
   const start=a?.dateRecrutement||today();
@@ -11506,8 +11512,8 @@ function openEmployeeNewContractModal(agentId,options){
   if(guardOpsSupervisorMutation("contrat","Accès superviseur OPS : création contrat non autorisée."))return;
   if(!canUseEmployeeActionWorkflows()){toast("Nouveau contrat non autorisé depuis ce module","error");return}
   const allowExistingContract=!!(options&&options.allowExistingContract);
-  const selected=findEmployeeByRef(agentId)||rhEffectifActionTargets()[0];
-  if(!selected){toast("Aucun employé disponible","error");return}
+  const selected=employeeNewContractTarget(agentId);
+  if(!selected){toast(agentId?"Employé de la fiche introuvable":"Aucun employé disponible","error");return}
   const contractBlock=employeeValidContractBlockReason(selected);
   if(contractBlock&&!allowExistingContract){toast(contractBlock,"error");return}
   const p=employeeNewContractDefaults(selected);
@@ -13977,7 +13983,7 @@ function renderAgentForm(view,id){
       ${showHabilitations?`<div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="habilitations" style="display:none"><fieldset class="rh-panel-fieldset"><legend>Habilitations</legend><div class="grid grid-2" style="margin-top:10px">
         ${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>{const v=a.habilitations?.[k]||"non";return`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="ahab_${k}" value="oui" ${v==="oui"?"checked":""} ${locked?"disabled":""}/> Oui</label><label class="radio-pill"><input type="radio" name="ahab_${k}" value="non" ${v!=="oui"?"checked":""} ${locked?"disabled":""}/> Non</label></div></div>`}).join("")}
       </div><div class="mt-3 text-sm text-slate-500">Langues : ${(a.langues||[]).map(l=>`<span class="pill pill-blue">${escapeHTML(l)}</span>`).join(" ")||"—"}</div></fieldset></div>`:""}
-      <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><fieldset class="rh-panel-fieldset rh-contract-fieldset"><legend>RH / contrat</legend><div class="rh-contract-toolbar"><span>Gestion du contrat de l’employé</span><div class="rh-contract-actions">${adminFicheContext?`<button type="button" class="btn text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">✏ Modifier</button>`:(isDrhFicheContext()?`<button type="button" class="btn text-xs" onclick="openDrhContractModal('${a.id}')">✏ Modifier</button>`:"")}<button type="button" class="btn text-xs" onclick="openAvenantModal('general')">＋ Avenant</button><button type="button" class="btn text-xs" onclick="openEmployeeNewContractModal()">＋ Contrat</button></div></div><div class="grid grid-6 rh-contract-grid">
+        <div class="card p-5 mb-4 rh-erp-panel" data-fp-tab-panel="contrat" style="display:none"><fieldset class="rh-panel-fieldset rh-contract-fieldset"><legend>RH / contrat</legend><div class="rh-contract-toolbar"><span>Gestion du contrat de l’employé</span><div class="rh-contract-actions">${adminFicheContext?`<button type="button" class="btn text-xs" onclick="openAdminEmployeeContractModal('${a.id}')">✏ Modifier</button>`:(isDrhFicheContext()?`<button type="button" class="btn text-xs" onclick="openDrhContractModal('${a.id}')">✏ Modifier</button>`:"")}<button type="button" class="btn text-xs" onclick="openAvenantModal('general','${escapeHTML(a.id)}')">＋ Avenant</button><button type="button" class="btn text-xs" onclick="openEmployeeNewContractModal('${escapeHTML(a.id)}')">＋ Contrat</button></div></div><div class="grid grid-6 rh-contract-grid">
         <div class="col-span-6"><label class="label">Fonction de l'employé</label><select class="select" name="fonction" ${locked?"disabled":""}><option value="">— Choisir fonction —</option>${newContractPosteOptions(a.fonction||a.posteContrat||"").replace('<option value="">— Choisir fonction —</option>',"")}</select></div>
         <div class="col-span-3"><label class="label">Type de contrat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(cleanContractType(a.typeContrat)||ficheContractDocumentType||"CDD")}" readonly/>${locked?"":`<input type="hidden" name="typeContrat" value="${escapeHTML(cleanContractType(a.typeContrat)||"CDD")}"/>`}</div>
         <div class="col-span-3"><label class="label">Salaire net</label><input class="input" type="text" inputmode="decimal" name="salaireNet" value="${formatMoneyInputValue(a.salaireNet||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)" ${locked?"disabled":""}/></div>

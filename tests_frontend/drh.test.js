@@ -23,6 +23,8 @@ const { loadError, T } = loadSgdiApp([
   'candidatIsArchived',
   'candidatIsRecruited',
   'candidatIsActive',
+  'employeeNewContractTarget',
+  'employeeValidContractBlockReason',
 ]);
 
 test('sgdi-app.js se charge et expose les fonctions DRH', () => {
@@ -31,6 +33,16 @@ test('sgdi-app.js se charge et expose les fonctions DRH', () => {
   for (const name of ['drhLeaveEntitlement', 'nextMatricule', 'candidatAgeAtSave']) {
     assert.ok(t[name], `${name} introuvable`);
   }
+});
+
+test('nouveau contrat: un identifiant explicite ne retombe jamais sur un autre employé', () => {
+  const t = T();
+  const achour = { id: 'achour', nom: 'ACHOUR', prenom: 'ABDELKADER', dateFinContrat: '2099-10-09', statut: 'actif' };
+  const bilel = { id: 'bilel', nom: 'GOURMIDA', prenom: 'BILEL', dateFinContrat: '2020-06-30', statut: 'actif' };
+  t.setDb({ agents: [achour, bilel] });
+  assert.strictEqual(t.employeeNewContractTarget('bilel').id, 'bilel');
+  assert.strictEqual(t.employeeNewContractTarget('inconnu'), null, 'identifiant inconnu: aucun repli sur ACHOUR');
+  assert.strictEqual(t.employeeNewContractTarget().id, 'bilel', 'depuis Contrats, choisir un employé éligible');
 });
 
 // ── Congés acquis : 2,5 jours par mois ───────────────────────────────────────
