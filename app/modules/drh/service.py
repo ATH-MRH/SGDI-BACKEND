@@ -291,6 +291,10 @@ def list_candidates_page(
     allowed_societies: list[str] | None = None,
     mode: str | None = None,
     q: str | None = None,
+    desired_position: str | None = None,
+    recruiter_opinion: str | None = None,
+    sort_key: str | None = None,
+    sort_direction: str | None = None,
     page: int = 1,
     page_size: int = 25,
 ) -> dict[str, Any]:
@@ -312,6 +316,27 @@ def list_candidates_page(
     query = str(q or "").strip()
     if query:
         rows = [row for row in rows if _candidate_matches_text(row, query)]
+    if desired_position:
+        rows = [row for row in rows if str(row.desired_position or "Poste non renseigné") == desired_position]
+    if recruiter_opinion:
+        rows = [
+            row for row in rows
+            if str((row.data if isinstance(row.data, dict) else {}).get("avisDecision") or "Non évalué") == recruiter_opinion
+        ]
+    key = str(sort_key or "").strip().lower()
+    if key:
+        def candidate_sort_value(row: Candidate):
+            data = row.data if isinstance(row.data, dict) else {}
+            return {
+                "candidate": f"{row.last_name or ''} {row.first_name or ''}",
+                "position": row.desired_position or "",
+                "society": row.society or "",
+                "phone": row.phone or "",
+                "status": row.status or "",
+                "date": row.created_at or datetime.min,
+                "avis": data.get("avisDecision") or "Non évalué",
+            }.get(key, row.id)
+        rows.sort(key=candidate_sort_value, reverse=str(sort_direction or "asc").lower() == "desc")
 
     page = max(int(page or 1), 1)
     page_size = min(max(int(page_size or 25), 5), 100)
@@ -590,6 +615,23 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
     values = payload.model_dump(exclude_unset=True)
     data = values.get("data")
     if isinstance(data, dict):
+        # Ces marqueurs sont exclusivement produits par les endpoints de validation.
+        # Un client web ne peut donc plus fabriquer une fiche entièrement validée.
+        if existing:
+            persisted = existing.data if isinstance(existing.data, dict) else {}
+            if "sectionValidations" in data:
+                data["sectionValidations"] = persisted.get("sectionValidations", {})
+            for protected in ("fichePositionValidee", "fichePositionValideeAt", "fichePositionValideeBy"):
+                if protected in data:
+                    if protected in persisted:
+                        data[protected] = persisted[protected]
+                    else:
+                        data.pop(protected, None)
+        else:
+            data.pop("sectionValidations", None)
+            data.pop("fichePositionValidee", None)
+            data.pop("fichePositionValideeAt", None)
+            data.pop("fichePositionValideeBy", None)
         raw_id = str(data.get("id") or "").strip()
         if raw_id.startswith("tmp_cd_"):
             raise HTTPException(status_code=422, detail="Candidature temporaire refusée. Enregistrez uniquement une fiche complète.")
@@ -676,6 +718,10 @@ def validate_candidate_final(db: Session, candidate_id: int, username: str | Non
     missing = [key for key in order if not sections.get(key)]
     if missing:
         raise HTTPException(status_code=422, detail="Fiche candidat refusée : sections non validées (" + ", ".join(missing) + ")")
+    # Ne jamais faire confiance aux seuls tampons : recontrôler le contenu réel de
+    # toutes les sections obligatoires au moment de la validation finale.
+    for section in order:
+        _validate_candidate_form_rules({"first_name": row.first_name, "last_name": row.last_name, "data": data}, row, section=section)
     values = {
         "first_name": row.first_name,
         "last_name": row.last_name,
@@ -697,8 +743,46 @@ def validate_candidate_final(db: Session, candidate_id: int, username: str | Non
     db.refresh(row)
     return row
 
+def _candidate_identity_key(first_name: Any, last_name: Any, birth_date: Any) -> tuple[str, str, str]:
+    def clean(value: Any) -> str:
+        return " ".join(str(value or "").strip().upper().split())
+    return clean(first_name), clean(last_name), str(birth_date or "")[:10]
+
+
+def _ensure_candidate_not_duplicate(db: Session, values: dict[str, Any], existing: Candidate | None = None) -> None:
+    data = _candidate_data(values, existing)
+    if _candidate_bool(data.get("allowDuplicate")):
+        return
+    first_name = values.get("first_name", existing.first_name if existing else "")
+    last_name = values.get("last_name", existing.last_name if existing else "")
+    nin = _candidate_text(data.get("nin"))
+    email = _candidate_text(values.get("email", existing.email if existing else "")).lower()
+    identity = _candidate_identity_key(first_name, last_name, data.get("dateNaissance"))
+    for row in db.execute(select(Candidate)).scalars().all():
+        if existing and row.id == existing.id:
+            continue
+        row_data = row.data if isinstance(row.data, dict) else {}
+        if nin and nin == _candidate_text(row_data.get("nin")):
+            raise HTTPException(status_code=409, detail=f"Candidat déjà existant : même NIN (dossier n° {row.id})")
+        if email and email == _candidate_text(row.email).lower():
+            raise HTTPException(status_code=409, detail=f"Candidat déjà existant : même adresse email (dossier n° {row.id})")
+        if identity[2] and identity == _candidate_identity_key(row.first_name, row.last_name, row_data.get("dateNaissance")):
+            raise HTTPException(status_code=409, detail=f"Candidat déjà existant : même identité et date de naissance (dossier n° {row.id})")
+    if nin:
+        employee = db.execute(select(Employee).where(Employee.nin == nin)).scalar_one_or_none()
+        if employee:
+            raise HTTPException(status_code=409, detail=f"Cette personne est déjà salariée sous le code {employee.code}")
+
+
 def create_candidate(db: Session, payload: Any, username: str | None = None):
-    row = Candidate(**_candidate_values(payload))
+    values = _candidate_values(payload)
+    _ensure_candidate_not_duplicate(db, values)
+    initial_data = values.get("data") if isinstance(values.get("data"), dict) else {}
+    values["data"] = {
+        **initial_data,
+        "auditTrail": [{"action": "creation", "by": username or "system", "at": datetime.utcnow().isoformat()}],
+    }
+    row = Candidate(**values)
     db.add(row)
     db.flush()
     _record_candidate_recruitment_creation(db, row, username)
@@ -706,9 +790,16 @@ def create_candidate(db: Session, payload: Any, username: str | None = None):
     db.refresh(row)
     return row
 
-def update_candidate(db: Session, candidate_id: int, payload: Any):
+def update_candidate(db: Session, candidate_id: int, payload: Any, username: str | None = None):
     row = get_or_404(db, Candidate, candidate_id)
-    for key, value in _candidate_values(payload, existing=row, partial=True).items():
+    values = _candidate_values(payload, existing=row, partial=True)
+    _ensure_candidate_not_duplicate(db, values, existing=row)
+    updated_data = values.get("data") if isinstance(values.get("data"), dict) else dict(row.data or {})
+    history = list(updated_data.get("auditTrail") or [])[-99:]
+    history.append({"action": "modification", "by": username or "system", "at": datetime.utcnow().isoformat()})
+    updated_data["auditTrail"] = history
+    values["data"] = updated_data
+    for key, value in values.items():
         setattr(row, key, value)
     db.commit()
     db.refresh(row)
@@ -844,7 +935,7 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         raise HTTPException(status_code=422, detail="Le candidat doit être à contractualiser avant son recrutement")
     _validate_candidate_transition({"status": "embauche", "data": candidate.data or {}}, candidate)
     next_code = next_employee_code(db, candidate.society)
-    recruit_date = date.today()
+    recruit_date = _candidate_date(data.get("contractStartDate")) or date.today()
 
     # typeContrat stocké tel quel (CDD/CDI/CIDD…) — ne pas passer par _clean_contract_type
     # qui efface CDI. posteContrat est le poste de travail, pas le type de contrat.
@@ -858,11 +949,13 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
     # Date de fin de contrat (CDD uniquement, depuis les données candidat si dispo)
     raw_end = str(data.get("dateFinContrat") or "").strip()
     contract_end: date | None = None
-    if contract_type == "CDD":
+    if contract_type != "CDI":
         try:
             contract_end = date.fromisoformat(raw_end[:10]) if raw_end else None
         except ValueError:
             contract_end = None
+        if contract_end and contract_end < recruit_date:
+            raise HTTPException(status_code=422, detail="La date de fin du contrat doit être postérieure à la date de début")
 
     employee = Employee(
         code=next_code,
@@ -878,7 +971,7 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         society=candidate.society or data.get("societe"),
         salary_net=candidate.expected_salary or data.get("salaireNet") or data.get("salairePrevu") or 0,
         contract_type=contract_type,
-        status="actif",
+        status="actif" if recruit_date <= date.today() else "a_venir",
         recruit_date=recruit_date,
         trial_end_date=trial_end,
         contract_end_date=contract_end,
@@ -903,7 +996,7 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
         end_date=contract_end,
         trial_end_date=trial_end,
         salary_net=employee.salary_net,
-        status="actif",
+        status="actif" if recruit_date <= date.today() else "a_venir",
     )
     db.add(contract)
     try:

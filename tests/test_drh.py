@@ -33,19 +33,18 @@ _SECTIONS = ["identification", "militaire", "poste",
 
 def _full_candidate_data(nom="RECRUE", prenom="Karim"):
     """Données complètes couvrant tous les champs obligatoires des 7 sections."""
+    identity_number = sum((index + 1) * ord(char) for index, char in enumerate(f"{nom}:{prenom}"))
     return {
         "nom": nom, "prenom": prenom,
         "dateNaissance": "1990-05-15", "lieuNaissance": "Alger",
         "sexe": "M", "nomPere": "Ahmed", "nomMere": "Fatima",
-        "nin": "1234567890", "situation": "celibataire", "source": "spontanee",
+        "nin": f"{identity_number:010d}"[-10:], "situation": "celibataire", "source": "spontanee",
         "posteSouhaite": "AGENT DE SECURITE", "telephone": "0550112233",
         "avisDecision": "favorable", "avisDate": "2026-01-10",
         "avisRecruteur": "DRH", "avisCommentaire": "RAS",
         "adresse": "Rue 1", "commune": "Bab Ezzouar", "wilaya": "Alger",
         "contactUrgenceLien": "epouse", "contactUrgenceNom": "Sara",
         "contactUrgenceTel": "0550998877",
-        # Les 7 sections marquées validées (persistées dès la création)
-        "sectionValidations": {s: {"by": "system", "at": "2026-01-10T00:00:00"} for s in _SECTIONS},
     }
 
 
@@ -58,6 +57,14 @@ def _make_reserve_candidate(client, h, nom="RECRUE", prenom="Karim"):
     r = client.post("/api/drh/candidates", headers=h, json=body)
     assert r.status_code in (200, 201), r.text
     cid = r.json()["data"]["id"]
+    for section in _SECTIONS:
+        checked = client.post(
+            f"/api/drh/candidates/validate-section?section={section}&candidate_id={cid}",
+            headers=h,
+            json=body,
+        )
+        assert checked.status_code == 200, checked.text
+        body["data"]["sectionValidations"] = checked.json()["data"]["sectionValidations"]
     fin = client.post(f"/api/drh/candidates/{cid}/validate-final", headers=h)
     assert fin.status_code == 200, fin.text
     assert fin.json()["data"]["status"] == "reserve"
@@ -266,7 +273,7 @@ def test_recruit_requires_contractualisation_state(client, auth_headers):
 
 def test_validate_section_persists_on_existing_candidate(client, auth_headers):
     data = _full_candidate_data(nom="PERSISTE", prenom="Section")
-    data.pop("sectionValidations")
+    data.pop("sectionValidations", None)
     c = _cand(client, auth_headers, first="Section", last="PERSISTE", data=data)
     body = {
         "first_name": "Section", "last_name": "PERSISTE",
@@ -291,6 +298,34 @@ def test_candidate_accepts_18_digit_nin(client, auth_headers):
     assert r.status_code in (200, 201), r.text
 
 
+def test_candidate_rejects_forged_section_validations(client, auth_headers):
+    data = _full_candidate_data(nom="FORGE", prenom="Tampon")
+    data["sectionValidations"] = {section: {"by": "browser", "at": "2026-08-11T00:00:00"} for section in _SECTIONS}
+    data["fichePositionValidee"] = True
+    candidate = _cand(client, auth_headers, first="Tampon", last="FORGE", data=data)
+    result = client.post(f"/api/drh/candidates/{candidate['id']}/validate-final", headers=auth_headers)
+    assert result.status_code == 422, result.text
+    assert "sections non validées" in result.text
+
+
+def test_candidate_duplicate_nin_is_rejected_early(client, auth_headers):
+    first_data = _full_candidate_data(nom="DOUBLON", prenom="Premier")
+    _cand(client, auth_headers, first="Premier", last="DOUBLON", data=first_data)
+    second_data = _full_candidate_data(nom="AUTRE", prenom="Second")
+    second_data["nin"] = first_data["nin"]
+    response = client.post("/api/drh/candidates", headers=auth_headers, json={
+        "first_name": "Second", "last_name": "AUTRE", "society": "Iron Global Securite",
+        "status": "nouvelle", "data": second_data,
+    })
+    assert response.status_code == 409, response.text
+    assert "même NIN" in response.text
+
+
+def test_candidate_api_rejects_non_recruitment_role(client, restricted_headers):
+    response = client.get("/api/drh/candidates/page", headers=restricted_headers)
+    assert response.status_code == 403, response.text
+
+
 def test_marquer_contractualisation_requires_reserve(client, auth_headers):
     """marquer-contractualisation refuse un candidat qui n'est pas en réserve (422)."""
     c = _cand(client, auth_headers, first="PasEnReserve")
@@ -301,7 +336,7 @@ def test_marquer_contractualisation_requires_reserve(client, auth_headers):
 def test_validate_section_enforces_order(client, auth_headers):
     """validate-section impose l'ordre : valider 'poste' avant les précédentes est refusé."""
     data = _full_candidate_data(nom="ORDRE", prenom="Test")
-    data.pop("sectionValidations")  # aucune section validée
+    data.pop("sectionValidations", None)  # aucune section validée
     body = {"first_name": "Test", "last_name": "ORDRE", "society": "Iron Global Securite",
             "desired_position": "AGENT", "status": "nouvelle", "data": data}
     r = client.post("/api/drh/candidates/validate-section?section=poste", headers=auth_headers, json=body)

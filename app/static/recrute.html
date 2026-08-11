@@ -184,7 +184,7 @@ tr:last-child td{border-bottom:0}
             <div class="full"><label>Candidat</label><input id="ctCandidateName" readonly style="background:#f8fafc;font-weight:800"></div>
             <div><label>Poste</label><select id="ctPosition" required><option value="">— Choisir —</option></select></div>
             <div><label>Société</label><input id="ctSociety" readonly style="background:#f8fafc"></div>
-            <div><label>Type de contrat</label><select id="ctType" onchange="onContractTypeChange()" disabled><option value="CDD">CDD</option></select></div>
+            <div><label>Type de contrat</label><select id="ctType" onchange="onContractTypeChange()"><option value="CDD">CDD</option><option value="CDI">CDI</option><option value="CIDD">CIDD</option><option value="CTA">CTA</option><option value="APPRENTISSAGE">Apprentissage</option></select></div>
             <div><label>Date de début</label><input id="ctStart" type="date" onchange="updateContractEndDate()" required></div>
             <div id="ctDurationWrap"><label>Durée du contrat</label><select id="ctDuration" onchange="updateContractEndDate()" required><option value="1">1 mois</option><option value="3">3 mois</option><option value="6">6 mois</option><option value="12" selected>12 mois</option><option value="24">24 mois</option><option value="36">36 mois</option></select></div>
             <div><label>Date de fin</label><input id="ctEnd" type="date" readonly style="background:#f8fafc"></div>
@@ -424,7 +424,8 @@ function onSocietyChange(){
 }
 function populateFormSocieties(societies){
   const select=document.getElementById("fSociety");
-  const list=[...new Set([...RECRUTE_SOCIETIES,...societies,[activeSociety]].flat().filter(Boolean))];
+  const authorized=Array.isArray(recruteSession?.user?.authorized_societies)?recruteSession.user.authorized_societies.filter(Boolean):[];
+  const list=[...new Set([...(authorized.length?authorized:societies),activeSociety].filter(Boolean))];
   select.innerHTML=list.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")||'<option value="">—</option>';
 }
 
@@ -461,18 +462,24 @@ function onSearchInput(){
   searchTimer=setTimeout(()=>{
     tabState[activeTab].q=value;
     tabState[activeTab].page=1;
-    renderList();renderPagination();
+    loadTab(activeTab);
   },250);
 }
 async function loadTab(tab){
   const state=tabState[tab];
   if(tab===activeTab)document.getElementById("listWrap").innerHTML='<div class="empty">Chargement…</div>';
   try{
-    const params=new URLSearchParams({mode:tab,page:"1",page_size:"100"});
+    const params=new URLSearchParams({mode:tab,page:String(state.page),page_size:String(PAGE_SIZE)});
     if(activeSociety)params.set("society",activeSociety);
+    if(state.q)params.set("q",state.q);
+    if(state.posteFilter)params.set("desired_position",state.posteFilter);
+    if(state.avisFilter)params.set("recruiter_opinion",state.avisFilter);
+    if(state.sortKey){params.set("sort_key",state.sortKey);params.set("sort_direction",state.sortDirection)}
     const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
     state.items=result.items||[];
     state.total=result.total||0;
+    state.pages=result.pages||1;
+    state.page=result.page||1;
     renderTabs();
     if(tab===activeTab){renderCounters();renderList();renderPagination()}
   }catch(error){
@@ -527,7 +534,7 @@ function setCandidateSort(key){
   if(state.sortKey===key)state.sortDirection=state.sortDirection==="asc"?"desc":"asc";
   else{state.sortKey=key;state.sortDirection=key==="date"?"desc":"asc"}
   state.page=1;
-  renderList();renderPagination();
+  loadTab(activeTab);
 }
 function sortableHeader(key,label){
   const state=tabState[activeTab];
@@ -540,13 +547,13 @@ function setPosteFilter(value){
   const state=tabState[activeTab];
   state.posteFilter=state.posteFilter===value?"":value;
   state.page=1;
-  renderCounters();renderList();renderPagination();
+  loadTab(activeTab);
 }
 function setAvisFilter(value){
   const state=tabState[activeTab];
   state.avisFilter=state.avisFilter===value?"":value;
   state.page=1;
-  renderCounters();renderList();renderPagination();
+  loadTab(activeTab);
 }
 function renderCounters(){
   const state=tabState[activeTab];
@@ -680,9 +687,7 @@ function renderList(){
     document.getElementById("listWrap").innerHTML='<div class="empty">Aucun candidat.</div>';
     return;
   }
-  const pages=Math.max(Math.ceil(filtered.length/PAGE_SIZE),1);
-  if(state.page>pages)state.page=pages;
-  const pageItems=filtered.slice((state.page-1)*PAGE_SIZE,state.page*PAGE_SIZE);
+  const pageItems=filtered;
   document.getElementById("listWrap").innerHTML=`<table><thead><tr>
     <th>${sortableHeader("candidate","Candidat")}</th><th>${sortableHeader("position","Poste")}</th><th>${sortableHeader("society","Société")}</th><th>${sortableHeader("phone","Téléphone")}</th><th>${sortableHeader("status","Statut")}</th><th>${sortableHeader("date","Date")}</th><th>Actions</th><th>${sortableHeader("avis","Avis")}</th>
   </tr></thead><tbody>
@@ -701,10 +706,10 @@ function renderList(){
 function renderPagination(){
   const state=tabState[activeTab];
   const filtered=filteredItems(activeTab);
-  const pages=Math.max(Math.ceil(filtered.length/PAGE_SIZE),1);
+  const pages=Math.max(state.pages||Math.ceil(state.total/PAGE_SIZE),1);
   if(state.page>pages)state.page=pages;
-  document.getElementById("pagination").innerHTML=filtered.length?`
-    <div>${filtered.length} candidat(s) · page ${state.page}/${pages}</div>
+  document.getElementById("pagination").innerHTML=state.total?`
+    <div>${state.total} candidat(s) · page ${state.page}/${pages}${filtered.length!==state.items.length?` · ${filtered.length} affiché(s) avec les filtres`:""}</div>
     <div class="btns">
       <button ${state.page<=1?"disabled":""} onclick="gotoPage(${state.page-1})">Précédent</button>
       <button ${state.page>=pages?"disabled":""} onclick="gotoPage(${state.page+1})">Suivant</button>
@@ -712,8 +717,7 @@ function renderPagination(){
 }
 function gotoPage(page){
   tabState[activeTab].page=page;
-  renderList();
-  renderPagination();
+  loadTab(activeTab);
 }
 async function changeAvis(id,value){
   const item=tabState[activeTab].items.find(row=>row.id===id);
@@ -731,7 +735,7 @@ async function markReadyForContract(id){
   }catch(error){showBanner(esc(error.message),"error")}
 }
 const CANDIDATE_SECTIONS=["identification","mensurations","militaire","poste","avis","contact","habilitations","experience"];
-const CONTRACT_TYPES=["CDD"];
+const CONTRACT_TYPES=["CDD","CDI","CIDD","CTA","APPRENTISSAGE"];
 let contractCandidate=null;
 let contractReturnTab="new";
 function addMonths(dateStr,months){
@@ -830,26 +834,37 @@ async function submitContractForm(){
   const button=document.getElementById("establishContractBtn");
   button.disabled=true;button.textContent="Enregistrement…";
   try{
-    const stamp={by:recruteSession?.user?.username||"recrutement",at:new Date().toISOString()};
-    const sectionValidations={};
-    CANDIDATE_SECTIONS.forEach(key=>{sectionValidations[key]=stamp});
     const salaryInput=document.getElementById("ctSalary").value;
     const salary=salaryInput?parseSalaryDzd(salaryInput):(contractCandidate.expected_salary||0);
+    const candidateData={
+      ...(contractCandidate.data||{}),
+      contractStartDate:start,
+      salaireDemande:contractCandidate.data?.salaireDemande??contractCandidate.expected_salary??null,
+      salaireContractuelNet:salary,
+      typeContrat:type,
+      dateFinContrat:type==="CDI"?"":end,
+      numeroCnas:document.getElementById("ctCnas").value.trim(),
+      modePaiement:document.getElementById("ctPaymentMode").value,
+      banque:document.getElementById("ctBank").value.trim(),
+      iban:document.getElementById("ctIban").value.trim()
+    };
     await apiFetch(`/api/drh/candidates/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({
       desired_position:document.getElementById("ctPosition").value,
       expected_salary:salary,
-      data:{
-        ...(contractCandidate.data||{}),
-        sectionValidations,
-        fichePositionValidee:true,
-        typeContrat:type,
-        dateFinContrat:type==="CDI"?"":end,
-        numeroCnas:document.getElementById("ctCnas").value.trim(),
-        modePaiement:document.getElementById("ctPaymentMode").value,
-        banque:document.getElementById("ctBank").value.trim(),
-        iban:document.getElementById("ctIban").value.trim()
-      }
+      data:candidateData
     })});
+    const validationPayload={
+      first_name:contractCandidate.first_name,last_name:contractCandidate.last_name,
+      phone:contractCandidate.phone,email:contractCandidate.email,
+      desired_position:document.getElementById("ctPosition").value,
+      society:contractCandidate.society,expected_salary:salary,
+      recruiter_opinion:contractCandidate.recruiter_opinion,status:contractCandidate.status,
+      data:candidateData
+    };
+    for(const section of CANDIDATE_SECTIONS){
+      const validation=await apiFetch(`/api/drh/candidates/validate-section?section=${encodeURIComponent(section)}&candidate_id=${id}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(validationPayload)});
+      validationPayload.data.sectionValidations=validation?.data?.sectionValidations||validationPayload.data.sectionValidations||{};
+    }
     await apiFetch(`/api/drh/candidates/${id}/validate-final`,{method:"POST"});
     await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
     const result=await apiFetch(`/api/drh/candidates/${id}/recruit`,{method:"POST"});

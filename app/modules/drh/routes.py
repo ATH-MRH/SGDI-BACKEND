@@ -45,6 +45,29 @@ from app.modules.drh.schemas import (
 router = APIRouter(dependencies=[Depends(current_user)])
 
 
+def _ensure_recruitment_access(user: User, *, destructive: bool = False) -> None:
+    """Autorise les opérations de recrutement uniquement aux profils RH/recrutement.
+
+    Le filtrage par société reste appliqué séparément. Cette garde empêche un compte
+    Atlas authentifié dans un autre module d'appeler directement les API DRH.
+    """
+    role = str(user.role or "").strip().lower()
+    username = str(user.username or "").strip().upper()
+    structures = {
+        _society_key(value).replace(" ", "_").lower()
+        for value in (user.authorized_structures if isinstance(user.authorized_structures, list) else [])
+    }
+    allowed = (
+        role in {"admin", "adm", "adm1", "adm2", "rh", "drh", "recruteur"}
+        or username.startswith("REC")
+        or bool(structures & {"drh", "recrutement", "recruteur", "gestionnaire_rh"})
+    )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès réservé au recrutement / DRH")
+    if destructive and role not in {"admin", "adm", "adm1", "adm2", "rh", "drh"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Suppression réservée à la DRH")
+
+
 def _allowed_societies(user: User) -> list[str]:
     values = user.authorized_societies if isinstance(user.authorized_societies, list) else []
     return [str(v).strip() for v in values if str(v).strip()]
@@ -307,9 +330,14 @@ def candidates_page(
     page: int = 1,
     page_size: int = 25,
     society: str | None = None,
+    desired_position: str | None = None,
+    recruiter_opinion: str | None = None,
+    sort_key: str | None = None,
+    sort_direction: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    _ensure_recruitment_access(user)
     effective_society = _effective_society_filter(user, society)
     allowed = _allowed_societies(user)
     return service.list_candidates_page(
@@ -318,6 +346,10 @@ def candidates_page(
         allowed_societies=allowed if allowed and not effective_society else None,
         mode=mode,
         q=q,
+        desired_position=desired_position,
+        recruiter_opinion=recruiter_opinion,
+        sort_key=sort_key,
+        sort_direction=sort_direction,
         page=page,
         page_size=page_size,
     )
@@ -330,6 +362,7 @@ def candidates(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    _ensure_recruitment_access(user)
     effective_society = _effective_society_filter(user, society)
     rows = service.list_rows(db, Candidate, {"status": status, "society": effective_society})
     allowed = _allowed_societies(user)
@@ -344,16 +377,18 @@ def _action_success(data):
 
 @router.post("/candidates")
 def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_recruitment_access(user)
     _ensure_society_allowed(user, payload.society)
     return _action_success(service.create_candidate(db, payload, username=user.username))
 
 
 @router.put("/candidates/{candidate_id}")
 def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
     _ensure_society_allowed(user, payload.society or existing.society)
-    return _action_success(service.update_candidate(db, candidate_id, payload))
+    return _action_success(service.update_candidate(db, candidate_id, payload, username=user.username))
 
 
 @router.post("/candidates/validate-section")
@@ -364,6 +399,7 @@ def validate_candidate_section(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    _ensure_recruitment_access(user)
     _ensure_society_allowed(user, payload.society)
     if candidate_id is not None:
         existing = service.get_or_404(db, Candidate, candidate_id)
@@ -373,6 +409,7 @@ def validate_candidate_section(
 
 @router.post("/candidates/{candidate_id}/validate-final")
 def validate_candidate_final(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
     return _action_success(service.validate_candidate_final(db, candidate_id, username=user.username))
@@ -381,6 +418,7 @@ def validate_candidate_final(candidate_id: int, db: Session = Depends(get_db), u
 @router.post("/candidates/{candidate_id}/marquer-contractualisation")
 def marquer_contractualisation(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     """Passe le candidat en 'a_contractualiser' — étape entre réserve et embauche."""
+    _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
     return _action_success(service.marquer_a_contractualiser(db, candidate_id, username=user.username))
@@ -393,6 +431,7 @@ def delete_candidate(
     user: User = Depends(current_user),
     token_payload: dict = Depends(current_token_payload),
 ):
+    _ensure_recruitment_access(user, destructive=True)
     existing = service.get_or_404(db, Candidate, candidate_id)
     if not _is_admin_system_user(user, token_payload):
         _ensure_society_allowed(user, existing.society)
@@ -401,6 +440,7 @@ def delete_candidate(
 
 @router.post("/candidates/{candidate_id}/recruit")
 def recruit(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_recruitment_access(user)
     candidate = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, candidate.society)
     return _action_success(service.recruit_candidate(db, candidate_id, username=user.username))
