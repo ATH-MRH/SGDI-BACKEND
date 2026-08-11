@@ -66,6 +66,10 @@ label.field-label-invalid{color:#b91c1c!important}
 .table-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:850;padding:12px 14px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
+.sort-head{border:0;background:none;color:inherit;font:inherit;font-weight:inherit;text-transform:inherit;letter-spacing:inherit;padding:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.sort-head:hover,.sort-head:focus-visible{color:var(--navy)}
+.sort-head .sort-arrow{font-size:10px;min-width:9px;color:#94a3b8}
+.sort-head.active .sort-arrow{color:var(--blue)}
 td{padding:12px 14px;border-bottom:1px solid #eef2f7;vertical-align:middle}
 tr:last-child td{border-bottom:0}
 .cand-name{font-weight:850}
@@ -305,9 +309,9 @@ function updateCandidateCommuneOptions(selectedValue=""){
 }
 const PAGE_SIZE=25;
 const tabState={
-  new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""},
-  reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""},
-  archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""}
+  new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
+  reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
+  archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"}
 };
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
@@ -484,7 +488,7 @@ function matchesSearch(item,q){
 }
 function filteredItems(tab){
   const state=tabState[tab];
-  return state.items.filter(item=>{
+  const filtered=state.items.filter(item=>{
     if(!matchesSearch(item,state.q))return false;
     if(state.posteFilter&&(item.desired_position||"Poste non renseigné")!==state.posteFilter)return false;
     if(state.avisFilter){
@@ -493,6 +497,44 @@ function filteredItems(tab){
     }
     return true;
   });
+  if(!state.sortKey)return filtered;
+  return filtered.map((item,index)=>({item,index})).sort((left,right)=>{
+    const a=sortValue(left.item,state.sortKey);
+    const b=sortValue(right.item,state.sortKey);
+    const comparison=String(a).localeCompare(String(b),"fr",{numeric:true,sensitivity:"base"});
+    return comparison?(state.sortDirection==="desc"?-comparison:comparison):left.index-right.index;
+  }).map(entry=>entry.item);
+}
+function sortValue(item,key){
+  if(key==="candidate")return `${item.last_name||""} ${item.first_name||""}`.trim();
+  if(key==="position")return item.desired_position||"";
+  if(key==="society")return item.society||"";
+  if(key==="phone")return item.phone||"";
+  if(key==="status"){
+    const avis=item.data?.avisDecision||"";
+    if(avis==="Favorable")return "Accepté";
+    if(avis==="Défavorable")return "Refusé";
+    if(avis==="Instance")return item.data?.derniereConvocation?"Convoqué":"Instance";
+    if(activeTab==="reserve"||String(item.status||"").toLowerCase()==="reserve")return "Réserve";
+    return activeTab==="archive"?"Archivé":"Nouvelle";
+  }
+  if(key==="date")return item.created_at||"";
+  if(key==="avis")return item.data?.avisDecision||"Non évalué";
+  return "";
+}
+function setCandidateSort(key){
+  const state=tabState[activeTab];
+  if(state.sortKey===key)state.sortDirection=state.sortDirection==="asc"?"desc":"asc";
+  else{state.sortKey=key;state.sortDirection=key==="date"?"desc":"asc"}
+  state.page=1;
+  renderList();renderPagination();
+}
+function sortableHeader(key,label){
+  const state=tabState[activeTab];
+  const active=state.sortKey===key;
+  const arrow=active?(state.sortDirection==="asc"?"▲":"▼"):"↕";
+  const direction=active?(state.sortDirection==="asc"?"croissant":"décroissant"):"non trié";
+  return `<button type="button" class="sort-head${active?' active':''}" onclick="setCandidateSort('${key}')" title="Trier par ${esc(label)} — ${direction}" aria-label="Trier par ${esc(label)} — ${direction}">${esc(label)} <span class="sort-arrow">${arrow}</span></button>`;
 }
 function setPosteFilter(value){
   const state=tabState[activeTab];
@@ -642,7 +684,7 @@ function renderList(){
   if(state.page>pages)state.page=pages;
   const pageItems=filtered.slice((state.page-1)*PAGE_SIZE,state.page*PAGE_SIZE);
   document.getElementById("listWrap").innerHTML=`<table><thead><tr>
-    <th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Statut</th><th>Date</th><th></th><th>Avis</th>
+    <th>${sortableHeader("candidate","Candidat")}</th><th>${sortableHeader("position","Poste")}</th><th>${sortableHeader("society","Société")}</th><th>${sortableHeader("phone","Téléphone")}</th><th>${sortableHeader("status","Statut")}</th><th>${sortableHeader("date","Date")}</th><th>Actions</th><th>${sortableHeader("avis","Avis")}</th>
   </tr></thead><tbody>
   ${pageItems.map(item=>`<tr data-id="${item.id}">
     <td><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${esc(item.desired_position||"Poste non renseigné")}${item.email?" · "+esc(item.email):""}</div></td>
