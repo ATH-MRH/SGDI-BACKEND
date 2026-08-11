@@ -552,12 +552,46 @@ function saveRecruitAnnouncement(form){
 }
 function setAnnouncementStatus(id,status){const items=getRecruitAnnouncements();const item=items.find(row=>row.id===id);if(!item)return;item.status=status;item.updatedAt=new Date().toISOString();saveRecruitAnnouncements(items);renderRecruitAnnouncements()}
 function deleteRecruitAnnouncement(id){if(!confirm("Supprimer définitivement cette annonce ?"))return;saveRecruitAnnouncements(getRecruitAnnouncements().filter(row=>row.id!==id));renderRecruitAnnouncements()}
+function recruitAnnouncementShareText(item){
+  const lines=[`📢 OFFRE D'EMPLOI — ${item.title}`,item.society,item.location?`📍 ${item.location}`:"",`👥 ${item.positions||1} poste(s) à pourvoir`,item.deadline?`📅 Candidatures avant le ${formatDateFr(item.deadline)}`:"",item.description||"","Contactez notre service recrutement pour déposer votre candidature.","#Recrutement #Emploi #IRONGROUP"];
+  return lines.filter(Boolean).join("\n\n");
+}
+function wrapPosterText(ctx,text,maxWidth){
+  const words=String(text||"").split(/\s+/);const lines=[];let line="";
+  words.forEach(word=>{const candidate=line?line+" "+word:word;if(ctx.measureText(candidate).width>maxWidth&&line){lines.push(line);line=word}else line=candidate});
+  if(line)lines.push(line);return lines;
+}
+async function recruitAnnouncementPoster(item){
+  const canvas=document.createElement("canvas");canvas.width=1080;canvas.height=1080;const ctx=canvas.getContext("2d");
+  const gradient=ctx.createLinearGradient(0,0,1080,1080);gradient.addColorStop(0,"#043970");gradient.addColorStop(1,"#0d6ecc");ctx.fillStyle=gradient;ctx.fillRect(0,0,1080,1080);
+  ctx.fillStyle="rgba(255,255,255,.10)";ctx.beginPath();ctx.arc(930,120,290,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(90,980,250,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#fff";ctx.font="900 46px Arial";ctx.fillText("RECRUTEMENT",80,105);ctx.font="700 25px Arial";ctx.fillStyle="#bfdbfe";ctx.fillText(item.society||"IRON GROUP",80,148);
+  ctx.fillStyle="#fff";ctx.font="900 68px Arial";const titleLines=wrapPosterText(ctx,item.title,900).slice(0,3);titleLines.forEach((line,index)=>ctx.fillText(line,80,300+index*82));
+  const detailTop=300+titleLines.length*82+45;ctx.fillStyle="#dbeafe";ctx.font="700 31px Arial";if(item.location)ctx.fillText(`LIEU : ${item.location}`,80,detailTop);ctx.fillText(`${item.positions||1} POSTE(S) À POURVOIR`,80,detailTop+55);if(item.deadline)ctx.fillText(`DATE LIMITE : ${formatDateFr(item.deadline)}`,80,detailTop+110);
+  ctx.fillStyle="rgba(255,255,255,.14)";ctx.fillRect(70,detailTop+155,940,230);ctx.fillStyle="#fff";ctx.font="400 27px Arial";wrapPosterText(ctx,item.description||"Rejoignez nos équipes. Envoyez votre candidature à notre service recrutement.",860).slice(0,6).forEach((line,index)=>ctx.fillText(line,105,detailTop+210+index*38));
+  ctx.fillStyle="#fbbf24";ctx.fillRect(80,965,255,7);ctx.fillStyle="#fff";ctx.font="800 27px Arial";ctx.fillText(item.reference||"OFFRE D'EMPLOI",80,1025);
+  return new Promise(resolve=>canvas.toBlob(resolve,"image/png",.95));
+}
+async function shareRecruitAnnouncement(id){
+  const item=getRecruitAnnouncements().find(row=>row.id===id);if(!item)return;
+  const button=document.querySelector(`[data-share-announcement="${CSS.escape(id)}"]`);const initial=button?.textContent;if(button){button.disabled=true;button.textContent="Préparation…"}
+  try{
+    const text=recruitAnnouncementShareText(item);const blob=await recruitAnnouncementPoster(item);const filename=`annonce-${String(item.title||"recrutement").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"recrutement"}.png`;
+    const file=blob?new File([blob],filename,{type:"image/png"}):null;const payload={title:`Recrutement — ${item.title}`,text,...(file&&navigator.canShare?.({files:[file]})?{files:[file]}:{})};
+    if(navigator.share){await navigator.share(payload);setAnnouncementStatus(id,"Publiée");showBanner("Annonce envoyée vers l’application choisie.","success")}
+    else{
+      if(blob){const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)}
+      await navigator.clipboard?.writeText(text);setAnnouncementStatus(id,"Publiée");showBanner("Visuel téléchargé et texte copié. Vous pouvez les publier sur le réseau social de votre choix.","success");
+    }
+  }catch(error){if(error?.name!=="AbortError")showBanner("Partage impossible sur cet appareil. Réessayez depuis un smartphone ou un navigateur récent.","error")}
+  finally{if(button){button.disabled=false;button.textContent=initial}}
+}
 function filteredRecruitAnnouncements(q="",status=""){
   q=String(q||"").toLowerCase();
   return getRecruitAnnouncements().filter(item=>(!activeSociety||item.society===activeSociety)&&(!status||item.status===status)&&(!q||[item.title,item.society,item.location,item.reference].join(" ").toLowerCase().includes(q)));
 }
 function announcementListHTML(items){
-  return items.map(item=>`<article class="announcement-card"><div><h3>${esc(item.title)}</h3><div class="announcement-meta"><span>${esc(item.society)}</span><span>${esc(item.location||"Lieu non renseigné")}</span><span>${item.positions} poste(s)</span><span>Limite : ${formatDateFr(item.deadline)}</span><span class="pill ${item.status==="Publiée"?"pill-green":item.status==="Clôturée"?"pill-gray":"pill-amber"}">${esc(item.status)}</span></div></div><div class="announcement-actions"><button class="secondary" onclick="openAnnouncementForm('${jsStr(item.id)}')">Modifier</button>${item.status!=="Publiée"?`<button class="secondary" onclick="setAnnouncementStatus('${jsStr(item.id)}','Publiée')">Publier</button>`:""}${item.status!=="Clôturée"?`<button class="secondary" onclick="setAnnouncementStatus('${jsStr(item.id)}','Clôturée')">Clôturer</button>`:""}<button class="danger" onclick="deleteRecruitAnnouncement('${jsStr(item.id)}')">Supprimer</button></div></article>`).join("")||'<div class="table-card empty">Aucune annonce pour ce filtre.</div>';
+  return items.map(item=>`<article class="announcement-card"><div><h3>${esc(item.title)}</h3><div class="announcement-meta"><span>${esc(item.society)}</span><span>${esc(item.location||"Lieu non renseigné")}</span><span>${item.positions} poste(s)</span><span>Limite : ${formatDateFr(item.deadline)}</span><span class="pill ${item.status==="Publiée"?"pill-green":item.status==="Clôturée"?"pill-gray":"pill-amber"}">${esc(item.status)}</span></div></div><div class="announcement-actions"><button class="primary" data-share-announcement="${esc(item.id)}" onclick="shareRecruitAnnouncement('${jsStr(item.id)}')">Publier / Partager</button><button class="secondary" onclick="openAnnouncementForm('${jsStr(item.id)}')">Modifier</button>${item.status!=="Clôturée"?`<button class="secondary" onclick="setAnnouncementStatus('${jsStr(item.id)}','Clôturée')">Clôturer</button>`:""}<button class="danger" onclick="deleteRecruitAnnouncement('${jsStr(item.id)}')">Supprimer</button></div></article>`).join("")||'<div class="table-card empty">Aucune annonce pour ce filtre.</div>';
 }
 function filterRecruitAnnouncements(){
   const q=document.getElementById("announcementSearch")?.value||"";const status=document.getElementById("announcementStatus")?.value||"";

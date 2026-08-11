@@ -19,8 +19,10 @@ test("annonces recrutement: cycle opérationnel disponible", () => {
     "setAnnouncementStatus",
     "deleteRecruitAnnouncement",
     "filterRecruitAnnouncements",
+    "shareRecruitAnnouncement",
+    "recruitAnnouncementPoster",
   ]) assert.match(source, new RegExp(`function ${fn}\\(`));
-  assert.match(source, />Publier</);
+  assert.match(source, />Publier \/ Partager</);
   assert.match(source, />Clôturer</);
 });
 
