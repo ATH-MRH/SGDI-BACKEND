@@ -222,7 +222,7 @@ tr:last-child td{border-bottom:0}
         </div></section>
         <section class="form-section"><div class="form-section-title">2. Coordonnées</div><div class="form-section-sub">Adresse et personne à contacter en cas d’urgence</div><div class="field-grid">
           <div><label for="fPhone">Téléphone</label><input id="fPhone" inputmode="tel"></div><div><label for="fEmail">Email</label><input id="fEmail" type="email"></div>
-          <div class="full"><label for="fAddress">Adresse</label><input id="fAddress"></div><div><label for="fCommune">Commune</label><input id="fCommune"></div><div><label for="fWilaya">Wilaya</label><input id="fWilaya"></div>
+          <div class="full"><label for="fAddress">Adresse</label><input id="fAddress"></div><div><label for="fCommune">Commune</label><select id="fCommune"><option value="">— Choisir d’abord la wilaya —</option></select></div><div><label for="fWilaya">Wilaya</label><select id="fWilaya" onchange="updateCandidateCommuneOptions()"><option value="">— Choisir la wilaya —</option></select></div>
           <div><label for="fEmergencyName">Contact d’urgence</label><input id="fEmergencyName"></div><div><label for="fEmergencyRelation">Lien avec le candidat</label><input id="fEmergencyRelation"></div><div><label for="fEmergencyPhone">Téléphone d’urgence</label><input id="fEmergencyPhone" inputmode="tel"></div>
         </div></section>
         <section class="form-section"><div class="form-section-title">3. Candidature et profil</div><div class="form-section-sub">Poste souhaité, expérience et informations opérationnelles</div><div class="field-grid">
@@ -255,6 +255,7 @@ tr:last-child td{border-bottom:0}
   </div>
 </div>
 
+<script src="/static/algeria-communes.js?v=20260625-communes"></script>
 <script>
 const SESSION_KEY="atlas_recrute_session";
 let recruteSession=null;
@@ -268,6 +269,40 @@ const TABS=[
   {key:"archive",label:"Archives"},
   {key:"contrat",label:"Contrat"}
 ];
+const RECRUTE_WILAYAS=[
+  ["01","Adrar"],["02","Chlef"],["03","Laghouat"],["04","Oum El Bouaghi"],["05","Batna"],["06","Béjaïa"],["07","Biskra"],["08","Béchar"],["09","Blida"],["10","Bouira"],["11","Tamanrasset"],["12","Tébessa"],["13","Tlemcen"],["14","Tiaret"],["15","Tizi Ouzou"],["16","Alger"],["17","Djelfa"],["18","Jijel"],["19","Sétif"],["20","Saïda"],["21","Skikda"],["22","Sidi Bel Abbès"],["23","Annaba"],["24","Guelma"],["25","Constantine"],["26","Médéa"],["27","Mostaganem"],["28","M'Sila"],["29","Mascara"],["30","Ouargla"],["31","Oran"],["32","El Bayadh"],["33","Illizi"],["34","Bordj Bou Arreridj"],["35","Boumerdès"],["36","El Tarf"],["37","Tindouf"],["38","Tissemsilt"],["39","El Oued"],["40","Khenchela"],["41","Souk Ahras"],["42","Tipaza"],["43","Mila"],["44","Aïn Defla"],["45","Naâma"],["46","Aïn Témouchent"],["47","Ghardaïa"],["48","Relizane"],["49","Timimoun"],["50","Bordj Badji Mokhtar"],["51","Ouled Djellal"],["52","Béni Abbès"],["53","In Salah"],["54","In Guezzam"],["55","Touggourt"],["56","Djanet"],["57","El M'Ghair"],["58","El Meniaa"]
+];
+const RECRUTE_SOCIETIES=["IRON GLOBAL SÉCURITÉ","IRON GLOBAL SOLUTION","SWORD CORPORATION","SWORD CONSTRUCTION"];
+function normalizedLocation(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase()}
+function candidateWilayaCode(value){
+  const raw=String(value||"").trim();
+  const codeMatch=raw.match(/^(\d{1,2})\b/);
+  if(codeMatch)return codeMatch[1].padStart(2,"0");
+  const match=RECRUTE_WILAYAS.find(([,name])=>normalizedLocation(name)===normalizedLocation(raw));
+  return match?match[0]:"";
+}
+function initializeCandidateLocation(wilayaValue="",communeValue=""){
+  const wilaya=document.getElementById("fWilaya");
+  if(!wilaya)return;
+  const selectedCode=candidateWilayaCode(wilayaValue);
+  const knownValue=RECRUTE_WILAYAS.some(([,name])=>normalizedLocation(name)===normalizedLocation(wilayaValue));
+  wilaya.innerHTML='<option value="">— Choisir la wilaya —</option>'+
+    (wilayaValue&&!selectedCode&&!knownValue?`<option value="${esc(wilayaValue)}" selected>${esc(wilayaValue)}</option>`:"")+
+    RECRUTE_WILAYAS.map(([code,name])=>`<option value="${esc(name)}"${code===selectedCode?' selected':''}>${code} - ${esc(name)}</option>`).join("");
+  updateCandidateCommuneOptions(communeValue);
+}
+function updateCandidateCommuneOptions(selectedValue=""){
+  const wilaya=document.getElementById("fWilaya");
+  const commune=document.getElementById("fCommune");
+  if(!wilaya||!commune)return;
+  const selected=String(selectedValue||commune.value||"").trim();
+  const communes=window.ALGERIA_COMMUNES_BY_WILAYA_CODE?.[candidateWilayaCode(wilaya.value)]||[];
+  const isKnown=communes.some(name=>normalizedLocation(name)===normalizedLocation(selected));
+  commune.innerHTML=`<option value="">${communes.length?'— Choisir la commune —':'— Choisir d’abord la wilaya —'}</option>`+
+    (selected&&!isKnown?`<option value="${esc(selected)}" selected>${esc(selected)}</option>`:"")+
+    communes.map(name=>`<option value="${esc(name)}"${normalizedLocation(name)===normalizedLocation(selected)?' selected':''}>${esc(name)}</option>`).join("");
+  commune.disabled=!communes.length&&!selected;
+}
 const PAGE_SIZE=25;
 const tabState={
   new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:""},
@@ -385,7 +420,7 @@ function onSocietyChange(){
 }
 function populateFormSocieties(societies){
   const select=document.getElementById("fSociety");
-  const list=societies.length?societies:[activeSociety].filter(Boolean);
+  const list=[...new Set([...RECRUTE_SOCIETIES,...societies,[activeSociety]].flat().filter(Boolean))];
   select.innerHTML=list.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("")||'<option value="">—</option>';
 }
 
@@ -894,6 +929,7 @@ function openCandidateForm(id){
   editingCandidateId=id;
   document.getElementById("formError").classList.remove("show");
   document.getElementById("candidateForm").reset();
+  initializeCandidateLocation();
   if(id){
     const item=Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===id);
     document.getElementById("modalTitle").textContent="Modifier le candidat";
@@ -903,8 +939,9 @@ function openCandidateForm(id){
       if(item.society)document.getElementById("fSociety").value=item.society;
       candidateField("fSalary",formatSalaryPlain(item.expected_salary));
       const data=item.data||{};
-      const fields={fBirthDate:"dateNaissance",fBirthPlace:"lieuNaissance",fSex:"sexe",fFamilyStatus:"situation",fChildren:"nombreEnfants",fBlood:"groupeSanguin",fFather:"nomPere",fMother:"nomMere",fNin:"nin",fCnas:"numeroCnas",fAddress:"adresse",fCommune:"commune",fWilaya:"wilaya",fEmergencyName:"contactUrgenceNom",fEmergencyRelation:"contactUrgenceLien",fEmergencyPhone:"contactUrgenceTel",fContractDuration:"dureeContrat",fSource:"source",fMilitary:"serviceMilitaire",fHeight:"taille",fShoeSize:"pointure",fShirtSize:"tailleChemise",fNotes:"notes",fAvis:"avisDecision",fAvisDate:"avisDate",fRecruteur:"avisRecruteur",fComment:"avisCommentaire"};
+      const fields={fBirthDate:"dateNaissance",fBirthPlace:"lieuNaissance",fSex:"sexe",fFamilyStatus:"situation",fChildren:"nombreEnfants",fBlood:"groupeSanguin",fFather:"nomPere",fMother:"nomMere",fNin:"nin",fCnas:"numeroCnas",fAddress:"adresse",fEmergencyName:"contactUrgenceNom",fEmergencyRelation:"contactUrgenceLien",fEmergencyPhone:"contactUrgenceTel",fContractDuration:"dureeContrat",fSource:"source",fMilitary:"serviceMilitaire",fHeight:"taille",fShoeSize:"pointure",fShirtSize:"tailleChemise",fNotes:"notes",fAvis:"avisDecision",fAvisDate:"avisDate",fRecruteur:"avisRecruteur",fComment:"avisCommentaire"};
       Object.entries(fields).forEach(([field,key])=>candidateField(field,data[key]));
+      initializeCandidateLocation(data.wilaya,data.commune);
       candidateField("fLanguages",Array.isArray(data.langues)?data.langues.join(", "):data.langues);
       setExperienceRows(Array.isArray(data.experience)&&data.experience.length?data.experience:(data.experienceTexte?[{motif:data.experienceTexte}]:[]));
       const photo=data.photo||data.photoData||"";candidateField("fPhotoData",photo);renderCandidatePhoto(photo);
