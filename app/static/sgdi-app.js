@@ -160,7 +160,7 @@ const SESSION_KEY = "irongs_session_v1";
 const UNLOCK_SESSION_KEY = "irongs_unlocked_v1";
 const ADMIN_SYSTEM_UNLOCK_KEY = "sgdi_admin_system_unlocked_v1";
 const SGDI_API_TOKEN_KEY = "sgdi_api_token_v1";
-let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:1,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null;
+let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:1,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null, sgdiViewRenderGeneration=0, sgdiViewRenderHash="";
 let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPendingRoute=null;
 // Devient true UNIQUEMENT après un vrai chargement serveur réussi (sgdiPullState). Empêche
 // d'envoyer une base vide/non chargée qui effacerait les données (bug "tout à zéro" en multi-PC).
@@ -7599,6 +7599,12 @@ function sidebarNavigate(event,route){
 }
 
 function renderView(){
+  // Invalide immédiatement tout rendu asynchrone lancé par la vue précédente.
+  const activeRenderHash=String(location.hash||"#/dashboard");
+  if(activeRenderHash!==sgdiViewRenderHash){
+    sgdiViewRenderHash=activeRenderHash;
+    sgdiViewRenderGeneration+=1;
+  }
   if(typeof closeEmployeeRowActions==="function")closeEmployeeRowActions();
   // RÈGLE GLOBALE : tant que les données complètes du serveur ne sont pas chargées, on n'affiche
   // AUCUN chiffre calculé en local (qui serait faux). On reste en CHARGEMENT jusqu'à la réponse
@@ -15910,6 +15916,11 @@ function sitesGlobalSearchHTML(query,sites,soc){
 }
 
 async function renderSitesServer(view){
+  // Une navigation peut intervenir pendant les appels serveur ci-dessous. Dans ce cas,
+  // cette ancienne vue ne doit jamais écraser la nouvelle page affichée (ex. Pointage).
+  const renderGeneration=sgdiViewRenderGeneration;
+  const renderHash=String(location.hash||"");
+  const renderIsCurrent=()=>renderGeneration===sgdiViewRenderGeneration&&renderHash===String(location.hash||"")&&view===document.getElementById("view");
   const soc=sitesPageSocieteFilter();
   const page=sgdiServerCurrentPage("sites",soc||"all");
   const globalQ=sessionStorage.getItem("sitesGlobalSearch")||"";
@@ -15921,6 +15932,7 @@ async function renderSitesServer(view){
       globalQ?SGDI.sites.page({society:soc||undefined,q:globalQ,page:1,page_size:50}).catch(()=>null):Promise.resolve(null),
       session?.transverse!=="materiel"&&window.SGDI_API?.ui?.sidebarStats?window.SGDI_API.ui.sidebarStats({}).catch(()=>null):Promise.resolve(null)
     ]);
+    if(!renderIsCurrent())return;
     if(statsData)window.SGDI_SIDEBAR_STATS=statsData;
     const rows=(result?.items||result?.data||[]).map(siteFromApi);
     const mapRows=(Array.isArray(mapRowsRaw)?mapRowsRaw:[]).map(siteFromApi);
@@ -15928,8 +15940,10 @@ async function renderSitesServer(view){
     [...rows,...mapRows,...globalSearchRows].forEach(site=>sgdiUpsertServerItem("sites",site));
     if(session?.transverse!=="materiel"&&typeof syncAssignmentsFromPostgres==="function"){
       await syncAssignmentsFromPostgres().catch(e=>console.warn("Affectations PostgreSQL non synchronisées avant situation sites",e));
+      if(!renderIsCurrent())return;
     }
     const situationData=session?.transverse!=="materiel"?await SGDI.sites.situation(soc?{society:soc}:undefined).catch(()=>null):null;
+    if(!renderIsCurrent())return;
     if(session?.transverse!=="materiel"&&!situationData)throw new Error("Situation sites PostgreSQL indisponible");
     const sites=siteOpsSitesForScope(soc,mapRows.length?mapRows:rows,{onlyExtra:true,includeInactive:true});
     const mapSites=siteOpsSitesForScope(soc,mapRows,{onlyExtra:true});
@@ -15946,8 +15960,9 @@ async function renderSitesServer(view){
     <div id="sites-filter-info" class="hidden mb-4 p-3 rounded-lg bg-slate-100 border border-slate-200 text-sm font-semibold"></div>
     ${sites.length===0?`<div class="card p-10 text-center text-slate-500">Aucun site.</div>`:`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${sites.map(s=>{const metric=siteBackendMetricForSite(s,situationBySite);const eff={...siteEffectifsNorm(s),totalContractuel:metric.contractual};const manque=metric.missing;const surplus=metric.surplus;const realized=metric.realized;const op=metric.operational;const archived=s.actif===false||s.active===0||s.statut==="inactif";const lampOk=eff.totalContractuel>0&&realized===eff.totalContractuel;const lampKo=eff.totalContractuel>0&&realized!==eff.totalContractuel;const sid2=siteEditRouteId(s);return `<div class="card p-5 site-card ${archived?"opacity-75":""}" data-site-status="${op?"operationnel":"non-operationnel"}" data-site-manque="${manque}" data-site-surplus="${surplus}" data-site-instance="${realized===0?1:0}" data-site-contractuel="${eff.totalContractuel}" data-site-realise="${realized}" data-searchable><div class="flex items-start justify-between gap-3"><div><h2 class="text-lg font-black flex items-center gap-2 flex-wrap"><span class="site-status-lamp ${lampOk?"lamp-green":lampKo?"lamp-red":"lamp-gray"}" title="${lampOk?"Effectif conforme":surplus>0?"Surplus +"+surplus:manque>0?"Manque −"+manque:"Effectif non défini"}"></span>${escapeHTML(s.nom||"-")} <span class="pill pill-amber ml-2 font-mono">${safe(s.indicatif)}</span> ${archived?`<span class="pill pill-gray ml-2">Archivé</span>`:`<span class="pill pill-green ml-2">Actif</span>`}</h2><div class="text-sm text-slate-500">${safe(s.type)} · ${safe(s.commune)}, ${safe(s.wilaya)}</div><div class="text-xs text-slate-500 mt-1">Client : ${safe(s.client)}</div></div><div class="flex gap-2"><a class="btn btn-ghost text-xs" href="#/sites/${sid2}">${opsReadOnly?"Accéder":"Modifier"}</a>${opsReadOnly?"":siteAdminSystemActionsHTML(s)}</div></div>${siteEffectifAlertHTML(eff,{length:realized})}<div class="grid grid-6 gap-2 mt-4 text-xs"><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Contractuel</div><div class="text-lg font-bold">${eff.totalContractuel||0}</div></div><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Jour</div><div class="text-lg font-bold">${eff.jour||0}</div></div><div class="bg-slate-50 p-2 rounded border text-center"><div class="text-slate-500 font-semibold">Nuit</div><div class="text-lg font-bold">${eff.nuit||0}</div></div><button type="button" class="p-2 rounded border text-center transition ${surplus>0?"hover:opacity-80":"hover:bg-blue-50 hover:border-blue-300 bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74":""}" onclick="event.stopPropagation();openSiteAffectesModal('${sid2}')"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Affecté</div><div class="text-lg font-bold">${realized}</div></button><div class="p-2 rounded border text-center ${surplus>0?"":"bg-slate-50 border-slate-200"}" style="${surplus>0?"background:#fff7ed;border-color:#fdba74;color:#c2410c":""}"><div class="font-semibold ${surplus>0?"":"text-slate-500"}">Surplus</div><div class="text-lg font-bold">${surplus>0?"+"+surplus:0}</div></div><div class="p-2 rounded border text-center ${manque>0?"":"bg-slate-50 border-slate-200"}" style="${manque>0?"background:#fef2f2;border-color:#fca5a5;color:#991b1b":""}"><div class="font-semibold ${manque>0?"":"text-slate-500"}">Manque</div><div class="text-lg font-bold">${manque>0?"−"+manque:0}</div></div></div>${siteMovementHistoryHTML(s)}</div>`}).join("")}</div>`}
     ${pagination}`;
-    setTimeout(()=>{initSitesDashboardMap();enableClickableSiteCards()},0);
+    setTimeout(()=>{if(renderIsCurrent()){initSitesDashboardMap();enableClickableSiteCards()}},0);
   }catch(e){
+    if(!renderIsCurrent())return;
     console.warn("Sites serveur indisponibles, repli local",e);
     window.__sgdiSitesLocalFallback=true;
     renderSites(view);
