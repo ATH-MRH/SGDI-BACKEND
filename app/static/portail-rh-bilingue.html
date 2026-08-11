@@ -1092,7 +1092,6 @@
           </table>
         </section>
         <div class="attendance-actions">
-          <button class="attendance-action scan" onclick="openEmployeeQrScanner()">📷 SCANNER UN QR DE PRÉSENCE</button>
           <button class="attendance-action" onclick="switchTab('portail')">☰ PORTAIL RH</button>
           <button class="attendance-action" onclick="renderHomeTab()">↻ ACTUALISER</button>
         </div>
@@ -1124,10 +1123,6 @@
           </button>
           <button class="home-nav-item" onclick="switchTab('historique')">
             <span class="home-nav-item-left"><span class="pnav-icon">📋</span> Mes demandes</span>
-            <span class="home-nav-arrow">›</span>
-          </button>
-          <button class="home-nav-item" onclick="switchTab('pointage')">
-            <span class="home-nav-item-left"><span class="pnav-icon">📍</span> Pointage (QR / GPS)</span>
             <span class="home-nav-arrow">›</span>
           </button>
           <button class="home-nav-item" onclick="switchTab('ronde')">
@@ -1541,45 +1536,6 @@
       </div>
 
       <!-- ============ POINTAGE ============ -->
-      <div class="tab-content" id="tab-pointage">
-        <!-- QR Scan card -->
-        <div class="card" id="qr-scan-card">
-          <h2>Feuille Quotidienne de Pointage</h2>
-          <div class="info-banner" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af;">Scannez le QR code affiché sur la tablette du site. Votre présence du jour sera enregistrée automatiquement.</div>
-          <div id="qr-scan-result" style="margin-bottom:12px;"></div>
-          <div id="portal-qr-reader" style="border-radius:10px;overflow:hidden;max-width:360px;margin:0 auto 12px;"></div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;align-items:center;margin-top:8px;">
-            <button type="button" id="qr-open-btn" onclick="portalStartQrScan()" style="width:148px;height:148px;border-radius:999px;border:0;background:#043970;color:#fff;font-weight:900;font-size:17px;box-shadow:0 18px 40px rgba(4,57,112,.28);cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;">Pointer<br>présence</button>
-            <button type="button" class="btn btn-outline" id="qr-stop-btn" onclick="portalStopQrScan()" style="display:none">✕ Fermer la caméra</button>
-          </div>
-        </div>
-        <!-- Manual fallback -->
-        <div class="card">
-          <h2>Pointage manuel (sans QR)</h2>
-          <div class="grid" style="align-items:end;">
-            <div class="field">
-              <label>Date</label>
-              <input type="date" id="pointage-date" readonly />
-            </div>
-            <div class="field">
-              <label>Heure</label>
-              <input type="time" id="pointage-heure" readonly />
-            </div>
-            <div class="field full">
-              <label>Observation</label>
-              <textarea id="pointage-note" placeholder="Observation éventuelle"></textarea>
-            </div>
-          </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
-            <button type="button" class="btn btn-secondary" onclick="renderPointage()">Actualiser</button>
-          </div>
-        </div>
-        <div class="card">
-          <h2>Historique pointage</h2>
-          <div id="pointageHistory" class="info-banner">Chargement...</div>
-        </div>
-      </div>
-
       <!-- ============ DOCUMENTS ============ -->
       <div class="tab-content" id="tab-documents">
         <div class="card">
@@ -1784,8 +1740,6 @@
   let employeeQrRefreshTimer = null;
   let employeeQrCountdownTimer = null;
   let employeeQrExpiresAt = 0;
-  let _portalQrScanner = null;
-  let _portalQrBusy = false;
 
   const TYPE_LABELS = {
     attestation: 'Attestation de travail',
@@ -2619,7 +2573,6 @@
 
   function switchTab(name) {
     if (name !== 'home') stopEmployeeQr();
-    if (name !== 'pointage' && _portalQrScanner) portalStopQrScan();
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + name).classList.add('active');
@@ -2637,7 +2590,6 @@
     }
     if (name === 'historique') renderHistory();
     if (name === 'reception') renderInbox();
-    if (name === 'pointage') renderPointage();
     if (name === 'documents') renderDocuments();
     if (name === 'profil') { loadProfileForm(); updateNotifUI(); autoSubscribePush(); }
     if (name === 'ronde') {
@@ -2645,14 +2597,6 @@
       rondeInit();
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function openEmployeeQrScanner() {
-    switchTab('pointage');
-    requestAnimationFrame(() => {
-      document.getElementById('qr-scan-card')?.scrollIntoView({ block: 'start' });
-      portalStartQrScan();
-    });
   }
 
   function stopEmployeeQr() {
@@ -2932,43 +2876,6 @@
   /* ================================================== */
   /* ================ POINTAGE ========================== */
   /* ================================================== */
-  function updatePointageClock() {
-    const now = new Date();
-    const d = document.getElementById('pointage-date');
-    const h = document.getElementById('pointage-heure');
-    if (d) d.value = now.toISOString().slice(0, 10);
-    if (h) h.value = now.toTimeString().slice(0, 5);
-  }
-
-  function getPortalPosition() {
-    return new Promise(resolve => {
-      if (!window.isSecureContext) return resolve({ error: 'insecure_context' });
-      if (!navigator.geolocation) return resolve({ error: 'geolocation_unavailable' });
-      navigator.geolocation.getCurrentPosition(
-        pos => resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy
-        }),
-        err => resolve({ error: err && err.code === 1 ? 'permission_denied' : 'position_unavailable' }),
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 30000 }
-      );
-    });
-  }
-
-  async function sendPortalPointage(record) {
-    const res = await fetch(location.origin + '/api/portal/pointages', {
-      method: 'POST',
-      headers: portalAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(record)
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error(txt || 'Erreur pointage PostgreSQL');
-    }
-    return res.json();
-  }
-
   async function loadPortalPointages() {
     const code = currentUser?.profile?.matricule || currentUser?.profile?.code || currentUser?.key || '';
     if (!code) return [];
@@ -2978,78 +2885,6 @@
     if (!res.ok) throw new Error('Historique pointage indisponible');
     const payload = await res.json();
     return Array.isArray(payload.data) ? payload.data : [];
-  }
-
-  function _updateArriveeBtn(rows) {
-    const btn = document.getElementById('btn-arrivee-gps');
-    if (!btn) return;
-    const cutoff = Date.now() - 12 * 60 * 60 * 1000;
-    const hasRecent = (rows || []).some(p => {
-      if (p.action !== 'arrivee' && p.action !== 'presence') return false;
-      const dt = new Date(`${p.date}T${p.heure}`);
-      return !isNaN(dt.getTime()) && dt.getTime() >= cutoff;
-    });
-    btn.disabled = hasRecent;
-    btn.style.opacity = hasRecent ? '0.45' : '';
-    btn.style.cursor = hasRecent ? 'not-allowed' : '';
-    btn.title = hasRecent ? 'Déjà pointé — disponible 12 h après le dernier pointage arrivée' : '';
-  }
-
-  async function renderPointage() {
-    updatePointageClock();
-    const zone = document.getElementById('pointageHistory');
-    if (!zone) return;
-    zone.textContent = 'Chargement...';
-    try {
-      const rows = await loadPortalPointages();
-      _updateArriveeBtn(rows);
-      if (!rows.length) {
-        zone.innerHTML = 'Aucun pointage enregistré.';
-        return;
-      }
-      zone.innerHTML = `<div style="overflow:auto;"><table class="history-table"><thead><tr><th>Date</th><th>Heure</th><th>Action</th><th>Site</th><th>Position</th></tr></thead><tbody>${rows.slice(0, 20).map(p => {
-        const gps = p.position && p.position.lat ? `${Number(p.position.lat).toFixed(5)}, ${Number(p.position.lng).toFixed(5)}` : '—';
-        const action = p.action === 'presence' ? 'Présent' : p.action === 'depart' ? 'Départ' : 'Arrivée';
-        return `<tr><td>${escapeHtml(p.date || '')}</td><td>${escapeHtml(p.heure || '')}</td><td><span class="badge badge-traite">${action}</span></td><td>${escapeHtml(p.site || '—')}</td><td>${escapeHtml(gps)}</td></tr>`;
-      }).join('')}</tbody></table></div>`;
-    } catch (err) {
-      console.error(err);
-      zone.innerHTML = '<span style="color:var(--danger);">Connexion PostgreSQL indisponible pour le pointage.</span>';
-    }
-  }
-
-  async function submitPortalPointage(action) {
-    updatePointageClock();
-    const now = new Date();
-    const ref = `PTG-${now.toISOString().slice(0,10).replaceAll('-', '')}-${Math.floor(Math.random() * 9000 + 1000)}`;
-    const record = {
-      ref,
-      action,
-      employee: { ...currentUser.profile },
-      date: document.getElementById('pointage-date').value,
-      heure: document.getElementById('pointage-heure').value,
-      note: val('pointage-note'),
-      createdAt: now.toISOString(),
-      position: await getPortalPosition()
-    };
-    if (record.position && record.position.error === 'permission_denied') {
-      toast('Localisation refusée. Autorisez la position dans les paramètres du navigateur.', true);
-      return;
-    }
-    // GPS non disponible (PC, timeout, insecure_context) → on pointe sans coordonnées
-    if (!record.position || record.position.error || !record.position.lat || !record.position.lng) {
-      record.position = { lat: null, lng: null, accuracy: null, source: 'manual' };
-    }
-    try {
-      await sendPortalPointage(record);
-      document.getElementById('pointage-note').value = '';
-      playPointageSound('success');
-      toast(action === 'depart' ? 'Pointage départ enregistré ✓' : 'Pointage arrivée enregistré ✓');
-      renderPointage();
-    } catch (err) {
-      console.error(err);
-      toast('Erreur pointage : ' + (err.message || 'Connexion indisponible'), true);
-    }
   }
 
   function generateRef(type) {
@@ -3759,160 +3594,6 @@
   }
 
   boot();
-
-  // ── QR Scan Portail ────────────────────────────────────────────────────────
-  async function portalStartQrScan() {
-    const reader = document.getElementById('portal-qr-reader');
-    if (!reader) return;
-    if (_portalQrScanner) return;
-    const openBtn = document.getElementById('qr-open-btn');
-    const stopBtn = document.getElementById('qr-stop-btn');
-    if (openBtn) openBtn.style.display = 'none';
-    if (stopBtn) stopBtn.style.display = '';
-    reader.innerHTML = '';
-    reader.style.minHeight = '300px';
-    portalShowQrResult('Ouverture de la caméra...', 'warning');
-    if (!window.Html5Qrcode) { setTimeout(portalStartQrScan, 500); return; }
-    try {
-      _portalQrBusy = false;
-      _portalQrScanner = new Html5Qrcode('portal-qr-reader');
-      await _portalQrScanner.start(
-        { facingMode: 'environment' },
-        { fps: 12, qrbox: { width: 260, height: 260 }, aspectRatio: 1 },
-        portalOnQrScan,
-        () => {}
-      );
-    } catch (err) {
-      try {
-        if (_portalQrScanner) await _portalQrScanner.start(
-          { facingMode: 'user' },
-          { fps: 12, qrbox: { width: 260, height: 260 }, aspectRatio: 1 },
-          portalOnQrScan,
-          () => {}
-        );
-      } catch (fallbackErr) {
-        _portalQrScanner = null;
-        if (openBtn) openBtn.style.display = 'flex';
-        if (stopBtn) stopBtn.style.display = 'none';
-        portalShowQrResult('❌ Caméra indisponible ou autorisation refusée', 'error');
-      }
-    }
-  }
-
-  async function portalStopQrScan() {
-    if (_portalQrScanner) {
-      try {
-        if (typeof _portalQrScanner.stop === 'function') await _portalQrScanner.stop();
-      } catch (e) {}
-      try {
-        if (typeof _portalQrScanner.clear === 'function') _portalQrScanner.clear();
-      } catch (e) {}
-      _portalQrScanner = null;
-    }
-    _portalQrBusy = false;
-    const reader = document.getElementById('portal-qr-reader');
-    if (reader) { reader.innerHTML = ''; reader.style.minHeight = ''; }
-    const openBtn = document.getElementById('qr-open-btn');
-    const stopBtn = document.getElementById('qr-stop-btn');
-    if (openBtn) openBtn.style.display = 'flex';
-    if (stopBtn) stopBtn.style.display = 'none';
-  }
-
-  async function portalOnQrScan(decodedText) {
-    if (_portalQrBusy) return;
-    _portalQrBusy = true;
-    const token = decodedText.trim();
-    let slot, currentSlot;
-    if (token.includes('|')) {
-      const parts = token.split('|');
-      slot = parseInt(parts[1]);
-      currentSlot = Math.floor(Date.now() / 10000);
-    } else {
-      slot = parseInt(token);
-      currentSlot = Math.floor(Date.now() / 300000);
-    }
-    if (isNaN(slot)) {
-      portalShowQrResult('❌ QR non reconnu — scannez le QR affiché sur la tablette de présence', 'error');
-      _portalQrBusy = false;
-      return;
-    }
-    if (Math.abs(slot - currentSlot) > 1) {
-      portalShowQrResult('⏱ QR expiré — demandez un nouveau QR à l\'écran de la tablette', 'error');
-      _portalQrBusy = false;
-      return;
-    }
-    const session = getSessionV2();
-    if (!session || !session.matricule) { portalShowQrResult('⚠️ Session expirée — reconnectez-vous', 'error'); _portalQrBusy = false; return; }
-    try {
-      const res = await fetch(location.origin + '/api/portal/pointage-qr', {
-        method: 'POST',
-        headers: portalAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ token, matricule: session.matricule })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        portalShowQrResult('❌ ' + (err.detail || 'Pointage refusé'), 'error');
-        _portalQrBusy = false;
-        return;
-      }
-      const data = await res.json();
-      const heure = data.heure || new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-      await portalStopQrScan();
-      const emp = data.employee || {};
-      const fullName = [emp.nom, emp.prenom].filter(Boolean).join(' ') || currentUser?.name || '';
-      const matricule = emp.matricule || session.matricule || '';
-      const site = data.site || data.record?.siteName || currentUser?.profile?.site || '—';
-      if (data.duplicate) {
-        playPointageSound('warning');
-        portalShowQrResult(`Déjà enregistré — ${fullName} · ${matricule} · ${site} · ${heure}`, 'warning');
-      } else {
-        playPointageSound('success');
-        portalShowQrResult(`PRÉSENT — ${fullName} · ${matricule} · ${site} · ${heure}`, 'success');
-      }
-      setTimeout(renderPointage, 800);
-    } catch (err) {
-      portalShowQrResult('❌ Erreur réseau — vérifiez votre connexion', 'error');
-      _portalQrBusy = false;
-    }
-  }
-
-  function portalShowQrResult(msg, type) {
-    const el = document.getElementById('qr-scan-result');
-    if (!el) return;
-    const bg = type === 'success' ? '#dcfce7' : type === 'warning' ? '#fef3c7' : '#fee2e2';
-    const color = type === 'success' ? '#166534' : type === 'warning' ? '#92400e' : '#991b1b';
-    el.innerHTML = `<div style="padding:12px 16px;border-radius:8px;font-weight:700;font-size:15px;background:${bg};color:${color};margin-bottom:8px;">${msg}</div>`;
-    setTimeout(() => { el.innerHTML = ''; }, 4000);
-  }
-
-  function playPointageSound(type) {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (type === 'success') {
-        // Double bip montant : confirmation de présence
-        [[440, 0, 0.12], [660, 0.14, 0.18]].forEach(([freq, start, end]) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.type = 'sine'; osc.frequency.value = freq;
-          gain.gain.setValueAtTime(0, ctx.currentTime + start);
-          gain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + start + 0.02);
-          gain.gain.linearRampToValueAtTime(0, ctx.currentTime + end);
-          osc.start(ctx.currentTime + start);
-          osc.stop(ctx.currentTime + end + 0.01);
-        });
-      } else {
-        // Bip grave court : erreur ou doublon
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.type = 'sine'; osc.frequency.value = 220;
-        gain.gain.setValueAtTime(0.35, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.26);
-      }
-    } catch (e) {}
-  }
 </script>
 </body>
 </html>
