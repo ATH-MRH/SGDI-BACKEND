@@ -1,5 +1,5 @@
 // Service Worker — Pointeur ATLAS
-const CACHE = 'pointeur-atlas-v1';
+const CACHE = 'pointeur-atlas-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 
@@ -19,7 +19,10 @@ self.addEventListener('fetch', e => {
     fetch(e.request)
       .then(res => {
         if (res.ok) {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+          // Cloner immédiatement : une fois la réponse rendue au navigateur,
+          // son body peut déjà être consommé lorsque la promesse du cache aboutit.
+          const cacheCopy = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, cacheCopy)).catch(() => {});
         }
         return res;
       })

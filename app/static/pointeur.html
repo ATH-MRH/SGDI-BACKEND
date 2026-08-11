@@ -646,8 +646,16 @@ async function confirmManualPointage(){
     button.disabled=false;
   }
 }
+function normalizeUsbQrToken(value){
+  let token=String(value||"").trim().replace(/[\r\n\t ]+/g,"");
+  // Le HC-666 configuré comme clavier français peut produire « ! » à la place
+  // du caractère URL-safe « _ ». Un JWT ne contient jamais « ! » : cette
+  // correction est donc ciblée et ne réduit pas la vérification de signature.
+  if(token.split(".").length===3&&token.includes("!")&&/^[A-Za-z0-9._!\-]+$/.test(token))token=token.replaceAll("!","_");
+  return token;
+}
 function acceptUsbQr(value){
-  const token=String(value||"").trim();qrKeyBuffer="";
+  const token=normalizeUsbQrToken(value);qrKeyBuffer="";
   const input=document.getElementById("wedgeInput");
   if(input)input.value="";
   if(token.length>=20)onQr(token);
