@@ -27427,6 +27427,26 @@ function agendaWeekEventCard(e){
     <button type="button" onclick="${e.automatic?`navigate('${escapeHTML(e.route||"agenda/dashboard")}')`:`openAgendaEventModal('${escapeHTML(e.id)}')`}">Ouvrir</button>
   </article>`;
 }
+function agendaMonthStart(dateStr){
+  const d=new Date((dateStr||today())+"T00:00:00");d.setDate(1);return d.toISOString().slice(0,10);
+}
+function agendaMonthOffset(dateStr,months){
+  const d=new Date((dateStr||today())+"T00:00:00");d.setDate(1);d.setMonth(d.getMonth()+months);return d.toISOString().slice(0,10);
+}
+function agendaCalendarEvent(e){
+  const meta=agendaEventTypeMeta(e.type);
+  return `<button type="button" class="agenda-cal-event" style="--cal-color:${meta.color};--cal-bg:${meta.bg}" onclick="${e.automatic?`navigate('${escapeHTML(e.route||"agenda/dashboard")}')`:`openAgendaEventModal('${escapeHTML(e.id)}')`}" title="${escapeHTML(e.titre||"")}"><i></i><span>${e.heureDebut?escapeHTML(e.heureDebut)+" ":""}${escapeHTML(e.titre||"Sans titre")}</span></button>`;
+}
+function agendaMiniMonth(year,month,events,selected){
+  const first=new Date(year,month,1),start=(first.getDay()+6)%7,days=new Date(year,month+1,0).getDate();
+  const cells=Array.from({length:42},(_,i)=>{const day=i-start+1;if(day<1||day>days)return`<span class="outside"></span>`;const ds=`${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;return`<button class="${ds===today()?"today":""} ${ds===selected?"selected":""}" onclick="navigate('agenda/dashboard/${ds}')">${day}${events.some(e=>e.date===ds)?`<i></i>`:""}</button>`}).join("");
+  return `<div class="agenda-mini-month"><header><b>${new Date(year,month,1).toLocaleDateString("fr-FR",{month:"long"})}</b></header><div class="agenda-mini-week"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div><div class="agenda-mini-days">${cells}</div></div>`;
+}
+function agendaCalendarSidebar(events,selected){
+  const d=new Date((selected||today())+"T00:00:00");
+  const types=[["tache","Tâches"],["contrat","Fins de contrat"],["essai","Périodes d'essai"],["mission","Missions"],["conge","Congés"]];
+  return `<aside class="agenda-calendar-sidebar"><button class="agenda-sidebar-create" onclick="openAgendaEventModal()">＋</button><h3>Calendriers</h3>${types.map(([type,label])=>{const meta=agendaEventTypeMeta(type);return`<label><i style="background:${meta.color}">✓</i><span>${label}</span><b>${events.filter(e=>e.type===type&&!agendaEventIsDone(e)).length}</b></label>`}).join("")}<div class="agenda-sidebar-rule"></div>${agendaMiniMonth(d.getFullYear(),d.getMonth(),events,selected)}</aside>`;
+}
 function renderAgenda(view,sub,arg){
   if(!canAccess("agenda")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(!Array.isArray(db.agendaEvents))db.agendaEvents=[];
@@ -27439,20 +27459,24 @@ function renderAgenda(view,sub,arg){
   const done=events.filter(agendaEventIsDone);
   const kpi=(label,value,subText,color)=>`<div class="agenda-kpi"><span>${escapeHTML(label)}</span><strong style="color:${color}">${value}</strong><small>${escapeHTML(subText||"")}</small></div>`;
   view.classList.add("agenda-fullscreen-view");
-  const header=`<div class="agenda-page agenda-page-full">
-    <div class="agenda-head">
-      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Centre de pilotage</div><h1>Agenda & tâches</h1><p>${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})} · ${escapeHTML(agendaScopeLabel())}</p></div>
-      <div class="agenda-head-actions"><button type="button" class="btn btn-secondary" onclick="navigate('agenda/semaine')">Vue semaine</button><button type="button" class="btn btn-primary" onclick="openAgendaEventModal()">+ Nouvelle tâche</button></div>
-    </div>
-    <div class="agenda-tabs">
-      ${["dashboard","liste","semaine","rappels"].map(k=>`<button type="button" class="${mode===k?"active":""}" onclick="navigate('agenda/${k}')">${k==="dashboard"?"Aujourd'hui":k==="liste"?"Toutes les tâches":k==="semaine"?"Planning semaine":"Alertes"}</button>`).join("")}
-    </div>`;
+  const selected=arg||td;
+  const navMode=mode==="dashboard"?"jour":mode;
+  const routes=[["jour","Jour","dashboard"],["semaine","Semaine","semaine"],["mois","Mois","mois"],["annee","Année","annee"]];
+  const header=`<div class="agenda-page agenda-page-full agenda-calendar-app"><div class="agenda-calendar-top"><div class="agenda-calendar-brand"><b>Agenda</b><span>${escapeHTML(agendaScopeLabel())}</span></div><div class="agenda-calendar-modes">${routes.map(([k,label,route])=>`<button class="${navMode===k?"active":""}" onclick="navigate('agenda/${route}/${selected}')">${label}</button>`).join("")}</div><button class="agenda-calendar-search" onclick="navigate('agenda/liste')">⌕</button></div>`;
   if(mode==="semaine"){
-    const start=agendaWeekStart(arg||td);
+    const start=agendaWeekStart(selected);
     const days=Array.from({length:7},(_,i)=>agendaDateOffset(start,i));
-    view.innerHTML=header+`<section class="agenda-week-layout"><div class="agenda-week-nav"><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,-7)}')">← Précédente</button><div><small>Semaine du</small><strong>${formatDate(start)} – ${formatDate(days[6])}</strong></div><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,7)}')">Suivante →</button></div>
-      <div class="agenda-week-grid">${days.map(d=>{const rows=events.filter(e=>e.date===d);return`<div class="agenda-day ${d===td?"today":""}"><div class="agenda-day-title"><span>${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{weekday:"long"})}</span><b>${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</b>${rows.length?`<i>${rows.length}</i>`:""}</div><div class="agenda-day-content">${rows.length?rows.map(agendaWeekEventCard).join(""):`<div class="agenda-empty-mini">Aucun événement</div>`}</div></div>`}).join("")}</div></section></div>`;
+    const hours=Array.from({length:16},(_,i)=>String(i+5).padStart(2,"0")+":00");
+    view.innerHTML=header+`<div class="agenda-calendar-shell">${agendaCalendarSidebar(events,selected)}<main class="agenda-calendar-main"><div class="agenda-calendar-toolbar"><h1>${new Date(start+"T00:00:00").toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h1><div><button onclick="navigate('agenda/semaine/${agendaDateOffset(start,-7)}')">‹</button><button onclick="navigate('agenda/semaine/${td}')">Aujourd’hui</button><button onclick="navigate('agenda/semaine/${agendaDateOffset(start,7)}')">›</button></div></div><div class="agenda-time-week"><div class="agenda-time-corner">toute la journée</div>${days.map(d=>`<div class="agenda-time-day-head ${d===td?"today":""}">${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{weekday:"short"})} <b>${Number(d.slice(-2))}</b></div>`).join("")}<div class="agenda-all-day-label"></div>${days.map(d=>`<div class="agenda-all-day">${events.filter(e=>e.date===d&&!e.heureDebut).map(agendaCalendarEvent).join("")}</div>`).join("")}${hours.map(h=>`<div class="agenda-hour-label">${h}</div>${days.map(d=>`<div class="agenda-hour-cell">${events.filter(e=>e.date===d&&e.heureDebut&&e.heureDebut.slice(0,2)===h.slice(0,2)).map(agendaCalendarEvent).join("")}</div>`).join("")}`).join("")}</div></main></div></div>`;
     return;
+  }
+  if(mode==="mois"){
+    const ms=agendaMonthStart(selected),d=new Date(ms+"T00:00:00"),offset=(d.getDay()+6)%7,start=agendaDateOffset(ms,-offset);const cells=Array.from({length:42},(_,i)=>agendaDateOffset(start,i));
+    view.innerHTML=header+`<div class="agenda-calendar-shell">${agendaCalendarSidebar(events,selected)}<main class="agenda-calendar-main"><div class="agenda-calendar-toolbar"><h1>${d.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</h1><div><button onclick="navigate('agenda/mois/${agendaMonthOffset(ms,-1)}')">‹</button><button onclick="navigate('agenda/mois/${td}')">Aujourd’hui</button><button onclick="navigate('agenda/mois/${agendaMonthOffset(ms,1)}')">›</button></div></div><div class="agenda-month-weekdays">${["lun.","mar.","mer.","jeu.","ven.","sam.","dim."].map(x=>`<span>${x}</span>`).join("")}</div><div class="agenda-month-grid">${cells.map(ds=>`<div class="agenda-month-cell ${ds.slice(0,7)!==ms.slice(0,7)?"outside":""} ${ds===td?"today":""}" ondblclick="openAgendaEventModal()"><button onclick="navigate('agenda/dashboard/${ds}')">${Number(ds.slice(-2))}</button>${events.filter(e=>e.date===ds).slice(0,4).map(agendaCalendarEvent).join("")}${events.filter(e=>e.date===ds).length>4?`<small>+ ${events.filter(e=>e.date===ds).length-4} autres</small>`:""}</div>`).join("")}</div></main></div></div>`;return;
+  }
+  if(mode==="annee"){
+    const year=Number(String(selected).slice(0,4))||new Date().getFullYear();
+    view.innerHTML=header+`<div class="agenda-calendar-shell">${agendaCalendarSidebar(events,selected)}<main class="agenda-calendar-main"><div class="agenda-calendar-toolbar"><h1>${year}</h1><div><button onclick="navigate('agenda/annee/${year-1}-01-01')">‹</button><button onclick="navigate('agenda/annee/${td}')">Aujourd’hui</button><button onclick="navigate('agenda/annee/${year+1}-01-01')">›</button></div></div><div class="agenda-year-grid">${Array.from({length:12},(_,m)=>agendaMiniMonth(year,m,events,selected)).join("")}</div></main></div></div>`;return;
   }
   if(mode==="rappels"){
     const reminders=events.filter(agendaEventIsReminderDue);
@@ -27464,6 +27488,10 @@ function renderAgenda(view,sub,arg){
     const filtered=filter==="aujourdhui"?todayRows:filter==="retard"?overdue:filter==="termine"?done:events;
     view.innerHTML=header+`<div class="agenda-list-toolbar"><select class="select" onchange="sessionStorage.setItem('agendaFilter',this.value);renderView()"><option value="tous" ${filter==="tous"?"selected":""}>Tous les événements</option><option value="aujourdhui" ${filter==="aujourdhui"?"selected":""}>Aujourd'hui</option><option value="retard" ${filter==="retard"?"selected":""}>En retard</option><option value="termine" ${filter==="termine"?"selected":""}>Terminés</option></select><input class="input" placeholder="Rechercher..." oninput="filterTable(this.value)"></div><section class="agenda-panel">${filtered.length?filtered.map(e=>agendaEventCard(e)).join(""):`<div class="agenda-empty">Aucun événement.</div>`}</section></div>`;
     return;
+  }
+  if(mode==="dashboard"){
+    const dayEvents=events.filter(e=>e.date===selected),hours=Array.from({length:16},(_,i)=>String(i+5).padStart(2,"0")+":00");
+    view.innerHTML=header+`<div class="agenda-calendar-shell">${agendaCalendarSidebar(events,selected)}<main class="agenda-calendar-main"><div class="agenda-calendar-toolbar"><div><h1>${new Date(selected+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"})}</h1><p>${new Date(selected+"T00:00:00").toLocaleDateString("fr-FR",{weekday:"long"})}</p></div><div><button onclick="navigate('agenda/dashboard/${agendaDateOffset(selected,-1)}')">‹</button><button onclick="navigate('agenda/dashboard/${td}')">Aujourd’hui</button><button onclick="navigate('agenda/dashboard/${agendaDateOffset(selected,1)}')">›</button></div></div><div class="agenda-day-view"><section><div class="agenda-day-all"><span>toute la journée</span><div>${dayEvents.filter(e=>!e.heureDebut).map(agendaCalendarEvent).join("")}</div></div>${hours.map(h=>`<div class="agenda-day-hour"><time>${h}</time><div>${dayEvents.filter(e=>e.heureDebut&&e.heureDebut.slice(0,2)===h.slice(0,2)).map(agendaCalendarEvent).join("")}</div></div>`).join("")}</section><aside><h3>Événements du jour</h3>${dayEvents.length?dayEvents.map(e=>agendaEventCard(e,true)).join(""):`<p>Aucun événement sélectionné</p>`}</aside></div></main></div></div>`;return;
   }
   const automatic=events.filter(e=>e.automatic&&!agendaEventIsDone(e));
   const contracts=automatic.filter(e=>e.type==="contrat");const trials=automatic.filter(e=>e.type==="essai");
