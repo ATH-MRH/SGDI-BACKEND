@@ -30818,9 +30818,10 @@ function renderDRHDashboard(view){
       </div>
       ${(()=>{
         if(!contratsAlerte.length)return`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat critique.</div>`;
+        window._contratsAlerteLists={expires:contratsExpires,fin30:contratsFin30};
         const contractCard=a=>{const d=employeePositionContractDaysLeft(a);return`<a href="#/effectif/agent/${a.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #fecaca;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b><span class="pill pill-red">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.societe||"—")} · Fin : ${employeePositionContractEndPillHTML(a)}</div></a>`};
-        const block=(label,list,color)=>!list.length?"":`<div class="text-xs font-black uppercase mt-3 mb-2" style="color:${color}">${label} (${list.length})</div><div class="grid grid-cols-1 md:grid-cols-2 gap-2">${list.slice(0,4).map(contractCard).join("")}</div>${list.length>4?`<a href="#/contrats/situation" class="text-xs mt-2 font-semibold block hover:underline" style="color:${color}">+ ${list.length-4} autre(s) contrat(s) ${label==="Contrats expirés"?"expiré(s)":"dans 30 jours"} →</a>`:""}`;
-        return block("Contrats expirés",contratsExpires,"#991b1b")+block("Fin de contrat dans 30 jours",contratsFin30,"#92400e");
+        const block=(label,list,kind,color)=>!list.length?"":`<div class="text-xs font-black uppercase mt-3 mb-2" style="color:${color}">${label} (${list.length})</div><div class="grid grid-cols-1 md:grid-cols-2 gap-2">${list.slice(0,4).map(contractCard).join("")}</div>${list.length>4?`<button type="button" onclick="openContratsAlerteModal('${kind}')" class="text-xs mt-2 font-semibold block hover:underline" style="color:${color};background:none;border:0;padding:0;cursor:pointer;text-align:left">+ ${list.length-4} autre(s) contrat(s) ${label==="Contrats expirés"?"expiré(s)":"dans 30 jours"} →</button>`:""}`;
+        return block("Contrats expirés",contratsExpires,"expires","#991b1b")+block("Fin de contrat dans 30 jours",contratsFin30,"fin30","#92400e");
       })()}
     </div>
     <section class="drh-dashboard-stat-section card p-5 mb-6">
@@ -34724,6 +34725,17 @@ function openOpsSocModal(socEncoded,type){
     body=agents.length?`<table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 uppercase bg-slate-50"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2 text-left">Matricule</th><th class="px-3 py-2 text-left">Site</th><th class="px-3 py-2 text-left">Poste</th></tr></thead><tbody>${agents.map(a=>`<tr><td class="px-3 py-2 font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</td><td class="px-3 py-2 font-mono text-xs">${escapeHTML(a.matricule||"—")}</td><td class="px-3 py-2 text-xs text-slate-500">${escapeHTML(agentLiveAffectation(a)?.siteName||"—")}</td><td class="px-3 py-2 text-xs">${escapeHTML(a.fonction||a.affectationCourante?.poste||"—")}</td></tr>`).join("")}</tbody></table>`:`<div class="text-center text-slate-400 py-8">Aucun employé dans cette catégorie.</div>`;
   }
   openModal(`<div class="flex items-center gap-3 mb-4"><div class="text-2xl font-black" style="color:${color}">${type==="inc"?(incidents?.length||0):(agents?.length||0)}</div><div><div class="font-black text-sm">${escapeHTML(title)}</div></div></div><div class="overflow-auto" style="max-height:60vh">${body}</div><div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
+}
+function openContratsAlerteModal(kind){
+  const lists=window._contratsAlerteLists||{};
+  const rows=lists[kind]||[];
+  const title=kind==="expires"?"Contrats expirés":"Fin de contrat dans 30 jours";
+  const color=kind==="expires"?"#991b1b":"#92400e";
+  const sorted=rows.slice().sort((a,b)=>String(employeePositionContractEndDate(a)||"").localeCompare(String(employeePositionContractEndDate(b)||"")));
+  const body=sorted.length
+    ?`<table class="w-full text-sm"><thead><tr class="text-xs text-slate-400 uppercase bg-slate-50"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2 text-left">Matricule</th><th class="px-3 py-2 text-left">Société</th><th class="px-3 py-2 text-left">Fin de contrat</th><th class="px-3 py-2 text-center">Statut</th></tr></thead><tbody>${sorted.map(a=>{const d=employeePositionContractDaysLeft(a);return`<tr class="cursor-pointer hover:bg-slate-50" onclick="closeModal();navigate('effectif/agent/${a.id}')"><td class="px-3 py-2 font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</td><td class="px-3 py-2 font-mono text-xs">${escapeHTML(a.matricule||"—")}</td><td class="px-3 py-2 text-xs text-slate-500">${escapeHTML(a.societe||"—")}</td><td class="px-3 py-2 text-xs">${employeePositionContractEndPillHTML(a)}</td><td class="px-3 py-2 text-center"><span class="pill pill-red">${d<0?"Expiré":"J-"+d}</span></td></tr>`}).join("")}</tbody></table>`
+    :`<div class="text-center text-slate-400 py-8">Aucun employé concerné.</div>`;
+  openModal(`<div class="flex items-center gap-3 mb-4"><div class="text-2xl font-black" style="color:${color}">${sorted.length}</div><div><div class="font-black text-sm">${escapeHTML(title)}</div><div class="text-xs text-slate-500">Cliquer sur une ligne pour ouvrir la fiche employé</div></div></div><div class="overflow-auto" style="max-height:60vh">${body}</div><div class="flex justify-end mt-3"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 function openOpsStatModal(type){
   const lists=window._opsStatLists||{};
