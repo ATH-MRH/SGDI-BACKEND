@@ -27418,6 +27418,15 @@ function agendaCompactRows(rows,emptyText){
   const groups=new Map();rows.forEach(e=>{if(!groups.has(e.date))groups.set(e.date,[]);groups.get(e.date).push(e)});
   return [...groups].map(([date,items])=>`<div class="agenda-date-group"><div class="agenda-date-label"><b>${formatDate(date)}</b><span>${items.length}</span></div>${items.map(e=>agendaEventCard(e,true)).join("")}</div>`).join("");
 }
+function agendaWeekEventCard(e){
+  const meta=agendaEventTypeMeta(e.type);
+  return `<article class="agenda-week-event ${agendaEventIsDone(e)?"is-done":""}" style="--agenda-event-color:${meta.color}">
+    <div class="agenda-week-event-top"><span class="agenda-week-event-type" style="background:${meta.bg};color:${meta.color}">${escapeHTML(meta.label)}</span>${e.priority?`<span class="agenda-priority agenda-priority-${escapeHTML(e.priority)}">${escapeHTML(e.priority)}</span>`:""}</div>
+    <strong>${escapeHTML(e.titre||"Sans titre")}</strong>
+    <small>${e.heureDebut?`${escapeHTML(e.heureDebut)}${e.heureFin?` – ${escapeHTML(e.heureFin)}`:""}`:"Toute la journée"}${e.responsable?` · ${escapeHTML(e.responsable)}`:""}</small>
+    <button type="button" onclick="${e.automatic?`navigate('${escapeHTML(e.route||"agenda/dashboard")}')`:`openAgendaEventModal('${escapeHTML(e.id)}')`}">Ouvrir</button>
+  </article>`;
+}
 function renderAgenda(view,sub,arg){
   if(!canAccess("agenda")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(!Array.isArray(db.agendaEvents))db.agendaEvents=[];
@@ -27441,8 +27450,8 @@ function renderAgenda(view,sub,arg){
   if(mode==="semaine"){
     const start=agendaWeekStart(arg||td);
     const days=Array.from({length:7},(_,i)=>agendaDateOffset(start,i));
-    view.innerHTML=header+`<div class="agenda-week-nav"><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,-7)}')">← Semaine précédente</button><strong>${formatDate(start)} - ${formatDate(days[6])}</strong><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,7)}')">Semaine suivante →</button></div>
-      <div class="agenda-week-grid">${days.map(d=>{const rows=events.filter(e=>e.date===d);return`<div class="agenda-day ${d===td?"today":""}"><div class="agenda-day-title">${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</div>${rows.length?rows.map(e=>agendaEventCard(e,true)).join(""):`<div class="agenda-empty-mini">Libre</div>`}</div>`}).join("")}</div></div>`;
+    view.innerHTML=header+`<section class="agenda-week-layout"><div class="agenda-week-nav"><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,-7)}')">← Précédente</button><div><small>Semaine du</small><strong>${formatDate(start)} – ${formatDate(days[6])}</strong></div><button class="btn btn-secondary" onclick="navigate('agenda/semaine/${agendaDateOffset(start,7)}')">Suivante →</button></div>
+      <div class="agenda-week-grid">${days.map(d=>{const rows=events.filter(e=>e.date===d);return`<div class="agenda-day ${d===td?"today":""}"><div class="agenda-day-title"><span>${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{weekday:"long"})}</span><b>${new Date(d+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})}</b>${rows.length?`<i>${rows.length}</i>`:""}</div><div class="agenda-day-content">${rows.length?rows.map(agendaWeekEventCard).join(""):`<div class="agenda-empty-mini">Aucun événement</div>`}</div></div>`}).join("")}</div></section></div>`;
     return;
   }
   if(mode==="rappels"){
