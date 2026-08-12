@@ -30786,7 +30786,7 @@ function renderDRHDashboard(view){
   const showPayrollCounters=typeof isAdminSystemSession==="function"&&isAdminSystemSession();
   const drhKpi=(label,value,sub,route,color,icon)=>`<a href="${route}" class="drh-erp-kpi" style="--kpi-color:${color};text-decoration:none"><span class="drh-erp-kpi-icon">${icon}</span><span class="drh-erp-kpi-copy"><span class="drh-erp-kpi-label">${escapeHTML(label)}</span><strong>${value}</strong><small>${escapeHTML(sub)}</small></span></a>`;
   view.innerHTML=`<div class="drh-erp-head">
-      <div><h1>Synthèse générale</h1><p>${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${dashEmployees} employés · ${dashSites} sites</p></div>
+      <div><h1>Synthèse générale</h1></div>
       <div class="drh-erp-head-pills"><span class="drh-head-control">${dashActifs} actifs</span><span class="drh-head-control">${dashIncidents} incidents ouverts</span>${sgdiSyncStatusHTML()}<button class="drh-head-control drh-head-sync-button" onclick="sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true}).then(()=>sgdiAutoSync('Synchronisation forcée'))">Forcer la synchronisation</button></div>
     </div>
     ${drhTabs("dashboard")}
