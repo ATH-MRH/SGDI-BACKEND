@@ -2457,6 +2457,41 @@ table{width:100%;max-width:100%}
 .drh-erp-head-pills .drh-head-sync-button:active{
   transform:translateY(1px);
 }
+.drh-erp-head-pills .drh-head-metric{
+  gap:6px;
+  background:#f8fafc;
+  border-color:#e2e8f0;
+  color:#475569;
+}
+.drh-erp-head-pills .drh-head-metric i{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  border-radius:6px;
+  font-size:10px;
+  font-style:normal;
+  font-weight:950;
+}
+.drh-erp-head-pills .drh-head-metric b{color:#0f172a;font-size:12px}
+.drh-erp-head-pills .drh-head-active i{background:#dcfce7;color:#15803d}
+.drh-erp-head-pills .drh-head-incidents i{background:#e2e8f0;color:#64748b}
+.drh-erp-head-pills .drh-head-sync-button{
+  gap:7px;
+  min-width:132px;
+  border-color:#0757a6;
+  background:linear-gradient(135deg,#043970,#0874d1);
+  color:#fff;
+  box-shadow:0 5px 12px rgba(4,57,112,.18);
+}
+.drh-erp-head-pills .drh-head-sync-button i{font-size:15px;font-style:normal;line-height:1}
+.drh-erp-head-pills .drh-head-sync-button:hover{
+  border-color:#043970;
+  background:linear-gradient(135deg,#032e5d,#0565b9);
+  box-shadow:0 7px 16px rgba(4,57,112,.24);
+  transform:translateY(-1px);
+}
 .drh-erp-kpi-grid{
   display:grid;
   grid-template-columns:repeat(6,minmax(0,1fr));
@@ -8673,6 +8708,28 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 .agenda-event-card.is-done{
   opacity:.72;
 }
+.agenda-event-card{
+  transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;
+}
+.agenda-event-card:hover{
+  transform:translateY(-1px);
+  box-shadow:0 8px 22px rgba(15,35,64,.08);
+}
+.agenda-priority{
+  display:inline-flex;
+  align-items:center;
+  height:22px;
+  border-radius:999px;
+  padding:0 8px;
+  font-size:9px;
+  font-weight:950;
+  text-transform:uppercase;
+}
+.agenda-priority-basse{background:#f1f5f9;color:#64748b}
+.agenda-priority-normale{background:#e0f2fe;color:#0369a1}
+.agenda-priority-haute{background:#fef3c7;color:#b45309}
+.agenda-priority-urgente{background:#fee2e2;color:#b91c1c;animation:agendaUrgentPulse 1.8s infinite}
+@keyframes agendaUrgentPulse{50%{box-shadow:0 0 0 4px rgba(220,38,38,.1)}}
 .agenda-event-head{
   display:flex;
   align-items:flex-start;

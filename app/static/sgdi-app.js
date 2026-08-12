@@ -27335,7 +27335,25 @@ function deleteStructure(nom){if(!confirm("Supprimer ?"))return;db.structures=(d
 function agendaEvents(){
   if(!Array.isArray(db.agendaEvents))db.agendaEvents=[];
   const soc=currentStructureSocieteFilter()||session?.societe||"";
-  return db.agendaEvents.filter(e=>!soc||!e.societe||normalizeSocieteName(e.societe)===normalizeSocieteName(soc));
+  const manual=db.agendaEvents.filter(e=>!soc||!e.societe||normalizeSocieteName(e.societe)===normalizeSocieteName(soc));
+  return [...manual,...agendaAutomaticEvents(soc)];
+}
+function agendaAutomaticEvents(soc){
+  const rows=[];
+  const allowed=row=>!soc||!row.societe||normalizeSocieteName(row.societe)===normalizeSocieteName(soc);
+  const add=(source,sourceId,date,titre,type,description,route,priority,societe)=>{
+    if(!date||date<agendaDateOffset(today(),-30)||date>agendaDateOffset(today(),365))return;
+    rows.push({id:`auto:${source}:${sourceId}`,date,titre,type,description,route,priority:priority||"normale",societe:societe||"",statut:"planifie",responsable:"Automatique SGDI",automatic:true,source});
+  };
+  (db.agents||[]).filter(a=>a.statut!=="archive"&&allowed(a)).forEach(a=>{
+    const name=((a.nom||"")+" "+(a.prenom||"")).trim()||a.matricule||"Employé";
+    const end=employeePositionContractEndDate(a);
+    add("contrat",a.id,end,`Fin de contrat · ${name}`,"contrat",`${a.matricule||""} · ${a.posteContrat||a.fonction||""}`,`agents/${a.id}`,end&&daysBetween(today(),end)<=30?"urgente":"haute",a.societe);
+    add("essai",a.id,a.dateFinEssai,`Fin de période d'essai · ${name}`,"essai",`${a.matricule||""} · Décision RH à préparer`,`agents/${a.id}`,"haute",a.societe);
+  });
+  (db.missions||[]).filter(allowed).forEach(m=>add("mission",m.id,m.dateFin||m.endDate,`Fin de mission · ${m.titre||m.libelle||"Mission"}`,"mission",m.description||m.details||"Évaluer la prolongation ou clôturer la mission.",`ops/missions`,"haute",m.societe));
+  (db.conges||[]).filter(allowed).forEach(c=>{const a=(db.agents||[]).find(x=>String(x.id)===String(c.agentId||c.employeeId));add("conge",c.id,c.au||c.dateFin,`Retour de congé · ${((a?.nom||"")+" "+(a?.prenom||"")).trim()||"Employé"}`,"personnel",c.type||"Congé",a?`agents/${a.id}`:"conges","normale",a?.societe||c.societe)});
+  return rows;
 }
 function agendaEventIsDone(e){return String(e?.statut||"planifie")==="termine"}
 function agendaEventIsReminderDue(e){
@@ -27351,6 +27369,9 @@ function agendaEventIsReminderDue(e){
 }
 function agendaEventTypeMeta(type){
   return ({
+    tache:{label:"Tâche",color:"#0f766e",bg:"#ecfdf5"},
+    contrat:{label:"Fin de contrat",color:"#dc2626",bg:"#fef2f2"},
+    essai:{label:"Fin d'essai",color:"#7c3aed",bg:"#f5f3ff"},
     reunion:{label:"Réunion",color:"#2563eb",bg:"#eff6ff"},
     rappel:{label:"Rappel",color:"#d97706",bg:"#fffbeb"},
     echeance:{label:"Échéance",color:"#dc2626",bg:"#fef2f2"},
@@ -27385,10 +27406,10 @@ function agendaEventCard(e,compact){
         <div class="agenda-event-title">${escapeHTML(e.titre||"Sans titre")}</div>
         <div class="agenda-event-meta">${formatDate(e.date)}${e.heureDebut?` · ${escapeHTML(e.heureDebut)}`:""}${e.heureFin?`-${escapeHTML(e.heureFin)}`:""}${who?` · ${escapeHTML(who)}`:""}</div>
       </div>
-      <div class="agenda-event-actions">${agendaStatusPill(e)}<button type="button" class="btn btn-secondary text-xs" onclick="openAgendaEventModal('${escapeHTML(e.id)}')">Modifier</button></div>
+      <div class="agenda-event-actions">${e.priority?`<span class="agenda-priority agenda-priority-${escapeHTML(e.priority)}">${escapeHTML(e.priority)}</span>`:""}${agendaStatusPill(e)}${e.automatic?`<button type="button" class="btn btn-secondary text-xs" onclick="navigate('${escapeHTML(e.route||"agenda/dashboard")}')">Ouvrir</button>`:`${!agendaEventIsDone(e)?`<button type="button" class="btn btn-success text-xs" onclick="completeAgendaEvent('${escapeHTML(e.id)}')">✓</button>`:""}<button type="button" class="btn btn-secondary text-xs" onclick="openAgendaEventModal('${escapeHTML(e.id)}')">Modifier</button>`}</div>
     </div>
     ${compact?"":`<div class="agenda-event-body">${escapeHTML(e.description||"")}</div>`}
-    <div class="agenda-event-foot"><span style="background:${meta.bg};color:${meta.color}">${escapeHTML(meta.label)}</span>${e.lieu?`<span>${escapeHTML(e.lieu)}</span>`:""}${e.societe?`<span>${escapeHTML(e.societe)}</span>`:""}</div>
+    <div class="agenda-event-foot"><span style="background:${meta.bg};color:${meta.color}">${escapeHTML(meta.label)}</span>${e.automatic?`<span>⚙ Automatique</span>`:""}${e.lieu?`<span>${escapeHTML(e.lieu)}</span>`:""}${e.societe?`<span>${escapeHTML(e.societe)}</span>`:""}</div>
   </div>`;
 }
 function renderAgenda(view,sub,arg){
@@ -27404,11 +27425,11 @@ function renderAgenda(view,sub,arg){
   const kpi=(label,value,subText,color)=>`<div class="agenda-kpi"><span>${escapeHTML(label)}</span><strong style="color:${color}">${value}</strong><small>${escapeHTML(subText||"")}</small></div>`;
   const header=`<div class="agenda-page">
     <div class="agenda-head">
-      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Module autonome</div><h1>Agenda SGDI</h1><p>Planification, rappels et suivi quotidien · ${escapeHTML(agendaScopeLabel())}</p></div>
-      <div class="agenda-head-actions"><button type="button" class="btn btn-secondary" onclick="navigate('agenda/semaine')">Vue semaine</button><button type="button" class="btn btn-primary" onclick="openAgendaEventModal()">+ Nouvel événement</button></div>
+      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Centre de pilotage</div><h1>Agenda & tâches</h1><p>Échéances automatiques, priorités et suivi quotidien · ${escapeHTML(agendaScopeLabel())}</p></div>
+      <div class="agenda-head-actions"><button type="button" class="btn btn-secondary" onclick="navigate('agenda/semaine')">Vue semaine</button><button type="button" class="btn btn-primary" onclick="openAgendaEventModal()">+ Nouvelle tâche</button></div>
     </div>
     <div class="agenda-tabs">
-      ${["dashboard","liste","semaine","rappels"].map(k=>`<button type="button" class="${mode===k?"active":""}" onclick="navigate('agenda/${k}')">${k==="dashboard"?"Tableau de bord":k==="liste"?"Liste":k==="semaine"?"Semaine":"Rappels"}</button>`).join("")}
+      ${["dashboard","liste","semaine","rappels"].map(k=>`<button type="button" class="${mode===k?"active":""}" onclick="navigate('agenda/${k}')">${k==="dashboard"?"Aujourd'hui":k==="liste"?"Toutes les tâches":k==="semaine"?"Planning semaine":"Alertes"}</button>`).join("")}
     </div>`;
   if(mode==="semaine"){
     const start=agendaWeekStart(arg||td);
@@ -27428,7 +27449,8 @@ function renderAgenda(view,sub,arg){
     view.innerHTML=header+`<div class="agenda-list-toolbar"><select class="select" onchange="sessionStorage.setItem('agendaFilter',this.value);renderView()"><option value="tous" ${filter==="tous"?"selected":""}>Tous les événements</option><option value="aujourdhui" ${filter==="aujourdhui"?"selected":""}>Aujourd'hui</option><option value="retard" ${filter==="retard"?"selected":""}>En retard</option><option value="termine" ${filter==="termine"?"selected":""}>Terminés</option></select><input class="input" placeholder="Rechercher..." oninput="filterTable(this.value)"></div><section class="agenda-panel">${filtered.length?filtered.map(e=>agendaEventCard(e)).join(""):`<div class="agenda-empty">Aucun événement.</div>`}</section></div>`;
     return;
   }
-  view.innerHTML=header+`<div class="agenda-kpis">${kpi("Aujourd'hui",todayRows.length,"Événement(s) à suivre","#2563eb")}${kpi("À venir",upcoming.length,"Planifiés après aujourd'hui","#0891b2")}${kpi("En retard",overdue.length,"Non terminés","#dc2626")}${kpi("Terminés",done.length,"Historique clôturé","#16a34a")}</div>
+  const automatic=events.filter(e=>e.automatic&&!agendaEventIsDone(e));
+  view.innerHTML=header+`<div class="agenda-kpis">${kpi("Aujourd'hui",todayRows.length,"Actions du jour","#2563eb")}${kpi("À venir",upcoming.length,"Tâches et échéances","#0891b2")}${kpi("En retard",overdue.length,"Action immédiate","#dc2626")}${kpi("Automatiques",automatic.length,"Contrats, essais, missions","#7c3aed")}</div>
     <div class="agenda-grid-main"><section class="agenda-panel"><h2>Aujourd'hui</h2>${todayRows.length?todayRows.map(e=>agendaEventCard(e)).join(""):`<div class="agenda-empty">Aucun événement aujourd'hui.</div>`}</section><section class="agenda-panel"><h2>Prochains événements</h2>${upcoming.slice(0,8).length?upcoming.slice(0,8).map(e=>agendaEventCard(e,true)).join(""):`<div class="agenda-empty">Aucun événement à venir.</div>`}</section></div>
     ${overdue.length?`<section class="agenda-panel agenda-overdue"><h2>En retard</h2>${overdue.map(e=>agendaEventCard(e,true)).join("")}</section>`:""}</div>`;
 }
@@ -27436,18 +27458,21 @@ function openAgendaEventModal(id){
   const e=(db.agendaEvents||[]).find(x=>String(x.id)===String(id))||null;
   const soc=currentStructureSocieteFilter()||session?.societe||e?.societe||"";
   const users=(db.users||[]).map(u=>u.nom||u.username).filter(Boolean);
-  openModal(`<h3 class="font-bold text-lg mb-4">${e?"Modifier événement":"Nouvel événement"}</h3>
+  if(e?.automatic){toast("Cette échéance est alimentée automatiquement par le module source.","info");return}
+  openModal(`<h3 class="font-bold text-lg mb-4">${e?"Modifier la tâche":"Nouvelle tâche"}</h3>
     <form onsubmit="event.preventDefault();saveAgendaEvent('${escapeHTML(e?.id||"")}',this)">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div class="md:col-span-2"><label class="label">Titre *</label><input class="input" name="titre" required value="${escapeHTML(e?.titre||"")}"></div>
         <div><label class="label">Date *</label><input class="input" type="date" name="date" required value="${escapeHTML(e?.date||today())}"></div>
-        <div><label class="label">Type</label><select class="select" name="type">${["reunion","rappel","echeance","mission","personnel"].map(t=>`<option value="${t}" ${e?.type===t?"selected":""}>${escapeHTML(agendaEventTypeMeta(t).label)}</option>`).join("")}</select></div>
+        <div><label class="label">Type</label><select class="select" name="type">${["tache","reunion","rappel","echeance","mission","personnel"].map(t=>`<option value="${t}" ${String(e?.type||"tache")===t?"selected":""}>${escapeHTML(agendaEventTypeMeta(t).label)}</option>`).join("")}</select></div>
         <div><label class="label">Heure début</label><input class="input" type="time" name="heureDebut" value="${escapeHTML(e?.heureDebut||"")}"></div>
         <div><label class="label">Heure fin</label><input class="input" type="time" name="heureFin" value="${escapeHTML(e?.heureFin||"")}"></div>
         <div><label class="label">Responsable</label><input class="input" name="responsable" list="agenda-users" value="${escapeHTML(e?.responsable||session?.nom||"")}"><datalist id="agenda-users">${users.map(u=>`<option value="${escapeHTML(u)}">`).join("")}</datalist></div>
         <div><label class="label">Lieu</label><input class="input" name="lieu" value="${escapeHTML(e?.lieu||"")}"></div>
         <div><label class="label">Société</label><input class="input" name="societe" value="${escapeHTML(soc)}" ${session?.societe?"readonly":""}></div>
         <div><label class="label">Statut</label><select class="select" name="statut">${["planifie","termine","annule"].map(s=>`<option value="${s}" ${String(e?.statut||"planifie")===s?"selected":""}>${s==="planifie"?"Planifié":s==="termine"?"Terminé":"Annulé"}</option>`).join("")}</select></div>
+        <div><label class="label">Priorité</label><select class="select" name="priority">${["basse","normale","haute","urgente"].map(p=>`<option value="${p}" ${String(e?.priority||"normale")===p?"selected":""}>${p.charAt(0).toUpperCase()+p.slice(1)}</option>`).join("")}</select></div>
+        <div><label class="label">Rappel</label><select class="select" name="rappelAvant"><option value="0">À l'échéance</option><option value="1" ${Number(e?.rappelAvant)===1?"selected":""}>1 jour avant</option><option value="3" ${Number(e?.rappelAvant)===3?"selected":""}>3 jours avant</option><option value="7" ${Number(e?.rappelAvant)===7?"selected":""}>7 jours avant</option></select></div>
         <div class="md:col-span-2"><label class="label">Description</label><textarea class="input" name="description" rows="4">${escapeHTML(e?.description||"")}</textarea></div>
       </div>
       <div class="flex justify-between gap-2 mt-4 flex-wrap">
@@ -27464,7 +27489,9 @@ function saveAgendaEvent(id,form){
   Object.assign(e,{
     titre:String(fd.get("titre")||"").trim(),
     date:fd.get("date")||today(),
-    type:fd.get("type")||"reunion",
+    type:fd.get("type")||"tache",
+    priority:fd.get("priority")||"normale",
+    rappelAvant:Number(fd.get("rappelAvant")||0),
     heureDebut:fd.get("heureDebut")||"",
     heureFin:fd.get("heureFin")||"",
     responsable:String(fd.get("responsable")||"").trim(),
@@ -27476,6 +27503,11 @@ function saveAgendaEvent(id,form){
     updatedBy:session?.username||""
   });
   saveDB();closeModal();toast("Événement agenda enregistré","success");renderView();
+}
+function completeAgendaEvent(id){
+  const e=(db.agendaEvents||[]).find(x=>String(x.id)===String(id));if(!e)return;
+  e.statut="termine";e.completedAt=new Date().toISOString();e.completedBy=session?.username||"";e.updatedAt=e.completedAt;
+  saveDB();toast("Tâche terminée","success");renderView();
 }
 function deleteAgendaEvent(id){
   if(!confirm("Supprimer cet événement agenda ?"))return;
@@ -30787,7 +30819,7 @@ function renderDRHDashboard(view){
   const drhKpi=(label,value,sub,route,color,icon)=>`<a href="${route}" class="drh-erp-kpi" style="--kpi-color:${color};text-decoration:none"><span class="drh-erp-kpi-icon">${icon}</span><span class="drh-erp-kpi-copy"><span class="drh-erp-kpi-label">${escapeHTML(label)}</span><strong>${value}</strong><small>${escapeHTML(sub)}</small></span></a>`;
   view.innerHTML=`<div class="drh-erp-head">
       <div><h1>Synthèse générale</h1></div>
-      <div class="drh-erp-head-pills"><span class="drh-head-control">${dashActifs} actifs</span><span class="drh-head-control">${dashIncidents} incidents ouverts</span>${sgdiSyncStatusHTML()}<button class="drh-head-control drh-head-sync-button" onclick="sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true}).then(()=>sgdiAutoSync('Synchronisation forcée'))">Forcer la synchronisation</button></div>
+      <div class="drh-erp-head-pills"><span class="drh-head-control drh-head-metric drh-head-active"><i>✓</i><b>${dashActifs}</b> actifs</span><span class="drh-head-control drh-head-metric drh-head-incidents"><i>!</i><b>${dashIncidents}</b> incidents ouverts</span>${sgdiSyncStatusHTML()}<button class="drh-head-control drh-head-sync-button" onclick="sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true}).then(()=>sgdiAutoSync('Synchronisation forcée'))"><i>↻</i> Synchroniser</button></div>
     </div>
     ${drhTabs("dashboard")}
     <div class="dashboard-compact-band-grid mb-4">
