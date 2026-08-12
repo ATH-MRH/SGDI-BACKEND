@@ -4992,15 +4992,13 @@ function moduleCounterItemHTML(item,total){
   const href=route.startsWith("#")?route:"#/"+route.replace(/^\/+/,"");
   const label=String(item.label||"");
   const subText=item.sub??(label.toUpperCase()==="NBR SITE"?"site(s)":(pct+"%"));
-  const glyph=topbarCounterGlyph(label);
   const iconBg=hexToIconBg(item.color||"#043970");
   const click=item.showAllPeriods?` onclick="sessionStorage.setItem('stkPeriode','all');if(location.hash===this.hash){event.preventDefault();renderView()}"`:"";
-  return `<a href="${escapeHTML(href)}"${click} class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;height:auto!important;min-height:68px!important;overflow:visible!important;padding:10px 14px!important" title="${escapeHTML(item.label)}">
-    <div style="font-size:9px;font-weight:700;color:#64748b;line-height:1.3;white-space:normal;word-break:break-word;margin-bottom:4px">${escapeHTML(label)}</div>
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:8px;width:100%">
-      <span style="font-size:24px;font-weight:950;color:${escapeHTML(item.color||"#043970")};line-height:1;font-variant-numeric:tabular-nums">${escapeHTML(String(item.value??0))}</span>
-      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:34px;padding:3px 7px;border-radius:999px;background:${iconBg};font-size:10px;font-weight:900;color:${escapeHTML(item.color||"#043970")};line-height:1.1;white-space:nowrap">${escapeHTML(String(subText))}</span>
-    </div>
+  return `<a href="${escapeHTML(href)}"${click} class="module-counter-item drh-workforce-item ${numericValue===0?"is-zero":"is-active"}" style="--drh-color:${escapeHTML(item.color||"#043970")};--counter-soft:${iconBg}" title="${escapeHTML(item.label)}">
+    <i class="module-counter-dot" aria-hidden="true"></i>
+    <strong class="module-counter-value drh-workforce-value">${escapeHTML(String(item.value??0))}</strong>
+    <span class="module-counter-label drh-workforce-label">${escapeHTML(label.replace(/^EFF\.\s*/i,""))}</span>
+    <span class="module-counter-pct drh-workforce-pct">${escapeHTML(String(subText))}</span>
   </a>`;
 }
 function moduleCounterCurrentModule(){
@@ -5037,7 +5035,7 @@ function moduleCountersRibbon(items){
   if(!visibleItems.length)return"";
   const ordered=applyCounterOrder(moduleCounterCurrentModule(),visibleItems);
   const total=ordered.reduce((s,x)=>s+counterNumericValue(x.value),0);
-  return `<div class="module-counters-ribbon drh-workforce-ribbon no-print" style="--ribbon-count:${Math.min(Math.max(ordered.length,1),12)};height:auto!important;min-height:68px!important;overflow-y:visible!important" data-no-lang="1">${ordered.map(i=>moduleCounterItemHTML(i,total)).join("")}</div>`;
+  return `<div class="module-counters-ribbon drh-workforce-ribbon no-print" style="--ribbon-count:${Math.min(Math.max(ordered.length,1),12)}" data-no-lang="1">${ordered.map(i=>moduleCounterItemHTML(i,total)).join("")}</div>`;
 }
 function sgdiBackendStatsForScope(scopeSoc){
   const scope=String(scopeSoc||"").trim();
