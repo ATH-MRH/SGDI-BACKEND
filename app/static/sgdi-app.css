@@ -6546,6 +6546,45 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
   white-space:nowrap!important;
 }
 
+/* Pointage mensuel : l'en-tête reste visible pendant le défilement des agents. */
+.pointage-month-scroll{
+  position:relative;
+  width:100%;
+  max-width:100%;
+  max-height:calc(100vh - 245px);
+  min-height:180px;
+  overflow:auto;
+  overscroll-behavior:contain;
+}
+.pointage-month-table{
+  position:relative;
+  width:max-content!important;
+  min-width:100%;
+}
+.pointage-month-table thead th{
+  position:sticky!important;
+  top:0!important;
+  z-index:20!important;
+  background-clip:padding-box!important;
+  box-shadow:0 1px 0 #cbd5e1;
+}
+.pointage-month-table thead th:first-child{
+  left:0!important;
+  z-index:24!important;
+}
+.pointage-month-table thead th:nth-child(2){
+  z-index:23!important;
+}
+.pointage-month-table tbody td:first-child{
+  z-index:12!important;
+}
+.pointage-month-table tbody td:nth-child(2){
+  z-index:11!important;
+}
+@media(max-width:760px){
+  .pointage-month-scroll{max-height:calc(100vh - 190px)}
+}
+
 /* Mouvement — liste agents : hover géré par CSS pour éviter le layout thrashing au scroll */
 .ops-mvt-agent-row{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:5px;cursor:pointer;}
 .ops-mvt-agent-row:hover{background:#f8fafc;}
