@@ -6236,7 +6236,7 @@ function sidebarPinnedDefaultOrder(module){
 function adminSidebarOrganizerDefaults(){
   return {
     drh:[
-      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["ÉLÉMENTS SORTANTS","effectif/sortants"]
+      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["ARCHIVES","effectif/archives_sortants"]
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
@@ -6410,12 +6410,13 @@ function renderSidebar(){
         {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"]},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"]},
-        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!soc||a.societe===soc).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
+        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
         {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length||null},
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
-        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:(()=>{const soc=drhActiveSocieteFilter();return (db.agents||[]).filter(a=>a.statut==="sortant"&&(!soc||a.societe===soc)).length||null})()}
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month&&(!soc||a.societe===soc)).length||null})()},
+        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month&&(!soc||a.societe===soc)}).length||null})()}
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard"},
@@ -7642,7 +7643,7 @@ function renderView(){
         else if(sub==="a_contractualiser")renderContractsToEstablish(view);
         else renderContratsDashboard(view);
         break;
-      case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else if(sub==="sortants")renderElementsSortants(view);else renderEffectif(view,sub||"actifs");break;
+      case"effectif":if(session?.transverse==="drh"&&sub==="instance_affectation"){navigate("effectif/actifs");return}if(sub==="agent"&&arg)renderAgentForm(view,arg);else if(sub==="sortants")renderElementsSortants(view,"current");else if(sub==="archives_sortants")renderElementsSortants(view,"archives");else renderEffectif(view,sub||"actifs");break;
       case"agents":if(sub)renderAgentForm(view,sub);else renderEffectif(view,"actifs");break;
       case"fiches":renderFiches(view,sub||"toutes");break;
       case"documents":renderDocumentsArchives(view,sub,arg);break;
@@ -10364,8 +10365,9 @@ function renderContractsToEstablish(view){
 }
 function renderContratsDashboard(view){
   const socFilter=currentStructureSocieteFilter();
-  const agents=(db.agents||[]).filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter));
-  const avenants=(db.avenants||[]).filter(av=>{const a=(db.agents||[]).find(x=>x.id===av.agentId);return !socFilter||a?.societe===socFilter});
+  const agents=(db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!socFilter||a.societe===socFilter));
+  const activeAgentIds=new Set(agents.map(a=>String(a.id)));
+  const avenants=(db.avenants||[]).filter(av=>activeAgentIds.has(String(av.agentId)));
   const signedAvenants=avenants.filter(a=>a.statut==="signe");
   const today_=today();
   // Types
@@ -10619,7 +10621,7 @@ function contractSituationListHTML(agents,today_,options){
 function renderContrats(view,mode){
   const socFilter=currentStructureSocieteFilter();
   if(ensureContratsEmployeesFresh(view))return;
-  const agents=sortContractSituationAgents(db.agents.filter(a=>a.statut!=="archive"&&(!socFilter||a.societe===socFilter)));
+  const agents=sortContractSituationAgents(db.agents.filter(a=>!employeeIsFormer(a)&&(!socFilter||a.societe===socFilter)));
   const today_=today();
   const byType={};agents.forEach(a=>{const t=cleanContractType(a.typeContrat)||"—";byType[t]=(byType[t]||0)+1});
   const essaiEnCours=agents.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0}).length;
@@ -19244,7 +19246,7 @@ async function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure
 function renderConges(view){
   const filt=sessionStorage.getItem("congesFiltre")||"instance";
   const soc=effectifSocieteFilter&&effectifSocieteFilter();
-  const agentsScope=(db.agents||[]).filter(a=>!soc||a.societe===soc);
+  const agentsScope=(db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc));
   const agentIds=new Set(agentsScope.map(a=>a.id));
   const all=(db.conges||[]).filter(c=>c.type!=="Maladie"&&(!soc||agentIds.has(c.agentId)));
   const now=today();
@@ -19269,8 +19271,8 @@ function renderConges(view){
   <div class="card overflow-hidden"><table><thead><tr><th>Agent</th><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${list.length===0?`<tr><td colspan="8" class="text-center text-slate-500 p-6">Aucune demande dans cette rubrique.</td></tr>`:list.map(c=>{const a=db.agents.find(x=>x.id===c.agentId);const j=c.du&&c.au?daysBetween(c.du,c.au)+1:"—";return`<tr data-searchable><td>${safe(a?a.nom+" "+a.prenom:"")}</td><td><span class="pill ${c.type==="Maladie"?"pill-red":"pill-blue"}">${c.type}</span></td><td class="text-xs">${formatDate(c.du)}</td><td class="text-xs">${formatDate(c.au)}</td><td>${j}</td><td class="text-xs">${escapeHTML((c.motif||"").slice(0,40))}</td><td><span class="pill ${c.statut==="approuve"?"pill-green":c.statut==="refuse"?"pill-red":"pill-amber"}">${c.statut}</span></td><td class="flex gap-1">${c.statut==="en_attente"?`<button class="btn btn-success text-xs" onclick="approuverConge('${c.id}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${c.id}')">Refuser</button>`:""}</td></tr>`}).join("")}</tbody></table></div>`;
 }
 function setCongesFiltre(v){sessionStorage.setItem("congesFiltre",v);renderView()}
-function openCongeModal(){const soc=effectifSocieteFilter&&effectifSocieteFilter();const agents=(db.agents||[]).filter(a=>a.statut==="actif"&&(!soc||a.societe===soc));openModal(`<h3 class="font-bold text-lg mb-4">Demande de congé</h3><form onsubmit="event.preventDefault();saveConge()"><div class="grid grid-2"><div class="col-span-2"><label class="label">Agent</label><select class="select" name="agentId" ><option value="">—</option>${agents.map(a=>`<option value="${a.id}">${escapeHTML(a.nom+" "+a.prenom)} · ${escapeHTML(a.societe||"")}</option>`).join("")}</select></div><div><label class="label">Type</label><select class="select" name="type">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select><div class="text-xs text-slate-500 mt-1">La maladie est traitée comme une absence, pas comme un congé.</div></div><div><label class="label">Statut</label><select class="select" name="statut"><option>en_attente</option><option>approuve</option></select></div><div><label class="label">Du</label><input class="input" type="date" name="du" /></div><div><label class="label">Au</label><input class="input" type="date" name="au" /></div><div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`)}
-async function saveConge(){const fd=new FormData(document.querySelector(".modal-bg form"));const agentId=fd.get("agentId");const soc=effectifSocieteFilter&&effectifSocieteFilter();const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Choisissez un agent","error");return}if(soc&&a.societe!==soc){toast("Agent hors société active","error");return}db.conges.push({id:uid("cg"),agentId,type:fd.get("type"),du:fd.get("du"),au:fd.get("au"),motif:fd.get("motif"),statut:fd.get("statut"),createdAt:today()});if(!(await saveDBAndWaitToast("Congé non confirmé")))return;closeModal();toast("Enregistré","success");renderView()}
+function openCongeModal(){const soc=effectifSocieteFilter&&effectifSocieteFilter();const agents=(db.agents||[]).filter(a=>employeeIsActive(a)&&(!soc||a.societe===soc));openModal(`<h3 class="font-bold text-lg mb-4">Demande de congé</h3><form onsubmit="event.preventDefault();saveConge()"><div class="grid grid-2"><div class="col-span-2"><label class="label">Agent</label><select class="select" name="agentId" ><option value="">—</option>${agents.map(a=>`<option value="${a.id}">${escapeHTML(a.nom+" "+a.prenom)} · ${escapeHTML(a.societe||"")}</option>`).join("")}</select></div><div><label class="label">Type</label><select class="select" name="type">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select><div class="text-xs text-slate-500 mt-1">La maladie est traitée comme une absence, pas comme un congé.</div></div><div><label class="label">Statut</label><select class="select" name="statut"><option>en_attente</option><option>approuve</option></select></div><div><label class="label">Du</label><input class="input" type="date" name="du" /></div><div><label class="label">Au</label><input class="input" type="date" name="au" /></div><div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`)}
+async function saveConge(){const fd=new FormData(document.querySelector(".modal-bg form"));const agentId=fd.get("agentId");const soc=effectifSocieteFilter&&effectifSocieteFilter();const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Choisissez un agent","error");return}if(employeeIsFormer(a)){toast("Congé impossible — cet employé est sortant et archivé","error");return}if(soc&&a.societe!==soc){toast("Agent hors société active","error");return}db.conges.push({id:uid("cg"),agentId,type:fd.get("type"),du:fd.get("du"),au:fd.get("au"),motif:fd.get("motif"),statut:fd.get("statut"),createdAt:today()});if(!(await saveDBAndWaitToast("Congé non confirmé")))return;closeModal();toast("Enregistré","success");renderView()}
 async function approuverConge(id){const c=db.conges.find(x=>x.id===id);c.statut="approuve";if(!(await saveDBAndWaitToast("Validation congé non confirmée")))return;renderView()}
 async function refuserConge(id){const c=db.conges.find(x=>x.id===id);c.statut="refuse";if(!(await saveDBAndWaitToast("Refus congé non confirmé")))return;renderView()}
 
@@ -27346,14 +27348,14 @@ function agendaAutomaticEvents(soc){
     if(!date||date<agendaDateOffset(today(),-30)||date>agendaDateOffset(today(),365))return;
     rows.push({id:`auto:${source}:${sourceId}`,date,titre,type,description,route,priority:priority||"normale",societe:societe||"",statut:"planifie",responsable:"Automatique SGDI",automatic:true,source});
   };
-  (db.agents||[]).filter(a=>a.statut!=="archive"&&allowed(a)).forEach(a=>{
+  (db.agents||[]).filter(a=>!employeeIsFormer(a)&&allowed(a)).forEach(a=>{
     const name=((a.nom||"")+" "+(a.prenom||"")).trim()||a.matricule||"Employé";
     const end=employeePositionContractEndDate(a);
     add("contrat",a.id,end,`Fin de contrat · ${name}`,"contrat",`${a.matricule||""} · ${a.posteContrat||a.fonction||""}`,`agents/${a.id}`,end&&daysBetween(today(),end)<=30?"urgente":"haute",a.societe);
     add("essai",a.id,a.dateFinEssai,`Fin de période d'essai · ${name}`,"essai",`${a.matricule||""} · Décision RH à préparer`,`agents/${a.id}`,"haute",a.societe);
   });
   (db.missions||[]).filter(allowed).forEach(m=>add("mission",m.id,m.dateFin||m.endDate,`Fin de mission · ${m.titre||m.libelle||"Mission"}`,"mission",m.description||m.details||"Évaluer la prolongation ou clôturer la mission.",`ops/missions`,"haute",m.societe));
-  (db.conges||[]).filter(allowed).forEach(c=>{const a=(db.agents||[]).find(x=>String(x.id)===String(c.agentId||c.employeeId));add("conge",c.id,c.au||c.dateFin,`Retour de congé · ${((a?.nom||"")+" "+(a?.prenom||"")).trim()||"Employé"}`,"personnel",c.type||"Congé",a?`agents/${a.id}`:"conges","normale",a?.societe||c.societe)});
+  (db.conges||[]).filter(allowed).forEach(c=>{const a=(db.agents||[]).find(x=>String(x.id)===String(c.agentId||c.employeeId));if(!a||employeeIsFormer(a))return;add("conge",c.id,c.au||c.dateFin,`Retour de congé · ${((a?.nom||"")+" "+(a?.prenom||"")).trim()||"Employé"}`,"personnel",c.type||"Congé",a?`agents/${a.id}`:"conges","normale",a?.societe||c.societe)});
   return rows;
 }
 function agendaEventIsDone(e){return String(e?.statut||"planifie")==="termine"}
@@ -30083,11 +30085,18 @@ function openMedPrintWindow(a,num,opt={}){
   const w=window.open("","_blank","width=860,height=700");
   if(w){w.document.write(html);w.document.close();}else{toast("Impression bloquée par le navigateur","warn");}
 }
-function renderElementsSortants(view){
+function renderElementsSortants(view,scope="current"){
   const isDrh=isDrhModuleContext();
   const isOps=isOpsEffectifContext();
   const soc=isDrh?drhActiveSocieteFilter():(currentStructureSocieteFilter()||mySoc()||"");
-  const sortants=(db.agents||[]).filter(a=>a.statut==="sortant"&&(!soc||!a.societe||a.societe===soc));
+  const currentMonth=today().slice(0,7);
+  const exitMonth=a=>String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);
+  const isArchive=scope==="archives";
+  const sortants=(db.agents||[]).filter(a=>{
+    if(a.statut!=="sortant"||!(!soc||!a.societe||a.societe===soc))return false;
+    if(!isDrh)return true;
+    return isArchive?exitMonth(a)!==currentMonth:exitMonth(a)===currentMonth;
+  });
   const rows=sortants.map(a=>{
     const nom=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim());
     const mat=escapeHTML(a.matricule||a.code||"—");
@@ -30117,10 +30126,10 @@ function renderElementsSortants(view){
   const thSociete=isDrh?"":`<th>Société</th>`;
   view.innerHTML=`<div class="effectif-page">
     <div class="${isDrh?"drh-effectif-list-header":"card p-4 mb-4 flex items-center justify-between gap-3 flex-wrap"}">
-      <div><h1 class="text-2xl font-black">ÉLÉMENTS SORTANTS</h1><p class="text-xs text-slate-400 mt-0.5">${sortants.length} employé(s) sortant${soc?` · ${escapeHTML(soc)}`:""}</p></div>
+      <div><h1 class="text-2xl font-black">${isArchive?"ARCHIVES DES ÉLÉMENTS SORTANTS":"ÉLÉMENTS SORTANTS"}</h1><p class="text-xs text-slate-400 mt-0.5">${sortants.length} dossier(s)${isDrh&&!isArchive?` · sorties de ${new Date(currentMonth+"-01T00:00:00").toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}`:""}${soc?` · ${escapeHTML(soc)}`:""}</p></div>
     </div>
     ${sortants.length===0
-      ?`<div class="card p-10 text-center text-slate-500">Aucun employé SORTANT.</div>`
+      ?`<div class="card p-10 text-center text-slate-500">${isArchive?"Aucun ancien dossier sortant archivé.":"Aucun employé sorti durant le mois en cours."}</div>`
       :`<div class="card overflow-hidden"><table class="effectif-table">
         <thead><tr><th>Employé</th>${thSociete}<th>Date sortie</th>${thDrh}${thOps}<th>Action</th></tr></thead>
         <tbody>${rows.join("")}</tbody>
