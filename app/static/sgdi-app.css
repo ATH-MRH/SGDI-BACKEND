@@ -6546,18 +6546,12 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
   white-space:nowrap!important;
 }
 
-/* Pointage mensuel : le panneau possède son propre scroll. La roulette placée
-   sur les employés ne déplace donc plus la page, seulement les lignes. */
+/* Pointage mensuel : défilement normal de la page, seule la ligne d'en-tête
+   reste fixée en haut pendant que les employés passent dessous. */
 .pointage-month-panel{
-  display:flex;
-  flex-direction:column;
-  height:calc(100vh - 225px);
-  min-height:360px;
-  max-height:760px;
-  overflow:hidden!important;
+  overflow:visible!important;
 }
 .pointage-month-title{
-  flex:0 0 auto;
   min-height:34px;
   display:flex;
   align-items:center;
@@ -6567,19 +6561,13 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
 }
 .pointage-month-scroll{
   position:relative;
-  flex:1 1 auto;
-  min-height:0;
   width:100%;
   max-width:100%;
-  height:100%;
-  overflow-x:auto;
-  overflow-y:scroll;
-  overscroll-behavior:contain;
-  scrollbar-gutter:stable;
+  overflow:visible!important;
 }
 .pointage-month-table{
   position:relative;
-  width:max-content!important;
+  width:100%!important;
   min-width:100%;
 }
 .pointage-month-table thead th{
@@ -6601,9 +6589,6 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
 }
 .pointage-month-table tbody td:nth-child(2){
   z-index:11!important;
-}
-@media(max-width:760px){
-  .pointage-month-panel{height:calc(100vh - 175px);min-height:300px}
 }
 
 /* Mouvement — liste agents : hover géré par CSS pour éviter le layout thrashing au scroll */
