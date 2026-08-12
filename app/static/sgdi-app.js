@@ -30816,7 +30816,12 @@ function renderDRHDashboard(view){
           <div class="text-xs" style="color:${contratsAlerte.length?"#7f1d1d":"#166534"}">${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} fin(s) dans 30 jours</div>
         </div>
       </div>
-      ${contratsAlerte.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${contratsAlerte.slice(0,6).map(a=>{const d=employeePositionContractDaysLeft(a);return`<a href="#/effectif/agent/${a.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #fecaca;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b><span class="pill pill-red">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.societe||"—")} · Fin : ${employeePositionContractEndPillHTML(a)}</div></a>`}).join("")}</div>${contratsAlerte.length>6?`<div class="text-xs text-red-700 mt-2 font-semibold">+ ${contratsAlerte.length-6} autre(s) contrat(s) en alerte.</div>`:""}`:`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat critique.</div>`}
+      ${(()=>{
+        if(!contratsAlerte.length)return`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat critique.</div>`;
+        const contractCard=a=>{const d=employeePositionContractDaysLeft(a);return`<a href="#/effectif/agent/${a.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #fecaca;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b><span class="pill pill-red">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.societe||"—")} · Fin : ${employeePositionContractEndPillHTML(a)}</div></a>`};
+        const block=(label,list,color)=>!list.length?"":`<div class="text-xs font-black uppercase mt-3 mb-2" style="color:${color}">${label} (${list.length})</div><div class="grid grid-cols-1 md:grid-cols-2 gap-2">${list.slice(0,4).map(contractCard).join("")}</div>${list.length>4?`<a href="#/contrats/situation" class="text-xs mt-2 font-semibold block hover:underline" style="color:${color}">+ ${list.length-4} autre(s) contrat(s) ${label==="Contrats expirés"?"expiré(s)":"dans 30 jours"} →</a>`:""}`;
+        return block("Contrats expirés",contratsExpires,"#991b1b")+block("Fin de contrat dans 30 jours",contratsFin30,"#92400e");
+      })()}
     </div>
     <section class="drh-dashboard-stat-section card p-5 mb-6">
       <div class="drh-dashboard-stat-head">
