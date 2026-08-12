@@ -927,6 +927,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .fp-print-batch-btn,
   .paie-export-btn,
   .paie-print-btn,
+  .paie-close-btn,
   .candidate-reserve-page-btn,
   .site-create-btn,
   .contract-create-btn,
@@ -984,6 +985,8 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .conge-request-btn:hover,
   .main-event-btn:hover,
   .topbar-back-btn:hover{background:var(--sgdi-btn-yellow-hover)!important;color:var(--sgdi-btn-text)!important;border-color:var(--sgdi-btn-border,#facc15)!important}
+  .paie-close-btn{background:var(--primary,#043970)!important;color:#fff!important;border-color:var(--primary,#043970)!important}
+  .paie-close-btn:hover{background:var(--primary-dark,#032a52)!important;border-color:var(--primary-dark,#032a52)!important}
   @keyframes recrutement-add-pulse{
     0%,100%{box-shadow:0 0 0 0 rgba(4,57,112,.34);filter:brightness(1)}
     50%{box-shadow:0 0 0 7px rgba(4,57,112,.08);filter:brightness(1.18)}
