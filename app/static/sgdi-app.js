@@ -899,7 +899,7 @@ function sgdiSyncStatusHTML(){
   const state=sgdiSyncStatus.state||"idle";
   const cfg=state==="syncing"?["Actualisation…","#d97706","#fffbeb"]:state==="error"?["Serveur indisponible","#dc2626","#fef2f2"]:["Synchronisé","#047857","#ecfdf5"];
   const stamp=sgdiSyncStatus.at?new Date(sgdiSyncStatus.at).toLocaleTimeString("fr-DZ",{hour:"2-digit",minute:"2-digit",second:"2-digit"}):"—";
-  return `<span data-sgdi-sync-status title="${escapeHTML(sgdiSyncStatus.error||"")}" style="display:inline-flex;align-items:center;gap:6px;border:1px solid ${cfg[1]}33;background:${cfg[2]};color:${cfg[1]};border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800"><i style="width:7px;height:7px;border-radius:50%;background:${cfg[1]}"></i>${cfg[0]} · ${stamp}</span>`;
+  return `<span class="drh-head-control drh-head-sync" data-sgdi-sync-status title="${escapeHTML(sgdiSyncStatus.error||"")}" style="--sync-color:${cfg[1]};--sync-bg:${cfg[2]}"><i></i>${cfg[0]} · ${stamp}</span>`;
 }
 async function sgdiCheckAppVersion(){
   try{
@@ -30789,14 +30789,9 @@ function renderDRHDashboard(view){
   const drhKpi=(label,value,sub,route,color,icon)=>`<a href="${route}" class="drh-erp-kpi" style="--kpi-color:${color};text-decoration:none"><span class="drh-erp-kpi-icon">${icon}</span><span class="drh-erp-kpi-copy"><span class="drh-erp-kpi-label">${escapeHTML(label)}</span><strong>${value}</strong><small>${escapeHTML(sub)}</small></span></a>`;
   view.innerHTML=`<div class="drh-erp-head">
       <div><h1>Synthèse générale</h1><p>${selSoc?escapeHTML(selSoc):"Toutes sociétés"} · ${dashEmployees} employés · ${dashSites} sites</p></div>
-      <div class="drh-erp-head-pills"><span>${dashActifs} actifs</span><span>${dashIncidents} incidents ouverts</span>${sgdiSyncStatusHTML()}<button class="btn btn-ghost text-xs" onclick="sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true}).then(()=>sgdiAutoSync('Synchronisation forcée'))">Forcer la synchronisation</button></div>
+      <div class="drh-erp-head-pills"><span class="drh-head-control">${dashActifs} actifs</span><span class="drh-head-control">${dashIncidents} incidents ouverts</span>${sgdiSyncStatusHTML()}<button class="drh-head-control drh-head-sync-button" onclick="sgdiRefreshDrhStats(drhActiveSocieteFilter(),{force:true}).then(()=>sgdiAutoSync('Synchronisation forcée'))">Forcer la synchronisation</button></div>
     </div>
     ${drhTabs("dashboard")}
-    <div class="drh-erp-kpi-grid mb-4">
-      ${drhKpi("Demandes",demandesPersonnel,"Personnel à traiter","#/demandes_personnel/dashboard","#0891b2","D")}
-      ${drhKpi("Congés attente",congesAttente,"Validation DRH","#/conges","#d97706","C")}
-      ${drhKpi("Sortants",sortants,"Éléments sortants","#/effectif/sortants","#dc2626","S")}
-    </div>
     <div class="dashboard-compact-band-grid mb-4">
       <div class="card dashboard-compact-band dashboard-ratio-band"><h3>Ratios RH</h3>
         ${progressRow("Actifs RH",dashActifs,dashEmployees,"#047857")}
