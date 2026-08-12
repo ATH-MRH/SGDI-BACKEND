@@ -30730,7 +30730,7 @@ function renderDRHDashboard(view){
   const congesAttente=co.filter(c=>c.statut==="en_attente").length;
   const socialAlertes=ag.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length;
   const contratsExpires=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d<0});
-  const contratsFin30=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90});
+  const contratsFin30=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(employeePositionContractEndDate(a)||"").localeCompare(String(employeePositionContractEndDate(b)||"")));
   const srvEmp=sgdiErpEmployeeCounters(selSoc);
   const srvDrh=sgdiErpModuleCounters("drh",selSoc);
@@ -30813,7 +30813,7 @@ function renderDRHDashboard(view){
       <div class="flex items-center justify-between gap-3 mb-3">
         <div>
           <h3 class="font-bold text-lg" style="color:${contratsAlerte.length?"#991b1b":"#166534"}">Alerte fin de contrat</h3>
-          <div class="text-xs" style="color:${contratsAlerte.length?"#7f1d1d":"#166534"}">${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} fin(s) dans 90 jours</div>
+          <div class="text-xs" style="color:${contratsAlerte.length?"#7f1d1d":"#166534"}">${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} fin(s) dans 30 jours</div>
         </div>
       </div>
       ${contratsAlerte.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${contratsAlerte.slice(0,6).map(a=>{const d=employeePositionContractDaysLeft(a);return`<a href="#/effectif/agent/${a.id}" class="p-3 rounded-lg text-sm block" style="background:#fff;border:1px solid #fecaca;text-decoration:none;color:#0f172a"><div class="flex justify-between gap-2"><b>${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</b><span class="pill pill-red">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.societe||"—")} · Fin : ${employeePositionContractEndPillHTML(a)}</div></a>`}).join("")}</div>${contratsAlerte.length>6?`<div class="text-xs text-red-700 mt-2 font-semibold">+ ${contratsAlerte.length-6} autre(s) contrat(s) en alerte.</div>`:""}`:`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat critique.</div>`}
