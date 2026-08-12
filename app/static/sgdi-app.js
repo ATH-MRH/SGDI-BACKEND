@@ -6236,7 +6236,7 @@ function sidebarPinnedDefaultOrder(module){
 function adminSidebarOrganizerDefaults(){
   return {
     drh:[
-      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"]
+      ["TABLEAU DE BORD","drh/dashboard"],["RECRUTEMENT / CANDIDATS","recrutement/candidats"],["CONTRATS À ÉTABLIR","contrats/a_contractualiser"],["CONTRATS","contrats/dashboard"],["PERIODE D'ESSAI","drh/essai"],["REVERSEMENT EN ATTENTE","drh/reversement"],["FICHE DE POSITION","fiches"],["GRH","effectif/recap"],["SOCIAL","drh/social"],["PAIE","paie/dashboard"],["ÉLÉMENTS SORTANTS","effectif/sortants"]
     ],
     ops:[
       ["TABLEAU DE BORD","ops/dashboard"],["EFFECTIFS","effectif/recap"],["FICHE DE POSITION","fiches"],["POINTAGE","pointage/dashboard"],["📲 QR PRÉSENCE","ops/qr"],["SITES","sites/actifs"],["MISSIONS","ops/missions"],["MOUVEMENT","ops/mouvements"],["CONGÉS","conges"],["ABSENTS","effectif/absents"],["SUSPENSION","effectif/suspension"],["BLACKLIST","effectif/blacklist"],["ÉLÉMENTS SORTANTS","effectif/sortants"],["SUPERVISION SITE","ops/supervision"],["MAIN COURANTE","incidents/dashboard"]
