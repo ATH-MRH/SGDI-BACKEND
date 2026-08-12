@@ -7625,6 +7625,7 @@ function renderView(){
   const preserveScroll=!!sgdiNextScrollRestore;
   const scrollState=samePath&&!sgdiResetViewScroll?sgdiScrollSnapshot():null;
   const view=document.getElementById("view");
+  if(view)view.classList.remove("agenda-fullscreen-view");
   const resetScroll=!preserveScroll&&(sgdiResetViewScroll||!samePath);
   sgdiResetViewScroll=false;
   if(view&&resetScroll)view.scrollTop=0;
@@ -27412,6 +27413,11 @@ function agendaEventCard(e,compact){
     <div class="agenda-event-foot"><span style="background:${meta.bg};color:${meta.color}">${escapeHTML(meta.label)}</span>${e.automatic?`<span>⚙ Automatique</span>`:""}${e.lieu?`<span>${escapeHTML(e.lieu)}</span>`:""}${e.societe?`<span>${escapeHTML(e.societe)}</span>`:""}</div>
   </div>`;
 }
+function agendaCompactRows(rows,emptyText){
+  if(!rows.length)return `<div class="agenda-empty">${escapeHTML(emptyText||"Aucune tâche.")}</div>`;
+  const groups=new Map();rows.forEach(e=>{if(!groups.has(e.date))groups.set(e.date,[]);groups.get(e.date).push(e)});
+  return [...groups].map(([date,items])=>`<div class="agenda-date-group"><div class="agenda-date-label"><b>${formatDate(date)}</b><span>${items.length}</span></div>${items.map(e=>agendaEventCard(e,true)).join("")}</div>`).join("");
+}
 function renderAgenda(view,sub,arg){
   if(!canAccess("agenda")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(!Array.isArray(db.agendaEvents))db.agendaEvents=[];
@@ -27423,9 +27429,10 @@ function renderAgenda(view,sub,arg){
   const overdue=events.filter(e=>e.date<td&&!agendaEventIsDone(e));
   const done=events.filter(agendaEventIsDone);
   const kpi=(label,value,subText,color)=>`<div class="agenda-kpi"><span>${escapeHTML(label)}</span><strong style="color:${color}">${value}</strong><small>${escapeHTML(subText||"")}</small></div>`;
-  const header=`<div class="agenda-page">
+  view.classList.add("agenda-fullscreen-view");
+  const header=`<div class="agenda-page agenda-page-full">
     <div class="agenda-head">
-      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Centre de pilotage</div><h1>Agenda & tâches</h1><p>Échéances automatiques, priorités et suivi quotidien · ${escapeHTML(agendaScopeLabel())}</p></div>
+      <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Centre de pilotage</div><h1>Agenda & tâches</h1><p>${new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})} · ${escapeHTML(agendaScopeLabel())}</p></div>
       <div class="agenda-head-actions"><button type="button" class="btn btn-secondary" onclick="navigate('agenda/semaine')">Vue semaine</button><button type="button" class="btn btn-primary" onclick="openAgendaEventModal()">+ Nouvelle tâche</button></div>
     </div>
     <div class="agenda-tabs">
@@ -27450,9 +27457,29 @@ function renderAgenda(view,sub,arg){
     return;
   }
   const automatic=events.filter(e=>e.automatic&&!agendaEventIsDone(e));
-  view.innerHTML=header+`<div class="agenda-kpis">${kpi("Aujourd'hui",todayRows.length,"Actions du jour","#2563eb")}${kpi("À venir",upcoming.length,"Tâches et échéances","#0891b2")}${kpi("En retard",overdue.length,"Action immédiate","#dc2626")}${kpi("Automatiques",automatic.length,"Contrats, essais, missions","#7c3aed")}</div>
-    <div class="agenda-grid-main"><section class="agenda-panel"><h2>Aujourd'hui</h2>${todayRows.length?todayRows.map(e=>agendaEventCard(e)).join(""):`<div class="agenda-empty">Aucun événement aujourd'hui.</div>`}</section><section class="agenda-panel"><h2>Prochains événements</h2>${upcoming.slice(0,8).length?upcoming.slice(0,8).map(e=>agendaEventCard(e,true)).join(""):`<div class="agenda-empty">Aucun événement à venir.</div>`}</section></div>
-    ${overdue.length?`<section class="agenda-panel agenda-overdue"><h2>En retard</h2>${overdue.map(e=>agendaEventCard(e,true)).join("")}</section>`:""}</div>`;
+  const contracts=automatic.filter(e=>e.type==="contrat");const trials=automatic.filter(e=>e.type==="essai");
+  view.innerHTML=header+`<div class="agenda-workspace">
+    <aside class="agenda-sidebar-panel"><h3>Navigation</h3>
+      <button class="active" onclick="navigate('agenda/dashboard')"><span>Aujourd'hui</span><b>${todayRows.length}</b></button>
+      <button onclick="navigate('agenda/semaine')"><span>Cette semaine</span><b>${events.filter(e=>e.date>=agendaWeekStart(td)&&e.date<=agendaDateOffset(agendaWeekStart(td),6)&&!agendaEventIsDone(e)).length}</b></button>
+      <button class="danger" onclick="sessionStorage.setItem('agendaFilter','retard');navigate('agenda/liste')"><span>En retard</span><b>${overdue.length}</b></button>
+      <button onclick="navigate('agenda/rappels')"><span>Alertes automatiques</span><b>${automatic.length}</b></button>
+      <button onclick="sessionStorage.setItem('agendaFilter','termine');navigate('agenda/liste')"><span>Terminées</span><b>${done.length}</b></button>
+      <div class="agenda-sidebar-separator"></div><button class="agenda-create-side" onclick="openAgendaEventModal()">＋ Nouvelle tâche</button>
+    </aside>
+    <main class="agenda-main-panel"><div class="agenda-main-toolbar"><div><h2>Planning prioritaire</h2><p>Tâches du jour, retards et prochaines échéances</p></div><div class="agenda-quick-filters"><button class="active">Tout</button><button onclick="navigate('agenda/rappels')">Automatique</button><button onclick="navigate('agenda/liste')">Manuel</button></div></div>
+      ${overdue.length?`<section class="agenda-stream-section urgent"><h3>En retard <span>${overdue.length}</span></h3>${agendaCompactRows(overdue,"Aucun retard")}</section>`:""}
+      <section class="agenda-stream-section"><h3>Aujourd'hui <span>${todayRows.length}</span></h3>${agendaCompactRows(todayRows,"Aucune action aujourd'hui.")}</section>
+      <section class="agenda-stream-section"><h3>Prochaines échéances <span>${upcoming.length}</span></h3>${agendaCompactRows(upcoming.slice(0,20),"Aucune échéance à venir.")}</section>
+    </main>
+    <aside class="agenda-summary-panel"><h3>Résumé</h3>
+      <div class="agenda-summary-stat blue"><span>Actions du jour</span><b>${todayRows.length}</b></div>
+      <div class="agenda-summary-stat red"><span>Urgences / retards</span><b>${overdue.length}</b></div>
+      <div class="agenda-summary-stat orange"><span>Fins de contrat</span><b>${contracts.length}</b></div>
+      <div class="agenda-summary-stat purple"><span>Fins d'essai</span><b>${trials.length}</b></div>
+      <div class="agenda-summary-list"><h4>7 prochains jours</h4>${upcoming.filter(e=>e.date<=agendaDateOffset(td,7)).slice(0,8).map(e=>`<button onclick="${e.automatic?`navigate('${escapeHTML(e.route||"agenda/dashboard")}')`:`openAgendaEventModal('${escapeHTML(e.id)}')`}"><i style="background:${agendaEventTypeMeta(e.type).color}"></i><span>${escapeHTML(e.titre||"")}<small>${formatDate(e.date)}</small></span></button>`).join("")||`<p>Aucune échéance.</p>`}</div>
+    </aside>
+  </div></div>`;
 }
 function openAgendaEventModal(id){
   const e=(db.agendaEvents||[]).find(x=>String(x.id)===String(id))||null;
