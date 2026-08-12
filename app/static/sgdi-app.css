@@ -6546,15 +6546,36 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
   white-space:nowrap!important;
 }
 
-/* Pointage mensuel : l'en-tête reste visible pendant le défilement des agents. */
+/* Pointage mensuel : le panneau possède son propre scroll. La roulette placée
+   sur les employés ne déplace donc plus la page, seulement les lignes. */
+.pointage-month-panel{
+  display:flex;
+  flex-direction:column;
+  height:calc(100vh - 225px);
+  min-height:360px;
+  max-height:760px;
+  overflow:hidden!important;
+}
+.pointage-month-title{
+  flex:0 0 auto;
+  min-height:34px;
+  display:flex;
+  align-items:center;
+  margin:0;
+  background:#fff;
+  border-bottom:1px solid #e2e8f0;
+}
 .pointage-month-scroll{
   position:relative;
+  flex:1 1 auto;
+  min-height:0;
   width:100%;
   max-width:100%;
-  max-height:calc(100vh - 245px);
-  min-height:180px;
-  overflow:auto;
+  height:100%;
+  overflow-x:auto;
+  overflow-y:scroll;
   overscroll-behavior:contain;
+  scrollbar-gutter:stable;
 }
 .pointage-month-table{
   position:relative;
@@ -6582,7 +6603,7 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
   z-index:11!important;
 }
 @media(max-width:760px){
-  .pointage-month-scroll{max-height:calc(100vh - 190px)}
+  .pointage-month-panel{height:calc(100vh - 175px);min-height:300px}
 }
 
 /* Mouvement — liste agents : hover géré par CSS pour éviter le layout thrashing au scroll */
