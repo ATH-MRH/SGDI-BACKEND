@@ -1365,11 +1365,33 @@ function employeeApiPayload(a){
 async function sgdiPullEmployees(options){
   const opt=options||{};
   if(!sgdiBackendShouldUse()||!sgdiAuthToken())return null;
+  const scopeNorm=opt.society?normalizeSocieteName(opt.society):"";
+  const previousAgents=Array.isArray(db?.agents)?db.agents:[];
   try{
-    const scopeNorm=opt.society?normalizeSocieteName(opt.society):"";
-    const previousAgents=Array.isArray(db?.agents)?db.agents:[];
-    let employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
-    if(!Array.isArray(employees))return null;
+    let employees;
+    try{
+      employees=await window.SGDI_API.employees.list(opt.society?{society:opt.society}:{});
+      if(!Array.isArray(employees))throw new Error("Réponse employés invalide");
+    }catch(primaryError){
+      // Le flux complet peut être volumineux. Si celui-ci échoue, le endpoint paginé
+      // permet de récupérer les mêmes fiches par lots sans laisser DRH vide.
+      console.warn("Chargement employés complet indisponible, repli paginé",primaryError);
+      const params={mode:"all",society:opt.society||undefined,page:1,page_size:100};
+      const first=await window.SGDI_API.employees.page(params);
+      const firstItems=Array.isArray(first?.items)?first.items:[];
+      const pages=Math.max(1,Number(first?.pages)||1);
+      employees=[...firstItems];
+      for(let page=2;page<=pages;page++){
+        const batch=await window.SGDI_API.employees.page({...params,page});
+        if(Array.isArray(batch?.items))employees.push(...batch.items);
+      }
+      if(!Array.isArray(employees))throw primaryError;
+    }
+    // Une réponse vide transitoire ne doit jamais effacer un référentiel déjà chargé.
+    if(!employees.length&&previousAgents.length){
+      console.warn("Réponse employés vide ignorée : conservation du dernier référentiel valide");
+      return previousAgents;
+    }
     const backendAgents=dedupeEmployeesByBackendId(employees.map(employeeFromApi));
     if(scopeNorm){
       const previous=previousAgents.filter(a=>normalizeSocieteName(a?.societe||a?.society||"")!==scopeNorm);
@@ -1389,9 +1411,14 @@ async function sgdiPullEmployees(options){
     if(!opt.silent&&typeof toast==="function")toast("Employés backend chargés","success");
     return db.agents;
   }catch(e){
+    console.error("Impossible de charger les employés backend",e);
+    if(previousAgents.length){
+      if(typeof toast==="function")toast("Serveur DRH momentanément indisponible : dernières données valides conservées.","warning");
+      return previousAgents;
+    }
     if(!opt.silent&&typeof toast==="function")toast("Impossible de charger les employés backend : "+(e.message||e),"error");
+    throw e;
   }
-  return null;
 }
 let ptLightEmployeesLoading=false;
 function ptLightEmployeesKey(soc){return normalizeSocieteName(soc||"__all__")}
