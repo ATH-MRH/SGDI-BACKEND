@@ -32469,6 +32469,11 @@ async function renderAdminPostes(view){
     </div>
     <button type="button" class="btn btn-ghost" onclick="navigate('admin/dashboard')">← Retour</button>
   </div>
+  <div class="card p-4 mb-4" style="background:#eff6ff;border:1px solid #93c5fd">
+    <div class="font-bold mb-1">🔧 Corriger "Agent de sécurité" (intitulé libre, hors catalogue)</div>
+    <div class="text-xs text-slate-600 mb-2">Renomme partout — fiches employés, affectations, candidats, contrats, modèles — l'ancien intitulé libre "Agent de sécurité" vers le libellé officiel du catalogue ci-dessous (AGENT DE PRÉVENTION ET DE SÉCURITÉ (APS)), sans perte de donnée.</div>
+    <button class="btn btn-primary text-sm" onclick="adminRenamePosteAgentSecurite(this)">Corriger maintenant</button>
+  </div>
   <div class="card p-4 mb-4 flex items-center gap-3 flex-wrap">
     <label class="label mb-0">Filtrer par société :</label>
     <select class="select" style="min-width:260px" onchange="sessionStorage.setItem('adminPostesFilterSoc',this.value);renderView()">${socOptions}</select>
@@ -32497,6 +32502,25 @@ async function renderAdminPostes(view){
       </form>
     </section>
   </div>`;
+}
+async function adminRenamePosteAgentSecurite(btn){
+  if(!isAdminSystemSession()){toast("Action réservée à l'administrateur système","error");return}
+  if(!confirm(`Renommer partout "Agent de sécurité" vers le libellé officiel du catalogue ?\nAucune donnée n'est perdue (fiches employés, affectations, candidats, contrats, modèles).\nCette action est réversible en corrigeant à nouveau chaque enregistrement à la main.`))return;
+  const original=btn?.textContent;
+  if(btn){btn.disabled=true;btn.textContent="Correction en cours…"}
+  try{
+    const r=await sgdiApi("/drh/postes/rename-agent-securite",{method:"POST",legacy:false});
+    if(r&&r.total){
+      toast(`✓ ${r.total} enregistrement(s) corrigé(s) vers "${r.canonical_label}"`,"success");
+      if(typeof sgdiEnsureEmployeesForDisplay==="function"){window.__sgdiEnsuredAt={};sgdiEnsureEmployeesForDisplay({force:true})}
+    }else{
+      toast("Aucun enregistrement à corriger — déjà à jour.","success");
+    }
+  }catch(e){
+    toast("Correction impossible : "+(e.message||e),"error");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=original}
+  }
 }
 window.adminAddPoste=async function(e){
   e.preventDefault();

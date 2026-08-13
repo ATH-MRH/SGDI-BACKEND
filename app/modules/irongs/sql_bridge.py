@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from copy import deepcopy
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -11,9 +12,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.commercial.models import Client
-from app.modules.drh.models import Candidate, Contract, Employee
+from app.modules.drh.models import Candidate, Contract, ContractTemplate, Employee, GeneratedContract
 from app.modules.finance_models import Advance, CashEntry, CreditNote, Invoice, Payment
-from app.modules.irongs.models import SgdiRecord
+from app.modules.irongs.models import Position, SgdiRecord
 from app.modules.materiel.models import StockArticle, StockMovement, Store, Supplier
 from app.modules.ops.models import Assignment, DailyPresence, Incident, OpsMovement, Site
 from app.core.photo_storage import externalize_employee_documents, normalize_photo_fields
@@ -258,6 +259,105 @@ def migrate_flatten_employees(db: Session) -> dict[str, int]:
     if changed:
         db.commit()
     return {"total": len(rows), "changed": changed}
+
+
+def _normalize_poste_text(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", text)
+
+
+_POSTE_OLD_NORM = "agent de securite"
+
+
+def _rename_poste_in_extra(extra: Any, canonical: str) -> tuple[Any, bool]:
+    """Renomme le poste dans les champs legacy imbriqués de Employee.extra (fonction,
+    posteContrat, _legacy.affectationCourante.poste, _legacy.fonction). Retourne une
+    NOUVELLE structure (jamais de mutation en place) pour que SQLAlchemy détecte le
+    changement sur la colonne JSON — même règle que shrink_employee_extra."""
+    if not isinstance(extra, dict) or not extra:
+        return extra, False
+    new_extra = deepcopy(extra)
+    changed = False
+    for key in ("fonction", "posteContrat"):
+        if isinstance(new_extra.get(key), str) and _normalize_poste_text(new_extra[key]) == _POSTE_OLD_NORM:
+            new_extra[key] = canonical
+            changed = True
+    legacy = new_extra.get("_legacy")
+    if isinstance(legacy, dict):
+        if isinstance(legacy.get("fonction"), str) and _normalize_poste_text(legacy["fonction"]) == _POSTE_OLD_NORM:
+            legacy["fonction"] = canonical
+            changed = True
+        aff = legacy.get("affectationCourante")
+        if isinstance(aff, dict) and isinstance(aff.get("poste"), str) and _normalize_poste_text(aff["poste"]) == _POSTE_OLD_NORM:
+            aff["poste"] = canonical
+            changed = True
+    return (new_extra if changed else extra), changed
+
+
+def rename_poste_agent_securite(db: Session) -> dict[str, Any]:
+    """Renomme partout (toutes tables + champs legacy imbriqués) l'ancien intitulé libre
+    "Agent de sécurité" (comparaison insensible à la casse/aux accents) vers le libellé
+    officiel du catalogue Administration système > Postes / Fonctions. Un seul commit à
+    la fin : tout ou rien. Idempotente (un 2e passage ne trouve plus rien à changer)."""
+    canonical = "AGENT DE PRÉVENTION ET DE SÉCURITÉ (APS)"
+    for name in db.execute(select(Position.name)).scalars().all():
+        norm = _normalize_poste_text(name)
+        if "prevention" in norm and "securite" in norm and "aps" in norm:
+            canonical = name
+            break
+
+    changed = {
+        "employees_position": 0,
+        "employees_extra": 0,
+        "assignments": 0,
+        "candidates": 0,
+        "contracts": 0,
+        "contract_templates": 0,
+        "generated_contracts": 0,
+    }
+
+    for row in db.execute(select(Employee)).scalars().all():
+        if row.position and _normalize_poste_text(row.position) == _POSTE_OLD_NORM:
+            row.position = canonical
+            changed["employees_position"] += 1
+        new_extra, extra_changed = _rename_poste_in_extra(row.extra, canonical)
+        if extra_changed:
+            row.extra = new_extra
+            changed["employees_extra"] += 1
+
+    for row in db.execute(select(Assignment)).scalars().all():
+        if row.position and _normalize_poste_text(row.position) == _POSTE_OLD_NORM:
+            row.position = canonical
+            changed["assignments"] += 1
+
+    for row in db.execute(select(Candidate)).scalars().all():
+        if row.desired_position and _normalize_poste_text(row.desired_position) == _POSTE_OLD_NORM:
+            row.desired_position = canonical
+            changed["candidates"] += 1
+
+    for row in db.execute(select(Contract)).scalars().all():
+        if row.position and _normalize_poste_text(row.position) == _POSTE_OLD_NORM:
+            row.position = canonical
+            changed["contracts"] += 1
+
+    for row in db.execute(select(ContractTemplate)).scalars().all():
+        if row.position and _normalize_poste_text(row.position) == _POSTE_OLD_NORM:
+            row.position = canonical
+            changed["contract_templates"] += 1
+
+    for row in db.execute(select(GeneratedContract)).scalars().all():
+        if row.position and _normalize_poste_text(row.position) == _POSTE_OLD_NORM:
+            row.position = canonical
+            changed["generated_contracts"] += 1
+
+    total_changed = sum(changed.values())
+    if total_changed:
+        db.commit()
+    changed["total"] = total_changed
+    changed["canonical_label"] = canonical
+    return changed
 
 
 def employee_to_item(row: Employee) -> dict[str, Any]:

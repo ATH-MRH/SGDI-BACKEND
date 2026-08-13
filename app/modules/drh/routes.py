@@ -280,6 +280,17 @@ def flatten_employee_extra_bloat(db: Session = Depends(get_db), user: User = Dep
     return migrate_flatten_employees(db)
 
 
+@router.post("/postes/rename-agent-securite")
+def rename_poste_agent_securite_route(db: Session = Depends(get_db), user: User = Depends(current_user), token_payload: dict = Depends(current_token_payload)):
+    """Renomme partout l'ancien intitulé libre "Agent de sécurité" (fiches employés,
+    affectations, candidats, contrats, modèles) vers le libellé officiel du catalogue
+    Administration système > Postes / Fonctions. Transaction unique : tout ou rien."""
+    if not _is_admin_system_user(user, token_payload):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé à l'administrateur système")
+    from app.modules.irongs.sql_bridge import rename_poste_agent_securite
+    return rename_poste_agent_securite(db)
+
+
 @router.post("/employees", response_model=EmployeeOut)
 def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)

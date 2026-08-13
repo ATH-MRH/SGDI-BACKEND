@@ -209,6 +209,50 @@ def test_flatten_employee_extra_requires_system_admin(client, auth_headers):
     assert r.status_code == 403, r.text
 
 
+def test_rename_poste_agent_securite_requires_system_admin(client, auth_headers):
+    """postes/rename-agent-securite est réservé à un admin système — sinon 403."""
+    r = client.post("/api/drh/postes/rename-agent-securite", headers=auth_headers)
+    assert r.status_code == 403, r.text
+
+
+def test_rename_poste_agent_securite_renames_everywhere_and_is_idempotent(db):
+    """Renomme le poste libre "Agent de sécurité" (toute casse/accent) vers le libellé
+    officiel du catalogue, sur Employee.position, les champs legacy imbriqués de
+    Employee.extra, et Candidate.desired_position. Un 2e passage ne change plus rien."""
+    from app.modules.irongs.sql_bridge import rename_poste_agent_securite
+    from app.modules.irongs.models import Position
+    from app.modules.drh.models import Employee, Candidate
+
+    db.add(Position(name="AGENT DE PRÉVENTION ET DE SÉCURITÉ (APS)", society=None))
+    emp = Employee(code="RENPOS1", first_name="Test", last_name="Rename",
+                    society="Iron Global Securite", status="actif", contract_type="CDD",
+                    position="Agent de securite",
+                    extra={"fonction": "agent de Sécurité", "_legacy": {
+                        "affectationCourante": {"poste": "AGENT DE SECURITE", "siteName": "Site X"},
+                    }})
+    cand = Candidate(first_name="Cand", last_name="Test", desired_position="agent de sécurité",
+                      society="Iron Global Securite")
+    db.add(emp)
+    db.add(cand)
+    db.commit()
+
+    result = rename_poste_agent_securite(db)
+    assert result["total"] > 0
+    canonical = result["canonical_label"]
+    assert canonical == "AGENT DE PRÉVENTION ET DE SÉCURITÉ (APS)"
+
+    db.refresh(emp)
+    db.refresh(cand)
+    assert emp.position == canonical
+    assert emp.extra["fonction"] == canonical
+    assert emp.extra["_legacy"]["affectationCourante"]["poste"] == canonical
+    assert emp.extra["_legacy"]["affectationCourante"]["siteName"] == "Site X"
+    assert cand.desired_position == canonical
+
+    second = rename_poste_agent_securite(db)
+    assert second["total"] == 0
+
+
 # ── Candidats (CRUD + workflow recrutement) ───────────────────────────────────
 
 def test_candidate_crud(client, auth_headers):
