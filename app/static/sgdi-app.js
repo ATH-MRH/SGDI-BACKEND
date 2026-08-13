@@ -20077,7 +20077,7 @@ function badgeHTML(a,opts){
           ${groupeSanguin?`<div class="badge-blood">Groupe sanguin : <b>${escapeHTML(groupeSanguin)}</b></div>`:""}
         </div>
       </div>
-      <img class="badge-seal" src="/static/iron-securite-logo.png" alt=""/>
+      <img class="badge-seal" src="/static/iron-service-badge-seal.png" alt=""/>
     </div>
     <div class="badge-foot" style="border-color:${color}">Valable avec pièce d'identité professionnelle</div>
   </section>`;
