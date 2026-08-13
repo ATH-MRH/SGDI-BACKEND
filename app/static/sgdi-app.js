@@ -20058,7 +20058,7 @@ function badgeHTML(a,opts){
   const aff=a.affectationCourante||{};
   const vertical=format==="vertical";
   const size=vertical?"width:54mm;height:86mm":"width:86mm;height:54mm";
-  const photoSize=vertical?"27mm":"25mm";
+  const photoSize=vertical?"35mm":"29mm";
   const nom=String(a.nom||"").trim();
   const prenom=String(a.prenom||"").trim();
   const code=String(a.matricule||"—").trim();
