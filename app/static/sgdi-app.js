@@ -32383,7 +32383,7 @@ async function cleanupActionFlattenEmployeeExtra(btn){
   const original=btn?.textContent;
   if(btn){btn.disabled=true;btn.textContent="Allègement en cours…"}
   try{
-    const result=await SGDI.drh.employees.flattenExtra();
+    const result=await window.SGDI_API.employees.flattenExtra();
     toast(`✓ ${result.changed}/${result.total} fiche(s) allégée(s)`+(result.changed?" — recharge le module DRH pour voir l'effet.":" — déjà à jour."),"success");
   }catch(e){
     toast("Allègement impossible : "+(e.message||e),"error");
