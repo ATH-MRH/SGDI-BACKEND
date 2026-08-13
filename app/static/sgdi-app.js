@@ -20058,7 +20058,7 @@ function badgeHTML(a,opts){
   const aff=a.affectationCourante||{};
   const vertical=format==="vertical";
   const size=vertical?"width:54mm;height:86mm":"width:86mm;height:54mm";
-  const photoSize=vertical?"29mm":"31mm";
+  const photoSize=vertical?"27mm":"25mm";
   const nom=String(a.nom||"").trim();
   const prenom=String(a.prenom||"").trim();
   const code=String(a.matricule||"—").trim();
@@ -20070,12 +20070,11 @@ function badgeHTML(a,opts){
       <div class="badge-identity-row">
         ${badgePhotoHTML(a,{style:`width:${photoSize};height:${photoSize}`,editable:!!opts.preview})}
         <div class="badge-identity-fields">
-		          <div class="badge-field"><span>Nom :</span><b>${escapeHTML(nom||"—")}</b></div>
-		          <div class="badge-field"><span>Prénom :</span><b>${escapeHTML(prenom||"—")}</b></div>
-		          <div class="badge-field badge-field-code"><span>Code :</span><b>${escapeHTML(code||"—")}</b></div>
-		          <div class="badge-field badge-field-function"><span>Fonction :</span><b>${escapeHTML(fonction||"—")}</b></div>
-		          <div class="badge-field badge-field-blood"><span>G. sang :</span><b>${escapeHTML(groupeSanguin||"—")}</b></div>
-		        </div>
+          <div class="badge-name">${escapeHTML([nom,prenom].filter(Boolean).join(" ")||"—")}</div>
+          <div class="badge-code">${escapeHTML(code||"—")}</div>
+          <div class="badge-job">${escapeHTML(fonction||"—")}</div>
+          ${groupeSanguin?`<div class="badge-blood">Groupe sanguin : <b>${escapeHTML(groupeSanguin)}</b></div>`:""}
+        </div>
       </div>
     </div>
     <div class="badge-foot" style="border-color:${color}">Valable avec pièce d'identité professionnelle</div>
