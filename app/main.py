@@ -377,6 +377,24 @@ def on_startup() -> None:
                 conn.execute(text(ddl))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Index assignments non créé (%s): %s", ddl, exc)
+    # _events_signature() (polling temps réel + snapshot /api/irongs/db) fait un COUNT(*)/MAX(updated_at)/
+    # MAX(created_at) sur chacune de ces tables à chaque appel (cache 2s, donc très fréquent). Seules
+    # sgdi_records/employees/assignments/daily_presence avaient un index (migration 20260726_0018) ; le
+    # reste scannait la table entière en continu -> lenteur transverse à toute l'appli, DRH compris.
+    events_signature_tables = [
+        "candidates", "contracts", "generated_contracts", "sites", "events", "incidents",
+        "stock_articles", "stock_movements", "stores", "suppliers", "employee_equipment",
+        "material_assignments", "clients", "prospects", "invoices", "payments",
+        "cash_entries", "ops_movements", "advances", "credit_notes",
+    ]
+    for table in events_signature_tables:
+        for column in ("updated_at", "created_at"):
+            ddl = f"CREATE INDEX IF NOT EXISTS ix_{table}_{column} ON {table} ({column})"
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(ddl))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Index %s non créé (%s): %s", table, ddl, exc)
     logger.info("Tables PostgreSQL vérifiées/créées")
     with SessionLocal() as db:
         if settings.startup_maintenance_enabled:

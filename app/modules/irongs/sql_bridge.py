@@ -868,7 +868,7 @@ def list_all_collections_parallel(session_factory: Any) -> "dict[str, list[dict[
     return result
 
 
-def _live_assignment_map(db: Session) -> dict[int, dict[str, Any]]:
+def _live_assignment_map(db: Session, employee_ids: list[int] | None = None) -> dict[int, dict[str, Any]]:
     # Affectation ACTIVE réelle par employé, reconstruite depuis la table SQL assignments + sites.
     # C'est la source de vérité. On l'injecte dans affectationCourante de chaque employé pour que
     # TOUS les écrans (compteurs, listes, filtres) soient cohérents (fin des "50 affectés / 19 en
@@ -876,13 +876,20 @@ def _live_assignment_map(db: Session) -> dict[int, dict[str, Any]]:
     today = date.today()
     # Une seule requête (LEFT JOIN) au lieu de deux allers-retours séquentiels
     # (affectations puis sites) — appelée à chaque chargement de la liste des employés.
-    rows = db.execute(
+    # employee_ids : quand l'appelant a déjà la liste des employés concernés (ex: /drh/employees
+    # filtré par société), on limite la requête à ces employés au lieu de scanner la table
+    # assignments en entier à chaque appel.
+    query = (
         select(Assignment, Site)
         .join(Site, Assignment.site_id == Site.id, isouter=True)
         .where(Assignment.active == 1)
         .where(or_(Assignment.end_date.is_(None), Assignment.end_date >= today))
-        .order_by(Assignment.id)
-    ).all()
+    )
+    if employee_ids is not None:
+        if not employee_ids:
+            return {}
+        query = query.where(Assignment.employee_id.in_(employee_ids))
+    rows = db.execute(query.order_by(Assignment.id)).all()
     if not rows:
         return {}
     result: dict[int, dict[str, Any]] = {}

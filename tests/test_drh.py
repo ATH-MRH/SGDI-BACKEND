@@ -203,6 +203,12 @@ def test_repair_employee_codes_requires_system_admin(client, auth_headers):
     assert r.status_code == 403, r.text
 
 
+def test_flatten_employee_extra_requires_system_admin(client, auth_headers):
+    """flatten-extra est réservé à un admin système (token admin_system) — sinon 403."""
+    r = client.post("/api/drh/employees/flatten-extra", headers=auth_headers)
+    assert r.status_code == 403, r.text
+
+
 # ── Candidats (CRUD + workflow recrutement) ───────────────────────────────────
 
 def test_candidate_crud(client, auth_headers):

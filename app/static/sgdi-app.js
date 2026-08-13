@@ -1502,7 +1502,7 @@ window.SGDI_API={
     resetPassword:(email,otp,newPassword)=>sgdiApi("/auth/password/reset",{method:"POST",body:{email,otp,newPassword},legacy:false}),
     me:()=>sgdiApi("/auth/me",{method:"GET",legacy:false})
   },
-  employees:{list:(params)=>sgdiApi("/drh/employees"+sgdiQuery(params),{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false})},
+  employees:{list:(params)=>sgdiApi("/drh/employees"+sgdiQuery(params),{legacy:false}),page:(params)=>sgdiApi("/drh/employees/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),create:(payload)=>sgdiApi("/drh/employees",{method:"POST",body:payload,legacy:false}),update:(id,payload)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),get:(id)=>sgdiApi("/drh/employees/"+id,{legacy:false}),fiche:(id)=>sgdiApi("/drh/employees/"+id+"/fiche-position",{legacy:false}),delete:(id)=>sgdiApi("/drh/employees/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),flattenExtra:()=>sgdiApi("/drh/employees/flatten-extra",{method:"POST",legacy:false})},
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
@@ -1754,8 +1754,12 @@ window.addEventListener("sgdi:sidebar-stats",()=>{
   try{renderSidebar()}catch(e){}
   try{
     const hash=String(location.hash||"");
+    // Le tableau de bord DRH a déjà son propre cycle de rafraîchissement dédié et mis en cache
+    // (événement "sgdi:drh-stats", TTL 15s, voir sgdiRefreshDrhStats) : le re-rendre ICI AUSSI à
+    // chaque tick de stats sidebar (au mieux toutes les 5s, déclenché depuis de nombreux autres
+    // écrans) doublait le rendu complet du tableau de bord DRH sans raison, avec son coût de
+    // recalcul (O(effectif × congés/incidents)) — c'était une cause majeure de lenteur perçue.
     if(hash==="#/materiel"||hash.startsWith("#/materiel/dashboard"))renderView();
-    if(hash==="#/drh"||hash.startsWith("#/drh/dashboard")||hash==="#/dashboard")renderView();
   }catch(e){}
 });
 function userPermissionCache(){
@@ -30850,8 +30854,12 @@ function renderDRHDashboard(view){
   const sIds=new Set(si.map(s=>s.id));
   const inc=selSoc?allInc.filter(i=>(i.agentId&&activeAgIds.has(String(i.agentId)))||(i.siteId&&sIds.has(i.siteId))):allInc;
   const actifs=activeAg.filter(a=>a.statut==="actif").length;
-  const enConge=activeAg.filter(a=>co.some(c=>String(c.agentId)===String(a.id)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
-  const enMaladie=activeAg.filter(a=>co.some(c=>String(c.agentId)===String(a.id)&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
+  // Sets construits une fois (au lieu d'un .some() sur co pour CHAQUE employé, O(effectif×congés))
+  // : la même info recalculée à l'identique, en O(congés+effectif).
+  const congeAgentIds=new Set(co.filter(c=>c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).map(c=>String(c.agentId)));
+  const maladieAgentIds=new Set(co.filter(c=>c.statut==="approuve"&&c.type==="Maladie"&&inRange(c)).map(c=>String(c.agentId)));
+  const enConge=activeAg.filter(a=>congeAgentIds.has(String(a.id))).length;
+  const enMaladie=activeAg.filter(a=>maladieAgentIds.has(String(a.id))).length;
   const absents=activeAg.filter(a=>a.statut==="absent").length;
   const susp=activeAg.filter(a=>a.statut==="suspendu").length;
   const sortants=ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length;
@@ -32285,6 +32293,11 @@ function renderAdminStorage(view){
             <button class="btn btn-danger text-sm" style="background:#7f1d1d;border-color:#7f1d1d" onclick="cleanupActionResetRhPeople(this,'all')">Supprimer employés + candidats</button>
           </div>
         </div>
+        <div class="card p-4" style="background:#ecfdf5;border:1px solid #6ee7b7">
+          <div class="font-bold mb-1">⚡ Alléger les fiches employés (dossiers gonflés)</div>
+          <div class="text-xs text-slate-600 mb-2">Aplatit l'historique interne accumulé dans chaque fiche employé (sans perte de données) — cause principale de lenteur au chargement du module DRH quand des lignes n'ont pas été ré-enregistrées depuis longtemps.</div>
+          <button class="btn btn-success text-sm" onclick="cleanupActionFlattenEmployeeExtra(this)">Alléger maintenant</button>
+        </div>
         <div class="card p-4" style="background:#043970;border:1px solid #043970">
           <div class="font-bold mb-1">📅 Anciens pointages</div>
           <div class="text-xs text-slate-600 mb-2">${pointagesCount} pointage(s) · supprimer ceux > 12 mois</div>
@@ -32363,6 +32376,20 @@ function cleanupActionAutoRepairDB(){
   if(!report.length){toast("Aucune correction nécessaire","success");return}
   if(saveDB())toast("Correction automatique terminée : "+report.length+" point(s) corrigé(s)","success");
   renderView();
+}
+async function cleanupActionFlattenEmployeeExtra(btn){
+  if(!isAdminSystemSession()){toast("Action réservée à l'administrateur système","error");return}
+  if(!confirm("Alléger toutes les fiches employés maintenant ?\nAucune donnée n'est perdue (opération testée, tout ou rien) — seul l'historique interne emboîté est aplati.\nCela peut prendre quelques secondes."))return;
+  const original=btn?.textContent;
+  if(btn){btn.disabled=true;btn.textContent="Allègement en cours…"}
+  try{
+    const result=await SGDI.drh.employees.flattenExtra();
+    toast(`✓ ${result.changed}/${result.total} fiche(s) allégée(s)`+(result.changed?" — recharge le module DRH pour voir l'effet.":" — déjà à jour."),"success");
+  }catch(e){
+    toast("Allègement impossible : "+(e.message||e),"error");
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=original}
+  }
 }
 function cleanupActionTrimLog(){
   if(!confirm("Garder uniquement les 200 dernières entrées du journal d'activité ?"))return;

@@ -235,7 +235,7 @@ def employees(
     # le front affiche la vérité sans dépendre d'un appariement local fragile. Un employé sans
     # affectation active repart sans site (cohérent avec la base).
     from app.modules.irongs.sql_bridge import _live_assignment_map
-    live = _live_assignment_map(db)
+    live = _live_assignment_map(db, employee_ids=[row.id for row in rows])
     # Un seul passage de sérialisation : model_dump(mode="json") produit un dict JSON-safe,
     # qu'on renvoie tel quel via JSONResponse. On évite ainsi la re-validation intégrale que
     # FastAPI ferait sur ~12 Mo si on retournait des objets EmployeeOut avec response_model.
@@ -266,6 +266,18 @@ def repair_employee_codes(db: Session = Depends(get_db), user: User = Depends(cu
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé à l'administrateur système")
     updated = service.repair_employee_codes_if_needed(db)
     return {"updated": updated}
+
+
+@router.post("/employees/flatten-extra")
+def flatten_employee_extra_bloat(db: Session = Depends(get_db), user: User = Depends(current_user), token_payload: dict = Depends(current_token_payload)):
+    """Aplatit l'emboîtement récursif extra._legacy accumulé sur les anciennes lignes
+    (jusqu'à plusieurs Mo/ligne), sans perte de données — même fonction, déjà testée, que le
+    script scripts/flatten_employee_extra.py, mais déclenchable depuis l'appli (transaction
+    unique : tout ou rien)."""
+    if not _is_admin_system_user(user, token_payload):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé à l'administrateur système")
+    from app.modules.irongs.sql_bridge import migrate_flatten_employees
+    return migrate_flatten_employees(db)
 
 
 @router.post("/employees", response_model=EmployeeOut)
