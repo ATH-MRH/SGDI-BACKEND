@@ -19854,7 +19854,7 @@ function renderBadgeModule(view){
   const verso=sessionStorage.getItem("badgeVerso")||"oui";
   view.innerHTML=`<div class="mb-4 flex items-start justify-between gap-3 flex-wrap">
     <div><h1 class="text-2xl font-bold">Création de badge</h1><p class="text-slate-500 text-sm">Module DRH · création, aperçu et impression des badges personnel.</p></div>
-	    <div class="flex gap-2 flex-wrap"><a href="#/fiches/toutes" class="btn btn-ghost text-sm">Retour fiches</a>${selected?`<button class="btn btn-primary text-sm" onclick="printBadge('${selected.id}')">Imprimer badge</button>`:""}</div>
+	    <div class="flex gap-2 flex-wrap"><a href="#/fiches/toutes" class="btn btn-ghost text-sm">Retour fiches</a>${selected?`<button class="btn btn-secondary text-sm" onclick="previewBadge('${selected.id}')">Aperçu badge</button><button class="btn btn-primary text-sm" onclick="printBadge('${selected.id}')">Imprimer badge</button>`:""}</div>
   </div>
   <div class="badge-builder-grid grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="card p-4 badge-agent-panel">
@@ -20154,6 +20154,17 @@ async function renderBadgeVerify(view,id){
       <div class="public-badge-qr"><img src="${badgeQrSrc(a,180)}" alt="QR pointage"></div>
     </div>
   </div>`;
+}
+async function previewBadge(id){
+  const a=(db.agents||[]).find(x=>x.id===id);if(!a){toast("Employé introuvable","error");return}
+  const opts={color:sessionStorage.getItem("badgeColor")||"#043970",format:sessionStorage.getItem("badgeFormat")||"vertical",verso:sessionStorage.getItem("badgeVerso")||"oui"};
+  const w=window.open("","_blank","width=900,height=700");
+  if(w){w.document.write(`<!doctype html><body style="font-family:Arial,sans-serif;padding:40px;color:#64748b">Préparation de l'aperçu…</body>`);w.document.close()}
+  await fetchBadgePublicLink(a);
+  if(!w||w.closed)return;
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><title>Aperçu badge ${escapeHTML(a.matricule||"")}</title>${badgePrintStyles()}</head><body><main class="badge-print-page">${badgeHTML(a,opts)}</main></body></html>`);
+  w.document.close();
 }
 async function printBadge(id){
   const a=(db.agents||[]).find(x=>x.id===id);if(!a){toast("Employé introuvable","error");return}
