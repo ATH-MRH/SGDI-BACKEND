@@ -30517,7 +30517,7 @@ function openCongeAttributionModal(agentId){
   congeAttribSolde=solde;
   congeAttribAgent=a;
   const history=(db.conges||[]).filter(c=>String(c.agentId)===String(a.id)).sort((x,y)=>String(y.du||"").localeCompare(String(x.du||"")));
-  const historyRows=history.map(c=>`<tr><td>${escapeHTML(c.type||"—")}</td><td class="text-xs">${c.du?formatDate(c.du):"—"} → ${c.au?formatDate(c.au):"—"}</td><td class="font-bold">${drhCongeDureeJours(c)} j</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td><button type="button" class="btn btn-ghost text-xs" onclick="printCongeOrder('${escapeHTML(String(c.id))}')">🖨 Titre de congé</button></td></tr>`).join("");
+  const historyRows=history.map(c=>`<tr><td>${escapeHTML(c.type||"—")}</td><td class="font-bold">${drhCongeDureeJours(c)} j</td><td class="text-xs">${c.du?formatDate(c.du):"—"}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td class="text-xs">${escapeHTML(c.motif||"—")}</td><td><button type="button" class="btn btn-ghost text-xs" onclick="printCongeOrder('${escapeHTML(String(c.id))}')">🖨 Titre de congé</button></td></tr>`).join("");
   openModal(`<div style="min-height:78vh;display:flex;flex-direction:column">
     <div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
       <div><h3 class="text-xl font-black">${escapeHTML(name||"—")}</h3><p class="text-sm text-slate-500">${escapeHTML(a.matricule||a.code||"—")} · ${escapeHTML(a.societe||"")} · Recruté le ${recruited?formatDate(recruited):"—"}</p></div>
@@ -30545,7 +30545,7 @@ function openCongeAttributionModal(agentId){
       </div>
       <div class="flex justify-end gap-2 mt-4"><button type="submit" class="btn btn-primary">Valider congé</button></div>
     </form>`}
-    <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type</th><th>Période</th><th>Jours</th><th>Statut</th><th></th></tr></thead><tbody>${historyRows||`<tr><td colspan="5" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
+    <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type congé</th><th>Nbr jour demandés</th><th>Date départ souhaitée</th><th>Statut</th><th>Observation</th><th>Document</th></tr></thead><tbody>${historyRows||`<tr><td colspan="6" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
   </div>`);
 }
 async function notifyPortalCongeAttribution(a,c){
