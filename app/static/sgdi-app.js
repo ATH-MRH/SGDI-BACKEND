@@ -30376,11 +30376,96 @@ function renderDRHCongesPersonnel(view){
     const contractEnd=employeePositionContractEndDate(a);
     const entitlement=recruited?drhLeaveEntitlement(recruited):null;
     const q=[name,code,recruited,contractEnd].join(" ").toLowerCase();
-    return `<tr data-searchable data-q="${escapeHTML(q)}"><td class="font-semibold"><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td></tr>`;
+    return `<tr data-searchable data-q="${escapeHTML(q)}" class="drh-conge-row" onclick="if(!event.target.closest('a'))openCongeAttributionModal('${escapeHTML(String(a.id))}')"><td class="font-semibold"><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td></tr>`;
   }).join("");
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-black">CONGÉS</h1><p class="text-sm text-slate-500">Droits acquis du personnel · 2,5 jours par mois depuis la date de recrutement${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""}.</p></div><span class="pill pill-blue">${agents.length} personne(s)</span></div>
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-black">CONGÉS</h1><p class="text-sm text-slate-500">Droits acquis du personnel · 2,5 jours par mois depuis la date de recrutement${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""} · Cliquez sur un employé pour lui attribuer un congé.</p></div><span class="pill pill-blue">${agents.length} personne(s)</span></div>
     <div class="card p-4 mb-4"><input class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div>
     <div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th></tr></thead><tbody>${rows||`<tr><td colspan="5" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
+}
+function drhCongeDureeJours(c){
+  const du=drhLeaveCalendarDate(c&&c.du),au=drhLeaveCalendarDate(c&&c.au);
+  if(!du||!au||au<du)return 0;
+  return Math.round((au-du)/86400000)+1;
+}
+function drhCongesAnnuelsPris(agentId){
+  return (db.conges||[]).filter(c=>String(c.agentId)===String(agentId)&&c.type==="Annuel"&&c.statut==="approuve").reduce((s,c)=>s+drhCongeDureeJours(c),0);
+}
+function drhCongeStatutBadgeHTML(statut){
+  const map={approuve:["Approuvé","pill-green"],en_attente:["En attente","pill-amber"],refuse:["Refusé","pill-red"]};
+  const [label,cls]=map[statut]||[statut||"—","pill"];
+  return `<span class="pill ${cls}">${escapeHTML(label)}</span>`;
+}
+let congeAttribSolde=0;
+function updateCongeAttribJours(){
+  const type=document.getElementById("conge-attrib-type")?.value;
+  const du=document.getElementById("conge-attrib-du")?.value;
+  const au=document.getElementById("conge-attrib-au")?.value;
+  const el=document.getElementById("conge-attrib-jours");
+  if(!el)return;
+  const jours=drhCongeDureeJours({du,au});
+  if(!jours){el.innerHTML="";return}
+  if(type==="Annuel"&&jours>congeAttribSolde){
+    el.innerHTML=`<span class="text-red-600 font-semibold">⚠ ${jours} jour(s) demandé(s) — dépasse le solde disponible (${congeAttribSolde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j). Ajustez le nombre de jours.</span>`;
+  }else{
+    el.innerHTML=`<span class="text-emerald-700 font-semibold">${jours} jour(s) demandé(s)</span>`;
+  }
+}
+function openCongeAttributionModal(agentId){
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  if(!a){toast("Employé introuvable","error");return}
+  const name=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const recruited=a.dateRecrutement||a.dateEntree||"";
+  const entitlement=recruited?drhLeaveEntitlement(recruited):0;
+  const pris=drhCongesAnnuelsPris(a.id);
+  const solde=Math.round((entitlement-pris)*100)/100;
+  congeAttribSolde=solde;
+  const history=(db.conges||[]).filter(c=>String(c.agentId)===String(a.id)).sort((x,y)=>String(y.du||"").localeCompare(String(x.du||"")));
+  const historyRows=history.map(c=>`<tr><td>${escapeHTML(c.type||"—")}</td><td class="text-xs">${c.du?formatDate(c.du):"—"} → ${c.au?formatDate(c.au):"—"}</td><td class="font-bold">${drhCongeDureeJours(c)} j</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td></tr>`).join("");
+  openModal(`<div style="min-height:78vh;display:flex;flex-direction:column">
+    <div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
+      <div><h3 class="text-xl font-black">${escapeHTML(name||"—")}</h3><p class="text-sm text-slate-500">${escapeHTML(a.matricule||a.code||"—")} · ${escapeHTML(a.societe||"")} · Recruté le ${recruited?formatDate(recruited):"—"}</p></div>
+      <button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button>
+    </div>
+    <div class="grid grid-3 mb-4">
+      <div class="card p-3 text-center"><div class="text-xs text-slate-500 uppercase font-bold">Droit acquis</div><div class="text-2xl font-black" style="color:#043970">${entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j</div></div>
+      <div class="card p-3 text-center"><div class="text-xs text-slate-500 uppercase font-bold">Déjà pris</div><div class="text-2xl font-black text-amber-700">${pris.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j</div></div>
+      <div class="card p-3 text-center"><div class="text-xs text-slate-500 uppercase font-bold">Solde restant</div><div class="text-2xl font-black ${solde<0?"text-red-600":"text-emerald-700"}">${solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j</div></div>
+    </div>
+    <form onsubmit="event.preventDefault();saveCongeAttribution('${escapeHTML(String(a.id))}')" class="card p-4 mb-4">
+      <div class="font-bold mb-3">Attribuer un congé</div>
+      <div class="grid grid-2">
+        <div><label class="label">Type</label><select class="select" name="type" id="conge-attrib-type" onchange="updateCongeAttribJours()">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select></div>
+        <div><label class="label">Statut</label><select class="select" name="statut"><option value="approuve">Approuvé</option><option value="en_attente">En attente</option></select></div>
+        <div><label class="label">Du</label><input class="input" type="date" name="du" id="conge-attrib-du" onchange="updateCongeAttribJours()" required/></div>
+        <div><label class="label">Au</label><input class="input" type="date" name="au" id="conge-attrib-au" onchange="updateCongeAttribJours()" required/></div>
+        <div class="col-span-2" id="conge-attrib-jours"></div>
+        <div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div>
+      </div>
+      <div class="flex justify-end gap-2 mt-4"><button type="submit" class="btn btn-primary">Attribuer le congé</button></div>
+    </form>
+    <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type</th><th>Période</th><th>Jours</th><th>Statut</th></tr></thead><tbody>${historyRows||`<tr><td colspan="4" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
+  </div>`);
+}
+async function saveCongeAttribution(agentId){
+  const form=document.querySelector(".modal-bg form");
+  if(!form)return;
+  const fd=new FormData(form);
+  const type=fd.get("type"),du=fd.get("du"),au=fd.get("au"),statut=fd.get("statut"),motif=fd.get("motif");
+  if(!du||!au){toast("Renseignez les dates du congé","error");return}
+  const jours=drhCongeDureeJours({du,au});
+  if(jours<=0){toast("Période invalide (date de fin avant date de début)","error");return}
+  if(type==="Annuel"&&jours>congeAttribSolde){
+    toast(`Impossible : ${jours} jour(s) demandé(s) dépasse le solde disponible (${congeAttribSolde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jour(s)). Ajustez le nombre de jours.`,"error");
+    return;
+  }
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  if(!a){toast("Employé introuvable","error");return}
+  if(employeeIsFormer(a)){toast("Congé impossible — cet employé est sortant et archivé","error");return}
+  db.conges.push({id:uid("cg"),agentId:a.id,type,du,au,motif,statut,createdAt:today()});
+  if(!(await saveDBAndWaitToast("Congé non confirmé")))return;
+  closeModal();
+  toast("Congé attribué","success");
+  renderView();
 }
 function drhBars(entries,color){
   const max=Math.max(1,...entries.map(e=>e[1]));
