@@ -20157,14 +20157,14 @@ async function renderBadgeVerify(view,id){
     </div>
   </div>`;
 }
-async function previewBadge(id){
+function previewBadge(id){
   const a=(db.agents||[]).find(x=>x.id===id);if(!a){toast("Employé introuvable","error");return}
   const opts={color:sessionStorage.getItem("badgeColor")||"#043970",format:sessionStorage.getItem("badgeFormat")||"vertical",verso:sessionStorage.getItem("badgeVerso")||"oui"};
+  // Écriture directe, en un seul passage : l'employé vient d'être sélectionné dans ce module
+  // (l'aperçu intégré a déjà déclenché la récupération du lien QR signé, voir badgeVerifyURL),
+  // donc pas besoin d'un écran "Préparation..." intermédiaire qui ne fait que clignoter.
   const w=window.open("","_blank","width=900,height=700");
-  if(w){w.document.write(`<!doctype html><body style="font-family:Arial,sans-serif;padding:40px;color:#64748b">Préparation de l'aperçu…</body>`);w.document.close()}
-  await fetchBadgePublicLink(a);
-  if(!w||w.closed)return;
-  w.document.open();
+  if(!w)return;
   w.document.write(`<!doctype html><html><head><title>Aperçu badge ${escapeHTML(a.matricule||"")}</title>${badgePrintStyles()}</head><body><main class="badge-print-page">${badgeHTML(a,opts)}</main></body></html>`);
   w.document.close();
 }
