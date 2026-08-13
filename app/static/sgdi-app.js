@@ -30490,7 +30490,7 @@ function openCongeAttributionModal(agentId){
       <div class="card p-3 text-center"><div class="text-xs text-slate-500 uppercase font-bold">Solde restant</div><div class="text-2xl font-black ${solde<0?"text-red-600":"text-emerald-700"}">${solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j</div></div>
     </div>
     ${suspended?`<div class="card p-4 mb-4" style="background:#fef2f2;border:1px solid #fca5a5"><span class="font-bold text-red-700">⛔ Employé suspendu</span><div class="text-sm text-red-800 mt-1">Un employé suspendu ne peut pas bénéficier d'un congé. Levez la suspension avant d'en attribuer un.</div></div>`:`
-    <form onsubmit="event.preventDefault();saveCongeAttribution('${escapeHTML(String(a.id))}')" class="card p-4 mb-4">
+    <form onsubmit="event.preventDefault();requestCongeConfirmation('${escapeHTML(String(a.id))}')" class="card p-4 mb-4">
       <div class="font-bold mb-3">Attribuer un congé</div>
       <div class="grid grid-2">
         <div><label class="label">Type</label><select class="select" name="type" id="conge-attrib-type" onchange="updateCongeAttribJours()">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select></div>
@@ -30501,7 +30501,7 @@ function openCongeAttributionModal(agentId){
         <div class="col-span-2" id="conge-attrib-coverage"></div>
         <div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div>
       </div>
-      <div class="flex justify-end gap-2 mt-4"><button type="submit" class="btn btn-primary">Attribuer le congé</button></div>
+      <div class="flex justify-end gap-2 mt-4"><button type="submit" class="btn btn-primary">Valider congé</button></div>
     </form>`}
     <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type</th><th>Période</th><th>Jours</th><th>Statut</th><th></th></tr></thead><tbody>${historyRows||`<tr><td colspan="5" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
   </div>`);
@@ -30555,7 +30555,8 @@ function printCongeOrder(congeId){
   w.document.write(congeOrderHTML(c,a)+`<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script>`);
   w.document.close();
 }
-async function saveCongeAttribution(agentId){
+let pendingCongeAttribution=null;
+function requestCongeConfirmation(agentId){
   const form=document.querySelector(".modal-bg form");
   if(!form)return;
   const fd=new FormData(form);
@@ -30571,24 +30572,74 @@ async function saveCongeAttribution(agentId){
   if(!a){toast("Employé introuvable","error");return}
   if(employeeIsFormer(a)){toast("Congé impossible — cet employé est sortant et archivé","error");return}
   if(a.statut==="suspendu"){toast("Congé impossible — cet employé est suspendu","error");return}
-  const conge={id:uid("cg"),agentId:a.id,type,du,au,motif,statut,createdAt:today()};
-  // Le titre de congé n'a de sens qu'une fois le congé validé (Approuvé) — on ouvre la fenêtre
-  // d'impression tout de suite (dans le même geste utilisateur, avant l'await réseau) pour
-  // éviter le blocage popup, puis on la remplit une fois l'enregistrement confirmé.
-  const willPrint=statut==="approuve";
-  const w=willPrint?window.open("","_blank","width=800,height=900"):null;
-  if(w){w.document.write(`<!doctype html><body style="font-family:Arial,sans-serif;padding:40px;color:#64748b">Préparation du titre de congé…</body>`);w.document.close()}
+  pendingCongeAttribution={agentId:a.id,type,du,au,statut,motif,jours,savedConge:null};
+  const name=((a.nom||"")+" "+(a.prenom||"")).trim();
+  openModal(`<div class="text-center p-4">
+    <div class="text-lg font-black mb-3">Confirmation</div>
+    <div class="text-base mb-6">Un congé de <b>${jours} jour(s)</b> va être accordé à <b>${escapeHTML(name||"—")}</b>.</div>
+    <div class="flex justify-center gap-3">
+      <button type="button" class="btn btn-ghost" onclick="cancelCongeConfirmation('${escapeHTML(String(a.id))}')">Non</button>
+      <button type="button" class="btn btn-primary" onclick="showCongeOrderPreview()">Oui</button>
+    </div>
+  </div>`);
+}
+function cancelCongeConfirmation(agentId){
+  pendingCongeAttribution=null;
+  openCongeAttributionModal(agentId);
+}
+function showCongeOrderPreview(){
+  const p=pendingCongeAttribution;
+  if(!p)return;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(p.agentId));
+  if(!a){toast("Employé introuvable","error");return}
+  const name=((a.nom||"")+" "+(a.prenom||"")).trim();
+  openModal(`<div>
+    <div class="flex items-center justify-between mb-4"><h3 class="text-lg font-black">Titre de congé — aperçu avant validation</h3><button type="button" class="btn btn-ghost" onclick="cancelCongeConfirmation('${escapeHTML(String(a.id))}')">← Retour</button></div>
+    <div class="card p-5 mb-4" style="max-width:640px;margin:0 auto">
+      <div class="text-center font-black text-lg uppercase mb-4" style="color:#043970">Titre de congé</div>
+      <div class="grid" style="grid-template-columns:170px 1fr;gap:8px 12px;font-size:14px">
+        <div class="font-bold text-slate-600">Employé</div><div>${escapeHTML(name||"—")} (${escapeHTML(a.matricule||a.code||"—")})</div>
+        <div class="font-bold text-slate-600">Fonction</div><div>${escapeHTML(a.affectationCourante?.poste||a.fonction||"—")}</div>
+        <div class="font-bold text-slate-600">Société</div><div>${escapeHTML(a.societe||"—")}</div>
+        <div class="font-bold text-slate-600">Type de congé</div><div>${escapeHTML(p.type||"—")}</div>
+        <div class="font-bold text-slate-600">Période</div><div>Du ${p.du?formatDate(p.du):"—"} au ${p.au?formatDate(p.au):"—"} (${p.jours} jour(s))</div>
+        <div class="font-bold text-slate-600">Statut</div><div>${p.statut==="approuve"?"Approuvé":"En attente"}</div>
+      </div>
+      ${p.motif?`<div class="mt-3 p-3 rounded border border-slate-200 text-sm"><b>Motif</b><br>${escapeHTML(p.motif)}</div>`:""}
+    </div>
+    <div class="flex justify-center gap-3">
+      <button type="button" id="conge-preview-valider" class="btn btn-primary" onclick="finalizeCongeAttribution()">✓ Valider</button>
+      <button type="button" id="conge-preview-imprimer" class="btn btn-ghost" disabled onclick="printPendingCongeOrder()">🖨 Imprimer</button>
+      <button type="button" class="btn btn-ghost" onclick="closeModal();renderView()">Fermer</button>
+    </div>
+  </div>`);
+}
+async function finalizeCongeAttribution(){
+  const p=pendingCongeAttribution;
+  if(!p)return;
+  const a=(db.agents||[]).find(x=>String(x.id)===String(p.agentId));
+  if(!a){toast("Employé introuvable","error");return}
+  const btn=document.getElementById("conge-preview-valider");
+  if(btn){btn.disabled=true;btn.textContent="Validation…"}
+  const conge={id:uid("cg"),agentId:a.id,type:p.type,du:p.du,au:p.au,motif:p.motif,statut:p.statut,createdAt:today()};
   db.conges.push(conge);
-  if(!(await saveDBAndWaitToast("Congé non confirmé"))){if(w&&!w.closed)w.close();return}
-  notifyPortalCongeAttribution(a,conge);
-  closeModal();
-  toast("Congé attribué","success");
-  if(w&&!w.closed){
-    w.document.open();
-    w.document.write(congeOrderHTML(conge,a)+`<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script>`);
-    w.document.close();
+  if(!(await saveDBAndWaitToast("Congé non confirmé"))){
+    db.conges.pop();
+    if(btn){btn.disabled=false;btn.textContent="✓ Valider"}
+    return;
   }
+  notifyPortalCongeAttribution(a,conge);
+  p.savedConge=conge;
+  toast("Congé attribué","success");
+  if(btn)btn.remove();
+  const printBtn=document.getElementById("conge-preview-imprimer");
+  if(printBtn)printBtn.disabled=false;
   renderView();
+}
+function printPendingCongeOrder(){
+  const conge=pendingCongeAttribution?.savedConge;
+  if(!conge){toast("Validez d'abord le congé","error");return}
+  printCongeOrder(conge.id);
 }
 function drhBars(entries,color){
   const max=Math.max(1,...entries.map(e=>e[1]));
