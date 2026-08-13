@@ -19931,9 +19931,41 @@ function filterBadgeAgents(){
   const q=(document.getElementById("badge-q")?.value||"").toLowerCase().trim();
   document.querySelectorAll("[data-badge-agent]").forEach(r=>r.classList.toggle("hidden",q&&!r.dataset.q.includes(q)));
 }
+let badgePublicLinkCache={};
+let badgePublicLinkPending={};
+function badgePublicLinkRef(a){return String(a?.backendId||a?.id||a?.matricule||"")}
+// La page publique /public/badge/{ref} exige un jeton signé côté serveur (settings.
+// public_employee_pages_require_token) — sans lui, le scan renvoie "Lien public invalide"
+// au lieu de l'identité/photo. On récupère donc le lien signé via /api/public-links/employee
+// avant de générer le QR (mis en cache par employé, ~pas de re-fetch à chaque rendu).
+async function fetchBadgePublicLink(a){
+  const ref=badgePublicLinkRef(a);
+  if(!ref)return null;
+  if(badgePublicLinkCache[ref])return badgePublicLinkCache[ref];
+  if(badgePublicLinkPending[ref])return badgePublicLinkPending[ref];
+  const p=(async()=>{
+    try{
+      const links=await sgdiApi("/public-links/employee/"+encodeURIComponent(ref),{legacy:false});
+      if(links&&links.badge_page){badgePublicLinkCache[ref]=links.badge_page;return links.badge_page}
+    }catch(e){console.warn("Lien public badge indisponible",e)}
+    return null;
+  })();
+  badgePublicLinkPending[ref]=p;
+  const result=await p;
+  delete badgePublicLinkPending[ref];
+  return result;
+}
+function ensureBadgePublicLink(a){
+  const ref=badgePublicLinkRef(a);
+  if(!ref||badgePublicLinkCache[ref]||badgePublicLinkPending[ref])return;
+  fetchBadgePublicLink(a).then(link=>{if(link&&typeof renderView==="function")renderView()});
+}
 function badgeVerifyURL(a){
+  const ref=badgePublicLinkRef(a);
+  const cached=badgePublicLinkCache[ref];
+  if(cached)return cached;
+  ensureBadgePublicLink(a);
   const origin=location.origin&&location.origin!=="null"?location.origin:"";
-  const ref=a.backendId||a.id||a.matricule||"";
   return `${origin}/public/badge/${encodeURIComponent(ref)}`;
 }
 function badgeQrSrc(a,size){
@@ -20122,19 +20154,30 @@ async function renderBadgeVerify(view,id){
     </div>
   </div>`;
 }
-function printBadge(id){
+async function printBadge(id){
   const a=(db.agents||[]).find(x=>x.id===id);if(!a){toast("Employé introuvable","error");return}
   const opts={color:sessionStorage.getItem("badgeColor")||"#043970",format:sessionStorage.getItem("badgeFormat")||"vertical",verso:sessionStorage.getItem("badgeVerso")||"oui"};
+  // Ouvrir la fenêtre tout de suite (dans le même geste utilisateur) pour éviter le blocage
+  // popup, puis la remplir une fois le lien QR signé récupéré (voir fetchBadgePublicLink).
   const w=window.open("","_blank","width=900,height=700");
+  if(w){w.document.write(`<!doctype html><body style="font-family:Arial,sans-serif;padding:40px;color:#64748b">Préparation du badge…</body>`);w.document.close()}
+  await fetchBadgePublicLink(a);
+  if(!w||w.closed)return;
+  w.document.open();
   w.document.write(`<!doctype html><html><head><title>Badge ${escapeHTML(a.matricule||"")}</title>${badgePrintStyles()}</head><body><main class="badge-print-page">${badgeHTML(a,opts)}</main><script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
   w.document.close();
 }
-function printBadgesSelection(){
+async function printBadgesSelection(){
   const ids=Array.from(document.querySelectorAll(".badge-check:checked")).map(x=>x.value);
   if(!ids.length){const a=badgeSelectedAgent();if(a)return printBadge(a.id);toast("Sélectionnez au moins un employé","error");return}
   const opts={color:sessionStorage.getItem("badgeColor")||"#043970",format:sessionStorage.getItem("badgeFormat")||"vertical",verso:sessionStorage.getItem("badgeVerso")||"oui"};
-  const html=ids.map(id=>{const a=(db.agents||[]).find(x=>x.id===id);return a?badgeHTML(a,opts):""}).join("");
+  const agents=ids.map(id=>(db.agents||[]).find(x=>x.id===id)).filter(Boolean);
   const w=window.open("","_blank","width=900,height=700");
+  if(w){w.document.write(`<!doctype html><body style="font-family:Arial,sans-serif;padding:40px;color:#64748b">Préparation des badges…</body>`);w.document.close()}
+  await Promise.all(agents.map(fetchBadgePublicLink));
+  if(!w||w.closed)return;
+  const html=agents.map(a=>badgeHTML(a,opts)).join("");
+  w.document.open();
   w.document.write(`<!doctype html><html><head><title>Badges personnel</title>${badgePrintStyles()}</head><body><main class="badge-print-page">${html}</main><script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
   w.document.close();
 }
