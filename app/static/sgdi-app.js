@@ -30516,6 +30516,14 @@ async function notifyPortalCongeAttribution(a,c){
     await fetch(`/api/portal/push/send/${encodeURIComponent(matricule)}`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({title,body})});
   }catch(e){/* best-effort : pas d'abonnement push ou hors-ligne, sans impact sur l'attribution */}
 }
+function congeDocumentRef(c){
+  const createdAt=c&&c.createdAt?String(c.createdAt):"";
+  const year=(createdAt.slice(0,4)||String(today()).slice(0,4))||new Date().getFullYear();
+  const sameYear=(db.conges||[]).filter(x=>String(x.createdAt||"").slice(0,4)===String(year)).sort((x,y)=>String(x.createdAt||"").localeCompare(String(y.createdAt||"")));
+  const idx=sameYear.findIndex(x=>String(x.id)===String(c&&c.id));
+  const num=idx>=0?idx+1:sameYear.length+1;
+  return `DRH/${String(num).padStart(4,"0")}/${year}`;
+}
 function congeOrderHTML(c,a){
   const name=((a.nom||"")+" "+(a.prenom||"")).trim();
   const jours=drhCongeDureeJours(c);
@@ -30531,7 +30539,7 @@ function congeOrderHTML(c,a){
     .sign{display:flex;justify-content:space-between;margin-top:60px;font-size:13px}
     .sign div{width:45%;text-align:center;border-top:1px solid #94a3b8;padding-top:6px}
   </style></head><body>
-  <div class="head"><div class="brand">${escapeHTML(a.societe||"IRON GLOBAL SECURITE")}</div><div>Réf. congé : ${escapeHTML(String(c.id))}<br>Édité le ${formatDate(today())}</div></div>
+  <div class="head"><div class="brand">${escapeHTML(a.societe||"IRON GLOBAL SECURITE")}</div><div>Réf. congé : ${escapeHTML(congeDocumentRef(c))}<br>Édité le ${formatDate(today())}</div></div>
   <h1>Titre de congé</h1>
   <div class="grid">
     <div class="k">Employé</div><div>${escapeHTML(name)} (${escapeHTML(a.matricule||a.code||"—")})</div>
