@@ -30364,23 +30364,53 @@ function drhLeaveEntitlement(dateRecrutement,asOf=today()){
 }
 function filterDrhCongesPersonnel(value){
   const q=String(value||"").trim().toLowerCase();
-  document.querySelectorAll("#drh-conges-personnel tbody tr[data-searchable]").forEach(row=>row.style.display=!q||String(row.dataset.q||"").includes(q)?"":"none");
+  document.querySelectorAll("#drh-conges-personnel tbody tr[data-searchable]").forEach(row=>{
+    const matchesQ=!q||String(row.dataset.q||"").includes(q);
+    const matchesSolde=!drhCongesSoldeEleveOnly||row.dataset.soldeEleve==="1";
+    row.style.display=(matchesQ&&matchesSolde)?"":"none";
+  });
 }
+const DRH_CONGE_SOLDE_ELEVE_SEUIL=20;
+let drhCongesSoldeEleveOnly=false;
 function renderDRHCongesPersonnel(view){
   const soc=drhActiveSocieteFilter();
   const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
+  drhCongesSoldeEleveOnly=false;
+  let soldeEleveCount=0;
   const rows=agents.map(a=>{
     const name=((a.nom||"")+" "+(a.prenom||"")).trim();
     const code=a.matricule||a.code||"";
     const recruited=a.dateRecrutement||a.dateEntree||"";
     const contractEnd=employeePositionContractEndDate(a);
     const entitlement=recruited?drhLeaveEntitlement(recruited):null;
+    const pris=drhCongesAnnuelsPris(a.id);
+    const solde=entitlement===null?null:Math.round((entitlement-pris)*100)/100;
+    const soldeEleve=solde!==null&&solde>=DRH_CONGE_SOLDE_ELEVE_SEUIL;
+    if(soldeEleve)soldeEleveCount++;
     const q=[name,code,recruited,contractEnd].join(" ").toLowerCase();
-    return `<tr data-searchable data-q="${escapeHTML(q)}" class="drh-conge-row" onclick="if(!event.target.closest('a'))openCongeAttributionModal('${escapeHTML(String(a.id))}')"><td class="font-semibold"><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td></tr>`;
+    return `<tr data-searchable data-q="${escapeHTML(q)}" data-solde-eleve="${soldeEleve?"1":"0"}" class="drh-conge-row" onclick="if(!event.target.closest('a'))openCongeAttributionModal('${escapeHTML(String(a.id))}')"><td class="font-semibold"><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td><td class="font-black ${soldeEleve?"text-amber-700":""}">${solde===null?"—":solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}${soldeEleve?" ⚠":""}</td></tr>`;
   }).join("");
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-black">CONGÉS</h1><p class="text-sm text-slate-500">Droits acquis du personnel · 2,5 jours par mois depuis la date de recrutement${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""} · Cliquez sur un employé pour lui attribuer un congé.</p></div><span class="pill pill-blue">${agents.length} personne(s)</span></div>
-    <div class="card p-4 mb-4"><input class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div>
-    <div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th></tr></thead><tbody>${rows||`<tr><td colspan="5" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-black">CONGÉS</h1><p class="text-sm text-slate-500">Droits acquis du personnel · 2,5 jours par mois depuis la date de recrutement${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""} · Cliquez sur un employé pour lui attribuer un congé.</p></div><div class="flex items-center gap-2 flex-wrap"><span class="pill pill-blue">${agents.length} personne(s)</span><button type="button" class="btn btn-ghost text-sm" onclick="exportCongesRecapCSV()">⬇ Exporter CSV</button></div></div>
+    ${soldeEleveCount?`<div class="card p-3 mb-4" style="background:#fffbeb;border:1px solid #fcd34d;cursor:pointer" onclick="toggleDrhCongesSoldeEleve()"><span class="font-bold text-amber-800">⚠ ${soldeEleveCount} employé(s) avec un solde élevé non pris (≥ ${DRH_CONGE_SOLDE_ELEVE_SEUIL} jours)</span> <span class="text-xs text-amber-700">— congés à planifier avant qu'ils ne s'accumulent davantage. Cliquez pour ${drhCongesSoldeEleveOnly?"tout afficher":"filtrer"}.</span></div>`:""}
+    <div class="card p-4 mb-4"><input id="drh-conges-search" class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div>
+    <div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th><th>SOLDE RESTANT</th></tr></thead><tbody>${rows||`<tr><td colspan="6" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
+}
+function toggleDrhCongesSoldeEleve(){
+  drhCongesSoldeEleveOnly=!drhCongesSoldeEleveOnly;
+  filterDrhCongesPersonnel(document.getElementById("drh-conges-search")?.value||"");
+}
+function exportCongesRecapCSV(){
+  const soc=drhActiveSocieteFilter();
+  const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||"")));
+  const rows=[["Nom Prénom","Code","Société","Date de recrutement","Droit acquis (j)","Jours pris (j)","Solde restant (j)"]];
+  agents.forEach(a=>{
+    const recruited=a.dateRecrutement||a.dateEntree||"";
+    const entitlement=recruited?drhLeaveEntitlement(recruited):0;
+    const pris=drhCongesAnnuelsPris(a.id);
+    const solde=Math.round((entitlement-pris)*100)/100;
+    rows.push([((a.nom||"")+" "+(a.prenom||"")).trim(),a.matricule||a.code||"",a.societe||"",recruited?formatDate(recruited):"",entitlement.toFixed(2),pris.toFixed(2),solde.toFixed(2)]);
+  });
+  paieDownloadCSV(rows,"conges-recap-"+today()+(soc?"-"+soc.replace(/\s+/g,"_"):"")+".csv");
 }
 function drhCongeDureeJours(c){
   const du=drhLeaveCalendarDate(c&&c.du),au=drhLeaveCalendarDate(c&&c.au);
@@ -30395,19 +30425,43 @@ function drhCongeStatutBadgeHTML(statut){
   const [label,cls]=map[statut]||[statut||"—","pill"];
   return `<span class="pill ${cls}">${escapeHTML(label)}</span>`;
 }
+function drhCongesOverlap(c,du,au){
+  const cs=drhLeaveCalendarDate(c&&c.du),ce=drhLeaveCalendarDate(c&&c.au);
+  const s=drhLeaveCalendarDate(du),e=drhLeaveCalendarDate(au);
+  if(!cs||!ce||!s||!e)return false;
+  return cs<=e&&ce>=s;
+}
+function drhSiteCoverageCheck(agent,du,au){
+  const site=agent?.affectationCourante?.siteName||"";
+  if(!site)return null;
+  const atSite=(db.agents||[]).filter(x=>String(x.id)!==String(agent.id)&&employeeIsActive(x)&&x.affectationCourante?.siteName===site);
+  const total=atSite.length+1;
+  const concurrentNames=(db.conges||[]).filter(c=>c.statut==="approuve"&&drhCongesOverlap(c,du,au)&&atSite.some(x=>String(x.id)===String(c.agentId))).map(c=>{const x=atSite.find(y=>String(y.id)===String(c.agentId));return x?((x.nom||"")+" "+(x.prenom||"")).trim():""}).filter(Boolean);
+  return {site,total,concurrentNames};
+}
 let congeAttribSolde=0;
+let congeAttribAgent=null;
 function updateCongeAttribJours(){
   const type=document.getElementById("conge-attrib-type")?.value;
   const du=document.getElementById("conge-attrib-du")?.value;
   const au=document.getElementById("conge-attrib-au")?.value;
   const el=document.getElementById("conge-attrib-jours");
+  const covEl=document.getElementById("conge-attrib-coverage");
   if(!el)return;
   const jours=drhCongeDureeJours({du,au});
-  if(!jours){el.innerHTML="";return}
+  if(!jours){el.innerHTML="";if(covEl)covEl.innerHTML="";return}
   if(type==="Annuel"&&jours>congeAttribSolde){
     el.innerHTML=`<span class="text-red-600 font-semibold">⚠ ${jours} jour(s) demandé(s) — dépasse le solde disponible (${congeAttribSolde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j). Ajustez le nombre de jours.</span>`;
   }else{
     el.innerHTML=`<span class="text-emerald-700 font-semibold">${jours} jour(s) demandé(s)</span>`;
+  }
+  if(covEl&&congeAttribAgent){
+    const cov=drhSiteCoverageCheck(congeAttribAgent,du,au);
+    if(cov&&cov.concurrentNames.length>0&&(cov.concurrentNames.length+1)/cov.total>=0.25){
+      covEl.innerHTML=`<div class="p-2 rounded mt-2" style="background:#fffbeb;border:1px solid #fcd34d;font-size:12px;color:#92400e">⚠ Couverture site « ${escapeHTML(cov.site)} » : ${cov.concurrentNames.length+1}/${cov.total} agent(s) seraient absents en même temps (déjà en congé : ${escapeHTML(cov.concurrentNames.join(", "))}).</div>`;
+    }else{
+      covEl.innerHTML="";
+    }
   }
 }
 function openCongeAttributionModal(agentId){
@@ -30419,8 +30473,9 @@ function openCongeAttributionModal(agentId){
   const pris=drhCongesAnnuelsPris(a.id);
   const solde=Math.round((entitlement-pris)*100)/100;
   congeAttribSolde=solde;
+  congeAttribAgent=a;
   const history=(db.conges||[]).filter(c=>String(c.agentId)===String(a.id)).sort((x,y)=>String(y.du||"").localeCompare(String(x.du||"")));
-  const historyRows=history.map(c=>`<tr><td>${escapeHTML(c.type||"—")}</td><td class="text-xs">${c.du?formatDate(c.du):"—"} → ${c.au?formatDate(c.au):"—"}</td><td class="font-bold">${drhCongeDureeJours(c)} j</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td></tr>`).join("");
+  const historyRows=history.map(c=>`<tr><td>${escapeHTML(c.type||"—")}</td><td class="text-xs">${c.du?formatDate(c.du):"—"} → ${c.au?formatDate(c.au):"—"}</td><td class="font-bold">${drhCongeDureeJours(c)} j</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td><button type="button" class="btn btn-ghost text-xs" onclick="printCongeOrder('${escapeHTML(String(c.id))}')">🖨 Ordre</button></td></tr>`).join("");
   openModal(`<div style="min-height:78vh;display:flex;flex-direction:column">
     <div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
       <div><h3 class="text-xl font-black">${escapeHTML(name||"—")}</h3><p class="text-sm text-slate-500">${escapeHTML(a.matricule||a.code||"—")} · ${escapeHTML(a.societe||"")} · Recruté le ${recruited?formatDate(recruited):"—"}</p></div>
@@ -30439,12 +30494,60 @@ function openCongeAttributionModal(agentId){
         <div><label class="label">Du</label><input class="input" type="date" name="du" id="conge-attrib-du" onchange="updateCongeAttribJours()" required/></div>
         <div><label class="label">Au</label><input class="input" type="date" name="au" id="conge-attrib-au" onchange="updateCongeAttribJours()" required/></div>
         <div class="col-span-2" id="conge-attrib-jours"></div>
+        <div class="col-span-2" id="conge-attrib-coverage"></div>
         <div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div>
       </div>
       <div class="flex justify-end gap-2 mt-4"><button type="submit" class="btn btn-primary">Attribuer le congé</button></div>
     </form>
-    <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type</th><th>Période</th><th>Jours</th><th>Statut</th></tr></thead><tbody>${historyRows||`<tr><td colspan="4" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
+    <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type</th><th>Période</th><th>Jours</th><th>Statut</th><th></th></tr></thead><tbody>${historyRows||`<tr><td colspan="5" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
   </div>`);
+}
+async function notifyPortalCongeAttribution(a,c){
+  const matricule=String(a?.matricule||a?.code||"").trim();
+  if(!matricule)return;
+  const title="Congé "+(c.statut==="approuve"?"approuvé":"enregistré");
+  const body=`${c.type} du ${formatDate(c.du)} au ${formatDate(c.au)}.`;
+  try{
+    const token=sgdiAuthToken();
+    await fetch(`/api/portal/push/send/${encodeURIComponent(matricule)}`,{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:JSON.stringify({title,body})});
+  }catch(e){/* best-effort : pas d'abonnement push ou hors-ligne, sans impact sur l'attribution */}
+}
+function printCongeOrder(congeId){
+  const c=(db.conges||[]).find(x=>String(x.id)===String(congeId));
+  if(!c){toast("Congé introuvable","error");return}
+  const a=(db.agents||[]).find(x=>String(x.id)===String(c.agentId));
+  if(!a){toast("Employé introuvable","error");return}
+  const name=((a.nom||"")+" "+(a.prenom||"")).trim();
+  const jours=drhCongeDureeJours(c);
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Ordre de congé - ${escapeHTML(name)}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111827;padding:32px;max-width:760px;margin:0 auto}
+    .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #043970;padding-bottom:12px;margin-bottom:20px}
+    .brand{font-weight:900;font-size:18px;color:#043970}
+    h1{font-size:20px;text-transform:uppercase;text-align:center;margin:20px 0}
+    .grid{display:grid;grid-template-columns:180px 1fr;gap:8px 12px;margin:20px 0;font-size:14px}
+    .k{font-weight:700;color:#475569}
+    .box{border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin:20px 0;font-size:14px}
+    .sign{display:flex;justify-content:space-between;margin-top:60px;font-size:13px}
+    .sign div{width:45%;text-align:center;border-top:1px solid #94a3b8;padding-top:6px}
+  </style></head><body>
+  <div class="head"><div class="brand">${escapeHTML(a.societe||"IRON GLOBAL SECURITE")}</div><div>Réf. congé : ${escapeHTML(String(c.id))}<br>Édité le ${formatDate(today())}</div></div>
+  <h1>Ordre de congé</h1>
+  <div class="grid">
+    <div class="k">Employé</div><div>${escapeHTML(name)} (${escapeHTML(a.matricule||a.code||"—")})</div>
+    <div class="k">Fonction</div><div>${escapeHTML(a.affectationCourante?.poste||a.fonction||"—")}</div>
+    <div class="k">Société</div><div>${escapeHTML(a.societe||"—")}</div>
+    <div class="k">Type de congé</div><div>${escapeHTML(c.type||"—")}</div>
+    <div class="k">Période</div><div>Du ${c.du?formatDate(c.du):"—"} au ${c.au?formatDate(c.au):"—"} (${jours} jour(s))</div>
+    <div class="k">Statut</div><div>${c.statut==="approuve"?"Approuvé":"En attente"}</div>
+  </div>
+  ${c.motif?`<div class="box"><b>Motif</b><br>${escapeHTML(c.motif)}</div>`:""}
+  <div class="sign"><div>Signature employé</div><div>Signature DRH</div></div>
+  </body></html>`;
+  const w=window.open("","_blank","width=800,height=900");
+  if(!w)return;
+  w.document.write(html+`<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script>`);
+  w.document.close();
 }
 async function saveCongeAttribution(agentId){
   const form=document.querySelector(".modal-bg form");
@@ -30461,8 +30564,10 @@ async function saveCongeAttribution(agentId){
   const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
   if(!a){toast("Employé introuvable","error");return}
   if(employeeIsFormer(a)){toast("Congé impossible — cet employé est sortant et archivé","error");return}
-  db.conges.push({id:uid("cg"),agentId:a.id,type,du,au,motif,statut,createdAt:today()});
+  const conge={id:uid("cg"),agentId:a.id,type,du,au,motif,statut,createdAt:today()};
+  db.conges.push(conge);
   if(!(await saveDBAndWaitToast("Congé non confirmé")))return;
+  notifyPortalCongeAttribution(a,conge);
   closeModal();
   toast("Congé attribué","success");
   renderView();
