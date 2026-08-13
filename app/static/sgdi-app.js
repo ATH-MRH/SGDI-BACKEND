@@ -30459,6 +30459,29 @@ function drhSiteCoverageCheck(agent,du,au){
 }
 let congeAttribSolde=0;
 let congeAttribAgent=null;
+function congeAttribAddDays(dateStr,days){
+  const d=drhLeaveCalendarDate(dateStr);
+  if(!d)return "";
+  return new Date(d.getTime()+days*86400000).toISOString().slice(0,10);
+}
+function updateCongeAttribDates(source){
+  const duEl=document.getElementById("conge-attrib-du");
+  const auEl=document.getElementById("conge-attrib-au");
+  const joursEl=document.getElementById("conge-attrib-jours-nbr");
+  if(!duEl||!auEl||!joursEl)return;
+  const du=duEl.value;
+  if(source==="au"){
+    // Modification manuelle de la date de retour -> on resynchronise le nombre de jours affiché.
+    const jours=drhCongeDureeJours({du,au:auEl.value});
+    joursEl.value=jours>0?jours:"";
+  }else{
+    // Nombre de jours saisi (ou date de début changée avec un nombre déjà saisi) -> on calcule
+    // automatiquement la date de retour (Du + nombre de jours - 1, période inclusive).
+    const jours=parseInt(joursEl.value,10);
+    if(du&&jours>0)auEl.value=congeAttribAddDays(du,jours-1);
+  }
+  updateCongeAttribJours();
+}
 function updateCongeAttribJours(){
   const type=document.getElementById("conge-attrib-type")?.value;
   const du=document.getElementById("conge-attrib-du")?.value;
@@ -30511,8 +30534,11 @@ function openCongeAttributionModal(agentId){
       <div class="grid grid-2">
         <div><label class="label">Type</label><select class="select" name="type" id="conge-attrib-type" onchange="updateCongeAttribJours()">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select></div>
         <div><label class="label">Statut</label><select class="select" name="statut"><option value="approuve">Approuvé</option><option value="en_attente">En attente</option></select></div>
-        <div><label class="label">Du</label><input class="input" type="date" name="du" id="conge-attrib-du" onchange="updateCongeAttribJours()" required/></div>
-        <div><label class="label">Au</label><input class="input" type="date" name="au" id="conge-attrib-au" onchange="updateCongeAttribJours()" required/></div>
+        <div class="col-span-2 grid grid-3">
+          <div><label class="label">Du</label><input class="input" type="date" name="du" id="conge-attrib-du" onchange="updateCongeAttribDates('du')" required/></div>
+          <div><label class="label">Nbr de jours demandés</label><input class="input" type="number" min="1" id="conge-attrib-jours-nbr" oninput="updateCongeAttribDates('jours')" placeholder="Ex: 14"/></div>
+          <div><label class="label">Au (date de retour)</label><input class="input" type="date" name="au" id="conge-attrib-au" onchange="updateCongeAttribDates('au')" required/></div>
+        </div>
         <div class="col-span-2" id="conge-attrib-jours"></div>
         <div class="col-span-2" id="conge-attrib-coverage"></div>
         <div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div>
