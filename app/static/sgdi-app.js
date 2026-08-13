@@ -20070,12 +20070,14 @@ function badgeHTML(a,opts){
       <div class="badge-identity-row">
         ${badgePhotoHTML(a,{style:`width:${photoSize};height:${photoSize}`,editable:!!opts.preview})}
         <div class="badge-identity-fields">
-          <div class="badge-name">${escapeHTML([nom,prenom].filter(Boolean).join(" ")||"—")}</div>
+          <div class="badge-name">${escapeHTML(nom||"—")}</div>
+          <div class="badge-prenom">${escapeHTML(prenom||"")}</div>
           <div class="badge-code">${escapeHTML(code||"—")}</div>
           <div class="badge-job">${escapeHTML(fonction||"—")}</div>
           ${groupeSanguin?`<div class="badge-blood">Groupe sanguin : <b>${escapeHTML(groupeSanguin)}</b></div>`:""}
         </div>
       </div>
+      <img class="badge-seal" src="/static/iron-securite-logo.png" alt=""/>
     </div>
     <div class="badge-foot" style="border-color:${color}">Valable avec pièce d'identité professionnelle</div>
   </section>`;
