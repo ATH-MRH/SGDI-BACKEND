@@ -19402,7 +19402,12 @@ function applyFpPositionFilters(list){
 function renderFiches(view,sub,_skipEnsure){
   const fixedSociete=mySoc()||"";
   const socFilter=fixedSociete||(session?.transverse?currentStructureSocieteFilter():(sessionStorage.getItem("fpSociete")||""));
-  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:socFilter,force:true});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderFiches(view,sub,true)).catch(()=>renderFiches(view,sub,true));return}}
+  // Pas de force:true ici : des données locales déjà présentes court-circuitent le
+  // rechargement (voir sgdiEnsureEmployeesForDisplay). Avec force:true, CHAQUE visite de
+  // Fiche de position relançait un chargement complet (~12 Mo) qui remplaçait la vue par
+  // "Chargement des effectifs…" — perçu comme une page blanche (même bug déjà corrigé pour
+  // la Feuille Pointage, commit a1690b88).
+  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:socFilter});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderFiches(view,sub,true)).catch(()=>renderFiches(view,sub,true));return}}
   const allowedSocietes=currentAllowedSocietes();
   const restrictedSocietes=hasExplicitSocieteRestriction();
   const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
@@ -32942,7 +32947,8 @@ function adminFicheSearchRestore(){
 }
 function renderAdminFichesPosition(view,_skipEnsure){
   const adminSoc=adminActiveSociete();
-  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:adminSoc||"",force:true});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderAdminFichesPosition(view,true)).catch(()=>renderAdminFichesPosition(view,true));return}}
+  // Pas de force:true ici, même raison que renderFiches : voir plus haut (commit a1690b88).
+  if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:adminSoc||""});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderAdminFichesPosition(view,true)).catch(()=>renderAdminFichesPosition(view,true));return}}
   const rawQ=String(sessionStorage.getItem("adminFicheSearch")||"");
   const q=adminFicheSearchText(rawQ);
   const allAgents=db.agents||[];
