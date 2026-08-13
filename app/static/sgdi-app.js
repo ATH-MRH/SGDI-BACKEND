@@ -20116,10 +20116,11 @@ function badgeHTML(a,opts){
   const back=`<section class="badge-card badge-back ${vertical?"vertical":"horizontal"}" style="${size}">
     <div class="badge-top" style="background:${color}"><div class="badge-brand">CONSIGNES</div></div>
     <div class="badge-back-body">
-      <div class="badge-back-qr"><img src="${badgeQrSrc(a,160)}" alt="QR ${escapeHTML(a.matricule||"")}"/></div>
+      <div class="badge-back-important">IMPORTANT</div>
       <div class="badge-back-text">
         <p>Ce badge est la propriété exclusive de la société. Personnel et non transférable, il doit être porté visible en permanence dans l'enceinte de l'établissement. Toute perte, tout vol ou disparition doit être signalé sans délai au service des ressources humaines. Il doit être restitué immédiatement en cas de fin de contrat. Toute utilisation frauduleuse expose son détenteur à des poursuites.</p>
       </div>
+      <div class="badge-back-qr"><img src="${badgeQrSrc(a,160)}" alt="QR ${escapeHTML(a.matricule||"")}"/></div>
     </div>
   </section>`;
   return `<div class="badge-sheet-preview">${recto}${verso?back:""}</div>`;
