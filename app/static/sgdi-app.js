@@ -20126,7 +20126,9 @@ function badgeHTML(a,opts){
   return `<div class="badge-sheet-preview">${recto}${verso?back:""}</div>`;
 }
 function badgePrintStyles(){
-  return ``;
+  // La fenêtre d'aperçu/impression est un document tout neuf, sans accès au CSS de l'appli :
+  // sans cette feuille de style, le badge s'affiche en HTML brut (voir bug signalé).
+  return `<link rel="stylesheet" href="/static/sgdi-app.css">`;
 }
 async function publicBadgeEmployee(id){
   const ref=decodeURIComponent(id||"");
