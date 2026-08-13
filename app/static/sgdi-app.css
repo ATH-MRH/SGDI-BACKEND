@@ -482,7 +482,7 @@
   @keyframes modalSlideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 
   /* ----- MESSAGES / NOTIFICATIONS ----- */
-  .message-toast{position:fixed;right:18px;bottom:18px;z-index:130;width:min(390px,calc(100vw - 36px));background:#fff;border:1px solid #dbe3ef;border-left:5px solid var(--info);border-radius:10px;box-shadow:0 14px 38px rgba(15,23,42,.18);padding:13px 42px 13px 14px;color:#0f172a;animation:toastSlideIn .16s ease}
+  .message-toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10050;width:min(390px,calc(100vw - 36px));background:#fff;border:1px solid #dbe3ef;border-left:5px solid var(--info);border-radius:10px;box-shadow:0 20px 55px rgba(15,23,42,.28);padding:13px 42px 13px 14px;color:#0f172a;text-align:center;animation:toastCenterPop .16s ease}
   .message-toast.message-error{border-left-color:var(--danger)}
   .message-toast.message-success{border-left-color:#475569}
   .message-toast.message-warning{border-left-color:var(--warn)}
