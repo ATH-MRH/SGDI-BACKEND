@@ -20118,7 +20118,7 @@ function badgeHTML(a,opts){
     <div class="badge-back-body">
       <div class="badge-back-qr"><img src="${badgeQrSrc(a,160)}" alt="QR ${escapeHTML(a.matricule||"")}"/></div>
       <div class="badge-back-text">
-        <p>Ce badge est la propriété exclusive de la société et doit être porté en permanence dans l'enceinte de l'établissement. Toute perte, vol ou disparition doit être signalé immédiatement au service des ressources humaines. En cas de fin de contrat, ce badge doit être restitué sans délai. Toute utilisation frauduleuse fera l'objet de poursuites.</p>
+        <p>Ce badge est la propriété exclusive de la société. Personnel et non transférable, il doit être porté visible en permanence dans l'enceinte de l'établissement. Toute perte, tout vol ou disparition doit être signalé sans délai au service des ressources humaines. Il doit être restitué immédiatement en cas de fin de contrat. Toute utilisation frauduleuse expose son détenteur à des poursuites.</p>
       </div>
     </div>
   </section>`;
