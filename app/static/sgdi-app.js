@@ -10514,6 +10514,9 @@ function employeePositionContractEndPillHTML(a,baseDate){
   if(!end)return "—";
   const d=daysBetween(baseDate||today(),end);
   const badge=(text,bg,color)=>`<span class="pill" style="background:${bg};color:${color};font-weight:900">${text}</span>`;
+  // Une sortie clôture la relation de travail. Le contrat reste consultable dans
+  // les archives, mais ne doit plus être présenté comme une échéance à traiter.
+  if(employeeIsFormer(a,baseDate||today()))return badge(`${formatDate(end)} · clôturé`,"#e2e8f0","#475569");
   if(d<0)return badge(`${formatDate(end)} · expiré`,"#fee2e2","#991b1b");
   if(d<=30)return badge(`${formatDate(end)} (${d} j)`,"#fee2e2","#991b1b");
   if(d<=90)return badge(`${formatDate(end)} (${d} j)`,"#fef3c7","#92400e");
@@ -30837,20 +30840,23 @@ function renderDRHDashboard(view){
   sgdiEnsureEmployeesForDisplay({society:selSoc,force:true});
   const allCo=db.conges||[];const allSi=db.sites||[];const allInc=db.incidents||[];
   const ag=drhAgentsList();
-  const agIds=new Set(ag.map(a=>a.id));
-  const co=selSoc?allCo.filter(c=>agIds.has(c.agentId)):allCo;
-  const siteIds=new Set(ag.map(a=>agentLiveAffectation(a)?.siteId).filter(Boolean));
+  // Population opérationnelle courante. Les sortants restent disponibles dans
+  // les archives et l'historique, mais sont exclus de tous les calculs vivants.
+  const activeAg=ag.filter(a=>!employeeIsFormer(a));
+  const activeAgIds=new Set(activeAg.map(a=>String(a.id)));
+  const co=allCo.filter(c=>activeAgIds.has(String(c.agentId)));
+  const siteIds=new Set(activeAg.map(a=>agentLiveAffectation(a)?.siteId).filter(Boolean));
   const si=selSoc?allSi.filter(s=>siteIds.has(s.id)||drhMatchSoc(s,selSoc)):allSi;
   const sIds=new Set(si.map(s=>s.id));
-  const inc=selSoc?allInc.filter(i=>(i.agentId&&agIds.has(i.agentId))||(i.siteId&&sIds.has(i.siteId))):allInc;
-  const actifs=ag.filter(a=>a.statut==="actif").length;
-  const enConge=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
-  const enMaladie=ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
-  const absents=ag.filter(a=>a.statut==="absent").length;
-  const susp=ag.filter(a=>a.statut==="suspendu").length;
+  const inc=selSoc?allInc.filter(i=>(i.agentId&&activeAgIds.has(String(i.agentId)))||(i.siteId&&sIds.has(i.siteId))):allInc;
+  const actifs=activeAg.filter(a=>a.statut==="actif").length;
+  const enConge=activeAg.filter(a=>co.some(c=>String(c.agentId)===String(a.id)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
+  const enMaladie=activeAg.filter(a=>co.some(c=>String(c.agentId)===String(a.id)&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
+  const absents=activeAg.filter(a=>a.statut==="absent").length;
+  const susp=activeAg.filter(a=>a.statut==="suspendu").length;
   const sortants=ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length;
-  const actifsBase=Math.max(1,ag.length);
-  const salaires=ag.filter(a=>a.statut==="actif").map(a=>Number(a.salaire||a.salaireNet||0)).filter(n=>n>0);
+  const actifsBase=Math.max(1,activeAg.length);
+  const salaires=activeAg.filter(a=>a.statut==="actif").map(a=>Number(a.salaire||a.salaireNet||0)).filter(n=>n>0);
   const masseSalaires=salaires.reduce((s,n)=>s+n,0);
   const salaireMoyen=salaires.length?Math.round(masseSalaires/salaires.length):0;
   const sites=si.length;
@@ -30858,14 +30864,16 @@ function renderDRHDashboard(view){
   const demandesList=drhDemandesPersonnelList();
   const demandesPersonnel=demandesList.filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length;
   const congesAttente=co.filter(c=>c.statut==="en_attente").length;
-  const socialAlertes=ag.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length;
-  const contratsExpires=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d<0});
-  const contratsFin30=ag.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=30});
+  const socialAlertes=activeAg.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length;
+  const contratsExpires=activeAg.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d<0});
+  const contratsFin30=activeAg.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(employeePositionContractEndDate(a)||"").localeCompare(String(employeePositionContractEndDate(b)||"")));
   const srvEmp=sgdiErpEmployeeCounters(selSoc);
   const srvDrh=sgdiErpModuleCounters("drh",selSoc);
   const srvOps=sgdiErpModuleCounters("ops",selSoc);
-  const dashEmployees=srvEmp?.total??ag.length;
+  // Le total serveur peut inclure les dossiers archivés : la population DRH
+  // affichée doit suivre la règle locale unique `employeeIsFormer`.
+  const dashEmployees=activeAg.length;
   const dashActifs=sgdiDisplayActiveEmployees(srvEmp,actifs);
   const dashConge=srvEmp?.leave_current??enConge;
   const dashMaladie=srvEmp?.sick_leave_current??enMaladie;
@@ -30878,8 +30886,8 @@ function renderDRHDashboard(view){
       <div class="flex justify-between text-sm mb-1"><span class="font-semibold">${escapeHTML(label)}</span><span class="text-slate-500">${value} / ${total} · ${total?Math.round(value/total*100):0}%</span></div>
       <div class="dashboard-compact-bar"><span style="width:${total?Math.round(value/total*100):0}%;background:${color}"></span></div>
     </div>`;
-  const bySoc=drhSocieteRows().map(r=>[r.label,ag.filter(a=>drhMatchSoc(a,r.key)).length]).filter(x=>x[1]>0);
-  const byFonction={};ag.forEach(a=>{const aff=agentLiveAffectation(a);const k=a.fonction||a.poste||aff?.poste||a.affectationCourante?.poste||"Non précisé";byFonction[k]=(byFonction[k]||0)+1});
+  const bySoc=drhSocieteRows().map(r=>[r.label,activeAg.filter(a=>drhMatchSoc(a,r.key)).length]).filter(x=>x[1]>0);
+  const byFonction={};activeAg.forEach(a=>{const aff=agentLiveAffectation(a);const k=a.fonction||a.poste||aff?.poste||a.affectationCourante?.poste||"Non précisé";byFonction[k]=(byFonction[k]||0)+1});
   const topFonctions=Object.entries(byFonction).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const months=[];
   for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);months.push(d.toISOString().slice(0,7))}
@@ -30895,7 +30903,7 @@ function renderDRHDashboard(view){
   const seriesDemissions=months.map(m=>ag.filter(a=>a.statut==="demissionne"&&monthOf(a.dateSortie||a.departAt||a.updatedAt)===m).length);
   const seriesDemandes=months.map(m=>demandesList.filter(d=>monthOf(d.createdAt||d.date||d.submittedAt)===m).length);
   const seriesIncidents=months.map(m=>inc.filter(i=>monthOf(i.date||i.createdAt)===m).length);
-  const seriesContrats=months.map(m=>ag.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
+  const seriesContrats=months.map(m=>activeAg.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
   const seriesSites=months.map(m=>si.filter(s=>monthOf(s.createdAt||s.dateCreation||s.updatedAt)===m).length);
   const seriesMasse=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)&&a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire||a.salaireNet||0)||0),0));
   const chart=(seriesA,seriesB)=>{
@@ -30978,22 +30986,24 @@ function renderDRHDashboard(view){
 }
 function renderDRHStats(view){
   const ag=drhAgentsList();
-  const co=db.conges||[];
+  const activeAg=ag.filter(a=>!employeeIsFormer(a));
+  const activeIds=new Set(activeAg.map(a=>String(a.id)));
+  const co=(db.conges||[]).filter(c=>activeIds.has(String(c.agentId)));
   const demandes=drhDemandesPersonnelList();
   const incidents=db.incidents||[];
   const sites=db.sites||[];
   const months=drhMonthlyKeys(12);
   const monthOf=v=>String(v||"").slice(0,7);
-  const parSoc=drhSocieteRows().map(r=>[r.label,ag.filter(a=>drhMatchSoc(a,r.key)).length]).filter(([,n])=>n>0);
-  const parFonc={};ag.forEach(a=>{const k=a.fonction||a.poste||"Non précisé";parFonc[k]=(parFonc[k]||0)+1});
-  const parCat={};ag.forEach(a=>{const k=a.categorie||"Non précisé";parCat[k]=(parCat[k]||0)+1});
-  const parTheme={};ag.forEach(a=>{const k=a.theme||"Non précisé";parTheme[k]=(parTheme[k]||0)+1});
+  const parSoc=drhSocieteRows().map(r=>[r.label,activeAg.filter(a=>drhMatchSoc(a,r.key)).length]).filter(([,n])=>n>0);
+  const parFonc={};activeAg.forEach(a=>{const k=a.fonction||a.poste||"Non précisé";parFonc[k]=(parFonc[k]||0)+1});
+  const parCat={};activeAg.forEach(a=>{const k=a.categorie||"Non précisé";parCat[k]=(parCat[k]||0)+1});
+  const parTheme={};activeAg.forEach(a=>{const k=a.theme||"Non précisé";parTheme[k]=(parTheme[k]||0)+1});
   const statusRows=[
-    ["Actifs",ag.filter(a=>a.statut==="actif").length],
-    ["Congés",ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length],
-    ["Maladies",ag.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length],
-    ["Absents",ag.filter(a=>a.statut==="absent").length],
-    ["Suspendus",ag.filter(a=>a.statut==="suspendu").length],
+    ["Actifs",activeAg.filter(a=>a.statut==="actif").length],
+    ["Congés",activeAg.filter(a=>co.some(c=>String(c.agentId)===String(a.id)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length],
+    ["Maladies",activeAg.filter(a=>co.some(c=>String(c.agentId)===String(a.id)&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length],
+    ["Absents",activeAg.filter(a=>a.statut==="absent").length],
+    ["Suspendus",activeAg.filter(a=>a.statut==="suspendu").length],
     ["Sortants",ag.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length]
   ];
   const seriesEffectif=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)).length);
@@ -31004,7 +31014,7 @@ function renderDRHStats(view){
   const seriesAbsences=months.map(m=>ag.filter(a=>a.statut==="absent"&&monthOf(a.updatedAt||a.createdAt)===m).length);
   const seriesDemandes=months.map(m=>demandes.filter(d=>monthOf(d.createdAt||d.date||d.submittedAt)===m).length);
   const seriesIncidents=months.map(m=>incidents.filter(i=>monthOf(i.date||i.createdAt)===m).length);
-  const seriesContrats=months.map(m=>ag.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
+  const seriesContrats=months.map(m=>activeAg.filter(a=>monthOf(employeePositionContractEndDate(a))===m).length);
   const seriesMasse=months.map(m=>ag.filter(a=>(!a.dateRecrutement||monthOf(a.dateRecrutement)<=m)&&(!a.dateSortie||monthOf(a.dateSortie)>m)&&a.statut==="actif").reduce((s,a)=>s+(Number(a.salaire||a.salaireNet)||0),0));
   const topFonc=Object.entries(parFonc).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const operationalAg=drhOperationalAgents(ag);
@@ -31071,14 +31081,15 @@ function renderDRHStats(view){
 function renderDRHStatsSociete(view){
   const ag=drhAgentsList();const co=db.conges||[];
   const rows=drhSocieteRows().map(row=>{
-    const list=ag.filter(a=>drhMatchSoc(a,row.key));
+    const societyAll=ag.filter(a=>drhMatchSoc(a,row.key));
+    const list=societyAll.filter(a=>!employeeIsFormer(a));
     const actif=list.filter(a=>a.statut==="actif").length;
     const operationnel=list.filter(agentIsOperational).length;
     const enCo=list.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c))).length;
     const enMa=list.filter(a=>co.some(c=>c.agentId===a.id&&c.statut==="approuve"&&c.type==="Maladie"&&inRange(c))).length;
     const abs=list.filter(a=>a.statut==="absent").length;
     const sus=list.filter(a=>a.statut==="suspendu").length;
-    const sor=list.filter(a=>["sortant","demissionne","licencie"].includes(a.statut)).length;
+    const sor=societyAll.filter(employeeIsFormer).length;
     const masse=list.filter(a=>a.statut==="actif").reduce((sum,a)=>sum+(Number(a.salaire)||0),0);
     return{s:row.label,total:list.length,actif,operationnel,enCo,enMa,abs,sus,sor,masse};
   });
@@ -31093,7 +31104,7 @@ function renderDRHStatsSociete(view){
     </div>`;
 }
 function renderDRHStatsTheme(view){
-  const ag=drhAgentsList();
+  const ag=drhAgentsList().filter(a=>!employeeIsFormer(a));
   const themes={};ag.forEach(a=>{const k=a.theme||"Non précisé";if(!themes[k])themes[k]={total:0,masse:0,actif:0};themes[k].total++;if(agentIsOperational(a))themes[k].actif++;if(a.statut==="actif")themes[k].masse+=Number(a.salaire)||0});
   const entries=Object.entries(themes).sort((a,b)=>b[1].total-a[1].total);
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR THÈME</h1>
@@ -31110,7 +31121,7 @@ function renderDRHStatsTheme(view){
     </div>`;
 }
 function renderDRHStatsFonction(view){
-  const ag=drhAgentsList();
+  const ag=drhAgentsList().filter(a=>!employeeIsFormer(a));
   const fonctions={};ag.forEach(a=>{const k=a.fonction||a.poste||agentLiveAffectation(a)?.poste||"Non précisé";if(!fonctions[k])fonctions[k]={total:0,actif:0,masse:0,salaires:[]};fonctions[k].total++;if(agentIsOperational(a))fonctions[k].actif++;if(a.statut==="actif"){const s=Number(a.salaire)||0;fonctions[k].masse+=s;if(s>0)fonctions[k].salaires.push(s)}});
   const entries=Object.entries(fonctions).sort((a,b)=>b[1].total-a[1].total);
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR FONCTION</h1>
@@ -31124,7 +31135,7 @@ function renderDRHStatsFonction(view){
     </div>`;
 }
 function renderDRHStatsCategorie(view){
-  const ag=drhAgentsList();
+  const ag=drhAgentsList().filter(a=>!employeeIsFormer(a));
   const cats={};ag.forEach(a=>{const k=a.categorie||"Non précisé";if(!cats[k])cats[k]={total:0,actif:0,masse:0};cats[k].total++;if(agentIsOperational(a))cats[k].actif++;if(a.statut==="actif")cats[k].masse+=Number(a.salaire)||0});
   const entries=Object.entries(cats).sort((a,b)=>b[1].total-a[1].total);
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR CATÉGORIE</h1>
@@ -31141,7 +31152,7 @@ function renderDRHStatsCategorie(view){
     </div>`;
 }
 function renderDRHStatsSalaire(view){
-  const ag=drhAgentsList().filter(a=>a.statut==="actif"&&Number(a.salaire)>0);
+  const ag=drhAgentsList().filter(a=>!employeeIsFormer(a)&&a.statut==="actif"&&Number(a.salaire)>0);
   const tranches=[
     {label:"< 30 000 DA",min:0,max:30000,c:"#ef4444"},
     {label:"30 000 – 45 000 DA",min:30000,max:45000,c:"#043970"},
@@ -31173,7 +31184,7 @@ function renderDRHStatsSalaire(view){
     </div>`;
 }
 function renderDRHStatsAffectation(view){
-  const ag=drhAgentsList();const sites=db.sites||[];
+  const ag=drhAgentsList().filter(a=>!employeeIsFormer(a));const sites=db.sites||[];
   const rows=drhSiteBucketsFromAgents(ag,sites);
   const noAffect=ag.filter(agentNeedsAffectation);
   view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">DRH - STATISTIQUES PAR AFFECTATION</h1>
@@ -32818,8 +32829,8 @@ function renderAdminDashboard(view){
   const sitesActifs=(db.sites||[]).filter(s=>s.actif!==false&&s.active!==0&&adminDataMatchesSociete(s)).length;
   const incidentsOuverts=(db.incidents||[]).filter(i=>i.statut!=="clos"&&adminMatchesSociete(i)).length;
   const missionsEnCours=(db.missions||[]).filter(m=>adminMatchesSociete(m)&&(!m.dateDebut||m.dateDebut<=today())&&(!m.dateFin||m.dateFin>=today())).length;
-  const contratsAlerte=agents.filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90}).length;
-  const essaisAlerte=agents.filter(a=>a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&daysBetween(today(),a.dateFinEssai)<=90).length;
+  const contratsAlerte=agents.filter(a=>!employeeIsFormer(a)).filter(a=>{const d=employeePositionContractDaysLeft(a);return d!==null&&d>=0&&d<=90}).length;
+  const essaisAlerte=agents.filter(a=>!employeeIsFormer(a)&&a.dateFinEssai&&daysBetween(today(),a.dateFinEssai)>=0&&daysBetween(today(),a.dateFinEssai)<=90).length;
   const instructions=(db.echanges||[]).filter(e=>e.to==="all"||e.type==="post"||e.type==="instruction").length;
   const factures=(db.factures||[]).filter(adminMatchesSociete);
   const devis=(db.devis||[]).filter(adminMatchesSociete);
