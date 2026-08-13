@@ -1586,7 +1586,10 @@ function sgdiEnsureEmployeesForDisplay(options){
   }else if(!backendShowsMissing&&localCount>0&&(localEligible>0||backendCount<=0)){
     return null;
   }
-  if(!opt.force&&backendCount<=0)return null;
+  // backendCount<=0 signifie "total serveur pas encore connu", pas "aucun employé" : si on
+  // n'a RIEN localement (localCount===0), il faut quand même tenter le chargement, sinon la
+  // page reste vide indéfiniment (aucune autre logique ne relance jamais l'essai).
+  if(!opt.force&&backendCount<=0&&localCount>0)return null;
   sgdiEmployeesDisplayLoading=true;
   return sgdiPullEmployees({silent:true,society:scopeSoc}).then(rows=>{
     window.__sgdiEnsuredAt[_ensureKey]=Date.now();
