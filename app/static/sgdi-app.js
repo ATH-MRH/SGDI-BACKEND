@@ -10435,7 +10435,6 @@ function renderContratsDashboard(view){
     <div class="contract-summary-panel">
       ${contractGroup("Effectif",[
         contractMetric("Total",agents.length,"#043970",false,"setContratQuickFilter('all')"),
-        contractMetric("CDI",cdi,"#0369a1",false,"setContratQuickFilter('type:cdi')"),
         contractMetric("CDD",cdd,"#7c3aed",false,"setContratQuickFilter('type:cdd')"),
         autre>0?contractMetric("Autre",autre,"#64748b",false,"setContratQuickFilter('type:autre')"):""
       ],false)}
