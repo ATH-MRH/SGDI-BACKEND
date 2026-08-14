@@ -30385,11 +30385,36 @@ function filterDrhCongesPersonnel(value){
 }
 const DRH_CONGE_SOLDE_ELEVE_SEUIL=20;
 let drhCongesSoldeEleveOnly=false;
+function drhCongesDashboardTab(){return sessionStorage.getItem("drhCongesDashboardTab")||"dashboard"}
+function setDrhCongesDashboardTab(tab){sessionStorage.setItem("drhCongesDashboardTab",tab);renderView()}
+function drhCongeAgentName(c){const a=(db.agents||[]).find(x=>String(x.id)===String(c.agentId));return a?((a.nom||"")+" "+(a.prenom||"")).trim():"Employé introuvable"}
+function drhCongeMonthStats(conges,year){
+  return Array.from({length:12},(_,month)=>conges.filter(c=>{
+    const d=drhLeaveCalendarDate(c.du);return d&&d.getUTCFullYear()===year&&d.getUTCMonth()===month&&c.statut==="approuve";
+  }).length);
+}
+function drhCongesDashboardCalendar(conges){
+  const base=drhLeaveCalendarDate(today())||new Date();
+  const year=base.getUTCFullYear(),month=base.getUTCMonth();
+  const first=new Date(Date.UTC(year,month,1));
+  const startOffset=(first.getUTCDay()+6)%7;
+  const days=new Date(Date.UTC(year,month+1,0)).getUTCDate();
+  const cells=[];
+  for(let i=0;i<startOffset;i++)cells.push(`<span class="drh-leave-cal-day is-empty"></span>`);
+  for(let day=1;day<=days;day++){
+    const iso=`${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const active=conges.filter(c=>c.statut==="approuve"&&c.du<=iso&&(!c.au||c.au>=iso)).length;
+    cells.push(`<button type="button" class="drh-leave-cal-day${iso===today()?" is-today":""}${active?" has-leave":""}" title="${active?`${active} congé(s) planifié(s)`:"Aucun congé"}"><b>${day}</b>${active?`<small>${active}</small>`:""}</button>`);
+  }
+  const monthName=new Intl.DateTimeFormat("fr-FR",{month:"long",year:"numeric",timeZone:"UTC"}).format(first);
+  return `<div class="drh-leave-calendar"><div class="drh-leave-calendar-title"><strong>${monthName}</strong><span><i></i> Congé planifié</span></div><div class="drh-leave-week"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div><div class="drh-leave-days">${cells.join("")}</div></div>`;
+}
 function renderDRHCongesPersonnel(view){
   const soc=drhActiveSocieteFilter();
   const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
   drhCongesSoldeEleveOnly=false;
   let soldeEleveCount=0;
+  const balances=[];
   const rows=agents.map(a=>{
     const name=((a.nom||"")+" "+(a.prenom||"")).trim();
     const code=a.matricule||a.code||"";
@@ -30403,12 +30428,31 @@ function renderDRHCongesPersonnel(view){
     const q=[name,code,recruited,contractEnd].join(" ").toLowerCase();
     const suspended=a.statut==="suspendu";
     const hasTaken=pris>0;
+    balances.push({a,name,code,recruited,contractEnd,entitlement,pris,solde,soldeEleve});
     return `<tr data-searchable data-q="${escapeHTML(q)}" data-solde-eleve="${soldeEleve?"1":"0"}" class="drh-conge-row${hasTaken?" drh-conge-row-taken":""}" onclick="if(!event.target.closest('a'))openCongeAttributionModal('${escapeHTML(String(a.id))}')"><td class="font-semibold"><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a>${suspended?` <span class="pill pill-red">Suspendu</span>`:""}</td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td><td class="font-black text-amber-700">${pris.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jours</td><td class="font-black ${soldeEleve?"text-amber-700":""}">${solde===null?"—":solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}${soldeEleve?" ⚠":""}</td></tr>`;
   }).join("");
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-black">CONGÉS</h1><p class="text-sm text-slate-500">Droits acquis du personnel · 2,5 jours par mois depuis la date de recrutement${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""} · Cliquez sur un employé pour lui attribuer un congé.</p></div><div class="flex items-center gap-2 flex-wrap"><span class="pill pill-blue">${agents.length} personne(s)</span><button type="button" class="btn btn-ghost text-sm" onclick="exportCongesRecapCSV()">⬇ Exporter CSV</button></div></div>
-    ${soldeEleveCount?`<div class="card p-3 mb-4" style="background:#fffbeb;border:1px solid #fcd34d;cursor:pointer" onclick="toggleDrhCongesSoldeEleve()"><span class="font-bold text-amber-800">⚠ ${soldeEleveCount} employé(s) avec un solde élevé non pris (≥ ${DRH_CONGE_SOLDE_ELEVE_SEUIL} jours)</span> <span class="text-xs text-amber-700">— congés à planifier avant qu'ils ne s'accumulent davantage. Cliquez pour ${drhCongesSoldeEleveOnly?"tout afficher":"filtrer"}.</span></div>`:""}
-    <div class="card p-4 mb-4"><input id="drh-conges-search" class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div>
-    <div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th><th>CONGÉ CONSOMMÉ</th><th>SOLDE RESTANT</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
+  const tab=drhCongesDashboardTab();
+  const scopedIds=new Set(agents.map(a=>String(a.id)));
+  const conges=(db.conges||[]).filter(c=>c.type!=="Maladie"&&scopedIds.has(String(c.agentId)));
+  const enCours=conges.filter(c=>c.statut==="approuve"&&c.du<=today()&&(!c.au||c.au>=today()));
+  const pending=conges.filter(c=>c.statut==="en_attente");
+  const priority=balances.filter(x=>x.soldeEleve).sort((a,b)=>(b.solde||0)-(a.solde||0)).slice(0,4);
+  const latest=conges.slice().sort((a,b)=>String(b.createdAt||b.du||"").localeCompare(String(a.createdAt||a.du||"")));
+  const history=latest.filter(c=>["approuve","refuse"].includes(c.statut));
+  const tabButton=(key,label)=>`<button type="button" class="drh-leave-tab${tab===key?" is-active":""}" onclick="setDrhCongesDashboardTab('${key}')">${label}${key==="requests"&&pending.length?` <b>${pending.length}</b>`:""}</button>`;
+  const requestRows=pending.map(c=>{const a=agents.find(x=>String(x.id)===String(c.agentId));return`<tr><td class="font-semibold">${escapeHTML(drhCongeAgentName(c))}</td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeDureeJours(c)} j</td><td class="flex gap-1"><button class="btn btn-success text-xs" onclick="approuverConge('${c.id}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${c.id}')">Refuser</button>${a?`<a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir</a>`:""}</td></tr>`}).join("");
+  const historyRows=history.map(c=>`<tr><td class="font-semibold">${escapeHTML(drhCongeAgentName(c))}</td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td>${drhCongeDureeJours(c)} j</td></tr>`).join("");
+  const dashboard=`<div class="drh-leave-kpis"><article><span>Personnel suivi</span><strong>${agents.length}</strong><small>Employés actifs du périmètre</small></article><article><span>En congé aujourd'hui</span><strong>${enCours.length}</strong><small>Absences planifiées en cours</small></article><article class="is-warning"><span>Soldes élevés</span><strong>${soldeEleveCount}</strong><small>Au moins ${DRH_CONGE_SOLDE_ELEVE_SEUIL} jours disponibles</small></article><article><span>Demandes en attente</span><strong>${pending.length}</strong><small>À valider par la DRH</small></article></div>
+    <div class="drh-leave-main-grid"><section class="card drh-leave-panel"><header><div><h3>Congés prioritaires à planifier</h3><p>Classement automatique par solde disponible</p></div><button type="button" onclick="setDrhCongesDashboardTab('balances')">Voir tous →</button></header><div class="drh-leave-priority-list">${priority.length?priority.map(x=>`<div class="drh-leave-priority"><div><strong>${escapeHTML(x.name)}</strong><span>${escapeHTML(x.code||"—")} · Fin de contrat ${x.contractEnd?formatDate(x.contractEnd):"—"}</span></div><b>${Number(x.solde||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j</b><i><em style="width:${Math.min(100,Math.max(4,(x.solde||0)/40*100))}%"></em></i><button type="button" onclick="openCongeAttributionModal('${escapeHTML(String(x.a.id))}')">Planifier</button></div>`).join(""):`<div class="drh-leave-empty">Aucun solde élevé à planifier.</div>`}</div></section><section class="card drh-leave-panel"><header><div><h3>Planning des congés</h3><p>Départs et reprises du mois</p></div><button type="button" onclick="setDrhCongesDashboardTab('planning')">Vue complète →</button></header>${drhCongesDashboardCalendar(conges)}</section></div>
+    <div class="drh-leave-bottom-grid"><section class="card drh-leave-panel"><header><div><h3>Demandes à traiter</h3><p>Validation DRH et édition du titre de congé</p></div><button type="button" onclick="setDrhCongesDashboardTab('requests')">Toutes →</button></header>${pending.length?`<div class="drh-leave-mini-list">${pending.slice(0,4).map(c=>`<button type="button" onclick="setDrhCongesDashboardTab('requests')"><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} · ${drhCongeDureeJours(c)} j</span></button>`).join("")}</div>`:`<div class="drh-leave-empty"><strong>Aucune demande en attente</strong><span>Les nouvelles demandes apparaîtront automatiquement ici.</span></div>`}</section><section class="card drh-leave-panel"><header><div><h3>Activité récente</h3><p>Dernières validations et décisions</p></div><button type="button" onclick="setDrhCongesDashboardTab('history')">Historique →</button></header>${history.length?`<div class="drh-leave-mini-list">${history.slice(0,4).map(c=>`<button type="button" onclick="setDrhCongesDashboardTab('history')"><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} · ${c.statut}</span></button>`).join("")}</div>`:`<div class="drh-leave-empty">Aucune décision enregistrée.</div>`}</section></div>`;
+  const balancesView=`${soldeEleveCount?`<button type="button" class="drh-leave-balance-alert" onclick="toggleDrhCongesSoldeEleve()"><b>${soldeEleveCount} employé(s) avec un solde élevé non pris</b><span>Congés à planifier avant une nouvelle accumulation.</span></button>`:""}<div class="card p-4 mb-4"><input id="drh-conges-search" class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div><div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th><th>CONGÉ CONSOMMÉ</th><th>SOLDE RESTANT</th></tr></thead><tbody>${rows||`<tr><td colspan="7" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
+  const tableView=(title,subtitle,thead,body,empty)=>`<section class="card drh-leave-panel"><header><div><h3>${title}</h3><p>${subtitle}</p></div></header><div class="overflow-x-auto"><table><thead>${thead}</thead><tbody>${body||`<tr><td colspan="5" class="text-center text-slate-500 p-8">${empty}</td></tr>`}</tbody></table></div></section>`;
+  let content=dashboard;
+  if(tab==="balances")content=balancesView;
+  else if(tab==="planning")content=`<section class="card drh-leave-panel drh-leave-planning-full"><header><div><h3>Planning mensuel</h3><p>Visualisation des congés approuvés et de la couverture du personnel</p></div><button class="btn btn-primary" onclick="openCongeModal()">+ Planifier</button></header>${drhCongesDashboardCalendar(conges)}<div class="drh-leave-planning-list">${conges.filter(c=>c.statut==="approuve"&&String(c.du||"").slice(0,7)===today().slice(0,7)).sort((a,b)=>String(a.du).localeCompare(String(b.du))).map(c=>`<div><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} — ${formatDate(c.au)}</span><b>${drhCongeDureeJours(c)} j</b></div>`).join("")||`<div class="drh-leave-empty">Aucun congé approuvé ce mois-ci.</div>`}</div></section>`;
+  else if(tab==="requests")content=tableView("Demandes à traiter","Validation, refus et contrôle du solde","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>DURÉE</th><th>ACTIONS</th></tr>",requestRows,"Aucune demande en attente.");
+  else if(tab==="history")content=tableView("Historique des congés","Décisions enregistrées dans le dossier du personnel","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>STATUT</th><th>DURÉE</th></tr>",historyRows,"Aucun historique disponible.");
+  view.innerHTML=`<div class="drh-leave-page"><header class="drh-leave-head"><div><h1>Congés</h1><p>Planification, validation et suivi des droits acquis${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""}</p></div><div><button type="button" class="btn btn-ghost" onclick="exportCongesRecapCSV()">Exporter Excel</button><button type="button" class="btn btn-primary" onclick="openCongeModal()">+ Attribuer un congé</button></div></header><nav class="drh-leave-tabs">${tabButton("dashboard","Tableau de bord")}${tabButton("balances","Soldes individuels")}${tabButton("planning","Planning")}${tabButton("requests","Demandes")}${tabButton("history","Historique")}</nav>${content}</div>`;
 }
 function toggleDrhCongesSoldeEleve(){
   drhCongesSoldeEleveOnly=!drhCongesSoldeEleveOnly;

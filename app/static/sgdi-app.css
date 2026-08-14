@@ -9147,3 +9147,53 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 .agenda-day-view{display:grid;grid-template-columns:minmax(420px,.65fr) minmax(320px,1fr);min-height:calc(100% - 75px)}.agenda-day-view>section{border-right:1px solid #ddd}.agenda-day-all{display:grid;grid-template-columns:75px 1fr;min-height:35px;border-bottom:2px solid #ccc}.agenda-day-all>span{padding:10px 6px;color:#999;font-size:9px}.agenda-day-all>div{border-left:1px solid #ddd;padding:2px}.agenda-day-hour{display:grid;grid-template-columns:75px 1fr;min-height:36px}.agenda-day-hour time{margin-top:-6px;padding-right:8px;color:#999;font-size:9px;text-align:right}.agenda-day-hour>div{border-top:1px solid #e3e3e5;border-left:1px solid #e3e3e5;padding:1px 3px}.agenda-day-view>aside{padding:22px}.agenda-day-view>aside h3{margin:0 0 14px;font-size:14px}.agenda-day-view>aside>p{margin-top:120px;color:#bbb;font-size:17px;text-align:center}
 @media(max-width:1000px){.agenda-calendar-top{grid-template-columns:1fr auto}.agenda-calendar-brand{display:none}.agenda-calendar-modes{justify-self:start}.agenda-calendar-shell{grid-template-columns:190px minmax(0,1fr)}.agenda-year-grid{grid-template-columns:repeat(3,minmax(180px,1fr))}}
 @media(max-width:720px){.agenda-calendar-app{height:auto;min-height:calc(100vh - 70px);overflow:visible}.agenda-calendar-top{position:sticky;top:0;z-index:10;padding:5px}.agenda-calendar-modes button{padding:0 9px}.agenda-calendar-shell{display:block}.agenda-calendar-sidebar{display:none}.agenda-calendar-toolbar h1{font-size:21px}.agenda-year-grid{grid-template-columns:repeat(2,minmax(150px,1fr));gap:16px;padding:14px}.agenda-month-grid{min-width:760px}.agenda-day-view{grid-template-columns:1fr}.agenda-day-view>aside{display:none}}
+/* DRH — centre de pilotage des congés */
+.drh-leave-page{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#172033}
+.drh-leave-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:18px 20px;margin-bottom:12px;background:#fff;border:1px solid #d7e1ed;border-radius:10px}
+.drh-leave-head h1{margin:0 0 7px;font-size:26px;line-height:1;font-weight:900;color:#111827}
+.drh-leave-head p{margin:0;color:#6b7b92}
+.drh-leave-head>div:last-child{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.drh-leave-tabs{display:flex;gap:4px;margin-bottom:12px;padding:5px;overflow-x:auto;background:#fff;border:1px solid #d7e1ed;border-radius:9px}
+.drh-leave-tab{padding:10px 15px;border:0;border-radius:6px;background:transparent;color:#53657d;font:700 12px Arial,Helvetica,sans-serif;white-space:nowrap;cursor:pointer}
+.drh-leave-tab:hover{background:#edf4fb;color:#073c74}
+.drh-leave-tab.is-active{background:#073c74;color:#fff}
+.drh-leave-tab b{display:inline-flex;min-width:18px;height:18px;align-items:center;justify-content:center;margin-left:5px;border-radius:999px;background:#e73b3b;color:#fff;font-size:10px}
+.drh-leave-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.drh-leave-kpis article{min-height:96px;padding:15px;background:#fff;border:1px solid #d7e1ed;border-radius:9px}
+.drh-leave-kpis span{display:block;color:#697b92;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
+.drh-leave-kpis strong{display:block;margin:10px 0 7px;color:#073c74;font-size:28px;line-height:1;font-weight:900}
+.drh-leave-kpis small{color:#7a899d;font-size:11px}
+.drh-leave-kpis article.is-warning{background:#fffaf0;border-color:#f4cd76}
+.drh-leave-kpis article.is-warning strong{color:#b86b05}
+.drh-leave-main-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(340px,.9fr);gap:12px;margin-bottom:12px}
+.drh-leave-bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.drh-leave-panel{overflow:hidden}
+.drh-leave-panel>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 17px;border-bottom:1px solid #e3eaf2}
+.drh-leave-panel>header h3{margin:0 0 3px;color:#172033;font-size:15px;font-weight:900}
+.drh-leave-panel>header p{margin:0;color:#78889d;font-size:11px}
+.drh-leave-panel>header>button:not(.btn){padding:3px;border:0;background:transparent;color:#0865bd;font:800 11px Arial,Helvetica,sans-serif;cursor:pointer}
+.drh-leave-priority-list{padding:0 16px 8px}
+.drh-leave-priority{display:grid;grid-template-columns:minmax(190px,1fr) 72px minmax(90px,.55fr) 84px;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #edf1f5}
+.drh-leave-priority:last-child{border-bottom:0}
+.drh-leave-priority>div strong,.drh-leave-priority>div span{display:block}
+.drh-leave-priority>div strong{font-size:12px}.drh-leave-priority>div span{margin-top:3px;color:#77879b;font-size:10px}
+.drh-leave-priority>b{color:#b86b05;text-align:right;font-size:13px}
+.drh-leave-priority>i{height:7px;overflow:hidden;background:#e7edf4;border-radius:999px}.drh-leave-priority>i em{display:block;height:100%;background:#f0a128;border-radius:999px}
+.drh-leave-priority>button{padding:8px 10px;border:1px solid #c9d7e7;border-radius:6px;background:#fff;color:#073c74;font:800 10px Arial,Helvetica,sans-serif;cursor:pointer}
+.drh-leave-calendar{padding:14px 16px 16px}
+.drh-leave-calendar-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;text-transform:capitalize}
+.drh-leave-calendar-title>span{color:#77879b;font-size:10px}.drh-leave-calendar-title i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#f0a128}
+.drh-leave-week,.drh-leave-days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.drh-leave-week{margin-bottom:5px;color:#8491a2;font-size:9px;font-weight:900;text-transform:uppercase}
+.drh-leave-cal-day{position:relative;min-height:36px;padding:6px 2px;border:1px solid transparent;border-radius:6px;background:#f7f9fc;color:#253347;font:500 11px Arial,Helvetica,sans-serif}
+.drh-leave-cal-day.is-empty{background:transparent}.drh-leave-cal-day.is-today{border-color:#0865bd;color:#0865bd}.drh-leave-cal-day.has-leave{background:#fff3d8;color:#9a5a00}
+.drh-leave-cal-day small{position:absolute;right:3px;bottom:2px;min-width:14px;height:14px;padding:1px 3px;border-radius:999px;background:#f0a128;color:#fff;font-size:8px;font-weight:900}
+.drh-leave-empty{display:flex;min-height:90px;align-items:center;justify-content:center;flex-direction:column;gap:5px;padding:20px;color:#8190a4;text-align:center}
+.drh-leave-empty strong{color:#53657d}.drh-leave-mini-list{padding:7px 15px 12px}
+.drh-leave-mini-list button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:9px 3px;border:0;border-bottom:1px solid #edf1f5;background:transparent;text-align:left;cursor:pointer}
+.drh-leave-mini-list button:last-child{border-bottom:0}.drh-leave-mini-list button strong{font-size:11px}.drh-leave-mini-list button span{color:#77879b;font-size:10px}
+.drh-leave-balance-alert{display:flex;width:100%;align-items:center;justify-content:space-between;gap:15px;margin-bottom:12px;padding:13px 15px;border:1px solid #f4cd76;border-radius:9px;background:#fffaf0;color:#8a5508;text-align:left;cursor:pointer}
+.drh-leave-balance-alert span{font-size:11px}.drh-leave-planning-full .drh-leave-calendar{max-width:760px;margin:0 auto;padding:24px}.drh-leave-planning-full .drh-leave-cal-day{min-height:58px;text-align:left;padding:8px}
+.drh-leave-planning-list{padding:0 18px 18px}.drh-leave-planning-list>div:not(.drh-leave-empty){display:grid;grid-template-columns:1fr 180px 55px;gap:12px;padding:10px;border-top:1px solid #edf1f5}.drh-leave-planning-list span{color:#74849a}.drh-leave-planning-list b{text-align:right;color:#073c74}
+@media(max-width:1050px){.drh-leave-kpis{grid-template-columns:repeat(2,1fr)}.drh-leave-main-grid,.drh-leave-bottom-grid{grid-template-columns:1fr}}
+@media(max-width:680px){.drh-leave-head{flex-direction:column}.drh-leave-kpis{grid-template-columns:1fr}.drh-leave-priority{grid-template-columns:1fr 60px}.drh-leave-priority>i{grid-column:1/2}.drh-leave-planning-list>div:not(.drh-leave-empty){grid-template-columns:1fr}}
