@@ -166,6 +166,28 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 @media(max-width:1100px){.pointer-dashboard-grid{grid-template-columns:1fr 1fr}.pointer-year-card{grid-column:span 2}.pointer-employee-card{grid-column:span 1}}
 @media(max-width:759px){.pointer-dashboard-head{align-items:flex-start;flex-direction:column}.pointer-dashboard-filters{width:100%;flex-wrap:wrap;row-gap:8px}.pointer-dashboard-filters label{flex:1 1 110px;min-width:100px}.pointer-dashboard-filters select,.pointer-dashboard-filters input{width:100%}.pointer-dashboard-filters button{flex:1 1 100%}.pointer-kpis{display:flex;overflow:auto}.pointer-kpi{min-width:195px}.pointer-dashboard-grid{display:block}.pointer-dash-card{margin-bottom:12px}.pointer-year-card{overflow:auto}.pointer-year-chart{min-width:620px}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
+
+/* Agent pointeur — indicateur de connexion + barre d'onglets ancrée en bas et
+   feuille de résultat plein écran sur mobile (poste tenu en main sur le terrain). */
+.conn-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:999px;padding:7px 11px;font-size:11px;font-weight:800;white-space:nowrap}
+.conn-pill.offline{background:rgba(220,38,38,.28);border-color:rgba(252,165,165,.55)}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,.25);flex-shrink:0;display:inline-block}
+.conn-pill.offline .conn-dot{background:#f87171;box-shadow:0 0 0 3px rgba(248,113,113,.25);animation:connBlink 1s step-start infinite}
+@keyframes connBlink{50%{opacity:.3}}
+.tab-lb-short{display:none}
+@media(max-width:759px){
+  .conn-label{display:none}
+  .conn-pill{padding:7px}
+  .pointer-tabs{position:fixed;left:0;right:0;bottom:0;z-index:55;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0;width:auto;max-width:none;background:#fff;border-radius:0;border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));gap:2px;box-shadow:0 -8px 22px rgba(4,57,112,.1)}
+  .pointer-tab{position:relative;flex:0 0 auto;min-width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:7px 4px;border-radius:12px;white-space:normal}
+  .pointer-tab .tab-ic{font-size:16px;line-height:1}
+  .pointer-tab .tab-lb{display:none}
+  .pointer-tab .tab-lb-short{display:block;font-size:8.5px;font-weight:850;letter-spacing:.01em}
+  .pointer-tab-badge{position:absolute;top:2px;right:10px;margin:0;min-width:15px;height:15px;font-size:8px;padding:0 3px}
+  .main{padding-bottom:78px}
+  .result{position:fixed;left:0;right:0;bottom:0;z-index:70;display:block;margin:0;border-radius:22px 22px 0 0;max-height:74vh;overflow:auto;transform:translateY(106%);transition:transform .32s cubic-bezier(.22,1,.36,1);box-shadow:0 -20px 50px rgba(0,0,0,.28);pointer-events:none}
+  .result.show{transform:translateY(0);pointer-events:auto}
+}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
 <script>
@@ -192,6 +214,7 @@ window.sgdiLoadXLSX=function(){return window._xlsxLoaded?Promise.resolve():new P
     <div class="top-row">
       <div class="brand"><div class="brand-logo">QR</div><div><div class="brand-title">POINTAGE</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div class="top-actions">
+        <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
         <button class="header-menu" onclick="returnToPointerMenu()" title="Retour au menu principal"><span class="mobile-icon">☰</span> Menu</button>
         <button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
       </div>
@@ -208,12 +231,12 @@ window.sgdiLoadXLSX=function(){return window._xlsxLoaded?Promise.resolve():new P
       </div>
     </div>
     <nav class="pointer-tabs" aria-label="Vues du pointage">
-      <button id="pointerTabDashboard" class="pointer-tab" onclick="switchPointerTab('dashboard')">⌂ TABLEAU DE BORD</button>
-      <button id="pointerTabScanner" class="pointer-tab active" onclick="switchPointerTab('scanner')">▣ BORNE DE POINTAGE</button>
-      <button id="pointerTabHistory" class="pointer-tab" onclick="switchPointerTab('history')">↕ PASSAGES 48 H <span id="historyTabCount" class="pointer-tab-badge">0</span></button>
-      <button id="pointerTabAlerts" class="pointer-tab" onclick="switchPointerTab('alerts')">⚠ ALERTES EN COURS <span id="alertsTabCount" class="pointer-tab-badge">0</span></button>
-      <button id="pointerTabSociete" class="pointer-tab" onclick="switchPointerTab('societe')">🏢 RÉCAP SOCIÉTÉ</button>
-      <button id="pointerTabLegende" class="pointer-tab" onclick="switchPointerTab('legende')">🎨 LÉGENDE</button>
+      <button id="pointerTabDashboard" class="pointer-tab" onclick="switchPointerTab('dashboard')"><span class="tab-ic">⌂</span> <span class="tab-lb">TABLEAU DE BORD</span><span class="tab-lb-short">Bilan</span></button>
+      <button id="pointerTabScanner" class="pointer-tab active" onclick="switchPointerTab('scanner')"><span class="tab-ic">▣</span> <span class="tab-lb">BORNE DE POINTAGE</span><span class="tab-lb-short">Scanner</span></button>
+      <button id="pointerTabHistory" class="pointer-tab" onclick="switchPointerTab('history')"><span class="tab-ic">↕</span> <span class="tab-lb">PASSAGES 48 H</span><span class="tab-lb-short">Passages</span> <span id="historyTabCount" class="pointer-tab-badge">0</span></button>
+      <button id="pointerTabAlerts" class="pointer-tab" onclick="switchPointerTab('alerts')"><span class="tab-ic">⚠</span> <span class="tab-lb">ALERTES EN COURS</span><span class="tab-lb-short">Alertes</span> <span id="alertsTabCount" class="pointer-tab-badge">0</span></button>
+      <button id="pointerTabSociete" class="pointer-tab" onclick="switchPointerTab('societe')"><span class="tab-ic">🏢</span> <span class="tab-lb">RÉCAP SOCIÉTÉ</span><span class="tab-lb-short">Société</span></button>
+      <button id="pointerTabLegende" class="pointer-tab" onclick="switchPointerTab('legende')"><span class="tab-ic">🎨</span> <span class="tab-lb">LÉGENDE</span><span class="tab-lb-short">Légende</span></button>
     </nav>
     <section id="pointerDashboard" class="pointer-dashboard pointer-panel hidden" data-pointer-panel="dashboard">
       <div class="pointer-dashboard-head"><div><h2>Tableau de bord Pointeur</h2><p>Statistiques de présence, performance des sites et contrôles RH.</p><p id="pointerStatsPeriod" class="pointer-dashboard-period"></p></div><div class="pointer-dashboard-filters"><label for="pointerStatsYear">Année<input id="pointerStatsYear" type="number" min="2020" max="2100" inputmode="numeric" onchange="loadPointerStatistics()"></label><label for="pointerStatsMonth">Période<select id="pointerStatsMonth" onchange="loadPointerStatistics()"><option value="">Toute l’année</option><option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option><option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option><option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></label><label for="pointerStatsSite">Site<select id="pointerStatsSite" onchange="loadPointerStatistics()"><option value="">Tous les sites</option></select></label><button type="button" onclick="exportPointerStatisticsExcel()" title="Exporter le tableau de bord au format Excel (.xlsx)">⇩ Exporter en Excel</button></div></div>
@@ -344,6 +367,16 @@ function startHeaderClock(){
   updateHeaderClock();
   headerClockTimer=setInterval(updateHeaderClock,1000);
 }
+function updateConnPill(){
+  const pill=document.getElementById("connPill");if(!pill)return;
+  const online=navigator.onLine;
+  pill.classList.toggle("offline",!online);
+  const label=document.getElementById("connLabel");
+  if(label)label.textContent=online?"En ligne":"Hors ligne";
+  pill.title=online?"Connecté au réseau":"Hors ligne — le pointage nécessite une connexion";
+}
+window.addEventListener("online",updateConnPill);
+window.addEventListener("offline",updateConnPill);
 async function login(){
   const button=document.getElementById("loginBtn");
   button.disabled=true;button.textContent="CONNEXION…";showLoginError("");
@@ -367,6 +400,7 @@ function enterApp(){
   societyEl.textContent=societies.length?"SOCIÉTÉ : "+societies.join(" / ").toUpperCase():"";
   societyEl.classList.toggle("hidden",!societies.length);
   startHeaderClock();
+  updateConnPill();
   switchPointerTab("dashboard");
   refreshPointeurData();
   clearInterval(historyRefreshTimer);
