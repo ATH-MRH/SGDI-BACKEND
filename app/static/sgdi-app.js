@@ -14543,7 +14543,6 @@ function leaveTitleDraftFromForm(agentId,form){
 }
 function leaveTitleHTML(a,d){
   const i=rhDecisionBaseInfo(a);
-  const motif=escapeHTML(d.motif||"Congé annuel").replace(/\n/g,"<br>");
   const reprise=d.au?addDays(d.au,1):"";
   const archiveMeta={agentId:a.id,title:"Titre de congé",category:"Congés",type:"titre_conge",reference:d.reference||"",date:d.dateDecision||today()};
   return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(d.reference||"TITRE DE CONGE")}</title><style>
@@ -14554,15 +14553,13 @@ function leaveTitleHTML(a,d){
     <div class="leave-rule"></div>
     <div class="leave-meta"><div>Alger le : <b>${formatDate(d.dateDecision||today())}</b></div><div>Réf. : <b>${escapeHTML(d.reference||"")}</b></div></div>
     <section class="leave-box"><div class="leave-grid">
-      <div class="leave-k">Employé</div><div class="leave-v">${i.nom} (${i.code})</div>
-      <div class="leave-k">Société</div><div class="leave-v">${i.societe}</div>
-      <div class="leave-k">Site</div><div class="leave-v">${i.site}</div>
+      <div class="leave-k">Employé</div><div class="leave-v">${i.nom}</div>
       <div class="leave-k">Fonction</div><div class="leave-v">${i.fonction}</div>
+      <div class="leave-k">Type de congé</div><div class="leave-v">Congé annuel</div>
     </div></section>
     <section class="leave-body"><p>Il est accordé à l'employé(e) désigné(e) ci-dessus un congé selon la période indiquée ci-après.</p>
       <div class="leave-period"><div><b>Du</b>${formatDate(d.du)}</div><div><b>Au</b>${formatDate(d.au)}</div><div><b>Durée</b>${d.jours?escapeHTML(d.jours+" jour(s)"):"—"}</div></div>
-      <p><b>Motif / observation :</b></p><p>${motif||"&nbsp;"}</p>
-      <p class="leave-important"><b>IMPORTANT :</b> Le présent congé est accordé sous réserve des nécessités de service. En cas de rappel, l'intéressé(e) est tenu(e) de se présenter dans un délai de 48 heures à compter de la date de notification de la convocation. À défaut de réponse dans ce délai, l'agent sera réputé en situation d'abandon de poste et s'exposera aux sanctions disciplinaires prévues par la réglementation en vigueur.</p>
+      <p class="leave-important"><b>IMPORTANT :</b> Le bénéficiaire doit reprendre son poste à la date indiquée. Toute prolongation doit faire l’objet d’une autorisation préalable de la Direction des Ressources Humaines. En cas de nécessité de service, le congé peut être interrompu et l’employé devra reprendre son poste conformément à la réglementation en vigueur.</p>
       ${reprise?`<p>L'intéressé(e) devra reprendre son poste le <b>${formatDate(reprise)}</b>, sauf prolongation ou décision contraire de la Direction des Ressources Humaines.</p>`:""}
     </section>
     <div class="leave-signs"><div class="leave-sign">L'intéressé(e)</div><div class="leave-sign">La Direction des Ressources Humaines</div></div>
@@ -30613,31 +30610,47 @@ function congeDocumentRef(c){
 function congeOrderHTML(c,a){
   const name=((a.nom||"")+" "+(a.prenom||"")).trim();
   const jours=drhCongeDureeJours(c);
+  const reference=congeDocumentRef(c);
+  const reprise=c.au?addDays(c.au,1):"";
+  const aff=agentLiveAffectation(a)||{};
+  const societe=String(a.societe||"IRON GLOBAL SÉCURITÉ");
+  const logo=sgdiDocumentLogoHTML(societe,"leave-order-logo");
   return `<!doctype html><html><head><meta charset="utf-8"><title>Titre de congé - ${escapeHTML(name)}</title>
   <style>
-    body{font-family:Arial,Helvetica,sans-serif;color:#111827;padding:32px;max-width:760px;margin:0 auto}
-    .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #043970;padding-bottom:12px;margin-bottom:20px}
-    .brand{font-weight:900;font-size:18px;color:#043970}
-    h1{font-size:20px;text-transform:uppercase;text-align:center;margin:20px 0}
-    .grid{display:grid;grid-template-columns:180px 1fr;gap:8px 12px;margin:20px 0;font-size:14px}
-    .k{font-weight:700;color:#475569}
-    .box{border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin:20px 0;font-size:14px}
-    .sign{display:flex;justify-content:space-between;margin-top:60px;font-size:13px}
-    .sign div{width:45%;text-align:center;border-top:1px solid #94a3b8;padding-top:6px}
+    @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}
+    body{margin:0;background:#eef2f7;color:#111827;font-family:Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.35}
+    .leave-order{position:relative;width:190mm;min-height:277mm;margin:0 auto;background:#fff;padding:8mm 10mm 17mm;overflow:hidden}
+    .leave-order-logo{display:block;width:31mm;height:31mm;object-fit:contain;margin:0 auto 3mm}
+    .company{text-align:center;font-size:10pt;font-weight:900;text-transform:uppercase;color:#043970;letter-spacing:.04em}
+    h1{text-align:center;font-size:18pt;line-height:1.1;text-transform:uppercase;letter-spacing:.08em;margin:7mm 0 3mm;color:#0f172a}
+    .title-rule{height:1.2mm;background:#043970;border-bottom:.5mm solid #f2b705;margin-bottom:5mm}
+    .meta{display:flex;justify-content:space-between;gap:10mm;font-size:9.5pt;margin-bottom:5mm}.meta b{color:#043970}
+    .identity{border:1px solid #cbd5e1;border-left:1.5mm solid #043970;padding:5mm 6mm;margin-bottom:6mm}
+    .grid{display:grid;grid-template-columns:38mm 1fr;gap:2.2mm 5mm}.k{font-size:8.5pt;font-weight:900;color:#475569;text-transform:uppercase}.v{font-weight:700;overflow-wrap:anywhere}
+    .decision{font-size:11pt;text-align:justify;margin:6mm 0}.decision p{margin:0 0 4mm}
+    .period{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #cbd5e1;margin:6mm 0}.period div{padding:4mm 2mm;text-align:center;border-right:1px solid #cbd5e1}.period div:last-child{border-right:0}.period b{display:block;color:#475569;text-transform:uppercase;font-size:8pt;margin-bottom:1.5mm}.period strong{font-size:11pt;color:#043970}
+    .notice{border:1px solid #f2b705;background:#fffbeb;padding:4mm 5mm;margin-top:5mm;font-size:9pt;text-align:justify}.notice b{color:#92400e}
+    .signatures{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10mm;margin-top:18mm}.signature{text-align:center;font-size:9pt;font-weight:900}.signature-line{height:19mm;border-bottom:1px solid #64748b;margin-bottom:2mm}
+    .footer{position:absolute;left:10mm;right:10mm;bottom:5mm;border-top:.7mm solid #043970;padding-top:2mm;text-align:center;font-size:7.5pt;color:#475569}
+    @media print{html,body{width:auto;min-height:auto;background:#fff}.leave-order{width:190mm;min-height:277mm;margin:0}}
   </style></head><body>
-  <div class="head"><div class="brand">${escapeHTML(a.societe||"IRON GLOBAL SECURITE")}</div><div>Réf. congé : ${escapeHTML(congeDocumentRef(c))}<br>Édité le ${formatDate(today())}</div></div>
-  <h1>Titre de congé</h1>
-  <div class="grid">
-    <div class="k">Employé</div><div>${escapeHTML(name)} (${escapeHTML(a.matricule||a.code||"—")})</div>
-    <div class="k">Fonction</div><div>${escapeHTML(a.affectationCourante?.poste||a.fonction||"—")}</div>
-    <div class="k">Société</div><div>${escapeHTML(a.societe||"—")}</div>
-    <div class="k">Type de congé</div><div>${escapeHTML(c.type||"—")}</div>
-    <div class="k">Période</div><div>Du ${c.du?formatDate(c.du):"—"} au ${c.au?formatDate(c.au):"—"} (${jours} jour(s))</div>
-    <div class="k">Statut</div><div>${c.statut==="approuve"?"Approuvé":"En attente"}</div>
-  </div>
-  ${c.motif?`<div class="box"><b>Motif</b><br>${escapeHTML(c.motif)}</div>`:""}
-  <div class="sign"><div>Signature employé</div><div>Signature DRH</div></div>
-  </body></html>`;
+  <main class="leave-order">
+    ${logo}
+    <div class="company">${escapeHTML(societe)}</div>
+    <h1>Titre de congé</h1><div class="title-rule"></div>
+    <div class="meta"><div>Référence : <b>${escapeHTML(reference)}</b></div><div>Établi le : <b>${formatDate(c.createdAt||today())}</b></div></div>
+    <section class="identity"><div class="grid">
+      <div class="k">Nom et prénom</div><div class="v">${escapeHTML(name||"—")}</div>
+      <div class="k">Fonction</div><div class="v">${escapeHTML(aff.poste||a.fonction||"—")}</div>
+      <div class="k">Type de congé</div><div class="v">${escapeHTML(c.type||"—")}</div>
+    </div></section>
+    <section class="decision"><p>La Direction des Ressources Humaines accorde à l’employé(e) désigné(e) ci-dessus le congé suivant :</p>
+      <div class="period"><div><b>Date de départ</b><strong>${c.du?formatDate(c.du):"—"}</strong></div><div><b>Date de fin</b><strong>${c.au?formatDate(c.au):"—"}</strong></div><div><b>Durée</b><strong>${jours} jour(s)</strong></div><div><b>Date de reprise</b><strong>${reprise?formatDate(reprise):"—"}</strong></div></div>
+      <div class="notice"><b>IMPORTANT :</b> Le bénéficiaire doit reprendre son poste à la date indiquée. Toute prolongation doit faire l’objet d’une autorisation préalable de la Direction des Ressources Humaines. En cas de nécessité de service, le congé peut être interrompu et l’employé devra reprendre son poste conformément à la réglementation en vigueur.</div>
+    </section>
+    <div class="signatures"><div class="signature"><div class="signature-line"></div>L’intéressé(e)</div><div class="signature"><div class="signature-line"></div>Responsable hiérarchique</div><div class="signature"><div class="signature-line"></div>Direction des Ressources Humaines</div></div>
+    <footer class="footer">Document généré par ATLAS SGDI · ${escapeHTML(societe)} · Réf. ${escapeHTML(reference)}</footer>
+  </main></body></html>`;
 }
 function printCongeOrder(congeId){
   const c=(db.conges||[]).find(x=>String(x.id)===String(congeId));
