@@ -19479,16 +19479,16 @@ function renderFiches(view,sub,_skipEnsure){
   const counterRatioBase=Math.max(1,counterNumericValue(employeeCounters.activeHeadcount)||activeBase.length);
   const activeEmployees=counterNumericValue(employeeCounters.active);
   const withoutAffectation=counterNumericValue(employeeCounters.withoutAssignment);
-  const withoutDotation=counterNumericValue(employeeCounters.withoutEquipment);
-  const dotationToReplace=activeBase.filter(agentHasDotationToReplace).length;
   const suspendedEmployees=counterNumericValue(employeeCounters.suspended);
+  const incompleteEmployees=activeBase.filter(a=>agentCompleteness(a).pct<85).length;
+  const contractsToWatch=activeBase.filter(a=>{const end=employeePositionContractEndDate(a);if(!end)return false;const d=daysBetween(today(),end);return d>=0&&d<=60}).length;
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
   const summaryCards=[
-    ["Employés actifs",activeEmployees,"Dans l'effectif","#15803d",ratio(activeEmployees,counterRatioBase),"effectif/actifs","users"],
+    ["Fiches actives",activeEmployees,"Dossiers en cours","#15803d",ratio(activeEmployees,counterRatioBase),"effectif/actifs","users"],
     ["Sans affectation",withoutAffectation,"Site à renseigner","#d97706",ratio(withoutAffectation,counterRatioBase),"effectif/preparation_affectation","pin"],
-    ["Sans dotation",withoutDotation,"Matériel à attribuer","#dc2626",ratio(withoutDotation,counterRatioBase),"materiel/dotation","box"],
-    ["À remplacer",dotationToReplace,"Durée de vie dépassée","#7c3aed",ratio(dotationToReplace,counterRatioBase),"materiel/dotation","refresh"],
-    ["Employés suspendus",suspendedEmployees,"Suspension en cours","#dc2626",ratio(suspendedEmployees,counterRatioBase),"effectif/suspension","pause"]
+    ["Dossiers incomplets",incompleteEmployees,"Informations à compléter","#dc2626",ratio(incompleteEmployees,counterRatioBase),"effectif/actifs","box"],
+    ["Contrats à surveiller",contractsToWatch,"Échéance dans 60 jours","#7c3aed",ratio(contractsToWatch,counterRatioBase),"contrats","refresh"],
+    ["Suspendus",suspendedEmployees,"Suspension en cours","#dc2626",ratio(suspendedEmployees,counterRatioBase),"effectif/suspension","pause"]
   ];
   const metricIcon=type=>({
     users:'<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
@@ -19503,7 +19503,7 @@ function renderFiches(view,sub,_skipEnsure){
   view.innerHTML=`<div class="fp-page fp-stable-layout">
     <div class="fp-head">
       <div>
-        <h1 class="text-2xl font-black uppercase">${title}</h1>
+        <h1 class="text-2xl font-black">${title}</h1>
         <p>${sub==="archivees"?"Fiches sorties du cycle actif":"Consultez et gérez les fiches de vos employés"}${safeSocFilter?` · <span>${escapeHTML(safeSocFilter)}</span>`:""}</p>
       </div>
       ${showFichePrintBadgeActions?`<div class="fp-head-actions">
@@ -19615,30 +19615,31 @@ function fichePositionCard(a){
   const codeStyle=isActive?"color:#047857!important":"color:#d97706";
   const statusStyle="font-size:10px!important;text-transform:uppercase;font-weight:950!important;letter-spacing:.04em!important";
   const statusText=isActive?"ACTIF":`${status.icon?status.icon+" ":""}${status.label}`;
-  const lamps=fpAgentLampStatus(a);
-  const lp=(cls,on,blink,ttl)=>`<span class="fp-status-lamp ${cls}${!on?" fp-lamp-off":""}${blink?" fp-lamp-blink":""}" title="${ttl}"></span>`;
-  const lampsHTML=`<div style="position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px;z-index:2">${lp("lamp-green",lamps.G.on,false,"Statut général OK")}${lp("lamp-orange",lamps.O.on,lamps.O.blink,"Alerte : sanction / absence / essai / contrat J-60")}${lp("lamp-red-fp",lamps.R.on,lamps.R.blink,"Danger : blacklist / dotation 12+ mois / contrat J-30")}${lp("lamp-blue",lamps.B.on,false,"Employé non doté")}</div>`;
   const contractEnd=employeePositionContractEndDate(a);
   const opsFicheReadOnly=isOpsFicheReadOnlyContext();
-  return`<div class="card p-4 fp-agent-card" style="position:relative" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-site-key="${escapeHTML(siteKey)}" data-poste="${escapeHTML(aff.poste||a.fonction||a.position||a.posteContrat||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
-    ${lampsHTML}
-    <div class="flex items-center gap-3 mb-3">
-      <div class="avatar" style="width:52px;height:68px;font-size:18px;border-radius:6px;overflow:hidden">${a.photo?`<img src="${a.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:6px"/>`:escapeHTML((a.prenom||"?").slice(0,1))}</div>
-      <div class="flex-1 min-w-0"><div class="font-bold truncate">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule font-mono text-lg font-black leading-tight mt-1" style="${codeStyle}">${safe(a.matricule)}</div></div>
+  const completeness=agentCompleteness(a);
+  const contractDays=contractEnd?daysBetween(today(),contractEnd):null;
+  const warning=status.key==="suspendu"?"Suivi de suspension en cours":completeness.missing.length?`${completeness.missing.length} information${completeness.missing.length>1?"s":""} à compléter`:contractDays!==null&&contractDays>=0&&contractDays<=60?`Contrat à renouveler dans ${contractDays} jour${contractDays>1?"s":""}`:"Dossier conforme et à jour";
+  const warningTone=status.key==="suspendu"||completeness.missing.length||contractDays!==null&&contractDays>=0&&contractDays<=60?"warning":"ok";
+  return`<div class="card fp-agent-card fp-agent-card-modern" style="position:relative" data-row data-status="${escapeHTML(status.key)}" data-soc="${escapeHTML(a.societe||"")}" data-site="${escapeHTML(aff.siteId||"")}" data-site-key="${escapeHTML(siteKey)}" data-poste="${escapeHTML(aff.poste||a.fonction||a.position||a.posteContrat||"")}" data-q="${escapeHTML((a.nom+" "+a.prenom+" "+(a.matricule||"")).toLowerCase())}">
+    <div class="fp-agent-card-top">
+      <div class="fp-agent-photo">${a.photo?`<img src="${a.photo}" alt="Photo de ${escapeHTML((a.nom||"")+" "+(a.prenom||""))}"/>`:escapeHTML(((a.nom||"").slice(0,1)+(a.prenom||"").slice(0,1))||"?")}</div>
+      <div class="fp-agent-identity"><div class="fp-agent-name">${escapeHTML(a.nom+" "+a.prenom)}</div><div class="fp-agent-matricule" style="${codeStyle}">${safe(a.matricule)}</div><div class="fp-agent-function">${safe(aff.poste||a.fonction||a.position||a.posteContrat)||"Poste non renseigné"}</div></div>
+      <span class="fp-agent-status pill ${status.pill}" style="${statusStyle}">${escapeHTML(statusText)}</span>
     </div>
-    <div class="text-xs space-y-1 mb-3 text-slate-600">
-      <div><span class="text-slate-400">Société :</span> ${safe(a.societe)}</div>
-      <div><span class="text-slate-400">Poste :</span> ${safe(aff.poste)||"—"}</div>
-      <div><span class="text-slate-400">Site :</span> ${safe(aff.siteName)||"—"}</div>
-      <div><span class="text-slate-400">Contrat :</span> ${safe(cleanContractType(a.typeContrat))} · Fin le ${formatDate(contractEnd||"")}</div>
+    <div class="fp-agent-details">
+      <div><span>Site</span><strong>${safe(aff.siteName)||"Non affecté"}</strong></div>
+      <div><span>Contrat</span><strong>${safe(cleanContractType(a.typeContrat))||"—"}${contractEnd?` · fin ${formatDate(contractEnd)}`:""}</strong></div>
+      <div><span>Société</span><strong>${safe(a.societe)||"—"}</strong></div>
+      <div><span>Complétude</span><strong>${completeness.pct}%</strong><i><b style="width:${completeness.pct}%"></b></i></div>
     </div>
-    <div class="fp-agent-actions" style="justify-content:space-between;flex-wrap:nowrap">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <div class="fp-agent-compliance ${warningTone}"><span></span>${escapeHTML(warning)}</div>
+    <div class="fp-agent-actions">
+      <div class="fp-agent-action-group">
         <a class="fp-card-action fp-card-action-main" href="${ficheHref}" ${ficheClick?`onclick="${ficheClick}"`:""}>Ouvrir fiche</a>
         ${opsFicheReadOnly?"":`<button type="button" class="fp-card-action fp-card-action-secondary" onclick="openAgentDocumentsModal('${a.id}')">Documents</button>`}
         ${isMaterielFicheContext()?`<button class="btn btn-primary text-xs" onclick="voirFicheDotation('${a.id}')">Voir fiche de dotation</button>`:""}
       </div>
-      <span class="fp-agent-status pill ${status.pill}" style="${statusStyle};flex:0 0 auto;align-self:flex-end">${escapeHTML(statusText)}</span>
     </div>
   </div>`;
 }

@@ -8545,6 +8545,88 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   #view .fp-page.fp-stable-layout .fp-display-controls>label{display:none!important}
 }
 
+/* Fiches de position — version moderne validée : cartes denses, lisibles et
+   entièrement responsives, sans modifier la logique de données existante. */
+#view .fp-page.fp-stable-layout .fp-head{
+  padding:18px 20px!important;
+  border:1px solid #dbe5f0!important;
+  border-radius:14px!important;
+  background:#fff!important;
+}
+#view .fp-page.fp-stable-layout .fp-head h1{
+  font-size:28px!important;
+  text-transform:none!important;
+  letter-spacing:-.025em!important;
+}
+#view .fp-page.fp-stable-layout .fp-summary-grid{
+  gap:0!important;
+  padding:0 10px!important;
+  border:1px solid #d9e5f1!important;
+  border-radius:12px!important;
+  background:#073d77!important;
+  overflow:hidden!important;
+}
+#view .fp-page.fp-stable-layout .fp-summary-card{
+  min-height:68px!important;
+  padding:10px 14px!important;
+  border:0!important;
+  border-right:1px solid rgba(255,255,255,.18)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+#view .fp-page.fp-stable-layout .fp-summary-card:last-child{border-right:0!important}
+#view .fp-page.fp-stable-layout .fp-summary-card:hover{background:rgba(255,255,255,.07)!important;transform:none!important;box-shadow:none!important}
+#view .fp-page.fp-stable-layout .fp-metric-icon{background:rgba(255,255,255,.13)!important;color:#fff!important}
+#view .fp-page.fp-stable-layout .fp-summary-card .fp-metric-copy span,
+#view .fp-page.fp-stable-layout .fp-summary-card .fp-metric-copy small{color:#dbeafe!important}
+#view .fp-page.fp-stable-layout .fp-summary-card .fp-metric-copy strong{color:#fff!important}
+#view .fp-page.fp-stable-layout .fp-summary-card .fp-metric-trend{background:rgba(255,255,255,.13)!important;color:#fff!important}
+#view .fp-card-grid{gap:16px!important}
+#view .fp-agent-card-modern{
+  padding:0!important;
+  overflow:hidden!important;
+  border:1px solid #dbe5ef!important;
+  border-top:4px solid #10b981!important;
+  border-radius:14px!important;
+  background:#fff!important;
+  box-shadow:0 5px 18px rgba(15,38,68,.055)!important;
+  transition:transform .16s ease,box-shadow .16s ease!important;
+}
+#view .fp-agent-card-modern[data-status="suspendu"],
+#view .fp-agent-card-modern[data-status="absent"],
+#view .fp-agent-card-modern[data-status="abandon"]{border-top-color:#f59e0b!important}
+#view .fp-agent-card-modern:hover{transform:translateY(-2px)!important;box-shadow:0 11px 26px rgba(15,38,68,.1)!important}
+#view .fp-agent-card-top{display:grid!important;grid-template-columns:76px minmax(0,1fr) auto!important;align-items:center!important;gap:14px!important;padding:17px 17px 13px!important}
+#view .fp-agent-photo{width:76px!important;height:88px!important;border-radius:10px!important;display:flex!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;background:linear-gradient(145deg,#e8eef5,#d3deea)!important;color:#183a62!important;font-size:20px!important;font-weight:900!important}
+#view .fp-agent-photo img{width:100%!important;height:100%!important;object-fit:cover!important;display:block!important}
+#view .fp-agent-identity{min-width:0!important}
+#view .fp-agent-name{font-size:15px!important;line-height:1.25!important;font-weight:900!important;color:#15263d!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+#view .fp-agent-matricule{margin-top:4px!important;font:900 18px/1.1 ui-monospace,SFMono-Regular,Menlo,monospace!important}
+#view .fp-agent-function{margin-top:5px!important;color:#64748b!important;font-size:11px!important;font-weight:700!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+#view .fp-agent-card-top>.fp-agent-status{align-self:start!important;white-space:nowrap!important}
+#view .fp-agent-details{display:grid!important;grid-template-columns:1fr 1fr!important;gap:0!important;border-top:1px solid #edf2f7!important;border-bottom:1px solid #edf2f7!important;background:#f8fafc!important}
+#view .fp-agent-details>div{min-width:0!important;padding:10px 14px!important;border-right:1px solid #e8eef5!important;border-bottom:1px solid #e8eef5!important}
+#view .fp-agent-details>div:nth-child(2n){border-right:0!important}
+#view .fp-agent-details>div:nth-last-child(-n+2){border-bottom:0!important}
+#view .fp-agent-details span{display:block!important;margin-bottom:3px!important;color:#8492a6!important;font-size:9px!important;font-weight:850!important;text-transform:uppercase!important;letter-spacing:.055em!important}
+#view .fp-agent-details strong{display:block!important;color:#33445a!important;font-size:11px!important;font-weight:750!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+#view .fp-agent-details i{display:block!important;height:4px!important;margin-top:6px!important;border-radius:99px!important;background:#e2e8f0!important;overflow:hidden!important}
+#view .fp-agent-details i b{display:block!important;height:100%!important;border-radius:inherit!important;background:#10b981!important}
+#view .fp-agent-compliance{display:flex!important;align-items:center!important;gap:7px!important;margin:12px 15px 0!important;padding:8px 10px!important;border-radius:8px!important;font-size:10.5px!important;font-weight:800!important}
+#view .fp-agent-compliance>span{width:7px!important;height:7px!important;border-radius:50%!important;flex:0 0 auto!important}
+#view .fp-agent-compliance.ok{background:#ecfdf5!important;color:#067647!important}
+#view .fp-agent-compliance.ok>span{background:#10b981!important}
+#view .fp-agent-compliance.warning{background:#fff7ed!important;color:#b45309!important}
+#view .fp-agent-compliance.warning>span{background:#f59e0b!important}
+#view .fp-agent-card-modern .fp-agent-actions{margin:0!important;padding:13px 15px 15px!important;justify-content:flex-start!important}
+#view .fp-agent-action-group{display:flex!important;align-items:center!important;gap:8px!important;flex-wrap:wrap!important}
+#view .fp-agent-card-modern .fp-card-action{height:34px!important;border-radius:8px!important;padding:0 14px!important;font-size:10.5px!important;text-transform:uppercase!important;letter-spacing:.03em!important}
+#view .fp-agent-card-modern .fp-card-action-main{background:#073d77!important;border-color:#073d77!important;color:#fff!important}
+#view .fp-agent-card-modern .fp-card-action-main:hover{background:#052f5d!important;color:#fff!important}
+@media(max-width:1180px){#view .fp-agent-card-top{grid-template-columns:66px minmax(0,1fr) auto!important}#view .fp-agent-photo{width:66px!important;height:78px!important}}
+@media(max-width:720px){#view .fp-agent-card-top{grid-template-columns:68px minmax(0,1fr)!important}#view .fp-agent-card-top>.fp-agent-status{grid-column:2!important;justify-self:start!important}#view .fp-agent-details{grid-template-columns:1fr!important}#view .fp-agent-details>div{border-right:0!important;border-bottom:1px solid #e8eef5!important}#view .fp-agent-details>div:last-child{border-bottom:0!important}}
+
 /* Topbar visibility guard: keep the company/module strip visible after cache
    refreshes and later page-scoped layout overrides. */
 .sgdi-shell > .sgdi-topbar{
