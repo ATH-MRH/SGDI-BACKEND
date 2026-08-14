@@ -59,6 +59,7 @@ label.field-label-invalid{color:#b91c1c!important}
 .dashboard-kpi{appearance:none;text-align:left;background:#fff;border:1px solid var(--line);border-radius:15px;padding:15px 16px;box-shadow:0 7px 20px rgba(4,57,112,.045);cursor:pointer;transition:.16s ease;position:relative;overflow:hidden}
 .dashboard-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--kpi-color,#0d6ecc)}
 .dashboard-kpi:hover{transform:translateY(-2px);border-color:#b9cee4;box-shadow:0 11px 28px rgba(4,57,112,.1)}
+.dashboard-kpi-static{cursor:default}.dashboard-kpi-static:hover{transform:none;border-color:var(--line);box-shadow:0 7px 20px rgba(4,57,112,.045)}
 .dashboard-kpi span{font-size:10px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.055em}.dashboard-kpi strong{display:block;font-size:27px;line-height:1;margin-top:8px;color:var(--kpi-color,var(--navy))}
 .dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr);gap:14px;margin-bottom:14px}.dashboard-panel{background:#fff;border:1px solid var(--line);border-radius:17px;padding:18px;box-shadow:0 7px 20px rgba(4,57,112,.035)}.dashboard-panel h3{font-size:15px;margin:0}.dashboard-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}.dashboard-panel-head button{border:0;background:none;color:var(--blue);font-size:11px;font-weight:850;cursor:pointer}
 .dashboard-funnel{display:grid;gap:12px}.dashboard-funnel-row{display:grid;grid-template-columns:135px minmax(90px,1fr) 38px;gap:10px;align-items:center;font-size:12px;font-weight:750}.dashboard-funnel-track{height:9px;border-radius:999px;background:#eaf0f6;overflow:hidden}.dashboard-funnel-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,#0d6ecc,#38a3ff);min-width:3px}.dashboard-funnel-row b{text-align:right;color:var(--navy)}
@@ -554,7 +555,7 @@ async function renderRecruitDashboard(refresh=false){
       <button class="dashboard-kpi" style="--kpi-color:#d97706" onclick="showRecruitSection('candidates');switchTab('new',true)"><span>À convoquer</span><strong>${toConvoke.length}</strong></button>
       <button class="dashboard-kpi" style="--kpi-color:#7c3aed" onclick="showRecruitSection('interviews')"><span>Entretiens planifiés</span><strong>${upcoming.length}</strong></button>
       <button class="dashboard-kpi" style="--kpi-color:#0891b2" onclick="showRecruitSection('reserve')"><span>En réserve</span><strong>${tabState.reserve.total}</strong></button>
-      <button class="dashboard-kpi" style="--kpi-color:#16a34a" onclick="window.open('https://atlas.irongs.com/#/contrats/a_contractualiser','_blank','noopener')"><span>Transmis à la DRH</span><strong>${contractPending.length}</strong></button>
+      <div class="dashboard-kpi dashboard-kpi-static" style="--kpi-color:#16a34a"><span>Transmis à la DRH</span><strong>${contractPending.length}</strong></div>
     </div>
     <div class="dashboard-grid">
       <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Avancement du recrutement</h3><button onclick="showRecruitSection('candidates')">Voir les candidatures →</button></div>
