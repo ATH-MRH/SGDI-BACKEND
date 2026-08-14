@@ -124,6 +124,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .lamp-red-blink{background:#dc2626;animation:lampBlink .6s step-start infinite}
 .lamp-red-fixed{background:#dc2626;box-shadow:0 0 8px 2px rgba(220,38,38,.6)}
 @keyframes lampBlink{50%{opacity:.15}}
+.pointer-dashboard{display:grid;gap:16px}.pointer-dashboard-head{display:flex;align-items:end;justify-content:space-between;gap:16px}.pointer-dashboard-head h2{margin:0;font-size:25px}.pointer-dashboard-head p{margin:5px 0 0;color:var(--muted);font-size:12px}.pointer-dashboard-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.pointer-dashboard-filters label{margin:0}.pointer-dashboard-filters select,.pointer-dashboard-filters input{height:39px;border:1px solid var(--line);border-radius:9px;background:#fff;padding:0 10px;color:var(--ink);font-weight:750}.pointer-dashboard-filters button{height:39px;border:0;border-radius:9px;background:var(--navy);color:#fff;padding:0 14px;font-weight:900}.pointer-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.pointer-kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;grid-template-columns:40px 1fr;gap:3px 11px;box-shadow:0 5px 18px rgba(4,57,112,.05)}.pointer-kpi>span{grid-row:1/4;width:40px;height:40px;border-radius:11px;background:#e7f2ff;color:#0868c7;display:grid;place-items:center;font-size:19px}.pointer-kpi.green>span{background:#e8f8ee;color:#15934a}.pointer-kpi.red>span{background:#ffebed;color:#dc2f3a}.pointer-kpi.violet>span{background:#f1ebff;color:#7546dc}.pointer-kpi strong{font-size:23px;line-height:1}.pointer-kpi b{font-size:11px}.pointer-kpi small{font-size:9px;color:#7c8ca0}.pointer-dashboard-grid{display:grid;grid-template-columns:1.35fr .9fr .82fr;gap:14px}.pointer-dash-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:17px;min-width:0}.pointer-dash-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:16px}.pointer-dash-title h3{margin:0;font-size:14px}.pointer-dash-title p{margin:4px 0 0;font-size:9px;color:#7d8da1}.pointer-dash-title span{background:#dc2626;color:#fff;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:900}.pointer-year-chart{height:235px;border-bottom:1px solid #dce5ef;background:repeating-linear-gradient(to bottom,#edf2f7 0,#edf2f7 1px,transparent 1px,transparent 50px);display:grid;grid-template-columns:repeat(12,1fr);gap:7px;padding-top:12px}.pointer-year-month{display:grid;grid-template-rows:1fr 18px;text-align:center;font-size:9px;color:#718096}.pointer-year-month div{display:flex;align-items:end;justify-content:center;gap:3px}.pointer-year-month i,.pointer-year-month b{display:block;width:11px;min-height:2px;background:#0870d3;border-radius:3px 3px 0 0}.pointer-year-month b{width:6px;background:#ee4c55}.pointer-sites-list{display:grid;gap:10px}.pointer-site-row{display:grid;grid-template-columns:90px 1fr 38px;gap:8px;align-items:center;font-size:10px}.pointer-site-row span{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pointer-site-row i{height:11px;background:#edf2f7;border-radius:4px;overflow:hidden}.pointer-site-row i b{display:block;height:100%;background:linear-gradient(90deg,#084b91,#0d7bdc)}.pointer-site-row strong{color:#0865c1;font-size:9px}.pointer-alert-list{display:grid;gap:8px}.pointer-alert-card{border:1px solid #ffd1d4;background:#fffafa;border-radius:9px;padding:10px;display:grid;grid-template-columns:25px 1fr;gap:8px}.pointer-alert-card.warning{border-color:#f5d49e;background:#fffdf7}.pointer-alert-card>span{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;background:#dc2f3a;color:#fff;font-weight:950}.pointer-alert-card.warning>span{background:#e99512}.pointer-alert-card strong,.pointer-alert-card small{display:block}.pointer-alert-card strong{font-size:9px}.pointer-alert-card small{font-size:8px;color:#667b94;margin-top:3px}.pointer-dashboard-legal{font-size:8px;color:#8493a6;line-height:1.45;border-top:1px solid #edf1f5;padding-top:10px;margin-top:12px}.pointer-employee-card{grid-column:span 2}.pointer-dashboard-table{overflow:auto}.pointer-dashboard-table table{width:100%;border-collapse:collapse;font-size:10px}.pointer-dashboard-table th{padding:8px;background:#f7f9fc;color:#687a91;text-align:left}.pointer-dashboard-table td{padding:9px;border-bottom:1px solid #e8edf3}.pointer-dashboard-table td:first-child strong,.pointer-dashboard-table td:first-child small{display:block}.pointer-dashboard-table td:first-child small{font-size:8px;color:#8291a4}.pointer-compliance{border-radius:999px;padding:4px 9px;font-size:8px;font-weight:900;background:#e8f8ee;color:#128747}.pointer-compliance.warn{background:#fff3d7;color:#c77900}.pointer-compliance.danger{background:#ffeaec;color:#d32935}.pointer-dashboard-empty{padding:35px 10px;text-align:center;color:#8a99ab;font-size:11px}
 /* Interface Pointeur 2026 — poste de pointage plein écran */
 @media(min-width:1100px){
   .main{padding:0 30px 22px}
@@ -157,6 +158,8 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
   .history{grid-column:1/-1;min-height:400px}
 }
 @media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.header-clock{position:static;transform:none;margin-top:9px;justify-content:center}.seg-date{font-size:11px}.seg-clock{padding:4px 7px;gap:2px}.seg-digit{width:11px;height:19px}.seg-a,.seg-d,.seg-g{width:8px;height:2px}.seg-g{top:8.5px}.seg-d{top:17px}.seg-b,.seg-c,.seg-e,.seg-f{width:2px;height:7px}.seg-b,.seg-f{top:1.5px}.seg-e,.seg-c{top:10.5px}.seg-colon{height:19px;gap:3px}.seg-colon i{width:3px;height:3px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:center}.presence-summary{width:100%;font-size:13px}.presence-summary span{min-width:0;flex:1;padding:0 6px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
+@media(max-width:1100px){.pointer-kpis{grid-template-columns:repeat(3,1fr)}.pointer-dashboard-grid{grid-template-columns:1fr 1fr}.pointer-year-card{grid-column:span 2}.pointer-employee-card{grid-column:span 1}}
+@media(max-width:759px){.pointer-dashboard-head{align-items:flex-start;flex-direction:column}.pointer-dashboard-filters{width:100%;overflow:auto;flex-wrap:nowrap}.pointer-dashboard-filters>*{flex:0 0 auto}.pointer-kpis{display:flex;overflow:auto}.pointer-kpi{min-width:195px}.pointer-dashboard-grid{display:block}.pointer-dash-card{margin-bottom:12px}.pointer-year-card{overflow:auto}.pointer-year-chart{min-width:620px}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 </style>
 <script defer src="/static/html5-qrcode.min.js?v=1"></script>
@@ -197,10 +200,15 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       </div>
     </div>
     <nav class="pointer-tabs" aria-label="Vues du pointage">
+      <button id="pointerTabDashboard" class="pointer-tab" onclick="switchPointerTab('dashboard')">⌂ TABLEAU DE BORD</button>
       <button id="pointerTabScanner" class="pointer-tab active" onclick="switchPointerTab('scanner')">▣ BORNE DE POINTAGE</button>
       <button id="pointerTabHistory" class="pointer-tab" onclick="switchPointerTab('history')">↕ PASSAGES 48 H <span id="historyTabCount" class="pointer-tab-badge">0</span></button>
       <button id="pointerTabAlerts" class="pointer-tab" onclick="switchPointerTab('alerts')">⚠ ALERTES <span id="alertsTabCount" class="pointer-tab-badge">0</span></button>
     </nav>
+    <section id="pointerDashboard" class="pointer-dashboard pointer-panel hidden" data-pointer-panel="dashboard">
+      <div class="pointer-dashboard-head"><div><h2>Tableau de bord Pointeur</h2><p>Statistiques de présence, performance des sites et contrôles RH.</p></div><div class="pointer-dashboard-filters"><label>Année<input id="pointerStatsYear" type="number" min="2020" max="2100" onchange="loadPointerStatistics()"></label><label>Mois<select id="pointerStatsMonth" onchange="loadPointerStatistics()"><option value="">Toute l’année</option><option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option><option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option><option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></label><label>Site<select id="pointerStatsSite" onchange="loadPointerStatistics()"><option value="">Tous les sites</option></select></label><button onclick="window.print()">⇩ Exporter</button></div></div>
+      <div id="pointerDashboardBody"><div class="pointer-dashboard-empty">Chargement des statistiques…</div></div>
+    </section>
     <div id="attendanceAlertsBar" class="alerts-panel pointer-panel hidden" data-pointer-panel="alerts">
       <div class="alerts-section-title"><span>Présences prolongées sur site</span><small id="presenceAlertsCount">0 alerte</small></div>
       <div id="alertsPresenceRow" class="alerts-row"></div>
@@ -278,6 +286,7 @@ let pointerSession=null;
 let scanner=null;
 let scanBusy=false;
 let sessionScans=[];
+let pointerStatistics=null;
 let qrKeyBuffer="";
 let qrLastKeyAt=0;
 let cameraMode=false;
@@ -339,6 +348,30 @@ function enterApp(){
   requestAnimationFrame(setupScanMode);
 }
 function refreshPointeurData(){loadHistory();loadAttendanceAlerts()}
+async function loadPointerStatistics(){
+  if(!pointerSession?.token)return;
+  const year=document.getElementById("pointerStatsYear")?.value||new Date().getFullYear();
+  const month=document.getElementById("pointerStatsMonth")?.value||"";
+  const site=document.getElementById("pointerStatsSite")?.value||"";
+  const params=new URLSearchParams({year:String(year)});if(month)params.set("month",month);if(site)params.set("site",site);
+  try{
+    const response=await fetch("/api/portal/attendance-statistics?"+params,{headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(response.status===401){logout();return}if(!response.ok)throw new Error("Statistiques indisponibles");
+    pointerStatistics=await response.json();renderPointerDashboard();
+  }catch(error){document.getElementById("pointerDashboardBody").innerHTML='<div class="pointer-dashboard-empty">Les statistiques ne sont pas disponibles pour le moment.</div>'}
+}
+function renderPointerDashboard(){
+  const data=pointerStatistics;if(!data)return;const summary=data.summary||{};
+  const siteSelect=document.getElementById("pointerStatsSite"),selected=siteSelect?.value||"";
+  if(siteSelect){siteSelect.innerHTML='<option value="">Tous les sites</option>'+[...new Set((data.sites||[]).map(row=>row.site))].map(site=>`<option value="${esc(site)}" ${site===selected?"selected":""}>${esc(site)}</option>`).join("")}
+  const maxEntries=Math.max(1,...(data.months||[]).map(row=>row.entries||0));
+  const monthLabels=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Aoû","Sep","Oct","Nov","Déc"];
+  const chart=(data.months||[]).map((row,index)=>`<div class="pointer-year-month"><div><i style="height:${Math.max(2,Math.round((row.entries||0)*100/maxEntries))}%" title="${row.entries||0} entrées"></i><b style="height:${Math.max(2,Math.round((row.exits||0)*100/maxEntries))}%" title="${row.exits||0} sorties"></b></div><span>${monthLabels[index]}</span></div>`).join("");
+  const sites=(data.sites||[]).slice(0,7).map(row=>`<div class="pointer-site-row"><span title="${esc(row.site)}">${esc(row.site)}</span><i><b style="width:${Math.min(100,row.completion_rate||0)}%"></b></i><strong>${row.completion_rate||0}%</strong></div>`).join("")||'<div class="pointer-dashboard-empty">Aucune donnée par site.</div>';
+  const alerts=(data.alerts||[]).slice(0,6).map(row=>`<div class="pointer-alert-card ${row.level==='critical'?'':'warning'}"><span>${row.level==='critical'?'!':'◷'}</span><div><strong>${esc(row.title)}</strong><small>${esc(row.name)} · ${esc(row.site)}</small><small>${esc(row.detail||'Contrôle requis')}</small></div></div>`).join("")||'<div class="pointer-dashboard-empty">Aucune anomalie détectée.</div>';
+  const employees=(data.employees||[]).slice(0,10).map(row=>{const risk=row.missing_exits?'danger':'';return`<tr><td><strong>${esc(row.name)}</strong><small>${esc(row.matricule||'—')}</small></td><td>${esc(row.site)}</td><td>${row.hours||0} h</td><td>${row.entries||0}</td><td>${row.exits||0}</td><td><span class="pointer-compliance ${risk}">${risk==='danger'?'À régulariser':'Conforme'}</span></td></tr>`}).join("");
+  document.getElementById("pointerDashboardBody").innerHTML=`<div class="pointer-kpis"><article class="pointer-kpi"><span>♙</span><strong>${summary.employees||0}</strong><b>Employés pointés</b><small>Période sélectionnée</small></article><article class="pointer-kpi"><span>▦</span><strong>${summary.sites||0}</strong><b>Sites actifs</b><small>Avec activité enregistrée</small></article><article class="pointer-kpi green"><span>✓</span><strong>${summary.entries||0}</strong><b>Entrées</b><small>${summary.exits||0} sorties</small></article><article class="pointer-kpi violet"><span>◷</span><strong>${summary.hours||0} h</strong><b>Heures enregistrées</b><small>Vacations terminées</small></article><article class="pointer-kpi red"><span>◇</span><strong>${summary.alerts||0}</strong><b>Alertes conformité</b><small>À examiner par la DRH</small></article></div><div class="pointer-dashboard-grid"><article class="pointer-dash-card pointer-year-card"><div class="pointer-dash-title"><div><h3>Présences par mois</h3><p>Entrées en bleu · sorties en rouge · ${data.year}</p></div></div><div class="pointer-year-chart">${chart}</div></article><article class="pointer-dash-card"><div class="pointer-dash-title"><div><h3>Performance par site</h3><p>Taux de vacations clôturées</p></div></div><div class="pointer-sites-list">${sites}</div></article><aside class="pointer-dash-card"><div class="pointer-dash-title"><div><h3>Alertes conformité</h3><p>Situations nécessitant un contrôle</p></div><span>${summary.alerts||0}</span></div><div class="pointer-alert-list">${alerts}</div><div class="pointer-dashboard-legal">Indicateurs d’aide au contrôle. Toute qualification au regard du droit du travail algérien doit être validée par la DRH ou le conseil juridique.</div></aside><article class="pointer-dash-card pointer-employee-card"><div class="pointer-dash-title"><div><h3>Suivi par employé</h3><p>Heures et complétude des pointages</p></div></div><div class="pointer-dashboard-table"><table><thead><tr><th>Employé</th><th>Site</th><th>Heures</th><th>Entrées</th><th>Sorties</th><th>Conformité</th></tr></thead><tbody>${employees||'<tr><td colspan="6">Aucune donnée pour cette période.</td></tr>'}</tbody></table></div></article></div>`;
+}
 async function logout(){
   await stopScanner();
   clearInterval(headerClockTimer);headerClockTimer=null;
@@ -359,9 +392,10 @@ function returnToPointerMenu(){
   document.getElementById("scannerCard")?.scrollIntoView({behavior:"smooth",block:"start"});
 }
 function switchPointerTab(tab){
-  pointerActiveTab=["scanner","history","alerts"].includes(tab)?tab:"scanner";
+  pointerActiveTab=["dashboard","scanner","history","alerts"].includes(tab)?tab:"scanner";
   document.querySelectorAll("[data-pointer-panel]").forEach(el=>el.classList.toggle("hidden",el.dataset.pointerPanel!==pointerActiveTab));
-  [["scanner","pointerTabScanner"],["history","pointerTabHistory"],["alerts","pointerTabAlerts"]].forEach(([name,id])=>document.getElementById(id)?.classList.toggle("active",name===pointerActiveTab));
+  [["dashboard","pointerTabDashboard"],["scanner","pointerTabScanner"],["history","pointerTabHistory"],["alerts","pointerTabAlerts"]].forEach(([name,id])=>document.getElementById(id)?.classList.toggle("active",name===pointerActiveTab));
+  if(pointerActiveTab==="dashboard"){if(!document.getElementById("pointerStatsYear").value)document.getElementById("pointerStatsYear").value=String(new Date().getFullYear());loadPointerStatistics()}
   if(pointerActiveTab==="scanner")requestAnimationFrame(setupScanMode);else stopScanner();
 }
 function setupScanMode(){

@@ -1007,6 +1007,113 @@ def attendance_feed(
     ]
 
 
+@router.get("/attendance-statistics")
+def attendance_statistics(
+    year: int | None = None,
+    month: int | None = None,
+    site: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Statistiques consolidées du Pointeur, filtrées par le périmètre du compte.
+
+    Les indicateurs sont factuels (évènements et durées enregistrées). Les alertes
+    restent des signaux de contrôle RH et ne constituent pas une décision juridique.
+    """
+    tz = ZoneInfo("Africa/Algiers")
+    now = datetime.now(tz)
+    selected_year = max(2020, min(int(year or now.year), now.year + 1))
+    selected_month = int(month) if month else None
+    if selected_month is not None and not 1 <= selected_month <= 12:
+        raise HTTPException(status_code=422, detail="Mois invalide")
+    allowed_site_ids = _allowed_assignment_site_ids(db, user)
+    site_filter = _clean_text(site).casefold()
+    source_rows = [
+        row for row in service.list_items(db, "attendanceQrScans")
+        if isinstance(row, dict) and row.get("action") in {"arrivee", "depart"}
+    ]
+    if allowed_site_ids is not None:
+        allowed = set(allowed_site_ids)
+        source_rows = [row for row in source_rows if row.get("siteId") in allowed]
+
+    parsed: list[tuple[datetime, dict[str, Any]]] = []
+    for row in source_rows:
+        at = _parse_scan_at(row.get("scannedAt"), tz)
+        if not at or at.year != selected_year or (selected_month and at.month != selected_month):
+            continue
+        if site_filter and _clean_text(row.get("site")).casefold() != site_filter:
+            continue
+        parsed.append((at, row))
+    parsed.sort(key=lambda pair: pair[0])
+
+    employee_ids = {
+        int(row.get("employeeId")) for _, row in parsed
+        if str(row.get("employeeId") or "").isdigit()
+    }
+    employees_by_id = {
+        employee.id: employee for employee in db.execute(
+            select(Employee).where(Employee.id.in_(employee_ids))
+        ).scalars().all()
+    } if employee_ids else {}
+    months = [{"month": index, "entries": 0, "exits": 0, "minutes": 0} for index in range(1, 13)]
+    sites: dict[str, dict[str, Any]] = {}
+    employees: dict[str, dict[str, Any]] = {}
+    open_arrivals: dict[str, datetime] = {}
+
+    for at, row in parsed:
+        employee_key = str(row.get("employeeId") or row.get("matricule") or "")
+        if not employee_key:
+            continue
+        employee = employees_by_id.get(int(row.get("employeeId"))) if str(row.get("employeeId") or "").isdigit() else None
+        employee_name = _clean_text(row.get("agentName")) or (
+            " ".join(filter(None, [employee.last_name, employee.first_name])).strip() if employee else "Employé"
+        )
+        site_name = _clean_text(row.get("site")) or "Site non renseigné"
+        site_row = sites.setdefault(site_name, {"site": site_name, "entries": 0, "exits": 0, "minutes": 0, "employees": set()})
+        employee_row = employees.setdefault(employee_key, {
+            "employee_id": row.get("employeeId"), "matricule": row.get("matricule") or (employee.code if employee else ""),
+            "name": employee_name, "site": site_name, "entries": 0, "exits": 0, "minutes": 0, "missing_exits": 0,
+        })
+        site_row["employees"].add(employee_key)
+        action = row.get("action")
+        if action == "arrivee":
+            months[at.month - 1]["entries"] += 1; site_row["entries"] += 1; employee_row["entries"] += 1
+            open_arrivals[employee_key] = at
+        else:
+            months[at.month - 1]["exits"] += 1; site_row["exits"] += 1; employee_row["exits"] += 1
+            arrival = open_arrivals.pop(employee_key, None)
+            if arrival and at >= arrival:
+                duration = min(int((at - arrival).total_seconds() // 60), 48 * 60)
+                months[at.month - 1]["minutes"] += duration; site_row["minutes"] += duration; employee_row["minutes"] += duration
+
+    alerts: list[dict[str, Any]] = []
+    for key, arrival in open_arrivals.items():
+        row = employees.get(key)
+        if not row:
+            continue
+        row["missing_exits"] = 1
+        alerts.append({"level": "warning", "title": "Pointage de sortie manquant", "name": row["name"], "site": row["site"], "detail": arrival.isoformat()})
+    for row in employees.values():
+        hours = round(row["minutes"] / 60, 1)
+        row["hours"] = hours
+    site_output = []
+    for row in sites.values():
+        count = len(row.pop("employees"))
+        row["employee_count"] = count
+        row["hours"] = round(row.pop("minutes") / 60, 1)
+        row["completion_rate"] = round(row["exits"] * 100 / row["entries"]) if row["entries"] else 0
+        site_output.append(row)
+    site_output.sort(key=lambda row: (-row["completion_rate"], row["site"]))
+    employee_output = sorted(employees.values(), key=lambda row: (-row["hours"], row["name"]))
+    return {
+        "year": selected_year, "month": selected_month, "sites": site_output,
+        "employees": employee_output, "months": months, "alerts": alerts[:50],
+        "summary": {
+            "employees": len(employees), "sites": len(sites),
+            "entries": sum(row["entries"] for row in months), "exits": sum(row["exits"] for row in months),
+            "hours": round(sum(row["minutes"] for row in months) / 60, 1), "alerts": len(alerts),
+        },
+    }
 def _parse_scan_at(value: Any, tz: ZoneInfo) -> datetime | None:
     raw = _clean_text(value)
     if not raw:
