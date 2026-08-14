@@ -341,7 +341,7 @@ function enterApp(){
   societyEl.textContent=societies.length?"SOCIÉTÉ : "+societies.join(" / ").toUpperCase():"";
   societyEl.classList.toggle("hidden",!societies.length);
   startHeaderClock();
-  switchPointerTab("scanner");
+  switchPointerTab("dashboard");
   refreshPointeurData();
   clearInterval(historyRefreshTimer);
   historyRefreshTimer=setInterval(refreshPointeurData,15000);
@@ -387,9 +387,8 @@ function returnToPointerMenu(){
   resetManualPanel();
   const result=document.getElementById("result");
   if(result){result.className="result";result.innerHTML=""}
-  switchPointerTab("scanner");
-  setupScanMode();
-  document.getElementById("scannerCard")?.scrollIntoView({behavior:"smooth",block:"start"});
+  switchPointerTab("dashboard");
+  document.getElementById("pointerDashboard")?.scrollIntoView({behavior:"smooth",block:"start"});
 }
 function switchPointerTab(tab){
   pointerActiveTab=["dashboard","scanner","history","alerts"].includes(tab)?tab:"scanner";
