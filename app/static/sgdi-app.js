@@ -10397,70 +10397,65 @@ function renderContractsToEstablish(view){
   view.innerHTML=`<div class="mb-4 flex items-center justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">Contrats à établir</h1><p class="text-sm text-slate-500">Dossiers transmis par Recrutement. Aucun employé n'est créé avant validation du premier contrat.</p></div><span class="pill pill-amber">${candidates.length} en attente</span></div>
   <div class="card overflow-hidden"><table class="table"><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Transmission</th><th>Action</th></tr></thead><tbody>${candidates.length?candidates.map(c=>`<tr><td><b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b></td><td>${escapeHTML(c.posteSouhaite||c.posteContrat||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(c.telephone||"—")}</td><td>${escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today()))}</td><td><button class="btn btn-primary" onclick="navigate('contrats/a_contractualiser/${jsString(c.id)}')">Établir le contrat</button></td></tr>`).join(""):`<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun contrat à établir.</td></tr>`}</tbody></table></div>`;
 }
+function exportContratsCSV(){
+  const soc=currentStructureSocieteFilter();
+  const rows=[["Employé","Code","Société","Type","Date de recrutement","Fin de période d'essai","Fin de contrat","Salaire net","Statut"]];
+  (db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)).forEach(a=>rows.push([
+    `${a.nom||""} ${a.prenom||""}`.trim(),
+    normalizeEmployeeCodeFormat(a.matricule||a.code||""),
+    a.societe||"",
+    cleanContractType(a.typeContrat)||"",
+    a.dateRecrutement||"",
+    a.dateFinEssai||"",
+    employeePositionContractEndDate(a)||"",
+    Number(a.salaireNet)||0,
+    a.statut||""
+  ]));
+  paieDownloadCSV(rows,`contrats-${today()}${soc?"-"+soc.replace(/\s+/g,"_").toLowerCase():""}.csv`);
+  toast("Export des contrats téléchargé","success");
+}
 function renderContratsDashboard(view){
   const socFilter=currentStructureSocieteFilter();
   const agents=(db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!socFilter||a.societe===socFilter));
   const activeAgentIds=new Set(agents.map(a=>String(a.id)));
   const avenants=(db.avenants||[]).filter(av=>activeAgentIds.has(String(av.agentId)));
-  const signedAvenants=avenants.filter(a=>a.statut==="signe");
   const today_=today();
-  // Types
   const cdi=agents.filter(a=>cleanContractType(a.typeContrat)==="CDI").length;
   const cdd=agents.filter(a=>cleanContractType(a.typeContrat)==="CDD").length;
-  const autre=agents.length-cdi-cdd;
-  // Période d'essai
   const essaiEnCours=agents.filter(a=>{if(!a.dateFinEssai)return false;return daysBetween(today_,a.dateFinEssai)>=0}).length;
   const essai30=agents.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0&&d<=30}).length;
-  const essai90=agents.filter(a=>{if(!a.dateFinEssai)return false;const d=daysBetween(today_,a.dateFinEssai);return d>=0&&d<=90}).length;
-  const essaiExpire=agents.filter(a=>{if(!a.dateFinEssai)return false;return daysBetween(today_,a.dateFinEssai)<0}).length;
-  // Fin contrat CDD
   const cddExpire=agents.filter(a=>{const end=employeePositionContractEndDate(a);return cleanContractType(a.typeContrat)==="CDD"&&end&&daysBetween(today_,end)<0}).length;
   const cdd30=agents.filter(a=>{const end=employeePositionContractEndDate(a);if(cleanContractType(a.typeContrat)!=="CDD"||!end)return false;const d=daysBetween(today_,end);return d>=0&&d<=30}).length;
-  const cdd90=agents.filter(a=>{const end=employeePositionContractEndDate(a);if(cleanContractType(a.typeContrat)!=="CDD"||!end)return false;const d=daysBetween(today_,end);return d>=0&&d<=90}).length;
-  const contractMetric=(label,value,color,urgent,action)=>`<button type="button" class="contract-metric contract-metric-click ${urgent&&value>0?"is-alert":""}" onclick="${escapeHTML(action||"resetContratFilters()")}" title="Afficher le détail">
-    <span>${escapeHTML(label)}</span>
-    <strong style="color:${urgent&&value>0?"#dc2626":color}">${value}</strong>
-  </button>`;
-  const contractGroup=(title,items,alert)=>`<section class="contract-summary-group ${alert?"is-alert":""}">
-    <h3>${escapeHTML(title)}</h3>
-    <div class="contract-summary-metrics">${items.join("")}</div>
-  </section>`;
-  const pendingContracts=contractsToEstablishCandidates().length;
-  const contractActions=`<div class="contract-actions-row contract-title-actions flex gap-4 flex-wrap justify-end items-center"><button type="button" class="contract-title-link" onclick="navigate('contrats/a_contractualiser')">Contrats à établir (${pendingContracts})</button><button type="button" class="contract-title-link" onclick="openAvenantModal('general')">+ Créer avenant</button><button type="button" class="contract-title-link" onclick="openEmployeeNewContractModal()">+ Créer contrat</button></div>`;
-  view.innerHTML=`
-    <div class="mb-4 flex items-center justify-between gap-3 flex-wrap">
-      <div><h1 class="text-2xl font-black uppercase">CONTRAT</h1><p class="text-sm text-slate-500">Statistiques${socFilter?` · ${escapeHTML(socFilter)}`:""}</p></div>
-      ${contractActions}
-    </div>
-    <div class="contract-summary-panel">
-      ${contractGroup("Effectif",[
-        contractMetric("Total",agents.length,"#043970",false,"setContratQuickFilter('all')"),
-        contractMetric("CDD",cdd,"#7c3aed",false,"setContratQuickFilter('type:cdd')"),
-        autre>0?contractMetric("Autre",autre,"#64748b",false,"setContratQuickFilter('type:autre')"):""
-      ],false)}
-      ${contractGroup("Alertes contrat",[
-        contractMetric("Total ≤ 90j",cdd90+essai90,"#dc2626",true,"setContratQuickFilter('alert90')"),
-        contractMetric("CDD",cdd90,"#dc2626",true,"setContratQuickFilter('cdd90')"),
-        contractMetric("Essai",essai90,"#dc2626",true,"setContratQuickFilter('essai90')")
-      ],cdd90+essai90>0)}
-      ${contractGroup("Période d'essai",[
-        contractMetric("En cours",essaiEnCours,"#0369a1",false,"setContratQuickFilter('essai')"),
-        contractMetric("≤ 30j",essai30,"#dc2626",true,"setContratQuickFilter('essai30')"),
-        contractMetric("≤ 90j",essai90,"#f59e0b",true,"setContratQuickFilter('essai90')"),
-        contractMetric("Terminés",essaiExpire,"#64748b",false,"setContratQuickFilter('essaiExpired')")
-      ],false)}
-      ${contractGroup("Fin CDD",[
-        contractMetric("Expirés",cddExpire,"#dc2626",true,"setContratQuickFilter('cddExpired')"),
-        contractMetric("≤ 30j",cdd30,"#f59e0b",true,"setContratQuickFilter('cdd30')"),
-        contractMetric("≤ 90j",cdd90,"#ca8a04",false,"setContratQuickFilter('cdd90')")
-      ],cddExpire+cdd30+cdd90>0)}
-      ${contractGroup("Renouvellement",[
-        contractMetric("CDD expirés",cddExpire,"#dc2626",true,"setContratQuickFilter('cddExpired')"),
-        contractMetric("Avenants",avenants.length,"#7c3aed",false,"navigate('contrats/avenants')"),
-        contractMetric("Signés",signedAvenants.length,"#16a34a",false,"navigate('contrats/avenants')")
-      ],false)}
-    </div>
-    ${contractSituationListHTML(agents,today_,{title:"Liste des contrats",subtitle:`${agents.length} agent(s) avec situation contrat${socFilter?` · ${socFilter}`:""}`})}`;
+  const pendingCandidates=contractsToEstablishCandidates();
+  const compliant=Math.max(0,agents.length-cddExpire);
+  const healthPercent=agents.length?Math.round(compliant/agents.length*100):100;
+  const healthLabel=healthPercent>=90?"Bonne":healthPercent>=75?"À surveiller":"Critique";
+  const upcomingContracts=agents.map(a=>({agent:a,type:"CDD",date:employeePositionContractEndDate(a),days:employeePositionContractDaysLeft(a,today_)})).filter(x=>cleanContractType(x.agent.typeContrat)==="CDD"&&x.date&&x.days>=0&&x.days<=90);
+  const upcomingTrials=agents.map(a=>({agent:a,type:"Essai",date:a.dateFinEssai,days:a.dateFinEssai?daysBetween(today_,a.dateFinEssai):null})).filter(x=>x.date&&x.days>=0&&x.days<=90);
+  const deadlines=[...upcomingContracts,...upcomingTrials].sort((a,b)=>a.days-b.days);
+  const timeline=[{agent:null,type:"Actifs",date:today_,days:0},...deadlines.slice(0,3)];
+  while(timeline.length<4)timeline.push({agent:null,type:"Aucune échéance",date:"",days:null});
+  const priority=[];
+  pendingCandidates.slice(0,2).forEach(c=>priority.push({kind:"pending",candidate:c,title:"Établir le premier contrat",name:`${c.nom||""} ${c.prenom||""}`.trim(),meta:c.posteSouhaite||c.posteContrat||"Poste à compléter",tag:"À établir",color:"#d97706"}));
+  deadlines.slice(0,Math.max(0,4-priority.length)).forEach(x=>priority.push({kind:x.type==="Essai"?"trial":"renew",agent:x.agent,title:x.type==="Essai"?"Évaluer la période d’essai":"Décider le renouvellement",name:`${x.agent.nom||""} ${x.agent.prenom||""}`.trim(),meta:`${x.type} · ${formatDate(x.date)}`,tag:x.days===0?"Aujourd’hui":`J-${x.days}`,color:x.days<=15?"#dc2626":x.type==="Essai"?"#7c3aed":"#d97706"}));
+  const society=escapeHTML(socFilter||currentStructureSocieteFilter()||"Toutes les sociétés");
+  const deadlineMilestone=x=>{const has=x.agent;const name=has?escapeHTML(`${x.agent.nom||""} ${x.agent.prenom||""}`.trim()):x.type==="Actifs"?"Aujourd’hui":"Aucune échéance";const dot=!has?"#16a34a":x.days<=15?"#ef4444":"#f59e0b";return `<div class="contract-modern-milestone" style="--dot:${dot}"><b>${name}</b><span>${x.date?formatDate(x.date):"—"}${has?` · ${escapeHTML(x.type)}`:""}</span><small>${x.type==="Actifs"?`${agents.length} actifs`:x.days===null?"RAS":x.days===0?"Aujourd’hui":`J-${x.days}`}</small></div>`};
+  const priorityRow=p=>`<div class="contract-modern-focus-row" style="--focus:${p.color}" onclick="${p.kind==="pending"?`navigate('contrats/a_contractualiser/${jsString(p.candidate.id)}')`:`navigate('effectif/agent/${jsString(p.agent.id)}')`}"><i class="contract-modern-focus-dot"></i><div><b>${escapeHTML(p.title)}</b><span>${escapeHTML(p.name)}</span></div><em>${escapeHTML(p.tag)}</em></div>`;
+  const taskRow=p=>{const initials=String(p.name||"?").split(/\s+/).slice(0,2).map(v=>v[0]||"").join("").toUpperCase();return `<div class="contract-modern-task"><div class="contract-modern-initial">${escapeHTML(initials)}</div><div><b>${escapeHTML(p.name)}</b><small>${escapeHTML(p.meta)}</small></div><span>${escapeHTML(p.title)}</span><span class="contract-modern-tag" style="--tag:${p.color}">${escapeHTML(p.tag)}</span><button class="contract-modern-open" onclick="event.stopPropagation();${p.kind==="pending"?`navigate('contrats/a_contractualiser/${jsString(p.candidate.id)}')`:`navigate('effectif/agent/${jsString(p.agent.id)}')`}">Ouvrir</button></div>`};
+  view.innerHTML=`<div class="contract-modern-dashboard"><div class="contract-modern-layout">
+    <aside class="contract-modern-rail"><div class="contract-modern-mark">CTR</div><button class="active" title="Tableau de bord" onclick="navigate('contrats/dashboard')">⌂</button><button title="Contrats à établir" onclick="navigate('contrats/a_contractualiser')">＋</button><button title="Contrats actifs" onclick="setContratQuickFilter('all')">▤</button><button title="Échéances" onclick="setContratQuickFilter('alert90')">◷</button><button title="Avenants" onclick="navigate('contrats/avenants')">↗</button><button title="Archives" onclick="navigate('effectif/archives_sortants')">▣</button><button class="contract-modern-rail-bottom" title="Retour DRH" onclick="navigate('drh/dashboard')">←</button></aside>
+    <div class="contract-modern-work"><header class="contract-modern-header"><div><div class="contract-modern-heading">Contrats</div><div class="contract-modern-sub">${society} · Direction des ressources humaines</div></div><div class="contract-modern-head-actions"><button onclick="exportContratsCSV()">Exporter</button><button class="primary" onclick="openEmployeeNewContractModal()">+ Créer un contrat</button><div class="contract-modern-avatar">DRH</div></div></header>
+    <main class="contract-modern-content"><div class="contract-modern-welcome"><div><h1>Bonjour, voici vos contrats.</h1><p>Les priorités du ${formatDate(today_)} sont classées automatiquement.</p></div><div class="contract-modern-period"><button onclick="setContratQuickFilter('cdd30')">30 jours</button><button class="active" onclick="setContratQuickFilter('alert90')">90 jours</button><button onclick="setContratQuickFilter('all')">Tous</button></div></div>
+    <section class="contract-modern-overview"><div class="contract-modern-health"><div><div class="contract-modern-health-label">Santé contractuelle</div><strong>${healthLabel}</strong><small>${compliant} dossier(s) conforme(s) sur ${agents.length}</small></div><div class="contract-modern-ring" style="background:conic-gradient(#5ee6a8 0 ${healthPercent}%,rgba(255,255,255,.18) ${healthPercent}%)"><b>${healthPercent}%</b></div></div>
+      <button class="contract-modern-stat" style="--tone:#d97706" onclick="navigate('contrats/a_contractualiser')"><div class="contract-modern-stat-top"><div class="contract-modern-stat-icon">＋</div><div class="contract-modern-stat-delta">Recrutement → DRH</div></div><strong>${pendingCandidates.length}</strong><span>Contrats à établir</span></button>
+      <button class="contract-modern-stat" style="--tone:#dc2626" onclick="setContratQuickFilter('cdd30')"><div class="contract-modern-stat-top"><div class="contract-modern-stat-icon">!</div><div class="contract-modern-stat-delta">Avant 30 jours</div></div><strong>${cdd30}</strong><span>Échéances urgentes</span></button>
+      <button class="contract-modern-stat" style="--tone:#7c3aed" onclick="setContratQuickFilter('essai')"><div class="contract-modern-stat-top"><div class="contract-modern-stat-icon">◷</div><div class="contract-modern-stat-delta">${essai30} à évaluer</div></div><strong>${essaiEnCours}</strong><span>Essais en cours</span></button>
+    </section>
+    <section class="contract-modern-main-grid"><div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>Échéances des 90 prochains jours</h2><button onclick="setContratQuickFilter('alert90')">Ouvrir la liste →</button></div><div class="contract-modern-timeline"><div class="contract-modern-timeline-line"></div><div class="contract-modern-timeline-items">${timeline.map(deadlineMilestone).join("")}</div></div></div>
+      <div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>À faire maintenant</h2><button onclick="navigate('contrats/a_contractualiser')">Tout voir →</button></div><div class="contract-modern-focus">${priority.slice(0,3).map(priorityRow).join("")||'<div class="text-xs text-slate-400 p-4">Aucune action prioritaire.</div>'}</div></div></section>
+    <section class="contract-modern-lower"><div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>File de traitement intelligente</h2><button onclick="setContratQuickFilter('alert90')">Voir tous les dossiers →</button></div><div class="contract-modern-task-list">${priority.map(taskRow).join("")||'<div class="text-xs text-slate-400 p-4">Aucun dossier à traiter.</div>'}</div></div>
+      <div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>Portefeuille actif</h2><button onclick="setContratQuickFilter('all')">Statistiques →</button></div><div class="contract-modern-bars"><div><div class="contract-modern-bar-head"><span>CDD</span><b>${cdd}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#0d6ecc;width:${agents.length?Math.round(cdd/agents.length*100):0}%"></div></div></div><div><div class="contract-modern-bar-head"><span>CDI</span><b>${cdi}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#16a34a;width:${agents.length?Math.round(cdi/agents.length*100):0}%"></div></div></div><div><div class="contract-modern-bar-head"><span>Avenants actifs</span><b>${avenants.length}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#7c3aed;width:${agents.length?Math.min(100,Math.round(avenants.length/agents.length*100)):0}%"></div></div></div></div><div class="contract-modern-note">Les employés sortants et leurs contrats clôturés sont automatiquement retirés du portefeuille actif et conservés dans les archives.</div></div></section>
+    </main></div></div></div>`;
 }
 
 function contractAgentRefs(a){

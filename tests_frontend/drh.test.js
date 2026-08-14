@@ -3,6 +3,8 @@
 // validation candidat (âge, identité) et cycle de vie candidat.
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const { loadSgdiApp } = require('./load-app');
 
 const { loadError, T } = loadSgdiApp([
@@ -33,6 +35,17 @@ test('sgdi-app.js se charge et expose les fonctions DRH', () => {
   for (const name of ['drhLeaveEntitlement', 'nextMatricule', 'candidatAgeAtSave']) {
     assert.ok(t[name], `${name} introuvable`);
   }
+});
+
+test('dashboard Contrats moderne: restitue les zones validées et des actions réelles', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.js'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  for (const label of ['Santé contractuelle', 'Échéances des 90 prochains jours', 'À faire maintenant', 'File de traitement intelligente', 'Portefeuille actif']) {
+    assert.ok(js.includes(label), `zone manquante: ${label}`);
+  }
+  assert.ok(js.includes('function exportContratsCSV()'), 'export contrats non raccordé');
+  assert.ok(js.includes("navigate('effectif/agent/"), 'ouverture de la fiche employé non raccordée');
+  assert.ok(css.includes('.contract-modern-dashboard'), 'style du dashboard moderne absent');
 });
 
 test('nouveau contrat: un identifiant explicite ne retombe jamais sur un autre employé', () => {
