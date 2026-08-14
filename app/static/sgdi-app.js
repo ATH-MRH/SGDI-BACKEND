@@ -36110,6 +36110,8 @@ function ptCurrentAutoChip(){return sessionStorage.getItem("ptAutoChip")||"all"}
 function setPtAutoChip(v){sessionStorage.setItem("ptAutoChip",v||"all");renderView()}
 function ptCurrentAutoDensity(){return sessionStorage.getItem("ptAutoDensity")||"comfort"}
 function setPtAutoDensity(v){sessionStorage.setItem("ptAutoDensity",v||"comfort");renderView()}
+function ptCurrentManuelChip(){return sessionStorage.getItem("ptManuelChip")||"all"}
+function setPtManuelChip(v){sessionStorage.setItem("ptManuelChip",v||"all");renderView()}
 function setPtSociete(v){sessionStorage.setItem("ptSociete",v||"");renderView()}
 function setPtSearch(v){sessionStorage.setItem("ptSearch",v||"");renderView();requestAnimationFrame(()=>{const el=document.getElementById("pt-search-input");if(el){const len=el.value.length;el.focus();try{el.setSelectionRange(len,len)}catch(_){}}})}
 function setPtSort(v){sessionStorage.setItem("ptSort",v||"nom");renderView()}
@@ -37093,7 +37095,14 @@ function ptPickCode(agentId,ym,day,code){ptSetCell(agentId,ym,day,code);closeMod
 function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);renderView()}
 async function ptClearRow(agentId,ym){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : effacement pointage non autorisé."))return;const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
-function ptCellHTML(agentId,ym,day,code,isWeekend){const c=POINTAGE_CODES[code];const bg=c?c.bg:(isWeekend?"#dbeafe":"");const fg=c?c.color:(isWeekend?"#1e40af":"#64748b");const txt=code||"·";return`<td class="text-center align-middle" style="border:1px solid #e2e8f0;padding:0;width:21px;min-width:21px;max-width:21px;height:18px;background:${bg}"><button onclick="ptOpenCodePicker('${agentId}','${ym}',${day})" title="Cliquer pour choisir le code" style="width:100%;height:18px;border:0;background:transparent;color:${fg};font-weight:800;font-family:ui-monospace,monospace;cursor:pointer;font-size:7px;line-height:1">${txt}</button></td>`}
+function ptCellHTML(agentId,ym,day,code,isWeekend,isToday,locked){
+  const c=POINTAGE_CODES[code];
+  const cls=["pt-day"];if(isWeekend)cls.push("weekend");if(isToday)cls.push("today");
+  const btnCls=(code?"pt-code-chip":"pt-code-dot")+(locked?" locked":" editable");
+  const bg=c?c.bg:"transparent";const fg=c?c.color:(isWeekend?"#1e40af":"#94a3b8");
+  const title=locked?"Pointage validé — déverrouillez la ligne pour modifier":(c?`${code} — ${c.label}`:"Cliquer pour choisir le code");
+  return`<td class="${cls.join(" ")}"><button type="button" class="${btnCls}" onclick="ptOpenCodePicker('${agentId}','${ym}',${day})" style="background:${bg};color:${fg}" title="${escapeHTML(title)}">${code||"·"}</button></td>`;
+}
 function ptSupervisorMonthlyCount(sheet,code){
   if(!sheet)return 0;
   const days=Object.values(sheet.days||{});
@@ -38038,55 +38047,105 @@ function renderPointageSaisie(){
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const weekdayShort=["D","L","M","Me","J","V","S"];
-  const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const date=new Date(yr,mo-1,d);const wd=date.getDay();const we=wd===5||wd===6;return`<th style="border:1px solid #e2e8f0;padding:1px 0;width:21px;min-width:21px;max-width:21px;text-align:center;font-size:7px;font-weight:700;${we?"color:#1e40af;background:#dbeafe":"color:#64748b"}"><div>${String(d).padStart(2,"0")}</div><div style="font-size:6px;line-height:8px;opacity:.8">${weekdayShort[wd]}</div></th>`}).join("");
-  const legende=Object.entries(POINTAGE_CODES).map(([k,v])=>`<span class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold" style="background:${v.bg};color:${v.color}"><span class="font-mono font-black">${k}</span>${v.label}</span>`).join(" ");
-  const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
-    ${supervisorModuleActive()?"":drumMultiHTML([{id:"pt-drum-mo",label:"Mois",opts:drumMonthOpts(),selected:String(mo).padStart(2,"0"),cb:"drumPtMonthSync"},{id:"pt-drum-yr",label:"Année",opts:drumYearOpts(6),selected:String(yr),cb:"drumPtMonthSync"}])}
+  const now=new Date();
+  const todayYm=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  const isCurrentMonth=todayYm===ym;
+  const todayDay=isCurrentMonth?now.getDate():0;
+  const horizonDay=ym<todayYm?days:(isCurrentMonth?todayDay:0);
+  // Statistiques calculées une fois pour tout l'effectif éligible : servent aux KPI,
+  // aux puces de filtre rapide et aux lignes du tableau (même logique que Saisie automatique).
+  const statsById=new Map();
+  ag.forEach(a=>{
+    const sheet=ptGetSheet(a.id,ym);
+    let renseignes=0,workDays=0;
+    for(let d=1;d<=days;d++){
+      const we=[5,6].includes(new Date(yr,mo-1,d).getDay());
+      if(d<=horizonDay&&!we){workDays++;if((sheet?.days||{})[String(d).padStart(2,"0")])renseignes++;}
+    }
+    statsById.set(a.id,{sheet,valide:!!(sheet&&sheet.valide),taux:workDays?Math.round(renseignes*100/workDays):100,absPaie:ptAbsencePayrollDays(sheet)});
+  });
+  const effectif=ag.length;
+  const validated=ag.filter(a=>statsById.get(a.id)?.valide).length;
+  const tauxMois=effectif?Math.round(ag.reduce((s,a)=>s+(statsById.get(a.id)?.taux||0),0)/effectif):0;
+  const absencesPaie=ag.reduce((s,a)=>s+(statsById.get(a.id)?.absPaie||0),0);
+  const alertes=ag.filter(a=>(statsById.get(a.id)?.taux??100)<100).length;
+  const kpiCard=(lbl,val,sub,color,alertCls,barPct)=>`<div class="pt-auto-kpi ${alertCls||""}" style="--pt-kpi-c:${color}"><div class="lbl">${escapeHTML(lbl)}</div><div class="val">${val}</div><div class="sub">${escapeHTML(sub)}</div>${barPct!==undefined?`<div class="pt-kpi-bar"><i style="width:${barPct}%;background:${color}"></i></div>`:""}</div>`;
+  const kpisHTML=`<div class="pt-auto-kpis">
+    ${kpiCard("Effectif",effectif,soc?soc:"Toutes sociétés autorisées","#043970")}
+    ${kpiCard("Pointages validés",`${validated}/${effectif}`,`${effectif?Math.round(validated*100/effectif):0}% verrouillés`,"#16a34a",validated===0?"alert":"",effectif?Math.round(validated*100/effectif):0)}
+    ${kpiCard("Complétude — mois",`${tauxMois}%`,"Jours ouvrés renseignés","#0d6ecc",undefined,tauxMois)}
+    ${kpiCard("Absences paie",absencesPaie,"Cumul du mois affiché","#d97706")}
+    ${kpiCard("Cases à compléter",alertes,"Agents avec des trous de saisie","#dc2626",alertes>0?"alert":"")}
+  </div>`;
+  const chip=ptCurrentManuelChip();
+  const chipDefs=[["all","Tous",()=>true],["unlocked","🔓 Non validés",a=>!statsById.get(a.id)?.valide],["gaps","Renseignement < 90%",a=>(statsById.get(a.id)?.taux??100)<90]];
+  const chipsHTML=chipDefs.map(([k,l,fn])=>{const n=ag.filter(fn).length;return`<button type="button" class="pt-auto-chip ${k==="unlocked"?"warn":""} ${chip===k?"active":""}" onclick="setPtManuelChip('${k}')">${l} <span class="n">${n}</span></button>`}).join("");
+  const legendBaseKeys=["P","A","M","S","C","R","AB"];
+  const legendExtraGroups=[["Récup. travaillée · présent",["F1","F2","F3"]],["Maintenu en poste · présent",["P/F1","P/F2","P/F3"]],["Absent partiel",["A1","A2","A3"]]];
+  const legendItem=k=>`<span class="pt-auto-legend-item"><span class="pt-auto-legend-dot" style="background:${POINTAGE_CODES[k].color}"></span>${k} — ${escapeHTML(POINTAGE_CODES[k].label)}</span>`;
+  const legendBaseHTML=legendBaseKeys.map(legendItem).join("");
+  const legendExtraHTML=legendExtraGroups.map(([,keys])=>keys.map(legendItem).join("")).join("");
+  const legendHTML=`<div class="pt-auto-legend">
+    <span class="lbl">Légende</span>${legendBaseHTML}
+    <button type="button" class="pt-manuel-legend-toggle" onclick="const ex=this.nextElementSibling;const sh=ex.classList.toggle('show');this.textContent=sh?'− Masquer les codes avancés':'+ Codes avancés (récupération, maintien, absences graduées)'">+ Codes avancés (récupération, maintien, absences graduées)</button>
+    <div class="pt-manuel-legend-extra">${legendExtraHTML}</div>
+    ${isDrh?"":`<div class="pt-manuel-hint">Astuce : <b>cliquer sur une case</b> ouvre le sélecteur de code · <b>Valider</b> verrouille le pointage de l'agent.</div>`}
+  </div>`;
+  const filterBar=`<div class="pt-auto-toolbar">
+    ${supervisorModuleActive()?"":`<div class="pt-auto-monthnav"><button type="button" onclick="setPtMonth(ptShiftMonth('${ym}',-1))" title="Mois précédent">‹</button><span class="lbl capitalize">${escapeHTML(monthLabel)}</span><button type="button" onclick="setPtMonth(ptShiftMonth('${ym}',1))" title="Mois suivant">›</button></div>`}
     ${ptSearchBarHTML()}
     ${ptSortControlsHTML()}
+    <div class="pt-auto-chips">${chipsHTML}</div>
     <div class="flex-1"></div>
-    ${isDrh?"":`<button class="btn btn-primary text-xs" style="background:#043970;border-color:#043970" onclick="ptValiderTous('${ym}','${soc.replace(/'/g,"\\'")}')">✅ Valider tous les pointages</button>
+    ${isDrh?"":`<button class="btn btn-primary text-xs" onclick="ptValiderTous('${ym}','${soc.replace(/'/g,"\\'")}')">✅ Valider tous les pointages</button>
     <button class="btn btn-ghost text-xs" onclick="ptDevaliderTous('${ym}','${soc.replace(/'/g,"\\'")}')">🔓 Tout déverrouiller</button>`}
     <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
-  </div>
-  <div class="mt-3 flex flex-wrap items-center gap-2 text-xs"><span class="font-semibold text-slate-600">Légende :</span>${legende}</div>
-  ${isDrh?"":`<div class="text-[11px] text-slate-500 mt-2">Astuce : <strong>Clic</strong> sur une case = cycle des codes (·→P→A→M→S→C→R) · <strong>Clic droit</strong> = saisir directement · <strong>✅ Valider</strong> verrouille le pointage</div>`}
   </div>`;
-  const filtered=ptSortAgents(ptFilterAgents(ag));
-  if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
+  const chipFn=(chipDefs.find(c=>c[0]===chip)||chipDefs[0])[2];
+  const filtered=ptSortAgents(ptFilterAgents(ag)).filter(chipFn);
+  if(!filtered.length){
+    const emptyMsg=ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:chip!=="all"?"Aucun agent ne correspond à ce filtre rapide.":`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`;
+    return kpisHTML+filterBar+legendHTML+`<div class="pt-auto-card"><div class="p-6 text-center text-slate-500">${emptyMsg}</div></div>`;
+  }
+  const sumCols=["P","A","M","S","C","R"];
+  const dayCls=d=>{const we=[5,6].includes(new Date(yr,mo-1,d).getDay());const td=isCurrentMonth&&d===todayDay;const cls=["pt-day"];if(we)cls.push("weekend");if(td)cls.push("today");return cls.join(" ")};
+  const dayHeadersNum=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-num">${String(i+1).padStart(2,"0")}</th>`).join("");
+  const dayHeadersDow=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-dow">${weekdayShort[new Date(yr,mo-1,i+1).getDay()]}</th>`).join("");
+  const headHTML=`<thead>
+    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-sum" rowspan="2" style="color:#b45309;background:#fef9c3" title="F1+F2+F3+P/F1+P/F2+P/F3">Fx</th><th class="pt-col-sum" rowspan="2" style="color:#7f1d1d;background:#fecaca" title="AB+A2+A3 déjà inclus dans A paie">Ax</th><th class="pt-col-rate" rowspan="2">Renseigné</th>${isDrh?"":`<th class="pt-col-action" rowspan="2">Statut</th>`}</tr>
+    <tr>${dayHeadersDow}</tr>
+  </thead>`;
   const rows=filtered.map((a,idx)=>{
-    const sheet=ptGetSheet(a.id,ym);
-    const isValide=!!(sheet&&sheet.valide);
-    const cells=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();return ptCellHTML(a.id,ym,d,(sheet?.days||{})[String(d).padStart(2,"0")],wd===5||wd===6);}).join("");
-    const nP=ptCount(sheet,"P");const nA=ptAbsencePayrollDays(sheet);const nM=ptCount(sheet,"M");const nS=ptCount(sheet,"S");const nC=ptCount(sheet,"C");const nR=ptCount(sheet,"R");const nFx=["F1","F2","F3","P/F1","P/F2","P/F3"].reduce((s,k)=>s+ptCount(sheet,k),0);const nAx=["AB","A2","A3"].reduce((s,k)=>s+ptCount(sheet,k),0);
-    const valideTitle=isValide?`✓ Validé par ${escapeHTML(sheet.valideBy||"?")} le ${sheet.valideAt?new Date(sheet.valideAt).toLocaleString("fr-FR"):""}`:"";
-    const lockBadge=isValide?`<span class="pill" style="background:#043970;color:#fff;font-size:7px;padding:0 3px" title="${valideTitle}">🔒</span>`:"";
-    const rowBg=isValide?"#dcfce7":"#f8fafc";
-    return`<tr>
-      <td style="border:1px solid #e2e8f0;background:${rowBg};position:sticky;left:0;z-index:2;width:20px;min-width:20px;text-align:center;font-weight:800;color:#043970;font-size:8px;line-height:9px;height:18px">${idx+1}</td>
-      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:${rowBg};position:sticky;left:20px;z-index:1;padding:0 3px;font-size:9px;line-height:10px;height:18px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:8px;opacity:.7">${escapeHTML(a.matricule||"")}</span> ${lockBadge}</td>
+    const st=statsById.get(a.id)||{};
+    const sheet=st.sheet;const locked=!!st.valide;
+    let cells="";
+    for(let d=1;d<=days;d++){
+      const we=[5,6].includes(new Date(yr,mo-1,d).getDay());const td=isCurrentMonth&&d===todayDay;
+      const code=(sheet?.days||{})[String(d).padStart(2,"0")]||"";
+      cells+=ptCellHTML(a.id,ym,d,code,we,td,locked);
+    }
+    const nFx=["F1","F2","F3","P/F1","P/F2","P/F3"].reduce((s,k)=>s+ptCount(sheet,k),0);
+    const nAx=["AB","A2","A3"].reduce((s,k)=>s+ptCount(sheet,k),0);
+    const sumCells=sumCols.map(k=>{const n=k==="A"?ptAbsencePayrollDays(sheet):ptCount(sheet,k);return`<td class="pt-col-sum" style="color:${POINTAGE_CODES[k].color}">${n||"·"}</td>`}).join("");
+    const rateColor=st.taux>=90?"#16a34a":st.taux>=70?"#d97706":"#dc2626";
+    const valideTitle=locked?`Validé par ${escapeHTML(sheet.valideBy||"?")} le ${sheet.valideAt?new Date(sheet.valideAt).toLocaleString("fr-FR"):""}`:"";
+    return`<tr class="${locked?"locked":""}">
+      <td class="pt-col-idx">${idx+1}</td>
+      <td class="pt-col-agent"><span class="pt-agent-name">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span><span class="pt-agent-mat">${escapeHTML(a.matricule||"")}</span></td>
       ${cells}
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;font-size:8px;height:18px">${nP}</td>
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;font-size:8px;height:18px">${nA}</td>
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;font-size:8px;height:18px">${nM}</td>
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;font-size:8px;height:18px">${nS}</td>
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;font-size:8px;height:18px">${nC}</td>
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;font-size:8px;height:18px">${nR}</td>
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fef9c3;color:#b45309;font-size:8px;height:18px" title="F1+F2+F3+P/F1+P/F2+P/F3">${nFx||"·"}</td>
-      <td class="pt-summary-cell text-center font-bold" style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d;font-size:8px;height:18px" title="AB+A2+A3 déjà inclus dans A paie">${nAx||"·"}</td>
-      ${isDrh?"":`<td class="text-center" style="border:1px solid #e2e8f0;white-space:nowrap;height:18px;padding:0">
-        ${isValide?`<button type="button" style="all:unset;display:inline-block;box-sizing:border-box;cursor:pointer;color:#dc2626;font-size:8px;font-weight:800;padding:0 4px;height:18px;line-height:18px" title="Déverrouiller" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔓</button>`:`<button type="button" style="all:unset;display:inline-block;box-sizing:border-box;cursor:pointer;color:#043970;font-size:8px;font-weight:800;padding:0 4px;height:18px;line-height:18px" title="Valider le pointage" onclick="ptValiderSheet('${a.id}','${ym}')">✔ Valider</button>`}
-      </td>`}
+      ${sumCells}
+      <td class="pt-col-sum" style="color:#b45309">${nFx||"·"}</td>
+      <td class="pt-col-sum" style="color:#7f1d1d">${nAx||"·"}</td>
+      <td class="pt-col-rate"><div class="pt-rate-track"><div class="pt-rate-fill" style="width:${st.taux}%;background:${rateColor}"></div></div><div class="pt-rate-txt">${st.taux}%</div></td>
+      ${isDrh?"":`<td class="pt-col-action">${locked?`<button type="button" class="pt-lock-btn locked" title="${escapeHTML(valideTitle)}" onclick="ptDevaliderSheet('${a.id}','${ym}')">🔒 Verrouillé</button>`:`<button type="button" class="pt-lock-btn" onclick="ptValiderSheet('${a.id}','${ym}')">🔓 Valider</button>`}</td>`}
     </tr>`;
   }).join("");
-  const totSheets=filtered.map(a=>ptGetSheet(a.id,ym)).filter(Boolean);const totValide=totSheets.filter(s=>s.valide).length;
   const searchNote=ptCurrentSearch()?` · <span style="color:#043970;font-weight:700">${filtered.length} résultat${filtered.length>1?"s":""} sur ${ag.length}</span>`:"";
-  return filterBar+`<div class="card p-3 mb-3" style="background:linear-gradient(90deg,#043970,#fff)"><div class="flex items-center justify-between flex-wrap gap-2"><div class="text-sm"><span class="font-bold text-emerald-700">${totValide}</span> / <span class="font-bold">${filtered.length}</span> pointages validés pour cette période</div><div class="text-[11px] text-slate-500">Statut de validation</div></div></div>
-  <div class="card p-2 pointage-month-panel"><div class="pointage-month-title text-sm font-semibold px-2">Tableau de pointage — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
-    <div class="pointage-month-scroll"><table class="w-full pointage-month-table" style="border-collapse:separate;border-spacing:0;font-size:8px${isDrh?";pointer-events:none":""}">
-      <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 4px;text-align:center;position:sticky;left:0;background:#f1f5f9;z-index:3;width:20px;min-width:20px;white-space:nowrap;font-size:8px">N°</th><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:20px;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;text-align:center;font-size:8px;width:18px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;text-align:center;font-size:8px;width:18px" title="Absence paie : A + AB + A1 + A2×2 + A3×3">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;text-align:center;font-size:8px;width:18px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;text-align:center;font-size:8px;width:18px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;text-align:center;font-size:8px;width:18px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;text-align:center;font-size:8px;width:18px">R</th><th style="border:1px solid #e2e8f0;background:#fef9c3;color:#b45309;text-align:center;font-size:8px;width:20px" title="F1+F2+F3+P/F1+P/F2+P/F3 (présent)">Fx</th><th style="border:1px solid #e2e8f0;background:#fecaca;color:#7f1d1d;text-align:center;font-size:8px;width:26px" title="AB+A2+A3 déjà inclus dans A paie">Ax/AB</th>${isDrh?"":`<th style="border:1px solid #e2e8f0;text-align:center;font-size:8px;width:34px">Action</th>`}</tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div></div>`;
+  const tableHTML=`<table class="pt-auto pt-manuel"${isDrh?' style="pointer-events:none"':""}>${headHTML}<tbody>${rows}</tbody></table>`;
+  return kpisHTML+filterBar+legendHTML+`<div class="pt-auto-card">
+    <div class="pt-auto-card-head"><h2>Saisie manuelle — <span class="capitalize">${escapeHTML(monthLabel)}</span></h2><span class="meta">${days} jours · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</span></div>
+    <div class="pt-auto-scroll">${tableHTML}</div>
+  </div>`;
 }
 function renderPointageSaisieAuto(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();const days=ptDaysInMonth(ym);
