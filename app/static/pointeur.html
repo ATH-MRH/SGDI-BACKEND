@@ -294,6 +294,7 @@ let scanBusy=false;
 let sessionScans=[];
 let pointerStatistics=null;
 let pointerKnownSites=[];
+let pointerStatsRequestId=0;
 let qrKeyBuffer="";
 let qrLastKeyAt=0;
 let cameraMode=false;
@@ -357,18 +358,27 @@ function enterApp(){
 function refreshPointeurData(){loadHistory();loadAttendanceAlerts()}
 async function loadPointerStatistics(){
   if(!pointerSession?.token)return;
+  const requestId=++pointerStatsRequestId;
   const year=document.getElementById("pointerStatsYear")?.value||new Date().getFullYear();
   const month=document.getElementById("pointerStatsMonth")?.value||"";
   const site=document.getElementById("pointerStatsSite")?.value||"";
   const params=new URLSearchParams({year:String(year)});if(month)params.set("month",month);if(site)params.set("site",site);
   try{
     const response=await fetch("/api/portal/attendance-statistics?"+params,{headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(requestId!==pointerStatsRequestId)return;
     if(response.status===401){logout();return}if(!response.ok)throw new Error("Statistiques indisponibles");
-    pointerStatistics=await response.json();renderPointerDashboard();
-  }catch(error){document.getElementById("pointerDashboardBody").innerHTML='<div class="pointer-dashboard-empty">Les statistiques ne sont pas disponibles pour le moment.</div>'}
+    const json=await response.json();
+    if(requestId!==pointerStatsRequestId)return;
+    pointerStatistics=json;renderPointerDashboard();
+  }catch(error){
+    if(requestId!==pointerStatsRequestId)return;
+    document.getElementById("pointerDashboardBody").innerHTML='<div class="pointer-dashboard-empty">Les statistiques ne sont pas disponibles pour le moment.</div>';
+  }
 }
 function renderPointerDashboard(){
   const data=pointerStatistics;if(!data)return;const summary=data.summary||{};
+  const yearInput=document.getElementById("pointerStatsYear");
+  if(yearInput&&Number(yearInput.value)!==data.year)yearInput.value=String(data.year);
   const monthNames=["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
   const selectedMonth=Number(document.getElementById("pointerStatsMonth")?.value||0);
   const selectedSite=document.getElementById("pointerStatsSite")?.value||"Tous les sites";
@@ -455,7 +465,11 @@ function switchPointerTab(tab){
   pointerActiveTab=["dashboard","scanner","history","alerts"].includes(tab)?tab:"scanner";
   document.querySelectorAll("[data-pointer-panel]").forEach(el=>el.classList.toggle("hidden",el.dataset.pointerPanel!==pointerActiveTab));
   [["dashboard","pointerTabDashboard"],["scanner","pointerTabScanner"],["history","pointerTabHistory"],["alerts","pointerTabAlerts"]].forEach(([name,id])=>document.getElementById(id)?.classList.toggle("active",name===pointerActiveTab));
-  if(pointerActiveTab==="dashboard"){if(!document.getElementById("pointerStatsYear").value)document.getElementById("pointerStatsYear").value=String(new Date().getFullYear());loadPointerStatistics()}
+  if(pointerActiveTab==="dashboard"){
+    const yearInput=document.getElementById("pointerStatsYear");
+    if(yearInput){yearInput.max=String(new Date().getFullYear()+1);if(!yearInput.value)yearInput.value=String(new Date().getFullYear())}
+    loadPointerStatistics();
+  }
   if(pointerActiveTab==="scanner")requestAnimationFrame(setupScanMode);else stopScanner();
 }
 function setupScanMode(){
