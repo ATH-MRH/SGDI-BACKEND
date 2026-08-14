@@ -1,5 +1,5 @@
 // Service Worker — Pointeur ATLAS
-const CACHE = 'pointeur-atlas-v2';
+const CACHE = 'pointeur-atlas-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 

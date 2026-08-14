@@ -124,6 +124,38 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .lamp-red-blink{background:#dc2626;animation:lampBlink .6s step-start infinite}
 .lamp-red-fixed{background:#dc2626;box-shadow:0 0 8px 2px rgba(220,38,38,.6)}
 @keyframes lampBlink{50%{opacity:.15}}
+/* Interface Pointeur 2026 — poste de pointage plein écran */
+@media(min-width:1100px){
+  .main{padding:0 30px 22px}
+  .top{min-height:82px;padding-left:28px;padding-right:28px;box-shadow:none}
+  .status-row{height:76px;margin:0 -30px;padding:0 30px;background:#fff;border-bottom:1px solid #d5e1ec}
+  .status{background:transparent;border:0;padding:0;color:#08723c}
+  .presence-summary{font-size:0;gap:0}
+  .presence-summary span{min-width:180px;padding:0 24px;text-align:left;border-left:1px solid #dce5ee;font-size:0}
+  .presence-summary span::first-line{font-size:0}
+  .presence-summary span b{display:block;font-size:28px;line-height:1.05;color:#086fb5}
+  .presence-summary span:before{display:block;margin-bottom:4px;font-size:11px;color:#66778e;letter-spacing:.04em}
+  .presence-summary span:nth-child(1):before{content:"ENTRÉES AUJOURD'HUI"}.presence-summary span:nth-child(2):before{content:"SORTIES AUJOURD'HUI"}.presence-summary span:nth-child(3):before{content:"PRÉSENTS SUR SITE"}
+  .presence-summary span:nth-child(1) b{color:#078449}.presence-summary span:nth-child(2) b{color:#d36b00}
+  .pointer-tabs{margin:0;padding:16px 0 0;background:transparent;border-radius:0;gap:3px}
+  .pointer-tab{border-radius:0;padding:11px 15px;border-bottom:3px solid transparent}.pointer-tab.active{box-shadow:none;background:transparent;border-bottom-color:#0a79cc}
+  .work-grid{grid-template-columns:minmax(0,1fr) 370px;gap:18px;padding-top:14px;align-items:stretch}
+  .scanner-card{border-radius:17px;box-shadow:none;padding:20px}
+  #scannerCard{min-height:575px}.scanner-title{font-size:20px}.scanner-hint{margin-bottom:14px}
+  .usb-reader{min-height:330px;border-radius:15px;background:linear-gradient(140deg,#062e55,#075b9d)}
+  .usb-icon{width:88px;height:88px;font-size:0;border:5px solid #fff;border-radius:12px;display:grid;place-items:center}
+  .usb-icon:after{content:"";width:44px;height:44px;border:3px solid #72d7ff;border-radius:7px}
+  .usb-title{font-size:28px}.usb-hint{font-size:14px}.usb-ready{padding:9px 16px}
+  .action-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+  .action-row .secondary{height:50px;margin:0;border-radius:10px;font-size:12px}
+  .action-row .secondary:first-child{background:#0b4d86;color:#fff;border-color:#0b4d86}
+  .generate-qr-btn{width:100%;min-width:0;margin:0}
+  #liveFeedCard{min-height:575px;padding:0;overflow:hidden}
+  #liveFeedCard>.scanner-title{text-align:left;padding:18px 18px 0;margin:0;font-size:16px!important}
+  #liveFeedCard>.scanner-hint{text-align:left;padding:0 18px 13px;margin:4px 0 0;border-bottom:1px solid var(--line)}
+  .live-feed-list{padding:8px}.live-feed-row{border-width:1px;padding:12px 9px;background:#fff}.live-feed-row.live-in{background:#f0fdf4}.live-feed-row.live-out{background:#fff7ed}
+  .history{grid-column:1/-1;min-height:400px}
+}
 @media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.header-clock{position:static;transform:none;margin-top:9px;justify-content:center}.seg-date{font-size:11px}.seg-clock{padding:4px 7px;gap:2px}.seg-digit{width:11px;height:19px}.seg-a,.seg-d,.seg-g{width:8px;height:2px}.seg-g{top:8.5px}.seg-d{top:17px}.seg-b,.seg-c,.seg-e,.seg-f{width:2px;height:7px}.seg-b,.seg-f{top:1.5px}.seg-e,.seg-c{top:10.5px}.seg-colon{height:19px;gap:3px}.seg-colon i{width:3px;height:3px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:center}.presence-summary{width:100%;font-size:13px}.presence-summary span{min-width:0;flex:1;padding:0 6px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 </style>
@@ -190,10 +222,10 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
         <div id="reader"><div class="camera-msg">Ouverture de la caméra arrière…</div></div>
         <button id="restartBtn" class="secondary hidden" onclick="startScanner()">📷 RÉACTIVER LA CAMÉRA</button>
         <div class="action-row">
-          <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">📷 UTILISER LA CAMÉRA</button>
-          <button id="manualToggleBtn" class="secondary" onclick="toggleManualPanel()">🔤 SAISIE MANUELLE (SANS SMARTPHONE)</button>
+          <button id="manualToggleBtn" class="secondary" onclick="toggleManualPanel()">⌨ SAISIE MANUELLE</button>
+          <button id="cameraModeBtn" class="secondary hidden" onclick="enableCameraMode()">▣ UTILISER LA CAMÉRA</button>
+          <button id="generateQrBtn" class="secondary generate-qr-btn">▦ GÉNÉRER UN QR SITE</button>
         </div>
-        <button id="generateQrBtn" class="secondary generate-qr-btn">GÉNÉRER CODE QR</button>
         <div id="result" class="result"></div>
         <div id="manualPanel" class="manual-panel hidden">
           <div class="manual-heading">SAISIE MANUELLE</div>
