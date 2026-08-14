@@ -8664,6 +8664,20 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 #view .drh-med-case-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.drh-med-case-actions .btn{min-height:33px;border-radius:8px!important;font-size:10px!important}
 #view .drh-med-aside{display:flex;flex-direction:column;gap:16px}.drh-med-aside section{padding:4px 0 4px 14px;border-left:3px solid #2563eb}.drh-med-aside h2{margin:0 0 9px;font-size:13px;font-weight:900}.drh-med-aside a,.drh-med-aside section>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #e5eaf0;color:#172033;text-decoration:none;font-size:11px}.drh-med-aside a span{color:#c12626;font-size:10px}.drh-med-aside section>p{color:#64748b;font-size:11px}.drh-med-aside section>div span{min-width:25px;height:25px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#eaf1f8;color:#073d77;font-weight:900}
 #view .drh-med-footer{padding-top:4px;color:#64748b;font-size:11px}
+#view .drh-med-page{align-items:stretch!important;max-width:none!important;margin:0!important;padding:0 2px 12px}
+#view .drh-med-page>header,#view .drh-med-page>section,#view .drh-med-page>main,#view .drh-med-page>footer{width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important;align-self:stretch!important}
+#view .drh-med-head{min-height:96px;align-items:center;padding:20px 24px}
+#view .drh-med-head-actions .pill{min-height:36px;display:inline-flex;align-items:center;padding:0 14px;font-size:11px}
+#view .drh-med-stats{gap:12px}
+#view .drh-med-stats>div{min-height:104px;padding:17px 19px}
+#view .drh-med-workflow>div{min-height:88px;padding:17px 20px}
+#view .drh-med-tools{grid-template-columns:minmax(320px,1fr) minmax(220px,320px) auto;padding:14px 16px}
+#view .drh-med-layout{grid-template-columns:minmax(0,1fr) minmax(300px,360px);gap:18px;min-height:250px}
+#view .drh-med-cases{min-width:0;border:1px solid #dce6f1;border-radius:12px;overflow:hidden;background:#fff}
+#view .drh-med-cases>.card{min-height:160px!important;display:grid;place-items:center;border:0!important;border-radius:0!important}
+#view .drh-med-aside{min-width:0;padding:14px 16px;border:1px solid #dce6f1;border-radius:12px;background:#fff}
+#view .drh-med-aside section{padding:2px 0 5px 14px}
+#view .drh-med-footer{padding:10px 14px;border:1px solid #dce6f1;border-radius:9px;background:#f7f9fc;text-align:right}
 @media(max-width:1120px){#view .drh-med-layout{grid-template-columns:1fr}#view .drh-med-aside{display:grid;grid-template-columns:1fr 1fr}#view .drh-med-case{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){#view .drh-med-head{display:grid}#view .drh-med-stats{grid-template-columns:1fr 1fr}#view .drh-med-workflow{grid-template-columns:1fr}#view .drh-med-workflow>div{border-right:0;border-bottom:1px solid #e4ebf3}#view .drh-med-tools,#view .drh-med-case{grid-template-columns:1fr}#view .drh-med-case-actions{justify-content:flex-start}#view .drh-med-aside{grid-template-columns:1fr}}
 
