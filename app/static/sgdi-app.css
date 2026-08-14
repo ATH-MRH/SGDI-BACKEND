@@ -9369,7 +9369,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 #view .contract-modern-rail button:hover,#view .contract-modern-rail button.active{background:#0d6ecc;color:#fff;box-shadow:0 8px 18px rgba(0,0,0,.22)}
 #view .contract-modern-rail .contract-modern-rail-bottom{margin-top:auto}
 #view .contract-modern-work{min-width:0}
-#view .contract-modern-header{min-height:76px;background:#fff;border-bottom:1px solid #e4eaf1;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#view .contract-modern-header{position:sticky;top:0;z-index:5;min-height:76px;background:#fff;border-bottom:1px solid #e4eaf1;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 #view .contract-modern-heading{font-size:17px;font-weight:900}.contract-modern-sub{font-size:9px;color:#718096;margin-top:3px}
 #view .contract-modern-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex:1;flex-wrap:wrap}
 #view .contract-modern-head-actions button{height:35px;padding:0 13px;border:1px solid #cedbe8;background:transparent;color:#043970;border-radius:10px;font-size:9px;font-weight:900;cursor:pointer}
