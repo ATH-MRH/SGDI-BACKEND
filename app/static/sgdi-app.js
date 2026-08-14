@@ -30123,6 +30123,9 @@ function renderDRHMiseEnDemeure(view){
   const sortants=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||!a.societe||a.societe===soc));
   const allDone=(db.agents||[]).filter(a=>a.statut==="sortant"&&a.finRelationDotationReversee&&a.finRelationAt&&(!soc||!a.societe||a.societe===soc));
   const pendingCount=sortants.reduce((n,a)=>n+drhMedPendingCount(a),0);
+  const med1Count=sortants.filter(a=>drhMedDaysSince(a.finRelationAt)>=3&&!a.finRelationMed1SentAt).length;
+  const med2Count=sortants.filter(a=>a.finRelationMed1SentAt&&drhMedDaysSince(a.finRelationMed1SentAt)>=7&&!a.finRelationMed2SentAt).length;
+  const criticalCount=sortants.filter(a=>drhMedDaysSince(a.finRelationAt)>=14&&!a.finRelationDotationReversee).length;
   const rows=sortants.map(a=>{
     const nom=((a.nom||"")+" "+(a.prenom||"")).trim();
     const daysSince=drhMedDaysSince(a.finRelationAt)||0;
@@ -30143,29 +30146,51 @@ function renderDRHMiseEnDemeure(view){
       const jRestants=3-daysSince;
       btns.push(`<span class="text-xs text-slate-400">MED1 disponible dans ${jRestants} j</span>`);
     }
-    return `<tr>
-      <td><div class="font-semibold">${escapeHTML(nom)}</div><div class="text-xs font-mono text-slate-500">${escapeHTML(a.matricule||"—")}</div></td>
-      <td class="text-xs">${escapeHTML(a.societe||"—")}</td>
-      <td class="text-xs">${formatDate(a.dateSortie||"")}</td>
-      <td class="text-xs text-center">${daysSince} j</td>
-      <td><div class="flex flex-col gap-1">${sent1}${sent2}${sentG}</div></td>
-      <td><div class="flex gap-1 flex-wrap">${btns.join("")}</div></td>
-    </tr>`;
+    const stage=genDue?"gendarmerie":med2Due||a.finRelationMed1SentAt?"med2":"med1";
+    const stageLabel=genDue?"Lettre Gendarmerie requise":med2Due?"MED n°2 requise":med1Due?"MED n°1 en retard":a.finRelationMed1SentAt?"MED n°2 en attente":"MED n°1 à venir";
+    const progress1=a.finRelationMed1SentAt?"done":med1Due?"current":"";
+    const progress2=a.finRelationMed2SentAt?"done":med2Due?"current":"";
+    const progress3=a.finRelationGendarmerieSentAt?"done":genDue?"current":"";
+    const initials=((a.nom||"").slice(0,1)+(a.prenom||"").slice(0,1)).toUpperCase()||"?";
+    return `<article class="drh-med-case" data-med-row data-stage="${stage}" data-q="${escapeHTML((nom+" "+(a.matricule||"")+" "+(a.societe||"")).toLowerCase())}">
+      <div class="drh-med-person"><div class="drh-med-avatar">${a.photo?`<img src="${a.photo}" alt=""/>`:escapeHTML(initials)}</div><div><strong>${escapeHTML(nom)}</strong><span>${escapeHTML(a.matricule||"—")} · sorti le ${formatDate(a.dateSortie||a.finRelationAt||"")}</span></div></div>
+      <div class="drh-med-time"><strong>${Math.max(0,daysSince)} jours écoulés</strong><div class="drh-med-progress" aria-label="Progression de la procédure"><i class="${progress1}"></i><i class="${progress2}"></i><i class="${progress3}"></i></div></div>
+      <div class="drh-med-stage ${med1Due||med2Due||genDue?"urgent":""}"><b><i></i>${escapeHTML(stageLabel)}</b><span>${sent1||sent2||sentG||"Dotation non restituée"}</span></div>
+      <div class="drh-med-case-actions">${btns.join("")}</div>
+    </article>`;
   }).join("");
-  const doneRows=allDone.length?`<div class="card p-4 mt-4"><div class="font-black text-sm text-slate-500 mb-2">DOSSIERS CLÔTURÉS (dotation reversée)</div><table><thead><tr><th>Employé</th><th>Sortie</th><th>Reversement</th></tr></thead><tbody>${allDone.map(a=>`<tr><td>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</td><td class="text-xs">${formatDate(a.dateSortie||"")}</td><td class="text-xs">${formatDate(a.finRelationReversementDate||"")}</td></tr>`).join("")}</tbody></table></div>`:"";
-  view.innerHTML=`<div class="flex justify-between items-start gap-3 mb-4 flex-wrap">
-    <div><h1 class="text-2xl font-black">MISE EN DEMEURE</h1>
-    <p class="text-sm text-slate-500">Documents automatiques — Fin de relation de travail · Dotation non reversée</p></div>
-    <div class="flex gap-2">
-      ${pendingCount?`<span class="pill pill-red">${pendingCount} action(s) requise(s)</span>`:`<span class="pill pill-green">Aucune action requise</span>`}
-    </div>
-  </div>
-  <div class="card p-4 mb-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">
-    <b>Procédure :</b> MED n°1 (72h après sortie) → MED n°2 (J+7) → Lettre Brigade de Gendarmerie (J+14). Chaque document est généré automatiquement dès l'échéance atteinte.
-  </div>
-  ${sortants.length===0?`<div class="card p-8 text-center text-slate-500">Aucun dossier en instance de mise en demeure.</div>`:
-  `<div class="card overflow-x-auto"><table><thead><tr><th>Employé</th><th>Société</th><th>Date sortie</th><th class="text-center">Jours écoulés</th><th>Documents émis</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table></div>`}
-  ${doneRows}`;
+  view.innerHTML=`<div class="drh-med-page">
+    <header class="drh-med-head"><div><h1>Mises en demeure</h1><p>Pilotage des restitutions de dotation après fin de relation de travail</p></div><div class="drh-med-head-actions"><button type="button" class="btn btn-secondary" onclick="exportDRHMiseEnDemeure()">Exporter</button><span class="pill ${pendingCount?"pill-red":"pill-green"}">${pendingCount} action(s) requise(s)</span></div></header>
+    <section class="drh-med-stats">
+      <div><span>Procédures ouvertes</span><strong>${sortants.length}</strong><small>Dossiers à suivre</small></div>
+      <div><span>MED n°1 à émettre</span><strong>${med1Count}</strong><small>Action immédiate</small></div>
+      <div><span>MED n°2 à émettre</span><strong>${med2Count}</strong><small>Échéance dépassée</small></div>
+      <div><span>Dossiers clôturés</span><strong>${allDone.length}</strong><small>Historique complet</small></div>
+    </section>
+    <section class="drh-med-workflow">
+      <div><b><i>1</i>MED n°1</b><span>72 h après sortie</span><p>Première demande formelle de restitution du matériel.</p></div>
+      <div><b><i>2</i>MED n°2</b><span>J+7</span><p>Relance automatique si la dotation reste non restituée.</p></div>
+      <div><b><i>3</i>Lettre Gendarmerie</b><span>J+14</span><p>Dernière étape avec dossier et pièces justificatives.</p></div>
+    </section>
+    <section class="drh-med-tools"><div class="drh-med-search"><span>⌕</span><input id="drh-med-search" placeholder="Employé ou code…" oninput="filterDRHMiseEnDemeure()"/></div><select id="drh-med-stage" onchange="filterDRHMiseEnDemeure()"><option value="">Toutes les étapes</option><option value="med1">MED n°1</option><option value="med2">MED n°2</option><option value="gendarmerie">Lettre Gendarmerie</option></select><button type="button" class="btn btn-ghost" onclick="resetDRHMiseEnDemeureFilters()">Réinitialiser</button></section>
+    <main class="drh-med-layout"><section class="drh-med-cases">${rows||`<div class="card p-8 text-center text-slate-500">Aucun dossier en instance de mise en demeure.</div>`}</section><aside class="drh-med-aside">
+      <section><h2>À traiter aujourd’hui</h2>${sortants.filter(a=>drhMedPendingCount(a)>0).slice(0,4).map(a=>`<a href="#/agents/${employeeRouteId(a)}"><strong>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</strong><span>${drhMedPendingCount(a)} action(s) requise(s)</span></a>`).join("")||`<p>Aucune action urgente.</p>`}</section>
+      <section><h2>Contrôles automatiques</h2><div><strong>Dotations non restituées</strong><span>${sortants.length}</span></div><div><strong>Échéances critiques</strong><span>${criticalCount}</span></div><div><strong>Dossiers clôturés</strong><span>${allDone.length}</span></div></section>
+    </aside></main>
+    <footer class="drh-med-footer"><span id="drh-med-count">${sortants.length}</span> procédure(s) affichée(s) · données PostgreSQL</footer>
+  </div>`;
+}
+function filterDRHMiseEnDemeure(){
+  const q=(document.getElementById("drh-med-search")?.value||"").trim().toLowerCase();
+  const stage=document.getElementById("drh-med-stage")?.value||"";let shown=0;
+  document.querySelectorAll("[data-med-row]").forEach(row=>{const ok=(!q||(row.dataset.q||"").includes(q))&&(!stage||row.dataset.stage===stage);row.hidden=!ok;if(ok)shown++});
+  const count=document.getElementById("drh-med-count");if(count)count.textContent=shown;
+}
+function resetDRHMiseEnDemeureFilters(){const q=document.getElementById("drh-med-search"),s=document.getElementById("drh-med-stage");if(q)q.value="";if(s)s.value="";filterDRHMiseEnDemeure()}
+function exportDRHMiseEnDemeure(){
+  const rows=[["Employé","Code","Société","Date sortie","Jours écoulés","MED n°1","MED n°2","Gendarmerie"],...[...(db.agents||[])].filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt).map(a=>[((a.nom||"")+" "+(a.prenom||"")).trim(),a.matricule||"",a.societe||"",a.dateSortie||String(a.finRelationAt||"").slice(0,10),drhMedDaysSince(a.finRelationAt)||0,a.finRelationMed1SentAt||"",a.finRelationMed2SentAt||"",a.finRelationGendarmerieSentAt||""])];
+  if(rows.length===1)return toast("Aucune procédure à exporter","warn");
+  paieDownloadCSV(rows,"mises_en_demeure_"+today()+".csv");
 }
 async function genMed(evt,agentId,num){
   evt&&evt.stopPropagation();

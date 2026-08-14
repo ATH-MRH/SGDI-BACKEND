@@ -8627,6 +8627,46 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 @media(max-width:1180px){#view .fp-agent-card-top{grid-template-columns:66px minmax(0,1fr) auto!important}#view .fp-agent-photo{width:66px!important;height:78px!important}}
 @media(max-width:720px){#view .fp-agent-card-top{grid-template-columns:68px minmax(0,1fr)!important}#view .fp-agent-card-top>.fp-agent-status{grid-column:2!important;justify-self:start!important}#view .fp-agent-details{grid-template-columns:1fr!important}#view .fp-agent-details>div{border-right:0!important;border-bottom:1px solid #e8eef5!important}#view .fp-agent-details>div:last-child{border-bottom:0!important}}
 
+/* DRH — Mise en demeure : centre de pilotage moderne */
+#view .drh-med-page{display:flex;flex-direction:column;gap:16px;width:100%;font-family:Arial,sans-serif;color:#172033}
+#view .drh-med-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:18px 20px;border:1px solid #dbe5f0;border-radius:14px;background:#fff}
+#view .drh-med-head h1{margin:0;font-size:28px;font-weight:900;letter-spacing:-.025em}
+#view .drh-med-head p{margin:6px 0 0;color:#64748b;font-size:13px}
+#view .drh-med-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#view .drh-med-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#view .drh-med-stats>div{padding:14px 16px;border:1px solid #dce6f1;border-top:3px solid #2563eb;border-radius:11px;background:#fff}
+#view .drh-med-stats>div:nth-child(2){border-top-color:#f59e0b}#view .drh-med-stats>div:nth-child(3){border-top-color:#dc2626}#view .drh-med-stats>div:nth-child(4){border-top-color:#16a34a}
+#view .drh-med-stats span,#view .drh-med-stats small{display:block;color:#64748b;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+#view .drh-med-stats strong{display:block;margin:5px 0;font-size:25px;line-height:1;font-weight:900}
+#view .drh-med-stats small{text-transform:none;font-weight:600;letter-spacing:0}
+#view .drh-med-workflow{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #dce6f1;border-radius:12px;background:#fff;overflow:hidden}
+#view .drh-med-workflow>div{position:relative;padding:15px 18px;border-right:1px solid #e4ebf3}
+#view .drh-med-workflow>div:last-child{border-right:0}
+#view .drh-med-workflow b{display:flex;align-items:center;gap:9px;font-size:13px}
+#view .drh-med-workflow b i{width:25px;height:25px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#073d77;color:#fff;font-style:normal;font-size:11px}
+#view .drh-med-workflow>div>span{position:absolute;right:16px;top:18px;color:#64748b;font-size:10px;font-weight:800}
+#view .drh-med-workflow p{margin:8px 0 0 34px;color:#64748b;font-size:11px}
+#view .drh-med-tools{display:grid;grid-template-columns:minmax(280px,1fr) minmax(190px,.35fr) auto;gap:10px;align-items:center;padding:13px;border:1px solid #dce6f1;border-radius:12px;background:#fff}
+#view .drh-med-search{height:40px;display:flex;align-items:center;gap:9px;padding:0 12px;border:1px solid #cfdbe8;border-radius:9px;background:#f9fbfd}
+#view .drh-med-search span{color:#6b7f98;font-size:20px}.drh-med-search input{width:100%;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;color:#172033;font-size:12px}
+#view .drh-med-tools select{height:40px;border:1px solid #cfdbe8;border-radius:9px;background:#fff;padding:0 30px 0 11px;color:#334155;font-size:12px}
+#view .drh-med-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+#view .drh-med-cases{display:flex;flex-direction:column;border-top:1px solid #dce6f1}
+#view .drh-med-case{display:grid;grid-template-columns:minmax(210px,1.2fr) minmax(150px,.7fr) minmax(200px,.9fr) minmax(190px,auto);gap:15px;align-items:center;padding:14px 10px;border-bottom:1px solid #dce6f1;background:#fff}
+#view .drh-med-case[hidden]{display:none!important}
+#view .drh-med-person{display:flex;align-items:center;gap:11px;min-width:0}
+#view .drh-med-avatar{width:45px;height:52px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto;border-radius:8px;background:#e6edf5;color:#173b63;font-size:14px;font-weight:900}
+#view .drh-med-avatar img{width:100%;height:100%;object-fit:cover}
+#view .drh-med-person strong,#view .drh-med-time strong{display:block;font-size:12px;font-weight:900}.drh-med-person span{display:block;margin-top:3px;color:#64748b;font:600 10px ui-monospace,monospace}
+#view .drh-med-progress{display:flex;gap:4px;margin-top:8px}.drh-med-progress i{height:5px;flex:1;border-radius:99px;background:#e5eaf0}.drh-med-progress i.done{background:#16a34a}.drh-med-progress i.current{background:#f59e0b}
+#view .drh-med-stage>b{width:max-content;max-width:100%;display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#eef4fb;color:#245681;font-size:10px}.drh-med-stage>b>i{width:7px;height:7px;border-radius:50%;background:currentColor}
+#view .drh-med-stage.urgent>b{background:#fff1f2;color:#c12626}.drh-med-stage>span{display:block;margin-top:5px;color:#64748b;font-size:10px}.drh-med-stage>span .pill{font-size:9px!important}
+#view .drh-med-case-actions{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap}.drh-med-case-actions .btn{min-height:33px;border-radius:8px!important;font-size:10px!important}
+#view .drh-med-aside{display:flex;flex-direction:column;gap:16px}.drh-med-aside section{padding:4px 0 4px 14px;border-left:3px solid #2563eb}.drh-med-aside h2{margin:0 0 9px;font-size:13px;font-weight:900}.drh-med-aside a,.drh-med-aside section>div{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #e5eaf0;color:#172033;text-decoration:none;font-size:11px}.drh-med-aside a span{color:#c12626;font-size:10px}.drh-med-aside section>p{color:#64748b;font-size:11px}.drh-med-aside section>div span{min-width:25px;height:25px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#eaf1f8;color:#073d77;font-weight:900}
+#view .drh-med-footer{padding-top:4px;color:#64748b;font-size:11px}
+@media(max-width:1120px){#view .drh-med-layout{grid-template-columns:1fr}#view .drh-med-aside{display:grid;grid-template-columns:1fr 1fr}#view .drh-med-case{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){#view .drh-med-head{display:grid}#view .drh-med-stats{grid-template-columns:1fr 1fr}#view .drh-med-workflow{grid-template-columns:1fr}#view .drh-med-workflow>div{border-right:0;border-bottom:1px solid #e4ebf3}#view .drh-med-tools,#view .drh-med-case{grid-template-columns:1fr}#view .drh-med-case-actions{justify-content:flex-start}#view .drh-med-aside{grid-template-columns:1fr}}
+
 /* Topbar visibility guard: keep the company/module strip visible after cache
    refreshes and later page-scoped layout overrides. */
 .sgdi-shell > .sgdi-topbar{
