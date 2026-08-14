@@ -6635,7 +6635,8 @@ table.pt-auto thead th{position:sticky;top:0;background:#f7fafc;z-index:6;border
 table.pt-auto th.pt-day-num{font-size:9px;color:#10243e}
 table.pt-auto th.pt-day-dow{font-weight:700;color:#5b7089}
 table.pt-auto th.pt-col-idx{width:30px;min-width:30px;text-align:center;position:sticky;left:0;z-index:8;background:#f7fafc}
-table.pt-auto th.pt-col-agent{text-align:left;padding-left:8px;position:sticky;left:30px;z-index:8;min-width:170px;background:#f7fafc}
+table.pt-auto th.pt-col-agent{text-align:left;padding-left:6px;position:sticky;left:30px;z-index:8;width:112px;min-width:112px;max-width:112px;background:#f7fafc}
+table.pt-auto th.pt-col-code{text-align:left;padding-left:4px;position:sticky;left:142px;z-index:8;width:48px;min-width:48px;background:#f7fafc;border-right:1px solid #dbe5f0}
 table.pt-auto th.pt-day{width:22px;min-width:22px;text-align:center}
 table.pt-auto th.pt-day.weekend{background:#eaf2fd}
 table.pt-auto th.pt-day.today{background:#dbeafe;box-shadow:inset 0 -2px 0 #043970}
@@ -6644,9 +6645,10 @@ table.pt-auto th.pt-col-rate{width:62px;text-align:center}
 table.pt-auto tbody td{border-bottom:1px solid #eef2f7;padding:0;height:20px;vertical-align:middle}
 table.pt-auto tbody tr:nth-child(even) td{background:#fbfcfe}
 table.pt-auto td.pt-col-idx{text-align:center;font-weight:800;color:#5b7089;position:sticky;left:0;background:inherit;z-index:2;font-size:9px}
-table.pt-auto td.pt-col-agent{position:sticky;left:30px;background:inherit;z-index:2;padding:0 8px;white-space:nowrap}
+table.pt-auto td.pt-col-agent{position:sticky;left:30px;background:inherit;z-index:2;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.pt-auto td.pt-col-code{position:sticky;left:142px;background:inherit;z-index:2;padding:0 4px;white-space:nowrap;border-right:1px solid #eef2f7}
 .pt-agent-name{font-weight:800;color:#10243e;font-size:9.5px}
-.pt-agent-mat{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8px;color:#043970;opacity:.72;font-weight:700;margin-left:4px}
+.pt-agent-mat{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8px;color:#043970;opacity:.72;font-weight:700}
 .pt-agent-alert{display:inline-block;width:6px;height:6px;border-radius:50%;background:#dc2626;margin-right:4px;vertical-align:middle}
 table.pt-auto td.pt-day{text-align:center;padding:0}
 table.pt-auto td.pt-day.weekend{background:#eaf2fd}
@@ -6659,13 +6661,13 @@ table.pt-auto td.pt-col-rate{padding:0 6px}
 .pt-rate-fill{height:100%;border-radius:inherit}
 .pt-rate-txt{font-size:7.5px;color:#5b7089;margin-top:1px;text-align:right;font-weight:700}
 table.pt-auto tfoot td{position:sticky;bottom:0;background:#043970;color:#fff;border-top:2px solid #0a4a8a;font-weight:800;font-size:8.5px;text-align:center;padding:5px 0;z-index:6}
-table.pt-auto tfoot td.pt-col-idx,table.pt-auto tfoot td.pt-col-agent{position:sticky;left:0;text-align:left;padding-left:8px;background:#043970;z-index:7}
+table.pt-auto tfoot td.pt-col-idx,table.pt-auto tfoot td.pt-col-agent,table.pt-auto tfoot td.pt-col-code{position:sticky;left:0;text-align:left;padding-left:8px;background:#043970;z-index:7}
 table.pt-auto tfoot td.pt-col-agent{left:30px}
+table.pt-auto tfoot td.pt-col-code{left:142px}
 
 .pt-auto-card.dense table.pt-auto tbody td{height:15px}
 .pt-auto-card.dense .pt-code-chip{width:13px;height:13px;font-size:7px;border-radius:3px}
 .pt-auto-card.dense .pt-agent-name{font-size:8.5px}
-.pt-auto-card.dense .pt-agent-mat{display:none}
 @media(max-width:759px){.pt-auto-toolbar{align-items:stretch}}
 
 /* Saisie manuelle — pointage : même langage visuel que Saisie automatique (voir bloc ci-dessus),

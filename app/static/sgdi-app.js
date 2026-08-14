@@ -38112,7 +38112,7 @@ function renderPointageSaisie(){
   const dayHeadersNum=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-num">${String(i+1).padStart(2,"0")}</th>`).join("");
   const dayHeadersDow=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-dow">${weekdayShort[new Date(yr,mo-1,i+1).getDay()]}</th>`).join("");
   const headHTML=`<thead>
-    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-sum" rowspan="2" style="color:#b45309;background:#fef9c3" title="F1+F2+F3+P/F1+P/F2+P/F3">Fx</th><th class="pt-col-sum" rowspan="2" style="color:#7f1d1d;background:#fecaca" title="AB+A2+A3 déjà inclus dans A paie">Ax</th><th class="pt-col-rate" rowspan="2">Renseigné</th>${isDrh?"":`<th class="pt-col-action" rowspan="2">Statut</th>`}</tr>
+    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th><th class="pt-col-code" rowspan="2">Code</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-sum" rowspan="2" style="color:#b45309;background:#fef9c3" title="F1+F2+F3+P/F1+P/F2+P/F3">Fx</th><th class="pt-col-sum" rowspan="2" style="color:#7f1d1d;background:#fecaca" title="AB+A2+A3 déjà inclus dans A paie">Ax</th><th class="pt-col-rate" rowspan="2">Renseigné</th>${isDrh?"":`<th class="pt-col-action" rowspan="2">Statut</th>`}</tr>
     <tr>${dayHeadersDow}</tr>
   </thead>`;
   const rows=filtered.map((a,idx)=>{
@@ -38131,7 +38131,8 @@ function renderPointageSaisie(){
     const valideTitle=locked?`Validé par ${escapeHTML(sheet.valideBy||"?")} le ${sheet.valideAt?new Date(sheet.valideAt).toLocaleString("fr-FR"):""}`:"";
     return`<tr class="${locked?"locked":""}">
       <td class="pt-col-idx">${idx+1}</td>
-      <td class="pt-col-agent"><span class="pt-agent-name">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span><span class="pt-agent-mat">${escapeHTML(a.matricule||"")}</span></td>
+      <td class="pt-col-agent"><span class="pt-agent-name">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span></td>
+      <td class="pt-col-code"><span class="pt-agent-mat">${escapeHTML(a.matricule||"—")}</span></td>
       ${cells}
       ${sumCells}
       <td class="pt-col-sum" style="color:#b45309">${nFx||"·"}</td>
@@ -38192,21 +38193,31 @@ function renderPointageSaisieAuto(){
     const fpqCode=sheetCode?"":f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"")||"";
     return sheetCode||fpqCode;
   };
+  // Codes du mois pré-calculés une seule fois par agent (au lieu d'être recalculés dans
+  // les stats, le total quotidien et les cellules du tableau — jusqu'à 3 passes sur
+  // 110×31 avant, ce qui ralentissait chaque rendu — donc chaque frappe de recherche/tri).
+  const codesByAgent=new Map();
+  ag.forEach(a=>{
+    const arr=[];
+    for(let d=1;d<=days;d++)arr[d]=codeForDay(a,d);
+    codesByAgent.set(a.id,arr);
+  });
   // Statistiques calculées une fois pour tout l'effectif éligible : servent aux KPI,
-  // aux puces de filtre rapide et aux lignes du tableau (évite de refaire la boucle 3 fois).
+  // aux puces de filtre rapide et aux lignes du tableau.
   const statsById=new Map();
   ag.forEach(a=>{
+    const codes=codesByAgent.get(a.id);
     let nP=0,nA=0,nM=0,nS=0,nC=0,nR=0,renseignes=0,workDays=0;
     for(let d=1;d<=days;d++){
       const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;
-      const code=codeForDay(a,d);
+      const code=codes[d];
       if(POINTAGE_CODES[code]?.isPresent)nP++;
       else if(ptIsAbsencePayrollCode(code))nA+=ptCodeAbsencePayrollValue(code);
       else if(code==="M")nM++;else if(code==="S")nS++;else if(code==="C")nC++;else if(code==="R")nR++;
       if(d<=horizonDay&&!we){workDays++;if(code)renseignes++;}
     }
     const taux=workDays?Math.round(renseignes*100/workDays):100;
-    const todayCode=isCurrentMonth?codeForDay(a,todayDay):"";
+    const todayCode=isCurrentMonth?codes[todayDay]:"";
     const todayWeekend=isCurrentMonth?[5,6].includes(new Date(yr,mo-1,todayDay).getDay()):false;
     statsById.set(a.id,{nP,nA,nM,nS,nC,nR,taux,alertToday:isCurrentMonth&&!todayWeekend&&!todayCode,presentToday:isCurrentMonth&&!!POINTAGE_CODES[todayCode]?.isPresent});
   });
@@ -38256,17 +38267,18 @@ function renderPointageSaisieAuto(){
   const dayHeadersNum=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-num">${String(i+1).padStart(2,"0")}</th>`).join("");
   const dayHeadersDow=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-dow">${weekdayShort[new Date(yr,mo-1,i+1).getDay()]}</th>`).join("");
   const headHTML=`<thead>
-    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-rate" rowspan="2">Renseigné</th></tr>
+    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th><th class="pt-col-code" rowspan="2">Code</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-rate" rowspan="2">Renseigné</th></tr>
     <tr>${dayHeadersDow}</tr>
   </thead>`;
-  const dailyTotals=Array.from({length:days},(_,i)=>{const d=i+1;let p=0;ag.forEach(a=>{if(POINTAGE_CODES[codeForDay(a,d)]?.isPresent)p++});return p});
+  const dailyTotals=Array.from({length:days},(_,i)=>{const d=i+1;let p=0;ag.forEach(a=>{if(POINTAGE_CODES[codesByAgent.get(a.id)[d]]?.isPresent)p++});return p});
   const footCells=Array.from({length:days},(_,i)=>{const d=i+1;const we=[5,6].includes(new Date(yr,mo-1,d).getDay());const known=ym<todayYm||d<=horizonDay;return `<td>${we?"–":(known?dailyTotals[d-1]:"–")}</td>`}).join("");
-  const footHTML=`<tfoot><tr><td class="pt-col-idx"></td><td class="pt-col-agent">Effectif présent / jour</td>${footCells}<td colspan="${sumCols.length+1}"></td></tr></tfoot>`;
+  const footHTML=`<tfoot><tr><td class="pt-col-idx"></td><td class="pt-col-agent">Effectif présent / jour</td><td class="pt-col-code"></td>${footCells}<td colspan="${sumCols.length+1}"></td></tr></tfoot>`;
   const rows=filtered.map((a,idx)=>{
     const st=statsById.get(a.id)||{};
+    const codes=codesByAgent.get(a.id)||[];
     let cells="";
     for(let d=1;d<=days;d++){
-      const code=codeForDay(a,d);
+      const code=codes[d];
       const cls=dayCls(d);
       if(!code){cells+=`<td class="${cls}"><span class="pt-code-dot">·</span></td>`;continue}
       const c=POINTAGE_CODES[code];
@@ -38276,7 +38288,8 @@ function renderPointageSaisieAuto(){
     const rateColor=st.taux>=90?"#16a34a":st.taux>=70?"#d97706":"#dc2626";
     return`<tr>
       <td class="pt-col-idx">${idx+1}</td>
-      <td class="pt-col-agent">${st.alertToday?'<span class="pt-agent-alert" title="Non pointé aujourd’hui"></span>':""}<span class="pt-agent-name">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span><span class="pt-agent-mat">${escapeHTML(a.matricule||"")}</span></td>
+      <td class="pt-col-agent">${st.alertToday?'<span class="pt-agent-alert" title="Non pointé aujourd’hui"></span>':""}<span class="pt-agent-name">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span></td>
+      <td class="pt-col-code"><span class="pt-agent-mat">${escapeHTML(a.matricule||"—")}</span></td>
       ${cells}
       ${sumCells}
       <td class="pt-col-rate"><div class="pt-rate-track"><div class="pt-rate-fill" style="width:${st.taux}%;background:${rateColor}"></div></div><div class="pt-rate-txt">${st.taux}%</div></td>
@@ -38370,6 +38383,11 @@ function ptAutoSaisieStopLiveRefresh(){
 }
 async function ptAutoSaisieLiveRefresh(){
   if(_ptAutoSaisieRefreshing||document.hidden||sgdiDirty||document.querySelector(".modal-bg"))return;
+  const active=document.activeElement;
+  // Ne pas reconstruire la vue pendant que l'utilisateur tape dans la recherche ou a un
+  // menu déroulant ouvert (Trier par/Ordre) : ça lui coupe la frappe / referme le menu
+  // en plein clic. On retente au prochain cycle (10s) une fois le focus relâché.
+  if(active&&(active.id==="pt-search-input"||active.tagName==="SELECT"||active.closest?.(".pt-auto-toolbar")))return;
   const route=String(location.hash||"");
   if(!route.includes("pointage/auto")){ptAutoSaisieStopLiveRefresh();return}
   _ptAutoSaisieRefreshing=true;
@@ -38423,7 +38441,7 @@ function ptAutoApercu(){
   if(!tbl){toast("Aucun tableau à afficher","error");return;}
   const w=window.open("","_blank","width=1100,height=700");
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Aperçu saisie automatique</title>
-  <style>body{font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;margin:16px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{border:1px solid #e2e8f0;padding:2px}thead th{background:#f1f5f9;font-size:9px;text-transform:uppercase;color:#5b7089}.pt-col-idx,.pt-col-agent{white-space:nowrap;font-weight:700;background:#f8fafc}.pt-day,.pt-col-sum,.pt-col-rate{width:26px;min-width:26px;text-align:center}.pt-code-chip{display:inline-flex;width:16px;height:16px;border-radius:4px;align-items:center;justify-content:center;font-weight:800}.pt-agent-name{font-weight:800}.pt-agent-mat{color:#043970;opacity:.75;margin-left:4px}.pt-rate-track,.pt-agent-alert{display:none}h2{margin:0 0 10px;font-size:14px;color:#043970}@media print{button{display:none}}</style>
+  <style>body{font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;margin:16px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{border:1px solid #e2e8f0;padding:2px}thead th{background:#f1f5f9;font-size:9px;text-transform:uppercase;color:#5b7089}.pt-col-idx,.pt-col-agent,.pt-col-code{white-space:nowrap;font-weight:700;background:#f8fafc}.pt-day,.pt-col-sum,.pt-col-rate{width:26px;min-width:26px;text-align:center}.pt-code-chip{display:inline-flex;width:16px;height:16px;border-radius:4px;align-items:center;justify-content:center;font-weight:800}.pt-agent-name{font-weight:800}.pt-agent-mat{color:#043970;opacity:.75}.pt-rate-track,.pt-agent-alert{display:none}h2{margin:0 0 10px;font-size:14px;color:#043970}@media print{button{display:none}}</style>
   </head><body>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h2>Saisie automatique — Pointage du personnel</h2>
