@@ -8,7 +8,10 @@ const source = fs.readFileSync(path.join(__dirname, "..", "app", "static", "recr
 test("module recrutement: navigation latérale complète", () => {
   assert.match(source, /data-section="dashboard"[^>]*>.*Tableau de bord/s);
   assert.match(source, /data-section="candidates"[^>]*>.*Candidatures/s);
+  assert.match(source, /data-section="interviews"[^>]*>.*Entretiens/s);
   assert.match(source, /data-section="announcements"[^>]*>.*Annonces recrutement/s);
+  assert.match(source, /data-section="reserve"[^>]*>.*Réserve/s);
+  assert.match(source, /data-section="archive"[^>]*>.*Archives/s);
 });
 
 test("annonces recrutement: cycle opérationnel disponible", () => {
@@ -28,9 +31,13 @@ test("annonces recrutement: cycle opérationnel disponible", () => {
 
 test("tableau de bord recrutement: indicateurs et accès rapides", () => {
   assert.match(source, /Nouvelles candidatures/);
-  assert.match(source, /Candidats en réserve/);
-  assert.match(source, /Annonces publiées/);
-  assert.match(source, /Contrats à établir/);
+  assert.match(source, /À convoquer/);
+  assert.match(source, /Entretiens planifiés/);
+  assert.match(source, /Transmis à la DRH/);
+  assert.match(source, /Avancement du recrutement/);
+  assert.match(source, /Candidatures à traiter/);
+  assert.match(source, /Annonces actives/);
+  assert.match(source, /function renderRecruitInterviews\(/);
 });
 
 test("recrutement: transmet le candidat à la DRH sans créer employé ni contrat", () => {

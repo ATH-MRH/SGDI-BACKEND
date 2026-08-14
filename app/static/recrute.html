@@ -55,11 +55,15 @@ label.field-label-invalid{color:#b91c1c!important}
 .main{min-width:0;padding:0}
 .section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:15px;flex-wrap:wrap}
 .section-head h2{font-size:22px;margin:0}.section-head p{font-size:13px;color:var(--muted);margin:4px 0 0}
-.dashboard-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
-.dashboard-kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 24px rgba(4,57,112,.05)}
-.dashboard-kpi span{font-size:10px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.05em}.dashboard-kpi strong{display:block;font-size:27px;margin-top:5px;color:var(--navy)}
-.dashboard-grid{display:grid;grid-template-columns:1.35fr .85fr;gap:14px}.dashboard-panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px}.dashboard-panel h3{font-size:14px;margin:0 0 14px}
-.dashboard-line{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid #eef2f7;font-size:13px}.dashboard-line:last-child{border-bottom:0}.dashboard-line b{color:var(--navy)}
+.dashboard-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.dashboard-kpi{appearance:none;text-align:left;background:#fff;border:1px solid var(--line);border-radius:15px;padding:15px 16px;box-shadow:0 7px 20px rgba(4,57,112,.045);cursor:pointer;transition:.16s ease;position:relative;overflow:hidden}
+.dashboard-kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--kpi-color,#0d6ecc)}
+.dashboard-kpi:hover{transform:translateY(-2px);border-color:#b9cee4;box-shadow:0 11px 28px rgba(4,57,112,.1)}
+.dashboard-kpi span{font-size:10px;color:var(--muted);font-weight:900;text-transform:uppercase;letter-spacing:.055em}.dashboard-kpi strong{display:block;font-size:27px;line-height:1;margin-top:8px;color:var(--kpi-color,var(--navy))}
+.dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr);gap:14px;margin-bottom:14px}.dashboard-panel{background:#fff;border:1px solid var(--line);border-radius:17px;padding:18px;box-shadow:0 7px 20px rgba(4,57,112,.035)}.dashboard-panel h3{font-size:15px;margin:0}.dashboard-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}.dashboard-panel-head button{border:0;background:none;color:var(--blue);font-size:11px;font-weight:850;cursor:pointer}
+.dashboard-funnel{display:grid;gap:12px}.dashboard-funnel-row{display:grid;grid-template-columns:135px minmax(90px,1fr) 38px;gap:10px;align-items:center;font-size:12px;font-weight:750}.dashboard-funnel-track{height:9px;border-radius:999px;background:#eaf0f6;overflow:hidden}.dashboard-funnel-fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,#0d6ecc,#38a3ff);min-width:3px}.dashboard-funnel-row b{text-align:right;color:var(--navy)}
+.dashboard-agenda{display:grid;gap:8px}.dashboard-agenda-item{border:1px solid #e6edf5;border-radius:12px;padding:11px 12px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:11px;align-items:center;background:#fbfdff}.dashboard-agenda-date{border-radius:10px;background:#eaf3ff;color:var(--navy);height:45px;display:grid;place-items:center;font-size:10px;font-weight:900;text-align:center;line-height:1.2}.dashboard-agenda-name{font-size:12px;font-weight:900}.dashboard-agenda-meta{font-size:10px;color:var(--muted);margin-top:3px}.dashboard-mini-action{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:9px;padding:7px 9px;font-size:10px;font-weight:900;cursor:pointer}
+.dashboard-bottom{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr);gap:14px}.dashboard-candidate-list,.dashboard-announcement-list{display:grid;gap:7px}.dashboard-candidate,.dashboard-announcement{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border-bottom:1px solid #eef2f7;padding:8px 0}.dashboard-candidate:last-child,.dashboard-announcement:last-child{border-bottom:0}.dashboard-candidate-name,.dashboard-announcement-title{font-size:12px;font-weight:900}.dashboard-candidate-meta,.dashboard-announcement-meta{font-size:10px;color:var(--muted);margin-top:3px}.dashboard-status{border-radius:999px;padding:4px 8px;font-size:9px;font-weight:900;background:#fff7ed;color:#9a3412;white-space:nowrap}
 .announcement-toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}.announcement-toolbar input{height:42px;flex:1;min-width:220px}.announcement-toolbar select{height:42px;width:180px}
 .announcement-list{display:grid;gap:11px}.announcement-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.announcement-card h3{font-size:15px;margin:0 0 5px}.announcement-meta{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}.announcement-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 .counters-row{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px}
@@ -148,7 +152,8 @@ tr:last-child td{border-bottom:0}
 .interview-grid select{height:34px;font-weight:850;text-align:center}
 .interview-score{margin-top:14px;padding:13px 16px;border-radius:12px;background:#eff6ff;color:var(--navy);display:flex;align-items:center;justify-content:space-between;font-weight:900}
 .interview-score strong{font-size:22px}
-@media(max-width:1000px){.app-shell{grid-template-columns:1fr;padding:14px}.recruit-sidebar{position:static}.recruit-nav{flex-direction:row;overflow-x:auto}.recruit-nav-btn{min-width:max-content}.dashboard-kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:1100px){.dashboard-kpis{grid-template-columns:repeat(3,1fr)}.dashboard-grid,.dashboard-bottom{grid-template-columns:1fr}}
+@media(max-width:1000px){.app-shell{grid-template-columns:1fr;padding:14px}.recruit-sidebar{position:static}.recruit-nav{flex-direction:row;overflow-x:auto}.recruit-nav-btn{min-width:max-content}}
 @media(max-width:900px){.row-actions{flex-wrap:wrap;justify-content:flex-start}.dashboard-grid{grid-template-columns:1fr}}
 @media(max-width:640px){.dashboard-kpis{grid-template-columns:1fr 1fr}.announcement-card{grid-template-columns:1fr}.announcement-actions{justify-content:flex-start}}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
@@ -186,12 +191,16 @@ tr:last-child td{border-bottom:0}
       <nav class="recruit-nav">
         <button class="recruit-nav-btn" data-section="dashboard" onclick="showRecruitSection('dashboard')"><span class="recruit-nav-icon">⌂</span>Tableau de bord</button>
         <button class="recruit-nav-btn" data-section="candidates" onclick="showRecruitSection('candidates')"><span class="recruit-nav-icon">👤</span>Candidatures</button>
+        <button class="recruit-nav-btn" data-section="interviews" onclick="showRecruitSection('interviews')"><span class="recruit-nav-icon">✓</span>Entretiens</button>
         <button class="recruit-nav-btn" data-section="announcements" onclick="showRecruitSection('announcements')"><span class="recruit-nav-icon">▤</span>Annonces recrutement</button>
+        <button class="recruit-nav-btn" data-section="reserve" onclick="showRecruitSection('reserve')"><span class="recruit-nav-icon">◷</span>Réserve</button>
+        <button class="recruit-nav-btn" data-section="archive" onclick="showRecruitSection('archive')"><span class="recruit-nav-icon">▣</span>Archives</button>
       </nav>
     </aside>
     <main class="main">
       <div id="banner"></div>
       <section id="dashboardSection" class="hidden"></section>
+      <section id="interviewsSection" class="hidden"></section>
       <section id="candidatesSection">
        <div id="countersRow" class="counters-row"></div>
        <div class="tabs" id="tabs"></div>
@@ -239,6 +248,7 @@ tr:last-child td{border-bottom:0}
        </div>
       </section>
       <section id="announcementsSection" class="hidden"></section>
+      <input id="candidateExcelInput" class="hidden" type="file" accept=".xlsx,.xls" onchange="importRecruitmentExcel(this)">
     </main>
   </div>
 </section>
@@ -457,6 +467,7 @@ function onSocietyChange(){
   Object.keys(tabState).forEach(k=>{tabState[k].page=1});
   if(recruitSection==="candidates")loadTab(activeTab);
   else if(recruitSection==="dashboard")renderRecruitDashboard(true);
+  else if(recruitSection==="interviews")renderRecruitInterviews(true);
   else renderRecruitAnnouncements();
 }
 function populateFormSocieties(societies){
@@ -475,16 +486,40 @@ async function apiFetch(path,options={}){
 }
 
 function showRecruitSection(section){
-  recruitSection=["dashboard","candidates","announcements"].includes(section)?section:"candidates";
+  if(section==="reserve"||section==="archive"){
+    recruitSection="candidates";
+    sessionStorage.setItem("atlas_recrute_section",recruitSection);
+    showRecruitSection("candidates");
+    switchTab(section,true);
+    document.querySelectorAll(".recruit-nav-btn").forEach(button=>button.classList.toggle("active",button.dataset.section===section));
+    return;
+  }
+  recruitSection=["dashboard","candidates","interviews","announcements"].includes(section)?section:"candidates";
   sessionStorage.setItem("atlas_recrute_section",recruitSection);
   document.querySelectorAll(".recruit-nav-btn").forEach(button=>button.classList.toggle("active",button.dataset.section===recruitSection));
   document.getElementById("dashboardSection").classList.toggle("hidden",recruitSection!=="dashboard");
+  document.getElementById("interviewsSection").classList.toggle("hidden",recruitSection!=="interviews");
   document.getElementById("candidatesSection").classList.toggle("hidden",recruitSection!=="candidates");
   document.getElementById("announcementsSection").classList.toggle("hidden",recruitSection!=="announcements");
   showBanner("");
   if(recruitSection==="dashboard")renderRecruitDashboard(true);
   else if(recruitSection==="candidates")loadTab(activeTab);
+  else if(recruitSection==="interviews")renderRecruitInterviews(true);
   else renderRecruitAnnouncements();
+}
+function candidateFullName(item){return `${item?.last_name||""} ${item?.first_name||""}`.trim()||"Candidat sans nom"}
+function candidateConvocation(item){return item?.data?.derniereConvocation||null}
+function candidateInterview(item){return item?.data?.dernierEntretien||null}
+function candidateIsContractPending(item){return [item?.status,item?.data?.statut,item?.data?.status].some(value=>String(value||"").toLowerCase()==="a_contractualiser")}
+function dashboardDateTile(value){
+  const match=String(value||"").slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return match?`${match[3]}<br>${match[2]}`:"—";
+}
+function dashboardOpenCandidate(id,action="open"){
+  const item=[...tabState.new.items,...tabState.reserve.items,...tabState.archive.items].find(row=>Number(row.id)===Number(id));
+  if(!item)return;
+  activeTab=tabState.new.items.some(row=>Number(row.id)===Number(id))?"new":tabState.reserve.items.some(row=>Number(row.id)===Number(id))?"reserve":"archive";
+  if(action==="interview")openCandidateInterview(id);else openCandidateForm(id);
 }
 async function renderRecruitDashboard(refresh=false){
   const host=document.getElementById("dashboardSection");
@@ -492,7 +527,7 @@ async function renderRecruitDashboard(refresh=false){
   if(refresh){
     await Promise.all(["new","reserve","archive"].map(async mode=>{
       try{
-        const params=new URLSearchParams({mode,page:"1",page_size:"25"});
+        const params=new URLSearchParams({mode,page:"1",page_size:"100"});
         if(activeSociety)params.set("society",activeSociety);
         const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
         tabState[mode].items=result.items||[];tabState[mode].total=result.total||0;tabState[mode].pages=result.pages||1;
@@ -501,27 +536,74 @@ async function renderRecruitDashboard(refresh=false){
   }
   const announcements=getRecruitAnnouncements().filter(item=>!activeSociety||item.society===activeSociety);
   const published=announcements.filter(item=>item.status==="Publiée").length;
-  const evaluated=tabState.new.items.filter(item=>item.data?.avisDecision).length;
-  host.innerHTML=`<div class="section-head"><div><h2>Tableau de bord</h2><p>Vue opérationnelle du recrutement${activeSociety?` · ${esc(activeSociety)}`:""}.</p></div><button class="secondary" onclick="renderRecruitDashboard(true)">↻ Actualiser</button></div>
+  const candidates=tabState.new.items;
+  const convocations=candidates.filter(item=>candidateConvocation(item));
+  const interviews=candidates.filter(item=>candidateInterview(item));
+  const favorable=candidates.filter(item=>item.data?.avisDecision==="Favorable");
+  const contractPending=candidates.filter(candidateIsContractPending);
+  const toConvoke=candidates.filter(item=>!candidateConvocation(item)&&!candidateInterview(item)&&!candidateIsContractPending(item));
+  const upcoming=convocations.filter(item=>String(candidateConvocation(item)?.date||"")>=today()).sort((a,b)=>String(candidateConvocation(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||""))).slice(0,4);
+  const recent=candidates.filter(item=>!candidateIsContractPending(item)).slice(0,5);
+  const maxFunnel=Math.max(tabState.new.total,1);
+  const funnel=[
+    ["Candidatures",tabState.new.total],["Présélectionnés",candidates.filter(item=>item.data?.avisDecision).length],["Convoqués",convocations.length],["Entretiens",interviews.length],["Validés",favorable.length]
+  ];
+  host.innerHTML=`<div class="section-head"><div><h2>Tableau de bord recrutement</h2><p>Suivi du parcours candidat, des annonces et des entretiens${activeSociety?` · ${esc(activeSociety)}`:""}.</p></div><div style="display:flex;gap:8px"><button class="secondary" onclick="document.getElementById('candidateExcelInput').click()">Importer Excel</button><button class="secondary" onclick="renderRecruitDashboard(true)">↻ Actualiser</button><button class="primary" onclick="showRecruitSection('candidates');openCandidateForm(null)">+ Ajouter un candidat</button></div></div>
     <div class="dashboard-kpis">
-      <button class="dashboard-kpi" onclick="showRecruitSection('candidates');switchTab('new',true)"><span>Nouvelles candidatures</span><strong>${tabState.new.total}</strong></button>
-      <button class="dashboard-kpi" onclick="showRecruitSection('candidates');switchTab('reserve',true)"><span>Candidats en réserve</span><strong>${tabState.reserve.total}</strong></button>
-      <button class="dashboard-kpi" onclick="showRecruitSection('candidates');switchTab('archive',true)"><span>Archives</span><strong>${tabState.archive.total}</strong></button>
-      <button class="dashboard-kpi" onclick="showRecruitSection('announcements')"><span>Annonces publiées</span><strong>${published}</strong></button>
+      <button class="dashboard-kpi" style="--kpi-color:#0d6ecc" onclick="showRecruitSection('candidates');switchTab('new',true)"><span>Nouvelles candidatures</span><strong>${tabState.new.total}</strong></button>
+      <button class="dashboard-kpi" style="--kpi-color:#d97706" onclick="showRecruitSection('candidates');switchTab('new',true)"><span>À convoquer</span><strong>${toConvoke.length}</strong></button>
+      <button class="dashboard-kpi" style="--kpi-color:#7c3aed" onclick="showRecruitSection('interviews')"><span>Entretiens planifiés</span><strong>${upcoming.length}</strong></button>
+      <button class="dashboard-kpi" style="--kpi-color:#0891b2" onclick="showRecruitSection('reserve')"><span>En réserve</span><strong>${tabState.reserve.total}</strong></button>
+      <button class="dashboard-kpi" style="--kpi-color:#16a34a" onclick="window.open('https://atlas.irongs.com/#/contrats/a_contractualiser','_blank','noopener')"><span>Transmis à la DRH</span><strong>${contractPending.length}</strong></button>
     </div>
     <div class="dashboard-grid">
-      <div class="dashboard-panel"><h3>À traiter</h3>
-        <div class="dashboard-line"><span>Candidatures sans évaluation (page courante)</span><b>${Math.max(tabState.new.items.length-evaluated,0)}</b></div>
-        <div class="dashboard-line"><span>Candidatures évaluées (page courante)</span><b>${evaluated}</b></div>
-        <div class="dashboard-line"><span>Annonces en brouillon</span><b>${announcements.filter(item=>item.status==="Brouillon").length}</b></div>
-        <div class="dashboard-line"><span>Annonces clôturées</span><b>${announcements.filter(item=>item.status==="Clôturée").length}</b></div>
+      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Avancement du recrutement</h3><button onclick="showRecruitSection('candidates')">Voir les candidatures →</button></div>
+        <div class="dashboard-funnel">${funnel.map(([label,value])=>`<div class="dashboard-funnel-row"><span>${esc(label)}</span><div class="dashboard-funnel-track"><div class="dashboard-funnel-fill" style="width:${Math.min(100,Math.round((value/maxFunnel)*100))}%"></div></div><b>${value}</b></div>`).join("")}</div>
       </div>
-      <div class="dashboard-panel"><h3>Accès rapides</h3>
-        <button class="primary" style="width:100%;margin-bottom:9px" onclick="showRecruitSection('candidates');openCandidateForm(null)">+ Ajouter un candidat</button>
-        <button class="secondary" style="width:100%;margin-bottom:9px" onclick="showRecruitSection('announcements');openAnnouncementForm()">+ Créer une annonce</button>
-        <button class="secondary" style="width:100%" onclick="window.open('https://atlas.irongs.com/#/contrats/a_contractualiser','_blank','noopener')">Ouvrir « Contrats à établir » dans la DRH</button>
+      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Prochains entretiens</h3><button onclick="showRecruitSection('interviews')">Tout afficher →</button></div>
+        <div class="dashboard-agenda">${upcoming.length?upcoming.map(item=>{const c=candidateConvocation(item);return `<div class="dashboard-agenda-item"><div class="dashboard-agenda-date">${dashboardDateTile(c.date)}</div><div><div class="dashboard-agenda-name">${esc(candidateFullName(item))}</div><div class="dashboard-agenda-meta">${esc(c.heure||"Heure non précisée")} · ${esc(c.lieu||item.desired_position||"Entretien")}</div></div><button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${item.id},'interview')">Entretien</button></div>`}).join(""):'<div class="empty" style="padding:24px 10px">Aucun entretien planifié.</div>'}</div>
       </div>
+    </div>
+    <div class="dashboard-bottom">
+      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Candidatures à traiter</h3><button onclick="showRecruitSection('candidates')">Voir toutes →</button></div><div class="dashboard-candidate-list">${recent.length?recent.map(item=>`<div class="dashboard-candidate"><div><div class="dashboard-candidate-name">${esc(candidateFullName(item))}</div><div class="dashboard-candidate-meta">${esc(item.desired_position||"Poste non renseigné")} · ${formatDateFr(item.created_at)}</div></div><div style="display:flex;align-items:center;gap:7px"><span class="dashboard-status">${candidateInterview(item)?"Entretien réalisé":candidateConvocation(item)?"Convoqué":"À traiter"}</span><button class="dashboard-mini-action" onclick="dashboardOpenCandidate(${item.id})">Ouvrir</button></div></div>`).join(""):'<div class="empty" style="padding:24px 10px">Aucune candidature à traiter.</div>'}</div></div>
+      <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Annonces actives</h3><button onclick="showRecruitSection('announcements')">Gérer les annonces →</button></div><div class="dashboard-announcement-list">${announcements.filter(item=>item.status==="Publiée").slice(0,5).map(item=>`<div class="dashboard-announcement"><div><div class="dashboard-announcement-title">${esc(item.title||"Annonce")}</div><div class="dashboard-announcement-meta">${esc(item.location||item.society||"")} · ${Number(item.positions||1)} poste(s)</div></div><span class="pill pill-green">Publiée</span></div>`).join("")||'<div class="empty" style="padding:24px 10px">Aucune annonce publiée.</div>'}</div><div style="margin-top:12px;font-size:10px;color:var(--muted)">${published} publiée(s) · ${announcements.filter(item=>item.status==="Brouillon").length} brouillon(s)</div></div>
     </div>`;
+}
+async function renderRecruitInterviews(refresh=false){
+  const host=document.getElementById("interviewsSection");
+  host.innerHTML='<div class="empty">Chargement des entretiens…</div>';
+  if(refresh){
+    try{const params=new URLSearchParams({mode:"new",page:"1",page_size:"100"});if(activeSociety)params.set("society",activeSociety);const result=await apiFetch("/api/drh/candidates/page?"+params.toString());tabState.new.items=result.items||[];tabState.new.total=result.total||0}catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+  }
+  const rows=tabState.new.items.filter(item=>candidateConvocation(item)||candidateInterview(item)).sort((a,b)=>String(candidateConvocation(a)?.date||candidateInterview(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||candidateInterview(b)?.date||"")));
+  host.innerHTML=`<div class="section-head"><div><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><button class="secondary" onclick="renderRecruitInterviews(true)">↻ Actualiser</button></div><div class="table-card"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Date</th><th>Heure</th><th>État</th><th>Note</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(item=>{const c=candidateConvocation(item)||{};const e=candidateInterview(item);return `<tr><td><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div></td><td>${esc(item.desired_position||"—")}</td><td>${formatDateFr(e?.date||c.date)}</td><td>${esc(c.heure||"—")}</td><td>${e?'<span class="pill pill-green">Réalisé</span>':'<span class="pill pill-indigo">Planifié</span>'}</td><td>${e?`${String(e.moyenne??"—").replace(".",",")} / 5`:"—"}</td><td><button class="link-btn" onclick="dashboardOpenCandidate(${item.id},'interview')">${e?"Nouvel entretien":"Démarrer"}</button></td></tr>`}).join(""):`<tr><td colspan="7" class="empty">Aucun entretien enregistré.</td></tr>`}</tbody></table></div>`;
+}
+function normalizeExcelHeader(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
+function excelCell(row,names){
+  const wanted=names.map(normalizeExcelHeader);
+  const key=Object.keys(row||{}).find(name=>wanted.includes(normalizeExcelHeader(name)));
+  return key?String(row[key]??"").trim():"";
+}
+async function importRecruitmentExcel(input){
+  const file=input?.files?.[0];if(!file)return;
+  try{
+    if(!window.XLSX){await new Promise((resolve,reject)=>{const script=document.createElement("script");script.src="/static/xlsx.full.min.js?v=1";script.onload=resolve;script.onerror=()=>reject(new Error("Lecteur Excel indisponible"));document.head.appendChild(script)})}
+    const workbook=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:false});
+    const rows=XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]],{defval:""});
+    if(!rows.length)throw new Error("Le fichier Excel ne contient aucune ligne");
+    let created=0;const errors=[];
+    for(let index=0;index<rows.length;index++){
+      const row=rows[index];
+      let lastName=excelCell(row,["nom","nom candidat","nom de famille"]),firstName=excelCell(row,["prenom","prénom"]);
+      const fullName=excelCell(row,["nom prenom","nom et prenom","candidat"]);
+      if(fullName&&(!lastName||!firstName)){const parts=fullName.split(/\s+/);lastName=lastName||parts.shift()||"NON RENSEIGNE";firstName=firstName||parts.join(" ")||"NON RENSEIGNE"}
+      lastName=lastName||"NON RENSEIGNE";firstName=firstName||"NON RENSEIGNE";
+      const payload={last_name:lastName,first_name:firstName,phone:excelCell(row,["telephone","téléphone","tel","mobile"])||null,email:excelCell(row,["email","e mail","courriel"])||null,desired_position:excelCell(row,["poste","poste souhaite","fonction"])||null,society:excelCell(row,["societe","société"])||activeSociety||null,status:"nouvelle",data:{importSource:file.name,importRow:index+2}};
+      try{await apiFetch("/api/drh/candidates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});created++}catch(error){errors.push(`ligne ${index+2}: ${error.message}`)}
+    }
+    showBanner(`${created} candidat(s) importé(s)${errors.length?` · ${errors.length} ligne(s) non importée(s)`:""}.`,errors.length&&created===0?"error":"success");
+    await renderRecruitDashboard(true);
+  }catch(error){showBanner(esc(error.message||"Import Excel impossible"),"error")}finally{input.value=""}
 }
 function getRecruitAnnouncements(){
   try{return JSON.parse(localStorage.getItem(RECRUIT_ANNOUNCEMENTS_KEY)||"[]")||[]}catch(error){return []}
