@@ -175,9 +175,12 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .conn-pill.offline .conn-dot{background:#f87171;box-shadow:0 0 0 3px rgba(248,113,113,.25);animation:connBlink 1s step-start infinite}
 @keyframes connBlink{50%{opacity:.3}}
 .tab-lb-short{display:none}
-/* <1100px = poste tenu en main (téléphone ou tablette) ; >=1100px = borne fixe
-   avec douchette USB (mise en page kiosque existante, non modifiée). */
-@media(max-width:1099px){
+/* Poste tenu en main (téléphone, ou tablette en portrait) : barre d'onglets en
+   bas + feuille de résultat plein écran. Une même tablette peut aussi être
+   fixée à l'entrée d'un site en paysage large : dans ce cas l'orientation ne
+   correspond à aucune des deux conditions ci-dessous et la mise en page
+   kiosque existante (>=1100px, douchette USB) s'applique sans changement. */
+@media(max-width:1099px),(orientation:portrait){
   .conn-label{display:none}
   .conn-pill{padding:7px}
   .pointer-tabs{position:fixed;left:0;right:0;bottom:0;z-index:55;display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0;width:auto;max-width:none;background:#fff;border-radius:0;border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom));gap:2px;box-shadow:0 -8px 22px rgba(4,57,112,.1)}
