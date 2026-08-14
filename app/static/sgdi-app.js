@@ -30449,10 +30449,10 @@ function renderDRHCongesPersonnel(view){
   const tableView=(title,subtitle,thead,body,empty)=>`<section class="card drh-leave-panel"><header><div><h3>${title}</h3><p>${subtitle}</p></div></header><div class="overflow-x-auto"><table><thead>${thead}</thead><tbody>${body||`<tr><td colspan="5" class="text-center text-slate-500 p-8">${empty}</td></tr>`}</tbody></table></div></section>`;
   let content=dashboard;
   if(tab==="balances")content=balancesView;
-  else if(tab==="planning")content=`<section class="card drh-leave-panel drh-leave-planning-full"><header><div><h3>Planning mensuel</h3><p>Visualisation des congés approuvés et de la couverture du personnel</p></div><button class="btn btn-primary" onclick="openCongeModal()">+ Planifier</button></header>${drhCongesDashboardCalendar(conges)}<div class="drh-leave-planning-list">${conges.filter(c=>c.statut==="approuve"&&String(c.du||"").slice(0,7)===today().slice(0,7)).sort((a,b)=>String(a.du).localeCompare(String(b.du))).map(c=>`<div><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} — ${formatDate(c.au)}</span><b>${drhCongeDureeJours(c)} j</b></div>`).join("")||`<div class="drh-leave-empty">Aucun congé approuvé ce mois-ci.</div>`}</div></section>`;
+  else if(tab==="planning")content=`<section class="card drh-leave-panel drh-leave-planning-full"><header><div><h3>Planning mensuel</h3><p>Visualisation des congés approuvés et de la couverture du personnel</p></div><button class="btn btn-primary" onclick="openCongeAttributionPicker()">+ Planifier</button></header>${drhCongesDashboardCalendar(conges)}<div class="drh-leave-planning-list">${conges.filter(c=>c.statut==="approuve"&&String(c.du||"").slice(0,7)===today().slice(0,7)).sort((a,b)=>String(a.du).localeCompare(String(b.du))).map(c=>`<div><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} — ${formatDate(c.au)}</span><b>${drhCongeDureeJours(c)} j</b></div>`).join("")||`<div class="drh-leave-empty">Aucun congé approuvé ce mois-ci.</div>`}</div></section>`;
   else if(tab==="requests")content=tableView("Demandes à traiter","Validation, refus et contrôle du solde","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>DURÉE</th><th>ACTIONS</th></tr>",requestRows,"Aucune demande en attente.");
   else if(tab==="history")content=tableView("Historique des congés","Décisions enregistrées dans le dossier du personnel","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>STATUT</th><th>DURÉE</th></tr>",historyRows,"Aucun historique disponible.");
-  view.innerHTML=`<div class="drh-leave-page"><header class="drh-leave-head"><div><h1>Congés</h1><p>Planification, validation et suivi des droits acquis${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""}</p></div><div><button type="button" class="btn btn-ghost" onclick="exportCongesRecapCSV()">Exporter Excel</button><button type="button" class="btn btn-primary" onclick="openCongeModal()">+ Attribuer un congé</button></div></header><nav class="drh-leave-tabs">${tabButton("dashboard","Tableau de bord")}${tabButton("balances","Soldes individuels")}${tabButton("planning","Planning")}${tabButton("requests","Demandes")}${tabButton("history","Historique")}</nav>${content}</div>`;
+  view.innerHTML=`<div class="drh-leave-page"><header class="drh-leave-head"><div><h1>Congés</h1><p>Planification, validation et suivi des droits acquis${soc?` · ${escapeHTML(drhSocieteLabel(soc))}`:""}</p></div><div><button type="button" class="btn btn-ghost" onclick="exportCongesRecapCSV()">Exporter Excel</button><button type="button" class="btn btn-primary" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button></div></header><nav class="drh-leave-tabs">${tabButton("dashboard","Tableau de bord")}${tabButton("balances","Soldes individuels")}${tabButton("planning","Planning")}${tabButton("requests","Demandes")}${tabButton("history","Historique")}</nav>${content}</div>`;
 }
 function toggleDrhCongesSoldeEleve(){
   drhCongesSoldeEleveOnly=!drhCongesSoldeEleveOnly;
@@ -30573,6 +30573,20 @@ function updateCongeAttribJours(){
       covEl.innerHTML="";
     }
   }
+}
+function openCongeAttributionPicker(){
+  // Point d'entrée générique (bouton "+ Attribuer un congé" du bandeau, "+ Planifier" du
+  // planning) : on choisit d'abord l'employé, puis on enchaîne sur le même parcours complet
+  // (solde, couverture site, confirmation, aperçu, impression) que le clic sur une ligne du
+  // tableau "Soldes individuels" — pour ne pas avoir deux façons différentes d'attribuer un
+  // congé, l'une contrôlée et l'autre non.
+  const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
+  openModal(`<h3 class="font-bold text-lg mb-4">Attribuer un congé</h3>
+    <div class="mb-3"><label class="label">Employé</label><select class="select" id="conge-picker-agent">
+      <option value="">— Choisir un employé —</option>
+      ${agents.map(a=>`<option value="${escapeHTML(String(a.id))}">${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} · ${escapeHTML(a.matricule||a.code||"")}</option>`).join("")}
+    </select></div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-primary" onclick="const id=document.getElementById('conge-picker-agent').value;if(!id){toast('Choisissez un employé','error');return}openCongeAttributionModal(id)">Continuer</button></div>`);
 }
 function openCongeAttributionModal(agentId){
   const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
