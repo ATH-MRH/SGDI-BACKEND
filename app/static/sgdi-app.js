@@ -36105,6 +36105,11 @@ function ptCurrentSortOrder(){return sessionStorage.getItem("ptSortOrder")||"asc
 function ptSupCurrentSiteFilter(){return sessionStorage.getItem("ptSupSiteFilter")||""}
 function setPtSupSiteFilter(v){sessionStorage.setItem("ptSupSiteFilter",v||"");renderView()}
 function setPtMonth(v){sessionStorage.setItem("ptMonth",v||"");renderView()}
+function ptShiftMonth(ym,delta){const [y,m]=String(ym||"").split("-").map(Number);const d=new Date(y||new Date().getFullYear(),(m||1)-1+delta,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
+function ptCurrentAutoChip(){return sessionStorage.getItem("ptAutoChip")||"all"}
+function setPtAutoChip(v){sessionStorage.setItem("ptAutoChip",v||"all");renderView()}
+function ptCurrentAutoDensity(){return sessionStorage.getItem("ptAutoDensity")||"comfort"}
+function setPtAutoDensity(v){sessionStorage.setItem("ptAutoDensity",v||"comfort");renderView()}
 function setPtSociete(v){sessionStorage.setItem("ptSociete",v||"");renderView()}
 function setPtSearch(v){sessionStorage.setItem("ptSearch",v||"");renderView();requestAnimationFrame(()=>{const el=document.getElementById("pt-search-input");if(el){const len=el.value.length;el.focus();try{el.setSelectionRange(len,len)}catch(_){}}})}
 function setPtSort(v){sessionStorage.setItem("ptSort",v||"nom");renderView()}
@@ -38092,7 +38097,11 @@ function renderPointageSaisieAuto(){
   const [yr,mo]=ym.split("-").map(Number);
   const monthLabel=new Date(yr,mo-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const weekdayShort=["D","L","M","Me","J","V","S"];
-  const dayHeaders=Array.from({length:days},(_,i)=>{const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;return`<th style="border:1px solid #e2e8f0;padding:1px 0;width:24px;min-width:24px;max-width:24px;text-align:center;font-size:7px;font-weight:700;${we?"color:#1e40af;background:#dbeafe":"color:#64748b"}"><div>${String(d).padStart(2,"0")}</div><div style="font-size:6px;line-height:8px;opacity:.8">${weekdayShort[wd]}</div></th>`;}).join("");
+  const now=new Date();
+  const todayYm=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  const isCurrentMonth=todayYm===ym;
+  const todayDay=isCurrentMonth?now.getDate():0;
+  const horizonDay=ym<todayYm?days:(isCurrentMonth?todayDay:0);
   const presenceIndex=new Map();
   (db.feuillePresence||[]).forEach(x=>{
     const date=String(x?.date||"");
@@ -38113,61 +38122,114 @@ function renderPointageSaisieAuto(){
   const sheetIndex=new Map(
     (db.pointages||[]).filter(sheet=>sheet?.periode===ym).map(sheet=>[String(sheet.agentId||""),sheet])
   );
-  const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-end gap-3">
-    <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
-    <div style="flex:1;min-width:180px;max-width:320px"><label class="label">Recherche</label>${ptSearchBarHTML()}</div>
-    ${ptSortControlsHTML()}
-    <div class="flex-1"></div>
-    <div class="flex gap-2">
-      <button class="btn btn-primary text-xs" id="pt-auto-refresh-btn" onclick="ptAutoSaisieRefresh()">↺ Actualiser</button>
-      <button class="btn btn-secondary text-xs" onclick="ptAutoApercu()">🔍 Aperçu</button>
-      <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
-    </div>
-  </div>
-  <div class="text-[11px] mt-2 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — ${supervisorActive?"Pointage mensuel actualisé automatiquement par la Feuille quotidienne.":"Synchronisation automatique toutes les 10 secondes · reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne."}</div>
-  <div id="pt-auto-sync-error" class="mt-3 p-3 rounded-lg text-xs font-bold" style="display:${_ptAutoSaisieError?"block":"none"};background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">${_ptAutoSaisieError?`Synchronisation impossible : ${escapeHTML(_ptAutoSaisieError)}`:""}</div>
-  </div>`;
-  const filtered=ptSortAgents(ptFilterAgents(ag));
-  if(!filtered.length)return filterBar+`<div class="card p-6 text-center text-slate-500">${ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`}</div>`;
-  const rows=filtered.map((a,idx)=>{
-    let nP=0,nA=0,nM=0,nS=0,nC=0,nR=0;
+  const codeForDay=(a,d)=>{
+    const day=String(d).padStart(2,"0");
+    const dateStr=`${ym}-${day}`;
     const sheet=sheetIndex.get(String(a.id||""));
-    const cells=Array.from({length:days},(_,i)=>{
-      const d=i+1;const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;
-      const day=String(d).padStart(2,"0");
-      const dateStr=`${ym}-${day}`;
-      // Priorité : fiche mensuelle (saisie manuelle) — source de vérité unique
-      const sheetCode=(sheet?.days||{})[day]||"";
-      // Fallback : feuillePresence si aucune fiche mensuelle pour ce jour
-      const f=sheetCode?"":fpqGetForAgent(a,dateStr);
-      const fpqCode=sheetCode?"":f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"")||"";
-      const code=sheetCode||fpqCode;
+    // Priorité : fiche mensuelle (saisie manuelle) — source de vérité unique
+    const sheetCode=(sheet?.days||{})[day]||"";
+    // Fallback : feuillePresence si aucune fiche mensuelle pour ce jour
+    const f=sheetCode?"":fpqGetForAgent(a,dateStr);
+    const fpqCode=sheetCode?"":f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"")||"";
+    return sheetCode||fpqCode;
+  };
+  // Statistiques calculées une fois pour tout l'effectif éligible : servent aux KPI,
+  // aux puces de filtre rapide et aux lignes du tableau (évite de refaire la boucle 3 fois).
+  const statsById=new Map();
+  ag.forEach(a=>{
+    let nP=0,nA=0,nM=0,nS=0,nC=0,nR=0,renseignes=0,workDays=0;
+    for(let d=1;d<=days;d++){
+      const wd=new Date(yr,mo-1,d).getDay();const we=wd===5||wd===6;
+      const code=codeForDay(a,d);
       if(POINTAGE_CODES[code]?.isPresent)nP++;
       else if(ptIsAbsencePayrollCode(code))nA+=ptCodeAbsencePayrollValue(code);
       else if(code==="M")nM++;else if(code==="S")nS++;else if(code==="C")nC++;else if(code==="R")nR++;
-      const ci=POINTAGE_CODES[code];const bg=ci?ci.bg:(we?"#dbeafe":"");const fg=ci?ci.color:(we?"#1e40af":"#94a3b8");
-      return`<td style="border:1px solid #e2e8f0;padding:0;width:24px;min-width:24px;max-width:24px;background:${bg};text-align:center;color:${fg};font-weight:800;font-family:ui-monospace,monospace;font-size:7px;line-height:9px;height:18px">${code||"·"}</td>`;
-    }).join("");
+      if(d<=horizonDay&&!we){workDays++;if(code)renseignes++;}
+    }
+    const taux=workDays?Math.round(renseignes*100/workDays):100;
+    const todayCode=isCurrentMonth?codeForDay(a,todayDay):"";
+    const todayWeekend=isCurrentMonth?[5,6].includes(new Date(yr,mo-1,todayDay).getDay()):false;
+    statsById.set(a.id,{nP,nA,nM,nS,nC,nR,taux,alertToday:isCurrentMonth&&!todayWeekend&&!todayCode,presentToday:isCurrentMonth&&!!POINTAGE_CODES[todayCode]?.isPresent});
+  });
+  const effectif=ag.length;
+  const presentsAuj=isCurrentMonth?ag.filter(a=>statsById.get(a.id)?.presentToday).length:null;
+  const tauxMois=effectif?Math.round(ag.reduce((s,a)=>s+(statsById.get(a.id)?.taux||0),0)/effectif):0;
+  const absencesPaie=ag.reduce((s,a)=>s+(statsById.get(a.id)?.nA||0),0);
+  const alertesJour=isCurrentMonth?ag.filter(a=>statsById.get(a.id)?.alertToday).length:null;
+  const kpiCard=(lbl,val,sub,color,alertCls)=>`<div class="pt-auto-kpi ${alertCls||""}" style="--pt-kpi-c:${color}"><div class="lbl">${escapeHTML(lbl)}</div><div class="val">${val}</div><div class="sub">${escapeHTML(sub)}</div></div>`;
+  const kpisHTML=`<div class="pt-auto-kpis">
+    ${kpiCard("Effectif",effectif,soc?soc:"Toutes sociétés autorisées","#043970")}
+    ${kpiCard("Présents aujourd’hui",presentsAuj===null?"—":`${presentsAuj}/${effectif}`,presentsAuj===null?"Mois affiché différent d’aujourd’hui":`${effectif?Math.round(presentsAuj*100/effectif):0}% de l’effectif`,"#16a34a")}
+    ${kpiCard("Taux de présence — mois",`${tauxMois}%`,"Jours ouvrés renseignés","#0d6ecc")}
+    ${kpiCard("Absences paie",absencesPaie,"Cumul du mois affiché","#d97706")}
+    ${kpiCard("Alertes du jour",alertesJour===null?"—":alertesJour,alertesJour===null?"Mois affiché différent d’aujourd’hui":"Agents non pointés aujourd’hui","#dc2626",alertesJour?"alert":"")}
+  </div>`;
+  const legendCodes=["P","A","M","S","C","R"];
+  const legendHTML=`<div class="pt-auto-legend"><span class="lbl">Légende</span>${legendCodes.map(k=>`<span class="pt-auto-legend-item"><span class="pt-auto-legend-dot" style="background:${POINTAGE_CODES[k].color}"></span>${k} — ${escapeHTML(POINTAGE_CODES[k].label)}</span>`).join("")}<span style="margin-left:auto;font-size:11px;color:#5b7089">Case vide = jour à venir ou repos hebdomadaire (Ven/Sam)</span></div>`;
+  const chip=ptCurrentAutoChip();
+  const chipDefs=[["all","Tous",()=>true],["alert","⚠ Alertes",a=>!!statsById.get(a.id)?.alertToday],["gaps","Renseignement < 90%",a=>(statsById.get(a.id)?.taux??100)<90]];
+  const chipsHTML=chipDefs.map(([k,l,fn])=>{
+    const n=ag.filter(fn).length;
+    return `<button type="button" class="pt-auto-chip ${k==="alert"?"warn":""} ${chip===k?"active":""}" onclick="setPtAutoChip('${k}')">${l} <span class="n">${n}</span></button>`;
+  }).join("");
+  const density=ptCurrentAutoDensity();
+  const filterBar=`<div class="pt-auto-toolbar">
+    <div class="pt-auto-monthnav"><button type="button" onclick="setPtMonth(ptShiftMonth('${ym}',-1))" title="Mois précédent">‹</button><span class="lbl capitalize">${escapeHTML(monthLabel)}</span><button type="button" onclick="setPtMonth(ptShiftMonth('${ym}',1))" title="Mois suivant">›</button></div>
+    ${ptSearchBarHTML()}
+    ${ptSortControlsHTML()}
+    <div class="pt-auto-chips">${chipsHTML}</div>
+    <div class="flex-1"></div>
+    <div class="pt-auto-density"><button type="button" class="${density==="comfort"?"active":""}" onclick="setPtAutoDensity('comfort')">Confort</button><button type="button" class="${density==="dense"?"active":""}" onclick="setPtAutoDensity('dense')">Dense</button></div>
+    <button class="btn btn-primary text-xs" id="pt-auto-refresh-btn" onclick="ptAutoSaisieRefresh()">↺ Actualiser</button>
+    <button class="btn btn-secondary text-xs" onclick="ptAutoApercu()">🔍 Aperçu</button>
+    <button class="btn btn-ghost text-xs" onclick="window.print()">🖨 Imprimer</button>
+  </div>
+  <div class="text-[11px] mb-3 px-1" style="color:#043970"><strong>🔒 Lecture seule</strong> — ${supervisorActive?"Pointage mensuel actualisé automatiquement par la Feuille quotidienne.":"Synchronisation automatique toutes les 10 secondes · reflète la saisie manuelle (priorité) puis la feuille de présence quotidienne."}</div>
+  <div id="pt-auto-sync-error" class="mb-3 p-3 rounded-lg text-xs font-bold" style="display:${_ptAutoSaisieError?"block":"none"};background:#fee2e2;color:#991b1b;border:1px solid #fca5a5">${_ptAutoSaisieError?`Synchronisation impossible : ${escapeHTML(_ptAutoSaisieError)}`:""}</div>`;
+  const chipFn=(chipDefs.find(c=>c[0]===chip)||chipDefs[0])[2];
+  const filtered=ptSortAgents(ptFilterAgents(ag)).filter(chipFn);
+  if(!filtered.length){
+    const emptyMsg=ptCurrentSearch()?`Aucun résultat pour « ${escapeHTML(ptCurrentSearch())} »`:chip!=="all"?"Aucun agent ne correspond à ce filtre rapide.":`Aucun employé ${soc?`pour ${escapeHTML(soc)}`:""} sur cette période.`;
+    return kpisHTML+filterBar+legendHTML+`<div class="pt-auto-card"><div class="p-6 text-center text-slate-500">${emptyMsg}</div></div>`;
+  }
+  const sumCols=["P","A","M","S","C","R"];
+  const dayCls=d=>{const we=[5,6].includes(new Date(yr,mo-1,d).getDay());const td=isCurrentMonth&&d===todayDay;const cls=["pt-day"];if(we)cls.push("weekend");if(td)cls.push("today");return cls.join(" ")};
+  const dayHeadersNum=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-num">${String(i+1).padStart(2,"0")}</th>`).join("");
+  const dayHeadersDow=Array.from({length:days},(_,i)=>`<th class="${dayCls(i+1)} pt-day-dow">${weekdayShort[new Date(yr,mo-1,i+1).getDay()]}</th>`).join("");
+  const headHTML=`<thead>
+    <tr><th class="pt-col-idx" rowspan="2">N°</th><th class="pt-col-agent" rowspan="2">Agent</th>${dayHeadersNum}${sumCols.map(k=>`<th class="pt-col-sum" rowspan="2" style="color:${POINTAGE_CODES[k].color};background:${POINTAGE_CODES[k].bg}">${k}</th>`).join("")}<th class="pt-col-rate" rowspan="2">Renseigné</th></tr>
+    <tr>${dayHeadersDow}</tr>
+  </thead>`;
+  const dailyTotals=Array.from({length:days},(_,i)=>{const d=i+1;let p=0;ag.forEach(a=>{if(POINTAGE_CODES[codeForDay(a,d)]?.isPresent)p++});return p});
+  const footCells=Array.from({length:days},(_,i)=>{const d=i+1;const we=[5,6].includes(new Date(yr,mo-1,d).getDay());const known=ym<todayYm||d<=horizonDay;return `<td>${we?"–":(known?dailyTotals[d-1]:"–")}</td>`}).join("");
+  const footHTML=`<tfoot><tr><td class="pt-col-idx"></td><td class="pt-col-agent">Effectif présent / jour</td>${footCells}<td colspan="${sumCols.length+1}"></td></tr></tfoot>`;
+  const rows=filtered.map((a,idx)=>{
+    const st=statsById.get(a.id)||{};
+    let cells="";
+    for(let d=1;d<=days;d++){
+      const code=codeForDay(a,d);
+      const cls=dayCls(d);
+      if(!code){cells+=`<td class="${cls}"><span class="pt-code-dot">·</span></td>`;continue}
+      const c=POINTAGE_CODES[code];
+      cells+=`<td class="${cls}"><span class="pt-code-chip" style="background:${c?c.bg:"#e2e8f0"};color:${c?c.color:"#64748b"}">${escapeHTML(code)}</span></td>`;
+    }
+    const sumCells=sumCols.map(k=>`<td class="pt-col-sum" style="color:${POINTAGE_CODES[k].color}">${st[`n${k}`]||"·"}</td>`).join("");
+    const rateColor=st.taux>=90?"#16a34a":st.taux>=70?"#d97706":"#dc2626";
     return`<tr>
-      <td style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:0;z-index:2;width:34px;min-width:34px;text-align:center;font-weight:800;color:#043970;font-size:8px;line-height:9px;height:18px">${idx+1}</td>
-      <td class="whitespace-nowrap" style="border:1px solid #e2e8f0;background:#f8fafc;position:sticky;left:34px;z-index:1;padding:0 3px;font-size:9px;line-height:10px;height:18px"><span class="font-bold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span> <span class="font-mono" style="color:#043970;font-weight:700;font-size:8px;opacity:.7">${escapeHTML(a.matricule||"")}</span></td>
+      <td class="pt-col-idx">${idx+1}</td>
+      <td class="pt-col-agent">${st.alertToday?'<span class="pt-agent-alert" title="Non pointé aujourd’hui"></span>':""}<span class="pt-agent-name">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</span><span class="pt-agent-mat">${escapeHTML(a.matricule||"")}</span></td>
       ${cells}
-      <td style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nP}</td>
-      <td style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nA}</td>
-      <td style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nM}</td>
-      <td style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nS}</td>
-      <td style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nC}</td>
-      <td style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;text-align:center;font-weight:700;font-size:7px;line-height:9px;height:18px;width:22px">${nR}</td>
+      ${sumCells}
+      <td class="pt-col-rate"><div class="pt-rate-track"><div class="pt-rate-fill" style="width:${st.taux}%;background:${rateColor}"></div></div><div class="pt-rate-txt">${st.taux}%</div></td>
     </tr>`;
   }).join("");
   const searchNote=ptCurrentSearch()?` · <span style="color:#043970;font-weight:700">${filtered.length} résultat${filtered.length>1?"s":""} sur ${ag.length}</span>`:"";
-  const tableHTML=`<table class="w-full pointage-month-table" id="pt-auto-table" style="border-collapse:separate;border-spacing:0;font-size:8px">
-      <thead><tr style="background:#f1f5f9"><th style="border:1px solid #e2e8f0;padding:2px 4px;text-align:center;position:sticky;left:0;background:#f1f5f9;z-index:3;width:34px;min-width:34px;white-space:nowrap;font-size:8px">N°</th><th style="border:1px solid #e2e8f0;padding:2px 6px;text-align:left;position:sticky;left:34px;background:#f1f5f9;z-index:2;width:1%;white-space:nowrap;font-size:8px">Agent</th>${dayHeaders}<th style="border:1px solid #e2e8f0;background:#dcfce7;color:#166534;width:22px;text-align:center;font-size:8px">P</th><th style="border:1px solid #e2e8f0;background:#fee2e2;color:#991b1b;width:22px;text-align:center;font-size:8px">A</th><th style="border:1px solid #e2e8f0;background:#fef3c7;color:#92400e;width:22px;text-align:center;font-size:8px">M</th><th style="border:1px solid #e2e8f0;background:#ede9fe;color:#5b21b6;width:22px;text-align:center;font-size:8px">S</th><th style="border:1px solid #e2e8f0;background:#dbeafe;color:#1e40af;width:22px;text-align:center;font-size:8px">C</th><th style="border:1px solid #e2e8f0;background:#e2e8f0;color:#334155;width:22px;text-align:center;font-size:8px">R</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+  const tableHTML=`<table class="pt-auto" id="pt-auto-table">${headHTML}<tbody>${rows}</tbody>${footHTML}</table>`;
   const title=supervisorActive?"Pointage mensuel":"Saisie automatique";
-  return filterBar+`<div class="card p-2 pointage-month-panel"><div class="pointage-month-title text-sm font-semibold px-2">${title} — <span class="capitalize">${monthLabel}</span> (${days} jours) · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</div>
-    <div class="pointage-month-scroll" style="pointer-events:none;user-select:none">${tableHTML}</div></div>`;
+  return kpisHTML+filterBar+legendHTML+`<div class="pt-auto-card${density==="dense"?" dense":""}">
+    <div class="pt-auto-card-head"><h2>${escapeHTML(title)} — <span class="capitalize">${escapeHTML(monthLabel)}</span></h2><span class="meta">${days} jours · ${filtered.length} agent${filtered.length>1?"s":""}${searchNote}</span></div>
+    <div class="pt-auto-scroll"><div class="pt-auto-noselect">${tableHTML}</div></div>
+  </div>`;
 }
 function ptEmployeeQrScanCard(){
   return`<div class="card p-4 mb-4" style="border:1px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#fff)">
@@ -38302,7 +38364,7 @@ function ptAutoApercu(){
   if(!tbl){toast("Aucun tableau à afficher","error");return;}
   const w=window.open("","_blank","width=1100,height=700");
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Aperçu saisie automatique</title>
-  <style>body{font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;margin:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e2e8f0;padding:0}thead tr{background:#f1f5f9}.agent-cell{padding:3px 6px;white-space:nowrap;font-weight:700;background:#f8fafc}.day-cell{width:28px;min-width:28px;text-align:center}.counter{width:32px;text-align:center;font-weight:700;padding:0 4px}h2{margin:0 0 10px;font-size:14px;color:#043970}@media print{button{display:none}}</style>
+  <style>body{font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;margin:16px}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}th,td{border:1px solid #e2e8f0;padding:2px}thead th{background:#f1f5f9;font-size:9px;text-transform:uppercase;color:#5b7089}.pt-col-idx,.pt-col-agent{white-space:nowrap;font-weight:700;background:#f8fafc}.pt-day,.pt-col-sum,.pt-col-rate{width:26px;min-width:26px;text-align:center}.pt-code-chip{display:inline-flex;width:16px;height:16px;border-radius:4px;align-items:center;justify-content:center;font-weight:800}.pt-agent-name{font-weight:800}.pt-agent-mat{color:#043970;opacity:.75;margin-left:4px}.pt-rate-track,.pt-agent-alert{display:none}h2{margin:0 0 10px;font-size:14px;color:#043970}@media print{button{display:none}}</style>
   </head><body>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <h2>Saisie automatique — Pointage du personnel</h2>
