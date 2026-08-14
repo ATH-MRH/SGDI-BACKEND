@@ -1027,6 +1027,10 @@ def attendance_statistics(
     if selected_month is not None and not 1 <= selected_month <= 12:
         raise HTTPException(status_code=422, detail="Mois invalide")
     allowed_site_ids = _allowed_assignment_site_ids(db, user)
+    site_catalog_query = select(Site.name).where(Site.active == 1)
+    if allowed_site_ids is not None:
+        site_catalog_query = site_catalog_query.where(Site.id.in_(allowed_site_ids))
+    site_options = sorted({name for (name,) in db.execute(site_catalog_query).all() if _clean_text(name)})
     site_filter = _clean_text(site).casefold()
     source_rows = [
         row for row in service.list_items(db, "attendanceQrScans")
@@ -1106,7 +1110,7 @@ def attendance_statistics(
     site_output.sort(key=lambda row: (-row["completion_rate"], row["site"]))
     employee_output = sorted(employees.values(), key=lambda row: (-row["hours"], row["name"]))
     return {
-        "year": selected_year, "month": selected_month, "sites": site_output,
+        "year": selected_year, "month": selected_month, "sites": site_output, "site_options": site_options,
         "employees": employee_output, "months": months, "alerts": alerts[:50],
         "summary": {
             "employees": len(employees), "sites": len(sites),

@@ -386,8 +386,8 @@ function renderPointerDashboard(){
   const periodEl=document.getElementById("pointerStatsPeriod");
   if(periodEl)periodEl.textContent=`Données affichées : ${periodLabel} · ${selectedSite}`;
   const siteSelect=document.getElementById("pointerStatsSite"),selected=siteSelect?.value||"";
-  if(!selected){pointerKnownSites=[...new Set((data.sites||[]).map(row=>row.site))].sort((a,b)=>a.localeCompare(b,"fr"))}
-  else if(!pointerKnownSites.includes(selected)){pointerKnownSites=[...pointerKnownSites,selected].sort((a,b)=>a.localeCompare(b,"fr"))}
+  const catalogSites=data.site_options||(data.sites||[]).map(row=>row.site);
+  pointerKnownSites=[...new Set([...pointerKnownSites,...catalogSites,...(data.sites||[]).map(row=>row.site)])].sort((a,b)=>a.localeCompare(b,"fr"));
   if(siteSelect){siteSelect.innerHTML='<option value="">Tous les sites</option>'+pointerKnownSites.map(site=>`<option value="${esc(site)}" ${site===selected?"selected":""}>${esc(site)}</option>`).join("")}
   const maxEntries=Math.max(1,...(data.months||[]).map(row=>row.entries||0));
   const monthLabels=["Jan","Fév","Mar","Avr","Mai","Juin","Juil","Aoû","Sep","Oct","Nov","Déc"];
