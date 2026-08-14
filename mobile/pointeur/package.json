@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Coquille Capacitor (Android/iOS) qui charge pointeur.irongs.com",
+  "description": "Coquille Capacitor (Android/iOS) qui charge pointage.irongs.com",
   "scripts": {
     "sync": "cap sync",
     "open:android": "cap open android",

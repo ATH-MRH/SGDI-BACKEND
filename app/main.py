@@ -495,7 +495,9 @@ def _is_portal_host(host: str) -> bool:
 
 
 def _is_pointer_host(host: str) -> bool:
-    return host.split(":")[0].lower() == "pointeur.irongs.com"
+    # pointage.irongs.com est le domaine canonique. L'ancien nom reste accepté
+    # pendant la transition pour les PWA installées et les favoris existants.
+    return host.split(":")[0].lower() in {"pointage.irongs.com", "pointeur.irongs.com"}
 
 
 def _is_recrute_host(host: str) -> bool:

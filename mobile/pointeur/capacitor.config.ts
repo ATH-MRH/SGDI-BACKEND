@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Pointeur ATLAS',
   webDir: 'www',
   server: {
-    url: 'https://pointeur.irongs.com',
+    url: 'https://pointage.irongs.com',
     cleartext: false,
   },
 };

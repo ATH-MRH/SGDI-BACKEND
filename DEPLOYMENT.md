@@ -57,12 +57,16 @@ comptabilite.irongs.com
 facturation.irongs.com
 commercial.irongs.com
 agenda.irongs.com
+pointage.irongs.com
 ```
 
 `atlas.irongs.com` garde le portail global. `finances.irongs.com` et
 `comptabilite.irongs.com` ouvrent Finances & Comptabilité, tandis que
 `facturation.irongs.com` ouvre exclusivement le module Facturation.
 `agenda.irongs.com` ouvre le module Agenda.
+`pointage.irongs.com` ouvre l'application autonome Pointeur. L'ancien domaine
+`pointeur.irongs.com` peut rester associé temporairement au même service pour
+assurer la compatibilité avec les PWA et favoris existants.
 
 Important : `atlas.irongs.com` doit pointer vers le service backend SGDI/ATLAS
 qui sert `app/static/index.html`. Il ne doit pas pointer vers une page vitrine
