@@ -10479,9 +10479,9 @@ function renderContratsDashboard(view){
       <button class="contract-modern-stat" style="--tone:#7c3aed" onclick="setContratQuickFilter('essai')"><div class="contract-modern-stat-top"><div class="contract-modern-stat-icon">◷</div><div class="contract-modern-stat-delta">${essai30} à évaluer</div></div><strong>${essaiEnCours}</strong><span>Essais en cours</span></button>
     </section>
     <section class="contract-modern-main-grid"><div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>Échéances des 90 prochains jours</h2><button onclick="setContratQuickFilter('alert90')">Ouvrir la liste →</button></div><div class="contract-modern-timeline"><div class="contract-modern-timeline-line"></div><div class="contract-modern-timeline-items">${timeline.map(deadlineMilestone).join("")}</div></div></div>
-      <div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>À faire maintenant</h2><button onclick="navigate('contrats/a_contractualiser')">Tout voir →</button></div><div class="contract-modern-focus">${priority.slice(0,3).map(priorityRow).join("")||'<div class="text-xs text-slate-400 p-4">Aucune action prioritaire.</div>'}</div></div></section>
+      <div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>À faire maintenant</h2><button onclick="setContratQuickFilter('alert90')">Tout voir →</button></div><div class="contract-modern-focus">${priority.slice(0,3).map(priorityRow).join("")||'<div class="text-xs text-slate-400 p-4">Aucune action prioritaire.</div>'}</div></div></section>
     <section class="contract-modern-lower"><div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>File de traitement intelligente</h2><button onclick="setContratQuickFilter('alert90')">Voir tous les dossiers →</button></div><div class="contract-modern-task-list">${priority.map(taskRow).join("")||'<div class="text-xs text-slate-400 p-4">Aucun dossier à traiter.</div>'}</div></div>
-      <div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>Portefeuille actif</h2><button onclick="setContratQuickFilter('all')">Statistiques →</button></div><div class="contract-modern-bars"><div><div class="contract-modern-bar-head"><span>CDD</span><b>${cdd}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#0d6ecc;width:${agents.length?Math.round(cdd/agents.length*100):0}%"></div></div></div><div><div class="contract-modern-bar-head"><span>CDI</span><b>${cdi}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#16a34a;width:${agents.length?Math.round(cdi/agents.length*100):0}%"></div></div></div><div><div class="contract-modern-bar-head"><span>Avenants actifs</span><b>${avenants.length}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#7c3aed;width:${agents.length?Math.min(100,Math.round(avenants.length/agents.length*100)):0}%"></div></div></div></div><div class="contract-modern-note">Les employés sortants et leurs contrats clôturés sont automatiquement retirés du portefeuille actif et conservés dans les archives.</div></div></section>
+      <div class="contract-modern-surface"><div class="contract-modern-surface-head"><h2>Portefeuille actif</h2><button onclick="openContractPortfolioStats()">Statistiques →</button></div><div class="contract-modern-bars"><div><div class="contract-modern-bar-head"><span>CDD</span><b>${cdd}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#0d6ecc;width:${agents.length?Math.round(cdd/agents.length*100):0}%"></div></div></div><div><div class="contract-modern-bar-head"><span>CDI</span><b>${cdi}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#16a34a;width:${agents.length?Math.round(cdi/agents.length*100):0}%"></div></div></div><div><div class="contract-modern-bar-head"><span>Avenants actifs</span><b>${avenants.length}</b></div><div class="contract-modern-bar-base"><div class="contract-modern-bar-value" style="--fill:#7c3aed;width:${agents.length?Math.min(100,Math.round(avenants.length/agents.length*100)):0}%"></div></div></div></div><div class="contract-modern-note">Les employés sortants et leurs contrats clôturés sont automatiquement retirés du portefeuille actif et conservés dans les archives.</div></div></section>
     </main></div></div></div>`;
 }
 
@@ -10714,6 +10714,11 @@ function renderContrats(view,mode){
     <div class="card overflow-hidden"><table>
     <thead>${contractSituationHeadersHTML()}</thead>
     <tbody id="ct-tbody">${contractSituationRowsHTML(agents,today_)}</tbody></table></div>`;
+  const pendingFilter=sessionStorage.getItem("sgdi-contract-list-filter")||"";
+  if(pendingFilter){
+    sessionStorage.removeItem("sgdi-contract-list-filter");
+    requestAnimationFrame(()=>setContratQuickFilter(pendingFilter));
+  }
 }
 function directContractPayload(form){
   const fd=new FormData(form);
@@ -11837,6 +11842,11 @@ function applyContratFilters(){
 }
 function resetContratFilters(){window.__contractQuickFilter="";document.querySelectorAll(".contract-metric-click.is-selected").forEach(el=>el.classList.remove("is-selected"));["flt-essai","flt-contrat","flt-search"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=""});applyContratFilters()}
 function setContratQuickFilter(type){
+  if(!document.getElementById("ct-tbody")){
+    sessionStorage.setItem("sgdi-contract-list-filter",String(type||"all"));
+    navigate("contrats/situation");
+    return;
+  }
   resetContratFilters();
   if(type==="all"){
     applyContratFilters();
@@ -11859,6 +11869,19 @@ function setContratQuickFilter(type){
   }
   drumRender("flt-essai");drumRender("flt-contrat");applyContratFilters();
   const table=document.getElementById("ct-tbody");if(table)table.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+function openContractPortfolioStats(){
+  const socFilter=currentStructureSocieteFilter();
+  const agents=(db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!socFilter||a.societe===socFilter));
+  const avenants=(db.avenants||[]).filter(av=>agents.some(a=>String(a.id)===String(av.agentId)));
+  const today_=today();
+  const countType=type=>agents.filter(a=>cleanContractType(a.typeContrat)===type).length;
+  const expired=agents.filter(a=>{const d=employeePositionContractDaysLeft(a,today_);return cleanContractType(a.typeContrat)==="CDD"&&d!==null&&d<0}).length;
+  const due30=agents.filter(a=>{const d=employeePositionContractDaysLeft(a,today_);return cleanContractType(a.typeContrat)==="CDD"&&d!==null&&d>=0&&d<=30}).length;
+  const trials=agents.filter(a=>a.dateFinEssai&&daysBetween(today_,a.dateFinEssai)>=0).length;
+  const card=(label,value,color,action)=>`<button type="button" class="card p-4 text-left" style="border-color:${color};cursor:pointer" onclick="closeModal();${action}"><div class="text-xs uppercase font-black text-slate-500">${escapeHTML(label)}</div><div class="text-3xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-400 mt-1">Ouvrir la liste →</div></button>`;
+  openModal(`<div class="flex items-start justify-between gap-3 mb-5"><div><h2 class="text-xl font-black">Statistiques du portefeuille contractuel</h2><p class="text-sm text-slate-500">${escapeHTML(socFilter||"Toutes les sociétés")} · ${agents.length} contrat(s) actif(s)</p></div><button class="btn btn-ghost" onclick="closeModal()">Fermer</button></div><div class="grid grid-cols-2 md:grid-cols-3 gap-3">${card("CDD",countType("CDD"),"#0d6ecc",`setContratQuickFilter('type:cdd')`)}${card("CDI",countType("CDI"),"#16a34a",`setContratQuickFilter('type:cdi')`)}${card("Échéances ≤ 30 jours",due30,"#d97706",`setContratQuickFilter('cdd30')`)}${card("CDD expirés",expired,"#dc2626",`setContratQuickFilter('cddExpired')`)}${card("Essais en cours",trials,"#7c3aed",`setContratQuickFilter('essai')`)}${card("Avenants",avenants.length,"#0891b2",`navigate('contrats/avenants')`)}</div>`);
 }
 
 function activeBackendContractTemplates(){return (window.__contractTemplates||window.__adminContractTemplates||[]).filter(t=>Number(t.active)!==0)}
