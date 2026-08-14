@@ -6603,7 +6603,7 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
 .pt-auto-kpi.alert .val{color:#dc2626}
 @media(max-width:860px){.pt-auto-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-.pt-auto-toolbar{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:12px 14px;box-shadow:0 2px 8px rgba(4,57,112,.06);margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.pt-auto-toolbar{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:12px 14px;box-shadow:0 2px 8px rgba(4,57,112,.06);margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
 .pt-auto-monthnav{display:flex;align-items:center;gap:6px;background:#f7fafc;border:1px solid #dbe5f0;border-radius:11px;padding:4px}
 .pt-auto-monthnav button{border:0;background:transparent;color:#043970;width:28px;height:28px;border-radius:8px;font-size:14px;font-weight:900;cursor:pointer}
 .pt-auto-monthnav button:hover{background:#eef3f9}
