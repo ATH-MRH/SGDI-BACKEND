@@ -926,8 +926,13 @@ async function saveCandidateInterview(form){
   const entretien={id:"ent_"+Date.now(),date:form.date.value,recruteur:form.recruteur.value.trim(),notes,moyenne:Number(moyenne.toFixed(2)),recommandation:form.recommandation.value,prochaineEtape:form.prochaineEtape.value,appreciation:form.appreciation.value.trim(),createdAt:new Date().toISOString(),createdBy:recruteSession?.user?.username||""};
   const data={...(item.data||{})};const history=Array.isArray(data.entretiens)?data.entretiens.slice():[];history.push(entretien);data.entretiens=history;data.dernierEntretien=entretien;
   if(entretien.recommandation==="Favorable")data.avisDecision="Favorable";else if(entretien.recommandation==="Défavorable")data.avisDecision="Défavorable";else data.avisDecision="Instance";data.avisDate=entretien.date;data.avisRecruteur=entretien.recruteur;data.avisCommentaire=entretien.appreciation;
+  const payload={data};
+  if(entretien.prochaineEtape==="Mettre en réserve"){
+    data.fichePositionValidee=true;data.fichePositionValideeAt=new Date().toISOString();data.fichePositionValideeBy=recruteSession?.user?.username||"system";
+    payload.status="reserve";
+  }
   const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="ENREGISTREMENT…";
-  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateInterview();showBanner(`Entretien du ${esc(formatDateFr(entretien.date))} enregistré · note ${String(entretien.moyenne).replace(".",",")} / 5.`,"success");refreshRecruitCurrentSection();}catch(error){const el=document.getElementById("interviewError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer l’entretien";}
+  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});closeCandidateInterview();showBanner(`Entretien du ${esc(formatDateFr(entretien.date))} enregistré · note ${String(entretien.moyenne).replace(".",",")} / 5.${payload.status==="reserve"?" Candidat placé en réserve.":""}`,"success");refreshRecruitCurrentSection();}catch(error){const el=document.getElementById("interviewError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer l’entretien";}
 }
 function renderList(){
   const state=tabState[activeTab];
