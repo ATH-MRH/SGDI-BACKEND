@@ -9215,17 +9215,18 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 @media(max-width:680px){.drh-leave-head{flex-direction:column}.drh-leave-kpis{grid-template-columns:1fr}.drh-leave-page.is-dashboard .drh-leave-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.drh-leave-priority{grid-template-columns:1fr 60px}.drh-leave-priority>i{grid-column:1/2}.drh-leave-planning-list>div:not(.drh-leave-empty){grid-template-columns:1fr}}
 #view .contract-modern-dashboard{font-family:Arial,sans-serif;background:#f4f7fb;border:1px solid #dbe5f0;border-radius:18px;overflow:hidden;min-height:690px;color:#14243b}
 #view .contract-modern-dashboard *{box-sizing:border-box}
-#view .contract-modern-layout{display:grid;grid-template-columns:76px minmax(0,1fr);min-height:690px}
+#view .contract-modern-layout{display:grid;grid-template-columns:minmax(0,1fr);min-height:690px}
 #view .contract-modern-rail{background:#062e5b;color:#fff;padding:15px 10px;display:flex;flex-direction:column;align-items:center;gap:11px}
 #view .contract-modern-mark{width:46px;height:46px;border-radius:15px;background:linear-gradient(145deg,#fff,#bedcff);color:#043970;display:grid;place-items:center;font-weight:950;font-size:12px;margin-bottom:10px}
 #view .contract-modern-rail button{width:47px;height:47px;border:0;border-radius:14px;background:transparent;color:#a9c4df;display:grid;place-items:center;font-size:16px;cursor:pointer}
 #view .contract-modern-rail button:hover,#view .contract-modern-rail button.active{background:#0d6ecc;color:#fff;box-shadow:0 8px 18px rgba(0,0,0,.22)}
 #view .contract-modern-rail .contract-modern-rail-bottom{margin-top:auto}
 #view .contract-modern-work{min-width:0}
-#view .contract-modern-header{height:70px;background:#fff;border-bottom:1px solid #e4eaf1;padding:0 22px;display:flex;align-items:center;justify-content:space-between}
+#view .contract-modern-header{min-height:76px;background:#fff;border-bottom:1px solid #e4eaf1;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
 #view .contract-modern-heading{font-size:17px;font-weight:900}.contract-modern-sub{font-size:9px;color:#718096;margin-top:3px}
-#view .contract-modern-head-actions{display:flex;align-items:center;gap:8px}
+#view .contract-modern-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex:1;flex-wrap:wrap}
 #view .contract-modern-head-actions button{height:35px;padding:0 13px;border:1px solid #cedbe8;background:transparent;color:#043970;border-radius:10px;font-size:9px;font-weight:900;cursor:pointer}
+#view .contract-modern-head-actions button:hover,#view .contract-modern-head-actions button.active{background:#eaf2fb;border-color:#9fc1e3;color:#043970}
 #view .contract-modern-head-actions .primary{background:#0d6ecc;color:#fff;border-color:#0d6ecc;margin:0;width:auto}
 #view .contract-modern-avatar{width:34px;height:34px;border-radius:50%;background:#eaf2fb;color:#043970;display:grid;place-items:center;font-size:9px;font-weight:900;margin-left:4px}
 #view .contract-modern-content{padding:19px 21px}
