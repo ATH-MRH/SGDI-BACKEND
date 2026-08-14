@@ -30459,15 +30459,16 @@ function drhSiteCoverageCheck(agent,du,au){
 }
 let congeAttribSolde=0;
 let congeAttribAgent=null;
+let congeAccordeTouched=false;
 function congeAttribAddDays(dateStr,days){
   const d=drhLeaveCalendarDate(dateStr);
   if(!d)return "";
   return new Date(d.getTime()+days*86400000).toISOString().slice(0,10);
 }
-function updateCongeAttribDates(source){
-  const duEl=document.getElementById("conge-attrib-du");
-  const auEl=document.getElementById("conge-attrib-au");
-  const joursEl=document.getElementById("conge-attrib-jours-nbr");
+function congeAttribApplyDateFields(prefix,source){
+  const duEl=document.getElementById(`conge-attrib-du${prefix}`);
+  const auEl=document.getElementById(`conge-attrib-au${prefix}`);
+  const joursEl=document.getElementById(`conge-attrib-jours-nbr${prefix}`);
   if(!duEl||!auEl||!joursEl)return;
   const du=duEl.value;
   if(source==="au"){
@@ -30480,24 +30481,51 @@ function updateCongeAttribDates(source){
     const jours=parseInt(joursEl.value,10);
     if(du&&jours>0)auEl.value=congeAttribAddDays(du,jours-1);
   }
+}
+function congeAttribSyncAccorde(){
+  // Par défaut, le congé accordé recopie le congé demandé — jusqu'à ce que le DRH modifie
+  // lui-même le bloc "Congé accordé" (ex : accorder moins de jours que demandé).
+  if(congeAccordeTouched)return;
+  const du=document.getElementById("conge-attrib-du")?.value||"";
+  const jours=document.getElementById("conge-attrib-jours-nbr")?.value||"";
+  const au=document.getElementById("conge-attrib-au")?.value||"";
+  const duA=document.getElementById("conge-attrib-du-accorde");
+  const joursA=document.getElementById("conge-attrib-jours-nbr-accorde");
+  const auA=document.getElementById("conge-attrib-au-accorde");
+  if(duA)duA.value=du;
+  if(joursA)joursA.value=jours;
+  if(auA)auA.value=au;
+}
+function updateCongeAttribDates(source){
+  congeAttribApplyDateFields("",source);
+  congeAttribSyncAccorde();
+  updateCongeAttribJours();
+}
+function updateCongeAccordeDates(source){
+  congeAccordeTouched=true;
+  congeAttribApplyDateFields("-accorde",source);
   updateCongeAttribJours();
 }
 function updateCongeAttribJours(){
   const type=document.getElementById("conge-attrib-type")?.value;
-  const du=document.getElementById("conge-attrib-du")?.value;
-  const au=document.getElementById("conge-attrib-au")?.value;
+  const duD=document.getElementById("conge-attrib-du")?.value;
+  const auD=document.getElementById("conge-attrib-au")?.value;
+  const duA=document.getElementById("conge-attrib-du-accorde")?.value;
+  const auA=document.getElementById("conge-attrib-au-accorde")?.value;
   const el=document.getElementById("conge-attrib-jours");
   const covEl=document.getElementById("conge-attrib-coverage");
   if(!el)return;
-  const jours=drhCongeDureeJours({du,au});
-  if(!jours){el.innerHTML="";if(covEl)covEl.innerHTML="";return}
-  if(type==="Annuel"&&jours>congeAttribSolde){
-    el.innerHTML=`<span class="text-red-600 font-semibold">⚠ ${jours} jour(s) demandé(s) — dépasse le solde disponible (${congeAttribSolde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j). Ajustez le nombre de jours.</span>`;
+  const joursDemande=drhCongeDureeJours({du:duD,au:auD});
+  const joursAccorde=drhCongeDureeJours({du:duA,au:auA});
+  if(!joursDemande&&!joursAccorde){el.innerHTML="";if(covEl)covEl.innerHTML="";return}
+  const diff=joursAccorde&&joursAccorde!==joursDemande?` · ${joursAccorde} jour(s) accordé(s)`:"";
+  if(type==="Annuel"&&joursAccorde>congeAttribSolde){
+    el.innerHTML=`<span class="text-red-600 font-semibold">⚠ ${joursAccorde} jour(s) accordé(s) — dépasse le solde disponible (${congeAttribSolde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} j). Ajustez le nombre de jours.</span>`;
   }else{
-    el.innerHTML=`<span class="text-emerald-700 font-semibold">${jours} jour(s) demandé(s)</span>`;
+    el.innerHTML=`<span class="text-emerald-700 font-semibold">${joursDemande} jour(s) demandé(s)${diff}</span>`;
   }
   if(covEl&&congeAttribAgent){
-    const cov=drhSiteCoverageCheck(congeAttribAgent,du,au);
+    const cov=drhSiteCoverageCheck(congeAttribAgent,duA||duD,auA||auD);
     if(cov&&cov.concurrentNames.length>0&&(cov.concurrentNames.length+1)/cov.total>=0.25){
       covEl.innerHTML=`<div class="p-2 rounded mt-2" style="background:#fffbeb;border:1px solid #fcd34d;font-size:12px;color:#92400e">⚠ Couverture site « ${escapeHTML(cov.site)} » : ${cov.concurrentNames.length+1}/${cov.total} agent(s) seraient absents en même temps (déjà en congé : ${escapeHTML(cov.concurrentNames.join(", "))}).</div>`;
     }else{
@@ -30516,8 +30544,14 @@ function openCongeAttributionModal(agentId){
   const suspended=a.statut==="suspendu";
   congeAttribSolde=solde;
   congeAttribAgent=a;
+  congeAccordeTouched=false;
   const history=(db.conges||[]).filter(c=>String(c.agentId)===String(a.id)).sort((x,y)=>String(y.du||"").localeCompare(String(x.du||"")));
-  const historyRows=history.map(c=>`<tr><td>${escapeHTML(c.type||"—")}</td><td class="font-bold">${drhCongeDureeJours(c)} j</td><td class="text-xs">${c.du?formatDate(c.du):"—"}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td class="text-xs">${escapeHTML(c.motif||"—")}</td><td><button type="button" class="btn btn-ghost text-xs" onclick="printCongeOrder('${escapeHTML(String(c.id))}')">🖨 Titre de congé</button></td></tr>`).join("");
+  const historyRows=history.map(c=>{
+    const duDemande=c.duDemande||c.du,auDemande=c.auDemande||c.au;
+    const joursDemande=drhCongeDureeJours({du:duDemande,au:auDemande});
+    const joursAccorde=drhCongeDureeJours(c);
+    return `<tr><td>${escapeHTML(c.type||"—")}</td><td class="font-bold">${joursDemande} – ${joursAccorde}</td><td class="text-xs">${duDemande?formatDate(duDemande):"—"} – ${c.du?formatDate(c.du):"—"}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td class="text-xs">${escapeHTML(c.motif||"—")}</td><td><button type="button" class="btn btn-ghost text-xs" onclick="printCongeOrder('${escapeHTML(String(c.id))}')">🖨 Titre de congé</button></td></tr>`;
+  }).join("");
   openModal(`<div style="min-height:78vh;display:flex;flex-direction:column">
     <div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
       <div><h3 class="text-xl font-black">${escapeHTML(name||"—")}</h3><p class="text-sm text-slate-500">${escapeHTML(a.matricule||a.code||"—")} · ${escapeHTML(a.societe||"")} · Recruté le ${recruited?formatDate(recruited):"—"}</p></div>
@@ -30530,22 +30564,32 @@ function openCongeAttributionModal(agentId){
     </div>
     ${suspended?`<div class="card p-4 mb-4" style="background:#fef2f2;border:1px solid #fca5a5"><span class="font-bold text-red-700">⛔ Employé suspendu</span><div class="text-sm text-red-800 mt-1">Un employé suspendu ne peut pas bénéficier d'un congé. Levez la suspension avant d'en attribuer un.</div></div>`:`
     <form onsubmit="event.preventDefault();requestCongeConfirmation('${escapeHTML(String(a.id))}')" class="card p-4 mb-4">
-      <div class="font-bold mb-3">Attribuer un congé</div>
-      <div class="grid grid-2">
-        <div><label class="label">Type</label><select class="select" name="type" id="conge-attrib-type" onchange="updateCongeAttribJours()">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select></div>
-        <div><label class="label">Statut</label><select class="select" name="statut"><option value="approuve">Approuvé</option><option value="en_attente">En attente</option></select></div>
-        <div class="col-span-2 grid grid-3">
-          <div><label class="label">Du</label><input class="input" type="date" name="du" id="conge-attrib-du" onchange="updateCongeAttribDates('du')" required/></div>
-          <div><label class="label">Nbr de jours demandés</label><input class="input" type="number" min="1" id="conge-attrib-jours-nbr" oninput="updateCongeAttribDates('jours')" placeholder="Ex: 14"/></div>
-          <div><label class="label">Au (date de retour)</label><input class="input" type="date" name="au" id="conge-attrib-au" onchange="updateCongeAttribDates('au')" required/></div>
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <div class="font-bold mb-3" style="color:#043970">CONGÉ DEMANDÉ</div>
+          <div class="mb-3"><label class="label">Type</label><select class="select" name="type" id="conge-attrib-type" onchange="updateCongeAttribJours()">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select></div>
+          <div class="grid grid-3">
+            <div><label class="label">Du</label><input class="input" type="date" id="conge-attrib-du" onchange="updateCongeAttribDates('du')" required/></div>
+            <div><label class="label">Nbr de jours demandés</label><input class="input" type="number" min="1" id="conge-attrib-jours-nbr" oninput="updateCongeAttribDates('jours')" placeholder="Ex: 14"/></div>
+            <div><label class="label">Au (date de retour)</label><input class="input" type="date" id="conge-attrib-au" onchange="updateCongeAttribDates('au')" required/></div>
+          </div>
         </div>
-        <div class="col-span-2" id="conge-attrib-jours"></div>
-        <div class="col-span-2" id="conge-attrib-coverage"></div>
-        <div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div>
+        <div style="border-left:1px solid var(--border);padding-left:24px">
+          <div class="font-bold mb-3" style="color:#043970">CONGÉ ACCORDÉ</div>
+          <div class="grid grid-3" style="margin-top:38px">
+            <div><label class="label">Du</label><input class="input" type="date" id="conge-attrib-du-accorde" onchange="updateCongeAccordeDates('du')" required/></div>
+            <div><label class="label">Nbr de jours demandés</label><input class="input" type="number" min="1" id="conge-attrib-jours-nbr-accorde" oninput="updateCongeAccordeDates('jours')" placeholder="Ex: 14"/></div>
+            <div><label class="label">Au (date de retour)</label><input class="input" type="date" id="conge-attrib-au-accorde" onchange="updateCongeAccordeDates('au')" required/></div>
+          </div>
+        </div>
       </div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--border)"/>
+      <div id="conge-attrib-jours"></div>
+      <div id="conge-attrib-coverage"></div>
+      <div class="mt-3"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div>
       <div class="flex justify-end gap-2 mt-4"><button type="submit" class="btn btn-primary">Valider congé</button></div>
     </form>`}
-    <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type congé</th><th>Nbr jour demandés</th><th>Date départ souhaitée</th><th>Statut</th><th>Observation</th><th>Document</th></tr></thead><tbody>${historyRows||`<tr><td colspan="6" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
+    <div class="card overflow-x-auto" style="flex:1"><div class="p-3 font-bold border-b">Historique des congés</div><table><thead><tr><th>Type congé</th><th>Nbr jour demandés / accordés</th><th>Date départ souhaitée / accordée</th><th>Statut</th><th>Observation</th><th>Document</th></tr></thead><tbody>${historyRows||`<tr><td colspan="6" class="text-center text-slate-500 p-6">Aucun congé enregistré.</td></tr>`}</tbody></table></div>
   </div>`);
 }
 async function notifyPortalCongeAttribution(a,c){
@@ -30610,19 +30654,23 @@ function requestCongeConfirmation(agentId){
   const form=document.querySelector(".modal-bg form");
   if(!form)return;
   const fd=new FormData(form);
-  const type=fd.get("type"),du=fd.get("du"),au=fd.get("au"),statut=fd.get("statut"),motif=fd.get("motif");
-  if(!du||!au){toast("Renseignez les dates du congé","error");return}
+  const type=fd.get("type"),motif=fd.get("motif");
+  const duDemande=document.getElementById("conge-attrib-du")?.value||"";
+  const auDemande=document.getElementById("conge-attrib-au")?.value||"";
+  const du=document.getElementById("conge-attrib-du-accorde")?.value||"";
+  const au=document.getElementById("conge-attrib-au-accorde")?.value||"";
+  if(!du||!au){toast("Renseignez les dates du congé accordé","error");return}
   const jours=drhCongeDureeJours({du,au});
-  if(jours<=0){toast("Période invalide (date de fin avant date de début)","error");return}
+  if(jours<=0){toast("Période accordée invalide (date de fin avant date de début)","error");return}
   if(type==="Annuel"&&jours>congeAttribSolde){
-    toast(`Impossible : ${jours} jour(s) demandé(s) dépasse le solde disponible (${congeAttribSolde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jour(s)). Ajustez le nombre de jours.`,"error");
+    toast(`Impossible : ${jours} jour(s) accordé(s) dépasse le solde disponible (${congeAttribSolde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jour(s)). Ajustez le nombre de jours.`,"error");
     return;
   }
   const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
   if(!a){toast("Employé introuvable","error");return}
   if(employeeIsFormer(a)){toast("Congé impossible — cet employé est sortant et archivé","error");return}
   if(a.statut==="suspendu"){toast("Congé impossible — cet employé est suspendu","error");return}
-  pendingCongeAttribution={agentId:a.id,type,du,au,statut,motif,jours,savedConge:null};
+  pendingCongeAttribution={agentId:a.id,type,statut:"approuve",motif,du,au,jours,duDemande:duDemande||du,auDemande:auDemande||au,savedConge:null};
   const name=((a.nom||"")+" "+(a.prenom||"")).trim();
   openModal(`<div class="text-center p-4">
     <div class="text-lg font-black mb-3">Confirmation</div>
@@ -30671,7 +30719,7 @@ async function finalizeCongeAttribution(){
   if(!a){toast("Employé introuvable","error");return}
   const btn=document.getElementById("conge-preview-valider");
   if(btn){btn.disabled=true;btn.textContent="Validation…"}
-  const conge={id:uid("cg"),agentId:a.id,type:p.type,du:p.du,au:p.au,motif:p.motif,statut:p.statut,createdAt:today()};
+  const conge={id:uid("cg"),agentId:a.id,type:p.type,du:p.du,au:p.au,duDemande:p.duDemande,auDemande:p.auDemande,motif:p.motif,statut:p.statut,createdAt:today()};
   db.conges.push(conge);
   if(!(await saveDBAndWaitToast("Congé non confirmé"))){
     db.conges.pop();
