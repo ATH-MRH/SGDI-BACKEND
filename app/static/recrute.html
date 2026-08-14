@@ -466,6 +466,9 @@ function setPositionValue(id,value){
 function onSocietyChange(){
   activeSociety=document.getElementById("societySelect").value||"";
   Object.keys(tabState).forEach(k=>{tabState[k].page=1});
+  refreshRecruitCurrentSection();
+}
+function refreshRecruitCurrentSection(){
   if(recruitSection==="candidates")loadTab(activeTab);
   else if(recruitSection==="dashboard")renderRecruitDashboard(true);
   else if(recruitSection==="interviews")renderRecruitInterviews(true);
@@ -503,10 +506,7 @@ function showRecruitSection(section){
   document.getElementById("candidatesSection").classList.toggle("hidden",recruitSection!=="candidates");
   document.getElementById("announcementsSection").classList.toggle("hidden",recruitSection!=="announcements");
   showBanner("");
-  if(recruitSection==="dashboard")renderRecruitDashboard(true);
-  else if(recruitSection==="candidates")loadTab(activeTab);
-  else if(recruitSection==="interviews")renderRecruitInterviews(true);
-  else renderRecruitAnnouncements();
+  refreshRecruitCurrentSection();
 }
 function candidateFullName(item){return `${item?.last_name||""} ${item?.first_name||""}`.trim()||"Candidat sans nom"}
 function candidateConvocation(item){return item?.data?.derniereConvocation||null}
@@ -577,7 +577,7 @@ async function renderRecruitInterviews(refresh=false){
     try{const params=new URLSearchParams({mode:"new",page:"1",page_size:"100"});if(activeSociety)params.set("society",activeSociety);const result=await apiFetch("/api/drh/candidates/page?"+params.toString());tabState.new.items=result.items||[];tabState.new.total=result.total||0}catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
   }
   const rows=tabState.new.items.filter(item=>candidateConvocation(item)||candidateInterview(item)).sort((a,b)=>String(candidateConvocation(a)?.date||candidateInterview(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||candidateInterview(b)?.date||"")));
-  host.innerHTML=`<div class="section-head"><div><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><button class="secondary" onclick="renderRecruitInterviews(true)">↻ Actualiser</button></div><div class="table-card"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Date</th><th>Heure</th><th>État</th><th>Note</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(item=>{const c=candidateConvocation(item)||{};const e=candidateInterview(item);return `<tr><td><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div></td><td>${esc(item.desired_position||"—")}</td><td>${formatDateFr(e?.date||c.date)}</td><td>${esc(c.heure||"—")}</td><td>${e?'<span class="pill pill-green">Réalisé</span>':'<span class="pill pill-indigo">Planifié</span>'}</td><td>${e?`${String(e.moyenne??"—").replace(".",",")} / 5`:"—"}</td><td><button class="link-btn" onclick="dashboardOpenCandidate(${item.id},'interview')">${e?"Nouvel entretien":"Démarrer"}</button></td></tr>`}).join(""):`<tr><td colspan="7" class="empty">Aucun entretien enregistré.</td></tr>`}</tbody></table></div>`;
+  host.innerHTML=`<div class="section-head"><div><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><button class="secondary" onclick="renderRecruitInterviews(true)">↻ Actualiser</button></div><div class="table-card"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Date</th><th>Heure</th><th>État</th><th>Note</th><th>Action</th><th>Recruteur</th></tr></thead><tbody>${rows.length?rows.map(item=>{const c=candidateConvocation(item)||{};const e=candidateInterview(item);return `<tr><td><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div></td><td>${esc(item.desired_position||"—")}</td><td>${formatDateFr(e?.date||c.date)}</td><td>${esc(c.heure||"—")}</td><td>${e?'<span class="pill pill-green">Réalisé</span>':'<span class="pill pill-indigo">Planifié</span>'}</td><td>${e?`${String(e.moyenne??"—").replace(".",",")} / 5`:"—"}</td><td><button class="link-btn" onclick="dashboardOpenCandidate(${item.id},'interview')">${e?"Nouvel entretien":"Démarrer"}</button></td><td>${esc(e?.recruteur||"—")}</td></tr>`}).join(""):`<tr><td colspan="8" class="empty">Aucun entretien enregistré.</td></tr>`}</tbody></table></div>`;
 }
 function normalizeExcelHeader(value){return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()}
 function excelCell(row,names){
@@ -887,7 +887,7 @@ async function saveCandidateConvocation(form){
   const data={...(item.data||{})};const history=Array.isArray(data.convocations)?data.convocations.slice():[];
   const convocation={id:"conv_"+Date.now(),date:form.date.value,heure:form.heure.value,lieu:form.lieu.value.trim(),motif:form.motif.value.trim(),statut:"planifiee",createdAt:new Date().toISOString(),createdBy:recruteSession?.user?.username||""};
   history.push(convocation);data.convocations=history;data.derniereConvocation=convocation;data.avisDecision="Instance";data.avisDate=today();
-  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateConvocation();showBanner(`Convocation enregistrée pour le ${esc(convocation.date)} à ${esc(convocation.heure)}.`,"success");loadTab(activeTab);}catch(error){const el=document.getElementById("convocationError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer la convocation";}
+  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateConvocation();showBanner(`Convocation enregistrée pour le ${esc(convocation.date)} à ${esc(convocation.heure)}.`,"success");refreshRecruitCurrentSection();}catch(error){const el=document.getElementById("convocationError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer la convocation";}
 }
 const INTERVIEW_CRITERIA=[
   ["identite","Identité et complétude du dossier"],
@@ -927,7 +927,7 @@ async function saveCandidateInterview(form){
   const data={...(item.data||{})};const history=Array.isArray(data.entretiens)?data.entretiens.slice():[];history.push(entretien);data.entretiens=history;data.dernierEntretien=entretien;
   if(entretien.recommandation==="Favorable")data.avisDecision="Favorable";else if(entretien.recommandation==="Défavorable")data.avisDecision="Défavorable";else data.avisDecision="Instance";data.avisDate=entretien.date;data.avisRecruteur=entretien.recruteur;data.avisCommentaire=entretien.appreciation;
   const button=form.querySelector('button[type="submit"]');button.disabled=true;button.textContent="ENREGISTREMENT…";
-  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateInterview();showBanner(`Entretien du ${esc(formatDateFr(entretien.date))} enregistré · note ${String(entretien.moyenne).replace(".",",")} / 5.`,"success");loadTab(activeTab);}catch(error){const el=document.getElementById("interviewError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer l’entretien";}
+  try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data})});closeCandidateInterview();showBanner(`Entretien du ${esc(formatDateFr(entretien.date))} enregistré · note ${String(entretien.moyenne).replace(".",",")} / 5.`,"success");refreshRecruitCurrentSection();}catch(error){const el=document.getElementById("interviewError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer l’entretien";}
 }
 function renderList(){
   const state=tabState[activeTab];
