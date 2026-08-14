@@ -31356,7 +31356,9 @@ function drhOperationalAgents(list){
 }
 function drhSiteBucketsFromAgents(agents,sites=db.sites||[]){
   const buckets=new Map();
-  drhOperationalAgents(agents).forEach(a=>{
+  // Cette répartition décrit les salariés actifs actuellement affectés. Elle ne
+  // doit pas disparaître parce qu'une dotation ou un PV reste à compléter.
+  (agents||[]).filter(a=>employeeIsActive(a)&&agentHasLiveAffectation(a)).forEach(a=>{
     const aff=agentLiveAffectation(a);
     const site=drhResolvedAgentSite(a,sites);
     const label=site?.nom||site?.intitule||aff?.siteName||"Site inconnu";
