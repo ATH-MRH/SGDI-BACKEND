@@ -36199,8 +36199,16 @@ function pointageEligibleAgents(soc){
 }
 function ptDaysInMonth(ym){const [y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate()}
 function ptKey(year,month){return year+"-"+String(month).padStart(2,"0")}
-function ptGetSheet(agentId,ym){if(!db.pointages)db.pointages=[];return db.pointages.find(p=>p.agentId===agentId&&p.periode===ym)}
-function ptEnsureSheet(agentId,ym){let s=ptGetSheet(agentId,ym);if(!s){const ag=db.agents.find(a=>a.id===agentId);s={id:uid("pt"),agentId,periode:ym,societe:ag?ag.societe:"",days:{},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.pointages.push(s)}return s}
+function ptGetSheet(agentId,ym){
+  if(!db.pointages)db.pointages=[];
+  // agentId circule tantot en nombre (a.id lu directement, ex. depuis la paie), tantot en
+  // chaine (valeurs interpolees dans les attributs onclick de la saisie manuelle) : comparer
+  // en String() des deux cotes evite qu'une fiche de pointage existante devienne introuvable
+  // (et donc que la paie ignore silencieusement des absences pourtant saisies).
+  const key=String(agentId??"");
+  return db.pointages.find(p=>String(p.agentId??"")===key&&p.periode===ym);
+}
+function ptEnsureSheet(agentId,ym){let s=ptGetSheet(agentId,ym);if(!s){const key=String(agentId??"");const ag=db.agents.find(a=>String(a.id??"")===key);s={id:uid("pt"),agentId,periode:ym,societe:ag?ag.societe:"",days:{},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.pointages.push(s)}return s}
 function ptCodeAbsencePayrollValue(code){const c=String(code||"").toUpperCase();if(c==="A"||c==="AB"||c==="A1")return 1;if(c==="A2")return 2;if(c==="A3")return 3;return 0}
 function ptIsAbsencePayrollCode(code){return ptCodeAbsencePayrollValue(code)>0}
 function ptAbsencePayrollDays(sheet){if(!sheet)return 0;return Object.values(sheet.days||{}).reduce((s,c)=>s+ptCodeAbsencePayrollValue(c),0)}
