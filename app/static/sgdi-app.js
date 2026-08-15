@@ -25255,6 +25255,17 @@ function paieBulletinFor(agentId,ym){
   paieEnsure();
   return (db.paieBulletins||[]).find(b=>b.agentId===agentId&&b.ym===ym)||null;
 }
+function paieBulletinDrift(a,ym){
+  // Un bulletin clôturé est fige (calcul snapshot) : si la fiche de pointage de l'agent
+  // est modifiee APRES la clôture, le bulletin ne reflete plus le pointage reel. On le
+  // detecte en comparant la date de creation du bulletin a la derniere modification de
+  // la fiche de pointage correspondante.
+  const bulletin=paieBulletinFor(a.id,ym);
+  if(!bulletin)return false;
+  const sheet=ptGetSheet(a.id,ym);
+  if(!sheet||!sheet.updatedAt||!bulletin.createdAt)return false;
+  return new Date(sheet.updatedAt).getTime()>new Date(bulletin.createdAt).getTime();
+}
 function paieCalcForAgent(a,ym){
   const b=paieBulletinFor(a.id,ym);
   if(b&&b.calcul)return b.calcul;
@@ -25900,7 +25911,7 @@ function renderPaie(view,sub,arg){
   </details>
   <div class="card overflow-hidden"><div class="overflow-x-auto"><table>
     <thead><tr><th>Code</th><th>Employé</th><th>Société</th><th>Contrat</th><th class="text-right">Base proratisée</th><th class="text-right">Primes</th><th class="text-right">Brut cotisable</th><th class="text-right">Assiette CNAS</th><th class="text-right">CNAS sal.</th><th class="text-right">Base IRG</th><th class="text-right">IRG</th><th class="text-right">Net à payer</th><th class="text-right">Coût employeur</th><th>Alerte</th><th></th></tr></thead>
-    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="15" class="text-center text-slate-500 p-6">Aucun salarié à payer sur cette période.</td></tr>`:lines.map(({a,c})=>{const typeContrat=cleanContractType(a.typeContrat);const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,typeContrat,c.brutCotisable,c.assietteCnas,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.oeuvresSociales,c.coutEmployeur];const issues=[!c.pointageDisponible?"POINTAGE":null,!(c.brutBase>0)?"BASE":null,c.assietteCnas>c.brutCotisable?"CNAS MIN":null].filter(Boolean);return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/paie/agent/${employeeRouteId(a)}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(typeContrat)}</span></td><td class="text-right">${money(c.baseProratisee)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right font-bold">${money(c.assietteCnas)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${issues.length?issues.map(i=>`<span class="pill pill-red">${i}</span>`).join(" "):`<span class="pill pill-green">OK</span>`}</td><td><div class="flex gap-1 flex-wrap"><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${a.id}')">Éléments</button><button class="btn btn-primary text-xs" onclick="navigate('paie/agent/${employeeRouteId(a)}')">Dossier</button><button class="btn btn-secondary text-xs" onclick="previewPaieFiche('${a.id}')">Bulletin</button></div></td></tr>`}).join("")}</tbody>
+    <tbody id="paie-tbody">${lines.length===0?`<tr><td colspan="15" class="text-center text-slate-500 p-6">Aucun salarié à payer sur cette période.</td></tr>`:lines.map(({a,c})=>{const typeContrat=cleanContractType(a.typeContrat);const csv=[a.matricule,(a.nom||"")+" "+(a.prenom||""),a.societe,typeContrat,c.brutCotisable,c.assietteCnas,c.cnasSalarie,c.baseIRG,c.irg,c.netAPayer,c.cnasPatronal,c.oeuvresSociales,c.coutEmployeur];const issues=[!c.pointageDisponible?"POINTAGE":null,!(c.brutBase>0)?"BASE":null,c.assietteCnas>c.brutCotisable?"CNAS MIN":null,paieIsClosed(ym,a.societe)&&paieBulletinDrift(a,ym)?"POINTAGE MODIFIÉ APRÈS CLÔTURE":null].filter(Boolean);return`<tr data-searchable data-paierow data-csv='${JSON.stringify(csv).replace(/'/g,"&#39;")}'><td class="font-mono font-bold">${safe(a.matricule)}</td><td><a href="#/paie/agent/${employeeRouteId(a)}" class="font-semibold hover:underline">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</a><div class="text-[10px] text-slate-500">${escapeHTML(a.fonction||a.affectationCourante?.poste||"")}</div></td><td class="text-xs">${safe(a.societe)}</td><td><span class="pill pill-gray">${safe(typeContrat)}</span></td><td class="text-right">${money(c.baseProratisee)}</td><td class="text-right">${money(c.primes)}</td><td class="text-right font-bold">${money(c.brutCotisable)}</td><td class="text-right font-bold">${money(c.assietteCnas)}</td><td class="text-right text-red-700">${money(c.cnasSalarie)}</td><td class="text-right">${money(c.baseIRG)}</td><td class="text-right text-purple-700">${money(c.irg)}</td><td class="text-right font-black text-emerald-700">${money(c.netAPayer)}</td><td class="text-right font-bold text-amber-700">${money(c.coutEmployeur)}</td><td>${issues.length?issues.map(i=>`<span class="pill pill-red">${i}</span>`).join(" "):`<span class="pill pill-green">OK</span>`}</td><td><div class="flex gap-1 flex-wrap"><button class="btn btn-secondary text-xs" onclick="openPaieElementsModal('${a.id}')">Éléments</button><button class="btn btn-primary text-xs" onclick="navigate('paie/agent/${employeeRouteId(a)}')">Dossier</button><button class="btn btn-secondary text-xs" onclick="previewPaieFiche('${a.id}')">Bulletin</button></div></td></tr>`}).join("")}</tbody>
   </table></div></div>
   <div class="text-xs text-slate-500 mt-3">Note : ce module automatise les calculs standards. Les cas particuliers (avantages en nature, indemnités imposables/non imposables, temps partiel, dispositifs aidés, rappels) doivent être validés par votre comptable ou gestionnaire paie.</div>`;
 }
@@ -36265,6 +36276,13 @@ async function ptPersistCell(agentId,ym,day,code){
   }
 }
 function ptSetCell(agentId,ym,day,code){const date=`${ym}-${String(day).padStart(2,"0")}`;if(ptGuardEmployeePointage(agentId,date))return;const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("Pointage validé · déverrouillez d'abord","error");return}const k=String(day).padStart(2,"0");if(code)s.days[k]=code;else delete s.days[k];if(s.fpqSync)delete s.fpqSync[k];ptNormalizeAbandonDePoste(s);s.updatedAt=new Date().toISOString();ptPersistCell(agentId,ym,day,code)}
+function ptWarnIfPaieAlreadyClosed(agentId,ym){
+  const key=String(agentId??"");
+  const a=(db.agents||[]).find(x=>String(x.id??"")===key);
+  if(!a||typeof paieIsClosed!=="function"||!paieIsClosed(ym,a.societe))return;
+  const label=typeof paieMonthLabel==="function"?paieMonthLabel(ym):ym;
+  toast(`⚠ La paie de ${label} est déjà clôturée pour ${(a.nom||"")+" "+(a.prenom||"")} — ce pointage ne sera pas repris tant que le bulletin n'est pas régénéré.`,"error");
+}
 function ptPresenceAgentId(f){
   const refs=[f?.agentId,f?.agentBackendId,f?.employee_id,f?.matricule].map(x=>String(x||"")).filter(Boolean);
   const a=(db.agents||[]).find(ag=>refs.includes(String(ag.id||""))||refs.includes(String(ag.backendId||""))||refs.includes(String(ag.matricule||"")));
@@ -37099,9 +37117,16 @@ function ptOpenCodePicker(agentId,ym,day){
     ${cur?`<div style="padding-top:10px;border-top:1px solid #f1f5f9;margin-top:2px"><button onclick="ptPickCode('${agentId}','${ym}',${day},'')" style="background:#f8fafc;color:#64748b;border:1px solid #e2e8f0;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;font-weight:600">✕ Effacer (actuellement : <strong>${cur}</strong>)</button></div>`:""}
   </div>`);
 }
-function ptPickCode(agentId,ym,day,code){ptSetCell(agentId,ym,day,code);closeModal();renderView()}
-function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);renderView()}
-async function ptClearRow(agentId,ym){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : effacement pointage non autorisé."))return;const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
+function ptPickCode(agentId,ym,day,code){ptSetCell(agentId,ym,day,code);ptWarnIfPaieAlreadyClosed(agentId,ym);closeModal();renderView()}
+function ptFillRow(agentId,ym,code){const s=ptEnsureSheet(agentId,ym);if(s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Remplir toute la ligne avec « "+code+" » ?"))return;const days=ptDaysInMonth(ym);for(let d=1;d<=days;d++)ptSetCell(agentId,ym,d,code);ptWarnIfPaieAlreadyClosed(agentId,ym);renderView()}
+function ptWarnIfPaieAlreadyClosed(agentId,ym){
+  const key=String(agentId??"");
+  const a=(db.agents||[]).find(x=>String(x.id??"")===key);
+  if(!a||typeof paieIsClosed!=="function"||!paieIsClosed(ym,a.societe))return;
+  const label=typeof paieMonthLabel==="function"?paieMonthLabel(ym):ym;
+  toast(`⚠ La paie de ${label} est déjà clôturée pour ${(a.nom||"")+" "+(a.prenom||"")} — ce pointage ne sera pas repris tant que le bulletin n'est pas régénéré.`,"error");
+}
+async function ptClearRow(agentId,ym){if(guardOpsSupervisorMutation("pointage-admin","Accès superviseur OPS : effacement pointage non autorisé."))return;const s=ptGetSheet(agentId,ym);if(s&&s.valide){toast("🔒 Pointage validé","error");return}if(!confirm("Effacer toute la ligne ?"))return;if(s){s.days={};s.fpqSync={};s.updatedAt=new Date().toISOString()}try{await sgdiRunLegacyAction("clear-pointage-sheet",{data:{agentId,periode:ym}});uiSaveState("Sauvegardé","success");ptWarnIfPaieAlreadyClosed(agentId,ym);renderView()}catch(e){toast("Effacement refusé : "+(e.message||e),"error");await sgdiPullState({silent:true,force:true}).catch(()=>null);renderView()}}
 function ptCount(sheet,code){if(!sheet)return 0;return Object.values(sheet.days||{}).filter(v=>v===code).length}
 function ptCellHTML(agentId,ym,day,code,isWeekend,isToday,locked){
   const c=POINTAGE_CODES[code];
