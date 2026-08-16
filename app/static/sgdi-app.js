@@ -35595,41 +35595,86 @@ function renderOPS(view,sub,arg){
     suspendus:_fpqSuspList.map(f=>{const a=(db.agents||[]).find(x=>x.id===f.agentId);return{nom:(a?.nom||"")+" "+(a?.prenom||""),mat:a?.matricule||"—",site:f.siteName||"—",code:"S"};}),
     sanctions:_sanctionList.map(a=>{const ev=(a.gestionEvents||[]).filter(e=>["Mise en demeure","Sanction"].includes(e.type)&&(e.statut==="en_cours"||e.statut==="approuve")).pop();return{nom:(a.nom||"")+" "+(a.prenom||""),mat:a.matricule||"—",site:agentLiveAffectation(a)?.siteName||"—",code:ev?.type||"Sanction"};})
   };
-  const opsKpi=(label,value,color,subtext,action,id)=>`<button type="button" ${action?`onclick="${action}"`:""} class="card p-4 text-left hover:shadow-lg transition" style="border:1px solid #e2e8f0;border-top:4px solid ${color};min-height:112px;cursor:${action?"pointer":"default"}"><div class="text-[10px] uppercase tracking-wider font-black text-slate-500">${label}</div><div ${id?`id="${id}"`:""} class="text-3xl font-black mt-2" style="color:${color}">${value}</div><div class="text-xs text-slate-500 mt-1">${subtext}</div></button>`;
+  const opsKpi=(label,value,bg,color,icon,subtext,action,id)=>`<button type="button" ${action?`onclick="${action}"`:""} class="ops-dash-kpi" style="cursor:${action?"pointer":"default"}"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${label}</div><div ${id?`id="${id}"`:""} class="ops-dash-val">${value}</div><div class="ops-dash-sub">${subtext}</div></button>`;
   const presenceBase=Math.max(fpqToday.length,fpqPresent+_fpqAbsList.length+_fpqMalList.length+_fpqSuspList.length,1);
-  const presencePct=Math.round(fpqPresent*100/presenceBase),absencePct=Math.round(_fpqAbsList.length*100/presenceBase);
-  view.innerHTML=`<div class="flex items-end justify-between gap-3 mb-5 flex-wrap"><div><div class="text-xs font-black uppercase tracking-widest text-blue-600">Pilotage opérationnel</div><h1 class="text-3xl font-black mt-1">Tableau de bord OPS</h1><p class="text-slate-500 text-sm mt-1">${soc?escapeHTML(soc):"Toutes sociétés"} · situation du ${formatDate(td)}</p></div><button class="btn btn-secondary text-xs" onclick="renderView()">↻ Actualiser</button></div>
-  <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
-    ${opsKpi("Effectif actif",dashboardActive,"#043970","Employés en activité",societeRows.length===1?`openOpsSocModal('${encodeURIComponent(societeRows[0].soc)}','eff')`:"")}
-    ${opsKpi("Présents",fpqPresent,"#16a34a","Aujourd'hui","navigate('pointage/feuille')")}
-    ${opsKpi("Absents",_fpqAbsList.length,"#dc2626","Aujourd'hui","openOpsStatModal('absents')")}
-    ${opsKpi("Affectés",dashboardAffectes,"#2563eb",`${tauxAffectation}% de l'effectif`,"navigate('effectif/actifs')")}
-    ${opsKpi("Sites actifs",dashboardSitesActifs,"#7c3aed","Périmètre opérationnel","navigate('sites/actifs')")}
-    ${opsKpi("Alertes critiques","…","#ea580c","Temps réel","document.getElementById('opsAttendanceAlertsCard')?.scrollIntoView({behavior:'smooth'})","opsAlertsKpi")}
+  const _siteStatRowsNew=_siteStatKeys.map(k=>{
+    const pres=_presentsBySite[k]||0;const aff=_affectesBySite[k]||0;const total=Math.max(aff,pres);
+    const pct=total?Math.round(pres*100/total):0;const color=pct>=80?"#16a34a":pct>=50?"#d97706":"#dc2626";
+    return`<div class="ops-dash-site-row"><div class="ops-dash-site-name">${escapeHTML(k)}</div><div class="ops-dash-site-metric"><b>${pres}</b><small>Présents</small></div><div class="ops-dash-site-metric" title="${aff} affecté(s)"><div class="ops-dash-cov-track"><div class="ops-dash-cov-fill" style="width:${pct}%;background:${color}"></div></div><span class="ops-dash-cov-pct" style="color:${color}">${total?pct+"%":"—"}</span></div></div>`;
+  }).join("");
+  view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Pilotage opérationnel</div><h1>Tableau de bord OPS</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(soc):"Toutes sociétés"} · situation du ${formatDate(td)}</span><span class="ops-dash-live"><span class="ops-dash-live-dot"></span>Temps réel</span></div></div><button class="ops-dash-refresh" onclick="renderView()">↻ Actualiser</button></div></div>
+  <div class="ops-dash-kpis">
+    ${opsKpi("Effectif actif",dashboardActive,"#dbeafe","#043970","👥","Employés en activité",societeRows.length===1?`openOpsSocModal('${encodeURIComponent(societeRows[0].soc)}','eff')`:"")}
+    ${opsKpi("Présents",fpqPresent,"#dcfce7","#166534","✓","Aujourd'hui","navigate('pointage/feuille')")}
+    ${opsKpi("Absents",_fpqAbsList.length,"#fee2e2","#991b1b","✕","Aujourd'hui","openOpsStatModal('absents')")}
+    ${opsKpi("Affectés",dashboardAffectes,"#dbeafe","#1e40af","📌",`${tauxAffectation}% de l'effectif`,"navigate('effectif/actifs')")}
+    ${opsKpi("Sites actifs",dashboardSitesActifs,"#ede9fe","#5b21b6","📍","Périmètre opérationnel","navigate('sites/actifs')")}
+    ${opsKpi("Alertes critiques","…","#fef3c7","#92400e","⚠","Temps réel","document.getElementById('opsAttendanceAlertsCard')?.scrollIntoView({behavior:'smooth'})","opsAlertsKpi")}
   </div>
-  <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-5">
-    <div class="card p-5"><div class="flex items-center justify-between mb-4"><div><h3 class="font-black text-lg">Présence aujourd'hui</h3><p class="text-xs text-slate-500">Répartition de la feuille quotidienne</p></div><span class="pill pill-green">${tauxPointage}% pointé</span></div>
-      <div style="height:14px;border-radius:999px;overflow:hidden;background:#e2e8f0;display:flex"><span style="width:${presencePct}%;background:#16a34a"></span><span style="width:${absencePct}%;background:#ef4444"></span></div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
-        <button onclick="navigate('pointage/feuille')" class="p-3 rounded-lg text-left" style="background:#ecfdf5;border:1px solid #a7f3d0"><b class="text-emerald-700 text-xl">${fpqPresent}</b><div class="text-[10px] uppercase font-black text-slate-500">Présents</div></button>
-        <button onclick="openOpsStatModal('absents')" class="p-3 rounded-lg text-left" style="background:#fef2f2;border:1px solid #fecaca"><b class="text-red-700 text-xl">${_fpqAbsList.length}</b><div class="text-[10px] uppercase font-black text-slate-500">Absents</div></button>
-        <button onclick="openOpsStatModal('malades')" class="p-3 rounded-lg text-left" style="background:#fff7ed;border:1px solid #fed7aa"><b class="text-orange-700 text-xl">${_fpqMalList.length}</b><div class="text-[10px] uppercase font-black text-slate-500">Maladie</div></button>
-        <button onclick="openOpsStatModal('suspendus')" class="p-3 rounded-lg text-left" style="background:#f5f3ff;border:1px solid #ddd6fe"><b class="text-violet-700 text-xl">${_fpqSuspList.length}</b><div class="text-[10px] uppercase font-black text-slate-500">Suspendus</div></button>
+  <div class="ops-dash-row2">
+    <div class="ops-dash-card">
+      <div class="ops-dash-card-head"><div><h3>Présence aujourd'hui</h3><p>Répartition de la feuille quotidienne</p></div></div>
+      <div class="ops-dash-card-body">
+        <div class="ops-dash-donut-wrap">
+          <div class="ops-dash-donut-figure"><svg width="148" height="148" viewBox="0 0 148 148"><circle cx="74" cy="74" r="60" fill="none" stroke="#eef3f9" stroke-width="16"/><g id="opsDonutArcs"></g></svg><div class="ops-dash-donut-center"><b id="opsDonutPct">${tauxPointage}%</b><span>pointé</span></div></div>
+          <div class="ops-dash-legend" id="opsDonutLegend"></div>
+        </div>
       </div>
     </div>
-    <div class="card p-5 overflow-hidden"><div class="flex items-center justify-between mb-3"><div><h3 class="font-black text-lg">Situation des sites</h3><p class="text-xs text-slate-500">Présents comparés aux effectifs affectés</p></div><a href="#/sites/actifs" class="btn btn-ghost text-xs">Tous les sites</a></div>
-      <div style="max-height:230px;overflow:auto">${_siteStatKeys.length?`<table><thead><tr><th class="text-left">Site</th><th class="text-center">Présents</th><th class="text-center">Affectés</th><th class="text-center">Couverture</th></tr></thead><tbody>${_siteStatRows}</tbody></table>`:`<div class="text-slate-400 text-sm text-center py-8">Aucune donnée de présence aujourd'hui.</div>`}</div>
+    <div class="ops-dash-card">
+      <div class="ops-dash-card-head"><div><h3>Situation des sites</h3><p>Présents comparés aux effectifs affectés</p></div><a href="#/sites/actifs" class="ops-dash-alert-open">Tous les sites</a></div>
+      <div class="ops-dash-card-body"><div class="ops-dash-site-list" style="max-height:230px;overflow:auto">${_siteStatKeys.length?_siteStatRowsNew:`<div class="text-slate-400 text-sm text-center py-8">Aucune donnée de présence aujourd'hui.</div>`}</div></div>
     </div>
   </div>
-  <div class="card mb-6 overflow-hidden" id="opsAttendanceAlertsCard"><div class="p-4 flex items-center justify-between gap-3 flex-wrap" style="border-bottom:1px solid #e2e8f0"><div><h3 class="font-black text-lg">Centre d'alertes</h3><p class="text-xs text-slate-500">Présences prolongées et volumes hebdomadaires</p></div><div class="flex gap-2"><select id="opsAlertType" class="input text-xs" onchange="renderOpsAttendanceAlerts()"><option value="all">Toutes les alertes</option><option value="presence">Présence prolongée</option><option value="weekly">Volume hebdomadaire</option></select><select id="opsAlertSort" class="input text-xs" onchange="renderOpsAttendanceAlerts()"><option value="duration">Durée décroissante</option><option value="site">Site</option><option value="name">Nom</option></select></div></div><div id="opsAttendanceAlertsBody" class="text-sm text-slate-400 p-5">Chargement…</div></div>
-  <div class="grid grid-3">
-    <a href="#/pointage/feuille" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">🕒</div><div><div class="font-bold text-cyan-700">Pointage</div><div class="text-xs text-slate-500">Feuille quotidienne · Saisie manuelle · Récap</div></div></div></a>
-    <a href="#/fiches/toutes" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">🪪</div><div><div class="font-bold text-emerald-700">Fiches de position</div><div class="text-xs text-slate-500">Toutes · Actifs · Archivées</div></div></div></a>
-    <a href="#/sites/actifs" class="card p-5 block hover:shadow-lg transition" style="text-decoration:none;color:inherit;border:2px solid #04397055"><div class="flex items-center gap-3"><div style="font-size:36px">📍</div><div><div class="font-bold text-amber-700">Sites</div><div class="text-xs text-slate-500">Création · Sites actifs</div></div></div></a>
+  <div class="ops-dash-card" style="margin-bottom:24px" id="opsAttendanceAlertsCard">
+    <div class="ops-dash-card-head"><div><h3>Centre d'alertes</h3><p>Présences prolongées et volumes hebdomadaires</p></div></div>
+    <div class="ops-dash-alert-toolbar">
+      <div class="ops-dash-seg" id="opsAlertSeg">
+        <button type="button" class="active" onclick="setOpsAlertFilter(this,'all')">Toutes</button>
+        <button type="button" onclick="setOpsAlertFilter(this,'presence')">Présence prolongée</button>
+        <button type="button" onclick="setOpsAlertFilter(this,'weekly')">Volume hebdo.</button>
+      </div>
+      <div style="flex:1"></div>
+      <select id="opsAlertSort" class="ops-dash-sel" onchange="renderOpsAttendanceAlerts()"><option value="duration">Durée décroissante</option><option value="site">Site</option><option value="name">Nom</option></select>
+    </div>
+    <div id="opsAttendanceAlertsBody" class="ops-dash-alert-feed"><div class="text-sm text-slate-400 p-2">Chargement…</div></div>
+  </div>
+  <div class="ops-dash-section-lbl">Accès rapide</div>
+  <div class="ops-dash-quick">
+    <a href="#/pointage/feuille" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#dbeafe;color:#1e40af">🕒</div><div><div class="ops-dash-quick-title" style="color:#1e40af">Pointage</div><div class="ops-dash-quick-sub">Feuille quotidienne · Saisie manuelle · Récap</div></div></a>
+    <a href="#/fiches/toutes" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#dcfce7;color:#166534">🪪</div><div><div class="ops-dash-quick-title" style="color:#166534">Fiches de position</div><div class="ops-dash-quick-sub">Toutes · Actifs · Archivées</div></div></a>
+    <a href="#/sites/actifs" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#fef3c7;color:#92400e">📍</div><div><div class="ops-dash-quick-title" style="color:#92400e">Sites</div><div class="ops-dash-quick-sub">Création · Sites actifs</div></div></a>
   </div>`;
+  renderOpsPresenceDonut({presents:fpqPresent,absents:_fpqAbsList.length,maladie:_fpqMalList.length,suspendus:_fpqSuspList.length});
   clearInterval(window._opsAttendanceAlertsTimer);
   loadOpsAttendanceAlerts();
   window._opsAttendanceAlertsTimer=setInterval(loadOpsAttendanceAlerts,60000);
+}
+function renderOpsPresenceDonut(counts){
+  const segs=[
+    {label:"Présents",value:counts.presents||0,color:"#16a34a",action:"navigate('pointage/feuille')"},
+    {label:"Absents",value:counts.absents||0,color:"#dc2626",action:"openOpsStatModal('absents')"},
+    {label:"Maladie",value:counts.maladie||0,color:"#d97706",action:"openOpsStatModal('malades')"},
+    {label:"Suspendus",value:counts.suspendus||0,color:"#7c3aed",action:"openOpsStatModal('suspendus')"}
+  ];
+  const total=segs.reduce((s,x)=>s+x.value,0);
+  const r=60,circ=2*Math.PI*r,gapDeg=total?2.2:0;
+  let offsetDeg=0;
+  const arcsEl=document.getElementById("opsDonutArcs");
+  if(arcsEl){
+    arcsEl.innerHTML=total?segs.filter(s=>s.value>0).map(s=>{
+      const frac=s.value/total;const segDeg=Math.max(0,frac*360-gapDeg);const segLen=(segDeg/360)*circ;
+      const rotate=offsetDeg;offsetDeg+=frac*360;
+      return`<circle cx="74" cy="74" r="${r}" fill="none" stroke="${s.color}" stroke-width="16" stroke-linecap="round" stroke-dasharray="${segLen} ${circ-segLen}" transform="rotate(${rotate} 74 74)"/>`;
+    }).join(""):"";
+  }
+  const legend=document.getElementById("opsDonutLegend");
+  if(legend)legend.innerHTML=segs.map(s=>`<button type="button" class="ops-dash-legend-row" onclick="${s.action}"><span class="ops-dash-legend-dot" style="background:${s.color}"></span><span class="ops-dash-legend-label">${s.label}</span><span class="ops-dash-legend-val">${s.value}</span><span class="ops-dash-legend-pct">${total?Math.round(s.value*100/total):0}%</span></button>`).join("");
+}
+function setOpsAlertFilter(btn,value){
+  window._opsAlertType=value;
+  document.querySelectorAll("#opsAlertSeg button").forEach(b=>b.classList.toggle("active",b===btn));
+  renderOpsAttendanceAlerts();
 }
 async function loadOpsAttendanceAlerts(){
   const body=document.getElementById("opsAttendanceAlertsBody");
@@ -35642,16 +35687,29 @@ async function loadOpsAttendanceAlerts(){
     renderOpsAttendanceAlerts();
   }catch(e){body.innerHTML='<span class="text-slate-400">Alertes indisponibles.</span>';console.warn("Alertes de présence indisponibles",e)}
 }
+function opsAlertInitials(name){return String(name||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase()}
 function renderOpsAttendanceAlerts(){
   const body=document.getElementById("opsAttendanceAlertsBody");if(!body)return;
-  const data=window._opsAttendanceAlertsData||{presence:[],weekly:[]};const type=document.getElementById("opsAlertType")?.value||"all";const sort=document.getElementById("opsAlertSort")?.value||"duration";
+  const data=window._opsAttendanceAlertsData||{presence:[],weekly:[]};const type=window._opsAlertType||"all";const sort=document.getElementById("opsAlertSort")?.value||"duration";
   let rows=[];
   if(type!=="weekly")rows.push(...data.presence.map(a=>({...a,type:"presence",minutes:Number(a.elapsed_minutes||0),duration:`${Math.floor(Number(a.elapsed_minutes||0)/60)} h ${String(Number(a.elapsed_minutes||0)%60).padStart(2,"0")}`,level:Number(a.threshold_hours||0)>=16?"Critique":Number(a.threshold_hours||0)>=12?"Élevé":"Vigilance"})));
   if(type!=="presence")rows.push(...data.weekly.map(a=>({...a,type:"weekly",minutes:Number(a.week_minutes||a.week_hours*60||0),duration:`${a.week_hours||0} h`,level:"Hebdomadaire"})));
   if(sort==="name")rows.sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""),"fr"));else if(sort==="site")rows.sort((a,b)=>String(a.site||"").localeCompare(String(b.site||""),"fr"));else rows.sort((a,b)=>b.minutes-a.minutes);
   if(!rows.length){body.innerHTML='<div class="text-center text-slate-400 py-7">✓ Aucune alerte en cours.</div>';return}
   const visible=window._opsAlertsExpanded?rows:rows.slice(0,5);
-  body.innerHTML=`<div class="overflow-x-auto"><table><thead><tr><th>Employé</th><th>Code</th><th>Site</th><th>Durée</th><th>Niveau</th><th class="text-right">Action</th></tr></thead><tbody>${visible.map(a=>{const colors=a.level==="Critique"?["#991b1b","#fee2e2"]:a.level==="Élevé"?["#9a3412","#ffedd5"]:a.level==="Hebdomadaire"?["#5b21b6","#ede9fe"]:["#854d0e","#fef9c3"];return`<tr><td class="font-black">${escapeHTML(a.nom||"Employé")}</td><td class="font-mono text-xs">${escapeHTML(a.matricule||"—")}</td><td class="text-xs">${escapeHTML(a.site||"—")}</td><td class="font-black">${escapeHTML(a.duration)}</td><td><span class="pill" style="color:${colors[0]};background:${colors[1]}">${escapeHTML(a.level)}</span></td><td class="text-right"><button class="btn btn-ghost text-xs" onclick="navigate('pointage/feuille')">Ouvrir</button></td></tr>`}).join("")}</tbody></table></div>${rows.length>5?`<div class="text-center mt-3"><button class="btn btn-secondary text-xs" onclick="window._opsAlertsExpanded=!window._opsAlertsExpanded;renderOpsAttendanceAlerts()">${window._opsAlertsExpanded?"Réduire":"Voir toutes les alertes ("+rows.length+")"}</button></div>`:""}`;
+  const sevStyle={Critique:["#dc2626","#fee2e2","#991b1b"],"Élevé":["#d97706","#ffedd5","#9a3412"],Hebdomadaire:["#7c3aed","#ede9fe","#5b21b6"],Vigilance:["#1e40af","#fef9c3","#854d0e"]};
+  body.innerHTML=visible.map(a=>{
+    const sev=sevStyle[a.level]||sevStyle.Vigilance;
+    return`<div class="ops-dash-alert-item" style="--sev-c:${sev[0]}">
+      <div class="ops-dash-alert-avatar">${opsAlertInitials(a.nom)}</div>
+      <div><div class="ops-dash-alert-name">${escapeHTML(a.nom||"Employé")}</div><div class="ops-dash-alert-meta">${escapeHTML(a.matricule||"—")} · ${escapeHTML(a.site||"—")}</div></div>
+      <div class="ops-dash-alert-right">
+        <div class="ops-dash-alert-duration">${escapeHTML(a.duration)}<small>Durée</small></div>
+        <span class="ops-dash-sev-pill" style="color:${sev[2]};background:${sev[1]}">${escapeHTML(a.level)}</span>
+        <button class="ops-dash-alert-open" onclick="navigate('pointage/feuille')">Ouvrir</button>
+      </div>
+    </div>`;
+  }).join("")+(rows.length>5?`<div class="text-center mt-1"><button class="ops-dash-alert-open" onclick="window._opsAlertsExpanded=!window._opsAlertsExpanded;renderOpsAttendanceAlerts()">${window._opsAlertsExpanded?"Réduire":"Voir toutes les alertes ("+rows.length+")"}</button></div>`:"");
 }
 function renderSuperviseur(view,sub,arg){
   if(!canAccess("superviseur")){view.innerHTML=`<div class="card p-6">Accès refusé</div>`;return}
