@@ -621,7 +621,22 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
             persisted = existing.data if isinstance(existing.data, dict) else {}
             if "sectionValidations" in data:
                 data["sectionValidations"] = persisted.get("sectionValidations", {})
-            for protected in ("fichePositionValidee", "fichePositionValideeAt", "fichePositionValideeBy"):
+            if "fichePositionValidee" in data:
+                if _candidate_bool(data.get("fichePositionValidee")):
+                    # Seule une validation deja actee cote serveur fait foi : un
+                    # client ne peut pas revendiquer une validation qu'il n'a pas
+                    # obtenue via validate-section/validate-final.
+                    data["fichePositionValidee"] = persisted.get("fichePositionValidee", False)
+                else:
+                    # En revanche un client peut legitimement redescendre ce
+                    # marqueur a False (fiche redecouverte incomplete) : sinon une
+                    # fiche laissee dans un etat incoherent (fichePositionValidee
+                    # =True mais sectionValidations vide/incomplet, ex. un ancien
+                    # chemin de transition qui n'imposait pas la validation par
+                    # section) ne pourrait plus jamais etre corrigee ni sauvee.
+                    data.pop("fichePositionValideeAt", None)
+                    data.pop("fichePositionValideeBy", None)
+            for protected in ("fichePositionValideeAt", "fichePositionValideeBy"):
                 if protected in data:
                     if protected in persisted:
                         data[protected] = persisted[protected]
