@@ -11290,7 +11290,8 @@ function employeeNewContractDraftFromForm(form){
     iban:String(fd.get("iban")||"").trim(),
     missions:String(fd.get("missions")||"").trim(),
     articleOverrides:employeeNewContractArticleOverridesFromForm(form),
-    observation:String(fd.get("observation")||"").trim()
+    observation:String(fd.get("observation")||"").trim(),
+    contratPersonnelId:String(fd.get("contratPersonnelId")||"").trim()
   };
 }
 function employeeNewContractArticleOverridesFromForm(form){
@@ -11570,6 +11571,8 @@ function printEmployeeNewContractFromForm(form){
 }
 function employeeNewContractPayload(draft){
   const a=draft.a||{};
+  const modelValue=String(draft.contratPersonnelId||"").trim();
+  const useBackendTemplate=/^\d+$/.test(modelValue);
   return {
     matricule:a.matricule||"",
     contract_type:draft.typeContrat||"CDD",
@@ -11597,9 +11600,9 @@ function employeeNewContractPayload(draft){
     salary_details:draft.salaireLettres||"",
     position:draft.poste||"AGENT DE PREVENTION ET DE SECURITE",
     society:a.societe||mySoc()||"",
+    ...(useBackendTemplate?{template_id:Number(modelValue)}:{}),
     values:{
-      USE_APS_TEMPLATE:"1",
-      MODELE:"CONTRAT_APS_2026",
+      ...(useBackendTemplate?{}:{USE_APS_TEMPLATE:"1",MODELE:"CONTRAT_APS_2026"}),
       FONCTION:draft.poste||"AGENT DE PREVENTION ET DE SECURITE",
       POSTE:draft.poste||"AGENT DE PREVENTION ET DE SECURITE",
       DUREE_CONTRAT:contratDureeLabel(draft.dureeContrat)||"",
@@ -11996,6 +11999,57 @@ async function loadContractualisationContractTemplates(){
     console.warn("Modèles contrat PostgreSQL indisponibles",e);
   }
 }
+// Section ⑤ "Modèle de contrat" du formulaire Nouveau contrat (renderContractualisation) :
+// recommande automatiquement le modèle Word actif correspondant au type de contrat et au
+// poste déjà saisis plus haut dans le formulaire, avec le modèle APS générique toujours
+// disponible comme choix explicite de repli (comportement historique inchangé si ignoré).
+function newContractModelOptionsHTML(selectedValue,poste,typeContrat){
+  const wantedType=cleanContractType(typeContrat);
+  const backend=activeBackendContractTemplates().filter(t=>!wantedType||cleanContractType(t.contract_type)===wantedType);
+  const p=String(poste||"").trim().toLowerCase();
+  const scored=backend.map(t=>{
+    let score=0;
+    if(p&&String(t.position||"").trim().toLowerCase()===p)score+=2;
+    if(p&&String(t.function||"").trim().toLowerCase()===p)score+=2;
+    if(!t.position&&!t.function)score+=1;
+    return{t,score};
+  }).sort((x,y)=>y.score-x.score);
+  const best=scored.length&&scored[0].score>0?scored[0].t:null;
+  const selected=String(selectedValue||"");
+  const apsSelected=selected==="aps"||(!selected&&!best);
+  const optionsHTML=scored.map(({t,score})=>{
+    const typ=cleanContractType(t.contract_type);
+    const recommended=best&&t.id===best.id;
+    const sel=selected===String(t.id)||(!selected&&recommended);
+    return`<option value="${t.id}" ${sel?"selected":""}>${escapeHTML(t.title)}${typ?` — ${escapeHTML(typ)}`:""}${t.position?` · ${escapeHTML(t.position)}`:""}${recommended?" ★ recommandé":""}</option>`;
+  }).join("");
+  return`<option value="aps" ${apsSelected?"selected":""}>Modèle standard APS (par défaut)</option>`+optionsHTML;
+}
+async function loadNewContractContractModels(){
+  const f=document.getElementById("employee-new-contract-form");if(!f)return;
+  const sel=f.querySelector('[name="contratPersonnelId"]');if(!sel)return;
+  try{
+    window.__contractTemplates=(await SGDI.rh.contractTemplates()).filter(t=>Number(t.active)!==0);
+  }catch(e){console.warn("Modèles contrat indisponibles",e)}
+  sel.innerHTML=newContractModelOptionsHTML(sel.value,f.querySelector('[name="poste"]')?.value,f.querySelector('[name="typeContrat"]')?.value);
+  updateNewContractModelPreview();
+}
+function updateNewContractModelPreview(){
+  const f=document.getElementById("employee-new-contract-form");if(!f)return;
+  const sel=f.querySelector('[name="contratPersonnelId"]');if(!sel)return;
+  const host=document.getElementById("nc-model-preview");
+  const toggleRow=document.getElementById("nc-articles-toggle-row");
+  const editor=document.getElementById("new-contract-articles-editor");
+  const value=sel.value;
+  const isAps=!value||value==="aps";
+  if(toggleRow)toggleRow.classList.toggle("hidden",!isAps);
+  if(!isAps&&editor)editor.classList.add("hidden");
+  if(!host)return;
+  if(isAps){host.innerHTML=`<div class="nc-model-note">Modèle Word générique APS, commun à tous les postes de prévention et sécurité.</div>`;return}
+  const t=activeBackendContractTemplates().find(x=>String(x.id)===String(value));
+  if(!t){host.innerHTML="";return}
+  host.innerHTML=`<div class="nc-model-note"><b>${escapeHTML(t.title)}</b> — ${escapeHTML(t.position||"Tous postes")}${t.function?" / "+escapeHTML(t.function):""}<br><button type="button" class="nc-link-btn" onclick="downloadContractTemplate(${t.id},'${escapeHTML(t.file_name||"modele.docx")}')">Télécharger l'aperçu du modèle</button></div>`;
+}
 function contratDureeOptions(selected){
   return `<option value="">— Choisir —</option>`+DUREES_CONTRAT.map(d=>`<option value="${d.value}" ${selected===d.value?"selected":""}>${d.label}</option>`).join("");
 }
@@ -12068,7 +12122,7 @@ function renderContractualisation(view,id){
           <div class="nc-section-head"><div class="nc-icon">①</div><div><h2>Candidat &amp; poste</h2><span>Identité et affectation du candidat</span></div></div>
           <div class="nc-body">
             <div class="nc-field full"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
-            <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary()">${newContractPosteOptions(p.poste)}</select></div>
+            <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary();loadNewContractContractModels()">${newContractPosteOptions(p.poste)}</select></div>
             <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client)}</select></div>
             <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
             <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
@@ -12078,7 +12132,7 @@ function renderContractualisation(view,id){
         <div class="nc-section">
           <div class="nc-section-head"><div class="nc-icon">②</div><div><h2>Type &amp; durée</h2><span>Nature du contrat et jalons de dates</span></div></div>
           <div class="nc-body">
-            <div class="nc-field"><label>Type de contrat</label><select class="select" name="typeContrat" onchange="updateNewContractSummary()"><option selected>CDD</option></select></div>
+            <div class="nc-field"><label>Type de contrat</label><select class="select" name="typeContrat" onchange="updateNewContractSummary();loadNewContractContractModels()"><option selected>CDD</option></select></div>
             <div class="nc-field"><label>Date contrat</label><input class="input" type="date" name="dateDecision" value="${escapeHTML(p.dateDecision)}" required/></div>
             <div class="nc-field"><label>Date début</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(p.dateDebut)}" onchange="updateNewContractReference();updateNewContractSummary()" required/></div>
             <div class="nc-field"><label>Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateNewContractReference();updateNewContractSummary()" required>${contratDureeOptions(p.dureeContrat)}</select></div>
@@ -12106,10 +12160,12 @@ function renderContractualisation(view,id){
           </div>
         </div>
         <div class="nc-section">
-          <div class="nc-section-head"><div class="nc-icon">⑤</div><div><h2>Missions &amp; observations</h2><span>Contenu libre injecté dans le contrat</span></div></div>
+          <div class="nc-section-head"><div class="nc-icon">⑤</div><div><h2>Modèle de contrat</h2><span>Document Word utilisé pour générer le contrat</span></div></div>
           <div class="nc-body" style="grid-template-columns:1fr">
+            <div class="nc-field full"><label>Modèle</label><select class="select" name="contratPersonnelId" onchange="updateNewContractModelPreview()"><option value="aps">Modèle standard APS (par défaut)</option></select></div>
+            <div id="nc-model-preview" class="nc-model-preview"></div>
             <div class="nc-field"><label>Mission et attributions</label><textarea class="textarea" name="missions" rows="3" placeholder="Texte à ajouter dans l'article 6">${escapeHTML(p.missions||"")}</textarea></div>
-            <div class="nc-link-row"><button type="button" class="nc-link-btn" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles du contrat</button></div>
+            <div id="nc-articles-toggle-row" class="nc-link-row"><button type="button" class="nc-link-btn" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles du contrat</button></div>
             <div id="new-contract-articles-editor" class="hidden"></div>
             <div class="nc-field"><label>Observation</label><textarea class="textarea" name="observation" rows="3"></textarea></div>
           </div>
@@ -12137,7 +12193,7 @@ function renderContractualisation(view,id){
         </div>
       </div>
     </form>`;
-  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary()},0);
+  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels()},0);
 }
 function updateNewContractSummary(){
   const f=document.getElementById("employee-new-contract-form");if(!f)return;

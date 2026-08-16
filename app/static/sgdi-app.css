@@ -9511,6 +9511,10 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 .nc-field.computed label::after{content:"Calculé";margin-left:auto;font-size:9px;font-weight:800;color:#0d6ecc;background:rgba(13,110,204,.1);padding:2px 6px;border-radius:999px;text-transform:none;letter-spacing:0}
 .nc-link-row{display:flex}
 .nc-link-btn{border:1px dashed #dbe5f0;background:#f6f9fc;color:#043970;font-size:12px;font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer}
+.nc-model-preview{background:#f6f9fc;border:1px solid #dbe5f0;border-radius:10px;padding:10px 14px}
+.nc-model-note{font-size:12px;color:#334155;line-height:1.5}
+.nc-model-note b{color:#10243e}
+.nc-model-note .nc-link-btn{margin-top:6px;padding:5px 10px;font-size:11px}
 .nc-side{display:flex;flex-direction:column;gap:14px;position:sticky;top:16px}
 .nc-candidate-card{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,36,62,.05),0 10px 26px rgba(16,36,62,.14);display:flex;flex-direction:column;gap:12px}
 .nc-candidate-top{display:flex;align-items:center;gap:12px}
