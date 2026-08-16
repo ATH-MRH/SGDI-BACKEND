@@ -12232,18 +12232,12 @@ async function recruitContractCandidateToEmployee(c,fd,overrideMatricule){
     sourceId:`recrutement_${c.backendId||c.id||agent.id}`,
     details:{candidateId:c.id||"",candidateBackendId:c.backendId||"",societe:agent.societe||"",matricule:agent.matricule||""}
   });
-  // Le serveur est l'unique autorité pour créer l'employé et son contrat. Cette
-  // opération est transactionnelle et idempotente : aucun doublon n'est possible.
-  Object.assign(c,agent,{
-    id:c.id,backendId:c.backendId,statut:"a_contractualiser",status:"a_contractualiser",
-    salairePrevu:agent.salaireNet,typeContrat:agent.typeContrat,dateRecrutement:agent.dateRecrutement,
-    dateFinContrat:agent.dateFinContrat,dateFinEssai:agent.dateFinEssai,dureeEssai:agent.dureeEssai
-  });
-  await SGDI.rh.updateCandidate(backendId,candidateApiPayload(c));
   if(!candidatAllSectionsValid(c)){
     // Les candidats transmis depuis recrute.html arrivent en "a_contractualiser"
     // sans jamais passer par la validation section par section d'ATLAS : on la
-    // rejoue ici à partir des données déjà saisies avant d'autoriser le recrutement.
+    // rejoue ici à partir des données déjà saisies, AVANT tout appel qui enverrait
+    // status:"a_contractualiser" au backend (celui-ci refuse toute écriture sur un
+    // candidat à ce statut tant que les 7 sections ne sont pas validées).
     for(const section of CANDIDAT_SECTIONS){
       const validation=await SGDI.rh.validateCandidateSection(candidateApiPayload(c),section.key,backendId);
       c.sectionValidations={...(c.sectionValidations||{}),...(validation?.data?.sectionValidations||{})};
@@ -12252,6 +12246,14 @@ async function recruitContractCandidateToEmployee(c,fd,overrideMatricule){
     const revalidated=await SGDI.rh.marquerContractualisation(backendId);
     Object.assign(c,candidateFromApi(revalidated));
   }
+  // Le serveur est l'unique autorité pour créer l'employé et son contrat. Cette
+  // opération est transactionnelle et idempotente : aucun doublon n'est possible.
+  Object.assign(c,agent,{
+    id:c.id,backendId:c.backendId,statut:"a_contractualiser",status:"a_contractualiser",
+    salairePrevu:agent.salaireNet,typeContrat:agent.typeContrat,dateRecrutement:agent.dateRecrutement,
+    dateFinContrat:agent.dateFinContrat,dateFinEssai:agent.dateFinEssai,dureeEssai:agent.dureeEssai
+  });
+  await SGDI.rh.updateCandidate(backendId,candidateApiPayload(c));
   const savedEmployee=await SGDI.rh.recruitCandidate(backendId);
   const fromApi=employeeFromApi(savedEmployee);
   Object.assign(agent,agent,fromApi,{backendId:savedEmployee?.id||fromApi.backendId,matricule:fromApi.matricule||agent.matricule});
