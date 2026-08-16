@@ -11206,9 +11206,12 @@ function updateNewContractReference(){
   if(f.reference)f.reference.value=newContractDecisionReference(a,start);
   if(f.dateFin)f.dateFin.value=contractEndDate(start,f.dureeContrat?.value||"")||"";
 }
-function newContractClientOptions(selectedClient){
+function newContractClientOptions(selectedClient,forcedSociete){
   const selected=String(selectedClient||"").trim().toLowerCase();
-  const soc=typeof effectifSocieteFilter==="function"?effectifSocieteFilter():(typeof mySoc==="function"?mySoc():"");
+  // La société du candidat/employé prime toujours sur le filtre société global du
+  // compte DRH : sinon la liste apparaît vide dès que ce filtre diffère de la société
+  // réelle du dossier en cours, alors que des sites existent bel et bien pour elle.
+  const soc=forcedSociete||(typeof effectifSocieteFilter==="function"?effectifSocieteFilter():(typeof mySoc==="function"?mySoc():""));
   const seen=new Set();
   const sites=(db.sites||[]).filter(s=>s&&s.actif!==false&&(!soc||siteMatchesSociete(s,soc))).sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||""),"fr"));
   const options=sites.map(s=>{
@@ -11664,7 +11667,7 @@ function openEmployeeNewContractModal(agentId,options){
         <div><label class="label">N° pièce d'identité *</label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
         <div><label class="label">N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
         <div class="md:col-span-2"><label class="label">Poste / fonction</label><select class="select" name="poste" required>${newContractPosteOptions(p.poste)}</select></div>
-        <div><label class="label">Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client)}</select></div>${newContractClientCustomField(p.client)}
+        <div><label class="label">Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client,selected.societe)}</select></div>${newContractClientCustomField(p.client)}
         <div><label class="label">Adresse</label><input class="input" name="adresseSite" value="${escapeHTML(p.adresseSite||"")}"/></div>
         <div><label class="label">Wilaya</label><input class="input" name="wilaya" value="${escapeHTML(p.wilaya)}"/></div>
         <div><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(p.commune)}"/></div>
@@ -12125,7 +12128,7 @@ function renderContractualisation(view,id){
           <div class="nc-body">
             <div class="nc-field full"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
             <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary();loadNewContractContractModels()">${newContractPosteOptions(p.poste)}</select></div>
-            <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client)}</select></div>
+            <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client,selectedSociete)}</select></div>
             <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
             <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
           </div>
