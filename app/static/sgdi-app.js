@@ -7808,7 +7808,7 @@ function renderLogin(){
   if(hostCfg?.key==="paie"){renderPaieStandaloneLogin();return}
   const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.title||"ATLAS";
   const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":"Suite de gestion intégrée";
-  try{document.title=hostCfg?.key==="facmod"?"FACTURATION — IRON GROUP":"ATLAS — Suite de gestion intégrée"}catch(_e){}
+  try{document.title=hostCfg?.key==="facmod"?"FACTURATION — IRON GROUP":hostCfg?.key?hostCfg.key.toUpperCase()+" — ATLAS":"ATLAS — Suite de gestion intégrée"}catch(_e){}
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page">
     <main class="sgdi-login-main">
       <section class="sgdi-login-visual" aria-label="Présentation ATLAS">
