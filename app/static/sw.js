@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260718-atlas-login";
+const SGDI_CACHE = "sgdi-pwa-v20260816-contract-section-fix";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
