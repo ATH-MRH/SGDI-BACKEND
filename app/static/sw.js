@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260816-archive-contract-btn";
+const SGDI_CACHE = "sgdi-pwa-v20260816-contract-form-redesign";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

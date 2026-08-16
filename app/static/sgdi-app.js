@@ -11224,7 +11224,7 @@ function newContractClientOptions(selectedClient){
 }
 function newContractClientCustomField(selectedClient){
   const selected=String(selectedClient||"").trim();
-  return `<div data-new-contract-client-other class="hidden"><label class="label">Autre client</label><input class="input" name="clientAutre" value="${escapeHTML(selected)}" placeholder="Saisir le client"/></div>`;
+  return `<div data-new-contract-client-other class="nc-field full hidden"><label>Autre client</label><input class="input" name="clientAutre" value="${escapeHTML(selected)}" placeholder="Saisir le client"/></div>`;
 }
 function newContractPosteOptions(selectedPoste){
   const selected=String(selectedPoste||"").trim();
@@ -12057,43 +12057,99 @@ function renderContractualisation(view,id){
   if(selectedSociete&&!c.societe){c.societe=selectedSociete;saveDB()}
   const verifs=contractVerificationItems();
   const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
-  view.innerHTML=`<div class="max-w-6xl mx-auto">
-    <div class="flex justify-between mb-4 gap-3 items-start flex-wrap"><div><h1 class="text-2xl font-black uppercase">Nouveau contrat — ${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</h1><p class="text-slate-500 text-sm">Même formulaire que Gestion des effectifs > Nouveau contrat. Documents contractualisation : <b>${nbOk}/9</b>.</p></div><div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
-    <div class="card p-5">
-      <div class="flex items-start justify-between gap-3 mb-3 flex-wrap"><h3 class="font-bold text-lg">NOUVEAU CONTRAT APS</h3><div style="min-width:240px"><label class="label">Référence contrat</label><input class="input bg-slate-50" name="reference" form="employee-new-contract-form" value="${escapeHTML(p.reference)}" readonly/></div></div>
-      <form id="employee-new-contract-form" onsubmit="event.preventDefault();confirmCandidateNewContract(this,'${jsString(c.id)}')">
-        <input type="hidden" name="agentId" value="${escapeHTML(proxy.id)}"/>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div class="md:col-span-2"><label class="label">Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML((c.nom||"")+" "+(c.prenom||""))}" readonly/></div>
-          <div><label class="label">Type de contrat</label><select class="select" name="typeContrat"><option selected>CDD</option></select></div>
-          <div><label class="label">Date contrat</label><input class="input" type="date" name="dateDecision" value="${escapeHTML(p.dateDecision)}" required/></div>
-          <div><label class="label">N° pièce d'identité *</label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
-          <div><label class="label">N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
-          <div class="md:col-span-2"><label class="label">Poste / fonction</label><select class="select" name="poste" required>${newContractPosteOptions(p.poste)}</select></div>
-          <div><label class="label">Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client)}</select></div>${newContractClientCustomField(p.client)}
-          <div><label class="label">Adresse</label><input class="input" name="adresseSite" value="${escapeHTML(p.adresseSite||"")}"/></div>
-          <div><label class="label">Wilaya</label><input class="input" name="wilaya" value="${escapeHTML(p.wilaya)}"/></div>
-          <div><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(p.commune)}"/></div>
-          <div><label class="label">Date début</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(p.dateDebut)}" onchange="updateNewContractReference()" required/></div>
-          <div><label class="label">Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateNewContractReference()" required>${contratDureeOptions(p.dureeContrat)}</select></div>
-          <div><label class="label">Période d'essai</label><select class="select" name="periodeEssai">${newContractPeriodeEssaiOptions(p.periodeEssai)}</select></div>
-          <div><label class="label">Date fin contrat</label><input class="input bg-slate-50" type="date" name="dateFin" value="${escapeHTML(p.dateFin)}" readonly/></div>
-          <div><label class="label">Salaire net</label><input class="input" name="salaireNet" inputmode="decimal" oninput="updateNewContractSalaryWords(this,false)" onblur="updateNewContractSalaryWords(this,true)" value="${p.salaireNet?escapeHTML(formatMoneyInputValue(p.salaireNet)):""}"/></div>
-          <div class="md:col-span-2"><label class="label">Salaire en lettres</label><input class="input bg-slate-50" name="salaireLettres" value="${escapeHTML(moneyToFrenchWords(p.salaireNet))}" readonly/></div>
-          <div><label class="label">N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(p.numeroCnas||"")}"/></div>
-          <div><label class="label">Mode de paiement</label><select class="select" name="modePaiement">${["Virement bancaire","Espèces","Chèque"].map(m=>`<option value="${m}" ${(p.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")}</select></div>
-          <div><label class="label">Banque</label><input class="input" name="banque" value="${escapeHTML(p.banque||"")}"/></div>
-          <div><label class="label">RIB / IBAN</label><input class="input" name="iban" value="${escapeHTML(p.iban||"")}"/></div>
-          <div class="md:col-span-2"><label class="label">Mission et attributions</label><textarea class="textarea" name="missions" rows="3" placeholder="Texte à ajouter dans l'article 6">${escapeHTML(p.missions||"")}</textarea></div>
-          <div class="md:col-span-2"><button type="button" class="btn btn-secondary" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles du contrat</button></div>
-          <div id="new-contract-articles-editor" class="md:col-span-2 hidden"></div>
-          <div class="md:col-span-2"><label class="label">Observation</label><textarea class="textarea" name="observation" rows="3"></textarea></div>
+  const candidateFullName=(c.nom||"")+" "+(c.prenom||"");
+  const candidateInitials=(candidateFullName.trim()?candidateFullName.trim().split(/\s+/).slice(0,2).map(x=>x.charAt(0)).join(""):"CD").toUpperCase();
+  view.innerHTML=`<div class="max-w-6xl mx-auto nc-page">
+    <div class="flex justify-between mb-4 gap-3 items-start flex-wrap"><div><p class="nc-eyebrow">Contrats à établir</p><h1 class="text-2xl font-black uppercase">Nouveau contrat — ${escapeHTML(candidateFullName)}</h1><p class="text-slate-500 text-sm">Même formulaire que Gestion des effectifs > Nouveau contrat. Documents contractualisation : <b>${nbOk}/9</b>.</p></div><div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
+    <form id="employee-new-contract-form" onsubmit="event.preventDefault();confirmCandidateNewContract(this,'${jsString(c.id)}')" class="nc-layout">
+      <input type="hidden" name="agentId" value="${escapeHTML(proxy.id)}"/>
+      <div class="nc-main">
+        <div class="nc-section">
+          <div class="nc-section-head"><div class="nc-icon">①</div><div><h2>Candidat &amp; poste</h2><span>Identité et affectation du candidat</span></div></div>
+          <div class="nc-body">
+            <div class="nc-field full"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
+            <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary()">${newContractPosteOptions(p.poste)}</select></div>
+            <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client)}</select></div>
+            <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
+            <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
+          </div>
         </div>
-        <div class="flex justify-between gap-2 mt-4 flex-wrap"><div class="text-sm text-slate-500">La validation crée le code employé, le premier contrat archivé et la fiche de position. L'affectation site reste confiée à OPS.</div><div class="flex gap-2 flex-wrap"><button type="button" class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">Annuler</button><button type="button" class="btn btn-secondary" onclick="printEmployeeNewContractFromForm(this.form)">Aperçu avant validation</button><button class="btn btn-success" data-no-critical-auth="1">Valider et créer l'employé</button></div></div>
-      </form>
-    </div>
+        ${newContractClientCustomField(p.client)}
+        <div class="nc-section">
+          <div class="nc-section-head"><div class="nc-icon">②</div><div><h2>Type &amp; durée</h2><span>Nature du contrat et jalons de dates</span></div></div>
+          <div class="nc-body">
+            <div class="nc-field"><label>Type de contrat</label><select class="select" name="typeContrat" onchange="updateNewContractSummary()"><option selected>CDD</option></select></div>
+            <div class="nc-field"><label>Date contrat</label><input class="input" type="date" name="dateDecision" value="${escapeHTML(p.dateDecision)}" required/></div>
+            <div class="nc-field"><label>Date début</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(p.dateDebut)}" onchange="updateNewContractReference();updateNewContractSummary()" required/></div>
+            <div class="nc-field"><label>Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateNewContractReference();updateNewContractSummary()" required>${contratDureeOptions(p.dureeContrat)}</select></div>
+            <div class="nc-field"><label>Période d'essai</label><select class="select" name="periodeEssai" onchange="updateNewContractSummary()">${newContractPeriodeEssaiOptions(p.periodeEssai)}</select></div>
+            <div class="nc-field computed"><label>Date fin contrat</label><input class="input bg-slate-50" type="date" name="dateFin" value="${escapeHTML(p.dateFin)}" readonly/></div>
+          </div>
+        </div>
+        <div class="nc-section">
+          <div class="nc-section-head"><div class="nc-icon">③</div><div><h2>Lieu d'affectation</h2><span>Adresse du site rattaché au contrat</span></div></div>
+          <div class="nc-body">
+            <div class="nc-field"><label>Wilaya</label><input class="input" name="wilaya" value="${escapeHTML(p.wilaya)}"/></div>
+            <div class="nc-field"><label>Commune</label><input class="input" name="commune" value="${escapeHTML(p.commune)}"/></div>
+            <div class="nc-field full"><label>Adresse</label><input class="input" name="adresseSite" value="${escapeHTML(p.adresseSite||"")}"/></div>
+          </div>
+        </div>
+        <div class="nc-section">
+          <div class="nc-section-head"><div class="nc-icon">④</div><div><h2>Rémunération &amp; paiement</h2><span>Salaire net et coordonnées de versement</span></div></div>
+          <div class="nc-body">
+            <div class="nc-field"><label>Salaire net</label><input class="input" name="salaireNet" inputmode="decimal" oninput="updateNewContractSalaryWords(this,false);updateNewContractSummary()" onblur="updateNewContractSalaryWords(this,true);updateNewContractSummary()" value="${p.salaireNet?escapeHTML(formatMoneyInputValue(p.salaireNet)):""}"/></div>
+            <div class="nc-field"><label>N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(p.numeroCnas||"")}"/></div>
+            <div class="nc-field computed full"><label>Salaire en lettres</label><input class="input bg-slate-50" name="salaireLettres" value="${escapeHTML(moneyToFrenchWords(p.salaireNet))}" readonly/></div>
+            <div class="nc-field"><label>Mode de paiement</label><select class="select" name="modePaiement">${["Virement bancaire","Espèces","Chèque"].map(m=>`<option value="${m}" ${(p.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")}</select></div>
+            <div class="nc-field"><label>Banque</label><input class="input" name="banque" value="${escapeHTML(p.banque||"")}"/></div>
+            <div class="nc-field full"><label>RIB / IBAN</label><input class="input" name="iban" value="${escapeHTML(p.iban||"")}"/></div>
+          </div>
+        </div>
+        <div class="nc-section">
+          <div class="nc-section-head"><div class="nc-icon">⑤</div><div><h2>Missions &amp; observations</h2><span>Contenu libre injecté dans le contrat</span></div></div>
+          <div class="nc-body" style="grid-template-columns:1fr">
+            <div class="nc-field"><label>Mission et attributions</label><textarea class="textarea" name="missions" rows="3" placeholder="Texte à ajouter dans l'article 6">${escapeHTML(p.missions||"")}</textarea></div>
+            <div class="nc-link-row"><button type="button" class="nc-link-btn" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles du contrat</button></div>
+            <div id="new-contract-articles-editor" class="hidden"></div>
+            <div class="nc-field"><label>Observation</label><textarea class="textarea" name="observation" rows="3"></textarea></div>
+          </div>
+        </div>
+      </div>
+      <div class="nc-side">
+        <div class="nc-candidate-card">
+          <div class="nc-candidate-top"><div class="nc-avatar">${escapeHTML(candidateInitials)}</div><div><div class="nc-candidate-name">${escapeHTML(candidateFullName)}</div><div class="nc-candidate-role">${escapeHTML(p.poste||"Poste à définir")}</div></div></div>
+          <div class="nc-ref-box"><label>Référence contrat</label><input name="reference" value="${escapeHTML(p.reference)}" readonly/></div>
+        </div>
+        <div class="nc-summary-card">
+          <h3>Résumé du contrat</h3>
+          <div class="nc-summary-row"><span>Type</span><span id="nc-sum-type">CDD</span></div>
+          <div class="nc-summary-row"><span>Début</span><span id="nc-sum-debut">—</span></div>
+          <div class="nc-summary-row"><span>Fin</span><span id="nc-sum-fin">—</span></div>
+          <div class="nc-summary-row"><span>Essai</span><span id="nc-sum-essai">—</span></div>
+          <div class="nc-summary-row"><span>Salaire net</span><span id="nc-sum-salaire">—</span></div>
+          <div class="nc-summary-salary" id="nc-sum-lettres">—</div>
+        </div>
+        <div class="nc-actions-card">
+          <button class="btn btn-success" data-no-critical-auth="1">✓ Valider et créer l'employé</button>
+          <button type="button" class="btn btn-secondary" onclick="printEmployeeNewContractFromForm(this.form)">Aperçu avant validation</button>
+          <button type="button" class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">Annuler</button>
+          <div class="nc-helper">La validation crée le code employé, le premier contrat archivé et la fiche de position. L'affectation site reste confiée à OPS.</div>
+        </div>
+      </div>
+    </form>
   </div>`;
-  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'))},0);
+  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary()},0);
+}
+function updateNewContractSummary(){
+  const f=document.getElementById("employee-new-contract-form");if(!f)return;
+  const set=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val&&String(val).trim()?val:"—"};
+  set("nc-sum-type",f.typeContrat?.value);
+  set("nc-sum-debut",f.dateDebut?.value?formatDate(f.dateDebut.value):"");
+  set("nc-sum-fin",f.dateFin?.value?formatDate(f.dateFin.value):"");
+  set("nc-sum-essai",f.periodeEssai?.selectedOptions?.[0]?.textContent||"");
+  set("nc-sum-salaire",f.salaireNet?.value?f.salaireNet.value+" DA":"");
+  const lettres=document.getElementById("nc-sum-lettres");
+  if(lettres)lettres.textContent=f.salaireLettres?.value?`« ${f.salaireLettres.value} »`:"—";
 }
 function setContractualisationSociete(id,societe){
   const c=findCandidatById(id);if(!c)return;

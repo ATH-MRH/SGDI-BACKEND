@@ -9492,3 +9492,42 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 #view .contract-modern-bars{display:grid;gap:11px}.contract-modern-bar-head{display:flex;justify-content:space-between;font-size:9px;font-weight:800;margin-bottom:5px}.contract-modern-bar-base{height:7px;background:#eaf0f6;border-radius:99px;overflow:hidden}.contract-modern-bar-value{height:100%;border-radius:99px;background:var(--fill)}.contract-modern-note{margin-top:13px;padding:10px 11px;border-radius:11px;background:#eff6ff;font-size:8px;color:#315476;line-height:1.45}
 @media(max-width:1100px){#view .contract-modern-overview{grid-template-columns:repeat(3,1fr)}#view .contract-modern-health{grid-column:1/-1}#view .contract-modern-main-grid,#view .contract-modern-lower{grid-template-columns:1fr}}
 @media(max-width:760px){#view .contract-modern-layout{grid-template-columns:1fr}#view .contract-modern-rail{flex-direction:row;overflow:auto}.contract-modern-mark{margin:0!important;flex:0 0 auto}.contract-modern-rail .contract-modern-rail-bottom{margin:0 0 0 auto}.contract-modern-header{height:auto!important;padding:12px!important;gap:10px;flex-wrap:wrap}.contract-modern-content{padding:12px!important}.contract-modern-overview{grid-template-columns:1fr!important}.contract-modern-task{grid-template-columns:30px 1fr auto!important}.contract-modern-task>span:not(.contract-modern-tag){display:none}.contract-modern-welcome{align-items:flex-start!important;flex-direction:column}.contract-modern-timeline-items{grid-template-columns:repeat(2,1fr)!important;gap:22px 8px}.contract-modern-timeline-line{display:none}.contract-modern-milestone:before{margin:0 auto 8px!important}}
+
+/* ---- Nouveau contrat (depuis candidat a_contractualiser) ---- */
+.nc-eyebrow{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#0d6ecc;margin:0 0 4px}
+.nc-layout{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+.nc-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.nc-section{background:#fff;border:1px solid #dbe5f0;border-radius:16px;box-shadow:0 1px 2px rgba(16,36,62,.05),0 10px 26px rgba(16,36,62,.06);overflow:hidden}
+.nc-section-head{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid #dbe5f0;background:#f6f9fc}
+.nc-icon{width:28px;height:28px;border-radius:8px;flex:0 0 28px;background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900}
+.nc-section-head h2{font-size:13.5px;font-weight:800;margin:0;letter-spacing:.01em;color:#10243e}
+.nc-section-head span{font-size:11px;color:#64748b;display:block;margin-top:1px}
+.nc-body{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.nc-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.nc-field.full{grid-column:1/-1}
+.nc-field label{font-size:10.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;display:flex;align-items:center;gap:4px}
+.nc-field .req{color:#dc2626;font-weight:900}
+.nc-field .input,.nc-field .select,.nc-field .textarea{border-radius:10px}
+.nc-field.computed label::after{content:"Calculé";margin-left:auto;font-size:9px;font-weight:800;color:#0d6ecc;background:rgba(13,110,204,.1);padding:2px 6px;border-radius:999px;text-transform:none;letter-spacing:0}
+.nc-link-row{display:flex}
+.nc-link-btn{border:1px dashed #dbe5f0;background:#f6f9fc;color:#043970;font-size:12px;font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer}
+.nc-side{display:flex;flex-direction:column;gap:14px;position:sticky;top:16px}
+.nc-candidate-card{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,36,62,.05),0 10px 26px rgba(16,36,62,.14);display:flex;flex-direction:column;gap:12px}
+.nc-candidate-top{display:flex;align-items:center;gap:12px}
+.nc-avatar{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;flex:0 0 44px}
+.nc-candidate-name{font-size:14px;font-weight:900;line-height:1.25}
+.nc-candidate-role{font-size:11.5px;opacity:.85;margin-top:2px}
+.nc-ref-box{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:8px 12px}
+.nc-ref-box label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;opacity:.85;margin-bottom:3px}
+.nc-ref-box input{width:100%;background:transparent;border:0;color:#fff;font-weight:800;font-size:12.5px;font-variant-numeric:tabular-nums;padding:0}
+.nc-summary-card,.nc-actions-card{background:#fff;border:1px solid #dbe5f0;border-radius:16px;box-shadow:0 1px 2px rgba(16,36,62,.05),0 10px 26px rgba(16,36,62,.06);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.nc-summary-card h3{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b;margin:0}
+.nc-summary-row{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:6px 0;border-top:1px solid #dbe5f0}
+.nc-summary-row:first-of-type{border-top:0}
+.nc-summary-row span:first-child{color:#64748b}
+.nc-summary-row span:last-child{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.nc-summary-salary{background:#f6f9fc;border-radius:10px;padding:9px 11px;font-size:11.5px;color:#64748b;line-height:1.5;font-style:italic}
+.nc-actions-card .btn{width:100%}
+.nc-helper{font-size:11px;color:#64748b;line-height:1.5;padding-top:8px;border-top:1px solid #dbe5f0}
+@media(max-width:960px){.nc-layout{grid-template-columns:1fr}.nc-side{position:static}}
+@media(max-width:600px){.nc-body{grid-template-columns:1fr}.nc-field.full{grid-column:auto}}
