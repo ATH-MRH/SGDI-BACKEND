@@ -12240,6 +12240,18 @@ async function recruitContractCandidateToEmployee(c,fd,overrideMatricule){
     dateFinContrat:agent.dateFinContrat,dateFinEssai:agent.dateFinEssai,dureeEssai:agent.dureeEssai
   });
   await SGDI.rh.updateCandidate(backendId,candidateApiPayload(c));
+  if(!candidatAllSectionsValid(c)){
+    // Les candidats transmis depuis recrute.html arrivent en "a_contractualiser"
+    // sans jamais passer par la validation section par section d'ATLAS : on la
+    // rejoue ici à partir des données déjà saisies avant d'autoriser le recrutement.
+    for(const section of CANDIDAT_SECTIONS){
+      const validation=await SGDI.rh.validateCandidateSection(candidateApiPayload(c),section.key,backendId);
+      c.sectionValidations={...(c.sectionValidations||{}),...(validation?.data?.sectionValidations||{})};
+    }
+    await SGDI.rh.validateCandidateFinal(backendId);
+    const revalidated=await SGDI.rh.marquerContractualisation(backendId);
+    Object.assign(c,candidateFromApi(revalidated));
+  }
   const savedEmployee=await SGDI.rh.recruitCandidate(backendId);
   const fromApi=employeeFromApi(savedEmployee);
   Object.assign(agent,agent,fromApi,{backendId:savedEmployee?.id||fromApi.backendId,matricule:fromApi.matricule||agent.matricule});
