@@ -4500,6 +4500,7 @@ function sgdiModuleHostConfigs(){
         {label:"MAGASINS",route:"admin/magasins"},
         {label:"ARTICLES",route:"admin/articles"},
         {label:"MODÈLES DOCUMENTS",route:"admin/document-models"},
+        {label:"CONTRAT",route:"admin/contrats"},
         {label:"UTILISATEURS & BLOCAGE",route:"admin/users"},
         {label:"DROITS D'ACCÈS",route:"admin/droits"},
         {label:"SÉCURITÉ DES ACCÈS",route:"admin/access"}
@@ -6605,6 +6606,7 @@ function renderSidebar(){
         {label:"MAGASINS",route:"admin/magasins",count:adminMagasinsCount||null},
         {label:"ARTICLES",route:"admin/articles",count:adminArticlesCount||null},
         {label:"MODÈLES DOCUMENTS",route:"admin/document-models",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
+        {label:"CONTRAT",route:"admin/contrats"},
         {label:"UTILISATEURS & BLOCAGE",route:"admin/users",gapBefore:true,count:(db.users||[]).length||null},
         {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",count:(db.supervisorScopes||[]).length||null},
         {label:"DROITS D'ACCÈS",route:"admin/droits",count:Object.keys(db.droitsAcces||{}).length||null},
