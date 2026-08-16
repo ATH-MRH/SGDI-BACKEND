@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260817-module-tab-titles";
+const SGDI_CACHE = "sgdi-pwa-v20260817-contract-model-preview-fix";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

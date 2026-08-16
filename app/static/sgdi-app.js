@@ -11572,6 +11572,19 @@ function printEmployeeNewContractFromForm(form){
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
   if(!draft.numeroPieceIdentite){toast("N° pièce d'identité obligatoire","error");return}
+  const modelValue=String(draft.contratPersonnelId||"").trim();
+  if(/^\d+$/.test(modelValue)){
+    // Modèle Word personnalisé (ex. COORDINATEUR) : l'aperçu HTML article par article
+    // ne s'applique qu'au modèle APS générique. On télécharge ici le modèle vierge
+    // sélectionné plutôt que d'afficher à tort le texte APS — le contrat final,
+    // lui, utilisera bien ce modèle (template_id transmis au serveur à la validation).
+    const t=activeBackendContractTemplates().find(x=>String(x.id)===modelValue);
+    if(t){
+      toast("Aperçu HTML indisponible pour ce modèle personnalisé — téléchargement du modèle "+(t.title||"")+". Le contrat final utilisera bien ce modèle.","info");
+      downloadContractTemplate(t.id,t.file_name||"modele.docx");
+      return;
+    }
+  }
   openEmployeeContractReviewWindow(draft.a,draft);
 }
 function employeeNewContractPayload(draft){
@@ -12036,7 +12049,9 @@ async function loadNewContractContractModels(){
   try{
     window.__contractTemplates=(await SGDI.rh.contractTemplates()).filter(t=>Number(t.active)!==0);
   }catch(e){console.warn("Modèles contrat indisponibles",e)}
-  sel.innerHTML=newContractModelOptionsHTML(sel.value,f.querySelector('[name="poste"]')?.value,f.querySelector('[name="typeContrat"]')?.value);
+  const priorValue=sel.dataset.loaded==="1"?sel.value:"";
+  sel.innerHTML=newContractModelOptionsHTML(priorValue,f.querySelector('[name="poste"]')?.value,f.querySelector('[name="typeContrat"]')?.value);
+  sel.dataset.loaded="1";
   updateNewContractModelPreview();
 }
 function updateNewContractModelPreview(){
@@ -12167,7 +12182,7 @@ function renderContractualisation(view,id){
         <div class="nc-section">
           <div class="nc-section-head"><div class="nc-icon">⑤</div><div><h2>Modèle de contrat</h2><span>Document Word utilisé pour générer le contrat</span></div></div>
           <div class="nc-body" style="grid-template-columns:1fr">
-            <div class="nc-field full"><label>Modèle</label><select class="select" name="contratPersonnelId" onchange="updateNewContractModelPreview()"><option value="aps">Modèle standard APS (par défaut)</option></select></div>
+            <div class="nc-field full"><label>Modèle</label><select class="select" name="contratPersonnelId" data-loaded="0" onchange="updateNewContractModelPreview()"><option value="aps">Modèle standard APS (par défaut)</option></select></div>
             <div id="nc-model-preview" class="nc-model-preview"></div>
             <div class="nc-field"><label>Mission et attributions</label><textarea class="textarea" name="missions" rows="3" placeholder="Texte à ajouter dans l'article 6">${escapeHTML(p.missions||"")}</textarea></div>
             <div id="nc-articles-toggle-row" class="nc-link-row"><button type="button" class="nc-link-btn" onclick="toggleNewContractArticlesEditor(this)">Modifier les articles du contrat</button></div>
