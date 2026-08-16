@@ -10423,7 +10423,61 @@ function contractsToEstablishCandidates(){
 function renderContractsToEstablish(view){
   const candidates=contractsToEstablishCandidates();
   view.innerHTML=`<div class="mb-4 flex items-center justify-between gap-3 flex-wrap"><div><h1 class="text-2xl font-black uppercase">Contrats à établir</h1><p class="text-sm text-slate-500">Dossiers transmis par Recrutement. Aucun employé n'est créé avant validation du premier contrat.</p></div><span class="pill pill-amber">${candidates.length} en attente</span></div>
-  <div class="card overflow-hidden"><table class="table"><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Transmission</th><th>Action</th></tr></thead><tbody>${candidates.length?candidates.map(c=>`<tr><td><b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b></td><td>${escapeHTML(c.posteSouhaite||c.posteContrat||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(c.telephone||"—")}</td><td>${escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today()))}</td><td><button class="btn btn-primary" onclick="navigate('contrats/a_contractualiser/${jsString(c.id)}')">Établir le contrat</button></td></tr>`).join(""):`<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun contrat à établir.</td></tr>`}</tbody></table></div>`;
+  <div class="card overflow-hidden"><table class="table"><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Transmission</th><th>Action</th></tr></thead><tbody>${candidates.length?candidates.map(c=>`<tr><td><b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b></td><td>${escapeHTML(c.posteSouhaite||c.posteContrat||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(c.telephone||"—")}</td><td>${escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today()))}</td><td><div class="flex gap-2 flex-wrap"><button class="btn btn-primary" onclick="navigate('contrats/a_contractualiser/${jsString(c.id)}')">Établir le contrat</button><button class="btn btn-ghost text-red-600" onclick="openArchiveContractCandidateModal('${jsString(c.id)}')">Archiver</button></div></td></tr>`).join(""):`<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun contrat à établir.</td></tr>`}</tbody></table></div>`;
+}
+const CONTRACT_CANDIDATE_ARCHIVE_MOTIFS=["Désistement","Annulation","Problème dossier administratif"];
+function openArchiveContractCandidateModal(id){
+  const c=findCandidatById(id)||{};
+  openModal(`<h3 class="font-bold text-lg mb-4">Archiver candidat</h3>
+    <form onsubmit="event.preventDefault();confirmArchiveContractCandidate('${jsString(id)}')">
+      <div class="mb-4 text-sm text-slate-600">Choisissez le motif d'archivage${c.nom||c.prenom?` pour <b>${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</b>`:""}. Le dossier quitte « Contrats à établir » sans créer d'employé.</div>
+      <div class="mb-4 flex flex-col gap-2">
+        ${CONTRACT_CANDIDATE_ARCHIVE_MOTIFS.map((m,i)=>`<label class="flex items-center gap-2"><input type="radio" name="motifArchive" value="${escapeHTML(m)}" ${i===0?"required":""} onchange="document.getElementById('archiveContractProblemDetail').classList.toggle('hidden',this.value!=='Problème dossier administratif')"> ${escapeHTML(m)}</label>`).join("")}
+        <div id="archiveContractProblemDetail" class="hidden ml-6">
+          <label class="label">Préciser le problème *</label>
+          <textarea class="textarea" name="motifArchiveDetail" rows="2" placeholder="Décrivez le problème de dossier administratif"></textarea>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
+        <button class="btn btn-danger">Archiver candidat</button>
+      </div>
+    </form>`);
+}
+async function confirmArchiveContractCandidate(id){
+  const f=document.querySelector(".modal-bg form");if(!f)return;
+  const motif=String(new FormData(f).get("motifArchive")||"").trim();
+  const detail=String(new FormData(f).get("motifArchiveDetail")||"").trim();
+  const c=findCandidatById(id);
+  if(!c){toast("Candidat introuvable","error");return}
+  if(!motif){toast("Choisissez un motif d'archivage","error");return}
+  if(motif==="Problème dossier administratif"&&!detail){toast("Précisez le problème de dossier administratif","error");return}
+  const draft={...c};
+  draft.statut="archive";
+  draft.status="archive";
+  draft.archiveSource="a_contractualiser";
+  draft.motifArchive=motif;
+  draft.commentaireArchive=detail;
+  draft.archivedAt=new Date().toISOString();
+  draft.archivedBy=session?.username||session?.nom||"";
+  if(!candidatAllSectionsValid(draft)){
+    // Certains dossiers transmis avant validation des sections portent un
+    // fichePositionValidee orphelin (incohérent) — on le redescend pour que
+    // l'archivage (statut hors {reserve,a_contractualiser,embauche}) ne soit
+    // pas bloqué par la vérification stricte des sections côté backend.
+    draft.fichePositionValidee=false;
+    delete draft.fichePositionValideeAt;
+    delete draft.fichePositionValideeBy;
+  }
+  delete draft.isNew;
+  try{
+    await persistCandidateToPostgres(draft);
+    Object.assign(c,draft);
+    await sgdiPullState({silent:true,render:false,force:true,light:true});
+    closeModal();
+    toast("Candidat archivé","success");
+    renderView();
+  }catch(e){toast("Archivage refusé : "+(e.message||e),"error")}
 }
 function exportContratsCSV(){
   const soc=currentStructureSocieteFilter();
