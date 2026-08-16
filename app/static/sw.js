@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260816-contract-form-width-fix";
+const SGDI_CACHE = "sgdi-pwa-v20260816-effectifs-modern";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
