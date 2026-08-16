@@ -100,7 +100,8 @@ const PERIODES_ESSAI_CONTRAT = [
   {value:"15d",label:"15 jours"},
   {value:"1m",label:"01 mois"},
   {value:"2m",label:"02 mois"},
-  {value:"3m",label:"03 mois"}
+  {value:"3m",label:"03 mois"},
+  {value:"6m",label:"06 mois"}
 ];
 const TYPES_SITE = [
  "Bureaux","Centre commercial","Hôpital","Entrepôt","Aéroport","Résidentiel",
@@ -12059,8 +12060,7 @@ function renderContractualisation(view,id){
   const nbOk=verifs.filter(([k])=>c["verif"+k]).length;
   const candidateFullName=(c.nom||"")+" "+(c.prenom||"");
   const candidateInitials=(candidateFullName.trim()?candidateFullName.trim().split(/\s+/).slice(0,2).map(x=>x.charAt(0)).join(""):"CD").toUpperCase();
-  view.innerHTML=`<div class="max-w-6xl mx-auto nc-page">
-    <div class="flex justify-between mb-4 gap-3 items-start flex-wrap"><div><p class="nc-eyebrow">Contrats à établir</p><h1 class="text-2xl font-black uppercase">Nouveau contrat — ${escapeHTML(candidateFullName)}</h1><p class="text-slate-500 text-sm">Même formulaire que Gestion des effectifs > Nouveau contrat. Documents contractualisation : <b>${nbOk}/9</b>.</p></div><div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
+  view.innerHTML=`<div class="flex justify-between mb-4 gap-3 items-start flex-wrap"><div><p class="nc-eyebrow">Contrats à établir</p><h1 class="text-2xl font-black uppercase">Nouveau contrat — ${escapeHTML(candidateFullName)}</h1><p class="text-slate-500 text-sm">Même formulaire que Gestion des effectifs > Nouveau contrat. Documents contractualisation : <b>${nbOk}/9</b>.</p></div><div class="flex gap-2 flex-wrap justify-end"><button type="button" class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="openContractDocumentsModal('${c.id}')">＋ Ajouter document</button><button class="btn" style="background:#f2b705;color:#111827;border-color:#d99f00;font-weight:900" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div></div>
     <form id="employee-new-contract-form" onsubmit="event.preventDefault();confirmCandidateNewContract(this,'${jsString(c.id)}')" class="nc-layout">
       <input type="hidden" name="agentId" value="${escapeHTML(proxy.id)}"/>
       <div class="nc-main">
@@ -12136,8 +12136,7 @@ function renderContractualisation(view,id){
           <div class="nc-helper">La validation crée le code employé, le premier contrat archivé et la fiche de position. L'affectation site reste confiée à OPS.</div>
         </div>
       </div>
-    </form>
-  </div>`;
+    </form>`;
   setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary()},0);
 }
 function updateNewContractSummary(){
