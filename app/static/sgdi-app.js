@@ -11213,7 +11213,12 @@ function newContractClientOptions(selectedClient,forcedSociete){
   // réelle du dossier en cours, alors que des sites existent bel et bien pour elle.
   const soc=forcedSociete||(typeof effectifSocieteFilter==="function"?effectifSocieteFilter():(typeof mySoc==="function"?mySoc():""));
   const seen=new Set();
-  const sites=(db.sites||[]).filter(s=>s&&s.actif!==false&&(!soc||siteMatchesSociete(s,soc))).sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||""),"fr"));
+  const activeSites=(db.sites||[]).filter(s=>s&&s.actif!==false);
+  // Si le filtrage par société ne renvoie aucun résultat (site non tagué, données
+  // incohérentes...), mieux vaut proposer tous les sites actifs qu'un menu vide qui
+  // bloque la création du contrat — l'utilisateur choisit alors manuellement.
+  const socMatches=soc?activeSites.filter(s=>siteMatchesSociete(s,soc)):activeSites;
+  const sites=(socMatches.length?socMatches:activeSites).sort((a,b)=>String(a.nom||a.intitule||"").localeCompare(String(b.nom||b.intitule||""),"fr"));
   const options=sites.map(s=>{
     const siteName=String(s.nom||s.intitule||"").trim();
     const client=String(s.client||siteName||"").trim();
