@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260817-contract-preview-real-merge";
+const SGDI_CACHE = "sgdi-pwa-v20260817-admin-recrutement-delete";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

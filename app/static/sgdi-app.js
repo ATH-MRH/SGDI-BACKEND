@@ -32467,6 +32467,8 @@ function updateAdminRecruitmentSelectionUI(){
   if(counter)counter.textContent=`${count} candidat(s) sélectionné(s)`;
   const btn=document.getElementById("admin-recruitment-submit");
   if(btn){btn.disabled=!count;btn.textContent=count?`Recruter la sélection (${count})`:"Recruter la sélection"}
+  const delBtn=document.getElementById("admin-recruitment-delete");
+  if(delBtn){delBtn.disabled=!count;delBtn.textContent=count?`Supprimer la sélection (${count})`:"Supprimer la sélection"}
   const visible=[...document.querySelectorAll(".admin-recruit-candidate")];
   const checked=visible.filter(x=>x.checked).length;
   document.querySelectorAll(".admin-recruit-select-all").forEach(input=>{
@@ -32500,7 +32502,8 @@ function renderAdminRecruitment(view){
   </div><div class="flex justify-end mt-3"><button class="btn btn-ghost text-xs" onclick="resetAdminRecruitmentFilters()">Réinitialiser les filtres</button></div></div>
   <div class="card p-3 mb-3 flex items-center justify-between gap-3 flex-wrap" style="background:#eff6ff;border-color:#bfdbfe">
     <div class="flex items-center gap-4 flex-wrap"><label class="flex items-center gap-2 text-sm font-black"><input type="checkbox" class="admin-recruit-select-all" onchange="toggleAdminRecruitmentVisible(this.checked)" style="width:17px;height:17px"/> Tout sélectionner (${candidates.length})</label><button class="btn btn-ghost text-xs" onclick="clearAdminRecruitmentSelection()">Tout désélectionner</button><span id="admin-recruitment-selected-count" class="text-sm font-black text-blue-800">${adminRecruitmentSelectedCandidates().length} candidat(s) sélectionné(s)</span></div>
-    <button type="button" id="admin-recruitment-submit" class="btn btn-success" onclick="openAdminRecruitmentConfirmation()" ${adminRecruitmentSelectedCandidates().length?"":"disabled"}>Recruter la sélection${adminRecruitmentSelectedCandidates().length?` (${adminRecruitmentSelectedCandidates().length})`:""}</button>
+    <div class="flex gap-2 flex-wrap"><button type="button" id="admin-recruitment-delete" class="btn btn-danger" onclick="openAdminRecruitmentDeleteConfirmation()" ${adminRecruitmentSelectedCandidates().length?"":"disabled"}>Supprimer la sélection${adminRecruitmentSelectedCandidates().length?` (${adminRecruitmentSelectedCandidates().length})`:""}</button>
+    <button type="button" id="admin-recruitment-submit" class="btn btn-success" onclick="openAdminRecruitmentConfirmation()" ${adminRecruitmentSelectedCandidates().length?"":"disabled"}>Recruter la sélection${adminRecruitmentSelectedCandidates().length?` (${adminRecruitmentSelectedCandidates().length})`:""}</button></div>
   </div>
   <div class="card overflow-hidden">${candidates.length?`<table><thead><tr><th style="width:42px;text-align:center"><input type="checkbox" class="admin-recruit-select-all" onchange="toggleAdminRecruitmentVisible(this.checked)" style="width:17px;height:17px"/></th><th>Candidat</th><th>Société</th><th>Poste</th><th>État du dossier</th><th>Doublon</th></tr></thead><tbody>${candidates.map(c=>{
     const key=adminRecruitmentCandidateKey(c),missing=adminRecruitmentMissingFields(c),duplicate=adminRecruitmentDuplicate(c);
@@ -32575,6 +32578,37 @@ async function recruitAdminSelectedCandidates(btn,includeDuplicates){
   logActivity("Recrutement groupé",`${ok} employé(s) créé(s)${failed?` · ${failed} échec(s)`:""}`);
   closeModal();
   toastCenter(`${ok} EMPLOYÉ(S) CRÉÉ(S)${failed?` · ${failed} ÉCHEC(S)`:""}${portalFailed?` · ${portalFailed} COMPTE(S) PORTAIL À REPRENDRE`:""}`,failed||portalFailed?"error":"success");
+  if(errors.length)toast(errors.slice(0,3).join(" ; ")+(errors.length>3?` ; +${errors.length-3} autre(s)`:""),"error");
+  renderSidebar();
+  renderView();
+}
+function openAdminRecruitmentDeleteConfirmation(){
+  const list=adminRecruitmentSelectedCandidates();
+  if(!list.length){toast("Sélectionnez au moins un candidat","error");return}
+  openModal(`<h3 class="font-black text-xl mb-2 text-red-700">Supprimer ${list.length} candidat(s) ?</h3>
+    <p class="text-sm text-slate-600 mb-4">Suppression définitive, sans passage par les archives. Cette action est irréversible.</p>
+    <div class="card p-3 mb-4" style="max-height:220px;overflow:auto;border-color:#fecaca;background:#fef2f2">${list.map(c=>`<div class="text-xs py-1">${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim()||"Identité à compléter")}${c.societe?` · ${escapeHTML(c.societe)}`:""}</div>`).join("")}</div>
+    <div class="flex justify-end gap-2"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger" onclick="deleteAdminSelectedCandidates(this)">Supprimer définitivement</button></div>`);
+}
+async function deleteAdminSelectedCandidates(btn){
+  const list=adminRecruitmentSelectedCandidates();
+  if(!list.length){closeModal();return}
+  if(btn){btn.disabled=true;btn.textContent="Suppression en cours…"}
+  let ok=0,failed=0;
+  const errors=[];
+  for(const c of list){
+    try{
+      await deleteCandidateFromPostgres(c);
+      const key=adminRecruitmentCandidateKey(c);
+      adminRecruitmentSelection.delete(key);
+      db.candidats=(db.candidats||[]).filter(x=>adminRecruitmentCandidateKey(x)!==key);
+      ok++;
+    }catch(e){failed++;errors.push(`${((c.nom||"")+" "+(c.prenom||"")).trim()||"Candidat"} : ${e.message||e}`)}
+  }
+  saveDB();
+  logActivity("Suppression candidats (recrutement groupé)",`${ok} supprimé(s)${failed?` · ${failed} échec(s)`:""}`);
+  closeModal();
+  toastCenter(`${ok} CANDIDAT(S) SUPPRIMÉ(S)${failed?` · ${failed} ÉCHEC(S)`:""}`,failed?"error":"success");
   if(errors.length)toast(errors.slice(0,3).join(" ; ")+(errors.length>3?` ; +${errors.length-3} autre(s)`:""),"error");
   renderSidebar();
   renderView();
