@@ -261,6 +261,17 @@ def _candidate_is_active(row: Candidate) -> bool:
     return not _candidate_is_archived(row) and not _candidate_is_recruited(row)
 
 
+def _candidate_is_transmitted(row: Candidate) -> bool:
+    """Dossier envoyé à la DRH (marquer-contractualisation) mais pas encore recruté."""
+    data = row.data if isinstance(row.data, dict) else {}
+    statuses = {
+        str(row.status or "").strip().lower(),
+        str(data.get("statut") or "").strip().lower(),
+        str(data.get("status") or "").strip().lower(),
+    }
+    return "a_contractualiser" in statuses
+
+
 def _candidate_matches_text(row: Candidate, query: str) -> bool:
     if not query:
         return True
@@ -309,9 +320,14 @@ def list_candidates_page(
     if selected_mode in {"archive", "archived", "archives"}:
         rows = [row for row in rows if _candidate_is_archived(row)]
     elif selected_mode in {"reserve", "reserves"}:
-        rows = [row for row in rows if _candidate_is_active(row) and _candidate_is_reserve(row)]
+        rows = [row for row in rows if _candidate_is_active(row) and _candidate_is_reserve(row) and not _candidate_is_transmitted(row)]
+    elif selected_mode in {"recruited", "recrutes", "recrutés", "candidats_recrutes"}:
+        rows = [row for row in rows if _candidate_is_transmitted(row) or _candidate_is_recruited(row)]
     elif selected_mode in {"new", "nouveau", "nouvelle", "recrutement"}:
-        rows = [row for row in rows if _candidate_is_active(row) and not _candidate_is_reserve(row)]
+        rows = [
+            row for row in rows
+            if _candidate_is_active(row) and not _candidate_is_reserve(row) and not _candidate_is_transmitted(row)
+        ]
 
     query = str(q or "").strip()
     if query:

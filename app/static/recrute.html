@@ -200,6 +200,7 @@ tr:last-child td{border-bottom:0}
         <button class="recruit-nav-btn" data-section="interviews" onclick="showRecruitSection('interviews')"><span class="recruit-nav-icon">✓</span>Entretiens</button>
         <button class="recruit-nav-btn" data-section="announcements" onclick="showRecruitSection('announcements')"><span class="recruit-nav-icon">▤</span>Annonces recrutement</button>
         <button class="recruit-nav-btn" data-section="reserve" onclick="showRecruitSection('reserve')"><span class="recruit-nav-icon">◷</span>Réserve</button>
+        <button class="recruit-nav-btn" data-section="recruited" onclick="showRecruitSection('recruited')"><span class="recruit-nav-icon">★</span>Candidats recrutés</button>
         <button class="recruit-nav-btn" data-section="archive" onclick="showRecruitSection('archive')"><span class="recruit-nav-icon">▣</span>Archives</button>
       </nav>
     </aside>
@@ -320,6 +321,7 @@ let searchTimer=null;
 const TABS=[
   {key:"new",label:"Nouvelles candidatures"},
   {key:"reserve",label:"Réserve"},
+  {key:"recruited",label:"Candidats recrutés"},
   {key:"archive",label:"Archives"}
 ];
 const RECRUTE_WILAYAS=[
@@ -361,6 +363,7 @@ const PAGE_SIZE=25;
 const tabState={
   new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
   reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
+  recruited:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
   archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"}
 };
 
@@ -495,7 +498,7 @@ async function apiFetch(path,options={}){
 }
 
 function showRecruitSection(section){
-  if(section==="reserve"||section==="archive"){
+  if(section==="reserve"||section==="archive"||section==="recruited"){
     recruitSection="candidates";
     sessionStorage.setItem("atlas_recrute_section",recruitSection);
     showRecruitSection("candidates");
@@ -522,16 +525,16 @@ function dashboardDateTile(value){
   return match?`${match[3]}<br>${match[2]}`:"—";
 }
 function dashboardOpenCandidate(id,action="open"){
-  const item=[...tabState.new.items,...tabState.reserve.items,...tabState.archive.items].find(row=>Number(row.id)===Number(id));
+  const item=[...tabState.new.items,...tabState.reserve.items,...tabState.recruited.items,...tabState.archive.items].find(row=>Number(row.id)===Number(id));
   if(!item)return;
-  activeTab=tabState.new.items.some(row=>Number(row.id)===Number(id))?"new":tabState.reserve.items.some(row=>Number(row.id)===Number(id))?"reserve":"archive";
+  activeTab=tabState.new.items.some(row=>Number(row.id)===Number(id))?"new":tabState.reserve.items.some(row=>Number(row.id)===Number(id))?"reserve":tabState.recruited.items.some(row=>Number(row.id)===Number(id))?"recruited":"archive";
   if(action==="interview")openCandidateInterview(id);else openCandidateForm(id);
 }
 async function renderRecruitDashboard(refresh=false){
   const host=document.getElementById("dashboardSection");
   host.innerHTML='<div class="empty">Chargement du tableau de bord…</div>';
   if(refresh){
-    await Promise.all(["new","reserve","archive"].map(async mode=>{
+    await Promise.all(["new","reserve","recruited","archive"].map(async mode=>{
       try{
         const params=new URLSearchParams({mode,page:"1",page_size:"100"});
         if(activeSociety)params.set("society",activeSociety);
@@ -546,7 +549,7 @@ async function renderRecruitDashboard(refresh=false){
   const convocations=candidates.filter(item=>candidateConvocation(item));
   const interviews=candidates.filter(item=>candidateInterview(item));
   const favorable=candidates.filter(item=>item.data?.avisDecision==="Favorable");
-  const contractPending=candidates.filter(candidateIsContractPending);
+  const contractPending=tabState.recruited.items.filter(candidateIsContractPending);
   const toConvoke=candidates.filter(item=>!candidateConvocation(item)&&!candidateInterview(item)&&!candidateIsContractPending(item));
   const upcoming=convocations.filter(item=>String(candidateConvocation(item)?.date||"")>=today()).sort((a,b)=>String(candidateConvocation(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||""))).slice(0,4);
   const recent=candidates.filter(item=>!candidateIsContractPending(item)).slice(0,5);
@@ -560,7 +563,7 @@ async function renderRecruitDashboard(refresh=false){
       <button class="dashboard-kpi" style="--kpi-color:#d97706" onclick="showRecruitSection('candidates');switchTab('new',true)"><span>À convoquer</span><strong>${toConvoke.length}</strong></button>
       <button class="dashboard-kpi" style="--kpi-color:#7c3aed" onclick="showRecruitSection('interviews')"><span>Entretiens planifiés</span><strong>${upcoming.length}</strong></button>
       <button class="dashboard-kpi" style="--kpi-color:#0891b2" onclick="showRecruitSection('reserve')"><span>En réserve</span><strong>${tabState.reserve.total}</strong></button>
-      <div class="dashboard-kpi dashboard-kpi-static" style="--kpi-color:#16a34a"><span>Transmis à la DRH</span><strong>${contractPending.length}</strong></div>
+      <button class="dashboard-kpi" style="--kpi-color:#16a34a" onclick="showRecruitSection('recruited')"><span>Transmis à la DRH</span><strong>${contractPending.length}</strong></button>
     </div>
     <div class="dashboard-grid">
       <div class="dashboard-panel"><div class="dashboard-panel-head"><h3>Avancement du recrutement</h3><button onclick="showRecruitSection('candidates')">Voir les candidatures →</button></div>
@@ -843,6 +846,10 @@ function statusPill(item){
     if(avis==="Défavorable")return '<span class="pill pill-red">Refusé</span>';
     return '<span class="pill pill-gray">Archivé</span>';
   }
+  if(activeTab==="recruited"){
+    if(status==="embauche")return '<span class="pill pill-green">Recruté</span>';
+    return '<span class="pill pill-indigo">Transmis à la DRH</span>';
+  }
   if(avis==="Favorable")return '<span class="pill pill-green">Accepté</span>';
   if(avis==="Défavorable")return '<span class="pill pill-red">Refusé</span>';
   if(avis==="Instance")return convoque?'<span class="pill pill-indigo">Convoqué</span>':'<span class="pill pill-amber">Instance</span>';
@@ -857,7 +864,7 @@ function avisClass(value){
 }
 function avisCell(item){
   const value=(item.data&&item.data.avisDecision)||"";
-  if(activeTab==="archive"){
+  if(activeTab==="archive"||activeTab==="recruited"){
     const pillClass=value==="Favorable"?"pill-green":value==="Défavorable"?"pill-red":value==="Instance"?"pill-amber":"pill-gray";
     return value?`<span class="pill ${pillClass}">${esc(value)}</span>`:"—";
   }
@@ -870,9 +877,10 @@ function avisCell(item){
 }
 function rowActionItems(item){
   const actions=[{label:"Ouvrir",onclick:`openCandidateForm(${item.id})`}];
-  if(activeTab!=="archive")actions.push({label:"Convoquer",onclick:`openCandidateConvocation(${item.id})`});
-  if(activeTab!=="archive")actions.push({label:"Entretien",onclick:`openCandidateInterview(${item.id})`});
-  if(activeTab!=="archive")actions.push({label:"Recruter",onclick:`transmitCandidateToDrh(${item.id})`});
+  const editable=activeTab!=="archive"&&activeTab!=="recruited";
+  if(editable)actions.push({label:"Convoquer",onclick:`openCandidateConvocation(${item.id})`});
+  if(editable)actions.push({label:"Entretien",onclick:`openCandidateInterview(${item.id})`});
+  if(editable)actions.push({label:"Recruter",onclick:`transmitCandidateToDrh(${item.id})`});
   if(activeTab==="reserve")actions.push({label:"Marquer prêt pour contrat",onclick:`markReadyForContract(${item.id})`});
   return actions;
 }
@@ -1023,7 +1031,7 @@ async function changeAvis(id,value){
 async function markReadyForContract(id){
   try{
     await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
-    showBanner('Candidat prêt pour contractualisation. Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
+    showBanner('Candidat prêt pour contractualisation, archivé dans « Candidats recrutés ». Terminez le contrat dans ATLAS : <a href="https://atlas.irongs.com/#/contrats/a_contractualiser" target="_blank" rel="noopener">ouvrir l\'application ATLAS</a>.',"success");
     loadTab(activeTab);
   }catch(error){showBanner(esc(error.message),"error")}
 }
@@ -1031,10 +1039,10 @@ async function transmitCandidateToDrh(id){
   const item=tabState[activeTab]?.items?.find(row=>Number(row.id)===Number(id));
   if(!item)return;
   const fullName=`${item.last_name||""} ${item.first_name||""}`.trim()||"ce candidat";
-  if(!confirm(`Transmettre le dossier de ${fullName} à la DRH pour établir son premier contrat ?\n\nAucun employé et aucun contrat ne seront créés à cette étape.`))return;
+  if(!confirm(`Transmettre le dossier de ${fullName} à la DRH pour établir son premier contrat ?\n\nLe candidat sera retiré du recrutement actif et archivé dans « Candidats recrutés ». Aucun employé et aucun contrat ne seront créés à cette étape.`))return;
   try{
     await apiFetch(`/api/drh/candidates/${id}/marquer-contractualisation`,{method:"POST"});
-    showBanner(`Dossier de ${esc(fullName)} transmis à la DRH. Il est maintenant visible dans « Contrats à établir ».`,"success");
+    showBanner(`Dossier de ${esc(fullName)} transmis à la DRH. Il est visible dans « Contrats à établir » et archivé dans « Candidats recrutés ».`,"success");
     await loadTab(activeTab);
   }catch(error){showBanner(esc(error.message||"Transmission à la DRH impossible"),"error")}
 }
