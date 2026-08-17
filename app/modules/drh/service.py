@@ -1653,6 +1653,87 @@ def generate_contract_from_form(db: Session, request: Any, user: Any | None = No
     return generate_contract(db, generated_request, user)
 
 
+def preview_contract_from_form(db: Session, request: Any) -> tuple[bytes, str, str]:
+    """Aperçu du contrat fusionné (modèle Word choisi + données du formulaire),
+    SANS créer/modifier d'employé ni persister de GeneratedContract/Contract/
+    Document — contrairement à generate_contract_from_form. Utilisé par le
+    bouton Aperçu du formulaire Nouveau contrat pour les modèles personnalisés
+    (le modèle APS générique garde son aperçu HTML instantané côté client)."""
+    first_name = str(request.first_name or "").strip()
+    last_name = str(request.last_name or "").strip()
+    code = str(getattr(request, "matricule", "") or "").strip() or "APERCU"
+    nin_raw = str(request.nin or "").strip()
+    nin = nin_raw if re.fullmatch(r"\d{10}", nin_raw) else None
+    extra = {
+        "nomPere": request.father_name or "",
+        "nomMere": request.mother_name or "",
+        "numeroCnas": getattr(request, "numero_cnas", None) or "",
+        "lieuTravail": request.work_place or "",
+        "client": getattr(request, "client", None) or "",
+        "motifRecrutement": request.recruitment_reason or "",
+        "detailSalaire": request.salary_details or "",
+        "dureeContrat": getattr(request, "contract_duration", None) or "",
+    }
+    preview_employee = SimpleNamespace(
+        id=0,
+        code=code,
+        first_name=first_name,
+        last_name=last_name,
+        father_name=request.father_name,
+        mother_name=request.mother_name,
+        nin=nin,
+        birth_date=request.birth_date,
+        birth_place=request.birth_place,
+        phone=getattr(request, "phone", None),
+        email=None,
+        address=getattr(request, "address", None),
+        commune=getattr(request, "commune", None),
+        wilaya=getattr(request, "wilaya", None),
+        position=request.position or request.work_place,
+        society=request.society,
+        contract_type=_clean_contract_type(request.contract_type),
+        salary_net=float(request.salary_net or 0),
+        recruit_date=request.start_date,
+        contract_end_date=request.end_date,
+        trial_end_date=None,
+        extra=extra,
+    )
+    generated_request = SimpleNamespace(
+        employee_id=0,
+        template_id=request.template_id,
+        contract_type=request.contract_type,
+        position=request.position or request.work_place,
+        function=request.position or request.work_place,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        salary_net=request.salary_net,
+        output_format="docx",
+        values={
+            **(request.values if isinstance(getattr(request, "values", None), dict) else {}),
+            "CODE": code,
+            "MATRICULE": code,
+            "DATE_CONTRAT": date.today(),
+            "CNAS": getattr(request, "numero_cnas", None) or "",
+            "NUMERO_CNAS": getattr(request, "numero_cnas", None) or "",
+            "TELEPHONE": getattr(request, "phone", None) or "",
+            "ADRESSE": getattr(request, "address", None) or "",
+            "LIEU_TRAVAIL": request.work_place or "",
+            "CLIENT": getattr(request, "client", None) or "",
+            "WILAYA": getattr(request, "wilaya", None) or "",
+            "COMMUNE": getattr(request, "commune", None) or "",
+            "DUREE_CONTRAT": (request.values.get("DUREE_CONTRAT") if isinstance(getattr(request, "values", None), dict) else None) or getattr(request, "contract_duration", None) or "",
+            "MOTIF_RECRUTEMENT": request.recruitment_reason or "",
+            "DETAIL_SALAIRE": request.salary_details or "",
+        },
+    )
+    template = find_contract_template(db, generated_request, preview_employee)
+    values = contract_values(preview_employee, generated_request)
+    values.update(matching_clauses(db, template.id, values))
+    docx_bytes = render_docx(template, values)
+    safe_name = (f"apercu-{template.code}-{last_name}-{first_name}".replace(" ", "_")) or "apercu-contrat"
+    return docx_bytes, f"{safe_name}.docx", DOCX_MIME
+
+
 def cleanup_base64_photos(db: Session) -> int:
     changed = 0
     for row in db.execute(select(Candidate)).scalars().all():

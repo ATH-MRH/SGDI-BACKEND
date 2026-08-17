@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260817-contract-model-preview-fix";
+const SGDI_CACHE = "sgdi-pwa-v20260817-contract-preview-real-merge";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

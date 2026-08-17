@@ -651,6 +651,21 @@ async function sgdiDownload(path,filename){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
 }
+async function sgdiDownloadPost(path,payload,filename){
+  const url=sgdiApiUrl(path,false);
+  const res=await fetch(url,{method:"POST",cache:"no-store",headers:sgdiAuthHeaders({}),body:JSON.stringify(payload||{})});
+  if(!res.ok){
+    const out=await res.json().catch(()=>({detail:"Aperçu impossible"}));
+    throw new Error(out.detail||out.error||"Aperçu impossible");
+  }
+  const blob=await res.blob();
+  const a=document.createElement("a");
+  const objectUrl=URL.createObjectURL(blob);
+  a.href=objectUrl;
+  a.download=filename||"document";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);
+}
 function sgdiSetApiRoot(url){window.__SGDI_API_ROOT__=String(url||"").replace(/\/+$/,"");window.__SGDI_BACKEND_ENABLED__=true}
 function sgdiPurgeBrowserBusinessStorage(){
   const blocked=/^(pendingCandidat:|candidatIdAliases$|irongs_db|sgdi_db|sgdi:db|sgdi:data|sgdi-backup|sgdiDraft|candidateDraft|siteDraft|dotationDraft)/i;
@@ -7514,7 +7529,11 @@ function normalizePageHeader(view){
   const children=[...view.children].filter(el=>el.nodeType===1&&!el.classList.contains('module-counters-ribbon'));
   if(!children.length)return;
   let first=children[0];
-  if(first.classList.contains('candidate-section-card')||first.classList.contains('modal-bg'))return;
+  // Bandeaux d'en-tête personnalisés (dégradé navy, bouton d'action déjà stylé) : ne
+  // pas laisser le normalisateur générique leur imposer un fond blanc et détourner
+  // leurs boutons vers le style d'action jaune admin (repère déjà vu sur .ops-dash-hero,
+  // dont le dégradé disparaissait entièrement à cause de cette règle).
+  if(first.classList.contains('candidate-section-card')||first.classList.contains('modal-bg')||first.classList.contains('ops-dash-hero'))return;
   if(first.matches('h1')){
     const wrap=document.createElement('div');
     wrap.className='module-page-header';
@@ -11571,7 +11590,7 @@ function resetNewContractArticle(n){
   const el=document.querySelector(`[data-contract-article-text][data-article="${CSS.escape(String(n))}"]`);
   if(el)el.value=el.dataset.defaultText||"";
 }
-function printEmployeeNewContractFromForm(form){
+async function printEmployeeNewContractFromForm(form){
   const draft=employeeNewContractDraftFromForm(form);
   if(!draft.a){toast("Employé introuvable","error");return}
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
@@ -11580,15 +11599,16 @@ function printEmployeeNewContractFromForm(form){
   const modelValue=String(draft.contratPersonnelId||"").trim();
   if(/^\d+$/.test(modelValue)){
     // Modèle Word personnalisé (ex. COORDINATEUR) : l'aperçu HTML article par article
-    // ne s'applique qu'au modèle APS générique. On télécharge ici le modèle vierge
-    // sélectionné plutôt que d'afficher à tort le texte APS — le contrat final,
-    // lui, utilisera bien ce modèle (template_id transmis au serveur à la validation).
+    // ne s'applique qu'au modèle APS générique codé en dur. On demande ici au serveur
+    // un vrai aperçu fusionné (mêmes données que le contrat final) via un endpoint
+    // dédié qui ne crée ni ne persiste rien — contrairement à la génération finale.
     const t=activeBackendContractTemplates().find(x=>String(x.id)===modelValue);
-    if(t){
-      toast("Aperçu HTML indisponible pour ce modèle personnalisé — téléchargement du modèle "+(t.title||"")+". Le contrat final utilisera bien ce modèle.","info");
-      downloadContractTemplate(t.id,t.file_name||"modele.docx");
-      return;
-    }
+    try{
+      const fileName=`apercu-${(t?.code||"contrat").toString().toLowerCase()}-${draft.a.matricule||"employe"}.docx`;
+      await sgdiDownloadPost("/drh/generated-contracts/preview-from-form",employeeNewContractPayload(draft),fileName);
+      toast("Aperçu du modèle "+(t?.title||"")+" généré avec les données du formulaire.","success");
+    }catch(e){toast("Aperçu impossible : "+(e.message||e),"error")}
+    return;
   }
   openEmployeeContractReviewWindow(draft.a,draft);
 }
@@ -35528,6 +35548,23 @@ function _renderOpsMouvementsHTML(view){
   </div>`;
   if(presetAgent)sessionStorage.removeItem("opsMovementAgentId");
 }
+let opsDashboardFeuilleFetchedAt=0;
+function opsDashboardRefreshFeuillePresence(){
+  // db.feuillePresence n'est normalement peuplé que par les écrans Pointage
+  // (feuille/auto/planning) visités dans la session : sans ce fetch dédié, un
+  // utilisateur qui arrive directement sur ops/dashboard voit tous les
+  // indicateurs de présence (Présents, Absents, taux par site...) à zéro.
+  const now=Date.now();
+  if(now-opsDashboardFeuilleFetchedAt<10000)return;
+  opsDashboardFeuilleFetchedAt=now;
+  sgdiApi("/api/irongs/collections/feuillePresence",{method:"GET",legacy:false}).then(res=>{
+    const data=Array.isArray(res)?res:(res?.data||[]);
+    if(data.length){
+      db.feuillePresence=data;
+      if(((location.hash||"").slice(2)).startsWith("ops/dashboard"))renderView();
+    }
+  }).catch(e=>console.warn("Feuille de présence indisponible pour le tableau de bord OPS",e));
+}
 function renderOPS(view,sub,arg){
   if(!canAccess("ops")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="qr")ptStopQrTabletTimer();
@@ -35540,6 +35577,7 @@ function renderOPS(view,sub,arg){
   if(sub==="mouvements"){renderOpsMouvements(view);return}
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
   if(sub==="instance_dotation"){renderOpsInstanceDotation(view);return}
+  opsDashboardRefreshFeuillePresence();
   const soc=currentStructureSocieteFilter();
   const empCounters=sgdiUnifiedEmployeeCounters(soc);
   const erpOps=sgdiErpModuleCounters("ops",soc);

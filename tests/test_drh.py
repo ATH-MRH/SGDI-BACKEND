@@ -520,6 +520,69 @@ def test_contract_templates_list(client, auth_headers):
     assert r.status_code == 200 and isinstance(r.json(), list)
 
 
+def _minimal_docx_bytes(text="Contrat de {{NOM}} {{PRENOM}} — poste {{POSTE}}."):
+    from io import BytesIO
+    from docx import Document
+    doc = Document()
+    doc.add_paragraph(text)
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_preview_contract_from_form_merges_without_side_effects(client, auth_headers):
+    """L'aperçu d'un modèle Word personnalise doit fusionner les donnees du formulaire
+    SANS creer d'employe ni de contrat/document persistes (contrairement a la
+    generation finale) — c'est l'invariant de securite du bouton Apercu."""
+    upload = client.post(
+        "/api/drh/contract-templates",
+        headers=auth_headers,
+        data={"code": "TEST_COORD", "title": "Contrat Coordinateur", "contract_type": "CDD",
+              "position": "COORDINATEUR", "active": 1},
+        files={"file": ("coordinateur.docx", _minimal_docx_bytes(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+    )
+    assert upload.status_code == 200, upload.text
+    template_id = upload.json()["id"]
+
+    employees_before = client.get("/api/drh/employees", headers=auth_headers).json()
+
+    payload = {
+        "template_id": template_id,
+        "matricule": "PREVIEWTEST",
+        "contract_type": "CDD",
+        "first_name": "Slimane",
+        "last_name": "Rouabeh",
+        "position": "COORDINATEUR",
+        "society": "Iron Global Securite",
+        "start_date": str(date.today()),
+        "end_date": str(date.today() + timedelta(days=365)),
+        "salary_net": 45000,
+        "values": {"FONCTION": "COORDINATEUR", "POSTE": "COORDINATEUR"},
+        "output_format": "docx",
+    }
+    preview = client.post("/api/drh/generated-contracts/preview-from-form", headers=auth_headers, json=payload)
+    assert preview.status_code == 200, preview.text
+    assert preview.headers["content-type"].startswith("application/vnd.openxmlformats")
+    assert len(preview.content) > 0
+
+    employees_after = client.get("/api/drh/employees", headers=auth_headers).json()
+    assert len(employees_after) == len(employees_before), "L'aperçu ne doit jamais créer d'employé"
+
+    generated = client.get("/api/drh/generated-contracts", headers=auth_headers)
+    if generated.status_code == 200:
+        codes = [g.get("employee_id") for g in generated.json()]
+        assert "PREVIEWTEST" not in [str(c) for c in codes]
+
+
+def test_preview_contract_from_form_requires_template_id(client, auth_headers):
+    payload = {
+        "first_name": "Sans", "last_name": "Modele", "contract_type": "CDD",
+        "society": "Iron Global Securite", "output_format": "docx",
+    }
+    r = client.post("/api/drh/generated-contracts/preview-from-form", headers=auth_headers, json=payload)
+    assert r.status_code == 422
+
+
 def _agent_headers(client, db):
     """Compte role='agent' (consultation simple) — ne doit jamais pouvoir modifier les
     modèles de contrat ni les clauses conditionnelles (document officiel partagé)."""

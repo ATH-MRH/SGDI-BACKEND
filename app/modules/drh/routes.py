@@ -703,6 +703,19 @@ def generate_contract_from_form(payload: DirectContractRequest, db: Session = De
     return service.generate_contract_from_form(db, payload, user)
 
 
+@router.post("/generated-contracts/preview-from-form")
+def preview_contract_from_form(payload: DirectContractRequest, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    _ensure_society_allowed(user, payload.society)
+    if not payload.template_id:
+        raise HTTPException(status_code=422, detail="Aperçu réservé aux modèles Word personnalisés (template_id requis)")
+    docx_bytes, file_name, mime_type = service.preview_contract_from_form(db, payload)
+    return StreamingResponse(
+        BytesIO(docx_bytes),
+        media_type=mime_type,
+        headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
+    )
+
+
 @router.get("/generated-contracts/{generated_id}/download")
 def download_generated_contract(generated_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     row = service.get_or_404(db, GeneratedContract, generated_id)
