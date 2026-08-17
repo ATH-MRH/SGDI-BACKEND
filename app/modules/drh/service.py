@@ -661,7 +661,13 @@ def _candidate_values(payload: Any, existing: Candidate | None = None, partial: 
     if not partial or "last_name" in values:
         values["last_name"] = last_name
     _validate_candidate_form_rules(values, existing)
-    _validate_candidate_transition(values, existing)
+    # NB : _validate_candidate_transition (exigence des 7 sections validées) n'est PAS
+    # appliquée ici. Le parcours réel (recrute.html) place un candidat en réserve/à
+    # contractualiser sans jamais valider les sections une à une — cela n'arrive qu'au
+    # moment d'« Établir le contrat » (boucle validate-section puis validate-final). La
+    # exiger ici bloquerait indéfiniment la moindre modification d'un candidat déjà
+    # transmis à la DRH. Le vrai garde-fou reste en place à la création de l'employé
+    # (recruit_candidate appelle _validate_candidate_transition explicitement).
     return values
 
 def validate_candidate_section(db: Session, payload: Any, section: str, existing_id: int | None = None, username: str | None = None):
