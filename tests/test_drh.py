@@ -376,11 +376,24 @@ def test_candidate_api_rejects_non_recruitment_role(client, restricted_headers):
     assert response.status_code == 403, response.text
 
 
-def test_marquer_contractualisation_requires_reserve(client, auth_headers):
-    """marquer-contractualisation refuse un candidat qui n'est pas en réserve (422)."""
+def test_marquer_contractualisation_accepts_non_reserve_candidate(client, auth_headers):
+    """marquer-contractualisation accepte un candidat qui n'est pas en réserve : c'est le
+    chemin normal des candidats transmis depuis recrute.html, qui ne passent jamais par le
+    workflow interne "réserve" d'ATLAS avant d'être envoyés en contractualisation."""
     c = _cand(client, auth_headers, first="PasEnReserve")
     r = client.post(f"/api/drh/candidates/{c['id']}/marquer-contractualisation", headers=auth_headers)
-    assert r.status_code == 422, r.text
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["status"] == "a_contractualiser"
+
+
+def test_marquer_contractualisation_rejects_archived_or_embauche(client, auth_headers):
+    """marquer-contractualisation refuse un dossier déjà archivé ou déjà transformé en
+    employé (409) — c'est la seule restriction de statut réellement appliquée."""
+    c = _cand(client, auth_headers, first="DejaArchive")
+    patch = client.put(f"/api/drh/candidates/{c['id']}", headers=auth_headers, json={"status": "archive"})
+    assert patch.status_code == 200, patch.text
+    r = client.post(f"/api/drh/candidates/{c['id']}/marquer-contractualisation", headers=auth_headers)
+    assert r.status_code == 409, r.text
 
 
 def test_validate_section_enforces_order(client, auth_headers):
