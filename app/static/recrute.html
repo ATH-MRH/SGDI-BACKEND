@@ -106,6 +106,11 @@ tr:last-child td{border-bottom:0}
 .row-actions{display:flex;align-items:center;gap:2px;justify-content:flex-end;flex-wrap:nowrap;white-space:nowrap}
 .link-btn{border:0;background:none;color:var(--blue);font-weight:850;font-size:11px;cursor:pointer;padding:6px 5px}
 .link-btn.danger{color:var(--red)}
+.kebab-btn{border:0;background:none;color:#64748b;font-weight:900;font-size:17px;line-height:1;cursor:pointer;padding:5px 10px;border-radius:8px}
+.kebab-btn:hover{background:#eef4f9;color:var(--navy)}
+.row-menu{position:fixed;z-index:200;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 34px rgba(4,57,112,.16);padding:6px;display:flex;flex-direction:column;gap:1px;min-width:190px}
+.row-menu-item{border:0;background:none;text-align:left;padding:9px 11px;border-radius:8px;font-size:12.5px;font-weight:750;color:var(--navy);cursor:pointer}
+.row-menu-item:hover{background:#eef4f9;color:var(--blue)}
 .empty{text-align:center;color:#94a3b8;padding:40px 20px;font-size:14px}
 .pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;font-size:12px;color:var(--muted)}
 .pagination .btns{display:flex;gap:8px}
@@ -863,13 +868,46 @@ function avisCell(item){
     <option value="Instance"${value==="Instance"?" selected":""}>Instance</option>
   </select>`;
 }
+function rowActionItems(item){
+  const actions=[{label:"Ouvrir",onclick:`openCandidateForm(${item.id})`}];
+  if(activeTab!=="archive")actions.push({label:"Convoquer",onclick:`openCandidateConvocation(${item.id})`});
+  if(activeTab!=="archive")actions.push({label:"Entretien",onclick:`openCandidateInterview(${item.id})`});
+  if(activeTab!=="archive")actions.push({label:"Recruter",onclick:`transmitCandidateToDrh(${item.id})`});
+  if(activeTab==="reserve")actions.push({label:"Marquer prêt pour contrat",onclick:`markReadyForContract(${item.id})`});
+  return actions;
+}
 function rowActions(item){
-  const actions=[`<button type="button" class="link-btn" onclick="openCandidateForm(${item.id})">Ouvrir</button>`];
-  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openCandidateConvocation(${item.id})">Convoquer</button>`);
-  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="openCandidateInterview(${item.id})">Entretien</button>`);
-  if(activeTab!=="archive")actions.push(`<button type="button" class="link-btn" onclick="transmitCandidateToDrh(${item.id})">Recruter</button>`);
-  if(activeTab==="reserve")actions.push(`<button type="button" class="link-btn" onclick="markReadyForContract(${item.id})">Marquer prêt pour contrat</button>`);
-  return `<div class="row-actions">${actions.join("")}</div>`;
+  return `<div class="row-actions"><button type="button" class="kebab-btn" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
+}
+function closeRowMenu(){
+  document.getElementById("rowActionMenu")?.remove();
+  document.removeEventListener("click",handleRowMenuOutsideClick,true);
+  document.removeEventListener("keydown",handleRowMenuEscape,true);
+}
+function handleRowMenuOutsideClick(e){
+  if(!document.getElementById("rowActionMenu")?.contains(e.target))closeRowMenu();
+}
+function handleRowMenuEscape(e){if(e.key==="Escape")closeRowMenu();}
+function toggleRowMenu(id,btn){
+  const already=document.getElementById("rowActionMenu");
+  closeRowMenu();
+  if(already&&already.dataset.forId===String(id))return;
+  const item=tabState[activeTab]?.items?.find(row=>Number(row.id)===Number(id));if(!item)return;
+  const menu=document.createElement("div");
+  menu.id="rowActionMenu";
+  menu.className="row-menu";
+  menu.dataset.forId=String(id);
+  menu.innerHTML=rowActionItems(item).map(a=>`<button type="button" class="row-menu-item" onclick="closeRowMenu();${a.onclick}">${esc(a.label)}</button>`).join("");
+  document.body.appendChild(menu);
+  const rect=btn.getBoundingClientRect();
+  const menuRect=menu.getBoundingClientRect();
+  let top=rect.bottom+4;
+  let left=rect.right-menuRect.width;
+  if(top+menuRect.height>window.innerHeight-8)top=Math.max(8,rect.top-menuRect.height-4);
+  if(left<8)left=8;
+  menu.style.top=top+"px";
+  menu.style.left=left+"px";
+  setTimeout(()=>{document.addEventListener("click",handleRowMenuOutsideClick,true);document.addEventListener("keydown",handleRowMenuEscape,true)},0);
 }
 let convocationCandidate=null;
 function openCandidateConvocation(id){
@@ -935,6 +973,7 @@ async function saveCandidateInterview(form){
   try{await apiFetch(`/api/drh/candidates/${item.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});closeCandidateInterview();showBanner(`Entretien du ${esc(formatDateFr(entretien.date))} enregistré · note ${String(entretien.moyenne).replace(".",",")} / 5.${payload.status==="reserve"?" Candidat placé en réserve.":""}`,"success");refreshRecruitCurrentSection();}catch(error){const el=document.getElementById("interviewError");if(el){el.textContent=error.message||"Enregistrement impossible";el.classList.add("show")}button.disabled=false;button.textContent="Enregistrer l’entretien";}
 }
 function renderList(){
+  closeRowMenu();
   const state=tabState[activeTab];
   const filtered=filteredItems(activeTab);
   if(!filtered.length){
