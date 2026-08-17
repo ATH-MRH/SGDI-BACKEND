@@ -6486,11 +6486,23 @@ function renderSidebar(){
     const sidebarByModule={
       drh:[
         {label:"TABLEAU DE BORD",route:"drh/dashboard"},
-        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"]},
-        {label:"FICHE DE POSITION",route:"fiches"},
-        {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"]},
+        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],count:contractsToEstablishCandidates().length||null},
+        {label:"FICHE DE POSITION",route:"fiches",count:drhAgents.filter(a=>!employeeIsFormer(a)&&agentCompleteness(a).pct<85).length||null},
+        {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],count:drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length||null},
         {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
-        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
+        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],count:(()=>{
+          const now=new Date();
+          if([5,6].includes(now.getDay()))return null;
+          const dateStr=now.toISOString().slice(0,10);
+          const eligible=typeof pointageEligibleAgents==="function"?pointageEligibleAgents(drhSoc):[];
+          if(!eligible.length)return null;
+          const pointes=new Set();
+          (db.feuillePresence||[]).forEach(x=>{
+            if(String(x?.date||"")!==dateStr)return;
+            [x.agentId,x.agentBackendId,x.employee_id,x.matricule].forEach(ref=>{if(ref!==undefined&&ref!==null&&ref!=="")pointes.add(String(ref))});
+          });
+          return eligible.filter(a=>![a.id,a.backendId,a.matricule].some(ref=>ref!==undefined&&ref!==null&&ref!==""&&pointes.has(String(ref)))).length||null;
+        })()},
         {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length||null},
         {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},

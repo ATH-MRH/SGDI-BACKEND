@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260817-admin-recrutement-delete";
+const SGDI_CACHE = "sgdi-pwa-v20260817-drh-sidebar-counters";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
