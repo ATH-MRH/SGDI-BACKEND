@@ -261,7 +261,7 @@ tr:last-child td{border-bottom:0}
       <div class="field-grid">
         <section class="form-section"><div class="form-section-title">1. Identification du candidat</div><div class="form-section-sub">État civil et informations personnelles</div><div class="field-grid">
           <div class="full photo-field"><div class="photo-preview" id="photoPreview">PHOTO</div><div style="flex:1"><label for="fPhoto">Photo d’identité</label><input id="fPhoto" type="file" accept="image/*" onchange="previewCandidatePhoto(this)"><input id="fPhotoData" type="hidden"></div></div>
-          <div><label for="fLastName">Nom *</label><input id="fLastName" required></div><div><label for="fFirstName">Prénom *</label><input id="fFirstName" required></div>
+          <div><label for="fLastName">Nom</label><input id="fLastName"></div><div><label for="fFirstName">Prénom</label><input id="fFirstName"></div>
           <div><label for="fBirthDate">Date de naissance</label><input id="fBirthDate" type="date"></div><div><label for="fBirthPlace">Lieu de naissance</label><input id="fBirthPlace"></div>
           <div><label for="fSex">Sexe</label><select id="fSex"><option value="">—</option><option value="M">Masculin</option><option value="F">Féminin</option></select></div><div><label for="fFamilyStatus">Situation familiale</label><select id="fFamilyStatus"><option value="">—</option><option>Célibataire</option><option>Marié(e)</option><option>Divorcé(e)</option><option>Veuf(ve)</option></select></div>
           <div><label for="fChildren">Nombre d’enfants</label><input id="fChildren" type="number" min="0"></div><div><label for="fBlood">Groupe sanguin</label><select id="fBlood"><option value="">—</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
@@ -1264,11 +1264,13 @@ async function submitCandidateForm(){
   errorEl.classList.remove("show");
   const lastName=document.getElementById("fLastName").value.trim();
   const firstName=document.getElementById("fFirstName").value.trim();
-  if(lastName.length<2||firstName.length<2){
-    errorEl.textContent="Nom et prénom obligatoires (2 caractères minimum).";
-    errorEl.classList.add("show");
-    return;
-  }
+  const missing=[];
+  document.querySelectorAll("#candidateForm label[for]").forEach(label=>{
+    const field=document.getElementById(label.getAttribute("for"));
+    if(!field||field.type==="hidden"||field.type==="file")return;
+    if(!String(field.value||"").trim())missing.push(label.textContent.replace(/\s*\*$/,"").trim());
+  });
+  if(missing.length&&!confirm(`Champs vides : ${missing.join(", ")}.\n\nEnregistrer quand même ?`))return;
   const existing=editingCandidateId?Object.values(tabState).flatMap(s=>s.items).find(row=>row.id===editingCandidateId):null;
   const payload={
     last_name:lastName,
