@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260819-hero-h1-white";
+const SGDI_CACHE = "sgdi-pwa-v20260819-recap-agent-feuillepresence-fallback";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

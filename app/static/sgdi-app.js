@@ -36842,6 +36842,30 @@ function ptGetSheet(agentId,ym){
   return db.pointages.find(p=>String(p.agentId??"")===key&&p.periode===ym);
 }
 function ptEnsureSheet(agentId,ym){let s=ptGetSheet(agentId,ym);if(!s){const key=String(agentId??"");const ag=db.agents.find(a=>String(a.id??"")===key);s={id:uid("pt"),agentId,periode:ym,societe:ag?ag.societe:"",days:{},createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};db.pointages.push(s)}return s}
+// Recherche l'enregistrement feuillePresence (scan QR) d'un agent pour une date donnée, avec
+// la même priorité de correspondance (id, backendId, matricule) que le repli utilisé par la
+// grille "Saisie automatique" (fpqGetForAgent, closure locale à renderPointageSaisieAuto,
+// indexée pour la performance sur ~100 agents × 31 jours — ici on ne traite qu'un seul agent
+// à la fois, un scan linéaire suffit sans dupliquer l'index).
+function ptFeuillePresenceRowForAgent(agent,dateStr){
+  const refs=[agent?.id,agent?.backendId,agent?.matricule].filter(v=>v!==undefined&&v!==null&&v!=="").map(String);
+  if(!refs.length)return null;
+  return (db.feuillePresence||[]).find(x=>{
+    if(String(x?.date||"")!==dateStr)return false;
+    return [x.agentId,x.agentBackendId,x.employee_id,x.matricule].some(ref=>ref!==undefined&&ref!==null&&ref!==""&&refs.includes(String(ref)));
+  })||null;
+}
+// Code du jour pour un agent : priorité à la fiche mensuelle (saisie manuelle, source de
+// vérité), repli sur feuillePresence sinon — MÊME règle que codeForDay dans
+// renderPointageSaisieAuto. Sans ce repli, un agent pointé uniquement via scan QR (jamais
+// transcrit dans la fiche mensuelle) apparaissait présent dans la grille "Saisie automatique"
+// mais totalement absent (0 jour renseigné) dans son récapitulatif individuel.
+function ptResolveDayCode(agent,sheet,ym,day){
+  const sheetCode=(sheet?.days||{})[day]||"";
+  if(sheetCode)return sheetCode;
+  const f=ptFeuillePresenceRowForAgent(agent,`${ym}-${day}`)||{};
+  return f.code||fpqPresenceCode(f.heureArrivee)||((f.scanArrivee||f.heureArrivee)?"P":"")||"";
+}
 function ptCodeAbsencePayrollValue(code){const c=String(code||"").toUpperCase();if(c==="A"||c==="AB"||c==="A1")return 1;if(c==="A2")return 2;if(c==="A3")return 3;return 0}
 function ptIsAbsencePayrollCode(code){return ptCodeAbsencePayrollValue(code)>0}
 function ptAbsencePayrollDays(sheet){if(!sheet)return 0;return Object.values(sheet.days||{}).reduce((s,c)=>s+ptCodeAbsencePayrollValue(c),0)}
@@ -39116,9 +39140,12 @@ function renderPointageRecap(agentId){
   if(!cur)return filterBar+`<div class="card p-6 text-center text-slate-500">Sélectionnez un agent ci-dessus pour voir son récapitulatif mensuel.</div>`;
   const sheet=ptGetSheet(cur.id,ym);
   const days=ptDaysInMonth(ym);const [yr,mo]=ym.split("-").map(Number);
-  const tableCells=Array.from({length:days},(_,i)=>{const d=i+1;const k=String(d).padStart(2,"0");const code=(sheet?.days||{})[k]||"";const c=POINTAGE_CODES[code];const date=new Date(yr,mo-1,d);const wd=date.getDay();const we=wd===0||wd===6;const wdName=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][wd];return`<tr ${we?'style="background:#fef2f2"':""}><td class="px-2 py-1 font-mono text-xs" style="border:1px solid #e2e8f0">${k}/${String(mo).padStart(2,"0")}</td><td class="px-2 py-1 text-xs ${we?"text-red-600 font-semibold":""}" style="border:1px solid #e2e8f0">${wdName}</td><td class="px-2 py-1 text-center font-bold" style="border:1px solid #e2e8f0;background:${c?c.bg:""};color:${c?c.color:"#94a3b8"}">${code||"·"}</td><td class="px-2 py-1 text-xs" style="border:1px solid #e2e8f0">${c?c.label:"—"}</td></tr>`}).join("");
-  const counts=Object.entries(POINTAGE_CODES).filter(([k])=>{const n=ptCount(sheet,k);return n>0||["P","A","M","S","C","R"].includes(k);}).map(([k,c])=>{const n=ptCount(sheet,k);return`<div class="card p-3 text-center" style="background:${c.bg}"><div class="text-[10px] uppercase tracking-wider font-semibold" style="color:${c.color}">${c.label} (${k})</div><div class="text-2xl font-black" style="color:${c.color}">${n}</div></div>`}).join("");
-  const total=Object.keys(sheet?.days||{}).length;
+  const resolvedByDay={};
+  for(let d=1;d<=days;d++){const k=String(d).padStart(2,"0");resolvedByDay[k]=ptResolveDayCode(cur,sheet,ym,k)}
+  const tableCells=Array.from({length:days},(_,i)=>{const d=i+1;const k=String(d).padStart(2,"0");const code=resolvedByDay[k];const c=POINTAGE_CODES[code];const date=new Date(yr,mo-1,d);const wd=date.getDay();const we=wd===0||wd===6;const wdName=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][wd];return`<tr ${we?'style="background:#fef2f2"':""}><td class="px-2 py-1 font-mono text-xs" style="border:1px solid #e2e8f0">${k}/${String(mo).padStart(2,"0")}</td><td class="px-2 py-1 text-xs ${we?"text-red-600 font-semibold":""}" style="border:1px solid #e2e8f0">${wdName}</td><td class="px-2 py-1 text-center font-bold" style="border:1px solid #e2e8f0;background:${c?c.bg:""};color:${c?c.color:"#94a3b8"}">${code||"·"}</td><td class="px-2 py-1 text-xs" style="border:1px solid #e2e8f0">${c?c.label:"—"}</td></tr>`}).join("");
+  const countForCode=k=>Object.values(resolvedByDay).filter(v=>v===k).length;
+  const counts=Object.entries(POINTAGE_CODES).filter(([k])=>{const n=countForCode(k);return n>0||["P","A","M","S","C","R"].includes(k);}).map(([k,c])=>{const n=countForCode(k);return`<div class="card p-3 text-center" style="background:${c.bg}"><div class="text-[10px] uppercase tracking-wider font-semibold" style="color:${c.color}">${c.label} (${k})</div><div class="text-2xl font-black" style="color:${c.color}">${n}</div></div>`}).join("");
+  const total=Object.values(resolvedByDay).filter(Boolean).length;
   const isValide=!!(sheet&&sheet.valide);
   const validBlock=isValide?`<div class="card p-3 mb-3" style="background:#dcfce7;border:2px solid #043970"><div class="flex items-center justify-between"><div><div class="text-xs uppercase tracking-wider font-bold text-emerald-700">🔒 Pointage validé</div><div class="text-xs text-slate-600">Validé par <strong>${escapeHTML(sheet.valideBy||"?")}</strong> le ${sheet.valideAt?new Date(sheet.valideAt).toLocaleString("fr-FR"):""}</div></div><button class="btn btn-ghost text-xs" onclick="ptDevaliderSheet('${cur.id}','${ym}')">🔓 Déverrouiller</button></div></div>`:`<div class="card p-3 mb-3" style="background:#043970;border:2px dashed #043970"><div class="flex items-center justify-between"><div><div class="text-xs uppercase tracking-wider font-bold text-amber-700">⏳ Non validé</div><div class="text-xs text-slate-600">Cliquez sur « Valider » pour verrouiller ce pointage.</div></div><button class="btn btn-primary text-xs" style="background:#043970;border-color:#043970" onclick="ptValiderSheet('${cur.id}','${ym}')">✅ Valider le pointage</button></div></div>`;
   return filterBar+validBlock+`<div class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4">${counts}</div>
