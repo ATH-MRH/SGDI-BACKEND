@@ -35,6 +35,7 @@ from app.modules.irongs import models as _irongs_models  # noqa: F401
 from app.modules import finance_models as _finance_models  # noqa: F401
 from app.modules.materiel import models as _materiel_models  # noqa: F401
 from app.modules.ops import models as _ops_models  # noqa: F401
+from app.modules.client_portal import models as _client_portal_models  # noqa: F401
 from app.modules.irongs import service as irongs_service
 from app.modules.drh import service as drh_service
 from app.modules.drh.email_alerts import start_contract_email_alert_scheduler, stop_contract_email_alert_scheduler
@@ -518,6 +519,31 @@ def _is_paie_host(host: str) -> bool:
 
 def _is_conges_host(host: str) -> bool:
     return host.split(":")[0].lower() == "conges.irongs.com"
+
+
+_CLIENT_PORTAL_SLUG_CACHE: dict[str, tuple[float, bool]] = {}
+_CLIENT_PORTAL_SLUG_CACHE_TTL = 60.0  # secondes
+
+
+def _is_client_portal_host(host: str) -> bool:
+    """Sous-domaine dédié à un client (ex. sonatrach.irongs.com), résolu dynamiquement
+    contre Client.portal_slug — contrairement aux autres _is_xxx_host ci-dessus qui sont
+    des listes fixes, un nouveau client ne nécessite aucun déploiement. Résultat mis en
+    cache en mémoire (~60s) pour ne pas requêter la base à chaque requête HTTP."""
+    label = host.split(":")[0].lower().split(".")[0]
+    if not label or label in {"localhost", "127", "atlas", "www", "sgdi"}:
+        return False
+    cached = _CLIENT_PORTAL_SLUG_CACHE.get(label)
+    now = time.time()
+    if cached and now - cached[0] < _CLIENT_PORTAL_SLUG_CACHE_TTL:
+        return cached[1]
+    from app.modules.commercial.models import Client
+    with SessionLocal() as db:
+        exists = db.execute(
+            select(Client.id).where(Client.portal_slug == label, Client.portal_enabled.is_(True))
+        ).scalar_one_or_none() is not None
+    _CLIENT_PORTAL_SLUG_CACHE[label] = (now, exists)
+    return exists
 
 
 def _portal_mobile_urls(request: Request) -> list[str]:
@@ -1212,6 +1238,12 @@ def frontend(request: Request) -> HTMLResponse:
     if _is_portal_host(host):
         return FileResponse(
             STATIC_DIR / "portail-rh-bilingue.html",
+            media_type="text/html; charset=utf-8",
+            headers={"Cache-Control": "no-cache, max-age=0"},
+        )
+    if _is_client_portal_host(host):
+        return FileResponse(
+            STATIC_DIR / "client-portail.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )

@@ -13,6 +13,11 @@ class Site(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(180), index=True)
     indicatif: Mapped[str | None] = mapped_column(String(50), index=True)
     client_name: Mapped[str | None] = mapped_column(String(180))
+    # Lien fiable vers commercial.Client (client_name ci-dessus reste un texte libre non
+    # fiabilisé, jamais recoupé — ne pas s'y fier pour dériver la visibilité du portail
+    # client). Nullable : un site sans client_id reste simplement invisible depuis tout
+    # portail client, sans backfill forcé.
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id", ondelete="SET NULL"), nullable=True, index=True)
     address: Mapped[str | None] = mapped_column(Text)
     commune: Mapped[str | None] = mapped_column(String(120))
     wilaya: Mapped[str | None] = mapped_column(String(120))

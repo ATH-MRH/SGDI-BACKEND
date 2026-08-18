@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#043970">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Portail Client">
+<title>PORTAIL CLIENT — ATLAS</title>
+<link rel="icon" href="/static/sgdi-icon-192.png">
+<link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
+<style>
+:root{--navy:#043970;--blue:#0d6ecc;--green:#16a34a;--red:#dc2626;--amber:#d97706;--ink:#10243e;--muted:#64748b;--line:#dbe5f0;--bg:#edf3f8}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select,textarea{font:inherit}
+.hidden{display:none!important}
+.login{min-height:100vh;padding:24px;display:flex;align-items:center;justify-content:center;background:linear-gradient(155deg,#032f60,#0d6ecc)}
+.login-card{width:100%;max-width:390px;background:#fff;border-radius:26px;padding:28px;box-shadow:0 24px 70px rgba(0,0,0,.25)}
+.logo{width:72px;height:72px;border-radius:22px;margin:0 auto 16px;background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;display:grid;place-items:center;font-size:20px;font-weight:900}
+h1{font-size:22px;text-align:center;margin:0}
+.login-sub{text-align:center;color:var(--muted);margin:7px 0 24px;font-size:14px}
+label{display:block;font-size:12px;font-weight:800;color:#42566f;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--ink);background:#fff;font-size:13px}
+input,select{height:40px}
+textarea{padding:9px 10px;min-height:90px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
+.primary{border:0;border-radius:14px;background:var(--navy);color:#fff;padding:13px 18px;font-weight:900;cursor:pointer}
+.primary:disabled{opacity:.55;cursor:default}
+.login .primary{width:100%;margin-top:18px}
+.secondary{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:11px 16px;font-weight:850;cursor:pointer}
+.error{display:none;margin-top:13px;border-radius:11px;padding:11px;background:#fee2e2;color:#991b1b;font-size:13px;font-weight:700}
+.error.show{display:block}
+.hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+.app{min-height:100vh;padding-bottom:40px}
+.top{background:linear-gradient(135deg,#043970,#0d6ecc);color:#fff;padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px;box-shadow:0 10px 30px rgba(4,57,112,.25)}
+.top-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1100px;margin:auto;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-logo{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);display:grid;place-items:center;font-weight:900;flex-shrink:0}
+.brand-title{font-size:17px;font-weight:950;letter-spacing:.03em}
+.brand-sub{font-size:12px;opacity:.8;margin-top:2px}
+.logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 14px;font-weight:750;cursor:pointer}
+.shell{max-width:1100px;margin:0 auto;padding:18px 20px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tab-btn{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:999px;padding:10px 18px;font-weight:850;font-size:13px;cursor:pointer}
+.tab-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.banner{border-radius:14px;padding:13px 16px;margin-bottom:14px;font-size:13px;font-weight:700}
+.banner.success{background:#dcfce7;color:#14532d;border:1px solid #86efac}
+.banner.error{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.emp-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 22px rgba(4,57,112,.05)}
+.emp-name{font-size:15px;font-weight:900}
+.emp-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.emp-site{display:inline-block;margin-top:9px;background:#e0e7ff;color:#3730a3;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800}
+.emp-actions{margin-top:13px}
+.emp-actions button{width:100%}
+.empty{text-align:center;color:#94a3b8;padding:50px 20px;font-size:14px}
+.hist-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.hist-toolbar select{height:40px;max-width:220px}
+.hist-list{display:grid;gap:10px}
+.hist-card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:14px;padding:14px 16px}
+.hist-card.urgente{border-left-color:var(--red)}
+.hist-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.hist-emp{font-weight:900;font-size:14px}
+.hist-date{font-size:11px;color:var(--muted)}
+.hist-desc{font-size:13px;margin-top:8px;color:#334155}
+.hist-cats{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pill{display:inline-block;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:900;white-space:nowrap}
+.pill-blue{background:#dbeafe;color:#1d4ed8}
+.pill-amber{background:#fef3c7;color:#92400e}
+.pill-gray{background:#e5e7eb;color:#374151}
+.pill-green{background:#dcfce7;color:#166534}
+.pill-red{background:#fee2e2;color:#7f1d1d}
+.modal-backdrop{position:fixed;inset:0;background:rgba(4,20,40,.55);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;z-index:50}
+.modal{width:100%;max-width:560px;background:#fff;border-radius:22px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.3)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.modal-head h2{font-size:18px;margin:0}
+.modal-close{border:0;background:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1}
+.modal-sub{font-size:12px;color:var(--muted);margin-bottom:10px}
+.kind-toggle{display:flex;gap:8px;margin-top:12px}
+.kind-btn{flex:1;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;text-align:center;font-weight:850;font-size:13px;cursor:pointer;color:#42566f}
+.kind-btn.active{border-color:var(--navy);background:#eff6ff;color:var(--navy)}
+.kind-btn.active.probleme{border-color:var(--red);background:#fef2f2;color:#991b1b}
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.cat-item{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12.5px;font-weight:700;color:#334155;cursor:pointer}
+.cat-item input{width:auto;height:auto}
+.cat-item.checked{border-color:var(--blue);background:#eff6ff}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+@media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<section id="loginView" class="login">
+  <form class="login-card" onsubmit="event.preventDefault();login()">
+    <div class="logo">PC</div>
+    <h1 id="loginTitle">PORTAIL CLIENT</h1>
+    <p class="login-sub">Suivi de vos agents de sécurité</p>
+    <label for="username">Identifiant</label>
+    <input id="username" autocomplete="username">
+    <label for="password">Mot de passe</label>
+    <input id="password" type="password" autocomplete="current-password">
+    <button id="loginBtn" class="primary">SE CONNECTER</button>
+    <div id="loginError" class="error"></div>
+  </form>
+</section>
+
+<section id="changePwView" class="login hidden">
+  <form class="login-card" onsubmit="event.preventDefault();submitChangePassword()">
+    <div class="logo">PC</div>
+    <h1>NOUVEAU MOT DE PASSE</h1>
+    <p class="login-sub">Première connexion : choisissez votre mot de passe définitif.</p>
+    <label for="newPassword1">Nouveau mot de passe</label>
+    <input id="newPassword1" type="password" autocomplete="new-password">
+    <label for="newPassword2">Confirmer le mot de passe</label>
+    <input id="newPassword2" type="password" autocomplete="new-password">
+    <button class="primary">ENREGISTRER</button>
+    <div id="changePwError" class="error"></div>
+    <p class="hint">Au moins 6 caractères.</p>
+  </form>
+</section>
+
+<section id="appView" class="app hidden">
+  <header class="top">
+    <div class="top-row">
+      <div class="brand">
+        <div class="brand-logo">PC</div>
+        <div>
+          <div class="brand-title" id="clientNameLabel">—</div>
+          <div class="brand-sub" id="fullNameLabel">—</div>
+        </div>
+      </div>
+      <button class="logout" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <div id="banner"></div>
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="employees" onclick="switchTab('employees')">Mes agents</button>
+      <button type="button" class="tab-btn" data-tab="history" onclick="switchTab('history')">Historique</button>
+    </div>
+
+    <div id="employeesTab">
+      <div id="employeesList"><div class="empty">Chargement…</div></div>
+    </div>
+
+    <div id="historyTab" class="hidden">
+      <div class="hist-toolbar">
+        <select id="histStatusFilter" onchange="loadHistory()">
+          <option value="">Tous les statuts</option>
+          <option value="nouveau">Nouveau</option>
+          <option value="en_cours">En cours</option>
+          <option value="traite">Traité</option>
+        </select>
+      </div>
+      <div id="historyList"><div class="empty">Chargement…</div></div>
+    </div>
+  </div>
+</section>
+
+<div id="modalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeObservationModal()">
+  <div class="modal">
+    <div class="modal-head"><h2>Signaler un agent</h2><button type="button" class="modal-close" onclick="closeObservationModal()">×</button></div>
+    <div class="modal-sub" id="modalEmployeeLabel"></div>
+    <div class="kind-toggle">
+      <button type="button" class="kind-btn active" id="kindObservationBtn" onclick="setObservationKind('observation')">Observation</button>
+      <button type="button" class="kind-btn" id="kindProblemeBtn" onclick="setObservationKind('probleme')">Signaler un problème</button>
+    </div>
+    <div id="categoriesWrap" class="hidden">
+      <label style="margin-top:16px">Nature du problème</label>
+      <div class="cat-grid" id="categoriesGrid"></div>
+    </div>
+    <label for="obsDate">Date</label>
+    <input id="obsDate" type="date">
+    <label for="obsDescription">Description</label>
+    <textarea id="obsDescription" placeholder="Décrivez ce que vous avez constaté…"></textarea>
+    <div id="obsError" class="error"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="closeObservationModal()">Annuler</button>
+      <button type="button" class="primary" id="obsSubmitBtn" onclick="submitObservation()">Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SESSION_KEY="atlas_client_portal_session";
+let session=null;
+let loginPasswordUsed="";
+let employees=[];
+let categories={};
+let observationKind="observation";
+let selectedCategories=new Set();
+let modalEmployee=null;
+
+function today(){return new Date().toISOString().slice(0,10)}
+function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
+function formatDateFr(value){
+  const m=String(value||"").slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m?`${m[3]}/${m[2]}/${m[1]}`:(value||"—");
+}
+
+async function apiFetch(path,opts={}){
+  const headers=Object.assign({"Content-Type":"application/json"},opts.headers||{});
+  if(session?.token)headers["Authorization"]=`Bearer ${session.token}`;
+  const res=await fetch(`/api/client-portal${path}`,Object.assign({},opts,{headers}));
+  let body=null;
+  try{body=await res.json()}catch(e){}
+  if(!res.ok){
+    if(res.status===401){logout();throw new Error("Session expirée, reconnectez-vous.")}
+    throw new Error(body?.detail||"Erreur serveur");
+  }
+  return body;
+}
+
+function showBanner(message,type){
+  const host=document.getElementById("banner");
+  if(!message){host.innerHTML="";return}
+  host.innerHTML=`<div class="banner ${type}">${esc(message)}</div>`;
+  if(type==="success")setTimeout(()=>{if(host.innerHTML.includes(esc(message)))host.innerHTML=""},4000);
+}
+
+async function login(){
+  const username=document.getElementById("username").value.trim();
+  const password=document.getElementById("password").value;
+  const errorEl=document.getElementById("loginError");
+  errorEl.classList.remove("show");
+  if(!username||!password){errorEl.textContent="Identifiant et mot de passe requis.";errorEl.classList.add("show");return}
+  const btn=document.getElementById("loginBtn");
+  btn.disabled=true;btn.textContent="Connexion…";
+  try{
+    const res=await fetch("/api/client-portal/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password})});
+    const body=await res.json();
+    if(!res.ok)throw new Error(body?.detail||"Identifiants incorrects");
+    session={token:body.access_token,clientId:body.client_id,clientName:body.client_name,fullName:body.full_name};
+    loginPasswordUsed=password;
+    if(body.must_change_password){
+      document.getElementById("loginView").classList.add("hidden");
+      document.getElementById("changePwView").classList.remove("hidden");
+    }else{
+      localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+      enterApp();
+    }
+  }catch(error){
+    errorEl.textContent=error.message||"Connexion impossible";
+    errorEl.classList.add("show");
+  }finally{
+    btn.disabled=false;btn.textContent="SE CONNECTER";
+  }
+}
+
+async function submitChangePassword(){
+  const p1=document.getElementById("newPassword1").value;
+  const p2=document.getElementById("newPassword2").value;
+  const errorEl=document.getElementById("changePwError");
+  errorEl.classList.remove("show");
+  if(p1.length<6){errorEl.textContent="Le mot de passe doit contenir au moins 6 caractères.";errorEl.classList.add("show");return}
+  if(p1!==p2){errorEl.textContent="Les deux mots de passe ne correspondent pas.";errorEl.classList.add("show");return}
+  try{
+    await apiFetch("/auth/change-password",{method:"POST",body:JSON.stringify({current_password:loginPasswordUsed,new_password:p1})});
+    localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+    document.getElementById("changePwView").classList.add("hidden");
+    enterApp();
+  }catch(error){
+    errorEl.textContent=error.message||"Impossible de changer le mot de passe";
+    errorEl.classList.add("show");
+  }
+}
+
+function logout(){
+  session=null;
+  localStorage.removeItem(SESSION_KEY);
+  document.getElementById("appView").classList.add("hidden");
+  document.getElementById("changePwView").classList.add("hidden");
+  document.getElementById("loginView").classList.remove("hidden");
+  document.getElementById("username").value="";
+  document.getElementById("password").value="";
+}
+
+async function enterApp(){
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
+  document.getElementById("clientNameLabel").textContent=session.clientName||"—";
+  document.getElementById("fullNameLabel").textContent=session.fullName||"—";
+  try{categories=await apiFetch("/reference/categories")}catch(e){categories={}}
+  await loadEmployees();
+}
+
+function switchTab(tab){
+  document.querySelectorAll(".tab-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===tab));
+  document.getElementById("employeesTab").classList.toggle("hidden",tab!=="employees");
+  document.getElementById("historyTab").classList.toggle("hidden",tab!=="history");
+  if(tab==="history")loadHistory();
+}
+
+async function loadEmployees(){
+  const host=document.getElementById("employeesList");
+  try{
+    employees=await apiFetch("/employees");
+    if(!employees.length){host.innerHTML='<div class="empty">Aucun agent actuellement affecté à vos sites.</div>';return}
+    host.innerHTML=`<div class="card-grid">${employees.map(e=>`
+      <div class="emp-card">
+        <div class="emp-name">${esc(e.last_name)} ${esc(e.first_name)}</div>
+        <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div>
+        ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
+        <div class="emp-actions"><button type="button" class="secondary" onclick="openObservationModal(${e.id})">Signaler</button></div>
+      </div>`).join("")}</div>`;
+  }catch(error){
+    host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  }
+}
+
+function openObservationModal(employeeId){
+  modalEmployee=employees.find(e=>e.id===employeeId);
+  if(!modalEmployee)return;
+  document.getElementById("modalEmployeeLabel").textContent=`${modalEmployee.last_name} ${modalEmployee.first_name} — ${modalEmployee.site_name||""}`;
+  document.getElementById("obsDate").value=today();
+  document.getElementById("obsDate").max=today();
+  document.getElementById("obsDescription").value="";
+  document.getElementById("obsError").classList.remove("show");
+  selectedCategories=new Set();
+  setObservationKind("observation");
+  document.getElementById("categoriesGrid").innerHTML=Object.entries(categories).map(([code,label])=>`
+    <label class="cat-item" data-code="${esc(code)}">
+      <input type="checkbox" onchange="toggleCategory('${esc(code)}',this.checked)">
+      <span>${esc(label)}</span>
+    </label>`).join("");
+  document.getElementById("modalBackdrop").classList.remove("hidden");
+}
+
+function closeObservationModal(){
+  document.getElementById("modalBackdrop").classList.add("hidden");
+  modalEmployee=null;
+}
+
+function setObservationKind(kind){
+  observationKind=kind;
+  document.getElementById("kindObservationBtn").classList.toggle("active",kind==="observation");
+  document.getElementById("kindProblemeBtn").classList.toggle("active",kind==="probleme");
+  document.getElementById("categoriesWrap").classList.toggle("hidden",kind!=="probleme");
+}
+
+function toggleCategory(code,checked){
+  if(checked)selectedCategories.add(code);else selectedCategories.delete(code);
+  const item=document.querySelector(`.cat-item[data-code="${code}"]`);
+  if(item)item.classList.toggle("checked",checked);
+}
+
+async function submitObservation(){
+  const errorEl=document.getElementById("obsError");
+  errorEl.classList.remove("show");
+  const description=document.getElementById("obsDescription").value.trim();
+  const incidentDate=document.getElementById("obsDate").value;
+  if(description.length<3){errorEl.textContent="Merci de décrire la situation.";errorEl.classList.add("show");return}
+  if(!incidentDate){errorEl.textContent="Date requise.";errorEl.classList.add("show");return}
+  const btn=document.getElementById("obsSubmitBtn");
+  btn.disabled=true;btn.textContent="Envoi…";
+  try{
+    await apiFetch("/observations",{method:"POST",body:JSON.stringify({
+      employee_id:modalEmployee.id,
+      kind:observationKind,
+      categories:observationKind==="probleme"?Array.from(selectedCategories):[],
+      description,
+      incident_date:incidentDate,
+    })});
+    closeObservationModal();
+    showBanner("Signalement envoyé, merci.","success");
+  }catch(error){
+    errorEl.textContent=error.message||"Envoi impossible";
+    errorEl.classList.add("show");
+  }finally{
+    btn.disabled=false;btn.textContent="Envoyer";
+  }
+}
+
+function statusLabel(status){
+  return {nouveau:"Nouveau",en_cours:"En cours",traite:"Traité"}[status]||status;
+}
+function statusPillClass(status){
+  return {nouveau:"pill-blue",en_cours:"pill-amber",traite:"pill-green"}[status]||"pill-gray";
+}
+
+async function loadHistory(){
+  const host=document.getElementById("historyList");
+  const statusFilter=document.getElementById("histStatusFilter").value;
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const params=new URLSearchParams();
+    if(statusFilter)params.set("status",statusFilter);
+    const rows=await apiFetch(`/observations?${params.toString()}`);
+    if(!rows.length){host.innerHTML='<div class="empty">Aucun signalement.</div>';return}
+    host.innerHTML=`<div class="hist-list">${rows.map(o=>`
+      <div class="hist-card ${o.severity==="urgente"?"urgente":""}">
+        <div class="hist-top">
+          <div>
+            <div class="hist-emp">${esc(o.employee_name)}</div>
+            <div class="hist-date">${formatDateFr(o.incident_date)}${o.site_name?` · ${esc(o.site_name)}`:""}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            ${o.kind==="probleme"?'<span class="pill pill-red">Problème</span>':'<span class="pill pill-gray">Observation</span>'}
+            <span class="pill ${statusPillClass(o.status)}">${statusLabel(o.status)}</span>
+          </div>
+        </div>
+        <div class="hist-desc">${esc(o.description)}</div>
+        ${o.categories&&o.categories.length?`<div class="hist-cats">${o.categories.map(c=>`<span class="pill pill-amber">${esc(categories[c]||c)}</span>`).join("")}</div>`:""}
+      </div>`).join("")}</div>`;
+  }catch(error){
+    host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  }
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){session=null}
+  if(session?.token)enterApp().catch(()=>logout());
+});
+</script>
+</body>
+</html>

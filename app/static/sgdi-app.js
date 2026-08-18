@@ -2044,14 +2044,14 @@ function siteApiPayload(site){
   const safeSociete=siteSafeSociete(site);
   if(safeSociete){site.societe=safeSociete;site.society=safeSociete}
   const data={...siteData,societe:safeSociete||siteData.societe||"",society:safeSociete||siteData.society||"",dateOuverture:site?.dateOuverture||legacy.dateOuverture||"",siteOuvertPar:site?.siteOuvertPar||legacy.siteOuvertPar||""};
-  return {name:String(site.nom||site.name||"Site").trim()||"Site",indicatif:site.indicatif||null,client_name:site.client||site.client_name||null,address:site.adresse||site.address||null,commune:site.commune||null,wilaya:site.wilaya||null,site_type:site.type||site.site_type||null,rotation_system:site.rotationSystem||site.rotation_system||null,contractual_staff:parseInt(effectifs.totalContractuel??site.contractual_staff)||0,day_staff:parseInt(effectifs.jour??site.day_staff)||0,night_staff:parseInt(effectifs.nuit??site.night_staff)||0,weekend_staff:parseInt(effectifs.weekend??site.weekend_staff)||0,holiday_staff:parseInt(effectifs.feries??site.holiday_staff)||0,groups_count:parseInt(effectifs.groupes??site.groups_count)||0,active:site.actif===false||site.active===0?0:1,equipment_plan:{...plan,...data,_legacy:{...legacy,...data}}};
+  return {name:String(site.nom||site.name||"Site").trim()||"Site",indicatif:site.indicatif||null,client_name:site.client||site.client_name||null,client_id:site.clientId?Number(site.clientId):null,address:site.adresse||site.address||null,commune:site.commune||null,wilaya:site.wilaya||null,site_type:site.type||site.site_type||null,rotation_system:site.rotationSystem||site.rotation_system||null,contractual_staff:parseInt(effectifs.totalContractuel??site.contractual_staff)||0,day_staff:parseInt(effectifs.jour??site.day_staff)||0,night_staff:parseInt(effectifs.nuit??site.night_staff)||0,weekend_staff:parseInt(effectifs.weekend??site.weekend_staff)||0,holiday_staff:parseInt(effectifs.feries??site.holiday_staff)||0,groups_count:parseInt(effectifs.groupes??site.groups_count)||0,active:site.actif===false||site.active===0?0:1,equipment_plan:{...plan,...data,_legacy:{...legacy,...data}}};
 }
 function siteFromApi(row){
   const plan=row&&row.equipment_plan&&typeof row.equipment_plan==="object"?row.equipment_plan:{};
   const legacy=plan._legacy&&typeof plan._legacy==="object"?plan._legacy:{};
   const data={...legacy,...plan};
   delete data._legacy;
-  return {...data,isNew:false,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",indicatif:data.indicatif||row.indicatif||"",client:data.client||row.client_name||"",adresse:data.adresse||row.address||"",commune:data.commune||row.commune||"",wilaya:data.wilaya||row.wilaya||"",type:data.type||row.site_type||"",rotationSystem:data.rotationSystem||row.rotation_system||"",dateOuverture:data.dateOuverture||data.date_ouverture||"",siteOuvertPar:data.siteOuvertPar||data.site_ouvert_par||"",actif:row.active!==0,effectifs:{...(data.effectifs||{}),totalContractuel:data.effectifs?.totalContractuel??row.contractual_staff??0,jour:data.effectifs?.jour??row.day_staff??0,nuit:data.effectifs?.nuit??row.night_staff??0,weekend:data.effectifs?.weekend??row.weekend_staff??0,feries:data.effectifs?.feries??row.holiday_staff??0,groupes:data.effectifs?.groupes??row.groups_count??0}}}
+  return {...data,isNew:false,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",indicatif:data.indicatif||row.indicatif||"",client:data.client||row.client_name||"",clientId:row.client_id||data.clientId||"",adresse:data.adresse||row.address||"",commune:data.commune||row.commune||"",wilaya:data.wilaya||row.wilaya||"",type:data.type||row.site_type||"",rotationSystem:data.rotationSystem||row.rotation_system||"",dateOuverture:data.dateOuverture||data.date_ouverture||"",siteOuvertPar:data.siteOuvertPar||data.site_ouvert_par||"",actif:row.active!==0,effectifs:{...(data.effectifs||{}),totalContractuel:data.effectifs?.totalContractuel??row.contractual_staff??0,jour:data.effectifs?.jour??row.day_staff??0,nuit:data.effectifs?.nuit??row.night_staff??0,weekend:data.effectifs?.weekend??row.weekend_staff??0,feries:data.effectifs?.feries??row.holiday_staff??0,groupes:data.effectifs?.groupes??row.groups_count??0}}}
 async function persistSiteToPostgres(site){if(!site)return null;sgdiRequireServerWrite();const saved=site.backendId?await SGDI.sites.update(site.backendId,siteApiPayload(site)):await SGDI.sites.create(siteApiPayload(site));Object.assign(site,siteFromApi(saved),{id:site.id||String(saved.id),backendId:saved.id,isNew:false});return site}
 async function syncSitesFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.sites.list();if((!rows||!rows.length)&&(db.sites||[]).length){for(const s of db.sites){await persistSiteToPostgres(s)}rows=await SGDI.sites.list()}db.sites=(rows||[]).map(siteFromApi)}catch(e){console.warn("Sites PostgreSQL indisponibles",e);throw e}}
 function assignmentFromApi(row){
@@ -2351,8 +2351,8 @@ async function sgdiRefreshAdminMaterialNow(options={}){
     if(!options.silent&&typeof toast==="function")toast("Action enregistrée, actualisation immédiate incomplète : "+(e.message||e),"warning");
   }
 }
-function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()||"Client",legal_name:c.raisonSociale||c.legal_name||null,society:c.societe||c.society||null,structure:c.structure||null,status:c.statut||c.status||"actif",contact_name:c.contact||c.contact_name||null,contact_position:c.fonction||c.contact_position||null,phone:c.tel||c.phone||null,email:c.email||null,address:c.adresse||c.address||null,nif:c.nif||null,rc:c.rc||null,services:c.prestationsServices||c.services||null,contract_start:sqlDate(c.dateDebutContrat),contract_duration:c.dureeContrat||null,contract_end:sqlDate(c.dateFinContrat),notes:c.notes||null,data:{...c}}}
-function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||""}}
+function clientApiPayload(c){return{name:String(c.nom||c.name||"Client").trim()||"Client",legal_name:c.raisonSociale||c.legal_name||null,society:c.societe||c.society||null,structure:c.structure||null,status:c.statut||c.status||"actif",contact_name:c.contact||c.contact_name||null,contact_position:c.fonction||c.contact_position||null,phone:c.tel||c.phone||null,email:c.email||null,address:c.adresse||c.address||null,nif:c.nif||null,rc:c.rc||null,services:c.prestationsServices||c.services||null,contract_start:sqlDate(c.dateDebutContrat),contract_duration:c.dureeContrat||null,contract_end:sqlDate(c.dateFinContrat),notes:c.notes||null,portal_slug:c.portalSlug?c.portalSlug.trim().toLowerCase():null,portal_enabled:c.portalEnabled!==false,data:{...c}}}
+function clientFromApi(row){const data=row.data&&typeof row.data==="object"?row.data:{};return{...data,id:data.id||String(row.id),backendId:row.id,nom:data.nom||row.name||"",raisonSociale:data.raisonSociale||row.legal_name||"",societe:data.societe||row.society||"",structure:data.structure||row.structure||"",statut:data.statut||row.status||"actif",contact:data.contact||row.contact_name||"",fonction:data.fonction||row.contact_position||"",tel:data.tel||row.phone||"",email:data.email||row.email||"",adresse:data.adresse||row.address||"",nif:data.nif||row.nif||"",rc:data.rc||row.rc||"",prestationsServices:data.prestationsServices||row.services||"",dateDebutContrat:data.dateDebutContrat||String(row.contract_start||"").slice(0,10),dureeContrat:data.dureeContrat||row.contract_duration||"",dateFinContrat:data.dateFinContrat||String(row.contract_end||"").slice(0,10),notes:data.notes||row.notes||"",portalSlug:row.portal_slug||data.portalSlug||"",portalEnabled:row.portal_enabled!==undefined?row.portal_enabled:(data.portalEnabled!==false)}}
 async function persistClientToPostgres(c){if(!c)return null;sgdiRequireServerWrite();const bid=c.backendId&&Number.isInteger(Number(c.backendId))&&Number(c.backendId)>0?Number(c.backendId):null;const saved=bid?await SGDI.commercial.updateClient(bid,clientApiPayload(c)):await SGDI.commercial.createClient(clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function updateExistingClientToPostgres(c){if(!c)throw new Error("Client existant introuvable");sgdiRequireServerWrite();const rawId=c.backendId||(/^[1-9]\d*$/.test(String(c.id||""))?c.id:null);const bid=rawId&&Number.isInteger(Number(rawId))&&Number(rawId)>0?Number(rawId):null;if(!bid)throw new Error("Identifiant PostgreSQL du client manquant : rechargez la liste des clients");const saved=await SGDI.commercial.updateClient(bid,clientApiPayload(c));Object.assign(c,clientFromApi(saved),{id:c.id||String(saved.id),backendId:saved.id});return c}
 async function syncClientsFromPostgres(){if(!sgdiAuthToken()||!db)return;try{let rows=await SGDI.commercial.clients();if((!rows||!rows.length)&&(db.clients||[]).length){for(const c of db.clients){await persistClientToPostgres(c)}rows=await SGDI.commercial.clients()}db.clients=(rows||[]).map(clientFromApi)}catch(e){console.warn("Clients PostgreSQL indisponibles",e);throw e}}
@@ -6523,7 +6523,8 @@ function renderSidebar(){
         {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
         {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:agents.filter(a=>a.statut==="sortant").length||null},
         {label:"SUPERVISION SITE",route:"ops/supervision",aliases:["ops/supervision"]},
-        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
+        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length},
+        {label:"SIGNALEMENTS CLIENTS",route:"ops/signalements-clients",aliases:["ops/signalements-clients"],count:(opsClientObservationsCache||[]).filter(o=>o.status==="nouveau").length||null}
       ],
       superviseur:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"]},
@@ -6635,6 +6636,7 @@ function renderSidebar(){
         {label:"MODÈLES DOCUMENTS",route:"admin/document-models",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
         {label:"CONTRAT",route:"admin/contrats"},
         {label:"UTILISATEURS & BLOCAGE",route:"admin/users",gapBefore:true,count:(db.users||[]).length||null},
+        {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",count:(adminClientPortalUsersCache||[]).length||null},
         {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",count:(db.supervisorScopes||[]).length||null},
         {label:"DROITS D'ACCÈS",route:"admin/droits",count:Object.keys(db.droitsAcces||{}).length||null},
         {label:"PROFILS D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
@@ -6655,6 +6657,7 @@ function renderSidebar(){
         {label:"DÉCISIONS / PROPOSITIONS",route:"admin/feed",count:(db.echanges||[]).filter(e=>e.to==="all"||e.type==="post"||e.type==="instruction").length||null}
       ]
     };
+    if(mod==="ops")refreshOpsClientObservationsCount();
     const baseItems=sidebarByModule[mod]||[];
     const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
     const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
@@ -18142,6 +18145,16 @@ async function renderSiteForm(view,id){
       if(Array.isArray(stores)&&stores.length)db.magasins=stores.map(storeFromApi);
     }catch(e){console.warn("renderSiteForm: stores preload failed",e);}
   }
+  // Sans ce préchargement, le sélecteur "Client (fiche commerciale liée)" reste vide tant
+  // que l'utilisateur n'a pas visité le module Commercial dans la session (db.clients n'est
+  // synchronisé que pour scope.commercial, voir sgdiSqlSyncTasks) — or c'est précisément
+  // depuis OPS/Admin qu'on rattache un site à son client pour le portail client.
+  if(sgdiAuthToken()&&SGDI?.commercial?.clients&&!(db.clients||[]).length){
+    try{
+      const clients=await SGDI.commercial.clients();
+      if(Array.isArray(clients)&&clients.length)db.clients=clients.map(clientFromApi);
+    }catch(e){console.warn("renderSiteForm: clients preload failed",e);}
+  }
   let s;if(id){const lookup=decodeURIComponent(String(id));s=db.sites.find(x=>String(x.id)===lookup||String(x.backendId||"")===lookup);if(!s){toast("Introuvable","error");return navigate("sites/actifs")}}else{s={id:uid("st"),actif:true,dateCreation:today(),dateOuverture:"",siteOuvertPar:"",nom:"",indicatif:"",telephone:"",adresse:"",commune:"",wilaya:"",type:"",latitude:"",longitude:"",contact:{nom:"",fonction:"",telephone:"",email:""},client:"",effectifs:{totalContractuel:0,groupes:0,jour:0,nuit:0,weekend:0,feries:0},postes:{},horairesReleves:"",rotation:ROTATION_DEFAUT.map(r=>({...r})),isNew:true}}
   if(supervisorModuleActive()&&!siteInSupervisorScope(s)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès refusé</h2><p class="text-slate-600">Ce site ne fait pas partie des sites autorisés pour ce superviseur.</p></div>`;return}
   const rotationSystem=inferSiteRotationSystem(s);
@@ -18153,7 +18166,7 @@ async function renderSiteForm(view,id){
   view.innerHTML=`<div class="w-full"><div class="site-form-title w-full"><h1>${s.isNew?"CRÉATION DE SITE":"FICHE TECHNIQUE SITE"}</h1></div>${opsSupervisorReadOnlyNoticeHTML()}${siteRecap}${siteHeaderActions}${lockNotice}
   <form id="site-form" class="site-editor-wide site-form-layout" data-site-create-form="1" style="margin-top:${s.isNew?"18px":"12px"}" data-locked="${canEditSite?"0":"1"}" onsubmit="event.preventDefault();saveSite('${s.id}')"><input type="hidden" name="isNew" value="${s.isNew?"1":""}"/>
     <div class="card p-5 mb-4"><div class="section-banner banner-amber">S1. Identification</div><div class="grid grid-6"><div class="col-span-3"><label class="label">Dénomination *</label><input class="input" name="nom" value="${escapeHTML(s.nom)}" /></div><div class="col-span-3"><label class="label">Indicatif</label><input class="input" name="indicatif" value="${escapeHTML(s.indicatif||"")}"/></div><div class="col-span-3">${isAdminSystemSession()?`<label class="label">Société</label><select class="select" name="societe">${uniqueSocieteNames([...SOCIETES,...((societeConfig().custom)||[])]).map(soc=>`<option value="${escapeHTML(soc)}" ${normalizeSocieteName(s.societe)===normalizeSocieteName(soc)?"selected":""}>${escapeHTML(soc)}</option>`).join("")}</select>`:`<label class="label">Société</label><input class="input bg-slate-50" value="${escapeHTML(s.societe||"—")}" readonly/>`}</div><div class="col-span-4"><label class="label">Adresse</label><input class="input" name="adresse" value="${escapeHTML(s.adresse||"")}"/></div><div class="col-span-2"><label class="label">Commune</label><input class="input" name="commune" value="${escapeHTML(s.commune||"")}"/></div><div class="col-span-3"><label class="label">Wilaya</label><select class="select" name="wilaya"><option value="">—</option>${WILAYAS.map(w=>`<option ${s.wilaya===w?"selected":""}>${w}</option>`).join("")}</select></div><div class="col-span-3"><label class="label">Type</label><select class="select" name="type"><option value="">—</option>${TYPES_SITE.map(t=>`<option ${s.type===t?"selected":""}>${t}</option>`).join("")}</select></div>${sitePositionFieldHTML(s)}<div class="col-span-3"><label class="label">Date d'ouverture</label><input class="input" type="date" name="dateOuverture" value="${escapeHTML(s.dateOuverture||"")}"/></div><div class="col-span-3"><label class="label">Site ouvert par</label><input class="input" name="siteOuvertPar" value="${escapeHTML(s.siteOuvertPar||"")}" placeholder="Nom et prénom"/></div><div class="col-span-3"><label class="label">Téléphone du site</label><input class="input" name="telephone" value="${escapeHTML(s.telephone||"")}" placeholder="0X XX XX XX XX"/></div></div></div>
-    <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div></div></div>
+    <div class="card p-5 mb-4"><div class="section-banner banner-blue">S2. Contact client</div><div class="grid grid-4"><div><label class="label">Nom</label><input class="input" name="contact_nom" value="${escapeHTML(s.contact?.nom||"")}"/></div><div><label class="label">Fonction</label><input class="input" name="contact_fonction" value="${escapeHTML(s.contact?.fonction||"")}"/></div><div><label class="label">Téléphone</label><input class="input" name="contact_tel" value="${escapeHTML(s.contact?.telephone||"")}"/></div><div><label class="label">Email</label><input class="input" type="email" name="contact_email" value="${escapeHTML(s.contact?.email||"")}"/></div><div class="col-span-2"><label class="label">Client</label><input class="input" name="client" value="${escapeHTML(s.client||"")}"/></div><div class="col-span-2"><label class="label">Client (fiche commerciale liée)</label><select class="select" name="clientId"><option value="">— Aucun —</option>${(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||"")).map(c=>`<option value="${escapeHTML(c.backendId||c.id||"")}" ${String(s.clientId||"")===String(c.backendId||c.id||"")?"selected":""}>${escapeHTML(c.nom||c.raisonSociale||"Client")}</option>`).join("")}</select><p style="font-size:11px;color:#64748b;margin-top:4px">Détermine quels agents ce client verra depuis son portail dédié (si activé).</p></div></div></div>
     <div class="card p-5 mb-4"><div class="section-banner banner-green">S3. Effectifs</div>
       <div class="grid grid-2 mb-4">
         <div class="p-3 rounded-lg bg-slate-50 border border-slate-200"><label class="label">Effectif total contractuel</label><input class="input bg-slate-100" type="number" min="0" name="eff_totalContractuel" value="${eff.totalContractuel}" readonly/></div>
@@ -18246,6 +18259,7 @@ function siteDraftFromCurrentForm(id){
     dateOuverture:String(fd.get("dateOuverture")||existing.dateOuverture||"").trim(),
     siteOuvertPar:String(fd.get("siteOuvertPar")||existing.siteOuvertPar||"").trim(),
     client:String(fd.get("client")||existing.client||"").trim(),
+    clientId:String(fd.get("clientId")||existing.clientId||"").trim(),
     contact:{nom:fd.get("contact_nom")||existing.contact?.nom||"",fonction:fd.get("contact_fonction")||existing.contact?.fonction||"",telephone:fd.get("contact_tel")||existing.contact?.telephone||"",email:fd.get("contact_email")||existing.contact?.email||""},
     postes:{...(existing.postes||{}),...postes},
     equipements:equipements.length?equipements:(existing.equipements||existing.materiel||[]),
@@ -18546,6 +18560,7 @@ async function saveSite(id){
   s.type=fd.get("type");
   s.contact={nom:fd.get("contact_nom"),fonction:fd.get("contact_fonction"),telephone:fd.get("contact_tel"),email:fd.get("contact_email")};
   s.client=fd.get("client")||s.contact.nom;
+  s.clientId=(fd.get("clientId")||"").trim();
   s.postes={};
   const noms=fd.getAll("poste_nom"),jours=fd.getAll("poste_jour"),nuits=fd.getAll("poste_nuit"),rotations=fd.getAll("poste_rotationSystem");
   let totalContractuel=0,totalJour=0,totalNuit=0;
@@ -28927,6 +28942,13 @@ function openClientModal(id,readOnly=false){
       `,"rh-op-emergency")}
     </div>
     ${fbox("Statut",lbl("Statut",sel("statut",["prospection","negos","actif","inactif"].map(s=>`<option value="${s}" ${((c?.statut)||"actif")===s?"selected":""}>${s.toUpperCase()}</option>`).join(""))))}
+    ${fbox("Portail client",`
+      <div class="rh-op-grid">
+        <label><span>Sous-domaine (ex : sonatrach)</span><input class="input" name="portalSlug" value="${escapeHTML(c?.portalSlug||"")}" placeholder="laisser vide si pas de portail"/></label>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" name="portalEnabled" style="width:auto" ${(c?.portalEnabled!==false)?"checked":""}/><span style="text-transform:none;font-weight:600">Accès portail activé</span></label>
+      </div>
+      <p style="font-size:11px;color:#64748b;margin-top:6px">Le portail sera accessible sur <b>&lt;sous-domaine&gt;.irongs.com</b> une fois le sous-domaine enregistré côté DNS/Coolify. Créez ensuite les comptes depuis Administration système → Comptes portail client.</p>
+    `)}
     <fieldset class="rh-op-box" style="margin-bottom:10px">
       <legend>Champs libres</legend>
       <input type="hidden" id="client-champs-libres-json" name="champsLibres" value="${escapeHTML(JSON.stringify(c?.champsLibres||[]))}"/>
@@ -29172,7 +29194,7 @@ async function confirmClient(id,options={}){
   const hasContractSites=fd.get("ct_nbrSite")!==null;
   if(hasContractSites)tech_sites=cts_sites;
   const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
-  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
+  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,portalSlug:(fd.get("portalSlug")||"").trim().toLowerCase(),portalEnabled:!!fd.get("portalEnabled"),updatedAt:new Date().toISOString()});
   try{if(options.requireExisting)await updateExistingClientToPostgres(c);else await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");
@@ -32670,7 +32692,7 @@ async function renderAdminRotations(view){
 }
 function renderAdmin(view,sub,arg){
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
-  const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats"];
+  const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats","portail-clients"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
@@ -32683,6 +32705,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="messages")return renderAdminMessagesHistory(view);
   if(sub==="sync")return renderAdminSyncSettings(view);
   if(sub==="users")return renderAdminUsers(view);
+  if(sub==="portail-clients")return renderAdminClientPortalUsers(view);
   if(sub==="supervisors")return renderAdminSupervisors(view);
   if(sub==="droits")return renderAdminDroits(view);
   if(sub==="document-models")return renderAdminDocumentModels(view);
@@ -35606,6 +35629,205 @@ function opsDashboardRefreshFeuillePresence(){
     }
   }).catch(e=>console.warn("Feuille de présence indisponible pour le tableau de bord OPS",e));
 }
+let opsClientObservationsCache=null;
+let opsClientObservationsFetchedAt=0;
+function refreshOpsClientObservationsCount(){
+  // Les signalements clients vivent dans de vraies tables SQL dédiées (client_observations),
+  // hors du gros instantané /api/irongs/db qui peuple db.* — il faut donc les récupérer à
+  // part pour alimenter le badge "SIGNALEMENTS CLIENTS" et l'écran de traitement.
+  const now=Date.now();
+  if(now-opsClientObservationsFetchedAt<15000)return;
+  opsClientObservationsFetchedAt=now;
+  sgdiApi("/api/client-portal/ops/observations",{method:"GET",legacy:false}).then(res=>{
+    opsClientObservationsCache=Array.isArray(res)?res:[];
+    renderSidebar();
+    if(((location.hash||"").slice(2)).startsWith("ops/signalements-clients"))renderView();
+  }).catch(e=>console.warn("Signalements clients indisponibles",e));
+}
+let opsClientObservationsFilter="tous";
+function renderOpsClientObservations(view){
+  view.innerHTML=`<div class="mb-4"><h1 class="text-2xl font-black uppercase">Signalements clients</h1><p class="text-sm text-slate-500">Observations et signalements soumis par les clients depuis leur portail dédié.</p></div>
+    <div class="flex gap-2 flex-wrap mb-4" id="ops-obs-filters"></div>
+    <div id="ops-obs-list"><div class="card p-6 text-center text-slate-400">Chargement…</div></div>`;
+  loadOpsClientObservations();
+}
+function opsStatusLabel(status){return {nouveau:"Nouveau",en_cours:"En cours",traite:"Traité"}[status]||status}
+function opsStatusPillClass(status){return {nouveau:"pill-blue",en_cours:"pill-amber",traite:"pill-green"}[status]||"pill-gray"}
+function opsClientObservationsFilterTabs(){
+  const host=document.getElementById("ops-obs-filters");
+  if(!host)return;
+  const counts={tous:(opsClientObservationsCache||[]).length,nouveau:0,en_cours:0,traite:0};
+  (opsClientObservationsCache||[]).forEach(o=>{counts[o.status]=(counts[o.status]||0)+1});
+  const tabs=[["tous","Tous"],["nouveau","Nouveau"],["en_cours","En cours"],["traite","Traité"]];
+  host.innerHTML=tabs.map(([key,label])=>`<button type="button" class="btn ${opsClientObservationsFilter===key?"btn-primary":"btn-secondary"} text-xs" onclick="setOpsClientObservationsFilter('${key}')">${label} (${counts[key]||0})</button>`).join("");
+}
+function setOpsClientObservationsFilter(key){opsClientObservationsFilter=key;renderOpsClientObservationsList()}
+async function loadOpsClientObservations(){
+  try{
+    const res=await sgdiApi("/api/client-portal/ops/observations",{method:"GET",legacy:false});
+    opsClientObservationsCache=Array.isArray(res)?res:[];
+    opsClientObservationsFetchedAt=Date.now();
+  }catch(e){
+    const host=document.getElementById("ops-obs-list");
+    if(host)host.innerHTML=`<div class="card p-6 text-center text-red-600">${escapeHTML(e.message||"Erreur de chargement")}</div>`;
+    return;
+  }
+  renderSidebar();
+  renderOpsClientObservationsList();
+}
+function renderOpsClientObservationsList(){
+  const host=document.getElementById("ops-obs-list");
+  if(!host)return;
+  opsClientObservationsFilterTabs();
+  let rows=opsClientObservationsCache||[];
+  if(opsClientObservationsFilter!=="tous")rows=rows.filter(o=>o.status===opsClientObservationsFilter);
+  if(!rows.length){host.innerHTML=`<div class="card p-6 text-center text-slate-400">Aucun signalement.</div>`;return}
+  host.innerHTML=`<div class="grid gap-3">${rows.map(opsObservationCardHTML).join("")}</div>`;
+}
+function opsObservationCardHTML(o){
+  return `<div class="card p-4" style="border-left:4px solid ${o.severity==="urgente"?"#dc2626":"#0d6ecc"}">
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="font-black">${escapeHTML(o.employee_name)}</div>
+        <div class="text-xs text-slate-500 mt-1">${escapeHTML(o.client_name)}${o.site_name?" · "+escapeHTML(o.site_name):""} · ${escapeHTML(formatDate(o.incident_date))}</div>
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        ${o.kind==="probleme"?'<span class="pill pill-red">Problème</span>':'<span class="pill pill-gray">Observation</span>'}
+        ${o.severity==="urgente"?'<span class="pill pill-red">Urgent</span>':""}
+        <span class="pill ${opsStatusPillClass(o.status)}">${opsStatusLabel(o.status)}</span>
+      </div>
+    </div>
+    <div class="text-sm mt-2 text-slate-700">${escapeHTML(o.description)}</div>
+    ${o.categories&&o.categories.length?`<div class="flex gap-1 flex-wrap mt-2">${o.categories.map(c=>`<span class="pill pill-amber">${escapeHTML(c)}</span>`).join("")}</div>`:""}
+    <div class="flex justify-end mt-3"><button type="button" class="btn btn-secondary text-xs" onclick="openOpsObservationDetail(${o.id})">Ouvrir</button></div>
+  </div>`;
+}
+function openOpsObservationDetail(id){
+  const o=(opsClientObservationsCache||[]).find(x=>x.id===id);
+  if(!o)return;
+  openModal(`<h3 class="font-black text-xl mb-2">${escapeHTML(o.employee_name)}</h3>
+    <div class="text-sm text-slate-500 mb-3">${escapeHTML(o.client_name)}${o.site_name?" · "+escapeHTML(o.site_name):""} · ${escapeHTML(formatDate(o.incident_date))}</div>
+    <div class="flex gap-2 mb-3 flex-wrap">${o.kind==="probleme"?'<span class="pill pill-red">Problème</span>':'<span class="pill pill-gray">Observation</span>'}${o.severity==="urgente"?'<span class="pill pill-red">Urgent</span>':""}<span class="pill ${opsStatusPillClass(o.status)}">${opsStatusLabel(o.status)}</span></div>
+    <div class="card p-3 mb-3" style="background:#f8fafc">
+      <div class="text-sm">${escapeHTML(o.description)}</div>
+      ${o.categories&&o.categories.length?`<div class="flex gap-1 flex-wrap mt-2">${o.categories.map(c=>`<span class="pill pill-amber">${escapeHTML(c)}</span>`).join("")}</div>`:""}
+    </div>
+    ${o.resolution_note?`<div class="mb-3"><label class="label">Dernière note de résolution</label><div class="card p-3 text-sm" style="background:#f0fdf4">${escapeHTML(o.resolution_note)}</div><div class="text-xs text-slate-400 mt-1">${o.resolved_by_name?escapeHTML(o.resolved_by_name)+" · ":""}${o.resolved_at?escapeHTML(formatDate(o.resolved_at)):""}</div></div>`:""}
+    <label class="label">Statut</label>
+    <select class="select" id="ops-obs-status">
+      <option value="nouveau" ${o.status==="nouveau"?"selected":""}>Nouveau</option>
+      <option value="en_cours" ${o.status==="en_cours"?"selected":""}>En cours</option>
+      <option value="traite" ${o.status==="traite"?"selected":""}>Traité</option>
+    </select>
+    <label class="label mt-2">Note de résolution (interne — jamais visible du client)</label>
+    <textarea class="textarea" id="ops-obs-note" rows="3">${escapeHTML(o.resolution_note||"")}</textarea>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button type="button" class="btn btn-primary" onclick="submitOpsObservationResolution(${o.id})">Enregistrer</button></div>`);
+}
+async function submitOpsObservationResolution(id){
+  const status=document.getElementById("ops-obs-status").value;
+  const note=document.getElementById("ops-obs-note").value.trim();
+  try{
+    await sgdiApi(`/api/client-portal/ops/observations/${id}/resolve`,{method:"POST",legacy:false,body:{status,resolution_note:note||null}});
+    closeModal();
+    toast("Signalement mis à jour","success");
+    await loadOpsClientObservations();
+  }catch(e){toast(e.message||"Mise à jour impossible","error")}
+}
+
+// ── Administration : comptes portail client ─────────────────────────────────────────
+let adminClientPortalUsersCache=null;
+async function loadAdminClientPortalUsers(){
+  const host=document.getElementById("admin-cpu-list");
+  if(!(db.clients||[]).length&&SGDI?.commercial?.clients){
+    try{const clients=await SGDI.commercial.clients();if(Array.isArray(clients)&&clients.length)db.clients=clients.map(clientFromApi)}catch(e){}
+  }
+  try{
+    const rows=await sgdiApi("/api/client-portal/admin/users",{method:"GET",legacy:false});
+    adminClientPortalUsersCache=Array.isArray(rows)?rows:[];
+  }catch(e){
+    if(host)host.innerHTML=`<div class="card p-6 text-center text-red-600">${escapeHTML(e.message||"Erreur de chargement")}</div>`;
+    return;
+  }
+  renderSidebar();
+  renderAdminClientPortalUsersList();
+}
+function adminClientNameById(clientId){
+  const c=(db.clients||[]).find(x=>String(x.backendId||x.id||"")===String(clientId));
+  return c?(c.nom||c.raisonSociale||"Client #"+clientId):"Client #"+clientId;
+}
+function renderAdminClientPortalUsersList(){
+  const host=document.getElementById("admin-cpu-list");
+  if(!host)return;
+  const rows=adminClientPortalUsersCache||[];
+  if(!rows.length){host.innerHTML=`<div class="card p-6 text-center text-slate-400">Aucun compte portail client. Créez-en un pour donner accès à un client.</div>`;return}
+  host.innerHTML=`<div class="table-card"><table class="w-full"><thead><tr><th class="p-3 text-left">Client</th><th class="p-3 text-left">Interlocuteur</th><th class="p-3 text-left">Identifiant</th><th class="p-3 text-left">Statut</th><th class="p-3 text-right">Actions</th></tr></thead><tbody>${rows.map(u=>`
+    <tr class="border-t">
+      <td class="p-3">${escapeHTML(adminClientNameById(u.client_id))}</td>
+      <td class="p-3">${escapeHTML(u.full_name)}</td>
+      <td class="p-3 font-mono text-xs">${escapeHTML(u.username)}</td>
+      <td class="p-3">${u.is_active?'<span class="pill pill-green">Actif</span>':'<span class="pill pill-gray">Désactivé</span>'}${u.must_change_password?' <span class="pill pill-amber">1er login</span>':""}</td>
+      <td class="p-3 text-right"><div class="flex gap-2 justify-end flex-wrap">
+        <button type="button" class="btn btn-secondary text-xs" onclick="toggleAdminClientPortalUser(${u.id},${u.is_active?"false":"true"})">${u.is_active?"Désactiver":"Activer"}</button>
+        <button type="button" class="btn btn-secondary text-xs" onclick="resetAdminClientPortalUserPassword(${u.id})">Réinitialiser mot de passe</button>
+      </div></td>
+    </tr>`).join("")}</tbody></table></div>`;
+}
+function renderAdminClientPortalUsers(view){
+  view.innerHTML=`<div class="mb-4 flex items-center justify-between flex-wrap gap-3">
+    <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Comptes portail client</h1><p class="text-sm text-slate-500 mt-1">Comptes nominatifs permettant à un client d'accéder à son portail dédié (signalements sur ses agents).</p></div>
+    <button type="button" class="btn btn-primary" onclick="openCreateClientPortalUserModal()">+ Nouveau compte</button>
+  </div>
+  <div id="admin-cpu-list"><div class="card p-6 text-center text-slate-400">Chargement…</div></div>`;
+  loadAdminClientPortalUsers();
+}
+function openCreateClientPortalUserModal(){
+  const clients=(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  if(!clients.length){toast("Créez d'abord une fiche client (module Commercial)","error");return}
+  openModal(`<h3 class="font-black text-xl mb-3">Nouveau compte portail client</h3>
+    <label class="label">Client</label>
+    <select class="select" id="cpu-client-id">${clients.map(c=>`<option value="${escapeHTML(c.backendId||c.id||"")}">${escapeHTML(c.nom||c.raisonSociale||"Client")}</option>`).join("")}</select>
+    <label class="label mt-2">Nom de l'interlocuteur</label>
+    <input class="input" id="cpu-full-name" placeholder="Nom et prénom">
+    <label class="label mt-2">Identifiant</label>
+    <input class="input" id="cpu-username" placeholder="ex: sonatrach.dupont">
+    <div id="cpu-error" class="text-red-600 text-xs mt-2 hidden"></div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-primary" onclick="submitCreateClientPortalUser()">Créer</button></div>`);
+}
+async function submitCreateClientPortalUser(){
+  const clientId=Number(document.getElementById("cpu-client-id").value);
+  const fullName=document.getElementById("cpu-full-name").value.trim();
+  const username=document.getElementById("cpu-username").value.trim();
+  const errorEl=document.getElementById("cpu-error");
+  errorEl.classList.add("hidden");
+  if(!clientId||!fullName||!username){errorEl.textContent="Tous les champs sont requis.";errorEl.classList.remove("hidden");return}
+  try{
+    const created=await sgdiApi("/api/client-portal/admin/users",{method:"POST",legacy:false,body:{client_id:clientId,full_name:fullName,username}});
+    closeModal();
+    openModal(`<h3 class="font-black text-xl mb-2 text-emerald-700">Compte créé</h3>
+      <p class="text-sm text-slate-600 mb-3">Communiquez ces identifiants au client. Le mot de passe temporaire ne sera plus affiché ensuite — le client devra le changer à sa première connexion.</p>
+      <div class="card p-3" style="background:#f0fdf4"><div class="text-xs text-slate-500">Identifiant</div><div class="font-mono font-black">${escapeHTML(created.username)}</div><div class="text-xs text-slate-500 mt-2">Mot de passe temporaire</div><div class="font-mono font-black">${escapeHTML(created.temporary_password)}</div></div>
+      <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
+    await loadAdminClientPortalUsers();
+  }catch(e){errorEl.textContent=e.message||"Création impossible";errorEl.classList.remove("hidden")}
+}
+async function toggleAdminClientPortalUser(id,active){
+  try{
+    await sgdiApi(`/api/client-portal/admin/users/${id}`,{method:"PATCH",legacy:false,body:{is_active:active}});
+    toast(active?"Compte activé":"Compte désactivé","success");
+    await loadAdminClientPortalUsers();
+  }catch(e){toast(e.message||"Action impossible","error")}
+}
+async function resetAdminClientPortalUserPassword(id){
+  if(!confirm("Réinitialiser le mot de passe de ce compte ?"))return;
+  try{
+    const res=await sgdiApi(`/api/client-portal/admin/users/${id}/reset-password`,{method:"POST",legacy:false});
+    openModal(`<h3 class="font-black text-xl mb-2">Mot de passe réinitialisé</h3>
+      <p class="text-sm text-slate-600 mb-3">Communiquez ce nouveau mot de passe temporaire au client.</p>
+      <div class="card p-3" style="background:#f0fdf4"><div class="text-xs text-slate-500">Nouveau mot de passe temporaire</div><div class="font-mono font-black">${escapeHTML(res.temporary_password)}</div></div>
+      <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
+    await loadAdminClientPortalUsers();
+  }catch(e){toast(e.message||"Réinitialisation impossible","error")}
+}
 function renderOPS(view,sub,arg){
   if(!canAccess("ops")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   if(sub!=="qr")ptStopQrTabletTimer();
@@ -35618,6 +35840,7 @@ function renderOPS(view,sub,arg){
   if(sub==="mouvements"){renderOpsMouvements(view);return}
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
   if(sub==="instance_dotation"){renderOpsInstanceDotation(view);return}
+  if(sub==="signalements-clients"){renderOpsClientObservations(view);return}
   opsDashboardRefreshFeuillePresence();
   const soc=currentStructureSocieteFilter();
   const empCounters=sgdiUnifiedEmployeeCounters(soc);

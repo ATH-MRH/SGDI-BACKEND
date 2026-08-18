@@ -21,6 +21,7 @@ class SiteBase(_UpperMixin):
     name: str
     indicatif: str | None = None
     client_name: str | None = None
+    client_id: int | None = None
     address: str | None = None
     commune: str | None = None
     wilaya: str | None = None
@@ -44,6 +45,7 @@ class SiteUpdate(_UpperMixin):
     name: str | None = None
     indicatif: str | None = None
     client_name: str | None = None
+    client_id: int | None = None
     address: str | None = None
     commune: str | None = None
     wilaya: str | None = None

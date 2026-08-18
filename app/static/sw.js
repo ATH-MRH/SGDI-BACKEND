@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260817-conges-tabbar-sticky-fix";
+const SGDI_CACHE = "sgdi-pwa-v20260818-client-portal";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Date, JSON, String, Text
+from sqlalchemy import Boolean, Date, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -28,3 +28,7 @@ class Client(Base, TimestampMixin):
     contract_end: Mapped[date | None] = mapped_column(Date, index=True)
     notes: Mapped[str | None] = mapped_column(Text)
     data: Mapped[dict | None] = mapped_column(JSON)
+    # Portail client (module de signalement indépendant, un sous-domaine dédié par client) :
+    # portal_slug est le premier label du sous-domaine (ex. "sonatrach" -> sonatrach.irongs.com).
+    portal_slug: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
+    portal_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

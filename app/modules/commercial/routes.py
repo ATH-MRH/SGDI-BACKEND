@@ -14,6 +14,33 @@ from app.modules.commercial.schemas import ClientCreate, ClientOut, ClientUpdate
 router = APIRouter(dependencies=[Depends(current_user)])
 
 
+# Sous-domaines déjà utilisés par des modules internes ou réservés — un client ne peut
+# pas se voir attribuer l'un de ces slugs pour son portail dédié.
+RESERVED_PORTAL_SLUGS = {
+    "drh", "ops", "materiel", "finances", "comptabilite", "compta", "facturation", "fac",
+    "commercial", "agenda", "paie", "conges", "recrute", "pointage", "pointeur",
+    "portail-rh", "cheque", "atlas", "www", "sgdi", "administrateur", "general",
+    "sup", "superviseur", "supervisor", "finance", "secretariat", "admin",
+}
+
+
+def _validate_portal_slug(db: Session, slug: str | None, exclude_client_id: int | None = None) -> None:
+    if not slug:
+        return
+    normalized = slug.strip().lower()
+    if normalized != slug.strip():
+        raise HTTPException(status_code=400, detail="Le sous-domaine doit être en minuscules")
+    if not normalized or not all(c.isalnum() or c == "-" for c in normalized):
+        raise HTTPException(status_code=400, detail="Sous-domaine invalide (lettres, chiffres, tirets uniquement)")
+    if normalized in RESERVED_PORTAL_SLUGS:
+        raise HTTPException(status_code=409, detail="Ce sous-domaine est réservé")
+    stmt = select(Client).where(Client.portal_slug == normalized)
+    if exclude_client_id:
+        stmt = stmt.where(Client.id != exclude_client_id)
+    if db.execute(stmt).scalars().first():
+        raise HTTPException(status_code=409, detail="Ce sous-domaine est déjà utilisé par un autre client")
+
+
 def _allowed_societies(user: User) -> list[str]:
     values = user.authorized_societies if isinstance(user.authorized_societies, list) else []
     return [str(v).strip() for v in values if str(v).strip()]
@@ -72,6 +99,7 @@ def clients(society: str | None = None, status: str | None = None, db: Session =
 @router.post("/clients", response_model=ClientOut)
 def create_client(payload: ClientCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_society_allowed(user, payload.society)
+    _validate_portal_slug(db, payload.portal_slug)
     return service.create_row(db, Client, payload)
 
 
@@ -79,6 +107,8 @@ def create_client(payload: ClientCreate, db: Session = Depends(get_db), user: Us
 def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     existing = _ensure_client_allowed(db, user, client_id)
     _ensure_society_allowed(user, payload.society or existing.society)
+    if payload.portal_slug is not None:
+        _validate_portal_slug(db, payload.portal_slug, exclude_client_id=client_id)
     return service.update_row(db, Client, client_id, payload)
 
 

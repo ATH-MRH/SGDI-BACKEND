@@ -23,6 +23,8 @@ class ClientBase(BaseModel):
     contract_end: date | None = None
     notes: str | None = None
     data: dict[str, Any] | None = None
+    portal_slug: str | None = None
+    portal_enabled: bool = True
 
 
 class ClientCreate(ClientBase):
@@ -48,6 +50,8 @@ class ClientUpdate(BaseModel):
     contract_end: date | None = None
     notes: str | None = None
     data: dict[str, Any] | None = None
+    portal_slug: str | None = None
+    portal_enabled: bool | None = None
 
 
 class ClientOut(ClientBase):
