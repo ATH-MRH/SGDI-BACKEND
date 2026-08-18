@@ -9510,6 +9510,7 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 .ops-dash-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative}
 .ops-dash-eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.78}
 .ops-dash-hero h1{font-size:27px;font-weight:800;margin:6px 0 0}
+#view .ops-dash-hero h1{color:#fff!important}
 .ops-dash-hero-sub{font-size:13px;opacity:.82;margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .ops-dash-live{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:5px 12px 5px 10px;font-size:11px;font-weight:800}
 .ops-dash-live-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,.28);animation:opsDashPulse 1.8s ease-in-out infinite}
