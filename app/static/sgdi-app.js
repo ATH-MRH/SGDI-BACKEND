@@ -35821,6 +35821,7 @@ function renderAdminClientPortalUsersList(){
       <td class="p-3 text-right"><div class="flex gap-2 justify-end flex-wrap">
         <button type="button" class="btn btn-secondary text-xs" onclick="toggleAdminClientPortalUser(${u.id},${u.is_active?"false":"true"})">${u.is_active?"Désactiver":"Activer"}</button>
         <button type="button" class="btn btn-secondary text-xs" onclick="resetAdminClientPortalUserPassword(${u.id})">Réinitialiser mot de passe</button>
+        <button type="button" class="btn btn-danger text-xs" onclick="deleteAdminClientPortalUser(${u.id},'${jsString(u.full_name||u.username||"")}')">Supprimer</button>
       </div></td>
     </tr>`).join("")}</tbody></table></div>`;
 }
@@ -35879,6 +35880,14 @@ async function resetAdminClientPortalUserPassword(id){
       <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
     await loadAdminClientPortalUsers();
   }catch(e){toast(e.message||"Réinitialisation impossible","error")}
+}
+async function deleteAdminClientPortalUser(id,label){
+  if(!confirm(`Supprimer définitivement le compte de ${label||"cet interlocuteur"} ? Cette action est irréversible — il perdra immédiatement l'accès à son portail.`))return;
+  try{
+    await sgdiApi(`/api/client-portal/admin/users/${id}`,{method:"DELETE",legacy:false});
+    toast("Compte supprimé","success");
+    await loadAdminClientPortalUsers();
+  }catch(e){toast(e.message||"Suppression impossible","error")}
 }
 function renderOPS(view,sub,arg){
   if(!canAccess("ops")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}

@@ -205,3 +205,14 @@ def admin_reset_password(user_id: int, db: Session = Depends(get_db), user: User
     require_admin(user)
     temp_password = service.reset_client_portal_user_password(db, user_id)
     return {"temporary_password": temp_password}
+
+
+@router.delete("/admin/users/{user_id}")
+def admin_delete_user(user_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    row = db.get(ClientPortalUser, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Compte introuvable")
+    db.delete(row)
+    db.commit()
+    return {"deleted": True, "id": user_id}
