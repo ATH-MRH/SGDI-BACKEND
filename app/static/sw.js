@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260818-conges-full-width-all-tabs";
+const SGDI_CACHE = "sgdi-pwa-v20260819-conges-kpis-full-width";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
