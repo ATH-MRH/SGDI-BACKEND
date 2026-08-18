@@ -28908,6 +28908,20 @@ function sgdiTabSwitch(id,idx){
   });
   document.querySelectorAll(`[id^="${id}-panel-"]`).forEach((p,i)=>p.style.display=i===idx?"block":"none");
 }
+function previewClientPortalLogo(input){
+  const file=input.files?.[0];
+  if(!file)return;
+  if(file.size>800000){toast("Logo trop volumineux (max ~800 Ko)","error");input.value="";return}
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const dataUri=String(reader.result||"");
+    const dataField=document.getElementById("client-portal-logo-data");
+    const preview=document.getElementById("client-portal-logo-preview");
+    if(dataField)dataField.value=dataUri;
+    if(preview)preview.innerHTML=`<img src="${escapeHTML(dataUri)}" style="max-width:100%;max-height:100%;object-fit:contain"/>`;
+  };
+  reader.readAsDataURL(file);
+}
 function openClientModal(id,readOnly=false){
   const c=(db.clients||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id));
   const isEdit=!!c;
@@ -28947,7 +28961,20 @@ function openClientModal(id,readOnly=false){
         <label><span>Sous-domaine (ex : sonatrach)</span><input class="input" name="portalSlug" value="${escapeHTML(c?.portalSlug||"")}" placeholder="laisser vide si pas de portail"/></label>
         <label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" name="portalEnabled" style="width:auto" ${(c?.portalEnabled!==false)?"checked":""}/><span style="text-transform:none;font-weight:600">Accès portail activé</span></label>
       </div>
-      <p style="font-size:11px;color:#64748b;margin-top:6px">Le portail sera accessible sur <b>&lt;sous-domaine&gt;.irongs.com</b> une fois le sous-domaine enregistré côté DNS/Coolify. Créez ensuite les comptes depuis Administration système → Comptes portail client.</p>
+      <div class="rh-op-grid" style="margin-top:10px">
+        <label><span>Couleur principale</span><input class="input" type="color" name="portalPrimaryColor" value="${escapeHTML(c?.portalPrimaryColor||"#043970")}" style="height:40px;padding:2px;cursor:pointer"/></label>
+        <label><span>Couleur d'accent</span><input class="input" type="color" name="portalAccentColor" value="${escapeHTML(c?.portalAccentColor||"#0d6ecc")}" style="height:40px;padding:2px;cursor:pointer"/></label>
+      </div>
+      <label style="margin-top:10px"><span>Logo (écran de connexion du portail)</span></label>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div id="client-portal-logo-preview" style="width:104px;height:60px;border:1px dashed #bfd1e3;border-radius:10px;background:#fafcff;display:grid;place-items:center;overflow:hidden;flex-shrink:0">${c?.portalLogoDataUri?`<img src="${escapeHTML(c.portalLogoDataUri)}" style="max-width:100%;max-height:100%;object-fit:contain"/>`:'<span style="font-size:10px;color:#94a3b8;text-transform:none">Aucun logo</span>'}</div>
+        <div>
+          <input type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" onchange="previewClientPortalLogo(this)"/>
+          <input type="hidden" name="portalLogoDataUri" id="client-portal-logo-data" value="${escapeHTML(c?.portalLogoDataUri||"")}"/>
+          <p style="font-size:11px;color:#64748b;margin-top:4px;text-transform:none">PNG/SVG à fond transparent recommandé. Poids max ~800 Ko.</p>
+        </div>
+      </div>
+      <p style="font-size:11px;color:#64748b;margin-top:10px">Le portail sera accessible sur <b>&lt;sous-domaine&gt;.irongs.com</b> une fois le sous-domaine enregistré côté DNS/Coolify. Créez ensuite les comptes depuis Administration système → Comptes portail client.</p>
     `)}
     <fieldset class="rh-op-box" style="margin-bottom:10px">
       <legend>Champs libres</legend>
@@ -29194,7 +29221,7 @@ async function confirmClient(id,options={}){
   const hasContractSites=fd.get("ct_nbrSite")!==null;
   if(hasContractSites)tech_sites=cts_sites;
   const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
-  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,portalSlug:(fd.get("portalSlug")||"").trim().toLowerCase(),portalEnabled:!!fd.get("portalEnabled"),updatedAt:new Date().toISOString()});
+  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,portalSlug:(fd.get("portalSlug")||"").trim().toLowerCase(),portalEnabled:!!fd.get("portalEnabled"),portalPrimaryColor:fd.get("portalPrimaryColor")||"",portalAccentColor:fd.get("portalAccentColor")||"",portalLogoDataUri:fd.get("portalLogoDataUri")||"",updatedAt:new Date().toISOString()});
   try{if(options.requireExisting)await updateExistingClientToPostgres(c);else await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");

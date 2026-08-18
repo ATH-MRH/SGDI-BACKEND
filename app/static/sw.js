@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260818-conges-reorg";
+const SGDI_CACHE = "sgdi-pwa-v20260818-client-portal-branding";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

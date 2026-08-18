@@ -52,6 +52,27 @@ def _limit_public(request: Request, name: str, maxn: int) -> None:
         )
 
 
+@router.get("/public/branding")
+def public_branding(request: Request, db: Session = Depends(get_db)):
+    """Identité visuelle du client (nom, logo, couleurs) résolue depuis le sous-domaine —
+    volontairement PUBLIC (pas de current_client_user) : l'écran de connexion en a besoin
+    avant toute authentification. N'expose rien de sensible, uniquement de la présentation."""
+    host = (request.headers.get("host") or "").split(":")[0].lower()
+    slug = host.split(".")[0] if "." in host else host
+    client = db.execute(
+        select(Client).where(Client.portal_slug == slug, Client.portal_enabled.is_(True))
+    ).scalar_one_or_none()
+    if not client:
+        return {"client_name": None, "logo_data_uri": None, "primary_color": None, "accent_color": None}
+    data = client.data if isinstance(client.data, dict) else {}
+    return {
+        "client_name": client.name,
+        "logo_data_uri": data.get("portalLogoDataUri") or None,
+        "primary_color": data.get("portalPrimaryColor") or None,
+        "accent_color": data.get("portalAccentColor") or None,
+    }
+
+
 @router.post("/auth/login", response_model=ClientPortalTokenOut)
 def login(payload: ClientLoginRequest, request: Request, db: Session = Depends(get_db)):
     _limit_public(request, "login", 20)
