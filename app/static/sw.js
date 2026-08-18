@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260818-client-portal-delete-account";
+const SGDI_CACHE = "sgdi-pwa-v20260818-conges-kpi-icons-fix";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
