@@ -9540,7 +9540,9 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 .nc-model-note b{color:#10243e}
 .nc-model-note .nc-link-btn{margin-top:6px;padding:5px 10px;font-size:11px}
 
-/* Tableau de bord OPS — maquette validée (voir conversation) */
+/* Style "pilotage" générique (bannière navy, KPI à pastille, carte de contenu) :
+   introduit pour le Tableau de bord OPS, désormais réutilisé tel quel comme
+   habillage par défaut des écrans OPS/DRH repris un par un (voir conversation). */
 .ops-dash-hero{background:linear-gradient(135deg,#043970,#0a4a8a 55%,#0d6ecc);color:#fff;padding:26px 28px;border-radius:20px;box-shadow:0 16px 40px rgba(4,57,112,.28);margin-bottom:20px;position:relative;overflow:hidden}
 .ops-dash-hero:before{content:"";position:absolute;top:-60%;right:-8%;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.1),transparent 70%);pointer-events:none}
 .ops-dash-hero-row{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;position:relative}

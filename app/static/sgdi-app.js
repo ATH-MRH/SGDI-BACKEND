@@ -30636,22 +30636,21 @@ function renderDRHPeriodeEssai(view){
     const name=escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim().toUpperCase());
     return`<tr data-searchable><td><a class="font-semibold hover:underline" href="#/effectif/agent/${a.id}">${name}</a></td><td class="font-mono text-xs text-amber-600">${escapeHTML(a.matricule||"—")}</td><td class="text-xs">${escapeHTML(a.societe||"—")}</td><td class="text-xs">${formatDate(a.dateRecrutement)}</td><td class="text-xs">${formatDate(a.dateFinEssai)}</td><td>${dLabel}</td><td class="text-center">${rec||"—"}</td><td class="text-center">${enc?'<span class="pill pill-red text-xs">ENC</span>':"—"}</td><td class="text-center">${hasPortail?'<span class="pill pill-green text-xs">✓</span>':'<span class="pill pill-amber text-xs">⚠</span>'}</td><td><div class="flex gap-1"><button class="btn btn-ghost text-xs" onclick="openPeriodeEncModal('${a.id}')">ENC</button><button class="btn btn-ghost text-xs" onclick="runRhEffectifAction('rec_periode_essai','${a.id}')">Reconduire</button></div></td></tr>`;
   }
-  view.innerHTML=`<div class="max-w-5xl mx-auto px-2 py-4">
-    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-      <h1 class="text-xl font-black uppercase">Période d'essai</h1>
-      <a href="#/contrats/dashboard" class="btn btn-ghost text-xs">← Contrats</a>
+  const kpi=(label,value,bg,color,icon,sub)=>`<div class="ops-dash-kpi" style="cursor:default"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${escapeHTML(label)}</div><div class="ops-dash-val">${value}</div><div class="ops-dash-sub">${escapeHTML(sub)}</div></div>`;
+  const theadRow=`<tr><th class="text-left">Employé</th><th>Code</th><th>Société</th><th>Recrutement</th><th>Fin essai</th><th>Délai</th><th class="text-center">Reconductions</th><th class="text-center">ENC</th><th class="text-center">Portail</th><th>Actions</th></tr>`;
+  view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Direction des ressources humaines</div><h1>Période d'essai</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(soc):"Toutes sociétés"} · ${enCours.length} en cours</span></div></div><a href="#/contrats/dashboard" class="ops-dash-refresh">← Contrats</a></div></div>
+    <div class="ops-dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+      ${kpi("En cours",enCours.length,"#dbeafe","#1e40af","⏳","Périodes d'essai actives")}
+      ${kpi("Fin dans 90 j",expires90.length,"#fef3c7","#92400e","📅","À anticiper")}
+      ${kpi("Fin dans 30 j",expires30.length,"#fee2e2","#991b1b","⚠","Décision urgente")}
+      ${kpi("Sans compte portail",sansPortail.length,sansPortail.length?"#fef3c7":"#dcfce7",sansPortail.length?"#92400e":"#166534","👤","Notifications indisponibles")}
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-      <div class="card p-4 text-center"><div class="text-2xl font-black text-blue-700">${enCours.length}</div><div class="text-xs text-slate-500 mt-1">En cours</div></div>
-      <div class="card p-4 text-center"><div class="text-2xl font-black text-amber-600">${expires90.length}</div><div class="text-xs text-slate-500 mt-1">Fin dans 90 j</div></div>
-      <div class="card p-4 text-center"><div class="text-2xl font-black text-red-600">${expires30.length}</div><div class="text-xs text-slate-500 mt-1">Fin dans 30 j</div></div>
-      <div class="card p-4 text-center"><div class="text-2xl font-black ${sansPortail.length?"text-amber-600":"text-green-600"}">${sansPortail.length}</div><div class="text-xs text-slate-500 mt-1">Sans compte portail</div></div>
+    ${sansPortail.length?`<div class="section-banner banner-amber">⚠ ${sansPortail.length} employé(s) en période d'essai sans compte Portail RH — notifications automatiques non disponibles.</div>`:""}
+    <div class="ops-dash-card" style="margin-bottom:20px">
+      <div class="ops-dash-card-head"><div><h3>En cours</h3><p>${enCours.length} période(s) d'essai active(s)</p></div></div>
+      <div class="ops-dash-card-body" style="overflow-x:auto"><table data-searchable-table><thead>${theadRow}</thead><tbody>${enCours.length?enCours.map(essaiRow).join(""):`<tr><td colspan="10" class="text-center p-4 text-slate-400 italic">Aucune période d'essai en cours.</td></tr>`}</tbody></table></div>
     </div>
-    ${sansPortail.length?`<div class="p-3 mb-4 rounded-lg text-sm font-bold" style="background:#fffbeb;color:#92400e;border:1px solid #fde68a">⚠ ${sansPortail.length} employé(s) en période d'essai sans compte Portail RH — notifications automatiques non disponibles.</div>`:""}
-    <h3 class="font-bold text-sm mb-2 uppercase text-slate-600">En cours (${enCours.length})</h3>
-    <div class="card overflow-hidden mb-6"><table data-searchable-table><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2">Code</th><th class="px-3 py-2">Société</th><th class="px-3 py-2">Recrutement</th><th class="px-3 py-2">Fin essai</th><th class="px-3 py-2">Délai</th><th class="px-3 py-2 text-center">Reconductions</th><th class="px-3 py-2 text-center">ENC</th><th class="px-3 py-2 text-center">Portail</th><th class="px-3 py-2">Actions</th></tr></thead><tbody>${enCours.length?enCours.map(essaiRow).join(""):`<tr><td colspan="10" class="text-center p-4 text-slate-400 italic">Aucune période d'essai en cours.</td></tr>`}</tbody></table></div>
-    ${expired.length?`<h3 class="font-bold text-sm mb-2 uppercase text-slate-600">Expirées (${expired.length})</h3><div class="card overflow-hidden"><table><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2">Code</th><th class="px-3 py-2">Société</th><th class="px-3 py-2">Recrutement</th><th class="px-3 py-2">Fin essai</th><th class="px-3 py-2">Délai</th><th class="px-3 py-2 text-center">Reconductions</th><th class="px-3 py-2 text-center">ENC</th><th class="px-3 py-2 text-center">Portail</th><th class="px-3 py-2">Actions</th></tr></thead><tbody>${expired.slice(0,20).map(essaiRow).join("")}</tbody></table></div>`:""}
-  </div>`;
+    ${expired.length?`<div class="ops-dash-card"><div class="ops-dash-card-head"><div><h3>Expirées</h3><p>${expired.length} période(s) échue(s) — 20 plus récentes affichées</p></div></div><div class="ops-dash-card-body" style="overflow-x:auto"><table><thead>${theadRow}</thead><tbody>${expired.slice(0,20).map(essaiRow).join("")}</tbody></table></div></div>`:""}`;
 }
 function renderDRH(view,sub,arg){
   sgdiEnsureEmployeesForDisplay({society:drhActiveSocieteFilter(),force:true});
@@ -36156,24 +36155,21 @@ function renderOpsMissions(view,arg){
   const urgentMissions=missions.filter(x=>/urgent|intervention/i.test([x.motif,x.nature,x.objet,x.consignes].join(" ")));
   const endingMissions=missions.filter(opsMissionNeedsEndAlert);
   const withEmployee=missions.filter(x=>x.agentId).length;
-  const missionKpi=(label,n,color,sub)=>`<div class="card p-4 text-left" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Suivi missions"}</div></div>`;
-  view.innerHTML=`<div class="flex items-center justify-between mb-5 flex-wrap gap-3">
-    <div><h1 class="text-2xl font-black uppercase">MISSIONS OPS</h1><div class="text-xs text-slate-500">Création, suivi, ordres de mission et archivage employé · ${soc?escapeHTML(soc):"Toutes sociétés"}</div></div>
-    ${opsReadOnly?"":`<button class="btn btn-secondary" onclick="openOpsMissionModal()">＋ Nouvelle mission</button>`}
-  </div>
+  const missionKpi=(label,n,bg,color,icon,sub)=>`<div class="ops-dash-kpi" style="cursor:default"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${escapeHTML(label)}</div><div class="ops-dash-val">${n}</div><div class="ops-dash-sub">${escapeHTML(sub||"Suivi missions")}</div></div>`;
+  view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Pilotage opérationnel</div><h1>Missions OPS</h1><div class="ops-dash-hero-sub"><span>Création, suivi, ordres de mission et archivage employé · ${soc?escapeHTML(soc):"Toutes sociétés"}</span></div></div>${opsReadOnly?"":`<button class="ops-dash-refresh" onclick="openOpsMissionModal()">＋ Nouvelle mission</button>`}</div></div>
   ${opsSupervisorReadOnlyNoticeHTML()}
-  ${endingMissions.length?`<div class="card p-4 mb-4" style="background:#fff7ed;border:1px solid #fb923c"><div class="font-black text-orange-800 mb-2">⚠ ${endingMissions.length} mission${endingMissions.length>1?"s":""} se termine${endingMissions.length>1?"nt":""} dans moins de 24 heures</div><div class="flex gap-2 flex-wrap">${endingMissions.map(m=>`<button class="btn btn-ghost text-xs" onclick="openOpsMissionDetail('${escapeHTML(m.id)}')">${escapeHTML(m.numero||"Mission")} · Décider OUI/NON</button>`).join("")}</div></div>`:""}
-  <div class="grid grid-4 gap-3 mb-5">
-    ${missionKpi("Total missions",missions.length,"#043970","Toutes les missions")}
-    ${missionKpi("En cours",activeMissions.length,"#16a34a","Actives aujourd'hui")}
-    ${missionKpi("Planifiées",plannedMissions.length,"#f59e0b","À venir")}
-    ${missionKpi("Urgentes",urgentMissions.length,"#dc2626","Intervention / urgent")}
+  ${endingMissions.length?`<div class="section-banner banner-amber">⚠ ${endingMissions.length} mission${endingMissions.length>1?"s":""} se termine${endingMissions.length>1?"nt":""} dans moins de 24 heures — ${endingMissions.map(m=>`<button class="ops-dash-alert-open" style="margin-left:6px" onclick="openOpsMissionDetail('${escapeHTML(m.id)}')">${escapeHTML(m.numero||"Mission")} · Décider</button>`).join(" ")}</div>`:""}
+  <div class="ops-dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    ${missionKpi("Total missions",missions.length,"#dbeafe","#043970","🗂","Toutes les missions")}
+    ${missionKpi("En cours",activeMissions.length,"#dcfce7","#166534","▶","Actives aujourd'hui")}
+    ${missionKpi("Planifiées",plannedMissions.length,"#fef3c7","#92400e","📅","À venir")}
+    ${missionKpi("Urgentes",urgentMissions.length,"#fee2e2","#991b1b","⚠","Intervention / urgent")}
   </div>
-  <div class="card p-5 overflow-hidden">
-    <div class="flex items-center justify-between mb-3 gap-2 flex-wrap"><h3 class="font-black">Liste des missions OPS</h3><span class="pill">${missions.length} mission${missions.length>1?"s":""}</span></div>
-    <table><thead><tr><th>N°</th><th>Employé</th><th>Lieu</th><th>Début</th><th>Fin</th><th>Motif</th><th class="text-right">Actions</th></tr></thead><tbody>
+  <div class="ops-dash-card">
+    <div class="ops-dash-card-head"><div><h3>Liste des missions OPS</h3><p>${missions.length} mission${missions.length>1?"s":""} enregistrée${missions.length>1?"s":""}</p></div></div>
+    <div class="ops-dash-card-body" style="overflow-x:auto"><table><thead><tr><th>N°</th><th>Employé</th><th>Lieu</th><th>Début</th><th>Fin</th><th>Motif</th><th class="text-right">Actions</th></tr></thead><tbody>
       ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—",status=opsMissionStatus(x);return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}<div class="mt-1"><span class="pill ${status.cls}">${status.label}</span></div></td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}<br><span class="text-slate-500">${escapeHTML(x.heureDebut||"00:00")}</span></td><td class="text-xs">${formatDate(x.dateFin)}<br><span class="text-slate-500">${escapeHTML(x.heureFin||"23:59")}</span></td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-primary text-xs" onclick="openOpsMissionDetail('${escapeHTML(x.id)}')">Détail</button><button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button></div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
-    </tbody></table>
+    </tbody></table></div>
   </div>`;
   if(endingMissions.length){
     const alertKey="ops-mission-ending-"+endingMissions.map(m=>m.id).sort().join("-");

@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260817-drh-sidebar-counters";
+const SGDI_CACHE = "sgdi-pwa-v20260817-generalized-pilot-style-drh-ops";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
