@@ -18672,11 +18672,12 @@ function renderMainCouranteDashboard(view){
     {label:"Clôturés",value:closedEvents.length,route:"incidents/site",tone:"#047857"},
     {label:"Aujourd'hui",value:todayEvents.length,route:"incidents/site",tone:"#1d4ed8"}
   ];
-  view.innerHTML=`<div class="flex justify-between items-start mb-4"><div><h1 class="text-2xl font-black">MAIN COURANTE - TABLEAU DE BORD</h1><div class="text-sm text-slate-500">Synthèse des évènements, incidents, alertes et clôtures.</div></div><button class="btn main-event-btn" onclick="openIncidentModal('site')">Nouvel évènement</button></div>
-  <div class="grid grid-7 gap-3 mb-4">${kpis.map(k=>`<button class="card p-4 text-left kpi-clickable" onclick="navigate('${k.route}')"><div class="text-xs text-slate-500 uppercase font-bold">${k.label}</div><div class="text-3xl font-black" style="color:${k.tone}">${k.value}</div></button>`).join("")}</div>
-  <div class="grid grid-2 gap-4 mb-4">
-    <div class="card p-4"><div class="font-black mb-3">Accès rapides</div><div class="flex flex-wrap gap-2"><button class="btn btn-secondary" onclick="navigate('incidents/site')">Évènements site</button><button class="btn btn-secondary" onclick="navigate('incidents/autres')">Évènements autres</button><button class="btn btn-primary" onclick="openIncidentModal('site')">Créer évènement site</button><button class="btn btn-primary" onclick="openIncidentModal('autres')">Créer évènement autre</button></div></div>
-    <div class="card p-4"><div class="font-black mb-3">Alertes ouvertes</div>${recent.length?recent.map(i=>`<button class="w-full text-left p-2 rounded-lg bg-slate-50 mb-2" onclick="viewIncident('${i.id}')"><div class="text-xs font-bold">${escapeHTML(i.sujet||i.categorie||"Évènement")}</div><div class="text-[10px] text-slate-500">${formatDate(i.date||i.createdAt||"")} · ${escapeHTML(i.statut||"ouvert")} · ${escapeHTML(i.gravite||"")}</div></button>`).join(""):`<div class="text-sm text-emerald-700 font-semibold">Aucune alerte ouverte.</div>`}</div>
+  const kpiHTML=(k)=>`<button type="button" class="ops-dash-kpi" onclick="navigate('${k.route}')"><div class="ops-dash-kpi-icon" style="background:${k.tone}1a;color:${k.tone}">●</div><div class="ops-dash-lbl">${escapeHTML(k.label)}</div><div class="ops-dash-val" style="color:${k.tone}">${k.value}</div></button>`;
+  view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Pilotage opérationnel</div><h1>Main courante</h1><div class="ops-dash-hero-sub"><span>Synthèse des évènements, incidents, alertes et clôtures</span></div></div><button class="ops-dash-refresh" onclick="openIncidentModal('site')">＋ Nouvel évènement</button></div></div>
+  <div class="ops-dash-kpis" style="grid-template-columns:repeat(7,minmax(0,1fr))">${kpis.map(kpiHTML).join("")}</div>
+  <div class="ops-dash-row2" style="grid-template-columns:1fr 1fr">
+    <div class="ops-dash-card"><div class="ops-dash-card-head"><div><h3>Accès rapides</h3><p>Consulter ou créer un évènement</p></div></div><div class="ops-dash-card-body" style="display:flex;flex-wrap:wrap;gap:8px"><button class="btn btn-secondary" onclick="navigate('incidents/site')">Évènements site</button><button class="btn btn-secondary" onclick="navigate('incidents/autres')">Évènements autres</button><button class="btn btn-primary" onclick="openIncidentModal('site')">Créer évènement site</button><button class="btn btn-primary" onclick="openIncidentModal('autres')">Créer évènement autre</button></div></div>
+    <div class="ops-dash-card"><div class="ops-dash-card-head"><div><h3>Alertes ouvertes</h3><p>${recent.length} évènement(s) récent(s) non clôturé(s)</p></div></div><div class="ops-dash-card-body">${recent.length?recent.map(i=>`<button type="button" class="ops-dash-alert-item" style="--sev-c:#dc2626;width:100%;text-align:left;cursor:pointer;margin-bottom:8px" onclick="viewIncident('${i.id}')"><div><div class="ops-dash-alert-name">${escapeHTML(i.sujet||i.categorie||"Évènement")}</div><div class="ops-dash-alert-meta">${formatDate(i.date||i.createdAt||"")} · ${escapeHTML(i.statut||"ouvert")} · ${escapeHTML(i.gravite||"")}</div></div></button>`).join(""):`<div class="text-sm text-emerald-700 font-semibold p-2">Aucune alerte ouverte.</div>`}</div></div>
   </div>`;
 }
 function incidentFromApi(row){
@@ -31270,29 +31271,29 @@ function renderDRHSocial(view,arg){
   const chifaOk=base.filter(socialChifaOk).length;
   const alertes=base.filter(a=>!socialCnasOk(a)||!socialChifaOk(a)).length;
   const dossiersComplets=base.filter(a=>socialCnasOk(a)&&socialChifaOk(a)).length;
-  const kpi=(key,label,n,sub,color)=>`<button type="button" onclick="sessionStorage.setItem('drhSocialFilter','${key}');renderView()" class="card p-4 text-left kpi-clickable" style="border:2px solid ${filter===key?color:"#e2e8f0"};background:${filter===key?"#f8fafc":"#fff"}"><div class="text-xs uppercase font-bold text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub}</div></button>`;
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap">
-    <div><h1 class="text-2xl font-black">Service social DRH</h1><p class="text-sm text-slate-500">Suivi CNAS, carte Chifa et dossier social employé${soc?` · ${escapeHTML(soc)}`:""}.</p></div>
-    <div class="flex gap-2 flex-wrap"><button class="btn btn-secondary text-sm" onclick="openSocialGuideModal()">Procédure social</button><a class="btn btn-ghost text-sm" href="#/conges">Congés</a></div>
-  </div>
-  <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
-    ${kpi("alertes","Alertes sociales",alertes,"CNAS ou Chifa incomplet","#dc2626")}
-    ${kpi("cnas","CNAS à traiter",base.length-cnasOk,"Déclarations manquantes","#b45309")}
-    ${kpi("chifa","Chifa à traiter",base.length-chifaOk,"Cartes absentes ou non valides","#7c3aed")}
-    ${kpi("ok","Dossiers complets",dossiersComplets,"CNAS + Chifa renseignées","#047857")}
+  const kpi=(key,label,n,sub,bg,color)=>`<button type="button" onclick="sessionStorage.setItem('drhSocialFilter','${key}');renderView()" class="ops-dash-kpi" style="${filter===key?`box-shadow:0 0 0 2px ${color} inset`:""}"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${key==="ok"?"✓":key==="alertes"?"⚠":key==="cnas"?"📋":"🩺"}</div><div class="ops-dash-lbl">${escapeHTML(label)}</div><div class="ops-dash-val">${n}</div><div class="ops-dash-sub">${escapeHTML(sub)}</div></button>`;
+  view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Direction des ressources humaines</div><h1>Service social</h1><div class="ops-dash-hero-sub"><span>Suivi CNAS, carte Chifa et dossier social employé${soc?` · ${escapeHTML(soc)}`:""}</span></div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ops-dash-refresh" onclick="openSocialGuideModal()">Procédure social</button><a href="#/conges" class="ops-dash-refresh" style="text-decoration:none;display:inline-flex;align-items:center">Congés</a></div></div></div>
+  <div class="ops-dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    ${kpi("alertes","Alertes sociales",alertes,"CNAS ou Chifa incomplet","#fee2e2","#991b1b")}
+    ${kpi("cnas","CNAS à traiter",base.length-cnasOk,"Déclarations manquantes","#fef3c7","#92400e")}
+    ${kpi("chifa","Chifa à traiter",base.length-chifaOk,"Cartes absentes ou non valides","#ede9fe","#5b21b6")}
+    ${kpi("ok","Dossiers complets",dossiersComplets,"CNAS + Chifa renseignées","#dcfce7","#166534")}
   </div>
   ${socialOfficialFormsHTML()}
-  <div class="card p-4 mb-4">
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-      <div class="md:col-span-2"><label class="label">Recherche</label><input class="input" value="${escapeHTML(q)}" placeholder="Nom, matricule, CNAS, Chifa..." oninput="sessionStorage.setItem('drhSocialQ',this.value);renderView()"/></div>
-      <div><label class="label">Vue</label><select class="select" onchange="sessionStorage.setItem('drhSocialFilter',this.value);renderView()">
-        ${[["alertes","Alertes"],["tous","Tous les employés"],["cnas","CNAS à traiter"],["chifa","Chifa à traiter"],["ok","Dossiers complets"]].map(([k,l])=>`<option value="${k}" ${filter===k?"selected":""}>${l}</option>`).join("")}
-      </select></div>
-      <button type="button" class="btn btn-ghost" onclick="sessionStorage.removeItem('drhSocialQ');sessionStorage.setItem('drhSocialFilter','alertes');renderView()">Réinitialiser</button>
+  <div class="ops-dash-card" style="margin-bottom:16px">
+    <div class="ops-dash-card-body" style="padding-top:18px">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div class="md:col-span-2"><label class="label">Recherche</label><input class="input" value="${escapeHTML(q)}" placeholder="Nom, matricule, CNAS, Chifa..." oninput="sessionStorage.setItem('drhSocialQ',this.value);renderView()"/></div>
+        <div><label class="label">Vue</label><select class="select" onchange="sessionStorage.setItem('drhSocialFilter',this.value);renderView()">
+          ${[["alertes","Alertes"],["tous","Tous les employés"],["cnas","CNAS à traiter"],["chifa","Chifa à traiter"],["ok","Dossiers complets"]].map(([k,l])=>`<option value="${k}" ${filter===k?"selected":""}>${l}</option>`).join("")}
+        </select></div>
+        <button type="button" class="btn btn-ghost" onclick="sessionStorage.removeItem('drhSocialQ');sessionStorage.setItem('drhSocialFilter','alertes');renderView()">Réinitialiser</button>
+      </div>
     </div>
   </div>
-  <div class="card overflow-hidden">
-    <table><thead><tr><th>Employé</th><th>Société</th><th>CNAS</th><th>Carte Chifa</th><th>Ayants droit</th><th>Dernière mise à jour</th><th></th></tr></thead>
+  <div class="ops-dash-card">
+    <div class="ops-dash-card-head"><div><h3>Dossiers sociaux</h3><p>${agents.length} employé(s) dans cette vue</p></div></div>
+    <div class="ops-dash-card-body" style="overflow-x:auto"><table><thead><tr><th class="text-left">Employé</th><th>Société</th><th>CNAS</th><th>Carte Chifa</th><th>Ayants droit</th><th>Dernière mise à jour</th><th></th></tr></thead>
     <tbody>${agents.length?agents.map(a=>{const s=agentSocialData(a);return`<tr data-searchable>
       <td><div class="font-semibold">${escapeHTML((a.nom||"")+" "+(a.prenom||""))}</div><div class="text-xs text-slate-500">${escapeHTML(a.matricule||"Sans matricule")} · ${escapeHTML(a.fonction||a.poste||"")}</div></td>
       <td class="text-xs">${escapeHTML(a.societe||"—")}</td>
@@ -31301,7 +31302,7 @@ function renderDRHSocial(view,arg){
       <td class="text-xs">${escapeHTML(s.ayantsDroit||"—")}</td>
       <td class="text-xs">${formatDate(s.updatedAt||s.dateDeclarationCnas||"")}</td>
       <td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-secondary text-xs" onclick="openSocialAgentModal('${jsString(a.id)}')">Dossier social</button><button class="btn btn-ghost text-xs" onclick="printSocialCnasAffiliation('${jsString(a.id)}')">SECU.01</button><button class="btn btn-primary text-xs" onclick="openChifaReadModal('${jsString(a.id)}')">Lire Chifa</button></div></td>
-    </tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-8">Aucun employé dans cette vue.</td></tr>`}</tbody></table>
+    </tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-8">Aucun employé dans cette vue.</td></tr>`}</tbody></table></div>
   </div>`;
 }
 function renderDRHSocialAgent(view,id){
