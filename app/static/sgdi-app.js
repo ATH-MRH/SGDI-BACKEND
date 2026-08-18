@@ -30589,18 +30589,18 @@ function renderDRHReversementEnAttente(view){
     const rowStyle=is72?' style="background:#fef2f2;color:#991b1b;font-weight:700"':'';
     return`<tr${rowStyle}><td class="px-3 py-2"><a class="font-semibold hover:underline" href="#/effectif/agent/${a.id}">${nom}</a></td><td class="px-3 py-2 font-mono text-xs text-amber-600">${mat}</td><td class="px-3 py-2 text-xs">${escapeHTML(a.societe||"—")}</td><td class="px-3 py-2 text-xs">${dateSortie}</td><td class="px-3 py-2 text-xs">${motif}</td><td class="px-3 py-2 text-xs">${dotationDesc}</td><td class="px-3 py-2 text-center">${delaiLabel}</td><td class="px-3 py-2"><button class="btn btn-ghost text-xs" onclick="markDotationReversee('${a.id}')">Marquer reversée</button></td></tr>`;
   }
-  view.innerHTML=`<div class="max-w-5xl mx-auto px-2 py-4">
-    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-      <h1 class="text-xl font-black uppercase">Reversements en attente</h1>
+  const kpi=(label,value,bg,color,icon,sub)=>`<div class="ops-dash-kpi" style="cursor:default"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${escapeHTML(label)}</div><div class="ops-dash-val">${value}</div><div class="ops-dash-sub">${escapeHTML(sub)}</div></div>`;
+  view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Direction des ressources humaines</div><h1>Reversements en attente</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(soc):"Toutes sociétés"} · dotations non reversées après fin de relation</span></div></div></div></div>
+    <div class="ops-dash-kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      ${kpi("Total en attente",agents.length,"#eef3f9","#334155","📦","Dotations à récupérer")}
+      ${kpi("En attente < 72h",enCours.length,"#fef3c7","#92400e","⏳","Délai normal")}
+      ${kpi("Alerte +72h",alerte72.length,alerte72.length?"#fee2e2":"#dcfce7",alerte72.length?"#991b1b":"#166534","⚠","Relance nécessaire")}
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-      <div class="card p-4 text-center"><div class="text-2xl font-black text-slate-700">${agents.length}</div><div class="text-xs text-slate-500 mt-1">Total en attente</div></div>
-      <div class="card p-4 text-center"><div class="text-2xl font-black text-amber-600">${enCours.length}</div><div class="text-xs text-slate-500 mt-1">En attente (&lt; 72h)</div></div>
-      <div class="card p-4 text-center"><div class="text-2xl font-black ${alerte72.length?"text-red-600":"text-green-600"}" ${alerte72.length?'style="animation:fpLampBlink 0.9s ease-in-out infinite"':""}>${alerte72.length}</div><div class="text-xs text-slate-500 mt-1">⚠ Alerte +72h</div></div>
-    </div>
-    ${alerte72.length?`<div class="p-3 mb-4 rounded-lg text-sm font-bold" style="background:#fef2f2;color:#991b1b;border:2px solid #dc2626;animation:fpLampBlink 0.9s ease-in-out infinite">⚠ ${alerte72.length} employé(s) n'ont pas reversé leur dotation depuis plus de 72 heures.</div>`:""}
-    ${agents.length?`<div class="card overflow-hidden"><table class="w-full text-sm"><thead><tr class="bg-slate-100 text-xs text-slate-500 uppercase"><th class="px-3 py-2 text-left">Employé</th><th class="px-3 py-2">Code</th><th class="px-3 py-2">Société</th><th class="px-3 py-2">Date sortie</th><th class="px-3 py-2">Motif</th><th class="px-3 py-2">Dotation</th><th class="px-3 py-2 text-center">Délai</th><th class="px-3 py-2">Action</th></tr></thead><tbody>${agents.sort((a,b)=>(elapsedH(b)||0)-(elapsedH(a)||0)).map(row).join("")}</tbody></table></div>`:`<div class="card p-8 text-center text-slate-400 italic">Aucun reversement en attente.</div>`}
-  </div>`;
+    ${alerte72.length?`<div class="section-banner banner-amber" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5">⚠ ${alerte72.length} employé(s) n'ont pas reversé leur dotation depuis plus de 72 heures.</div>`:""}
+    <div class="ops-dash-card">
+      <div class="ops-dash-card-head"><div><h3>Dotations en attente de reversement</h3><p>${agents.length} dossier(s)</p></div></div>
+      <div class="ops-dash-card-body" style="overflow-x:auto">${agents.length?`<table><thead><tr><th class="text-left">Employé</th><th>Code</th><th>Société</th><th>Date sortie</th><th>Motif</th><th>Dotation</th><th class="text-center">Délai</th><th>Action</th></tr></thead><tbody>${agents.sort((a,b)=>(elapsedH(b)||0)-(elapsedH(a)||0)).map(row).join("")}</tbody></table>`:`<div class="p-8 text-center text-slate-400 italic">Aucun reversement en attente.</div>`}</div>
+    </div>`;
 }
 function markDotationReversee(agentId){
   const a=db.agents.find(x=>x.id===agentId);if(!a){toast("Employé introuvable","error");return}
@@ -35571,25 +35571,20 @@ function _renderOpsMouvementsHTML(view){
     .sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))||String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||"")));
   const agents=(db.agents||[]).filter(a=>(!soc||a.societe===soc)&&!ficheAgentIsSortantArchive(a)&&a.statut!=="suspendu").sort((a,b)=>opsMovementAgentAvailability(a).rank-opsMovementAgentAvailability(b).rank||opsMovementAgentLabel(a).localeCompare(opsMovementAgentLabel(b)));
   const count=p=>baseRows.filter(f=>opsMovementInPeriod(f,p)).length;
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap">
-    <div>
-      <h1 class="text-2xl font-black uppercase">MOUVEMENT</h1>
-      <p class="text-sm text-slate-500">Ordres de mouvement OPS · ${soc?escapeHTML(soc):"Toutes sociétés"}</p>
-    </div>
-  </div>
+  view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Pilotage opérationnel</div><h1>Mouvement</h1><div class="ops-dash-hero-sub"><span>Ordres de mouvement OPS · ${soc?escapeHTML(soc):"Toutes sociétés"} · ${baseRows.length} mouvement(s)</span></div></div></div></div>
   ${opsMovementEditorHTML(today(),selectedMovementAgent,agents)}
   <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">${opsMovementSitesReferenceHTML(soc,rows)}${opsMovementGroupHTML("Par client",rows,opsMovementClientLabel)}</div>
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between gap-3 p-4 flex-wrap" style="border-bottom:1px solid #e2e8f0;background:#fff">
-      <div><h3 class="font-black text-lg">Historique des mouvements</h3><div class="text-xs text-slate-500">${rows.length} mouvement(s) affiché(s) sur ${baseRows.length} mouvement(s) correspondant aux filtres site/client.</div></div>
+  <div class="ops-dash-card">
+    <div class="ops-dash-card-head">
+      <div><h3>Historique des mouvements</h3><p>${rows.length} mouvement(s) affiché(s) sur ${baseRows.length} correspondant aux filtres site/client</p></div>
       <div class="flex items-center gap-2 flex-wrap">
         <input type="search" class="input text-sm" placeholder="Recherche agent, motif, site, N° ordre…" style="min-width:260px" value="${escapeHTML(searchQ)}" oninput="sessionStorage.setItem('opsMovementSearch',this.value);renderView()"/>
-        <button type="button" class="btn btn-secondary text-xs" onclick="['opsMovementAgentId','opsMovementSelectedAgent','opsMovementAgentFilter','opsMovementSite','opsMovementClient','opsMovementSearch'].forEach(k=>sessionStorage.removeItem(k));sessionStorage.setItem('opsMovementPeriod','all');renderView()">Tout afficher</button>
+        <button type="button" class="ops-dash-alert-open" onclick="['opsMovementAgentId','opsMovementSelectedAgent','opsMovementAgentFilter','opsMovementSite','opsMovementClient','opsMovementSearch'].forEach(k=>sessionStorage.removeItem(k));sessionStorage.setItem('opsMovementPeriod','all');renderView()">Tout afficher</button>
       </div>
     </div>
-    ${rows.length?`<table class="w-full text-sm"><thead style="background:#f8fafc"><tr><th class="p-3 text-left">Date</th><th class="p-3 text-left">Heure</th><th class="p-3 text-left">N° ordre</th><th class="p-3 text-left">Agent</th><th class="p-3 text-left">Motif</th><th class="p-3 text-left">Affectation</th><th class="p-3 text-left">Durée</th><th class="p-3 text-right">Action</th></tr></thead><tbody>
-      ${rows.map(f=>`<tr class="border-t hover:bg-slate-50"><td class="p-3 text-xs font-mono">${escapeHTML(formatDate(f.date||""))}</td><td class="p-3 text-xs font-mono">${escapeHTML(movementTimeLabel(f))}</td><td class="p-3 text-xs font-black">${escapeHTML(f.ordreMouvementNumero||f.mouvementNumero||"—")}</td><td class="p-3 font-semibold">${escapeHTML(opsMovementAgentLabel(f._agent))}</td><td class="p-3 text-xs">${escapeHTML(f.mouvementMotif||f.mouvementType||"—")}</td><td class="p-3 text-xs">${escapeHTML(opsMovementSiteLabel(f))}<div class="text-[10px] text-slate-500">${escapeHTML(opsMovementClientLabel(f))}</div></td><td class="p-3 text-xs">${escapeHTML(f.mouvementDuree||"—")}</td><td class="p-3 text-right"><div class="flex gap-1 justify-end flex-wrap">${isOpsSupervisorReadOnlySession()?"":`<button class="btn btn-secondary text-xs" onclick="fpqOpenMouvement('${escapeHTML(f.date||today())}','${escapeHTML(f.agentId||"")}')">Modifier</button>`}<button class="btn btn-ghost text-xs" onclick="opsOpenMovementDocumentByRow('${escapeHTML(f.id||"")}')">Ordre</button></div></td></tr>`).join("")}
-    </tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucun mouvement enregistré.</div>`}
+    <div class="ops-dash-card-body" style="overflow-x:auto">${rows.length?`<table><thead><tr><th class="text-left">Date</th><th class="text-left">Heure</th><th class="text-left">N° ordre</th><th class="text-left">Agent</th><th class="text-left">Motif</th><th class="text-left">Affectation</th><th class="text-left">Durée</th><th class="text-right">Action</th></tr></thead><tbody>
+      ${rows.map(f=>`<tr><td class="text-xs font-mono">${escapeHTML(formatDate(f.date||""))}</td><td class="text-xs font-mono">${escapeHTML(movementTimeLabel(f))}</td><td class="text-xs font-black">${escapeHTML(f.ordreMouvementNumero||f.mouvementNumero||"—")}</td><td class="font-semibold">${escapeHTML(opsMovementAgentLabel(f._agent))}</td><td class="text-xs">${escapeHTML(f.mouvementMotif||f.mouvementType||"—")}</td><td class="text-xs">${escapeHTML(opsMovementSiteLabel(f))}<div class="text-[10px] text-slate-500">${escapeHTML(opsMovementClientLabel(f))}</div></td><td class="text-xs">${escapeHTML(f.mouvementDuree||"—")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap">${isOpsSupervisorReadOnlySession()?"":`<button class="btn btn-secondary text-xs" onclick="fpqOpenMouvement('${escapeHTML(f.date||today())}','${escapeHTML(f.agentId||"")}')">Modifier</button>`}<button class="btn btn-ghost text-xs" onclick="opsOpenMovementDocumentByRow('${escapeHTML(f.id||"")}')">Ordre</button></div></td></tr>`).join("")}
+    </tbody></table>`:`<div class="p-10 text-center text-slate-500">Aucun mouvement enregistré.</div>`}</div>
   </div>`;
   if(presetAgent)sessionStorage.removeItem("opsMovementAgentId");
 }

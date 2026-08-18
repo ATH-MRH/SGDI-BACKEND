@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260817-generalized-pilot-style-drh-ops";
+const SGDI_CACHE = "sgdi-pwa-v20260817-pilot-style-round2-reversement-mouvement";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
