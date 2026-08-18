@@ -30836,7 +30836,7 @@ function renderDRHCongesPersonnel(view){
     const empty=docFiltre==="titles"?"Aucun titre de congé validé.":"Aucun historique disponible.";
     content=tableView("Documents",docFiltre==="titles"?"Titres de congé validés, imprimables et archivés dans le dossier salarié":"Décisions enregistrées dans le dossier du personnel",thead,body,empty,`<div class="ops-dash-seg">${seg("titles","À imprimer")}${seg("history","Historique complet")}</div>`);
   }
-  view.innerHTML=`<div class="drh-leave-page${tab==="dashboard"?" is-dashboard":""}">
+  view.innerHTML=`<div class="drh-leave-page is-dashboard">
     <div class="ops-dash-hero"><div class="ops-dash-hero-row">
       <div><div class="ops-dash-eyebrow">Centre de pilotage</div><h1>Congés &amp; planification</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(drhSocieteLabel(soc)):"Toutes sociétés"} · ${pending.length} demande(s) en attente · ${enCours.length} en congé aujourd'hui</span></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
