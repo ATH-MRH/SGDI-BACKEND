@@ -119,9 +119,10 @@ tr:last-child td{border-bottom:0}
 .equip-name{font-weight:850;font-size:13px}
 .equip-ref{font-size:11px;color:var(--muted);margin-top:1px}
 .group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
-.group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc}
+.group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc;width:100%;color:inherit;font:inherit;cursor:pointer}
 .group-counter.total{background:#fff8d6;border-color:#f1c400}
 .group-counter.function{background:#fff;border-color:#e5cbd0}
+.group-counter:hover,.group-counter[aria-pressed="true"]{border-color:#c8102e;box-shadow:0 0 0 2px rgba(200,16,46,.12)}
 .function-counters{margin-bottom:8px}
 .gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
 .gc-assigned{font-size:18px;font-weight:900;margin-top:2px;line-height:1}
@@ -593,14 +594,14 @@ async function loadSites(){
       const positionMap=(s.employees||[]).reduce((map,e)=>{const label=String(e.position||"Fonction non renseignée").trim()||"Fonction non renseignée",key=label.toLocaleLowerCase("fr");if(!map.has(key))map.set(key,{label,count:0});map.get(key).count+=1;return map},new Map());
       const positionCounts=[...positionMap.values()].sort((a,b)=>a.label.localeCompare(b.label,"fr"));
       const groupOptionsHtml=code=>groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
-      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Effectifs par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<div class="group-counter function"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="gc-quota-row">agent${p.count>1?"s":""}</div></div>`).join("")}</div></div>`:"";
-      const countersHtml=groups.length?`<div class="group-counters"><div class="group-counter total">
+      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Effectifs par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="gc-quota-row">agent${p.count>1?"s":""}</div></button>`).join("")}</div></div>`:"";
+      const countersHtml=groups.length?`<div class="group-counters"><button type="button" class="group-counter total" aria-pressed="false" onclick="filterSiteEmployees(this,'all','')">
           <div class="gc-code">Effectif total</div>
           <div class="gc-assigned">${totalAssigned}</div>
           <div class="gc-quota-row">tous groupes</div>
           <div class="gc-remaining">affectés au site</div>
-        </div>${groups.map(g=>`
-        <div class="group-counter">
+        </button>${groups.map(g=>`
+        <div class="group-counter" role="button" tabindex="0" aria-pressed="false" onclick="if(event.target.tagName!=='INPUT')filterSiteEmployees(this,'group','${encodeURIComponent(g.code)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterSiteEmployees(this,'group','${encodeURIComponent(g.code)}')}">
           <div class="gc-code">Groupe ${esc(g.code)}</div>
           <div class="gc-assigned">${g.assigned}</div>
           <div class="gc-quota-row">quota
@@ -610,7 +611,7 @@ async function loadSites(){
         </div>`).join("")}</div>`:"";
       const employeesHtml=(s.employees||[]).length?`<div class="site-employees">
         <div class="site-employees-title">Agents affectés</div>
-        ${s.employees.map(e=>`<div class="site-employee-row">
+        ${s.employees.map(e=>`<div class="site-employee-row" data-position="${encodeURIComponent(String(e.position||"Fonction non renseignée").trim().toLocaleLowerCase("fr"))}" data-group="${encodeURIComponent(String(e.group_code||""))}">
           <div class="site-employee-name">${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div>
           ${canAssign&&groups.length?`<select class="group-select" onchange="updateEmployeeGroup(${e.id},this.value)">${groupOptionsHtml(e.group_code)}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
         </div>`).join("")}
@@ -633,6 +634,12 @@ async function loadSites(){
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
+}
+
+function filterSiteEmployees(button,type,value){
+  const card=button.closest(".site-card");if(!card)return;
+  card.querySelectorAll(".group-counter").forEach(counter=>counter.setAttribute("aria-pressed",String(counter===button)));
+  card.querySelectorAll(".site-employee-row").forEach(row=>{const visible=type==="all"||(type==="position"&&row.dataset.position===value)||(type==="group"&&row.dataset.group===value);row.classList.toggle("hidden",!visible)});
 }
 
 async function updateGroupQuota(siteId,groupCode,value){
