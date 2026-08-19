@@ -113,6 +113,48 @@ def test_non_admin_cannot_create_portal_account(client, restricted_headers):
     assert r.status_code == 403, r.text
 
 
+def test_admin_can_define_and_fully_update_client_portal_credentials(client, auth_headers):
+    cid_a = _commercial_client(client, auth_headers, "Client Admin Account A", portal_slug="client-admin-a")
+    cid_b = _commercial_client(client, auth_headers, "Client Admin Account B", portal_slug="client-admin-b")
+    created = client.post("/api/client-portal/admin/users", headers=auth_headers, json={
+        "client_id": cid_a,
+        "full_name": "Responsable Initial",
+        "username": "client.admin.initial",
+        "password": "Secret123",
+        "is_active": True,
+        "must_change_password": False,
+    })
+    assert created.status_code == 201, created.text
+    account = created.json()
+    assert account["temporary_password"] == "Secret123"
+    assert account["must_change_password"] is False
+    assert _login(client, "client.admin.initial", "Secret123")
+
+    updated = client.patch(f"/api/client-portal/admin/users/{account['id']}", headers=auth_headers, json={
+        "client_id": cid_b,
+        "full_name": "Responsable Modifié",
+        "username": "client.admin.updated",
+        "password": "Nouveau456",
+        "is_active": True,
+        "must_change_password": True,
+    })
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["client_id"] == cid_b
+    assert updated.json()["username"] == "client.admin.updated"
+    assert updated.json()["must_change_password"] is True
+    assert _login(client, "client.admin.updated", "Nouveau456")
+
+
+def test_admin_cannot_duplicate_client_portal_username_on_update(client, auth_headers):
+    cid = _commercial_client(client, auth_headers, "Client Admin Duplicate", portal_slug="client-admin-duplicate")
+    first = _portal_account(client, auth_headers, cid, username="client.admin.first")
+    second = _portal_account(client, auth_headers, cid, username="client.admin.second")
+    response = client.patch(f"/api/client-portal/admin/users/{second['id']}", headers=auth_headers, json={
+        "username": first["username"],
+    })
+    assert response.status_code == 409, response.text
+
+
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────
 
 def test_employee_visible_only_via_site_client_id(client, auth_headers):

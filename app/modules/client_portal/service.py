@@ -210,19 +210,50 @@ def create_client_portal_user(db: Session, payload) -> tuple[ClientPortalUser, s
         raise HTTPException(status_code=404, detail="Client introuvable")
     if db.execute(select(ClientPortalUser).where(ClientPortalUser.username == payload.username.strip())).scalars().first():
         raise HTTPException(status_code=409, detail="Cet identifiant existe déjà")
-    temp_password = generate_temporary_password()
+    temp_password = payload.password or generate_temporary_password()
     row = ClientPortalUser(
         client_id=payload.client_id,
         full_name=payload.full_name.strip(),
         username=payload.username.strip(),
         password_hash=hash_password(temp_password),
-        is_active=True,
-        must_change_password=True,
+        is_active=payload.is_active,
+        must_change_password=payload.must_change_password,
     )
     db.add(row)
     db.commit()
     db.refresh(row)
     return row, temp_password
+
+
+def update_client_portal_user(db: Session, user_id: int, payload) -> ClientPortalUser:
+    row = db.get(ClientPortalUser, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Compte introuvable")
+    changes = payload.model_dump(exclude_unset=True)
+    if "client_id" in changes and not db.get(Client, changes["client_id"]):
+        raise HTTPException(status_code=404, detail="Client introuvable")
+    if "username" in changes:
+        username = str(changes["username"] or "").strip()
+        if not username:
+            raise HTTPException(status_code=422, detail="L'identifiant est requis")
+        duplicate = db.execute(
+            select(ClientPortalUser).where(ClientPortalUser.username == username, ClientPortalUser.id != user_id)
+        ).scalars().first()
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Cet identifiant existe déjà")
+        changes["username"] = username
+    if "full_name" in changes:
+        changes["full_name"] = str(changes["full_name"] or "").strip()
+        if not changes["full_name"]:
+            raise HTTPException(status_code=422, detail="Le nom de l'interlocuteur est requis")
+    password = changes.pop("password", None)
+    if password:
+        row.password_hash = hash_password(password)
+    for key, value in changes.items():
+        setattr(row, key, value)
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 def reset_client_portal_user_password(db: Session, user_id: int) -> str:

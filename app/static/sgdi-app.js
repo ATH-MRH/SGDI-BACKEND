@@ -35979,6 +35979,7 @@ function renderAdminClientPortalUsersList(){
       <td class="p-3 font-mono text-xs">${escapeHTML(u.username)}</td>
       <td class="p-3">${u.is_active?'<span class="pill pill-green">Actif</span>':'<span class="pill pill-gray">Désactivé</span>'}${u.must_change_password?' <span class="pill pill-amber">1er login</span>':""}</td>
       <td class="p-3 text-right"><div class="flex gap-2 justify-end flex-wrap">
+        <button type="button" class="btn btn-primary text-xs" onclick="openEditClientPortalUserModal(${u.id})">Gérer</button>
         <button type="button" class="btn btn-secondary text-xs" onclick="toggleAdminClientPortalUser(${u.id},${u.is_active?"false":"true"})">${u.is_active?"Désactiver":"Activer"}</button>
         <button type="button" class="btn btn-secondary text-xs" onclick="resetAdminClientPortalUserPassword(${u.id})">Réinitialiser mot de passe</button>
         <button type="button" class="btn btn-danger text-xs" onclick="deleteAdminClientPortalUser(${u.id},'${jsString(u.full_name||u.username||"")}')">Supprimer</button>
@@ -36045,6 +36046,10 @@ function openCreateClientPortalUserModal(){
     <input class="input" id="cpu-full-name" placeholder="Nom et prénom">
     <label class="label mt-2">Identifiant</label>
     <input class="input" id="cpu-username" placeholder="ex: sonatrach.dupont">
+    <label class="label mt-2">Mot de passe</label>
+    <input class="input" id="cpu-password" type="password" minlength="6" autocomplete="new-password" placeholder="Laisser vide pour le générer automatiquement">
+    <p class="text-xs text-slate-500 mt-1">Minimum 6 caractères. S'il est vide, un mot de passe sécurisé sera généré.</p>
+    <div class="grid grid-cols-2 gap-3 mt-3"><label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" id="cpu-active" checked> Compte actif</label><label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" id="cpu-must-change" checked> Changement au 1er accès</label></div>
     <div id="cpu-error" class="text-red-600 text-xs mt-2 hidden"></div>
     <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-primary" onclick="submitCreateClientPortalUser()">Créer</button></div>`);
 }
@@ -36052,11 +36057,16 @@ async function submitCreateClientPortalUser(){
   const clientId=Number(document.getElementById("cpu-client-id").value);
   const fullName=document.getElementById("cpu-full-name").value.trim();
   const username=document.getElementById("cpu-username").value.trim();
+  const password=document.getElementById("cpu-password").value;
+  const isActive=document.getElementById("cpu-active").checked;
+  const mustChangePassword=document.getElementById("cpu-must-change").checked;
   const errorEl=document.getElementById("cpu-error");
   errorEl.classList.add("hidden");
   if(!clientId||!fullName||!username){errorEl.textContent="Tous les champs sont requis.";errorEl.classList.remove("hidden");return}
+  if(password&&password.length<6){errorEl.textContent="Le mot de passe doit contenir au moins 6 caractères.";errorEl.classList.remove("hidden");return}
   try{
-    const created=await sgdiApi("/api/client-portal/admin/users",{method:"POST",legacy:false,body:{client_id:clientId,full_name:fullName,username}});
+    const body={client_id:clientId,full_name:fullName,username,is_active:isActive,must_change_password:mustChangePassword};if(password)body.password=password;
+    const created=await sgdiApi("/api/client-portal/admin/users",{method:"POST",legacy:false,body});
     closeModal();
     openModal(`<h3 class="font-black text-xl mb-2 text-emerald-700">Compte créé</h3>
       <p class="text-sm text-slate-600 mb-3">Communiquez ces identifiants au client. Le mot de passe temporaire ne sera plus affiché ensuite — le client devra le changer à sa première connexion.</p>
@@ -36064,6 +36074,25 @@ async function submitCreateClientPortalUser(){
       <div class="flex justify-end mt-4"><button type="button" class="btn btn-primary" onclick="closeModal()">Fermer</button></div>`);
     await loadAdminClientPortalUsers();
   }catch(e){errorEl.textContent=e.message||"Création impossible";errorEl.classList.remove("hidden")}
+}
+function openEditClientPortalUserModal(id){
+  const u=(adminClientPortalUsersCache||[]).find(x=>Number(x.id)===Number(id));
+  if(!u){toast("Compte introuvable. Rechargez la page.","error");return}
+  const clients=(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+  openModal(`<form onsubmit="submitEditClientPortalUser(event,${u.id})"><h3 class="font-black text-xl mb-1">Paramétrage du compte</h3><p class="text-sm text-slate-500 mb-4">Modifiez les identifiants, le mot de passe et l'état du compte client.</p>
+    <label class="label">Client</label><select class="select" name="clientId">${clients.map(c=>`<option value="${escapeHTML(c.backendId||c.id||"")}" ${String(c.backendId||c.id||"")===String(u.client_id)?"selected":""}>${escapeHTML(c.nom||c.raisonSociale||"Client")}</option>`).join("")}</select>
+    <label class="label mt-2">Nom de l'interlocuteur</label><input class="input" name="fullName" value="${escapeHTML(u.full_name||"")}" required>
+    <label class="label mt-2">Identifiant de connexion</label><input class="input" name="username" value="${escapeHTML(u.username||"")}" required>
+    <label class="label mt-2">Nouveau mot de passe</label><input class="input" name="password" type="password" minlength="6" autocomplete="new-password" placeholder="Laisser vide pour conserver le mot de passe"><p class="text-xs text-slate-500 mt-1">Minimum 6 caractères.</p>
+    <div class="grid grid-cols-2 gap-3 mt-3"><label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="isActive" ${u.is_active?"checked":""}> Compte actif</label><label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="mustChangePassword" ${u.must_change_password?"checked":""}> Changement obligatoire</label></div>
+    <div class="card p-3 mt-4" style="background:#f8fafc"><div class="text-sm font-bold">Paramétrage du portail</div><p class="text-xs text-slate-500 mt-1">Sous-domaine, identité visuelle et droits d'accès du client.</p><button type="button" class="btn btn-secondary text-xs mt-2" onclick="closeModal();openAdminClientPortalConfigModal('${jsString(u.client_id)}')">Configurer le portail client</button></div>
+    <div id="cpu-edit-error" class="text-red-600 text-xs mt-3 hidden"></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
+}
+async function submitEditClientPortalUser(event,id){
+  event.preventDefault();const form=event.currentTarget,fd=new FormData(form),errorEl=document.getElementById("cpu-edit-error"),password=String(fd.get("password")||"");
+  const body={client_id:Number(fd.get("clientId")),full_name:String(fd.get("fullName")||"").trim(),username:String(fd.get("username")||"").trim(),is_active:!!fd.get("isActive"),must_change_password:!!fd.get("mustChangePassword")};
+  if(password&&password.length<6){errorEl.textContent="Le mot de passe doit contenir au moins 6 caractères.";errorEl.classList.remove("hidden");return}if(password)body.password=password;
+  try{await sgdiApi(`/api/client-portal/admin/users/${id}`,{method:"PATCH",legacy:false,body});closeModal();toast("Compte portail mis à jour","success");await loadAdminClientPortalUsers()}catch(e){errorEl.textContent=e.message||"Mise à jour impossible";errorEl.classList.remove("hidden")}
 }
 async function toggleAdminClientPortalUser(id,active){
   try{

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # Catégories standard proposées au client lors d'un signalement de problème. Codées ici
@@ -143,11 +143,18 @@ class ClientPortalUserCreate(BaseModel):
     client_id: int
     full_name: str
     username: str
+    password: str | None = Field(default=None, min_length=6)
+    is_active: bool = True
+    must_change_password: bool = True
 
 
 class ClientPortalUserUpdate(BaseModel):
+    client_id: int | None = None
     full_name: str | None = None
+    username: str | None = None
+    password: str | None = Field(default=None, min_length=6)
     is_active: bool | None = None
+    must_change_password: bool | None = None
 
 
 class ClientPortalUserOut(BaseModel):

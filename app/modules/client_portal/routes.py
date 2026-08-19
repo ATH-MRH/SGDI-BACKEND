@@ -218,14 +218,7 @@ def admin_create_user(payload: ClientPortalUserCreate, db: Session = Depends(get
 @router.patch("/admin/users/{user_id}", response_model=ClientPortalUserOut)
 def admin_update_user(user_id: int, payload: ClientPortalUserUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
-    row = db.get(ClientPortalUser, user_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Compte introuvable")
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(row, key, value)
-    db.commit()
-    db.refresh(row)
-    return row
+    return service.update_client_portal_user(db, user_id, payload)
 
 
 @router.post("/admin/users/{user_id}/reset-password")
