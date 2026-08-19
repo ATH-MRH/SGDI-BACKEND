@@ -302,7 +302,7 @@ async function login(){
     const res=await fetch("/api/client-portal/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username,password})});
     const body=await res.json();
     if(!res.ok)throw new Error(body?.detail||"Identifiants incorrects");
-    session={token:body.access_token,clientId:body.client_id,clientName:body.client_name,fullName:body.full_name};
+    session={token:body.access_token,clientId:body.client_id,clientName:body.client_name,fullName:body.full_name,permissions:body.permissions||{}};
     loginPasswordUsed=password;
     if(body.must_change_password){
       document.getElementById("loginView").classList.add("hidden");
@@ -353,6 +353,10 @@ async function enterApp(){
   document.getElementById("appView").classList.remove("hidden");
   document.getElementById("clientNameLabel").textContent=session.clientName||"—";
   document.getElementById("fullNameLabel").textContent=session.fullName||"—";
+  try{const me=await apiFetch("/me");session.permissions=me.permissions||{};persistSession()}catch(e){}
+  const canHistory=session?.permissions?.view_observations!==false;
+  document.querySelector('.tab-btn[data-tab="history"]')?.classList.toggle("hidden",!canHistory);
+  if(!canHistory)document.getElementById("historyTab").classList.add("hidden");
   if(branding?.logo_data_uri){
     document.getElementById("appLogoImg").src=branding.logo_data_uri;
     document.getElementById("appLogoBox").classList.remove("hidden");
@@ -371,6 +375,7 @@ function switchTab(tab){
 
 async function loadEmployees(){
   const host=document.getElementById("employeesList");
+  if(session?.permissions?.view_employees===false){host.innerHTML='<div class="empty">La consultation des agents n’est pas activée pour votre compte.</div>';return}
   try{
     employees=await apiFetch("/employees");
     if(!employees.length){host.innerHTML='<div class="empty">Aucun agent actuellement affecté à vos sites.</div>';return}
@@ -379,7 +384,7 @@ async function loadEmployees(){
         <div class="emp-name">${esc(e.last_name)} ${esc(e.first_name)}</div>
         <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div>
         ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
-        <div class="emp-actions"><button type="button" class="secondary" onclick="openObservationModal(${e.id})">Signaler</button></div>
+        ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="openObservationModal(${e.id})">Signaler</button></div>`}
       </div>`).join("")}</div>`;
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
@@ -458,6 +463,7 @@ function statusPillClass(status){
 
 async function loadHistory(){
   const host=document.getElementById("historyList");
+  if(session?.permissions?.view_observations===false){host.innerHTML='<div class="empty">L’historique des signalements n’est pas activé pour votre compte.</div>';return}
   const statusFilter=document.getElementById("histStatusFilter").value;
   host.innerHTML='<div class="empty">Chargement…</div>';
   try{

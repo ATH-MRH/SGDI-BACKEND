@@ -34,6 +34,29 @@ from sqlalchemy import select
 
 router = APIRouter()
 
+CLIENT_PORTAL_DEFAULT_PERMISSIONS = {
+    "view_employees": True,
+    "view_observations": True,
+    "create_observations": True,
+}
+
+
+def _client_permissions(db: Session, user: ClientPortalUser) -> dict[str, bool]:
+    client = db.get(Client, user.client_id)
+    data = client.data if client and isinstance(client.data, dict) else {}
+    configured = data.get("portalPermissions") if isinstance(data.get("portalPermissions"), dict) else {}
+    camel_keys = {
+        "view_employees": "viewEmployees",
+        "view_observations": "viewObservations",
+        "create_observations": "createObservations",
+    }
+    return {key: bool(configured.get(key, configured.get(camel_keys[key], default))) for key, default in CLIENT_PORTAL_DEFAULT_PERMISSIONS.items()}
+
+
+def _require_client_permission(db: Session, user: ClientPortalUser, permission: str) -> None:
+    if not _client_permissions(db, user).get(permission, False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cette fonctionnalité n'est pas autorisée pour votre compte client.")
+
 
 def _ip(request: Request) -> str:
     fwd = request.headers.get("x-forwarded-for")
@@ -84,6 +107,7 @@ def login(payload: ClientLoginRequest, request: Request, db: Session = Depends(g
         client_id=user.client_id,
         client_name=client.name if client else "",
         full_name=user.full_name,
+        permissions=_client_permissions(db, user),
     )
 
 
@@ -105,11 +129,13 @@ def me(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_c
         client_id=user.client_id,
         client_name=client.name if client else "",
         full_name=user.full_name,
+        permissions=_client_permissions(db, user),
     )
 
 
 @router.get("/employees", response_model=list[EmployeeVisibleOut])
 def employees(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
+    _require_client_permission(db, user, "view_employees")
     return service.visible_employees_for_client(db, user.client_id)
 
 
@@ -120,6 +146,7 @@ def observations(
     db: Session = Depends(get_db),
     user: ClientPortalUser = Depends(current_client_user),
 ):
+    _require_client_permission(db, user, "view_observations")
     return service.list_observations_for_client(db, user.client_id, employee_id, status)
 
 
@@ -129,6 +156,7 @@ def create_observation(
     db: Session = Depends(get_db),
     user: ClientPortalUser = Depends(current_client_user),
 ):
+    _require_client_permission(db, user, "create_observations")
     row = service.create_observation(db, user, payload)
     return service.observation_out_dict(db, row)
 

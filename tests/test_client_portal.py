@@ -153,6 +153,27 @@ def test_employee_no_longer_visible_after_assignment_ends(client, auth_headers):
     assert emp not in {e["id"] for e in r.json()}
 
 
+def test_client_portal_permissions_are_enforced(client, auth_headers):
+    cid = _commercial_client(client, auth_headers, "Client Permissions")
+    account = _portal_account(client, auth_headers, cid, username="clientpermissions")
+    headers = _login(client, "clientpermissions", account["temporary_password"])
+    updated = client.put(f"/api/commercial/clients/{cid}", headers=auth_headers, json={
+        "data": {"portalPermissions": {
+            "viewEmployees": False,
+            "viewObservations": False,
+            "createObservations": False,
+        }}
+    })
+    assert updated.status_code == 200, updated.text
+    assert client.get("/api/client-portal/employees", headers=headers).status_code == 403
+    assert client.get("/api/client-portal/observations", headers=headers).status_code == 403
+    r = client.post("/api/client-portal/observations", headers=headers, json={
+        "employee_id": 1, "kind": "observation", "categories": [],
+        "description": "Cette soumission doit être bloquée.", "incident_date": "2026-08-18",
+    })
+    assert r.status_code == 403
+
+
 # ── Soumission d'un signalement ─────────────────────────────────────────────────────
 
 def test_create_observation_and_urgent_severity(client, auth_headers):

@@ -36,6 +36,7 @@ class ClientMeOut(BaseModel):
     client_id: int
     client_name: str
     full_name: str
+    permissions: dict[str, bool]
 
 
 class ClientPortalTokenOut(ClientMeOut):
