@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260819-sidebar-groups-fix";
+const SGDI_CACHE = "sgdi-pwa-v20260819-drh-hide-pointage-counters";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",

@@ -38361,6 +38361,7 @@ function fpqStopLiveRefresh(){clearInterval(_fpqLiveTimer);_fpqLiveTimer=null;}
 
 // ── Feuille de présence QR ────────────────────────────────────────────────────
 function renderFeuillePresentQR(){
+  const isDrh=session?.transverse==="drh";
   const date=fpqCurrentDate();
   const soc=ptCurrentSoc();
   const dateLabel=new Date(date).toLocaleDateString("fr-FR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
@@ -38487,11 +38488,11 @@ function renderFeuillePresentQR(){
     <button type="button" onclick="fpqOpenDailyCodeModal('')" class="card p-3 text-center" style="background:#fee2e2;cursor:pointer;border:none"><div class="text-xs text-red-700 font-semibold">Non pointés</div><div class="text-2xl font-black text-red-700">${nonPointeCount}</div></button>
     <div class="card p-3 text-center" style="background:#f0f9ff"><div class="text-xs text-blue-700 font-semibold">Total agents</div><div class="text-2xl font-black text-blue-700">${agents.length}</div></div>
   </div>
-  <div class="flex items-center justify-between mt-3 mb-1">
+  ${isDrh?"":`<div class="flex items-center justify-between mt-3 mb-1">
     <div class="text-xs font-black uppercase text-slate-500">Compteurs par code</div>
     <button type="button" class="btn btn-ghost text-xs" onclick="fpqToggleCodeCards()">${fpqCodeCardsHidden()?"▼ Afficher les compteurs":"▲ Masquer les compteurs"}</button>
   </div>
-  ${fpqCodeCardsHidden()?"":dailyCodeCardsHTML}
+  ${fpqCodeCardsHidden()?"":dailyCodeCardsHTML}`}
   </div>
   ${groupBySite?`<div id="fpq-live-tbody">${siteGroupsHTML||`<div class="card p-8 text-center text-slate-500">Aucun agent opérationnel pour cette date.</div>`}</div>`:`<div class="card p-2"><div style="overflow-x:auto"><table class="w-full" style="border-collapse:collapse;font-size:13px">
     <thead><tr style="background:#043970;color:#fff">${(()=>{const sk=_fpqSortKey,sd=_fpqSortDir;const th=(label,key,align,w)=>{const act=sk===key;const arr=act?(sd===1?"▲":"▼"):"⇅";return`<th onclick="fpqSetSort('${key}')" class="px-3 py-2 text-${align} text-xs font-bold" style="border:1px solid #cbd5e1;${w?`width:${w};`:""}cursor:pointer;user-select:none;white-space:nowrap">${label} <span style="font-size:9px;opacity:${act?1:.45}">${arr}</span></th>`;};return`<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;width:40px">N°</th>${th("SITE","site","left")}${th("NOM PRÉNOM","nom","left")}${th("CODE","code","center","60px")}${th("HEURE ARRIVÉE","arrivee","center","110px")}${th("HEURE DÉPART","depart","center","110px")}<th class="px-3 py-2 text-center text-xs font-bold" style="border:1px solid #cbd5e1;white-space:nowrap">POSITION GPS</th>${th("ÉTAT","etat","center","100px")}`;})()}</tr></thead>
