@@ -7648,6 +7648,10 @@ function normalizePageHeader(view){
 function normalizeCentralPage(view){
   if(!view)return;
   view.classList.add("module-view");
+  // La réception des demandes est une vue de travail autonome : ses pictogrammes
+  // font partie des KPI et son bandeau possède déjà son propre habillage. Ne pas
+  // lui appliquer le nettoyage générique des emojis/titres des anciennes vues.
+  if(view.querySelector(".dp-clean-page"))return;
   const iconPattern=/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
   const walker=document.createTreeWalker(view,NodeFilter.SHOW_TEXT,{acceptNode(node){
     const parent=node.parentElement;
@@ -7765,6 +7769,9 @@ function sidebarNavigate(event,route){
 
 function renderView(){
   // Invalide immédiatement tout rendu asynchrone lancé par la vue précédente.
+  // Les vues qui utilisent une coque dédiée la réactivent explicitement durant
+  // leur rendu. Ainsi, la navigation suivante retrouve toujours le shell ERP.
+  document.body.classList.remove("dp-focus-layout");
   const activeRenderHash=String(location.hash||"#/dashboard");
   if(activeRenderHash!==sgdiViewRenderHash){
     sgdiViewRenderHash=activeRenderHash;
@@ -19485,6 +19492,11 @@ async function portalComptesNotify(matricule){
 
 function renderDemandesPersonnel(view,sub,arg){
   if(!canAccess("demandes_personnel")){view.innerHTML=`<div class="card p-6 text-red-700">Accès réservé DRH / Administration.</div>`;return}
+  // Cette réception reprend la maquette plein écran : aucune zone de la coque
+  // générale ne doit réduire son canevas de travail.
+  document.body.classList.add("dp-focus-layout");
+  view.classList.add("dp-wide-view");
+  view.closest("main")?.classList.add("dp-wide-main");
   ensureDemandesPersonnel();
   refreshDemandesPersonnelFromPostgres({silent:true});
   const soc=isDrhModuleContext()?drhActiveSocieteFilter():mySoc();
@@ -19513,7 +19525,7 @@ function renderDemandesPersonnel(view,sub,arg){
   const types=[...new Set(all.map(d=>demandePersonnelTypeLabel(d)).filter(Boolean))];
   const employeeRow=g=>{const active=g.key===selectedEmployeeKey,alert=(g.items||[]).some(d=>demandePersonnelIsAlert(d)),pending=g.nouveau+g.enCours;return`<button type="button" class="dp-emp-row ${active?"is-active":""}" onclick="selectDemandePersonnelEmployee('${jsString(g.key)}')"><span class="dp-emp-avatar">${escapeHTML((g.name||"?").trim().slice(0,1).toUpperCase())}</span><span class="dp-emp-copy"><strong>${escapeHTML(g.name||"—")}</strong><small>${escapeHTML(g.matricule||"Sans matricule")} · ${escapeHTML(g.societe||"")}</small></span><span class="dp-emp-meta"><b>${g.total}</b>${pending?`<small>${pending} ouverte(s)</small>`:""}${alert?`<i>Alerte</i>`:""}</span></button>`};
   const timelineItem=d=>{const active=String(d.id)===String(selectedId),alert=demandePersonnelIsAlert(d);return`<button type="button" class="dp-tl-item ${active?"is-active":""}" onclick="selectDemandePersonnel('${jsString(d.id)}')"><div class="dp-tl-date">${formatDate(d.createdAt||d.date)}</div><span class="dp-tl-title">${escapeHTML(d.objet||demandePersonnelTypeLabel(d)||"Demande")}</span>${demandePersonnelStatusPill(d.statut)}${alert?` <span class="pill pill-red">Alerte</span>`:""}</button>`};
-  const kpi=(label,n,icon,bg,color,onclick)=>`<div class="ops-dash-kpi" style="cursor:pointer" onclick="${onclick}"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${label}</div><div class="ops-dash-val">${n}</div></div>`;
+  const kpi=(label,n,icon,bg,color,onclick)=>`<div class="ops-dash-kpi" style="cursor:pointer" onclick="${onclick}"><div class="ops-dash-kpi-icon" data-preserve-emoji style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${label}</div><div class="ops-dash-val">${n}</div></div>`;
   view.innerHTML=`<div class="dp-clean-page">
     <div class="ops-dash-hero"><div class="ops-dash-hero-row">
       <div><div class="ops-dash-eyebrow">Direction des ressources humaines</div><h1>Réception demandes &amp; réclamations</h1><div class="ops-dash-hero-sub"><span>${list.length}${list.length!==all.length?` sur ${all.length}`:""} demande(s) affichée(s) · ${employeeGroups.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</span></div></div>

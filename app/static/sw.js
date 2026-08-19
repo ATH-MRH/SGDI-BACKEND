@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260819-reception-demandes-fix";
+const SGDI_CACHE = "sgdi-pwa-v20260819-reception-demandes-focus";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
