@@ -7816,7 +7816,7 @@ function renderView(){
       case"badge":if(sub==="verify"&&arg)renderBadgeVerify(view,arg);else renderFiches(view,"badge");break;
       case"sites":if(!["ops","superviseur","admin","materiel","global"].includes(session?.transverse)){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès réservé OPS / Superviseur / Matériel / Administration système</h2><p class="text-slate-600">La carte Sites est disponible uniquement dans les modules autorisés.</p></div>`;break}if(sub==="nouveau"&&!arg)renderSiteForm(view,null);else if(sub==="actifs")renderSites(view);else if(sub)renderSiteForm(view,sub);else renderSites(view);break;
       case"incidents":renderIncidents(view,sub||"dashboard");break;
-      case"conges":renderConges(view);break;
+      case"conges":renderCongesModule(view,false);break;
       case"portail":if(sub==="comptes")renderPortailComptes(view);else renderPortailPersonnel(view);break;
       case"demandes_personnel":renderDemandesPersonnel(view,sub||"dashboard",arg);break;
       case"demandes_structure":renderDemandesStructure(view,sub||"dashboard",arg);break;
@@ -19157,28 +19157,28 @@ function setDemandesPersonnelSearch(value){
   demandesPersonnelSearchTimer=setTimeout(()=>renderView(),250);
 }
 function demandePersonnelDetailHTML(d){
-  if(!d)return`<div class="card p-8 text-center text-slate-500">Sélectionnez une demande pour voir le détail.</div>`;
+  if(!d)return`<div class="dp-empty">Sélectionnez une demande pour voir le détail.</div>`;
   const original=d.payloadOriginal||{};
   const details=original.details&&typeof original.details==="object"?original.details:{};
   const docs=d.documentsDemandes||[];
-  return`<div class="card p-5 sticky top-4">
-    <div class="flex items-start justify-between gap-3 mb-4">
-      <div><h2 class="text-xl font-black mb-1">${escapeHTML(d.objet||demandePersonnelTypeLabel(d))}</h2><div class="text-xs text-slate-500">${escapeHTML(d.ref||d.id||"")} · ${formatDate(d.date||d.createdAt)}</div></div>
-      <div>${demandePersonnelStatusPill(d.statut)}</div>
+  return`<div class="dp-detail-card">
+    <div class="dp-detail-top">
+      <div><div class="dp-detail-title">${escapeHTML(d.objet||demandePersonnelTypeLabel(d))}</div><div class="dp-detail-meta">Réf. ${escapeHTML(d.ref||d.id||"")} · ${formatDate(d.date||d.createdAt)}</div></div>
+      ${demandePersonnelStatusPill(d.statut)}
     </div>
-    <div class="grid grid-cols-2 gap-2 text-sm mb-4">
-      <div class="p-3 bg-slate-50 rounded"><div class="text-xs text-slate-500">Demandeur</div><b>${escapeHTML(d.agentName||"—")}</b></div>
-      <div class="p-3 bg-slate-50 rounded"><div class="text-xs text-slate-500">Matricule</div><b>${escapeHTML(d.matricule||"—")}</b></div>
-      <div class="p-3 bg-slate-50 rounded"><div class="text-xs text-slate-500">Société</div><b>${escapeHTML(d.societe||"—")}</b></div>
-      <div class="p-3 bg-slate-50 rounded"><div class="text-xs text-slate-500">Site</div><b>${escapeHTML(d.site||"—")}</b></div>
+    <div class="dp-detail-grid">
+      <div><div class="lbl">Demandeur</div><b>${escapeHTML(d.agentName||"—")}</b></div>
+      <div><div class="lbl">Matricule</div><b>${escapeHTML(d.matricule||"—")}</b></div>
+      <div><div class="lbl">Société</div><b>${escapeHTML(d.societe||"—")}</b></div>
+      <div><div class="lbl">Site</div><b>${escapeHTML(d.site||"—")}</b></div>
     </div>
-    <div class="mb-4"><h3 class="font-bold text-sm mb-2">Message / contenu</h3><div class="p-3 rounded bg-blue-50 text-sm whitespace-pre-wrap">${escapeHTML(d.message||"Aucun message.")}</div></div>
+    <div class="dp-detail-message">${escapeHTML(d.message||"Aucun message.")}</div>
     ${suspensionDemandStatusHTML(d)}
-    ${Object.keys(details).length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Détails du portail</h3>${Object.entries(details).filter(([,v])=>v).map(([k,v])=>`<div class="flex justify-between gap-3 py-1 border-b border-slate-100 text-sm"><span class="text-slate-500">${escapeHTML(k)}</span><b class="text-right">${escapeHTML(String(v))}</b></div>`).join("")}</div>`:""}
-    ${d.reponse?`<div class="mb-4 p-3 rounded bg-emerald-50 text-sm text-emerald-800"><b>Réponse DRH :</b><br>${escapeHTML(d.reponse)}</div>`:""}
-    ${docs.length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Documents demandés</h3>${docs.map(x=>`<div class="flex justify-between py-1 border-b text-sm"><span>${escapeHTML(x.nom||"Document")}</span>${x.recu?`<span class="pill pill-green">Reçu</span>`:`<span class="pill pill-red">En attente</span>`}</div>`).join("")}</div>`:""}
-    ${(d.pieces||[]).length?`<div class="mb-4"><h3 class="font-bold text-sm mb-2">Pièces jointes</h3><div class="flex gap-2 flex-wrap">${(d.pieces||[]).map((p,i)=>`<a class="btn btn-ghost text-xs" href="${p.data}" download="${escapeHTML(p.name||'document')}">${escapeHTML(p.source||"Employé")} · ${escapeHTML(p.name||`Pièce ${i+1}`)}</a>`).join("")}</div></div>`:""}
-    <div class="flex gap-2 flex-wrap">${suspensionDemandActionsHTML(d)}${convocationDemandActionsHTML(d)}<button class="btn btn-secondary text-sm" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter</button><button class="btn btn-ghost text-sm" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander document</button></div>
+    ${Object.keys(details).length?`<div class="dp-detail-section"><h4>Détails du portail</h4>${Object.entries(details).filter(([,v])=>v).map(([k,v])=>`<div class="flex justify-between gap-3 py-1 border-b border-slate-100 text-sm"><span class="text-slate-500">${escapeHTML(k)}</span><b class="text-right">${escapeHTML(String(v))}</b></div>`).join("")}</div>`:""}
+    ${d.reponse?`<div class="dp-detail-reply"><b>Réponse DRH</b>${escapeHTML(d.reponse)}</div>`:""}
+    ${docs.length?`<div class="dp-detail-section"><h4>Documents demandés</h4>${docs.map(x=>`<div class="flex justify-between py-1 border-b text-sm"><span>${escapeHTML(x.nom||"Document")}</span>${x.recu?`<span class="pill pill-green">Reçu</span>`:`<span class="pill pill-red">En attente</span>`}</div>`).join("")}</div>`:""}
+    ${(d.pieces||[]).length?`<div class="dp-detail-attach">${(d.pieces||[]).map((p,i)=>`<a class="dp-attach-chip" href="${p.data}" download="${escapeHTML(p.name||'document')}">📎 ${escapeHTML(p.source||"Employé")} · ${escapeHTML(p.name||`Pièce ${i+1}`)}</a>`).join("")}</div>`:""}
+    <div class="dp-detail-actions">${suspensionDemandActionsHTML(d)}${convocationDemandActionsHTML(d)}<button class="act-btn primary" onclick="openTraiterDemandePersonnel('${d.id}')">Traiter la demande</button><button class="act-btn" onclick="openDemanderDocumentPersonnel('${d.id}')">Demander un document</button></div>
   </div>`;
 }
 function demandePersonnelResponseTemplates(d){
@@ -19511,14 +19511,26 @@ function renderDemandesPersonnel(view,sub,arg){
   const alerts=all.filter(d=>demandePersonnelIsAlert(d)).length;
   const done=all.filter(d=>d.statut==="traite").length;
   const types=[...new Set(all.map(d=>demandePersonnelTypeLabel(d)).filter(Boolean))];
-  const employeeRow=g=>{const active=g.key===selectedEmployeeKey,alert=(g.items||[]).some(d=>demandePersonnelIsAlert(d)),pending=g.nouveau+g.enCours;return`<button type="button" class="dp-clean-employee ${active?"is-active":""}" onclick="selectDemandePersonnelEmployee('${jsString(g.key)}')"><span class="dp-clean-avatar">${escapeHTML((g.name||"?").trim().slice(0,1).toUpperCase())}</span><span class="dp-clean-employee-copy"><strong>${escapeHTML(g.name||"—")}</strong><small>${escapeHTML(g.matricule||"Sans matricule")} · ${escapeHTML(g.societe||"")}</small></span><span class="dp-clean-employee-meta"><b>${g.total}</b>${pending?`<small>${pending} ouverte(s)</small>`:""}${alert?`<i>Alerte</i>`:""}</span></button>`};
-  const timelineItem=d=>{const active=String(d.id)===String(selectedId),alert=demandePersonnelIsAlert(d);return`<button type="button" class="dp-clean-timeline-item ${active?"is-active":""}" onclick="selectDemandePersonnel('${jsString(d.id)}')"><span>${formatDate(d.createdAt||d.date)}</span><strong>${escapeHTML(d.objet||demandePersonnelTypeLabel(d)||"Demande")}</strong><small>${demandePersonnelStatusLabel(d.statut)}${alert?" · Alerte":""}</small></button>`};
-  view.innerHTML=`<div class="dp-clean-page"><div class="dp-clean-header">
-    <div><h1 class="text-2xl font-bold sentence-case-title">Réception demandes & réclamations</h1><p class="text-sm text-slate-500">${list.length}${list.length!==all.length?` sur ${all.length}`:""} demande(s) affichée(s) · ${employeeGroups.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" toutes sociétés"}.</p></div>
-    <a class="btn portal-open-btn text-sm" href="#/portail">Ouvrir portail</a>
-  </div>
-  <section class="dp-clean-card dp-clean-controls"><div class="dp-clean-stats"><button onclick="setDemandesPersonnelFilter('statut','')"><strong>${all.length}</strong><span>Total</span></button><button onclick="setDemandesPersonnelFilter('statut','nouveau')"><strong>${all.filter(d=>(d.statut||"nouveau")==="nouveau").length}</strong><span>Nouvelles</span></button><a href="#/demandes_personnel/alertes"><strong>${alerts}</strong><span>Alertes</span></a><button onclick="setDemandesPersonnelFilter('statut','traite')"><strong>${done}</strong><span>Traitées</span></button></div><div class="dp-clean-filters"><input class="input" placeholder="Rechercher une demande..." value="${escapeHTML(q)}" oninput="setDemandesPersonnelSearch(this.value)"/><select class="select" onchange="setDemandesPersonnelFilter('statut',this.value)"><option value="">Tous statuts</option>${["nouveau","en_cours","traite","rejete"].map(s=>`<option value="${s}" ${statut===s?"selected":""}>${demandePersonnelStatusLabel(s)}</option>`).join("")}</select><select class="select" onchange="setDemandesPersonnelFilter('type',this.value)"><option value="">Tous types</option>${types.map(t=>`<option ${type===t?"selected":""}>${escapeHTML(t)}</option>`).join("")}</select><button class="btn btn-secondary" onclick="sessionStorage.removeItem('dp_q');sessionStorage.removeItem('dp_statut');sessionStorage.removeItem('dp_type');renderView()">Réinitialiser</button></div></section>
-  <div class="dp-clean-workspace"><section class="dp-clean-card dp-clean-employees"><header><strong>Employés</strong><span>${employeeGroups.length}</span></header><div class="dp-clean-employee-list">${employeeGroups.map(employeeRow).join("")||`<div class="dp-clean-empty">Aucun employé.</div>`}</div></section><section class="dp-clean-card dp-clean-requests">${selectedGroup?`<header class="dp-clean-request-header"><div><strong>${escapeHTML(selectedGroup.name||"—")}</strong><span>${escapeHTML(selectedGroup.matricule||"Sans matricule")} · ${selectedGroup.total} demande(s)</span></div><button class="btn btn-secondary text-xs" onclick="openPortailEmployeHistory('${jsString(selectedGroup.key)}')">Historique complet</button></header><div class="dp-clean-timeline">${selectedItems.map(timelineItem).join("")}</div><div class="dp-clean-detail">${selectedDemand?demandePersonnelDetailHTML(selectedDemand):`<div class="dp-clean-empty">Sélectionnez une demande.</div>`}</div>`:`<div class="dp-clean-empty">Sélectionnez un employé.</div>`}</section></div></div>`;
+  const employeeRow=g=>{const active=g.key===selectedEmployeeKey,alert=(g.items||[]).some(d=>demandePersonnelIsAlert(d)),pending=g.nouveau+g.enCours;return`<button type="button" class="dp-emp-row ${active?"is-active":""}" onclick="selectDemandePersonnelEmployee('${jsString(g.key)}')"><span class="dp-emp-avatar">${escapeHTML((g.name||"?").trim().slice(0,1).toUpperCase())}</span><span class="dp-emp-copy"><strong>${escapeHTML(g.name||"—")}</strong><small>${escapeHTML(g.matricule||"Sans matricule")} · ${escapeHTML(g.societe||"")}</small></span><span class="dp-emp-meta"><b>${g.total}</b>${pending?`<small>${pending} ouverte(s)</small>`:""}${alert?`<i>Alerte</i>`:""}</span></button>`};
+  const timelineItem=d=>{const active=String(d.id)===String(selectedId),alert=demandePersonnelIsAlert(d);return`<button type="button" class="dp-tl-item ${active?"is-active":""}" onclick="selectDemandePersonnel('${jsString(d.id)}')"><div class="dp-tl-date">${formatDate(d.createdAt||d.date)}</div><span class="dp-tl-title">${escapeHTML(d.objet||demandePersonnelTypeLabel(d)||"Demande")}</span>${demandePersonnelStatusPill(d.statut)}${alert?` <span class="pill pill-red">Alerte</span>`:""}</button>`};
+  const kpi=(label,n,icon,bg,color,onclick)=>`<div class="ops-dash-kpi" style="cursor:pointer" onclick="${onclick}"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${label}</div><div class="ops-dash-val">${n}</div></div>`;
+  view.innerHTML=`<div class="dp-clean-page">
+    <div class="ops-dash-hero"><div class="ops-dash-hero-row">
+      <div><div class="ops-dash-eyebrow">Direction des ressources humaines</div><h1>Réception demandes &amp; réclamations</h1><div class="ops-dash-hero-sub"><span>${list.length}${list.length!==all.length?` sur ${all.length}`:""} demande(s) affichée(s) · ${employeeGroups.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</span></div></div>
+      <a class="ops-dash-refresh" style="background:#fff;color:#043970;text-decoration:none;display:inline-flex;align-items:center" href="#/portail">🔗 Ouvrir portail</a>
+    </div></div>
+    <div class="ops-dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+      ${kpi("Total",all.length,"📥","#dbeafe","#1e40af","setDemandesPersonnelFilter('statut','')")}
+      ${kpi("Nouvelles",all.filter(d=>(d.statut||"nouveau")==="nouveau").length,"✦","#dbeafe","#1e40af","setDemandesPersonnelFilter('statut','nouveau')")}
+      ${kpi("Alertes",alerts,"⚠️","#fef3c7","#92400e","navigate('demandes_personnel/alertes')")}
+      ${kpi("Traitées",done,"✓","#dcfce7","#166534","setDemandesPersonnelFilter('statut','traite')")}
+    </div>
+    <div class="dp-filters"><input class="input" placeholder="Rechercher une demande..." value="${escapeHTML(q)}" oninput="setDemandesPersonnelSearch(this.value)"/><select class="select" onchange="setDemandesPersonnelFilter('statut',this.value)"><option value="">Tous statuts</option>${["nouveau","en_cours","traite","rejete"].map(s=>`<option value="${s}" ${statut===s?"selected":""}>${demandePersonnelStatusLabel(s)}</option>`).join("")}</select><select class="select" onchange="setDemandesPersonnelFilter('type',this.value)"><option value="">Tous types</option>${types.map(t=>`<option ${type===t?"selected":""}>${escapeHTML(t)}</option>`).join("")}</select><button class="btn btn-secondary" onclick="sessionStorage.removeItem('dp_q');sessionStorage.removeItem('dp_statut');sessionStorage.removeItem('dp_type');renderView()">Réinitialiser</button></div>
+    <div class="dp-workspace">
+      <section class="dp-panel"><div class="dp-panel-head"><strong>Employés</strong><span class="cnt">${employeeGroups.length}</span></div><div class="dp-emp-list">${employeeGroups.map(employeeRow).join("")||`<div class="dp-empty">Aucun employé.</div>`}</div></section>
+      <section class="dp-panel"><div class="dp-req-body">${selectedGroup?`<div class="dp-req-head"><div><strong>${escapeHTML(selectedGroup.name||"—")}</strong><span>${escapeHTML(selectedGroup.matricule||"Sans matricule")} · ${selectedGroup.total} demande(s)</span></div><button class="btn btn-secondary text-xs" onclick="openPortailEmployeHistory('${jsString(selectedGroup.key)}')">Historique complet</button></div><div class="dp-timeline">${selectedItems.map(timelineItem).join("")}</div>${selectedDemand?demandePersonnelDetailHTML(selectedDemand):`<div class="dp-empty">Sélectionnez une demande.</div>`}`:`<div class="dp-empty">Sélectionnez un employé.</div>`}</div></section>
+    </div>
+  </div>`;
 }
 function openTraiterDemandePersonnel(id){
   const d=(db.demandesPersonnel||[]).find(x=>x.id===id);if(!d)return;
@@ -19640,36 +19652,24 @@ function openTraiterStructureDemand(id){
 async function saveTraiterStructureDemand(id,form){const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;d.statut=form.statut.value;d.reponse=form.reponse.value||"";d.updatedAt=new Date().toISOString();d.traitePar=session?.username||"";d.historique=d.historique||[];d.historique.push({date:new Date().toISOString(),user:session?.username||"",action:"Réponse structure",note:d.statut});if(!(await saveDBAndWaitToast("Demande structure non confirmée")))return;closeModal();toast("Demande structure mise à jour","success");renderSidebar();renderView()}
 
 /* ---- CONGES ---- */
-function renderConges(view){
-  const filt=sessionStorage.getItem("congesFiltre")||"instance";
-  const soc=effectifSocieteFilter&&effectifSocieteFilter();
-  const agentsScope=(db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc));
-  const agentIds=new Set(agentsScope.map(a=>a.id));
-  const all=(db.conges||[]).filter(c=>c.type!=="Maladie"&&(!soc||agentIds.has(c.agentId)));
-  const now=today();
-  const tabs=[
-    ["instance","Demandes en instance de validation",all.filter(c=>c.statut==="en_attente").length],
-    ["encours","Congés en cours",all.filter(c=>c.statut==="approuve"&&c.du<=now&&(!c.au||c.au>=now)).length],
-    ["programmes","Demandes programmées",all.filter(c=>c.statut==="approuve"&&c.du>=now).length],
-    ["refuses","Demandes refusées",all.filter(c=>c.statut==="refuse").length],
-    ["nouvelles","Nouvelles demandes",all.filter(c=>(c.createdAt||c.du||"")>=addDays(now,-7)).length]
-  ];
-  let list=all.slice();
-  if(filt==="instance")list=list.filter(c=>c.statut==="en_attente");
-  else if(filt==="encours")list=list.filter(c=>c.statut==="approuve"&&c.du<=now&&(!c.au||c.au>=now));
-  else if(filt==="programmes")list=list.filter(c=>c.statut==="approuve"&&c.du>=now);
-  else if(filt==="refuses")list=list.filter(c=>c.statut==="refuse");
-  else if(filt==="nouvelles")list=list.filter(c=>(c.createdAt||c.du||"")>=addDays(now,-7));
-  list.sort((a,b)=>String(b.createdAt||b.du||"").localeCompare(String(a.createdAt||a.du||"")));
-  view.innerHTML=`<div class="flex justify-between mb-4"><div><h1 class="text-2xl font-bold">Situation des congés</h1><p class="text-sm text-slate-500">Suivi des demandes selon leur état${soc?` · <span class="font-semibold text-amber-700">${escapeHTML(soc)}</span>`:""}.</p></div><button class="btn conge-request-btn" onclick="openCongeModal()">Nouvelle demande</button></div>
-  <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
-    ${tabs.map(([k,l,n])=>`<button type="button" onclick="setCongesFiltre('${k}')" class="card p-4 text-left kpi-clickable" style="border:2px solid ${filt===k?"#043970":"#e2e8f0"};background:${filt===k?"#043970":"#fff"}"><div class="text-xs uppercase font-bold text-slate-500">${l}</div><div class="text-3xl font-black mt-1" style="color:${filt===k?"#043970":"#0f172a"}">${n}</div></button>`).join("")}
-  </div>
-  <div class="card overflow-hidden"><table><thead><tr><th>Agent</th><th>Type</th><th>Du</th><th>Au</th><th>Jours</th><th>Motif</th><th>Statut</th><th></th></tr></thead><tbody>${list.length===0?`<tr><td colspan="8" class="text-center text-slate-500 p-6">Aucune demande dans cette rubrique.</td></tr>`:list.map(c=>{const a=db.agents.find(x=>x.id===c.agentId);const j=c.du&&c.au?daysBetween(c.du,c.au)+1:"—";return`<tr data-searchable><td>${safe(a?a.nom+" "+a.prenom:"")}</td><td><span class="pill ${c.type==="Maladie"?"pill-red":"pill-blue"}">${c.type}</span></td><td class="text-xs">${formatDate(c.du)}</td><td class="text-xs">${formatDate(c.au)}</td><td>${j}</td><td class="text-xs">${escapeHTML((c.motif||"").slice(0,40))}</td><td><span class="pill ${c.statut==="approuve"?"pill-green":c.statut==="refuse"?"pill-red":"pill-amber"}">${c.statut}</span></td><td class="flex gap-1">${c.statut==="en_attente"?`<button class="btn btn-success text-xs" onclick="approuverConge('${c.id}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${c.id}')">Refuser</button>`:""}</td></tr>`}).join("")}</tbody></table></div>`;
+function openCongeModal(prefillAgentId){
+  const isDrh=session?.transverse==="drh";
+  const agents=congesModuleScopeAgents(isDrh).slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||"")));
+  openModal(`<h3 class="font-bold text-lg mb-1">Nouvelle demande de congé</h3><p class="text-sm text-slate-500 mb-4">Cette demande rejoint la file de validation — elle devra être validée avant de devenir effective.</p><form onsubmit="event.preventDefault();saveConge()"><div class="grid grid-2"><div class="col-span-2"><label class="label">Agent concerné</label><select class="select" name="agentId" required><option value="">—</option>${agents.map(a=>`<option value="${escapeHTML(String(a.id))}" ${prefillAgentId&&String(a.id)===String(prefillAgentId)?"selected":""}>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())} · ${escapeHTML(a.societe||"")}</option>`).join("")}</select></div><div><label class="label">Type</label><select class="select" name="type">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select><div class="text-xs text-slate-500 mt-1">La maladie est traitée comme une absence, pas comme un congé.</div></div><div></div><div><label class="label">Du</label><input class="input" type="date" name="du" required/></div><div><label class="label">Au</label><input class="input" type="date" name="au" required/></div><div class="col-span-2"><label class="label">Commentaire (facultatif)</label><textarea class="textarea" rows="2" name="motif" placeholder="Contexte pour le validateur..."></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Soumettre la demande</button></div></form>`)
 }
-function setCongesFiltre(v){sessionStorage.setItem("congesFiltre",v);renderView()}
-function openCongeModal(){const soc=effectifSocieteFilter&&effectifSocieteFilter();const agents=(db.agents||[]).filter(a=>employeeIsActive(a)&&(!soc||a.societe===soc));openModal(`<h3 class="font-bold text-lg mb-4">Demande de congé</h3><form onsubmit="event.preventDefault();saveConge()"><div class="grid grid-2"><div class="col-span-2"><label class="label">Agent</label><select class="select" name="agentId" ><option value="">—</option>${agents.map(a=>`<option value="${a.id}">${escapeHTML(a.nom+" "+a.prenom)} · ${escapeHTML(a.societe||"")}</option>`).join("")}</select></div><div><label class="label">Type</label><select class="select" name="type">${["Annuel","Sans solde","Exceptionnel","Maternité","Paternité"].map(t=>`<option>${t}</option>`).join("")}</select><div class="text-xs text-slate-500 mt-1">La maladie est traitée comme une absence, pas comme un congé.</div></div><div><label class="label">Statut</label><select class="select" name="statut"><option>en_attente</option><option>approuve</option></select></div><div><label class="label">Du</label><input class="input" type="date" name="du" /></div><div><label class="label">Au</label><input class="input" type="date" name="au" /></div><div class="col-span-2"><label class="label">Motif</label><textarea class="textarea" rows="2" name="motif"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`)}
-async function saveConge(){const fd=new FormData(document.querySelector(".modal-bg form"));const agentId=fd.get("agentId");const soc=effectifSocieteFilter&&effectifSocieteFilter();const a=(db.agents||[]).find(x=>x.id===agentId);if(!a){toast("Choisissez un agent","error");return}if(employeeIsFormer(a)){toast("Congé impossible — cet employé est sortant et archivé","error");return}if(soc&&a.societe!==soc){toast("Agent hors société active","error");return}db.conges.push({id:uid("cg"),agentId,type:fd.get("type"),du:fd.get("du"),au:fd.get("au"),motif:fd.get("motif"),statut:fd.get("statut"),createdAt:today()});if(!(await saveDBAndWaitToast("Congé non confirmé")))return;closeModal();toast("Enregistré","success");renderView()}
+async function saveConge(){
+  const fd=new FormData(document.querySelector(".modal-bg form"));
+  const agentId=fd.get("agentId");
+  const a=(db.agents||[]).find(x=>String(x.id)===String(agentId));
+  if(!a){toast("Choisissez un agent","error");return}
+  if(employeeIsFormer(a)){toast("Congé impossible — cet employé est sortant et archivé","error");return}
+  const du=fd.get("du"),au=fd.get("au");
+  if(!du||!au){toast("Renseignez les dates de début et de fin","error");return}
+  if(au<du){toast("La date de fin doit être après la date de début","error");return}
+  db.conges.push({id:uid("cg"),agentId,type:fd.get("type"),du,au,motif:fd.get("motif"),statut:"en_attente",origine:"demande",createdAt:today()});
+  if(!(await saveDBAndWaitToast("Congé non confirmé")))return;
+  closeModal();toast("Demande soumise","success");renderView()
+}
 async function approuverConge(id){const c=db.conges.find(x=>x.id===id);c.statut="approuve";if(!(await saveDBAndWaitToast("Validation congé non confirmée")))return;renderView()}
 async function refuserConge(id){const c=db.conges.find(x=>x.id===id);c.statut="refuse";if(!(await saveDBAndWaitToast("Refus congé non confirmé")))return;renderView()}
 
@@ -30772,7 +30772,7 @@ function renderDRHPeriodeEssai(view){
 function renderDRH(view,sub,arg){
   sgdiEnsureEmployeesForDisplay({society:drhActiveSocieteFilter(),force:true});
   if(sub==="dashboard")return renderDRHDashboard(view);
-  if(sub==="conges")return renderDRHCongesPersonnel(view);
+  if(sub==="conges")return renderCongesModule(view,true);
   if(sub==="social")return renderDRHSocial(view,arg);
   if(sub==="mise_en_demeure")return renderDRHMiseEnDemeure(view);
   if(sub==="essai")return renderDRHPeriodeEssai(view);
@@ -30845,9 +30845,24 @@ function drhCongesDashboardCalendar(conges){
   const monthName=new Intl.DateTimeFormat("fr-FR",{month:"long",year:"numeric",timeZone:"UTC"}).format(first);
   return `<div class="drh-leave-calendar"><div class="drh-leave-calendar-title"><strong>${monthName}</strong><span><i></i> Congé planifié</span></div><div class="drh-leave-week"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div><div class="drh-leave-days">${cells.join("")}</div></div>`;
 }
-function renderDRHCongesPersonnel(view){
-  const soc=drhActiveSocieteFilter();
-  const agents=drhAgentsList().slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
+function congesModuleCanAttribuer(isDrh){return !!isDrh||(typeof isAdminSystemSession==="function"&&isAdminSystemSession())}
+function congesModuleScopeAgents(isDrh){
+  if(isDrh)return drhAgentsList().filter(a=>!employeeIsFormer(a));
+  const soc=effectifSocieteFilter&&effectifSocieteFilter();
+  return (db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)&&agentInSupervisorScope(a));
+}
+function congeAvatarInitials(name){
+  const parts=String(name||"").trim().split(/\s+/).filter(Boolean);
+  return (((parts[0]||"")[0]||"")+((parts[1]||"")[0]||"")).toUpperCase();
+}
+function congeOrigineBadgeHTML(c){
+  const isAttrib=c.origine==="attribution";
+  return `<span class="cg-origin-pill ${isAttrib?"drh":"self"}">${isAttrib?"Attribution DRH":"Auto-demande"}</span>`;
+}
+function renderCongesModule(view,isDrh){
+  const soc=isDrh?drhActiveSocieteFilter():(effectifSocieteFilter&&effectifSocieteFilter());
+  const canAttribuer=congesModuleCanAttribuer(isDrh);
+  const agents=congesModuleScopeAgents(isDrh).slice().sort((a,b)=>String(a.nom||"").localeCompare(String(b.nom||""))||String(a.prenom||"").localeCompare(String(b.prenom||"")));
   drhCongesSoldeEleveOnly=false;
   let soldeEleveCount=0;
   const balances=[];
@@ -30864,8 +30879,9 @@ function renderDRHCongesPersonnel(view){
     const q=[name,code,recruited,contractEnd].join(" ").toLowerCase();
     const suspended=a.statut==="suspendu";
     const hasTaken=pris>0;
+    const rowAction=canAttribuer?`openCongeAttributionModal('${escapeHTML(String(a.id))}')`:`openCongeModal('${escapeHTML(String(a.id))}')`;
     balances.push({a,name,code,recruited,contractEnd,entitlement,pris,solde,soldeEleve});
-    return `<tr data-searchable data-q="${escapeHTML(q)}" data-solde-eleve="${soldeEleve?"1":"0"}" class="drh-conge-row${hasTaken?" drh-conge-row-taken":""}" onclick="if(!event.target.closest('a,button'))openCongeAttributionModal('${escapeHTML(String(a.id))}')"><td class="font-semibold"><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a>${suspended?` <span class="pill pill-red">Suspendu</span>`:""}</td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td><td class="font-black text-amber-700">${pris.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jours</td><td class="font-black ${soldeEleve?"text-amber-700":""}">${solde===null?"—":solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}${soldeEleve?" ⚠":""}</td><td><button type="button" class="btn btn-primary text-xs" onclick="event.stopPropagation();openCongeAttributionModal('${escapeHTML(String(a.id))}')">Attribuer</button></td></tr>`;
+    return `<tr data-searchable data-q="${escapeHTML(q)}" data-solde-eleve="${soldeEleve?"1":"0"}" class="drh-conge-row${hasTaken?" drh-conge-row-taken":""}" onclick="if(!event.target.closest('a,button'))${rowAction}"><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(name)}</span><a href="#/agents/${employeeRouteId(a)}" class="hover:underline">${escapeHTML(name||"—")}</a>${suspended?` <span class="pill pill-red">Suspendu</span>`:""}</div></td><td class="font-mono font-bold text-amber-700">${escapeHTML(code||"—")}</td><td class="text-xs">${recruited?formatDate(recruited):"—"}</td><td class="text-xs">${contractEnd?formatDate(contractEnd):"—"}</td><td class="font-black" style="color:#043970">${entitlement===null?"—":entitlement.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}</td><td class="font-black text-amber-700">${pris.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})} jours</td><td class="font-black ${soldeEleve?"text-amber-700":""}">${solde===null?"—":solde.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" jours"}${soldeEleve?" ⚠":""}</td><td><button type="button" class="btn ${canAttribuer?"btn-primary":"btn-ghost"} text-xs" onclick="event.stopPropagation();${rowAction}">${canAttribuer?"Attribuer":"Demander"}</button></td></tr>`;
   }).join("");
   const tab=drhCongesDashboardTab();
   const scopedIds=new Set(agents.map(a=>String(a.id)));
@@ -30876,44 +30892,47 @@ function renderDRHCongesPersonnel(view){
   const latest=conges.slice().sort((a,b)=>String(b.createdAt||b.du||"").localeCompare(String(a.createdAt||a.du||"")));
   const history=latest.filter(c=>["approuve","refuse"].includes(c.statut));
   const tabButton=(key,label,count)=>`<button type="button" class="drh-leave-tab${tab===key?" is-active":""}" onclick="setDrhCongesDashboardTab('${key}')">${label}${count?` <b>${count}</b>`:""}</button>`;
-  const requestRows=pending.map(c=>{const a=agents.find(x=>String(x.id)===String(c.agentId));return`<tr><td class="font-semibold">${escapeHTML(drhCongeAgentName(c))}</td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeDureeJours(c)} j</td><td class="flex gap-1"><button class="btn btn-success text-xs" onclick="approuverConge('${c.id}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${c.id}')">Refuser</button>${a?`<a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir</a>`:""}</td></tr>`}).join("");
-  const historyRows=history.map(c=>`<tr><td class="font-semibold">${escapeHTML(drhCongeAgentName(c))}</td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td>${drhCongeDureeJours(c)} j</td></tr>`).join("");
+  const requestRows=pending.map(c=>{const a=agents.find(x=>String(x.id)===String(c.agentId));return`<tr><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(drhCongeAgentName(c))}</span>${escapeHTML(drhCongeAgentName(c))}</div></td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeDureeJours(c)} j</td><td>${congeOrigineBadgeHTML(c)}</td><td class="flex gap-1"><button class="btn btn-success text-xs" onclick="approuverConge('${c.id}')">Valider</button><button class="btn btn-danger text-xs" onclick="refuserConge('${c.id}')">Refuser</button>${a?`<a class="btn btn-ghost text-xs" href="#/agents/${employeeRouteId(a)}">Ouvrir</a>`:""}</td></tr>`}).join("");
+  const historyRows=history.map(c=>`<tr><td class="font-semibold"><div class="cg-person"><span class="cg-avatar">${congeAvatarInitials(drhCongeAgentName(c))}</span>${escapeHTML(drhCongeAgentName(c))}</div></td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td>${drhCongeStatutBadgeHTML(c.statut)}</td><td>${congeOrigineBadgeHTML(c)}</td><td>${drhCongeDureeJours(c)} j</td></tr>`).join("");
   const weekStart=new Date();weekStart.setHours(0,0,0,0);weekStart.setDate(weekStart.getDate()-((weekStart.getDay()+6)%7));
   const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(d.getDate()+i);const iso=d.toISOString().slice(0,10);const dayLeaves=conges.filter(c=>c.statut==="approuve"&&c.du<=iso&&(!c.au||c.au>=iso));return{d,iso,items:dayLeaves}});
   const consumed=balances.reduce((sum,x)=>sum+x.pris,0),allocated=balances.reduce((sum,x)=>sum+(x.entitlement||0),0),planned=conges.filter(c=>c.statut==="approuve"&&c.du>today()).reduce((sum,c)=>sum+drhCongeDureeJours(c),0);
   const pct=(n,d)=>d?Math.min(100,Math.round(n/d*100)):0;
   const health=Math.max(0,100-Math.round((pending.length*3+soldeEleveCount)*100/Math.max(agents.length*2,1)));
-  const queue=[...pending.slice(0,3).map(c=>({kind:"Demande",name:drhCongeAgentName(c),meta:`${formatDate(c.du)} — ${formatDate(c.au)}`,action:`setDrhCongesDashboardTab('requests')`})),...priority.slice(0,3).map(x=>({kind:"Solde élevé",name:x.name,meta:`${Number(x.solde||0).toLocaleString("fr-FR",{maximumFractionDigits:2})} jours disponibles`,action:`openCongeAttributionModal('${escapeHTML(String(x.a.id))}')`}))].slice(0,5);
+  const queue=[...pending.slice(0,3).map(c=>({kind:"Demande",name:drhCongeAgentName(c),meta:`${formatDate(c.du)} — ${formatDate(c.au)}`,action:`setDrhCongesDashboardTab('requests')`})),...priority.slice(0,3).map(x=>({kind:"Solde élevé",name:x.name,meta:`${Number(x.solde||0).toLocaleString("fr-FR",{maximumFractionDigits:2})} jours disponibles`,action:canAttribuer?`openCongeAttributionModal('${escapeHTML(String(x.a.id))}')`:`openCongeModal('${escapeHTML(String(x.a.id))}')`}))].slice(0,5);
   const dashboard=`<section class="leave-modern-grid"><article class="leave-modern-card leave-week-card"><header><div><h3>Planning de la semaine</h3><p>Présences et absences approuvées</p></div><button onclick="setDrhCongesDashboardTab('planning')">Ouvrir le planning →</button></header><div class="leave-week-strip">${weekDays.map(x=>`<button class="${x.iso===today()?"today":""}" onclick="setDrhCongesDashboardTab('planning')"><span>${x.d.toLocaleDateString("fr-FR",{weekday:"short"})}</span><b>${x.d.getDate()}</b><em>${x.items.length} absent${x.items.length>1?"s":""}</em></button>`).join("")}</div></article>
     <article class="leave-modern-card leave-actions"><header><div><h3>À faire maintenant</h3><p>Priorités calculées automatiquement</p></div></header>${queue.length?queue.slice(0,3).map((x,i)=>`<button onclick="${x.action}"><i>${i+1}</i><span><b>${escapeHTML(x.kind)} · ${escapeHTML(x.name)}</b><small>${escapeHTML(x.meta)}</small></span><em>Ouvrir</em></button>`).join(""):`<div class="drh-leave-empty">Aucune action urgente.</div>`}</article></section>
     <section class="leave-modern-grid lower"><article class="leave-modern-card"><header><div><h3>File de traitement intelligente</h3><p>Demandes et soldes classés par priorité</p></div><button onclick="setDrhCongesDashboardTab('requests')">Tout afficher →</button></header><div class="leave-queue">${queue.length?queue.map(x=>`<button onclick="${x.action}"><span class="leave-dot"></span><strong>${escapeHTML(x.name)}</strong><small>${escapeHTML(x.kind)} · ${escapeHTML(x.meta)}</small><em>›</em></button>`).join(""):`<div class="drh-leave-empty">La file est à jour.</div>`}</div></article>
     <article class="leave-modern-card"><header><div><h3>Allocation annuelle</h3><p>Consommation réelle des droits acquis</p></div></header><div class="leave-bars"><label><span>Droits acquis <b>${allocated.toLocaleString("fr-FR",{maximumFractionDigits:1})} j</b></span><i><em style="width:100%"></em></i></label><label><span>Congés consommés <b>${consumed.toLocaleString("fr-FR",{maximumFractionDigits:1})} j</b></span><i><em class="blue" style="width:${pct(consumed,allocated)}%"></em></i></label><label><span>Congés planifiés <b>${planned.toLocaleString("fr-FR",{maximumFractionDigits:1})} j</b></span><i><em class="amber" style="width:${pct(planned,allocated)}%"></em></i></label></div></article></section>`;
   const balancesView=`${soldeEleveCount?`<button type="button" class="drh-leave-balance-alert" onclick="toggleDrhCongesSoldeEleve()"><b>${soldeEleveCount} employé(s) avec un solde élevé non pris</b><span>Congés à planifier avant une nouvelle accumulation.</span></button>`:""}<div class="card p-4 mb-4"><input id="drh-conges-search" class="input" type="search" placeholder="Rechercher par nom, prénom ou code..." oninput="filterDrhCongesPersonnel(this.value)"/></div><div id="drh-conges-personnel" class="card overflow-x-auto"><table><thead><tr><th>NOM PRÉNOM</th><th>CODE</th><th>DATE DE RECRUTEMENT</th><th>DATE DE FIN DE CONTRAT</th><th>DROIT CONGÉ</th><th>CONGÉ CONSOMMÉ</th><th>SOLDE RESTANT</th><th></th></tr></thead><tbody>${rows||`<tr><td colspan="8" class="text-center text-slate-500 p-8">Aucun personnel enregistré.</td></tr>`}</tbody></table></div>`;
-  const tableView=(title,subtitle,thead,body,empty,extra)=>`<section class="card drh-leave-panel"><header><div><h3>${title}</h3><p>${subtitle}</p></div>${extra||""}</header><div class="overflow-x-auto"><table><thead>${thead}</thead><tbody>${body||`<tr><td colspan="5" class="text-center text-slate-500 p-8">${empty}</td></tr>`}</tbody></table></div></section>`;
+  const tableView=(title,subtitle,thead,body,empty,extra)=>`<section class="card drh-leave-panel"><header><div><h3>${title}</h3><p>${subtitle}</p></div>${extra||""}</header><div class="overflow-x-auto"><table><thead>${thead}</thead><tbody>${body||`<tr><td colspan="6" class="text-center text-slate-500 p-8">${empty}</td></tr>`}</tbody></table></div></section>`;
   let content=dashboard;
   if(tab==="balances")content=balancesView;
-  else if(tab==="planning")content=`<section class="card drh-leave-panel drh-leave-planning-full"><header><div><h3>Planning mensuel</h3><p>Visualisation des congés approuvés et de la couverture du personnel</p></div><button class="btn btn-primary" onclick="openCongeAttributionPicker()">+ Planifier</button></header>${drhCongesDashboardCalendar(conges)}<div class="drh-leave-planning-list">${conges.filter(c=>c.statut==="approuve"&&String(c.du||"").slice(0,7)===today().slice(0,7)).sort((a,b)=>String(a.du).localeCompare(String(b.du))).map(c=>`<div><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} — ${formatDate(c.au)}</span><b>${drhCongeDureeJours(c)} j</b></div>`).join("")||`<div class="drh-leave-empty">Aucun congé approuvé ce mois-ci.</div>`}</div></section>`;
-  else if(tab==="requests")content=tableView("Demandes à traiter","Validation, refus et contrôle du solde","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>DURÉE</th><th>ACTIONS</th></tr>",requestRows,"Aucune demande en attente.",`<button type="button" class="btn btn-primary text-xs" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button>`);
+  else if(tab==="planning")content=`<section class="card drh-leave-panel drh-leave-planning-full"><header><div><h3>Planning mensuel</h3><p>Visualisation des congés approuvés et de la couverture du personnel</p></div>${canAttribuer?`<button class="btn btn-primary" onclick="openCongeAttributionPicker()">+ Planifier</button>`:`<button class="btn btn-primary" onclick="openCongeModal()">+ Nouvelle demande</button>`}</header>${drhCongesDashboardCalendar(conges)}<div class="drh-leave-planning-list">${conges.filter(c=>c.statut==="approuve"&&String(c.du||"").slice(0,7)===today().slice(0,7)).sort((a,b)=>String(a.du).localeCompare(String(b.du))).map(c=>`<div><strong>${escapeHTML(drhCongeAgentName(c))}</strong><span>${formatDate(c.du)} — ${formatDate(c.au)}</span><b>${drhCongeDureeJours(c)} j</b></div>`).join("")||`<div class="drh-leave-empty">Aucun congé approuvé ce mois-ci.</div>`}</div></section>`;
+  else if(tab==="requests")content=tableView("Demandes à traiter","Validation, refus et contrôle du solde — auto-demandes et attributions réunies","<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>DURÉE</th><th>ORIGINE</th><th>ACTIONS</th></tr>",requestRows,"Aucune demande en attente.",canAttribuer?`<button type="button" class="btn btn-primary text-xs" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button>`:`<button type="button" class="btn btn-primary text-xs" onclick="openCongeModal()">+ Nouvelle demande</button>`);
   else if(tab==="documents"){
     const docFiltre=drhCongesDocFiltre();
     const seg=(key,label)=>`<button type="button" class="${docFiltre===key?"active":""}" onclick="setDrhCongesDocFiltre('${key}')">${label}</button>`;
     const titleRows=conges.filter(c=>c.statut==="approuve").map(c=>`<tr><td class="font-semibold">${escapeHTML(drhCongeAgentName(c))}</td><td>${escapeHTML(c.type||"Congé")}</td><td>${formatDate(c.du)} — ${formatDate(c.au)}</td><td class="font-mono">${escapeHTML(congeDocumentRef(c))}</td><td><button class="btn btn-ghost text-xs" onclick="printCongeOrder('${escapeHTML(String(c.id))}')">🖨 Ouvrir / imprimer</button></td></tr>`).join("");
-    const thead=docFiltre==="titles"?"<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>RÉFÉRENCE</th><th>DOCUMENT</th></tr>":"<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>STATUT</th><th>DURÉE</th></tr>";
+    const thead=docFiltre==="titles"?"<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>RÉFÉRENCE</th><th>DOCUMENT</th></tr>":"<tr><th>EMPLOYÉ</th><th>TYPE</th><th>PÉRIODE</th><th>STATUT</th><th>ORIGINE</th><th>DURÉE</th></tr>";
     const body=docFiltre==="titles"?titleRows:historyRows;
     const empty=docFiltre==="titles"?"Aucun titre de congé validé.":"Aucun historique disponible.";
     content=tableView("Documents",docFiltre==="titles"?"Titres de congé validés, imprimables et archivés dans le dossier salarié":"Décisions enregistrées dans le dossier du personnel",thead,body,empty,`<div class="ops-dash-seg">${seg("titles","À imprimer")}${seg("history","Historique complet")}</div>`);
   }
+  const heroLabel=isDrh?"Direction des ressources humaines":"Pilotage opérationnel";
+  const heroActions=`<div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${canAttribuer?`<button type="button" class="ops-dash-refresh" onclick="exportCongesRecapCSV()">⇩ Exporter</button>`:""}
+        <button type="button" class="ops-dash-refresh" onclick="setDrhCongesDashboardTab('planning')">▦ Planning</button>
+        ${canAttribuer?`<button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button>`:""}
+        <button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="openCongeModal()">+ Nouvelle demande</button>
+      </div>`;
   view.innerHTML=`<div class="drh-leave-page is-dashboard">
     <div class="ops-dash-hero"><div class="ops-dash-hero-row">
-      <div><div class="ops-dash-eyebrow">Centre de pilotage</div><h1>Congés &amp; planification</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(drhSocieteLabel(soc)):"Toutes sociétés"} · ${pending.length} demande(s) en attente · ${enCours.length} en congé aujourd'hui</span></div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" class="ops-dash-refresh" onclick="exportCongesRecapCSV()">⇩ Exporter</button>
-        <button type="button" class="ops-dash-refresh" onclick="setDrhCongesDashboardTab('planning')">▦ Planning</button>
-        <button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="openCongeAttributionPicker()">+ Attribuer un congé</button>
-      </div>
+      <div><div class="ops-dash-eyebrow">${heroLabel}</div><h1>Congés &amp; planification</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(isDrh?drhSocieteLabel(soc):soc):"Toutes sociétés"} · ${pending.length} demande(s) en attente · ${enCours.length} en congé aujourd'hui</span></div></div>
+      ${heroActions}
     </div></div>
     <div class="ops-dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
-      <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('requests')"><div class="ops-dash-lbl">Demandes en attente</div><div class="ops-dash-val">${pending.length}</div><div class="ops-dash-sub">${pending.length?"Décisions DRH requises":"File à jour"}</div></div>
+      <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('requests')"><div class="ops-dash-lbl">Demandes en attente</div><div class="ops-dash-val">${pending.length}</div><div class="ops-dash-sub">${pending.length?"Décisions requises":"File à jour"}</div></div>
       <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('balances')"><div class="ops-dash-lbl">Soldes prioritaires</div><div class="ops-dash-val">${soldeEleveCount}</div><div class="ops-dash-sub">Seuil ${DRH_CONGE_SOLDE_ELEVE_SEUIL} jours</div></div>
       <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('planning')"><div class="ops-dash-lbl">En congé aujourd'hui</div><div class="ops-dash-val">${enCours.length}</div><div class="ops-dash-sub">Absences planifiées</div></div>
       <div class="ops-dash-kpi" style="cursor:pointer" onclick="setDrhCongesDashboardTab('dashboard')"><div class="ops-dash-lbl">Santé du planning</div><div class="ops-dash-val">${health}%</div><div class="ops-dash-sub">${pending.length} demande(s) · ${soldeEleveCount} solde(s) élevé(s)</div></div>
@@ -31258,7 +31277,7 @@ async function finalizeCongeAttribution(){
   if(!a){toast("Employé introuvable","error");return}
   const btn=document.getElementById("conge-preview-valider");
   if(btn){btn.disabled=true;btn.textContent="Validation…"}
-  const conge={id:uid("cg"),agentId:a.id,type:p.type,du:p.du,au:p.au,duDemande:p.duDemande,auDemande:p.auDemande,motif:p.motif,statut:p.statut,createdAt:today()};
+  const conge={id:uid("cg"),agentId:a.id,type:p.type,du:p.du,au:p.au,duDemande:p.duDemande,auDemande:p.auDemande,motif:p.motif,statut:p.statut,origine:"attribution",createdAt:today()};
   db.conges.push(conge);
   if(!(await saveDBAndWaitToast("Congé non confirmé"))){
     db.conges.pop();
