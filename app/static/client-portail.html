@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#043970">
+<meta name="theme-color" content="#07192b">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Portail Client">
-<title>PORTAIL CLIENT — ATLAS</title>
+<meta name="apple-mobile-web-app-title" content="IRON Portail Client">
+<title>IRON GLOBAL SOLUTION — Portail Client</title>
 <link rel="icon" href="/static/sgdi-icon-192.png">
 <link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
 <style>
@@ -38,36 +38,23 @@ h1{font-size:25px;font-weight:950;text-align:left;margin:14px 0 0;letter-spacing
 .login-assurance{display:flex;align-items:center;gap:7px;justify-content:center;margin-top:18px;font-size:11.5px;color:var(--muted);font-weight:700}
 .login-assurance span{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block}
 .login-footer-brand{text-align:center;margin-top:14px;font-size:10.5px;color:#94a3b8;letter-spacing:.03em}
-.login-dhl-showcase{display:none}
-/* Expérience dédiée au portail DHL, activée uniquement pour le client DHL ou son sous-domaine. */
-body.dhl-portal{--navy:#d40511;--blue:#d40511;--ink:#202020;--muted:#5b5b5b;--line:#e3e3e3;--bg:#ffcc00;background:#ffcc00}
-body.dhl-portal .login{padding:clamp(18px,3vw,42px);display:grid;grid-template-columns:minmax(0,1.18fr) minmax(370px,.82fr);gap:clamp(24px,5vw,86px);background:#ffcc00;isolation:isolate}
-body.dhl-portal .login:before{width:58vmax;height:58vmax;top:-48%;right:-16%;opacity:1;filter:none;background:radial-gradient(circle,rgba(255,255,255,.36),transparent 66%)}
-body.dhl-portal .login:after{width:36vmax;height:36vmax;bottom:-35%;left:26%;opacity:.18;filter:none;background:radial-gradient(circle,#d40511,transparent 68%)}
-body.dhl-portal .login-dhl-showcase{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;max-width:760px;width:100%;min-height:620px;margin-left:auto;overflow:hidden;border-radius:30px;background:linear-gradient(145deg,#ffdf3f,#ffcc00 62%,#f7ba00);box-shadow:0 26px 64px rgba(92,52,0,.18)}
-.dhl-identity{position:relative;z-index:2;padding:clamp(34px,5vw,62px) clamp(30px,5vw,62px) 0;color:#d40511;font-weight:1000;line-height:.78;letter-spacing:-.08em;font-size:clamp(54px,8vw,102px);font-style:italic}
-.dhl-identity:after{content:"";display:block;height:5px;width:1.45em;margin:15px 0 0;background:#d40511;box-shadow:0 8px 0 #d40511}
-.dhl-identity small{display:block;margin-top:24px;color:#202020;font-size:13px;font-style:normal;font-weight:900;letter-spacing:.2em;line-height:1.2}
-.dhl-showcase-copy{position:relative;z-index:2;margin:25px clamp(30px,5vw,62px) 0;max-width:440px;color:#3c3320;font-size:clamp(15px,1.6vw,19px);font-weight:700;line-height:1.45}
-.dhl-team-art{position:relative;z-index:1;width:min(91%,560px);margin:18px auto -4px;display:block;filter:drop-shadow(0 18px 24px rgba(104,60,0,.22))}
-.dhl-logistics-strip{position:relative;z-index:2;width:100%;height:128px;margin-top:auto;background:#4d4d4d url('/static/dhl-login-logistics.png') center/cover no-repeat;border-top:7px solid #d40511}
-body.dhl-portal .login-card{z-index:2;max-width:450px;justify-self:start;border-radius:28px;padding:38px 36px 32px;border:1px solid rgba(90,52,0,.14);box-shadow:0 28px 65px rgba(92,52,0,.24),0 2px 8px rgba(92,52,0,.08)}
-body.dhl-portal .login-logo-box{min-height:58px;margin-bottom:17px;background:#fff8df;border-color:#f0cf5a;border-radius:12px}
-body.dhl-portal .logo{width:auto;height:auto;display:block;background:transparent;color:#d40511;border-radius:0;font-size:42px;font-style:italic;letter-spacing:-.09em;line-height:1;font-weight:1000}
-body.dhl-portal .login-chip{background:#fff4c8;color:#8a0009;border-color:#efca48}
-body.dhl-portal .login-chip:before{background:#d40511}
-body.dhl-portal .login-card h1{font-size:31px;color:#202020}
-body.dhl-portal .login-sub{color:#5b5b5b}
-body.dhl-portal label{color:#4a4a4a}
-body.dhl-portal input:focus,body.dhl-portal select:focus,body.dhl-portal textarea:focus{border-color:#d40511;box-shadow:0 0 0 3px rgba(212,5,17,.13)}
-body.dhl-portal .pw-toggle{color:#a8000b;background:#fff1f1}
-body.dhl-portal .remember-row input{accent-color:#d40511}
-body.dhl-portal .primary{background:#d40511!important;border-color:#d40511!important;border-radius:12px;box-shadow:0 10px 22px rgba(212,5,17,.2)!important}
-body.dhl-portal .primary:hover{background:#b8040e!important;border-color:#b8040e!important}
-body.dhl-portal .login-footer-brand{color:#8a7240}
-body.dhl-portal .login-assurance span{background:#d40511}
-@media(max-width:820px){body.dhl-portal .login{grid-template-columns:1fr;align-items:start;padding:18px;gap:18px}body.dhl-portal .login-dhl-showcase{min-height:0;max-width:560px;margin:auto;border-radius:22px}.dhl-identity{padding:30px 32px 0;font-size:64px}.dhl-showcase-copy{margin:17px 32px 0;font-size:14px}.dhl-team-art{width:min(73%,370px);margin:7px auto -3px}.dhl-logistics-strip{height:74px}body.dhl-portal .login-card{justify-self:center;width:100%;padding:30px 26px}}
-@media(max-width:440px){body.dhl-portal .login{padding:12px}.dhl-identity{padding:25px 24px 0;font-size:54px}.dhl-showcase-copy{margin:15px 24px 0}.dhl-team-art{display:none}.dhl-logistics-strip{height:60px}body.dhl-portal .login-card{padding:27px 22px}}
+.login-iron-showcase{display:none}
+/* Portail client opéré et identifié par IRON GLOBAL SOLUTION. */
+body.iron-portal{--navy:#07192b;--blue:#0879c9;--ink:#10243e;--muted:#5d6d7d;--line:#d7e2ec;--bg:#edf4f9;background:#edf4f9}
+body.iron-portal .login{padding:clamp(18px,3vw,42px);display:grid;grid-template-columns:minmax(0,1.12fr) minmax(370px,.88fr);gap:clamp(24px,5vw,76px);background:linear-gradient(145deg,#eef5fa,#f8fbfd 58%,#e9f2f8);isolation:isolate}
+body.iron-portal .login:before{width:56vmax;height:56vmax;top:-42%;right:-14%;opacity:.12;filter:none;background:radial-gradient(circle,#0a84d8,transparent 68%)}
+body.iron-portal .login:after{width:42vmax;height:42vmax;bottom:-38%;left:18%;opacity:.1;background:radial-gradient(circle,#07192b,transparent 68%)}
+body.iron-portal .login-iron-showcase{position:relative;z-index:1;display:flex;flex-direction:column;justify-content:center;max-width:720px;width:100%;min-height:620px;margin-left:auto;overflow:hidden;border-radius:30px;padding:clamp(38px,5vw,66px);background:linear-gradient(145deg,#07192b,#0b3152 58%,#0879c9);box-shadow:0 26px 64px rgba(4,28,50,.22);color:#fff}
+.iron-showcase-mark{display:flex;align-items:center;gap:22px}.iron-showcase-logo{width:118px;height:118px;object-fit:contain;border-radius:22px;background:#fff;padding:8px;box-shadow:0 12px 28px rgba(0,0,0,.2)}
+.iron-identity{font-size:clamp(30px,4vw,52px);font-weight:950;letter-spacing:-.04em;line-height:.94}.iron-identity strong{display:block;color:#ffd500;font-size:.58em;letter-spacing:.08em;margin-top:10px}.iron-identity small{display:block;margin-top:16px;color:#c8deed;font-size:11px;font-weight:850;letter-spacing:.2em;line-height:1.2}
+.iron-showcase-copy{margin:42px 0 0;max-width:490px;color:#e4f0f7;font-size:clamp(15px,1.5vw,19px);font-weight:650;line-height:1.55}.iron-showcase-proof{display:flex;gap:10px;flex-wrap:wrap;margin-top:32px}.iron-showcase-proof span{padding:8px 12px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.08);color:#d9ebf6;font-size:11px;font-weight:800}
+body.iron-portal .login-card{z-index:2;max-width:440px;justify-self:start;border-radius:24px;padding:38px 36px 32px;border:1px solid rgba(7,25,43,.1);box-shadow:0 28px 65px rgba(4,28,50,.17),0 2px 8px rgba(4,28,50,.06)}
+body.iron-portal .login-logo-box{display:none!important}body.iron-portal .logo{width:68px;height:68px;border-radius:18px;background:#07192b url('/static/iron-solution-logo.png') center/90% no-repeat;color:transparent}
+body.iron-portal .login-chip{background:#e8f4fc;color:#075f9d;border-color:#b9dff5}body.iron-portal .login-chip:before{background:#16a34a}
+body.iron-portal .login-card h1{font-size:29px;color:#10243e}body.iron-portal input:focus{border-color:#0879c9;box-shadow:0 0 0 3px rgba(8,121,201,.13)}body.iron-portal .pw-toggle{color:#075f9d;background:#eaf4fa}body.iron-portal .remember-row input{accent-color:#0879c9}
+body.iron-portal .primary{background:#0879c9!important;border-color:#0879c9!important;border-radius:11px;box-shadow:0 10px 22px rgba(8,121,201,.2)!important}body.iron-portal .primary:hover{background:#0665a8!important;border-color:#0665a8!important}body.iron-portal .login-footer-brand{color:#64788a}
+@media(max-width:820px){body.iron-portal .login{grid-template-columns:1fr;align-items:start;padding:18px;gap:18px}body.iron-portal .login-iron-showcase{min-height:340px;max-width:560px;margin:auto;border-radius:22px}.iron-showcase-logo{width:92px;height:92px}.iron-showcase-copy{margin-top:28px}body.iron-portal .login-card{justify-self:center;width:100%;padding:30px 26px}}
+@media(max-width:440px){body.iron-portal .login{padding:12px}.iron-showcase-mark{gap:14px}.iron-showcase-logo{width:72px;height:72px;border-radius:15px}.iron-identity{font-size:27px}.iron-showcase-copy{font-size:14px}.iron-showcase-proof{display:none}body.iron-portal .login-card{padding:27px 22px}}
 label{display:block;font-size:12px;font-weight:800;color:#42566f;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
 input,select,textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:0 10px;color:var(--ink);background:#fff;font-size:13px}
 input,select{height:40px}
@@ -140,11 +127,10 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 <body>
 
 <section id="loginView" class="login">
-  <aside class="login-dhl-showcase" aria-label="DHL, connecting people, improving lives">
-    <div class="dhl-identity">DHL<small>PORTAIL CLIENT</small></div>
-    <p class="dhl-showcase-copy">Un accès simple et sécurisé pour suivre vos équipes, signaler les situations terrain et rester connecté à vos opérations.</p>
-    <img class="dhl-team-art" src="/static/dhl-login-team.png" alt="Les équipes DHL connectées au monde">
-    <div class="dhl-logistics-strip" aria-hidden="true"></div>
+  <aside class="login-iron-showcase" aria-label="IRON GLOBAL SOLUTION, opérateur du portail client">
+    <div class="iron-showcase-mark"><img class="iron-showcase-logo" src="/static/iron-solution-logo.png" alt="IRON GLOBAL SOLUTION"><div class="iron-identity">IRON<strong>GLOBAL SOLUTION</strong><small>PORTAIL CLIENT OPÉRATIONNEL</small></div></div>
+    <p class="iron-showcase-copy">Un accès professionnel sécurisé, exploité par IRON GLOBAL SOLUTION, pour suivre vos équipes et vos opérations terrain.</p>
+    <div class="iron-showcase-proof"><span>Accès réservé</span><span>Session chiffrée</span><span>Assistance IRON</span></div>
   </aside>
   <form class="login-card" onsubmit="event.preventDefault();login()">
     <div id="loginLogoBox" class="login-logo-box hidden"><img id="loginLogoImg" alt="Logo client"></div>
@@ -163,16 +149,15 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
     <button id="loginBtn" class="primary">SE CONNECTER</button>
     <div id="loginError" class="error"></div>
     <div class="login-assurance"><span></span>Session chiffrée</div>
-    <div class="login-footer-brand">PORTAIL SÉCURISÉ — IRON GLOBAL SÉCURITÉ</div>
+    <div class="login-footer-brand">PORTAIL EXPLOITÉ PAR IRON GLOBAL SOLUTION</div>
   </form>
 </section>
 
 <section id="changePwView" class="login hidden">
-  <aside class="login-dhl-showcase" aria-label="DHL, connecting people, improving lives">
-    <div class="dhl-identity">DHL<small>PORTAIL CLIENT</small></div>
-    <p class="dhl-showcase-copy">Votre espace est prêt. Définissez un mot de passe personnel pour sécuriser votre accès.</p>
-    <img class="dhl-team-art" src="/static/dhl-login-team.png" alt="Les équipes DHL connectées au monde">
-    <div class="dhl-logistics-strip" aria-hidden="true"></div>
+  <aside class="login-iron-showcase" aria-label="IRON GLOBAL SOLUTION, opérateur du portail client">
+    <div class="iron-showcase-mark"><img class="iron-showcase-logo" src="/static/iron-solution-logo.png" alt="IRON GLOBAL SOLUTION"><div class="iron-identity">IRON<strong>GLOBAL SOLUTION</strong><small>PORTAIL CLIENT OPÉRATIONNEL</small></div></div>
+    <p class="iron-showcase-copy">Votre espace sécurisé est prêt. Définissez maintenant votre mot de passe personnel.</p>
+    <div class="iron-showcase-proof"><span>Accès réservé</span><span>Session chiffrée</span><span>Assistance IRON</span></div>
   </aside>
   <form class="login-card" onsubmit="event.preventDefault();submitChangePassword()">
     <div id="changePwLogoBox" class="login-logo-box hidden"><img id="changePwLogoImg" alt="Logo client"></div>
@@ -289,7 +274,7 @@ async function loadBranding(){
     const res=await fetch("/api/client-portal/public/branding");
     branding=await res.json();
   }catch(e){branding=null}
-  if(!branding){applyDhlPortalPresentation();return}
+  if(!branding){applyIronPortalPresentation();return}
   const root=document.documentElement.style;
   if(branding.primary_color)root.setProperty("--navy",branding.primary_color);
   if(branding.accent_color)root.setProperty("--blue",branding.accent_color);
@@ -303,20 +288,20 @@ async function loadBranding(){
     if(sub)sub.textContent=`Connectez-vous à l'espace client ${branding.client_name}.`;
     document.title=`${branding.client_name} — Portail Client`;
   }
-  applyDhlPortalPresentation();
+  applyIronPortalPresentation();
 }
-function applyDhlPortalPresentation(){
+function applyIronPortalPresentation(){
   const hostname=String(location.hostname||"").toLowerCase();
   const clientName=String(branding?.client_name||"").toLowerCase();
   if(!(hostname.startsWith("dhl.")||clientName.includes("dhl")))return;
-  document.body.classList.add("dhl-portal");
-  document.documentElement.style.setProperty("--navy","#d40511");
-  document.documentElement.style.setProperty("--blue","#d40511");
-  ["loginLogoFallback","changePwLogoFallback","appLogoFallback"].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent="DHL"});
+  document.body.classList.add("iron-portal");
+  document.documentElement.style.setProperty("--navy","#07192b");
+  document.documentElement.style.setProperty("--blue","#0879c9");
+  ["loginLogoFallback","changePwLogoFallback","appLogoFallback"].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent="IRON"});
   const title=document.getElementById("loginTitle"),sub=document.getElementById("loginSub");
-  if(title)title.textContent="Votre espace DHL";
-  if(sub)sub.textContent="Connectez-vous pour accéder à votre portail client sécurisé.";
-  document.title="DHL — Portail Client";
+  if(title)title.textContent="Connexion";
+  if(sub)sub.textContent="Accédez à votre espace client géré par IRON GLOBAL SOLUTION.";
+  document.title="IRON GLOBAL SOLUTION — Portail Client";
 }
 
 function today(){return new Date().toISOString().slice(0,10)}
