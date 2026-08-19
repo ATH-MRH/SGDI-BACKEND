@@ -6585,7 +6585,8 @@ function renderSidebar(){
         {label:"MOUVEMENT",route:"ops/mouvements",aliases:["ops/mouvements"],group:"TERRAIN"},
         {label:"SUPERVISION SITE",route:"ops/supervision",aliases:["ops/supervision"],group:"TERRAIN"},
         {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"SUIVI",count:opsIncidents.length},
-        {label:"SIGNALEMENTS CLIENTS",route:"ops/signalements-clients",aliases:["ops/signalements-clients"],group:"SUIVI",count:(opsClientObservationsCache||[]).filter(o=>o.status==="nouveau").length||null}
+        {label:"SIGNALEMENTS CLIENTS",route:"ops/signalements-clients",aliases:["ops/signalements-clients"],group:"SUIVI",count:(opsClientObservationsCache||[]).filter(o=>o.status==="nouveau").length||null},
+        {label:"MESSAGERIE CLIENTS",route:"ops/messages-clients/recus",aliases:["ops/messages-clients"],group:"SUIVI",count:(opsClientObservationsCache||[]).filter(o=>o.status!=="traite"&&!o.client_response).length||null}
       ],
       superviseur:[
         {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"],group:"PILOTAGE"},
@@ -35872,6 +35873,24 @@ function opsClientObservationsFilterTabs(){
   host.innerHTML=tabs.map(([key,label])=>`<button type="button" class="btn ${opsClientObservationsFilter===key?"btn-primary":"btn-secondary"} text-xs" onclick="setOpsClientObservationsFilter('${key}')">${label} (${counts[key]||0})</button>`).join("");
 }
 function setOpsClientObservationsFilter(key){opsClientObservationsFilter=key;renderOpsClientObservationsList()}
+
+function opsClientMessageFolderRows(folder){
+  const rows=opsClientObservationsCache||[];
+  if(folder==="envoyes")return rows.filter(o=>!!o.client_response);
+  if(folder==="archives")return rows.filter(o=>o.status==="traite");
+  return rows.filter(o=>o.status!=="traite"&&!o.client_response);
+}
+async function renderOpsClientMessages(view,folder="recus"){
+  const validFolder=["recus","envoyes","archives"].includes(folder)?folder:"recus";
+  view.innerHTML=`<div class="mb-4"><h1 class="text-2xl font-black uppercase">Messagerie espace client</h1><p class="text-sm text-slate-500">Échanges entre les clients et l'équipe OPS dans ATLAS.</p></div><div id="ops-client-messages"><div class="card p-6 text-center text-slate-400">Chargement…</div></div>`;
+  if(!opsClientObservationsCache){
+    try{const res=await sgdiApi("/api/client-portal/ops/observations",{method:"GET",legacy:false});opsClientObservationsCache=Array.isArray(res)?res:[];opsClientObservationsFetchedAt=Date.now()}catch(e){document.getElementById("ops-client-messages").innerHTML=`<div class="card p-6 text-center text-red-600">${escapeHTML(e.message||"Messagerie indisponible")}</div>`;return}
+  }
+  const counts={recus:opsClientMessageFolderRows("recus").length,envoyes:opsClientMessageFolderRows("envoyes").length,archives:opsClientMessageFolderRows("archives").length};
+  const rows=opsClientMessageFolderRows(validFolder);
+  const folderButton=(key,label,icon)=>`<button type="button" class="btn ${validFolder===key?"btn-primary":"btn-secondary"}" onclick="navigate('ops/messages-clients/${key}')">${icon} ${label} <span class="pill pill-gray" style="margin-left:5px">${counts[key]}</span></button>`;
+  document.getElementById("ops-client-messages").innerHTML=`<div class="card p-4 mb-4"><div class="flex gap-2 flex-wrap">${folderButton("recus","Messages reçus","↓")}${folderButton("envoyes","Messages envoyés","↑")}${folderButton("archives","Messages archivés","▣")}</div></div>${rows.length?`<div class="grid gap-3">${rows.map(o=>opsObservationCardHTML(o)).join("")}</div>`:`<div class="card p-8 text-center text-slate-400">Aucun message dans ce dossier.</div>`}`;
+}
 async function loadOpsClientObservations(){
   try{
     const res=await sgdiApi("/api/client-portal/ops/observations",{method:"GET",legacy:false});
@@ -36144,6 +36163,7 @@ function renderOPS(view,sub,arg){
   if(sub==="supervision"){renderOpsSupervision(view,arg||"dashboard");return}
   if(sub==="instance_dotation"){renderOpsInstanceDotation(view);return}
   if(sub==="signalements-clients"){renderOpsClientObservations(view);return}
+  if(sub==="messages-clients"){renderOpsClientMessages(view,arg||"recus");return}
   opsDashboardRefreshFeuillePresence();
   const soc=currentStructureSocieteFilter();
   const empCounters=sgdiUnifiedEmployeeCounters(soc);
@@ -36254,6 +36274,14 @@ function renderOPS(view,sub,arg){
     <a href="#/pointage/feuille" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#dbeafe;color:#1e40af">🕒</div><div><div class="ops-dash-quick-title" style="color:#1e40af">Pointage</div><div class="ops-dash-quick-sub">Feuille quotidienne · Saisie manuelle · Récap</div></div></a>
     <a href="#/fiches/toutes" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#dcfce7;color:#166534">🪪</div><div><div class="ops-dash-quick-title" style="color:#166534">Fiches de position</div><div class="ops-dash-quick-sub">Toutes · Actifs · Archivées</div></div></a>
     <a href="#/sites/actifs" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#fef3c7;color:#92400e">📍</div><div><div class="ops-dash-quick-title" style="color:#92400e">Sites</div><div class="ops-dash-quick-sub">Création · Sites actifs</div></div></a>
+  </div>
+  <div class="ops-dash-card" style="margin-top:18px">
+    <div class="ops-dash-card-head"><div><h3>Messagerie espace client</h3><p>Signalements reçus et réponses transmises aux clients</p></div><a href="#/ops/messages-clients/recus" class="ops-dash-alert-open">Ouvrir la messagerie</a></div>
+    <div class="ops-dash-card-body"><div class="ops-dash-quick">
+      <a href="#/ops/messages-clients/recus" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#dbeafe;color:#1e40af">↓</div><div><div class="ops-dash-quick-title" style="color:#1e40af">Messages reçus</div><div class="ops-dash-quick-sub">Demandes envoyées par les clients vers OPS</div></div></a>
+      <a href="#/ops/messages-clients/envoyes" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#dcfce7;color:#166534">↑</div><div><div class="ops-dash-quick-title" style="color:#166534">Messages envoyés</div><div class="ops-dash-quick-sub">Réponses OPS visibles dans le portail client</div></div></a>
+      <a href="#/ops/messages-clients/archives" class="ops-dash-quick-card"><div class="ops-dash-quick-icon" style="background:#f1f5f9;color:#475569">▣</div><div><div class="ops-dash-quick-title" style="color:#475569">Messages archivés</div><div class="ops-dash-quick-sub">Signalements clôturés et conservés</div></div></a>
+    </div></div>
   </div>`;
   renderOpsPresenceDonut({presents:fpqPresent,absents:_fpqAbsList.length,maladie:_fpqMalList.length,suspendus:_fpqSuspList.length});
   clearInterval(window._opsAttendanceAlertsTimer);
