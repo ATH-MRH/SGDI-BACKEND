@@ -83,6 +83,7 @@ class EmployeeGroupUpdateIn(BaseModel):
 
 class SiteEmployeeOut(BaseModel):
     id: int
+    code: str
     first_name: str
     last_name: str
     position: str | None = None
@@ -237,6 +238,7 @@ class ObservationOut(BaseModel):
 
     id: int
     employee_id: int
+    employee_code: str | None = None
     employee_name: str
     site_name: str | None = None
     kind: str

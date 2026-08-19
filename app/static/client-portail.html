@@ -107,6 +107,7 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 .emp-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 22px rgba(4,57,112,.05)}
 .emp-name{font-size:15px;font-weight:900}
+.emp-code{display:inline-block;margin-right:7px;border:1px solid #c8102e;border-radius:6px;padding:2px 6px;color:#a80d27;background:#fff0f2;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;font-weight:900;vertical-align:1px}
 .emp-meta{font-size:12px;color:var(--muted);margin-top:3px}
 .emp-site{display:inline-block;margin-top:9px;background:#e0e7ff;color:#3730a3;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800}
 .emp-actions{margin-top:13px}
@@ -582,7 +583,7 @@ async function loadEmployees(){
     if(!employees.length){host.innerHTML='<div class="empty">Aucun agent actuellement affecté à vos sites.</div>';return}
     host.innerHTML=`<div class="card-grid">${employees.map(e=>`
       <div class="emp-card">
-        <div class="emp-name">${esc(e.last_name)} ${esc(e.first_name)}</div>
+        <div class="emp-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}</div>
         <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div>
         ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
         ${e.group_code?`<span class="emp-site" style="background:#eaf2fb;color:var(--navy);margin-left:6px">Groupe ${esc(e.group_code)}</span>`:""}
@@ -636,7 +637,7 @@ async function loadSites(){
       const employeesHtml=(s.employees||[]).length?`<div class="site-employees">
         <div class="site-employees-title">Agents affectés</div>
         ${s.employees.map(e=>`<div class="site-employee-row" data-position="${encodeURIComponent(String(e.position||"Fonction non renseignée").trim().toLocaleLowerCase("fr"))}" data-group="${encodeURIComponent(String(e.group_code||""))}">
-          <div class="site-employee-name">${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div>
+          <div class="site-employee-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div>
           ${canAssign&&groups.length?`<select class="group-select" onchange="updateEmployeeGroup(${e.id},this.value)">${groupOptionsHtml(e.group_code)}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
         </div>`).join("")}
       </div>`:"";
@@ -800,7 +801,7 @@ async function submitEquipment(){
 function openObservationModal(employeeId){
   modalEmployee=employees.find(e=>e.id===employeeId);
   if(!modalEmployee)return;
-  document.getElementById("modalEmployeeLabel").textContent=`${modalEmployee.last_name} ${modalEmployee.first_name} — ${modalEmployee.site_name||""}`;
+  document.getElementById("modalEmployeeLabel").textContent=`${modalEmployee.code?modalEmployee.code+" — ":""}${modalEmployee.last_name} ${modalEmployee.first_name} — ${modalEmployee.site_name||""}`;
   document.getElementById("obsDate").value=today();
   document.getElementById("obsDate").max=today();
   document.getElementById("obsDescription").value="";
@@ -881,7 +882,7 @@ async function loadHistory(){
       <div class="hist-card ${o.severity==="urgente"?"urgente":""}">
         <div class="hist-top">
           <div>
-            <div class="hist-emp">${esc(o.employee_name)}</div>
+            <div class="hist-emp">${o.employee_code?`<span class="emp-code">${esc(o.employee_code)}</span>`:""}${esc(o.employee_name)}</div>
             <div class="hist-date">${formatDateFr(o.incident_date)}${o.site_name?` · ${esc(o.site_name)}`:""}</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center">
@@ -917,10 +918,10 @@ async function runPortalSearch(value){
   await ensurePortalSearchData();if(request!==portalSearchRequest)return;
   const results=[];
   const add=(type,tab,title,meta,haystack)=>{if(normalizePortalSearch(haystack).includes(query))results.push({type,tab,title,meta,term:title})};
-  employees.forEach(e=>add("Personnel","employees",`${e.last_name||""} ${e.first_name||""}`.trim(),[e.position,e.site_name,e.code].filter(Boolean).join(" · "),[e.last_name,e.first_name,e.position,e.site_name,e.code].join(" ")));
+  employees.forEach(e=>add("Personnel","employees",`${e.code?e.code+" — ":""}${e.last_name||""} ${e.first_name||""}`.trim(),[e.position,e.site_name].filter(Boolean).join(" · "),[e.last_name,e.first_name,e.position,e.site_name,e.code].join(" ")));
   sitesCache.forEach(s=>add("Site","sites",s.name||"Site",[s.commune,s.wilaya,s.site_type].filter(Boolean).join(" · "),[s.name,s.address,s.commune,s.wilaya,s.site_type].join(" ")));
   equipmentCache.forEach(e=>add("Matériel","equipment",e.designation||"Équipement",[e.site_name,e.category,e.code,e.assignee].filter(Boolean).join(" · "),[e.designation,e.site_name,e.category,e.code,e.assignee,e.status_label].join(" ")));
-  historyCache.forEach(o=>add("Événement","history",o.employee_name||"Signalement",[formatDateFr(o.incident_date),o.site_name,statusLabel(o.status)].filter(Boolean).join(" · "),[o.employee_name,o.site_name,o.description,o.status,...(o.categories||[])].join(" ")));
+  historyCache.forEach(o=>add("Événement","history",`${o.employee_code?o.employee_code+" — ":""}${o.employee_name||"Signalement"}`,[formatDateFr(o.incident_date),o.site_name,statusLabel(o.status)].filter(Boolean).join(" · "),[o.employee_code,o.employee_name,o.site_name,o.description,o.status,...(o.categories||[])].join(" ")));
   portalSearchResults=results.slice(0,10);
   host.innerHTML=portalSearchResults.length?portalSearchResults.map((r,index)=>`<button type="button" class="portal-search-result" onclick="openPortalSearchResult(${index})"><span><strong>${esc(r.title)}</strong><span>${esc(r.meta||"")}</span></span><span class="portal-search-type">${esc(r.type)}</span></button>`).join(""):'<div class="portal-search-empty">Aucun résultat dans votre périmètre.</div>';
 }

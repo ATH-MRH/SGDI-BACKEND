@@ -117,6 +117,7 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
         employees_by_site.setdefault(assignment.site_id, []).append(
             {
                 "id": employee.id,
+                "code": employee.code,
                 "first_name": employee.first_name,
                 "last_name": employee.last_name,
                 "position": assignment.position or employee.position,
@@ -295,7 +296,7 @@ def visible_equipment_for_client(db: Session, client_id: int) -> list[dict[str, 
                 "code": article.code,
                 "site_id": site.id,
                 "site_name": site.name,
-                "assignee": f"{employee.last_name} {employee.first_name}".strip(),
+                "assignee": f"{employee.code} — {employee.last_name} {employee.first_name}".strip(),
                 "item_state": state,
                 "status_label": label,
                 "status_tone": tone,
@@ -402,6 +403,7 @@ def observation_out_dict(db: Session, row: ClientObservation) -> dict[str, Any]:
     return {
         "id": row.id,
         "employee_id": row.employee_id,
+        "employee_code": employee.code if employee else None,
         "employee_name": f"{employee.last_name} {employee.first_name}".strip() if employee else "—",
         "site_name": site.name if site else None,
         "kind": row.kind,

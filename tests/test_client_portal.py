@@ -167,6 +167,7 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     assert response.status_code == 200, response.text
     site = next(row for row in response.json() if row["id"] == site_id)
     assert site["actual_staff"] == 1
+    assert site["employees"][0]["code"] == "GRPZERO1"
     assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 0
 
     assigned_a = client.patch(f"/api/client-portal/employees/{employee_id}/group", headers=portal_headers, json={"group_code": "A"})
@@ -204,6 +205,7 @@ def test_employee_visible_only_via_site_client_id(client, auth_headers):
 
     r = client.get("/api/client-portal/employees", headers=headers)
     assert r.status_code == 200, r.text
+    assert next(e for e in r.json() if e["id"] == emp_mine)["code"] == "VISIMINE"
     ids = {e["id"] for e in r.json()}
     assert emp_mine in ids
     assert emp_other not in ids, "un employé d'un autre client ne doit jamais être visible"
@@ -260,6 +262,7 @@ def test_create_observation_and_urgent_severity(client, auth_headers):
     })
     assert r.status_code == 201, r.text
     body = r.json()
+    assert body["employee_code"] == "OBS1"
     assert body["severity"] == "urgente"
     assert body["status"] == "nouveau"
     assert "resolution_note" not in body, "la vue client ne doit jamais exposer la note de résolution"
