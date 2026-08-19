@@ -75,15 +75,18 @@ def _site_group_quotas(site: Site) -> dict[str, int]:
     return {code: int(raw.get(code, 0) or 0) for code in GROUP_LETTERS}
 
 
+def _site_portal_group_assignments(site: Site) -> dict[str, str]:
+    plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
+    raw = plan.get("clientPortalGroupAssignments") if isinstance(plan.get("clientPortalGroupAssignments"), dict) else {}
+    return {str(employee_id): str(code).strip().upper() for employee_id, code in raw.items() if str(code).strip().upper() in GROUP_LETTERS}
+
+
 def _site_groups_payload(site: Site, site_employees: list[dict[str, Any]]) -> list[dict[str, Any]]:
     quotas = _site_group_quotas(site)
     counts: dict[str, int] = {code: 0 for code in GROUP_LETTERS}
     for employee in site_employees:
         code = str(employee.get("group_code") or "").strip().upper()
-        # Les affectations historiques portent souvent "A" par défaut alors qu'aucun
-        # groupe n'a encore été paramétré. Un quota nul signifie donc que le groupe
-        # n'est pas actif et ne doit afficher aucun agent.
-        if code in counts and quotas[code] > 0:
+        if code in counts:
             counts[code] += 1
     return [
         {
@@ -120,21 +123,26 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
                 "group_code": assignment.group_code,
             }
         )
-    return [
-        {
-            "id": s.id,
-            "name": s.name,
-            "address": s.address,
-            "commune": s.commune,
-            "wilaya": s.wilaya,
-            "site_type": s.site_type,
-            "required_staff": s.contractual_staff or (s.day_staff + s.night_staff) or 0,
-            "actual_staff": len(employees_by_site.get(s.id, [])),
-            "employees": employees_by_site.get(s.id, []),
-            "groups": _site_groups_payload(s, employees_by_site.get(s.id, [])),
-        }
-        for s in sites
-    ]
+    result: list[dict[str, Any]] = []
+    for site in sites:
+        explicit_groups = _site_portal_group_assignments(site)
+        site_employees = [
+            {**employee, "group_code": explicit_groups.get(str(employee["id"]))}
+            for employee in employees_by_site.get(site.id, [])
+        ]
+        result.append({
+            "id": site.id,
+            "name": site.name,
+            "address": site.address,
+            "commune": site.commune,
+            "wilaya": site.wilaya,
+            "site_type": site.site_type,
+            "required_staff": site.contractual_staff or (site.day_staff + site.night_staff) or 0,
+            "actual_staff": len(site_employees),
+            "employees": site_employees,
+            "groups": _site_groups_payload(site, site_employees),
+        })
+    return result
 
 
 def update_site_group_quotas_for_client(db: Session, client_id: int, site_id: int, payload) -> dict[str, Any]:
@@ -169,9 +177,14 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
     if not assignment:
         raise HTTPException(status_code=404, detail="Agent introuvable")
     assignment.group_code = payload.group_code
+    site = db.get(Site, assignment.site_id)
+    plan = dict(site.equipment_plan) if isinstance(site.equipment_plan, dict) else {}
+    explicit_groups = dict(plan.get("clientPortalGroupAssignments") if isinstance(plan.get("clientPortalGroupAssignments"), dict) else {})
+    explicit_groups[str(employee_id)] = payload.group_code
+    plan["clientPortalGroupAssignments"] = explicit_groups
+    site.equipment_plan = plan
     db.commit()
     employee = db.get(Employee, employee_id)
-    site = db.get(Site, assignment.site_id)
     return {
         "id": employee.id,
         "code": employee.code,

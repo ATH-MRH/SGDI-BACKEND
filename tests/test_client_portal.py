@@ -155,7 +155,7 @@ def test_admin_cannot_duplicate_client_portal_username_on_update(client, auth_he
     assert response.status_code == 409, response.text
 
 
-def test_site_group_with_zero_quota_does_not_count_default_assignments(client, auth_headers):
+def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers):
     cid = _commercial_client(client, auth_headers, "Client Group Zero", portal_slug="client-group-zero")
     site_id = _site(client, auth_headers, "Site Group Zero", client_id=cid)
     employee_id = _emp(client, auth_headers, "GRPZERO1")
@@ -168,6 +168,19 @@ def test_site_group_with_zero_quota_does_not_count_default_assignments(client, a
     site = next(row for row in response.json() if row["id"] == site_id)
     assert site["actual_staff"] == 1
     assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 0
+
+    assigned_a = client.patch(f"/api/client-portal/employees/{employee_id}/group", headers=portal_headers, json={"group_code": "A"})
+    assert assigned_a.status_code == 200, assigned_a.text
+    response = client.get("/api/client-portal/sites", headers=portal_headers)
+    site = next(row for row in response.json() if row["id"] == site_id)
+    assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 1
+
+    assigned_b = client.patch(f"/api/client-portal/employees/{employee_id}/group", headers=portal_headers, json={"group_code": "B"})
+    assert assigned_b.status_code == 200, assigned_b.text
+    response = client.get("/api/client-portal/sites", headers=portal_headers)
+    site = next(row for row in response.json() if row["id"] == site_id)
+    assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 0
+    assert next(group for group in site["groups"] if group["code"] == "B")["assigned"] == 1
 
 
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────
