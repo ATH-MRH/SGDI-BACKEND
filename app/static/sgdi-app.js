@@ -7915,7 +7915,7 @@ function isDhlHost(){return String(location.hostname||"").toLowerCase().split(".
 function renderDhlLogin(){
   try{document.title="DHL — Portail sécurisé"}catch(_e){}
   document.getElementById("app").innerHTML=`<div class="dhl-login-page">
-    <header class="dhl-login-topbar"><div class="dhl-login-topbar-inner"><div class="dhl-login-brand"><b>DHL</b><span>PORTAIL CLIENT</span></div><div class="dhl-login-topbar-status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z"/><path d="M9.5 12l1.7 1.7 3.6-4"/></svg> Accès sécurisé</div></div></header>
+    <header class="dhl-login-topbar"><div class="dhl-login-topbar-inner"><div class="dhl-login-brand"><span class="dhl-login-brand-logo"><img src="/static/dhl-global-forwarding-logo.png" alt="DHL Global Forwarding"></span><span>PORTAIL CLIENT</span></div><div class="dhl-login-topbar-status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z"/><path d="M9.5 12l1.7 1.7 3.6-4"/></svg> Accès sécurisé</div></div></header>
     <main class="dhl-login-main">
       <section class="dhl-login-showcase" aria-label="Présentation du portail DHL">
         <div class="dhl-login-copy"><span>ESPACE OPÉRATIONNEL</span><h1>Votre espace<br>opérationnel</h1><p>Suivez vos équipes et accédez à vos informations terrain en toute sécurité.</p><i></i></div>
@@ -7936,6 +7936,22 @@ function renderDhlLogin(){
       </section>
     </main>
   </div>`;
+  const dhlLogo=document.querySelector(".dhl-login-brand-logo img");
+  if(dhlLogo)dhlLogo.addEventListener("load",()=>{
+    try{
+      const canvas=document.createElement("canvas");
+      canvas.width=dhlLogo.naturalWidth;canvas.height=dhlLogo.naturalHeight;
+      const ctx=canvas.getContext("2d",{willReadFrequently:true});
+      ctx.drawImage(dhlLogo,0,0);
+      const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
+      for(let i=0;i<pixels.data.length;i+=4){
+        const r=pixels.data[i],g=pixels.data[i+1],b=pixels.data[i+2];
+        if(r>210&&g>100&&b<85&&g>r*.48)pixels.data[i+3]=0;
+      }
+      ctx.putImageData(pixels,0,0);dhlLogo.src=canvas.toDataURL("image/png");
+    }catch(_e){}
+    dhlLogo.classList.add("is-ready");
+  },{once:true});
 }
 function renderLogin(){
   const hostCfg=sgdiModuleHostConfig();
