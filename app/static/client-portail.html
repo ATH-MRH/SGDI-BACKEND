@@ -150,13 +150,26 @@ tr:last-child td{border-bottom:0}
 .emp-card{cursor:pointer}.emp-card:hover{border-color:#c8102e;box-shadow:0 8px 22px rgba(200,16,46,.1)}
 .emp-avatar{width:46px;height:46px;border-radius:50%;object-fit:cover;background:#eef2f7;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);flex:0 0 auto}
 .emp-card-head{display:flex;align-items:center;gap:12px}
-.employee-profile{display:grid;grid-template-columns:180px 1fr;gap:28px;align-items:start}
-.employee-profile-photo{width:180px;height:215px;border-radius:20px;object-fit:cover;background:#eef2f7;border:1px solid var(--line)}
-.employee-profile-name{font-size:24px;font-weight:900;color:var(--navy);margin:4px 0 16px}
+.employee-profile-modal{max-width:920px!important;padding:0!important;overflow:hidden;border-radius:20px!important}
+.employee-profile-head{background:#0c2749;color:#fff;padding:18px 24px;margin:0!important}
+.employee-profile-head h2{font-size:18px}.employee-profile-head .modal-close{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.1);color:#fff}
+.employee-profile-ref{font-size:11px;color:#9fb3ca;margin-top:3px}
+.employee-profile{display:grid;grid-template-columns:240px 1fr;align-items:stretch;min-height:480px}
+.employee-identity-panel{padding:24px;background:#f7f9fc;border-right:1px solid #e5ebf2}
+.employee-profile-photo{display:block;width:142px;height:172px;margin:0 auto 16px;border-radius:16px;object-fit:cover;object-position:top;background:#eef2f7;border:3px solid #fff;box-shadow:0 8px 24px rgba(12,39,73,.16)}
+.employee-profile-code{display:inline-flex;border:1px solid #e8a1ad;color:#ae1530;background:#fff1f3;padding:4px 8px;border-radius:7px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:900}
+.employee-profile-name{font-size:17px;line-height:1.25;font-weight:900;color:var(--navy);margin:10px 0 5px}
+.employee-profile-role{font-size:11px;color:#597087;text-transform:uppercase;font-weight:800;letter-spacing:.05em}
+.employee-profile-site{margin-top:16px;padding-top:16px;border-top:1px solid #dde6f0}.employee-profile-site b{display:block;font-size:12px;margin-top:5px;color:#243b58}
+.employee-profile-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:13px}.employee-profile-badge{font-size:10px;font-weight:850;padding:5px 8px;border-radius:999px;background:#e8f6ee;color:#187044}.employee-profile-badge.expired{background:#fff1f2;color:#a80d27}.employee-profile-badge.group{background:#eaf1fb;color:#224b7c}
+.employee-profile-main{padding:24px 26px 20px;min-width:0}
+.employee-profile-section{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px}.employee-profile-section h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#304963}.employee-profile-section span{font-size:10px;color:#7a8da2}
 .employee-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.employee-detail{padding:10px;border:1px solid var(--line);border-radius:11px;background:#f8fafc}
-.employee-detail span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:800;margin-bottom:3px}
+.employee-detail{padding:12px 13px;border:1px solid #dce5ef;border-radius:11px;background:#fff}
+.employee-detail span,.employee-profile-label{display:block;color:#718399;font-size:9px;text-transform:uppercase;font-weight:850;letter-spacing:.06em;margin-bottom:3px}
 .employee-detail b{font-size:13px;color:var(--navy)}
+.employee-profile-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:20px 0}.employee-profile-metric{padding:13px;border-radius:12px;background:#f4f7fa;border-left:3px solid #1e5c96}.employee-profile-metric.warn{border-left-color:#d2a007}.employee-profile-metric.danger{border-left-color:#c8102e}.employee-profile-metric b{display:block;font-size:22px;line-height:1;color:var(--navy);margin-bottom:7px}
+.employee-profile-observations{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px;border:1px solid #dce5ef;border-radius:12px}.employee-profile-observations strong{display:block;font-size:12px}.employee-profile-observations small{font-size:10px;color:#718399}
 .employee-profile-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px;padding-top:15px;border-top:1px solid var(--line)}
 .employee-profile-actions button{min-width:140px}.danger-action{background:#c8102e!important;color:#fff!important;border-color:#c8102e!important}
 .site-employee-name{font-weight:750}
@@ -193,7 +206,7 @@ tr:last-child td{border-bottom:0}
 .cat-item input{width:auto;height:auto}
 .cat-item.checked{border-color:var(--blue);background:#eff6ff}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
-@media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}.employee-profile{grid-template-columns:1fr}.employee-profile-photo{width:100px;height:115px}.employee-detail-grid{grid-template-columns:1fr}body.iron-portal .brand{gap:10px}body.iron-portal .brand-logo{width:140px;height:56px}body.iron-portal .brand-title{font-size:14px}}
+@media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}.employee-profile{grid-template-columns:1fr}.employee-identity-panel{border-right:0;border-bottom:1px solid #e5ebf2}.employee-profile-photo{width:110px;height:130px;margin-left:0}.employee-detail-grid{grid-template-columns:1fr}.employee-profile-metrics{grid-template-columns:repeat(2,1fr)}.employee-profile-observations{align-items:flex-start;flex-direction:column}.employee-profile-actions button{flex:1;min-width:120px}body.iron-portal .brand{gap:10px}body.iron-portal .brand-logo{width:140px;height:56px}body.iron-portal .brand-title{font-size:14px}}
 </style>
 </head>
 <body>
@@ -327,8 +340,8 @@ tr:last-child td{border-bottom:0}
 </section>
 
 <div id="employeeDetailBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEmployeeDetail()">
-  <div class="modal" style="max-width:900px;padding:28px">
-    <div class="modal-head"><h2>Fiche de l’employé</h2><button type="button" class="modal-close" onclick="closeEmployeeDetail()">×</button></div>
+  <div class="modal employee-profile-modal">
+    <div class="modal-head employee-profile-head"><div><h2>Dossier employé</h2><div class="employee-profile-ref">Personnel affecté · Situation actuelle</div></div><button type="button" class="modal-close" onclick="closeEmployeeDetail()">×</button></div>
     <div id="employeeDetailBody"></div>
   </div>
 </div>
@@ -516,15 +529,23 @@ function openEmployeeDetail(employeeId){
   const e=employeeById(employeeId);if(!e)return;
   const age=completedYears(e.birth_date);
   const detail=(label,value)=>`<div class="employee-detail"><span>${esc(label)}</span><b>${esc(value??"—")}</b></div>`;
+  const metric=(label,value,tone="")=>`<div class="employee-profile-metric ${tone}"><b>${esc(value)}</b><span class="employee-profile-label">${esc(label)}</span></div>`;
+  const contractActive=!e.contract_end_date||e.contract_end_date>=today();
   document.getElementById("employeeDetailBody").innerHTML=`<div class="employee-profile">
-    <img class="employee-profile-photo" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}">
-    <div><div class="employee-profile-name">${esc(e.last_name)} ${esc(e.first_name)}</div><div class="employee-detail-grid">
-      ${detail("Code",e.code)}${detail("Âge",age===null?"Non renseigné":`${age} ans`)}
-      ${detail("Date de fin de contrat",formatDateFr(e.contract_end_date))}${detail("Date d’affectation sur site",formatDateFr(e.assignment_start_date))}
-      ${detail("Ancienneté sur le site",siteSeniority(e.assignment_start_date))}${detail("Nombre de présences",Number(e.presence_count)||0)}
-      ${detail("Nombre d’absences",Number(e.absence_count)||0)}${detail("Nombre de suspensions",Number(e.suspension_count)||0)}
-      ${detail("Blacklisté",e.blacklisted?"Oui":"Non")}
-    </div>${session?.permissions?.create_observations===false?"":`<div class="employee-profile-actions"><button type="button" class="secondary" onclick="openObservationFromEmployeeDetail(${e.id})">Ajouter une observation</button><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Affecter</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Blacklister</button></div>`}</div></div>`;
+    <aside class="employee-identity-panel">
+      <img class="employee-profile-photo" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}">
+      <span class="employee-profile-code">${esc(e.code||"—")}</span>
+      <div class="employee-profile-name">${esc(e.last_name)} ${esc(e.first_name)}</div>
+      <div class="employee-profile-role">${esc(e.position||"Poste non renseigné")}</div>
+      <div class="employee-profile-site"><span class="employee-profile-label">Site actuel</span><b>${esc(e.site_name||"Non renseigné")}</b></div>
+      <div class="employee-profile-badges"><span class="employee-profile-badge ${contractActive?"":"expired"}">${contractActive?"Contrat actif":"Contrat expiré"}</span><span class="employee-profile-badge group">${e.group_code?`Groupe ${esc(e.group_code)}`:"Aucun groupe"}</span></div>
+    </aside>
+    <div class="employee-profile-main">
+      <div class="employee-profile-section"><h3>Informations contractuelles</h3><span>Situation actuelle</span></div>
+      <div class="employee-detail-grid">${detail("Âge",age===null?"Non renseigné":`${age} ans`)}${detail("Date de fin de contrat",formatDateFr(e.contract_end_date))}${detail("Date d’affectation sur site",formatDateFr(e.assignment_start_date))}${detail("Ancienneté sur le site",siteSeniority(e.assignment_start_date))}</div>
+      <div class="employee-profile-metrics">${metric("Présences",Number(e.presence_count)||0)}${metric("Absences",Number(e.absence_count)||0,"warn")}${metric("Suspensions",Number(e.suspension_count)||0,"danger")}${metric("Blacklisté",e.blacklisted?"Oui":"Non",e.blacklisted?"danger":"")}</div>
+      ${session?.permissions?.create_observations===false?"":`<div class="employee-profile-observations"><div><strong>Observations et suivi</strong><small>Ajoutez plusieurs observations, chacune conservée dans l’historique.</small></div><button type="button" class="primary" onclick="openObservationFromEmployeeDetail(${e.id})">+ Ajouter</button></div><div class="employee-profile-actions"><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Demander une affectation</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Demander le blacklistage</button></div>`}
+    </div></div>`;
   document.getElementById("employeeDetailBackdrop").classList.remove("hidden");
 }
 function closeEmployeeDetail(){document.getElementById("employeeDetailBackdrop").classList.add("hidden")}
