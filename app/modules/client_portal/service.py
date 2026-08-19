@@ -80,7 +80,10 @@ def _site_groups_payload(site: Site, site_employees: list[dict[str, Any]]) -> li
     counts: dict[str, int] = {code: 0 for code in GROUP_LETTERS}
     for employee in site_employees:
         code = str(employee.get("group_code") or "").strip().upper()
-        if code in counts:
+        # Les affectations historiques portent souvent "A" par défaut alors qu'aucun
+        # groupe n'a encore été paramétré. Un quota nul signifie donc que le groupe
+        # n'est pas actif et ne doit afficher aucun agent.
+        if code in counts and quotas[code] > 0:
             counts[code] += 1
     return [
         {

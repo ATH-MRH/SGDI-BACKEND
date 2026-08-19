@@ -155,6 +155,21 @@ def test_admin_cannot_duplicate_client_portal_username_on_update(client, auth_he
     assert response.status_code == 409, response.text
 
 
+def test_site_group_with_zero_quota_does_not_count_default_assignments(client, auth_headers):
+    cid = _commercial_client(client, auth_headers, "Client Group Zero", portal_slug="client-group-zero")
+    site_id = _site(client, auth_headers, "Site Group Zero", client_id=cid)
+    employee_id = _emp(client, auth_headers, "GRPZERO1")
+    _assign(client, auth_headers, employee_id, site_id)
+    account = _portal_account(client, auth_headers, cid, username="client.group.zero")
+    portal_headers = _login(client, account["username"], account["temporary_password"])
+
+    response = client.get("/api/client-portal/sites", headers=portal_headers)
+    assert response.status_code == 200, response.text
+    site = next(row for row in response.json() if row["id"] == site_id)
+    assert site["actual_staff"] == 1
+    assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 0
+
+
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────
 
 def test_employee_visible_only_via_site_client_id(client, auth_headers):
