@@ -9009,6 +9009,37 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
   transform:translateY(-1px)!important;
   text-decoration:none!important;
 }
+
+/* Agents suspendus : synthèse d'échéances, volontairement plus courte que la
+   barre d'actions générale de l'effectif. */
+#view .drh-suspension-overview{
+  display:grid!important;
+  grid-template-columns:minmax(220px,1.25fr) minmax(440px,1.8fr) auto!important;
+  align-items:center!important;
+  gap:20px!important;
+  width:100%!important;
+  margin:0 0 14px!important;
+  padding:18px 20px!important;
+  border:1px solid #d9e4f0!important;
+  border-radius:16px!important;
+  background:linear-gradient(110deg,#fff 0%,#f8fbff 100%)!important;
+  box-shadow:0 10px 26px rgba(4,57,112,.07)!important;
+}
+#view .drh-suspension-kicker{display:block;color:#7c3aed!important;font-size:10px!important;font-weight:900!important;letter-spacing:.12em!important;text-transform:uppercase!important}
+#view .drh-suspension-overview h2{margin:4px 0!important;color:#172b4d!important;font-size:18px!important;font-weight:850!important;letter-spacing:0!important}
+#view .drh-suspension-overview p{margin:0!important;color:#718096!important;font-size:11.5px!important;line-height:1.45!important}
+#view .drh-suspension-stats{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px!important}
+#view .drh-suspension-stats>div{min-width:0;padding:10px 12px;border:1px solid #e4ebf3;border-radius:11px;background:#fff}
+#view .drh-suspension-stats span{display:block;min-height:26px;color:#718096;font-size:9px;font-weight:800;line-height:1.3;text-transform:uppercase;letter-spacing:.045em}
+#view .drh-suspension-stats strong{display:block;margin-top:3px;color:#172b4d;font-size:22px;line-height:1;font-weight:900}
+#view .drh-suspension-stats .is-warning{background:#fffbeb;border-color:#fde7a8}
+#view .drh-suspension-stats .is-warning strong{color:#b45309}
+#view .drh-suspension-stats .is-danger{background:#fff5f5;border-color:#fecaca}
+#view .drh-suspension-stats .is-danger strong{color:#dc2626}
+#view .drh-suspension-primary-action{height:38px!important;padding:0 15px!important;border:0!important;border-radius:10px!important;background:#043970!important;color:#fff!important;font-size:11px!important;font-weight:850!important;white-space:nowrap!important;cursor:pointer!important;box-shadow:none!important}
+#view .drh-suspension-primary-action:hover{background:#0d6ecc!important;color:#fff!important}
+@media(max-width:1180px){#view .drh-suspension-overview{grid-template-columns:1fr auto!important}#view .drh-suspension-stats{grid-column:1/-1}}
+@media(max-width:680px){#view .drh-suspension-overview{display:flex!important;align-items:stretch!important;flex-direction:column!important;gap:14px!important}#view .drh-suspension-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}#view .drh-suspension-primary-action{width:100%!important}}
 @media(max-width:767px){
   #view .drh-effectif-actions-card{
     padding:14px!important;

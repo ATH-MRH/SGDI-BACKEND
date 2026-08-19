@@ -12640,6 +12640,37 @@ function drhEffectifActionsBarHTML(){
     <div class="drh-effectif-actions-bar">${btns.map(({k,l,c})=>`<button type="button" class="drh-effectif-action-btn" onclick="openRhEffectifActionModal('${k}')" style="--action-color:${c}">${l}</button>`).join("")}</div>
   </section>`;
 }
+function latestSuspensionEvent(a){
+  return (a?.gestionEvents||[])
+    .filter(e=>String(e?.type||"").toLowerCase()==="suspension")
+    .sort((x,y)=>String(y?.createdAt||y?.du||"").localeCompare(String(x?.createdAt||x?.du||"")))[0]||null;
+}
+function drhSuspensionOverviewHTML(list){
+  const rows=Array.isArray(list)?list:[];
+  const now=today();
+  const events=rows.map(a=>latestSuspensionEvent(a));
+  const endingSoon=events.filter(e=>{
+    if(!e?.au)return false;
+    const days=Math.ceil((new Date(`${e.au}T00:00:00`).getTime()-new Date(`${now}T00:00:00`).getTime())/86400000);
+    return days>=0&&days<=7;
+  }).length;
+  const overdue=events.filter(e=>e?.au&&e.au<now).length;
+  const missing=events.filter(e=>!e?.au).length;
+  return `<section class="drh-suspension-overview">
+    <div class="drh-suspension-overview-copy">
+      <span class="drh-suspension-kicker">Suivi RH</span>
+      <h2>Situation des suspensions</h2>
+      <p>Une vue simple des dossiers actifs et des échéances à traiter.</p>
+    </div>
+    <div class="drh-suspension-stats" aria-label="Statistiques des suspensions">
+      <div><span>Agents suspendus</span><strong>${rows.length}</strong></div>
+      <div class="is-warning"><span>Fin sous 7 jours</span><strong>${endingSoon}</strong></div>
+      <div class="is-danger"><span>Échéances dépassées</span><strong>${overdue}</strong></div>
+      <div><span>Dossiers à compléter</span><strong>${missing}</strong></div>
+    </div>
+    <button type="button" class="drh-suspension-primary-action" onclick="openRhEffectifActionModal('suspendre')">+ Nouvelle suspension</button>
+  </section>`;
+}
 function rhEffectifActionsHTML(){
   const actions=drhEmployeeActionLabels(false);
   return `<div class="mb-5"><h1 class="text-2xl font-bold">Effectifs</h1><p class="text-sm text-slate-500">Actions RH sur le personnel.</p></div>
@@ -13933,7 +13964,7 @@ async function effectifListServerHTML(filter){
   const pagination=`<div class="flex items-center justify-between gap-2 p-3 border-t border-slate-100 text-sm"><div class="text-slate-500">${result.total||0} employé(s) · page ${result.page||1}/${pages}</div><div class="flex gap-2"><button class="btn btn-ghost text-xs" ${result.page<=1?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)-1})">Précédent</button><button class="btn btn-ghost text-xs" ${result.page>=pages?"disabled":""} onclick="setEffectifPage('${filter}',${(result.page||1)+1})">Suivant</button></div></div>`;
   const selectHead=isAdminFichePositionContext()?`<th style="width:42px;text-align:center"><input type="checkbox" onchange="toggleEffectifSelectAll(this.checked)" style="width:16px;height:16px"/></th>`:"";
   return `<div class="effectif-page"><div class="drh-effectif-list-header"><div class="drh-effectif-title-block"><h1 class="text-2xl font-bold effectif-page-title">${title}</h1><p class="text-sm text-slate-500">${result.total||0} employé(s)${soc?` · ${escapeHTML(soc)}`:" · sociétés autorisées"}</p></div><div class="drh-effectif-search-slot">${effectifHeaderSearchHTML(filter)}</div><div class="drh-effectif-header-spacer"></div></div>
-  ${isDrhModuleContext()&&filter!=="instance_affectation"?drhEffectifActionsBarHTML():""}
+  ${isDrhModuleContext()&&filter!=="instance_affectation"?(filter==="suspension"?drhSuspensionOverviewHTML(list):drhEffectifActionsBarHTML()):""}
   ${effectifBulkDeleteToolbarHTML()}
   ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun employé.</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table"><colgroup>${selectHead?`<col style="width:44px">`:""}<col style="width:28%"><col style="width:8%"><col style="width:13%"><col style="width:13%"><col style="width:10%"><col style="width:8%"><col style="width:108px"><col style="width:128px"></colgroup><thead><tr>${selectHead}${effectifTableHeadersHTML()}</tr></thead><tbody>${list.map(a=>employeeListRowHTML(a,filter)).join("")}</tbody></table>${pagination}</div>`}</div>`;
 }
@@ -13962,7 +13993,7 @@ function effectifListHTML(filter){
     <div class="drh-effectif-sort-slot"><span class="text-xs text-slate-400 font-semibold uppercase tracking-widest">Tri</span>${sortHTML}</div>
   </div>`:`<div class="grid grid-cols-1 md:grid-cols-3 items-center gap-3 mb-4"><div><h1 class="text-2xl font-bold effectif-page-title">${title}</h1><p class="text-sm text-slate-500">${list.length} employé(s)${soc?` · ${escapeHTML(soc)}`:" · toutes sociétés"}</p></div>${effectifHeaderSearchHTML(filter)}<div class="flex items-center justify-end gap-2 flex-wrap"><span class="text-xs text-slate-500">Tri :</span><div style="max-width:260px">${sortHTML}</div></div></div>`;
   return `<div class="effectif-page ${isOpsEffectifContext()?"ops-effectif-page":""}">${opsHeader}
-  ${isDrhModuleContext()&&filter!=="instance_affectation"?drhEffectifActionsBarHTML():""}
+  ${isDrhModuleContext()&&filter!=="instance_affectation"?(filter==="suspension"?drhSuspensionOverviewHTML(list):drhEffectifActionsBarHTML()):""}
   ${opsEffectifFiltersHTML(filterSource,list.length)}
   ${effectifBulkDeleteToolbarHTML()}
   ${list.length===0?`<div class="card p-10 text-center text-slate-500">Aucun employé.</div>`:`<div class="card overflow-hidden effectif-table-card"><table class="effectif-table">
