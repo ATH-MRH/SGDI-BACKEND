@@ -76,8 +76,8 @@ class EmployeeGroupUpdateIn(BaseModel):
     @classmethod
     def _valid_group_code(cls, value: str) -> str:
         cleaned = (value or "").strip().upper()
-        if not cleaned or len(cleaned) > 3 or not cleaned.isalnum():
-            raise ValueError("Groupe invalide")
+        if cleaned not in GROUP_LETTERS:
+            raise ValueError(f"Groupe invalide. Groupes disponibles : {', '.join(GROUP_LETTERS)}")
         return cleaned
 
 
@@ -91,6 +91,13 @@ class SiteEmployeeOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SiteGroupOut(BaseModel):
+    code: str
+    assigned: int
+    quota: int
+    remaining: int
+
+
 class SiteVisibleOut(BaseModel):
     id: int
     name: str
@@ -101,9 +108,29 @@ class SiteVisibleOut(BaseModel):
     required_staff: int
     actual_staff: int
     employees: list[SiteEmployeeOut] = []
-    available_groups: list[str] = []
+    groups: list[SiteGroupOut] = []
 
     model_config = {"from_attributes": True}
+
+
+GROUP_LETTERS = ["A", "B", "C", "D", "E", "F"]
+
+
+class SiteGroupQuotasIn(BaseModel):
+    quotas: dict[str, int]
+
+    @field_validator("quotas")
+    @classmethod
+    def _valid_quotas(cls, value: dict[str, int]) -> dict[str, int]:
+        cleaned: dict[str, int] = {}
+        for key, val in value.items():
+            code = str(key).strip().upper()
+            if code not in GROUP_LETTERS:
+                raise ValueError(f"Groupe invalide : {key}")
+            if val is None or val < 0:
+                raise ValueError("Le quota doit être positif ou nul")
+            cleaned[code] = int(val)
+        return cleaned
 
 
 class EquipmentVisibleOut(BaseModel):

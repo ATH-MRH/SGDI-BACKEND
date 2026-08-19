@@ -2,18 +2,18 @@ from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
 from app.modules.auth.models import User
 from app.modules.client_portal.models import ClientObservation, ClientPortalUser
-from app.modules.client_portal.schemas import URGENT_CATEGORIES
+from app.modules.client_portal.schemas import GROUP_LETTERS, URGENT_CATEGORIES
 from app.modules.client_portal.security import generate_temporary_password
 from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.materiel.models import EmployeeEquipment, MaterialAssignment, StockArticle
-from app.modules.ops.models import Assignment, RotationTemplate, Site, SiteRotation
+from app.modules.ops.models import Assignment, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids
 
 
@@ -69,21 +69,28 @@ def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, 
     ]
 
 
-# Groupes de repli lorsque le site n'a pas (encore) de rotation configurée (SiteRotation) :
-# la plupart des rotations de gardiennage utilisées ici tournent sur 2 à 4 groupes.
-_DEFAULT_GROUPS = ["A", "B", "C", "D"]
+def _site_group_quotas(site: Site) -> dict[str, int]:
+    plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
+    raw = plan.get("groupQuotas") if isinstance(plan.get("groupQuotas"), dict) else {}
+    return {code: int(raw.get(code, 0) or 0) for code in GROUP_LETTERS}
 
 
-def _available_groups_for_site(db: Session, site_id: int) -> list[str]:
-    rotation = db.execute(
-        select(RotationTemplate)
-        .join(SiteRotation, SiteRotation.rotation_id == RotationTemplate.id)
-        .where(SiteRotation.site_id == site_id, SiteRotation.active == 1)
-        .order_by(SiteRotation.start_date.desc())
-    ).scalars().first()
-    if rotation and isinstance(rotation.group_offsets, dict) and rotation.group_offsets:
-        return sorted(str(key).upper() for key in rotation.group_offsets.keys())
-    return list(_DEFAULT_GROUPS)
+def _site_groups_payload(site: Site, site_employees: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    quotas = _site_group_quotas(site)
+    counts: dict[str, int] = {code: 0 for code in GROUP_LETTERS}
+    for employee in site_employees:
+        code = str(employee.get("group_code") or "").strip().upper()
+        if code in counts:
+            counts[code] += 1
+    return [
+        {
+            "code": code,
+            "assigned": counts[code],
+            "quota": quotas[code],
+            "remaining": max(0, quotas[code] - counts[code]),
+        }
+        for code in GROUP_LETTERS
+    ]
 
 
 def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]]:
@@ -121,10 +128,28 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             "required_staff": s.contractual_staff or (s.day_staff + s.night_staff) or 0,
             "actual_staff": len(employees_by_site.get(s.id, [])),
             "employees": employees_by_site.get(s.id, []),
-            "available_groups": _available_groups_for_site(db, s.id),
+            "groups": _site_groups_payload(s, employees_by_site.get(s.id, [])),
         }
         for s in sites
     ]
+
+
+def update_site_group_quotas_for_client(db: Session, client_id: int, site_id: int, payload) -> dict[str, Any]:
+    site = db.get(Site, site_id)
+    if not site or site.client_id != client_id:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    plan = dict(site.equipment_plan) if isinstance(site.equipment_plan, dict) else {}
+    quotas = dict(plan.get("groupQuotas") if isinstance(plan.get("groupQuotas"), dict) else {})
+    quotas.update(payload.quotas)
+    plan["groupQuotas"] = quotas
+    site.equipment_plan = plan
+    db.commit()
+    db.refresh(site)
+    sites = visible_sites_for_client(db, client_id)
+    updated = next((row for row in sites if row["id"] == site_id), None)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    return updated
 
 
 def update_employee_group_for_client(db: Session, client_id: int, employee_id: int, payload) -> dict[str, Any]:
@@ -140,12 +165,6 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
     ).scalars().first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Agent introuvable")
-    allowed_groups = _available_groups_for_site(db, assignment.site_id)
-    if payload.group_code not in allowed_groups:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Groupe invalide pour ce site. Groupes disponibles : {', '.join(allowed_groups)}",
-        )
     assignment.group_code = payload.group_code
     db.commit()
     employee = db.get(Employee, employee_id)

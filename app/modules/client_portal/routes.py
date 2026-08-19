@@ -31,6 +31,7 @@ from app.modules.client_portal.schemas import (
     ObservationOut,
     ObservationResolveIn,
     SiteCreateIn,
+    SiteGroupQuotasIn,
     SiteVisibleOut,
 )
 from app.modules.client_portal.security import create_client_portal_token, current_client_user
@@ -180,6 +181,17 @@ def create_site(
 ):
     _require_client_permission(db, user, "create_sites")
     return service.create_site_for_client(db, user.client_id, payload)
+
+
+@router.put("/sites/{site_id}/groups", response_model=SiteVisibleOut)
+def update_site_group_quotas(
+    site_id: int,
+    payload: SiteGroupQuotasIn,
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "assign_employees")
+    return service.update_site_group_quotas_for_client(db, user.client_id, site_id, payload)
 
 
 @router.get("/equipment", response_model=list[EquipmentVisibleOut])

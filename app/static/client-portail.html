@@ -118,6 +118,13 @@ td{padding:11px 14px;border-bottom:1px solid #eef2f7;vertical-align:middle}
 tr:last-child td{border-bottom:0}
 .equip-name{font-weight:850;font-size:13px}
 .equip-ref{font-size:11px;color:var(--muted);margin-top:1px}
+.group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
+.group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc}
+.gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
+.gc-assigned{font-size:18px;font-weight:900;margin-top:2px;line-height:1}
+.gc-quota-row{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;font-size:10px;color:var(--muted)}
+.gc-quota-input{width:42px;height:22px;padding:0 3px;font-size:11px;text-align:center}
+.gc-remaining{font-size:10px;color:var(--muted);margin-top:3px}
 .site-employees{border-top:1px solid #eef2f7;padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .site-employees-title{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .site-employee-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px}
@@ -578,12 +585,22 @@ async function loadSites(){
       const statusLabel=required===0?"Effectif non défini":(actual>=required?"Couverture complète":(actual>0?"Sous-effectif":"Aucun agent affecté"));
       const statusPill=required===0?"pill-gray":(actual>=required?"pill-green":(actual>0?"pill-amber":"pill-red"));
       const addressParts=[s.address,s.commune,s.wilaya].filter(Boolean).join(", ");
-      const groupOptions=(s.available_groups||[]).map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");
+      const groups=s.groups||[];
+      const groupOptionsHtml=code=>groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
+      const countersHtml=groups.length?`<div class="group-counters">${groups.map(g=>`
+        <div class="group-counter">
+          <div class="gc-code">Groupe ${esc(g.code)}</div>
+          <div class="gc-assigned">${g.assigned}</div>
+          <div class="gc-quota-row">quota
+            ${canAssign?`<input type="number" min="0" step="1" class="gc-quota-input" value="${g.quota}" onchange="updateGroupQuota(${s.id},'${g.code}',this.value)">`:`<b>${g.quota}</b>`}
+          </div>
+          <div class="gc-remaining">${g.remaining} restant${g.remaining>1?"s":""}</div>
+        </div>`).join("")}</div>`:"";
       const employeesHtml=(s.employees||[]).length?`<div class="site-employees">
         <div class="site-employees-title">Agents affectés</div>
         ${s.employees.map(e=>`<div class="site-employee-row">
           <div class="site-employee-name">${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div>
-          ${canAssign&&groupOptions?`<select class="group-select" onchange="updateEmployeeGroup(${e.id},this.value)">${(s.available_groups||[]).map(g=>`<option value="${esc(g)}" ${g===e.group_code?"selected":""}>Groupe ${esc(g)}</option>`).join("")}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
+          ${canAssign&&groups.length?`<select class="group-select" onchange="updateEmployeeGroup(${e.id},this.value)">${groupOptionsHtml(e.group_code)}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
         </div>`).join("")}
       </div>`:"";
       return `<div class="site-card">
@@ -596,11 +613,24 @@ async function loadSites(){
           <div class="coverage-row"><span>Effectif</span><span class="coverage-value">${actual} / ${required||"—"}</span></div>
           <div class="progress-track" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
         </div>
+        ${countersHtml}
         ${employeesHtml}
       </div>`;
     }).join("")}</div>`;
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  }
+}
+
+async function updateGroupQuota(siteId,groupCode,value){
+  const quota=parseInt(value,10);
+  if(isNaN(quota)||quota<0){loadSites();return}
+  try{
+    await apiFetch(`/sites/${siteId}/groups`,{method:"PUT",body:JSON.stringify({quotas:{[groupCode]:quota}})});
+    loadSites();
+  }catch(error){
+    showBanner(error.message||"Impossible de mettre à jour le quota.","error");
+    loadSites();
   }
 }
 
