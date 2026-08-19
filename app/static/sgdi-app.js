@@ -7918,7 +7918,7 @@ function renderDhlLogin(){
     <header class="dhl-login-topbar"><div class="dhl-login-topbar-inner"><div class="dhl-login-brand"><span class="dhl-login-brand-logo"><img src="/static/dhl-global-forwarding-logo.png" alt="DHL Global Forwarding"></span><span>PORTAIL CLIENT</span></div><div class="dhl-login-topbar-status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z"/><path d="M9.5 12l1.7 1.7 3.6-4"/></svg> Accès sécurisé</div></div></header>
     <main class="dhl-login-main">
       <section class="dhl-login-showcase" aria-label="Présentation du portail DHL">
-        <div class="dhl-login-copy"><span>ESPACE OPÉRATIONNEL</span><h1>Votre espace<br>opérationnel</h1><p>Suivez vos équipes et accédez à vos informations terrain en toute sécurité.</p><i></i></div>
+        <div class="dhl-login-copy"><h1>Votre espace opérationnel</h1><p>Suivez vos équipes et accédez à vos<br>informations terrain en toute sécurité.</p><i></i></div>
       </section>
       <section class="dhl-login-access">
        <div class="dhl-login-panel">
@@ -7931,10 +7931,11 @@ function renderDhlLogin(){
         <button class="sgdi-login-submit dhl-login-submit" type="submit" form="login-form">Se connecter</button>
         <div class="sgdi-login-status dhl-login-status" hidden aria-live="polite"></div>
         <button class="dhl-login-forgot" type="button" onclick="toast('Contactez l\'administrateur système pour réinitialiser le mot de passe','info')">Mot de passe oublié ?</button>
-        <div class="dhl-login-footer"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z"/><path d="M9.5 12l1.7 1.7 3.6-4"/></svg>Connexion sécurisée</span></div>
+        <div class="dhl-login-footer"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z"/><path d="M9.5 12l1.7 1.7 3.6-4"/></svg>Connexion sécurisée</span><button type="button" onclick="toast('Contactez l\'administrateur système','info')"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M6 20v-2a6 6 0 0112 0v2M4 9V7a8 8 0 0116 0v2M4 9h3v6H4zM17 9h3v6h-3z"/></svg>Administration système</button></div>
        </div>
       </section>
     </main>
+    <footer class="dhl-login-partner">Une plateforme opérée par <strong>IRON GLOBAL SÉCURITÉ</strong></footer>
   </div>`;
   const dhlLogo=document.querySelector(".dhl-login-brand-logo img");
   if(dhlLogo)dhlLogo.addEventListener("load",()=>{
