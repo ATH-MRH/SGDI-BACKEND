@@ -83,6 +83,8 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .portal-search-result{width:100%;border:0;background:#fff;color:#10243e;border-radius:9px;padding:10px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;gap:12px}
 .portal-search-result:hover{background:#fff8d6}.portal-search-result strong{display:block;font-size:12.5px}.portal-search-result span{display:block;font-size:11px;color:#64748b;margin-top:2px}.portal-search-type{font-size:9px!important;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#a80d27!important;white-space:nowrap}
 .portal-search-empty{padding:16px;text-align:center;font-size:12px;color:#64748b}
+.portal-search-status{padding:8px 10px;border-top:1px solid #eef2f7;font-size:10.5px;color:#64748b;text-align:center}
+.portal-search-status.error{color:#991b1b;background:#fff1f2}
 .portal-search-match{outline:2px solid #c8102e;outline-offset:2px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 14px;font-weight:750;cursor:pointer}
 .shell{max-width:1320px;margin:0 auto;padding:18px 20px;display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
@@ -258,7 +260,7 @@ tr:last-child td{border-bottom:0}
       </div>
       <div class="portal-search">
         <label class="sr-only" for="portalGlobalSearch">Rechercher dans le portail</label>
-        <input id="portalGlobalSearch" type="search" autocomplete="off" placeholder="Rechercher un agent, un site, un matériel…" oninput="runPortalSearch(this.value)" onkeydown="if(event.key==='Escape')closePortalSearch()">
+        <input id="portalGlobalSearch" type="search" autocomplete="off" placeholder="Rechercher un agent, un site, un matériel…" oninput="runPortalSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';resetPortalSearch()}">
         <span class="portal-search-icon" aria-hidden="true">⌕</span>
         <div id="portalSearchResults" class="portal-search-results hidden"></div>
       </div>
@@ -409,6 +411,7 @@ let equipmentCache=[];
 let historyCache=[];
 let portalSearchResults=[];
 let portalSearchRequest=0;
+let portalSearchLoading=null;
 const portalSearchLoaded={sites:false,equipment:false,history:false};
 let categories={};
 let observationKind="observation";
@@ -606,16 +609,16 @@ async function enterApp(){
   await loadEmployees();
 }
 
-function switchTab(tab){
+async function switchTab(tab){
   document.querySelectorAll(".portal-nav-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===tab));
   document.getElementById("planningTab").classList.toggle("hidden",tab!=="planning");
   document.getElementById("employeesTab").classList.toggle("hidden",tab!=="employees");
   document.getElementById("sitesTab").classList.toggle("hidden",tab!=="sites");
   document.getElementById("equipmentTab").classList.toggle("hidden",tab!=="equipment");
   document.getElementById("historyTab").classList.toggle("hidden",tab!=="history");
-  if(tab==="sites")loadSites();
-  if(tab==="equipment")loadEquipment();
-  if(tab==="history")loadHistory();
+  if(tab==="sites")await loadSites();
+  if(tab==="equipment")await loadEquipment();
+  if(tab==="history")await loadHistory();
 }
 
 async function loadEmployees(){
@@ -945,38 +948,59 @@ function normalizePortalSearch(value){
   return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("fr").trim();
 }
 async function ensurePortalSearchData(){
+  if(portalSearchLoading)return portalSearchLoading;
   const tasks=[];
-  if(session?.permissions?.view_sites!==false&&!portalSearchLoaded.sites)tasks.push(apiFetch("/sites").then(rows=>{sitesCache=rows;portalSearchLoaded.sites=true}).catch(()=>{}));
-  if(session?.permissions?.view_equipment!==false&&!portalSearchLoaded.equipment)tasks.push(apiFetch("/equipment").then(rows=>{equipmentCache=rows;portalSearchLoaded.equipment=true}).catch(()=>{}));
-  if(session?.permissions?.view_observations!==false&&!portalSearchLoaded.history)tasks.push(apiFetch("/observations").then(rows=>{historyCache=rows;portalSearchLoaded.history=true}).catch(()=>{}));
-  await Promise.all(tasks);
+  if(session?.permissions?.view_sites!==false&&!portalSearchLoaded.sites)tasks.push(apiFetch("/sites").then(rows=>{sitesCache=rows;portalSearchLoaded.sites=true}));
+  if(session?.permissions?.view_equipment!==false&&!portalSearchLoaded.equipment)tasks.push(apiFetch("/equipment").then(rows=>{equipmentCache=rows;portalSearchLoaded.equipment=true}));
+  if(session?.permissions?.view_observations!==false&&!portalSearchLoaded.history)tasks.push(apiFetch("/observations").then(rows=>{historyCache=rows;portalSearchLoaded.history=true}));
+  portalSearchLoading=Promise.allSettled(tasks).then(results=>results.filter(r=>r.status==="rejected").length).finally(()=>{portalSearchLoading=null});
+  return portalSearchLoading;
 }
 function closePortalSearch(){
   document.getElementById("portalSearchResults")?.classList.add("hidden");
 }
-async function runPortalSearch(value){
-  const query=normalizePortalSearch(value),host=document.getElementById("portalSearchResults"),request=++portalSearchRequest;
-  if(!host||query.length<2){closePortalSearch();return}
-  host.classList.remove("hidden");host.innerHTML='<div class="portal-search-empty">Recherche…</div>';
-  await ensurePortalSearchData();if(request!==portalSearchRequest)return;
+function resetPortalSearch(){
+  portalSearchRequest++;
+  document.querySelectorAll(".portal-search-match").forEach(node=>node.classList.remove("portal-search-match"));
+  document.querySelectorAll("#employeesList .emp-card.hidden,#sitesList .site-card.hidden,#equipmentList tbody tr.hidden,#historyList .hist-card.hidden").forEach(node=>node.classList.remove("hidden"));
+  closePortalSearch();
+}
+function collectPortalSearchResults(query){
   const results=[];
   const add=(type,tab,title,meta,haystack)=>{if(normalizePortalSearch(haystack).includes(query))results.push({type,tab,title,meta,term:title})};
   employees.forEach(e=>add("Personnel","employees",`${e.code?e.code+" — ":""}${e.last_name||""} ${e.first_name||""}`.trim(),[e.position,e.site_name].filter(Boolean).join(" · "),[e.last_name,e.first_name,e.position,e.site_name,e.code].join(" ")));
   sitesCache.forEach(s=>add("Site","sites",s.name||"Site",[s.commune,s.wilaya,s.site_type].filter(Boolean).join(" · "),[s.name,s.address,s.commune,s.wilaya,s.site_type].join(" ")));
   equipmentCache.forEach(e=>add("Matériel","equipment",e.designation||"Équipement",[e.site_name,e.category,e.code,e.assignee].filter(Boolean).join(" · "),[e.designation,e.site_name,e.category,e.code,e.assignee,e.status_label].join(" ")));
   historyCache.forEach(o=>add("Événement","history",`${o.employee_code?o.employee_code+" — ":""}${o.employee_name||"Signalement"}`,[formatDateFr(o.incident_date),o.site_name,statusLabel(o.status)].filter(Boolean).join(" · "),[o.employee_code,o.employee_name,o.site_name,o.description,o.status,...(o.categories||[])].join(" ")));
-  portalSearchResults=results.slice(0,10);
-  host.innerHTML=portalSearchResults.length?portalSearchResults.map((r,index)=>`<button type="button" class="portal-search-result" onclick="openPortalSearchResult(${index})"><span><strong>${esc(r.title)}</strong><span>${esc(r.meta||"")}</span></span><span class="portal-search-type">${esc(r.type)}</span></button>`).join(""):'<div class="portal-search-empty">Aucun résultat dans votre périmètre.</div>';
+  return results;
+}
+function renderPortalSearchResults(query,{loading=false,errors=0}={}){
+  const host=document.getElementById("portalSearchResults");if(!host)return;
+  const allResults=collectPortalSearchResults(query);portalSearchResults=allResults.slice(0,20);
+  let html=portalSearchResults.length?portalSearchResults.map((r,index)=>`<button type="button" class="portal-search-result" onclick="openPortalSearchResult(${index})"><span><strong>${esc(r.title)}</strong><span>${esc(r.meta||"")}</span></span><span class="portal-search-type">${esc(r.type)}</span></button>`).join(""):'<div class="portal-search-empty">Aucun résultat dans votre périmètre.</div>';
+  if(loading)html+='<div class="portal-search-status">Recherche dans les autres rubriques…</div>';
+  else if(errors)html+=`<div class="portal-search-status error">${errors} rubrique${errors>1?"s":""} indisponible${errors>1?"s":""}. Les résultats affichés sont partiels.</div>`;
+  else if(allResults.length>portalSearchResults.length)html+=`<div class="portal-search-status">20 résultats affichés sur ${allResults.length}. Affinez votre recherche.</div>`;
+  host.innerHTML=html;host.classList.remove("hidden");
+}
+async function runPortalSearch(value){
+  const query=normalizePortalSearch(value);
+  resetPortalSearch();
+  const request=portalSearchRequest;
+  if(!query)return;
+  renderPortalSearchResults(query,{loading:true});
+  const errors=await ensurePortalSearchData();if(request!==portalSearchRequest)return;
+  renderPortalSearchResults(query,{errors});
 }
 async function openPortalSearchResult(index){
   const result=portalSearchResults[index];if(!result)return;
-  switchTab(result.tab);
-  if(result.tab==="sites")await loadSites();
-  if(result.tab==="equipment")await loadEquipment();
-  if(result.tab==="history")await loadHistory();
+  await switchTab(result.tab);
   const selectors={employees:"#employeesList .emp-card",sites:"#sitesList .site-card",equipment:"#equipmentList tbody tr",history:"#historyList .hist-card"};
   const nodes=[...document.querySelectorAll(selectors[result.tab]||"")],term=normalizePortalSearch(result.term);
-  nodes.forEach(node=>{const match=normalizePortalSearch(node.textContent).includes(term);node.classList.toggle("hidden",!match);node.classList.toggle("portal-search-match",match)});
+  document.querySelectorAll(".portal-search-match").forEach(node=>node.classList.remove("portal-search-match"));
+  const match=nodes.find(node=>normalizePortalSearch(node.textContent).includes(term));
+  if(match){match.classList.add("portal-search-match");match.scrollIntoView({behavior:"smooth",block:"center"})}
+  const input=document.getElementById("portalGlobalSearch");if(input)input.value="";
   closePortalSearch();
 }
 document.addEventListener("click",event=>{if(!event.target.closest(".portal-search"))closePortalSearch()});
