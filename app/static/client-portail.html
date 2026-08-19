@@ -157,6 +157,8 @@ tr:last-child td{border-bottom:0}
 .employee-detail{padding:10px;border:1px solid var(--line);border-radius:11px;background:#f8fafc}
 .employee-detail span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:800;margin-bottom:3px}
 .employee-detail b{font-size:13px;color:var(--navy)}
+.employee-profile-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;padding-top:15px;border-top:1px solid var(--line)}
+.employee-profile-actions button{min-width:140px}.danger-action{background:#c8102e!important;color:#fff!important;border-color:#c8102e!important}
 .site-employee-name{font-weight:750}
 .site-employee-name .pos{display:block;font-size:11px;color:var(--muted);font-weight:600}
 .group-select{height:30px;font-size:11px;font-weight:800;padding:0 6px;width:auto}
@@ -331,6 +333,20 @@ tr:last-child td{border-bottom:0}
   </div>
 </div>
 
+<div id="employeeActionBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEmployeeActionModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head"><h2 id="employeeActionTitle">Demande</h2><button type="button" class="modal-close" onclick="closeEmployeeActionModal()">×</button></div>
+    <div class="modal-sub" id="employeeActionLabel"></div>
+    <label for="employeeActionReason">Motif de la demande</label>
+    <textarea id="employeeActionReason" placeholder="Expliquez précisément le motif…"></textarea>
+    <label for="employeeActionFile">Pièce jointe facultative</label>
+    <input id="employeeActionFile" type="file" accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp">
+    <div class="hint">PDF, Word ou image — 10 Mo maximum.</div>
+    <div id="employeeActionError" class="error"></div>
+    <div class="modal-actions"><button type="button" class="secondary" onclick="closeEmployeeActionModal()">Annuler</button><button type="button" class="primary" id="employeeActionSubmit" onclick="submitEmployeeActionRequest()">Envoyer la demande</button></div>
+  </div>
+</div>
+
 <div id="modalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeObservationModal()">
   <div class="modal">
     <div class="modal-head"><h2>Signaler un agent</h2><button type="button" class="modal-close" onclick="closeObservationModal()">×</button></div>
@@ -417,6 +433,7 @@ let categories={};
 let observationKind="observation";
 let selectedCategories=new Set();
 let modalEmployee=null;
+let employeeActionRequest=null;
 const defaultEmployeePhoto="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 140'%3E%3Crect width='120' height='140' fill='%23eef2f7'/%3E%3Ccircle cx='60' cy='48' r='25' fill='%2394a3b8'/%3E%3Cpath d='M18 132c3-34 20-51 42-51s39 17 42 51' fill='%2394a3b8'/%3E%3C/svg%3E";
 let branding=null;
 
@@ -485,28 +502,50 @@ function completedYears(value){
   if(!value)return null;const start=new Date(`${value}T00:00:00`);if(Number.isNaN(start.getTime()))return null;
   const now=new Date();let years=now.getFullYear()-start.getFullYear();if(now.getMonth()<start.getMonth()||(now.getMonth()===start.getMonth()&&now.getDate()<start.getDate()))years--;return Math.max(0,years);
 }
+function siteSeniority(value){
+  if(!value)return "Non renseignée";const start=new Date(`${value}T00:00:00`),end=new Date();if(Number.isNaN(start.getTime())||start>end)return "0 an, 0 mois, 0 jour";
+  let years=end.getFullYear()-start.getFullYear(),cursor=new Date(start);cursor.setFullYear(cursor.getFullYear()+years);if(cursor>end){years--;cursor=new Date(start);cursor.setFullYear(cursor.getFullYear()+years)}
+  let months=(end.getFullYear()-cursor.getFullYear())*12+end.getMonth()-cursor.getMonth(),monthCursor=new Date(cursor);monthCursor.setMonth(monthCursor.getMonth()+months);if(monthCursor>end){months--;monthCursor=new Date(cursor);monthCursor.setMonth(monthCursor.getMonth()+months)}
+  const days=Math.max(0,Math.floor((new Date(end.getFullYear(),end.getMonth(),end.getDate())-new Date(monthCursor.getFullYear(),monthCursor.getMonth(),monthCursor.getDate()))/86400000));
+  return `${years} an${years>1?"s":""}, ${months} mois, ${days} jour${days>1?"s":""}`;
+}
 function employeeById(employeeId){
   return employees.find(e=>e.id===employeeId)||sitesCache.flatMap(s=>s.employees||[]).find(e=>e.id===employeeId);
 }
 function openEmployeeDetail(employeeId){
   const e=employeeById(employeeId);if(!e)return;
-  const age=completedYears(e.birth_date),siteYears=completedYears(e.assignment_start_date);
+  const age=completedYears(e.birth_date);
   const detail=(label,value)=>`<div class="employee-detail"><span>${esc(label)}</span><b>${esc(value??"—")}</b></div>`;
   document.getElementById("employeeDetailBody").innerHTML=`<div class="employee-profile">
     <img class="employee-profile-photo" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}">
     <div><div class="employee-profile-name">${esc(e.last_name)} ${esc(e.first_name)}</div><div class="employee-detail-grid">
       ${detail("Code",e.code)}${detail("Âge",age===null?"Non renseigné":`${age} ans`)}
       ${detail("Date de fin de contrat",formatDateFr(e.contract_end_date))}${detail("Date d’affectation sur site",formatDateFr(e.assignment_start_date))}
-      ${detail("Ancienneté sur le site",siteYears===null?"Non renseignée":`${siteYears} an${siteYears>1?"s":""}`)}${detail("Nombre de présences",Number(e.presence_count)||0)}
+      ${detail("Ancienneté sur le site",siteSeniority(e.assignment_start_date))}${detail("Nombre de présences",Number(e.presence_count)||0)}
       ${detail("Nombre d’absences",Number(e.absence_count)||0)}${detail("Nombre de suspensions",Number(e.suspension_count)||0)}
       ${detail("Blacklisté",e.blacklisted?"Oui":"Non")}
-    </div></div></div>`;
+    </div>${session?.permissions?.create_observations===false?"":`<div class="employee-profile-actions"><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Affecter</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Blacklister</button></div>`}</div></div>`;
   document.getElementById("employeeDetailBackdrop").classList.remove("hidden");
 }
 function closeEmployeeDetail(){document.getElementById("employeeDetailBackdrop").classList.add("hidden")}
 
+function openEmployeeActionModal(employeeId,action){
+  const e=employeeById(employeeId);if(!e)return;employeeActionRequest={employee:e,action};
+  document.getElementById("employeeActionTitle").textContent=action==="blacklist"?"Demande de blacklistage":"Demande d’affectation";
+  document.getElementById("employeeActionLabel").textContent=`${e.code} — ${e.last_name} ${e.first_name}`;
+  document.getElementById("employeeActionReason").value="";document.getElementById("employeeActionFile").value="";document.getElementById("employeeActionError").classList.remove("show");
+  document.getElementById("employeeActionBackdrop").classList.remove("hidden");
+}
+function closeEmployeeActionModal(){document.getElementById("employeeActionBackdrop").classList.add("hidden");employeeActionRequest=null}
+async function submitEmployeeActionRequest(){
+  if(!employeeActionRequest)return;const reason=document.getElementById("employeeActionReason").value.trim(),error=document.getElementById("employeeActionError"),btn=document.getElementById("employeeActionSubmit");
+  error.classList.remove("show");if(reason.length<5){error.textContent="Veuillez expliquer le motif de la demande.";error.classList.add("show");return}
+  const form=new FormData();form.append("employee_id",employeeActionRequest.employee.id);form.append("action",employeeActionRequest.action);form.append("reason",reason);const file=document.getElementById("employeeActionFile").files[0];if(file)form.append("file",file);
+  btn.disabled=true;btn.textContent="Envoi…";try{await apiFetch("/employee-action-requests",{method:"POST",body:form});closeEmployeeActionModal();closeEmployeeDetail();showBanner("Votre demande a été transmise à l’administration.","success");portalSearchLoaded.history=false}catch(e){error.textContent=e.message||"Envoi impossible";error.classList.add("show")}finally{btn.disabled=false;btn.textContent="Envoyer la demande"}
+}
+
 async function apiFetch(path,opts={}){
-  const headers=Object.assign({"Content-Type":"application/json"},opts.headers||{});
+  const headers=Object.assign({},opts.headers||{});if(!(opts.body instanceof FormData))headers["Content-Type"]="application/json";
   if(session?.token)headers["Authorization"]=`Bearer ${session.token}`;
   const res=await fetch(`/api/client-portal${path}`,Object.assign({},opts,{headers}));
   let body=null;
@@ -938,6 +977,7 @@ async function loadHistory(){
         </div>
         <div class="hist-desc">${esc(o.description)}</div>
         ${o.categories&&o.categories.length?`<div class="hist-cats">${o.categories.map(c=>`<span class="pill pill-amber">${esc(categories[c]||c)}</span>`).join("")}</div>`:""}
+        ${o.attachment_url?`<div style="margin-top:9px"><a class="pill pill-blue" href="${esc(o.attachment_url)}" target="_blank" rel="noopener">📎 ${esc(o.attachment_name||"Voir la pièce jointe")}</a></div>`:""}
       </div>`).join("")}</div>`;
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;

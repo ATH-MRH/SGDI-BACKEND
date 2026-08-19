@@ -202,6 +202,32 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     assert site["employees"][0]["group_code"] is None
 
 
+def test_client_can_submit_employee_action_request_with_attachment(client, auth_headers, monkeypatch, tmp_path):
+    from app.modules.client_portal import routes
+
+    monkeypatch.setattr(routes, "DOCS_DIR", tmp_path)
+    cid = _commercial_client(client, auth_headers, "Client Action Request", portal_slug="client-action-request")
+    site_id = _site(client, auth_headers, "Site Action Request", client_id=cid)
+    employee_id = _emp(client, auth_headers, "ACTION1")
+    _assign(client, auth_headers, employee_id, site_id)
+    account = _portal_account(client, auth_headers, cid, username="client.action.request")
+    portal_headers = _login(client, account["username"], account["temporary_password"])
+
+    response = client.post(
+        "/api/client-portal/employee-action-requests",
+        headers=portal_headers,
+        data={"employee_id": str(employee_id), "action": "blacklist", "reason": "Incident grave documenté par le client"},
+        files={"file": ("preuve.pdf", b"%PDF-1.4 test", "application/pdf")},
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["categories"] == ["demande_blacklist"]
+    assert body["severity"] == "urgente"
+    assert body["attachment_name"] == "preuve.pdf"
+    assert body["attachment_url"].startswith("/uploads/photos/docs/client_request_")
+    assert any(tmp_path.iterdir())
+
+
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────
 
 def test_employee_visible_only_via_site_client_id(client, auth_headers):

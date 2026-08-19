@@ -1,16 +1,21 @@
 from datetime import date
+from pathlib import Path
+from typing import Annotated
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
 from app.core.config import settings
+from app.core.photo_storage import DOCS_DIR, PUBLIC_DOC_PREFIX
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.auth.routes import require_admin
 from app.modules.client_portal import service
 from app.modules.client_portal.models import ClientPortalUser
+from app.modules.drh.models import Document
 from app.modules.client_portal.schemas import (
     OBSERVATION_CATEGORIES,
     ClientChangePasswordIn,
@@ -235,6 +240,43 @@ def create_observation(
 ):
     _require_client_permission(db, user, "create_observations")
     row = service.create_observation(db, user, payload)
+    return service.observation_out_dict(db, row)
+
+
+@router.post("/employee-action-requests", response_model=ObservationOut, status_code=status.HTTP_201_CREATED)
+async def create_employee_action_request(
+    employee_id: Annotated[int, Form()],
+    action: Annotated[str, Form()],
+    reason: Annotated[str, Form()],
+    file: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "create_observations")
+    content = None
+    if file and file.filename:
+        allowed_types = {"application/pdf", "image/jpeg", "image/png", "image/webp", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+        if file.content_type not in allowed_types:
+            raise HTTPException(status_code=422, detail="Formats autorisés : PDF, image, Word")
+        content = await file.read()
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=422, detail="La pièce jointe ne doit pas dépasser 10 Mo")
+    row = service.create_employee_action_request(db, user, employee_id, action, reason)
+    if file and file.filename and content is not None:
+        suffix = {
+            "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+            "application/msword": ".doc", "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+        }[file.content_type]
+        DOCS_DIR.mkdir(parents=True, exist_ok=True)
+        stored_name = f"client_request_{row.id}_{uuid4().hex}{suffix}"
+        (DOCS_DIR / stored_name).write_bytes(content)
+        db.add(Document(
+            owner_type="client_observation", owner_id=row.id,
+            label="Pièce jointe à la demande client", file_name=Path(file.filename).name[:255],
+            file_path=f"{PUBLIC_DOC_PREFIX}/{stored_name}", mime_type=file.content_type,
+            uploaded_by=user.username,
+        ))
+        db.commit()
     return service.observation_out_dict(db, row)
 
 

@@ -11,7 +11,7 @@ from app.modules.client_portal.models import ClientObservation, ClientPortalUser
 from app.modules.client_portal.schemas import GROUP_LETTERS, URGENT_CATEGORIES
 from app.modules.client_portal.security import generate_temporary_password
 from app.modules.commercial.models import Client
-from app.modules.drh.models import Employee, Sanction
+from app.modules.drh.models import Document, Employee, Sanction
 from app.modules.materiel.models import EmployeeEquipment, MaterialAssignment, StockArticle
 from app.modules.ops.models import Assignment, DailyPresence, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids
@@ -448,9 +448,35 @@ def create_observation(db: Session, client_user: ClientPortalUser, payload) -> C
     return row
 
 
+def create_employee_action_request(db: Session, client_user: ClientPortalUser, employee_id: int, action: str, reason: str) -> ClientObservation:
+    site = _ensure_employee_visible_to_client(db, client_user.client_id, employee_id)
+    if action not in {"affectation", "blacklist"}:
+        raise HTTPException(status_code=422, detail="Action invalide")
+    cleaned_reason = reason.strip()
+    if len(cleaned_reason) < 5:
+        raise HTTPException(status_code=422, detail="Veuillez préciser le motif de la demande")
+    row = ClientObservation(
+        client_id=client_user.client_id,
+        client_user_id=client_user.id,
+        employee_id=employee_id,
+        site_id=site.id if site else None,
+        kind="probleme",
+        categories=[f"demande_{action}"],
+        severity="urgente" if action == "blacklist" else "normale",
+        description=cleaned_reason,
+        incident_date=date.today(),
+        status="nouveau",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 def observation_out_dict(db: Session, row: ClientObservation) -> dict[str, Any]:
     employee = db.get(Employee, row.employee_id)
     site = db.get(Site, row.site_id) if row.site_id else None
+    attachment = db.execute(select(Document).where(Document.owner_type == "client_observation", Document.owner_id == row.id).order_by(Document.id.desc())).scalars().first()
     return {
         "id": row.id,
         "employee_id": row.employee_id,
@@ -464,6 +490,8 @@ def observation_out_dict(db: Session, row: ClientObservation) -> dict[str, Any]:
         "incident_date": row.incident_date,
         "status": row.status,
         "created_at": row.created_at,
+        "attachment_name": attachment.file_name if attachment else None,
+        "attachment_url": attachment.file_path if attachment else None,
     }
 
 

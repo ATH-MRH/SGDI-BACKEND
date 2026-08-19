@@ -35909,6 +35909,7 @@ function opsObservationCardHTML(o){
     </div>
     <div class="text-sm mt-2 text-slate-700">${escapeHTML(o.description)}</div>
     ${o.categories&&o.categories.length?`<div class="flex gap-1 flex-wrap mt-2">${o.categories.map(c=>`<span class="pill pill-amber">${escapeHTML(c)}</span>`).join("")}</div>`:""}
+    ${o.attachment_url?`<a class="btn btn-secondary text-xs mt-2" href="${escapeHTML(o.attachment_url)}" target="_blank" rel="noopener">📎 ${escapeHTML(o.attachment_name||"Pièce jointe")}</a>`:""}
     <div class="flex justify-end mt-3"><button type="button" class="btn btn-secondary text-xs" onclick="openOpsObservationDetail(${o.id})">Ouvrir</button></div>
   </div>`;
 }
@@ -35921,6 +35922,7 @@ function openOpsObservationDetail(id){
     <div class="card p-3 mb-3" style="background:#f8fafc">
       <div class="text-sm">${escapeHTML(o.description)}</div>
       ${o.categories&&o.categories.length?`<div class="flex gap-1 flex-wrap mt-2">${o.categories.map(c=>`<span class="pill pill-amber">${escapeHTML(c)}</span>`).join("")}</div>`:""}
+      ${o.attachment_url?`<div class="mt-3"><a class="btn btn-secondary text-xs" href="${escapeHTML(o.attachment_url)}" target="_blank" rel="noopener">📎 ${escapeHTML(o.attachment_name||"Pièce jointe")}</a></div>`:""}
     </div>
     ${o.resolution_note?`<div class="mb-3"><label class="label">Dernière note de résolution</label><div class="card p-3 text-sm" style="background:#f0fdf4">${escapeHTML(o.resolution_note)}</div><div class="text-xs text-slate-400 mt-1">${o.resolved_by_name?escapeHTML(o.resolved_by_name)+" · ":""}${o.resolved_at?escapeHTML(formatDate(o.resolved_at)):""}</div></div>`:""}
     <label class="label">Statut</label>

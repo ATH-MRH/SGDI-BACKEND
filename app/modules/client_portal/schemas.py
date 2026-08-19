@@ -16,6 +16,8 @@ OBSERVATION_CATEGORIES: dict[str, str] = {
     "telephone_distraction": "Téléphone / distraction au poste",
     "abandon_poste": "Abandon de poste",
     "autre": "Autre",
+    "demande_affectation": "Demande d’affectation",
+    "demande_blacklist": "Demande de blacklistage",
 }
 
 # Ces catégories, quand cochées sur un signalement de problème, marquent automatiquement
@@ -266,6 +268,8 @@ class ObservationOut(BaseModel):
     incident_date: date
     status: str
     created_at: datetime | None = None
+    attachment_name: str | None = None
+    attachment_url: str | None = None
 
     model_config = {"from_attributes": True}
 
