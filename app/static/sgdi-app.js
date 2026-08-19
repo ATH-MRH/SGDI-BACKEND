@@ -7915,28 +7915,26 @@ function isDhlHost(){return String(location.hostname||"").toLowerCase().split(".
 function renderDhlLogin(){
   try{document.title="DHL — Portail sécurisé"}catch(_e){}
   document.getElementById("app").innerHTML=`<div class="dhl-login-page">
-    <header class="dhl-login-topbar"><div class="dhl-login-topbar-inner"><div class="dhl-login-brand"><b>DHL</b><span>PORTAIL CLIENT</span></div><div class="dhl-login-topbar-status"><i></i> Plateforme sécurisée</div></div></header>
+    <header class="dhl-login-topbar"><div class="dhl-login-topbar-inner"><div class="dhl-login-brand"><b>DHL</b><span>PORTAIL CLIENT</span></div><div class="dhl-login-topbar-status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z"/><path d="M9.5 12l1.7 1.7 3.6-4"/></svg> Accès sécurisé</div></div></header>
     <main class="dhl-login-main">
       <section class="dhl-login-showcase" aria-label="Présentation du portail DHL">
-        <div class="dhl-login-context">ESPACE PARTENAIRE</div>
-        <h1>Gestion des équipes<br><em>et des opérations terrain.</em></h1>
-        <p>Un espace centralisé pour consulter les informations opérationnelles et assurer le suivi avec les équipes IRON GLOBAL SÉCURITÉ.</p>
-        <div class="dhl-login-info-list"><div><b>01</b><span><strong>Suivi centralisé</strong>Vos collaborateurs et leurs signalements.</span></div><div><b>02</b><span><strong>Accès maîtrisé</strong>Droits définis pour chaque interlocuteur.</span></div><div><b>03</b><span><strong>Communication rapide</strong>Une information fiable, au bon moment.</span></div></div>
-        <div class="dhl-login-partner">Partenaire opérationnel <strong>IRON GLOBAL SÉCURITÉ</strong></div>
+        <div class="dhl-login-copy"><span>ESPACE OPÉRATIONNEL</span><h1>Votre espace<br>opérationnel</h1><p>Suivez vos équipes et accédez à vos informations terrain en toute sécurité.</p><i></i></div>
       </section>
-      <section class="dhl-login-panel">
-        <div class="dhl-login-panel-head"><span>Accès client DHL</span><h2>Connexion</h2><p>Utilisez vos identifiants pour accéder à votre espace.</p></div>
+      <section class="dhl-login-access">
+       <div class="dhl-login-panel">
+        <div class="dhl-login-panel-head"><h2>Connexion</h2></div>
         <form id="login-form" class="dhl-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
-          <label>Identifiant<input name="username" autocomplete="username" autofocus required placeholder="Votre identifiant"></label>
-          <label class="dhl-login-password-field">Mot de passe<input type="password" name="password" autocomplete="current-password" required placeholder="Votre mot de passe"><button type="button" class="dhl-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button></label>
+          <label>Identifiant<div class="dhl-login-input"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0115 0"/></svg><input name="username" autocomplete="username" autofocus required placeholder="Votre identifiant"></div></label>
+          <label>Mot de passe<div class="dhl-login-input dhl-login-password-field"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><input type="password" name="password" autocomplete="current-password" required placeholder="Votre mot de passe"><button type="button" class="dhl-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button></div></label>
           <label class="dhl-login-remember"><input type="checkbox" checked> Mémoriser cette session</label>
         </form>
         <button class="sgdi-login-submit dhl-login-submit" type="submit" form="login-form">Se connecter</button>
         <div class="sgdi-login-status dhl-login-status" hidden aria-live="polite"></div>
-        <div class="dhl-login-footer"><span><i></i>Connexion chiffrée</span><button type="button" onclick="toast('Contactez l\'administrateur système pour réinitialiser le mot de passe','info')">Mot de passe oublié ?</button></div>
+        <button class="dhl-login-forgot" type="button" onclick="toast('Contactez l\'administrateur système pour réinitialiser le mot de passe','info')">Mot de passe oublié ?</button>
+        <div class="dhl-login-footer"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.2-7 10-4.2-1.8-7-5.4-7-10V6l7-3z"/><path d="M9.5 12l1.7 1.7 3.6-4"/></svg>Connexion sécurisée</span></div>
+       </div>
       </section>
     </main>
-    <button type="button" class="dhl-login-admin" onclick="openAdminSystemPasswordModal(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">Administration système</button>
   </div>`;
 }
 function renderLogin(){
