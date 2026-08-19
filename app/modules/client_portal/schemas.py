@@ -70,12 +70,14 @@ class EmployeeVisibleOut(BaseModel):
 
 
 class EmployeeGroupUpdateIn(BaseModel):
-    group_code: str
+    group_code: str | None = None
 
     @field_validator("group_code")
     @classmethod
-    def _valid_group_code(cls, value: str) -> str:
+    def _valid_group_code(cls, value: str | None) -> str | None:
         cleaned = (value or "").strip().upper()
+        if not cleaned:
+            return None
         if cleaned not in GROUP_LETTERS:
             raise ValueError(f"Groupe invalide. Groupes disponibles : {', '.join(GROUP_LETTERS)}")
         return cleaned

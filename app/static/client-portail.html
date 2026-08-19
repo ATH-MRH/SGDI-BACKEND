@@ -618,7 +618,7 @@ async function loadSites(){
       const totalAssigned=actual;
       const positionMap=(s.employees||[]).reduce((map,e)=>{const label=String(e.position||"Fonction non renseignée").trim()||"Fonction non renseignée",key=label.toLocaleLowerCase("fr");if(!map.has(key))map.set(key,{label,count:0});map.get(key).count+=1;return map},new Map());
       const positionCounts=[...positionMap.values()].sort((a,b)=>a.label.localeCompare(b.label,"fr"));
-      const groupOptionsHtml=code=>groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
+      const groupOptionsHtml=code=>`<option value="" ${!code?"selected":""}>Aucun</option>`+groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
       const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Effectifs par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="gc-quota-row">agent${p.count>1?"s":""}</div></button>`).join("")}</div></div>`:"";
       const countersHtml=groups.length?`<div class="group-counters"><button type="button" class="group-counter total" aria-pressed="false" onclick="filterSiteEmployees(this,'all','')">
           <div class="gc-code">Effectif total</div>
@@ -681,8 +681,8 @@ async function updateGroupQuota(siteId,groupCode,value){
 
 async function updateEmployeeGroup(employeeId,groupCode){
   try{
-    await apiFetch(`/employees/${employeeId}/group`,{method:"PATCH",body:JSON.stringify({group_code:groupCode})});
-    showBanner("Groupe mis à jour.","success");
+    await apiFetch(`/employees/${employeeId}/group`,{method:"PATCH",body:JSON.stringify({group_code:groupCode||null})});
+    showBanner(groupCode?`Employé affecté au groupe ${groupCode}.`:"Employé retiré des groupes.","success");
     loadSites();
   }catch(error){
     showBanner(error.message||"Impossible de mettre à jour le groupe.","error");

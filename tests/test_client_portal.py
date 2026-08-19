@@ -183,6 +183,14 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 0
     assert next(group for group in site["groups"] if group["code"] == "B")["assigned"] == 1
 
+    unassigned = client.patch(f"/api/client-portal/employees/{employee_id}/group", headers=portal_headers, json={"group_code": None})
+    assert unassigned.status_code == 200, unassigned.text
+    assert unassigned.json()["group_code"] is None
+    response = client.get("/api/client-portal/sites", headers=portal_headers)
+    site = next(row for row in response.json() if row["id"] == site_id)
+    assert all(group["assigned"] == 0 for group in site["groups"])
+    assert site["employees"][0]["group_code"] is None
+
 
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────
 

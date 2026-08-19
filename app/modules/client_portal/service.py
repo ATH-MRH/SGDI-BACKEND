@@ -177,11 +177,15 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
     ).scalars().first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Agent introuvable")
-    assignment.group_code = payload.group_code
+    if payload.group_code:
+        assignment.group_code = payload.group_code
     site = db.get(Site, assignment.site_id)
     plan = dict(site.equipment_plan) if isinstance(site.equipment_plan, dict) else {}
     explicit_groups = dict(plan.get("clientPortalGroupAssignments") if isinstance(plan.get("clientPortalGroupAssignments"), dict) else {})
-    explicit_groups[str(employee_id)] = payload.group_code
+    if payload.group_code:
+        explicit_groups[str(employee_id)] = payload.group_code
+    else:
+        explicit_groups.pop(str(employee_id), None)
     plan["clientPortalGroupAssignments"] = explicit_groups
     site.equipment_plan = plan
     db.commit()
@@ -194,7 +198,7 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
         "position": assignment.position or employee.position,
         "site_id": site.id,
         "site_name": site.name,
-        "group_code": assignment.group_code,
+        "group_code": payload.group_code,
     }
 
 
