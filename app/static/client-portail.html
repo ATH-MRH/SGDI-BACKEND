@@ -53,6 +53,7 @@ body.iron-portal .login-chip{background:#fff0f2;color:#a80d27;border-color:#f3bd
 body.iron-portal .login-card h1{font-size:29px;color:#10243e}body.iron-portal input:focus{border-color:#c8102e;box-shadow:0 0 0 3px rgba(200,16,46,.13)}body.iron-portal .pw-toggle{color:#a80d27;background:#fff0f2}body.iron-portal .remember-row input{accent-color:#c8102e}
 body.iron-portal .primary{background:#c8102e!important;border-color:#c8102e!important;border-radius:11px;box-shadow:0 10px 22px rgba(200,16,46,.2)!important}body.iron-portal .primary:hover{background:#a80d27!important;border-color:#a80d27!important}body.iron-portal .login-footer-brand{color:#64788a}
 body.iron-portal .top{background:#ffcc00;color:#10243e;box-shadow:0 10px 30px rgba(120,90,0,.2)}body.iron-portal .brand-logo{width:96px;height:58px;border:0;border-radius:0;background:transparent}body.iron-portal .logout{border-color:#10243e;background:#10243e;color:#fff}
+body.iron-portal .brand-logo img{transform:scale(2);transform-origin:center;max-width:100%!important;max-height:100%!important}
 @media(max-width:900px){body.iron-portal .login{grid-template-columns:1fr;padding:0 18px;gap:0;overflow:auto}body.iron-portal .login:before{inset:150px 0 auto;height:310px}body.iron-portal .login-iron-showcase{height:310px;min-height:310px}.dfa-client-mark{transform:none;font-size:130px}.iron-access{min-height:auto;padding:26px 0 48px;gap:14px}.iron-operator{position:relative;top:auto;left:auto;padding:0;text-align:center}.iron-operator b{font-size:46px}.iron-operator i{font-size:23px}body.iron-portal .login-card{min-height:0;padding:30px 26px}}
 @media(max-width:440px){body.iron-portal .login{padding:0 12px}.dfa-client-mark{font-size:104px}.iron-operator b{font-size:40px}.iron-operator i{font-size:21px}body.iron-portal .login-card{padding:27px 22px}}
 label{display:block;font-size:12px;font-weight:800;color:#42566f;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
@@ -181,7 +182,7 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
   <header class="top">
     <div class="top-row">
       <div class="brand">
-        <div id="appLogoBox" class="brand-logo hidden"><img id="appLogoImg" alt="Logo client" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px"></div>
+        <div id="appLogoBox" class="brand-logo hidden"><img id="appLogoImg" alt="Logo client" style="max-width:100%;max-height:100%;object-fit:contain;transform:scale(2);transform-origin:center"></div>
         <div id="appLogoFallback" class="brand-logo">PC</div>
         <div>
           <div class="brand-title" id="clientNameLabel">—</div>
