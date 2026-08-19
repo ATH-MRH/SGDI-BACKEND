@@ -227,6 +227,33 @@ def test_client_can_submit_employee_action_request_with_attachment(client, auth_
     assert body["attachment_url"].startswith("/uploads/photos/docs/client_request_")
     assert any(tmp_path.iterdir())
 
+    target_site_id = _site(client, auth_headers, "Nouveau Site Action", client_id=cid)
+    rotation = client.post("/api/ops/rotations", headers=auth_headers, json={
+        "code": "ACT7", "name": "Planning action 7 jours", "cycle_length": 7,
+        "cycle_days": [{"day": index + 1, "status": "travail"} for index in range(7)],
+        "group_offsets": {"A": 0, "B": 1}, "active": 1,
+    })
+    assert rotation.status_code == 201, rotation.text
+    options = client.get("/api/client-portal/reference/assignment-options", headers=portal_headers)
+    assert options.status_code == 200, options.text
+    assert any(row["id"] == target_site_id for row in options.json()["sites"])
+    assert any(row["id"] == rotation.json()["id"] for row in options.json()["plannings"])
+
+    assignment_request = client.post(
+        "/api/client-portal/employee-action-requests", headers=portal_headers,
+        data={
+            "employee_id": str(employee_id), "action": "affectation", "reason": "Renforcement de la nouvelle équipe",
+            "target_site_id": str(target_site_id), "target_group_code": "B",
+            "target_rotation_id": str(rotation.json()["id"]), "effective_date": "2026-09-01",
+        },
+    )
+    assert assignment_request.status_code == 201, assignment_request.text
+    assignment_body = assignment_request.json()
+    assert assignment_body["categories"] == ["demande_affectation"]
+    assert "NOUVEAU SITE ACTION · Groupe B" in assignment_body["description"]
+    assert "PLANNING ACTION 7 JOURS (ACT7)" in assignment_body["description"]
+    assert "2026-09-01" in assignment_body["description"]
+
 
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────
 

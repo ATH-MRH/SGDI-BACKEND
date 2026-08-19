@@ -16,8 +16,10 @@ from app.modules.auth.routes import require_admin
 from app.modules.client_portal import service
 from app.modules.client_portal.models import ClientPortalUser
 from app.modules.drh.models import Document
+from app.modules.ops.models import RotationTemplate, Site
 from app.modules.client_portal.schemas import (
     OBSERVATION_CATEGORIES,
+    GROUP_LETTERS,
     ClientChangePasswordIn,
     ClientLoginRequest,
     ClientMeOut,
@@ -155,6 +157,18 @@ def me(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_c
     )
 
 
+@router.get("/reference/assignment-options")
+def assignment_options(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
+    _require_client_permission(db, user, "assign_employees")
+    sites = db.execute(select(Site).where(Site.client_id == user.client_id, Site.active == 1).order_by(Site.name)).scalars().all()
+    rotations = db.execute(select(RotationTemplate).where(RotationTemplate.active == 1).order_by(RotationTemplate.name)).scalars().all()
+    return {
+        "sites": [{"id": row.id, "name": row.name} for row in sites],
+        "groups": list(GROUP_LETTERS),
+        "plannings": [{"id": row.id, "code": row.code, "name": row.name} for row in rotations],
+    }
+
+
 @router.get("/employees", response_model=list[EmployeeVisibleOut])
 def employees(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
     _require_client_permission(db, user, "view_employees")
@@ -248,6 +262,10 @@ async def create_employee_action_request(
     employee_id: Annotated[int, Form()],
     action: Annotated[str, Form()],
     reason: Annotated[str, Form()],
+    target_site_id: Annotated[int | None, Form()] = None,
+    target_group_code: Annotated[str | None, Form()] = None,
+    target_rotation_id: Annotated[int | None, Form()] = None,
+    effective_date: Annotated[date | None, Form()] = None,
     file: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     user: ClientPortalUser = Depends(current_client_user),
@@ -261,7 +279,10 @@ async def create_employee_action_request(
         content = await file.read()
         if len(content) > 10 * 1024 * 1024:
             raise HTTPException(status_code=422, detail="La pièce jointe ne doit pas dépasser 10 Mo")
-    row = service.create_employee_action_request(db, user, employee_id, action, reason)
+    row = service.create_employee_action_request(
+        db, user, employee_id, action, reason,
+        target_site_id, target_group_code, target_rotation_id, effective_date,
+    )
     if file and file.filename and content is not None:
         suffix = {
             "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",

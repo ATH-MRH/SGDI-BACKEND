@@ -13,7 +13,7 @@ from app.modules.client_portal.security import generate_temporary_password
 from app.modules.commercial.models import Client
 from app.modules.drh.models import Document, Employee, Sanction
 from app.modules.materiel.models import EmployeeEquipment, MaterialAssignment, StockArticle
-from app.modules.ops.models import Assignment, DailyPresence, Site
+from app.modules.ops.models import Assignment, DailyPresence, RotationTemplate, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids
 
 
@@ -448,13 +448,35 @@ def create_observation(db: Session, client_user: ClientPortalUser, payload) -> C
     return row
 
 
-def create_employee_action_request(db: Session, client_user: ClientPortalUser, employee_id: int, action: str, reason: str) -> ClientObservation:
+def create_employee_action_request(
+    db: Session, client_user: ClientPortalUser, employee_id: int, action: str, reason: str,
+    target_site_id: int | None = None, target_group_code: str | None = None,
+    target_rotation_id: int | None = None, effective_date: date | None = None,
+) -> ClientObservation:
     site = _ensure_employee_visible_to_client(db, client_user.client_id, employee_id)
     if action not in {"affectation", "blacklist"}:
         raise HTTPException(status_code=422, detail="Action invalide")
     cleaned_reason = reason.strip()
     if len(cleaned_reason) < 5:
         raise HTTPException(status_code=422, detail="Veuillez préciser le motif de la demande")
+    description = cleaned_reason
+    if action == "affectation":
+        target_site = db.get(Site, target_site_id) if target_site_id else None
+        if not target_site or target_site.client_id != client_user.client_id or not target_site.active:
+            raise HTTPException(status_code=422, detail="Veuillez sélectionner un site autorisé")
+        group_code = str(target_group_code or "").strip().upper()
+        if group_code not in GROUP_LETTERS:
+            raise HTTPException(status_code=422, detail="Veuillez sélectionner un groupe")
+        rotation = db.get(RotationTemplate, target_rotation_id) if target_rotation_id else None
+        if not rotation or not rotation.active:
+            raise HTTPException(status_code=422, detail="Veuillez sélectionner un planning actif")
+        current_group = _site_portal_group_assignments(site).get(str(employee_id))
+        description = (
+            f"Motif : {cleaned_reason}\n"
+            f"Affectation actuelle : {site.name} · Groupe {current_group or 'Aucun'}\n"
+            f"Nouvelle affectation demandée : {target_site.name} · Groupe {group_code} · "
+            f"Planning {rotation.name} ({rotation.code}) · Date d’effet {(effective_date or date.today()).isoformat()}"
+        )
     row = ClientObservation(
         client_id=client_user.client_id,
         client_user_id=client_user.id,
@@ -463,7 +485,7 @@ def create_employee_action_request(db: Session, client_user: ClientPortalUser, e
         kind="probleme",
         categories=[f"demande_{action}"],
         severity="urgente" if action == "blacklist" else "normale",
-        description=cleaned_reason,
+        description=description,
         incident_date=date.today(),
         status="nouveau",
     )

@@ -350,6 +350,11 @@ tr:last-child td{border-bottom:0}
   <div class="modal" style="max-width:520px">
     <div class="modal-head"><h2 id="employeeActionTitle">Demande</h2><button type="button" class="modal-close" onclick="closeEmployeeActionModal()">×</button></div>
     <div class="modal-sub" id="employeeActionLabel"></div>
+    <div id="employeeAssignmentFields" class="hidden">
+      <label for="employeeTargetSite">Nouveau site</label><select id="employeeTargetSite"></select>
+      <div class="form-grid"><div><label for="employeeTargetGroup">Nouveau groupe</label><select id="employeeTargetGroup"></select></div><div><label for="employeeTargetPlanning">Nouveau planning</label><select id="employeeTargetPlanning"></select></div></div>
+      <label for="employeeEffectiveDate">Date d’effet souhaitée</label><input id="employeeEffectiveDate" type="date">
+    </div>
     <label for="employeeActionReason">Motif de la demande</label>
     <textarea id="employeeActionReason" placeholder="Expliquez précisément le motif…"></textarea>
     <label for="employeeActionFile">Pièce jointe facultative</label>
@@ -447,6 +452,7 @@ let observationKind="observation";
 let selectedCategories=new Set();
 let modalEmployee=null;
 let employeeActionRequest=null;
+let assignmentOptionsCache=null;
 const defaultEmployeePhoto="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 140'%3E%3Crect width='120' height='140' fill='%23eef2f7'/%3E%3Ccircle cx='60' cy='48' r='25' fill='%2394a3b8'/%3E%3Cpath d='M18 132c3-34 20-51 42-51s39 17 42 51' fill='%2394a3b8'/%3E%3C/svg%3E";
 let branding=null;
 
@@ -544,26 +550,44 @@ function openEmployeeDetail(employeeId){
       <div class="employee-profile-section"><h3>Informations contractuelles</h3><span>Situation actuelle</span></div>
       <div class="employee-detail-grid">${detail("Âge",age===null?"Non renseigné":`${age} ans`)}${detail("Date de fin de contrat",formatDateFr(e.contract_end_date))}${detail("Date d’affectation sur site",formatDateFr(e.assignment_start_date))}${detail("Ancienneté sur le site",siteSeniority(e.assignment_start_date))}</div>
       <div class="employee-profile-metrics">${metric("Présences",Number(e.presence_count)||0)}${metric("Absences",Number(e.absence_count)||0,"warn")}${metric("Suspensions",Number(e.suspension_count)||0,"danger")}${metric("Blacklisté",e.blacklisted?"Oui":"Non",e.blacklisted?"danger":"")}</div>
-      ${session?.permissions?.create_observations===false?"":`<div class="employee-profile-observations"><div><strong>Observations et suivi</strong><small>Ajoutez plusieurs observations, chacune conservée dans l’historique.</small></div><button type="button" class="primary" onclick="openObservationFromEmployeeDetail(${e.id})">+ Ajouter</button></div><div class="employee-profile-actions"><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Demander une affectation</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Demander le blacklistage</button></div>`}
+      ${session?.permissions?.create_observations===false?"":`<div class="employee-profile-observations"><div><strong>Observations et suivi</strong><small>Ajoutez plusieurs observations, chacune conservée dans l’historique.</small></div><button type="button" class="primary" onclick="openObservationFromEmployeeDetail(${e.id})">+ Ajouter</button></div><div class="employee-profile-actions"><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Nouvelle affectation</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Demander le blacklistage</button></div>`}
     </div></div>`;
   document.getElementById("employeeDetailBackdrop").classList.remove("hidden");
 }
 function closeEmployeeDetail(){document.getElementById("employeeDetailBackdrop").classList.add("hidden")}
 function openObservationFromEmployeeDetail(employeeId){closeEmployeeDetail();openObservationModal(employeeId)}
 
-function openEmployeeActionModal(employeeId,action){
+async function openEmployeeActionModal(employeeId,action){
   const e=employeeById(employeeId);if(!e)return;employeeActionRequest={employee:e,action};
-  document.getElementById("employeeActionTitle").textContent=action==="blacklist"?"Demande de blacklistage":"Demande d’affectation";
+  document.getElementById("employeeActionTitle").textContent=action==="blacklist"?"Demande de blacklistage":"Nouvelle affectation";
   document.getElementById("employeeActionLabel").textContent=`${e.code} — ${e.last_name} ${e.first_name}`;
-  document.getElementById("employeeActionReason").value="";document.getElementById("employeeActionFile").value="";document.getElementById("employeeActionError").classList.remove("show");
+  const actionError=document.getElementById("employeeActionError");actionError.classList.remove("show");
+  document.getElementById("employeeActionReason").value="";document.getElementById("employeeActionFile").value="";
   document.getElementById("employeeActionBackdrop").classList.remove("hidden");
+  const assignmentFields=document.getElementById("employeeAssignmentFields");assignmentFields.classList.toggle("hidden",action!=="affectation");
+  if(action==="affectation"){
+    document.getElementById("employeeTargetSite").innerHTML='<option value="">Chargement…</option>';document.getElementById("employeeTargetGroup").innerHTML='<option value="">Chargement…</option>';document.getElementById("employeeTargetPlanning").innerHTML='<option value="">Chargement…</option>';
+    try{
+      assignmentOptionsCache=assignmentOptionsCache||await apiFetch("/reference/assignment-options");
+      const sites=assignmentOptionsCache.sites||[],groups=assignmentOptionsCache.groups||[],plannings=assignmentOptionsCache.plannings||[];
+      document.getElementById("employeeTargetSite").innerHTML='<option value="">Choisir un site</option>'+sites.map(s=>`<option value="${s.id}" ${s.id===e.site_id?"selected":""}>${esc(s.name)}</option>`).join("");
+      document.getElementById("employeeTargetGroup").innerHTML='<option value="">Choisir un groupe</option>'+groups.map(g=>`<option value="${esc(g)}" ${g===e.group_code?"selected":""}>Groupe ${esc(g)}</option>`).join("");
+      document.getElementById("employeeTargetPlanning").innerHTML='<option value="">Choisir un planning</option>'+plannings.map(p=>`<option value="${p.id}">${esc(p.name)} (${esc(p.code)})</option>`).join("");
+      document.getElementById("employeeEffectiveDate").value=today();
+    }catch(error){actionError.textContent=error.message;actionError.classList.add("show")}
+  }
 }
 function closeEmployeeActionModal(){document.getElementById("employeeActionBackdrop").classList.add("hidden");employeeActionRequest=null}
 async function submitEmployeeActionRequest(){
   if(!employeeActionRequest)return;const reason=document.getElementById("employeeActionReason").value.trim(),error=document.getElementById("employeeActionError"),btn=document.getElementById("employeeActionSubmit");
   error.classList.remove("show");if(reason.length<5){error.textContent="Veuillez expliquer le motif de la demande.";error.classList.add("show");return}
   const form=new FormData();form.append("employee_id",employeeActionRequest.employee.id);form.append("action",employeeActionRequest.action);form.append("reason",reason);const file=document.getElementById("employeeActionFile").files[0];if(file)form.append("file",file);
-  btn.disabled=true;btn.textContent="Envoi…";try{await apiFetch("/employee-action-requests",{method:"POST",body:form});closeEmployeeActionModal();closeEmployeeDetail();showBanner("Votre demande a été transmise à l’administration.","success");portalSearchLoaded.history=false}catch(e){error.textContent=e.message||"Envoi impossible";error.classList.add("show")}finally{btn.disabled=false;btn.textContent="Envoyer la demande"}
+  if(employeeActionRequest.action==="affectation"){
+    const site=document.getElementById("employeeTargetSite").value,group=document.getElementById("employeeTargetGroup").value,planning=document.getElementById("employeeTargetPlanning").value,effectiveDate=document.getElementById("employeeEffectiveDate").value;
+    if(!site||!group||!planning||!effectiveDate){error.textContent="Le site, le groupe, le planning et la date d’effet sont obligatoires.";error.classList.add("show");return}
+    form.append("target_site_id",site);form.append("target_group_code",group);form.append("target_rotation_id",planning);form.append("effective_date",effectiveDate);
+  }
+  btn.disabled=true;btn.textContent="Envoi…";try{const action=employeeActionRequest.action;await apiFetch("/employee-action-requests",{method:"POST",body:form});closeEmployeeActionModal();closeEmployeeDetail();showBanner(action==="affectation"?"La nouvelle affectation a été transmise directement à ATLAS.":"Votre demande a été transmise à l’administration.","success");portalSearchLoaded.history=false}catch(e){error.textContent=e.message||"Envoi impossible";error.classList.add("show")}finally{btn.disabled=false;btn.textContent="Envoyer la demande"}
 }
 
 async function apiFetch(path,opts={}){
