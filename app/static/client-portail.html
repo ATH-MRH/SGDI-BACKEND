@@ -293,7 +293,7 @@ async function loadBranding(){
 function applyIronPortalPresentation(){
   const hostname=String(location.hostname||"").toLowerCase();
   const clientName=String(branding?.client_name||"").toLowerCase();
-  if(!(hostname.startsWith("dhl.")||clientName.includes("dhl")))return;
+  if(!(hostname.startsWith("dfa.")||clientName.includes("dhl")))return;
   document.body.classList.add("iron-portal");
   document.documentElement.style.setProperty("--navy","#07192b");
   document.documentElement.style.setProperty("--blue","#0879c9");
