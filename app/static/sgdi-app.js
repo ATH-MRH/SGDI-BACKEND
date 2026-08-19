@@ -6889,6 +6889,12 @@ function _sgdiDoNavigate(r){
 function sgdiNoteFormInput(e){
   const t=e&&e.target;
   if(!session||!t||typeof t.closest!=="function"||!t.closest("#view"))return;
+  // Filtres de navigation (mois/agent/société en haut d'un écran de consultation, ex.
+  // Pointage > Récap) : changer leur valeur ne modifie aucune donnée, ce n'est pas un
+  // formulaire à enregistrer. Sans cette exclusion, sélectionner un autre agent ou mois
+  // déclenchait à tort l'avertissement "Modifications non enregistrées" au moment même où
+  // le filtre appelle navigate() pour changer d'écran.
+  if(t.closest("[data-nav-filter]"))return;
   const tag=String(t.tagName||"").toUpperCase();
   const isField=tag==="INPUT"||tag==="TEXTAREA"||tag==="SELECT"||t.isContentEditable;
   if(!isField)return;
@@ -38038,7 +38044,7 @@ function renderPointageSaisieSuperviseur(freshNav){
       ${siteOptions.map(([key,label])=>`<option value="${escapeHTML(key)}" ${siteFilter===key?"selected":""}>${escapeHTML(label)}</option>`).join("")}
     </select>
   </label>`;
-  const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
+  const filterBar=`<div class="card p-4 mb-4" data-nav-filter><div class="flex flex-wrap items-center gap-3">
     ${ptSupervisorDateSelectHTML(supDay||"01",supMo||"01",supYr||String(new Date().getFullYear()))}
     ${ptSearchBarLabeledHTML("Rechercher nom, code, site...")}
     ${siteSelectHTML}
@@ -39133,7 +39139,7 @@ function renderPointageRecap(agentId){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();
   const ag=pointageEligibleAgents(soc);
   const cur=agentId?db.agents.find(a=>a.id===agentId):null;
-  const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
+  const filterBar=`<div class="card p-4 mb-4" data-nav-filter><div class="flex flex-wrap items-center gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
     <div class="flex-1"><label class="label">Agent</label><select class="select" onchange="navigate('pointage/recap/'+this.value)"><option value="">— Sélectionner un agent —</option>${ag.map(a=>`<option value="${a.id}" ${cur&&cur.id===a.id?"selected":""}>${escapeHTML((a.nom||"")+" "+(a.prenom||""))} [${escapeHTML(a.matricule||"—")}] · ${escapeHTML(a.societe||"")}</option>`).join("")}</select></div>
   </div></div>`;
@@ -39156,7 +39162,7 @@ function renderPointageRecap(agentId){
 }
 function renderPointageSociete(){
   const ym=ptCurrentMonth();const days=ptDaysInMonth(ym);
-  const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3"><div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div></div></div>`;
+  const filterBar=`<div class="card p-4 mb-4" data-nav-filter><div class="flex flex-wrap items-center gap-3"><div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div></div></div>`;
   const allowedSocietes=currentAllowedSocietes();
   const rows=allowedSocietes.map(s=>{
     const ag=pointageEligibleAgents(s);
@@ -39173,7 +39179,7 @@ function renderPointageSociete(){
 function renderPointageStats(){
   const ym=ptCurrentMonth();const soc=ptCurrentSoc();
   const ag=pointageEligibleAgents(soc);
-  const filterBar=`<div class="card p-4 mb-4"><div class="flex flex-wrap items-center gap-3">
+  const filterBar=`<div class="card p-4 mb-4" data-nav-filter><div class="flex flex-wrap items-center gap-3">
     <div><label class="label">Mois</label><input type="month" class="input" value="${ym}" onchange="setPtMonth(this.value)"/></div>
     <div><label class="label">Société</label><select class="select" onchange="setPtSociete(this.value)"><option value="" ${!soc?"selected":""}>🏢 Toutes les sociétés</option>${SOCIETES.map(s=>`<option ${soc===s?"selected":""}>${s}</option>`).join("")}</select></div>
   </div></div>`;
