@@ -97,6 +97,7 @@ def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, 
         .order_by(Employee.last_name, Employee.first_name)
     ).all()
     stats = _employee_portal_stats(db, [employee.id for _, employee, _ in rows])
+    portal_groups_by_site = {site.id: _site_portal_group_assignments(site) for _, _, site in rows}
     return [
         {
             "id": employee.id,
@@ -106,7 +107,7 @@ def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, 
             "position": assignment.position or employee.position,
             "site_id": site.id,
             "site_name": site.name,
-            "group_code": assignment.group_code,
+            "group_code": portal_groups_by_site.get(site.id, {}).get(str(employee.id)),
             **_employee_detail_payload(employee, assignment, stats),
         }
         for assignment, employee, site in rows

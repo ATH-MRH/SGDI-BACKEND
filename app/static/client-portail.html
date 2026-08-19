@@ -632,7 +632,7 @@ async function loadEmployees(){
         <div class="emp-card-head"><img class="emp-avatar" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}"><div><div class="emp-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}</div>
         <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div></div></div>
         ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
-        ${e.group_code?`<span class="emp-site" style="background:#eaf2fb;color:var(--navy);margin-left:6px">Groupe ${esc(e.group_code)}</span>`:""}
+        <span class="emp-site" style="background:#eaf2fb;color:var(--navy);margin-left:6px">${e.group_code?`Groupe ${esc(e.group_code)}`:"Aucun groupe"}</span>
         ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="event.stopPropagation();openObservationModal(${e.id})">Signaler</button></div>`}
       </div>`).join("")}</div>`;
   }catch(error){

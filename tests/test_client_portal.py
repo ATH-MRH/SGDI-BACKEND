@@ -173,6 +173,9 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     assert site["employees"][0]["absence_count"] == 0
     assert site["employees"][0]["suspension_count"] == 0
     assert site["employees"][0]["blacklisted"] is False
+    employees_response = client.get("/api/client-portal/employees", headers=portal_headers)
+    assert employees_response.status_code == 200, employees_response.text
+    assert next(row for row in employees_response.json() if row["id"] == employee_id)["group_code"] is None
     assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 0
 
     assigned_a = client.patch(f"/api/client-portal/employees/{employee_id}/group", headers=portal_headers, json={"group_code": "A"})
@@ -180,6 +183,8 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     response = client.get("/api/client-portal/sites", headers=portal_headers)
     site = next(row for row in response.json() if row["id"] == site_id)
     assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 1
+    employees_response = client.get("/api/client-portal/employees", headers=portal_headers)
+    assert next(row for row in employees_response.json() if row["id"] == employee_id)["group_code"] == "A"
 
     assigned_b = client.patch(f"/api/client-portal/employees/{employee_id}/group", headers=portal_headers, json={"group_code": "B"})
     assert assigned_b.status_code == 200, assigned_b.text
