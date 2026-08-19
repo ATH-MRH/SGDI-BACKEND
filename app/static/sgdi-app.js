@@ -7915,17 +7915,17 @@ function isDhlHost(){return String(location.hostname||"").toLowerCase().split(".
 function renderDhlLogin(){
   try{document.title="DHL — Portail sécurisé"}catch(_e){}
   document.getElementById("app").innerHTML=`<div class="dhl-login-page">
+    <header class="dhl-login-topbar"><div class="dhl-login-topbar-inner"><div class="dhl-login-brand"><b>DHL</b><span>PORTAIL CLIENT</span></div><div class="dhl-login-topbar-status"><i></i> Plateforme sécurisée</div></div></header>
     <main class="dhl-login-main">
-      <section class="dhl-login-showcase" aria-label="DHL, connecting people, improving lives">
-        <div class="dhl-login-wordmark">DHL<span></span></div>
-        <div class="dhl-login-kicker">PORTAIL CLIENT SÉCURISÉ</div>
-        <h1>Connecter les équipes.<br><em>Faire avancer vos opérations.</em></h1>
-        <p>Accédez à votre espace DHL pour suivre vos activités et rester au plus près de vos équipes terrain.</p>
-        <img class="dhl-login-team-art" src="/static/dhl-login-team.png" alt="Les équipes DHL connectées au monde">
-        <div class="dhl-login-logistics" aria-hidden="true"></div>
+      <section class="dhl-login-showcase" aria-label="Présentation du portail DHL">
+        <div class="dhl-login-context">ESPACE PARTENAIRE</div>
+        <h1>Gestion des équipes<br><em>et des opérations terrain.</em></h1>
+        <p>Un espace centralisé pour consulter les informations opérationnelles et assurer le suivi avec les équipes IRON GLOBAL SÉCURITÉ.</p>
+        <div class="dhl-login-info-list"><div><b>01</b><span><strong>Suivi centralisé</strong>Vos collaborateurs et leurs signalements.</span></div><div><b>02</b><span><strong>Accès maîtrisé</strong>Droits définis pour chaque interlocuteur.</span></div><div><b>03</b><span><strong>Communication rapide</strong>Une information fiable, au bon moment.</span></div></div>
+        <div class="dhl-login-partner">Partenaire opérationnel <strong>IRON GLOBAL SÉCURITÉ</strong></div>
       </section>
       <section class="dhl-login-panel">
-        <div class="dhl-login-panel-head"><span>Accès DHL sécurisé</span><h2>Bienvenue</h2><p>Connectez-vous à votre portail client DHL.</p></div>
+        <div class="dhl-login-panel-head"><span>Accès client DHL</span><h2>Connexion</h2><p>Utilisez vos identifiants pour accéder à votre espace.</p></div>
         <form id="login-form" class="dhl-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
           <label>Identifiant<input name="username" autocomplete="username" autofocus required placeholder="Votre identifiant"></label>
           <label class="dhl-login-password-field">Mot de passe<input type="password" name="password" autocomplete="current-password" required placeholder="Votre mot de passe"><button type="button" class="dhl-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button></label>
