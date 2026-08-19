@@ -6403,21 +6403,72 @@ function renderSidebar(){
     const r=String(item.route||"");
     const l=String(item.label||"").toLowerCase();
     const svg=body=>`<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
-    if(r.includes("dashboard"))return svg(`<path d="M4 11.5 12 5l8 6.5"></path><path d="M6.5 10.5V19h11v-8.5"></path>`);
+    if(r==="drh/dashboard")return svg(`<circle cx="9" cy="7.5" r="3"></circle><path d="M3.5 19c.8-3.8 4.2-5.5 5.5-5.5s4.7 1.7 5.5 5.5"></path><path d="M16.5 5.5v5M14 8h5"></path>`);
+    if(r==="ops/dashboard")return svg(`<path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6z"></path><path d="M9.5 12l2 2 3.5-4"></path>`);
+    if(r==="facturation/dashboard")return svg(`<path d="M6 3h9l3 3v15H6z"></path><path d="M9 8h6M9 11.5h6M9 15h4"></path><path d="M15 3v4h4"></path>`);
+    if(r==="secretariat/dashboard")return svg(`<rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M4 8l8 5 8-5"></path><path d="M4 16l5.5-4M20 16l-5.5-4"></path>`);
+    if(r==="paie/dashboard")return svg(`<rect x="3.5" y="6" width="17" height="13" rx="2"></rect><path d="M3.5 10h17"></path><circle cx="16.5" cy="14.3" r="1.4"></circle>`);
+    if(r==="global-dashboard")return svg(`<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.8 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.8-3.8-9S9.5 5.6 12 3z"></path>`);
+    if(r.includes("pointage"))return svg(`<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>`);
+    if(r==="fiches"||r.endsWith("/fiches"))return svg(`<rect x="4" y="4" width="16" height="16" rx="2.4"></rect><circle cx="10" cy="10.3" r="2"></circle><path d="M7 15c.4-1.6 1.6-2.5 3-2.5s2.6.9 3 2.5"></path><path d="M15 9h3M15 12h3"></path>`);
     if(r.includes("recrutement")||r.includes("reserve")||l.includes("candidat"))return svg(`<circle cx="12" cy="8" r="3.2"></circle><path d="M5.5 19c1.2-4 11.8-4 13 0"></path>`);
+    if(r.includes("mise_en_demeure"))return svg(`<path d="M12 4 21 20H3z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path>`);
     if(r.includes("contrat"))return svg(`<path d="M7 4h7l3 3v13H7z"></path><path d="M14 4v4h4"></path><path d="M9.5 12h5"></path><path d="M9.5 16h5"></path>`);
+    if(r.includes("absents"))return svg(`<circle cx="9" cy="8" r="3"></circle><path d="M3.5 19c.8-3.8 4.2-5.5 5.5-5.5"></path><path d="M15.8 8l4.7 4.7M20.5 8l-4.7 4.7"></path>`);
+    if(r.includes("suspension"))return svg(`<circle cx="12" cy="12" r="8.5"></circle><path d="M9.5 9v6M14.5 9v6"></path>`);
+    if(r.includes("blacklist"))return svg(`<circle cx="12" cy="12" r="8.5"></circle><path d="M6.3 17.7 17.7 6.3"></path>`);
+    if(r.includes("sortants")&&!r.includes("archive"))return svg(`<path d="M9 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H9"></path><path d="M14 12H3"></path><path d="M6.5 8.5 3 12l3.5 3.5"></path>`);
     if(r.includes("document")||r.includes("archive"))return svg(`<path d="M7 4h7l3 3v13H7z"></path><path d="M14 4v4h4"></path><path d="M9.5 12h5"></path><path d="M9.5 15.5h5"></path>`);
-    if(r.includes("effectif")||r.includes("agent")||r.includes("fiches"))return svg(`<circle cx="9" cy="8" r="3"></circle><path d="M3.8 19c.9-3.7 9.5-3.7 10.4 0"></path><path d="M15.5 7.2a2.5 2.5 0 0 1 0 4.6"></path><path d="M16.5 15c2 .5 3.4 1.8 3.8 4"></path>`);
+    if(r.includes("supervis"))return svg(`<path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="2.6"></circle>`);
+    if(r.includes("missions"))return svg(`<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4.2"></circle><circle cx="12" cy="12" r=".6" fill="currentColor"></circle>`);
+    if(r.includes("mouvement"))return svg(`<path d="M4 8h13M13 4l4 4-4 4"></path><path d="M20 16H7M11 12l-4 4 4 4"></path>`);
+    if(r.includes("signalements"))return svg(`<path d="M5 4v16"></path><path d="M5 5h11l-2.5 3.5L16 12H5"></path>`);
+    if(r.includes("demandes_personnel")||r.includes("portail"))return svg(`<rect x="3.5" y="6" width="17" height="13" rx="2"></rect><path d="M3.5 8l8.5 6 8.5-6"></path>`);
+    if(r.includes("effectif")||r.includes("agent"))return svg(`<circle cx="9" cy="8" r="3"></circle><path d="M3.8 19c.9-3.7 9.5-3.7 10.4 0"></path><path d="M15.5 7.2a2.5 2.5 0 0 1 0 4.6"></path><path d="M16.5 15c2 .5 3.4 1.8 3.8 4"></path>`);
     if(r.includes("site")||r.includes("location"))return svg(`<path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11Z"></path><circle cx="12" cy="10" r="2"></circle>`);
     if(r.includes("incident")||l.includes("main courante"))return svg(`<path d="M12 4 21 20H3z"></path><path d="M12 9v5"></path><path d="M12 17h.01"></path>`);
     if(r.includes("conges"))return svg(`<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path>`);
+    if(r.includes("rappels"))return svg(`<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path><path d="M10.5 20a1.7 1.7 0 0 0 3 0"></path>`);
+    if(r.includes("semaine"))return svg(`<rect x="3.5" y="5" width="17" height="15" rx="2"></rect><path d="M3.5 10h17"></path><path d="M8 3v4M16 3v4"></path><path d="M7 14h2M11 14h2M15 14h2"></path>`);
+    if(r.includes("agenda/liste"))return svg(`<path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="4" cy="6" r="1.2" fill="currentColor"></circle><circle cx="4" cy="12" r="1.2" fill="currentColor"></circle><circle cx="4" cy="18" r="1.2" fill="currentColor"></circle>`);
     if(r.includes("agenda"))return svg(`<rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M8 3v4"></path><path d="M16 3v4"></path><path d="M4 10h16"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path>`);
+    if(r.includes("magasins"))return svg(`<path d="M4 10V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V10"></path><path d="M3 6l1.5-3h15L21 6"></path><path d="M3 6a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path>`);
+    if(r.includes("fournisseurs"))return svg(`<path d="M3 16V7a1 1 0 0 1 1-1h9v10"></path><path d="M13 10h4l3 3v3h-7"></path><circle cx="7.5" cy="18" r="1.6"></circle><circle cx="17" cy="18" r="1.6"></circle>`);
+    if(r.includes("alertes"))return svg(`<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"></path><path d="M10.5 20a1.7 1.7 0 0 0 3 0"></path>`);
+    if(r.includes("dotation"))return svg(`<path d="M4 8.5 12 4l8 4.5-8 4.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M12 13v3M10.5 14.5h3"></path>`);
+    if(r.includes("reversement"))return svg(`<path d="M4 8.5 12 4l8 4.5-8 4.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M9.5 15l2.5-2.5L14.5 15"></path>`);
+    if(r.includes("clients"))return svg(`<path d="M4 20V9l8-5 8 5v11"></path><path d="M9 20v-6h6v6"></path>`);
+    if(r.includes("paiements"))return svg(`<rect x="3" y="6" width="18" height="13" rx="2"></rect><path d="M3 10h18"></path><path d="M7 15h4"></path>`);
+    if(r.includes("prospects"))return svg(`<circle cx="10" cy="8" r="3"></circle><path d="M4.5 19c.8-3.8 4.2-5.5 5.5-5.5"></path><path d="M16 7v5M13.5 9.5h5"></path>`);
+    if(r.includes("opportunites"))return svg(`<path d="M4 17l5-5 4 4 7-7"></path><path d="M15 8h5v5"></path>`);
+    if(r.includes("visites"))return svg(`<path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11Z"></path><path d="M9.5 10.5l1.7 1.7 3.3-3.6"></path>`);
+    if(r.includes("devis"))return svg(`<path d="M7 4h7l3 3v13H7z"></path><path d="M14 4v4h4"></path><path d="M9.5 12h5"></path><path d="M9.5 16h3"></path>`);
+    if(r.includes("catalogue"))return svg(`<rect x="4" y="4" width="7" height="7" rx="1.2"></rect><rect x="13" y="4" width="7" height="7" rx="1.2"></rect><rect x="4" y="13" width="7" height="7" rx="1.2"></rect><rect x="13" y="13" width="7" height="7" rx="1.2"></rect>`);
+    if(r.includes("tarifs")||r.includes("tarification"))return svg(`<path d="M12 3l9 9-9 9-9-9V4h9z"></path><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"></circle>`);
+    if(r.includes("calendrier"))return svg(`<rect x="3.5" y="5" width="17" height="15" rx="2"></rect><path d="M3.5 10h17"></path><path d="M8 3v4M16 3v4"></path>`);
+    if(r.includes("balance"))return svg(`<path d="M12 3v18M7 8H3l4-6 4 6H7zM21 8h-4l4-6 4 6h-4z"></path><path d="M3 8c0 2 1.8 3.5 4 3.5S11 10 11 8"></path><path d="M13 8c0 2 1.8 3.5 4 3.5S21 10 21 8"></path>`);
+    if(r.includes("avances"))return svg(`<rect x="3" y="6" width="18" height="13" rx="2"></rect><circle cx="12" cy="12.5" r="3"></circle><path d="M6 6V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path>`);
+    if(r.includes("avoirs"))return svg(`<path d="M4 12a8 8 0 1 0 3-6.2"></path><path d="M4 4v4h4"></path>`);
+    if(r.includes("caisse"))return svg(`<rect x="3" y="9" width="18" height="10" rx="1.5"></rect><path d="M3 9l2.5-5h13L21 9"></path><path d="M9.5 14h5"></path>`);
+    if(r.includes("situation"))return svg(`<path d="M5 19V5"></path><path d="M5 19h15"></path><path d="M9 16v-5"></path><path d="M13 16V8"></path><path d="M17 16v-3"></path>`);
+    if(r.includes("notes"))return svg(`<rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M8 9h8M8 13h8M8 17h5"></path>`);
+    if(r.includes("secretariat")||r.includes("courrier"))return svg(`<rect x="4" y="6" width="16" height="12" rx="2"></rect><path d="m5 8 7 5 7-5"></path>`);
     if(r.includes("paie")||r.includes("facturation"))return svg(`<path d="M12 3v18"></path><path d="M16.5 7.5c-.8-1-2.2-1.6-4-1.6-2.3 0-4 .9-4 2.6 0 4 8 1.7 8 5.8 0 1.8-1.8 3-4.3 3-2 0-3.7-.7-4.7-1.9"></path>`);
     if(r.includes("rapport")||r.includes("stat"))return svg(`<path d="M5 19V5"></path><path d="M5 19h15"></path><path d="M9 16v-5"></path><path d="M13 16V8"></path><path d="M17 16v-3"></path>`);
-    if(r.includes("materiel")||r.includes("stock"))return svg(`<path d="M4 8.5 12 4l8 4.5-8 4.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M12 13v7"></path>`);
+    if(r.includes("materiel")||r.includes("stock")||r.includes("articles"))return svg(`<path d="M4 8.5 12 4l8 4.5-8 4.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M12 13v7"></path>`);
     if(r.includes("commercial"))return svg(`<path d="M7 11l3.5 3.5 6-6"></path><path d="M4 20h16"></path><path d="M6 20V5h12v15"></path>`);
-    if(r.includes("secretariat")||r.includes("courrier"))return svg(`<rect x="4" y="6" width="16" height="12" rx="2"></rect><path d="m5 8 7 5 7-5"></path>`);
-    if(r.includes("admin")||r.includes("param"))return svg(`<circle cx="12" cy="12" r="3"></circle><path d="M12 3v3"></path><path d="M12 18v3"></path><path d="M3 12h3"></path><path d="M18 12h3"></path><path d="m5.6 5.6 2.1 2.1"></path><path d="m16.3 16.3 2.1 2.1"></path><path d="m18.4 5.6-2.1 2.1"></path><path d="m7.7 16.3-2.1 2.1"></path>`);
+    if(r.includes("droits"))return svg(`<path d="M12 2 4 5.5v6c0 5 3.4 8.4 8 9.5 4.6-1.1 8-4.5 8-9.5v-6z"></path><path d="M10.5 8.2a1.5 1.5 0 1 1 2.3 1.3v1.3"></path><circle cx="12" cy="14" r=".7" fill="currentColor"></circle>`);
+    if(r.includes("niveaux"))return svg(`<path d="M12 3 3 8l9 5 9-5z"></path><path d="M3 12l9 5 9-5"></path><path d="M3 16l9 5 9-5"></path>`);
+    if(r.includes("access")||r.includes("securite"))return svg(`<rect x="5" y="10.5" width="14" height="9.5" rx="2"></rect><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"></path>`);
+    if(r.includes("supervisors")||r.includes("perimetre"))return svg(`<path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"></path><circle cx="12" cy="12" r="2.6"></circle>`);
+    if(r.includes("users")||r.includes("utilisateurs"))return svg(`<circle cx="9" cy="8" r="3"></circle><path d="M3.8 19c.9-3.7 9.5-3.7 10.4 0"></path><path d="M17 8h3M18.5 6.5v3"></path>`);
+    if(r.includes("menu"))return svg(`<path d="M4 6h16M4 12h16M4 18h16"></path>`);
+    if(r.includes("counters"))return svg(`<path d="M6 4v16M12 4v16M18 4v16"></path><path d="M3 9h6M9 15h6M15 9h6"></path>`);
+    if(r.includes("log"))return svg(`<rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M8 9h8M8 13h5M8 17h8"></path>`);
+    if(r.includes("storage"))return svg(`<ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"></path><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path>`);
+    if(r.includes("feed")||r.includes("messages"))return svg(`<path d="M4 4h16v12H8l-4 4z"></path>`);
+    if(r.includes("admin")||r.includes("param")||r.includes("postes"))return svg(`<circle cx="12" cy="12" r="3"></circle><path d="M12 3v3"></path><path d="M12 18v3"></path><path d="M3 12h3"></path><path d="M18 12h3"></path><path d="m5.6 5.6 2.1 2.1"></path><path d="m16.3 16.3 2.1 2.1"></path><path d="m18.4 5.6-2.1 2.1"></path><path d="m7.7 16.3-2.1 2.1"></path>`);
+    if(r.includes("dashboard"))return svg(`<path d="M4 11.5 12 5l8 6.5"></path><path d="M6.5 10.5V19h11v-8.5"></path>`);
     return svg(`<circle cx="12" cy="12" r="4"></circle>`);
   };
   const itemHTML=item=>{
@@ -38123,70 +38174,75 @@ function renderPointageDashboard(isDrh){
   const fpqPresents=fpq.filter(f=>!!POINTAGE_CODES[String(f.code||"").toUpperCase()]?.isPresent||fpqPresenceCode(f.heureArrivee)||f.scanArrivee).length;
   const fpqRate=ag.length?Math.round(fpqPresents*100/ag.length):0;
   const unclosed=[...new Set((db.feuillePresence||[]).map(f=>f.date).filter(Boolean))].filter(d=>!fpqIsCloture(d));
-  const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||""}</div></button>`;
-  const codeCard=(k)=>{const v=POINTAGE_CODES[k];return v?`<button type="button" onclick="navigate('pointage/stats')" class="pointage-code-card" style="--pc-color:${v.color};--pc-bg:${v.bg};border-color:${v.color}33"><span class="pointage-code-key">${escapeHTML(k)}</span><span class="pointage-code-label">${escapeHTML(v.label)}</span><b>${tot[k]||0}</b></button>`:""};
-  const codeGroup=(title,codes)=>`<section class="pointage-code-group"><div class="pointage-code-group-title">${escapeHTML(title)}</div><div class="pointage-code-grid">${codes.map(codeCard).join("")}</div></section>`;
-  const codeCards=`<div class="pointage-code-groups">
-    ${codeGroup("Codes principaux",["P","A","M","C","S","R"])}
-    ${codeGroup("Absences renforcées",["AB","A1","A2","A3"])}
-    ${codeGroup("Récupération / maintien",["F1","F2","F3","P/F1","P/F2","P/F3"])}
-  </div>`;
-  // ── Statistiques card ──
-  const baseCodes=["P","A","M","S","C","R","AB"];
-  const totalBase=baseCodes.reduce((s,k)=>s+(tot[k]||0),0);
   const totalPresent=(tot.P||0)+(tot.F1||0)+(tot.F2||0)+(tot.F3||0)+(tot["P/F1"]||0)+(tot["P/F2"]||0)+(tot["P/F3"]||0);
   const totalAbsent=(tot.A||0)+(tot.A1||0)+(tot.A2*2||0)+(tot.A3*3||0)+(tot.AB||0);
   const totalAll=Object.values(tot).reduce((a,b)=>a+b,0);
   const tauxP=totalAll?Math.round(totalPresent*100/totalAll):0;
   const tauxA=totalAll?Math.round(totalAbsent*100/totalAll):0;
-  const tauxM=totalAll?Math.round((tot.M||0)*100/totalAll):0;
-  const tauxC=totalAll?Math.round((tot.C||0)*100/totalAll):0;
-  const tauxR=totalAll?Math.round((tot.R||0)*100/totalAll):0;
   const elapsed=Math.min(parseInt(todayDate.slice(8,10)||1),days);
   const moyPresDay=elapsed&&ag.length?((totalPresent/elapsed)/ag.length*100).toFixed(0):0;
-  const donutSlices=[
-    {v:totalPresent,c:"#16a34a"},{v:totalAbsent,c:"#ef4444"},{v:tot.M||0,c:"#f59e0b"},
-    {v:tot.C||0,c:"#3b82f6"},{v:tot.R||0,c:"#94a3b8"},{v:tot.S||0,c:"#7c3aed"}
-  ];
-  const donutSVG=`<svg viewBox="0 0 100 100" width="90" height="90">${ptDonutSVG(donutSlices,totalAll,50,50,42,26)}</svg>`;
-  const bar=(label,n,total,color)=>{const p=total?Math.round(n*100/total):0;return`<div class="flex items-center gap-2 mb-1.5"><span class="text-[10px] font-bold w-24 text-slate-600">${label}</span><div style="flex:1;background:#f1f5f9;border-radius:3px;height:10px;overflow:hidden"><div style="width:${p}%;height:100%;background:${color};border-radius:3px"></div></div><span class="text-[10px] font-black w-6 text-right" style="color:${color}">${n}</span><span class="text-[10px] text-slate-400 w-8">${p}%</span></div>`;};
-  const statsCard=`<div class="card p-4">
-    <div class="flex items-center justify-between mb-3"><h3 class="font-black text-sm">📊 Statistiques pointage — <span class="capitalize font-normal text-slate-500">${new Date(parseInt(ym.split("-")[0]),parseInt(ym.split("-")[1])-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</span></h3><span class="text-2xl font-black" style="color:${tauxP>=80?"#16a34a":tauxP>=50?"#f59e0b":"#ef4444"}">${tauxP}%</span></div>
-    <div class="flex gap-4 items-start">
-      <div class="shrink-0">${donutSVG}</div>
-      <div class="flex-1">
-        ${bar("Présents (P+Fx)",totalPresent,totalAll,"#16a34a")}
-        ${bar("Absents (A+Ax+AB)",totalAbsent,totalAll,"#ef4444")}
-        ${bar("Maladie",tot.M||0,totalAll,"#f59e0b")}
-        ${bar("Congé",tot.C||0,totalAll,"#3b82f6")}
-        ${bar("Récupération",tot.R||0,totalAll,"#64748b")}
-        ${bar("Suspendu",tot.S||0,totalAll,"#7c3aed")}
-      </div>
-    </div>
-    <div class="grid grid-cols-3 gap-2 mt-3 pt-3" style="border-top:1px solid #f1f5f9">
-      <div class="text-center"><div class="text-lg font-black" style="color:#16a34a">${tauxP}%</div><div class="text-[10px] text-slate-500 uppercase font-semibold">Taux présence</div></div>
-      <div class="text-center"><div class="text-lg font-black" style="color:#ef4444">${tauxA}%</div><div class="text-[10px] text-slate-500 uppercase font-semibold">Taux absence</div></div>
-      <div class="text-center"><div class="text-lg font-black" style="color:#043970">${coverage}%</div><div class="text-[10px] text-slate-500 uppercase font-semibold">Couverture saisie</div></div>
-    </div>
-    <div class="mt-3 pt-3 text-[10px] text-slate-500 flex flex-wrap gap-x-4 gap-y-1" style="border-top:1px solid #f1f5f9">
-      <span>📅 <strong>${elapsed}/${days}</strong> jours écoulés</span>
-      <span>👥 <strong>${ag.length}</strong> agents suivis</span>
-      <span>✅ <strong>${valid}</strong> pointages validés</span>
-      <span>📋 <strong>${totalAll}</strong> entrées saisies</span>
-      <span>📊 Présence moy/jour : <strong>${moyPresDay}%</strong></span>
-      ${fpqPresents?`<span>🟢 Aujourd'hui : <strong>${fpqPresents}</strong> présent(s) sur ${ag.length}</span>`:""}
+  const monthLabel=new Date(parseInt(ym.split("-")[0]),parseInt(ym.split("-")[1])-1,1).toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const ICO_PERSON=`<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1.3-4.2 12.7-4.2 14 0"/></svg>`;
+  const ICO_CHECK=`<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>`;
+  const ICO_DOC=`<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 10h8M8 14h5"/></svg>`;
+  const ICO_LOCK=`<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>`;
+  const ICO_BAR=`<svg viewBox="0 0 24 24"><path d="M4 19V9M11 19V5M18 19v-7"/></svg>`;
+  const ICO_CLOCK=`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg>`;
+  const kpi=(label,n,route,tone,sub,ico)=>`<button type="button" class="pt-dash-kpi${tone?` ${tone}`:""}" onclick="navigate('${route}')"><span class="pt-dash-kpi-ico">${ico}</span><span class="pt-dash-kpi-body"><span class="pt-dash-kpi-label">${escapeHTML(label)}</span><span class="pt-dash-kpi-val">${n}</span><span class="pt-dash-kpi-sub">${sub||""}</span></span></button>`;
+  const kpiRow=[
+    kpi("Agents suivis",ag.length,isDrh?"pointage/recap":"pointage/saisie","","Effectif filtré",ICO_PERSON),
+    isDrh?"":kpi("Présents aujourd'hui",fpqPresents,"pointage/feuille","ok",fpqRate+"% · "+formatDate(todayDate),ICO_CHECK),
+    kpi("Couverture saisie",coverage+"%","pointage/stats",coverage>=80?"ok":"warn","Mois en cours",ICO_DOC),
+    kpi("Pointages validés",valid,isDrh?"pointage/recap":"pointage/saisie","ok","Lignes verrouillées",ICO_LOCK),
+    kpi("Taux présence",tauxP+"%","pointage/stats",tauxP>=80?"ok":"amber","Sur saisies du mois",ICO_BAR),
+    isDrh?"":kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"warn":"ok","Feuilles à contrôler",ICO_CLOCK)
+  ].filter(Boolean).join("");
+  const codeChip=(k)=>{const v=POINTAGE_CODES[k];if(!v)return"";const n=tot[k]||0;const hasVal=n>0;return `<button type="button" class="pt-dash-chip${hasVal?" has-value":""}" onclick="navigate('pointage/stats')"${hasVal?` style="--accent:${v.color};--accent-bg:${v.bg}"`:""}><span class="code-tag">${escapeHTML(k)}</span><span class="code-label">${escapeHTML(v.label)}</span><span class="code-val">${n}</span></button>`;};
+  const codeFamily=(title,codes)=>`<div class="pt-dash-fam"><div class="pt-dash-fam-head"><b>${escapeHTML(title)}</b><span class="n">${codes.length} code${codes.length>1?"s":""}</span></div><div class="pt-dash-chip-wrap">${codes.map(codeChip).join("")}</div></div>`;
+  const codesPanel=`<div class="pt-dash-panel">
+    <div class="pt-dash-panel-head"><div><h3>Répartition des codes</h3><p>Cumul du mois en cours, par famille</p></div></div>
+    <div class="pt-dash-panel-body">
+      ${codeFamily("Codes principaux",["P","A","M","C","S","R"])}
+      ${codeFamily("Absences renforcées",["AB","A1","A2","A3"])}
+      ${codeFamily("Récupération / maintien",["F1","F2","F3","P/F1","P/F2","P/F3"])}
     </div>
   </div>`;
-  return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">POINTAGE - TABLEAU DE BORD</h1><p class="text-sm text-slate-500">Synthèse mensuelle et feuille de présence quotidienne · ${soc?escapeHTML(soc):"Toutes sociétés"}</p></div>${isDrh?"":`<div class="flex gap-2"><button class="topbar-dialogue-btn pointage-dialogue-style-btn" onclick="navigate('pointage/saisie')">Pointage quotidien</button></div>`}</div>
-    <div class="grid grid-6 gap-3 mb-5">
-      ${kpi("Agents suivis",ag.length,isDrh?"pointage/recap":"pointage/saisie","#043970","Effectif filtré")}
-      ${isDrh?"":kpi("Présents aujourd'hui",fpqPresents,"pointage/feuille","#16a34a",fpqRate+"% · "+formatDate(todayDate))}
-      ${kpi("Couverture saisie",coverage+"%","pointage/stats",coverage>=80?"#16a34a":"#dc2626","Mois en cours")}
-      ${kpi("Pointages validés",valid,isDrh?"pointage/recap":"pointage/saisie","#7c3aed","Lignes verrouillées")}
-      ${kpi("Taux présence",tauxP+"%","pointage/stats",tauxP>=80?"#16a34a":"#f59e0b","Sur saisies du mois")}
-      ${isDrh?"":kpi("Non clôturées",unclosed.length,"pointage/feuille",unclosed.length?"#dc2626":"#16a34a","Feuilles à contrôler")}
+  const statRow=(label,n,color)=>{const p=totalAll?Math.round(n*100/totalAll):0;return `<div class="pt-dash-stat-row"><span class="lbl">${escapeHTML(label)}</span><div class="pt-dash-stat-track"><div class="pt-dash-stat-fill" style="width:${p}%;background:${color}"></div></div><span class="pt-dash-stat-pct" style="color:${color}">${p}%</span></div>`;};
+  const statsPanel=`<div class="pt-dash-panel">
+    <div class="pt-dash-panel-head"><div><h3>Statistiques pointage</h3><p class="capitalize">${monthLabel}</p></div></div>
+    <div class="pt-dash-panel-body">
+      ${statRow("Présents (P+Fx)",totalPresent,"#16a34a")}
+      ${statRow("Absents (A+Ax+AB)",totalAbsent,"#dc2626")}
+      ${statRow("Maladie",tot.M||0,"#d97706")}
+      ${statRow("Congé",tot.C||0,"#0891b2")}
+      ${statRow("Récupération",tot.R||0,"#475569")}
+      ${statRow("Suspendu",tot.S||0,"#7c3aed")}
+      <div class="pt-dash-stat-divider"></div>
+      <div class="pt-dash-tiles">
+        <div class="pt-dash-tile"><b style="color:#16a34a">${tauxP}%</b><span>Taux présence</span></div>
+        <div class="pt-dash-tile" style="background:#fdecec"><b style="color:#dc2626">${tauxA}%</b><span>Taux absence</span></div>
+        <div class="pt-dash-tile"><b>${coverage}%</b><span>Couverture saisie</span></div>
+      </div>
+      <div class="pt-dash-footline">
+        <span><b>${elapsed}/${days}</b> jours écoulés</span><span class="dot"></span>
+        <span><b>${ag.length}</b> agents suivis</span><span class="dot"></span>
+        <span><b>${valid}</b> pointages validés</span><span class="dot"></span>
+        <span><b>${totalAll}</b> entrées saisies</span><span class="dot"></span>
+        <span>Présence moy/jour : <b>${moyPresDay}%</b></span>
+        ${fpqPresents?`<span class="dot"></span><span>Aujourd'hui : <b>${fpqPresents}</b> présent(s) sur ${ag.length}</span>`:""}
+      </div>
     </div>
-    <div class="grid grid-2 gap-4 mb-5"><div class="card p-4"><div class="flex items-center justify-between gap-2 mb-3"><h3 class="font-black">Répartition des codes</h3><span class="text-[10px] uppercase font-black text-slate-400">par famille</span></div>${codeCards}</div>${statsCard}</div>`;
+  </div>`;
+  return `<div class="ops-dash-hero"><div class="ops-dash-hero-row">
+    <div>
+      <div class="ops-dash-eyebrow">Pilotage opérationnel</div>
+      <h1>Tableau de bord pointage</h1>
+      <div class="ops-dash-hero-sub"><span>Synthèse mensuelle et feuille de présence quotidienne · ${soc?escapeHTML(soc):"Toutes sociétés"}</span><span class="ops-dash-live"><span class="ops-dash-live-dot"></span>Temps réel</span></div>
+    </div>
+    ${isDrh?"":`<button type="button" class="ops-dash-refresh" style="background:#fff;color:#043970" onclick="navigate('pointage/saisie')">📋 Pointage quotidien</button>`}
+  </div></div>
+  <div class="pt-dash-kpis"${isDrh?` style="--pt-kpi-cols:4"`:""}>${kpiRow}</div>
+  <div class="pt-dash-body-grid">${codesPanel}${statsPanel}</div>`;
 }
 
 // ── QR Tablet Generator — 10s per site ──────────────────────────────────────

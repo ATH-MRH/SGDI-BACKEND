@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260819-pointage-filters-no-navguard";
+const SGDI_CACHE = "sgdi-pwa-v20260819-pointage-dashboard-redesign";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
