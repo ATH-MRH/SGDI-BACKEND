@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
@@ -11,9 +11,9 @@ from app.modules.client_portal.models import ClientObservation, ClientPortalUser
 from app.modules.client_portal.schemas import GROUP_LETTERS, URGENT_CATEGORIES
 from app.modules.client_portal.security import generate_temporary_password
 from app.modules.commercial.models import Client
-from app.modules.drh.models import Employee
+from app.modules.drh.models import Employee, Sanction
 from app.modules.materiel.models import EmployeeEquipment, MaterialAssignment, StockArticle
-from app.modules.ops.models import Assignment, Site
+from app.modules.ops.models import Assignment, DailyPresence, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids
 
 
@@ -43,6 +43,48 @@ def _client_site_ids(db: Session, client_id: int) -> list[int]:
     return list(db.execute(select(Site.id).where(Site.client_id == client_id)).scalars().all())
 
 
+def _employee_photo(employee: Employee) -> str | None:
+    extra = employee.extra if isinstance(employee.extra, dict) else {}
+    legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+    for source in (extra, legacy):
+        for key in ("photo", "photoUrl", "photoData", "photo_url"):
+            if source.get(key):
+                return str(source[key])
+    return None
+
+
+def _employee_portal_stats(db: Session, employee_ids: list[int]) -> dict[int, dict[str, int]]:
+    stats = {employee_id: {"presence_count": 0, "absence_count": 0, "suspension_count": 0} for employee_id in employee_ids}
+    if not employee_ids:
+        return stats
+    absent = {"absent", "absence", "a", "ab", "abandon"}
+    for employee_id, status, count in db.execute(
+        select(DailyPresence.employee_id, DailyPresence.status, func.count(DailyPresence.id))
+        .where(DailyPresence.employee_id.in_(employee_ids))
+        .group_by(DailyPresence.employee_id, DailyPresence.status)
+    ).all():
+        key = "absence_count" if str(status or "").strip().lower() in absent else "presence_count"
+        stats[employee_id][key] += int(count or 0)
+    for employee_id, count in db.execute(
+        select(Sanction.employee_id, func.count(Sanction.id))
+        .where(Sanction.employee_id.in_(employee_ids), Sanction.suspension_days > 0)
+        .group_by(Sanction.employee_id)
+    ).all():
+        stats[employee_id]["suspension_count"] = int(count or 0)
+    return stats
+
+
+def _employee_detail_payload(employee: Employee, assignment: Assignment, stats: dict[int, dict[str, int]]) -> dict[str, Any]:
+    return {
+        "photo": _employee_photo(employee),
+        "birth_date": employee.birth_date,
+        "contract_end_date": employee.contract_end_date,
+        "assignment_start_date": assignment.start_date,
+        "blacklisted": str(employee.status or "").strip().lower() in {"blackliste", "blacklisté", "blacklist", "blacklisted"},
+        **stats.get(employee.id, {"presence_count": 0, "absence_count": 0, "suspension_count": 0}),
+    }
+
+
 def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, Any]]:
     site_ids = _client_site_ids(db, client_id)
     if not site_ids:
@@ -54,6 +96,7 @@ def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, 
         .where(Assignment.active == 1, Assignment.site_id.in_(site_ids))
         .order_by(Employee.last_name, Employee.first_name)
     ).all()
+    stats = _employee_portal_stats(db, [employee.id for _, employee, _ in rows])
     return [
         {
             "id": employee.id,
@@ -64,6 +107,7 @@ def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, 
             "site_id": site.id,
             "site_name": site.name,
             "group_code": assignment.group_code,
+            **_employee_detail_payload(employee, assignment, stats),
         }
         for assignment, employee, site in rows
     ]
@@ -112,6 +156,7 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
         .where(Assignment.active == 1, Assignment.site_id.in_(site_ids))
         .order_by(Employee.last_name, Employee.first_name)
     ).all()
+    stats = _employee_portal_stats(db, [employee.id for _, employee in assignment_rows])
     employees_by_site: dict[int, list[dict[str, Any]]] = {}
     for assignment, employee in assignment_rows:
         employees_by_site.setdefault(assignment.site_id, []).append(
@@ -122,6 +167,7 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
                 "last_name": employee.last_name,
                 "position": assignment.position or employee.position,
                 "group_code": assignment.group_code,
+                **_employee_detail_payload(employee, assignment, stats),
             }
         )
     result: list[dict[str, Any]] = []

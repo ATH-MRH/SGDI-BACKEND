@@ -65,6 +65,14 @@ class EmployeeVisibleOut(BaseModel):
     site_id: int | None = None
     site_name: str | None = None
     group_code: str | None = None
+    photo: str | None = None
+    birth_date: date | None = None
+    contract_end_date: date | None = None
+    assignment_start_date: date | None = None
+    presence_count: int = 0
+    absence_count: int = 0
+    suspension_count: int = 0
+    blacklisted: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -90,6 +98,14 @@ class SiteEmployeeOut(BaseModel):
     last_name: str
     position: str | None = None
     group_code: str | None = None
+    photo: str | None = None
+    birth_date: date | None = None
+    contract_end_date: date | None = None
+    assignment_start_date: date | None = None
+    presence_count: int = 0
+    absence_count: int = 0
+    suspension_count: int = 0
+    blacklisted: bool = False
 
     model_config = {"from_attributes": True}
 

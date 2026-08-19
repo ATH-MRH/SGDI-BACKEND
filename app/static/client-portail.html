@@ -143,7 +143,18 @@ tr:last-child td{border-bottom:0}
 .gc-remaining{font-size:10px;color:var(--muted);margin-top:3px}
 .site-employees{border-top:1px solid #eef2f7;padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .site-employees-title{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.site-employee-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px}
+.site-employee-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;cursor:pointer;border-radius:9px;padding:5px}
+.site-employee-row:hover{background:#fff8dc}
+.emp-card{cursor:pointer}.emp-card:hover{border-color:#c8102e;box-shadow:0 8px 22px rgba(200,16,46,.1)}
+.emp-avatar{width:46px;height:46px;border-radius:50%;object-fit:cover;background:#eef2f7;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);flex:0 0 auto}
+.emp-card-head{display:flex;align-items:center;gap:12px}
+.employee-profile{display:grid;grid-template-columns:130px 1fr;gap:22px;align-items:start}
+.employee-profile-photo{width:130px;height:150px;border-radius:18px;object-fit:cover;background:#eef2f7;border:1px solid var(--line)}
+.employee-profile-name{font-size:21px;font-weight:900;color:var(--navy);margin:4px 0 14px}
+.employee-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.employee-detail{padding:10px;border:1px solid var(--line);border-radius:11px;background:#f8fafc}
+.employee-detail span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:800;margin-bottom:3px}
+.employee-detail b{font-size:13px;color:var(--navy)}
 .site-employee-name{font-weight:750}
 .site-employee-name .pos{display:block;font-size:11px;color:var(--muted);font-weight:600}
 .group-select{height:30px;font-size:11px;font-weight:800;padding:0 6px;width:auto}
@@ -178,7 +189,7 @@ tr:last-child td{border-bottom:0}
 .cat-item input{width:auto;height:auto}
 .cat-item.checked{border-color:var(--blue);background:#eff6ff}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
-@media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}body.iron-portal .brand{gap:10px}body.iron-portal .brand-logo{width:140px;height:56px}body.iron-portal .brand-title{font-size:14px}}
+@media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}.employee-profile{grid-template-columns:1fr}.employee-profile-photo{width:100px;height:115px}.employee-detail-grid{grid-template-columns:1fr}body.iron-portal .brand{gap:10px}body.iron-portal .brand-logo{width:140px;height:56px}body.iron-portal .brand-title{font-size:14px}}
 </style>
 </head>
 <body>
@@ -311,6 +322,13 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
+<div id="employeeDetailBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEmployeeDetail()">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-head"><h2>Fiche de l’employé</h2><button type="button" class="modal-close" onclick="closeEmployeeDetail()">×</button></div>
+    <div id="employeeDetailBody"></div>
+  </div>
+</div>
+
 <div id="modalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeObservationModal()">
   <div class="modal">
     <div class="modal-head"><h2>Signaler un agent</h2><button type="button" class="modal-close" onclick="closeObservationModal()">×</button></div>
@@ -396,6 +414,7 @@ let categories={};
 let observationKind="observation";
 let selectedCategories=new Set();
 let modalEmployee=null;
+const defaultEmployeePhoto="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 140'%3E%3Crect width='120' height='140' fill='%23eef2f7'/%3E%3Ccircle cx='60' cy='48' r='25' fill='%2394a3b8'/%3E%3Cpath d='M18 132c3-34 20-51 42-51s39 17 42 51' fill='%2394a3b8'/%3E%3C/svg%3E";
 let branding=null;
 
 // "Mémoriser cette session" : localStorage (survit à la fermeture du navigateur) si coché,
@@ -458,6 +477,30 @@ function formatDateFr(value){
   const m=String(value||"").slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m?`${m[3]}/${m[2]}/${m[1]}`:(value||"—");
 }
+
+function completedYears(value){
+  if(!value)return null;const start=new Date(`${value}T00:00:00`);if(Number.isNaN(start.getTime()))return null;
+  const now=new Date();let years=now.getFullYear()-start.getFullYear();if(now.getMonth()<start.getMonth()||(now.getMonth()===start.getMonth()&&now.getDate()<start.getDate()))years--;return Math.max(0,years);
+}
+function employeeById(employeeId){
+  return employees.find(e=>e.id===employeeId)||sitesCache.flatMap(s=>s.employees||[]).find(e=>e.id===employeeId);
+}
+function openEmployeeDetail(employeeId){
+  const e=employeeById(employeeId);if(!e)return;
+  const age=completedYears(e.birth_date),siteYears=completedYears(e.assignment_start_date);
+  const detail=(label,value)=>`<div class="employee-detail"><span>${esc(label)}</span><b>${esc(value??"—")}</b></div>`;
+  document.getElementById("employeeDetailBody").innerHTML=`<div class="employee-profile">
+    <img class="employee-profile-photo" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}">
+    <div><div class="employee-profile-name">${esc(e.last_name)} ${esc(e.first_name)}</div><div class="employee-detail-grid">
+      ${detail("Code",e.code)}${detail("Âge",age===null?"Non renseigné":`${age} ans`)}
+      ${detail("Date de fin de contrat",formatDateFr(e.contract_end_date))}${detail("Date d’affectation sur site",formatDateFr(e.assignment_start_date))}
+      ${detail("Ancienneté sur le site",siteYears===null?"Non renseignée":`${siteYears} an${siteYears>1?"s":""}`)}${detail("Nombre de présences",Number(e.presence_count)||0)}
+      ${detail("Nombre d’absences",Number(e.absence_count)||0)}${detail("Nombre de suspensions",Number(e.suspension_count)||0)}
+      ${detail("Blacklisté",e.blacklisted?"Oui":"Non")}
+    </div></div></div>`;
+  document.getElementById("employeeDetailBackdrop").classList.remove("hidden");
+}
+function closeEmployeeDetail(){document.getElementById("employeeDetailBackdrop").classList.add("hidden")}
 
 async function apiFetch(path,opts={}){
   const headers=Object.assign({"Content-Type":"application/json"},opts.headers||{});
@@ -582,12 +625,12 @@ async function loadEmployees(){
     employees=await apiFetch("/employees");
     if(!employees.length){host.innerHTML='<div class="empty">Aucun agent actuellement affecté à vos sites.</div>';return}
     host.innerHTML=`<div class="card-grid">${employees.map(e=>`
-      <div class="emp-card">
-        <div class="emp-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}</div>
-        <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div>
+      <div class="emp-card" role="button" tabindex="0" onclick="openEmployeeDetail(${e.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmployeeDetail(${e.id})}">
+        <div class="emp-card-head"><img class="emp-avatar" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}"><div><div class="emp-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}</div>
+        <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div></div></div>
         ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
         ${e.group_code?`<span class="emp-site" style="background:#eaf2fb;color:var(--navy);margin-left:6px">Groupe ${esc(e.group_code)}</span>`:""}
-        ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="openObservationModal(${e.id})">Signaler</button></div>`}
+        ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="event.stopPropagation();openObservationModal(${e.id})">Signaler</button></div>`}
       </div>`).join("")}</div>`;
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
@@ -636,9 +679,9 @@ async function loadSites(){
         </div>`).join("")}</div>`:"";
       const employeesHtml=(s.employees||[]).length?`<div class="site-employees">
         <div class="site-employees-title">Agents affectés</div>
-        ${s.employees.map(e=>`<div class="site-employee-row" data-position="${encodeURIComponent(String(e.position||"Fonction non renseignée").trim().toLocaleLowerCase("fr"))}" data-group="${encodeURIComponent(String(e.group_code||""))}">
-          <div class="site-employee-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div>
-          ${canAssign&&groups.length?`<select class="group-select" onchange="updateEmployeeGroup(${e.id},this.value)">${groupOptionsHtml(e.group_code)}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
+        ${s.employees.map(e=>`<div class="site-employee-row" role="button" tabindex="0" onclick="openEmployeeDetail(${e.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmployeeDetail(${e.id})}" data-position="${encodeURIComponent(String(e.position||"Fonction non renseignée").trim().toLocaleLowerCase("fr"))}" data-group="${encodeURIComponent(String(e.group_code||""))}">
+          <div style="display:flex;align-items:center;gap:9px"><img class="emp-avatar" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo"><div class="site-employee-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div></div>
+          ${canAssign&&groups.length?`<select class="group-select" onclick="event.stopPropagation()" onchange="event.stopPropagation();updateEmployeeGroup(${e.id},this.value)">${groupOptionsHtml(e.group_code)}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
         </div>`).join("")}
       </div>`:"";
       return `<div class="site-card">
