@@ -6291,7 +6291,7 @@ function sidebarItemsWithAgendaShortcut(module,items){
   if(["agenda","global"].includes(String(module||"")))return base;
   if(base.some(item=>String(item.route||"").startsWith("agenda")))return base;
   if(!canAccess("agenda"))return base;
-  base.push({label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],gapBefore:true});
+  base.push({label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],group:"AUTRES",gapBefore:true});
   return base;
 }
 function applySidebarOrder(module,items){
@@ -6478,7 +6478,12 @@ function renderSidebar(){
     return `<div class="nav-link ${active?"active":""}${gapClass}" data-route="${escapeHTML(item.route)}" data-aliases="${escapeHTML((item.aliases||[]).join('|'))}" onclick="sidebarNavigate(event,'${item.route}')"><span class="nav-ico" aria-hidden="true">${navIcon(item)}</span><span class="nav-label">${escapeHTML(item.label)}</span>${badge}<button type="button" class="nav-newtab-btn" title="Nouvel onglet" onclick="event.stopPropagation();openInNewTab('${item.route}')"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>`;
   };
   const renderItems=(items,showBack=true)=>{
-    nav.innerHTML=items.map(itemHTML).join("");
+    let prevGroup=null;
+    nav.innerHTML=items.map(item=>{
+      const groupHTML=item.group&&item.group!==prevGroup?`<div class="nav-group-lbl">${escapeHTML(item.group)}</div>`:"";
+      prevGroup=item.group||prevGroup;
+      return groupHTML+itemHTML(item);
+    }).join("");
     if(backSlot&&showBack){
       backSlot.innerHTML=`<div class="sidebar-back"><button type="button" class="sidebar-return-button" onclick="exitTransverseModule()" title="${session.societe?"Retour société":"Retour à la sélection"}" aria-label="${session.societe?"Retour société":"Retour à la sélection"}"><span aria-hidden="true">←</span><span>Retour</span></button></div>`;
     }
@@ -6536,12 +6541,13 @@ function renderSidebar(){
 
     const sidebarByModule={
       drh:[
-        {label:"TABLEAU DE BORD",route:"drh/dashboard"},
-        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],count:contractsToEstablishCandidates().length||null},
-        {label:"FICHE DE POSITION",route:"fiches",count:drhAgents.filter(a=>!employeeIsFormer(a)&&agentCompleteness(a).pct<85).length||null},
-        {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],count:drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length||null},
-        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
-        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],count:(()=>{
+        {label:"TABLEAU DE BORD",route:"drh/dashboard",group:"PILOTAGE"},
+        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],group:"RECRUTEMENT & CONTRATS",count:contractsToEstablishCandidates().length||null},
+        {label:"FICHE DE POSITION",route:"fiches",group:"PERSONNEL",count:drhAgents.filter(a=>!employeeIsFormer(a)&&agentCompleteness(a).pct<85).length||null},
+        {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL",count:drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length||null},
+        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],group:"PERSONNEL",count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
+        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length||null},
+        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],group:"SUIVI TERRAIN",count:(()=>{
           const now=new Date();
           if([5,6].includes(now.getDay()))return null;
           const dateStr=now.toISOString().slice(0,10);
@@ -6554,163 +6560,162 @@ function renderSidebar(){
           });
           return eligible.filter(a=>![a.id,a.backendId,a.matricule].some(ref=>ref!==undefined&&ref!==null&&ref!==""&&pointes.has(String(ref)))).length||null;
         })()},
-        {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length||null},
-        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
-        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month&&(!soc||a.societe===soc)).length||null})()},
-        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month&&(!soc||a.societe===soc)}).length||null})()}
+        {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"SUIVI TERRAIN",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
+        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month&&(!soc||a.societe===soc)).length||null})()},
+        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month&&(!soc||a.societe===soc)}).length||null})()}
       ],
       ops:[
-        {label:"TABLEAU DE BORD",route:"ops/dashboard"},
-        {label:"EFFECTIFS",route:"effectif/recap",aliases:["effectif"]},
-        {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches","agents"]},
-        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
-        {label:"SITES",route:"sites/actifs",aliases:["sites"]},
-        {label:"MISSIONS",route:"ops/missions"},
-        {label:"MOUVEMENT",route:"ops/mouvements",aliases:["ops/mouvements"]},
-        {label:"CONGÉS",route:"conges",aliases:["conges"]},
-        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length||null})()},
-        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],count:agents.filter(a=>a.statut==="suspendu").length||null},
-        {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
-        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],count:agents.filter(a=>a.statut==="sortant").length||null},
-        {label:"SUPERVISION SITE",route:"ops/supervision",aliases:["ops/supervision"]},
-        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length},
-        {label:"SIGNALEMENTS CLIENTS",route:"ops/signalements-clients",aliases:["ops/signalements-clients"],count:(opsClientObservationsCache||[]).filter(o=>o.status==="nouveau").length||null}
+        {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},
+        {label:"EFFECTIFS",route:"effectif/recap",aliases:["effectif"],group:"PERSONNEL"},
+        {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches","agents"],group:"PERSONNEL"},
+        {label:"CONGÉS",route:"conges",aliases:["conges"],group:"PERSONNEL"},
+        {label:"ABSENTS",route:"effectif/absents",aliases:["effectif/absents"],group:"PERSONNEL",count:(()=>{const td=today();return agents.filter(a=>a.statut==="absent"||(a.gestionEvents||[]).some(e=>e.type==="Absence"&&["en_cours","approuve"].includes(e.statut||"en_cours")&&(!e.du||e.du<=td)&&(!e.au||e.au>=td))).length||null})()},
+        {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:agents.filter(a=>a.statut==="suspendu").length||null},
+        {label:"BLACKLIST",route:"effectif/blacklist",aliases:["effectif/blacklist"],group:"PERSONNEL",count:agents.filter(a=>a.blacklist||a.blacklistContractBlocked||a.contractBlocked).length||null},
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"PERSONNEL",count:agents.filter(a=>a.statut==="sortant").length||null},
+        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],group:"TERRAIN"},
+        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"TERRAIN"},
+        {label:"MISSIONS",route:"ops/missions",group:"TERRAIN"},
+        {label:"MOUVEMENT",route:"ops/mouvements",aliases:["ops/mouvements"],group:"TERRAIN"},
+        {label:"SUPERVISION SITE",route:"ops/supervision",aliases:["ops/supervision"],group:"TERRAIN"},
+        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"SUIVI",count:opsIncidents.length},
+        {label:"SIGNALEMENTS CLIENTS",route:"ops/signalements-clients",aliases:["ops/signalements-clients"],group:"SUIVI",count:(opsClientObservationsCache||[]).filter(o=>o.status==="nouveau").length||null}
       ],
       superviseur:[
-        {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"]},
-        {label:"POINTAGE MENSUEL",route:"pointage/feuille",aliases:["pointage"]},
-        {label:"FEUILLE QUOTIDIENNE",route:"pointage/saisie",aliases:["pointage/saisie"]},
-        {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"]},
-        {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"]},
-        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
+        {label:"TABLEAU DE BORD",route:"superviseur/dashboard",aliases:["superviseur"],group:"PILOTAGE"},
+        {label:"POINTAGE MENSUEL",route:"pointage/feuille",aliases:["pointage"],group:"POINTAGE"},
+        {label:"FEUILLE QUOTIDIENNE",route:"pointage/saisie",aliases:["pointage/saisie"],group:"POINTAGE"},
+        {label:"PERSONNEL RATTACHÉ",route:"effectif/actifs",aliases:["effectif","agents"],group:"PERSONNEL"},
+        {label:"FICHE DE POSITION",route:"fiches",aliases:["fiches"],group:"PERSONNEL"},
+        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"SUIVI",count:opsIncidents.length}
       ],
       materiel:[
-        {label:"TABLEAU DE BORD",route:"materiel/dashboard"},
-        {label:"ARTICLES",route:"materiel/articles",count:matArticles},
-        {label:"MAGASINS",route:"materiel/magasins",count:matMagasins},
-        {label:"FOURNISSEURS",route:"materiel/fournisseurs",count:matFournisseurs},
-        {label:"ALERTES",route:"materiel/alertes",count:matAlertes||null},
-        {label:"SITES",route:"sites/actifs",aliases:["sites"]},
-        {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",count:siteDotationCount},
-        {label:"EMPLOYÉ EN ATTENTE DE DOTATION",route:"materiel/dotation",count:dotationCount},
-        {label:"REVERSEMENTS EN ATTENTE",route:"materiel/reversement",count:reversementCount},
-        {label:"FICHES DE POSITION",route:"materiel/fiches"}
+        {label:"TABLEAU DE BORD",route:"materiel/dashboard",group:"PILOTAGE"},
+        {label:"ARTICLES",route:"materiel/articles",group:"STOCK",count:matArticles},
+        {label:"MAGASINS",route:"materiel/magasins",group:"STOCK",count:matMagasins},
+        {label:"FOURNISSEURS",route:"materiel/fournisseurs",group:"STOCK",count:matFournisseurs},
+        {label:"ALERTES",route:"materiel/alertes",group:"STOCK",count:matAlertes||null},
+        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"TERRAIN"},
+        {label:"FICHES DE POSITION",route:"materiel/fiches",group:"TERRAIN"},
+        {label:"SITE EN ATTENTE DE DOTATION",route:"materiel/sites-dotation",group:"DOTATIONS",count:siteDotationCount},
+        {label:"EMPLOYÉ EN ATTENTE DE DOTATION",route:"materiel/dotation",group:"DOTATIONS",count:dotationCount},
+        {label:"REVERSEMENTS EN ATTENTE",route:"materiel/reversement",group:"DOTATIONS",count:reversementCount}
       ],
       facturation:[
-        {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
-        {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],count:comClients},
-        {label:"PAIEMENTS",route:"facturation/paiements"},
-        {label:"AVANCES CLIENTS",route:"facturation/avances"},
-        {label:"AVOIRS",route:"facturation/avoirs"},
-        {label:"CAISSE",route:"facturation/caisse"},
-        {label:"BALANCE AGÉE",route:"facturation/balance"},
-        {label:"SITUATION PAIEMENTS",route:"facturation/situation"}
+        {label:"TABLEAU DE BORD",route:"facturation/dashboard",group:"PILOTAGE"},
+        {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],group:"CLIENTS",count:comClients},
+        {label:"PAIEMENTS",route:"facturation/paiements",group:"TRÉSORERIE"},
+        {label:"AVANCES CLIENTS",route:"facturation/avances",group:"TRÉSORERIE"},
+        {label:"AVOIRS",route:"facturation/avoirs",group:"TRÉSORERIE"},
+        {label:"CAISSE",route:"facturation/caisse",group:"TRÉSORERIE"},
+        {label:"BALANCE AGÉE",route:"facturation/balance",group:"SUIVI"},
+        {label:"SITUATION PAIEMENTS",route:"facturation/situation",group:"SUIVI"}
       ],
       facmod:[
-        {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
-        {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],count:comClients},
-        {label:"FACTURES",route:"facturation/factures",count:factFactures},
-        {label:"PAIEMENTS",route:"facturation/paiements"},
-        {label:"AVANCES CLIENTS",route:"facturation/avances"},
-        {label:"AVOIRS",route:"facturation/avoirs"},
-        {label:"CAISSE",route:"facturation/caisse"}
+        {label:"TABLEAU DE BORD",route:"facturation/dashboard",group:"PILOTAGE"},
+        {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],group:"CLIENTS",count:comClients},
+        {label:"FACTURES",route:"facturation/factures",group:"FACTURATION",count:factFactures},
+        {label:"PAIEMENTS",route:"facturation/paiements",group:"FACTURATION"},
+        {label:"AVANCES CLIENTS",route:"facturation/avances",group:"FACTURATION"},
+        {label:"AVOIRS",route:"facturation/avoirs",group:"FACTURATION"},
+        {label:"CAISSE",route:"facturation/caisse",group:"FACTURATION"}
       ],
       secretariat:[
-        {label:"TABLEAU DE BORD",route:"secretariat/dashboard"},
-        {label:"COURRIERS",route:"secretariat/courriers"},
-        {label:"NOTES INTERNES",route:"secretariat/notes"},
-        {label:"ARCHIVES",route:"secretariat/archives"},
-        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],count:opsIncidents.length}
+        {label:"TABLEAU DE BORD",route:"secretariat/dashboard",group:"PILOTAGE"},
+        {label:"COURRIERS",route:"secretariat/courriers",group:"COURRIER"},
+        {label:"NOTES INTERNES",route:"secretariat/notes",group:"COURRIER"},
+        {label:"ARCHIVES",route:"secretariat/archives",group:"COURRIER"},
+        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"SUIVI",count:opsIncidents.length}
       ],
       agenda:[
-        {label:"TABLEAU DE BORD",route:"agenda/dashboard"},
-        {label:"LISTE",route:"agenda/liste"},
-        {label:"SEMAINE",route:"agenda/semaine"},
-        {label:"RAPPELS",route:"agenda/rappels",count:(db.agendaEvents||[]).filter(agendaEventIsReminderDue).length||null},
-        {label:"DEMANDES STRUCTURE",route:"demandes_structure/dashboard",aliases:["demandes_structure"]},
-        {label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"]}
+        {label:"TABLEAU DE BORD",route:"agenda/dashboard",group:"PILOTAGE"},
+        {label:"LISTE",route:"agenda/liste",group:"PLANNING"},
+        {label:"SEMAINE",route:"agenda/semaine",group:"PLANNING"},
+        {label:"RAPPELS",route:"agenda/rappels",group:"PLANNING",count:(db.agendaEvents||[]).filter(agendaEventIsReminderDue).length||null},
+        {label:"DEMANDES STRUCTURE",route:"demandes_structure/dashboard",aliases:["demandes_structure"],group:"AUTRES"},
+        {label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES"}
       ],
       commercial:[
-        {label:"TABLEAU DE BORD",route:"commercial/dashboard"},
-        {label:"CALENDRIER",route:"commercial/calendrier"},
-        {label:"CLIENT",route:"commercial/clients",count:comClients},
-        {label:"PROSPECTS",route:"commercial/prospects",count:comProspects},
-        {label:"OPPORTUNITÉS",route:"commercial/opportunites",count:comOpportunites},
-        {label:"VISITES / SUIVI",route:"commercial/visites"},
-        {label:"DEVIS",route:"commercial/devis"},
-        {label:"CATALOGUE PRESTATIONS",route:"commercial/catalogue"},
-        {label:"TARIFICATION",route:"commercial/tarifs"},
-        {label:"STATISTIQUES",route:"commercial/stats"}
+        {label:"TABLEAU DE BORD",route:"commercial/dashboard",group:"PILOTAGE"},
+        {label:"CALENDRIER",route:"commercial/calendrier",group:"RELATION CLIENT"},
+        {label:"CLIENT",route:"commercial/clients",group:"RELATION CLIENT",count:comClients},
+        {label:"PROSPECTS",route:"commercial/prospects",group:"RELATION CLIENT",count:comProspects},
+        {label:"OPPORTUNITÉS",route:"commercial/opportunites",group:"RELATION CLIENT",count:comOpportunites},
+        {label:"VISITES / SUIVI",route:"commercial/visites",group:"RELATION CLIENT"},
+        {label:"DEVIS",route:"commercial/devis",group:"COMMERCE"},
+        {label:"CATALOGUE PRESTATIONS",route:"commercial/catalogue",group:"COMMERCE"},
+        {label:"TARIFICATION",route:"commercial/tarifs",group:"COMMERCE"},
+        {label:"STATISTIQUES",route:"commercial/stats",group:"SUIVI"}
       ],
       pointage:[
-        {label:"TABLEAU DE BORD POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
-        {label:"RÉCAP PAR AGENT",route:"pointage/recap"},
-        {label:"RÉCAP PAR SOCIÉTÉ",route:"pointage/societe"},
-        {label:"STATISTIQUES",route:"pointage/stats"},
-        {label:"LÉGENDE & CODES",route:"pointage/legende"},
-        {label:"ARCHIVES POINTAGE",route:"pointage/archives"}
+        {label:"TABLEAU DE BORD POINTAGE",route:"pointage/dashboard",aliases:["pointage"],group:"PILOTAGE"},
+        {label:"RÉCAP PAR AGENT",route:"pointage/recap",group:"RÉCAPITULATIFS"},
+        {label:"RÉCAP PAR SOCIÉTÉ",route:"pointage/societe",group:"RÉCAPITULATIFS"},
+        {label:"STATISTIQUES",route:"pointage/stats",group:"RÉCAPITULATIFS"},
+        {label:"LÉGENDE & CODES",route:"pointage/legende",group:"RÉFÉRENCE"},
+        {label:"ARCHIVES POINTAGE",route:"pointage/archives",group:"RÉFÉRENCE"}
       ],
       paie:[
-        {label:"TABLEAU DE BORD PAIE",route:"paie/dashboard",aliases:["paie"]},
-        {label:"EFFECTIF PAIE",route:"effectif/recap",aliases:["effectif","agents"]}
+        {label:"TABLEAU DE BORD PAIE",route:"paie/dashboard",aliases:["paie"],group:"PILOTAGE"},
+        {label:"EFFECTIF PAIE",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL"}
       ],
       global:[
-        {label:"SITUATION GÉNÉRALE",route:"global-dashboard"},
-        {label:"EFFECTIF GLOBAL",route:"effectif/recap",aliases:["effectif","agents"]},
-        {label:"CONTRATS",route:"contrats/situation",aliases:["contrats"]},
-        {label:"FICHE DE POSITION",route:"fiches"},
-        {label:"SITES",route:"sites/actifs",aliases:["sites"]},
-        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length||null},
-        {label:"DRH",route:"drh/dashboard",aliases:["drh"],gapBefore:true},
-        {label:"OPS",route:"ops/dashboard",aliases:["ops"]},
-        {label:"MATÉRIEL",route:"materiel/dashboard",aliases:["materiel"]},
-        {label:"FACTURATION",route:"facturation/dashboard",aliases:["facturation"]},
-        {label:"COMMERCIAL",route:"commercial/dashboard",aliases:["commercial"]},
-        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"]},
-        {label:"PORTAIL RH",route:"portail",aliases:["portail"]},
-        {label:"SECRÉTARIAT",route:"secretariat/dashboard",aliases:["secretariat"]},
-        {label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"]},
-        {label:"MODULE PAIE",route:"paie/dashboard",aliases:["paie"]},
-        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"]}
+        {label:"SITUATION GÉNÉRALE",route:"global-dashboard",group:"PILOTAGE"},
+        {label:"EFFECTIF GLOBAL",route:"effectif/recap",aliases:["effectif","agents"],group:"VUE CONSOLIDÉE"},
+        {label:"CONTRATS",route:"contrats/situation",aliases:["contrats"],group:"VUE CONSOLIDÉE"},
+        {label:"FICHE DE POSITION",route:"fiches",group:"VUE CONSOLIDÉE"},
+        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"VUE CONSOLIDÉE"},
+        {label:"DEMANDES PERSONNEL",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"VUE CONSOLIDÉE",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length||null},
+        {label:"DRH",route:"drh/dashboard",aliases:["drh"],group:"MODULES"},
+        {label:"OPS",route:"ops/dashboard",aliases:["ops"],group:"MODULES"},
+        {label:"MATÉRIEL",route:"materiel/dashboard",aliases:["materiel"],group:"MODULES"},
+        {label:"FACTURATION",route:"facturation/dashboard",aliases:["facturation"],group:"MODULES"},
+        {label:"COMMERCIAL",route:"commercial/dashboard",aliases:["commercial"],group:"MODULES"},
+        {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],group:"MODULES"},
+        {label:"PORTAIL RH",route:"portail",aliases:["portail"],group:"MODULES"},
+        {label:"SECRÉTARIAT",route:"secretariat/dashboard",aliases:["secretariat"],group:"MODULES"},
+        {label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],group:"MODULES"},
+        {label:"MODULE PAIE",route:"paie/dashboard",aliases:["paie"],group:"MODULES"},
+        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"MODULES"}
       ],
       admin:isAdminSystemSession()?[
-        {label:"TABLEAU CONFIGURATION",route:"admin/dashboard"},
-        {label:"RECRUTEMENT",route:"admin/recrutement",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length||null},
-        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",count:drhAgents.length||null},
-        {label:"FICHE DE POSITION",route:"admin/fiches",count:drhAgents.length||null},
-        {label:"CORRECTION POINTAGE",route:"admin/pointages",count:(db.pointages||[]).length||null},
-        {label:"POSTES / FONCTIONS",route:"admin/postes",count:POSTES.length||null},
-        {label:"SITES",route:"sites/actifs",aliases:["sites"],count:adminSitesActifs||null},
-        {label:"MAGASINS",route:"admin/magasins",count:adminMagasinsCount||null},
-        {label:"ARTICLES",route:"admin/articles",count:adminArticlesCount||null},
-        {label:"MODÈLES DOCUMENTS",route:"admin/document-models",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
-        {label:"CONTRAT",route:"admin/contrats"},
-        {label:"UTILISATEURS & BLOCAGE",route:"admin/users",gapBefore:true,count:(db.users||[]).length||null},
-        {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",count:(adminClientPortalUsersCache||[]).length||null},
-        {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",count:(db.supervisorScopes||[]).length||null},
-        {label:"DROITS D'ACCÈS",route:"admin/droits",count:Object.keys(db.droitsAcces||{}).length||null},
-        {label:"PROFILS D'ACCÈS",route:"admin/niveaux",count:(db.niveauxAcces||[]).length},
-        {label:"SÉCURITÉ DES ACCÈS",route:"admin/access"},
-        {label:"ORGANISER MENU LATÉRAL",route:"admin/menu"},
-        {label:"ORGANISER LES COMPTEURS",route:"admin/counters"},
-        {label:"JOURNAL D'ACTIVITÉ",route:"admin/log"},
-        {label:"STOCKAGE POSTGRESQL",route:"admin/storage"}
+        {label:"TABLEAU CONFIGURATION",route:"admin/dashboard",group:"PILOTAGE"},
+        {label:"RECRUTEMENT",route:"admin/recrutement",group:"RH",count:drhCandidates.filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length||null},
+        {label:"GESTION DES EFFECTIFS",route:"admin/effectifs",group:"RH",count:drhAgents.length||null},
+        {label:"FICHE DE POSITION",route:"admin/fiches",group:"RH",count:drhAgents.length||null},
+        {label:"CORRECTION POINTAGE",route:"admin/pointages",group:"RH",count:(db.pointages||[]).length||null},
+        {label:"POSTES / FONCTIONS",route:"admin/postes",group:"RH",count:POSTES.length||null},
+        {label:"SITES",route:"sites/actifs",aliases:["sites"],group:"SITES & STOCK",count:adminSitesActifs||null},
+        {label:"MAGASINS",route:"admin/magasins",group:"SITES & STOCK",count:adminMagasinsCount||null},
+        {label:"ARTICLES",route:"admin/articles",group:"SITES & STOCK",count:adminArticlesCount||null},
+        {label:"MODÈLES DOCUMENTS",route:"admin/document-models",group:"DOCUMENTS",count:(db.documentTemplates||[]).filter(t=>t&&t.active!==false).length||null},
+        {label:"CONTRAT",route:"admin/contrats",group:"DOCUMENTS"},
+        {label:"UTILISATEURS & BLOCAGE",route:"admin/users",group:"ACCÈS & SÉCURITÉ",count:(db.users||[]).length||null},
+        {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",group:"ACCÈS & SÉCURITÉ",count:(adminClientPortalUsersCache||[]).length||null},
+        {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"ACCÈS & SÉCURITÉ",count:(db.supervisorScopes||[]).length||null},
+        {label:"DROITS D'ACCÈS",route:"admin/droits",group:"ACCÈS & SÉCURITÉ",count:Object.keys(db.droitsAcces||{}).length||null},
+        {label:"PROFILS D'ACCÈS",route:"admin/niveaux",group:"ACCÈS & SÉCURITÉ",count:(db.niveauxAcces||[]).length},
+        {label:"SÉCURITÉ DES ACCÈS",route:"admin/access",group:"ACCÈS & SÉCURITÉ"},
+        {label:"ORGANISER MENU LATÉRAL",route:"admin/menu",group:"SYSTÈME"},
+        {label:"ORGANISER LES COMPTEURS",route:"admin/counters",group:"SYSTÈME"},
+        {label:"JOURNAL D'ACTIVITÉ",route:"admin/log",group:"SYSTÈME"},
+        {label:"STOCKAGE POSTGRESQL",route:"admin/storage",group:"SYSTÈME"}
       ]:[
-        {label:"COCKPIT DG",route:"admin/dashboard"},
-        {label:"VUE SOCIÉTÉS",route:"admin/dashboard"},
-        {label:"ALERTES CRITIQUES",route:"contrats/situation"},
-        {label:"SYNTHÈSE RH",route:"effectif/recap",count:drhAgents.length||null},
-        {label:"SYNTHÈSE OPS",route:"ops/dashboard",count:opsIncidents.length||null},
-        {label:"SYNTHÈSE MATÉRIEL",route:"materiel/dashboard",count:(db.stockArticles||[]).length||null},
-        {label:"SYNTHÈSE FINANCE",route:"facturation/dashboard",count:(db.factures||[]).length||null},
-        {label:"SYNTHÈSE COMMERCIALE",route:"commercial/dashboard",count:comOpportunites||null},
-        {label:"DÉCISIONS / PROPOSITIONS",route:"admin/feed",count:(db.echanges||[]).filter(e=>e.to==="all"||e.type==="post"||e.type==="instruction").length||null}
+        {label:"COCKPIT DG",route:"admin/dashboard",group:"PILOTAGE"},
+        {label:"VUE SOCIÉTÉS",route:"admin/dashboard",group:"PILOTAGE"},
+        {label:"ALERTES CRITIQUES",route:"contrats/situation",group:"PILOTAGE"},
+        {label:"SYNTHÈSE RH",route:"effectif/recap",group:"SYNTHÈSES",count:drhAgents.length||null},
+        {label:"SYNTHÈSE OPS",route:"ops/dashboard",group:"SYNTHÈSES",count:opsIncidents.length||null},
+        {label:"SYNTHÈSE MATÉRIEL",route:"materiel/dashboard",group:"SYNTHÈSES",count:(db.stockArticles||[]).length||null},
+        {label:"SYNTHÈSE FINANCE",route:"facturation/dashboard",group:"SYNTHÈSES",count:(db.factures||[]).length||null},
+        {label:"SYNTHÈSE COMMERCIALE",route:"commercial/dashboard",group:"SYNTHÈSES",count:comOpportunites||null},
+        {label:"DÉCISIONS / PROPOSITIONS",route:"admin/feed",group:"SYNTHÈSES",count:(db.echanges||[]).filter(e=>e.to==="all"||e.type==="post"||e.type==="instruction").length||null}
       ]
     };
     if(mod==="ops")refreshOpsClientObservationsCount();
     const baseItems=sidebarByModule[mod]||[];
-    const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
+    const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES",count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
     const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
     const items=sidebarItemsWithAgendaShortcut(mod,mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems));
     const orderedItems=applySidebarOrder(mod,items);
