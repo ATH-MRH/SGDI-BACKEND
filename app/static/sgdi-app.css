@@ -2951,8 +2951,9 @@ table{width:100%;max-width:100%}
 #view:has(.dp-clean-page){width:100%!important;max-width:none!important}
 .dp-clean-page{width:100%;display:flex;flex-direction:column;gap:14px}
 .dp-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #dbe5f0;border-radius:14px;padding:12px 16px;box-shadow:0 10px 26px rgba(4,57,112,.07)}
-.dp-filters .input{flex:1;min-width:220px;height:38px!important}
-.dp-filters .select{height:38px!important}
+.dp-filters .input{flex:1 1 220px;width:auto;min-width:220px;height:38px!important}
+.dp-filters .select{flex:0 0 auto;width:auto;min-width:150px;height:38px!important}
+.dp-filters .btn{flex:0 0 auto;width:auto!important}
 .dp-workspace{display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start}
 .dp-panel{background:#fff;border:1px solid #dbe5f0;border-radius:16px;box-shadow:0 10px 26px rgba(4,57,112,.07);overflow:hidden}
 .dp-panel-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e8eff6}

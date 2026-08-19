@@ -19521,9 +19521,9 @@ function renderDemandesPersonnel(view,sub,arg){
     </div></div>
     <div class="ops-dash-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
       ${kpi("Total",all.length,"📥","#dbeafe","#1e40af","setDemandesPersonnelFilter('statut','')")}
-      ${kpi("Nouvelles",all.filter(d=>(d.statut||"nouveau")==="nouveau").length,"✦","#dbeafe","#1e40af","setDemandesPersonnelFilter('statut','nouveau')")}
+      ${kpi("Nouvelles",all.filter(d=>(d.statut||"nouveau")==="nouveau").length,"🆕","#dbeafe","#1e40af","setDemandesPersonnelFilter('statut','nouveau')")}
       ${kpi("Alertes",alerts,"⚠️","#fef3c7","#92400e","navigate('demandes_personnel/alertes')")}
-      ${kpi("Traitées",done,"✓","#dcfce7","#166534","setDemandesPersonnelFilter('statut','traite')")}
+      ${kpi("Traitées",done,"✅","#dcfce7","#166534","setDemandesPersonnelFilter('statut','traite')")}
     </div>
     <div class="dp-filters"><input class="input" placeholder="Rechercher une demande..." value="${escapeHTML(q)}" oninput="setDemandesPersonnelSearch(this.value)"/><select class="select" onchange="setDemandesPersonnelFilter('statut',this.value)"><option value="">Tous statuts</option>${["nouveau","en_cours","traite","rejete"].map(s=>`<option value="${s}" ${statut===s?"selected":""}>${demandePersonnelStatusLabel(s)}</option>`).join("")}</select><select class="select" onchange="setDemandesPersonnelFilter('type',this.value)"><option value="">Tous types</option>${types.map(t=>`<option ${type===t?"selected":""}>${escapeHTML(t)}</option>`).join("")}</select><button class="btn btn-secondary" onclick="sessionStorage.removeItem('dp_q');sessionStorage.removeItem('dp_statut');sessionStorage.removeItem('dp_type');renderView()">Réinitialiser</button></div>
     <div class="dp-workspace">
