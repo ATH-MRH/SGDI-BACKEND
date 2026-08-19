@@ -2958,17 +2958,9 @@ table{width:100%;max-width:100%}
 #view.module-view:has(.dp-clean-page),
 #view:has(.dp-clean-page){padding:12px 18px 28px!important}
 .dp-clean-page{width:100%;min-width:0;max-width:none;display:flex;flex-direction:column;gap:14px}
-/* Maquette de réception : vue focalisée sans navigation latérale ni topbar.
-   Le canevas reprend les marges de 55 px visibles sur la référence desktop. */
-body.dp-focus-layout .sgdi-shell>.sgdi-topbar,
-body.dp-focus-layout .sgdi-shell .sidebar,
-body.dp-focus-layout .sgdi-shell .sgdi-sidebar-backdrop,
-body.dp-focus-layout .sgdi-shell .module-counters-ribbon,
-body.dp-focus-layout .sgdi-shell .drh-workforce-ribbon{display:none!important}
-body.dp-focus-layout .sgdi-shell-body{display:block!important;width:100%!important;height:100vh!important}
-body.dp-focus-layout .sgdi-shell-body>.dp-wide-main{display:flex!important;flex:1 1 auto!important;width:100%!important;max-width:none!important;min-width:0!important;height:100%!important}
-body.dp-focus-layout #view.dp-wide-view{width:100%!important;max-width:none!important;padding:7px 55px 28px!important;overflow-y:auto!important}
-@media(max-width:760px){body.dp-focus-layout #view.dp-wide-view{padding:8px 12px 20px!important}}
+.sgdi-shell-body>.dp-wide-main{display:flex!important;flex:1 1 0!important;width:0!important;max-width:none!important;min-width:0!important}
+#view.dp-wide-view{width:100%!important;max-width:none!important;padding:12px 18px 28px!important;overflow-y:auto!important}
+@media(max-width:760px){#view.dp-wide-view{padding:8px 12px 20px!important}}
 .dp-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #dbe5f0;border-radius:14px;padding:12px 16px;box-shadow:0 10px 26px rgba(4,57,112,.07)}
 .dp-filters .input{flex:1 1 220px;width:auto;min-width:220px;height:38px!important}
 .dp-filters .select{flex:0 0 auto;width:auto;min-width:150px;height:38px!important}

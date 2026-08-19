@@ -19492,9 +19492,8 @@ async function portalComptesNotify(matricule){
 
 function renderDemandesPersonnel(view,sub,arg){
   if(!canAccess("demandes_personnel")){view.innerHTML=`<div class="card p-6 text-red-700">Accès réservé DRH / Administration.</div>`;return}
-  // Cette réception reprend la maquette plein écran : aucune zone de la coque
-  // générale ne doit réduire son canevas de travail.
-  document.body.classList.add("dp-focus-layout");
+  // La vue garde la coque ERP (barre latérale incluse) tout en exploitant la
+  // largeur restante pour son espace de travail.
   view.classList.add("dp-wide-view");
   view.closest("main")?.classList.add("dp-wide-main");
   ensureDemandesPersonnel();
