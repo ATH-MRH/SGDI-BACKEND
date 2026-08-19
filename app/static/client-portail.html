@@ -1022,6 +1022,7 @@ async function loadHistory(){
           </div>
         </div>
         <div class="hist-desc">${esc(o.description)}</div>
+        ${o.client_response?`<div style="margin-top:10px;padding:12px 14px;border-left:4px solid #c8102e;border-radius:8px;background:#fff4f5"><strong style="display:block;font-size:11px;color:#9f1239;text-transform:uppercase;margin-bottom:4px">Réponse d’ATLAS</strong><div>${esc(o.client_response)}</div>${o.replied_by_name||o.replied_at?`<small style="display:block;margin-top:6px;color:#64748b">${o.replied_by_name?esc(o.replied_by_name):""}${o.replied_by_name&&o.replied_at?" · ":""}${o.replied_at?formatDateFr(o.replied_at):""}</small>`:""}</div>`:""}
         ${o.categories&&o.categories.length?`<div class="hist-cats">${o.categories.map(c=>`<span class="pill pill-amber">${esc(categories[c]||c)}</span>`).join("")}</div>`:""}
         ${o.attachment_url?`<div style="margin-top:9px"><a class="pill pill-blue" href="${esc(o.attachment_url)}" target="_blank" rel="noopener">📎 ${esc(o.attachment_name||"Voir la pièce jointe")}</a></div>`:""}
       </div>`).join("")}</div>`;

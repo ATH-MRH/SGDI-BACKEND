@@ -270,6 +270,9 @@ class ObservationOut(BaseModel):
     created_at: datetime | None = None
     attachment_name: str | None = None
     attachment_url: str | None = None
+    client_response: str | None = None
+    replied_by_name: str | None = None
+    replied_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -288,6 +291,7 @@ class ObservationOpsOut(ObservationOut):
 class ObservationResolveIn(BaseModel):
     status: str
     resolution_note: str | None = None
+    client_response: str | None = None
 
     @field_validator("status")
     @classmethod

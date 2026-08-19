@@ -35925,6 +35925,7 @@ function openOpsObservationDetail(id){
       ${o.attachment_url?`<div class="mt-3"><a class="btn btn-secondary text-xs" href="${escapeHTML(o.attachment_url)}" target="_blank" rel="noopener">📎 ${escapeHTML(o.attachment_name||"Pièce jointe")}</a></div>`:""}
     </div>
     ${o.resolution_note?`<div class="mb-3"><label class="label">Dernière note de résolution</label><div class="card p-3 text-sm" style="background:#f0fdf4">${escapeHTML(o.resolution_note)}</div><div class="text-xs text-slate-400 mt-1">${o.resolved_by_name?escapeHTML(o.resolved_by_name)+" · ":""}${o.resolved_at?escapeHTML(formatDate(o.resolved_at)):""}</div></div>`:""}
+    ${o.client_response?`<div class="mb-3"><label class="label">Réponse visible par le client</label><div class="card p-3 text-sm" style="background:#fff1f2;border-color:#fecdd3">${escapeHTML(o.client_response)}</div></div>`:""}
     <label class="label">Statut</label>
     <select class="select" id="ops-obs-status">
       <option value="nouveau" ${o.status==="nouveau"?"selected":""}>Nouveau</option>
@@ -35933,15 +35934,23 @@ function openOpsObservationDetail(id){
     </select>
     <label class="label mt-2">Note de résolution (interne — jamais visible du client)</label>
     <textarea class="textarea" id="ops-obs-note" rows="3">${escapeHTML(o.resolution_note||"")}</textarea>
-    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button type="button" class="btn btn-primary" onclick="submitOpsObservationResolution(${o.id})">Enregistrer</button></div>`);
+    <div id="ops-obs-reply-panel" class="hidden mt-3" style="padding:14px;border:1px solid #fecdd3;border-radius:10px;background:#fff7f8"><label class="label" style="color:#9f1239">Réponse au client</label><div class="text-xs text-slate-500 mb-2">Cette réponse sera visible dans l’historique de son portail.</div><textarea class="textarea" id="ops-obs-client-response" rows="4" placeholder="Rédigez la réponse destinée au client…">${escapeHTML(o.client_response||"")}</textarea></div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button><button type="button" class="btn btn-secondary" onclick="showOpsObservationReply()">Répondre</button><button type="button" class="btn btn-primary" onclick="submitOpsObservationResolution(${o.id})">Enregistrer</button></div>`);
+}
+function showOpsObservationReply(){
+  const panel=document.getElementById("ops-obs-reply-panel");
+  if(!panel)return;
+  panel.classList.remove("hidden");
+  document.getElementById("ops-obs-client-response")?.focus();
 }
 async function submitOpsObservationResolution(id){
   const status=document.getElementById("ops-obs-status").value;
   const note=document.getElementById("ops-obs-note").value.trim();
+  const response=document.getElementById("ops-obs-client-response")?.value.trim()||null;
   try{
-    await sgdiApi(`/api/client-portal/ops/observations/${id}/resolve`,{method:"POST",legacy:false,body:{status,resolution_note:note||null}});
+    await sgdiApi(`/api/client-portal/ops/observations/${id}/resolve`,{method:"POST",legacy:false,body:{status,resolution_note:note||null,client_response:response}});
     closeModal();
-    toast("Signalement mis à jour","success");
+    toast(response?"Réponse envoyée au client":"Signalement mis à jour","success");
     await loadOpsClientObservations();
   }catch(e){toast(e.message||"Mise à jour impossible","error")}
 }

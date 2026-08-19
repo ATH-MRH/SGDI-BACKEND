@@ -401,13 +401,17 @@ def test_ops_can_list_and_resolve_observation_without_exposing_note_to_client(cl
 
     resolved = client.post(f"/api/client-portal/ops/observations/{obs_id}/resolve", headers=auth_headers, json={
         "status": "traite", "resolution_note": "Agent recadré, note interne confidentielle.",
+        "client_response": "Votre signalement a été traité par nos équipes.",
     })
     assert resolved.status_code == 200, resolved.text
     assert resolved.json()["resolution_note"] == "Agent recadré, note interne confidentielle."
+    assert resolved.json()["client_response"] == "Votre signalement a été traité par nos équipes."
 
     client_view = client.get("/api/client-portal/observations", headers=headers).json()
     own = next(o for o in client_view if o["id"] == obs_id)
     assert own["status"] == "traite"
+    assert own["client_response"] == "Votre signalement a été traité par nos équipes."
+    assert own["replied_by_name"]
     assert "resolution_note" not in own, "le client ne doit voir que le statut, jamais la note interne"
 
 

@@ -514,6 +514,9 @@ def observation_out_dict(db: Session, row: ClientObservation) -> dict[str, Any]:
         "created_at": row.created_at,
         "attachment_name": attachment.file_name if attachment else None,
         "attachment_url": attachment.file_path if attachment else None,
+        "client_response": row.client_response,
+        "replied_by_name": (db.get(User, row.resolved_by).full_name if row.resolved_by and db.get(User, row.resolved_by) else None),
+        "replied_at": row.resolved_at,
     }
 
 
@@ -585,6 +588,10 @@ def resolve_observation(db: Session, observation_id: int, user: User, payload) -
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Site non autorisé")
     row.status = payload.status
     row.resolution_note = payload.resolution_note
+    row.client_response = payload.client_response.strip() if payload.client_response and payload.client_response.strip() else None
+    if row.client_response:
+        row.resolved_by = user.id
+        row.resolved_at = datetime.utcnow()
     if payload.status == "traite":
         row.resolved_by = user.id
         row.resolved_at = datetime.utcnow()

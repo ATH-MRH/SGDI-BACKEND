@@ -42,5 +42,6 @@ class ClientObservation(Base, TimestampMixin):
     incident_date: Mapped[date] = mapped_column(Date, index=True)
     status: Mapped[str] = mapped_column(String(20), default="nouveau", index=True)  # nouveau | en_cours | traite
     resolution_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    client_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
