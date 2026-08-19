@@ -2676,8 +2676,9 @@ table{width:100%;max-width:100%}
   display:grid!important;
   grid-template-columns:42px minmax(0,1fr) auto!important;
   align-items:center!important;
-  padding:0 18px!important;
-  border-radius:0!important;
+  padding:0 14px!important;
+  margin:0 8px!important;
+  border-radius:10px!important;
   color:#0f2d5a!important;
   background:transparent!important;
   font-size:12px!important;
@@ -2688,7 +2689,7 @@ table{width:100%;max-width:100%}
 .sidebar .nav-link + .nav-group,
 .sidebar .nav-group + .nav-link,
 .sidebar .nav-group + .nav-group,
-.sidebar .sub-link + .sub-link{margin-top:0!important}
+.sidebar .sub-link + .sub-link{margin-top:2px!important}
 .sidebar .nav-ico{
   width:22px;
   height:22px;
@@ -2727,7 +2728,7 @@ table{width:100%;max-width:100%}
 .sidebar .nav-link.active .nav-ico,.sidebar .sub-link.active .nav-ico{color:#fff!important;opacity:1!important}
 .sidebar .nav-link.active .nav-count,.sidebar .sub-link.active .nav-count{background:rgba(255,255,255,.25)!important;color:#fff!important}
 .sidebar .nav-group-lbl{
-  padding:14px 18px 5px!important;
+  padding:14px 14px 6px 22px!important;
   font-size:10px!important;
   font-weight:800!important;
   letter-spacing:.07em!important;

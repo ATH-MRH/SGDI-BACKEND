@@ -6291,7 +6291,7 @@ function sidebarItemsWithAgendaShortcut(module,items){
   if(["agenda","global"].includes(String(module||"")))return base;
   if(base.some(item=>String(item.route||"").startsWith("agenda")))return base;
   if(!canAccess("agenda"))return base;
-  base.push({label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],group:"AUTRES",gapBefore:true});
+  base.push({label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],group:"AUTRES"});
   return base;
 }
 function applySidebarOrder(module,items){
@@ -6306,6 +6306,16 @@ function applySidebarOrder(module,items){
   order.forEach(route=>{const item=byRoute.get(route);if(item){sorted.push(item);used.add(route)}});
   (items||[]).forEach(item=>{if(!used.has(item.route))sorted.push(item)});
   return sorted;
+}
+function clusterSidebarItemsByGroup(items){
+  const groupOrder=[];
+  const buckets=new Map();
+  (items||[]).forEach(item=>{
+    const g=item.group||"";
+    if(!buckets.has(g)){buckets.set(g,[]);groupOrder.push(g)}
+    buckets.get(g).push(item);
+  });
+  return groupOrder.flatMap(g=>buckets.get(g));
 }
 function sidebarPinnedDefaultOrder(module){
   if(!["drh","ops","superviseur"].includes(module))return [];
@@ -6403,11 +6413,6 @@ function renderSidebar(){
     const r=String(item.route||"");
     const l=String(item.label||"").toLowerCase();
     const svg=body=>`<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
-    if(r==="drh/dashboard")return svg(`<circle cx="9" cy="7.5" r="3"></circle><path d="M3.5 19c.8-3.8 4.2-5.5 5.5-5.5s4.7 1.7 5.5 5.5"></path><path d="M16.5 5.5v5M14 8h5"></path>`);
-    if(r==="ops/dashboard")return svg(`<path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6z"></path><path d="M9.5 12l2 2 3.5-4"></path>`);
-    if(r==="facturation/dashboard")return svg(`<path d="M6 3h9l3 3v15H6z"></path><path d="M9 8h6M9 11.5h6M9 15h4"></path><path d="M15 3v4h4"></path>`);
-    if(r==="secretariat/dashboard")return svg(`<rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M4 8l8 5 8-5"></path><path d="M4 16l5.5-4M20 16l-5.5-4"></path>`);
-    if(r==="paie/dashboard")return svg(`<rect x="3.5" y="6" width="17" height="13" rx="2"></rect><path d="M3.5 10h17"></path><circle cx="16.5" cy="14.3" r="1.4"></circle>`);
     if(r==="global-dashboard")return svg(`<circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c2.5 2.6 3.8 5.8 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.8-3.8-9S9.5 5.6 12 3z"></path>`);
     if(r.includes("pointage"))return svg(`<circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path>`);
     if(r==="fiches"||r.endsWith("/fiches"))return svg(`<rect x="4" y="4" width="16" height="16" rx="2.4"></rect><circle cx="10" cy="10.3" r="2"></circle><path d="M7 15c.4-1.6 1.6-2.5 3-2.5s2.6.9 3 2.5"></path><path d="M15 9h3M15 12h3"></path>`);
@@ -6715,7 +6720,7 @@ function renderSidebar(){
     };
     if(mod==="ops")refreshOpsClientObservationsCount();
     const baseItems=sidebarByModule[mod]||[];
-    const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES",count:documentsArchivesTotalCount()||null,gapBefore:!["drh","ops","materiel"].includes(mod)};
+    const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES",count:documentsArchivesTotalCount()||null};
     const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
     const items=sidebarItemsWithAgendaShortcut(mod,mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems));
     const orderedItems=applySidebarOrder(mod,items);
@@ -6730,7 +6735,7 @@ function renderSidebar(){
         orderedItems.splice(updatedAgendaIdx+1,0,portailItem);
       }
     }
-    renderItems(orderedItems);
+    renderItems(clusterSidebarItemsByGroup(orderedItems));
     restoreSidebarScroll();
     return;
   }
