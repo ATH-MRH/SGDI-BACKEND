@@ -150,14 +150,14 @@ tr:last-child td{border-bottom:0}
 .emp-card{cursor:pointer}.emp-card:hover{border-color:#c8102e;box-shadow:0 8px 22px rgba(200,16,46,.1)}
 .emp-avatar{width:46px;height:46px;border-radius:50%;object-fit:cover;background:#eef2f7;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);flex:0 0 auto}
 .emp-card-head{display:flex;align-items:center;gap:12px}
-.employee-profile{display:grid;grid-template-columns:130px 1fr;gap:22px;align-items:start}
-.employee-profile-photo{width:130px;height:150px;border-radius:18px;object-fit:cover;background:#eef2f7;border:1px solid var(--line)}
-.employee-profile-name{font-size:21px;font-weight:900;color:var(--navy);margin:4px 0 14px}
+.employee-profile{display:grid;grid-template-columns:180px 1fr;gap:28px;align-items:start}
+.employee-profile-photo{width:180px;height:215px;border-radius:20px;object-fit:cover;background:#eef2f7;border:1px solid var(--line)}
+.employee-profile-name{font-size:24px;font-weight:900;color:var(--navy);margin:4px 0 16px}
 .employee-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .employee-detail{padding:10px;border:1px solid var(--line);border-radius:11px;background:#f8fafc}
 .employee-detail span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:800;margin-bottom:3px}
 .employee-detail b{font-size:13px;color:var(--navy)}
-.employee-profile-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;padding-top:15px;border-top:1px solid var(--line)}
+.employee-profile-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px;padding-top:15px;border-top:1px solid var(--line)}
 .employee-profile-actions button{min-width:140px}.danger-action{background:#c8102e!important;color:#fff!important;border-color:#c8102e!important}
 .site-employee-name{font-weight:750}
 .site-employee-name .pos{display:block;font-size:11px;color:var(--muted);font-weight:600}
@@ -327,7 +327,7 @@ tr:last-child td{border-bottom:0}
 </section>
 
 <div id="employeeDetailBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEmployeeDetail()">
-  <div class="modal" style="max-width:680px">
+  <div class="modal" style="max-width:900px;padding:28px">
     <div class="modal-head"><h2>Fiche de l’employé</h2><button type="button" class="modal-close" onclick="closeEmployeeDetail()">×</button></div>
     <div id="employeeDetailBody"></div>
   </div>
@@ -524,10 +524,11 @@ function openEmployeeDetail(employeeId){
       ${detail("Ancienneté sur le site",siteSeniority(e.assignment_start_date))}${detail("Nombre de présences",Number(e.presence_count)||0)}
       ${detail("Nombre d’absences",Number(e.absence_count)||0)}${detail("Nombre de suspensions",Number(e.suspension_count)||0)}
       ${detail("Blacklisté",e.blacklisted?"Oui":"Non")}
-    </div>${session?.permissions?.create_observations===false?"":`<div class="employee-profile-actions"><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Affecter</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Blacklister</button></div>`}</div></div>`;
+    </div>${session?.permissions?.create_observations===false?"":`<div class="employee-profile-actions"><button type="button" class="secondary" onclick="openObservationFromEmployeeDetail(${e.id})">Ajouter une observation</button><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Affecter</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Blacklister</button></div>`}</div></div>`;
   document.getElementById("employeeDetailBackdrop").classList.remove("hidden");
 }
 function closeEmployeeDetail(){document.getElementById("employeeDetailBackdrop").classList.add("hidden")}
+function openObservationFromEmployeeDetail(employeeId){closeEmployeeDetail();openObservationModal(employeeId)}
 
 function openEmployeeActionModal(employeeId,action){
   const e=employeeById(employeeId);if(!e)return;employeeActionRequest={employee:e,action};
