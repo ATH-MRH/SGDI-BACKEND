@@ -22,10 +22,12 @@ from app.modules.client_portal.schemas import (
     ClientPortalUserOut,
     ClientPortalUserUpdate,
     EmployeeVisibleOut,
+    EquipmentVisibleOut,
     ObservationCreate,
     ObservationOpsOut,
     ObservationOut,
     ObservationResolveIn,
+    SiteVisibleOut,
 )
 from app.modules.client_portal.security import create_client_portal_token, current_client_user
 from app.modules.commercial.models import Client
@@ -38,6 +40,8 @@ CLIENT_PORTAL_DEFAULT_PERMISSIONS = {
     "view_employees": True,
     "view_observations": True,
     "create_observations": True,
+    "view_sites": True,
+    "view_equipment": True,
 }
 
 
@@ -49,6 +53,8 @@ def _client_permissions(db: Session, user: ClientPortalUser) -> dict[str, bool]:
         "view_employees": "viewEmployees",
         "view_observations": "viewObservations",
         "create_observations": "createObservations",
+        "view_sites": "viewSites",
+        "view_equipment": "viewEquipment",
     }
     return {key: bool(configured.get(key, configured.get(camel_keys[key], default))) for key, default in CLIENT_PORTAL_DEFAULT_PERMISSIONS.items()}
 
@@ -137,6 +143,18 @@ def me(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_c
 def employees(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
     _require_client_permission(db, user, "view_employees")
     return service.visible_employees_for_client(db, user.client_id)
+
+
+@router.get("/sites", response_model=list[SiteVisibleOut])
+def sites(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
+    _require_client_permission(db, user, "view_sites")
+    return service.visible_sites_for_client(db, user.client_id)
+
+
+@router.get("/equipment", response_model=list[EquipmentVisibleOut])
+def equipment(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
+    _require_client_permission(db, user, "view_equipment")
+    return service.visible_equipment_for_client(db, user.client_id)
 
 
 @router.get("/observations", response_model=list[ObservationOut])

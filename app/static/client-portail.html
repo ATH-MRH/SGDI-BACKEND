@@ -75,10 +75,21 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .brand-title{font-size:17px;font-weight:950;letter-spacing:.03em}
 .brand-sub{font-size:12px;opacity:.8;margin-top:2px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 14px;font-weight:750;cursor:pointer}
-.shell{max-width:1100px;margin:0 auto;padding:18px 20px}
-.tabs{display:flex;gap:8px;margin-bottom:16px}
-.tab-btn{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:999px;padding:10px 18px;font-weight:850;font-size:13px;cursor:pointer}
-.tab-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+.shell{max-width:1320px;margin:0 auto;padding:18px 20px;display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
+.portal-sidebar{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;position:sticky;top:18px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
+.portal-sidebar-title{padding:8px 10px 12px;font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.11em;text-transform:uppercase}
+.portal-nav{display:flex;flex-direction:column;gap:6px}
+.portal-nav-btn{width:100%;border:0;background:transparent;color:#31465f;border-radius:12px;padding:12px 13px;display:flex;align-items:center;gap:11px;text-align:left;font-size:13px;font-weight:850;cursor:pointer}
+.portal-nav-btn:hover{background:#eff6ff;color:var(--navy)}
+.portal-nav-btn.active{background:var(--navy);color:#fff;box-shadow:0 8px 18px rgba(4,57,112,.2)}
+.portal-nav-icon{width:24px;height:24px;border-radius:8px;background:#eaf2fb;color:var(--navy);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.portal-nav-icon svg{width:14px;height:14px}
+.portal-nav-btn.active .portal-nav-icon{background:rgba(255,255,255,.18);color:#fff}
+.portal-main{min-width:0}
+.section-head{margin-bottom:16px}
+.section-head h1{font-size:22px;margin:0;font-weight:900}
+.section-head p{font-size:13px;color:var(--muted);margin:5px 0 0}
+@media(max-width:900px){.shell{grid-template-columns:1fr}.portal-sidebar{position:static}.portal-nav{flex-direction:row;overflow-x:auto}.portal-nav-btn{min-width:max-content}}
 .banner{border-radius:14px;padding:13px 16px;margin-bottom:14px;font-size:13px;font-weight:700}
 .banner.success{background:#dcfce7;color:#14532d;border:1px solid #86efac}
 .banner.error{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5}
@@ -90,6 +101,23 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .emp-actions{margin-top:13px}
 .emp-actions button{width:100%}
 .empty{text-align:center;color:#94a3b8;padding:50px 20px;font-size:14px}
+.site-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.site-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 22px rgba(4,57,112,.05);display:flex;flex-direction:column;gap:11px}
+.site-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.site-name{font-size:15px;font-weight:900}
+.site-type{display:inline-block;margin-top:5px;background:#eaf2fb;color:var(--navy);border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:850}
+.site-address{font-size:12.5px;color:#42566f;font-weight:700;line-height:1.4}
+.coverage-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.coverage-value{font-size:13px;font-weight:900;color:var(--navy);text-transform:none;letter-spacing:0}
+.progress-track{height:8px;border-radius:999px;background:#eaf0f6;overflow:hidden}
+.progress-fill{height:100%;border-radius:inherit}
+.table-card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 8px 22px rgba(4,57,112,.05)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:850;padding:12px 14px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid #eef2f7;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.equip-name{font-weight:850;font-size:13px}
+.equip-ref{font-size:11px;color:var(--muted);margin-top:1px}
 .hist-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .hist-toolbar select{height:40px;max-width:220px}
 .hist-list{display:grid;gap:10px}
@@ -193,27 +221,51 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
   </header>
 
   <div class="shell">
-    <div id="banner"></div>
-    <div class="tabs">
-      <button type="button" class="tab-btn active" data-tab="employees" onclick="switchTab('employees')">Mes agents</button>
-      <button type="button" class="tab-btn" data-tab="history" onclick="switchTab('history')">Historique</button>
-    </div>
+    <aside class="portal-sidebar" aria-label="Navigation portail client">
+      <div class="portal-sidebar-title">Espace client</div>
+      <nav class="portal-nav">
+        <button type="button" class="portal-nav-btn" data-tab="planning" onclick="switchTab('planning')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Planning de travail</button>
+        <button type="button" class="portal-nav-btn active" data-tab="employees" onclick="switchTab('employees')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.4-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.3" cy="8.6" r="2.6"/><path d="M15.8 14.6c2.5.3 4.4 2.1 5 5"/></svg></span>Mon personnel</button>
+        <button type="button" class="portal-nav-btn" data-tab="sites" onclick="switchTab('sites')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>Mes sites</button>
+        <button type="button" class="portal-nav-btn" data-tab="equipment" onclick="switchTab('equipment')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8.5" width="19" height="11" rx="2"/><path d="M8.5 8.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2.5M2.5 13.5h19"/></svg></span>Mes équipements</button>
+        <button type="button" class="portal-nav-btn" data-tab="history" onclick="switchTab('history')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>Historique</button>
+      </nav>
+    </aside>
+    <main class="portal-main">
+      <div id="banner"></div>
 
-    <div id="employeesTab">
-      <div id="employeesList"><div class="empty">Chargement…</div></div>
-    </div>
-
-    <div id="historyTab" class="hidden">
-      <div class="hist-toolbar">
-        <select id="histStatusFilter" onchange="loadHistory()">
-          <option value="">Tous les statuts</option>
-          <option value="nouveau">Nouveau</option>
-          <option value="en_cours">En cours</option>
-          <option value="traite">Traité</option>
-        </select>
+      <div id="planningTab" class="hidden">
+        <div class="section-head"><h1>Planning de travail</h1><p>Le planning détaillé par créneau arrive bientôt sur votre espace client.</p></div>
+        <div class="empty">Cette section est en cours de préparation. Contactez votre gestionnaire ATLAS pour toute question sur le planning en cours.</div>
       </div>
-      <div id="historyList"><div class="empty">Chargement…</div></div>
-    </div>
+
+      <div id="employeesTab">
+        <div class="section-head"><h1>Mon personnel</h1><p>Les agents actuellement affectés à vos sites.</p></div>
+        <div id="employeesList"><div class="empty">Chargement…</div></div>
+      </div>
+
+      <div id="sitesTab" class="hidden">
+        <div class="section-head"><h1>Mes sites</h1><p>Vos emplacements sous surveillance et la couverture en effectif.</p></div>
+        <div id="sitesList"><div class="empty">Chargement…</div></div>
+      </div>
+
+      <div id="equipmentTab" class="hidden">
+        <div class="section-head"><h1>Mes équipements / matériel</h1><p>Le matériel affecté à vos sites et à vos agents.</p></div>
+        <div id="equipmentList"><div class="empty">Chargement…</div></div>
+      </div>
+
+      <div id="historyTab" class="hidden">
+        <div class="hist-toolbar">
+          <select id="histStatusFilter" onchange="loadHistory()">
+            <option value="">Tous les statuts</option>
+            <option value="nouveau">Nouveau</option>
+            <option value="en_cours">En cours</option>
+            <option value="traite">Traité</option>
+          </select>
+        </div>
+        <div id="historyList"><div class="empty">Chargement…</div></div>
+      </div>
+    </main>
   </div>
 </section>
 
@@ -398,8 +450,14 @@ async function enterApp(){
   document.getElementById("fullNameLabel").textContent=session.fullName||"—";
   try{const me=await apiFetch("/me");session.permissions=me.permissions||{};persistSession()}catch(e){}
   const canHistory=session?.permissions?.view_observations!==false;
-  document.querySelector('.tab-btn[data-tab="history"]')?.classList.toggle("hidden",!canHistory);
+  const canSites=session?.permissions?.view_sites!==false;
+  const canEquipment=session?.permissions?.view_equipment!==false;
+  document.querySelector('.portal-nav-btn[data-tab="history"]')?.classList.toggle("hidden",!canHistory);
+  document.querySelector('.portal-nav-btn[data-tab="sites"]')?.classList.toggle("hidden",!canSites);
+  document.querySelector('.portal-nav-btn[data-tab="equipment"]')?.classList.toggle("hidden",!canEquipment);
   if(!canHistory)document.getElementById("historyTab").classList.add("hidden");
+  if(!canSites)document.getElementById("sitesTab").classList.add("hidden");
+  if(!canEquipment)document.getElementById("equipmentTab").classList.add("hidden");
   if(branding?.logo_data_uri){
     document.getElementById("appLogoImg").src=branding.logo_data_uri;
     document.getElementById("appLogoBox").classList.remove("hidden");
@@ -410,9 +468,14 @@ async function enterApp(){
 }
 
 function switchTab(tab){
-  document.querySelectorAll(".tab-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===tab));
+  document.querySelectorAll(".portal-nav-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===tab));
+  document.getElementById("planningTab").classList.toggle("hidden",tab!=="planning");
   document.getElementById("employeesTab").classList.toggle("hidden",tab!=="employees");
+  document.getElementById("sitesTab").classList.toggle("hidden",tab!=="sites");
+  document.getElementById("equipmentTab").classList.toggle("hidden",tab!=="equipment");
   document.getElementById("historyTab").classList.toggle("hidden",tab!=="history");
+  if(tab==="sites")loadSites();
+  if(tab==="equipment")loadEquipment();
   if(tab==="history")loadHistory();
 }
 
@@ -429,6 +492,58 @@ async function loadEmployees(){
         ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
         ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="openObservationModal(${e.id})">Signaler</button></div>`}
       </div>`).join("")}</div>`;
+  }catch(error){
+    host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  }
+}
+
+async function loadSites(){
+  const host=document.getElementById("sitesList");
+  if(session?.permissions?.view_sites===false){host.innerHTML='<div class="empty">La consultation des sites n’est pas activée pour votre compte.</div>';return}
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const rows=await apiFetch("/sites");
+    if(!rows.length){host.innerHTML='<div class="empty">Aucun site actuellement rattaché à votre compte.</div>';return}
+    host.innerHTML=`<div class="site-grid">${rows.map(s=>{
+      const required=Number(s.required_staff)||0;
+      const actual=Number(s.actual_staff)||0;
+      const pct=required>0?Math.min(100,Math.round((actual/required)*100)):(actual>0?100:0);
+      const color=required===0?"#94a3b8":(actual>=required?"#16a34a":(actual>0?"#d97706":"#dc2626"));
+      const statusLabel=required===0?"Effectif non défini":(actual>=required?"Couverture complète":(actual>0?"Sous-effectif":"Aucun agent affecté"));
+      const statusPill=required===0?"pill-gray":(actual>=required?"pill-green":(actual>0?"pill-amber":"pill-red"));
+      const addressParts=[s.address,s.commune,s.wilaya].filter(Boolean).join(", ");
+      return `<div class="site-card">
+        <div class="site-card-top">
+          <div><div class="site-name">${esc(s.name)}</div>${s.site_type?`<span class="site-type">${esc(s.site_type)}</span>`:""}</div>
+          <span class="pill ${statusPill}">${statusLabel}</span>
+        </div>
+        ${addressParts?`<div class="site-address">${esc(addressParts)}</div>`:""}
+        <div>
+          <div class="coverage-row"><span>Effectif</span><span class="coverage-value">${actual} / ${required||"—"}</span></div>
+          <div class="progress-track" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+        </div>
+      </div>`;
+    }).join("")}</div>`;
+  }catch(error){
+    host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  }
+}
+
+async function loadEquipment(){
+  const host=document.getElementById("equipmentList");
+  if(session?.permissions?.view_equipment===false){host.innerHTML='<div class="empty">La consultation du matériel n’est pas activée pour votre compte.</div>';return}
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const rows=await apiFetch("/equipment");
+    if(!rows.length){host.innerHTML='<div class="empty">Aucun équipement actuellement recensé sur vos sites.</div>';return}
+    host.innerHTML=`<div class="table-card"><table><thead><tr><th>Équipement</th><th>Site</th><th>Assigné à</th><th>État</th><th>Depuis le</th></tr></thead><tbody>${rows.map(e=>`
+      <tr>
+        <td><div class="equip-name">${esc(e.designation)}</div>${(e.category||e.code)?`<div class="equip-ref">${esc([e.category,e.code].filter(Boolean).join(" · "))}</div>`:""}</td>
+        <td>${esc(e.site_name||"—")}</td>
+        <td>${esc(e.assignee)}</td>
+        <td><span class="pill ${esc(e.status_tone)}">${esc(e.status_label)}</span></td>
+        <td>${formatDateFr(e.dotation_date)}</td>
+      </tr>`).join("")}</tbody></table></div>`;
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }

@@ -68,6 +68,35 @@ class EmployeeVisibleOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SiteVisibleOut(BaseModel):
+    id: int
+    name: str
+    address: str | None = None
+    commune: str | None = None
+    wilaya: str | None = None
+    site_type: str | None = None
+    required_staff: int
+    actual_staff: int
+
+    model_config = {"from_attributes": True}
+
+
+class EquipmentVisibleOut(BaseModel):
+    id: str
+    designation: str
+    category: str | None = None
+    code: str | None = None
+    site_id: int | None = None
+    site_name: str | None = None
+    assignee: str
+    item_state: str
+    status_label: str
+    status_tone: str
+    dotation_date: date
+
+    model_config = {"from_attributes": True}
+
+
 class ObservationCreate(BaseModel):
     employee_id: int
     kind: str

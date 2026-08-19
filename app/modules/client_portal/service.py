@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password, verify_password
@@ -12,6 +12,7 @@ from app.modules.client_portal.schemas import URGENT_CATEGORIES
 from app.modules.client_portal.security import generate_temporary_password
 from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
+from app.modules.materiel.models import EmployeeEquipment, MaterialAssignment, StockArticle
 from app.modules.ops.models import Assignment, Site
 from app.modules.ops.routes import _allowed_assignment_site_ids
 
@@ -65,6 +66,119 @@ def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, 
         }
         for assignment, employee, site in rows
     ]
+
+
+def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]]:
+    sites = db.execute(
+        select(Site).where(Site.client_id == client_id, Site.active == 1).order_by(Site.name)
+    ).scalars().all()
+    if not sites:
+        return []
+    site_ids = [s.id for s in sites]
+    counts = dict(
+        db.execute(
+            select(Assignment.site_id, func.count(Assignment.id))
+            .where(Assignment.active == 1, Assignment.site_id.in_(site_ids))
+            .group_by(Assignment.site_id)
+        ).all()
+    )
+    return [
+        {
+            "id": s.id,
+            "name": s.name,
+            "address": s.address,
+            "commune": s.commune,
+            "wilaya": s.wilaya,
+            "site_type": s.site_type,
+            "required_staff": s.contractual_staff or (s.day_staff + s.night_staff) or 0,
+            "actual_staff": counts.get(s.id, 0),
+        }
+        for s in sites
+    ]
+
+
+# État réel de l'article (voir sgdi-app.js "etatArticle") -> libellé/couleur affichés au client.
+# "remboursé"/"perdu" côté dotation employé signifient que l'article n'est plus en dotation
+# active : ces lignes ne sont de toute façon jamais remontées ici (filtrées par statut "attribue").
+_ITEM_STATE_DISPLAY: dict[str, tuple[str, str]] = {
+    "neuf": ("En service", "pill-green"),
+    "rénové": ("En service", "pill-green"),
+    "usagé": ("À surveiller", "pill-amber"),
+    "réformé": ("Hors service", "pill-gray"),
+    "perdu": ("Hors service", "pill-red"),
+}
+
+
+def _equipment_display(item_state: str | None) -> tuple[str, str]:
+    return _ITEM_STATE_DISPLAY.get(item_state or "neuf", ("En service", "pill-green"))
+
+
+def visible_equipment_for_client(db: Session, client_id: int) -> list[dict[str, Any]]:
+    site_ids = _client_site_ids(db, client_id)
+    if not site_ids:
+        return []
+    results: list[dict[str, Any]] = []
+
+    # Matériel affecté directement au site (extincteurs, barrières, radio de poste...).
+    site_rows = db.execute(
+        select(MaterialAssignment, StockArticle, Site)
+        .join(StockArticle, StockArticle.id == MaterialAssignment.article_id)
+        .join(Site, Site.id == MaterialAssignment.site_id)
+        .where(
+            MaterialAssignment.target_type == "site",
+            MaterialAssignment.site_id.in_(site_ids),
+            MaterialAssignment.status == "attribue",
+        )
+    ).all()
+    for assignment, article, site in site_rows:
+        state = assignment.item_state or article.item_state or "neuf"
+        label, tone = _equipment_display(state)
+        results.append(
+            {
+                "id": f"site-{assignment.id}",
+                "designation": article.designation,
+                "category": article.category,
+                "code": article.code,
+                "site_id": site.id,
+                "site_name": site.name,
+                "assignee": "Commun au site",
+                "item_state": state,
+                "status_label": label,
+                "status_tone": tone,
+                "dotation_date": assignment.dotation_date,
+            }
+        )
+
+    # Matériel nominatif des agents actuellement affectés à ces sites (gilet, badge, lampe...).
+    employee_rows = db.execute(
+        select(EmployeeEquipment, StockArticle, Employee, Site)
+        .join(StockArticle, StockArticle.id == EmployeeEquipment.article_id)
+        .join(Employee, Employee.id == EmployeeEquipment.employee_id)
+        .join(Assignment, (Assignment.employee_id == Employee.id) & (Assignment.active == 1))
+        .join(Site, Site.id == Assignment.site_id)
+        .where(Assignment.site_id.in_(site_ids), EmployeeEquipment.status == "attribue")
+    ).all()
+    for equipment, article, employee, site in employee_rows:
+        state = equipment.item_state or article.item_state or "neuf"
+        label, tone = _equipment_display(state)
+        results.append(
+            {
+                "id": f"emp-{equipment.id}",
+                "designation": article.designation,
+                "category": article.category,
+                "code": article.code,
+                "site_id": site.id,
+                "site_name": site.name,
+                "assignee": f"{employee.last_name} {employee.first_name}".strip(),
+                "item_state": state,
+                "status_label": label,
+                "status_tone": tone,
+                "dotation_date": equipment.dotation_date,
+            }
+        )
+
+    results.sort(key=lambda row: (row["site_name"] or "", row["designation"] or ""))
+    return results
 
 
 def _ensure_employee_visible_to_client(db: Session, client_id: int, employee_id: int) -> Site | None:
