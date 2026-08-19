@@ -88,7 +88,7 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .portal-search-match{outline:2px solid #c8102e;outline-offset:2px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 14px;font-weight:750;cursor:pointer}
 .shell{max-width:1320px;margin:0 auto;padding:18px 20px;display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
-.portal-sidebar{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;position:sticky;top:18px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
+.portal-sidebar-stack{position:sticky;top:18px;display:flex;flex-direction:column;gap:14px}.portal-sidebar{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 .portal-sidebar-title{padding:8px 10px 12px;font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.11em;text-transform:uppercase}
 .portal-nav{display:flex;flex-direction:column;gap:6px}
 .portal-nav-btn{width:100%;border:0;background:transparent;color:#31465f;border-radius:12px;padding:12px 13px;display:flex;align-items:center;gap:11px;text-align:left;font-size:13px;font-weight:850;cursor:pointer}
@@ -101,7 +101,7 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .section-head{margin-bottom:16px}
 .section-head h1{font-size:22px;margin:0;font-weight:900}
 .section-head p{font-size:13px;color:var(--muted);margin:5px 0 0}
-@media(max-width:900px){.shell{grid-template-columns:1fr}.portal-sidebar{position:static}.portal-nav{flex-direction:row;overflow-x:auto}.portal-nav-btn{min-width:max-content}}
+@media(max-width:900px){.shell{grid-template-columns:1fr}.portal-sidebar-stack{position:static}.portal-nav{flex-direction:row;overflow-x:auto}.portal-nav-btn{min-width:max-content}}
 @media(max-width:760px){.portal-search{order:3;flex-basis:100%;max-width:none;margin:4px 0 0}.top-row{align-items:center}}
 .banner{border-radius:14px;padding:13px 16px;margin-bottom:14px;font-size:13px;font-weight:700}
 .banner.success{background:#dcfce7;color:#14532d;border:1px solid #86efac}
@@ -284,7 +284,7 @@ tr:last-child td{border-bottom:0}
   </header>
 
   <div class="shell">
-    <aside class="portal-sidebar" aria-label="Navigation portail client">
+    <div class="portal-sidebar-stack"><aside class="portal-sidebar" aria-label="Navigation portail client">
       <div class="portal-sidebar-title">Espace client</div>
       <nav class="portal-nav">
         <button type="button" class="portal-nav-btn" data-tab="planning" onclick="switchTab('planning')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Planning de travail</button>
@@ -293,7 +293,11 @@ tr:last-child td{border-bottom:0}
         <button type="button" class="portal-nav-btn" data-tab="equipment" onclick="switchTab('equipment')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8.5" width="19" height="11" rx="2"/><path d="M8.5 8.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2.5M2.5 13.5h19"/></svg></span>Mes équipements</button>
         <button type="button" class="portal-nav-btn" data-tab="history" onclick="switchTab('history')"><span class="portal-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span>Historique</button>
       </nav>
-    </aside>
+    </aside><aside class="portal-sidebar" id="portalMessagingCard" aria-label="Messagerie client"><div class="portal-sidebar-title">Messagerie</div><nav class="portal-nav">
+      <button type="button" class="portal-nav-btn" data-tab="messages-sent" onclick="switchTab('messages-sent')"><span class="portal-nav-icon">↑</span>Messages envoyés</button>
+      <button type="button" class="portal-nav-btn" data-tab="messages-received" onclick="switchTab('messages-received')"><span class="portal-nav-icon">↓</span>Messages reçus</button>
+      <button type="button" class="portal-nav-btn" data-tab="messages-archived" onclick="switchTab('messages-archived')"><span class="portal-nav-icon">▣</span>Messages archivés</button>
+    </nav></aside></div>
     <main class="portal-main">
       <div id="banner"></div>
 
@@ -334,6 +338,11 @@ tr:last-child td{border-bottom:0}
           </select>
         </div>
         <div id="historyList"><div class="empty">Chargement…</div></div>
+      </div>
+
+      <div id="messagesTab" class="hidden">
+        <div class="section-head"><h1 id="messagesTitle">Messages envoyés</h1><p id="messagesSubtitle">Vos signalements transmis à l'équipe OPS dans ATLAS.</p></div>
+        <div id="messagesList"><div class="empty">Chargement…</div></div>
       </div>
     </main>
   </div>
@@ -680,6 +689,7 @@ async function enterApp(){
   const canSites=session?.permissions?.view_sites!==false;
   const canEquipment=session?.permissions?.view_equipment!==false;
   document.querySelector('.portal-nav-btn[data-tab="history"]')?.classList.toggle("hidden",!canHistory);
+  document.getElementById("portalMessagingCard")?.classList.toggle("hidden",!canHistory);
   document.querySelector('.portal-nav-btn[data-tab="sites"]')?.classList.toggle("hidden",!canSites);
   document.querySelector('.portal-nav-btn[data-tab="equipment"]')?.classList.toggle("hidden",!canEquipment);
   if(!canHistory)document.getElementById("historyTab").classList.add("hidden");
@@ -701,9 +711,11 @@ async function switchTab(tab){
   document.getElementById("sitesTab").classList.toggle("hidden",tab!=="sites");
   document.getElementById("equipmentTab").classList.toggle("hidden",tab!=="equipment");
   document.getElementById("historyTab").classList.toggle("hidden",tab!=="history");
+  document.getElementById("messagesTab").classList.toggle("hidden",!tab.startsWith("messages-"));
   if(tab==="sites")await loadSites();
   if(tab==="equipment")await loadEquipment();
   if(tab==="history")await loadHistory();
+  if(tab.startsWith("messages-"))await loadPortalMessages(tab.slice(9));
 }
 
 async function loadEmployees(){
@@ -1029,6 +1041,29 @@ async function loadHistory(){
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
+}
+
+async function loadPortalMessages(folder){
+  const host=document.getElementById("messagesList");
+  const title=document.getElementById("messagesTitle");
+  const subtitle=document.getElementById("messagesSubtitle");
+  const config={
+    sent:["Messages envoyés","Vos signalements transmis à l’équipe OPS dans ATLAS."],
+    received:["Messages reçus","Les réponses envoyées par l’équipe OPS vers votre espace client."],
+    archived:["Messages archivés","Les échanges clôturés, conservés dans votre historique."]
+  }[folder]||["Messages envoyés","Vos signalements transmis à l’équipe OPS dans ATLAS."];
+  title.textContent=config[0];subtitle.textContent=config[1];host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const rows=await apiFetch("/observations");historyCache=rows;portalSearchLoaded.history=true;
+    const filtered=folder==="received"?rows.filter(o=>o.client_response&&o.status!=="traite"):folder==="archived"?rows.filter(o=>o.status==="traite"):rows.filter(o=>o.status!=="traite");
+    if(!filtered.length){host.innerHTML=`<div class="empty">Aucun message ${folder==="received"?"reçu":folder==="archived"?"archivé":"envoyé"}.</div>`;return}
+    host.innerHTML=`<div class="hist-list">${filtered.map(o=>`<div class="hist-card ${o.severity==="urgente"?"urgente":""}">
+      <div class="hist-top"><div><div class="hist-emp">${o.employee_code?`<span class="emp-code">${esc(o.employee_code)}</span>`:""}${esc(o.employee_name)}</div><div class="hist-date">${formatDateFr(o.incident_date)}${o.site_name?` · ${esc(o.site_name)}`:""}</div></div><span class="pill ${statusPillClass(o.status)}">${statusLabel(o.status)}</span></div>
+      <div class="hist-desc">${esc(o.description)}</div>
+      ${o.client_response?`<div style="margin-top:10px;padding:12px 14px;border-left:4px solid #c8102e;border-radius:8px;background:#fff4f5"><strong style="display:block;font-size:11px;color:#9f1239;text-transform:uppercase;margin-bottom:4px">Réponse d’ATLAS</strong><div>${esc(o.client_response)}</div>${o.replied_by_name||o.replied_at?`<small style="display:block;margin-top:6px;color:#64748b">${o.replied_by_name?esc(o.replied_by_name):""}${o.replied_by_name&&o.replied_at?" · ":""}${o.replied_at?formatDateFr(o.replied_at):""}</small>`:""}</div>`:""}
+      ${o.attachment_url?`<div style="margin-top:9px"><a class="pill pill-blue" href="${esc(o.attachment_url)}" target="_blank" rel="noopener">📎 ${esc(o.attachment_name||"Voir la pièce jointe")}</a></div>`:""}
+    </div>`).join("")}</div>`;
+  }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
 }
 
 function normalizePortalSearch(value){
