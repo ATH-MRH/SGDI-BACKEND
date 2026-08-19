@@ -120,6 +120,9 @@ tr:last-child td{border-bottom:0}
 .equip-ref{font-size:11px;color:var(--muted);margin-top:1px}
 .group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
 .group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc}
+.group-counter.total{background:#fff8d6;border-color:#f1c400}
+.group-counter.function{background:#fff;border-color:#e5cbd0}
+.function-counters{margin-bottom:8px}
 .gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
 .gc-assigned{font-size:18px;font-weight:900;margin-top:2px;line-height:1}
 .gc-quota-row{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;font-size:10px;color:var(--muted)}
@@ -586,8 +589,17 @@ async function loadSites(){
       const statusPill=required===0?"pill-gray":(actual>=required?"pill-green":(actual>0?"pill-amber":"pill-red"));
       const addressParts=[s.address,s.commune,s.wilaya].filter(Boolean).join(", ");
       const groups=s.groups||[];
+      const totalAssigned=actual;
+      const positionMap=(s.employees||[]).reduce((map,e)=>{const label=String(e.position||"Fonction non renseignée").trim()||"Fonction non renseignée",key=label.toLocaleLowerCase("fr");if(!map.has(key))map.set(key,{label,count:0});map.get(key).count+=1;return map},new Map());
+      const positionCounts=[...positionMap.values()].sort((a,b)=>a.label.localeCompare(b.label,"fr"));
       const groupOptionsHtml=code=>groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
-      const countersHtml=groups.length?`<div class="group-counters">${groups.map(g=>`
+      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Effectifs par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<div class="group-counter function"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="gc-quota-row">agent${p.count>1?"s":""}</div></div>`).join("")}</div></div>`:"";
+      const countersHtml=groups.length?`<div class="group-counters"><div class="group-counter total">
+          <div class="gc-code">Effectif total</div>
+          <div class="gc-assigned">${totalAssigned}</div>
+          <div class="gc-quota-row">tous groupes</div>
+          <div class="gc-remaining">affectés au site</div>
+        </div>${groups.map(g=>`
         <div class="group-counter">
           <div class="gc-code">Groupe ${esc(g.code)}</div>
           <div class="gc-assigned">${g.assigned}</div>
@@ -613,6 +625,7 @@ async function loadSites(){
           <div class="coverage-row"><span>Effectif</span><span class="coverage-value">${actual} / ${required||"—"}</span></div>
           <div class="progress-track" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
         </div>
+        ${functionsHtml}
         ${countersHtml}
         ${employeesHtml}
       </div>`;
