@@ -19494,6 +19494,12 @@ function renderDemandesPersonnel(view,sub,arg){
   if(!canAccess("demandes_personnel")){view.innerHTML=`<div class="card p-6 text-red-700">Accès réservé DRH / Administration.</div>`;return}
   // La vue garde la coque ERP (barre latérale incluse) tout en exploitant la
   // largeur restante pour son espace de travail.
+  if(!sgdiIsMobileViewport()){
+    // Une ancienne visite en mode focalisé pouvait avoir mémorisé le panneau
+    // comme replié. La réception s'ouvre toujours avec sa navigation visible.
+    try{localStorage.removeItem("sgdiSidebarCollapsed")}catch(e){}
+    view.closest(".sgdi-shell")?.classList.remove("sgdi-sidebar-collapsed");
+  }
   view.classList.add("dp-wide-view");
   view.closest("main")?.classList.add("dp-wide-main");
   ensureDemandesPersonnel();

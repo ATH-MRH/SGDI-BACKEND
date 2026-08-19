@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260819-reception-demandes-sidebar";
+const SGDI_CACHE = "sgdi-pwa-v20260819-reception-demandes-sidebar-open";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
