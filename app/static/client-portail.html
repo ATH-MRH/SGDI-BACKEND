@@ -118,6 +118,12 @@ td{padding:11px 14px;border-bottom:1px solid #eef2f7;vertical-align:middle}
 tr:last-child td{border-bottom:0}
 .equip-name{font-weight:850;font-size:13px}
 .equip-ref{font-size:11px;color:var(--muted);margin-top:1px}
+.site-employees{border-top:1px solid #eef2f7;padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.site-employees-title{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.site-employee-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px}
+.site-employee-name{font-weight:750}
+.site-employee-name .pos{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.group-select{height:30px;font-size:11px;font-weight:800;padding:0 6px;width:auto}
 .hist-toolbar{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .hist-toolbar select{height:40px;max-width:220px}
 .hist-list{display:grid;gap:10px}
@@ -245,12 +251,18 @@ tr:last-child td{border-bottom:0}
       </div>
 
       <div id="sitesTab" class="hidden">
-        <div class="section-head"><h1>Mes sites</h1><p>Vos emplacements sous surveillance et la couverture en effectif.</p></div>
+        <div class="section-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div><h1>Mes sites</h1><p>Vos emplacements sous surveillance, la couverture en effectif et les agents affectés à chaque groupe.</p></div>
+          <button type="button" class="secondary" id="addSiteBtn" onclick="openSiteModal()">+ Ajouter un site</button>
+        </div>
         <div id="sitesList"><div class="empty">Chargement…</div></div>
       </div>
 
       <div id="equipmentTab" class="hidden">
-        <div class="section-head"><h1>Mes équipements / matériel</h1><p>Le matériel affecté à vos sites et à vos agents.</p></div>
+        <div class="section-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div><h1>Mes équipements / matériel</h1><p>Le matériel affecté à vos sites et à vos agents.</p></div>
+          <button type="button" class="secondary" id="addEquipmentBtn" onclick="openEquipmentModal()">+ Ajouter un équipement</button>
+        </div>
         <div id="equipmentList"><div class="empty">Chargement…</div></div>
       </div>
 
@@ -290,6 +302,53 @@ tr:last-child td{border-bottom:0}
     <div class="modal-actions">
       <button type="button" class="secondary" onclick="closeObservationModal()">Annuler</button>
       <button type="button" class="primary" id="obsSubmitBtn" onclick="submitObservation()">Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<div id="siteModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeSiteModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><h2>Ajouter un site</h2><button type="button" class="modal-close" onclick="closeSiteModal()">×</button></div>
+    <label for="siteName">Nom du site</label>
+    <input id="siteName" placeholder="Entrepôt Oued Smar">
+    <label for="siteType">Type de site</label>
+    <input id="siteType" placeholder="Entrepôt, bureau, zone industrielle…">
+    <label for="siteAddress">Adresse</label>
+    <input id="siteAddress">
+    <label for="siteCommune">Commune</label>
+    <input id="siteCommune">
+    <label for="siteWilaya">Wilaya</label>
+    <input id="siteWilaya">
+    <label for="siteRequiredStaff">Effectif requis</label>
+    <input id="siteRequiredStaff" type="number" min="0" step="1" value="0">
+    <div id="siteError" class="error"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="closeSiteModal()">Annuler</button>
+      <button type="button" class="primary" id="siteSubmitBtn" onclick="submitSite()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div id="equipmentModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeEquipmentModal()">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head"><h2>Ajouter un équipement</h2><button type="button" class="modal-close" onclick="closeEquipmentModal()">×</button></div>
+    <label for="equipArticle">Article</label>
+    <select id="equipArticle"><option value="">Chargement…</option></select>
+    <label for="equipSite">Site</label>
+    <select id="equipSite"><option value="">— Choisir —</option></select>
+    <label for="equipQuantity">Quantité</label>
+    <input id="equipQuantity" type="number" min="1" step="1" value="1">
+    <label for="equipState">État</label>
+    <select id="equipState">
+      <option value="neuf">Neuf</option>
+      <option value="rénové">Rénové</option>
+      <option value="usagé">Usagé</option>
+      <option value="réformé">Réformé</option>
+    </select>
+    <div id="equipmentError" class="error"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="closeEquipmentModal()">Annuler</button>
+      <button type="button" class="primary" id="equipmentSubmitBtn" onclick="submitEquipment()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -491,6 +550,7 @@ async function loadEmployees(){
         <div class="emp-name">${esc(e.last_name)} ${esc(e.first_name)}</div>
         <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div>
         ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
+        ${e.group_code?`<span class="emp-site" style="background:#eaf2fb;color:var(--navy);margin-left:6px">Groupe ${esc(e.group_code)}</span>`:""}
         ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="openObservationModal(${e.id})">Signaler</button></div>`}
       </div>`).join("")}</div>`;
   }catch(error){
@@ -498,14 +558,19 @@ async function loadEmployees(){
   }
 }
 
+let sitesCache=[];
+
 async function loadSites(){
   const host=document.getElementById("sitesList");
+  const canAddSite=session?.permissions?.create_sites!==false;
+  document.getElementById("addSiteBtn")?.classList.toggle("hidden",!canAddSite);
   if(session?.permissions?.view_sites===false){host.innerHTML='<div class="empty">La consultation des sites n’est pas activée pour votre compte.</div>';return}
   host.innerHTML='<div class="empty">Chargement…</div>';
   try{
-    const rows=await apiFetch("/sites");
-    if(!rows.length){host.innerHTML='<div class="empty">Aucun site actuellement rattaché à votre compte.</div>';return}
-    host.innerHTML=`<div class="site-grid">${rows.map(s=>{
+    sitesCache=await apiFetch("/sites");
+    if(!sitesCache.length){host.innerHTML='<div class="empty">Aucun site actuellement rattaché à votre compte.</div>';return}
+    const canAssign=session?.permissions?.assign_employees!==false;
+    host.innerHTML=`<div class="site-grid">${sitesCache.map(s=>{
       const required=Number(s.required_staff)||0;
       const actual=Number(s.actual_staff)||0;
       const pct=required>0?Math.min(100,Math.round((actual/required)*100)):(actual>0?100:0);
@@ -513,6 +578,14 @@ async function loadSites(){
       const statusLabel=required===0?"Effectif non défini":(actual>=required?"Couverture complète":(actual>0?"Sous-effectif":"Aucun agent affecté"));
       const statusPill=required===0?"pill-gray":(actual>=required?"pill-green":(actual>0?"pill-amber":"pill-red"));
       const addressParts=[s.address,s.commune,s.wilaya].filter(Boolean).join(", ");
+      const groupOptions=(s.available_groups||[]).map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join("");
+      const employeesHtml=(s.employees||[]).length?`<div class="site-employees">
+        <div class="site-employees-title">Agents affectés</div>
+        ${s.employees.map(e=>`<div class="site-employee-row">
+          <div class="site-employee-name">${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div>
+          ${canAssign&&groupOptions?`<select class="group-select" onchange="updateEmployeeGroup(${e.id},this.value)">${(s.available_groups||[]).map(g=>`<option value="${esc(g)}" ${g===e.group_code?"selected":""}>Groupe ${esc(g)}</option>`).join("")}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
+        </div>`).join("")}
+      </div>`:"";
       return `<div class="site-card">
         <div class="site-card-top">
           <div><div class="site-name">${esc(s.name)}</div>${s.site_type?`<span class="site-type">${esc(s.site_type)}</span>`:""}</div>
@@ -523,6 +596,7 @@ async function loadSites(){
           <div class="coverage-row"><span>Effectif</span><span class="coverage-value">${actual} / ${required||"—"}</span></div>
           <div class="progress-track" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
         </div>
+        ${employeesHtml}
       </div>`;
     }).join("")}</div>`;
   }catch(error){
@@ -530,8 +604,61 @@ async function loadSites(){
   }
 }
 
+async function updateEmployeeGroup(employeeId,groupCode){
+  try{
+    await apiFetch(`/employees/${employeeId}/group`,{method:"PATCH",body:JSON.stringify({group_code:groupCode})});
+    showBanner("Groupe mis à jour.","success");
+    loadSites();
+  }catch(error){
+    showBanner(error.message||"Impossible de mettre à jour le groupe.","error");
+    loadSites();
+  }
+}
+
+function openSiteModal(){
+  document.getElementById("siteName").value="";
+  document.getElementById("siteType").value="";
+  document.getElementById("siteAddress").value="";
+  document.getElementById("siteCommune").value="";
+  document.getElementById("siteWilaya").value="";
+  document.getElementById("siteRequiredStaff").value="0";
+  document.getElementById("siteError").classList.remove("show");
+  document.getElementById("siteModalBackdrop").classList.remove("hidden");
+}
+function closeSiteModal(){
+  document.getElementById("siteModalBackdrop").classList.add("hidden");
+}
+async function submitSite(){
+  const errorEl=document.getElementById("siteError");
+  errorEl.classList.remove("show");
+  const name=document.getElementById("siteName").value.trim();
+  if(name.length<2){errorEl.textContent="Le nom du site est requis.";errorEl.classList.add("show");return}
+  const btn=document.getElementById("siteSubmitBtn");
+  btn.disabled=true;btn.textContent="Enregistrement…";
+  try{
+    await apiFetch("/sites",{method:"POST",body:JSON.stringify({
+      name,
+      site_type:document.getElementById("siteType").value.trim()||null,
+      address:document.getElementById("siteAddress").value.trim()||null,
+      commune:document.getElementById("siteCommune").value.trim()||null,
+      wilaya:document.getElementById("siteWilaya").value.trim()||null,
+      required_staff:parseInt(document.getElementById("siteRequiredStaff").value,10)||0,
+    })});
+    closeSiteModal();
+    showBanner("Site ajouté.","success");
+    loadSites();
+  }catch(error){
+    errorEl.textContent=error.message||"Impossible d’ajouter ce site.";
+    errorEl.classList.add("show");
+  }finally{
+    btn.disabled=false;btn.textContent="Enregistrer";
+  }
+}
+
 async function loadEquipment(){
   const host=document.getElementById("equipmentList");
+  const canAddEquipment=session?.permissions?.create_equipment!==false;
+  document.getElementById("addEquipmentBtn")?.classList.toggle("hidden",!canAddEquipment);
   if(session?.permissions?.view_equipment===false){host.innerHTML='<div class="empty">La consultation du matériel n’est pas activée pour votre compte.</div>';return}
   host.innerHTML='<div class="empty">Chargement…</div>';
   try{
@@ -547,6 +674,52 @@ async function loadEquipment(){
       </tr>`).join("")}</tbody></table></div>`;
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  }
+}
+
+async function openEquipmentModal(){
+  document.getElementById("equipQuantity").value="1";
+  document.getElementById("equipState").value="neuf";
+  document.getElementById("equipmentError").classList.remove("show");
+  const siteSelect=document.getElementById("equipSite");
+  siteSelect.innerHTML=(sitesCache.length?sitesCache:await apiFetch("/sites").catch(()=>[])).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join("")||'<option value="">Aucun site</option>';
+  const articleSelect=document.getElementById("equipArticle");
+  articleSelect.innerHTML='<option value="">Chargement…</option>';
+  document.getElementById("equipmentModalBackdrop").classList.remove("hidden");
+  try{
+    const catalog=await apiFetch("/equipment/catalog");
+    articleSelect.innerHTML=catalog.length?catalog.map(a=>`<option value="${a.id}">${esc(a.designation)}${a.category?` — ${esc(a.category)}`:""}</option>`).join(""):'<option value="">Aucun article disponible</option>';
+  }catch(error){
+    articleSelect.innerHTML='<option value="">Catalogue indisponible</option>';
+  }
+}
+function closeEquipmentModal(){
+  document.getElementById("equipmentModalBackdrop").classList.add("hidden");
+}
+async function submitEquipment(){
+  const errorEl=document.getElementById("equipmentError");
+  errorEl.classList.remove("show");
+  const articleId=document.getElementById("equipArticle").value;
+  const siteId=document.getElementById("equipSite").value;
+  if(!articleId){errorEl.textContent="Choisissez un article.";errorEl.classList.add("show");return}
+  if(!siteId){errorEl.textContent="Choisissez un site.";errorEl.classList.add("show");return}
+  const btn=document.getElementById("equipmentSubmitBtn");
+  btn.disabled=true;btn.textContent="Enregistrement…";
+  try{
+    await apiFetch("/equipment",{method:"POST",body:JSON.stringify({
+      article_id:parseInt(articleId,10),
+      site_id:parseInt(siteId,10),
+      quantity:parseFloat(document.getElementById("equipQuantity").value)||1,
+      item_state:document.getElementById("equipState").value,
+    })});
+    closeEquipmentModal();
+    showBanner("Équipement ajouté.","success");
+    loadEquipment();
+  }catch(error){
+    errorEl.textContent=error.message||"Impossible d’ajouter cet équipement.";
+    errorEl.classList.add("show");
+  }finally{
+    btn.disabled=false;btn.textContent="Enregistrer";
   }
 }
 

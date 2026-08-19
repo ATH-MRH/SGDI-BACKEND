@@ -21,12 +21,16 @@ from app.modules.client_portal.schemas import (
     ClientPortalUserCreatedOut,
     ClientPortalUserOut,
     ClientPortalUserUpdate,
+    EmployeeGroupUpdateIn,
     EmployeeVisibleOut,
+    EquipmentCatalogOut,
+    EquipmentCreateIn,
     EquipmentVisibleOut,
     ObservationCreate,
     ObservationOpsOut,
     ObservationOut,
     ObservationResolveIn,
+    SiteCreateIn,
     SiteVisibleOut,
 )
 from app.modules.client_portal.security import create_client_portal_token, current_client_user
@@ -42,6 +46,9 @@ CLIENT_PORTAL_DEFAULT_PERMISSIONS = {
     "create_observations": True,
     "view_sites": True,
     "view_equipment": True,
+    "create_sites": True,
+    "assign_employees": True,
+    "create_equipment": True,
 }
 
 
@@ -55,6 +62,9 @@ def _client_permissions(db: Session, user: ClientPortalUser) -> dict[str, bool]:
         "create_observations": "createObservations",
         "view_sites": "viewSites",
         "view_equipment": "viewEquipment",
+        "create_sites": "createSites",
+        "assign_employees": "assignEmployees",
+        "create_equipment": "createEquipment",
     }
     return {key: bool(configured.get(key, configured.get(camel_keys[key], default))) for key, default in CLIENT_PORTAL_DEFAULT_PERMISSIONS.items()}
 
@@ -145,16 +155,53 @@ def employees(db: Session = Depends(get_db), user: ClientPortalUser = Depends(cu
     return service.visible_employees_for_client(db, user.client_id)
 
 
+@router.patch("/employees/{employee_id}/group", response_model=EmployeeVisibleOut)
+def update_employee_group(
+    employee_id: int,
+    payload: EmployeeGroupUpdateIn,
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "assign_employees")
+    return service.update_employee_group_for_client(db, user.client_id, employee_id, payload)
+
+
 @router.get("/sites", response_model=list[SiteVisibleOut])
 def sites(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
     _require_client_permission(db, user, "view_sites")
     return service.visible_sites_for_client(db, user.client_id)
 
 
+@router.post("/sites", response_model=SiteVisibleOut, status_code=status.HTTP_201_CREATED)
+def create_site(
+    payload: SiteCreateIn,
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "create_sites")
+    return service.create_site_for_client(db, user.client_id, payload)
+
+
 @router.get("/equipment", response_model=list[EquipmentVisibleOut])
 def equipment(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
     _require_client_permission(db, user, "view_equipment")
     return service.visible_equipment_for_client(db, user.client_id)
+
+
+@router.get("/equipment/catalog", response_model=list[EquipmentCatalogOut])
+def equipment_catalog(db: Session = Depends(get_db), user: ClientPortalUser = Depends(current_client_user)):
+    _require_client_permission(db, user, "view_equipment")
+    return service.equipment_catalog(db)
+
+
+@router.post("/equipment", response_model=EquipmentVisibleOut, status_code=status.HTTP_201_CREATED)
+def create_equipment(
+    payload: EquipmentCreateIn,
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "create_equipment")
+    return service.create_equipment_for_client(db, user.client_id, payload)
 
 
 @router.get("/observations", response_model=list[ObservationOut])

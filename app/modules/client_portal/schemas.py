@@ -64,6 +64,29 @@ class EmployeeVisibleOut(BaseModel):
     position: str | None = None
     site_id: int | None = None
     site_name: str | None = None
+    group_code: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class EmployeeGroupUpdateIn(BaseModel):
+    group_code: str
+
+    @field_validator("group_code")
+    @classmethod
+    def _valid_group_code(cls, value: str) -> str:
+        cleaned = (value or "").strip().upper()
+        if not cleaned or len(cleaned) > 3 or not cleaned.isalnum():
+            raise ValueError("Groupe invalide")
+        return cleaned
+
+
+class SiteEmployeeOut(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    position: str | None = None
+    group_code: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -77,6 +100,8 @@ class SiteVisibleOut(BaseModel):
     site_type: str | None = None
     required_staff: int
     actual_staff: int
+    employees: list[SiteEmployeeOut] = []
+    available_groups: list[str] = []
 
     model_config = {"from_attributes": True}
 
@@ -95,6 +120,59 @@ class EquipmentVisibleOut(BaseModel):
     dotation_date: date
 
     model_config = {"from_attributes": True}
+
+
+class SiteCreateIn(BaseModel):
+    name: str
+    address: str | None = None
+    commune: str | None = None
+    wilaya: str | None = None
+    site_type: str | None = None
+    required_staff: int = 0
+
+    @field_validator("name")
+    @classmethod
+    def _non_empty_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) < 2:
+            raise ValueError("Le nom du site est requis")
+        return cleaned
+
+    @field_validator("required_staff")
+    @classmethod
+    def _non_negative_staff(cls, value: int) -> int:
+        return max(0, value or 0)
+
+
+class EquipmentCatalogOut(BaseModel):
+    id: int
+    designation: str
+    category: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class EquipmentCreateIn(BaseModel):
+    article_id: int
+    site_id: int
+    quantity: float = 1
+    item_state: str = "neuf"
+
+    @field_validator("quantity")
+    @classmethod
+    def _positive_quantity(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("La quantité doit être positive")
+        return value
+
+    @field_validator("item_state")
+    @classmethod
+    def _valid_state(cls, value: str) -> str:
+        allowed = {"neuf", "rénové", "usagé", "réformé"}
+        cleaned = (value or "neuf").strip()
+        if cleaned not in allowed:
+            raise ValueError("État invalide")
+        return cleaned
 
 
 class ObservationCreate(BaseModel):

@@ -13,7 +13,7 @@ from app.modules.client_portal.security import generate_temporary_password
 from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.materiel.models import EmployeeEquipment, MaterialAssignment, StockArticle
-from app.modules.ops.models import Assignment, Site
+from app.modules.ops.models import Assignment, RotationTemplate, Site, SiteRotation
 from app.modules.ops.routes import _allowed_assignment_site_ids
 
 
@@ -63,9 +63,27 @@ def visible_employees_for_client(db: Session, client_id: int) -> list[dict[str, 
             "position": assignment.position or employee.position,
             "site_id": site.id,
             "site_name": site.name,
+            "group_code": assignment.group_code,
         }
         for assignment, employee, site in rows
     ]
+
+
+# Groupes de repli lorsque le site n'a pas (encore) de rotation configurée (SiteRotation) :
+# la plupart des rotations de gardiennage utilisées ici tournent sur 2 à 4 groupes.
+_DEFAULT_GROUPS = ["A", "B", "C", "D"]
+
+
+def _available_groups_for_site(db: Session, site_id: int) -> list[str]:
+    rotation = db.execute(
+        select(RotationTemplate)
+        .join(SiteRotation, SiteRotation.rotation_id == RotationTemplate.id)
+        .where(SiteRotation.site_id == site_id, SiteRotation.active == 1)
+        .order_by(SiteRotation.start_date.desc())
+    ).scalars().first()
+    if rotation and isinstance(rotation.group_offsets, dict) and rotation.group_offsets:
+        return sorted(str(key).upper() for key in rotation.group_offsets.keys())
+    return list(_DEFAULT_GROUPS)
 
 
 def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]]:
@@ -75,13 +93,23 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
     if not sites:
         return []
     site_ids = [s.id for s in sites]
-    counts = dict(
-        db.execute(
-            select(Assignment.site_id, func.count(Assignment.id))
-            .where(Assignment.active == 1, Assignment.site_id.in_(site_ids))
-            .group_by(Assignment.site_id)
-        ).all()
-    )
+    assignment_rows = db.execute(
+        select(Assignment, Employee)
+        .join(Employee, Employee.id == Assignment.employee_id)
+        .where(Assignment.active == 1, Assignment.site_id.in_(site_ids))
+        .order_by(Employee.last_name, Employee.first_name)
+    ).all()
+    employees_by_site: dict[int, list[dict[str, Any]]] = {}
+    for assignment, employee in assignment_rows:
+        employees_by_site.setdefault(assignment.site_id, []).append(
+            {
+                "id": employee.id,
+                "first_name": employee.first_name,
+                "last_name": employee.last_name,
+                "position": assignment.position or employee.position,
+                "group_code": assignment.group_code,
+            }
+        )
     return [
         {
             "id": s.id,
@@ -91,10 +119,73 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             "wilaya": s.wilaya,
             "site_type": s.site_type,
             "required_staff": s.contractual_staff or (s.day_staff + s.night_staff) or 0,
-            "actual_staff": counts.get(s.id, 0),
+            "actual_staff": len(employees_by_site.get(s.id, [])),
+            "employees": employees_by_site.get(s.id, []),
+            "available_groups": _available_groups_for_site(db, s.id),
         }
         for s in sites
     ]
+
+
+def update_employee_group_for_client(db: Session, client_id: int, employee_id: int, payload) -> dict[str, Any]:
+    site_ids = _client_site_ids(db, client_id)
+    if not site_ids:
+        raise HTTPException(status_code=404, detail="Agent introuvable")
+    assignment = db.execute(
+        select(Assignment).where(
+            Assignment.employee_id == employee_id,
+            Assignment.active == 1,
+            Assignment.site_id.in_(site_ids),
+        )
+    ).scalars().first()
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Agent introuvable")
+    allowed_groups = _available_groups_for_site(db, assignment.site_id)
+    if payload.group_code not in allowed_groups:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Groupe invalide pour ce site. Groupes disponibles : {', '.join(allowed_groups)}",
+        )
+    assignment.group_code = payload.group_code
+    db.commit()
+    employee = db.get(Employee, employee_id)
+    site = db.get(Site, assignment.site_id)
+    return {
+        "id": employee.id,
+        "code": employee.code,
+        "first_name": employee.first_name,
+        "last_name": employee.last_name,
+        "position": assignment.position or employee.position,
+        "site_id": site.id,
+        "site_name": site.name,
+        "group_code": assignment.group_code,
+    }
+
+
+def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, Any]:
+    site = Site(
+        name=payload.name,
+        client_id=client_id,
+        address=payload.address,
+        commune=payload.commune,
+        wilaya=payload.wilaya,
+        site_type=payload.site_type,
+        contractual_staff=payload.required_staff,
+        active=1,
+    )
+    db.add(site)
+    db.commit()
+    db.refresh(site)
+    return {
+        "id": site.id,
+        "name": site.name,
+        "address": site.address,
+        "commune": site.commune,
+        "wilaya": site.wilaya,
+        "site_type": site.site_type,
+        "required_staff": site.contractual_staff or 0,
+        "actual_staff": 0,
+    }
 
 
 # État réel de l'article (voir sgdi-app.js "etatArticle") -> libellé/couleur affichés au client.
@@ -179,6 +270,53 @@ def visible_equipment_for_client(db: Session, client_id: int) -> list[dict[str, 
 
     results.sort(key=lambda row: (row["site_name"] or "", row["designation"] or ""))
     return results
+
+
+def equipment_catalog(db: Session) -> list[StockArticle]:
+    # Catalogue volontairement dépouillé (pas de prix/fournisseur/stock) : c'est juste ce
+    # qu'il faut au client pour choisir un article existant, jamais une vue inventaire.
+    return db.execute(
+        select(StockArticle).where(StockArticle.active == 1).order_by(StockArticle.designation)
+    ).scalars().all()
+
+
+def create_equipment_for_client(db: Session, client_id: int, payload) -> dict[str, Any]:
+    site_ids = _client_site_ids(db, client_id)
+    if payload.site_id not in site_ids:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    article = db.get(StockArticle, payload.article_id)
+    if not article or not article.active:
+        raise HTTPException(status_code=404, detail="Article introuvable")
+    site = db.get(Site, payload.site_id)
+    assignment = MaterialAssignment(
+        article_id=article.id,
+        target_type="site",
+        site_id=site.id,
+        target_label=site.name,
+        quantity=payload.quantity,
+        unit_price=article.unit_price or 0,
+        dotation_date=date.today(),
+        dotation_reason="Ajout depuis le portail client",
+        item_state=payload.item_state,
+        status="attribue",
+    )
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    label, tone = _equipment_display(assignment.item_state)
+    return {
+        "id": f"site-{assignment.id}",
+        "designation": article.designation,
+        "category": article.category,
+        "code": article.code,
+        "site_id": site.id,
+        "site_name": site.name,
+        "assignee": "Commun au site",
+        "item_state": assignment.item_state,
+        "status_label": label,
+        "status_tone": tone,
+        "dotation_date": assignment.dotation_date,
+    }
 
 
 def _ensure_employee_visible_to_client(db: Session, client_id: int, employee_id: int) -> Site | None:
