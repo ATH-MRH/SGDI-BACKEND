@@ -7911,8 +7911,37 @@ function renderPaieStandaloneLogin(){
     </section>
   </div>`;
 }
+function isDhlHost(){return String(location.hostname||"").toLowerCase().split(".")[0]==="dhl"}
+function renderDhlLogin(){
+  try{document.title="DHL — Portail sécurisé"}catch(_e){}
+  document.getElementById("app").innerHTML=`<div class="dhl-login-page">
+    <main class="dhl-login-main">
+      <section class="dhl-login-showcase" aria-label="DHL, connecting people, improving lives">
+        <div class="dhl-login-wordmark">DHL<span></span></div>
+        <div class="dhl-login-kicker">PORTAIL CLIENT SÉCURISÉ</div>
+        <h1>Connecter les équipes.<br><em>Faire avancer vos opérations.</em></h1>
+        <p>Accédez à votre espace DHL pour suivre vos activités et rester au plus près de vos équipes terrain.</p>
+        <img class="dhl-login-team-art" src="/static/dhl-login-team.png" alt="Les équipes DHL connectées au monde">
+        <div class="dhl-login-logistics" aria-hidden="true"></div>
+      </section>
+      <section class="dhl-login-panel">
+        <div class="dhl-login-panel-head"><span>Accès DHL sécurisé</span><h2>Bienvenue</h2><p>Connectez-vous à votre portail client DHL.</p></div>
+        <form id="login-form" class="dhl-login-form" onsubmit="event.preventDefault();login(this.username.value,this.password.value)">
+          <label>Identifiant<input name="username" autocomplete="username" autofocus required placeholder="Votre identifiant"></label>
+          <label class="dhl-login-password-field">Mot de passe<input type="password" name="password" autocomplete="current-password" required placeholder="Votre mot de passe"><button type="button" class="dhl-login-password-toggle" onclick="const p=this.parentNode.querySelector('input');p.type=p.type==='password'?'text':'password';this.textContent=p.type==='password'?'Afficher':'Masquer';">Afficher</button></label>
+          <label class="dhl-login-remember"><input type="checkbox" checked> Mémoriser cette session</label>
+        </form>
+        <button class="sgdi-login-submit dhl-login-submit" type="submit" form="login-form">Se connecter</button>
+        <div class="sgdi-login-status dhl-login-status" hidden aria-live="polite"></div>
+        <div class="dhl-login-footer"><span><i></i>Connexion chiffrée</span><button type="button" onclick="toast('Contactez l\'administrateur système pour réinitialiser le mot de passe','info')">Mot de passe oublié ?</button></div>
+      </section>
+    </main>
+    <button type="button" class="dhl-login-admin" onclick="openAdminSystemPasswordModal(document.getElementById('login-form'))" title="Administration système" aria-label="Administration système">Administration système</button>
+  </div>`;
+}
 function renderLogin(){
   const hostCfg=sgdiModuleHostConfig();
+  if(isDhlHost()){renderDhlLogin();return}
   if(hostCfg?.key==="paie"){renderPaieStandaloneLogin();return}
   const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.title||"ATLAS";
   const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":"Suite de gestion intégrée";

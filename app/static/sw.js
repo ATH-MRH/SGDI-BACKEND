@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260819-admin-client-portals";
+const SGDI_CACHE = "sgdi-pwa-v20260819-dhl-login";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
