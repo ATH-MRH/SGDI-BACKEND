@@ -29042,7 +29042,6 @@ function openClientModal(id,readOnly=false){
   const isEdit=!!c;
   if(c?.nom)pageTabSetLabel(c.nom);
   const selectedSoc=c?.societe||mySoc();
-  const portalPermissions={viewEmployees:true,viewObservations:true,createObservations:true,...(c?.portalPermissions||{})};
   const lbl=(label,field)=>`<label><span>${label}</span>${field}</label>`;
   const inp=(name,val="",type="text",extra="")=>`<input class="input" type="${type}" name="${name}" value="${escapeHTML(val)}" required ${extra}/>`;
   const sel=(name,opts,extra="")=>`<select class="select" name="${name}" required ${extra}>${opts}</select>`;
@@ -29072,32 +29071,6 @@ function openClientModal(id,readOnly=false){
       `,"rh-op-emergency")}
     </div>
     ${fbox("Statut",lbl("Statut",sel("statut",["prospection","negos","actif","inactif"].map(s=>`<option value="${s}" ${((c?.statut)||"actif")===s?"selected":""}>${s.toUpperCase()}</option>`).join(""))))}
-    ${fbox("Portail client",`
-      <div class="rh-op-grid">
-        <label><span>Sous-domaine (ex : sonatrach)</span><input class="input" name="portalSlug" value="${escapeHTML(c?.portalSlug||"")}" placeholder="laisser vide si pas de portail"/></label>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" name="portalEnabled" style="width:auto" ${(c?.portalEnabled!==false)?"checked":""}/><span style="text-transform:none;font-weight:600">Accès portail activé</span></label>
-      </div>
-      <div class="rh-op-grid" style="margin-top:10px">
-        <label><span>Couleur principale</span><input class="input" type="color" name="portalPrimaryColor" value="${escapeHTML(c?.portalPrimaryColor||"#043970")}" style="height:40px;padding:2px;cursor:pointer"/></label>
-        <label><span>Couleur d'accent</span><input class="input" type="color" name="portalAccentColor" value="${escapeHTML(c?.portalAccentColor||"#0d6ecc")}" style="height:40px;padding:2px;cursor:pointer"/></label>
-      </div>
-      <div style="margin-top:14px;padding:12px;border:1px solid #dbe5f0;border-radius:10px;background:#f8fbff">
-        <div style="font-size:11px;font-weight:850;color:#24364c;margin-bottom:8px">Accès et droits du portail</div>
-        <label style="display:flex;align-items:center;gap:8px;margin:7px 0"><input type="checkbox" name="portalCanViewEmployees" style="width:auto" ${portalPermissions.viewEmployees?"checked":""}/><span style="text-transform:none;font-weight:600">Voir les agents affectés aux sites du client</span></label>
-        <label style="display:flex;align-items:center;gap:8px;margin:7px 0"><input type="checkbox" name="portalCanViewObservations" style="width:auto" ${portalPermissions.viewObservations?"checked":""}/><span style="text-transform:none;font-weight:600">Consulter l'historique des signalements</span></label>
-        <label style="display:flex;align-items:center;gap:8px;margin:7px 0"><input type="checkbox" name="portalCanCreateObservations" style="width:auto" ${portalPermissions.createObservations?"checked":""}/><span style="text-transform:none;font-weight:600">Créer des observations et signalements</span></label>
-      </div>
-      <label style="margin-top:10px"><span>Logo (écran de connexion du portail)</span></label>
-      <div style="display:flex;align-items:center;gap:14px">
-        <div id="client-portal-logo-preview" style="width:104px;height:60px;border:1px dashed #bfd1e3;border-radius:10px;background:#fafcff;display:grid;place-items:center;overflow:hidden;flex-shrink:0">${c?.portalLogoDataUri?`<img src="${escapeHTML(c.portalLogoDataUri)}" style="max-width:100%;max-height:100%;object-fit:contain"/>`:'<span style="font-size:10px;color:#94a3b8;text-transform:none">Aucun logo</span>'}</div>
-        <div>
-          <input type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" onchange="previewClientPortalLogo(this)"/>
-          <input type="hidden" name="portalLogoDataUri" id="client-portal-logo-data" value="${escapeHTML(c?.portalLogoDataUri||"")}"/>
-          <p style="font-size:11px;color:#64748b;margin-top:4px;text-transform:none">PNG/SVG à fond transparent recommandé. Poids max ~800 Ko.</p>
-        </div>
-      </div>
-      <p style="font-size:11px;color:#64748b;margin-top:10px">Le portail sera accessible sur <b>&lt;sous-domaine&gt;.irongs.com</b> une fois le sous-domaine enregistré côté DNS/Coolify. Créez ensuite les comptes depuis Administration système → Comptes portail client.</p>
-    `)}
     <fieldset class="rh-op-box" style="margin-bottom:10px">
       <legend>Champs libres</legend>
       <input type="hidden" id="client-champs-libres-json" name="champsLibres" value="${escapeHTML(JSON.stringify(c?.champsLibres||[]))}"/>
@@ -29343,7 +29316,7 @@ async function confirmClient(id,options={}){
   const hasContractSites=fd.get("ct_nbrSite")!==null;
   if(hasContractSites)tech_sites=cts_sites;
   const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
-  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,portalSlug:(fd.get("portalSlug")||"").trim().toLowerCase(),portalEnabled:!!fd.get("portalEnabled"),portalPrimaryColor:fd.get("portalPrimaryColor")||"",portalAccentColor:fd.get("portalAccentColor")||"",portalLogoDataUri:fd.get("portalLogoDataUri")||"",portalPermissions:{viewEmployees:!!fd.get("portalCanViewEmployees"),viewObservations:!!fd.get("portalCanViewObservations"),createObservations:!!fd.get("portalCanCreateObservations")},updatedAt:new Date().toISOString()});
+  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
   try{if(options.requireExisting)await updateExistingClientToPostgres(c);else await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");
@@ -35939,9 +35912,11 @@ async function loadAdminClientPortalUsers(){
     adminClientPortalUsersCache=Array.isArray(rows)?rows:[];
   }catch(e){
     if(host)host.innerHTML=`<div class="card p-6 text-center text-red-600">${escapeHTML(e.message||"Erreur de chargement")}</div>`;
+    renderAdminClientPortalConfigList();
     return;
   }
   renderSidebar();
+  renderAdminClientPortalConfigList();
   renderAdminClientPortalUsersList();
 }
 function adminClientNameById(clientId){
@@ -35966,11 +35941,53 @@ function renderAdminClientPortalUsersList(){
       </div></td>
     </tr>`).join("")}</tbody></table></div>`;
 }
+function adminClientPortalPermissions(c){return{viewEmployees:true,viewObservations:true,createObservations:true,...(c?.portalPermissions||{})}}
+function adminClientPortalById(clientId){return(db.clients||[]).find(c=>String(c.backendId||c.id||"")===String(clientId))}
+function renderAdminClientPortalConfigList(){
+  const host=document.getElementById("admin-cpc-list");
+  if(!host)return;
+  const clients=(db.clients||[]).slice().sort((a,b)=>String(a.nom||a.raisonSociale||"").localeCompare(String(b.nom||b.raisonSociale||"")));
+  if(!clients.length){host.innerHTML=`<div class="text-sm text-slate-400">Aucun client disponible. Créez d'abord une fiche dans le module Commercial.</div>`;return}
+  host.innerHTML=`<div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(285px,1fr))">${clients.map(c=>{
+    const p=adminClientPortalPermissions(c),enabled=c.portalEnabled!==false,granted=Object.values(p).filter(Boolean).length;
+    const logo=c.portalLogoDataUri?`<img src="${escapeHTML(c.portalLogoDataUri)}" alt="" style="width:42px;height:42px;border-radius:10px;object-fit:contain;background:#f8fafc;border:1px solid #e2e8f0">`:`<div style="width:42px;height:42px;border-radius:10px;background:${escapeHTML(c.portalPrimaryColor||"#043970")};color:#fff;display:grid;place-items:center;font-weight:900">${escapeHTML(String(c.nom||c.raisonSociale||"C").trim().slice(0,1).toUpperCase())}</div>`;
+    return`<div class="card p-4"><div class="flex items-start gap-3"><div>${logo}</div><div class="min-w-0 flex-1"><div class="font-black truncate">${escapeHTML(c.nom||c.raisonSociale||"Client")}</div><div class="text-xs text-slate-500 mt-1">${c.portalSlug?`/client-portail.html?client=${escapeHTML(c.portalSlug)}`:"Portail non configuré"}</div></div><span class="pill ${enabled?"pill-green":"pill-gray"}">${enabled?"Actif":"Désactivé"}</span></div><div class="flex items-center justify-between gap-3 mt-4 text-xs text-slate-500"><span>${granted}/3 droits accordés</span><span class="flex gap-1"><i title="Couleur principale" style="width:14px;height:14px;border-radius:99px;background:${escapeHTML(c.portalPrimaryColor||"#043970")};border:1px solid #cbd5e1"></i><i title="Couleur d'accent" style="width:14px;height:14px;border-radius:99px;background:${escapeHTML(c.portalAccentColor||"#0d6ecc")};border:1px solid #cbd5e1"></i></span></div><button type="button" class="btn btn-secondary text-xs w-full mt-3" onclick="openAdminClientPortalConfigModal('${jsString(c.backendId||c.id||"")}')">Configurer le portail</button></div>`
+  }).join("")}</div>`;
+}
+function clearAdminClientPortalLogo(){
+  const data=document.getElementById("client-portal-logo-data"),preview=document.getElementById("client-portal-logo-preview"),input=document.getElementById("client-portal-logo-file");
+  if(data)data.value="";if(input)input.value="";if(preview)preview.textContent="Aucun logo";
+}
+function openAdminClientPortalConfigModal(clientId){
+  const c=adminClientPortalById(clientId);
+  if(!c){toast("Client introuvable. Rechargez la page.","error");return}
+  const p=adminClientPortalPermissions(c),name=c.nom||c.raisonSociale||"Client";
+  const checked=(value)=>value?"checked":"";
+  const logo=c.portalLogoDataUri?`<img src="${escapeHTML(c.portalLogoDataUri)}" style="max-width:100%;max-height:100%;object-fit:contain">`:"Aucun logo";
+  openModal(`<form onsubmit="saveAdminClientPortalConfig(event,'${jsString(c.backendId||c.id||"")}')"><h3 class="font-black text-xl">Configurer le portail</h3><p class="text-sm text-slate-500 mt-1 mb-4">${escapeHTML(name)} — identité visuelle et droits d'accès.</p>
+    <fieldset class="rh-op-box mb-3"><legend>Accès</legend><label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="portalEnabled" ${checked(c.portalEnabled!==false)}> Activer le portail client</label><label class="label mt-3">Identifiant de portail</label><input class="input" name="portalSlug" value="${escapeHTML(c.portalSlug||"")}" placeholder="ex. dhl"><p class="text-xs text-slate-500 mt-1">Utilisé dans l'adresse du portail client.</p></fieldset>
+    <fieldset class="rh-op-box mb-3"><legend>Identité visuelle</legend><div class="grid grid-cols-2 gap-3"><label class="label">Couleur principale<input class="input mt-1" type="color" name="portalPrimaryColor" value="${escapeHTML(c.portalPrimaryColor||"#043970")}"></label><label class="label">Couleur d'accent<input class="input mt-1" type="color" name="portalAccentColor" value="${escapeHTML(c.portalAccentColor||"#0d6ecc")}"></label></div><input type="hidden" id="client-portal-logo-data" name="portalLogoDataUri" value="${escapeHTML(c.portalLogoDataUri||"")}"><div class="flex items-center gap-3 mt-3"><div id="client-portal-logo-preview" style="width:58px;height:58px;border:1px dashed #cbd5e1;border-radius:10px;display:grid;place-items:center;overflow:hidden;font-size:11px;color:#64748b">${logo}</div><div class="flex-1"><label class="label">Logo</label><input id="client-portal-logo-file" class="input mt-1" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onchange="previewClientPortalLogo(this)"><button type="button" class="text-xs text-red-600 mt-2" onclick="clearAdminClientPortalLogo()">Retirer le logo</button></div></div></fieldset>
+    <fieldset class="rh-op-box"><legend>Droits du client</legend><label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" name="portalCanViewEmployees" ${checked(p.viewEmployees)}> Consulter ses employés</label><label class="flex items-center gap-2 text-sm mb-2"><input type="checkbox" name="portalCanViewObservations" ${checked(p.viewObservations)}> Consulter les signalements</label><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="portalCanCreateObservations" ${checked(p.createObservations)}> Créer des signalements</label></fieldset>
+    <div id="admin-cpc-error" class="text-red-600 text-xs mt-3 hidden"></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
+}
+async function saveAdminClientPortalConfig(event,clientId){
+  event.preventDefault();
+  const c=adminClientPortalById(clientId),form=event.currentTarget,errorEl=document.getElementById("admin-cpc-error");
+  if(!c){toast("Client introuvable.","error");return}
+  const fd=new FormData(form),slug=String(fd.get("portalSlug")||"").trim().toLowerCase();
+  if(fd.get("portalEnabled")&&!slug){errorEl.textContent="Un identifiant est requis pour activer le portail.";errorEl.classList.remove("hidden");return}
+  errorEl.classList.add("hidden");
+  const previous={portalSlug:c.portalSlug,portalEnabled:c.portalEnabled,portalPrimaryColor:c.portalPrimaryColor,portalAccentColor:c.portalAccentColor,portalLogoDataUri:c.portalLogoDataUri,portalPermissions:c.portalPermissions};
+  Object.assign(c,{portalSlug:slug,portalEnabled:!!fd.get("portalEnabled"),portalPrimaryColor:fd.get("portalPrimaryColor")||"#043970",portalAccentColor:fd.get("portalAccentColor")||"#0d6ecc",portalLogoDataUri:fd.get("portalLogoDataUri")||"",portalPermissions:{viewEmployees:!!fd.get("portalCanViewEmployees"),viewObservations:!!fd.get("portalCanViewObservations"),createObservations:!!fd.get("portalCanCreateObservations")}});
+  try{await updateExistingClientToPostgres(c);saveDB();closeModal();toast("Configuration du portail enregistrée","success");renderAdminClientPortalConfigList()}catch(e){Object.assign(c,previous);errorEl.textContent=e.message||"Enregistrement impossible";errorEl.classList.remove("hidden")}
+}
 function renderAdminClientPortalUsers(view){
   view.innerHTML=`<div class="mb-4 flex items-center justify-between flex-wrap gap-3">
-    <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Comptes portail client</h1><p class="text-sm text-slate-500 mt-1">Comptes nominatifs permettant à un client d'accéder à son portail dédié (signalements sur ses agents).</p></div>
+    <div><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-3xl font-black mt-1">Portails clients</h1><p class="text-sm text-slate-500 mt-1">Configurez l'identité visuelle, les droits et les comptes d'accès de chaque client.</p></div>
     <button type="button" class="btn btn-primary" onclick="openCreateClientPortalUserModal()">+ Nouveau compte</button>
   </div>
+  <div class="card p-4 mb-4"><div class="flex items-center justify-between gap-3 mb-3"><div><h2 class="font-black">Configuration des portails</h2><p class="text-sm text-slate-500">Logo, couleurs, activation et droits sont administrés ici.</p></div></div><div id="admin-cpc-list"><div class="text-sm text-slate-400">Chargement…</div></div></div>
+  <h2 class="font-black text-lg mb-3">Comptes d'accès</h2>
   <div id="admin-cpu-list"><div class="card p-6 text-center text-slate-400">Chargement…</div></div>`;
   loadAdminClientPortalUsers();
 }
