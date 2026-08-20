@@ -158,6 +158,7 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
         <button class="nav-btn" data-tab="agents" onclick="switchTab('agents')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.4-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.3" cy="8.6" r="2.6"/><path d="M15.8 14.6c2.5.3 4.4 2.1 5 5"/></svg></span>Agents / Effectifs</button>
         <button class="nav-btn" data-tab="contrats" onclick="switchTab('contrats')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></span>Contrats</button>
         <button class="nav-btn" data-tab="conges" onclick="switchTab('conges')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Congés</button>
+        <button class="nav-btn" data-tab="fiches" onclick="switchTab('fiches')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><circle cx="9.5" cy="9.5" r="2"/><path d="M6 16c.6-2 2-3 3.5-3s2.9 1 3.5 3M14.5 8.5h4M14.5 11.5h4M14.5 14.5h2.5"/></svg></span>Fiche de position</button>
       </nav>
     </aside>
     <main class="main">
@@ -194,6 +195,16 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
         </div>
         <div class="table-card">
           <div id="congesList"><div class="empty">Chargement…</div></div>
+        </div>
+      </section>
+
+      <section id="fichesSection" class="hidden">
+        <div class="section-head"><div><h1>Fiche de position</h1><p>Vue complète d'un agent : informations, contrats, congés, sanctions, équipement.</p></div></div>
+        <div class="toolbar">
+          <select id="ficheAgentSelect" class="filter" style="min-width:320px" onchange="renderFicheTab(this.value)"><option value="">— Choisir un agent —</option></select>
+        </div>
+        <div class="table-card" style="padding:20px">
+          <div id="ficheTabContent"><div class="empty">Choisissez un agent pour afficher sa fiche.</div></div>
         </div>
       </section>
     </main>
@@ -367,7 +378,7 @@ function onSocietyChange(){
   refreshCurrentTab();
 }
 function refreshCurrentTab(){
-  ({agents:loadAgents,contrats:loadContrats,conges:loadConges})[activeTab]();
+  ({agents:loadAgents,contrats:loadContrats,conges:loadConges,fiches:loadFichesTab})[activeTab]();
 }
 
 async function apiFetch(path,options={}){
@@ -381,7 +392,7 @@ async function apiFetch(path,options={}){
 function switchTab(tab){
   activeTab=tab;
   document.querySelectorAll(".nav-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===tab));
-  ["agents","contrats","conges"].forEach(t=>document.getElementById(t+"Section").classList.toggle("hidden",t!==tab));
+  ["agents","contrats","conges","fiches"].forEach(t=>document.getElementById(t+"Section").classList.toggle("hidden",t!==tab));
   showBanner("");
   refreshCurrentTab();
 }
@@ -491,52 +502,74 @@ async function submitEmployee(){
   finally{btn.disabled=false;btn.textContent="Enregistrer"}
 }
 
+function ficheContentHtml(fiche){
+  const e=fiche.employee||{};
+  const initials=((e.first_name||"?")[0]+(e.last_name||"?")[0]).toUpperCase();
+  const statusPill={actif:"pill-green",absent:"pill-amber",suspendu:"pill-red",sortant:"pill-gray"};
+  return `
+    <div class="fiche-header">
+      <div class="fiche-avatar">${esc(initials)}</div>
+      <div><div class="fiche-name">${esc(e.last_name)} ${esc(e.first_name)}</div><div class="fiche-meta">${esc(e.code||"")} · ${esc(e.position||"Poste non renseigné")} · <span class="pill ${statusPill[e.status]||"pill-gray"}">${esc(e.status||"—")}</span></div></div>
+    </div>
+    <div class="fiche-section">
+      <h3>Informations</h3>
+      <div class="fiche-info-grid">
+        <div class="fiche-field"><span>Société</span><b>${esc(e.society||"—")}</b></div>
+        <div class="fiche-field"><span>Téléphone</span><b>${esc(e.phone||"—")}</b></div>
+        <div class="fiche-field"><span>Email</span><b>${esc(e.email||"—")}</b></div>
+        <div class="fiche-field"><span>Recrutement</span><b>${fmtDate(e.recruit_date)}</b></div>
+        <div class="fiche-field"><span>Fin de contrat</span><b>${fmtDate(e.contract_end_date)}</b></div>
+        <div class="fiche-field"><span>Salaire net</span><b>${fmtMoney(e.salary_net)} DA</b></div>
+      </div>
+    </div>
+    <div class="fiche-section">
+      <h3>Contrats (${(fiche.contracts||[]).length})</h3>
+      <div class="fiche-list">${(fiche.contracts||[]).length?fiche.contracts.map(c=>`<div class="fiche-row"><span>${esc(c.contract_type||"—")} · ${esc(c.position||"—")}</span><span>${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span><span class="pill ${statusPill[c.status]||"pill-gray"}">${esc(c.status||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucun contrat.</div>'}</div>
+    </div>
+    <div class="fiche-section">
+      <h3>Congés (${(fiche.leaves||[]).length})</h3>
+      <div class="fiche-list">${(fiche.leaves||[]).length?fiche.leaves.map(l=>`<div class="fiche-row"><span>${esc(l.leave_type||"—")}</span><span>${fmtDate(l.start_date)} → ${fmtDate(l.end_date)}</span><span class="pill ${l.status==="approuve"?"pill-green":l.status==="refuse"?"pill-red":"pill-amber"}">${esc(l.status||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucun congé.</div>'}</div>
+    </div>
+    <div class="fiche-section">
+      <h3>Sanctions (${(fiche.sanctions||[]).length})</h3>
+      <div class="fiche-list">${(fiche.sanctions||[]).length?fiche.sanctions.map(s=>`<div class="fiche-row"><span>${esc(s.fault||"—")}</span><span>${fmtDate(s.infraction_date)}</span><span class="pill pill-red">${esc(s.sanction_type||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucune sanction.</div>'}</div>
+    </div>
+    <div class="fiche-section">
+      <h3>Équipement affecté (${(fiche.equipment||[]).length})</h3>
+      <div class="fiche-list">${(fiche.equipment||[]).length?fiche.equipment.map(eq=>`<div class="fiche-row"><span>Article #${eq.article_id}</span><span>${fmtDate(eq.dotation_date)}</span></div>`).join(""):'<div class="cell-meta">Aucun équipement.</div>'}</div>
+    </div>`;
+}
 async function openFiche(employeeId){
   document.getElementById("ficheBody").innerHTML='<div class="empty">Chargement…</div>';
   document.getElementById("ficheModalBackdrop").classList.remove("hidden");
   document.getElementById("ficheEditBtn").onclick=()=>{closeFicheModal();openEmployeeModal(employeesCache.find(e=>e.id===employeeId))};
   try{
     const fiche=await apiFetch(`/api/drh/employees/${employeeId}/fiche-position`);
-    const e=fiche.employee||{};
-    const initials=((e.first_name||"?")[0]+(e.last_name||"?")[0]).toUpperCase();
-    const statusPill={actif:"pill-green",absent:"pill-amber",suspendu:"pill-red",sortant:"pill-gray"};
-    document.getElementById("ficheBody").innerHTML=`
-      <div class="fiche-header">
-        <div class="fiche-avatar">${esc(initials)}</div>
-        <div><div class="fiche-name">${esc(e.last_name)} ${esc(e.first_name)}</div><div class="fiche-meta">${esc(e.code||"")} · ${esc(e.position||"Poste non renseigné")} · <span class="pill ${statusPill[e.status]||"pill-gray"}">${esc(e.status||"—")}</span></div></div>
-      </div>
-      <div class="fiche-section">
-        <h3>Informations</h3>
-        <div class="fiche-info-grid">
-          <div class="fiche-field"><span>Société</span><b>${esc(e.society||"—")}</b></div>
-          <div class="fiche-field"><span>Téléphone</span><b>${esc(e.phone||"—")}</b></div>
-          <div class="fiche-field"><span>Email</span><b>${esc(e.email||"—")}</b></div>
-          <div class="fiche-field"><span>Recrutement</span><b>${fmtDate(e.recruit_date)}</b></div>
-          <div class="fiche-field"><span>Fin de contrat</span><b>${fmtDate(e.contract_end_date)}</b></div>
-          <div class="fiche-field"><span>Salaire net</span><b>${fmtMoney(e.salary_net)} DA</b></div>
-        </div>
-      </div>
-      <div class="fiche-section">
-        <h3>Contrats (${(fiche.contracts||[]).length})</h3>
-        <div class="fiche-list">${(fiche.contracts||[]).length?fiche.contracts.map(c=>`<div class="fiche-row"><span>${esc(c.contract_type||"—")} · ${esc(c.position||"—")}</span><span>${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span><span class="pill ${statusPill[c.status]||"pill-gray"}">${esc(c.status||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucun contrat.</div>'}</div>
-      </div>
-      <div class="fiche-section">
-        <h3>Congés (${(fiche.leaves||[]).length})</h3>
-        <div class="fiche-list">${(fiche.leaves||[]).length?fiche.leaves.map(l=>`<div class="fiche-row"><span>${esc(l.leave_type||"—")}</span><span>${fmtDate(l.start_date)} → ${fmtDate(l.end_date)}</span><span class="pill ${l.status==="approuve"?"pill-green":l.status==="refuse"?"pill-red":"pill-amber"}">${esc(l.status||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucun congé.</div>'}</div>
-      </div>
-      <div class="fiche-section">
-        <h3>Sanctions (${(fiche.sanctions||[]).length})</h3>
-        <div class="fiche-list">${(fiche.sanctions||[]).length?fiche.sanctions.map(s=>`<div class="fiche-row"><span>${esc(s.fault||"—")}</span><span>${fmtDate(s.infraction_date)}</span><span class="pill pill-red">${esc(s.sanction_type||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucune sanction.</div>'}</div>
-      </div>
-      <div class="fiche-section">
-        <h3>Équipement affecté (${(fiche.equipment||[]).length})</h3>
-        <div class="fiche-list">${(fiche.equipment||[]).length?fiche.equipment.map(eq=>`<div class="fiche-row"><span>Article #${eq.article_id}</span><span>${fmtDate(eq.dotation_date)}</span></div>`).join(""):'<div class="cell-meta">Aucun équipement.</div>'}</div>
-      </div>`;
+    document.getElementById("ficheBody").innerHTML=ficheContentHtml(fiche);
   }catch(error){
     document.getElementById("ficheBody").innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
 }
 function closeFicheModal(){document.getElementById("ficheModalBackdrop").classList.add("hidden")}
+
+async function loadFichesTab(){
+  if(!employeesCache.length){try{const r=await apiFetch("/api/drh/employees/page?mode=all&page=1&page_size=200"+(activeSociety?`&society=${encodeURIComponent(activeSociety)}`:""));employeesCache=r.items||[]}catch(e){}}
+  const select=document.getElementById("ficheAgentSelect");
+  const previous=select.value;
+  select.innerHTML=employeeSelectOptionsHtml(previous);
+  if(previous)renderFicheTab(previous);
+}
+async function renderFicheTab(employeeId){
+  const host=document.getElementById("ficheTabContent");
+  if(!employeeId){host.innerHTML='<div class="empty">Choisissez un agent pour afficher sa fiche.</div>';return}
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const fiche=await apiFetch(`/api/drh/employees/${employeeId}/fiche-position`);
+    host.innerHTML=ficheContentHtml(fiche);
+  }catch(error){
+    host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
+  }
+}
 
 /* ── Contrats ────────────────────────────────────────────────────────────── */
 
