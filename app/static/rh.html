@@ -398,10 +398,16 @@ async function ensureAllEmployeesCache(){
     if(activeSociety)params.set("society",activeSociety);
     return "/api/drh/employees/page?"+params.toString();
   };
-  const first=await apiFetch(pageParams(1));
-  const pages=first.pages||1;
-  const rest=await Promise.all(Array.from({length:Math.max(0,pages-1)},(_,i)=>apiFetch(pageParams(i+2))));
-  allEmployeesCache=[...(first.items||[]),...rest.flatMap(r=>r.items||[])];
+  try{
+    const first=await apiFetch(pageParams(1));
+    const pages=first.pages||1;
+    const rest=await Promise.all(Array.from({length:Math.max(0,pages-1)},(_,i)=>apiFetch(pageParams(i+2))));
+    allEmployeesCache=[...(first.items||[]),...rest.flatMap(r=>r.items||[])];
+  }catch(error){
+    const params=new URLSearchParams();
+    if(activeSociety)params.set("society",activeSociety);
+    allEmployeesCache=await apiFetch("/api/drh/employees"+(params.size?"?"+params.toString():""));
+  }
   allEmployeesCacheSociety=activeSociety;
   return allEmployeesCache;
 }
@@ -669,8 +675,10 @@ async function openFiche(employeeId){
 function closeFicheModal(){document.getElementById("ficheModalBackdrop").classList.add("hidden")}
 
 async function loadFichesTab(){
-  await ensureAllEmployeesCache();
-  filterFicheCards();
+  const host=document.getElementById("ficheAgentCards");
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{await ensureAllEmployeesCache();filterFicheCards()}
+  catch(error){host.innerHTML=`<div class="empty">${esc(error.message||"Impossible de charger les employés.")}</div>`}
 }
 function filterFicheCards(){
   const host=document.getElementById("ficheAgentCards");
