@@ -156,9 +156,16 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 .fiche-field b{display:block;margin-top:4px;font-size:13px}
 .fiche-list{display:flex;flex-direction:column;gap:6px}
 .fiche-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:11px;font-size:12.5px}
+.atlas-fiche{border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:18px;overflow:hidden;background:light-dark(#fff,#111b29)}
+.atlas-fiche-hero{display:flex;align-items:center;gap:18px;padding:22px 24px;background:light-dark(linear-gradient(135deg,#f7faff,#edf4fb),#0d1725);border-bottom:1px solid light-dark(#dce5ef,#2b3b50)}
+.atlas-fiche-avatar{width:76px;height:88px;border-radius:14px;background:#dfe9f5;color:#123f6f;display:grid;place-items:center;font-size:22px;font-weight:950;overflow:hidden;flex:0 0 auto}.atlas-fiche-avatar img{width:100%;height:100%;object-fit:cover}
+.atlas-fiche-identity{flex:1;min-width:0}.atlas-fiche-identity h2{font-size:22px;margin:0;color:light-dark(#10243d,#f3f7fb)}.atlas-fiche-code{margin-top:6px;color:#c21832;font-size:13px;font-weight:950}.atlas-fiche-role{margin-top:3px;color:light-dark(#637990,#9fb0c2);font-size:12px;font-weight:700}
+.atlas-fiche-summary{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:9px;min-width:430px}.atlas-fiche-summary div{padding:10px 12px;border:1px solid light-dark(#d7e2ee,#2b3b50);border-radius:11px;background:light-dark(rgba(255,255,255,.82),#111b29)}.atlas-fiche-summary span{display:block;font-size:9px;font-weight:900;text-transform:uppercase;color:#75899f}.atlas-fiche-summary b{display:block;margin-top:3px;font-size:12px}
+.atlas-fiche-tabs{display:flex;gap:5px;padding:10px 14px;border-bottom:1px solid light-dark(#dce5ef,#2b3b50);overflow-x:auto;background:light-dark(#fff,#111b29)}.atlas-fiche-tab{border:0;background:transparent;color:light-dark(#5f748a,#9fb0c2);padding:9px 13px;border-radius:9px;font-size:11px;font-weight:900;white-space:nowrap;cursor:pointer}.atlas-fiche-tab.active{background:#123f6f;color:#fff;box-shadow:0 6px 14px rgba(18,63,111,.18)}
+.atlas-fiche-panel{padding:20px 22px}.atlas-fiche-panel.hidden{display:none}.atlas-fiche-panel-title{font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.06em;color:#123f6f;margin:0 0 12px}.atlas-fiche-empty{padding:22px;border:1px dashed light-dark(#cbd8e6,#34465b);border-radius:12px;text-align:center;color:#7a8da2;font-size:12px}
 
-@media(max-width:1000px){.shell{grid-template-columns:1fr}.sidebar{position:static}.nav{flex-direction:row;overflow-x:auto}.nav-btn{min-width:max-content}}
-@media(max-width:640px){.field-grid,.fiche-info-grid{grid-template-columns:1fr}.top{padding:14px 16px}.top-title{font-size:14px}.shell{padding:14px}}
+@media(max-width:1000px){.shell{grid-template-columns:1fr}.sidebar{position:static}.nav{flex-direction:row;overflow-x:auto}.nav-btn{min-width:max-content}.atlas-fiche-hero{align-items:flex-start;flex-wrap:wrap}.atlas-fiche-summary{min-width:0;width:100%}}
+@media(max-width:640px){.field-grid,.fiche-info-grid{grid-template-columns:1fr}.top{padding:14px 16px}.top-title{font-size:14px}.shell{padding:14px}.atlas-fiche-hero{padding:18px}.atlas-fiche-summary{grid-template-columns:1fr 1fr}.atlas-fiche-panel{padding:16px}.atlas-fiche-identity h2{font-size:18px}}
 </style>
 </head>
 <body>
@@ -568,38 +575,82 @@ function ficheContentHtml(fiche){
   const e=fiche.employee||{};
   const initials=((e.first_name||"?")[0]+(e.last_name||"?")[0]).toUpperCase();
   const statusPill={actif:"pill-green",absent:"pill-amber",suspendu:"pill-red",sortant:"pill-gray"};
+  const contracts=fiche.contracts||[], leaves=fiche.leaves||[], sanctions=fiche.sanctions||[], equipment=fiche.equipment||[];
+  const filled=[e.first_name,e.last_name,e.code,e.position,e.society,e.phone,e.email,e.address,e.birth_date,e.nin,e.recruit_date,e.contract_type,e.current_site_name].filter(Boolean).length;
+  const completeness=Math.round(filled/13*100);
+  const photo=e.photo_url||e.photo||e.avatar_url;
+  const infoField=(label,value)=>`<div class="fiche-field"><span>${esc(label)}</span><b>${value||"—"}</b></div>`;
   return `
-    <div class="fiche-header">
-      <div class="fiche-avatar">${esc(initials)}</div>
-      <div><div class="fiche-name">${esc(e.last_name)} ${esc(e.first_name)}</div><div class="fiche-meta">${esc(e.code||"")} · ${esc(e.position||"Poste non renseigné")} · <span class="pill ${statusPill[e.status]||"pill-gray"}">${esc(e.status||"—")}</span></div></div>
-    </div>
-    <div class="fiche-section">
-      <h3>Informations</h3>
-      <div class="fiche-info-grid">
-        <div class="fiche-field"><span>Société</span><b>${esc(e.society||"—")}</b></div>
-        <div class="fiche-field"><span>Téléphone</span><b>${esc(e.phone||"—")}</b></div>
-        <div class="fiche-field"><span>Email</span><b>${esc(e.email||"—")}</b></div>
-        <div class="fiche-field"><span>Recrutement</span><b>${fmtDate(e.recruit_date)}</b></div>
-        <div class="fiche-field"><span>Fin de contrat</span><b>${fmtDate(e.contract_end_date)}</b></div>
-        <div class="fiche-field"><span>Salaire net</span><b>${fmtMoney(e.salary_net)} DA</b></div>
+    <div class="atlas-fiche">
+      <div class="atlas-fiche-hero">
+        <div class="atlas-fiche-avatar">${photo?`<img src="${esc(photo)}" alt="Photo de ${esc(e.last_name||"l’agent")}">`:esc(initials)}</div>
+        <div class="atlas-fiche-identity">
+          <h2>${esc(e.last_name||"")} ${esc(e.first_name||"")}</h2>
+          <div class="atlas-fiche-code">${esc(e.code||"Code non renseigné")}</div>
+          <div class="atlas-fiche-role">${esc(e.position||"Poste non renseigné")} · <span class="pill ${statusPill[e.status]||"pill-gray"}">${esc(e.status||"—")}</span></div>
+        </div>
+        <div class="atlas-fiche-summary">
+          <div><span>Site actuel</span><b>${esc(e.current_site_name||e.site_name||"Non affecté")}</b></div>
+          <div><span>Fin de contrat</span><b>${fmtDate(e.contract_end_date)}</b></div>
+          <div><span>Complétude</span><b>${completeness}%</b></div>
+        </div>
       </div>
-    </div>
-    <div class="fiche-section">
-      <h3>Contrats (${(fiche.contracts||[]).length})</h3>
-      <div class="fiche-list">${(fiche.contracts||[]).length?fiche.contracts.map(c=>`<div class="fiche-row"><span>${esc(c.contract_type||"—")} · ${esc(c.position||"—")}</span><span>${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span><span class="pill ${statusPill[c.status]||"pill-gray"}">${esc(c.status||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucun contrat.</div>'}</div>
-    </div>
-    <div class="fiche-section">
-      <h3>Congés (${(fiche.leaves||[]).length})</h3>
-      <div class="fiche-list">${(fiche.leaves||[]).length?fiche.leaves.map(l=>`<div class="fiche-row"><span>${esc(l.leave_type||"—")}</span><span>${fmtDate(l.start_date)} → ${fmtDate(l.end_date)}</span><span class="pill ${l.status==="approuve"?"pill-green":l.status==="refuse"?"pill-red":"pill-amber"}">${esc(l.status||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucun congé.</div>'}</div>
-    </div>
-    <div class="fiche-section">
-      <h3>Sanctions (${(fiche.sanctions||[]).length})</h3>
-      <div class="fiche-list">${(fiche.sanctions||[]).length?fiche.sanctions.map(s=>`<div class="fiche-row"><span>${esc(s.fault||"—")}</span><span>${fmtDate(s.infraction_date)}</span><span class="pill pill-red">${esc(s.sanction_type||"—")}</span></div>`).join(""):'<div class="cell-meta">Aucune sanction.</div>'}</div>
-    </div>
-    <div class="fiche-section">
-      <h3>Équipement affecté (${(fiche.equipment||[]).length})</h3>
-      <div class="fiche-list">${(fiche.equipment||[]).length?fiche.equipment.map(eq=>`<div class="fiche-row"><span>Article #${eq.article_id}</span><span>${fmtDate(eq.dotation_date)}</span></div>`).join(""):'<div class="cell-meta">Aucun équipement.</div>'}</div>
+      <div class="atlas-fiche-tabs">
+        <button class="atlas-fiche-tab active" onclick="switchFichePanel('identite',this)">Identité</button>
+        <button class="atlas-fiche-tab" onclick="switchFichePanel('affectation',this)">Affectation</button>
+        <button class="atlas-fiche-tab" onclick="switchFichePanel('contrats',this)">Contrats (${contracts.length})</button>
+        <button class="atlas-fiche-tab" onclick="switchFichePanel('conges',this)">Congés (${leaves.length})</button>
+        <button class="atlas-fiche-tab" onclick="switchFichePanel('discipline',this)">Discipline (${sanctions.length})</button>
+        <button class="atlas-fiche-tab" onclick="switchFichePanel('equipement',this)">Équipement (${equipment.length})</button>
+      </div>
+      <section class="atlas-fiche-panel" data-panel="identite">
+        <h3 class="atlas-fiche-panel-title">Informations personnelles et administratives</h3>
+        <div class="fiche-info-grid">
+          ${infoField("Nom et prénom",esc(`${e.last_name||""} ${e.first_name||""}`.trim()))}
+          ${infoField("Code agent",esc(e.code||"—"))}
+          ${infoField("Date de naissance",fmtDate(e.birth_date))}
+          ${infoField("NIN",esc(e.nin||"—"))}
+          ${infoField("Téléphone",esc(e.phone||"—"))}
+          ${infoField("Email",esc(e.email||"—"))}
+          ${infoField("Adresse",esc(e.address||"—"))}
+          ${infoField("Commune / Wilaya",esc([e.commune,e.wilaya].filter(Boolean).join(" · ")||"—"))}
+        </div>
+      </section>
+      <section class="atlas-fiche-panel hidden" data-panel="affectation">
+        <h3 class="atlas-fiche-panel-title">Situation professionnelle actuelle</h3>
+        <div class="fiche-info-grid">
+          ${infoField("Société",esc(e.society||"—"))}
+          ${infoField("Site",esc(e.current_site_name||e.site_name||"Non affecté"))}
+          ${infoField("Poste / Fonction",esc(e.position||"—"))}
+          ${infoField("Date de recrutement",fmtDate(e.recruit_date))}
+          ${infoField("Type de contrat",esc(e.contract_type||"—"))}
+          ${infoField("Fin de période d’essai",fmtDate(e.trial_end_date))}
+          ${infoField("Fin de contrat",fmtDate(e.contract_end_date))}
+          ${infoField("Salaire net",`${fmtMoney(e.salary_net)} DA`)}
+        </div>
+      </section>
+      <section class="atlas-fiche-panel hidden" data-panel="contrats">
+        <h3 class="atlas-fiche-panel-title">Historique des contrats</h3>
+        <div class="fiche-list">${contracts.length?contracts.map(c=>`<div class="fiche-row"><span><b>${esc(c.contract_type||"Contrat")}</b> · ${esc(c.position||"Poste non renseigné")}</span><span>${fmtDate(c.start_date)} → ${fmtDate(c.end_date)}</span><span class="pill ${statusPill[c.status]||"pill-gray"}">${esc(c.status||"—")}</span></div>`).join(""):'<div class="atlas-fiche-empty">Aucun contrat enregistré.</div>'}</div>
+      </section>
+      <section class="atlas-fiche-panel hidden" data-panel="conges">
+        <h3 class="atlas-fiche-panel-title">Historique des congés</h3>
+        <div class="fiche-list">${leaves.length?leaves.map(l=>`<div class="fiche-row"><span><b>${esc(l.leave_type||"Congé")}</b></span><span>${fmtDate(l.start_date)} → ${fmtDate(l.end_date)}</span><span class="pill ${l.status==="approuve"?"pill-green":l.status==="refuse"?"pill-red":"pill-amber"}">${esc(l.status||"—")}</span></div>`).join(""):'<div class="atlas-fiche-empty">Aucun congé enregistré.</div>'}</div>
+      </section>
+      <section class="atlas-fiche-panel hidden" data-panel="discipline">
+        <h3 class="atlas-fiche-panel-title">Sanctions et suivi disciplinaire</h3>
+        <div class="fiche-list">${sanctions.length?sanctions.map(s=>`<div class="fiche-row"><span><b>${esc(s.fault||"Motif non renseigné")}</b></span><span>${fmtDate(s.infraction_date)}</span><span class="pill pill-red">${esc(s.sanction_type||"Sanction")}</span></div>`).join(""):'<div class="atlas-fiche-empty">Aucune sanction enregistrée.</div>'}</div>
+      </section>
+      <section class="atlas-fiche-panel hidden" data-panel="equipement">
+        <h3 class="atlas-fiche-panel-title">Équipements et matériels affectés</h3>
+        <div class="fiche-list">${equipment.length?equipment.map(eq=>`<div class="fiche-row"><span><b>${esc(eq.article_name||eq.designation||`Article #${eq.article_id}`)}</b></span><span>Affecté le ${fmtDate(eq.dotation_date)}</span></div>`).join(""):'<div class="atlas-fiche-empty">Aucun équipement affecté.</div>'}</div>
+      </section>
     </div>`;
+}
+function switchFichePanel(panelKey,button){
+  const fiche=button.closest(".atlas-fiche");
+  fiche.querySelectorAll(".atlas-fiche-tab").forEach(tab=>tab.classList.toggle("active",tab===button));
+  fiche.querySelectorAll(".atlas-fiche-panel").forEach(panel=>panel.classList.toggle("hidden",panel.dataset.panel!==panelKey));
 }
 async function openFiche(employeeId){
   document.getElementById("ficheBody").innerHTML='<div class="empty">Chargement…</div>';
