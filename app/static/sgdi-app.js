@@ -19866,10 +19866,11 @@ function renderFiches(view,sub,_skipEnsure){
   if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:socFilter});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderFiches(view,sub,true)).catch(()=>renderFiches(view,sub,true));return}}
   const allowedSocietes=currentAllowedSocietes();
   const restrictedSocietes=hasExplicitSocieteRestriction();
-  const authorizedAgent=a=>!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
+  const adminFicheMode=isAdminFichePositionContext();
+  const authorizedAgent=a=>adminFicheMode||!restrictedSocietes||allowedSocietes.some(s=>normalizeSocieteName(s)===normalizeSocieteName(a.societe));
   const fpFilter=fpFilters();
   const includeSortants=sub==="archivees"||fpFilter.status==="sortant";
-  let baseList=db.agents.filter(a=>authorizedAgent(a)&&agentInSupervisorScope(a)&&(includeSortants||!ficheAgentIsSortantArchive(a)));let title="Fiches de position — Toutes";
+  let baseList=db.agents.filter(a=>authorizedAgent(a)&&(adminFicheMode||agentInSupervisorScope(a))&&(includeSortants||!ficheAgentIsSortantArchive(a)));let title="Fiches de position — Toutes";
   if(sub==="maladie"){baseList=baseList.filter(a=>ficheAgentInMaladie(a));title="🤒 Fiches de position — En maladie"}
   else if(sub==="conge"){baseList=baseList.filter(a=>ficheAgentInConge(a));title="🏖 Fiches de position — En congé"}
   else if(sub==="suspendu"){baseList=baseList.filter(a=>a.statut==="suspendu");title="⏸ Fiches de position — Suspendu"}
@@ -19885,13 +19886,13 @@ function renderFiches(view,sub,_skipEnsure){
   if(fpFilter.site&&!fpSites.some(s=>fpSiteFilterKeyForSite(s)===fpFilter.site)){sessionStorage.removeItem("fpSite");fpFilter.site=""}
   if(fpFilter.poste&&!fpPostes.some(p=>fpPosteFilterKey(p)===fpPosteFilterKey(fpFilter.poste))){sessionStorage.removeItem("fpPoste");fpFilter.poste=""}
   const list=applyFpPositionFilters(rawList);
-  const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent).filter(agentInSupervisorScope);
+  const statsBase=(safeSocFilter?db.agents.filter(a=>a.societe===safeSocFilter):db.agents).filter(authorizedAgent).filter(a=>adminFicheMode||agentInSupervisorScope(a));
   const activeBase=statsBase.filter(a=>!ficheAgentIsSortantArchive(a));
   const employeeCounters=sgdiUnifiedEmployeeCounters(safeSocFilter);
   const counterRatioBase=Math.max(1,counterNumericValue(employeeCounters.activeHeadcount)||activeBase.length);
-  const activeEmployees=counterNumericValue(employeeCounters.active);
-  const withoutAffectation=counterNumericValue(employeeCounters.withoutAssignment);
-  const suspendedEmployees=counterNumericValue(employeeCounters.suspended);
+  const activeEmployees=adminFicheMode?activeBase.filter(employeeIsActive).length:counterNumericValue(employeeCounters.active);
+  const withoutAffectation=adminFicheMode?activeBase.filter(agentNeedsAffectation).length:counterNumericValue(employeeCounters.withoutAssignment);
+  const suspendedEmployees=adminFicheMode?activeBase.filter(a=>String(a.statut||"").toLowerCase()==="suspendu").length:counterNumericValue(employeeCounters.suspended);
   const incompleteEmployees=activeBase.filter(a=>agentCompleteness(a).pct<85).length;
   const contractsToWatch=activeBase.filter(a=>{const end=employeePositionContractEndDate(a);if(!end)return false;const d=daysBetween(today(),end);return d>=0&&d<=60}).length;
   const ratio=(n,d)=>d?Math.round((n/d)*100):0;
