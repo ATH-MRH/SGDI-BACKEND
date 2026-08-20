@@ -785,7 +785,7 @@ async function loadSites(){
       const totalAssigned=actual;
       const positionCounts=(s.position_requirements||[]).map(position=>({label:position.name,count:Number(position.assigned)||0,required:Number(position.required)||0,remaining:Number(position.remaining)||0}));
       const groupOptionsHtml=code=>`<option value="" ${!code?"selected":""}>Aucun</option>`+groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
-      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Effectifs par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="gc-quota-row">requis <b>${p.required}</b></div><div class="gc-remaining">${p.remaining} restant${p.remaining>1?"s":""}</div></button>`).join("")}</div></div>`:"";
+      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Besoins théoriques par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.required}</div><div class="gc-quota-row">besoin théorique</div><div class="gc-remaining">${p.count} affecté${p.count>1?"s":""} · ${p.remaining} restant${p.remaining>1?"s":""}</div></button>`).join("")}</div></div>`:"";
       const countersHtml=groups.length?`<div class="group-counters"><button type="button" class="group-counter total" aria-pressed="false" onclick="filterSiteEmployees(this,'all','')">
           <div class="gc-code">Effectif total</div>
           <div class="gc-assigned">${totalAssigned}</div>
@@ -814,7 +814,7 @@ async function loadSites(){
         </div>
         ${addressParts?`<div class="site-address">${esc(addressParts)}</div>`:""}
         <div>
-          <div class="coverage-row"><span>Effectif</span><span class="coverage-value">${actual} / ${required||"—"}</span></div>
+          <div class="coverage-row"><span>Effectif affecté / besoin théorique</span><span class="coverage-value">${actual} / ${required||"—"}</span></div>
           <div class="progress-track" style="margin-top:6px"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
         </div>
         ${functionsHtml}
