@@ -98,6 +98,8 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .portal-nav-icon svg{width:14px;height:14px}
 .portal-nav-btn.active .portal-nav-icon{background:rgba(16,36,62,.1);color:#10243e}
 .portal-main{min-width:0}
+#banner{position:fixed;z-index:45;top:92px;right:22px;width:min(420px,calc(100vw - 32px));pointer-events:none}
+#banner .banner{box-shadow:0 14px 34px rgba(15,23,42,.18)}
 .section-head{margin-bottom:16px}
 .section-head h1{font-size:22px;margin:0;font-weight:900}
 .section-head p{font-size:13px;color:var(--muted);margin:5px 0 0}
@@ -798,12 +800,12 @@ async function loadEmployees(){
 
 let sitesCache=[];
 
-async function loadSites(){
+async function loadSites(options={}){
   const host=document.getElementById("sitesList");
   const canAddSite=session?.permissions?.create_sites!==false;
   document.getElementById("addSiteBtn")?.classList.toggle("hidden",!canAddSite);
   if(session?.permissions?.view_sites===false){host.innerHTML='<div class="empty">La consultation des sites n’est pas activée pour votre compte.</div>';return}
-  host.innerHTML='<div class="empty">Chargement…</div>';
+  if(!options.silent)host.innerHTML='<div class="empty">Chargement…</div>';
   try{
     sitesCache=await apiFetch("/sites");portalSearchLoaded.sites=true;
     if(!sitesCache.length){host.innerHTML='<div class="empty">Aucun site actuellement rattaché à votre compte.</div>';return}
@@ -881,13 +883,18 @@ async function updateGroupQuota(siteId,groupCode,value){
 }
 
 async function updateEmployeeGroup(employeeId,groupCode){
+  const scrollX=window.scrollX,scrollY=window.scrollY,host=document.getElementById("sitesList"),currentHeight=host?.offsetHeight||0;
+  if(host&&currentHeight)host.style.minHeight=`${currentHeight}px`;
   try{
     await apiFetch(`/employees/${employeeId}/group`,{method:"PATCH",body:JSON.stringify({group_code:groupCode||null})});
     showBanner(groupCode?`Employé affecté au groupe ${groupCode}.`:"Employé retiré des groupes.","success");
-    loadSites();
+    await loadSites({silent:true});
   }catch(error){
     showBanner(error.message||"Impossible de mettre à jour le groupe.","error");
-    loadSites();
+    await loadSites({silent:true});
+  }finally{
+    window.scrollTo(scrollX,scrollY);
+    requestAnimationFrame(()=>{window.scrollTo(scrollX,scrollY);if(host)host.style.minHeight=""});
   }
 }
 
