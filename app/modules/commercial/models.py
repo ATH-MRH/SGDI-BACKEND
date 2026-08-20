@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import Boolean, Date, JSON, String, Text
+from sqlalchemy import Boolean, Date, Float, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -32,3 +32,18 @@ class Client(Base, TimestampMixin):
     # portal_slug est le premier label du sous-domaine (ex. "sonatrach" -> sonatrach.irongs.com).
     portal_slug: Mapped[str | None] = mapped_column(String(80), unique=True, index=True, nullable=True)
     portal_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class CommercialDcSettings(Base, TimestampMixin):
+    """Réglages du module Commercial autonome (dc.irongs.com) — une seule ligne (id=1),
+    éditée depuis Administration système. Séparé du reste du module commercial (Client)
+    qui reste partagé avec l'ancien écran interne."""
+
+    __tablename__ = "commercial_dc_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    default_tva: Mapped[float] = mapped_column(Float, default=19)
+    devis_prefix: Mapped[str] = mapped_column(String(20), default="DEV-")
+    commande_prefix: Mapped[str] = mapped_column(String(20), default="CMD-")
+    bl_prefix: Mapped[str] = mapped_column(String(20), default="BL-")
+    active_societies: Mapped[list | None] = mapped_column(JSON, nullable=True)

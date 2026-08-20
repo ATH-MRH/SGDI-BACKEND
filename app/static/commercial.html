@@ -337,6 +337,7 @@ let editingDevisId=null, devisLignes=[], devisExistingLignes=[];
 let editingCommandeId=null, commandeLignes=[], commandeExistingLignes=[];
 let editingLivraisonId=null, livraisonLignes=[], livraisonExistingLignes=[];
 let debounceTimers={};
+let dcSettings=null;
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function fmtMoney(value){const n=Number(value)||0;return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})}
@@ -361,8 +362,10 @@ function showBanner(message,type){
 function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
 
 function societyOptionsHtml(selected){
-  const list=(session?.user?.authorized_societies?.length?session.user.authorized_societies:SOCIETES_FALLBACK);
-  return list.map(s=>`<option value="${esc(s)}" ${s===selected?"selected":""}>${esc(s)}</option>`).join("");
+  const base=(dcSettings?.active_societies?.length?dcSettings.active_societies:SOCIETES_FALLBACK);
+  const authorized=session?.user?.authorized_societies?.length?session.user.authorized_societies:null;
+  const list=authorized?base.filter(s=>authorized.includes(s)):base;
+  return (list.length?list:base).map(s=>`<option value="${esc(s)}" ${s===selected?"selected":""}>${esc(s)}</option>`).join("");
 }
 
 async function login(){
@@ -374,7 +377,7 @@ async function login(){
     if(!response.ok)throw new Error(data.detail||"Connexion refusée");
     session={token:data.access_token,user:data.user};
     localStorage.setItem(SESSION_KEY,JSON.stringify(session));
-    enterApp();
+    await enterApp();
   }catch(error){showLoginError(error.message||"Connexion impossible")}
   finally{button.disabled=false;button.textContent="SE CONNECTER"}
 }
@@ -384,7 +387,19 @@ function logout(){
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("password").value="";
 }
-function enterApp(){
+async function enterApp(){
+  try{
+    dcSettings=await apiFetch("/api/commercial/dc/settings");
+  }catch(error){
+    showLoginError("Impossible de vérifier l’accès au module : "+(error.message||"erreur serveur"));
+    logout();
+    return;
+  }
+  if(!dcSettings?.my_access){
+    showLoginError("Votre compte n’a pas accès au module Commercial (dc.irongs.com). Contactez un administrateur.");
+    logout();
+    return;
+  }
   document.getElementById("loginView").classList.add("hidden");
   document.getElementById("appView").classList.remove("hidden");
   const user=session?.user||{};
@@ -594,7 +609,7 @@ function onDevisClientChange(){
   const client=clientsCache.find(c=>String(c.id)===document.getElementById("dClient").value);
   if(client?.society)document.getElementById("dSociety").value=client.society;
 }
-function addDevisLigne(){devisLignes.push({designation:"",quantite:1,unite:"Pièce",prix_unitaire_ht:0,tva_pct:19});renderDevisLignes()}
+function addDevisLigne(){devisLignes.push({designation:"",quantite:1,unite:"Pièce",prix_unitaire_ht:0,tva_pct:dcSettings?.default_tva??19});renderDevisLignes()}
 function updateDevisLigne(index,field,value){devisLignes[index][field]=field==="designation"||field==="unite"?value:parseFloat(value)||0;renderDevisTotals()}
 function removeDevisLigne(index){
   const ligne=devisLignes[index];
@@ -733,7 +748,7 @@ function onCommandeClientChange(){
   const client=clientsCache.find(c=>String(c.id)===document.getElementById("cmClient").value);
   if(client?.society)document.getElementById("cmSociety").value=client.society;
 }
-function addCommandeLigne(){commandeLignes.push({designation:"",quantite:1,unite:"Pièce",prix_unitaire_ht:0,tva_pct:19});renderCommandeLignes()}
+function addCommandeLigne(){commandeLignes.push({designation:"",quantite:1,unite:"Pièce",prix_unitaire_ht:0,tva_pct:dcSettings?.default_tva??19});renderCommandeLignes()}
 function updateCommandeLigne(index,field,value){commandeLignes[index][field]=field==="designation"||field==="unite"?value:parseFloat(value)||0;renderCommandeTotals()}
 function removeCommandeLigne(index){
   const ligne=commandeLignes[index];

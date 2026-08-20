@@ -6,9 +6,18 @@ from app.core.pagination import paginate_statement
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
+from app.modules.auth.routes import require_admin
 from app.modules.commercial import service
 from app.modules.commercial.models import Client
-from app.modules.commercial.schemas import ClientCreate, ClientOut, ClientUpdate
+from app.modules.commercial.schemas import (
+    ClientCreate,
+    ClientOut,
+    ClientUpdate,
+    CommercialDcAccessRuleIn,
+    CommercialDcAccessRuleOut,
+    CommercialDcSettingsOut,
+    CommercialDcSettingsUpdate,
+)
 
 
 router = APIRouter(dependencies=[Depends(current_user)])
@@ -116,3 +125,30 @@ def update_client(client_id: int, payload: ClientUpdate, db: Session = Depends(g
 def delete_client(client_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_client_allowed(db, user, client_id)
     return service.delete_row(db, Client, client_id)
+
+
+# ── Module Commercial autonome (dc.irongs.com) : accès et réglages ────────────────────
+# Endpoints dédiés, distincts de /clients ci-dessus : ils gèrent qui peut entrer dans
+# commercial.html et ses réglages métier, pas les données commerciales elles-mêmes.
+
+@router.get("/dc/settings", response_model=CommercialDcSettingsOut)
+def dc_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return service.dc_settings_out(db, user)
+
+
+@router.put("/dc/settings", response_model=CommercialDcSettingsOut)
+def update_dc_settings(payload: CommercialDcSettingsUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    return service.update_dc_settings(db, payload)
+
+
+@router.get("/dc/access-rules", response_model=list[CommercialDcAccessRuleOut])
+def dc_access_rules(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    return service.list_dc_access_rules(db)
+
+
+@router.put("/dc/access-rules", response_model=list[CommercialDcAccessRuleOut])
+def set_dc_access_rule(payload: CommercialDcAccessRuleIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    return service.set_dc_access_rule(db, payload)

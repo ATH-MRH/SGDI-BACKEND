@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.finance_models import Invoice
 from app.modules.accounting.auto import ecriture_facture_client
+from app.modules.commercial.service import get_or_create_dc_settings
 from app.modules.ventes.models import (
     BonDeLivraison,
     CommandeClient,
@@ -26,6 +27,15 @@ from app.modules.ventes.schemas import (
     LigneVenteCreate,
     LigneVenteUpdate,
 )
+
+
+def _dc_prefix(db: Session, kind: str) -> str:
+    # Préfixes configurables depuis Administration système > Commercial (dc.irongs.com) ;
+    # repli sur les valeurs historiques si jamais la ligne de réglages est absente.
+    settings = get_or_create_dc_settings(db)
+    defaults = {"devis": "DEV-", "commande": "CMD-", "bl": "BL-"}
+    value = {"devis": settings.devis_prefix, "commande": settings.commande_prefix, "bl": settings.bl_prefix}.get(kind)
+    return value or defaults[kind]
 
 
 def _next_numero(db: Session, model, prefix: str) -> str:
@@ -120,7 +130,7 @@ def get_devis_or_404(db: Session, devis_id: int) -> Devis:
 
 
 def create_devis(db: Session, payload: DevisCreate) -> dict:
-    numero = _next_numero(db, Devis, "DEV-")
+    numero = _next_numero(db, Devis, _dc_prefix(db, "devis"))
     devis = Devis(
         numero=numero, status="brouillon",
         society=payload.society, client_id=payload.client_id, client_name=payload.client_name,
@@ -163,7 +173,7 @@ def convertir_en_commande(db: Session, devis_id: int) -> dict:
         raise HTTPException(status_code=400, detail="Devis doit être envoyé ou accepté pour être converti")
     devis.status = "accepté"
     lignes_devis = db.execute(select(LigneDevis).where(LigneDevis.devis_id == devis_id).order_by(LigneDevis.id)).scalars().all()
-    numero = _next_numero(db, CommandeClient, "CMD-")
+    numero = _next_numero(db, CommandeClient, _dc_prefix(db, "commande"))
     cmd = CommandeClient(
         numero=numero, status="confirmée",
         society=devis.society, client_id=devis.client_id, client_name=devis.client_name,
@@ -245,7 +255,7 @@ def get_commande_or_404(db: Session, cmd_id: int) -> CommandeClient:
 
 
 def create_commande(db: Session, payload: CommandeClientCreate) -> dict:
-    numero = _next_numero(db, CommandeClient, "CMD-")
+    numero = _next_numero(db, CommandeClient, _dc_prefix(db, "commande"))
     initial_status = getattr(payload, "status", "brouillon") or "brouillon"
     cmd = CommandeClient(
         numero=numero, status=initial_status,
@@ -328,7 +338,7 @@ def get_bl_or_404(db: Session, bl_id: int) -> BonDeLivraison:
 
 
 def create_bl(db: Session, payload: BonDeLivraisonCreate) -> dict:
-    numero = _next_numero(db, BonDeLivraison, "BL-")
+    numero = _next_numero(db, BonDeLivraison, _dc_prefix(db, "bl"))
     bl = BonDeLivraison(
         numero=numero, status="brouillon",
         society=payload.society, commande_id=payload.commande_id,

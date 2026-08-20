@@ -60,3 +60,40 @@ class ClientOut(ClientBase):
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+# Rôles de base utilisés pour les droits d'accès au module (mêmes 4 catégories que le
+# tableau "Droits d'accès" d'Administration système : agent / dispatch / cadre / directeur).
+DC_ACCESS_BASE_ROLES = ["agent", "dispatch", "ops", "ADM"]
+DC_ACCESS_ROLE_LABELS = {"agent": "Agent", "dispatch": "Maîtrise", "ops": "Cadre", "ADM": "Directeur"}
+
+
+class CommercialDcSettingsOut(BaseModel):
+    default_tva: float
+    devis_prefix: str
+    commande_prefix: str
+    bl_prefix: str
+    active_societies: list[str]
+    my_access: bool
+
+    model_config = {"from_attributes": True}
+
+
+class CommercialDcSettingsUpdate(BaseModel):
+    default_tva: float | None = None
+    devis_prefix: str | None = None
+    commande_prefix: str | None = None
+    bl_prefix: str | None = None
+    active_societies: list[str] | None = None
+
+
+class CommercialDcAccessRuleOut(BaseModel):
+    role: str
+    label: str
+    allowed: bool
+    is_default: bool
+
+
+class CommercialDcAccessRuleIn(BaseModel):
+    role: str
+    allowed: bool

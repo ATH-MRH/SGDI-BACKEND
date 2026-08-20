@@ -6700,6 +6700,7 @@ function renderSidebar(){
         {label:"COMPTES PORTAIL CLIENT",route:"admin/portail-clients",group:"ACCÈS & SÉCURITÉ",count:(adminClientPortalUsersCache||[]).length||null},
         {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"ACCÈS & SÉCURITÉ",count:(db.supervisorScopes||[]).length||null},
         {label:"DROITS D'ACCÈS",route:"admin/droits",group:"ACCÈS & SÉCURITÉ",count:Object.keys(db.droitsAcces||{}).length||null},
+        {label:"COMMERCIAL (DC.IRONGS.COM)",route:"admin/commercial-dc",group:"ACCÈS & SÉCURITÉ"},
         {label:"PROFILS D'ACCÈS",route:"admin/niveaux",group:"ACCÈS & SÉCURITÉ",count:(db.niveauxAcces||[]).length},
         {label:"SÉCURITÉ DES ACCÈS",route:"admin/access",group:"ACCÈS & SÉCURITÉ"},
         {label:"ORGANISER MENU LATÉRAL",route:"admin/menu",group:"SYSTÈME"},
@@ -32902,7 +32903,7 @@ async function renderAdminRotations(view){
 }
 function renderAdmin(view,sub,arg){
   if(!isAdminGeneralSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">🔐 Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
-  const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats","portail-clients"];
+  const systemOnly=["menu","counters","recrutement","rotations","effectifs","access","access_sgdi","access_societes","access_structures","access_code","sync","users","supervisors","droits","commercial-dc","document-models","sections_candidat","niveaux","postes","magasins","catalogue","articles","priorites","fiches","pointages","contrats","candidats","portail-clients"];
   if(systemOnly.includes(sub)&&!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès système requis</h2><p class="text-slate-600">Cette configuration est réservée au compte Administration système. Les administrateurs généraux gardent la consultation directionnelle sans modifier les droits.</p></div>`;return}
   if(sub==="dashboard")return isAdminSystemSession()?renderAdminSystemDashboard(view):renderAdminDashboard(view);
   if(sub==="menu")return renderAdminSidebarMenu(view);
@@ -32918,6 +32919,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="portail-clients")return renderAdminClientPortalUsers(view);
   if(sub==="supervisors")return renderAdminSupervisors(view);
   if(sub==="droits")return renderAdminDroits(view);
+  if(sub==="commercial-dc")return renderAdminCommercialDc(view);
   if(sub==="document-models")return renderAdminDocumentModels(view);
   if(sub==="sections_candidat")return renderAdminCandidatSections(view);
   if(sub==="niveaux")return renderAdminNiveaux(view);
@@ -34629,6 +34631,86 @@ async function adminToggleDroit(m,r,enabled){
   render();
 }
 async function adminResetDroits(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}const count=Object.keys(db.droitsAcces||{}).length;if(!count){toast("Aucune exception à réinitialiser","info");return}if(!confirm("Supprimer les "+count+" exception(s) techniques et revenir aux droits par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Exceptions supprimées, droits par défaut restaurés","success");render()}
+
+let adminCommercialDcSettingsCache=null;
+let adminCommercialDcRulesCache=null;
+function renderAdminCommercialDc(view){
+  if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès refusé</h2><p class="text-slate-600">Cette section est réservée au compte Administration système.</p></div>`;return}
+  view.innerHTML=`<div class="card p-6"><div class="text-center text-slate-500">Chargement…</div></div>`;
+  Promise.all([
+    SGDI_API.request("/api/commercial/dc/settings",{method:"GET"}),
+    SGDI_API.request("/api/commercial/dc/access-rules",{method:"GET"})
+  ]).then(([settings,rules])=>{
+    adminCommercialDcSettingsCache=settings;
+    adminCommercialDcRulesCache=rules;
+    renderAdminCommercialDcContent(view);
+  }).catch(e=>{
+    view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Erreur</h2><p class="text-slate-600">${escapeHTML(e.message||"Chargement impossible")}</p></div>`;
+  });
+}
+function renderAdminCommercialDcContent(view){
+  const settings=adminCommercialDcSettingsCache||{};
+  const rules=adminCommercialDcRulesCache||[];
+  const allSocieties=uniqueSocieteNames([...SOCIETES,...((societeConfig().custom)||[])]);
+  const active=new Set(settings.active_societies||[]);
+  view.innerHTML=`
+    <div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-xl font-black mt-0.5">Commercial (dc.irongs.com)</h1><p class="text-sm text-slate-500 mt-1">Accès et réglages du module commercial autonome — indépendant de la section « Commercial » interne ci-dessus.</p></div>
+    <div class="card p-5 mb-4">
+      <h2 class="font-black text-lg mb-1">Accès par rôle</h2>
+      <p class="text-xs text-slate-500 mb-3">Qui peut se connecter à dc.irongs.com. Les Directeurs ont toujours accès.</p>
+      <div class="grid grid-cols-2 gap-3">
+        ${rules.map(r=>`<label class="admin-access-toggle ${r.allowed?"is-exception-allow":"is-exception-deny"}" style="justify-content:flex-start;gap:10px;padding:11px 13px;border:1px solid #e2e8f0;border-radius:10px;cursor:pointer">
+          <input type="checkbox" ${r.allowed?"checked":""} ${r.role==="ADM"?"disabled":""} onchange="adminToggleCommercialDcAccess('${jsString(r.role)}',this.checked)"/>
+          <span>${escapeHTML(r.label)}${r.role==="ADM"?" (toujours autorisé)":""}</span>
+        </label>`).join("")}
+      </div>
+    </div>
+    <div class="card p-5 mb-4">
+      <h2 class="font-black text-lg mb-3">Paramètres métier</h2>
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div><label class="label">TVA par défaut (%)</label><input id="dc-default-tva" class="input" type="number" min="0" max="100" step="0.5" value="${escapeHTML(settings.default_tva??19)}"/></div>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mb-3">
+        <div><label class="label">Préfixe devis</label><input id="dc-devis-prefix" class="input" value="${escapeHTML(settings.devis_prefix||"DEV-")}"/></div>
+        <div><label class="label">Préfixe commande</label><input id="dc-commande-prefix" class="input" value="${escapeHTML(settings.commande_prefix||"CMD-")}"/></div>
+        <div><label class="label">Préfixe bon de livraison</label><input id="dc-bl-prefix" class="input" value="${escapeHTML(settings.bl_prefix||"BL-")}"/></div>
+      </div>
+      <label class="label">Sociétés actives dans le module</label>
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        ${allSocieties.length?allSocieties.map(s=>`<label class="flex items-center gap-2 text-sm"><input type="checkbox" value="${escapeHTML(s)}" ${active.has(s)?"checked":""} class="dc-society-checkbox"/> ${escapeHTML(s)}</label>`).join(""):`<div class="text-sm text-slate-500">Aucune société configurée.</div>`}
+      </div>
+      <button class="btn btn-primary" onclick="saveAdminCommercialDcSettings()">Enregistrer les paramètres</button>
+    </div>`;
+}
+async function adminToggleCommercialDcAccess(role,allowed){
+  if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}
+  try{
+    adminCommercialDcRulesCache=await SGDI_API.request("/api/commercial/dc/access-rules",{method:"PUT",body:{role,allowed}});
+    logActivity("Accès Commercial DC",role+"="+allowed);
+    toast("Accès mis à jour","success");
+  }catch(e){
+    toast("Échec : "+(e.message||e),"error");
+  }
+  render();
+}
+async function saveAdminCommercialDcSettings(){
+  if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}
+  const activeSocieties=[...document.querySelectorAll(".dc-society-checkbox:checked")].map(el=>el.value);
+  const payload={
+    default_tva:parseFloat(document.getElementById("dc-default-tva").value)||0,
+    devis_prefix:document.getElementById("dc-devis-prefix").value.trim()||"DEV-",
+    commande_prefix:document.getElementById("dc-commande-prefix").value.trim()||"CMD-",
+    bl_prefix:document.getElementById("dc-bl-prefix").value.trim()||"BL-",
+    active_societies:activeSocieties
+  };
+  try{
+    adminCommercialDcSettingsCache=await SGDI_API.request("/api/commercial/dc/settings",{method:"PUT",body:payload});
+    logActivity("Paramètres Commercial DC","mise à jour");
+    toast("Paramètres enregistrés","success");
+  }catch(e){
+    toast("Échec : "+(e.message||e),"error");
+  }
+}
 function renderAdminCandidatSections(view){
   if(!db.settings)db.settings={};
   const validated=(db.candidats||[]).filter(c=>candidatAllSectionsValid(c)).length;
