@@ -138,6 +138,7 @@ class SiteVisibleOut(BaseModel):
     employees: list[SiteEmployeeOut] = []
     groups: list[SiteGroupOut] = []
     position_requirements: list[SitePositionRequirementOut] = []
+    group_position_requirements: dict[str, dict[str, int]] = {}
 
     model_config = {"from_attributes": True}
 
@@ -205,6 +206,7 @@ class SiteCreateIn(BaseModel):
     required_staff: int = 0
     positions: list[SitePositionRequirementIn] = Field(default_factory=list)
     group_quotas: dict[str, int] = Field(default_factory=dict)
+    group_positions: dict[str, dict[str, int]] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -230,6 +232,23 @@ class SiteCreateIn(BaseModel):
             if val is None or val < 0:
                 raise ValueError("Le nombre d’employés par groupe doit être positif ou nul")
             cleaned[code] = int(val)
+        return cleaned
+
+    @field_validator("group_positions")
+    @classmethod
+    def _valid_group_positions(cls, value: dict[str, dict[str, int]]) -> dict[str, dict[str, int]]:
+        cleaned: dict[str, dict[str, int]] = {}
+        for group, positions in value.items():
+            code = str(group).strip().upper()
+            if code not in GROUP_LETTERS:
+                raise ValueError(f"Groupe invalide : {group}")
+            cleaned[code] = {}
+            for name, count in positions.items():
+                label = str(name).strip()
+                if label and count is not None:
+                    if count < 0:
+                        raise ValueError("Les effectifs ventilés doivent être positifs ou nuls")
+                    cleaned[code][label] = int(count)
         return cleaned
 
 

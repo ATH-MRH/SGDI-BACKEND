@@ -217,13 +217,26 @@ def test_client_can_create_site_with_positions_and_group_staffing(client, auth_h
             {"name": "Superviseur", "required": 2},
         ],
         "group_quotas": {"A": 5, "B": 5, "C": 0, "D": 0, "E": 0, "F": 0},
+        "group_positions": {
+            "A": {"Agent de sécurité": 4, "Superviseur": 1},
+            "B": {"Agent de sécurité": 4, "Superviseur": 1},
+        },
     })
     assert response.status_code == 201, response.text
     site = response.json()
     assert site["required_staff"] == 10
     assert next(group for group in site["groups"] if group["code"] == "A")["quota"] == 5
+    assert site["group_position_requirements"]["A"]["Agent de sécurité"] == 4
     agent_position = next(position for position in site["position_requirements"] if position["name"] == "Agent de sécurité")
     assert agent_position == {"name": "Agent de sécurité", "assigned": 0, "required": 8, "remaining": 8}
+
+    incoherent = client.post("/api/client-portal/sites", headers=portal_headers, json={
+        "name": "Site incohérent",
+        "positions": [{"name": "Cariste", "required": 5}],
+        "group_positions": {"A": {"Cariste": 2}, "B": {"Cariste": 2}},
+    })
+    assert incoherent.status_code == 422, incoherent.text
+    assert "Répartition incohérente" in incoherent.json()["detail"]
 
     updated = client.put(f"/api/client-portal/sites/{site['id']}", headers=portal_headers, json={
         "name": "Site configuré modifié", "required_staff": 6,

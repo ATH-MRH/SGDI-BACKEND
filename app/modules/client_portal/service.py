@@ -208,6 +208,7 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             "employees": site_employees,
             "groups": _site_groups_payload(site, site_employees),
             "position_requirements": _site_position_requirements_payload(site, site_employees),
+            "group_position_requirements": ((site.equipment_plan or {}).get("groupPositionQuotas", {}) if isinstance(site.equipment_plan, dict) else {}),
         })
     return result
 
@@ -271,6 +272,7 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
 def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, Any]:
     position_quotas = {position.name: position.required for position in payload.positions}
     required_staff = sum(position_quotas.values()) if position_quotas else payload.required_staff
+    group_quotas = _validated_group_position_quotas(position_quotas, payload.group_positions) if payload.group_positions else payload.group_quotas
     site = Site(
         name=payload.name,
         client_id=client_id,
@@ -279,7 +281,7 @@ def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, An
         wilaya=payload.wilaya,
         site_type=payload.site_type,
         contractual_staff=required_staff,
-        equipment_plan={"positionQuotas": position_quotas, "groupQuotas": payload.group_quotas},
+        equipment_plan={"positionQuotas": position_quotas, "groupQuotas": group_quotas, "groupPositionQuotas": payload.group_positions},
         active=1,
     )
     db.add(site)
@@ -293,6 +295,7 @@ def update_site_for_client(db: Session, client_id: int, site_id: int, payload) -
     if not site or site.client_id != client_id or site.active != 1:
         raise HTTPException(status_code=404, detail="Site introuvable")
     position_quotas = {position.name: position.required for position in payload.positions}
+    group_quotas = _validated_group_position_quotas(position_quotas, payload.group_positions) if payload.group_positions else payload.group_quotas
     site.name = payload.name
     site.address = payload.address
     site.commune = payload.commune
@@ -301,10 +304,31 @@ def update_site_for_client(db: Session, client_id: int, site_id: int, payload) -
     site.contractual_staff = sum(position_quotas.values()) if position_quotas else payload.required_staff
     plan = dict(site.equipment_plan) if isinstance(site.equipment_plan, dict) else {}
     plan["positionQuotas"] = position_quotas
-    plan["groupQuotas"] = payload.group_quotas
+    plan["groupQuotas"] = group_quotas
+    plan["groupPositionQuotas"] = payload.group_positions
     site.equipment_plan = plan
     db.commit()
     return next(item for item in visible_sites_for_client(db, client_id) if item["id"] == site.id)
+
+
+def _validated_group_position_quotas(position_quotas: dict[str, int], group_positions: dict[str, dict[str, int]]) -> dict[str, int]:
+    for position, required in position_quotas.items():
+        distributed = sum(int(group_positions.get(code, {}).get(position, 0) or 0) for code in GROUP_LETTERS)
+        if distributed != required:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Répartition incohérente pour {position} : {distributed} ventilé(s) sur {required} requis.",
+            )
+    unknown = {
+        name for positions in group_positions.values() for name in positions
+        if name not in position_quotas and int(positions.get(name, 0) or 0) > 0
+    }
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Poste non défini : {sorted(unknown)[0]}")
+    return {
+        code: sum(int(value or 0) for value in group_positions.get(code, {}).values())
+        for code in GROUP_LETTERS
+    }
 
 
 def archive_site_for_client(db: Session, client_id: int, site_id: int) -> None:
