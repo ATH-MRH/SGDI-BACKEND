@@ -20021,7 +20021,7 @@ function fichePositionCard(a){
   const status=employeeDisplayStatus(a);
   const aff=agentLiveAffectation(a)||{};
   const siteKey=fpSiteFilterKeyForAgent(a);
-  const ficheHref=isMaterielFicheContext()?"#/materiel/fiche/"+a.id:"#/effectif/agent/"+a.id;
+  const ficheHref=isAdminFichePositionContext()?"#/admin/fiches/"+employeeRouteId(a):(isMaterielFicheContext()?"#/materiel/fiche/"+a.id:"#/effectif/agent/"+a.id);
   const ficheClick=isMaterielFicheContext()?"setFicheContext('materiel')":"";
   const isActive=status.key==="actif";
   const codeStyle=isActive?"color:#047857!important":"color:#d97706";
@@ -20060,7 +20060,7 @@ function fichePositionListHTML(list){
     const status=employeeDisplayStatus(a);
     const aff=agentLiveAffectation(a)||{};
     const siteKey=fpSiteFilterKeyForAgent(a);
-    const href=isMaterielFicheContext()?"#/materiel/fiche/"+a.id:"#/effectif/agent/"+a.id;
+    const href=isAdminFichePositionContext()?"#/admin/fiches/"+employeeRouteId(a):(isMaterielFicheContext()?"#/materiel/fiche/"+a.id:"#/effectif/agent/"+a.id);
     const click=isMaterielFicheContext()?` onclick="setFicheContext('materiel')"`:"";
     const age=fpEmployeeAge(a);
     const q=String((a.nom||"")+" "+(a.prenom||"")+" "+(a.matricule||"")+" "+(a.societe||"")+" "+(aff.siteName||"")).toLowerCase();
@@ -34060,6 +34060,9 @@ function adminFicheSearchRestore(){
   try{input.setSelectionRange(pos,pos)}catch(e){}
 }
 function renderAdminFichesPosition(view,_skipEnsure){
+  // Vue unique : elle exploite directement les employés, affectations et contrats déjà
+  // synchronisés depuis PostgreSQL. Aucune copie de fiche n'est créée.
+  return renderFiches(view,"",_skipEnsure);
   const adminSoc=adminActiveSociete();
   // Pas de force:true ici, même raison que renderFiches : voir plus haut (commit a1690b88).
   if(!_skipEnsure&&typeof sgdiEnsureEmployeesForDisplay==="function"){const _r=sgdiEnsureEmployeesForDisplay({society:adminSoc||""});if(_r&&typeof _r.then==="function"){view.innerHTML=`<div class="p-8 text-center text-slate-400 text-sm">Chargement des effectifs…</div>`;_r.then(()=>renderAdminFichesPosition(view,true)).catch(()=>renderAdminFichesPosition(view,true));return}}
