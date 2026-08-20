@@ -753,6 +753,13 @@ async function loadPortalOperationalAlerts(){
   }catch(e){portalOperationalAlerts=[]}
 }
 async function filterEmployeesBySite(siteId,button){
+  const planningActive=!document.getElementById("planningTab").classList.contains("hidden");
+  if(planningActive){
+    const plannedSites=sitesCache.filter(site=>(site.rotation_schedule||[]).length);
+    planningSelectedSiteId=siteId===null?(plannedSites[0]?.id||null):Number(siteId);planningWeekOffset=0;
+    document.querySelectorAll(".portal-alert-card").forEach(card=>card.setAttribute("aria-pressed",String(card===button)));
+    renderPlanningSchedule();return;
+  }
   const sitesActive=!document.getElementById("sitesTab").classList.contains("hidden");
   if(sitesActive){
     document.querySelectorAll(".portal-alert-card").forEach(card=>card.setAttribute("aria-pressed",String(card===button)));
@@ -774,7 +781,7 @@ async function switchTab(tab){
   document.getElementById("messagesTab").classList.toggle("hidden",!tab.startsWith("messages-"));
   if(tab==="sites")await loadSites();
   const allValue=document.getElementById("allCounterValue"),allLabel=document.getElementById("allCounterLabel");
-  if(allValue&&allLabel){allValue.textContent=tab==="sites"?sitesCache.length:employees.length;allLabel.textContent=tab==="sites"?"Tous les sites":"Tous les employés"}
+  if(allValue&&allLabel){const plannedCount=sitesCache.filter(site=>(site.rotation_schedule||[]).length).length;allValue.textContent=tab==="sites"?sitesCache.length:(tab==="planning"?plannedCount:employees.length);allLabel.textContent=tab==="sites"?"Tous les sites":(tab==="planning"?"Tous les plannings":"Tous les employés")}
   if(tab==="planning")await loadPlanning();
   if(tab==="equipment")await loadEquipment();
   if(tab==="history")await loadHistory();
