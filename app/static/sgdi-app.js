@@ -36292,7 +36292,7 @@ function renderOPS(view,sub,arg){
     suspendus:_fpqSuspList.map(f=>{const a=(db.agents||[]).find(x=>x.id===f.agentId);return{nom:(a?.nom||"")+" "+(a?.prenom||""),mat:a?.matricule||"—",site:f.siteName||"—",code:"S"};}),
     sanctions:_sanctionList.map(a=>{const ev=(a.gestionEvents||[]).filter(e=>["Mise en demeure","Sanction"].includes(e.type)&&(e.statut==="en_cours"||e.statut==="approuve")).pop();return{nom:(a.nom||"")+" "+(a.prenom||""),mat:a.matricule||"—",site:agentLiveAffectation(a)?.siteName||"—",code:ev?.type||"Sanction"};})
   };
-  const opsKpi=(label,value,bg,color,icon,subtext,action,id)=>`<button type="button" ${action?`onclick="${action}"`:""} class="ops-dash-kpi" style="cursor:${action?"pointer":"default"}"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${label}</div><div ${id?`id="${id}"`:""} class="ops-dash-val">${value}</div><div class="ops-dash-sub">${subtext}</div></button>`;
+  const opsKpi=(label,value,bg,color,icon,subtext,action,id)=>`<button type="button" ${action?`onclick="${action}"`:""} class="ops-dash-kpi" style="--ops-kpi-accent:${color};cursor:${action?"pointer":"default"}"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${label}</div><div ${id?`id="${id}"`:""} class="ops-dash-val">${value}</div><div class="ops-dash-sub">${subtext}</div></button>`;
   const presenceBase=Math.max(fpqToday.length,fpqPresent+_fpqAbsList.length+_fpqMalList.length+_fpqSuspList.length,1);
   const _siteStatRowsNew=_siteStatKeys.map(k=>{
     const pres=_presentsBySite[k]||0;const aff=_affectesBySite[k]||0;const total=Math.max(aff,pres);
