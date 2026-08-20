@@ -345,6 +345,8 @@ let activeTab="agents";
 let activeSociety="";
 const SOCIETES_FALLBACK=["IRON GLOBAL SÉCURITÉ","IRON GLOBAL SOLUTION","SWORD CORPORATION","SWORD CONSTRUCTION"];
 let employeesCache=[];
+let allEmployeesCache=[];
+let allEmployeesCacheSociety;
 let contratsCache=[];
 let congesCache=[];
 const PAGE_SIZE=25;
@@ -374,7 +376,27 @@ function societyOptionsHtml(selected){
   return list.map(s=>`<option value="${esc(s)}" ${s===selected?"selected":""}>${esc(s)}</option>`).join("");
 }
 function employeeSelectOptionsHtml(selectedId){
-  return '<option value="">— Choisir un agent —</option>'+employeesCache.map(e=>`<option value="${e.id}" ${String(e.id)===String(selectedId)?"selected":""}>${esc(e.code||"")} — ${esc(e.last_name)} ${esc(e.first_name)}</option>`).join("");
+  return '<option value="">— Choisir un agent —</option>'+allEmployeesCache.map(e=>`<option value="${e.id}" ${String(e.id)===String(selectedId)?"selected":""}>${esc(e.code||"")} — ${esc(e.last_name)} ${esc(e.first_name)}</option>`).join("");
+}
+// Le tableau "Agents/Effectifs" pagine par 25 (employeesCache) : insuffisant pour les
+// sélecteurs d'agent et les jointures contrat/congé, qui ont besoin du rôle complet.
+// Boucle sur toutes les pages (100 max/appel côté backend) pour construire une liste
+// exhaustive, mise en cache par société active.
+async function ensureAllEmployeesCache(){
+  if(allEmployeesCache.length&&allEmployeesCacheSociety===activeSociety)return allEmployeesCache;
+  const all=[];
+  let page=1,pages=1;
+  do{
+    const params=new URLSearchParams({mode:"all",page:String(page),page_size:"100"});
+    if(activeSociety)params.set("society",activeSociety);
+    const r=await apiFetch("/api/drh/employees/page?"+params.toString());
+    all.push(...(r.items||[]));
+    pages=r.pages||1;
+    page++;
+  }while(page<=pages);
+  allEmployeesCache=all;
+  allEmployeesCacheSociety=activeSociety;
+  return allEmployeesCache;
 }
 
 async function login(){
@@ -584,7 +606,8 @@ function ficheContentHtml(fiche){
 async function openFiche(employeeId){
   document.getElementById("ficheBody").innerHTML='<div class="empty">Chargement…</div>';
   document.getElementById("ficheModalBackdrop").classList.remove("hidden");
-  document.getElementById("ficheEditBtn").onclick=()=>{closeFicheModal();openEmployeeModal(employeesCache.find(e=>e.id===employeeId))};
+  await ensureAllEmployeesCache();
+  document.getElementById("ficheEditBtn").onclick=()=>{closeFicheModal();openEmployeeModal(allEmployeesCache.find(e=>e.id===employeeId))};
   try{
     const fiche=await apiFetch(`/api/drh/employees/${employeeId}/fiche-position`);
     document.getElementById("ficheBody").innerHTML=ficheContentHtml(fiche);
@@ -595,7 +618,7 @@ async function openFiche(employeeId){
 function closeFicheModal(){document.getElementById("ficheModalBackdrop").classList.add("hidden")}
 
 async function loadFichesTab(){
-  if(!employeesCache.length){try{const r=await apiFetch("/api/drh/employees/page?mode=all&page=1&page_size=200"+(activeSociety?`&society=${encodeURIComponent(activeSociety)}`:""));employeesCache=r.items||[]}catch(e){}}
+  await ensureAllEmployeesCache();
   const select=document.getElementById("ficheAgentSelect");
   const previous=select.value;
   select.innerHTML=employeeSelectOptionsHtml(previous);
@@ -620,12 +643,12 @@ const CONTRACT_STATUS_PILL={actif:"pill-green",termine:"pill-gray",rompu:"pill-r
 const CONTRACT_STATUS_DOT={actif:"#2f9e5f",termine:"#94a3b8",rompu:"#c8102e"};
 
 async function loadContrats(){
-  if(!employeesCache.length){try{const r=await apiFetch("/api/drh/employees/page?mode=all&page=1&page_size=200"+(activeSociety?`&society=${encodeURIComponent(activeSociety)}`:""));employeesCache=r.items||[]}catch(e){}}
+  await ensureAllEmployeesCache();
   const host=document.getElementById("contratsList");
   host.innerHTML='<div class="empty">Chargement…</div>';
   try{
     const rows=await apiFetch("/api/drh/contracts");
-    contratsCache=rows.map(c=>({...c,_employee:employeesCache.find(e=>e.id===c.employee_id)}));
+    contratsCache=rows.map(c=>({...c,_employee:allEmployeesCache.find(e=>e.id===c.employee_id)}));
     filterContrats();
   }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
 }
@@ -710,7 +733,7 @@ async function openContractModal(contractId){
   document.getElementById("contractModalTitle").textContent=contractId?"Contrat":"Nouveau contrat";
   document.getElementById("contractModalBackdrop").dataset.id=contractId||"";
   document.getElementById("contractError").classList.remove("show");
-  if(!employeesCache.length){try{const r=await apiFetch("/api/drh/employees/page?page=1&page_size=200"+(activeSociety?`&society=${encodeURIComponent(activeSociety)}`:""));employeesCache=r.items||[]}catch(e){}}
+  await ensureAllEmployeesCache();
   const contract=contractId?contratsCache.find(c=>c.id===contractId):null;
   document.getElementById("ctEmployee").innerHTML=employeeSelectOptionsHtml(contract?.employee_id);
   document.getElementById("ctType").value=contract?.contract_type||"";
@@ -749,12 +772,12 @@ async function submitContract(){
 /* ── Congés ──────────────────────────────────────────────────────────────── */
 
 async function loadConges(){
-  if(!employeesCache.length){try{const r=await apiFetch("/api/drh/employees/page?page=1&page_size=200"+(activeSociety?`&society=${encodeURIComponent(activeSociety)}`:""));employeesCache=r.items||[]}catch(e){}}
+  await ensureAllEmployeesCache();
   const host=document.getElementById("congesList");
   host.innerHTML='<div class="empty">Chargement…</div>';
   try{
     const rows=await apiFetch("/api/drh/leaves");
-    congesCache=rows.map(l=>({...l,_employee:employeesCache.find(e=>e.id===l.employee_id)}));
+    congesCache=rows.map(l=>({...l,_employee:allEmployeesCache.find(e=>e.id===l.employee_id)}));
     filterConges();
   }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
 }
@@ -787,8 +810,9 @@ async function decideLeave(leaveId,approve){
     loadConges();
   }catch(error){showBanner(error.message||"Action impossible.","error")}
 }
-function openLeaveModal(){
+async function openLeaveModal(){
   document.getElementById("leaveError").classList.remove("show");
+  await ensureAllEmployeesCache();
   document.getElementById("lvEmployee").innerHTML=employeeSelectOptionsHtml("");
   document.getElementById("lvType").value="conge";
   document.getElementById("lvStart").value=today();
