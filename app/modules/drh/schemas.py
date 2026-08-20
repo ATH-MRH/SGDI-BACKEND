@@ -60,6 +60,10 @@ class EmployeeUpdate(BaseModel):
     phone: str | None = None
     email: str | None = None
     address: str | None = None
+    commune: str | None = None
+    wilaya: str | None = None
+    birth_date: date | None = None
+    nin: str | None = None
     position: str | None = None
     society: str | None = None
     status: str | None = None
