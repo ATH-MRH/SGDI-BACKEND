@@ -163,6 +163,7 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 .atlas-fiche-summary{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:9px;min-width:430px}.atlas-fiche-summary div{padding:10px 12px;border:1px solid light-dark(#d7e2ee,#2b3b50);border-radius:11px;background:light-dark(rgba(255,255,255,.82),#111b29)}.atlas-fiche-summary span{display:block;font-size:9px;font-weight:900;text-transform:uppercase;color:#75899f}.atlas-fiche-summary b{display:block;margin-top:3px;font-size:12px}
 .atlas-fiche-tabs{display:flex;gap:5px;padding:10px 14px;border-bottom:1px solid light-dark(#dce5ef,#2b3b50);overflow-x:auto;background:light-dark(#fff,#111b29)}.atlas-fiche-tab{border:0;background:transparent;color:light-dark(#5f748a,#9fb0c2);padding:9px 13px;border-radius:9px;font-size:11px;font-weight:900;white-space:nowrap;cursor:pointer}.atlas-fiche-tab.active{background:#123f6f;color:#fff;box-shadow:0 6px 14px rgba(18,63,111,.18)}
 .atlas-fiche-panel{padding:20px 22px}.atlas-fiche-panel.hidden{display:none}.atlas-fiche-panel-title{font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.06em;color:#123f6f;margin:0 0 12px}.atlas-fiche-empty{padding:22px;border:1px dashed light-dark(#cbd8e6,#34465b);border-radius:12px;text-align:center;color:#7a8da2;font-size:12px}
+.position-search{max-width:520px}.position-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:12px;margin:14px 0 20px}.position-card{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:14px;background:light-dark(#fff,#111b29);text-align:left;cursor:pointer;color:inherit;transition:.16s ease}.position-card:hover,.position-card.active{border-color:#123f6f;box-shadow:0 8px 20px rgba(18,63,111,.12);transform:translateY(-1px)}.position-card-avatar{width:44px;height:48px;border-radius:11px;background:#e5eef8;color:#123f6f;display:grid;place-items:center;font-weight:950;flex:0 0 auto;overflow:hidden}.position-card-avatar img{width:100%;height:100%;object-fit:cover}.position-card-body{min-width:0}.position-card-name{font-size:12.5px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.position-card-meta{font-size:10.5px;color:#718399;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.position-card-code{color:#c21832;font-weight:900}
 
 @media(max-width:1000px){.shell{grid-template-columns:1fr}.sidebar{position:static}.nav{flex-direction:row;overflow-x:auto}.nav-btn{min-width:max-content}.atlas-fiche-hero{align-items:flex-start;flex-wrap:wrap}.atlas-fiche-summary{min-width:0;width:100%}}
 @media(max-width:640px){.field-grid,.fiche-info-grid{grid-template-columns:1fr}.top{padding:14px 16px}.top-title{font-size:14px}.shell{padding:14px}.atlas-fiche-hero{padding:18px}.atlas-fiche-summary{grid-template-columns:1fr 1fr}.atlas-fiche-panel{padding:16px}.atlas-fiche-identity h2{font-size:18px}}
@@ -250,10 +251,11 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
       <section id="fichesSection" class="hidden">
         <div class="section-head"><div><h1>Fiche de position</h1><p>Vue complète d'un agent : informations, contrats, congés, sanctions, équipement.</p></div></div>
         <div class="toolbar">
-          <select id="ficheAgentSelect" class="filter" style="min-width:320px" onchange="renderFicheTab(this.value)"><option value="">— Choisir un agent —</option></select>
+          <div class="search-box position-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="ficheAgentSearch" placeholder="Rechercher par code, nom, prénom ou fonction…" oninput="filterFicheCards()"></div>
         </div>
+        <div id="ficheAgentCards" class="position-cards"><div class="empty">Chargement…</div></div>
         <div class="table-card" style="padding:20px">
-          <div id="ficheTabContent"><div class="empty">Choisissez un agent pour afficher sa fiche.</div></div>
+          <div id="ficheTabContent"><div class="empty">Cliquez sur une carte pour afficher la fiche complète.</div></div>
         </div>
       </section>
     </main>
@@ -668,14 +670,26 @@ function closeFicheModal(){document.getElementById("ficheModalBackdrop").classLi
 
 async function loadFichesTab(){
   await ensureAllEmployeesCache();
-  const select=document.getElementById("ficheAgentSelect");
-  const previous=select.value;
-  select.innerHTML=employeeSelectOptionsHtml(previous);
-  if(previous)renderFicheTab(previous);
+  filterFicheCards();
 }
-async function renderFicheTab(employeeId){
+function filterFicheCards(){
+  const host=document.getElementById("ficheAgentCards");
+  const q=(document.getElementById("ficheAgentSearch")?.value||"").trim().toLowerCase();
+  const rows=allEmployeesCache.filter(e=>[e.code,e.last_name,e.first_name,e.position,e.current_site_name].filter(Boolean).join(" ").toLowerCase().includes(q));
+  if(!rows.length){host.innerHTML='<div class="empty">Aucun employé trouvé.</div>';return}
+  host.innerHTML=rows.map(e=>{
+    const initials=((e.first_name||"?")[0]+(e.last_name||"?")[0]).toUpperCase();
+    const photo=e.photo_url||e.photo||e.avatar_url;
+    return `<button class="position-card" data-employee-id="${e.id}" onclick="renderFicheTab(${e.id},this)">
+      <span class="position-card-avatar">${photo?`<img src="${esc(photo)}" alt="">`:esc(initials)}</span>
+      <span class="position-card-body"><span class="position-card-name"><span class="position-card-code">${esc(e.code||"—")}</span> · ${esc(e.last_name||"")} ${esc(e.first_name||"")}</span><span class="position-card-meta">${esc(e.position||"Poste non renseigné")} · ${esc(e.current_site_name||"Non affecté")}</span></span>
+    </button>`;
+  }).join("");
+}
+async function renderFicheTab(employeeId,card){
   const host=document.getElementById("ficheTabContent");
   if(!employeeId){host.innerHTML='<div class="empty">Choisissez un agent pour afficher sa fiche.</div>';return}
+  document.querySelectorAll(".position-card").forEach(item=>item.classList.toggle("active",item===card||String(item.dataset.employeeId)===String(employeeId)));
   host.innerHTML='<div class="empty">Chargement…</div>';
   try{
     const fiche=await apiFetch(`/api/drh/employees/${employeeId}/fiche-position`);
