@@ -18,7 +18,7 @@ router = APIRouter(dependencies=[Depends(current_user)])
 # pas se voir attribuer l'un de ces slugs pour son portail dédié.
 RESERVED_PORTAL_SLUGS = {
     "drh", "ops", "materiel", "finances", "comptabilite", "compta", "facturation", "fac",
-    "commercial", "agenda", "paie", "conges", "recrute", "pointage", "pointeur",
+    "commercial", "dc", "agenda", "paie", "conges", "recrute", "pointage", "pointeur",
     "portail-rh", "cheque", "atlas", "www", "sgdi", "administrateur", "general",
     "sup", "superviseur", "supervisor", "finance", "secretariat", "admin",
 }

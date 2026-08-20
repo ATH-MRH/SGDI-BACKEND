@@ -521,6 +521,10 @@ def _is_conges_host(host: str) -> bool:
     return host.split(":")[0].lower() == "conges.irongs.com"
 
 
+def _is_dc_host(host: str) -> bool:
+    return host.split(":")[0].lower() == "dc.irongs.com"
+
+
 _CLIENT_PORTAL_SLUG_CACHE: dict[str, tuple[float, bool]] = {}
 _CLIENT_PORTAL_SLUG_CACHE_TTL = 60.0  # secondes
 
@@ -1232,6 +1236,12 @@ def frontend(request: Request) -> HTMLResponse:
     if _is_cheque_host(host):
         return FileResponse(
             STATIC_DIR / "cheque.html",
+            media_type="text/html; charset=utf-8",
+            headers={"Cache-Control": "no-cache, max-age=0"},
+        )
+    if _is_dc_host(host):
+        return FileResponse(
+            STATIC_DIR / "commercial.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )
