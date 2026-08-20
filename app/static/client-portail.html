@@ -97,6 +97,7 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .portal-nav-icon{width:24px;height:24px;border-radius:8px;background:#eaf2fb;color:var(--navy);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
 .portal-nav-icon svg{width:14px;height:14px}
 .portal-nav-btn.active .portal-nav-icon{background:rgba(16,36,62,.1);color:#10243e}
+.employee-sidebar-search{position:relative;padding:0 4px 4px}.employee-sidebar-search input{width:100%;height:40px;padding:0 34px 0 11px;border:1px solid #d7e2ec;border-radius:10px;background:#f8fafc;color:#10243e;font-size:11px}.employee-sidebar-search input:focus{outline:0;border-color:#ffcc00;box-shadow:0 0 0 3px rgba(255,204,0,.22);background:#fff}.employee-sidebar-search-icon{position:absolute;right:15px;top:11px;color:#64748b;pointer-events:none}.employee-sidebar-results{display:flex;flex-direction:column;gap:4px;max-height:260px;margin-top:7px;overflow:auto}.employee-sidebar-result{width:100%;padding:8px;border:0;border-radius:9px;background:#f8fafc;color:#10243e;text-align:left;cursor:pointer}.employee-sidebar-result:hover{background:#fff4bf}.employee-sidebar-result strong{display:block;font-size:10.5px;line-height:1.25}.employee-sidebar-result span{display:block;margin-top:2px;color:#64748b;font-size:9px}.employee-sidebar-empty{padding:8px 3px;color:#64748b;font-size:10px;text-align:center}
 .portal-main{min-width:0}
 #banner{position:fixed;z-index:45;top:92px;right:22px;width:min(420px,calc(100vw - 32px));pointer-events:none}
 #banner .banner{box-shadow:0 14px 34px rgba(15,23,42,.18)}
@@ -311,7 +312,7 @@ tr:last-child td{border-bottom:0}
       <button type="button" class="portal-nav-btn" data-tab="messages-sent" onclick="switchTab('messages-sent')"><span class="portal-nav-icon">↑</span>Messages envoyés</button>
       <button type="button" class="portal-nav-btn" data-tab="messages-received" onclick="switchTab('messages-received')"><span class="portal-nav-icon">↓</span>Messages reçus</button>
       <button type="button" class="portal-nav-btn" data-tab="messages-archived" onclick="switchTab('messages-archived')"><span class="portal-nav-icon">▣</span>Messages archivés</button>
-    </nav></aside></div>
+    </nav></aside><aside class="portal-sidebar" id="employeeSearchCard" aria-label="Rechercher un employé"><div class="portal-sidebar-title">Recherche employé</div><div class="employee-sidebar-search"><input id="employeeSidebarSearch" type="search" autocomplete="off" placeholder="Code, nom, fonction…" oninput="runEmployeeSidebarSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';runEmployeeSidebarSearch('')}" aria-label="Rechercher un employé"><span class="employee-sidebar-search-icon" aria-hidden="true">⌕</span><div id="employeeSidebarResults" class="employee-sidebar-results hidden"></div></div></aside></div>
     <main class="portal-main">
       <div id="banner"></div>
       <div id="portalOperationalAlerts" class="portal-alert-center"></div>
@@ -712,8 +713,10 @@ async function enterApp(){
   const canHistory=session?.permissions?.view_observations!==false;
   const canSites=session?.permissions?.view_sites!==false;
   const canEquipment=session?.permissions?.view_equipment!==false;
+  const canEmployees=session?.permissions?.view_employees!==false;
   document.querySelector('.portal-nav-btn[data-tab="history"]')?.classList.toggle("hidden",!canHistory);
   document.getElementById("portalMessagingCard")?.classList.toggle("hidden",!canHistory);
+  document.getElementById("employeeSearchCard")?.classList.toggle("hidden",!canEmployees);
   document.querySelector('.portal-nav-btn[data-tab="sites"]')?.classList.toggle("hidden",!canSites);
   document.querySelector('.portal-nav-btn[data-tab="equipment"]')?.classList.toggle("hidden",!canEquipment);
   if(!canHistory)document.getElementById("historyTab").classList.add("hidden");
@@ -1266,6 +1269,18 @@ async function loadPortalMessages(folder){
 
 function normalizePortalSearch(value){
   return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("fr").trim();
+}
+function runEmployeeSidebarSearch(value){
+  const host=document.getElementById("employeeSidebarResults"),query=normalizePortalSearch(value);if(!host)return;
+  if(!query){host.innerHTML="";host.classList.add("hidden");return}
+  const matches=employees.filter(employee=>normalizePortalSearch([employee.code,employee.last_name,employee.first_name,employee.position,employee.site_name].join(" ")).includes(query)).slice(0,8);
+  host.innerHTML=matches.length?matches.map(employee=>`<button type="button" class="employee-sidebar-result" onclick="openSidebarEmployee(${employee.id})"><strong>${employee.code?esc(employee.code)+" — ":""}${esc(employee.last_name)} ${esc(employee.first_name)}</strong><span>${esc([employee.position,employee.site_name].filter(Boolean).join(" · ")||"Affectation non renseignée")}</span></button>`).join(""):'<div class="employee-sidebar-empty">Aucun employé trouvé.</div>';
+  host.classList.remove("hidden");
+}
+function openSidebarEmployee(employeeId){
+  const input=document.getElementById("employeeSidebarSearch");if(input)input.value="";
+  document.getElementById("employeeSidebarResults")?.classList.add("hidden");
+  openEmployeeDetail(employeeId);
 }
 async function ensurePortalSearchData(){
   if(portalSearchLoading)return portalSearchLoading;
