@@ -26,7 +26,7 @@ router = APIRouter(dependencies=[Depends(current_user)])
 # Sous-domaines déjà utilisés par des modules internes ou réservés — un client ne peut
 # pas se voir attribuer l'un de ces slugs pour son portail dédié.
 RESERVED_PORTAL_SLUGS = {
-    "drh", "ops", "materiel", "finances", "comptabilite", "compta", "facturation", "fac",
+    "drh", "rh", "ops", "materiel", "finances", "comptabilite", "compta", "facturation", "fac",
     "commercial", "dc", "agenda", "paie", "conges", "recrute", "pointage", "pointeur",
     "portail-rh", "cheque", "atlas", "www", "sgdi", "administrateur", "general",
     "sup", "superviseur", "supervisor", "finance", "secretariat", "admin",
