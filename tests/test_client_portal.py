@@ -225,6 +225,21 @@ def test_client_can_create_site_with_positions_and_group_staffing(client, auth_h
     agent_position = next(position for position in site["position_requirements"] if position["name"] == "Agent de sécurité")
     assert agent_position == {"name": "Agent de sécurité", "assigned": 0, "required": 8, "remaining": 8}
 
+    updated = client.put(f"/api/client-portal/sites/{site['id']}", headers=portal_headers, json={
+        "name": "Site configuré modifié", "required_staff": 6,
+        "positions": [{"name": "Agent de sécurité", "required": 6}],
+        "group_quotas": {"A": 3, "B": 3},
+    })
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "Site configuré modifié"
+    assert updated.json()["required_staff"] == 6
+    assert next(group for group in updated.json()["groups"] if group["code"] == "B")["quota"] == 3
+
+    archived = client.delete(f"/api/client-portal/sites/{site['id']}", headers=portal_headers)
+    assert archived.status_code == 204, archived.text
+    remaining = client.get("/api/client-portal/sites", headers=portal_headers)
+    assert all(item["id"] != site["id"] for item in remaining.json())
+
 
 def test_client_can_submit_employee_action_request_with_attachment(client, auth_headers, monkeypatch, tmp_path):
     from app.modules.client_portal import routes

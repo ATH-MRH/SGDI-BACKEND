@@ -288,6 +288,33 @@ def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, An
     return next(item for item in visible_sites_for_client(db, client_id) if item["id"] == site.id)
 
 
+def update_site_for_client(db: Session, client_id: int, site_id: int, payload) -> dict[str, Any]:
+    site = db.get(Site, site_id)
+    if not site or site.client_id != client_id or site.active != 1:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    position_quotas = {position.name: position.required for position in payload.positions}
+    site.name = payload.name
+    site.address = payload.address
+    site.commune = payload.commune
+    site.wilaya = payload.wilaya
+    site.site_type = payload.site_type
+    site.contractual_staff = payload.required_staff or sum(position_quotas.values())
+    plan = dict(site.equipment_plan) if isinstance(site.equipment_plan, dict) else {}
+    plan["positionQuotas"] = position_quotas
+    plan["groupQuotas"] = payload.group_quotas
+    site.equipment_plan = plan
+    db.commit()
+    return next(item for item in visible_sites_for_client(db, client_id) if item["id"] == site.id)
+
+
+def archive_site_for_client(db: Session, client_id: int, site_id: int) -> None:
+    site = db.get(Site, site_id)
+    if not site or site.client_id != client_id or site.active != 1:
+        raise HTTPException(status_code=404, detail="Site introuvable")
+    site.active = 0
+    db.commit()
+
+
 # État réel de l'article (voir sgdi-app.js "etatArticle") -> libellé/couleur affichés au client.
 # "remboursé"/"perdu" côté dotation employé signifient que l'article n'est plus en dotation
 # active : ces lignes ne sont de toute façon jamais remontées ici (filtrées par statut "attribue").

@@ -207,6 +207,7 @@ tr:last-child td{border-bottom:0}
 .cat-item.checked{border-color:var(--blue);background:#eff6ff}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .site-config-section{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:13px;background:#f8fafc}.site-config-section h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.05em}.site-config-section p{margin:4px 0 10px;font-size:11px;color:var(--muted)}.site-position-row{display:grid;grid-template-columns:minmax(0,1fr) 105px 34px;gap:7px;align-items:end;margin-top:7px}.site-position-row label{margin:0}.site-position-remove{height:40px;border:1px solid #fecdd3;border-radius:9px;background:#fff1f2;color:#be123c;font-weight:900;cursor:pointer}.site-groups-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.site-groups-grid label{margin:0}.site-groups-grid input{text-align:center;font-weight:850}
+.site-config-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:17px 0}.site-config-tab{border:1px solid var(--line);border-radius:11px;background:#fff;color:#31465f;padding:11px;font-weight:900;cursor:pointer}.site-config-tab.active{background:#ffcc00;border-color:#e6b800;color:#10243e;box-shadow:0 6px 15px rgba(176,132,0,.2)}.site-delete-panel{padding:22px;border:1px solid #fecaca;border-radius:14px;background:#fff7f7}.site-delete-panel h3{margin:0;color:#991b1b}.site-delete-panel p{font-size:12px;color:#64748b;line-height:1.5}
 @media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}.employee-profile{grid-template-columns:1fr}.employee-identity-panel{border-right:0;border-bottom:1px solid #e5ebf2}.employee-profile-photo{width:110px;height:130px;margin-left:0}.employee-detail-grid{grid-template-columns:1fr}.employee-profile-metrics{grid-template-columns:repeat(2,1fr)}.employee-profile-observations{align-items:flex-start;flex-direction:column}.employee-profile-actions button{flex:1;min-width:120px}body.iron-portal .brand{gap:10px}body.iron-portal .brand-logo{width:140px;height:56px}body.iron-portal .brand-title{font-size:14px}}
 </style>
 </head>
@@ -402,6 +403,9 @@ tr:last-child td{border-bottom:0}
 <div id="siteModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeSiteModal()">
   <div class="modal" style="max-width:980px">
     <div class="modal-head"><div><h2>Configurer un site</h2><div class="modal-sub">Créez le site et définissez son organisation opérationnelle.</div></div><button type="button" class="modal-close" onclick="closeSiteModal()">×</button></div>
+    <div class="site-config-tabs"><button type="button" class="site-config-tab active" data-site-mode="create" onclick="setSiteConfigMode('create')">Créer site</button><button type="button" class="site-config-tab" data-site-mode="edit" onclick="setSiteConfigMode('edit')">Modifier site</button><button type="button" class="site-config-tab" data-site-mode="delete" onclick="setSiteConfigMode('delete')">Supprimer site</button></div>
+    <div id="siteExistingSelector" class="hidden"><label for="siteExistingSelect">Site concerné</label><select id="siteExistingSelect" onchange="loadSelectedSiteConfiguration()"><option value="">— Choisir un site —</option></select></div>
+    <div id="siteConfigFields">
     <label for="siteName">Nom du site</label>
     <input id="siteName" placeholder="Entrepôt Oued Smar">
     <label for="siteType">Type de site</label>
@@ -416,10 +420,12 @@ tr:last-child td{border-bottom:0}
     <input id="siteRequiredStaff" type="number" min="0" step="1" value="0">
     <div class="site-config-section"><h3>Postes / fonctions</h3><p>Ajoutez chaque poste et le nombre d’employés requis.</p><div id="sitePositionsList"></div><button type="button" class="secondary" style="margin-top:10px" onclick="addSitePositionRow()">+ Ajouter un poste</button></div>
     <div class="site-config-section"><h3>Effectif par groupe</h3><p>Définissez le nombre d’employés prévu dans chaque groupe.</p><div class="site-groups-grid"><label>Groupe A<input class="site-group-quota" data-group="A" type="number" min="0" step="1" value="0"></label><label>Groupe B<input class="site-group-quota" data-group="B" type="number" min="0" step="1" value="0"></label><label>Groupe C<input class="site-group-quota" data-group="C" type="number" min="0" step="1" value="0"></label><label>Groupe D<input class="site-group-quota" data-group="D" type="number" min="0" step="1" value="0"></label><label>Groupe E<input class="site-group-quota" data-group="E" type="number" min="0" step="1" value="0"></label><label>Groupe F<input class="site-group-quota" data-group="F" type="number" min="0" step="1" value="0"></label></div></div>
+    </div>
+    <div id="siteDeletePanel" class="site-delete-panel hidden"><h3>Supprimer le site sélectionné</h3><p>Le site sera archivé dans ATLAS afin de conserver son historique. Il ne sera plus affiché dans votre espace client.</p></div>
     <div id="siteError" class="error"></div>
     <div class="modal-actions">
       <button type="button" class="secondary" onclick="closeSiteModal()">Annuler</button>
-      <button type="button" class="primary" id="siteSubmitBtn" onclick="submitSite()">Enregistrer</button>
+      <button type="button" class="primary" id="siteSubmitBtn" onclick="submitSite()">Créer le site</button>
     </div>
   </div>
 </div>
@@ -835,7 +841,8 @@ async function updateEmployeeGroup(employeeId,groupCode){
   }
 }
 
-function openSiteModal(){
+let siteConfigMode="create";
+function resetSiteConfigFields(){
   document.getElementById("siteName").value="";
   document.getElementById("siteType").value="";
   document.getElementById("siteAddress").value="";
@@ -845,8 +852,43 @@ function openSiteModal(){
   document.getElementById("sitePositionsList").innerHTML="";
   document.querySelectorAll(".site-group-quota").forEach(input=>input.value="0");
   addSitePositionRow();
+}
+function openSiteModal(){
+  const select=document.getElementById("siteExistingSelect");
+  select.innerHTML='<option value="">— Choisir un site —</option>'+sitesCache.map(site=>`<option value="${site.id}">${esc(site.name)}</option>`).join("");
+  setSiteConfigMode("create");
   document.getElementById("siteError").classList.remove("show");
   document.getElementById("siteModalBackdrop").classList.remove("hidden");
+}
+function setSiteConfigMode(mode){
+  siteConfigMode=mode;
+  document.querySelectorAll(".site-config-tab").forEach(button=>button.classList.toggle("active",button.dataset.siteMode===mode));
+  document.getElementById("siteExistingSelector").classList.toggle("hidden",mode==="create");
+  document.getElementById("siteConfigFields").classList.toggle("hidden",mode==="delete");
+  document.getElementById("siteDeletePanel").classList.toggle("hidden",mode!=="delete");
+  const select=document.getElementById("siteExistingSelect");select.value="";
+  const submit=document.getElementById("siteSubmitBtn");
+  submit.textContent=mode==="create"?"Créer le site":mode==="edit"?"Enregistrer les modifications":"Supprimer le site";
+  submit.classList.toggle("danger-action",mode==="delete");
+  submit.disabled=mode!=="create";
+  resetSiteConfigFields();
+  document.getElementById("siteError").classList.remove("show");
+}
+function loadSelectedSiteConfiguration(){
+  const id=Number(document.getElementById("siteExistingSelect").value);
+  const site=sitesCache.find(item=>Number(item.id)===id);
+  const submit=document.getElementById("siteSubmitBtn");submit.disabled=!site;
+  if(!site||siteConfigMode==="delete")return;
+  document.getElementById("siteName").value=site.name||"";
+  document.getElementById("siteType").value=site.site_type||"";
+  document.getElementById("siteAddress").value=site.address||"";
+  document.getElementById("siteCommune").value=site.commune||"";
+  document.getElementById("siteWilaya").value=site.wilaya||"";
+  document.getElementById("siteRequiredStaff").value=Number(site.required_staff)||0;
+  document.getElementById("sitePositionsList").innerHTML="";
+  (site.position_requirements||[]).forEach(position=>addSitePositionRow(position.name,position.required));
+  if(!(site.position_requirements||[]).length)addSitePositionRow();
+  document.querySelectorAll(".site-group-quota").forEach(input=>{const group=(site.groups||[]).find(item=>item.code===input.dataset.group);input.value=Number(group?.quota)||0});
 }
 function addSitePositionRow(name="",required=0){
   const host=document.getElementById("sitePositionsList");
@@ -860,6 +902,15 @@ function closeSiteModal(){
 async function submitSite(){
   const errorEl=document.getElementById("siteError");
   errorEl.classList.remove("show");
+  const selectedSiteId=Number(document.getElementById("siteExistingSelect").value);
+  if(siteConfigMode!=="create"&&!selectedSiteId){errorEl.textContent="Veuillez choisir un site.";errorEl.classList.add("show");return}
+  if(siteConfigMode==="delete"){
+    const site=sitesCache.find(item=>Number(item.id)===selectedSiteId);
+    if(!confirm(`Supprimer le site « ${site?.name||"sélectionné"} » ? Il sera archivé dans ATLAS.`))return;
+    const btn=document.getElementById("siteSubmitBtn");btn.disabled=true;btn.textContent="Suppression…";
+    try{await apiFetch(`/sites/${selectedSiteId}`,{method:"DELETE"});closeSiteModal();showBanner("Site supprimé et archivé dans ATLAS.","success");await loadSites()}catch(error){errorEl.textContent=error.message||"Impossible de supprimer ce site.";errorEl.classList.add("show")}finally{btn.disabled=false;btn.textContent="Supprimer le site"}
+    return;
+  }
   const name=document.getElementById("siteName").value.trim();
   if(name.length<2){errorEl.textContent="Le nom du site est requis.";errorEl.classList.add("show");return}
   const positions=[...document.querySelectorAll(".site-position-row")].map(row=>({name:row.querySelector(".site-position-name").value.trim(),required:parseInt(row.querySelector(".site-position-required").value,10)||0})).filter(position=>position.name);
@@ -869,7 +920,7 @@ async function submitSite(){
   const btn=document.getElementById("siteSubmitBtn");
   btn.disabled=true;btn.textContent="Enregistrement…";
   try{
-    await apiFetch("/sites",{method:"POST",body:JSON.stringify({
+    await apiFetch(siteConfigMode==="edit"?`/sites/${selectedSiteId}`:"/sites",{method:siteConfigMode==="edit"?"PUT":"POST",body:JSON.stringify({
       name,
       site_type:document.getElementById("siteType").value.trim()||null,
       address:document.getElementById("siteAddress").value.trim()||null,
@@ -880,13 +931,13 @@ async function submitSite(){
       group_quotas,
     })});
     closeSiteModal();
-    showBanner("Site et organisation opérationnelle créés.","success");
+    showBanner(siteConfigMode==="edit"?"Configuration du site mise à jour.":"Site et organisation opérationnelle créés.","success");
     loadSites();
   }catch(error){
-    errorEl.textContent=error.message||"Impossible d’ajouter ce site.";
+    errorEl.textContent=error.message||(siteConfigMode==="edit"?"Impossible de modifier ce site.":"Impossible d’ajouter ce site.");
     errorEl.classList.add("show");
   }finally{
-    btn.disabled=false;btn.textContent="Enregistrer";
+    btn.disabled=false;btn.textContent=siteConfigMode==="edit"?"Enregistrer les modifications":"Créer le site";
   }
 }
 

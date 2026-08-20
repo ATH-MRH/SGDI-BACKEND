@@ -202,6 +202,27 @@ def create_site(
     return service.create_site_for_client(db, user.client_id, payload)
 
 
+@router.put("/sites/{site_id}", response_model=SiteVisibleOut)
+def update_site(
+    site_id: int,
+    payload: SiteCreateIn,
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "create_sites")
+    return service.update_site_for_client(db, user.client_id, site_id, payload)
+
+
+@router.delete("/sites/{site_id}", status_code=status.HTTP_204_NO_CONTENT)
+def archive_site(
+    site_id: int,
+    db: Session = Depends(get_db),
+    user: ClientPortalUser = Depends(current_client_user),
+):
+    _require_client_permission(db, user, "create_sites")
+    service.archive_site_for_client(db, user.client_id, site_id)
+
+
 @router.put("/sites/{site_id}/groups", response_model=SiteVisibleOut)
 def update_site_group_quotas(
     site_id: int,
