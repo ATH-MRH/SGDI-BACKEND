@@ -146,7 +146,9 @@ tr:last-child td{border-bottom:0}
 .function-stat+.function-stat{border-left:1px solid #f1b5bb}
 .function-stat strong{display:block;margin-top:2px;font-size:12px;line-height:1;font-weight:500}
 .group-counter:hover,.group-counter[aria-pressed="true"]{border-color:#c8102e;box-shadow:0 0 0 2px rgba(200,16,46,.12)}
-.function-counters{margin-bottom:8px}
+.function-counters{grid-template-columns:repeat(auto-fill,118px);align-items:stretch;margin-bottom:8px}
+.function-counters .group-counter.function{width:118px}
+@media(max-width:600px){.function-counters{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}.function-counters .group-counter.function{width:100%}}
 .gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
 .gc-assigned{font-size:18px;font-weight:900;margin-top:2px;line-height:1}
 .gc-quota-row{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;font-size:10px;color:var(--muted)}
