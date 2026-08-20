@@ -95,6 +95,43 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 .link-btn{border:0;background:none;color:#123f6f;font-weight:800;font-size:11.5px;cursor:pointer;padding:5px 6px}
 .link-btn.danger{color:#c8102e}
 
+/* ── Contrats : vue scindée liste + détail ──────────────────────────────── */
+.contract-workspace{display:flex;border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(9,30,57,.06);background:light-dark(#fff,#111b29);min-height:640px}
+.contract-list-pane{width:360px;flex:0 0 auto;border-right:1px solid light-dark(#eef2f7,#1b2635);display:flex;flex-direction:column;background:light-dark(#fbfcfe,#0d1725)}
+.contract-list-head{padding:16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid light-dark(#eef2f7,#1b2635)}
+.contract-list-head .search-box input{height:38px}
+.contract-list-head select.filter{width:100%}
+.contract-rows{flex:1;overflow-y:auto;padding:8px}
+.contract-row{display:flex;align-items:center;gap:11px;padding:12px;border-radius:12px;cursor:pointer}
+.contract-row:hover{background:light-dark(#eef3f9,#182535)}
+.contract-row.active{background:#123f6f}
+.contract-row-avatar{width:36px;height:36px;border-radius:10px;background:light-dark(#eaf1fb,#182535);color:#123f6f;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex:0 0 auto}
+.contract-row.active .contract-row-avatar{background:rgba(255,255,255,.18);color:#fff}
+.contract-row-name{font-size:13px;font-weight:800}
+.contract-row.active .contract-row-name{color:#fff}
+.contract-row-meta{font-size:11px;color:light-dark(#8798ac,#8ea2b7);margin-top:2px;display:flex;align-items:center;gap:6px}
+.contract-row.active .contract-row-meta{color:#c3d3e8}
+.contract-row-dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+.contract-detail-pane{flex:1;padding:36px 44px;overflow-y:auto}
+.contract-detail-eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:light-dark(#8798ac,#8ea2b7)}
+.contract-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-top:8px}
+.contract-detail-name{font-size:24px;font-weight:900;letter-spacing:-.015em}
+.contract-detail-role{font-size:13px;color:light-dark(#64748b,#8ea2b7);margin-top:6px;font-weight:600}
+.contract-detail-actions{display:flex;gap:8px}
+.contract-detail-section{margin-top:32px}
+.contract-detail-section h3{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:light-dark(#8798ac,#8ea2b7);margin:0}
+.prop-list{margin-top:12px}
+.prop-row{display:flex;align-items:center;padding:13px 0;border-bottom:1px solid light-dark(#eef2f7,#1b2635)}
+.prop-row:last-child{border-bottom:0}
+.prop-key{width:200px;flex:0 0 auto;font-size:12.5px;font-weight:700;color:light-dark(#7c8ba0,#8ea2b7)}
+.prop-val{font-size:14px;font-weight:700}
+.prop-val.figure{font-size:18px;font-weight:900;color:#123f6f}
+.contract-timeline-track{position:relative;height:5px;border-radius:999px;background:light-dark(#eef1f5,#1b2635);margin-top:14px}
+.contract-timeline-fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:#123f6f}
+.contract-timeline-fill::after{content:"";position:absolute;right:-1px;top:50%;transform:translateY(-50%);width:11px;height:11px;border-radius:50%;background:light-dark(#fff,#111b29);border:3px solid #123f6f}
+.contract-timeline-labels{display:flex;justify-content:space-between;margin-top:10px;font-size:11.5px;color:light-dark(#7c8ba0,#8ea2b7);font-weight:600}
+.contract-timeline-labels b{color:inherit;font-weight:800;color:light-dark(#1a2c44,#eef4fa)}
+
 .modal-backdrop{position:fixed;inset:0;background:rgba(9,20,36,.5);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;z-index:50}
 .modal{width:100%;max-width:760px;background:light-dark(#fff,#111b29);border-radius:20px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.32)}
 .modal.wide{max-width:920px}
@@ -178,12 +215,17 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 
       <section id="contratsSection" class="hidden">
         <div class="section-head"><div><h1>Contrats</h1><p>Contrats de travail rattachés aux agents.</p></div><button class="btn primary" onclick="openContractModal(null)">+ Nouveau contrat</button></div>
-        <div class="toolbar">
-          <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="contratsSearch" placeholder="Rechercher un contrat (agent, poste, type)…" oninput="filterContrats()"></div>
-          <select id="contratsStatusFilter" class="filter" onchange="filterContrats()"><option value="">Tous les statuts</option><option value="actif">Actif</option><option value="termine">Terminé</option><option value="rompu">Rompu</option></select>
-        </div>
-        <div class="table-card">
-          <div id="contratsList"><div class="empty">Chargement…</div></div>
+        <div class="contract-workspace">
+          <aside class="contract-list-pane">
+            <div class="contract-list-head">
+              <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="contratsSearch" placeholder="Rechercher (agent, poste, type)…" oninput="filterContrats()"></div>
+              <select id="contratsStatusFilter" class="filter" onchange="filterContrats()"><option value="">Tous les statuts</option><option value="actif">Actif</option><option value="termine">Terminé</option><option value="rompu">Rompu</option></select>
+            </div>
+            <div id="contratsList" class="contract-rows"><div class="empty">Chargement…</div></div>
+          </aside>
+          <main id="contractDetailPane" class="contract-detail-pane">
+            <div class="empty">Choisissez un contrat dans la liste pour afficher son détail.</div>
+          </main>
         </div>
       </section>
 
@@ -573,8 +615,12 @@ async function renderFicheTab(employeeId){
 
 /* ── Contrats ────────────────────────────────────────────────────────────── */
 
+let selectedContractId=null;
+const CONTRACT_STATUS_PILL={actif:"pill-green",termine:"pill-gray",rompu:"pill-red"};
+const CONTRACT_STATUS_DOT={actif:"#2f9e5f",termine:"#94a3b8",rompu:"#c8102e"};
+
 async function loadContrats(){
-  if(!employeesCache.length){try{const r=await apiFetch("/api/drh/employees/page?page=1&page_size=200"+(activeSociety?`&society=${encodeURIComponent(activeSociety)}`:""));employeesCache=r.items||[]}catch(e){}}
+  if(!employeesCache.length){try{const r=await apiFetch("/api/drh/employees/page?mode=all&page=1&page_size=200"+(activeSociety?`&society=${encodeURIComponent(activeSociety)}`:""));employeesCache=r.items||[]}catch(e){}}
   const host=document.getElementById("contratsList");
   host.innerHTML='<div class="empty">Chargement…</div>';
   try{
@@ -593,19 +639,72 @@ function filterContrats(){
     const matchesStatus=!status||c.status===status;
     return matchesQ&&matchesStatus;
   });
-  if(!rows.length){host.innerHTML='<div class="empty">Aucun contrat.</div>';return}
-  const statusPill={actif:"pill-green",termine:"pill-gray",rompu:"pill-red"};
-  host.innerHTML=`<table><thead><tr><th>Agent</th><th>Type</th><th>Poste</th><th>Début</th><th>Fin</th><th>Salaire</th><th>Statut</th><th></th></tr></thead><tbody>${rows.map(c=>`
-    <tr>
-      <td class="cell-strong">${c._employee?esc(`${c._employee.last_name} ${c._employee.first_name}`):"Agent #"+c.employee_id}</td>
-      <td>${esc(c.contract_type||"—")}</td>
-      <td>${esc(c.position||"—")}</td>
-      <td>${fmtDate(c.start_date)}</td>
-      <td>${fmtDate(c.end_date)}</td>
-      <td>${fmtMoney(c.salary_net)} DA</td>
-      <td><span class="pill ${statusPill[c.status]||"pill-gray"}">${esc(c.status||"—")}</span></td>
-      <td class="row-actions"><button class="link-btn" onclick="openContractModal(${c.id})">Modifier</button></td>
-    </tr>`).join("")}</tbody></table>`;
+  if(!rows.length){
+    host.innerHTML='<div class="empty">Aucun contrat.</div>';
+    selectedContractId=null;
+    renderContractDetail(null);
+    return;
+  }
+  if(!rows.some(c=>c.id===selectedContractId))selectedContractId=rows[0].id;
+  host.innerHTML=rows.map(c=>{
+    const name=c._employee?`${c._employee.last_name} ${c._employee.first_name}`:"Agent #"+c.employee_id;
+    const initials=c._employee?((c._employee.first_name||"?")[0]+(c._employee.last_name||"?")[0]).toUpperCase():"?";
+    const active=c.id===selectedContractId;
+    return `<div class="contract-row ${active?"active":""}" onclick="selectContract(${c.id})">
+      <div class="contract-row-avatar">${esc(initials)}</div>
+      <div><div class="contract-row-name">${esc(name)}</div><div class="contract-row-meta"><span class="contract-row-dot" style="background:${CONTRACT_STATUS_DOT[c.status]||"#94a3b8"}"></span>${esc(c.contract_type||"—")} · ${esc(c.position||"—")}</div></div>
+    </div>`;
+  }).join("");
+  renderContractDetail(contratsCache.find(c=>c.id===selectedContractId));
+}
+function selectContract(contractId){
+  selectedContractId=contractId;
+  filterContrats();
+}
+function renderContractDetail(c){
+  const host=document.getElementById("contractDetailPane");
+  if(!c){host.innerHTML='<div class="empty">Choisissez un contrat dans la liste pour afficher son détail.</div>';return}
+  const name=c._employee?`${c._employee.last_name} ${c._employee.first_name}`:"Agent #"+c.employee_id;
+  const roleLine=[c._employee?.code,c._employee?.society].filter(Boolean).join(" · ");
+  let ancienneteRow="";
+  let timelineHtml="";
+  if(c.start_date){
+    const start=new Date(c.start_date+"T00:00:00");
+    const now=new Date();
+    const days=Math.max(0,Math.round((now-start)/(1000*60*60*24)));
+    ancienneteRow=`<div class="prop-row"><div class="prop-key">Ancienneté</div><div class="prop-val">${days} jour${days>1?"s":""}</div></div>`;
+    if(c.end_date){
+      const end=new Date(c.end_date+"T00:00:00");
+      const pct=Math.min(100,Math.max(0,Math.round((now-start)/(end-start)*100)));
+      timelineHtml=`<div class="contract-detail-section">
+        <h3>Chronologie</h3>
+        <div class="contract-timeline-track"><div class="contract-timeline-fill" style="width:${pct}%"></div></div>
+        <div class="contract-timeline-labels"><b>${fmtDate(c.start_date)}</b><span>${pct}% écoulé</span><b>${fmtDate(c.end_date)}</b></div>
+      </div>`;
+    }
+  }
+  host.innerHTML=`
+    <div class="contract-detail-eyebrow">Contrat · #${c.id}</div>
+    <div class="contract-detail-head">
+      <div><div class="contract-detail-name">${esc(name)}</div><div class="contract-detail-role">${esc(c.position||"Poste non renseigné")}${roleLine?" · "+esc(roleLine):""}</div></div>
+      <div class="contract-detail-actions">
+        <span class="pill ${CONTRACT_STATUS_PILL[c.status]||"pill-gray"}">${esc(c.status||"—")}</span>
+        <button class="btn" onclick="openContractModal(${c.id})">Modifier</button>
+      </div>
+    </div>
+    <div class="contract-detail-section">
+      <h3>Informations contractuelles</h3>
+      <div class="prop-list">
+        <div class="prop-row"><div class="prop-key">Type de contrat</div><div class="prop-val">${esc(c.contract_type||"—")}</div></div>
+        <div class="prop-row"><div class="prop-key">Poste</div><div class="prop-val">${esc(c.position||"—")}</div></div>
+        <div class="prop-row"><div class="prop-key">Salaire net</div><div class="prop-val figure">${fmtMoney(c.salary_net)} DA</div></div>
+        <div class="prop-row"><div class="prop-key">Date de début</div><div class="prop-val">${fmtDate(c.start_date)}</div></div>
+        <div class="prop-row"><div class="prop-key">Date de fin</div><div class="prop-val">${c.end_date?fmtDate(c.end_date):"— (sans date de fin)"}</div></div>
+        <div class="prop-row"><div class="prop-key">Fin de période d'essai</div><div class="prop-val">${c.trial_end_date?fmtDate(c.trial_end_date):"—"}</div></div>
+        ${ancienneteRow}
+      </div>
+    </div>
+    ${timelineHtml}`;
 }
 async function openContractModal(contractId){
   document.getElementById("contractModalTitle").textContent=contractId?"Contrat":"Nouveau contrat";
