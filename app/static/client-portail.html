@@ -206,6 +206,7 @@ tr:last-child td{border-bottom:0}
 .cat-item input{width:auto;height:auto}
 .cat-item.checked{border-color:var(--blue);background:#eff6ff}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.site-config-section{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:13px;background:#f8fafc}.site-config-section h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.05em}.site-config-section p{margin:4px 0 10px;font-size:11px;color:var(--muted)}.site-position-row{display:grid;grid-template-columns:minmax(0,1fr) 105px 34px;gap:7px;align-items:end;margin-top:7px}.site-position-row label{margin:0}.site-position-remove{height:40px;border:1px solid #fecdd3;border-radius:9px;background:#fff1f2;color:#be123c;font-weight:900;cursor:pointer}.site-groups-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.site-groups-grid label{margin:0}.site-groups-grid input{text-align:center;font-weight:850}
 @media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}.employee-profile{grid-template-columns:1fr}.employee-identity-panel{border-right:0;border-bottom:1px solid #e5ebf2}.employee-profile-photo{width:110px;height:130px;margin-left:0}.employee-detail-grid{grid-template-columns:1fr}.employee-profile-metrics{grid-template-columns:repeat(2,1fr)}.employee-profile-observations{align-items:flex-start;flex-direction:column}.employee-profile-actions button{flex:1;min-width:120px}body.iron-portal .brand{gap:10px}body.iron-portal .brand-logo{width:140px;height:56px}body.iron-portal .brand-title{font-size:14px}}
 </style>
 </head>
@@ -399,8 +400,8 @@ tr:last-child td{border-bottom:0}
 </div>
 
 <div id="siteModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeSiteModal()">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-head"><h2>Ajouter un site</h2><button type="button" class="modal-close" onclick="closeSiteModal()">×</button></div>
+  <div class="modal" style="max-width:720px">
+    <div class="modal-head"><div><h2>Configurer un site</h2><div class="modal-sub">Créez le site et définissez son organisation opérationnelle.</div></div><button type="button" class="modal-close" onclick="closeSiteModal()">×</button></div>
     <label for="siteName">Nom du site</label>
     <input id="siteName" placeholder="Entrepôt Oued Smar">
     <label for="siteType">Type de site</label>
@@ -413,6 +414,8 @@ tr:last-child td{border-bottom:0}
     <input id="siteWilaya">
     <label for="siteRequiredStaff">Effectif requis</label>
     <input id="siteRequiredStaff" type="number" min="0" step="1" value="0">
+    <div class="site-config-section"><h3>Postes / fonctions</h3><p>Ajoutez chaque poste et le nombre d’employés requis.</p><div id="sitePositionsList"></div><button type="button" class="secondary" style="margin-top:10px" onclick="addSitePositionRow()">+ Ajouter un poste</button></div>
+    <div class="site-config-section"><h3>Effectif par groupe</h3><p>Définissez le nombre d’employés prévu dans chaque groupe.</p><div class="site-groups-grid"><label>Groupe A<input class="site-group-quota" data-group="A" type="number" min="0" step="1" value="0"></label><label>Groupe B<input class="site-group-quota" data-group="B" type="number" min="0" step="1" value="0"></label><label>Groupe C<input class="site-group-quota" data-group="C" type="number" min="0" step="1" value="0"></label><label>Groupe D<input class="site-group-quota" data-group="D" type="number" min="0" step="1" value="0"></label><label>Groupe E<input class="site-group-quota" data-group="E" type="number" min="0" step="1" value="0"></label><label>Groupe F<input class="site-group-quota" data-group="F" type="number" min="0" step="1" value="0"></label></div></div>
     <div id="siteError" class="error"></div>
     <div class="modal-actions">
       <button type="button" class="secondary" onclick="closeSiteModal()">Annuler</button>
@@ -759,10 +762,9 @@ async function loadSites(){
       const addressParts=[s.address,s.commune,s.wilaya].filter(Boolean).join(", ");
       const groups=s.groups||[];
       const totalAssigned=actual;
-      const positionMap=(s.employees||[]).reduce((map,e)=>{const label=String(e.position||"Fonction non renseignée").trim()||"Fonction non renseignée",key=label.toLocaleLowerCase("fr");if(!map.has(key))map.set(key,{label,count:0});map.get(key).count+=1;return map},new Map());
-      const positionCounts=[...positionMap.values()].sort((a,b)=>a.label.localeCompare(b.label,"fr"));
+      const positionCounts=(s.position_requirements||[]).map(position=>({label:position.name,count:Number(position.assigned)||0,required:Number(position.required)||0,remaining:Number(position.remaining)||0}));
       const groupOptionsHtml=code=>`<option value="" ${!code?"selected":""}>Aucun</option>`+groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
-      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Effectifs par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="gc-quota-row">agent${p.count>1?"s":""}</div></button>`).join("")}</div></div>`:"";
+      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Effectifs par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="gc-quota-row">requis <b>${p.required}</b></div><div class="gc-remaining">${p.remaining} restant${p.remaining>1?"s":""}</div></button>`).join("")}</div></div>`:"";
       const countersHtml=groups.length?`<div class="group-counters"><button type="button" class="group-counter total" aria-pressed="false" onclick="filterSiteEmployees(this,'all','')">
           <div class="gc-code">Effectif total</div>
           <div class="gc-assigned">${totalAssigned}</div>
@@ -840,8 +842,17 @@ function openSiteModal(){
   document.getElementById("siteCommune").value="";
   document.getElementById("siteWilaya").value="";
   document.getElementById("siteRequiredStaff").value="0";
+  document.getElementById("sitePositionsList").innerHTML="";
+  document.querySelectorAll(".site-group-quota").forEach(input=>input.value="0");
+  addSitePositionRow();
   document.getElementById("siteError").classList.remove("show");
   document.getElementById("siteModalBackdrop").classList.remove("hidden");
+}
+function addSitePositionRow(name="",required=0){
+  const host=document.getElementById("sitePositionsList");
+  const row=document.createElement("div");row.className="site-position-row";
+  row.innerHTML=`<label>Poste / fonction<input class="site-position-name" placeholder="Ex. Agent de sécurité" value="${esc(name)}"></label><label>Nombre requis<input class="site-position-required" type="number" min="0" step="1" value="${Number(required)||0}"></label><button type="button" class="site-position-remove" title="Supprimer ce poste" onclick="this.closest('.site-position-row').remove()">×</button>`;
+  host.appendChild(row);
 }
 function closeSiteModal(){
   document.getElementById("siteModalBackdrop").classList.add("hidden");
@@ -851,6 +862,10 @@ async function submitSite(){
   errorEl.classList.remove("show");
   const name=document.getElementById("siteName").value.trim();
   if(name.length<2){errorEl.textContent="Le nom du site est requis.";errorEl.classList.add("show");return}
+  const positions=[...document.querySelectorAll(".site-position-row")].map(row=>({name:row.querySelector(".site-position-name").value.trim(),required:parseInt(row.querySelector(".site-position-required").value,10)||0})).filter(position=>position.name);
+  const invalidPosition=[...document.querySelectorAll(".site-position-name")].some(input=>input.value.trim()&&input.value.trim().length<2);
+  if(invalidPosition){errorEl.textContent="Chaque poste doit avoir un nom valide.";errorEl.classList.add("show");return}
+  const group_quotas=Object.fromEntries([...document.querySelectorAll(".site-group-quota")].map(input=>[input.dataset.group,parseInt(input.value,10)||0]));
   const btn=document.getElementById("siteSubmitBtn");
   btn.disabled=true;btn.textContent="Enregistrement…";
   try{
@@ -861,9 +876,11 @@ async function submitSite(){
       commune:document.getElementById("siteCommune").value.trim()||null,
       wilaya:document.getElementById("siteWilaya").value.trim()||null,
       required_staff:parseInt(document.getElementById("siteRequiredStaff").value,10)||0,
+      positions,
+      group_quotas,
     })});
     closeSiteModal();
-    showBanner("Site ajouté.","success");
+    showBanner("Site et organisation opérationnelle créés.","success");
     loadSites();
   }catch(error){
     errorEl.textContent=error.message||"Impossible d’ajouter ce site.";

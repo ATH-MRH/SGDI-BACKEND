@@ -119,6 +119,13 @@ class SiteGroupOut(BaseModel):
     remaining: int
 
 
+class SitePositionRequirementOut(BaseModel):
+    name: str
+    assigned: int
+    required: int
+    remaining: int
+
+
 class SiteVisibleOut(BaseModel):
     id: int
     name: str
@@ -130,6 +137,7 @@ class SiteVisibleOut(BaseModel):
     actual_staff: int
     employees: list[SiteEmployeeOut] = []
     groups: list[SiteGroupOut] = []
+    position_requirements: list[SitePositionRequirementOut] = []
 
     model_config = {"from_attributes": True}
 
@@ -170,6 +178,24 @@ class EquipmentVisibleOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SitePositionRequirementIn(BaseModel):
+    name: str
+    required: int = 0
+
+    @field_validator("name")
+    @classmethod
+    def _valid_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) < 2:
+            raise ValueError("Le nom du poste est requis")
+        return cleaned
+
+    @field_validator("required")
+    @classmethod
+    def _valid_required(cls, value: int) -> int:
+        return max(0, value or 0)
+
+
 class SiteCreateIn(BaseModel):
     name: str
     address: str | None = None
@@ -177,6 +203,8 @@ class SiteCreateIn(BaseModel):
     wilaya: str | None = None
     site_type: str | None = None
     required_staff: int = 0
+    positions: list[SitePositionRequirementIn] = Field(default_factory=list)
+    group_quotas: dict[str, int] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -190,6 +218,19 @@ class SiteCreateIn(BaseModel):
     @classmethod
     def _non_negative_staff(cls, value: int) -> int:
         return max(0, value or 0)
+
+    @field_validator("group_quotas")
+    @classmethod
+    def _valid_group_quotas(cls, value: dict[str, int]) -> dict[str, int]:
+        cleaned: dict[str, int] = {}
+        for key, val in value.items():
+            code = str(key).strip().upper()
+            if code not in GROUP_LETTERS:
+                raise ValueError(f"Groupe invalide : {key}")
+            if val is None or val < 0:
+                raise ValueError("Le nombre d’employés par groupe doit être positif ou nul")
+            cleaned[code] = int(val)
+        return cleaned
 
 
 class EquipmentCatalogOut(BaseModel):

@@ -144,6 +144,24 @@ def _site_groups_payload(site: Site, site_employees: list[dict[str, Any]]) -> li
     ]
 
 
+def _site_position_requirements_payload(site: Site, site_employees: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
+    configured = plan.get("positionQuotas") if isinstance(plan.get("positionQuotas"), dict) else {}
+    positions: dict[str, dict[str, Any]] = {}
+    for name, required in configured.items():
+        label = str(name).strip()
+        if label:
+            positions[label.casefold()] = {"name": label, "required": max(0, int(required or 0)), "assigned": 0}
+    for employee in site_employees:
+        label = str(employee.get("position") or "Fonction non renseignée").strip() or "Fonction non renseignée"
+        entry = positions.setdefault(label.casefold(), {"name": label, "required": 0, "assigned": 0})
+        entry["assigned"] += 1
+    return [
+        {**entry, "remaining": max(0, entry["required"] - entry["assigned"])}
+        for entry in sorted(positions.values(), key=lambda item: item["name"].casefold())
+    ]
+
+
 def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]]:
     sites = db.execute(
         select(Site).where(Site.client_id == client_id, Site.active == 1).order_by(Site.name)
@@ -189,6 +207,7 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             "actual_staff": len(site_employees),
             "employees": site_employees,
             "groups": _site_groups_payload(site, site_employees),
+            "position_requirements": _site_position_requirements_payload(site, site_employees),
         })
     return result
 
@@ -250,6 +269,8 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
 
 
 def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, Any]:
+    position_quotas = {position.name: position.required for position in payload.positions}
+    required_staff = payload.required_staff or sum(position_quotas.values())
     site = Site(
         name=payload.name,
         client_id=client_id,
@@ -257,22 +278,14 @@ def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, An
         commune=payload.commune,
         wilaya=payload.wilaya,
         site_type=payload.site_type,
-        contractual_staff=payload.required_staff,
+        contractual_staff=required_staff,
+        equipment_plan={"positionQuotas": position_quotas, "groupQuotas": payload.group_quotas},
         active=1,
     )
     db.add(site)
     db.commit()
     db.refresh(site)
-    return {
-        "id": site.id,
-        "name": site.name,
-        "address": site.address,
-        "commune": site.commune,
-        "wilaya": site.wilaya,
-        "site_type": site.site_type,
-        "required_staff": site.contractual_staff or 0,
-        "actual_staff": 0,
-    }
+    return next(item for item in visible_sites_for_client(db, client_id) if item["id"] == site.id)
 
 
 # État réel de l'article (voir sgdi-app.js "etatArticle") -> libellé/couleur affichés au client.

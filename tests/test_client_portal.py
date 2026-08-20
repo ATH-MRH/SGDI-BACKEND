@@ -202,6 +202,30 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     assert site["employees"][0]["group_code"] is None
 
 
+def test_client_can_create_site_with_positions_and_group_staffing(client, auth_headers):
+    cid = _commercial_client(client, auth_headers, "Client Config Site", portal_slug="client-config-site")
+    account = _portal_account(client, auth_headers, cid, username="client.config.site")
+    portal_headers = _login(client, account["username"], account["temporary_password"])
+
+    response = client.post("/api/client-portal/sites", headers=portal_headers, json={
+        "name": "Nouveau site configuré",
+        "site_type": "Entrepôt",
+        "address": "Zone industrielle",
+        "required_staff": 0,
+        "positions": [
+            {"name": "Agent de sécurité", "required": 8},
+            {"name": "Superviseur", "required": 2},
+        ],
+        "group_quotas": {"A": 5, "B": 5, "C": 0, "D": 0, "E": 0, "F": 0},
+    })
+    assert response.status_code == 201, response.text
+    site = response.json()
+    assert site["required_staff"] == 10
+    assert next(group for group in site["groups"] if group["code"] == "A")["quota"] == 5
+    agent_position = next(position for position in site["position_requirements"] if position["name"] == "Agent de sécurité")
+    assert agent_position == {"name": "Agent de sécurité", "assigned": 0, "required": 8, "remaining": 8}
+
+
 def test_client_can_submit_employee_action_request_with_attachment(client, auth_headers, monkeypatch, tmp_path):
     from app.modules.client_portal import routes
 
