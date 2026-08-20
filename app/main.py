@@ -13,7 +13,7 @@ import anyio.to_thread
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, func, inspect, select, text
 
@@ -523,6 +523,13 @@ def _is_conges_host(host: str) -> bool:
 
 def _is_dc_host(host: str) -> bool:
     return host.split(":")[0].lower() == "dc.irongs.com"
+
+
+def _is_retired_commercial_host(host: str) -> bool:
+    # Ancien sous-domaine du module Commercial, remplacé par dc.irongs.com (module
+    # autonome). On garde ce hostname routé (plutôt que de couper le DNS) uniquement pour
+    # rediriger les liens/favoris existants — voir _is_dc_host ci-dessus.
+    return host.split(":")[0].lower() == "commercial.irongs.com"
 
 
 _CLIENT_PORTAL_SLUG_CACHE: dict[str, tuple[float, bool]] = {}
@@ -1203,6 +1210,8 @@ def _build_index_html() -> str:
 @app.get("/", include_in_schema=False)
 def frontend(request: Request) -> HTMLResponse:
     host = request.headers.get("host", "").split(":")[0].lower()
+    if _is_retired_commercial_host(host):
+        return RedirectResponse("https://dc.irongs.com/", status_code=301)
     if _is_pointer_host(host):
         return FileResponse(
             STATIC_DIR / "pointeur.html",
