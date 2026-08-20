@@ -109,6 +109,19 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .status-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
 
+/* ---- Client form ---- */
+.client-modal{max-width:1140px;padding:0;overflow:hidden;border:1px solid light-dark(#d8e2ed,#2b3b50)}
+.client-modal-head{position:sticky;z-index:2;top:0;margin:0;padding:22px 28px;background:light-dark(linear-gradient(135deg,#f8fbff,#eef4fa),#0d1725);border-bottom:1px solid light-dark(#dce5ef,#2b3b50)}
+.client-modal-heading{display:flex;align-items:center;gap:13px}.client-modal-mark{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;background:#123f6f;color:#fff;font-size:17px;font-weight:900;box-shadow:0 8px 20px rgba(18,63,111,.2)}
+.client-modal-kicker{margin-bottom:3px;color:#64748b;font-size:9px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}.client-modal-head h2{font-size:21px;letter-spacing:-.02em}.client-modal-sub{margin:4px 0 0;color:light-dark(#64748b,#9fb0c2);font-size:12px}
+.client-modal-body{padding:22px 28px 8px;background:light-dark(#f8fafc,#0a1420)}
+.client-form-section{margin:0 0 16px;padding:18px;border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:16px;background:light-dark(#fff,#111b29);box-shadow:0 7px 20px rgba(9,30,57,.04)}
+.client-form-section-head{display:flex;align-items:center;gap:10px;margin-bottom:13px;padding-bottom:11px;border-bottom:1px solid light-dark(#edf1f6,#243246)}.client-form-section-index{display:grid;place-items:center;width:25px;height:25px;border-radius:8px;background:#eaf1fb;color:#123f6f;font-size:10px;font-weight:900}.client-form-section h3{margin:0;color:light-dark(#163553,#eef4fa);font-size:13px;font-weight:900;letter-spacing:.01em}.client-form-section p{margin:2px 0 0;color:light-dark(#7a8da2,#8ea2b7);font-size:10px}
+.client-form-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:0 14px}.client-field{grid-column:span 4}.client-field.span-6{grid-column:span 6}.client-field.span-8{grid-column:span 8}.client-field.full{grid-column:1/-1}.client-form-section label{margin-top:9px}.client-form-section input,.client-form-section select{height:44px;background:light-dark(#fbfdff,#0d1725)}.client-form-section textarea{min-height:90px;background:light-dark(#fbfdff,#0d1725)}
+.client-modal-footer{position:sticky;z-index:2;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0;padding:17px 28px;background:light-dark(rgba(255,255,255,.96),rgba(17,27,41,.97));border-top:1px solid light-dark(#dce5ef,#2b3b50);box-shadow:0 -10px 24px rgba(9,30,57,.07);backdrop-filter:blur(10px)}.client-modal-footer-note{color:light-dark(#718399,#8ea2b7);font-size:10.5px}.client-modal-footer .modal-actions{margin:0}.client-modal-footer .btn{min-width:120px;justify-content:center}.client-modal-footer .btn.primary{min-width:160px}
+@media(max-width:900px){.client-field,.client-field.span-6,.client-field.span-8{grid-column:span 6}.client-modal-body{padding:18px}.client-modal-head,.client-modal-footer{padding-left:20px;padding-right:20px}}
+@media(max-width:640px){.client-field,.client-field.span-6,.client-field.span-8{grid-column:1/-1}.client-form-section{padding:14px}.client-modal-footer{align-items:stretch;flex-direction:column}.client-modal-footer .modal-actions,.client-modal-footer .btn{width:100%}}
+
 /* ---- Line items editor ---- */
 .lignes-table{width:100%;border-collapse:collapse;margin-top:6px}
 .lignes-table th{font-size:9.5px;padding:6px 6px;background:none;border-bottom:1px solid light-dark(#dce5ef,#2b3b50)}
@@ -216,33 +229,53 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
 
 <!-- Client modal -->
 <div id="clientModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeClientModal()">
-  <div class="modal">
-    <div class="modal-head"><h2 id="clientModalTitle">Nouveau client</h2><button class="modal-close" onclick="closeClientModal()">×</button></div>
-    <div class="field-grid">
-      <div class="full"><label for="cName">Nom commercial</label><input id="cName" required></div>
-      <div><label for="cLegalName">Raison sociale</label><input id="cLegalName"></div>
-      <div><label for="cSociety">Société ATLAS</label><select id="cSociety"></select></div>
-      <div><label for="cStructure">Structure</label><input id="cStructure"></div>
-      <div><label for="cStatus">Statut</label><select id="cStatus"><option value="actif">Actif</option><option value="inactif">Inactif</option><option value="prospect">Prospect</option></select></div>
-      <div><label for="cContactName">Contact</label><input id="cContactName"></div>
-      <div><label for="cContactPosition">Fonction du contact</label><input id="cContactPosition"></div>
-      <div><label for="cPhone">Téléphone</label><input id="cPhone"></div>
-      <div><label for="cEmail">Email</label><input id="cEmail" type="email"></div>
-      <div class="full"><label for="cAddress">Adresse</label><input id="cAddress"></div>
-      <div><label for="cNif">NIF</label><input id="cNif"></div>
-      <div><label for="cRc">RC</label><input id="cRc"></div>
-      <div class="full"><label for="cServices">Services / prestations</label><input id="cServices"></div>
-      <div><label for="cContractStart">Début de contrat</label><input id="cContractStart" type="date"></div>
-      <div><label for="cContractDuration">Durée du contrat</label><input id="cContractDuration" placeholder="12 mois"></div>
-      <div><label for="cContractEnd">Fin de contrat</label><input id="cContractEnd" type="date"></div>
-      <div><label for="cPortalSlug">Sous-domaine portail client</label><input id="cPortalSlug" placeholder="sonatrach"></div>
-      <div class="full"><label for="cNotes">Notes</label><textarea id="cNotes"></textarea></div>
+  <div class="modal client-modal">
+    <div class="modal-head client-modal-head"><div class="client-modal-heading"><div class="client-modal-mark">CL</div><div><div class="client-modal-kicker">Gestion commerciale</div><h2 id="clientModalTitle">Nouveau client</h2><p class="client-modal-sub">Créez une fiche client complète et configurez son accès au portail.</p></div></div><button class="modal-close" onclick="closeClientModal()" aria-label="Fermer">×</button></div>
+    <div class="client-modal-body">
+      <section class="client-form-section">
+        <div class="client-form-section-head"><span class="client-form-section-index">01</span><div><h3>Identification du client</h3><p>Informations principales et rattachement dans ATLAS.</p></div></div>
+        <div class="client-form-grid">
+          <div class="client-field span-8"><label for="cName">Nom commercial</label><input id="cName" required placeholder="Nom utilisé dans les opérations"></div>
+          <div class="client-field"><label for="cStatus">Statut</label><select id="cStatus"><option value="actif">Actif</option><option value="inactif">Inactif</option><option value="prospect">Prospect</option></select></div>
+          <div class="client-field span-6"><label for="cLegalName">Raison sociale</label><input id="cLegalName" placeholder="Dénomination légale"></div>
+          <div class="client-field"><label for="cSociety">Société ATLAS</label><select id="cSociety"></select></div>
+          <div class="client-field"><label for="cStructure">Structure</label><input id="cStructure" placeholder="Direction, filiale…"></div>
+        </div>
+      </section>
+
+      <section class="client-form-section">
+        <div class="client-form-section-head"><span class="client-form-section-index">02</span><div><h3>Contact principal</h3><p>Interlocuteur responsable du suivi commercial.</p></div></div>
+        <div class="client-form-grid">
+          <div class="client-field span-6"><label for="cContactName">Nom et prénom du contact</label><input id="cContactName"></div>
+          <div class="client-field span-6"><label for="cContactPosition">Fonction du contact</label><input id="cContactPosition"></div>
+          <div class="client-field span-6"><label for="cPhone">Téléphone</label><input id="cPhone" type="tel" placeholder="+213 …"></div>
+          <div class="client-field span-6"><label for="cEmail">Adresse email</label><input id="cEmail" type="email" placeholder="contact@entreprise.dz"></div>
+        </div>
+      </section>
+
+      <section class="client-form-section">
+        <div class="client-form-section-head"><span class="client-form-section-index">03</span><div><h3>Coordonnées administratives</h3><p>Adresse et identifiants légaux de l’entreprise.</p></div></div>
+        <div class="client-form-grid">
+          <div class="client-field full"><label for="cAddress">Adresse complète</label><input id="cAddress"></div>
+          <div class="client-field span-6"><label for="cNif">Numéro d’identification fiscale (NIF)</label><input id="cNif"></div>
+          <div class="client-field span-6"><label for="cRc">Registre du commerce (RC)</label><input id="cRc"></div>
+        </div>
+      </section>
+
+      <section class="client-form-section">
+        <div class="client-form-section-head"><span class="client-form-section-index">04</span><div><h3>Contrat, prestations et portail</h3><p>Périmètre contractuel et accès numérique du client.</p></div></div>
+        <div class="client-form-grid">
+          <div class="client-field full"><label for="cServices">Services / prestations</label><input id="cServices" placeholder="Décrivez les prestations fournies"></div>
+          <div class="client-field"><label for="cContractStart">Début du contrat</label><input id="cContractStart" type="date"></div>
+          <div class="client-field"><label for="cContractDuration">Durée du contrat</label><input id="cContractDuration" placeholder="12 mois"></div>
+          <div class="client-field"><label for="cContractEnd">Fin du contrat</label><input id="cContractEnd" type="date"></div>
+          <div class="client-field span-6"><label for="cPortalSlug">Sous-domaine du portail client</label><input id="cPortalSlug" placeholder="nom-du-client"></div>
+          <div class="client-field span-6"><label for="cNotes">Notes internes</label><textarea id="cNotes" placeholder="Informations complémentaires utiles au suivi…"></textarea></div>
+        </div>
+      </section>
+      <div id="clientError" class="error"></div>
     </div>
-    <div id="clientError" class="error"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="closeClientModal()">Annuler</button>
-      <button class="btn primary" id="clientSubmitBtn" onclick="submitClient()">Enregistrer</button>
-    </div>
+    <div class="client-modal-footer"><span class="client-modal-footer-note">Les informations pourront être complétées ou modifiées après l’enregistrement.</span><div class="modal-actions"><button class="btn" onclick="closeClientModal()">Annuler</button><button class="btn primary" id="clientSubmitBtn" onclick="submitClient()">Enregistrer le client</button></div></div>
   </div>
 </div>
 
@@ -485,6 +518,7 @@ async function loadClients(page){
 
 function openClientModal(clientId){
   document.getElementById("clientModalTitle").textContent=clientId?"Modifier le client":"Nouveau client";
+  document.getElementById("clientSubmitBtn").textContent=clientId?"Enregistrer les modifications":"Enregistrer le client";
   document.getElementById("clientModalBackdrop").dataset.id=clientId||"";
   document.getElementById("cSociety").innerHTML=societyOptionsHtml(activeSociety);
   document.getElementById("clientError").classList.remove("show");
@@ -542,7 +576,7 @@ async function submitClient(){
     closeClientModal();showBanner("Client enregistré.","success");
     await loadClientsList();loadClients();
   }catch(error){errorEl.textContent=error.message||"Impossible d’enregistrer ce client.";errorEl.classList.add("show")}
-  finally{btn.disabled=false;btn.textContent="Enregistrer"}
+  finally{btn.disabled=false;btn.textContent=clientId?"Enregistrer les modifications":"Enregistrer le client"}
 }
 async function deleteClient(clientId){
   if(!confirm("Supprimer ce client ?"))return;
