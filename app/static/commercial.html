@@ -256,9 +256,11 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
       <section class="client-form-section">
         <div class="client-form-section-head"><span class="client-form-section-index">03</span><div><h3>Coordonnées administratives</h3><p>Adresse et identifiants légaux de l’entreprise.</p></div></div>
         <div class="client-form-grid">
-          <div class="client-field full"><label for="cAddress">Adresse complète</label><input id="cAddress"></div>
+          <div class="client-field full"><label for="cAddress">Adresse (Siège social)</label><input id="cAddress" placeholder="Adresse complète du siège social"></div>
           <div class="client-field span-6"><label for="cNif">Numéro d’identification fiscale (NIF)</label><input id="cNif"></div>
           <div class="client-field span-6"><label for="cRc">Registre du commerce (RC)</label><input id="cRc"></div>
+          <div class="client-field span-6"><label for="cAi">Numéro d’article d’imposition (AI)</label><input id="cAi"></div>
+          <div class="client-field span-6"><label for="cNis">Numéro d’identifiant statistique (NIS)</label><input id="cNis"></div>
         </div>
       </section>
 
@@ -534,6 +536,8 @@ function openClientModal(clientId){
   document.getElementById("cEmail").value=client?.email||"";
   document.getElementById("cAddress").value=client?.address||"";
   document.getElementById("cNif").value=client?.nif||"";
+  document.getElementById("cAi").value=client?.ai||"";
+  document.getElementById("cNis").value=client?.nis||"";
   document.getElementById("cRc").value=client?.rc||"";
   document.getElementById("cServices").value=client?.services||"";
   document.getElementById("cContractStart").value=(client?.contract_start||"").slice(0,10);
@@ -560,6 +564,8 @@ async function submitClient(){
     email:document.getElementById("cEmail").value.trim()||null,
     address:document.getElementById("cAddress").value.trim()||null,
     nif:document.getElementById("cNif").value.trim()||null,
+    ai:document.getElementById("cAi").value.trim()||null,
+    nis:document.getElementById("cNis").value.trim()||null,
     rc:document.getElementById("cRc").value.trim()||null,
     services:document.getElementById("cServices").value.trim()||null,
     contract_start:document.getElementById("cContractStart").value||null,

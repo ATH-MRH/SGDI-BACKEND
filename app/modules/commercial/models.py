@@ -21,6 +21,8 @@ class Client(Base, TimestampMixin):
     email: Mapped[str | None] = mapped_column(String(180))
     address: Mapped[str | None] = mapped_column(Text)
     nif: Mapped[str | None] = mapped_column(String(100))
+    ai: Mapped[str | None] = mapped_column(String(100))
+    nis: Mapped[str | None] = mapped_column(String(100))
     rc: Mapped[str | None] = mapped_column(String(100))
     services: Mapped[str | None] = mapped_column(Text)
     contract_start: Mapped[date | None] = mapped_column(Date)

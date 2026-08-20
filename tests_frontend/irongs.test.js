@@ -56,7 +56,7 @@ test('client : aller-retour préserve les champs métier ET les champs custom (v
   const clientObj = {
     nom: 'ACME', raisonSociale: 'ACME SARL', societe: 'Iron Global Securite',
     statut: 'actif', contact: 'Sara', fonction: 'DG', tel: '0550111222',
-    email: 'dg@acme.dz', adresse: 'Rue 1', nif: 'NIF1', rc: 'RC1',
+    email: 'dg@acme.dz', adresse: 'Rue 1', nif: 'NIF1', ai: 'AI1', nis: 'NIS1', rc: 'RC1',
     champMetierCustom: 'a-preserver',
   };
   const payload = t.clientApiPayload(clientObj);
@@ -71,6 +71,8 @@ test('client : aller-retour préserve les champs métier ET les champs custom (v
   assert.strictEqual(reconstruit.raisonSociale, 'ACME SARL');
   assert.strictEqual(reconstruit.statut, 'actif');
   assert.strictEqual(reconstruit.tel, '0550111222');
+  assert.strictEqual(reconstruit.ai, 'AI1');
+  assert.strictEqual(reconstruit.nis, 'NIS1');
   assert.strictEqual(reconstruit.champMetierCustom, 'a-preserver', 'un champ custom doit survivre via data');
 });
 
@@ -79,12 +81,15 @@ test('client : sans data, reconstruit depuis les colonnes SQL', () => {
   const back = t.clientFromApi({
     id: 3, name: 'BETA', legal_name: 'BETA SARL', society: 'Sword Corporation',
     status: 'prospect', contact_name: 'Yacine', phone: '0660000000', email: 'y@beta.dz',
+    ai: 'AI-BETA', nis: 'NIS-BETA',
   });
   assert.strictEqual(back.nom, 'BETA');
   assert.strictEqual(back.raisonSociale, 'BETA SARL');
   assert.strictEqual(back.statut, 'prospect');
   assert.strictEqual(back.contact, 'Yacine');
   assert.strictEqual(back.tel, '0660000000');
+  assert.strictEqual(back.ai, 'AI-BETA');
+  assert.strictEqual(back.nis, 'NIS-BETA');
 });
 
 test.after(() => { setTimeout(() => process.exit(0), 50); });

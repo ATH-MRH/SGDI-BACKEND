@@ -16,6 +16,8 @@ class ClientBase(BaseModel):
     email: str | None = None
     address: str | None = None
     nif: str | None = None
+    ai: str | None = None
+    nis: str | None = None
     rc: str | None = None
     services: str | None = None
     contract_start: date | None = None
@@ -43,6 +45,8 @@ class ClientUpdate(BaseModel):
     email: str | None = None
     address: str | None = None
     nif: str | None = None
+    ai: str | None = None
+    nis: str | None = None
     rc: str | None = None
     services: str | None = None
     contract_start: date | None = None

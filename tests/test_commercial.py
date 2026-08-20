@@ -10,7 +10,8 @@ SOC = "Iron Global Securite"
 def _client(client, h, name, society=SOC, status="actif"):
     r = client.post("/api/commercial/clients", headers=h, json={
         "name": name, "legal_name": f"{name} SARL", "society": society, "status": status,
-        "contact_name": "Contact", "phone": "0550111222", "nif": "NIF1",
+        "contact_name": "Contact", "phone": "0550111222", "address": "Siège social",
+        "nif": "NIF1", "ai": "AI1", "nis": "NIS1",
     })
     assert r.status_code in (200, 201), r.text
     return r.json()["id"]
@@ -20,6 +21,9 @@ def test_client_crud(client, auth_headers):
     cid = _client(client, auth_headers, "ACME Commerce")
     lst = client.get("/api/commercial/clients", headers=auth_headers)
     assert lst.status_code == 200 and any(c["id"] == cid for c in lst.json())
+    created = next(c for c in lst.json() if c["id"] == cid)
+    assert created["address"] == "Siège social"
+    assert created["ai"] == "AI1" and created["nis"] == "NIS1"
 
     upd = client.put(f"/api/commercial/clients/{cid}", headers=auth_headers, json={
         "name": "ACME Modifie", "society": SOC, "status": "prospect",
