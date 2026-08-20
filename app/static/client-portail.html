@@ -140,6 +140,7 @@ tr:last-child td{border-bottom:0}
 .group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
 .group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc;width:100%;color:inherit;font:inherit;cursor:pointer}
 .group-counter.total{background:#fff8d6;border-color:#f1c400}
+.group-counter.waiting{background:#fff1f2;border-color:#fda4af}
 .group-counter.function{display:grid;grid-template-rows:30px 26px 30px;align-content:center;min-height:102px;background:#fff;border-color:#e5cbd0}
 .group-counter.function .gc-code{display:flex;align-items:flex-start;justify-content:center;line-height:1.05}
 .group-counter.function .gc-assigned{margin-top:0;align-self:center;font-size:22px;color:#050505}
@@ -848,6 +849,7 @@ async function loadSites(options={}){
       const addressParts=[s.address,s.commune,s.wilaya].filter(Boolean).join(", ");
       const groups=s.groups||[];
       const totalAssigned=actual;
+      const waitingAssignment=(s.employees||[]).filter(employee=>!employee.group_code).length;
       const positionCounts=(s.position_requirements||[]).map(position=>({label:position.name,count:Number(position.assigned)||0,required:Number(position.required)||0,remaining:Number(position.remaining)||0}));
       const groupOptionsHtml=code=>`<option value="" ${!code?"selected":""}>Aucun</option>`+groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
       const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Besoins théoriques par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>{const delta=p.count-p.required,deltaLabel=delta===0?"00":(delta>0?`+${delta}`:`${delta}`);return`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="function-stats"><div class="function-stat">Besoin<strong>${p.required}</strong></div><div class="function-stat">Écart +/-<strong>${deltaLabel}</strong></div></div></button>`}).join("")}</div></div>`:"";
@@ -856,6 +858,11 @@ async function loadSites(options={}){
           <div class="gc-assigned">${totalAssigned}</div>
           <div class="gc-quota-row">tous groupes</div>
           <div class="gc-remaining">affectés au site</div>
+        </button><button type="button" class="group-counter waiting" aria-pressed="false" onclick="filterSiteEmployees(this,'group','')">
+          <div class="gc-code">Eff. attente d’affectation</div>
+          <div class="gc-assigned">${waitingAssignment}</div>
+          <div class="gc-quota-row">sans groupe</div>
+          <div class="gc-remaining">à affecter</div>
         </button>${groups.map(g=>`
         <div class="group-counter" role="button" tabindex="0" aria-pressed="false" onclick="if(event.target.tagName!=='INPUT')filterSiteEmployees(this,'group','${encodeURIComponent(g.code)}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterSiteEmployees(this,'group','${encodeURIComponent(g.code)}')}">
           <div class="gc-code">Groupe ${esc(g.code)}</div>
