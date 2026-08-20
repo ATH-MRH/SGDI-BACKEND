@@ -238,8 +238,7 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
           <div class="client-field span-8"><label for="cName">Nom commercial</label><input id="cName" required placeholder="Nom utilisé dans les opérations"></div>
           <div class="client-field"><label for="cStatus">Statut</label><select id="cStatus"><option value="actif">Actif</option><option value="inactif">Inactif</option><option value="prospect">Prospect</option></select></div>
           <div class="client-field span-6"><label for="cLegalName">Raison sociale</label><input id="cLegalName" placeholder="Dénomination légale"></div>
-          <div class="client-field"><label for="cSociety">Société ATLAS</label><select id="cSociety"></select></div>
-          <div class="client-field"><label for="cStructure">Structure</label><input id="cStructure" placeholder="Direction, filiale…"></div>
+          <div class="client-field span-6"><label for="cStructure">Structure</label><input id="cStructure" placeholder="Direction, filiale…"></div>
         </div>
       </section>
 
@@ -522,12 +521,10 @@ function openClientModal(clientId){
   document.getElementById("clientModalTitle").textContent=clientId?"Modifier le client":"Nouveau client";
   document.getElementById("clientSubmitBtn").textContent=clientId?"Enregistrer les modifications":"Enregistrer le client";
   document.getElementById("clientModalBackdrop").dataset.id=clientId||"";
-  document.getElementById("cSociety").innerHTML=societyOptionsHtml(activeSociety);
   document.getElementById("clientError").classList.remove("show");
   const client=clientId?clientsCache.find(c=>c.id===clientId):null;
   document.getElementById("cName").value=client?.name||"";
   document.getElementById("cLegalName").value=client?.legal_name||"";
-  if(client?.society)document.getElementById("cSociety").value=client.society;
   document.getElementById("cStructure").value=client?.structure||"";
   document.getElementById("cStatus").value=client?.status||"actif";
   document.getElementById("cContactName").value=client?.contact_name||"";
@@ -552,10 +549,12 @@ async function submitClient(){
   const errorEl=document.getElementById("clientError");errorEl.classList.remove("show");
   const name=document.getElementById("cName").value.trim();
   if(name.length<2){errorEl.textContent="Le nom du client est requis.";errorEl.classList.add("show");return}
+  const clientId=document.getElementById("clientModalBackdrop").dataset.id;
+  const existingClient=clientId?clientsCache.find(client=>String(client.id)===String(clientId)):null;
   const payload={
     name,
     legal_name:document.getElementById("cLegalName").value.trim()||null,
-    society:document.getElementById("cSociety").value||null,
+    society:existingClient?.society||activeSociety||null,
     structure:document.getElementById("cStructure").value.trim()||null,
     status:document.getElementById("cStatus").value,
     contact_name:document.getElementById("cContactName").value.trim()||null,
@@ -574,7 +573,6 @@ async function submitClient(){
     portal_slug:document.getElementById("cPortalSlug").value.trim()||null,
     notes:document.getElementById("cNotes").value.trim()||null,
   };
-  const clientId=document.getElementById("clientModalBackdrop").dataset.id;
   const btn=document.getElementById("clientSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
   try{
     if(clientId)await apiFetch(`/api/commercial/clients/${clientId}`,{method:"PUT",body:JSON.stringify(payload)});
