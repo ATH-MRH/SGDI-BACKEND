@@ -136,7 +136,10 @@ tr:last-child td{border-bottom:0}
 .group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
 .group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc;width:100%;color:inherit;font:inherit;cursor:pointer}
 .group-counter.total{background:#fff8d6;border-color:#f1c400}
-.group-counter.function{background:#fff;border-color:#e5cbd0}
+.group-counter.function{display:grid;grid-template-rows:30px 20px 16px 16px;align-content:center;min-height:94px;background:#fff;border-color:#e5cbd0}
+.group-counter.function .gc-code{display:flex;align-items:flex-start;justify-content:center;line-height:1.05}
+.group-counter.function .gc-assigned{margin-top:0;align-self:start}
+.group-counter.function .gc-quota-row,.group-counter.function .gc-remaining{margin-top:0;align-self:center;white-space:nowrap}
 .group-counter:hover,.group-counter[aria-pressed="true"]{border-color:#c8102e;box-shadow:0 0 0 2px rgba(200,16,46,.12)}
 .function-counters{margin-bottom:8px}
 .gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
