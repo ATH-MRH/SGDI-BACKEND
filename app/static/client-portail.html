@@ -111,12 +111,12 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .banner.error{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5}
 .portal-alert-center{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.portal-alert-card{display:flex;align-items:center;gap:9px;width:310px;max-width:100%;min-height:54px;padding:7px 10px;border:1px solid #e6b800;border-left:3px solid #c99f00;border-radius:11px;background:#ffcc00;color:#10243e;font:inherit;text-align:left;cursor:pointer}.portal-alert-card:hover{border-color:#b88f00;box-shadow:0 5px 14px rgba(176,132,0,.2)}.portal-alert-card>span:last-child{min-width:0}.portal-alert-count{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:#10243e;color:#ffcc00;font-size:16px;font-weight:950}.portal-alert-card strong{display:block;font-size:10.5px;font-weight:900;line-height:1.2;white-space:normal}.portal-alert-card small{display:block;margin-top:2px;color:#31465f;font-size:9px;font-weight:650;line-height:1.25;white-space:normal}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-.emp-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 22px rgba(4,57,112,.05)}
-.emp-name{font-size:15px;font-weight:900}
+.emp-card{display:grid;grid-template-rows:72px 42px 26px 42px;gap:7px;min-height:231px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 22px rgba(4,57,112,.05)}
+.emp-name{font-size:13.5px;font-weight:900;line-height:1.25}
 .emp-code{display:inline-block;margin-right:7px;border:1px solid #c8102e;border-radius:6px;padding:2px 6px;color:#a80d27;background:#fff0f2;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;font-weight:900;vertical-align:1px}
-.emp-meta{font-size:12px;color:var(--muted);margin-top:3px}
-.emp-site{display:inline-block;margin-top:9px;background:#fff4b8;color:#6b5200;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800}
-.emp-actions{margin-top:13px}
+.emp-meta{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.2}
+.emp-site-row,.emp-group-row{display:flex;align-items:flex-start;min-width:0}.emp-site{display:inline-block;max-width:100%;margin:0;background:#fff4b8;color:#6b5200;border-radius:999px;padding:4px 10px;font-size:10.5px;font-weight:800;line-height:1.15}
+.emp-actions{align-self:end;margin:0}
 .emp-actions button{width:100%}
 .empty{text-align:center;color:#94a3b8;padding:50px 20px;font-size:14px}
 .site-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
@@ -161,7 +161,7 @@ tr:last-child td{border-bottom:0}
 .site-employee-row:hover{background:#fff8dc}
 .emp-card{cursor:pointer}.emp-card:hover{border-color:#c8102e;box-shadow:0 8px 22px rgba(200,16,46,.1)}
 .emp-avatar{width:46px;height:46px;border-radius:50%;object-fit:cover;background:#eef2f7;border:2px solid #fff;box-shadow:0 0 0 1px var(--line);flex:0 0 auto}
-.emp-card-head{display:flex;align-items:center;gap:12px}
+.emp-card-head{display:flex;align-items:flex-start;gap:12px;min-width:0}.emp-card-head>div{min-width:0}
 .employee-profile-modal{max-width:920px!important;padding:0!important;overflow:hidden;border-radius:20px!important}
 .employee-profile-head{background:#0c2749;color:#fff;padding:18px 24px;margin:0!important}
 .employee-profile-head h2{font-size:18px}.employee-profile-head .modal-close{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.1);color:#fff}
@@ -804,8 +804,8 @@ async function loadEmployees(){
       <div class="emp-card" role="button" tabindex="0" onclick="openEmployeeDetail(${e.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmployeeDetail(${e.id})}">
         <div class="emp-card-head"><img class="emp-avatar" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}"><div><div class="emp-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}</div>
         <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div></div></div>
-        ${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}
-        <span class="emp-site" style="background:#eaf2fb;color:var(--navy);margin-left:6px">${e.group_code?`Groupe ${esc(e.group_code)}`:"Aucun groupe"}</span>
+        <div class="emp-site-row">${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}</div>
+        <div class="emp-group-row"><span class="emp-site" style="background:#eaf2fb;color:var(--navy)">${e.group_code?`Groupe ${esc(e.group_code)}`:"Aucun groupe"}</span></div>
         ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="event.stopPropagation();openObservationModal(${e.id})">Signaler</button></div>`}
       </div>`).join("")}</div>`;
   }catch(error){
