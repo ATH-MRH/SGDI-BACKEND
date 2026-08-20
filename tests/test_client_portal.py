@@ -312,6 +312,9 @@ def test_client_can_submit_employee_action_request_with_attachment(client, auth_
     assert "NOUVEAU SITE ACTION · Groupe B" in assignment_body["description"]
     assert "PLANNING ACTION 7 JOURS (ACT7)" in assignment_body["description"]
     assert "2026-09-01" in assignment_body["description"]
+    sites = client.get("/api/client-portal/sites", headers=portal_headers)
+    current_site = next(row for row in sites.json() if row["id"] == site_id)
+    assert next(row for row in current_site["employees"] if row["id"] == employee_id)["group_code"] == "B"
 
 
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────

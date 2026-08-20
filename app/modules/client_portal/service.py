@@ -586,6 +586,20 @@ def create_employee_action_request(
             f"Nouvelle affectation demandée : {target_site.name} · Groupe {group_code} · "
             f"Planning {rotation.name} ({rotation.code}) · Date d’effet {(effective_date or date.today()).isoformat()}"
         )
+        assignment = db.execute(
+            select(Assignment).where(
+                Assignment.employee_id == employee_id,
+                Assignment.site_id == site.id,
+                Assignment.active == 1,
+            )
+        ).scalars().first()
+        if assignment:
+            assignment.group_code = group_code
+        plan = dict(site.equipment_plan) if isinstance(site.equipment_plan, dict) else {}
+        explicit_groups = dict(plan.get("clientPortalGroupAssignments") if isinstance(plan.get("clientPortalGroupAssignments"), dict) else {})
+        explicit_groups[str(employee_id)] = group_code
+        plan["clientPortalGroupAssignments"] = explicit_groups
+        site.equipment_plan = plan
     row = ClientObservation(
         client_id=client_user.client_id,
         client_user_id=client_user.id,

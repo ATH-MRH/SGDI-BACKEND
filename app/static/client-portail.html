@@ -380,11 +380,11 @@ tr:last-child td{border-bottom:0}
       <div class="form-grid"><div><label for="employeeTargetGroup">Nouveau groupe</label><select id="employeeTargetGroup"></select></div><div><label for="employeeTargetPlanning">Nouveau planning</label><select id="employeeTargetPlanning"></select></div></div>
       <label for="employeeEffectiveDate">Date d’effet souhaitée</label><input id="employeeEffectiveDate" type="date">
     </div>
-    <label for="employeeActionReason">Motif de la demande</label>
+    <label for="employeeActionReason" id="employeeActionReasonLabel">Motif de la demande</label>
     <textarea id="employeeActionReason" placeholder="Expliquez précisément le motif…"></textarea>
-    <label for="employeeActionFile">Pièce jointe facultative</label>
+    <div id="employeeActionFileFields"><label for="employeeActionFile">Pièce jointe facultative</label>
     <input id="employeeActionFile" type="file" accept=".pdf,.doc,.docx,image/jpeg,image/png,image/webp">
-    <div class="hint">PDF, Word ou image — 10 Mo maximum.</div>
+    <div class="hint">PDF, Word ou image — 10 Mo maximum.</div></div>
     <div id="employeeActionError" class="error"></div>
     <div class="modal-actions"><button type="button" class="secondary" onclick="closeEmployeeActionModal()">Annuler</button><button type="button" class="primary" id="employeeActionSubmit" onclick="submitEmployeeActionRequest()">Envoyer la demande</button></div>
   </div>
@@ -595,6 +595,9 @@ async function openEmployeeActionModal(employeeId,action){
   const e=employeeById(employeeId);if(!e)return;employeeActionRequest={employee:e,action};
   document.getElementById("employeeActionTitle").textContent=action==="blacklist"?"Demande de blacklistage":"Nouvelle affectation";
   document.getElementById("employeeActionLabel").textContent=`${e.code} — ${e.last_name} ${e.first_name}`;
+  document.getElementById("employeeActionReasonLabel").textContent=action==="affectation"?"Motif de l’affectation":"Motif de la demande";
+  document.getElementById("employeeActionFileFields").classList.toggle("hidden",action==="affectation");
+  document.getElementById("employeeActionSubmit").textContent=action==="affectation"?"Valider":"Envoyer la demande";
   const actionError=document.getElementById("employeeActionError");actionError.classList.remove("show");
   document.getElementById("employeeActionReason").value="";document.getElementById("employeeActionFile").value="";
   document.getElementById("employeeActionBackdrop").classList.remove("hidden");
@@ -615,13 +618,13 @@ function closeEmployeeActionModal(){document.getElementById("employeeActionBackd
 async function submitEmployeeActionRequest(){
   if(!employeeActionRequest)return;const reason=document.getElementById("employeeActionReason").value.trim(),error=document.getElementById("employeeActionError"),btn=document.getElementById("employeeActionSubmit");
   error.classList.remove("show");if(reason.length<5){error.textContent="Veuillez expliquer le motif de la demande.";error.classList.add("show");return}
-  const form=new FormData();form.append("employee_id",employeeActionRequest.employee.id);form.append("action",employeeActionRequest.action);form.append("reason",reason);const file=document.getElementById("employeeActionFile").files[0];if(file)form.append("file",file);
+  const form=new FormData();form.append("employee_id",employeeActionRequest.employee.id);form.append("action",employeeActionRequest.action);form.append("reason",reason);const file=document.getElementById("employeeActionFile").files[0];if(employeeActionRequest.action!=="affectation"&&file)form.append("file",file);
   if(employeeActionRequest.action==="affectation"){
     const site=document.getElementById("employeeTargetSite").value,group=document.getElementById("employeeTargetGroup").value,planning=document.getElementById("employeeTargetPlanning").value,effectiveDate=document.getElementById("employeeEffectiveDate").value;
     if(!site||!group||!planning||!effectiveDate){error.textContent="Le site, le groupe, le planning et la date d’effet sont obligatoires.";error.classList.add("show");return}
     form.append("target_site_id",site);form.append("target_group_code",group);form.append("target_rotation_id",planning);form.append("effective_date",effectiveDate);
   }
-  btn.disabled=true;btn.textContent="Envoi…";try{const action=employeeActionRequest.action;await apiFetch("/employee-action-requests",{method:"POST",body:form});closeEmployeeActionModal();closeEmployeeDetail();showBanner(action==="affectation"?"La nouvelle affectation a été transmise directement à ATLAS.":"Votre demande a été transmise à l’administration.","success");portalSearchLoaded.history=false}catch(e){error.textContent=e.message||"Envoi impossible";error.classList.add("show")}finally{btn.disabled=false;btn.textContent="Envoyer la demande"}
+  const action=employeeActionRequest.action,appliedGroup=action==="affectation"?document.getElementById("employeeTargetGroup").value:"";btn.disabled=true;btn.textContent=action==="affectation"?"Validation…":"Envoi…";try{await apiFetch("/employee-action-requests",{method:"POST",body:form});if(action==="affectation"){const employee=employeeById(employeeActionRequest.employee.id);if(employee)employee.group_code=appliedGroup;sitesCache=[];portalSearchLoaded.sites=false;if(!document.getElementById("sitesTab").classList.contains("hidden"))await loadSites({silent:true})}closeEmployeeActionModal();closeEmployeeDetail();showBanner(action==="affectation"?`Groupe ${appliedGroup} appliqué et information transmise à ATLAS / OPS.`:"Votre demande a été transmise à l’administration.","success");portalSearchLoaded.history=false}catch(e){error.textContent=e.message||"Envoi impossible";error.classList.add("show")}finally{btn.disabled=false;btn.textContent=action==="affectation"?"Valider":"Envoyer la demande"}
 }
 
 async function apiFetch(path,opts={}){
