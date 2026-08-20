@@ -153,6 +153,8 @@ def _site_position_requirements_payload(site: Site, site_employees: list[dict[st
         if label:
             positions[label.casefold()] = {"name": label, "required": max(0, int(required or 0)), "assigned": 0}
     for employee in site_employees:
+        if not employee.get("group_code"):
+            continue
         label = str(employee.get("position") or "Fonction non renseignée").strip() or "Fonction non renseignée"
         entry = positions.setdefault(label.casefold(), {"name": label, "required": 0, "assigned": 0})
         entry["assigned"] += 1
@@ -206,7 +208,7 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             "wilaya": site.wilaya,
             "site_type": site.site_type,
             "required_staff": site.contractual_staff or (site.day_staff + site.night_staff) or 0,
-            "actual_staff": len(site_employees),
+            "actual_staff": sum(1 for employee in site_employees if employee.get("group_code")),
             "employees": site_employees,
             "groups": _site_groups_payload(site, site_employees),
             "position_requirements": _site_position_requirements_payload(site, site_employees),

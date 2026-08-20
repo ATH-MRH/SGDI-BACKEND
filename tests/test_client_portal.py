@@ -166,7 +166,7 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     response = client.get("/api/client-portal/sites", headers=portal_headers)
     assert response.status_code == 200, response.text
     site = next(row for row in response.json() if row["id"] == site_id)
-    assert site["actual_staff"] == 1
+    assert site["actual_staff"] == 0
     assert site["employees"][0]["code"] == "GRPZERO1"
     assert site["employees"][0]["assignment_start_date"] == "2026-01-01"
     assert site["employees"][0]["presence_count"] == 0
@@ -182,6 +182,7 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     assert assigned_a.status_code == 200, assigned_a.text
     response = client.get("/api/client-portal/sites", headers=portal_headers)
     site = next(row for row in response.json() if row["id"] == site_id)
+    assert site["actual_staff"] == 1
     assert next(group for group in site["groups"] if group["code"] == "A")["assigned"] == 1
     employees_response = client.get("/api/client-portal/employees", headers=portal_headers)
     assert next(row for row in employees_response.json() if row["id"] == employee_id)["group_code"] == "A"
@@ -199,6 +200,7 @@ def test_site_groups_count_only_explicit_portal_assignments(client, auth_headers
     response = client.get("/api/client-portal/sites", headers=portal_headers)
     site = next(row for row in response.json() if row["id"] == site_id)
     assert all(group["assigned"] == 0 for group in site["groups"])
+    assert site["actual_staff"] == 0
     assert site["employees"][0]["group_code"] is None
 
 
