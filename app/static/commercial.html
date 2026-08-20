@@ -634,10 +634,15 @@ async function openDevisModal(devisId){
       devisExistingLignes=devisLignes.map(l=>l.id);
       statusRow.classList.remove("hidden");
       const canValider=devis.status==="brouillon", canConvertir=devis.status==="envoyé"||devis.status==="accepté";
+      const locked=devis.status==="accepté"||devis.status==="annulé";
       statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(devis.numero||"")}</span><span class="pill pill-gray">${esc(devis.status||"")}</span>
         ${canValider?`<button type="button" class="btn" onclick="validerDevis(${devisId})">Envoyer au client</button>`:""}
         ${canConvertir?`<button type="button" class="btn primary" onclick="convertirDevis(${devisId})">Convertir en commande</button>`:""}
-        <a class="btn" href="/api/ventes/devis/${devisId}/pdf" target="_blank">Export PDF</a>`;
+        <a class="btn" href="/api/ventes/devis/${devisId}/pdf" target="_blank">Export PDF</a>
+        ${locked?`<span class="cell-meta">Devis ${esc(devis.status)} — lecture seule</span>`:""}`;
+      document.querySelectorAll("#devisModalBackdrop .field-grid input,#devisModalBackdrop .field-grid select,#devisModalBackdrop .field-grid textarea").forEach(el=>el.disabled=locked);
+      document.querySelector("#devisModalBackdrop .ligne-add-btn").classList.toggle("hidden",locked);
+      document.getElementById("devisSubmitBtn").classList.toggle("hidden",locked);
     }catch(error){showBanner(error.message,"error");return}
   }else{
     document.getElementById("dDate").value=today();
@@ -646,6 +651,9 @@ async function openDevisModal(devisId){
     document.getElementById("dNotes").value="";
     devisLignes=[];devisExistingLignes=[];
     statusRow.classList.add("hidden");statusRow.innerHTML="";
+    document.querySelectorAll("#devisModalBackdrop .field-grid input,#devisModalBackdrop .field-grid select,#devisModalBackdrop .field-grid textarea").forEach(el=>el.disabled=false);
+    document.querySelector("#devisModalBackdrop .ligne-add-btn").classList.remove("hidden");
+    document.getElementById("devisSubmitBtn").classList.remove("hidden");
   }
   renderDevisLignes();
   document.getElementById("devisModalBackdrop").classList.remove("hidden");
@@ -763,7 +771,11 @@ async function openCommandeModal(cmdId){
       document.getElementById("cmNotes").value=cmd.notes||"";
       commandeLignes=(cmd.lignes||[]).map(l=>({...l}));
       statusRow.classList.remove("hidden");
-      statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(cmd.numero||"")}</span><span class="pill pill-gray">${esc(cmd.status||"")}</span>${cmd.devis_id?`<span class="pill pill-gray">Issue du devis #${cmd.devis_id}</span>`:""}`;
+      const locked=cmd.status==="annulée";
+      statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(cmd.numero||"")}</span><span class="pill pill-gray">${esc(cmd.status||"")}</span>${cmd.devis_id?`<span class="pill pill-gray">Issue du devis #${cmd.devis_id}</span>`:""}${locked?`<span class="cell-meta">Commande annulée — lecture seule</span>`:""}`;
+      document.querySelectorAll("#commandeModalBackdrop .field-grid input,#commandeModalBackdrop .field-grid select,#commandeModalBackdrop .field-grid textarea").forEach(el=>el.disabled=locked);
+      document.querySelector("#commandeModalBackdrop .ligne-add-btn").classList.toggle("hidden",locked);
+      document.getElementById("commandeSubmitBtn").classList.toggle("hidden",locked);
     }catch(error){showBanner(error.message,"error");return}
   }else{
     document.getElementById("cmDate").value=today();
@@ -772,6 +784,9 @@ async function openCommandeModal(cmdId){
     document.getElementById("cmNotes").value="";
     commandeLignes=[];
     statusRow.classList.add("hidden");statusRow.innerHTML="";
+    document.querySelectorAll("#commandeModalBackdrop .field-grid input,#commandeModalBackdrop .field-grid select,#commandeModalBackdrop .field-grid textarea").forEach(el=>el.disabled=false);
+    document.querySelector("#commandeModalBackdrop .ligne-add-btn").classList.remove("hidden");
+    document.getElementById("commandeSubmitBtn").classList.remove("hidden");
   }
   renderCommandeLignes();
   document.getElementById("commandeModalBackdrop").classList.remove("hidden");
@@ -880,8 +895,12 @@ async function openLivraisonModal(blId){
       document.getElementById("lNotes").value=bl.notes||"";
       document.getElementById("lStatus").value=bl.status||"brouillon";
       livraisonLignes=(bl.lignes||[]).map(l=>({...l}));
-      statusRow.classList.remove("hidden");statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(bl.numero||"")}</span>${bl.commande_id?`<span class="pill pill-gray">Depuis commande #${bl.commande_id}</span>`:""}`;
+      const locked=bl.status==="annulé";
+      statusRow.classList.remove("hidden");statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(bl.numero||"")}</span>${bl.commande_id?`<span class="pill pill-gray">Depuis commande #${bl.commande_id}</span>`:""}${locked?`<span class="cell-meta">Bon annulé — lecture seule</span>`:""}`;
       statusWrap.classList.remove("hidden");
+      document.querySelectorAll("#livraisonModalBackdrop .field-grid input,#livraisonModalBackdrop .field-grid select,#livraisonModalBackdrop .field-grid textarea").forEach(el=>el.disabled=locked);
+      document.querySelector("#livraisonModalBackdrop .ligne-add-btn").classList.toggle("hidden",locked);
+      document.getElementById("livraisonSubmitBtn").classList.toggle("hidden",locked);
     }catch(error){showBanner(error.message,"error");return}
   }else{
     document.getElementById("lDate").value=today();
@@ -889,6 +908,9 @@ async function openLivraisonModal(blId){
     livraisonLignes=[];
     statusRow.classList.add("hidden");statusRow.innerHTML="";
     statusWrap.classList.add("hidden");
+    document.querySelectorAll("#livraisonModalBackdrop .field-grid input,#livraisonModalBackdrop .field-grid select,#livraisonModalBackdrop .field-grid textarea").forEach(el=>el.disabled=false);
+    document.querySelector("#livraisonModalBackdrop .ligne-add-btn").classList.remove("hidden");
+    document.getElementById("livraisonSubmitBtn").classList.remove("hidden");
   }
   renderLivraisonLignes();
   document.getElementById("livraisonModalBackdrop").classList.remove("hidden");
