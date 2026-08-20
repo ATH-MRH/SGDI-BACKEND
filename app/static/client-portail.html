@@ -609,7 +609,7 @@ async function openEmployeeActionModal(employeeId,action){
       const sites=assignmentOptionsCache.sites||[],groups=assignmentOptionsCache.groups||[],plannings=assignmentOptionsCache.plannings||[];
       document.getElementById("employeeTargetSite").innerHTML='<option value="">Choisir un site</option>'+sites.map(s=>`<option value="${s.id}" ${s.id===e.site_id?"selected":""}>${esc(s.name)}</option>`).join("");
       document.getElementById("employeeTargetGroup").innerHTML='<option value="">Choisir un groupe</option>'+groups.map(g=>`<option value="${esc(g)}" ${g===e.group_code?"selected":""}>Groupe ${esc(g)}</option>`).join("");
-      document.getElementById("employeeTargetPlanning").innerHTML='<option value="">Choisir un planning</option>'+plannings.map(p=>`<option value="${p.id}">${esc(p.name)} (${esc(p.code)})</option>`).join("");
+      document.getElementById("employeeTargetPlanning").innerHTML='<option value="">Conserver le planning actuel</option>'+plannings.map(p=>`<option value="${p.id}">${esc(p.name)} (${esc(p.code)})</option>`).join("");
       document.getElementById("employeeEffectiveDate").value=today();
     }catch(error){actionError.textContent=error.message;actionError.classList.add("show")}
   }
@@ -621,8 +621,8 @@ async function submitEmployeeActionRequest(){
   const form=new FormData();form.append("employee_id",employeeActionRequest.employee.id);form.append("action",employeeActionRequest.action);form.append("reason",reason);const file=document.getElementById("employeeActionFile").files[0];if(employeeActionRequest.action!=="affectation"&&file)form.append("file",file);
   if(employeeActionRequest.action==="affectation"){
     const site=document.getElementById("employeeTargetSite").value,group=document.getElementById("employeeTargetGroup").value,planning=document.getElementById("employeeTargetPlanning").value,effectiveDate=document.getElementById("employeeEffectiveDate").value;
-    if(!site||!group||!planning||!effectiveDate){error.textContent="Le site, le groupe, le planning et la date d’effet sont obligatoires.";error.classList.add("show");return}
-    form.append("target_site_id",site);form.append("target_group_code",group);form.append("target_rotation_id",planning);form.append("effective_date",effectiveDate);
+    if(!site||!group||!effectiveDate){error.textContent="Le site, le groupe et la date d’effet sont obligatoires.";error.classList.add("show");return}
+    form.append("target_site_id",site);form.append("target_group_code",group);if(planning)form.append("target_rotation_id",planning);form.append("effective_date",effectiveDate);
   }
   const action=employeeActionRequest.action,appliedGroup=action==="affectation"?document.getElementById("employeeTargetGroup").value:"";btn.disabled=true;btn.textContent=action==="affectation"?"Validation…":"Envoi…";try{await apiFetch("/employee-action-requests",{method:"POST",body:form});if(action==="affectation"){const employee=employeeById(employeeActionRequest.employee.id);if(employee)employee.group_code=appliedGroup;sitesCache=[];portalSearchLoaded.sites=false;if(!document.getElementById("sitesTab").classList.contains("hidden"))await loadSites({silent:true})}closeEmployeeActionModal();closeEmployeeDetail();showBanner(action==="affectation"?`Groupe ${appliedGroup} appliqué et information transmise à ATLAS / OPS.`:"Votre demande a été transmise à l’administration.","success");portalSearchLoaded.history=false}catch(e){error.textContent=e.message||"Envoi impossible";error.classList.add("show")}finally{btn.disabled=false;btn.textContent=action==="affectation"?"Valider":"Envoyer la demande"}
 }

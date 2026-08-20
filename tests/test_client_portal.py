@@ -316,6 +316,16 @@ def test_client_can_submit_employee_action_request_with_attachment(client, auth_
     current_site = next(row for row in sites.json() if row["id"] == site_id)
     assert next(row for row in current_site["employees"] if row["id"] == employee_id)["group_code"] == "B"
 
+    group_only_request = client.post(
+        "/api/client-portal/employee-action-requests", headers=portal_headers,
+        data={
+            "employee_id": str(employee_id), "action": "affectation", "reason": "Retour dans le groupe principal",
+            "target_site_id": str(site_id), "target_group_code": "A", "effective_date": "2026-09-02",
+        },
+    )
+    assert group_only_request.status_code == 201, group_only_request.text
+    assert "Planning actuel conservé" in group_only_request.json()["description"]
+
 
 # ── Visibilité des employés : dérivée du site, PAS de Site.client_name ─────────────────
 

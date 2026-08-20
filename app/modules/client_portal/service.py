@@ -577,14 +577,15 @@ def create_employee_action_request(
         if group_code not in GROUP_LETTERS:
             raise HTTPException(status_code=422, detail="Veuillez sélectionner un groupe")
         rotation = db.get(RotationTemplate, target_rotation_id) if target_rotation_id else None
-        if not rotation or not rotation.active:
+        if target_rotation_id and (not rotation or not rotation.active):
             raise HTTPException(status_code=422, detail="Veuillez sélectionner un planning actif")
+        planning_label = f"Planning {rotation.name} ({rotation.code})" if rotation else "Planning actuel conservé"
         current_group = _site_portal_group_assignments(site).get(str(employee_id))
         description = (
             f"Motif : {cleaned_reason}\n"
             f"Affectation actuelle : {site.name} · Groupe {current_group or 'Aucun'}\n"
             f"Nouvelle affectation demandée : {target_site.name} · Groupe {group_code} · "
-            f"Planning {rotation.name} ({rotation.code}) · Date d’effet {(effective_date or date.today()).isoformat()}"
+            f"{planning_label} · Date d’effet {(effective_date or date.today()).isoformat()}"
         )
         assignment = db.execute(
             select(Assignment).where(
