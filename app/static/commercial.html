@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c2749">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Commercial ATLAS">
+<title>COMMERCIAL — ATLAS</title>
+<link rel="icon" href="/static/sgdi-icon-192.png">
+<link rel="apple-touch-icon" href="/static/sgdi-icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light dark}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;background:light-dark(#f4f7fb,#0a1420);color:light-dark(#10233e,#eef4fa)}
+button,input,select,textarea{font:inherit;color:inherit}
+.hidden{display:none!important}
+a{color:light-dark(#123f6f,#7fb0e6)}
+
+/* ---- Login ---- */
+.login{min-height:100vh;padding:24px;display:flex;align-items:center;justify-content:center;background:light-dark(radial-gradient(circle at 15% 15%,#e7edf6,transparent 55%) , #0a1420),light-dark(#eef2f8,#0a1420)}
+.login-card{width:100%;max-width:400px;background:light-dark(#fff,#111b29);border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:22px;padding:32px 30px;box-shadow:0 24px 70px rgba(9,30,57,.16)}
+.login-logo{width:56px;height:56px;border-radius:16px;margin:0 auto 16px;background:light-dark(#0c2749,#123f6f);color:#fff;display:grid;place-items:center;font-size:16px;font-weight:900;letter-spacing:.02em}
+.login-title{font-size:21px;font-weight:900;text-align:center;margin:0;letter-spacing:-.01em}
+.login-sub{text-align:center;color:light-dark(#718399,#8ea2b7);margin:7px 0 22px;font-size:13px}
+label{display:block;font-size:11px;font-weight:800;color:light-dark(#597087,#a8b7c8);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+input,select,textarea{width:100%;border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:11px;padding:0 12px;color:inherit;background:light-dark(#fff,#0d1725);font-size:13.5px}
+input,select{height:40px}
+textarea{padding:9px 12px;min-height:70px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:0;border-color:#123f6f;box-shadow:0 0 0 3px rgba(18,63,111,.14)}
+.btn{border:1px solid light-dark(#cbd8e6,#3c4c60);background:light-dark(#fff,#162235);color:light-dark(#173451,#eef4fa);padding:10px 16px;border-radius:11px;font-weight:800;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.btn.primary{background:#123f6f;border-color:#123f6f;color:#fff}
+.btn.primary:hover{background:#0c2749}
+.btn.danger{background:#c8102e;border-color:#c8102e;color:#fff}
+.btn:disabled{opacity:.55;cursor:default}
+.btn-block{width:100%;justify-content:center;margin-top:16px}
+.error{display:none;margin-top:13px;border-radius:11px;padding:11px;background:#fdeceb;color:#a1122a;font-size:13px;font-weight:700}
+.error.show{display:block}
+
+/* ---- App shell ---- */
+.app{min-height:100vh;padding-bottom:40px}
+.top{background:light-dark(#0c2749,#07172b);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:14px;box-shadow:0 8px 26px rgba(9,30,57,.2)}
+.top-brand{display:flex;align-items:center;gap:12px}
+.top-logo{width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);display:grid;place-items:center;font-weight:900;font-size:13px}
+.top-title{font-size:16.5px;font-weight:850;letter-spacing:-.01em}
+.top-sub{font-size:11.5px;color:#9fb3ca;margin-top:2px}
+.top-actions{display:flex;align-items:center;gap:10px}
+.society-badge{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);border-radius:999px;padding:6px 12px;font-size:11.5px;font-weight:750}
+.society-select{height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.92);color:#10233e;font-size:12px;font-weight:750;padding:0 9px}
+.logout{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:8px 13px;font-weight:750;font-size:12.5px;cursor:pointer}
+.shell{max-width:1360px;margin:0 auto;padding:20px 24px;display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;align-items:start}
+.sidebar{background:light-dark(#fff,#111b29);border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:18px;padding:12px;position:sticky;top:20px;box-shadow:0 14px 34px rgba(9,30,57,.06)}
+.sidebar-title{padding:8px 10px 12px;font-size:10px;font-weight:900;color:light-dark(#7a8da2,#8ea2b7);letter-spacing:.1em;text-transform:uppercase}
+.nav{display:flex;flex-direction:column;gap:5px}
+.nav-btn{width:100%;border:0;background:transparent;color:light-dark(#304963,#c6d3e0);border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:11px;text-align:left;font-size:13px;font-weight:800;cursor:pointer}
+.nav-btn:hover{background:light-dark(#eef3f9,#182535)}
+.nav-btn.active{background:#123f6f;color:#fff;box-shadow:0 8px 18px rgba(18,63,111,.25)}
+.nav-icon{width:24px;height:24px;border-radius:8px;background:light-dark(#eaf1fb,#182535);color:#123f6f;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.nav-btn.active .nav-icon{background:rgba(255,255,255,.18);color:#fff}
+.nav-icon svg{width:14px;height:14px}
+.main{min-width:0}
+.section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.section-head h1{font-size:21px;margin:0;font-weight:900;letter-spacing:-.01em}
+.section-head p{font-size:13px;color:light-dark(#718399,#8ea2b7);margin:5px 0 0}
+.banner{border-radius:13px;padding:12px 15px;margin-bottom:14px;font-size:13px;font-weight:700}
+.banner.success{background:#e8f6ee;color:#187044}
+.banner.error{background:#fdeceb;color:#a1122a}
+
+/* ---- Toolbar / table / pagination ---- */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.search-box{position:relative;flex:1;min-width:220px}
+.search-box svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:light-dark(#7a8da2,#8ea2b7)}
+.search-box input{padding-left:36px}
+select.filter{height:40px;width:auto;font-size:12.5px;font-weight:700}
+.table-card{background:light-dark(#fff,#111b29);border:1px solid light-dark(#dce5ef,#2b3b50);border-radius:18px;overflow:hidden;box-shadow:0 14px 34px rgba(9,30,57,.06)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:10.5px;letter-spacing:.03em;text-transform:uppercase;color:light-dark(#7a8da2,#8ea2b7);font-weight:800;padding:12px 14px;border-bottom:1px solid light-dark(#dce5ef,#2b3b50);background:light-dark(#f7f9fc,#0d1725);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid light-dark(#eef2f7,#1b2635);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tr.clickable{cursor:pointer}
+tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
+.cell-strong{font-weight:800}
+.cell-meta{font-size:11px;color:light-dark(#7a8da2,#8ea2b7);margin-top:2px}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:4px 10px;font-size:10.5px;font-weight:800;white-space:nowrap}
+.pill-blue{background:#eaf1fb;color:#224b7c}.pill-green{background:#e8f6ee;color:#187044}.pill-amber{background:#fdf3dd;color:#8a6206}.pill-red{background:#fdeceb;color:#a1122a}.pill-gray{background:#eef1f5;color:#5a6b7d}
+.empty{text-align:center;color:light-dark(#94a3b8,#5a6b7d);padding:44px 20px;font-size:13.5px}
+.pagination{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 15px;font-size:12px;color:light-dark(#718399,#8ea2b7)}
+.pagination .btns{display:flex;gap:8px}
+.pagination button{border:1px solid light-dark(#dce5ef,#2b3b50);background:light-dark(#fff,#0d1725);border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer;font-size:12px}
+.pagination button:disabled{opacity:.4;cursor:default}
+.row-actions{display:flex;gap:4px;justify-content:flex-end}
+.link-btn{border:0;background:none;color:#123f6f;font-weight:800;font-size:11.5px;cursor:pointer;padding:5px 6px}
+.link-btn.danger{color:#c8102e}
+
+/* ---- Modal ---- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(9,20,36,.5);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;z-index:50}
+.modal{width:100%;max-width:760px;background:light-dark(#fff,#111b29);border-radius:20px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.32)}
+.modal.narrow{max-width:480px}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.modal-head h2{font-size:18px;margin:0;font-weight:900}
+.modal-close{border:0;background:none;font-size:19px;color:light-dark(#7a8da2,#8ea2b7);cursor:pointer;line-height:1}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.field-grid .full{grid-column:1/-1}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.status-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0}
+
+/* ---- Line items editor ---- */
+.lignes-table{width:100%;border-collapse:collapse;margin-top:6px}
+.lignes-table th{font-size:9.5px;padding:6px 6px;background:none;border-bottom:1px solid light-dark(#dce5ef,#2b3b50)}
+.lignes-table td{padding:5px 6px;border-bottom:1px solid light-dark(#eef2f7,#1b2635)}
+.lignes-table input{height:32px;font-size:12px;padding:0 8px}
+.ligne-remove{border:0;background:none;color:#c8102e;font-size:16px;font-weight:900;cursor:pointer;line-height:1}
+.ligne-add-btn{margin-top:8px}
+.totals-row{display:flex;justify-content:flex-end;gap:20px;margin-top:12px;padding-top:12px;border-top:1px solid light-dark(#dce5ef,#2b3b50);font-size:12.5px}
+.totals-row b{font-size:14px}
+
+@media(max-width:1000px){.shell{grid-template-columns:1fr}.sidebar{position:static}.nav{flex-direction:row;overflow-x:auto}.nav-btn{min-width:max-content}}
+@media(max-width:640px){.field-grid{grid-template-columns:1fr}.top{padding:14px 16px}.top-title{font-size:14px}.shell{padding:14px}}
+</style>
+</head>
+<body>
+<section id="loginView" class="login">
+  <form class="login-card" onsubmit="event.preventDefault();login()">
+    <div class="login-logo">COM</div>
+    <h1 class="login-title">Commercial ATLAS</h1>
+    <p class="login-sub">Clients, devis, commandes et livraisons</p>
+    <label for="username">Identifiant</label>
+    <input id="username" autocomplete="username" required>
+    <label for="password">Mot de passe</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button id="loginBtn" class="btn primary btn-block">SE CONNECTER</button>
+    <div id="loginError" class="error"></div>
+  </form>
+</section>
+
+<section id="appView" class="app hidden">
+  <header class="top">
+    <div class="top-brand">
+      <div class="top-logo">COM</div>
+      <div><div class="top-title">COMMERCIAL</div><div class="top-sub" id="userLabel">—</div></div>
+    </div>
+    <div class="top-actions">
+      <span id="societyBadge" class="society-badge hidden"></span>
+      <select id="societySelect" class="society-select hidden" onchange="onSocietyChange()"></select>
+      <button class="logout" onclick="logout()">Déconnexion</button>
+    </div>
+  </header>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navigation commercial">
+      <div class="sidebar-title">Espace commercial</div>
+      <nav class="nav">
+        <button class="nav-btn" data-tab="clients" onclick="switchTab('clients')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.4-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.3" cy="8.6" r="2.6"/><path d="M15.8 14.6c2.5.3 4.4 2.1 5 5"/></svg></span>Clients</button>
+        <button class="nav-btn" data-tab="devis" onclick="switchTab('devis')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></span>Devis</button>
+        <button class="nav-btn" data-tab="commandes" onclick="switchTab('commandes')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18l-1.5 12h-15z"/><path d="M8 7V5.5a4 4 0 0 1 8 0V7"/></svg></span>Commandes</button>
+        <button class="nav-btn" data-tab="livraisons" onclick="switchTab('livraisons')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="8.5" width="13" height="10" rx="1.5"/><path d="M15.5 11h3.5l3 3.5v4h-6.5z"/><circle cx="6.5" cy="19.5" r="1.6"/><circle cx="17" cy="19.5" r="1.6"/></svg></span>Bons de livraison</button>
+      </nav>
+    </aside>
+    <main class="main">
+      <div id="banner"></div>
+
+      <section id="clientsSection">
+        <div class="section-head"><div><h1>Clients</h1><p>Fiches commerciales et coordonnées de vos clients.</p></div><button class="btn primary" onclick="openClientModal(null)">+ Nouveau client</button></div>
+        <div class="toolbar">
+          <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="clientsSearch" placeholder="Rechercher un client…" oninput="debounceReload('clients')"></div>
+          <select id="clientsStatusFilter" class="filter" onchange="loadClients()"><option value="">Tous les statuts</option><option value="actif">Actif</option><option value="inactif">Inactif</option><option value="prospect">Prospect</option></select>
+        </div>
+        <div class="table-card">
+          <div id="clientsList"><div class="empty">Chargement…</div></div>
+          <div class="pagination" id="clientsPagination"></div>
+        </div>
+      </section>
+
+      <section id="devisSection" class="hidden">
+        <div class="section-head"><div><h1>Devis</h1><p>Propositions commerciales envoyées à vos clients.</p></div><button class="btn primary" onclick="openDevisModal()">+ Nouveau devis</button></div>
+        <div class="toolbar">
+          <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="devisSearch" placeholder="Rechercher un devis (n°, client, objet)…" oninput="debounceReload('devis')"></div>
+          <select id="devisStatusFilter" class="filter" onchange="loadDevis()"><option value="">Tous les statuts</option><option value="brouillon">Brouillon</option><option value="envoyé">Envoyé</option><option value="accepté">Accepté</option><option value="annulé">Annulé</option></select>
+        </div>
+        <div class="table-card">
+          <div id="devisList"><div class="empty">Chargement…</div></div>
+          <div class="pagination" id="devisPagination"></div>
+        </div>
+      </section>
+
+      <section id="commandesSection" class="hidden">
+        <div class="section-head"><div><h1>Commandes</h1><p>Commandes clients confirmées, issues ou non d'un devis.</p></div><button class="btn primary" onclick="openCommandeModal()">+ Nouvelle commande</button></div>
+        <div class="toolbar">
+          <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="commandesSearch" placeholder="Rechercher une commande (n°, client, objet)…" oninput="debounceReload('commandes')"></div>
+          <select id="commandesStatusFilter" class="filter" onchange="loadCommandes()"><option value="">Tous les statuts</option><option value="brouillon">Brouillon</option><option value="confirmée">Confirmée</option><option value="livrée">Livrée</option><option value="annulée">Annulée</option></select>
+        </div>
+        <div class="table-card">
+          <div id="commandesList"><div class="empty">Chargement…</div></div>
+          <div class="pagination" id="commandesPagination"></div>
+        </div>
+      </section>
+
+      <section id="livraisonsSection" class="hidden">
+        <div class="section-head"><div><h1>Bons de livraison</h1><p>Suivi des livraisons effectuées à vos clients.</p></div><button class="btn primary" onclick="openLivraisonModal()">+ Nouveau bon</button></div>
+        <div class="toolbar">
+          <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="livraisonsSearch" placeholder="Rechercher un bon (n°, client)…" oninput="debounceReload('livraisons')"></div>
+          <select id="livraisonsStatusFilter" class="filter" onchange="loadLivraisons()"><option value="">Tous les statuts</option><option value="brouillon">Brouillon</option><option value="livré">Livré</option><option value="partiel">Partiel</option><option value="annulé">Annulé</option></select>
+        </div>
+        <div class="table-card">
+          <div id="livraisonsList"><div class="empty">Chargement…</div></div>
+          <div class="pagination" id="livraisonsPagination"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</section>
+
+<!-- Client modal -->
+<div id="clientModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeClientModal()">
+  <div class="modal">
+    <div class="modal-head"><h2 id="clientModalTitle">Nouveau client</h2><button class="modal-close" onclick="closeClientModal()">×</button></div>
+    <div class="field-grid">
+      <div class="full"><label for="cName">Nom commercial</label><input id="cName" required></div>
+      <div><label for="cLegalName">Raison sociale</label><input id="cLegalName"></div>
+      <div><label for="cSociety">Société ATLAS</label><select id="cSociety"></select></div>
+      <div><label for="cStructure">Structure</label><input id="cStructure"></div>
+      <div><label for="cStatus">Statut</label><select id="cStatus"><option value="actif">Actif</option><option value="inactif">Inactif</option><option value="prospect">Prospect</option></select></div>
+      <div><label for="cContactName">Contact</label><input id="cContactName"></div>
+      <div><label for="cContactPosition">Fonction du contact</label><input id="cContactPosition"></div>
+      <div><label for="cPhone">Téléphone</label><input id="cPhone"></div>
+      <div><label for="cEmail">Email</label><input id="cEmail" type="email"></div>
+      <div class="full"><label for="cAddress">Adresse</label><input id="cAddress"></div>
+      <div><label for="cNif">NIF</label><input id="cNif"></div>
+      <div><label for="cRc">RC</label><input id="cRc"></div>
+      <div class="full"><label for="cServices">Services / prestations</label><input id="cServices"></div>
+      <div><label for="cContractStart">Début de contrat</label><input id="cContractStart" type="date"></div>
+      <div><label for="cContractDuration">Durée du contrat</label><input id="cContractDuration" placeholder="12 mois"></div>
+      <div><label for="cContractEnd">Fin de contrat</label><input id="cContractEnd" type="date"></div>
+      <div><label for="cPortalSlug">Sous-domaine portail client</label><input id="cPortalSlug" placeholder="sonatrach"></div>
+      <div class="full"><label for="cNotes">Notes</label><textarea id="cNotes"></textarea></div>
+    </div>
+    <div id="clientError" class="error"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeClientModal()">Annuler</button>
+      <button class="btn primary" id="clientSubmitBtn" onclick="submitClient()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Devis modal -->
+<div id="devisModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeDevisModal()">
+  <div class="modal">
+    <div class="modal-head"><h2 id="devisModalTitle">Nouveau devis</h2><button class="modal-close" onclick="closeDevisModal()">×</button></div>
+    <div id="devisStatusRow" class="status-row hidden"></div>
+    <div class="field-grid">
+      <div><label for="dSociety">Société</label><select id="dSociety"></select></div>
+      <div><label for="dClient">Client</label><select id="dClient" onchange="onDevisClientChange()"></select></div>
+      <div><label for="dDate">Date du devis</label><input id="dDate" type="date"></div>
+      <div><label for="dValidite">Valide jusqu'au</label><input id="dValidite" type="date"></div>
+      <div class="full"><label for="dObjet">Objet</label><input id="dObjet"></div>
+      <div class="full"><label for="dNotes">Notes</label><textarea id="dNotes"></textarea></div>
+    </div>
+    <label>Lignes</label>
+    <table class="lignes-table"><thead><tr><th>Désignation</th><th>Qté</th><th>Unité</th><th>P.U. HT</th><th>TVA %</th><th></th></tr></thead><tbody id="devisLignesBody"></tbody></table>
+    <button type="button" class="btn ligne-add-btn" onclick="addDevisLigne()">+ Ajouter une ligne</button>
+    <div class="totals-row" id="devisTotals"></div>
+    <div id="devisError" class="error"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDevisModal()">Fermer</button>
+      <button class="btn primary" id="devisSubmitBtn" onclick="submitDevis()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Commande modal -->
+<div id="commandeModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeCommandeModal()">
+  <div class="modal">
+    <div class="modal-head"><h2 id="commandeModalTitle">Nouvelle commande</h2><button class="modal-close" onclick="closeCommandeModal()">×</button></div>
+    <div id="commandeStatusRow" class="status-row hidden"></div>
+    <div class="field-grid">
+      <div><label for="cmSociety">Société</label><select id="cmSociety"></select></div>
+      <div><label for="cmClient">Client</label><select id="cmClient" onchange="onCommandeClientChange()"></select></div>
+      <div><label for="cmDate">Date de commande</label><input id="cmDate" type="date"></div>
+      <div><label for="cmLivraisonPrevue">Livraison prévue</label><input id="cmLivraisonPrevue" type="date"></div>
+      <div class="full"><label for="cmObjet">Objet</label><input id="cmObjet"></div>
+      <div class="full"><label for="cmNotes">Notes</label><textarea id="cmNotes"></textarea></div>
+    </div>
+    <label>Lignes</label>
+    <table class="lignes-table"><thead><tr><th>Désignation</th><th>Qté</th><th>Unité</th><th>P.U. HT</th><th>TVA %</th><th></th></tr></thead><tbody id="commandeLignesBody"></tbody></table>
+    <button type="button" class="btn ligne-add-btn" onclick="addCommandeLigne()">+ Ajouter une ligne</button>
+    <div class="totals-row" id="commandeTotals"></div>
+    <div id="commandeError" class="error"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeCommandeModal()">Fermer</button>
+      <button class="btn primary" id="commandeSubmitBtn" onclick="submitCommande()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Livraison modal -->
+<div id="livraisonModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeLivraisonModal()">
+  <div class="modal">
+    <div class="modal-head"><h2 id="livraisonModalTitle">Nouveau bon de livraison</h2><button class="modal-close" onclick="closeLivraisonModal()">×</button></div>
+    <div id="livraisonStatusRow" class="status-row hidden"></div>
+    <div class="field-grid">
+      <div><label for="lSociety">Société</label><select id="lSociety"></select></div>
+      <div><label for="lClient">Client</label><select id="lClient" onchange="onLivraisonClientChange()"></select></div>
+      <div><label for="lDate">Date de livraison</label><input id="lDate" type="date"></div>
+      <div id="lStatusWrap" class="hidden"><label for="lStatus">Statut</label><select id="lStatus"><option value="brouillon">Brouillon</option><option value="livré">Livré</option><option value="partiel">Partiel</option><option value="annulé">Annulé</option></select></div>
+      <div class="full"><label for="lNotes">Notes</label><textarea id="lNotes"></textarea></div>
+    </div>
+    <label>Lignes</label>
+    <table class="lignes-table"><thead><tr><th>Désignation</th><th>Qté commandée</th><th>Qté livrée</th><th>Unité</th><th></th></tr></thead><tbody id="livraisonLignesBody"></tbody></table>
+    <button type="button" class="btn ligne-add-btn" onclick="addLivraisonLigne()">+ Ajouter une ligne</button>
+    <div id="livraisonError" class="error"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeLivraisonModal()">Fermer</button>
+      <button class="btn primary" id="livraisonSubmitBtn" onclick="submitLivraison()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SESSION_KEY="atlas_commercial_session";
+let session=null;
+let activeTab="clients";
+let activeSociety="";
+const SOCIETES_FALLBACK=["IRON GLOBAL SÉCURITÉ","IRON GLOBAL SOLUTION","SWORD CORPORATION","SWORD CONSTRUCTION"];
+let clientsCache=[];
+const PAGE_SIZE=25;
+const state={
+  clients:{page:1,pages:1,total:0},
+  devis:{page:1,pages:1,total:0},
+  commandes:{page:1,pages:1,total:0},
+  livraisons:{page:1,pages:1,total:0},
+};
+let editingDevisId=null, devisLignes=[], devisExistingLignes=[];
+let editingCommandeId=null, commandeLignes=[], commandeExistingLignes=[];
+let editingLivraisonId=null, livraisonLignes=[], livraisonExistingLignes=[];
+let debounceTimers={};
+
+function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
+function fmtMoney(value){const n=Number(value)||0;return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtDate(value){
+  const m=String(value||"").slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m?`${m[3]}/${m[2]}/${m[1]}`:"—";
+}
+function today(){return new Date().toISOString().slice(0,10)}
+function debounceReload(key){
+  clearTimeout(debounceTimers[key]);
+  debounceTimers[key]=setTimeout(()=>{
+    state[key].page=1;
+    ({clients:loadClients,devis:loadDevis,commandes:loadCommandes,livraisons:loadLivraisons})[key]();
+  },300);
+}
+function showBanner(message,type){
+  const host=document.getElementById("banner");
+  if(!message){host.innerHTML="";return}
+  host.innerHTML=`<div class="banner ${type}">${esc(message)}</div>`;
+  if(type==="success")setTimeout(()=>{if(host.innerHTML.includes(esc(message)))host.innerHTML=""},4000);
+}
+function showLoginError(message){const el=document.getElementById("loginError");el.textContent=message;el.classList.toggle("show",!!message)}
+
+function societyOptionsHtml(selected){
+  const list=(session?.user?.authorized_societies?.length?session.user.authorized_societies:SOCIETES_FALLBACK);
+  return list.map(s=>`<option value="${esc(s)}" ${s===selected?"selected":""}>${esc(s)}</option>`).join("");
+}
+
+async function login(){
+  const button=document.getElementById("loginBtn");
+  button.disabled=true;button.textContent="CONNEXION…";showLoginError("");
+  try{
+    const response=await fetch("/api/auth/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:document.getElementById("username").value.trim(),password:document.getElementById("password").value})});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.detail||"Connexion refusée");
+    session={token:data.access_token,user:data.user};
+    localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+    enterApp();
+  }catch(error){showLoginError(error.message||"Connexion impossible")}
+  finally{button.disabled=false;button.textContent="SE CONNECTER"}
+}
+function logout(){
+  localStorage.removeItem(SESSION_KEY);session=null;
+  document.getElementById("appView").classList.add("hidden");
+  document.getElementById("loginView").classList.remove("hidden");
+  document.getElementById("password").value="";
+}
+function enterApp(){
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
+  const user=session?.user||{};
+  document.getElementById("userLabel").textContent=(user.full_name||user.username||"Commercial")+" · "+(user.username||"");
+  const societies=Array.isArray(user.authorized_societies)?user.authorized_societies.filter(Boolean):[];
+  const badge=document.getElementById("societyBadge"),select=document.getElementById("societySelect");
+  if(societies.length>1){
+    select.innerHTML=societies.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join("");
+    activeSociety=societies[0];select.value=activeSociety;
+    select.classList.remove("hidden");badge.classList.add("hidden");
+  }else{
+    activeSociety=societies[0]||"";
+    if(activeSociety){badge.textContent=activeSociety;badge.classList.remove("hidden")}
+    select.classList.add("hidden");
+  }
+  loadClientsList().then(()=>switchTab("clients"));
+}
+function onSocietyChange(){
+  activeSociety=document.getElementById("societySelect").value||"";
+  Object.keys(state).forEach(k=>state[k].page=1);
+  refreshCurrentTab();
+}
+function refreshCurrentTab(){
+  ({clients:loadClients,devis:loadDevis,commandes:loadCommandes,livraisons:loadLivraisons})[activeTab]();
+}
+
+async function apiFetch(path,options={}){
+  const response=await fetch(path,{...options,headers:{"Content-Type":"application/json",...(options.headers||{}),Authorization:"Bearer "+session.token}});
+  if(response.status===401){logout();throw new Error("Session expirée")}
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.detail||"Une erreur est survenue");
+  return data;
+}
+
+function switchTab(tab){
+  activeTab=tab;
+  document.querySelectorAll(".nav-btn").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===tab));
+  ["clients","devis","commandes","livraisons"].forEach(t=>document.getElementById(t+"Section").classList.toggle("hidden",t!==tab));
+  showBanner("");
+  refreshCurrentTab();
+}
+
+function renderPagination(key,hostId,loader){
+  const s=state[key];
+  const host=document.getElementById(hostId);
+  host.innerHTML=`<span>${s.total} résultat${s.total>1?"s":""}</span><div class="btns">
+    <button ${s.page<=1?"disabled":""} onclick="${loader}(${s.page-1})">‹ Précédent</button>
+    <span style="align-self:center">Page ${s.page} / ${s.pages}</span>
+    <button ${s.page>=s.pages?"disabled":""} onclick="${loader}(${s.page+1})">Suivant ›</button>
+  </div>`;
+}
+
+/* ── Clients ─────────────────────────────────────────────────────────────── */
+
+async function loadClientsList(){
+  try{clientsCache=await apiFetch("/api/commercial/clients"+(activeSociety?`?society=${encodeURIComponent(activeSociety)}`:""))}catch(e){clientsCache=[]}
+}
+
+async function loadClients(page){
+  if(page)state.clients.page=page;
+  const host=document.getElementById("clientsList");
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const params=new URLSearchParams({page:state.clients.page,page_size:PAGE_SIZE});
+    if(activeSociety)params.set("society",activeSociety);
+    const status=document.getElementById("clientsStatusFilter").value;if(status)params.set("status",status);
+    const q=document.getElementById("clientsSearch").value.trim();if(q)params.set("q",q);
+    const result=await apiFetch("/api/commercial/clients/page?"+params.toString());
+    state.clients.total=result.total||0;state.clients.pages=result.pages||1;
+    const rows=result.items||[];
+    if(!rows.length){host.innerHTML='<div class="empty">Aucun client.</div>';renderPagination("clients","clientsPagination","loadClients");return}
+    host.innerHTML=`<table><thead><tr><th>Client</th><th>Société</th><th>Contact</th><th>Statut</th><th></th></tr></thead><tbody>${rows.map(c=>`
+      <tr class="clickable" onclick="openClientModal(${c.id})">
+        <td><div class="cell-strong">${esc(c.name)}</div>${c.legal_name?`<div class="cell-meta">${esc(c.legal_name)}</div>`:""}</td>
+        <td>${esc(c.society||"—")}</td>
+        <td>${c.contact_name?`${esc(c.contact_name)}<div class="cell-meta">${esc(c.phone||c.email||"")}</div>`:"—"}</td>
+        <td><span class="pill ${c.status==="actif"?"pill-green":c.status==="prospect"?"pill-amber":"pill-gray"}">${esc(c.status||"—")}</span></td>
+        <td class="row-actions"><button class="link-btn" onclick="event.stopPropagation();openClientModal(${c.id})">Modifier</button><button class="link-btn danger" onclick="event.stopPropagation();deleteClient(${c.id})">Supprimer</button></td>
+      </tr>`).join("")}</tbody></table>`;
+    renderPagination("clients","clientsPagination","loadClients");
+  }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
+}
+
+function openClientModal(clientId){
+  document.getElementById("clientModalTitle").textContent=clientId?"Modifier le client":"Nouveau client";
+  document.getElementById("clientModalBackdrop").dataset.id=clientId||"";
+  document.getElementById("cSociety").innerHTML=societyOptionsHtml(activeSociety);
+  document.getElementById("clientError").classList.remove("show");
+  const client=clientId?clientsCache.find(c=>c.id===clientId):null;
+  document.getElementById("cName").value=client?.name||"";
+  document.getElementById("cLegalName").value=client?.legal_name||"";
+  if(client?.society)document.getElementById("cSociety").value=client.society;
+  document.getElementById("cStructure").value=client?.structure||"";
+  document.getElementById("cStatus").value=client?.status||"actif";
+  document.getElementById("cContactName").value=client?.contact_name||"";
+  document.getElementById("cContactPosition").value=client?.contact_position||"";
+  document.getElementById("cPhone").value=client?.phone||"";
+  document.getElementById("cEmail").value=client?.email||"";
+  document.getElementById("cAddress").value=client?.address||"";
+  document.getElementById("cNif").value=client?.nif||"";
+  document.getElementById("cRc").value=client?.rc||"";
+  document.getElementById("cServices").value=client?.services||"";
+  document.getElementById("cContractStart").value=(client?.contract_start||"").slice(0,10);
+  document.getElementById("cContractDuration").value=client?.contract_duration||"";
+  document.getElementById("cContractEnd").value=(client?.contract_end||"").slice(0,10);
+  document.getElementById("cPortalSlug").value=client?.portal_slug||"";
+  document.getElementById("cNotes").value=client?.notes||"";
+  document.getElementById("clientModalBackdrop").classList.remove("hidden");
+}
+function closeClientModal(){document.getElementById("clientModalBackdrop").classList.add("hidden")}
+async function submitClient(){
+  const errorEl=document.getElementById("clientError");errorEl.classList.remove("show");
+  const name=document.getElementById("cName").value.trim();
+  if(name.length<2){errorEl.textContent="Le nom du client est requis.";errorEl.classList.add("show");return}
+  const payload={
+    name,
+    legal_name:document.getElementById("cLegalName").value.trim()||null,
+    society:document.getElementById("cSociety").value||null,
+    structure:document.getElementById("cStructure").value.trim()||null,
+    status:document.getElementById("cStatus").value,
+    contact_name:document.getElementById("cContactName").value.trim()||null,
+    contact_position:document.getElementById("cContactPosition").value.trim()||null,
+    phone:document.getElementById("cPhone").value.trim()||null,
+    email:document.getElementById("cEmail").value.trim()||null,
+    address:document.getElementById("cAddress").value.trim()||null,
+    nif:document.getElementById("cNif").value.trim()||null,
+    rc:document.getElementById("cRc").value.trim()||null,
+    services:document.getElementById("cServices").value.trim()||null,
+    contract_start:document.getElementById("cContractStart").value||null,
+    contract_duration:document.getElementById("cContractDuration").value.trim()||null,
+    contract_end:document.getElementById("cContractEnd").value||null,
+    portal_slug:document.getElementById("cPortalSlug").value.trim()||null,
+    notes:document.getElementById("cNotes").value.trim()||null,
+  };
+  const clientId=document.getElementById("clientModalBackdrop").dataset.id;
+  const btn=document.getElementById("clientSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
+  try{
+    if(clientId)await apiFetch(`/api/commercial/clients/${clientId}`,{method:"PUT",body:JSON.stringify(payload)});
+    else await apiFetch("/api/commercial/clients",{method:"POST",body:JSON.stringify(payload)});
+    closeClientModal();showBanner("Client enregistré.","success");
+    await loadClientsList();loadClients();
+  }catch(error){errorEl.textContent=error.message||"Impossible d’enregistrer ce client.";errorEl.classList.add("show")}
+  finally{btn.disabled=false;btn.textContent="Enregistrer"}
+}
+async function deleteClient(clientId){
+  if(!confirm("Supprimer ce client ?"))return;
+  try{await apiFetch(`/api/commercial/clients/${clientId}`,{method:"DELETE"});showBanner("Client supprimé.","success");await loadClientsList();loadClients()}
+  catch(error){showBanner(error.message||"Suppression impossible.","error")}
+}
+
+function clientSelectOptionsHtml(selectedId){
+  return '<option value="">— Choisir un client —</option>'+clientsCache.map(c=>`<option value="${c.id}" ${String(c.id)===String(selectedId)?"selected":""}>${esc(c.name)}</option>`).join("");
+}
+
+/* ── Lignes helpers (devis / commande partagent le même format prix) ──────── */
+
+function ligneRowHtml(prefix,index,ligne){
+  return `<tr data-index="${index}">
+    <td><input value="${esc(ligne.designation||"")}" oninput="update${prefix}Ligne(${index},'designation',this.value)" placeholder="Désignation"></td>
+    <td style="width:70px"><input type="number" min="0" step="0.01" value="${ligne.quantite??1}" oninput="update${prefix}Ligne(${index},'quantite',this.value)"></td>
+    <td style="width:80px"><input value="${esc(ligne.unite||"")}" oninput="update${prefix}Ligne(${index},'unite',this.value)" placeholder="Pièce"></td>
+    <td style="width:110px"><input type="number" min="0" step="0.01" value="${ligne.prix_unitaire_ht??0}" oninput="update${prefix}Ligne(${index},'prix_unitaire_ht',this.value)"></td>
+    <td style="width:70px"><input type="number" min="0" step="0.1" value="${ligne.tva_pct??19}" oninput="update${prefix}Ligne(${index},'tva_pct',this.value)"></td>
+    <td style="width:26px"><button type="button" class="ligne-remove" onclick="remove${prefix}Ligne(${index})">×</button></td>
+  </tr>`;
+}
+function ligneTotals(lignes){
+  let ht=0,ttc=0;
+  lignes.forEach(l=>{
+    const lineHt=(Number(l.quantite)||0)*(Number(l.prix_unitaire_ht)||0);
+    ht+=lineHt;ttc+=lineHt*(1+(Number(l.tva_pct)||0)/100);
+  });
+  return {ht,tva:ttc-ht,ttc};
+}
+
+/* ── Devis ───────────────────────────────────────────────────────────────── */
+
+async function loadDevis(page){
+  if(page)state.devis.page=page;
+  const host=document.getElementById("devisList");
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const params=new URLSearchParams({page:state.devis.page,page_size:PAGE_SIZE});
+    if(activeSociety)params.set("society",activeSociety);
+    const status=document.getElementById("devisStatusFilter").value;if(status)params.set("status",status);
+    const q=document.getElementById("devisSearch").value.trim();if(q)params.set("q",q);
+    const result=await apiFetch("/api/ventes/devis/page?"+params.toString());
+    state.devis.total=result.total||0;state.devis.pages=result.pages||1;
+    const rows=result.items||[];
+    if(!rows.length){host.innerHTML='<div class="empty">Aucun devis.</div>';renderPagination("devis","devisPagination","loadDevis");return}
+    const statusPill={brouillon:"pill-gray",envoyé:"pill-blue",accepté:"pill-green",annulé:"pill-red"};
+    host.innerHTML=`<table><thead><tr><th>N°</th><th>Client</th><th>Objet</th><th>Date</th><th>Total TTC</th><th>Statut</th><th></th></tr></thead><tbody>${rows.map(d=>`
+      <tr class="clickable" onclick="openDevisModal(${d.id})">
+        <td class="cell-strong">${esc(d.numero||"—")}</td>
+        <td>${esc(d.client_name||"—")}</td>
+        <td>${esc(d.objet||"—")}</td>
+        <td>${fmtDate(d.date_devis)}</td>
+        <td>${fmtMoney(d.total_ttc)}</td>
+        <td><span class="pill ${statusPill[d.status]||"pill-gray"}">${esc(d.status||"—")}</span></td>
+        <td class="row-actions"><button class="link-btn" onclick="event.stopPropagation();openDevisModal(${d.id})">Ouvrir</button></td>
+      </tr>`).join("")}</tbody></table>`;
+    renderPagination("devis","devisPagination","loadDevis");
+  }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
+}
+
+function onDevisClientChange(){
+  const client=clientsCache.find(c=>String(c.id)===document.getElementById("dClient").value);
+  if(client?.society)document.getElementById("dSociety").value=client.society;
+}
+function addDevisLigne(){devisLignes.push({designation:"",quantite:1,unite:"Pièce",prix_unitaire_ht:0,tva_pct:19});renderDevisLignes()}
+function updateDevisLigne(index,field,value){devisLignes[index][field]=field==="designation"||field==="unite"?value:parseFloat(value)||0;renderDevisTotals()}
+function removeDevisLigne(index){
+  const ligne=devisLignes[index];
+  if(editingDevisId&&ligne.id){
+    if(!confirm("Supprimer cette ligne ?"))return;
+    apiFetch(`/api/ventes/devis/${editingDevisId}/lignes/${ligne.id}`,{method:"DELETE"}).then(()=>{devisLignes.splice(index,1);renderDevisLignes();loadDevis()}).catch(e=>showBanner(e.message,"error"));
+    return;
+  }
+  devisLignes.splice(index,1);renderDevisLignes();
+}
+function renderDevisLignes(){
+  document.getElementById("devisLignesBody").innerHTML=devisLignes.map((l,i)=>ligneRowHtml("Devis",i,l)).join("")||'<tr><td colspan="6" style="text-align:center;color:#8ea2b7;padding:10px">Aucune ligne.</td></tr>';
+  renderDevisTotals();
+}
+function renderDevisTotals(){
+  const t=ligneTotals(devisLignes);
+  document.getElementById("devisTotals").innerHTML=`<span>HT : <b>${fmtMoney(t.ht)}</b></span><span>TVA : <b>${fmtMoney(t.tva)}</b></span><span>TTC : <b>${fmtMoney(t.ttc)}</b></span>`;
+}
+async function openDevisModal(devisId){
+  editingDevisId=devisId||null;
+  document.getElementById("devisModalTitle").textContent=devisId?"Devis":"Nouveau devis";
+  document.getElementById("devisError").classList.remove("show");
+  document.getElementById("dSociety").innerHTML=societyOptionsHtml(activeSociety);
+  document.getElementById("dSociety").disabled=!!devisId;
+  document.getElementById("dClient").innerHTML=clientSelectOptionsHtml("");
+  const statusRow=document.getElementById("devisStatusRow");
+  if(devisId){
+    try{
+      const devis=await apiFetch(`/api/ventes/devis/${devisId}`);
+      document.getElementById("dSociety").value=devis.society||"";
+      document.getElementById("dClient").innerHTML=clientSelectOptionsHtml(devis.client_id);
+      document.getElementById("dDate").value=(devis.date_devis||"").slice(0,10);
+      document.getElementById("dValidite").value=(devis.date_validite||"").slice(0,10);
+      document.getElementById("dObjet").value=devis.objet||"";
+      document.getElementById("dNotes").value=devis.notes||"";
+      devisLignes=(devis.lignes||[]).map(l=>({...l}));
+      devisExistingLignes=devisLignes.map(l=>l.id);
+      statusRow.classList.remove("hidden");
+      const canValider=devis.status==="brouillon", canConvertir=devis.status==="envoyé"||devis.status==="accepté";
+      statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(devis.numero||"")}</span><span class="pill pill-gray">${esc(devis.status||"")}</span>
+        ${canValider?`<button type="button" class="btn" onclick="validerDevis(${devisId})">Envoyer au client</button>`:""}
+        ${canConvertir?`<button type="button" class="btn primary" onclick="convertirDevis(${devisId})">Convertir en commande</button>`:""}
+        <a class="btn" href="/api/ventes/devis/${devisId}/pdf" target="_blank">Export PDF</a>`;
+    }catch(error){showBanner(error.message,"error");return}
+  }else{
+    document.getElementById("dDate").value=today();
+    document.getElementById("dValidite").value="";
+    document.getElementById("dObjet").value="";
+    document.getElementById("dNotes").value="";
+    devisLignes=[];devisExistingLignes=[];
+    statusRow.classList.add("hidden");statusRow.innerHTML="";
+  }
+  renderDevisLignes();
+  document.getElementById("devisModalBackdrop").classList.remove("hidden");
+}
+function closeDevisModal(){document.getElementById("devisModalBackdrop").classList.add("hidden")}
+async function validerDevis(devisId){
+  try{await apiFetch(`/api/ventes/devis/${devisId}/valider`,{method:"POST"});showBanner("Devis envoyé.","success");closeDevisModal();loadDevis()}
+  catch(error){showBanner(error.message,"error")}
+}
+async function convertirDevis(devisId){
+  if(!confirm("Convertir ce devis en commande client ?"))return;
+  try{await apiFetch(`/api/ventes/devis/${devisId}/convertir`,{method:"POST"});showBanner("Devis converti en commande.","success");closeDevisModal();loadDevis()}
+  catch(error){showBanner(error.message,"error")}
+}
+async function submitDevis(){
+  const errorEl=document.getElementById("devisError");errorEl.classList.remove("show");
+  const clientSelect=document.getElementById("dClient");
+  const client=clientsCache.find(c=>String(c.id)===clientSelect.value);
+  const header={
+    society:document.getElementById("dSociety").value||null,
+    client_id:client?client.id:null,
+    client_name:client?client.name:null,
+    date_devis:document.getElementById("dDate").value||null,
+    date_validite:document.getElementById("dValidite").value||null,
+    objet:document.getElementById("dObjet").value.trim()||null,
+    notes:document.getElementById("dNotes").value.trim()||null,
+  };
+  const btn=document.getElementById("devisSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
+  try{
+    if(editingDevisId){
+      await apiFetch(`/api/ventes/devis/${editingDevisId}`,{method:"PUT",body:JSON.stringify(header)});
+      for(const ligne of devisLignes){
+        const payload={designation:ligne.designation||"—",reference:ligne.reference||null,quantite:ligne.quantite||1,unite:ligne.unite||null,prix_unitaire_ht:ligne.prix_unitaire_ht||0,tva_pct:ligne.tva_pct||0};
+        if(ligne.id)await apiFetch(`/api/ventes/devis/${editingDevisId}/lignes/${ligne.id}`,{method:"PUT",body:JSON.stringify(payload)});
+        else await apiFetch(`/api/ventes/devis/${editingDevisId}/lignes`,{method:"POST",body:JSON.stringify(payload)});
+      }
+    }else{
+      header.lignes=devisLignes.map(l=>({designation:l.designation||"—",reference:l.reference||null,quantite:l.quantite||1,unite:l.unite||null,prix_unitaire_ht:l.prix_unitaire_ht||0,tva_pct:l.tva_pct||0}));
+      await apiFetch("/api/ventes/devis",{method:"POST",body:JSON.stringify(header)});
+    }
+    closeDevisModal();showBanner("Devis enregistré.","success");loadDevis();
+  }catch(error){errorEl.textContent=error.message||"Impossible d’enregistrer ce devis.";errorEl.classList.add("show")}
+  finally{btn.disabled=false;btn.textContent="Enregistrer"}
+}
+
+/* ── Commandes ───────────────────────────────────────────────────────────── */
+
+async function loadCommandes(page){
+  if(page)state.commandes.page=page;
+  const host=document.getElementById("commandesList");
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const params=new URLSearchParams({page:state.commandes.page,page_size:PAGE_SIZE});
+    if(activeSociety)params.set("society",activeSociety);
+    const status=document.getElementById("commandesStatusFilter").value;if(status)params.set("status",status);
+    const q=document.getElementById("commandesSearch").value.trim();if(q)params.set("q",q);
+    const result=await apiFetch("/api/ventes/commandes/page?"+params.toString());
+    state.commandes.total=result.total||0;state.commandes.pages=result.pages||1;
+    const rows=result.items||[];
+    if(!rows.length){host.innerHTML='<div class="empty">Aucune commande.</div>';renderPagination("commandes","commandesPagination","loadCommandes");return}
+    const statusPill={brouillon:"pill-gray",confirmée:"pill-blue",livrée:"pill-green",annulée:"pill-red"};
+    host.innerHTML=`<table><thead><tr><th>N°</th><th>Client</th><th>Objet</th><th>Date</th><th>Total TTC</th><th>Statut</th><th></th></tr></thead><tbody>${rows.map(c=>`
+      <tr class="clickable" onclick="openCommandeModal(${c.id})">
+        <td class="cell-strong">${esc(c.numero||"—")}</td>
+        <td>${esc(c.client_name||"—")}</td>
+        <td>${esc(c.objet||"—")}</td>
+        <td>${fmtDate(c.date_commande)}</td>
+        <td>${fmtMoney(c.total_ttc)}</td>
+        <td><span class="pill ${statusPill[c.status]||"pill-gray"}">${esc(c.status||"—")}</span></td>
+        <td class="row-actions"><button class="link-btn" onclick="event.stopPropagation();openCommandeModal(${c.id})">Ouvrir</button></td>
+      </tr>`).join("")}</tbody></table>`;
+    renderPagination("commandes","commandesPagination","loadCommandes");
+  }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
+}
+
+function onCommandeClientChange(){
+  const client=clientsCache.find(c=>String(c.id)===document.getElementById("cmClient").value);
+  if(client?.society)document.getElementById("cmSociety").value=client.society;
+}
+function addCommandeLigne(){commandeLignes.push({designation:"",quantite:1,unite:"Pièce",prix_unitaire_ht:0,tva_pct:19});renderCommandeLignes()}
+function updateCommandeLigne(index,field,value){commandeLignes[index][field]=field==="designation"||field==="unite"?value:parseFloat(value)||0;renderCommandeTotals()}
+function removeCommandeLigne(index){
+  const ligne=commandeLignes[index];
+  if(editingCommandeId&&ligne.id){
+    if(!confirm("Supprimer cette ligne ?"))return;
+    apiFetch(`/api/ventes/commandes/${editingCommandeId}/lignes/${ligne.id}`,{method:"DELETE"}).then(()=>{commandeLignes.splice(index,1);renderCommandeLignes();loadCommandes()}).catch(e=>showBanner(e.message,"error"));
+    return;
+  }
+  commandeLignes.splice(index,1);renderCommandeLignes();
+}
+function renderCommandeLignes(){
+  document.getElementById("commandeLignesBody").innerHTML=commandeLignes.map((l,i)=>ligneRowHtml("Commande",i,l)).join("")||'<tr><td colspan="6" style="text-align:center;color:#8ea2b7;padding:10px">Aucune ligne.</td></tr>';
+  renderCommandeTotals();
+}
+function renderCommandeTotals(){
+  const t=ligneTotals(commandeLignes);
+  document.getElementById("commandeTotals").innerHTML=`<span>HT : <b>${fmtMoney(t.ht)}</b></span><span>TVA : <b>${fmtMoney(t.tva)}</b></span><span>TTC : <b>${fmtMoney(t.ttc)}</b></span>`;
+}
+async function openCommandeModal(cmdId){
+  editingCommandeId=cmdId||null;
+  document.getElementById("commandeModalTitle").textContent=cmdId?"Commande":"Nouvelle commande";
+  document.getElementById("commandeError").classList.remove("show");
+  document.getElementById("cmSociety").innerHTML=societyOptionsHtml(activeSociety);
+  document.getElementById("cmSociety").disabled=!!cmdId;
+  document.getElementById("cmClient").innerHTML=clientSelectOptionsHtml("");
+  const statusRow=document.getElementById("commandeStatusRow");
+  if(cmdId){
+    try{
+      const cmd=await apiFetch(`/api/ventes/commandes/${cmdId}`);
+      document.getElementById("cmSociety").value=cmd.society||"";
+      document.getElementById("cmClient").innerHTML=clientSelectOptionsHtml(cmd.client_id);
+      document.getElementById("cmDate").value=(cmd.date_commande||"").slice(0,10);
+      document.getElementById("cmLivraisonPrevue").value=(cmd.date_livraison_prevue||"").slice(0,10);
+      document.getElementById("cmObjet").value=cmd.objet||"";
+      document.getElementById("cmNotes").value=cmd.notes||"";
+      commandeLignes=(cmd.lignes||[]).map(l=>({...l}));
+      statusRow.classList.remove("hidden");
+      statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(cmd.numero||"")}</span><span class="pill pill-gray">${esc(cmd.status||"")}</span>${cmd.devis_id?`<span class="pill pill-gray">Issue du devis #${cmd.devis_id}</span>`:""}`;
+    }catch(error){showBanner(error.message,"error");return}
+  }else{
+    document.getElementById("cmDate").value=today();
+    document.getElementById("cmLivraisonPrevue").value="";
+    document.getElementById("cmObjet").value="";
+    document.getElementById("cmNotes").value="";
+    commandeLignes=[];
+    statusRow.classList.add("hidden");statusRow.innerHTML="";
+  }
+  renderCommandeLignes();
+  document.getElementById("commandeModalBackdrop").classList.remove("hidden");
+}
+function closeCommandeModal(){document.getElementById("commandeModalBackdrop").classList.add("hidden")}
+async function submitCommande(){
+  const errorEl=document.getElementById("commandeError");errorEl.classList.remove("show");
+  const client=clientsCache.find(c=>String(c.id)===document.getElementById("cmClient").value);
+  const header={
+    society:document.getElementById("cmSociety").value||null,
+    client_id:client?client.id:null,
+    client_name:client?client.name:null,
+    date_commande:document.getElementById("cmDate").value||null,
+    date_livraison_prevue:document.getElementById("cmLivraisonPrevue").value||null,
+    objet:document.getElementById("cmObjet").value.trim()||null,
+    notes:document.getElementById("cmNotes").value.trim()||null,
+  };
+  const btn=document.getElementById("commandeSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
+  try{
+    if(editingCommandeId){
+      await apiFetch(`/api/ventes/commandes/${editingCommandeId}`,{method:"PUT",body:JSON.stringify(header)});
+      for(const ligne of commandeLignes){
+        const payload={designation:ligne.designation||"—",reference:ligne.reference||null,quantite:ligne.quantite||1,unite:ligne.unite||null,prix_unitaire_ht:ligne.prix_unitaire_ht||0,tva_pct:ligne.tva_pct||0};
+        if(ligne.id)await apiFetch(`/api/ventes/commandes/${editingCommandeId}/lignes/${ligne.id}`,{method:"PUT",body:JSON.stringify(payload)});
+        else await apiFetch(`/api/ventes/commandes/${editingCommandeId}/lignes`,{method:"POST",body:JSON.stringify(payload)});
+      }
+    }else{
+      header.lignes=commandeLignes.map(l=>({designation:l.designation||"—",reference:l.reference||null,quantite:l.quantite||1,unite:l.unite||null,prix_unitaire_ht:l.prix_unitaire_ht||0,tva_pct:l.tva_pct||0}));
+      await apiFetch("/api/ventes/commandes",{method:"POST",body:JSON.stringify(header)});
+    }
+    closeCommandeModal();showBanner("Commande enregistrée.","success");loadCommandes();
+  }catch(error){errorEl.textContent=error.message||"Impossible d’enregistrer cette commande.";errorEl.classList.add("show")}
+  finally{btn.disabled=false;btn.textContent="Enregistrer"}
+}
+
+/* ── Bons de livraison ──────────────────────────────────────────────────── */
+
+async function loadLivraisons(page){
+  if(page)state.livraisons.page=page;
+  const host=document.getElementById("livraisonsList");
+  host.innerHTML='<div class="empty">Chargement…</div>';
+  try{
+    const params=new URLSearchParams({page:state.livraisons.page,page_size:PAGE_SIZE});
+    if(activeSociety)params.set("society",activeSociety);
+    const status=document.getElementById("livraisonsStatusFilter").value;if(status)params.set("status",status);
+    const q=document.getElementById("livraisonsSearch").value.trim();if(q)params.set("q",q);
+    const result=await apiFetch("/api/ventes/livraisons/page?"+params.toString());
+    state.livraisons.total=result.total||0;state.livraisons.pages=result.pages||1;
+    const rows=result.items||[];
+    if(!rows.length){host.innerHTML='<div class="empty">Aucun bon de livraison.</div>';renderPagination("livraisons","livraisonsPagination","loadLivraisons");return}
+    const statusPill={brouillon:"pill-gray",livré:"pill-green",partiel:"pill-amber",annulé:"pill-red"};
+    host.innerHTML=`<table><thead><tr><th>N°</th><th>Client</th><th>Date</th><th>Statut</th><th></th></tr></thead><tbody>${rows.map(b=>`
+      <tr class="clickable" onclick="openLivraisonModal(${b.id})">
+        <td class="cell-strong">${esc(b.numero||"—")}</td>
+        <td>${esc(b.client_name||"—")}</td>
+        <td>${fmtDate(b.date_livraison)}</td>
+        <td><span class="pill ${statusPill[b.status]||"pill-gray"}">${esc(b.status||"—")}</span></td>
+        <td class="row-actions"><button class="link-btn" onclick="event.stopPropagation();openLivraisonModal(${b.id})">Ouvrir</button></td>
+      </tr>`).join("")}</tbody></table>`;
+    renderPagination("livraisons","livraisonsPagination","loadLivraisons");
+  }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
+}
+
+function onLivraisonClientChange(){
+  const client=clientsCache.find(c=>String(c.id)===document.getElementById("lClient").value);
+  if(client?.society)document.getElementById("lSociety").value=client.society;
+}
+function addLivraisonLigne(){livraisonLignes.push({designation:"",quantite_commandee:0,quantite_livree:0,unite:"Pièce"});renderLivraisonLignes()}
+function updateLivraisonLigne(index,field,value){livraisonLignes[index][field]=field==="designation"||field==="unite"?value:parseFloat(value)||0}
+function removeLivraisonLigne(index){
+  const ligne=livraisonLignes[index];
+  if(editingLivraisonId&&ligne.id){
+    if(!confirm("Supprimer cette ligne ?"))return;
+    apiFetch(`/api/ventes/livraisons/${editingLivraisonId}/lignes/${ligne.id}`,{method:"DELETE"}).then(()=>{livraisonLignes.splice(index,1);renderLivraisonLignes();loadLivraisons()}).catch(e=>showBanner(e.message,"error"));
+    return;
+  }
+  livraisonLignes.splice(index,1);renderLivraisonLignes();
+}
+function livraisonLigneRowHtml(index,ligne){
+  return `<tr data-index="${index}">
+    <td><input value="${esc(ligne.designation||"")}" oninput="updateLivraisonLigne(${index},'designation',this.value)" placeholder="Désignation"></td>
+    <td style="width:100px"><input type="number" min="0" step="0.01" value="${ligne.quantite_commandee??0}" oninput="updateLivraisonLigne(${index},'quantite_commandee',this.value)"></td>
+    <td style="width:100px"><input type="number" min="0" step="0.01" value="${ligne.quantite_livree??0}" oninput="updateLivraisonLigne(${index},'quantite_livree',this.value)"></td>
+    <td style="width:80px"><input value="${esc(ligne.unite||"")}" oninput="updateLivraisonLigne(${index},'unite',this.value)" placeholder="Pièce"></td>
+    <td style="width:26px"><button type="button" class="ligne-remove" onclick="removeLivraisonLigne(${index})">×</button></td>
+  </tr>`;
+}
+function renderLivraisonLignes(){
+  document.getElementById("livraisonLignesBody").innerHTML=livraisonLignes.map((l,i)=>livraisonLigneRowHtml(i,l)).join("")||'<tr><td colspan="5" style="text-align:center;color:#8ea2b7;padding:10px">Aucune ligne.</td></tr>';
+}
+async function openLivraisonModal(blId){
+  editingLivraisonId=blId||null;
+  document.getElementById("livraisonModalTitle").textContent=blId?"Bon de livraison":"Nouveau bon de livraison";
+  document.getElementById("livraisonError").classList.remove("show");
+  document.getElementById("lSociety").innerHTML=societyOptionsHtml(activeSociety);
+  document.getElementById("lSociety").disabled=!!blId;
+  document.getElementById("lClient").innerHTML=clientSelectOptionsHtml("");
+  const statusRow=document.getElementById("livraisonStatusRow");
+  const statusWrap=document.getElementById("lStatusWrap");
+  if(blId){
+    try{
+      const bl=await apiFetch(`/api/ventes/livraisons/${blId}`);
+      document.getElementById("lSociety").value=bl.society||"";
+      document.getElementById("lClient").innerHTML=clientSelectOptionsHtml(bl.client_id);
+      document.getElementById("lDate").value=(bl.date_livraison||"").slice(0,10);
+      document.getElementById("lNotes").value=bl.notes||"";
+      document.getElementById("lStatus").value=bl.status||"brouillon";
+      livraisonLignes=(bl.lignes||[]).map(l=>({...l}));
+      statusRow.classList.remove("hidden");statusRow.innerHTML=`<span class="pill pill-blue">N° ${esc(bl.numero||"")}</span>${bl.commande_id?`<span class="pill pill-gray">Depuis commande #${bl.commande_id}</span>`:""}`;
+      statusWrap.classList.remove("hidden");
+    }catch(error){showBanner(error.message,"error");return}
+  }else{
+    document.getElementById("lDate").value=today();
+    document.getElementById("lNotes").value="";
+    livraisonLignes=[];
+    statusRow.classList.add("hidden");statusRow.innerHTML="";
+    statusWrap.classList.add("hidden");
+  }
+  renderLivraisonLignes();
+  document.getElementById("livraisonModalBackdrop").classList.remove("hidden");
+}
+function closeLivraisonModal(){document.getElementById("livraisonModalBackdrop").classList.add("hidden")}
+async function submitLivraison(){
+  const errorEl=document.getElementById("livraisonError");errorEl.classList.remove("show");
+  const client=clientsCache.find(c=>String(c.id)===document.getElementById("lClient").value);
+  const header={
+    society:document.getElementById("lSociety").value||null,
+    client_id:client?client.id:null,
+    client_name:client?client.name:null,
+    date_livraison:document.getElementById("lDate").value||null,
+    notes:document.getElementById("lNotes").value.trim()||null,
+  };
+  if(editingLivraisonId)header.status=document.getElementById("lStatus").value;
+  const btn=document.getElementById("livraisonSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
+  try{
+    if(editingLivraisonId){
+      await apiFetch(`/api/ventes/livraisons/${editingLivraisonId}`,{method:"PUT",body:JSON.stringify(header)});
+      for(const ligne of livraisonLignes){
+        const payload={designation:ligne.designation||"—",reference:ligne.reference||null,quantite_commandee:ligne.quantite_commandee||0,quantite_livree:ligne.quantite_livree||0,unite:ligne.unite||null};
+        if(ligne.id)await apiFetch(`/api/ventes/livraisons/${editingLivraisonId}/lignes/${ligne.id}`,{method:"PUT",body:JSON.stringify(payload)});
+        else await apiFetch(`/api/ventes/livraisons/${editingLivraisonId}/lignes`,{method:"POST",body:JSON.stringify(payload)});
+      }
+    }else{
+      header.lignes=livraisonLignes.map(l=>({designation:l.designation||"—",reference:l.reference||null,quantite_commandee:l.quantite_commandee||0,quantite_livree:l.quantite_livree||0,unite:l.unite||null}));
+      await apiFetch("/api/ventes/livraisons",{method:"POST",body:JSON.stringify(header)});
+    }
+    closeLivraisonModal();showBanner("Bon de livraison enregistré.","success");loadLivraisons();
+  }catch(error){errorEl.textContent=error.message||"Impossible d’enregistrer ce bon.";errorEl.classList.add("show")}
+  finally{btn.disabled=false;btn.textContent="Enregistrer"}
+}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){session=null}
+  if(session?.token)enterApp().catch(()=>logout());
+});
+</script>
+</body>
+</html>
