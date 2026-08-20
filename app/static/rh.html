@@ -393,21 +393,9 @@ function employeeSelectOptionsHtml(selectedId){
 // exhaustive, mise en cache par société active.
 async function ensureAllEmployeesCache(){
   if(allEmployeesCache.length&&allEmployeesCacheSociety===activeSociety)return allEmployeesCache;
-  const pageParams=page=>{
-    const params=new URLSearchParams({mode:"all",page:String(page),page_size:"100"});
-    if(activeSociety)params.set("society",activeSociety);
-    return "/api/drh/employees/page?"+params.toString();
-  };
-  try{
-    const first=await apiFetch(pageParams(1));
-    const pages=first.pages||1;
-    const rest=await Promise.all(Array.from({length:Math.max(0,pages-1)},(_,i)=>apiFetch(pageParams(i+2))));
-    allEmployeesCache=[...(first.items||[]),...rest.flatMap(r=>r.items||[])];
-  }catch(error){
-    const params=new URLSearchParams();
-    if(activeSociety)params.set("society",activeSociety);
-    allEmployeesCache=await apiFetch("/api/drh/employees"+(params.size?"?"+params.toString():""));
-  }
+  const params=new URLSearchParams();
+  if(activeSociety)params.set("society",activeSociety);
+  allEmployeesCache=await apiFetch("/api/drh/employees"+(params.size?"?"+params.toString():""));
   allEmployeesCacheSociety=activeSociety;
   return allEmployeesCache;
 }
