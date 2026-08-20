@@ -318,7 +318,7 @@ tr:last-child td{border-bottom:0}
       <div id="portalOperationalAlerts" class="portal-alert-center"></div>
 
       <div id="planningTab" class="hidden">
-        <div class="section-head"><h1>Planning de travail</h1><p>Planning intelligent des prises de service, relèves et récupérations.</p></div>
+        <div class="section-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h1>Planning de travail</h1><p>Planning intelligent des prises de service, relèves et récupérations.</p></div><button type="button" class="primary" id="newPlanningBtn" onclick="openPlanningConfiguration()">+ Nouveau planning</button></div>
         <div id="planningContent"><div class="empty">Chargement…</div></div>
       </div>
 
@@ -434,7 +434,7 @@ tr:last-child td{border-bottom:0}
     <input id="siteRequiredStaff" type="number" min="0" step="1" value="0" readonly title="Calculé automatiquement à partir des postes et fonctions">
     <div class="site-config-section"><h3>Postes / fonctions</h3><p>Ajoutez chaque poste et le nombre d’employés requis.</p><div id="sitePositionsList"></div><button type="button" class="secondary" style="margin-top:10px" onclick="addSitePositionRow()">+ Ajouter un poste</button></div>
     <div class="site-config-section"><h3>Effectif par groupe</h3><p>Ventilez chaque poste/fonction entre les groupes. Le total de chaque groupe est calculé automatiquement.</p><div class="site-groups-grid" id="siteGroupDistribution"></div><div id="siteDistributionStatus" class="site-distribution-status"></div></div>
-    <div class="site-config-section"><h3>Planning et rotation</h3><p>Configurez le cycle 24h/7j : trois groupes en service et un groupe en récupération, avec une relève toutes les huit heures.</p><div class="rotation-config-grid"><label>Système<select id="siteRotationSystem" onchange="renderSiteRotationPreview()"><option value="3x8">24h/7j — 3×8</option></select></label><label>Première prise<input id="siteRotationFirstTime" type="time" value="06:00" oninput="renderSiteRotationPreview()"></label><label>Début du cycle<input id="siteRotationStartDate" type="date" onchange="renderSiteRotationPreview()"></label><label>Horizon<select id="siteRotationWeeks" onchange="renderSiteRotationPreview()"><option value="4">4 semaines</option><option value="8">8 semaines</option><option value="12">12 semaines</option></select></label></div><div id="siteRotationPreview" class="rotation-preview"></div><div id="siteRotationAlerts"></div></div>
+    <div class="site-config-section" id="sitePlanningConfiguration"><h3>Planning et rotation</h3><p>Configurez le cycle 24h/7j : trois groupes en service et un groupe en récupération, avec une relève toutes les huit heures.</p><div class="rotation-config-grid"><label>Système<select id="siteRotationSystem" onchange="renderSiteRotationPreview()"><option value="3x8">24h/7j — 3×8</option></select></label><label>Première prise<input id="siteRotationFirstTime" type="time" value="06:00" oninput="renderSiteRotationPreview()"></label><label>Début du cycle<input id="siteRotationStartDate" type="date" onchange="renderSiteRotationPreview()"></label><label>Horizon<select id="siteRotationWeeks" onchange="renderSiteRotationPreview()"><option value="4">4 semaines</option><option value="8">8 semaines</option><option value="12">12 semaines</option></select></label></div><div id="siteRotationPreview" class="rotation-preview"></div><div id="siteRotationAlerts"></div></div>
     </div>
     <div id="siteDeletePanel" class="site-delete-panel hidden"><h3>Supprimer le site sélectionné</h3><p>Le site sera archivé dans ATLAS afin de conserver son historique. Il ne sera plus affiché dans votre espace client.</p></div>
     <div id="siteError" class="error"></div>
@@ -725,6 +725,7 @@ async function enterApp(){
   document.querySelector('.portal-nav-btn[data-tab="history"]')?.classList.toggle("hidden",!canHistory);
   document.getElementById("portalMessagingCard")?.classList.toggle("hidden",!canHistory);
   document.getElementById("employeeSearchCard")?.classList.toggle("hidden",!canEmployees);
+  document.getElementById("newPlanningBtn")?.classList.toggle("hidden",session?.permissions?.create_sites===false);
   document.querySelector('.portal-nav-btn[data-tab="sites"]')?.classList.toggle("hidden",!canSites);
   document.querySelector('.portal-nav-btn[data-tab="equipment"]')?.classList.toggle("hidden",!canEquipment);
   if(!canHistory)document.getElementById("historyTab").classList.add("hidden");
@@ -936,6 +937,15 @@ function openSiteModal(){
   setSiteConfigMode("create");
   document.getElementById("siteError").classList.remove("show");
   document.getElementById("siteModalBackdrop").classList.remove("hidden");
+}
+function openPlanningConfiguration(){
+  const site=sitesCache.find(item=>Number(item.id)===Number(planningSelectedSiteId))||sitesCache[0];
+  if(!site){showBanner("Aucun site disponible pour créer un planning.","error");return}
+  const select=document.getElementById("siteExistingSelect");
+  select.innerHTML='<option value="">— Choisir un site —</option>'+sitesCache.map(item=>`<option value="${item.id}">${esc(item.name)}</option>`).join("");
+  setSiteConfigMode("edit");select.value=String(site.id);loadSelectedSiteConfiguration();
+  document.getElementById("siteModalBackdrop").classList.remove("hidden");
+  requestAnimationFrame(()=>{const backdrop=document.getElementById("siteModalBackdrop"),section=document.getElementById("sitePlanningConfiguration");if(backdrop&&section)backdrop.scrollTo({top:Math.max(0,section.offsetTop-24),behavior:"smooth"})});
 }
 function setSiteConfigMode(mode){
   siteConfigMode=mode;
