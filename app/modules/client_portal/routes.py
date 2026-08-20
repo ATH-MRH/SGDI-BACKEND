@@ -162,8 +162,16 @@ def assignment_options(db: Session = Depends(get_db), user: ClientPortalUser = D
     _require_client_permission(db, user, "assign_employees")
     sites = db.execute(select(Site).where(Site.client_id == user.client_id, Site.active == 1).order_by(Site.name)).scalars().all()
     rotations = db.execute(select(RotationTemplate).where(RotationTemplate.active == 1).order_by(RotationTemplate.name)).scalars().all()
+    site_options = []
+    for row in sites:
+        plan = row.equipment_plan if isinstance(row.equipment_plan, dict) else {}
+        rotation = plan.get("clientPortalRotation") if isinstance(plan.get("clientPortalRotation"), dict) else {}
+        system = str(rotation.get("system") or "").strip()
+        first_shift = str(rotation.get("first_shift_time") or "").strip()
+        planning_label = f"24h/7j — {system.upper()} · première relève {first_shift}" if system else "Aucun planning configuré"
+        site_options.append({"id": row.id, "name": row.name, "planning_label": planning_label, "has_site_planning": bool(system)})
     return {
-        "sites": [{"id": row.id, "name": row.name} for row in sites],
+        "sites": site_options,
         "groups": list(GROUP_LETTERS),
         "plannings": [{"id": row.id, "code": row.code, "name": row.name} for row in rotations],
     }

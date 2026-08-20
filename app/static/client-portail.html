@@ -607,12 +607,17 @@ async function openEmployeeActionModal(employeeId,action){
     try{
       assignmentOptionsCache=assignmentOptionsCache||await apiFetch("/reference/assignment-options");
       const sites=assignmentOptionsCache.sites||[],groups=assignmentOptionsCache.groups||[],plannings=assignmentOptionsCache.plannings||[];
-      document.getElementById("employeeTargetSite").innerHTML='<option value="">Choisir un site</option>'+sites.map(s=>`<option value="${s.id}" ${s.id===e.site_id?"selected":""}>${esc(s.name)}</option>`).join("");
+      document.getElementById("employeeTargetSite").innerHTML='<option value="">Choisir un site</option>'+sites.map(s=>`<option value="${s.id}" ${s.id===e.site_id?"selected":""}>${esc(s.name)}</option>`).join("");document.getElementById("employeeTargetSite").onchange=event=>updateAssignmentPlanningOptions(event.target.value);
       document.getElementById("employeeTargetGroup").innerHTML='<option value="">Choisir un groupe</option>'+groups.map(g=>`<option value="${esc(g)}" ${g===e.group_code?"selected":""}>Groupe ${esc(g)}</option>`).join("");
-      document.getElementById("employeeTargetPlanning").innerHTML='<option value="">Conserver le planning actuel</option>'+plannings.map(p=>`<option value="${p.id}">${esc(p.name)} (${esc(p.code)})</option>`).join("");
+      updateAssignmentPlanningOptions(document.getElementById("employeeTargetSite").value);
       document.getElementById("employeeEffectiveDate").value=today();
     }catch(error){actionError.textContent=error.message;actionError.classList.add("show")}
   }
+}
+function updateAssignmentPlanningOptions(siteId){
+  const select=document.getElementById("employeeTargetPlanning"),site=(assignmentOptionsCache?.sites||[]).find(item=>Number(item.id)===Number(siteId)),plannings=assignmentOptionsCache?.plannings||[];if(!select)return;
+  const currentLabel=site?.has_site_planning?`Planning actuel du site — ${site.planning_label}`:(site?"Aucun planning configuré sur ce site":"Sélectionnez d’abord un site");
+  select.innerHTML=`<option value="">${esc(currentLabel)}</option>`+plannings.map(planning=>`<option value="${planning.id}">${esc(planning.name)} (${esc(planning.code)})</option>`).join("");
 }
 function closeEmployeeActionModal(){document.getElementById("employeeActionBackdrop").classList.add("hidden");employeeActionRequest=null}
 async function submitEmployeeActionRequest(){

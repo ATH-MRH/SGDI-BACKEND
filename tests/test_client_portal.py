@@ -296,6 +296,7 @@ def test_client_can_submit_employee_action_request_with_attachment(client, auth_
     options = client.get("/api/client-portal/reference/assignment-options", headers=portal_headers)
     assert options.status_code == 200, options.text
     assert any(row["id"] == target_site_id for row in options.json()["sites"])
+    assert all("planning_label" in row for row in options.json()["sites"])
     assert any(row["id"] == rotation.json()["id"] for row in options.json()["plannings"])
 
     assignment_request = client.post(
