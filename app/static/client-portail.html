@@ -136,10 +136,13 @@ tr:last-child td{border-bottom:0}
 .group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
 .group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc;width:100%;color:inherit;font:inherit;cursor:pointer}
 .group-counter.total{background:#fff8d6;border-color:#f1c400}
-.group-counter.function{display:grid;grid-template-rows:30px 20px 16px 16px;align-content:center;min-height:94px;background:#fff;border-color:#e5cbd0}
+.group-counter.function{display:grid;grid-template-rows:30px 26px 30px;align-content:center;min-height:102px;background:#fff;border-color:#e5cbd0}
 .group-counter.function .gc-code{display:flex;align-items:flex-start;justify-content:center;line-height:1.05}
-.group-counter.function .gc-assigned{margin-top:0;align-self:start}
-.group-counter.function .gc-quota-row,.group-counter.function .gc-remaining{margin-top:0;align-self:center;white-space:nowrap}
+.group-counter.function .gc-assigned{margin-top:0;align-self:center;font-size:22px;color:#050505}
+.function-stats{display:grid;grid-template-columns:1fr 1fr;align-items:start;color:#e30613}
+.function-stat{min-width:0;font-size:8px;line-height:1.05}
+.function-stat+.function-stat{border-left:1px solid #f1b5bb}
+.function-stat strong{display:block;margin-top:2px;font-size:12px;line-height:1;font-weight:500}
 .group-counter:hover,.group-counter[aria-pressed="true"]{border-color:#c8102e;box-shadow:0 0 0 2px rgba(200,16,46,.12)}
 .function-counters{margin-bottom:8px}
 .gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
@@ -817,7 +820,7 @@ async function loadSites(){
       const totalAssigned=actual;
       const positionCounts=(s.position_requirements||[]).map(position=>({label:position.name,count:Number(position.assigned)||0,required:Number(position.required)||0,remaining:Number(position.remaining)||0}));
       const groupOptionsHtml=code=>`<option value="" ${!code?"selected":""}>Aucun</option>`+groups.map(g=>`<option value="${esc(g.code)}" ${g.code===code?"selected":""}>Groupe ${esc(g.code)}</option>`).join("");
-      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Besoins théoriques par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.required}</div><div class="gc-quota-row">besoin théorique</div><div class="gc-remaining">${p.count} affecté${p.count>1?"s":""} · ${p.remaining} restant${p.remaining>1?"s":""}</div></button>`).join("")}</div></div>`:"";
+      const functionsHtml=positionCounts.length?`<div><div class="site-employees-title" style="margin-bottom:6px">Besoins théoriques par poste / fonction</div><div class="group-counters function-counters">${positionCounts.map(p=>{const delta=p.count-p.required,deltaLabel=delta===0?"00":(delta>0?`+${delta}`:`${delta}`);return`<button type="button" class="group-counter function" aria-pressed="false" onclick="filterSiteEmployees(this,'position','${encodeURIComponent(p.label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(p.label)}</div><div class="gc-assigned">${p.count}</div><div class="function-stats"><div class="function-stat">Besoin<strong>${p.required}</strong></div><div class="function-stat">Écart +/-<strong>${deltaLabel}</strong></div></div></button>`}).join("")}</div></div>`:"";
       const countersHtml=groups.length?`<div class="group-counters"><button type="button" class="group-counter total" aria-pressed="false" onclick="filterSiteEmployees(this,'all','')">
           <div class="gc-code">Effectif total</div>
           <div class="gc-assigned">${totalAssigned}</div>
