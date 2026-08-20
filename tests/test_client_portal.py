@@ -211,7 +211,7 @@ def test_client_can_create_site_with_positions_and_group_staffing(client, auth_h
         "name": "Nouveau site configuré",
         "site_type": "Entrepôt",
         "address": "Zone industrielle",
-        "required_staff": 0,
+        "required_staff": 99,
         "positions": [
             {"name": "Agent de sécurité", "required": 8},
             {"name": "Superviseur", "required": 2},

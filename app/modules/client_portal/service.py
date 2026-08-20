@@ -270,7 +270,7 @@ def update_employee_group_for_client(db: Session, client_id: int, employee_id: i
 
 def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, Any]:
     position_quotas = {position.name: position.required for position in payload.positions}
-    required_staff = payload.required_staff or sum(position_quotas.values())
+    required_staff = sum(position_quotas.values()) if position_quotas else payload.required_staff
     site = Site(
         name=payload.name,
         client_id=client_id,
@@ -298,7 +298,7 @@ def update_site_for_client(db: Session, client_id: int, site_id: int, payload) -
     site.commune = payload.commune
     site.wilaya = payload.wilaya
     site.site_type = payload.site_type
-    site.contractual_staff = payload.required_staff or sum(position_quotas.values())
+    site.contractual_staff = sum(position_quotas.values()) if position_quotas else payload.required_staff
     plan = dict(site.equipment_plan) if isinstance(site.equipment_plan, dict) else {}
     plan["positionQuotas"] = position_quotas
     plan["groupQuotas"] = payload.group_quotas

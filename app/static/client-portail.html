@@ -417,7 +417,7 @@ tr:last-child td{border-bottom:0}
     <label for="siteWilaya">Wilaya</label>
     <input id="siteWilaya">
     <label for="siteRequiredStaff">Effectif requis</label>
-    <input id="siteRequiredStaff" type="number" min="0" step="1" value="0">
+    <input id="siteRequiredStaff" type="number" min="0" step="1" value="0" readonly title="Calculé automatiquement à partir des postes et fonctions">
     <div class="site-config-section"><h3>Postes / fonctions</h3><p>Ajoutez chaque poste et le nombre d’employés requis.</p><div id="sitePositionsList"></div><button type="button" class="secondary" style="margin-top:10px" onclick="addSitePositionRow()">+ Ajouter un poste</button></div>
     <div class="site-config-section"><h3>Effectif par groupe</h3><p>Définissez le nombre d’employés prévu dans chaque groupe.</p><div class="site-groups-grid"><label>Groupe A<input class="site-group-quota" data-group="A" type="number" min="0" step="1" value="0"></label><label>Groupe B<input class="site-group-quota" data-group="B" type="number" min="0" step="1" value="0"></label><label>Groupe C<input class="site-group-quota" data-group="C" type="number" min="0" step="1" value="0"></label><label>Groupe D<input class="site-group-quota" data-group="D" type="number" min="0" step="1" value="0"></label><label>Groupe E<input class="site-group-quota" data-group="E" type="number" min="0" step="1" value="0"></label><label>Groupe F<input class="site-group-quota" data-group="F" type="number" min="0" step="1" value="0"></label></div></div>
     </div>
@@ -893,8 +893,13 @@ function loadSelectedSiteConfiguration(){
 function addSitePositionRow(name="",required=0){
   const host=document.getElementById("sitePositionsList");
   const row=document.createElement("div");row.className="site-position-row";
-  row.innerHTML=`<label>Poste / fonction<input class="site-position-name" placeholder="Ex. Agent de sécurité" value="${esc(name)}"></label><label>Nombre requis<input class="site-position-required" type="number" min="0" step="1" value="${Number(required)||0}"></label><button type="button" class="site-position-remove" title="Supprimer ce poste" onclick="this.closest('.site-position-row').remove()">×</button>`;
+  row.innerHTML=`<label>Poste / fonction<input class="site-position-name" placeholder="Ex. Agent de sécurité" value="${esc(name)}"></label><label>Nombre requis<input class="site-position-required" type="number" min="0" step="1" value="${Number(required)||0}" oninput="recalculateSiteRequiredStaff()"></label><button type="button" class="site-position-remove" title="Supprimer ce poste" onclick="this.closest('.site-position-row').remove();recalculateSiteRequiredStaff()">×</button>`;
   host.appendChild(row);
+  recalculateSiteRequiredStaff();
+}
+function recalculateSiteRequiredStaff(){
+  const total=[...document.querySelectorAll(".site-position-required")].reduce((sum,input)=>sum+(parseInt(input.value,10)||0),0);
+  document.getElementById("siteRequiredStaff").value=total;
 }
 function closeSiteModal(){
   document.getElementById("siteModalBackdrop").classList.add("hidden");
