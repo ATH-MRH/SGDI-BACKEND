@@ -155,7 +155,7 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
     <aside class="sidebar" aria-label="Navigation RH">
       <div class="sidebar-title">Espace RH</div>
       <nav class="nav">
-        <button class="nav-btn" data-tab="agents" onclick="switchTab('agents')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.4-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.3" cy="8.6" r="2.6"/><path d="M15.8 14.6c2.5.3 4.4 2.1 5 5"/></svg></span>Agents / Effectifs</button>
+        <button class="nav-btn" data-tab="agents" onclick="switchTab('agents')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.7-3.6 3.4-5.6 6.5-5.6s5.8 2 6.5 5.6"/><circle cx="17.3" cy="8.6" r="2.6"/><path d="M15.8 14.6c2.5.3 4.4 2.1 5 5"/></svg></span>Effectifs</button>
         <button class="nav-btn" data-tab="contrats" onclick="switchTab('contrats')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></span>Contrats</button>
         <button class="nav-btn" data-tab="conges" onclick="switchTab('conges')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span>Congés</button>
         <button class="nav-btn" data-tab="fiches" onclick="switchTab('fiches')"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><circle cx="9.5" cy="9.5" r="2"/><path d="M6 16c.6-2 2-3 3.5-3s2.9 1 3.5 3M14.5 8.5h4M14.5 11.5h4M14.5 14.5h2.5"/></svg></span>Fiche de position</button>
@@ -165,7 +165,7 @@ tr.clickable:hover{background:light-dark(#f7f9fc,#141f2e)}
       <div id="banner"></div>
 
       <section id="agentsSection">
-        <div class="section-head"><div><h1>Agents / Effectifs</h1><p>Fiches du personnel employé.</p></div><button class="btn primary" onclick="openEmployeeModal(null)">+ Nouvel agent</button></div>
+        <div class="section-head"><div><h1>Effectifs</h1><p>Fiches du personnel employé.</p></div><button class="btn primary" onclick="openEmployeeModal(null)">+ Nouvel agent</button></div>
         <div class="toolbar">
           <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.3-4.3"/></svg><input id="agentsSearch" placeholder="Rechercher un agent (nom, code, poste)…" oninput="debounceReload('agents')"></div>
           <select id="agentsStatusFilter" class="filter" onchange="loadAgents()"><option value="all">Tous les statuts</option><option value="actifs">Actif</option><option value="absents">Absent</option><option value="suspension">Suspendu</option><option value="sortant">Sortant</option></select>
