@@ -36292,7 +36292,13 @@ function renderOPS(view,sub,arg){
     suspendus:_fpqSuspList.map(f=>{const a=(db.agents||[]).find(x=>x.id===f.agentId);return{nom:(a?.nom||"")+" "+(a?.prenom||""),mat:a?.matricule||"—",site:f.siteName||"—",code:"S"};}),
     sanctions:_sanctionList.map(a=>{const ev=(a.gestionEvents||[]).filter(e=>["Mise en demeure","Sanction"].includes(e.type)&&(e.statut==="en_cours"||e.statut==="approuve")).pop();return{nom:(a.nom||"")+" "+(a.prenom||""),mat:a.matricule||"—",site:agentLiveAffectation(a)?.siteName||"—",code:ev?.type||"Sanction"};})
   };
-  const opsKpi=(label,value,bg,color,icon,subtext,action,id)=>`<button type="button" ${action?`onclick="${action}"`:""} class="ops-dash-kpi" style="--ops-kpi-accent:${color};cursor:${action?"pointer":"default"}"><div class="ops-dash-kpi-icon" style="background:${bg};color:${color}">${icon}</div><div class="ops-dash-lbl">${label}</div><div ${id?`id="${id}"`:""} class="ops-dash-val">${value}</div><div class="ops-dash-sub">${subtext}</div></button>`;
+  const ICON_USERS='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+  const ICON_CHECK='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>';
+  const ICON_X='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>';
+  const ICON_TARGET='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>';
+  const ICON_PIN='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+  const ICON_ALERT='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+  const opsKpi=(label,value,iconSvg,color,subtext,action,id,hot)=>`<button type="button" ${action?`onclick="${action}"`:""} class="ops-strip-seg${hot?" hot":""}" style="cursor:${action?"pointer":"default"}"><div class="ops-strip-seg-head"><span style="color:${hot?"#fde3b0":color}">${iconSvg}</span><span class="ops-strip-seg-lbl">${label}${hot?'<span class="ops-strip-seg-live"></span>':""}</span></div><div ${id?`id="${id}"`:""} class="ops-strip-seg-val">${value}</div><div class="ops-strip-seg-sub">${subtext}</div></button>`;
   const presenceBase=Math.max(fpqToday.length,fpqPresent+_fpqAbsList.length+_fpqMalList.length+_fpqSuspList.length,1);
   const _siteStatRowsNew=_siteStatKeys.map(k=>{
     const pres=_presentsBySite[k]||0;const aff=_affectesBySite[k]||0;const total=Math.max(aff,pres);
@@ -36300,13 +36306,13 @@ function renderOPS(view,sub,arg){
     return`<div class="ops-dash-site-row"><div class="ops-dash-site-name">${escapeHTML(k)}</div><div class="ops-dash-site-metric"><b>${pres}</b><small>Présents</small></div><div class="ops-dash-site-metric" title="${aff} affecté(s)"><div class="ops-dash-cov-track"><div class="ops-dash-cov-fill" style="width:${pct}%;background:${color}"></div></div><span class="ops-dash-cov-pct" style="color:${color}">${total?pct+"%":"—"}</span></div></div>`;
   }).join("");
   view.innerHTML=`<div class="ops-dash-hero"><div class="ops-dash-hero-row"><div><div class="ops-dash-eyebrow">Pilotage opérationnel</div><h1>Tableau de bord OPS</h1><div class="ops-dash-hero-sub"><span>${soc?escapeHTML(soc):"Toutes sociétés"} · situation du ${formatDate(td)}</span><span class="ops-dash-live"><span class="ops-dash-live-dot"></span>Temps réel</span></div></div><button class="ops-dash-refresh" onclick="renderView()">↻ Actualiser</button></div></div>
-  <div class="ops-dash-kpis">
-    ${opsKpi("Effectif actif",dashboardActive,"#dbeafe","#043970","👥","Employés en activité",societeRows.length===1?`openOpsSocModal('${encodeURIComponent(societeRows[0].soc)}','eff')`:"")}
-    ${opsKpi("Présents",fpqPresent,"#dcfce7","#166534","✓","Aujourd'hui","navigate('pointage/feuille')")}
-    ${opsKpi("Absents",_fpqAbsList.length,"#fee2e2","#991b1b","✕","Aujourd'hui","openOpsStatModal('absents')")}
-    ${opsKpi("Affectés",dashboardAffectes,"#dbeafe","#1e40af","📌",`${tauxAffectation}% de l'effectif`,"navigate('effectif/actifs')")}
-    ${opsKpi("Sites actifs",dashboardSitesActifs,"#ede9fe","#5b21b6","📍","Périmètre opérationnel","navigate('sites/actifs')")}
-    ${opsKpi("Alertes critiques","…","#fef3c7","#92400e","⚠","Temps réel","document.getElementById('opsAttendanceAlertsCard')?.scrollIntoView({behavior:'smooth'})","opsAlertsKpi")}
+  <div class="ops-strip">
+    ${opsKpi("Effectif actif",dashboardActive,ICON_USERS,"#043970","Employés en activité",societeRows.length===1?`openOpsSocModal('${encodeURIComponent(societeRows[0].soc)}','eff')`:"")}
+    ${opsKpi("Présents",fpqPresent,ICON_CHECK,"#166534","Aujourd'hui","navigate('pointage/feuille')")}
+    ${opsKpi("Absents",_fpqAbsList.length,ICON_X,"#991b1b","Aujourd'hui","openOpsStatModal('absents')")}
+    ${opsKpi("Affectés",dashboardAffectes,ICON_TARGET,"#1e40af",`${tauxAffectation}% de l'effectif`,"navigate('effectif/actifs')")}
+    ${opsKpi("Sites actifs",dashboardSitesActifs,ICON_PIN,"#5b21b6","Périmètre opérationnel","navigate('sites/actifs')")}
+    ${opsKpi("Alertes critiques","…",ICON_ALERT,"#92400e","Temps réel","document.getElementById('opsAttendanceAlertsCard')?.scrollIntoView({behavior:'smooth'})","opsAlertsKpi",true)}
   </div>
   <div class="ops-dash-row2">
     <div class="ops-dash-card">
