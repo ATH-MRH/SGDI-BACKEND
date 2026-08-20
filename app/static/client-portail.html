@@ -109,7 +109,7 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .banner{border-radius:14px;padding:13px 16px;margin-bottom:14px;font-size:13px;font-weight:700}
 .banner.success{background:#dcfce7;color:#14532d;border:1px solid #86efac}
 .banner.error{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5}
-.portal-alert-center{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.portal-alert-card{display:flex;align-items:center;gap:9px;width:310px;max-width:100%;min-height:54px;padding:7px 10px;border:1px solid #e6b800;border-left:3px solid #c99f00;border-radius:11px;background:#ffcc00;color:#10243e;font:inherit;text-align:left;cursor:pointer}.portal-alert-card:hover{border-color:#b88f00;box-shadow:0 5px 14px rgba(176,132,0,.2)}.portal-alert-card>span:last-child{min-width:0}.portal-alert-count{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:#10243e;color:#ffcc00;font-size:16px;font-weight:950}.portal-alert-card strong{display:block;font-size:10.5px;font-weight:900;line-height:1.2;white-space:normal}.portal-alert-card small{display:block;margin-top:2px;color:#31465f;font-size:9px;font-weight:650;line-height:1.25;white-space:normal}
+.portal-alert-center{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.portal-alert-card{display:flex;align-items:center;gap:9px;width:310px;max-width:100%;min-height:54px;padding:7px 10px;border:1px solid #e6b800;border-left:3px solid #c99f00;border-radius:11px;background:#ffcc00;color:#10243e;font:inherit;text-align:left;cursor:pointer;outline:none}.portal-alert-card:hover{border-color:#b88f00;box-shadow:0 5px 14px rgba(176,132,0,.2)}.portal-alert-card>span:last-child{min-width:0}.portal-alert-count{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:#10243e;color:#ffcc00;font-size:16px;font-weight:950}.portal-alert-card strong{display:block;font-size:10.5px;font-weight:900;line-height:1.2;white-space:normal}.portal-alert-card small{display:block;margin-top:2px;color:#31465f;font-size:9px;font-weight:650;line-height:1.25;white-space:normal}
 .portal-alert-card[aria-pressed="true"]{border-color:#c99f00;box-shadow:0 5px 14px rgba(176,132,0,.2);background:#ffd426}.portal-alert-card.all-sites{width:170px}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 .emp-card{display:grid;grid-template-rows:72px 42px 26px 42px;gap:7px;min-height:231px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 22px rgba(4,57,112,.05)}
@@ -748,10 +748,16 @@ async function loadPortalOperationalAlerts(){
     portalOperationalAlerts=sites.flatMap(site=>(site.rotation_alerts||[]).map(alert=>({...alert,site_id:site.id,site_name:site.name})));
     const host=document.getElementById("portalOperationalAlerts");
     const grouped=Object.values(portalOperationalAlerts.reduce((map,alert)=>{const key=alert.site_id;map[key]??={site_id:key,site_name:alert.site_name,count:0,max_hours:0};map[key].count+=1;map[key].max_hours=Math.max(map[key].max_hours,Number(alert.hours)||0);return map},{}));
-    host.innerHTML=`<button type="button" class="portal-alert-card all-sites" aria-pressed="true" onclick="filterEmployeesBySite(null,this)"><span class="portal-alert-count">${employees.length}</span><span><strong>TOUT</strong><small>Tous les employés</small></span></button>`+grouped.map(alert=>`<button type="button" class="portal-alert-card" aria-pressed="false" onclick="filterEmployeesBySite(${Number(alert.site_id)},this)"><span class="portal-alert-count">${alert.count}</span><span><strong>⚠ ${esc(alert.site_name)}</strong><small>Dépassements de 40 h/semaine${alert.max_hours?` · maximum ${alert.max_hours} h`:""}</small></span></button>`).join("");
+    host.innerHTML=`<button type="button" class="portal-alert-card all-sites" aria-pressed="true" onclick="filterEmployeesBySite(null,this)"><span class="portal-alert-count" id="allCounterValue">${employees.length}</span><span><strong>TOUT</strong><small id="allCounterLabel">Tous les employés</small></span></button>`+grouped.map(alert=>`<button type="button" class="portal-alert-card" aria-pressed="false" onclick="filterEmployeesBySite(${Number(alert.site_id)},this)"><span class="portal-alert-count">${alert.count}</span><span><strong>⚠ ${esc(alert.site_name)}</strong><small>Dépassements de 40 h/semaine${alert.max_hours?` · maximum ${alert.max_hours} h`:""}</small></span></button>`).join("");
   }catch(e){portalOperationalAlerts=[]}
 }
 async function filterEmployeesBySite(siteId,button){
+  const sitesActive=!document.getElementById("sitesTab").classList.contains("hidden");
+  if(sitesActive){
+    document.querySelectorAll(".portal-alert-card").forEach(card=>card.setAttribute("aria-pressed",String(card===button)));
+    document.querySelectorAll("#sitesList .site-card").forEach(card=>card.classList.toggle("hidden",siteId!==null&&Number(card.dataset.siteId)!==Number(siteId)));
+    return;
+  }
   await switchTab("employees");
   document.querySelectorAll(".portal-alert-card").forEach(card=>card.setAttribute("aria-pressed",String(card===button)));
   document.querySelectorAll("#employeesList .emp-card").forEach(card=>card.classList.toggle("hidden",siteId!==null&&Number(card.dataset.siteId)!==Number(siteId)));
@@ -766,6 +772,8 @@ async function switchTab(tab){
   document.getElementById("historyTab").classList.toggle("hidden",tab!=="history");
   document.getElementById("messagesTab").classList.toggle("hidden",!tab.startsWith("messages-"));
   if(tab==="sites")await loadSites();
+  const allValue=document.getElementById("allCounterValue"),allLabel=document.getElementById("allCounterLabel");
+  if(allValue&&allLabel){allValue.textContent=tab==="sites"?sitesCache.length:employees.length;allLabel.textContent=tab==="sites"?"Tous les sites":"Tous les employés"}
   if(tab==="planning")await loadPlanning();
   if(tab==="equipment")await loadEquipment();
   if(tab==="history")await loadHistory();
@@ -864,7 +872,7 @@ async function loadSites(options={}){
           ${canAssign&&groups.length?`<select class="group-select" onclick="event.stopPropagation()" onchange="event.stopPropagation();updateEmployeeGroup(${e.id},this.value)">${groupOptionsHtml(e.group_code)}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
         </div>`).join("")}
       </div>`:"";
-      return `<div class="site-card">
+      return `<div class="site-card" data-site-id="${s.id}">
         <div class="site-card-top">
           <div><div class="site-name">${esc(s.name)}</div>${s.site_type?`<span class="site-type">${esc(s.site_type)}</span>`:""}</div>
           <span class="pill ${statusPill}">${statusLabel}</span>
