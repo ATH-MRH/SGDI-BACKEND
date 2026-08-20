@@ -139,6 +139,9 @@ class SiteVisibleOut(BaseModel):
     groups: list[SiteGroupOut] = []
     position_requirements: list[SitePositionRequirementOut] = []
     group_position_requirements: dict[str, dict[str, int]] = {}
+    rotation_config: dict[str, Any] = {}
+    rotation_schedule: list[dict[str, Any]] = []
+    rotation_alerts: list[dict[str, Any]] = []
 
     model_config = {"from_attributes": True}
 
@@ -197,6 +200,36 @@ class SitePositionRequirementIn(BaseModel):
         return max(0, value or 0)
 
 
+class SiteRotationConfigIn(BaseModel):
+    system: str = "3x8"
+    first_shift_time: str = "06:00"
+    start_date: date = Field(default_factory=date.today)
+    horizon_weeks: int = 4
+
+    @field_validator("system")
+    @classmethod
+    def _valid_system(cls, value: str) -> str:
+        if value != "3x8":
+            raise ValueError("Seul le système 24h/7j en 3×8 est disponible")
+        return value
+
+    @field_validator("first_shift_time")
+    @classmethod
+    def _valid_time(cls, value: str) -> str:
+        try:
+            hour, minute = [int(part) for part in value.split(":")]
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ValueError("Heure de prise de service invalide")
+        return f"{hour:02d}:{minute:02d}"
+
+    @field_validator("horizon_weeks")
+    @classmethod
+    def _valid_horizon(cls, value: int) -> int:
+        return min(12, max(1, value or 4))
+
+
 class SiteCreateIn(BaseModel):
     name: str
     address: str | None = None
@@ -207,6 +240,7 @@ class SiteCreateIn(BaseModel):
     positions: list[SitePositionRequirementIn] = Field(default_factory=list)
     group_quotas: dict[str, int] = Field(default_factory=dict)
     group_positions: dict[str, dict[str, int]] = Field(default_factory=dict)
+    rotation: SiteRotationConfigIn | None = None
 
     @field_validator("name")
     @classmethod

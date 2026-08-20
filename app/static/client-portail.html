@@ -106,6 +106,7 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .banner{border-radius:14px;padding:13px 16px;margin-bottom:14px;font-size:13px;font-weight:700}
 .banner.success{background:#dcfce7;color:#14532d;border:1px solid #86efac}
 .banner.error{background:#fee2e2;color:#7f1d1d;border:1px solid #fca5a5}
+.portal-alert-center{display:grid;gap:8px;margin-bottom:14px}.portal-alert-card{padding:12px 14px;border:1px solid #fdba74;border-left:4px solid #ea580c;border-radius:12px;background:#fff7ed;color:#9a3412;font-size:12px;font-weight:800}.portal-alert-card small{display:block;margin-top:3px;color:#a16207;font-weight:600}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
 .emp-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 22px rgba(4,57,112,.05)}
 .emp-name{font-size:15px;font-weight:900}
@@ -208,6 +209,7 @@ tr:last-child td{border-bottom:0}
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .site-config-section{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:13px;background:#f8fafc}.site-config-section h3{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.05em}.site-config-section p{margin:4px 0 10px;font-size:11px;color:var(--muted)}.site-position-row{display:grid;grid-template-columns:minmax(0,1fr) 105px 34px;gap:7px;align-items:end;margin-top:7px}.site-position-row label{margin:0}.site-position-remove{height:40px;border:1px solid #fecdd3;border-radius:9px;background:#fff1f2;color:#be123c;font-weight:900;cursor:pointer}.site-groups-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.site-group-distribution{padding:12px;border:1px solid #d7e2ec;border-radius:12px;background:#fff}.site-group-distribution-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px;font-weight:900}.site-group-position-row{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #eef2f7;font-size:11px}.site-group-position-row input{text-align:center;font-weight:850}.site-distribution-status{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:11px;font-weight:800}.site-distribution-status.ok{background:#dcfce7;color:#166534}.site-distribution-status.error{display:block;background:#fee2e2;color:#991b1b}
 .site-config-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:17px 0}.site-config-tab{border:1px solid var(--line);border-radius:11px;background:#fff;color:#31465f;padding:11px;font-weight:900;cursor:pointer}.site-config-tab.active{background:#ffcc00;border-color:#e6b800;color:#10243e;box-shadow:0 6px 15px rgba(176,132,0,.2)}.site-delete-panel{padding:22px;border:1px solid #fecaca;border-radius:14px;background:#fff7f7}.site-delete-panel h3{margin:0;color:#991b1b}.site-delete-panel p{font-size:12px;color:#64748b;line-height:1.5}
+.rotation-config-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.rotation-preview{margin-top:12px;overflow:auto;border:1px solid #d7e2ec;border-radius:11px;background:#fff}.rotation-day{display:grid;grid-template-columns:100px repeat(4,minmax(120px,1fr));border-bottom:1px solid #eef2f7;min-width:650px}.rotation-day:last-child{border-bottom:0}.rotation-day>div{padding:8px;border-right:1px solid #eef2f7;font-size:10px}.rotation-day>div:last-child{border-right:0}.rotation-day-head{background:#fff8d6;font-weight:900}.rotation-rest{color:#64748b;background:#f8fafc}.rotation-work{color:#14532d;background:#f0fdf4;font-weight:800}.rotation-alert{margin-top:9px;padding:10px;border-radius:9px;background:#fff7ed;color:#9a3412;font-size:11px;font-weight:800}
 @media(max-width:640px){.cat-grid{grid-template-columns:1fr}.card-grid{grid-template-columns:1fr}.site-groups-grid{grid-template-columns:1fr}.employee-profile{grid-template-columns:1fr}.employee-identity-panel{border-right:0;border-bottom:1px solid #e5ebf2}.employee-profile-photo{width:110px;height:130px;margin-left:0}.employee-detail-grid{grid-template-columns:1fr}.employee-profile-metrics{grid-template-columns:repeat(2,1fr)}.employee-profile-observations{align-items:flex-start;flex-direction:column}.employee-profile-actions button{flex:1;min-width:120px}body.iron-portal .brand{gap:10px}body.iron-portal .brand-logo{width:140px;height:56px}body.iron-portal .brand-title{font-size:14px}}
 </style>
 </head>
@@ -302,6 +304,7 @@ tr:last-child td{border-bottom:0}
     </nav></aside></div>
     <main class="portal-main">
       <div id="banner"></div>
+      <div id="portalOperationalAlerts" class="portal-alert-center"></div>
 
       <div id="planningTab" class="hidden">
         <div class="section-head"><h1>Planning de travail</h1><p>Le planning détaillé par créneau arrive bientôt sur votre espace client.</p></div>
@@ -420,6 +423,7 @@ tr:last-child td{border-bottom:0}
     <input id="siteRequiredStaff" type="number" min="0" step="1" value="0" readonly title="Calculé automatiquement à partir des postes et fonctions">
     <div class="site-config-section"><h3>Postes / fonctions</h3><p>Ajoutez chaque poste et le nombre d’employés requis.</p><div id="sitePositionsList"></div><button type="button" class="secondary" style="margin-top:10px" onclick="addSitePositionRow()">+ Ajouter un poste</button></div>
     <div class="site-config-section"><h3>Effectif par groupe</h3><p>Ventilez chaque poste/fonction entre les groupes. Le total de chaque groupe est calculé automatiquement.</p><div class="site-groups-grid" id="siteGroupDistribution"></div><div id="siteDistributionStatus" class="site-distribution-status"></div></div>
+    <div class="site-config-section"><h3>Planning et rotation</h3><p>Configurez le cycle 24h/7j : trois groupes en service et un groupe en récupération, avec une relève toutes les huit heures.</p><div class="rotation-config-grid"><label>Système<select id="siteRotationSystem" onchange="renderSiteRotationPreview()"><option value="3x8">24h/7j — 3×8</option></select></label><label>Première prise<input id="siteRotationFirstTime" type="time" value="06:00" oninput="renderSiteRotationPreview()"></label><label>Début du cycle<input id="siteRotationStartDate" type="date" onchange="renderSiteRotationPreview()"></label><label>Horizon<select id="siteRotationWeeks" onchange="renderSiteRotationPreview()"><option value="4">4 semaines</option><option value="8">8 semaines</option><option value="12">12 semaines</option></select></label></div><div id="siteRotationPreview" class="rotation-preview"></div><div id="siteRotationAlerts"></div></div>
     </div>
     <div id="siteDeletePanel" class="site-delete-panel hidden"><h3>Supprimer le site sélectionné</h3><p>Le site sera archivé dans ATLAS afin de conserver son historique. Il ne sera plus affiché dans votre espace client.</p></div>
     <div id="siteError" class="error"></div>
@@ -461,6 +465,7 @@ let loginPasswordUsed="";
 let employees=[];
 let equipmentCache=[];
 let historyCache=[];
+let portalOperationalAlerts=[];
 let portalSearchResults=[];
 let portalSearchRequest=0;
 let portalSearchLoading=null;
@@ -711,6 +716,16 @@ async function enterApp(){
   }
   try{categories=await apiFetch("/reference/categories")}catch(e){categories={}}
   await loadEmployees();
+  await loadPortalOperationalAlerts();
+}
+
+async function loadPortalOperationalAlerts(){
+  try{
+    const sites=await apiFetch("/sites");sitesCache=sites;portalSearchLoaded.sites=true;
+    portalOperationalAlerts=sites.flatMap(site=>(site.rotation_alerts||[]).map(alert=>({...alert,site_name:site.name})));
+    const host=document.getElementById("portalOperationalAlerts");
+    host.innerHTML=portalOperationalAlerts.slice(0,5).map(alert=>`<div class="portal-alert-card">⚠ Alerte planning — ${esc(alert.site_name)}<small>${esc(alert.message)}</small></div>`).join("");
+  }catch(e){portalOperationalAlerts=[]}
 }
 
 async function switchTab(tab){
@@ -853,7 +868,12 @@ function resetSiteConfigFields(){
   document.getElementById("sitePositionsList").innerHTML="";
   siteGroupDistributionSeed={};
   document.getElementById("siteGroupDistribution").innerHTML="";
+  document.getElementById("siteRotationSystem").value="3x8";
+  document.getElementById("siteRotationFirstTime").value="06:00";
+  document.getElementById("siteRotationStartDate").value=today();
+  document.getElementById("siteRotationWeeks").value="4";
   addSitePositionRow();
+  renderSiteRotationPreview();
 }
 function openSiteModal(){
   const select=document.getElementById("siteExistingSelect");
@@ -893,6 +913,12 @@ function loadSelectedSiteConfiguration(){
   (site.position_requirements||[]).forEach(position=>addSitePositionRow(position.name,position.required));
   if(!(site.position_requirements||[]).length)addSitePositionRow();
   renderSiteGroupDistribution();
+  const rotation=site.rotation_config||{};
+  document.getElementById("siteRotationSystem").value=rotation.system||"3x8";
+  document.getElementById("siteRotationFirstTime").value=rotation.first_shift_time||"06:00";
+  document.getElementById("siteRotationStartDate").value=rotation.start_date||today();
+  document.getElementById("siteRotationWeeks").value=String(rotation.horizon_weeks||4);
+  renderSiteRotationPreview();
 }
 function addSitePositionRow(name="",required=0){
   const host=document.getElementById("sitePositionsList");
@@ -935,6 +961,22 @@ function validateSiteDistribution(){
   if(differences.length){status.className="site-distribution-status error";status.textContent=differences.map(item=>`${item.name} : ${item.total} ventilé(s) sur ${item.required} requis (${item.difference>0?item.difference+" restant(s)":Math.abs(item.difference)+" en trop"})`).join(" · ");return false}
   status.className="site-distribution-status ok";status.textContent="Répartition cohérente : tous les besoins par fonction sont entièrement ventilés.";return true;
 }
+function siteRotationConfiguration(){return{system:document.getElementById("siteRotationSystem").value,first_shift_time:document.getElementById("siteRotationFirstTime").value||"06:00",start_date:document.getElementById("siteRotationStartDate").value||today(),horizon_weeks:parseInt(document.getElementById("siteRotationWeeks").value,10)||4}}
+function renderSiteRotationPreview(){
+  const host=document.getElementById("siteRotationPreview"),alertsHost=document.getElementById("siteRotationAlerts");if(!host||!alertsHost)return;
+  const config=siteRotationConfiguration(),start=new Date(`${config.start_date}T00:00:00`),[hour,minute]=config.first_shift_time.split(":").map(Number),base=hour*60+minute,groups=["A","B","C","D"];
+  const fmt=minutes=>`${String(Math.floor((minutes%1440)/60)).padStart(2,"0")}:${String(minutes%60).padStart(2,"0")}`;
+  const shifts=[0,1,2].map(index=>{const begin=(base+index*480)%1440;return`${fmt(begin)}–${fmt((begin+480)%1440)}`});
+  const rows=[],weekly={};
+  for(let dayIndex=0;dayIndex<config.horizon_weeks*7;dayIndex++){
+    const current=new Date(start);current.setDate(start.getDate()+dayIndex);const dateKey=current.toISOString().slice(0,10);const dayGroups=[];
+    groups.forEach((code,groupIndex)=>{const cycle=(dayIndex+groupIndex)%4,working=cycle<3;dayGroups.push({code,working,shift:working?shifts[cycle]:"Récupération"});if(working){const monday=new Date(current);monday.setDate(current.getDate()-((current.getDay()+6)%7));const key=`${monday.toISOString().slice(0,10)}|${code}`;weekly[key]=(weekly[key]||0)+8}});
+    if(dayIndex<8)rows.push({date:current,groups:dayGroups});
+  }
+  host.innerHTML=`<div class="rotation-day rotation-day-head"><div>Date</div>${groups.map(code=>`<div>Groupe ${code}</div>`).join("")}</div>${rows.map(row=>`<div class="rotation-day"><div><b>${row.date.toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</b></div>${row.groups.map(group=>`<div class="${group.working?"rotation-work":"rotation-rest"}">${group.working?group.shift:"Récupération"}</div>`).join("")}</div>`).join("")}`;
+  const overtime=Object.entries(weekly).filter(([,hours])=>hours>40);
+  alertsHost.innerHTML=overtime.length?`<div class="rotation-alert">⚠ ${overtime.length} dépassement(s) prévisionnel(s) du seuil de 40 h/semaine détecté(s). Ils seront suivis dans les alertes et l’historique.</div>`:`<div class="site-distribution-status ok">Planning généré sans dépassement prévisionnel du seuil de 40 h/semaine.</div>`;
+}
 function closeSiteModal(){
   document.getElementById("siteModalBackdrop").classList.add("hidden");
 }
@@ -971,6 +1013,7 @@ async function submitSite(){
       positions,
       group_quotas,
       group_positions,
+      rotation:siteRotationConfiguration(),
     })});
     closeSiteModal();
     showBanner(siteConfigMode==="edit"?"Configuration du site mise à jour.":"Site et organisation opérationnelle créés.","success");
@@ -1130,8 +1173,9 @@ async function loadHistory(){
     const params=new URLSearchParams();
     if(statusFilter)params.set("status",statusFilter);
     const rows=await apiFetch(`/observations?${params.toString()}`);historyCache=rows;if(!statusFilter)portalSearchLoaded.history=true;
-    if(!rows.length){host.innerHTML='<div class="empty">Aucun signalement.</div>';return}
-    host.innerHTML=`<div class="hist-list">${rows.map(o=>`
+    const planningAlerts=portalOperationalAlerts.map(alert=>`<div class="hist-card urgente"><div class="hist-top"><div><div class="hist-emp">Alerte planning — ${esc(alert.site_name)}</div><div class="hist-date">Semaine du ${formatDateFr(alert.week_start)}</div></div><span class="pill pill-amber">Temps de travail</span></div><div class="hist-desc">${esc(alert.message)}</div></div>`).join("");
+    if(!rows.length&&!planningAlerts){host.innerHTML='<div class="empty">Aucun signalement.</div>';return}
+    host.innerHTML=`<div class="hist-list">${planningAlerts}${rows.map(o=>`
       <div class="hist-card ${o.severity==="urgente"?"urgente":""}">
         <div class="hist-top">
           <div>

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -196,6 +196,8 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             {**employee, "group_code": explicit_groups.get(str(employee["id"]))}
             for employee in employees_by_site.get(site.id, [])
         ]
+        rotation_config = ((site.equipment_plan or {}).get("clientPortalRotation", {}) if isinstance(site.equipment_plan, dict) else {})
+        rotation_schedule, rotation_alerts = _generate_site_rotation(rotation_config)
         result.append({
             "id": site.id,
             "name": site.name,
@@ -209,6 +211,9 @@ def visible_sites_for_client(db: Session, client_id: int) -> list[dict[str, Any]
             "groups": _site_groups_payload(site, site_employees),
             "position_requirements": _site_position_requirements_payload(site, site_employees),
             "group_position_requirements": ((site.equipment_plan or {}).get("groupPositionQuotas", {}) if isinstance(site.equipment_plan, dict) else {}),
+            "rotation_config": rotation_config,
+            "rotation_schedule": rotation_schedule,
+            "rotation_alerts": rotation_alerts,
         })
     return result
 
@@ -281,7 +286,7 @@ def create_site_for_client(db: Session, client_id: int, payload) -> dict[str, An
         wilaya=payload.wilaya,
         site_type=payload.site_type,
         contractual_staff=required_staff,
-        equipment_plan={"positionQuotas": position_quotas, "groupQuotas": group_quotas, "groupPositionQuotas": payload.group_positions},
+        equipment_plan={"positionQuotas": position_quotas, "groupQuotas": group_quotas, "groupPositionQuotas": payload.group_positions, "clientPortalRotation": payload.rotation.model_dump(mode="json") if payload.rotation else {}},
         active=1,
     )
     db.add(site)
@@ -306,6 +311,7 @@ def update_site_for_client(db: Session, client_id: int, site_id: int, payload) -
     plan["positionQuotas"] = position_quotas
     plan["groupQuotas"] = group_quotas
     plan["groupPositionQuotas"] = payload.group_positions
+    plan["clientPortalRotation"] = payload.rotation.model_dump(mode="json") if payload.rotation else {}
     site.equipment_plan = plan
     db.commit()
     return next(item for item in visible_sites_for_client(db, client_id) if item["id"] == site.id)
@@ -329,6 +335,43 @@ def _validated_group_position_quotas(position_quotas: dict[str, int], group_posi
         code: sum(int(value or 0) for value in group_positions.get(code, {}).values())
         for code in GROUP_LETTERS
     }
+
+
+def _generate_site_rotation(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    if not config or config.get("system") != "3x8":
+        return [], []
+    try:
+        start = date.fromisoformat(str(config.get("start_date")))
+        first_hour, first_minute = [int(part) for part in str(config.get("first_shift_time", "06:00")).split(":")]
+        weeks = min(12, max(1, int(config.get("horizon_weeks", 4))))
+    except (TypeError, ValueError):
+        return [], []
+    groups = ["A", "B", "C", "D"]
+    shift_labels = []
+    base_minutes = first_hour * 60 + first_minute
+    for index in range(3):
+        begin = (base_minutes + index * 480) % 1440
+        end = (begin + 480) % 1440
+        shift_labels.append(f"{begin // 60:02d}:{begin % 60:02d}–{end // 60:02d}:{end % 60:02d}")
+    schedule: list[dict[str, Any]] = []
+    weekly_hours: dict[tuple[str, str], int] = {}
+    for day_index in range(weeks * 7):
+        current = start + timedelta(days=day_index)
+        group_rows = []
+        for group_index, code in enumerate(groups):
+            cycle_position = (day_index + group_index) % 4
+            working = cycle_position < 3
+            group_rows.append({"group": code, "status": "service" if working else "recuperation", "shift": shift_labels[cycle_position] if working else None, "hours": 8 if working else 0})
+            if working:
+                monday = current - timedelta(days=current.weekday())
+                key = (monday.isoformat(), code)
+                weekly_hours[key] = weekly_hours.get(key, 0) + 8
+        schedule.append({"date": current.isoformat(), "groups": group_rows})
+    alerts = [
+        {"type": "weekly_hours", "week_start": week, "group": group, "hours": hours, "message": f"Groupe {group} planifié {hours} h sur la semaine (seuil 40 h)."}
+        for (week, group), hours in weekly_hours.items() if hours > 40
+    ]
+    return schedule, alerts
 
 
 def archive_site_for_client(db: Session, client_id: int, site_id: int) -> None:

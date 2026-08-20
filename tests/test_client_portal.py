@@ -221,12 +221,17 @@ def test_client_can_create_site_with_positions_and_group_staffing(client, auth_h
             "A": {"Agent de sécurité": 4, "Superviseur": 1},
             "B": {"Agent de sécurité": 4, "Superviseur": 1},
         },
+        "rotation": {"system": "3x8", "first_shift_time": "06:00", "start_date": "2026-08-20", "horizon_weeks": 4},
     })
     assert response.status_code == 201, response.text
     site = response.json()
     assert site["required_staff"] == 10
     assert next(group for group in site["groups"] if group["code"] == "A")["quota"] == 5
     assert site["group_position_requirements"]["A"]["Agent de sécurité"] == 4
+    assert site["rotation_config"]["system"] == "3x8"
+    assert len(site["rotation_schedule"]) == 28
+    assert site["rotation_schedule"][0]["groups"][0]["shift"] == "06:00–14:00"
+    assert all(len(day["groups"]) == 4 for day in site["rotation_schedule"])
     agent_position = next(position for position in site["position_requirements"] if position["name"] == "Agent de sécurité")
     assert agent_position == {"name": "Agent de sécurité", "assigned": 0, "required": 8, "remaining": 8}
 
