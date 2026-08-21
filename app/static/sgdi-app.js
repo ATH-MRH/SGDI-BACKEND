@@ -28500,31 +28500,41 @@ function renderCommDashboard(view){
   const contratsExpires=clients.filter(c=>c.dateFinContrat&&daysBetween(today(),c.dateFinContrat)<0);
   const contratsFin30=clients.filter(c=>{if(!c.dateFinContrat)return false;const d=daysBetween(today(),c.dateFinContrat);return d>=0&&d<=30});
   const contratsAlerte=[...contratsExpires,...contratsFin30].sort((a,b)=>String(a.dateFinContrat||"").localeCompare(String(b.dateFinContrat||"")));
-  view.innerHTML=`<h1 class="text-2xl font-black uppercase mb-2">COMMERCIAL - TABLEAU DE BORD</h1>
-    <p class="text-slate-500 text-sm mb-4">${mySoc()||"Toutes sociétés"}</p>
-    ${commTabs("dashboard")}
-    <div class="card p-5 mb-4" style="border-left:5px solid ${contratsAlerte.length?"#dc2626":"#059669"};background:${contratsAlerte.length?"#fef2f2":"#ecfdf5"}">
-      <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
-        <div>
-          <h3 class="font-bold text-lg" style="color:${contratsAlerte.length?"#991b1b":"#047857"}">Alerte fin de contrat client</h3>
-          <div class="text-xs" style="color:${contratsAlerte.length?"#7f1d1d":"#047857"}">${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} échéance(s) dans 30 jours avant date anniversaire</div>
-        </div>
-        <a class="btn ${contratsAlerte.length?"btn-danger":"btn-success"} text-xs" href="#/commercial/clients">Voir clients</a>
-      </div>
-      ${contratsAlerte.length?`<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${contratsAlerte.slice(0,6).map(c=>{const d=daysBetween(today(),c.dateFinContrat);return`<div class="p-3 rounded-lg text-sm" style="background:#fff;border:1px solid #fecaca"><div class="flex justify-between gap-2"><b>${escapeHTML(c.nom||c.raisonSociale||"Client")}</b><span class="pill ${d<0?"pill-red":"pill-amber"}">${d<0?"Expiré":"J-"+d}</span></div><div class="text-xs text-slate-500 mt-1">${escapeHTML(c.societe||"—")} · Fin contrat : ${formatDate(c.dateFinContrat)}${c.prestationsServices?` · ${escapeHTML(c.prestationsServices)}`:""}</div></div>`}).join("")}</div>${contratsAlerte.length>6?`<div class="text-xs text-red-700 mt-2 font-semibold">+ ${contratsAlerte.length-6} autre(s) client(s) en alerte.</div>`:""}`:`<div class="text-sm text-emerald-700 font-semibold">Aucune fin de contrat client dans les 30 jours.</div>`}
-    </div>
-    <div class="grid grid-4 mb-4">
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Prospects</div><div class="text-2xl font-bold mt-1 text-blue-600">${prospects.length}</div><div class="text-xs text-slate-400 mt-1">${prospects.filter(p=>p.statut==="nouveau").length} nouveaux</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Clients actifs</div><div class="text-2xl font-bold mt-1 text-emerald-600">${clients.filter(c=>c.statut!=="inactif").length}</div><div class="text-xs text-slate-400 mt-1">${clients.length} au total · ${contratsFin30.length} alerte(s)</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Opportunités actives</div><div class="text-2xl font-bold mt-1 text-amber-600">${oppsActives.length}</div><div class="text-xs text-slate-400 mt-1">${money(oppsActives.reduce((s,o)=>s+(o.montant||0),0))} potentiel</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">CA gagné</div><div class="text-2xl font-bold mt-1 text-purple-600">${money(ca)}</div><div class="text-xs text-slate-400 mt-1">${opps.filter(o=>o.etape==="gagnee").length} affaires</div></div>
-    </div>
-    <div class="grid grid-3 mb-4">
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Pipeline pondéré</div><div class="text-2xl font-bold mt-1 text-indigo-600">${money(pipeline)}</div><div class="text-xs text-slate-400 mt-1">prob × montant</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Taux conversion</div><div class="text-2xl font-bold mt-1">${tauxConv}%</div><div class="text-xs text-slate-400 mt-1">prospects → clients</div></div>
-      <div class="card p-4"><div class="text-xs text-slate-500 uppercase">Visites enregistrées</div><div class="text-2xl font-bold mt-1">${visites.length}</div><div class="text-xs text-slate-400 mt-1">${visites.filter(v=>v.date>=today()).length} à venir</div></div>
-    </div>
-    <div class="card p-5"><h3 class="mb-3 font-bold">Pipeline par étape</h3><div class="grid grid-cols-6 gap-2">${ETAPES_OPP.map(e=>{const n=opps.filter(o=>o.etape===e).length;const t=opps.filter(o=>o.etape===e).reduce((s,o)=>s+(o.montant||0),0);return`<div class="card p-3 bg-slate-50 text-center"><div class="text-xs uppercase text-slate-500 mb-1">${e}</div><div class="text-2xl font-bold ${e==="gagnee"?"text-emerald-600":e==="perdue"?"text-red-600":"text-amber-600"}">${n}</div><div class="text-xs text-slate-500 mt-1">${money(t)}</div></div>`}).join("")}</div></div>`;
+  const upcomingVisits=visites.filter(v=>v.date>=today()).sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
+  const priorities=[
+    ...contratsAlerte.map(c=>({title:`Contrat · ${c.nom||c.raisonSociale||"Client"}`,meta:`Échéance ${formatDate(c.dateFinContrat)}`,status:daysBetween(today(),c.dateFinContrat)<0?"Expiré":"Prioritaire",tone:"warning"})),
+    ...upcomingVisits.map(v=>({title:`Visite · ${v.client||v.clientNom||v.objet||"Client"}`,meta:`${formatDate(v.date)}${v.heure?` · ${v.heure}`:""}`,status:"Planifiée",tone:"info"})),
+    ...oppsActives.map(o=>({title:o.nom||o.titre||o.client||"Opportunité commerciale",meta:`${String(o.etape||"nouveau").replaceAll("_"," ")} · ${money(o.montant||0)}`,status:"À suivre",tone:"info"}))
+  ].slice(0,4);
+  const stageData=ETAPES_OPP.map(e=>({key:e,count:opps.filter(o=>o.etape===e).length,total:opps.filter(o=>o.etape===e).reduce((s,o)=>s+(o.montant||0),0)}));
+  const stageMax=Math.max(1,...stageData.map(x=>x.count));
+  const wonCount=opps.filter(o=>o.etape==="gagnee").length;
+  const avgWon=wonCount?ca/wonCount:0;
+  view.innerHTML=`<div class="comm-modern-dashboard">
+    <header class="comm-modern-head">
+      <div><div class="comm-modern-eyebrow">Pilotage commercial</div><h1>Tableau de bord commercial</h1><p>${escapeHTML(mySoc()||"Toutes sociétés")} · clients, opportunités et performance</p></div>
+      <div class="comm-modern-actions"><button type="button" class="btn btn-secondary" onclick="window.print()">Exporter</button><button type="button" class="btn btn-primary" onclick="openOpportuniteModal()">+ Nouvelle opportunité</button></div>
+    </header>
+    <section class="comm-modern-alert ${contratsAlerte.length?"is-warning":"is-ok"}">
+      <div><strong>Suivi des contrats clients</strong><span>${contratsAlerte.length?`${contratsExpires.length} contrat(s) expiré(s) · ${contratsFin30.length} échéance(s) dans les 30 jours.`:"Aucune échéance critique dans les 30 prochains jours."}</span></div>
+      <button type="button" onclick="navigate('commercial/clients')">${contratsAlerte.length?`${contratsAlerte.length} à traiter`:"Situation conforme"}</button>
+    </section>
+    <section class="comm-modern-kpis">
+      <button type="button" class="comm-modern-kpi tone-blue" onclick="navigate('commercial/prospects')"><span>Prospects actifs</span><strong>${prospects.length}</strong><small>${prospects.filter(p=>p.statut==="nouveau").length} nouveau(x)</small></button>
+      <button type="button" class="comm-modern-kpi tone-green" onclick="navigate('commercial/clients')"><span>Clients actifs</span><strong>${clients.filter(c=>c.statut!=="inactif").length}</strong><small>${contratsFin30.length} contrat(s) à surveiller</small></button>
+      <button type="button" class="comm-modern-kpi tone-purple" onclick="navigate('commercial/opportunites')"><span>Pipeline pondéré</span><strong>${money(pipeline)}</strong><small>${oppsActives.length} opportunité(s) ouverte(s)</small></button>
+      <button type="button" class="comm-modern-kpi tone-amber" onclick="navigate('commercial/opportunites')"><span>Chiffre d'affaires gagné</span><strong>${money(ca)}</strong><small>${wonCount} affaire(s) conclue(s)</small></button>
+    </section>
+    <section class="comm-modern-content">
+      <article class="comm-modern-panel comm-modern-pipeline"><div class="comm-modern-panel-head"><h2>Pipeline commercial</h2><span>Nombre et valeur par étape</span></div><div class="comm-modern-bars">${stageData.map(x=>`<button type="button" class="comm-modern-stage ${x.key==="gagnee"?"is-won":x.key==="perdue"?"is-lost":""}" onclick="navigate('commercial/opportunites')"><span class="comm-modern-bar" style="height:${Math.max(18,Math.round((x.count/stageMax)*100))}%"></span><strong>${x.count}</strong><small>${escapeHTML(x.key.replaceAll("_"," "))}</small><em>${money(x.total)}</em></button>`).join("")}</div></article>
+      <article class="comm-modern-panel"><div class="comm-modern-panel-head"><h2>Priorités</h2><span>${priorities.length} action(s)</span></div><div class="comm-modern-priorities">${priorities.length?priorities.map(p=>`<div class="comm-modern-priority"><div><strong>${escapeHTML(p.title)}</strong><small>${escapeHTML(p.meta)}</small></div><span class="${p.tone}">${escapeHTML(p.status)}</span></div>`).join(""):`<div class="comm-modern-empty">Aucune priorité commerciale en attente.</div>`}</div></article>
+    </section>
+    <section class="comm-modern-secondary">
+      <button type="button" onclick="navigate('commercial/prospects')"><span>Taux de conversion</span><strong>${tauxConv}%</strong><small>Prospects transformés en clients</small></button>
+      <button type="button" onclick="navigate('commercial/visites')"><span>Visites planifiées</span><strong>${upcomingVisits.length}</strong><small>${visites.length} visite(s) enregistrée(s)</small></button>
+      <button type="button" onclick="navigate('commercial/opportunites')"><span>Valeur moyenne gagnée</span><strong>${money(avgWon)}</strong><small>Par affaire conclue</small></button>
+    </section>
+  </div>`;
 }
 function renderCommProspects(view){
   const list=bySoc(db.prospects||[]).slice().sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
