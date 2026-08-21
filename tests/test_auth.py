@@ -97,6 +97,40 @@ def test_ops_subdomain_rejects_drh_prefix(client, db):
     assert resp.status_code == 403
 
 
+def test_dc_subdomain_serves_full_atlas_commercial_module(client, db):
+    _add_test_user(db, "COM01", "COM01", role="rh", access_level="H3", structures=["commercial"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "COM01", "password": "COM01"},
+        headers={"host": "dc.irongs.com"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    root = client.get("/", headers={"host": "dc.irongs.com"})
+    assert root.status_code == 200
+    assert 'id="app"' in root.text
+    assert "/static/sgdi-app.js?v=" in root.text
+    assert "Clients, devis, commandes et livraisons" not in root.text
+
+
+def test_dc_subdomain_rejects_non_commercial_prefix(client, db):
+    _add_test_user(db, "OPS97", "OPS97", role="ops", access_level="H3", structures=["ops"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "OPS97", "password": "OPS97"},
+        headers={"host": "dc.irongs.com"},
+    )
+    assert resp.status_code == 403
+
+
+def test_old_commercial_subdomain_redirects_to_dc(client):
+    root = client.get("/", headers={"host": "commercial.irongs.com"}, follow_redirects=False)
+    assert root.status_code == 301
+    assert root.headers["location"] == "https://dc.irongs.com/"
+
+
 def test_old_facturation_subdomain_is_retired(client, db):
     _add_test_user(db, "FAC98", "FAC98", role="ops", access_level="H3", structures=["facturation"])
 

@@ -534,9 +534,8 @@ def _is_rh_host(host: str) -> bool:
 
 
 def _is_retired_commercial_host(host: str) -> bool:
-    # Ancien sous-domaine du module Commercial, remplacé par dc.irongs.com (module
-    # autonome). On garde ce hostname routé (plutôt que de couper le DNS) uniquement pour
-    # rediriger les liens/favoris existants — voir _is_dc_host ci-dessus.
+    # Ancien sous-domaine du module Commercial. Il reste disponible uniquement comme
+    # redirection vers l'adresse principale dc.irongs.com.
     return host.split(":")[0].lower() == "commercial.irongs.com"
 
 
@@ -1256,12 +1255,9 @@ def frontend(request: Request) -> HTMLResponse:
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )
-    if _is_dc_host(host):
-        return FileResponse(
-            STATIC_DIR / "commercial.html",
-            media_type="text/html; charset=utf-8",
-            headers={"Cache-Control": "no-cache, max-age=0"},
-        )
+    # dc.irongs.com utilise désormais l'application ATLAS complète ci-dessous, avec le
+    # contexte Commercial imposé côté front. Cela conserve la base et toutes les fonctions
+    # du module historique au lieu de servir l'ancienne interface autonome commercial.html.
     if _is_rh_host(host):
         return FileResponse(
             STATIC_DIR / "rh.html",

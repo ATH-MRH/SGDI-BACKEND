@@ -36,6 +36,7 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "finances": (("FIN", "FAC"), "FINANCES/COMPTA"),
     "finance": (("FIN", "FAC"), "FINANCES/COMPTA"),
     "commercial": (("COM",), "COMMERCIAL"),
+    "dc": (("COM",), "COMMERCIAL"),
     "secretariat": (("SEC",), "SECRETARIAT GENERAL"),
     "agenda": (("AGD",), "AGENDA"),
     "pointage": (("PTG",), "POINTAGE"),
