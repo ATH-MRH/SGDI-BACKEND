@@ -28842,7 +28842,8 @@ async function confirmClientTechOnly(){
   try{await persistClientToPostgres(c)}catch(e){toast("Sauvegarde impossible : "+(e.message||e),"error");return;}
   clientSitesMirror("ts");
   toast("Données techniques enregistrées","success");
-  techLockDonneesTechniques();
+  // La fiche reste éditable après sauvegarde. Seuls les totaux calculés restent en lecture seule.
+  techUnlockDonneesTechniques();
 }
 function techRecapUpdate(){
   const tbody=document.getElementById("tech-recap-tbody");
@@ -29359,6 +29360,10 @@ function previewClientPortalLogo(input){
   reader.readAsDataURL(file);
 }
 function openClientModal(id,readOnly=false){
+  // Cette vue est un véritable formulaire d'édition. La liste des clients est affichée en
+  // mode consultation global ; sans cette sortie explicite, tous les champs nouvellement
+  // injectés héritent du verrouillage CSS et deviennent impossibles à saisir.
+  if(!readOnly&&typeof sgdiExitViewMode==="function"&&sgdiViewModeActive)sgdiExitViewMode();
   const c=(db.clients||[]).find(x=>String(x.id)===String(id)||String(x.backendId||"")===String(id));
   const isEdit=!!c;
   if(c?.nom)pageTabSetLabel(c.nom);
@@ -29584,7 +29589,7 @@ function openClientModal(id,readOnly=false){
   </form>`;
   prospInitReunions("prosp",(c?.prosp_reunions)||[]);
   prospInitReunions("negos",(c?.negos_reunions)||[]);
-  if(c?.tech_valide)requestAnimationFrame(()=>techLockDonneesTechniques());
+  if(!readOnly)requestAnimationFrame(()=>techUnlockDonneesTechniques());
   if(readOnly)requestAnimationFrame(()=>lockClientReadOnly());
 }
 function lockClientReadOnly(){
