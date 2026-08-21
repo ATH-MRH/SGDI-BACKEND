@@ -346,7 +346,7 @@ tr:last-child td{border-bottom:0}
       <div id="sitesTab" class="hidden">
         <div class="section-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div><h1>Mes sites</h1><p>Vos emplacements sous surveillance, la couverture en effectif et les agents affectés à chaque groupe.</p></div>
-          <button type="button" class="secondary" id="addSiteBtn" onclick="openSiteModal()">Configurer site</button>
+          <button type="button" class="secondary" id="addSiteBtn" onclick="openSiteModal()">Détail sites</button>
         </div>
         <div id="sitesList"><div class="empty">Chargement…</div></div>
       </div>
@@ -542,7 +542,7 @@ const PORTAL_LANG_PAIRS=[
   ["Planning intelligent des prises de service, relèves et récupérations.","Smart schedule for shift starts, handovers and recovery periods."],
   ["+ Nouveau planning","+ New schedule"],
   ["Vos emplacements sous surveillance, la couverture en effectif et les agents affectés à chaque groupe.","Your monitored sites, staffing coverage and the employees assigned to each group."],
-  ["Configurer site","Configure site"],
+  ["Détail sites","Sites detail"],
   ["Le matériel affecté à vos sites et à vos agents.","Equipment assigned to your sites and employees."],
   ["+ Ajouter un équipement","+ Add equipment"],
   ["Vos observations et signalements sur les agents affectés à vos sites.","Your observations and reports on employees assigned to your sites."],
@@ -630,7 +630,7 @@ const PORTAL_LANG_PAIRS=[
 
   ["← Semaine précédente","← Previous week"],["Semaine suivante →","Next week →"],
   ["Aucun site disponible pour créer un planning.","No site available to create a schedule."],
-  ["Aucun planning de rotation n’est encore configuré. Utilisez « Mes sites → Configurer site » pour créer le cycle 3×8.","No rotation schedule has been configured yet. Use “My sites → Configure site” to create the 3×8 cycle."],
+  ["Aucun planning de rotation n’est encore configuré. Utilisez « Mes sites → Détail sites » pour créer le cycle 3×8.","No rotation schedule has been configured yet. Use “My sites → Sites detail” to create the 3×8 cycle."],
   ["Groupes en service","Groups on duty"],["En récupération","On recovery"],["Récupération","Recovery"],
   ["Aucun employé affecté","No employee assigned"],
 
@@ -1000,7 +1000,7 @@ async function loadPlanning(){
   try{
     if(!sitesCache.length)sitesCache=await apiFetch("/sites");
     const plannedSites=sitesCache.filter(site=>(site.rotation_schedule||[]).length);
-    if(!plannedSites.length){host.innerHTML='<div class="empty">Aucun planning de rotation n’est encore configuré. Utilisez « Mes sites → Configurer site » pour créer le cycle 3×8.</div>';return}
+    if(!plannedSites.length){host.innerHTML='<div class="empty">Aucun planning de rotation n’est encore configuré. Utilisez « Mes sites → Détail sites » pour créer le cycle 3×8.</div>';return}
     if(!planningSelectedSiteId||!plannedSites.some(site=>Number(site.id)===Number(planningSelectedSiteId)))planningSelectedSiteId=plannedSites[0].id;
     renderPlanningSchedule();
   }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
