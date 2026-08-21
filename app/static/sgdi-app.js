@@ -5916,7 +5916,7 @@ function renderInternal(){
         <div class="sidebar-user sidebar-user-identity sidebar-user-profile-large px-4 py-5 text-xs">
           <div class="sidebar-profile-mark" aria-hidden="true"><span>${escapeHTML((session.nom||"A").slice(0,1).toUpperCase())}</span></div>
           <div class="sidebar-atlas-brand sidebar-current-user-name">${escapeHTML(session.nom)}</div>
-          <div class="sidebar-user-role">${session.role}</div>
+          <div class="sidebar-user-role">${escapeHTML(typeof adminRoleDisplayLabel==="function"?adminRoleDisplayLabel(session.role):session.role)}</div>
         </div>
         <nav class="flex-1 overflow-y-auto py-3 px-2" id="sidebar-nav"></nav>
         <div id="sidebar-back-slot"></div>
