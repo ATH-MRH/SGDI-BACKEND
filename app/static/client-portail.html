@@ -787,6 +787,7 @@ function openEmployeeDetail(employeeId){
       ${session?.permissions?.create_observations===false?"":`<div class="employee-profile-observations"><div><strong>Observations et suivi</strong><small>Ajoutez plusieurs observations, chacune conservée dans l’historique.</small></div><button type="button" class="primary" onclick="openObservationFromEmployeeDetail(${e.id})">+ Ajouter</button></div><div class="employee-profile-actions"><button type="button" class="secondary" onclick="openEmployeeActionModal(${e.id},'affectation')">Nouvelle affectation</button><button type="button" class="secondary danger-action" onclick="openEmployeeActionModal(${e.id},'blacklist')">Demander le blacklistage</button></div>`}
     </div></div>`;
   document.getElementById("employeeDetailBackdrop").classList.remove("hidden");
+  applyPortalLanguage(document.body);
 }
 function closeEmployeeDetail(){document.getElementById("employeeDetailBackdrop").classList.add("hidden")}
 function openObservationFromEmployeeDetail(employeeId){closeEmployeeDetail();openObservationModal(employeeId)}
@@ -813,6 +814,7 @@ async function openEmployeeActionModal(employeeId,action){
       document.getElementById("employeeEffectiveDate").value=today();
     }catch(error){actionError.textContent=error.message;actionError.classList.add("show")}
   }
+  applyPortalLanguage(document.body);
 }
 function updateAssignmentPlanningOptions(siteId){
   const select=document.getElementById("employeeTargetPlanning"),site=(assignmentOptionsCache?.sites||[]).find(item=>Number(item.id)===Number(siteId)),plannings=assignmentOptionsCache?.plannings||[];if(!select)return;
@@ -939,6 +941,7 @@ async function enterApp(){
   try{categories=await apiFetch("/reference/categories")}catch(e){categories={}}
   await loadEmployees();
   await loadPortalOperationalAlerts();
+  applyPortalLanguage(document.body);
 }
 
 async function loadPortalOperationalAlerts(){
@@ -947,6 +950,7 @@ async function loadPortalOperationalAlerts(){
     portalOperationalAlerts=sites.flatMap(site=>(site.rotation_alerts||[]).map(alert=>({...alert,site_id:site.id,site_name:site.name})));
     const host=document.getElementById("portalOperationalAlerts");
     host.innerHTML=`<button type="button" class="portal-alert-card all-sites" aria-pressed="true" onclick="filterEmployeesBySite(null,this)"><span class="portal-alert-count" id="allCounterValue">${employees.length}</span><span><strong>TOUT</strong><small id="allCounterLabel">Tous les employés</small></span></button>`+sites.map(site=>{const assigned=(site.employees||[]).length;return`<button type="button" class="portal-alert-card" aria-pressed="false" onclick="filterEmployeesBySite(${Number(site.id)},this)"><span class="portal-alert-count">${assigned}</span><span><strong>${esc(site.name)}</strong><small>${assigned} employé${assigned>1?"s":""} affecté${assigned>1?"s":""} au site</small></span></button>`}).join("");
+    applyPortalLanguage(document.body);
   }catch(e){portalOperationalAlerts=[]}
 }
 async function filterEmployeesBySite(siteId,button){
@@ -969,6 +973,7 @@ async function filterEmployeesBySite(siteId,button){
   portalEmployeePositionFilter=null;
   renderPortalPositionCounters(siteId);
   applyEmployeesFilter();
+  applyPortalLanguage(document.body);
 }
 
 async function switchTab(tab){
@@ -986,6 +991,7 @@ async function switchTab(tab){
   if(tab==="equipment")await loadEquipment();
   if(tab==="history")await loadHistory();
   if(tab.startsWith("messages-"))await loadPortalMessages(tab.slice(9));
+  applyPortalLanguage(document.body);
 }
 
 let planningWeekOffset=0;
@@ -1013,6 +1019,7 @@ function renderPlanningSchedule(){
   <div class="planning-summary"><div class="planning-summary-card"><span>Système</span><b>24h/7j — 3×8</b></div><div class="planning-summary-card"><span>Première prise</span><b>${esc(config.first_shift_time||"06:00")}</b></div><div class="planning-summary-card"><span>Groupes en service</span><b>${activeGroups}</b></div><div class="planning-summary-card"><span>En récupération</span><b>${recoveryGroups}</b></div></div>
   ${(site.rotation_alerts||[]).length?`<div class="rotation-alert" style="margin-bottom:12px">⚠ ${(site.rotation_alerts||[]).length} dépassement(s) prévisionnel(s) de 40 h/semaine détecté(s) sur l’horizon configuré.</div>`:""}
   <div class="planning-table-wrap"><table class="planning-table"><thead><tr><th>Date</th>${groups.map(code=>`<th>Groupe ${code}<div style="font-size:9px;font-weight:600;color:#64748b">${employeesByGroup[code].length} employé(s)</div></th>`).join("")}</tr></thead><tbody>${days.map(day=>`<tr><td><b>${formatDateFr(day.date)}</b><div class="equip-ref">${new Date(`${day.date}T00:00:00`).toLocaleDateString(portalDateLocale(),{weekday:"long"})}</div></td>${groups.map(code=>{const group=(day.groups||[]).find(item=>item.group===code),employees=employeesByGroup[code];return`<td><div class="${group?.status==="service"?"planning-shift":"planning-recovery"}">${group?.status==="service"?`Service ${esc(group.shift||"")}`:"Récupération"}</div>${employees.length?`<div class="planning-agents">${employees.map(employee=>`${employee.code?esc(employee.code)+" — ":""}${esc(employee.last_name)} ${esc(employee.first_name)}`).join("<br>")}</div>`:'<div class="planning-agents">Aucun employé affecté</div>'}</td>`}).join("")}</tr>`).join("")}</tbody></table></div>`;
+  applyPortalLanguage(document.body);
 }
 
 function employeePositionKey(e){
@@ -1033,6 +1040,7 @@ function renderPortalPositionCounters(siteId){
   });
   const rows=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"fr"));
   host.innerHTML=rows.map(([label,count])=>`<button type="button" class="group-counter headcount" aria-pressed="false" onclick="filterEmployeesByPosition(this,'${encodeURIComponent(label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(label)}</div><div class="gc-assigned">${count}</div></button>`).join("");
+  applyPortalLanguage(document.body);
 }
 
 function applyEmployeesFilter(){
@@ -1067,6 +1075,7 @@ async function loadEmployees(){
       </div>`).join("")}</div>`;
     portalEmployeeSiteFilter=null;portalEmployeePositionFilter=null;
     renderPortalPositionCounters(null);
+    applyPortalLanguage(document.body);
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
@@ -1139,6 +1148,7 @@ async function loadSites(options={}){
         ${employeesHtml}
       </div>`;
     }).join("")}</div>`;
+    applyPortalLanguage(document.body);
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
@@ -1226,6 +1236,7 @@ function setSiteConfigMode(mode){
   submit.disabled=mode!=="create";
   resetSiteConfigFields();
   document.getElementById("siteError").classList.remove("show");
+  applyPortalLanguage(document.body);
 }
 function loadSelectedSiteConfiguration(){
   const id=Number(document.getElementById("siteExistingSelect").value);
@@ -1374,6 +1385,7 @@ async function loadEquipment(){
         <td><span class="pill ${esc(e.status_tone)}">${esc(e.status_label)}</span></td>
         <td>${formatDateFr(e.dotation_date)}</td>
       </tr>`).join("")}</tbody></table></div>`;
+    applyPortalLanguage(document.body);
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
@@ -1394,6 +1406,7 @@ async function openEquipmentModal(){
   }catch(error){
     articleSelect.innerHTML='<option value="">Catalogue indisponible</option>';
   }
+  applyPortalLanguage(document.body);
 }
 function closeEquipmentModal(){
   document.getElementById("equipmentModalBackdrop").classList.add("hidden");
@@ -1441,6 +1454,7 @@ function openObservationModal(employeeId){
       <span>${esc(label)}</span>
     </label>`).join("");
   document.getElementById("modalBackdrop").classList.remove("hidden");
+  applyPortalLanguage(document.body);
 }
 
 function closeObservationModal(){
@@ -1523,6 +1537,7 @@ async function loadHistory(){
         ${o.categories&&o.categories.length?`<div class="hist-cats">${o.categories.map(c=>`<span class="pill pill-amber">${esc(categories[c]||c)}</span>`).join("")}</div>`:""}
         ${o.attachment_url?`<div style="margin-top:9px"><a class="pill pill-blue" href="${esc(o.attachment_url)}" target="_blank" rel="noopener">📎 ${esc(o.attachment_name||"Voir la pièce jointe")}</a></div>`:""}
       </div>`).join("")}</div>`;
+    applyPortalLanguage(document.body);
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
@@ -1548,6 +1563,7 @@ async function loadPortalMessages(folder){
       ${o.client_response?`<div style="margin-top:10px;padding:12px 14px;border-left:4px solid #c8102e;border-radius:8px;background:#fff4f5"><strong style="display:block;font-size:11px;color:#9f1239;text-transform:uppercase;margin-bottom:4px">Réponse d’ATLAS</strong><div>${esc(o.client_response)}</div>${o.replied_by_name||o.replied_at?`<small style="display:block;margin-top:6px;color:#64748b">${o.replied_by_name?esc(o.replied_by_name):""}${o.replied_by_name&&o.replied_at?" · ":""}${o.replied_at?formatDateFr(o.replied_at):""}</small>`:""}</div>`:""}
       ${o.attachment_url?`<div style="margin-top:9px"><a class="pill pill-blue" href="${esc(o.attachment_url)}" target="_blank" rel="noopener">📎 ${esc(o.attachment_name||"Voir la pièce jointe")}</a></div>`:""}
     </div>`).join("")}</div>`;
+    applyPortalLanguage(document.body);
   }catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`}
 }
 
@@ -1560,6 +1576,7 @@ function runEmployeeSidebarSearch(value){
   const matches=employees.filter(employee=>normalizePortalSearch([employee.code,employee.last_name,employee.first_name,employee.position,employee.site_name].join(" ")).includes(query)).slice(0,8);
   host.innerHTML=matches.length?matches.map(employee=>`<button type="button" class="employee-sidebar-result" onclick="openSidebarEmployee(${employee.id})"><strong>${employee.code?esc(employee.code)+" — ":""}${esc(employee.last_name)} ${esc(employee.first_name)}</strong><span>${esc([employee.position,employee.site_name].filter(Boolean).join(" · ")||"Affectation non renseignée")}</span></button>`).join(""):'<div class="employee-sidebar-empty">Aucun employé trouvé.</div>';
   host.classList.remove("hidden");
+  applyPortalLanguage(host);
 }
 function openSidebarEmployee(employeeId){
   const input=document.getElementById("employeeSidebarSearch");if(input)input.value="";
@@ -1601,6 +1618,7 @@ function renderPortalSearchResults(query,{loading=false,errors=0}={}){
   else if(errors)html+=`<div class="portal-search-status error">${errors} rubrique${errors>1?"s":""} indisponible${errors>1?"s":""}. Les résultats affichés sont partiels.</div>`;
   else if(allResults.length>portalSearchResults.length)html+=`<div class="portal-search-status">20 résultats affichés sur ${allResults.length}. Affinez votre recherche.</div>`;
   host.innerHTML=html;host.classList.remove("hidden");
+  applyPortalLanguage(host);
 }
 async function runPortalSearch(value){
   const query=normalizePortalSearch(value);
