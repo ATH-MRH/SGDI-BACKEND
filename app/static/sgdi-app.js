@@ -16637,6 +16637,7 @@ function siteMapDashboardHTML(sites){
   const positioned=sites.filter(siteLatLng);
   const initial=positioned[0]||sites[0];
   const initialQuery=initial?siteMapQuery(initial):"Algérie";
+  const mapCollapsed=!!window.__sgdiSitesMapCollapsed;
   const options=`<option value="__all__">Tous les sites positionnés</option>`+sites.map(s=>{const hasGps=!!siteLatLng(s);return`<option value="${escapeHTML(String(s.id||s.backendId||""))}">${escapeHTML((s.nom||"Site")+" · "+[s.commune,s.wilaya].filter(Boolean).join(", ")+(hasGps?"":" · GPS manquant"))}</option>`}).join("");
   return `<div class="card p-5 mb-5">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -16650,14 +16651,31 @@ function siteMapDashboardHTML(sites){
           <input id="sites-map-filter" type="search" class="input" style="padding-left:32px;width:280px" placeholder="Nom du site, wilaya, client..." oninput="siteMapSearchFilter(this.value)"/>
         </div>
         <select id="sites-map-select" class="select" style="max-width:320px" onchange="updateSitesMap(this.value)">${options}</select>
+        <button id="sites-map-toggle" type="button" class="btn btn-secondary" aria-expanded="${mapCollapsed?"false":"true"}" onclick="toggleSitesDashboardMap()">${mapCollapsed?"Afficher la carte":"Masquer la carte"}</button>
         <a id="sites-map-open" class="btn btn-ghost" href="${escapeHTML(googleMapsSearchUrl(initialQuery))}" target="_blank" rel="noopener">Ouvrir Google Maps</a>
       </div>
     </div>
+    <div id="sites-map-content" class="${mapCollapsed?"hidden":""}">
     ${siteMapDashboardStatusHTML(sites)}
     ${positioned.length?`<div class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100" style="height:360px">
       <div id="sites-map-frame" class="sgdi-maplibre-map" role="region" aria-label="Carte interactive des sites"></div>
     </div>`:`<div class="site-map-empty">Aucun site n'a encore de position GPS. Ouvre une fiche site puis utilise <b>Positionner site</b>.</div>`}
+    </div>
   </div>`;
+}
+function toggleSitesDashboardMap(){
+  const content=document.getElementById("sites-map-content");
+  const button=document.getElementById("sites-map-toggle");
+  if(!content||!button)return;
+  const willCollapse=!content.classList.contains("hidden");
+  window.__sgdiSitesMapCollapsed=willCollapse;
+  content.classList.toggle("hidden",willCollapse);
+  button.textContent=willCollapse?"Afficher la carte":"Masquer la carte";
+  button.setAttribute("aria-expanded",willCollapse?"false":"true");
+  if(!willCollapse){
+    initSitesDashboardMap();
+    [0,120,350].forEach(ms=>setTimeout(()=>{try{window.__sgdiSitesDashboardMap?.resize()}catch(_e){}},ms));
+  }
 }
 function initSitesDashboardMap(){
   const el=document.getElementById("sites-map-frame");
