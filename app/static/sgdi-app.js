@@ -30770,7 +30770,7 @@ function openCataloguePrestModal(id){
           <select class="select" name="unite" style="margin-top:4px">${UNITES.map(u=>`<option value="${escapeHTML(u)}" ${(p?.unite||"Agent / mois")===u?"selected":""}>${escapeHTML(u)}</option>`).join("")}</select>
         </label>
       </div>
-      <label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#334155">Prix HT (DZD) *</span><input class="input" type="number" min="0.01" step="0.01" name="prixHT" value="${p?.prixHT||""}" placeholder="0,00" required style="margin-top:4px;width:100%"/></label>
+      <label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#334155">Prix HT (DZD) <small style="font-weight:500;color:#94a3b8">— facultatif</small></span><input class="input" type="text" inputmode="decimal" name="prixHT" value="${p?.prixHT?escapeHTML(formatDZD(p.prixHT).replace(/ DZD$/,'')):""}" placeholder="00 000,00" onfocus="this.value=this.value?String(parseDZD(this.value)).replace('.',','):''" onblur="this.value=this.value.trim()?formatDZD(parseDZD(this.value)).replace(/ DZD$/,''):''" style="margin-top:4px;width:100%;font-variant-numeric:tabular-nums"/></label>
       <label style="display:block;margin-bottom:16px"><span style="font-size:12px;font-weight:700;color:#334155">Description *</span><textarea class="input" name="description" rows="3" required style="margin-top:4px;width:100%" placeholder="Détails de la prestation, conditions, périmètre d'intervention...">${escapeHTML(p?.description||"")}</textarea></label>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
@@ -30781,7 +30781,6 @@ function openCataloguePrestModal(id){
 async function confirmPrest(id){
   const fd=new FormData(document.querySelector(".modal-bg form"));
   if(!fd.get("designation")){toast("Désignation requise","error");return;}
-  if(!(parseFloat(fd.get("prixHT"))>0)){toast("Le prix HT doit être supérieur à zéro","error");return;}
   if(!String(fd.get("description")||"").trim()){toast("Description requise","error");return;}
   db.catalogue=db.catalogue||[];
   let p=id?db.catalogue.find(x=>x.id===id):null;
@@ -30796,7 +30795,7 @@ async function confirmPrest(id){
   p.designation=designation;
   p.categorie=fd.get("categorie")||"Gardiennage";
   p.unite=fd.get("unite")||"Agent / mois";
-  p.prixHT=parseFloat(fd.get("prixHT"))||0;
+  p.prixHT=parseDZD(fd.get("prixHT"));
   p.description=String(fd.get("description")||"").trim();
   p.updatedAt=new Date().toISOString();
   try{await sgdiApi("/api/irongs/collections/catalogue",{method:"PUT",body:{data:db.catalogue},legacy:false});}catch(e){toast("Erreur de sauvegarde : "+(e.message||e),"error");return;}
