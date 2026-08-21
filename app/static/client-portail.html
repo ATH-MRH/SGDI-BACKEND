@@ -87,6 +87,12 @@ input:focus,select:focus,textarea:focus{outline:0;border-color:var(--blue);box-s
 .portal-search-status.error{color:#991b1b;background:#fff1f2}
 .portal-search-match{outline:2px solid #c8102e;outline-offset:2px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 14px;font-weight:750;cursor:pointer}
+.lang-toggle{display:flex;gap:4px}
+.lang-toggle button{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:8px 11px;font-weight:850;font-size:11px;cursor:pointer}
+.lang-toggle button.active{background:#ffcc00;color:#10243e;border-color:#ffcc00}
+.login-lang-toggle{position:absolute;z-index:3;top:16px;right:16px;display:flex;gap:4px}
+.login-lang-toggle button{border:1px solid var(--line);background:#fff;color:#42566f;border-radius:8px;padding:6px 10px;font-weight:850;font-size:11px;cursor:pointer}
+.login-lang-toggle button.active{background:var(--navy);color:#fff;border-color:var(--navy)}
 .shell{width:100%;max-width:none;margin:0;padding:18px 0;display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
 .portal-sidebar-stack{position:sticky;top:18px;display:flex;flex-direction:column;gap:14px}.portal-sidebar{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 .portal-sidebar-title{padding:8px 10px 12px;font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.11em;text-transform:uppercase}
@@ -137,8 +143,8 @@ td{padding:11px 14px;border-bottom:1px solid #eef2f7;vertical-align:middle}
 tr:last-child td{border-bottom:0}
 .equip-name{font-weight:850;font-size:13px}
 .equip-ref{font-size:11px;color:var(--muted);margin-top:1px}
-.group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
-.group-counter{border:1px solid var(--line);border-radius:10px;padding:8px 4px;text-align:center;background:#f8fafc;width:100%;color:inherit;font:inherit;cursor:pointer}
+.group-counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;align-items:stretch}
+.group-counter{display:grid;grid-template-rows:30px 24px 20px 18px;align-content:center;row-gap:2px;min-height:100px;border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;background:#f8fafc;width:100%;color:inherit;font:inherit;cursor:pointer}
 .group-counter.total{background:#fff8d6;border-color:#f1c400}
 .group-counter.waiting{background:#fff1f2;border-color:#fda4af}
 .group-counter.function{display:grid;grid-template-rows:30px 26px 30px;align-content:center;min-height:102px;background:#fff;border-color:#e5cbd0}
@@ -156,11 +162,11 @@ tr:last-child td{border-bottom:0}
 .group-counter.headcount .gc-code{display:flex;align-items:flex-start;justify-content:center;line-height:1.05}
 .group-counter.headcount .gc-assigned{margin-top:0;align-self:center;font-size:22px;color:#050505}
 @media(max-width:600px){.group-counter.headcount{width:100%}}
-.gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
-.gc-assigned{font-size:18px;font-weight:900;margin-top:2px;line-height:1}
-.gc-quota-row{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;font-size:10px;color:var(--muted)}
+.gc-code{display:flex;align-items:center;justify-content:center;align-self:center;font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em;line-height:1.15;overflow-wrap:break-word;word-break:break-word;hyphens:auto}
+.gc-assigned{align-self:center;font-size:18px;font-weight:900;line-height:1}
+.gc-quota-row{display:flex;align-items:center;justify-content:center;align-self:center;gap:4px;font-size:10px;color:var(--muted)}
 .gc-quota-input{width:42px;height:22px;padding:0 3px;font-size:11px;text-align:center}
-.gc-remaining{font-size:10px;color:var(--muted);margin-top:3px}
+.gc-remaining{align-self:center;font-size:10px;color:var(--muted)}
 .site-employees{border-top:1px solid #eef2f7;padding-top:10px;display:flex;flex-direction:column;gap:6px}
 .site-employees-title{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .site-employee-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;cursor:pointer;border-radius:9px;padding:5px}
@@ -233,6 +239,7 @@ tr:last-child td{border-bottom:0}
 <body>
 
 <section id="loginView" class="login">
+  <div class="login-lang-toggle" data-no-lang="1"><button type="button" data-lang="fr" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" onclick="portalSetLangMode('en')">EN</button></div>
   <aside class="login-iron-showcase" aria-label="Espace client DHL">
     <div class="dfa-client-mark" aria-label="DHL">DHL</div>
   </aside>
@@ -261,6 +268,7 @@ tr:last-child td{border-bottom:0}
 </section>
 
 <section id="changePwView" class="login hidden">
+  <div class="login-lang-toggle" data-no-lang="1"><button type="button" data-lang="fr" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" onclick="portalSetLangMode('en')">EN</button></div>
   <aside class="login-iron-showcase" aria-label="Espace client DHL">
     <div class="dfa-client-mark" aria-label="DHL">DHL</div>
   </aside>
@@ -300,6 +308,7 @@ tr:last-child td{border-bottom:0}
         <span class="portal-search-icon" aria-hidden="true">⌕</span>
         <div id="portalSearchResults" class="portal-search-results hidden"></div>
       </div>
+      <div class="lang-toggle" data-no-lang="1"><button type="button" data-lang="fr" onclick="portalSetLangMode('fr')">FR</button><button type="button" data-lang="en" onclick="portalSetLangMode('en')">EN</button></div>
       <button class="logout" onclick="logout()">Déconnexion</button>
     </div>
   </header>
@@ -496,6 +505,198 @@ let employeeActionRequest=null;
 let assignmentOptionsCache=null;
 const defaultEmployeePhoto="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 140'%3E%3Crect width='120' height='140' fill='%23eef2f7'/%3E%3Ccircle cx='60' cy='48' r='25' fill='%2394a3b8'/%3E%3Cpath d='M18 132c3-34 20-51 42-51s39 17 42 51' fill='%2394a3b8'/%3E%3C/svg%3E";
 let branding=null;
+
+/* ---- LANGUE FR/EN ----
+   Technique reprise de sgdi-app.js (SGDI_LANG_PAIRS) : une table de correspondances
+   FR/EN, appliquée en parcourant les nœuds texte du DOM après chaque rendu (via un
+   MutationObserver global) plutôt qu'en réécrivant chaque fonction de rendu. La
+   substitution est symétrique (FR<->EN dans les deux sens) pour rester correcte quel
+   que soit l'état courant du texte affiché, et insensible à l'apostrophe (' ou ’). */
+function portalLangMode(){try{return localStorage.getItem("portalLangMode")==="en"?"en":"fr"}catch(e){return "fr"}}
+function portalDateLocale(){return portalLangMode()==="en"?"en-US":"fr-FR"}
+function portalSetLangMode(mode){try{localStorage.setItem("portalLangMode",mode==="en"?"en":"fr")}catch(e){}applyPortalLanguage(document.body)}
+
+const PORTAL_LANG_PAIRS=[
+  ["Connexion","Sign in"],["Connexion…","Signing in…"],["Connectez-vous à votre espace client.","Sign in to your client portal."],
+  ["Accès sécurisé","Secure access"],["Identifiant","Username"],["Mot de passe","Password"],["Afficher","Show"],["Masquer","Hide"],
+  ["Mémoriser cette session","Remember this session"],["SE CONNECTER","SIGN IN"],["Session chiffrée","Encrypted session"],
+  ["PORTAIL EXPLOITÉ PAR IRON GLOBAL SOLUTION","PORTAL OPERATED BY IRON GLOBAL SOLUTION"],
+  ["Première connexion","First sign-in"],["Nouveau mot de passe","New password"],
+  ["Choisissez votre mot de passe définitif.","Choose your permanent password."],["Confirmer le mot de passe","Confirm password"],
+  ["ENREGISTRER","SAVE"],["Au moins 6 caractères.","At least 6 characters."],
+  ["Identifiant et mot de passe requis.","Username and password are required."],["Identifiants incorrects","Incorrect credentials"],
+  ["Connexion impossible","Unable to sign in"],["Le mot de passe doit contenir au moins 6 caractères.","Password must be at least 6 characters."],
+  ["Les deux mots de passe ne correspondent pas.","The two passwords do not match."],
+  ["Impossible de changer le mot de passe","Unable to change password"],["Accédez à votre espace client","Access your client portal"],
+
+  ["Rechercher dans le portail","Search the portal"],
+  ["Rechercher un agent, un site, un matériel…","Search an employee, a site, equipment…"],
+  ["Déconnexion","Log out"],["Espace client","Client area"],["Mon personnel","My staff"],["Mes sites","My sites"],
+  ["Mes équipements / matériel","My equipment / materiel"],["Mes équipements","My equipment"],
+  ["Planning de travail","Work schedule"],["Historique","History"],["Messagerie","Messages"],
+  ["Messages envoyés","Sent messages"],["Messages reçus","Received messages"],["Messages archivés","Archived messages"],
+  ["Recherche employé","Employee search"],["Rechercher un employé","Search an employee"],
+  ["Code, nom, fonction…","Code, name, position…"],
+
+  ["LISTE DU PERSONNEL","STAFF LIST"],
+  ["Liste des employés actuellement affectés à vos sites.","List of employees currently assigned to your sites."],
+  ["Planning intelligent des prises de service, relèves et récupérations.","Smart schedule for shift starts, handovers and recovery periods."],
+  ["+ Nouveau planning","+ New schedule"],
+  ["Vos emplacements sous surveillance, la couverture en effectif et les agents affectés à chaque groupe.","Your monitored sites, staffing coverage and the employees assigned to each group."],
+  ["Configurer site","Configure site"],
+  ["Le matériel affecté à vos sites et à vos agents.","Equipment assigned to your sites and employees."],
+  ["+ Ajouter un équipement","+ Add equipment"],
+  ["Vos observations et signalements sur les agents affectés à vos sites.","Your observations and reports on employees assigned to your sites."],
+  ["Vos signalements transmis à l’équipe OPS dans ATLAS.","Your reports sent to the OPS team in ATLAS."],
+  ["Les réponses envoyées par l’équipe OPS vers votre espace client.","Replies sent by the OPS team to your client portal."],
+  ["Les échanges clôturés, conservés dans votre historique.","Closed threads, kept in your history."],
+  ["Tous les statuts","All statuses"],["Nouveau","New"],["En cours","In progress"],["Traité","Processed"],
+
+  ["TOUT","ALL"],["Tous les employés","All employees"],["Tous les sites","All sites"],["Tous les plannings","All schedules"],
+  ["Poste non renseigné","Position not specified"],["Fonction non renseignée","Position not specified"],
+  ["Aucun groupe","No group"],["Signaler","Report"],["Chargement…","Loading…"],
+
+  ["Dossier employé","Employee file"],["Personnel affecté · Situation actuelle","Assigned staff · Current status"],
+  ["Site actuel","Current site"],["Non renseigné","Not specified"],["Non renseignée","Not specified"],
+  ["Contrat actif","Active contract"],["Contrat expiré","Expired contract"],
+  ["Informations contractuelles","Contract information"],["Situation actuelle","Current status"],
+  ["Âge","Age"],["Date de fin de contrat","Contract end date"],
+  ["Date d’affectation sur site","Site assignment date"],["Ancienneté sur le site","Seniority on site"],
+  ["Présences","Attendances"],["Absences","Absences"],["Suspensions","Suspensions"],["Blacklisté","Blacklisted"],
+  ["Oui","Yes"],["Non","No"],["Observations et suivi","Observations and follow-up"],
+  ["Ajoutez plusieurs observations, chacune conservée dans l’historique.","Add multiple observations, each kept in the history."],
+  ["+ Ajouter","+ Add"],["Nouvelle affectation","New assignment"],["Demander le blacklistage","Request blacklisting"],
+  ["Demande de blacklistage","Blacklisting request"],["Motif de l’affectation","Reason for the assignment"],
+  ["Motif de la demande","Reason for the request"],["Date d’effet souhaitée","Requested effective date"],
+  ["Pièce jointe facultative","Optional attachment"],["PDF, Word ou image — 10 Mo maximum.","PDF, Word or image — 10 MB maximum."],
+  ["Envoyer la demande","Send request"],["Nouveau site","New site"],["Nouveau groupe","New group"],
+  ["Demande","Request"],["Validation…","Confirming…"],["Envoi…","Sending…"],["Valider","Confirm"],
+  ["Veuillez expliquer le motif de la demande.","Please explain the reason for the request."],
+  ["Le site, le groupe et la date d’effet sont obligatoires.","Site, group and effective date are required."],
+  ["Votre demande a été transmise à l’administration.","Your request has been sent to the administration."],
+  ["Choisir un site","Choose a site"],["Choisir un groupe","Choose a group"],
+  ["Aucun planning configuré sur ce site","No schedule configured on this site"],
+  ["Sélectionnez d’abord un site","Select a site first"],
+
+  ["Signaler un agent","Report an employee"],["Observation","Observation"],["Signaler un problème","Report an issue"],
+  ["Nature du problème","Nature of the issue"],["Date","Date"],["Description","Description"],
+  ["Annuler","Cancel"],["Envoyer","Send"],
+  ["Expliquez précisément le motif…","Explain the reason in detail…"],
+  ["Décrivez ce que vous avez constaté…","Describe what you observed…"],
+  ["Merci de décrire la situation.","Please describe the situation."],["Date requise.","Date is required."],
+  ["Signalement envoyé, merci.","Report sent, thank you."],["Envoi impossible","Unable to send"],
+  ["Problème","Issue"],["Réponse d’ATLAS","Reply from ATLAS"],["Voir la pièce jointe","View attachment"],
+  ["Aucun signalement.","No reports."],["Alerte planning — ","Schedule alert — "],["Semaine du ","Week of "],
+  ["Temps de travail","Working time"],
+
+  ["Configurer un site","Configure a site"],
+  ["Créez le site et définissez son organisation opérationnelle.","Create the site and define its operational setup."],
+  ["Créer site","Create site"],["Modifier site","Edit site"],["Supprimer site","Delete site"],
+  ["Site concerné","Site"],["— Choisir un site —","— Choose a site —"],["Nom du site","Site name"],
+  ["Type de site","Site type"],["Adresse","Address"],["Commune","Commune"],["Wilaya","Wilaya"],
+  ["Effectif requis","Required staff"],["Postes / fonctions","Positions / roles"],
+  ["Ajoutez chaque poste et le nombre d’employés requis.","Add each position and the number of employees required."],
+  ["+ Ajouter un poste","+ Add a position"],["Effectif par groupe","Staff by group"],
+  ["Ventilez chaque poste/fonction entre les groupes. Le total de chaque groupe est calculé automatiquement.","Split each position/role between the groups. Each group's total is calculated automatically."],
+  ["Planning et rotation","Schedule and rotation"],
+  ["Configurez le cycle 24h/7j : trois groupes en service et un groupe en récupération, avec une relève toutes les huit heures.","Configure the 24h/7-day cycle: three groups on duty and one group on recovery, with a handover every eight hours."],
+  ["Système","System"],["Première prise","First shift start"],["Début du cycle","Cycle start"],["Horizon","Horizon"],
+  ["4 semaines","4 weeks"],["8 semaines","8 weeks"],["12 semaines","12 weeks"],["24h/7j — 3×8","24h/7-day — 3×8"],
+  ["Supprimer le site sélectionné","Delete the selected site"],
+  ["Le site sera archivé dans ATLAS afin de conserver son historique. Il ne sera plus affiché dans votre espace client.","The site will be archived in ATLAS to keep its history. It will no longer appear in your client portal."],
+  ["Créer le site","Create the site"],["Le nom du site est requis.","The site name is required."],
+  ["Chaque poste doit avoir un nom valide.","Each position must have a valid name."],
+  ["Enregistrement…","Saving…"],["Enregistrer les modifications","Save changes"],
+  ["Configuration du site mise à jour.","Site configuration updated."],
+  ["Site et organisation opérationnelle créés.","Site and operational setup created."],
+  ["Suppression…","Deleting…"],["Site supprimé et archivé dans ATLAS.","Site deleted and archived in ATLAS."],
+  ["Poste / fonction","Position / role"],["Nombre requis","Required headcount"],
+  ["Ajoutez d’abord un poste ou une fonction.","Add a position or role first."],
+  ["Ajoutez les postes/fonctions pour commencer la ventilation.","Add positions/roles to start the split."],
+  ["Répartition cohérente : tous les besoins par fonction sont entièrement ventilés.","Consistent split: all position needs are fully allocated."],
+  ["Besoins théoriques par poste / fonction","Theoretical needs by position / role"],
+  ["Effectif total","Total headcount"],["tous groupes","all groups"],["affectés au site","assigned to the site"],
+  ["En attente","Awaiting"],["sans groupe","no group"],["à affecter","to be assigned"],
+  ["quota","quota"],["Employés affectés","Employees assigned"],
+  ["Effectif affecté / besoin théorique","Assigned staff / theoretical need"],
+  ["Effectif non défini","Staffing not defined"],["Couverture complète","Full coverage"],
+  ["Sous-effectif","Understaffed"],["Aucun agent affecté","No employee assigned"],["Besoin","Need"],["Écart +/-","Difference +/-"],
+
+  ["Ajouter un équipement","Add equipment"],["Article","Item"],["Quantité","Quantity"],["État","Condition"],
+  ["Équipement ajouté.","Equipment added."],["Choisissez un article.","Choose an item."],["Choisissez un site.","Choose a site."],
+  ["Impossible d’ajouter cet équipement.","Unable to add this equipment."],["Catalogue indisponible","Catalog unavailable"],
+  ["Aucun article disponible","No items available"],["Aucun site","No site"],
+  ["Neuf","New"],["Rénové","Refurbished"],["Usagé","Used"],["Réformé","Decommissioned"],
+  ["Équipement","Equipment"],["Assigné à","Assigned to"],["Depuis le","Since"],
+
+  ["← Semaine précédente","← Previous week"],["Semaine suivante →","Next week →"],
+  ["Aucun site disponible pour créer un planning.","No site available to create a schedule."],
+  ["Aucun planning de rotation n’est encore configuré. Utilisez « Mes sites → Configurer site » pour créer le cycle 3×8.","No rotation schedule has been configured yet. Use “My sites → Configure site” to create the 3×8 cycle."],
+  ["Groupes en service","Groups on duty"],["En récupération","On recovery"],["Récupération","Recovery"],
+  ["Aucun employé affecté","No employee assigned"],
+
+  ["Aucun agent actuellement affecté à vos sites.","No employees currently assigned to your sites."],
+  ["La consultation des agents n’est pas activée pour votre compte.","Employee access is not enabled for your account."],
+  ["Aucun site actuellement rattaché à votre compte.","No sites currently linked to your account."],
+  ["La consultation des sites n’est pas activée pour votre compte.","Site access is not enabled for your account."],
+  ["Aucun équipement actuellement recensé sur vos sites.","No equipment currently recorded on your sites."],
+  ["La consultation du matériel n’est pas activée pour votre compte.","Equipment access is not enabled for your account."],
+  ["L’historique des signalements n’est pas activé pour votre compte.","Report history is not enabled for your account."],
+  ["Aucun employé trouvé.","No employee found."],["Affectation non renseignée","Assignment not specified"],
+  ["Aucun résultat dans votre périmètre.","No results in your scope."],
+  ["Recherche dans les autres rubriques…","Searching other sections…"],
+  ["Personnel","Staff"],["Matériel","Equipment"],["Événement","Event"],
+].sort((a,b)=>b[0].length-a[0].length);
+
+function portalRegexEscape(value){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
+function portalApostropheRegex(value){return new RegExp(portalRegexEscape(value).replace(/['’]/g,"['’]"),"g")}
+const PORTAL_LANG_COMPILED=PORTAL_LANG_PAIRS.map(([fr,en])=>({fr,en,reFr:portalApostropheRegex(fr),reEn:portalApostropheRegex(en)}));
+
+function portalTranslateText(raw){
+  if(!raw||!raw.trim())return raw;
+  const mode=portalLangMode();
+  let out=raw;
+  PORTAL_LANG_COMPILED.forEach(({fr,en,reFr,reEn})=>{
+    const target=mode==="en"?en:fr;
+    out=out.replace(reFr,target).replace(reEn,target);
+  });
+  out=out.replace(/(\d+)\s+(?:ans?|years?)\b/g,(m,n)=>mode==="en"?`${n} year${n==="1"?"":"s"}`:`${n} an${n==="1"?"":"s"}`);
+  out=out.replace(/(\d+)\s+(?:mois|months?)\b/g,(m,n)=>mode==="en"?`${n} month${n==="1"?"":"s"}`:`${n} mois`);
+  out=out.replace(/(\d+)\s+(?:jours?|days?)\b/g,(m,n)=>mode==="en"?`${n} day${n==="1"?"":"s"}`:`${n} jour${n==="1"?"":"s"}`);
+  out=out.replace(/(\d+)\s+(?:employés?|employees?)\s+(?:affectés?|assigned)\s+(?:au site|to the site)\b/g,(m,n)=>mode==="en"?`${n} employee${n==="1"?"":"s"} assigned to the site`:`${n} employé${n==="1"?"":"s"} affecté${n==="1"?"":"s"} au site`);
+  out=out.replace(/(\d+)\s+(?:restants?|remaining)\b/g,(m,n)=>mode==="en"?`${n} remaining`:`${n} restant${n==="1"?"":"s"}`);
+  out=out.replace(/\b(?:Groupe|Group)\s+([A-Za-z0-9]+)\b/g,(m,c)=>mode==="en"?`Group ${c}`:`Groupe ${c}`);
+  return out;
+}
+
+function applyPortalLanguage(root){
+  const scope=root||document.body;
+  document.documentElement.lang=portalLangMode();
+  const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT,{acceptNode(node){
+    const p=node.parentElement;if(!p)return NodeFilter.FILTER_REJECT;
+    if(p.closest("[data-no-lang],script,style,textarea"))return NodeFilter.FILTER_REJECT;
+    if(!node.nodeValue||!node.nodeValue.trim())return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;
+  }});
+  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(n=>{const v=portalTranslateText(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
+  scope.querySelectorAll?.("input[placeholder],textarea[placeholder],[title],[aria-label]").forEach(el=>{
+    ["placeholder","title","aria-label"].forEach(a=>{const v=el.getAttribute(a);if(v){const t=portalTranslateText(v);if(t!==v)el.setAttribute(a,t)}});
+  });
+  document.querySelectorAll(".lang-toggle button,.login-lang-toggle button").forEach(b=>{
+    b.classList.toggle("active",b.dataset.lang===portalLangMode());
+  });
+}
+
+let portalLangApplying=false;
+const portalLangObserver=new MutationObserver(()=>{
+  if(portalLangApplying)return;
+  portalLangApplying=true;
+  applyPortalLanguage(document.body);
+  portalLangApplying=false;
+});
+portalLangObserver.observe(document.body,{childList:true,subtree:true,characterData:true});
+applyPortalLanguage(document.body);
 
 // "Mémoriser cette session" : localStorage (survit à la fermeture du navigateur) si coché,
 // sessionStorage (effacé à la fermeture de l'onglet) sinon — utilisé de façon cohérente
@@ -819,7 +1020,7 @@ function renderPlanningSchedule(){
   host.innerHTML=`<div class="planning-toolbar"><label>Site<select onchange="selectPlanningSite(this.value)">${plannedSites.map(item=>`<option value="${item.id}" ${Number(item.id)===Number(site.id)?"selected":""}>${esc(item.name)}</option>`).join("")}</select></label><button type="button" class="secondary" onclick="changePlanningWeek(-1)" ${planningWeekOffset===0?"disabled":""}>← Semaine précédente</button><button type="button" class="secondary" onclick="changePlanningWeek(1)" ${planningWeekOffset>=maxOffset?"disabled":""}>Semaine suivante →</button><div style="margin-left:auto;font-size:12px;font-weight:900;color:#475569">${dateRange}</div></div>
   <div class="planning-summary"><div class="planning-summary-card"><span>Système</span><b>24h/7j — 3×8</b></div><div class="planning-summary-card"><span>Première prise</span><b>${esc(config.first_shift_time||"06:00")}</b></div><div class="planning-summary-card"><span>Groupes en service</span><b>${activeGroups}</b></div><div class="planning-summary-card"><span>En récupération</span><b>${recoveryGroups}</b></div></div>
   ${(site.rotation_alerts||[]).length?`<div class="rotation-alert" style="margin-bottom:12px">⚠ ${(site.rotation_alerts||[]).length} dépassement(s) prévisionnel(s) de 40 h/semaine détecté(s) sur l’horizon configuré.</div>`:""}
-  <div class="planning-table-wrap"><table class="planning-table"><thead><tr><th>Date</th>${groups.map(code=>`<th>Groupe ${code}<div style="font-size:9px;font-weight:600;color:#64748b">${employeesByGroup[code].length} employé(s)</div></th>`).join("")}</tr></thead><tbody>${days.map(day=>`<tr><td><b>${formatDateFr(day.date)}</b><div class="equip-ref">${new Date(`${day.date}T00:00:00`).toLocaleDateString("fr-FR",{weekday:"long"})}</div></td>${groups.map(code=>{const group=(day.groups||[]).find(item=>item.group===code),employees=employeesByGroup[code];return`<td><div class="${group?.status==="service"?"planning-shift":"planning-recovery"}">${group?.status==="service"?`Service ${esc(group.shift||"")}`:"Récupération"}</div>${employees.length?`<div class="planning-agents">${employees.map(employee=>`${employee.code?esc(employee.code)+" — ":""}${esc(employee.last_name)} ${esc(employee.first_name)}`).join("<br>")}</div>`:'<div class="planning-agents">Aucun employé affecté</div>'}</td>`}).join("")}</tr>`).join("")}</tbody></table></div>`;
+  <div class="planning-table-wrap"><table class="planning-table"><thead><tr><th>Date</th>${groups.map(code=>`<th>Groupe ${code}<div style="font-size:9px;font-weight:600;color:#64748b">${employeesByGroup[code].length} employé(s)</div></th>`).join("")}</tr></thead><tbody>${days.map(day=>`<tr><td><b>${formatDateFr(day.date)}</b><div class="equip-ref">${new Date(`${day.date}T00:00:00`).toLocaleDateString(portalDateLocale(),{weekday:"long"})}</div></td>${groups.map(code=>{const group=(day.groups||[]).find(item=>item.group===code),employees=employeesByGroup[code];return`<td><div class="${group?.status==="service"?"planning-shift":"planning-recovery"}">${group?.status==="service"?`Service ${esc(group.shift||"")}`:"Récupération"}</div>${employees.length?`<div class="planning-agents">${employees.map(employee=>`${employee.code?esc(employee.code)+" — ":""}${esc(employee.last_name)} ${esc(employee.first_name)}`).join("<br>")}</div>`:'<div class="planning-agents">Aucun employé affecté</div>'}</td>`}).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function employeePositionKey(e){
@@ -911,7 +1112,7 @@ async function loadSites(options={}){
           <div class="gc-quota-row">tous groupes</div>
           <div class="gc-remaining">affectés au site</div>
         </button><button type="button" class="group-counter waiting" aria-pressed="false" onclick="filterSiteEmployees(this,'group','')">
-          <div class="gc-code">Eff. attente d’affectation</div>
+          <div class="gc-code">En attente</div>
           <div class="gc-assigned">${waitingAssignment}</div>
           <div class="gc-quota-row">sans groupe</div>
           <div class="gc-remaining">à affecter</div>
@@ -1111,7 +1312,7 @@ function renderSiteRotationPreview(){
     groups.forEach((code,groupIndex)=>{const cycle=(dayIndex+groupIndex)%4,working=cycle<3;dayGroups.push({code,working,shift:working?shifts[cycle]:"Récupération"});if(working){const monday=new Date(current);monday.setDate(current.getDate()-((current.getDay()+6)%7));const key=`${monday.toISOString().slice(0,10)}|${code}`;weekly[key]=(weekly[key]||0)+8}});
     if(dayIndex<8)rows.push({date:current,groups:dayGroups});
   }
-  host.innerHTML=`<div class="rotation-day rotation-day-head"><div>Date</div>${groups.map(code=>`<div>Groupe ${code}</div>`).join("")}</div>${rows.map(row=>`<div class="rotation-day"><div><b>${row.date.toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</b></div>${row.groups.map(group=>`<div class="${group.working?"rotation-work":"rotation-rest"}">${group.working?group.shift:"Récupération"}</div>`).join("")}</div>`).join("")}`;
+  host.innerHTML=`<div class="rotation-day rotation-day-head"><div>Date</div>${groups.map(code=>`<div>Groupe ${code}</div>`).join("")}</div>${rows.map(row=>`<div class="rotation-day"><div><b>${row.date.toLocaleDateString(portalDateLocale(),{weekday:"short",day:"2-digit",month:"2-digit"})}</b></div>${row.groups.map(group=>`<div class="${group.working?"rotation-work":"rotation-rest"}">${group.working?group.shift:"Récupération"}</div>`).join("")}</div>`).join("")}`;
   const overtime=Object.entries(weekly).filter(([,hours])=>hours>40);
   alertsHost.innerHTML=overtime.length?`<div class="rotation-alert">⚠ ${overtime.length} dépassement(s) prévisionnel(s) du seuil de 40 h/semaine détecté(s). Ils seront suivis dans les alertes et l’historique.</div>`:`<div class="site-distribution-status ok">Planning généré sans dépassement prévisionnel du seuil de 40 h/semaine.</div>`;
 }
