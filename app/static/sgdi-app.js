@@ -16813,12 +16813,25 @@ function sitePositionFieldHTML(s){
         <div id="site-position-current" class="site-position-value">${escapeHTML(sitePositionLabel(s.latitude,s.longitude))}</div>
         <div class="site-position-note">${readOnly?"Position GPS consultable uniquement.":hasPos?"Coordonnées prêtes à enregistrer avec la fiche site.":"Cliquez sur la carte ou déplacez le marqueur pour positionner le site."}</div>
       </div>
-      ${session?.transverse==="materiel"||readOnly?"":`<div class="site-position-actions"><button type="button" class="btn btn-warn site-position-action" onclick="openSitePositionModal('${jsString(s.id)}')">${hasPos?"Ouvrir en grand":"Positionner site"}</button><button type="button" class="btn btn-primary site-position-save" onclick="saveSitePositionInline('${jsString(s.id)}')">Enregistrer position</button></div>`}
+      <div class="site-position-actions"><button id="site-position-map-toggle" type="button" class="btn btn-secondary" aria-expanded="true" onclick="toggleInlineSitePositionMap()">Masquer la carte</button>${session?.transverse==="materiel"||readOnly?"":`<button type="button" class="btn btn-warn site-position-action" onclick="openSitePositionModal('${jsString(s.id)}')">${hasPos?"Ouvrir en grand":"Positionner site"}</button><button type="button" class="btn btn-primary site-position-save" onclick="saveSitePositionInline('${jsString(s.id)}')">Enregistrer position</button>`}</div>
     </div>
-    <div class="site-position-inline-wrap">
+    <div id="site-position-inline-wrap" class="site-position-inline-wrap">
       <div id="site-position-inline-map" class="sgdi-maplibre-map site-position-inline-map" data-lat="${Number.isFinite(center.lat)?center.lat:28.0339}" data-lng="${Number.isFinite(center.lng)?center.lng:1.6596}" data-has-position="${hasPos?"1":"0"}" role="region" aria-label="Carte GPS du site"></div>
     </div>
   </div>`;
+}
+function toggleInlineSitePositionMap(){
+  const wrapper=document.getElementById("site-position-inline-wrap");
+  const button=document.getElementById("site-position-map-toggle");
+  if(!wrapper||!button)return;
+  const willHide=!wrapper.classList.contains("hidden");
+  wrapper.classList.toggle("hidden",willHide);
+  button.textContent=willHide?"Afficher la carte":"Masquer la carte";
+  button.setAttribute("aria-expanded",willHide?"false":"true");
+  if(!willHide){
+    initInlineSitePositionMap();
+    [0,120,350].forEach(ms=>setTimeout(()=>{try{window.__sgdiInlineSitePositionMap?.resize()}catch(_e){}},ms));
+  }
 }
 function sitePositionMarkerIcon(){
   const el=document.createElement("div");
