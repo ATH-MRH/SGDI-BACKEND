@@ -8511,6 +8511,29 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
   .sites-synth-grid{grid-template-columns:1fr}
 }
 
+/* ----- CLIENTS PANEL (bandeau statistique intégré) ----- */
+.clients-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);overflow:hidden}
+.clients-panel-header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:22px 26px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.clients-header-left{display:flex;align-items:center;gap:28px;flex-wrap:wrap}
+.clients-title-block{display:flex;align-items:center;gap:10px}
+.clients-title-block h1{font-size:21px;font-weight:900;margin:0;letter-spacing:-.01em;color:var(--text)}
+.clients-count-badge{background:#0f2d5a;color:#fff;font-size:12px;font-weight:800;padding:3px 11px;border-radius:999px}
+.clients-stat-strip{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+.clients-stat{padding:0 22px;border-left:1px solid var(--border)}
+.clients-stat:first-child{border-left:0;padding-left:0}
+.clients-stat-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-mute)}
+.clients-stat-value{font-size:18px;font-weight:900;margin-top:3px;font-variant-numeric:tabular-nums;color:var(--text)}
+.clients-table-wrap{overflow-x:auto}
+.clients-table-wrap table{width:100%}
+.clients-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:96px 20px 100px}
+.clients-empty-icon{width:52px;height:52px;border-radius:14px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center}
+.clients-empty-title{font-size:15px;font-weight:800;color:var(--text)}
+.clients-empty-sub{font-size:12.5px;color:var(--text-mute);max-width:340px;text-align:center;line-height:1.5}
+@media(max-width:860px){
+  .clients-panel-header{align-items:flex-start;flex-direction:column}
+  .clients-stat{padding:0 16px 0 0;border-left:0}
+}
+
 /* ----- CLEAN FILTER BARS / SEARCH FIELDS ----- */
 #view .fp-filter-panel{
   border:1px solid #d9e6f3!important;
