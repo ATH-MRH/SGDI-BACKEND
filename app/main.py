@@ -464,7 +464,11 @@ def on_shutdown() -> None:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
+    # async (pas def) pour ne jamais passer par le threadpool partagé avec les routes
+    # synchrones bloquantes sur PostgreSQL : sous charge, ce pool peut saturer (voir
+    # app/db/session.py) et faire échouer le HEALTHCHECK Docker, qui redémarre alors
+    # le conteneur alors que l'appli tourne normalement.
     return {"ok": "true", "app": settings.app_name}
 
 
