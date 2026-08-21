@@ -433,7 +433,6 @@ tr:last-child td{border-bottom:0}
 <div id="siteModalBackdrop" class="modal-backdrop hidden" onclick="if(event.target===this)closeSiteModal()">
   <div class="modal" style="max-width:980px">
     <div class="modal-head"><div><h2>Configurer un site</h2><div class="modal-sub">Créez le site et définissez son organisation opérationnelle.</div></div><button type="button" class="modal-close" onclick="closeSiteModal()">×</button></div>
-    <div class="site-config-tabs"><button type="button" class="site-config-tab active" data-site-mode="create" onclick="setSiteConfigMode('create')">Créer site</button><button type="button" class="site-config-tab" data-site-mode="edit" onclick="setSiteConfigMode('edit')">Modifier site</button></div>
     <div id="siteExistingSelector" class="hidden"><label for="siteExistingSelect">Site concerné</label><select id="siteExistingSelect" onchange="loadSelectedSiteConfiguration()"><option value="">— Choisir un site —</option></select></div>
     <div id="siteConfigFields">
     <label for="siteName">Nom du site</label>
