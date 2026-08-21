@@ -925,7 +925,7 @@ async function loadSites(options={}){
           <div class="gc-remaining">${g.remaining} restant${g.remaining>1?"s":""}</div>
         </div>`).join("")}</div>`:"";
       const employeesHtml=(s.employees||[]).length?`<div class="site-employees">
-        <div class="site-employees-title">Agents affectés</div>
+        <div class="site-employees-title">Employés affectés</div>
         ${s.employees.map(e=>`<div class="site-employee-row" role="button" tabindex="0" onclick="openEmployeeDetail(${e.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmployeeDetail(${e.id})}" data-position="${encodeURIComponent(String(e.position||"Fonction non renseignée").trim().toLocaleLowerCase("fr"))}" data-group="${encodeURIComponent(String(e.group_code||""))}">
           <div style="display:flex;align-items:center;gap:9px"><img class="emp-avatar" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo"><div class="site-employee-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}<span class="pos">${esc(e.position||"—")}</span></div></div>
           ${canAssign&&groups.length?`<select class="group-select" onclick="event.stopPropagation()" onchange="event.stopPropagation();updateEmployeeGroup(${e.id},this.value)">${groupOptionsHtml(e.group_code)}</select>`:`<span class="pill pill-gray">Groupe ${esc(e.group_code||"—")}</span>`}
