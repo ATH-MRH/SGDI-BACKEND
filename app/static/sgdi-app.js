@@ -18483,7 +18483,7 @@ function siteTechnicalIdentityHTML(site){
     <div class="site-tech-identity-grid">
       <div class="site-tech-identity-column">
         <div class="site-tech-identity-field"><span>Client</span><strong>${escapeHTML(clientName)}</strong></div>
-        <div class="site-tech-identity-field"><span>Site</span><strong>${escapeHTML(site.nom||"—")}</strong></div>
+        <div class="site-tech-identity-field site-tech-identity-site"><span>Site</span><strong>${escapeHTML(site.nom||"—")}</strong></div>
       </div>
       <div class="site-tech-identity-column site-tech-identity-service">
         <div class="site-tech-identity-field"><span>Prestation</span><strong>${escapeHTML(prestation)}</strong></div>

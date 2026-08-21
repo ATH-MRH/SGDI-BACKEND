@@ -3323,7 +3323,7 @@ table{width:100%;max-width:100%}
 .site-tech-identity-field strong{
   display:block;
   color:#080d18;
-  font-size:16px;
+  font-size:21px;
   font-weight:850;
   line-height:1.2;
   overflow-wrap:anywhere;
@@ -3336,13 +3336,17 @@ table{width:100%;max-width:100%}
   line-height:1.35;
   overflow-wrap:anywhere;
 }
+.site-tech-identity-site strong{
+  font-size:16px;
+}
 @media(max-width:760px){
   .site-tech-identity{padding:0 16px 20px}
   .site-tech-identity h1{font-size:21px;padding-bottom:16px}
   .site-tech-identity-grid{grid-template-columns:1fr;gap:16px}
   .site-tech-identity-column{padding:0;gap:12px}
   .site-tech-identity-service{border-left:0;border-top:1px solid #cbd5e1;padding-top:16px}
-  .site-tech-identity-field strong{font-size:15px}
+  .site-tech-identity-field strong{font-size:17px}
+  .site-tech-identity-site strong{font-size:15px}
 }
 .site-form-layout{
   display:flex;
