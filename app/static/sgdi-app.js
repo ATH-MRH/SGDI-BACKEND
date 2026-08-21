@@ -28654,7 +28654,9 @@ function renderCommClients(view){
 function commPrestationsForSociete(societe){
   const soc=String(societe||"").trim();
   const seen=new Set();
-  return (db.catalogue||[]).filter(p=>!soc||p.societe===soc).map(p=>p.designation||p.code||"").filter(Boolean).filter(v=>{const k=v.toLowerCase();if(seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>a.localeCompare(b));
+  const catalogue=(db.catalogue||[]).filter(p=>!soc||p.societe===soc).map(p=>p.designation||p.code||"").filter(Boolean);
+  const official=/^IRON GLOBAL SOLUTION$/i.test(soc)?IGS_PRESTATIONS_OFFICIELLES.map(p=>p.designation):[];
+  return [...catalogue,...official].filter(v=>{const k=String(v).trim().toLowerCase();if(!k||seen.has(k))return false;seen.add(k);return true}).sort((a,b)=>a.localeCompare(b,"fr"));
 }
 function commPrestationsOptionsHTML(societe){
   const list=commPrestationsForSociete(societe);
@@ -28663,6 +28665,18 @@ function commPrestationsOptionsHTML(societe){
 function updateClientPrestationsOptions(societe){
   const sel=document.querySelector('.modal-bg [name="prestationsServices"]');
   if(sel)sel.innerHTML=commPrestationsOptionsHTML(societe);
+}
+function clientContractPrestationAdd(select){
+  const value=String(select?.value||"").trim();if(!value)return;
+  const form=select.closest("form");
+  const textarea=form?.querySelector("#prest-contrat,[name='prestationsServices']");
+  if(!textarea)return;
+  const lines=String(textarea.value||"").split(/\r?\n/).map(v=>v.trim()).filter(Boolean);
+  if(!lines.some(v=>v.toLowerCase()===value.toLowerCase()))lines.push(value);
+  textarea.value=lines.join("\n");
+  textarea.dispatchEvent(new Event("input",{bubbles:true}));
+  textarea.dispatchEvent(new Event("change",{bubbles:true}));
+  select.value="";
 }
 function prospReunionCardHTML(prefix,r,idx){
   return`<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;background:#f8fafc;position:relative">
@@ -29451,7 +29465,7 @@ function openClientModal(id,readOnly=false){
     </div>
     <div style="margin-top:12px">
       <span style="font-size:11px;color:#334155;font-weight:900">Prestation et Services fournis</span>
-      <select class="select" style="width:100%;margin:5px 0 4px" onchange="(function(s){var t=s.closest('form').querySelector('[name=prestationsServices]');if(s.value&&t){t.value=t.value?(t.value+'\\n'+s.value):s.value;s.value=''}})(this)">${commPrestationsOptionsHTML(selectedSoc)}</select>
+      <select class="select" style="width:100%;margin:5px 0 4px" onchange="clientContractPrestationAdd(this)">${commPrestationsOptionsHTML(selectedSoc)}</select>
       <textarea id="prest-contrat" class="input" name="prestationsServices" rows="3" style="width:100%" placeholder="Décrivez ou complétez..." required oninput="(function(v){var o=document.getElementById('prest-ident');if(o)o.value=v;})(this.value)">${escapeHTML(c?.prestationsServices||"")}</textarea>
     </div>
     <div style="margin-top:12px">
@@ -29590,6 +29604,9 @@ async function confirmClient(id,options={}){
   prospSyncHidden("prosp");
   prospSyncHidden("negos");
   techSitesSyncHidden();
+  ctsSitesSyncHidden();
+  clientLigneSyncHidden();
+  updateClientContractEndDate();
   const fd=new FormData(document.querySelector(".modal-bg form")||document.querySelector("#view form"));
   db.clients=db.clients||[];
   const dateDebutContrat=fd.get("dateDebutContrat")||"",dureeContrat=fd.get("dureeContrat")||"",dateFinContrat=fd.get("dateFinContrat")||contractEndDate(dateDebutContrat,dureeContrat);
