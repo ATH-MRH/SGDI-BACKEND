@@ -114,6 +114,17 @@ def test_dc_subdomain_serves_full_atlas_commercial_module(client, db):
     assert "Clients, devis, commandes et livraisons" not in root.text
 
 
+def test_dc_subdomain_accepts_existing_account_authorized_for_commercial(client, db):
+    _add_test_user(db, "ATL42", "ATL42", role="rh", access_level="H3", structures=["commercial"])
+
+    resp = client.post(
+        "/api/auth/login",
+        json={"username": "ATL42", "password": "ATL42"},
+        headers={"host": "dc.irongs.com"},
+    )
+    assert resp.status_code == 200, resp.text
+
+
 def test_dc_subdomain_rejects_non_commercial_prefix(client, db):
     _add_test_user(db, "OPS97", "OPS97", role="ops", access_level="H3", structures=["ops"])
 

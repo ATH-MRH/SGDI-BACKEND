@@ -36,7 +36,6 @@ DEDICATED_LOGIN_RULES: dict[str, tuple[tuple[str, ...], str]] = {
     "finances": (("FIN", "FAC"), "FINANCES/COMPTA"),
     "finance": (("FIN", "FAC"), "FINANCES/COMPTA"),
     "commercial": (("COM",), "COMMERCIAL"),
-    "dc": (("COM",), "COMMERCIAL"),
     "secretariat": (("SEC",), "SECRETARIAT GENERAL"),
     "agenda": (("AGD",), "AGENDA"),
     "pointage": (("PTG",), "POINTAGE"),
@@ -68,6 +67,24 @@ def enforce_subdomain_login_scope(request: Request, user: User) -> None:
     subdomain = _host_subdomain(request)
     if not subdomain or subdomain in {"atlas", "sgdi", "www"}:
         return
+    if subdomain == "dc":
+        # dc.irongs.com reprend le module Commercial d'ATLAS : l'autorisation dépend du
+        # périmètre Commercial configuré sur le compte, pas de son préfixe historique.
+        structures = {
+            str(value or "").strip().lower()
+            for value in (user.authorized_structures or [])
+            if str(value or "").strip()
+        }
+        if (
+            is_admin_role(user.role)
+            or _username_prefix(user.username) == "COM"
+            or "commercial" in structures
+        ):
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ce compte n'est pas autorisé à accéder au module Commercial.",
+        )
     rule = DEDICATED_LOGIN_RULES.get(subdomain)
     if rule is None:
         return
