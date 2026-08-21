@@ -664,6 +664,11 @@
   .site-status-lamp.lamp-red{background:radial-gradient(circle at 35% 30%,#fca5a5 0%,#dc2626 60%,#7f1d1d 100%);box-shadow:0 0 0 3px rgba(220,38,38,.20),0 0 10px rgba(220,38,38,.55);animation:lampBlink 1s ease-in-out infinite}
   .site-status-lamp.lamp-gray{background:radial-gradient(circle at 35% 30%,#e2e8f0 0%,#94a3b8 60%,#475569 100%);box-shadow:0 0 0 3px rgba(148,163,184,.15)}
   @keyframes lampBlink{0%,100%{opacity:1;box-shadow:0 0 0 3px rgba(220,38,38,.20),0 0 10px rgba(220,38,38,.55)}50%{opacity:.25;box-shadow:none}}
+  .site-coverage{margin:10px 0 12px}
+  .site-coverage-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.04em}
+  .site-coverage-value{font-size:13px;font-weight:900;color:#043970;text-transform:none;letter-spacing:0}
+  .site-coverage-track{height:8px;border-radius:999px;background:#eaf0f6;overflow:hidden;margin-top:6px}
+  .site-coverage-fill{height:100%;border-radius:inherit}
   .fp-status-lamp{width:9px;height:9px;border-radius:50%;display:block;flex-shrink:0}
   .fp-status-lamp.lamp-green{background:radial-gradient(circle at 35% 30%,#86efac 0%,#16a34a 60%,#14532d 100%);box-shadow:0 0 5px rgba(22,163,74,.7)}
   .fp-status-lamp.lamp-orange{background:radial-gradient(circle at 35% 30%,#fde68a 0%,#f59e0b 60%,#92400e 100%);box-shadow:0 0 5px rgba(245,158,11,.7)}
