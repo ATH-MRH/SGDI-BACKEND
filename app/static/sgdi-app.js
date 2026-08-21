@@ -28816,8 +28816,7 @@ function techUnlockDonneesTechniques(){
     el.style.pointerEvents="";el.style.opacity="";
   });
   // Restaurer le style rouge du champ total effectif
-  const tot=document.getElementById("tech-total-effectif");
-  if(tot){tot.setAttribute("readonly","");tot.style.background="#fff5f5";tot.style.color="#dc2626";tot.style.cursor="not-allowed";}
+  panel.querySelectorAll("[id^='ts-total-effectif-']").forEach(tot=>{tot.setAttribute("readonly","");tot.style.background="#fff5f5";tot.style.color="#dc2626";tot.style.cursor="not-allowed";});
   const btnMod=document.getElementById("btn-tech-modifier");
   const btnSave=document.getElementById("btn-tech-enregistrer");
   if(btnMod)btnMod.style.display="none";
@@ -28828,8 +28827,9 @@ async function confirmClientTechOnly(){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
   if(!form)return;
   const fd=new FormData(form);
-  const clientId=form.getAttribute("onsubmit")?.match(/confirmClient\('([^']*)'\)/)?.[1]||"";
-  let c=clientId?(db.clients||[]).find(x=>x.id===clientId):null;
+  const clientId=form.dataset.clientId||form.getAttribute("onsubmit")?.match(/confirmClient\('([^']*)'\)/)?.[1]||"";
+  const backendId=form.dataset.clientBackendId||"";
+  let c=(db.clients||[]).find(x=>String(x.id)===String(clientId)||String(x.backendId||"")===String(clientId)||backendId&&String(x.backendId||"")===String(backendId));
   if(!c){toast("Client introuvable","error");return;}
   let tech_sites=[];
   try{tech_sites=JSON.parse(fd.get("tech_sites")||"[]")}catch(e){}
@@ -28887,7 +28887,7 @@ function techSitesSyncHidden(){
       adresse:form.querySelector(`[name='ts_${si}_adresse']`)?.value||"",
       commune:form.querySelector(`[name='ts_${si}_commune']`)?.value||"",
       wilaya:form.querySelector(`[name='ts_${si}_wilaya']`)?.value||"",
-      surface:parseInt(form.querySelector(`[name='ts_${si}_surface']`)?.value)||0,
+      surface:parseFloat(form.querySelector(`[name='ts_${si}_surface']`)?.value)||0,
       nbEntrees:parseInt(form.querySelector(`[name='ts_${si}_nbEntrees']`)?.value)||0,
       nbBatiments:parseInt(form.querySelector(`[name='ts_${si}_nbBatiments']`)?.value)||0,
       nbNiveaux:parseInt(form.querySelector(`[name='ts_${si}_nbNiveaux']`)?.value)||0,
@@ -28916,6 +28916,7 @@ function techCalcTotalEffectif(si,pfx='ts'){
   const el=document.getElementById(pfx+"-total-effectif-"+si);
   if(el)el.value=total||"";
   if(pfx==='ts')techRecapUpdate();
+  clientSiteFieldChanged(pfx);
 }
 function techPosteRowHTML(si,pfx,nom,nbr,salaire){
   const n=parseInt(nbr)||0;const s=parseFloat(salaire)||0;const tot=n*s;
@@ -28962,6 +28963,7 @@ function techPostesSyncJSON(si,pfx){
   const tbody=document.getElementById(pfx+'-'+si+'-postes-body');if(!tbody)return;
   const list=[...tbody.querySelectorAll('tr')].map(tr=>({nom:tr.querySelector('td:first-child')?.textContent||'',nbr:parseInt(tr.querySelector('.poste-nbr')?.value)||0,salaire:parseDZD(tr.querySelector('.poste-sal')?.value||'0')}));
   const h=document.getElementById(pfx+'-'+si+'-postes-json');if(h)h.value=JSON.stringify(list);
+  clientSiteFieldChanged(pfx);
 }
 function clientMaterielSync(si,pfx='ts'){
   const tbody=document.getElementById(pfx+"-"+si+"-materiel-body");
@@ -28969,6 +28971,7 @@ function clientMaterielSync(si,pfx='ts'){
   const data=[...tbody.querySelectorAll("tr")].map(tr=>{const inputs=[...tr.querySelectorAll("input,select")];return{designation:inputs[0]?.value||"",qte:parseFloat(inputs[1]?.value)||1,etat:inputs[2]?.value||"Neuf",observations:inputs[3]?.value||""};});
   const hidden=document.getElementById(pfx+"-"+si+"-materiel-json");
   if(hidden)hidden.value=JSON.stringify(data);
+  clientSiteFieldChanged(pfx);
 }
 function clientMaterielAdd(si,pfx='ts'){
   const tbody=document.getElementById(pfx+"-"+si+"-materiel-body");
@@ -28998,7 +29001,7 @@ function ctsSitesSyncHidden(){
       adresse:form.querySelector(`[name='cts_${si}_adresse']`)?.value||"",
       commune:form.querySelector(`[name='cts_${si}_commune']`)?.value||"",
       wilaya:form.querySelector(`[name='cts_${si}_wilaya']`)?.value||"",
-      surface:parseInt(form.querySelector(`[name='cts_${si}_surface']`)?.value)||0,
+      surface:parseFloat(form.querySelector(`[name='cts_${si}_surface']`)?.value)||0,
       obs:form.querySelector(`[name='cts_${si}_obs']`)?.value||"",
       nbrGroupe:parseInt(form.querySelector(`[name='cts_${si}_nbrGroupe']`)?.value)||0,
       nbrJour:parseInt(form.querySelector(`[name='cts_${si}_nbrJour']`)?.value)||0,
@@ -29053,6 +29056,14 @@ function clientSitesMirror(sourcePfx){
   let sites=[];try{sites=JSON.parse(hidden?.value||"[]")}catch(e){}
   clientSitesRender(isContract?"ts":"cts",sites);
 }
+function clientSiteFieldChanged(sourcePfx){
+  const pfx=sourcePfx==="cts"?"cts":"ts";
+  if(pfx==="cts")ctsSitesSyncHidden();else techSitesSyncHidden();
+  const hidden=document.getElementById(pfx==="cts"?"cts-sites-json":"tech-sites-json");
+  let sites=[];try{sites=JSON.parse(hidden?.value||"[]")}catch(e){}
+  clientSitesRender(pfx==="cts"?"ts":"cts",sites);
+  if(pfx==="ts")techRecapUpdate();
+}
 function clientSiteAdd(pfx){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
   if(!form)return;
@@ -29104,13 +29115,13 @@ function techSitePanelHTML(si,s,pfx='ts'){
   const typesSite=["Industriel","Bancaire / Financier","Commercial / Centre commercial","Résidentiel / Immeuble","Institutionnel / Administratif","Hôtelier","Hospitalier / Médical","Éducatif / Universitaire","Aéroportuaire / Portuaire","Pétrolier / Gazier","Logistique / Entrepôt","Chantier BTP","Site minier","Ambassade / Consulat","Autre"];
   const typeSiteOpts='<option value="">— Sélectionner —</option>'+typesSite.map(t=>'<option value="'+escapeHTML(t)+'"'+(s.typeSite===t?' selected':'')+'>'+escapeHTML(t)+'</option>').join('');
   const identSiteGrid='<div class="rh-op-grid">'
-    +lbl("Dénomination du site",'<input class="input" name="'+pfx+'_'+si+'_denomination" value="'+escapeHTML(s.denomination||'')+'"/>')
-    +lbl("Type de site",'<select class="select" name="'+pfx+'_'+si+'_typeSite">'+typeSiteOpts+'</select>')
-    +lbl("Adresse",'<input class="input" name="'+pfx+'_'+si+'_adresse" value="'+escapeHTML(s.adresse||'')+'"/>')
-    +lbl("Commune",'<input class="input" name="'+pfx+'_'+si+'_commune" value="'+escapeHTML(s.commune||'')+'"/>')
-    +lbl("Wilaya",'<input class="input" name="'+pfx+'_'+si+'_wilaya" value="'+escapeHTML(s.wilaya||'')+'"/>')
-    +lbl("Surface (m²)",'<input class="input" type="number" min="0" name="'+pfx+'_'+si+'_surface" value="'+escapeHTML(String(s.surface||''))+'" placeholder="0"/>')
-    +'<label style="grid-column:1/-1"><span>Observations</span><textarea class="input" name="'+pfx+'_'+si+'_obs" rows="2" style="width:100%;margin-top:4px" placeholder="Caractéristiques particulières...">'+escapeHTML(s.obs||'')+'</textarea></label>'
+    +lbl("Dénomination du site",'<input class="input" name="'+pfx+'_'+si+'_denomination" value="'+escapeHTML(s.denomination||'')+'" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
+    +lbl("Type de site",'<select class="select" name="'+pfx+'_'+si+'_typeSite" onchange="clientSiteFieldChanged(\''+pfx+'\')">'+typeSiteOpts+'</select>')
+    +lbl("Adresse",'<input class="input" name="'+pfx+'_'+si+'_adresse" value="'+escapeHTML(s.adresse||'')+'" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
+    +lbl("Commune",'<input class="input" name="'+pfx+'_'+si+'_commune" value="'+escapeHTML(s.commune||'')+'" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
+    +lbl("Wilaya",'<input class="input" name="'+pfx+'_'+si+'_wilaya" value="'+escapeHTML(s.wilaya||'')+'" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
+    +lbl("Surface (m²)",'<input class="input" type="number" min="0" step="0.01" name="'+pfx+'_'+si+'_surface" value="'+escapeHTML(String(s.surface||''))+'" placeholder="0,00" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
+    +'<label style="grid-column:1/-1"><span>Observations</span><textarea class="input" name="'+pfx+'_'+si+'_obs" rows="2" style="width:100%;margin-top:4px" placeholder="Caractéristiques particulières..." onchange="clientSiteFieldChanged(\''+pfx+'\')">'+escapeHTML(s.obs||'')+'</textarea></label>'
     +'</div>';
   return`<div id="${pfx}-panel-${si}" style="display:${si===0?"block":"none"};padding-top:10px">
     <fieldset class="rh-op-box rh-op-personal" style="margin-bottom:10px">
@@ -29147,7 +29158,7 @@ function techSitePanelHTML(si,s,pfx='ts'){
       </table>
       <div style="margin-top:10px">
         <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Autres</label>
-        <textarea class="input" name="${pfx}_${si}_postesAutres" rows="2" style="width:100%" placeholder="Postes ou fonctions non listés ci-dessus...">${escapeHTML(s.postesAutres||"")}</textarea>
+        <textarea class="input" name="${pfx}_${si}_postesAutres" rows="2" style="width:100%" placeholder="Postes ou fonctions non listés ci-dessus..." onchange="clientSiteFieldChanged('${pfx}')">${escapeHTML(s.postesAutres||"")}</textarea>
       </div>
     </fieldset>
     <fieldset class="rh-op-box rh-op-emergency" style="margin-bottom:10px">
@@ -29159,8 +29170,8 @@ function techSitePanelHTML(si,s,pfx='ts'){
       <div class="rh-op-grid" style="margin-top:10px;padding-left:24px;border-left:3px solid #e2e8f0">
         <label><span>Faction jour</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_nbrJour" value="${j||""}" placeholder="0" oninput="techCalcTotalEffectif(${si},'${pfx}')"/></label>
         <label><span>Faction de nuit</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_nbrNuit" value="${n||""}" placeholder="0" oninput="techCalcTotalEffectif(${si},'${pfx}')"/></label>
-        <label><span>Effectif jour (Week-end)</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_effectifJourWE" value="${s.effectifJourWE||""}" placeholder="0"/></label>
-        <label><span>Effectif nuit (Week-end)</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_effectifNuitWE" value="${s.effectifNuitWE||""}" placeholder="0"/></label>
+        <label><span>Effectif jour (Week-end)</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_effectifJourWE" value="${s.effectifJourWE||""}" placeholder="0" onchange="clientSiteFieldChanged('${pfx}')"/></label>
+        <label><span>Effectif nuit (Week-end)</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_effectifNuitWE" value="${s.effectifNuitWE||""}" placeholder="0" onchange="clientSiteFieldChanged('${pfx}')"/></label>
       </div>
     </fieldset>
     <fieldset class="rh-op-box">
