@@ -152,6 +152,10 @@ tr:last-child td{border-bottom:0}
 .function-counters{grid-template-columns:repeat(auto-fill,118px);align-items:stretch;margin-bottom:8px}
 .function-counters .group-counter.function{width:118px}
 @media(max-width:600px){.function-counters{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}.function-counters .group-counter.function{width:100%}}
+.group-counter.headcount{display:grid;grid-template-rows:30px 26px;align-content:center;min-height:72px;background:#fff;border-color:#e5cbd0;width:118px}
+.group-counter.headcount .gc-code{display:flex;align-items:flex-start;justify-content:center;line-height:1.05}
+.group-counter.headcount .gc-assigned{margin-top:0;align-self:center;font-size:22px;color:#050505}
+@media(max-width:600px){.group-counter.headcount{width:100%}}
 .gc-code{font-size:10px;font-weight:900;color:var(--navy);text-transform:uppercase;letter-spacing:.03em}
 .gc-assigned{font-size:18px;font-weight:900;margin-top:2px;line-height:1}
 .gc-quota-row{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px;font-size:10px;color:var(--muted)}
@@ -326,6 +330,7 @@ tr:last-child td{border-bottom:0}
 
       <div id="employeesTab">
         <div class="section-head"><h1>LISTE DU PERSONNEL</h1><p>Liste des employés actuellement affectés à vos sites.</p></div>
+        <div id="portalPositionCounters" class="group-counters function-counters"></div>
         <div id="employeesList"><div class="empty">Chargement…</div></div>
       </div>
 
@@ -767,7 +772,10 @@ async function filterEmployeesBySite(siteId,button){
   }
   await switchTab("employees");
   document.querySelectorAll(".portal-alert-card").forEach(card=>card.setAttribute("aria-pressed",String(card===button)));
-  document.querySelectorAll("#employeesList .emp-card").forEach(card=>card.classList.toggle("hidden",siteId!==null&&Number(card.dataset.siteId)!==Number(siteId)));
+  portalEmployeeSiteFilter=siteId;
+  portalEmployeePositionFilter=null;
+  renderPortalPositionCounters(siteId);
+  applyEmployeesFilter();
 }
 
 async function switchTab(tab){
@@ -814,20 +822,58 @@ function renderPlanningSchedule(){
   <div class="planning-table-wrap"><table class="planning-table"><thead><tr><th>Date</th>${groups.map(code=>`<th>Groupe ${code}<div style="font-size:9px;font-weight:600;color:#64748b">${employeesByGroup[code].length} employé(s)</div></th>`).join("")}</tr></thead><tbody>${days.map(day=>`<tr><td><b>${formatDateFr(day.date)}</b><div class="equip-ref">${new Date(`${day.date}T00:00:00`).toLocaleDateString("fr-FR",{weekday:"long"})}</div></td>${groups.map(code=>{const group=(day.groups||[]).find(item=>item.group===code),employees=employeesByGroup[code];return`<td><div class="${group?.status==="service"?"planning-shift":"planning-recovery"}">${group?.status==="service"?`Service ${esc(group.shift||"")}`:"Récupération"}</div>${employees.length?`<div class="planning-agents">${employees.map(employee=>`${employee.code?esc(employee.code)+" — ":""}${esc(employee.last_name)} ${esc(employee.first_name)}`).join("<br>")}</div>`:'<div class="planning-agents">Aucun employé affecté</div>'}</td>`}).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
+function employeePositionKey(e){
+  return encodeURIComponent(String(e.position||"Fonction non renseignée").trim().toLocaleLowerCase("fr"));
+}
+
+let portalEmployeeSiteFilter=null;
+let portalEmployeePositionFilter=null;
+
+function renderPortalPositionCounters(siteId){
+  const host=document.getElementById("portalPositionCounters");
+  if(!host)return;
+  const pool=siteId===null?employees:employees.filter(e=>Number(e.site_id)===Number(siteId));
+  const counts=new Map();
+  pool.forEach(e=>{
+    const label=String(e.position||"Fonction non renseignée").trim()||"Fonction non renseignée";
+    counts.set(label,(counts.get(label)||0)+1);
+  });
+  const rows=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],"fr"));
+  host.innerHTML=rows.map(([label,count])=>`<button type="button" class="group-counter headcount" aria-pressed="false" onclick="filterEmployeesByPosition(this,'${encodeURIComponent(label.toLocaleLowerCase("fr"))}')"><div class="gc-code">${esc(label)}</div><div class="gc-assigned">${count}</div></button>`).join("");
+}
+
+function applyEmployeesFilter(){
+  document.querySelectorAll("#employeesList .emp-card").forEach(card=>{
+    const siteOk=portalEmployeeSiteFilter===null||Number(card.dataset.siteId)===Number(portalEmployeeSiteFilter);
+    const posOk=portalEmployeePositionFilter===null||card.dataset.position===portalEmployeePositionFilter;
+    card.classList.toggle("hidden",!(siteOk&&posOk));
+  });
+}
+
+function filterEmployeesByPosition(button,value){
+  const alreadyActive=button.getAttribute("aria-pressed")==="true";
+  document.querySelectorAll("#portalPositionCounters .group-counter").forEach(counter=>counter.setAttribute("aria-pressed","false"));
+  portalEmployeePositionFilter=alreadyActive?null:value;
+  if(!alreadyActive)button.setAttribute("aria-pressed","true");
+  applyEmployeesFilter();
+}
+
 async function loadEmployees(){
   const host=document.getElementById("employeesList");
   if(session?.permissions?.view_employees===false){host.innerHTML='<div class="empty">La consultation des agents n’est pas activée pour votre compte.</div>';return}
   try{
     employees=await apiFetch("/employees");
-    if(!employees.length){host.innerHTML='<div class="empty">Aucun agent actuellement affecté à vos sites.</div>';return}
+    if(!employees.length){host.innerHTML='<div class="empty">Aucun agent actuellement affecté à vos sites.</div>';document.getElementById("portalPositionCounters").innerHTML="";return}
     host.innerHTML=`<div class="card-grid">${employees.map(e=>`
-      <div class="emp-card" role="button" tabindex="0" data-site-id="${e.site_id||""}" onclick="openEmployeeDetail(${e.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmployeeDetail(${e.id})}">
+      <div class="emp-card" role="button" tabindex="0" data-site-id="${e.site_id||""}" data-position="${employeePositionKey(e)}" onclick="openEmployeeDetail(${e.id})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openEmployeeDetail(${e.id})}">
         <div class="emp-card-head"><img class="emp-avatar" src="${esc(e.photo||defaultEmployeePhoto)}" alt="Photo de ${esc(e.first_name)} ${esc(e.last_name)}"><div><div class="emp-name">${e.code?`<span class="emp-code">${esc(e.code)}</span>`:""}${esc(e.last_name)} ${esc(e.first_name)}</div>
         <div class="emp-meta">${esc(e.position||"Poste non renseigné")}</div></div></div>
         <div class="emp-site-row">${e.site_name?`<span class="emp-site">${esc(e.site_name)}</span>`:""}</div>
         <div class="emp-group-row"><span class="emp-site" style="background:#eaf2fb;color:var(--navy)">${e.group_code?`Groupe ${esc(e.group_code)}`:"Aucun groupe"}</span></div>
         ${session?.permissions?.create_observations===false?"":`<div class="emp-actions"><button type="button" class="secondary" onclick="event.stopPropagation();openObservationModal(${e.id})">Signaler</button></div>`}
       </div>`).join("")}</div>`;
+    portalEmployeeSiteFilter=null;portalEmployeePositionFilter=null;
+    renderPortalPositionCounters(null);
   }catch(error){
     host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;
   }
