@@ -30651,6 +30651,46 @@ function devisCalcCoutInserer(){
   lignes.forEach(l=>devisEditorLigneAdd(l));
 }
 
+const IGS_PRESTATIONS_OFFICIELLES=[
+  ["Installation de réseaux et de stations / équipements de télécommunications.","Télécommunications","Projet"],
+  ["Étude, consultation et assistance dans le domaine de la sécurité.","Sécurité & risques","Étude / mission"],
+  ["Étude et protection contre les risques liés à l'environnement.","Sécurité & risques","Étude / mission"],
+  ["Montage et installation d'équipements et appareils divers, y compris électroniques.","Équipements techniques","Projet"],
+  ["Commerce électronique.","Commerce & études","Forfait"],
+  ["Installation, maintenance et réparation de matériels et équipements non classés ailleurs.","Équipements techniques","Intervention"],
+  ["Bureau de consultation, d'études et d'assistance en logistique.","Logistique & stockage","Étude / mission"],
+  ["Travaux de maintenance et réparation de locaux / bâtiments.","Maintenance immobilière","Intervention"],
+  ["Bureau de consultation et d'études dans les domaines commerciaux.","Commerce & études","Étude / mission"],
+  ["Exploitation d'installations de stockage frigorifique et ordinaire.","Logistique & stockage","Forfait mensuel"],
+  ["Location de matériels, machines et équipements divers.","Location","Jour"],
+  ["Location de véhicules automobiles.","Location","Véhicule / jour"],
+  ["Services de restauration / traiteur.","Restauration","Repas"],
+  ["Vente et livraison de repas.","Restauration","Repas"],
+  ["Services de publicité commerciale.","Publicité","Campagne"],
+  ["Stockage et distribution de marchandises.","Transport & distribution","Forfait"],
+  ["Transport de marchandises.","Transport & distribution","Tonne / km"],
+  ["Montage, installation et réparation d'équipements de surveillance et de sécurité.","Sécurité & risques","Projet"],
+  ["Institution de formation professionnelle (activité réglementée).","Formation & emploi","Session"],
+  ["Institution de nettoyage.","Nettoyage","Agent / mois"],
+  ["Bureau de placement et d'emploi.","Formation & emploi","Placement"],
+  ["Préparateur / prestataire de services.","Services généraux","Prestation"],
+  ["Institution de services divers.","Services généraux","Prestation"],
+  ["Bureau de prestations de services.","Services généraux","Prestation"],
+  ["Assistance logistique.","Logistique & stockage","Agent / mois"],
+  ["Location de Clark.","Location","Engin / jour"],
+  ["Mise à disposition de personnel de manutention.","Logistique & stockage","Agent / mois"],
+  ["Travaux de secrétariat et assistance administrative.","Assistance administrative","Agent / mois"]
+].map(([designation,categorie,unite])=>({designation,categorie,unite}));
+const IGS_PRESTATION_CATEGORIES=[...new Set(IGS_PRESTATIONS_OFFICIELLES.map(p=>p.categorie))];
+const IGS_PRESTATION_UNITES=[...new Set(IGS_PRESTATIONS_OFFICIELLES.map(p=>p.unite))];
+function igsPrestationPreset(select){
+  const p=IGS_PRESTATIONS_OFFICIELLES[Number(select.value)];if(!p)return;
+  const form=select.closest("form");if(!form)return;
+  form.elements.designation.value=p.designation;
+  form.elements.categorie.value=p.categorie;
+  form.elements.unite.value=p.unite;
+  if(!form.elements.description.value.trim())form.elements.description.value=p.designation;
+}
 function renderCommCatalogue(view){
   const rawList=bySoc(db.catalogue||[]).slice();
   const seenPrestations=new Set();
@@ -30660,7 +30700,7 @@ function renderCommCatalogue(view){
     seenPrestations.add(key);
     return true;
   });
-  const CATS_SEC=["Gardiennage","Sécurité incendie","Sécurité électronique","Sécurité événementielle","Ronde et surveillance","Escorte / Transport de fonds","Agent d'accueil","Maître chien","Conseil et audit sécurité","Autre"];
+  const CATS_SEC=[...IGS_PRESTATION_CATEGORIES,"Autre"];
   const byCat={};CATS_SEC.forEach(k=>byCat[k]=[]);list.forEach(p=>{const k=p.categorie||"Autre";if(!byCat[k])byCat[k]=[];byCat[k].push(p);});
   const catBlocks=Object.entries(byCat).filter(([,ps])=>ps.length>0).map(([cat,ps])=>`
     <div class="card p-0 mb-4 overflow-hidden">
@@ -30692,14 +30732,14 @@ function renderCommCatalogue(view){
     </div>`).join("");
   view.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <div><h1 style="font-size:20px;font-weight:800;color:#0f2d5a;margin:0">Catalogue de prestations</h1>
-    <p style="font-size:13px;color:#64748b;margin:4px 0 0">${list.length} prestation${list.length>1?"s":""} · Gardiennage & Sécurité</p></div>
+    <p style="font-size:13px;color:#64748b;margin:4px 0 0">${list.length} prestation${list.length>1?"s":""} · Catalogue multiservices IRON GLOBAL SOLUTION</p></div>
     <button class="btn btn-primary" onclick="openCataloguePrestModal()">+ Nouvelle prestation</button>
   </div>
   ${commTabs("catalogue")}
   ${list.length===0?`<div class="card p-10 text-center" style="color:#94a3b8">
     <div style="font-size:48px;margin-bottom:12px">🛡</div>
     <div style="font-weight:700;font-size:15px;margin-bottom:6px">Aucune prestation</div>
-    <div style="font-size:13px;margin-bottom:16px">Créez votre premier service de gardiennage ou sécurité</div>
+    <div style="font-size:13px;margin-bottom:16px">Créez une prestation à partir du catalogue officiel IRON GLOBAL SOLUTION</div>
     <button class="btn btn-primary" onclick="openCataloguePrestModal()">+ Créer une prestation</button>
   </div>`:catBlocks}`;
 }
@@ -30712,14 +30752,15 @@ function openCataloguePrestModal(id){
   const p=(db.catalogue||[]).find(x=>x.id===id);
   const isEdit=!!p;
   const code=p?.code||nextPrestCode();
-  const CATS_SEC=["Gardiennage","Sécurité incendie","Sécurité électronique","Sécurité événementielle","Ronde et surveillance","Escorte / Transport de fonds","Agent d'accueil","Maître chien","Conseil et audit sécurité","Autre"];
-  const UNITES=["Agent / mois","Vacation / jour","Vacation / nuit","Forfait mensuel","Forfait journalier","Heure","Prestation"];
+  const CATS_SEC=[...IGS_PRESTATION_CATEGORIES,"Autre"];
+  const UNITES=[...IGS_PRESTATION_UNITES,"Vacation / jour","Vacation / nuit","Forfait journalier","Heure"];
   openModal(`<h3 style="font-weight:800;font-size:16px;color:#0f2d5a;margin:0 0 16px">${isEdit?"Modifier prestation":"Nouvelle prestation"}</h3>
     <form onsubmit="event.preventDefault();confirmPrest('${id||""}')">
       <div class="rh-op-grid" style="margin-bottom:12px">
         <label><span style="font-size:12px;font-weight:700;color:#334155">Code</span><input class="input" name="code" value="${escapeHTML(code)}" style="font-family:monospace;background:#f8fafc" readonly/></label>
         <label><span style="font-size:12px;font-weight:700;color:#334155">Société</span><select class="select" name="societe">${SOCIETES.map(s=>`<option ${((p?.societe)||mySoc())===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></label>
       </div>
+      ${isEdit?"":`<label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#334155">Catalogue officiel IGS</span><select class="select" style="margin-top:4px;width:100%" onchange="igsPrestationPreset(this)"><option value="">— Sélectionner une prestation —</option>${IGS_PRESTATIONS_OFFICIELLES.map((x,i)=>`<option value="${i}">${escapeHTML(x.designation)}</option>`).join("")}</select></label>`}
       <label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#334155">Désignation *</span><input class="input" name="designation" value="${escapeHTML(p?.designation||"")}" required style="margin-top:4px;width:100%"/></label>
       <div class="rh-op-grid" style="margin-bottom:12px">
         <label><span style="font-size:12px;font-weight:700;color:#334155">Catégorie</span>
