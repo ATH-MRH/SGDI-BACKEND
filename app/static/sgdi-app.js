@@ -1548,7 +1548,8 @@ window.SGDI_API={
   assignments:{
     page:(params)=>sgdiApi("/ops/assignments/page"+sgdiQuery(params),{legacy:false}),
     list:(params)=>sgdiApi("/ops/assignments"+sgdiQuery(params),{legacy:false}),
-    create:(payload)=>sgdiApi("/ops/assignments",{method:"POST",body:payload,legacy:false})
+    create:(payload)=>sgdiApi("/ops/assignments",{method:"POST",body:payload,legacy:false}),
+    update:(id,payload)=>sgdiApi("/ops/assignments/"+encodeURIComponent(id),{method:"PATCH",body:payload,legacy:false})
   },
   stock:{stores:()=>sgdiApi("/materiel/stores",{legacy:false}),storesPage:(params)=>sgdiApi("/materiel/stores/page"+sgdiQuery(params),{legacy:false}),createStore:(payload)=>sgdiApi("/materiel/stores",{method:"POST",body:payload,legacy:false}),updateStore:(id,payload)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteStore:(id)=>sgdiApi("/materiel/stores/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),suppliers:()=>sgdiApi("/materiel/suppliers",{legacy:false}),suppliersPage:(params)=>sgdiApi("/materiel/suppliers/page"+sgdiQuery(params),{legacy:false}),createSupplier:(payload)=>sgdiApi("/materiel/suppliers",{method:"POST",body:payload,legacy:false}),updateSupplier:(id,payload)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteSupplier:(id)=>sgdiApi("/materiel/suppliers/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),alerts:(params)=>sgdiApi("/materiel/alerts"+sgdiQuery(params),{legacy:false}),articles:(params)=>sgdiApi("/materiel/articles"+sgdiQuery(params),{legacy:false}),articlesPage:(params)=>sgdiApi("/materiel/articles/page"+sgdiQuery(params),{legacy:false}),createArticle:(payload)=>sgdiApi("/materiel/articles",{method:"POST",body:payload,legacy:false}),updateArticle:(id,payload)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),deleteArticle:(id)=>sgdiApi("/materiel/articles/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),movements:()=>sgdiApi("/materiel/movements",{legacy:false}),movementsPage:(params)=>sgdiApi("/materiel/movements/page"+sgdiQuery(params),{legacy:false}),createMovement:(payload)=>sgdiApi("/materiel/movements",{method:"POST",body:payload,legacy:false}),deleteMovement:(id)=>sgdiApi("/materiel/movements/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),createDotation:(payload)=>sgdiApi("/materiel/dotations",{method:"POST",body:payload,legacy:false}),
   employeeEquipment:(employeeId)=>sgdiApi("/materiel/employees/"+encodeURIComponent(employeeId)+"/equipment",{legacy:false}),
@@ -14410,6 +14411,7 @@ function renderAgentForm(view,id){
         <div><div class="rh-erp-side-label">Affectation</div><div class="rh-erp-side-value" style="color:#047857">${escapeHTML(aff.siteName||"Sans affectation")}</div></div>
         <div><div class="rh-erp-side-label">Fin de contrat</div><div class="rh-erp-side-value" style="color:${finContratColor}">${ficheContractEndDate?`${formatDate(ficheContractEndDate)}${finContratBadge}`:"—"}</div></div>
         ${essaiBadge?`<div>${essaiBadge}</div>`:""}
+        <div><div class="rh-erp-side-label">Groupe de rotation</div>${aff.assignmentBackendId&&!opsFicheReadOnly&&!locked?`<select class="select" style="height:32px;font-size:12px;font-weight:800;width:auto" onchange="updateAgentAssignmentGroup('${jsString(aff.assignmentBackendId)}',this.value)">${["A","B","C","D","E","F"].map(g=>`<option value="${g}" ${aff.groupe===g?"selected":""}>Groupe ${g}</option>`).join("")}</select>`:`<div class="rh-erp-side-value">${aff.groupe?"Groupe "+escapeHTML(aff.groupe):"—"}</div>`}</div>
       </div>
     </div>
     <div class="rh-erp-chips">
@@ -16446,7 +16448,7 @@ async function renderSitesServer(view){
     window.__SGDI_SITE_SITUATION_BY_SITE=situationBySite;
     const pagination=sgdiServerPaginationHTML("sites",soc||"all",result);
     const opsReadOnly=isOpsSupervisorReadOnlySession();
-    view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
+    view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="openOpsSiteConfigModal()">➕ Nouveau site</button>`}</div>
     ${opsSupervisorReadOnlyNoticeHTML()}
     ${sitesSocieteSelectorHTML(mapSites)}
     ${session?.transverse==="materiel"?"":situationData?siteSyntheseServerHTML(situationData,mapSites):siteSyntheseGeneraleHTML(mapSites)}
@@ -16480,7 +16482,7 @@ function renderSites(view){
   const soc=sitesPageSocieteFilter();
   const sites=siteOpsSitesForScope(soc);
   const opsReadOnly=isOpsSupervisorReadOnlySession();
-  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="navigate('sites/nouveau')">➕ Nouveau site</button>`}</div>
+  view.innerHTML=`<div class="flex justify-between mb-6"><h1 class="text-2xl font-black uppercase">📍 SITES - TABLEAU DE BORD</h1>${session?.transverse==="materiel"||opsReadOnly?"":`<button class="btn btn-primary site-create-btn" onclick="openOpsSiteConfigModal()">➕ Nouveau site</button>`}</div>
   ${opsSupervisorReadOnlyNoticeHTML()}
   ${sitesSocieteSelectorHTML(sites)}
   ${session?.transverse==="materiel"?"":siteSyntheseGeneraleHTML(sites)}
@@ -17425,6 +17427,154 @@ async function siteAjouterEffectifValider(siteId){
 // Barre de couverture "affecté / besoin théorique" — même pattern (calcul de pourcentage,
 // couleurs, gabarit) que .site-card sur le portail client (client-portail.html), pour que
 // les deux écrans se lisent comme une même famille visuelle.
+// Configurateur de site OPS — création uniquement (l'édition détaillée d'un site existant
+// reste sur la fiche technique #/sites/:id). Porté depuis le modal "Configurer un site" du
+// portail client (client-portail.html) : mêmes champs (postes/fonctions, ventilation par
+// groupe A-F, aperçu de rotation 3x8), même format equipment_plan, pour que la création
+// côté OPS produise directement une fiche exploitable côté portail client.
+let opsSiteConfigGroupSeed={};
+async function openOpsSiteConfigModal(){
+  if(sgdiAuthToken()&&SGDI?.commercial?.clients&&!(db.clients||[]).length){
+    try{const clients=await SGDI.commercial.clients();if(Array.isArray(clients)&&clients.length)db.clients=clients.map(clientFromApi)}catch(e){console.warn("openOpsSiteConfigModal: clients preload failed",e)}
+  }
+  opsSiteConfigGroupSeed={};
+  openModal(opsSiteConfigModalHTML());
+  setTimeout(()=>{
+    document.getElementById("opsSiteRotationStartDate").value=today();
+    addOpsSitePositionRow();
+    renderOpsSiteRotationPreview();
+  },0);
+}
+function opsSiteConfigModalHTML(){
+  const societes=uniqueSocieteNames([...SOCIETES,...((societeConfig().custom)||[])]);
+  return `<div style="max-width:1120px">
+    <div class="flex items-start justify-between gap-3 mb-1"><h3 class="font-bold text-lg">Configurer un site</h3><button type="button" class="btn btn-ghost" onclick="closeModal()">×</button></div>
+    <p class="text-xs text-slate-500 mb-4">Créez le site et définissez son organisation opérationnelle — postes, ventilation par groupe et planning de rotation.</p>
+    <div class="grid grid-2 mb-3">
+      <div><label class="label">Société</label><select class="select" id="opsSiteSociete">${societes.map(soc=>`<option value="${escapeHTML(soc)}">${escapeHTML(soc)}</option>`).join("")}</select></div>
+      <div><label class="label">Client (fiche commerciale liée)</label><select class="select" id="opsSiteClient"><option value="">— Aucun —</option>${(db.clients||[]).slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||"")).map(c=>`<option value="${escapeHTML(c.backendId||c.id||"")}">${escapeHTML(c.nom||c.raisonSociale||"Client")}</option>`).join("")}</select></div>
+    </div>
+    <div class="grid grid-2 mb-3">
+      <div><label class="label">Nom du site</label><input class="input" id="opsSiteName" placeholder="Entrepôt Oued Smar"></div>
+      <div><label class="label">Type de site</label><input class="input" id="opsSiteType" placeholder="Entrepôt, bureau, zone industrielle…"></div>
+    </div>
+    <div class="grid grid-3 mb-3">
+      <div><label class="label">Adresse</label><input class="input" id="opsSiteAddress"></div>
+      <div><label class="label">Commune</label><input class="input" id="opsSiteCommune"></div>
+      <div><label class="label">Wilaya</label><select class="select" id="opsSiteWilaya"><option value="">—</option>${WILAYAS.map(w=>`<option>${w}</option>`).join("")}</select></div>
+    </div>
+    <div><label class="label">Effectif requis</label><input class="input bg-slate-100" id="opsSiteRequiredStaff" type="number" min="0" step="1" value="0" readonly title="Calculé automatiquement à partir des postes et fonctions"></div>
+    <div class="site-config-section"><h3>Postes / fonctions</h3><p>Ajoutez chaque poste et le nombre d'employés requis.</p><div id="opsSitePositionsList"></div><button type="button" class="btn btn-secondary text-xs" style="margin-top:10px" onclick="addOpsSitePositionRow()">+ Ajouter un poste</button></div>
+    <div class="site-config-section"><h3>Effectif par groupe</h3><p>Ventilez chaque poste/fonction entre les groupes. Le total de chaque groupe est calculé automatiquement.</p><div class="site-groups-grid" id="opsSiteGroupDistribution"></div><div id="opsSiteDistributionStatus" class="site-distribution-status"></div></div>
+    <div class="site-config-section"><h3>Planning et rotation</h3><p>Configurez le cycle 24h/7j : trois groupes en service et un groupe en récupération, avec une relève toutes les huit heures.</p>
+      <div class="rotation-config-grid">
+        <label>Système<select class="select" id="opsSiteRotationSystem" onchange="renderOpsSiteRotationPreview()"><option value="3x8">24h/7j — 3×8</option></select></label>
+        <label>Première prise<input class="input" id="opsSiteRotationFirstTime" type="time" value="06:00" oninput="renderOpsSiteRotationPreview()"></label>
+        <label>Début du cycle<input class="input" id="opsSiteRotationStartDate" type="date" onchange="renderOpsSiteRotationPreview()"></label>
+        <label>Horizon<select class="select" id="opsSiteRotationWeeks" onchange="renderOpsSiteRotationPreview()"><option value="4">4 semaines</option><option value="8">8 semaines</option><option value="12">12 semaines</option></select></label>
+      </div>
+      <div id="opsSiteRotationPreview" class="rotation-preview"></div>
+      <div id="opsSiteRotationAlerts"></div>
+    </div>
+    <div id="opsSiteConfigError" class="text-sm font-bold text-red-600" style="display:none;margin-top:10px"></div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-secondary" onclick="closeModal()">Annuler</button><button type="button" class="btn btn-primary" id="opsSiteSubmitBtn" onclick="submitOpsSiteConfig()">Créer le site</button></div>
+  </div>`;
+}
+function addOpsSitePositionRow(name="",required=0){
+  const host=document.getElementById("opsSitePositionsList");if(!host)return;
+  const row=document.createElement("div");row.className="site-position-row";
+  row.innerHTML=`<label>Poste / fonction<input class="input site-position-name" placeholder="Ex. Agent de sécurité" value="${escapeHTML(name)}" oninput="renderOpsSiteGroupDistribution()"></label><label>Nombre requis<input class="input site-position-required" type="number" min="0" step="1" value="${Number(required)||0}" oninput="recalculateOpsSiteRequiredStaff()"></label><button type="button" class="site-position-remove" title="Supprimer ce poste" onclick="this.closest('.site-position-row').remove();recalculateOpsSiteRequiredStaff()">×</button>`;
+  host.appendChild(row);
+  recalculateOpsSiteRequiredStaff();
+}
+function recalculateOpsSiteRequiredStaff(){
+  const total=[...document.querySelectorAll("#opsSitePositionsList .site-position-required")].reduce((sum,input)=>sum+(parseInt(input.value,10)||0),0);
+  document.getElementById("opsSiteRequiredStaff").value=total;
+  renderOpsSiteGroupDistribution();
+}
+function currentOpsSitePositions(){
+  return [...document.querySelectorAll("#opsSitePositionsList .site-position-row")].map(row=>({name:row.querySelector(".site-position-name").value.trim(),required:parseInt(row.querySelector(".site-position-required").value,10)||0})).filter(position=>position.name);
+}
+function collectOpsSiteGroupPositions(){
+  const result={A:{},B:{},C:{},D:{},E:{},F:{}};
+  document.querySelectorAll(".ops-site-group-position-input").forEach(input=>{result[input.dataset.group][decodeURIComponent(input.dataset.position)]=parseInt(input.value,10)||0});
+  return result;
+}
+function renderOpsSiteGroupDistribution(){
+  const host=document.getElementById("opsSiteGroupDistribution");if(!host)return;
+  const previous=collectOpsSiteGroupPositions();
+  const positions=currentOpsSitePositions();
+  const groups=["A","B","C","D","E","F"];
+  host.innerHTML=groups.map(code=>{
+    const rows=positions.map(position=>{const value=previous[code]?.[position.name]??opsSiteConfigGroupSeed[code]?.[position.name]??0;return`<label class="site-group-position-row"><span>${escapeHTML(position.name)}</span><input class="ops-site-group-position-input" data-group="${code}" data-position="${encodeURIComponent(position.name)}" type="number" min="0" step="1" value="${Number(value)||0}" oninput="validateOpsSiteDistribution()"></label>`}).join("");
+    const total=positions.reduce((sum,position)=>sum+Number(previous[code]?.[position.name]??opsSiteConfigGroupSeed[code]?.[position.name]??0),0);
+    return`<div class="site-group-distribution"><div class="site-group-distribution-head"><span>Groupe ${code}</span><span>Total : <b data-ops-group-total="${code}">${total}</b></span></div>${rows||"<div class=\"text-xs text-slate-500\">Ajoutez d'abord un poste ou une fonction.</div>"}</div>`;
+  }).join("");
+  validateOpsSiteDistribution();
+}
+function validateOpsSiteDistribution(){
+  const positions=currentOpsSitePositions(),distributed=collectOpsSiteGroupPositions();
+  document.querySelectorAll("[data-ops-group-total]").forEach(total=>{const code=total.dataset.opsGroupTotal;total.textContent=Object.values(distributed[code]||{}).reduce((sum,value)=>sum+Number(value||0),0)});
+  const differences=positions.map(position=>{const total=["A","B","C","D","E","F"].reduce((sum,code)=>sum+Number(distributed[code]?.[position.name]||0),0);return{name:position.name,required:position.required,total,difference:position.required-total}}).filter(item=>item.difference!==0);
+  const status=document.getElementById("opsSiteDistributionStatus");if(!status)return false;
+  if(!positions.length){status.className="site-distribution-status";status.textContent="Ajoutez les postes/fonctions pour commencer la ventilation.";return false}
+  if(differences.length){status.className="site-distribution-status error";status.textContent=differences.map(item=>`${item.name} : ${item.total} ventilé(s) sur ${item.required} requis (${item.difference>0?item.difference+" restant(s)":Math.abs(item.difference)+" en trop"})`).join(" · ");return false}
+  status.className="site-distribution-status ok";status.textContent="Répartition cohérente : tous les besoins par fonction sont entièrement ventilés.";return true;
+}
+function opsSiteRotationConfiguration(){return{system:document.getElementById("opsSiteRotationSystem").value,first_shift_time:document.getElementById("opsSiteRotationFirstTime").value||"06:00",start_date:document.getElementById("opsSiteRotationStartDate").value||today(),horizon_weeks:parseInt(document.getElementById("opsSiteRotationWeeks").value,10)||4}}
+function renderOpsSiteRotationPreview(){
+  const host=document.getElementById("opsSiteRotationPreview"),alertsHost=document.getElementById("opsSiteRotationAlerts");if(!host||!alertsHost)return;
+  const config=opsSiteRotationConfiguration(),start=new Date(`${config.start_date}T00:00:00`),[hour,minute]=config.first_shift_time.split(":").map(Number),base=hour*60+minute,groups=["A","B","C","D"];
+  const fmt=minutes=>`${String(Math.floor((minutes%1440)/60)).padStart(2,"0")}:${String(minutes%60).padStart(2,"0")}`;
+  const shifts=[0,1,2].map(index=>{const begin=(base+index*480)%1440;return`${fmt(begin)}–${fmt((begin+480)%1440)}`});
+  const rows=[],weekly={};
+  for(let dayIndex=0;dayIndex<config.horizon_weeks*7;dayIndex++){
+    const current=new Date(start);current.setDate(start.getDate()+dayIndex);const dayGroups=[];
+    groups.forEach((code,groupIndex)=>{const cycle=(dayIndex+groupIndex)%4,working=cycle<3;dayGroups.push({code,working,shift:working?shifts[cycle]:"Récupération"});if(working){const monday=new Date(current);monday.setDate(current.getDate()-((current.getDay()+6)%7));const key=`${monday.toISOString().slice(0,10)}|${code}`;weekly[key]=(weekly[key]||0)+8}});
+    if(dayIndex<8)rows.push({date:current,groups:dayGroups});
+  }
+  host.innerHTML=`<div class="rotation-day rotation-day-head"><div>Date</div>${groups.map(code=>`<div>Groupe ${code}</div>`).join("")}</div>${rows.map(row=>`<div class="rotation-day"><div><b>${row.date.toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</b></div>${row.groups.map(group=>`<div class="${group.working?"rotation-work":"rotation-rest"}">${group.working?group.shift:"Récupération"}</div>`).join("")}</div>`).join("")}`;
+  const overtime=Object.entries(weekly).filter(([,hours])=>hours>40);
+  alertsHost.innerHTML=overtime.length?`<div class="rotation-alert">⚠ ${overtime.length} dépassement(s) prévisionnel(s) du seuil de 40 h/semaine détecté(s).</div>`:`<div class="site-distribution-status ok">Planning généré sans dépassement prévisionnel du seuil de 40 h/semaine.</div>`;
+}
+async function submitOpsSiteConfig(){
+  const errorEl=document.getElementById("opsSiteConfigError");errorEl.style.display="none";
+  const name=document.getElementById("opsSiteName").value.trim();
+  if(name.length<2){errorEl.textContent="Le nom du site est requis.";errorEl.style.display="block";return}
+  const positions=currentOpsSitePositions();
+  const invalidPosition=[...document.querySelectorAll("#opsSitePositionsList .site-position-name")].some(input=>input.value.trim()&&input.value.trim().length<2);
+  if(invalidPosition){errorEl.textContent="Chaque poste doit avoir un nom valide.";errorEl.style.display="block";return}
+  if(positions.length&&!validateOpsSiteDistribution()){errorEl.textContent="La ventilation par groupe doit correspondre exactement aux besoins par poste/fonction.";errorEl.style.display="block";return}
+  const positionQuotas=Object.fromEntries(positions.map(p=>[p.name,p.required]));
+  const groupPositions=collectOpsSiteGroupPositions();
+  const groupQuotas=Object.fromEntries(Object.entries(groupPositions).map(([code,values])=>[code,Object.values(values).reduce((sum,value)=>sum+Number(value||0),0)]));
+  const requiredStaff=parseInt(document.getElementById("opsSiteRequiredStaff").value,10)||0;
+  const societe=document.getElementById("opsSiteSociete").value;
+  const clientBackendId=document.getElementById("opsSiteClient").value;
+  const client=(db.clients||[]).find(c=>String(c.backendId||c.id||"")===String(clientBackendId));
+  const btn=document.getElementById("opsSiteSubmitBtn");btn.disabled=true;btn.textContent="Enregistrement…";
+  try{
+    await SGDI.sites.create({
+      name,
+      client_id:clientBackendId?parseInt(clientBackendId,10):null,
+      client_name:client?.nom||client?.raisonSociale||null,
+      address:document.getElementById("opsSiteAddress").value.trim()||null,
+      commune:document.getElementById("opsSiteCommune").value.trim()||null,
+      wilaya:document.getElementById("opsSiteWilaya").value||null,
+      site_type:document.getElementById("opsSiteType").value.trim()||null,
+      contractual_staff:requiredStaff,
+      active:1,
+      equipment_plan:{societe,positionQuotas,groupQuotas,groupPositionQuotas:groupPositions,clientPortalRotation:opsSiteRotationConfiguration()},
+    });
+    closeModal();
+    toast("Site créé.","success");
+    if(typeof renderView==="function")renderView();
+  }catch(e){
+    errorEl.textContent=e?.message||"Impossible de créer ce site.";errorEl.style.display="block";
+  }finally{
+    btn.disabled=false;btn.textContent="Créer le site";
+  }
+}
 function siteCoverageBarHTML(actual,required){
   required=Number(required)||0;actual=Number(actual)||0;
   const pct=required>0?Math.min(100,Math.round(actual/required*100)):(actual>0?100:0);
@@ -35371,6 +35521,20 @@ function opsLatestMovementForEmployee(a){
 function opsEmployeeLiveAffectation(a){
   const current=a?.affectationCourante||{};
   return current;
+}
+// Édition directe du groupe de rotation depuis la Fiche de position : pas d'ordre de
+// mouvement ici, car un changement de groupe n'est pas un départ de site — seul le champ
+// canonique Assignment.group_code (partagé avec le portail client) est mis à jour.
+async function updateAgentAssignmentGroup(assignmentId,groupCode){
+  try{
+    await SGDI.assignments.update(assignmentId,{group_code:groupCode});
+    const agent=(db.agents||[]).find(a=>String(a.affectationCourante?.assignmentBackendId||"")===String(assignmentId));
+    if(agent)agent.affectationCourante.groupe=groupCode;
+    toast(`Groupe de rotation mis à jour : Groupe ${groupCode}`,"success");
+  }catch(e){
+    toast(e?.message||"Impossible de mettre à jour le groupe de rotation","error");
+    renderView();
+  }
 }
 function opsEmployeeCurrentPositionLabel(a){
   const aff=opsEmployeeLiveAffectation(a);
