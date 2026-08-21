@@ -7961,7 +7961,7 @@ function renderLogin(){
   if(isDhlHost()){renderDhlLogin();return}
   if(hostCfg?.key==="paie"){renderPaieStandaloneLogin();return}
   const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.key==="ops"?"OPS":hostCfg?.title||"ATLAS";
-  const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":hostCfg?.key==="ops"?"Direction des opérations":"Suite de gestion intégrée";
+  const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":hostCfg?.key==="ops"?"Direction des opérations":hostCfg?.key==="commercial"?"Clients, devis, commandes et suivi de la relation commerciale, réunis dans un seul espace.":"Suite de gestion intégrée";
   try{document.title=hostCfg?.key==="facmod"?"FACTURATION — IRON GROUP":hostCfg?.key?hostCfg.key.toUpperCase()+" — ATLAS":"ATLAS — Suite de gestion intégrée"}catch(_e){}
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page${hostCfg?.key?` sgdi-login-page-${escapeHTML(hostCfg.key)}`:""}">
     <main class="sgdi-login-main">
