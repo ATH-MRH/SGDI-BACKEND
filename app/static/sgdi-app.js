@@ -30693,6 +30693,22 @@ function igsPrestationPreset(select){
 }
 function igsCatalogueToggleAll(checked){
   document.querySelectorAll(".igs-catalogue-check").forEach(el=>{el.checked=!!checked});
+  igsCatalogueSelectionChanged();
+}
+function igsCatalogueSelectionChanged(){
+  const form=document.querySelector(".modal-bg form");if(!form)return;
+  const bulk=!!form.querySelector(".igs-catalogue-check:checked");
+  ["designation","categorie","unite","prixHT","description"].forEach(name=>{
+    const el=form.elements[name];if(!el)return;
+    el.disabled=bulk;
+    el.style.background=bulk?"#f1f5f9":"";
+    el.style.color=bulk?"#94a3b8":"";
+    el.style.cursor=bulk?"not-allowed":"";
+  });
+  const submit=form.querySelector(".igs-custom-submit");
+  if(submit){submit.disabled=bulk;submit.title=bulk?"Utilisez le bouton Ajouter les prestations sélectionnées":""}
+  const hint=form.querySelector(".igs-custom-disabled-hint");
+  if(hint)hint.style.display=bulk?"block":"none";
 }
 async function igsCatalogueImportSelected(){
   const form=document.querySelector(".modal-bg form");if(!form)return;
@@ -30777,14 +30793,14 @@ function openCataloguePrestModal(id){
   const code=p?.code||nextPrestCode();
   const CATS_SEC=[...IGS_PRESTATION_CATEGORIES,"Autre"];
   const UNITES=[...IGS_PRESTATION_UNITES,"Vacation / jour","Vacation / nuit","Forfait journalier","Heure"];
-  const officialByCategory=IGS_PRESTATION_CATEGORIES.map(cat=>`<section style="border:1px solid #dbe3ec;border-radius:8px;overflow:hidden"><div style="padding:7px 10px;background:#eef4fa;color:#0f2d5a;font-size:11px;font-weight:850;text-transform:uppercase">${escapeHTML(cat)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px;padding:5px 10px">${IGS_PRESTATIONS_OFFICIELLES.map((x,i)=>({x,i})).filter(o=>o.x.categorie===cat).map(({x,i})=>`<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 2px;margin:0;font-size:11px;line-height:1.35;color:#243b55;cursor:pointer"><input type="checkbox" class="igs-catalogue-check" value="${i}" style="width:15px;height:15px;margin-top:1px;flex:0 0 auto"/><span>${escapeHTML(x.designation)}</span></label>`).join("")}</div></section>`).join("");
+  const officialByCategory=IGS_PRESTATION_CATEGORIES.map(cat=>`<section style="border:1px solid #dbe3ec;border-radius:8px;overflow:hidden"><div style="padding:7px 10px;background:#eef4fa;color:#0f2d5a;font-size:11px;font-weight:850;text-transform:uppercase">${escapeHTML(cat)}</div><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px;padding:5px 10px">${IGS_PRESTATIONS_OFFICIELLES.map((x,i)=>({x,i})).filter(o=>o.x.categorie===cat).map(({x,i})=>`<label style="display:flex;align-items:flex-start;gap:8px;padding:7px 2px;margin:0;font-size:11px;line-height:1.35;color:#243b55;cursor:pointer"><input type="checkbox" class="igs-catalogue-check" value="${i}" onchange="igsCatalogueSelectionChanged()" style="width:15px;height:15px;margin-top:1px;flex:0 0 auto"/><span>${escapeHTML(x.designation)}</span></label>`).join("")}</div></section>`).join("");
   openModal(`<h3 style="font-weight:800;font-size:16px;color:#0f2d5a;margin:0 0 16px">${isEdit?"Modifier prestation":"Nouvelle prestation"}</h3>
     <form onsubmit="event.preventDefault();confirmPrest('${id||""}')">
       <div class="rh-op-grid" style="margin-bottom:12px">
         <label><span style="font-size:12px;font-weight:700;color:#334155">Code</span><input class="input" name="code" value="${escapeHTML(code)}" style="font-family:monospace;background:#f8fafc" readonly/></label>
         <label><span style="font-size:12px;font-weight:700;color:#334155">Société</span><select class="select" name="societe">${SOCIETES.map(s=>`<option ${((p?.societe)||mySoc())===s?"selected":""}>${escapeHTML(s)}</option>`).join("")}</select></label>
       </div>
-      ${isEdit?"":`<fieldset style="margin:0 0 14px;border:1px solid #cbd8e6;border-radius:10px;padding:12px;background:#fbfdff"><legend style="padding:0 7px;color:#0f2d5a;font-size:12px;font-weight:850">Catalogue officiel IGS</legend><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:12px;font-weight:800;color:#0f2d5a;cursor:pointer"><input type="checkbox" onchange="igsCatalogueToggleAll(this.checked)" style="width:16px;height:16px"/> Tout sélectionner</label><button type="button" class="btn btn-primary" onclick="igsCatalogueImportSelected()">Ajouter les prestations sélectionnées</button></div><div style="display:grid;gap:8px;max-height:310px;overflow:auto;padding-right:4px">${officialByCategory}</div></fieldset><div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px;color:#64748b;font-size:11px"><span style="height:1px;background:#dbe3ec;flex:1"></span>OU AJOUTER UNE PRESTATION PERSONNALISÉE<span style="height:1px;background:#dbe3ec;flex:1"></span></div>`}
+      ${isEdit?"":`<fieldset style="margin:0 0 14px;border:1px solid #cbd8e6;border-radius:10px;padding:12px;background:#fbfdff"><legend style="padding:0 7px;color:#0f2d5a;font-size:12px;font-weight:850">Catalogue officiel IGS</legend><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:7px;margin:0;font-size:12px;font-weight:800;color:#0f2d5a;cursor:pointer"><input type="checkbox" onchange="igsCatalogueToggleAll(this.checked)" style="width:16px;height:16px"/> Tout sélectionner</label><button type="button" class="btn btn-primary" onclick="igsCatalogueImportSelected()">Ajouter les prestations sélectionnées</button></div><div style="display:grid;gap:8px;max-height:310px;overflow:auto;padding-right:4px">${officialByCategory}</div></fieldset><div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px;color:#64748b;font-size:11px"><span style="height:1px;background:#dbe3ec;flex:1"></span>OU AJOUTER UNE PRESTATION PERSONNALISÉE<span style="height:1px;background:#dbe3ec;flex:1"></span></div><div class="igs-custom-disabled-hint" style="display:none;margin:-4px 0 12px;padding:8px 11px;border-radius:7px;background:#eef4fa;color:#36536f;font-size:11px;font-weight:700">Mode sélection multiple actif : utilisez « Ajouter les prestations sélectionnées ».</div>`}
       <label style="display:block;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#334155">Désignation *</span><input class="input" name="designation" value="${escapeHTML(p?.designation||"")}" required style="margin-top:4px;width:100%"/></label>
       <div class="rh-op-grid" style="margin-bottom:12px">
         <label><span style="font-size:12px;font-weight:700;color:#334155">Catégorie</span>
@@ -30798,7 +30814,7 @@ function openCataloguePrestModal(id){
       <label style="display:block;margin-bottom:16px"><span style="font-size:12px;font-weight:700;color:#334155">Description *</span><textarea class="input" name="description" rows="3" required style="margin-top:4px;width:100%" placeholder="Détails de la prestation, conditions, périmètre d'intervention...">${escapeHTML(p?.description||"")}</textarea></label>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-        <button class="btn btn-primary">${isEdit?"Enregistrer les modifications":"Créer la prestation"}</button>
+        <button class="btn btn-primary igs-custom-submit">${isEdit?"Enregistrer les modifications":"Créer la prestation"}</button>
       </div>
     </form>`);
 }
