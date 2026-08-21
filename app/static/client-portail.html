@@ -592,7 +592,7 @@ const PORTAL_LANG_PAIRS=[
   ["Configurer un site","Configure a site"],
   ["Créez le site et définissez son organisation opérationnelle.","Create the site and define its operational setup."],
   ["Créer site","Create site"],["Modifier site","Edit site"],["Supprimer site","Delete site"],
-  ["Site concerné","Site"],["— Choisir un site —","— Choose a site —"],["Nom du site","Site name"],
+  ["Site concerné","Related site"],["— Choisir un site —","— Choose a site —"],["Nom du site","Site name"],
   ["Type de site","Site type"],["Adresse","Address"],["Commune","Commune"],["Wilaya","Wilaya"],
   ["Effectif requis","Required staff"],["Postes / fonctions","Positions / roles"],
   ["Ajoutez chaque poste et le nombre d’employés requis.","Add each position and the number of employees required."],
@@ -649,7 +649,13 @@ const PORTAL_LANG_PAIRS=[
 ].sort((a,b)=>b[0].length-a[0].length);
 
 function portalRegexEscape(value){return value.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
-function portalApostropheRegex(value){return new RegExp(portalRegexEscape(value).replace(/['’]/g,"['’]"),"g")}
+// Limites de mot Unicode-safe (\p{L}/\p{N} plutôt que \b, qui traite les lettres accentuées
+// comme des séparateurs) : sans ça, une paire courte comme "Non"→"No" matchait à l'intérieur
+// de "Nom" et se réinjectait à chaque appel, corrompant le texte de façon cumulative.
+function portalApostropheRegex(value){
+  const escaped=portalRegexEscape(value).replace(/['’]/g,"['’]");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`,"gu");
+}
 const PORTAL_LANG_COMPILED=PORTAL_LANG_PAIRS.map(([fr,en])=>({fr,en,reFr:portalApostropheRegex(fr),reEn:portalApostropheRegex(en)}));
 
 function portalTranslateText(raw){
