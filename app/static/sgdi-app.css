@@ -3348,7 +3348,7 @@ table{width:100%;max-width:100%}
   .site-tech-identity-field strong{font-size:17px}
   .site-tech-identity-site strong{font-size:15px}
 }
-.comm-modern-dashboard{color:#10233e}
+.comm-modern-dashboard{display:flex!important;flex-direction:column!important;width:100%;color:#10233e}
 .comm-modern-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:20px}
 .comm-modern-eyebrow{margin-bottom:5px;color:#1a5d96;font-size:10px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}
 .comm-modern-head h1{margin:0;color:#10233e;font-size:27px;font-weight:900;letter-spacing:-.025em}
