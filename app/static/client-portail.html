@@ -688,14 +688,6 @@ function applyPortalLanguage(root){
   });
 }
 
-let portalLangApplying=false;
-const portalLangObserver=new MutationObserver(()=>{
-  if(portalLangApplying)return;
-  portalLangApplying=true;
-  applyPortalLanguage(document.body);
-  portalLangApplying=false;
-});
-portalLangObserver.observe(document.body,{childList:true,subtree:true,characterData:true});
 applyPortalLanguage(document.body);
 
 // "Mémoriser cette session" : localStorage (survit à la fermeture du navigateur) si coché,
