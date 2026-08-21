@@ -28614,6 +28614,10 @@ async function renderCommClientsServer(view,options={}){
     const list=serverItems(result).map(clientFromApi);
     list.forEach(c=>sgdiUpsertServerItem("clients",c));
     if(!document.body.contains(view)||!String(location.hash||"").startsWith("#/commercial/clients"))return;
+    // La requête de liste peut se terminer après l'ouverture de l'éditeur client.
+    // Dans ce cas sa réponse est devenue obsolète : ne jamais remplacer le formulaire
+    // (et les valeurs déjà saisies) par la liste reçue en arrière-plan.
+    if(view.querySelector("form[data-client-editor='1']"))return;
     const _factReadOnly=session?.transverse==="facmod"||session?.transverse==="facturation";
     view.innerHTML=`<div class="clients-panel">
     <div class="clients-panel-header">
@@ -28625,7 +28629,11 @@ async function renderCommClientsServer(view,options={}){
     </div>
     ${commTabs("clients")}
     <div class="clients-table-wrap">${list.length===0?clientsEmptyStateHTML(!_factReadOnly):`<table id="clients-table"><thead><tr>${[["nom","Nom"],["prestation","Prestation fournie"],["contact","Contact"],["tel","Tel"],["wilaya","Wilaya"],["nbrsite","Nbr site","center"],["nbr","Total eff.","center"],["montant","Montant TTC","right"],["fin","Fin contrat"],["statut","Statut"]].map(([col,label,align])=>`<th style="cursor:pointer;user-select:none;white-space:nowrap${align?";text-align:"+align:""}" onclick="clientTableSort('${col}')" id="clients-th-${col}">${label} <span id="clients-sort-${col}" style="font-size:10px;color:#94a3b8"></span></th>`).join("")}<th style="width:56px;text-align:center">Actions</th></tr></thead><tbody id="clients-tbody">${list.map(c=>{const d=c.dateFinContrat?daysBetween(today(),c.dateFinContrat):null;const alert=d!==null&&d<=30;const finCell=c.dateFinContrat?`<span class="pill ${d<0?"pill-red":d<=30?"pill-amber":"pill-green"}">${formatDate(c.dateFinContrat)}${d<0?" · expiré":d<=30?" · J-"+d:""}</span>`:"—";const ttc=clientMontantTTC(c);const montantCell=ttc>0?formatDZD(ttc):"—";const totalEffectif=clientTotalEffectif(c);const nbrSite=clientNbrSites(c);return `<tr data-searchable data-nom="${escapeHTML(c.nom||"").toLowerCase()}" data-prestation="${escapeHTML((c.prestationsServices||"").split("\n")[0]||"").toLowerCase()}" data-contact="${escapeHTML(c.contact||"").toLowerCase()}" data-tel="${escapeHTML(c.tel||"").toLowerCase()}" data-wilaya="${escapeHTML(c.wilaya||"").toLowerCase()}" data-nbr="${totalEffectif}" data-nbrsite="${nbrSite}" data-montant="${ttc}" data-fin="${c.dateFinContrat||""}" data-statut="${escapeHTML(c.statut||"").toLowerCase()}" style="${alert?"background:#fff7ed;":""}cursor:pointer" onclick="openClientModal('${c.id}',${_factReadOnly})" ><td class="font-semibold" style="color:#1d4ed8">${escapeHTML(c.nom||"")}</td><td class="text-xs">${escapeHTML((c.prestationsServices||"").split("\n")[0]||"—")}</td><td class="text-xs">${escapeHTML(c.contact||"")}</td><td class="text-xs">${escapeHTML(c.tel||"")}</td><td class="text-xs">${escapeHTML(c.wilaya||"—")}</td><td class="font-bold" style="text-align:center">${nbrSite}</td><td class="font-bold" style="text-align:center;color:#043970">${totalEffectif}</td><td class="text-xs font-mono" style="white-space:nowrap;text-align:right;padding-right:16px">${escapeHTML(montantCell)}</td><td class="text-xs">${finCell}</td><td><span class="pill ${c.statut==="actif"?"pill-green":"pill-gray"}">${safe(c.statut)}</span></td><td style="text-align:center"><button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();sgdiClientRowMenu(this,'${jsString(c.id)}')">⋯</button></td></tr>`}).join("")}</tbody></table>`}</div>${sgdiServerPaginationHTML("comm-clients",soc||"all",result)}</div>`;
-  }catch(e){console.warn("Clients serveur indisponibles",e);window.__sgdiCommClientsLocalFallback=true;renderCommClients(view)}
+  }catch(e){
+    console.warn("Clients serveur indisponibles",e);
+    window.__sgdiCommClientsLocalFallback=true;
+    if(!view.querySelector("form[data-client-editor='1']"))renderCommClients(view);
+  }
 }
 function renderCommClients(view){
   const refreshFromServer=!!sgdiAuthToken()&&!window.__sgdiCommClientsLocalFallback;
@@ -29496,7 +29504,7 @@ function openClientModal(id,readOnly=false){
     </div>
   `)+`</div>`;
   const view=document.getElementById("view");
-  view.innerHTML=`<form data-no-critical-auth="1" data-client-id="${escapeHTML(c?.id||id||"")}" data-client-backend-id="${escapeHTML(c?.backendId||"")}" onsubmit="event.preventDefault();confirmClient('${id||""}')">
+  view.innerHTML=`<form data-client-editor="1" data-no-critical-auth="1" data-client-id="${escapeHTML(c?.id||id||"")}" data-client-backend-id="${escapeHTML(c?.backendId||"")}" onsubmit="event.preventDefault();confirmClient('${id||""}')">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e2e8f0">
       <h2 style="font-size:18px;font-weight:800;color:#0f2d5a;margin:0">${isEdit?"CLIENT : "+escapeHTML((c?.nom||"").toUpperCase()):"Nouveau client"}</h2>
       ${isEdit?`<div style="display:flex;align-items:center;gap:8px">
