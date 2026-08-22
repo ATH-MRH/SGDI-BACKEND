@@ -6708,7 +6708,7 @@ function renderSidebar(){
         {label:"MESSAGERIE",route:"secretariat/messagerie",group:"SUIVI"},
         {label:"ARCHIVES",route:"secretariat/archives",group:"SUIVI"},
         {label:"HISTORIQUE",route:"secretariat/historique",group:"SUIVI"}
-      ],
+      ].filter(item=>secretariatCanAccess(item.route.split("/")[1]||"dashboard")),
       agenda:[
         {label:"TABLEAU DE BORD",route:"agenda/dashboard",group:"PILOTAGE"},
         {label:"LISTE",route:"agenda/liste",group:"PLANNING"},
@@ -33073,7 +33073,7 @@ const ADMIN_MODULES=[
   "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement",
   "facturation","facturation/missions","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
   "commercial","commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats",
-  "secretariat","secretariat/courriers","secretariat/notes","secretariat/archives","agenda","agenda/liste","agenda/semaine","agenda/rappels",
+  "secretariat","secretariat/courriers","secretariat/parapheur","secretariat/missions","secretariat/agenda","secretariat/reunions","secretariat/decisions","secretariat/documents","secretariat/messagerie","secretariat/archives","secretariat/historique","agenda","agenda/liste","agenda/semaine","agenda/rappels",
   "pointage","pointage/recap","pointage/societe","pointage/stats","pointage/legende",
   "superviseur","superviseur/dashboard",
   "ops","ops/missions","ops/mouvements","ops/supervision","ops/qr","portail","parametres","admin"
@@ -33129,7 +33129,7 @@ function adminModuleHostKey(key){
   if(lower.startsWith("agenda/"))return"agenda";
   return lower;
 }
-function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","SUPERVISEUR":"superviseur/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","AGENDA":"agenda/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard","commercial/devis":"commercial/devis",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/notes":"secretariat/notes","secretariat/archives":"secretariat/archives",agenda:"agenda/dashboard","agenda/liste":"agenda/liste","agenda/semaine":"agenda/semaine","agenda/rappels":"agenda/rappels","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",superviseur:"superviseur/dashboard","superviseur/dashboard":"superviseur/dashboard",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
+function adminModuleRoute(module){return({"DRH":"drh/dashboard","OPS":"ops/dashboard","SUPERVISEUR":"superviseur/dashboard","MATERIEL/EQUIP":"materiel/dashboard","FINANCES/COMPTA":"facturation/dashboard","PAIE":"paie/dashboard","COMMERCIAL":"commercial/dashboard","SECRETARIAT GÉNÉRAL":"secretariat/dashboard","AGENDA":"agenda/dashboard","POINTAGE":"pointage/dashboard","PORTAIL RH":"portail","ADMINISTRATEUR GÉNÉRAL":"admin/dashboard","ADMINISTRATION SYSTEME":"admin/dashboard",dashboard:"dashboard",dossiers:"dossiers",recrutement:"recrutement",reserve:"reserve",candidats_archives:"candidats_archives","drh/social":"drh/social",demandes_personnel:"demandes_personnel/dashboard",demandes_structure:"demandes_structure/dashboard",contrats:"contrats/situation",a_contractualiser:"contrats/a_contractualiser",effectif:"effectif",agents:"agents",fiches:"fiches",badge:"badge",sites:"sites/actifs",incidents:"incidents/site",conges:"conges",paie:"paie/dashboard",rapports:"rapports",materiel:"materiel/dashboard","materiel/articles":"materiel/articles","materiel/magasins":"materiel/magasins","materiel/fournisseurs":"materiel/fournisseurs","materiel/dotation":"materiel/dotation","materiel/sites-dotation":"materiel/sites-dotation","materiel/reversement":"materiel/reversement",facturation:"facturation/dashboard","facturation/factures":"facturation/factures","facturation/paiements":"facturation/paiements","facturation/avances":"facturation/avances","facturation/avoirs":"facturation/avoirs","facturation/caisse":"facturation/caisse","facturation/situation":"facturation/situation",commercial:"commercial/dashboard","commercial/devis":"commercial/devis",secretariat:"secretariat/dashboard","secretariat/courriers":"secretariat/courriers","secretariat/parapheur":"secretariat/parapheur","secretariat/missions":"secretariat/missions","secretariat/agenda":"secretariat/agenda","secretariat/reunions":"secretariat/reunions","secretariat/decisions":"secretariat/decisions","secretariat/documents":"secretariat/documents","secretariat/messagerie":"secretariat/messagerie","secretariat/archives":"secretariat/archives","secretariat/historique":"secretariat/historique",agenda:"agenda/dashboard","agenda/liste":"agenda/liste","agenda/semaine":"agenda/semaine","agenda/rappels":"agenda/rappels","commercial/prospects":"commercial/prospects","commercial/clients":"commercial/clients","commercial/opportunites":"commercial/opportunites","commercial/visites":"commercial/visites","commercial/catalogue":"commercial/catalogue","commercial/tarifs":"commercial/tarifs","commercial/stats":"commercial/stats",pointage:"pointage/dashboard","pointage/recap":"pointage/recap","pointage/societe":"pointage/societe","pointage/stats":"pointage/stats","pointage/legende":"pointage/legende",superviseur:"superviseur/dashboard","superviseur/dashboard":"superviseur/dashboard",ops:"ops/dashboard","ops/missions":"ops/missions","ops/mouvements":"ops/mouvements","ops/supervision":"ops/supervision",portail:"portail",parametres:"parametres",admin:"admin/dashboard"}[module]||module)}
 function adminAccessModuleLabel(module){
   const labels={
     "DRH":"DRH","OPS":"OPS","SUPERVISEUR":"Superviseur terrain","MATERIEL/EQUIP":"Matériel / équipement","FINANCES/COMPTA":"Finances / comptabilité","PAIE":"Paie","COMMERCIAL":"Commercial","SECRETARIAT GÉNÉRAL":"Secrétariat général","AGENDA":"Agenda","POINTAGE":"Pointage","PORTAIL RH":"Portail RH","ADMINISTRATEUR GÉNÉRAL":"Administrateur général",
@@ -33138,7 +33138,7 @@ function adminAccessModuleLabel(module){
     materiel:"Tableau de bord matériel","materiel/articles":"Articles","materiel/magasins":"Magasins","materiel/fournisseurs":"Fournisseurs","materiel/alertes":"Alertes stock","materiel/dotation":"Dotation employés","materiel/sites-dotation":"Dotation sites","materiel/reversement":"Reversement",
     facturation:"Tableau de bord finances","commercial/devis":"Devis","facturation/factures":"Factures","facturation/paiements":"Paiements","facturation/avances":"Avances","facturation/avoirs":"Avoirs","facturation/caisse":"Caisse","facturation/situation":"Situation client",
     commercial:"Tableau de bord commercial","commercial/prospects":"Prospects","commercial/clients":"Clients","commercial/opportunites":"Opportunités","commercial/visites":"Visites","commercial/catalogue":"Catalogue","commercial/tarifs":"Tarifs","commercial/stats":"Statistiques commerciales",
-    secretariat:"Tableau de bord secrétariat","secretariat/courriers":"Courriers","secretariat/notes":"Notes","secretariat/archives":"Archives",
+    secretariat:"Tableau de bord secrétariat","secretariat/courriers":"Courrier","secretariat/parapheur":"Parapheur","secretariat/missions":"Ordres de mission","secretariat/agenda":"Agenda SG","secretariat/reunions":"Réunions et PV","secretariat/decisions":"Décisions","secretariat/documents":"Documents officiels","secretariat/messagerie":"Messagerie","secretariat/archives":"Archives","secretariat/historique":"Historique",
     agenda:"Tableau de bord agenda","agenda/liste":"Liste agenda","agenda/semaine":"Vue semaine","agenda/rappels":"Rappels",
     pointage:"Tableau de bord pointage","pointage/recap":"Récapitulatif","pointage/societe":"Récap société","pointage/stats":"Statistiques pointage","pointage/legende":"Légende et codes",
     superviseur:"Tableau de bord superviseur","superviseur/dashboard":"Tableau de bord superviseur",
@@ -33301,6 +33301,19 @@ const ADMIN_LEVEL_SENSITIVE=[
   {key:"messages_history",label:"Historique messagerie"},
   {key:"storage",label:"Nettoyage stockage"}
 ];
+const SECRETARIAT_ACCESS_SECTIONS=[
+  {key:"dashboard",label:"Tableau de bord"},{key:"courriers",label:"Courrier"},{key:"parapheur",label:"Parapheur"},{key:"missions",label:"Ordres de mission"},{key:"agenda",label:"Agenda"},{key:"reunions",label:"Réunions et PV"},{key:"decisions",label:"Décisions"},{key:"documents",label:"Documents officiels"},{key:"messagerie",label:"Messagerie"},{key:"archives",label:"Archives"},{key:"historique",label:"Historique"}
+];
+function secretariatAccessLevel(){return accessLevelRecord((typeof currentUserRecord==="function"?currentUserRecord()?.niveau:"")||session?.niveau||"")}
+function secretariatCanAccess(section,action="read"){
+  if(isAdminGeneralSession()||isAdminSystemSession())return true;
+  const level=secretariatAccessLevel();
+  if(!level)return true;
+  const sections=Array.isArray(level.secretariatSections)?level.secretariatSections:[];
+  if(sections.length&&!sections.includes(section))return false;
+  const actions=Array.isArray(level.actions)?level.actions:[];
+  return !actions.length||actions.includes(action)||(action==="read"&&actions.some(a=>["create","update","validate","admin"].includes(a)));
+}
 function accessLevelRecord(code){return ensureNiveauxAcces().find(n=>String(n.code||"")===String(code||""))||null}
 function normalizeAdminLevelList(value,allowed){
   const list=Array.isArray(value)?value:[];
@@ -33319,6 +33332,9 @@ function defaultNiveauxAcces(){
     {code:"H2",label:"H2 - Saisie",description:"Créer et modifier les données courantes sans validation finale.",weight:3,color:"#043970"},
     {code:"H3",label:"H3 - Validation",description:"Valider les formulaires, sections, pointages et opérations métier.",weight:6,color:"#ca8a04"},
     {code:"SUP_TERRAIN",label:"Superviseur terrain",description:"Accès terrain limité aux sites autorisés : feuille pointage, personnel rattaché, fiches et sites en lecture.",weight:4,color:"#0f766e",roles:["dispatch"],modules:["superviseur","pointage","fiches","agents","effectif","sites"],structures:["superviseur"],actions:["read","update"]},
+    {code:"SEC_CONSULT",label:"SG - Consultation",description:"Lecture uniquement de toutes les rubriques du Secrétariat Général.",weight:2,color:"#64748b",roles:["agent","dispatch","ops"],modules:["secretariat"],structures:["secretariat"],actions:["read"],secretariatSections:SECRETARIAT_ACCESS_SECTIONS.map(x=>x.key)},
+    {code:"SEC_GESTION",label:"SG - Gestionnaire",description:"Création, correction, transmission, impression et archivage des dossiers SG.",weight:5,color:"#0f766e",roles:["dispatch","ops"],modules:["secretariat"],structures:["secretariat"],actions:["read","create","update","export"],secretariatSections:SECRETARIAT_ACCESS_SECTIONS.map(x=>x.key)},
+    {code:"SEC_RESP",label:"SG - Responsable",description:"Responsable habilité à valider les ordres de mission, documents officiels et décisions.",weight:8,color:"#7c3aed",roles:["ops","ADM"],modules:["secretariat"],structures:["secretariat"],actions:["read","create","update","validate","export"],secretariatSections:SECRETARIAT_ACCESS_SECTIONS.map(x=>x.key)},
     {code:"H4",label:"H4 - Supervision",description:"Superviser une structure, corriger, déverrouiller et contrôler les données.",weight:8,color:"#7c3aed"},
     {code:"CADRE_CAT_01",label:"Cadre cat 01",description:"Cadre habilité à basculer d'une société vers les autres structures depuis le bandeau société.",weight:9,color:"#0360a8"},
     {code:"H5",label:"H5 - Administration système",description:"Accès complet aux utilisateurs, droits, paramètres et habilitations.",weight:10,color:"#dc2626"}
@@ -35380,6 +35396,7 @@ function renderAdminDroits(view){
       </div>
     </div>
     <div class="card px-3 py-1.5 mb-2 bg-amber-50 border border-amber-200 text-xs text-amber-900">À utiliser uniquement pour corriger une exception rôle × module (la config normale reste dans les profils). <b>Défaut</b> = règle standard, <b>Exception</b> = règle enregistrée en base.</div>
+    <div class="card p-4 mb-2" style="border-left:4px solid #0f766e"><div class="flex items-center justify-between gap-3 flex-wrap"><div><div class="font-black">Secrétariat Général — profils prêts à l’emploi</div><div class="text-xs text-slate-500 mt-1">SEC_CONSULT : lecture · SEC_GESTION : création et traitement · SEC_RESP : validation officielle. Les 11 rubriques sont configurables dans chaque profil.</div></div><button class="btn btn-primary" onclick="navigate('admin/niveaux')">Configurer les profils SG</button></div></div>
     <div class="card p-2 mb-2 admin-access-toolbar">
       <input id="admin-right-search" class="input" placeholder="Rechercher un module, code ou groupe..." oninput="adminFilterDroitsTable()"/>
       <label class="admin-access-filter"><input id="admin-right-only-exceptions" type="checkbox" onchange="adminFilterDroitsTable()"/> Exceptions seulement</label>
@@ -35572,6 +35589,7 @@ function openAdminNiveauModal(code){
   const societes=normalizeAdminLevelList(n.societes,SOCIETES);
   const structures=normalizeAdminLevelList(n.structures,ADMIN_STRUCTURES.map(s=>s.key));
   const sensitive=normalizeAdminLevelList(n.sensitive,ADMIN_LEVEL_SENSITIVE.map(s=>s.key));
+  const secretariatSections=normalizeAdminLevelList(n.secretariatSections,SECRETARIAT_ACCESS_SECTIONS.map(s=>s.key));
   openModal(`<h3 class="font-bold text-lg mb-1">${isNew?"Nouveau profil d'accès":"Configurer le profil"}</h3>
     <p class="text-sm text-slate-500 mb-4">Définissez ce que les utilisateurs de ce profil peuvent voir et faire.</p>
     <form onsubmit="event.preventDefault();confirmAdminNiveau('${n.code||''}')" class="space-y-4">
@@ -35590,6 +35608,7 @@ function openAdminNiveauModal(code){
       </div>
       <div class="card p-3 bg-slate-50"><div class="font-black mb-2">5. Actions prévues</div><div class="text-xs text-slate-500 mb-2">Référentiel lisible du profil. Les modules cochés restent le verrou principal appliqué par l'application.</div>${adminNiveauCheckGrid("actions",ADMIN_LEVEL_ACTIONS,actions,4)}</div>
       <div class="card p-3 bg-slate-50"><div class="font-black mb-2">6. Droits sensibles</div>${adminNiveauCheckGrid("sensitive",ADMIN_LEVEL_SENSITIVE,sensitive,2)}</div>
+      <div class="card p-3" style="background:#f0fdfa;border-color:#99f6e4"><div class="font-black mb-1">7. Rubriques du Secrétariat Général</div><div class="text-xs text-slate-500 mb-2">Utilisé pour les comptes SECxx. Le droit « Valider » reste obligatoire pour valider officiellement un ordre de mission.</div>${adminNiveauCheckGrid("secretariatSections",SECRETARIAT_ACCESS_SECTIONS,secretariatSections,3)}</div>
       <div class="flex justify-end gap-2 pt-2"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer le profil</button></div>
     </form>`);
 }
@@ -35613,6 +35632,7 @@ function confirmAdminNiveau(originalCode){
     structures:normalizeAdminLevelList(fd.getAll("structures"),ADMIN_STRUCTURES.map(s=>s.key)),
     actions:normalizeAdminLevelList(fd.getAll("actions"),ADMIN_LEVEL_ACTIONS.map(a=>a.key)),
     sensitive:normalizeAdminLevelList(fd.getAll("sensitive"),ADMIN_LEVEL_SENSITIVE.map(s=>s.key)),
+    secretariatSections:normalizeAdminLevelList(fd.getAll("secretariatSections"),SECRETARIAT_ACCESS_SECTIONS.map(s=>s.key)),
     updatedAt:new Date().toISOString(),
     updatedBy:session?session.username:"system"
   };
@@ -36015,6 +36035,8 @@ function secretariatScopedItems(list){
 }
 function renderSecretariat(view,sub,arg){
   if(!canAccess("secretariat")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
+  const accessSection=sub||"dashboard";
+  if(!secretariatCanAccess(accessSection,"read")){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès SG non autorisé</h2><p class="text-slate-600">Cette rubrique n’est pas activée dans votre profil d’accès. Contactez l’Administration système.</p></div>`;return}
   if(!db.secretariatCourriers)db.secretariatCourriers=[];
   if(!db.secretariatNotes)db.secretariatNotes=[];
   const soc=currentStructureSocieteFilter();
@@ -36038,7 +36060,7 @@ function renderSecretariat(view,sub,arg){
   if(sub==="messagerie")return renderDemandesStructure(view,"dashboard",arg);
   if(sub==="historique")return renderSecretariatHistory(view);
   if(sub==="archives")return renderSecretariatList(view,"Archives",archives);
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SECRÉTARIAT GÉNÉRAL</h1><p class="text-sm text-slate-500">Circulation, contrôle, validation et archivage des documents officiels${soc?` · ${escapeHTML(soc)}`:""}.</p></div><button class="btn btn-secondary" onclick="openSecretariatCourrierModal()">＋ Nouveau courrier</button></div>
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SECRÉTARIAT GÉNÉRAL</h1><p class="text-sm text-slate-500">Circulation, contrôle, validation et archivage des documents officiels${soc?` · ${escapeHTML(soc)}`:""}.</p></div>${secretariatCanAccess("courriers","create")?`<button class="btn btn-secondary" onclick="openSecretariatCourrierModal()">＋ Nouveau courrier</button>`:""}</div>
   <div class="grid grid-4 gap-3 mb-5">${card("À traiter",ouverts.length,"secretariat/courriers","#f59e0b")}${card("Parapheur",missionsPending.length+ouverts.length,"secretariat/parapheur","#7c3aed")}${card("Ordres de mission",missionsPending.length,"secretariat/missions","#043970")}${card("Décisions en cours",decisions.filter(d=>d.statut!=="cloturee").length,"secretariat/decisions","#0f766e")}</div>
   <div class="grid grid-2 gap-4"><div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Derniers courriers</h3><span class="pill">${courriers.length} élément(s)</span></div>${secretariatTableHTML(courriers.slice(0,6))}</div><div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Échéances institutionnelles</h3><span class="pill pill-blue">${reunions.length} réunion(s)</span></div>${reunions.length?reunions.slice(0,6).map(r=>`<div style="padding:10px 0;border-bottom:1px solid #e2e8f0"><b>${escapeHTML(r.objet||"Réunion")}</b><div class="text-xs text-slate-500">${formatDate(r.date)} · ${escapeHTML(r.lieu||"Lieu à préciser")}</div></div>`).join(""):`<div class="text-sm text-slate-400 p-5 text-center">Aucune réunion programmée.</div>`}</div></div>`;
 }
@@ -36051,7 +36073,7 @@ function renderSecretariatParapheur(view,missions,courriers){
   view.innerHTML=secretariatPageHeader("Parapheur électronique","Documents à vérifier, valider, signer ou retourner.")+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Type</th><th>Référence</th><th>Objet</th><th>Reçu le</th><th>État</th><th></th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td class="font-bold">${escapeHTML(r.type)}</td><td class="font-mono text-xs">${escapeHTML(r.ref||"—")}</td><td>${escapeHTML(r.objet||"—")}</td><td class="text-xs">${formatDate(r.date)}</td><td><span class="pill pill-amber">${escapeHTML(r.status)}</span></td><td>${r.action}</td></tr>`).join(""):`<tr><td colspan="6" class="p-8 text-center text-slate-400">Parapheur à jour.</td></tr>`}</tbody></table></div>`;
 }
 function renderSecretariatMissions(view,missions){
-  view.innerHTML=secretariatPageHeader("Ordres de mission","Contrôle SG des ordres préparés et validés par OPS.")+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Référence</th><th>Missionnaire</th><th>Objet / lieu</th><th>Période</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${missions.length?missions.map(m=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(m.numero||"—")}</td><td class="font-bold">${escapeHTML(m.agentName||"À désigner")}</td><td><b>${escapeHTML(m.objet||m.motif||"—")}</b><div class="text-xs text-slate-500">${escapeHTML(m.lieu||"—")}</div></td><td class="text-xs">${formatDate(m.dateDebut)} → ${formatDate(m.dateFin)}</td><td><span class="pill ${m.workflowStatus==="transmise_sg"?"pill-amber":"pill-green"}">${escapeHTML(dcMissionStatusLabel(m))}</span></td><td><div class="flex gap-2 flex-wrap"><button class="btn btn-ghost text-xs" onclick="secretariatPrintMission('${escapeHTML(m.id)}')">Aperçu</button>${m.workflowStatus==="transmise_sg"?`<button class="btn btn-primary text-xs" onclick="secretariatValidateMission('${escapeHTML(m.id)}')">Valider SG</button>`:""}</div></td></tr>`).join(""):`<tr><td colspan="6" class="p-8 text-center text-slate-400">Aucun ordre de mission transmis par OPS.</td></tr>`}</tbody></table></div>`;
+  view.innerHTML=secretariatPageHeader("Ordres de mission","Contrôle SG des ordres préparés et validés par OPS.")+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Référence</th><th>Missionnaire</th><th>Objet / lieu</th><th>Période</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${missions.length?missions.map(m=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(m.numero||"—")}</td><td class="font-bold">${escapeHTML(m.agentName||"À désigner")}</td><td><b>${escapeHTML(m.objet||m.motif||"—")}</b><div class="text-xs text-slate-500">${escapeHTML(m.lieu||"—")}</div></td><td class="text-xs">${formatDate(m.dateDebut)} → ${formatDate(m.dateFin)}</td><td><span class="pill ${m.workflowStatus==="transmise_sg"?"pill-amber":"pill-green"}">${escapeHTML(dcMissionStatusLabel(m))}</span></td><td><div class="flex gap-2 flex-wrap"><button class="btn btn-ghost text-xs" onclick="secretariatPrintMission('${escapeHTML(m.id)}')">Aperçu</button>${m.workflowStatus==="transmise_sg"&&secretariatCanAccess("missions","validate")?`<button class="btn btn-primary text-xs" onclick="secretariatValidateMission('${escapeHTML(m.id)}')">Valider SG</button>`:""}</div></td></tr>`).join(""):`<tr><td colspan="6" class="p-8 text-center text-slate-400">Aucun ordre de mission transmis par OPS.</td></tr>`}</tbody></table></div>`;
 }
 function secretariatPrintMission(id){
   const mission=(db.missions||[]).find(m=>String(m.id)===String(id));if(!mission)return;
@@ -36059,6 +36081,7 @@ function secretariatPrintMission(id){
   popup.document.write(typeof opsMissionDocumentHTML==="function"?opsMissionDocumentHTML(mission):`<h1>${escapeHTML(mission.numero||"Ordre de mission")}</h1>`);popup.document.close();
 }
 async function secretariatValidateMission(id){
+  if(!secretariatCanAccess("missions","validate")){toast("Validation réservée au profil Responsable SG","error");return}
   const mission=(db.missions||[]).find(m=>String(m.id)===String(id));if(!mission||mission.workflowStatus!=="transmise_sg")return;
   if(!confirm("Valider cet ordre de mission et le transmettre à Finance / Caisse ?"))return;
   const now=new Date().toISOString(),updated={...mission,workflowStatus:"validee_sg",sgValidatedAt:now,sgValidatedBy:session?.username||"SG",updatedAt:now,audit:[...(mission.audit||[]),{action:"Ordre de mission contrôlé et validé par SG",at:now,by:session?.username||"SG"}]};
@@ -36074,10 +36097,12 @@ function renderSecretariatList(view,title,items){
 }
 function renderSecretariatRegistry(view,title,items,type){
   const isDecision=type==="decision";
-  view.innerHTML=secretariatPageHeader(title,isDecision?"Suivi des décisions, responsables et échéances.":"Planification des réunions, ordres du jour et procès-verbaux.",`<button class="btn btn-primary" onclick="openSecretariatRegistryModal('${type}')">＋ ${isDecision?"Nouvelle décision":"Nouvelle réunion"}</button>`)+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Référence</th><th>${isDecision?"Décision":"Objet"}</th><th>${isDecision?"Responsable":"Date / lieu"}</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>${items.length?items.map(item=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(item.ref||"—")}</td><td class="font-bold">${escapeHTML(item.objet||"—")}</td><td>${escapeHTML(isDecision?(item.responsable||"—"):(`${formatDate(item.date)} · ${item.lieu||"—"}`))}</td><td class="text-xs">${formatDate(item.echeance||item.date)}</td><td><span class="pill pill-blue">${escapeHTML(item.statut||"planifiee")}</span></td></tr>`).join(""):`<tr><td colspan="5" class="p-8 text-center text-slate-400">Aucun élément enregistré.</td></tr>`}</tbody></table></div>`;
+  const section=isDecision?"decisions":"reunions",action=secretariatCanAccess(section,"create")?`<button class="btn btn-primary" onclick="openSecretariatRegistryModal('${type}')">＋ ${isDecision?"Nouvelle décision":"Nouvelle réunion"}</button>`:"";
+  view.innerHTML=secretariatPageHeader(title,isDecision?"Suivi des décisions, responsables et échéances.":"Planification des réunions, ordres du jour et procès-verbaux.",action)+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Référence</th><th>${isDecision?"Décision":"Objet"}</th><th>${isDecision?"Responsable":"Date / lieu"}</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>${items.length?items.map(item=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(item.ref||"—")}</td><td class="font-bold">${escapeHTML(item.objet||"—")}</td><td>${escapeHTML(isDecision?(item.responsable||"—"):(`${formatDate(item.date)} · ${item.lieu||"—"}`))}</td><td class="text-xs">${formatDate(item.echeance||item.date)}</td><td><span class="pill pill-blue">${escapeHTML(item.statut||"planifiee")}</span></td></tr>`).join(""):`<tr><td colspan="5" class="p-8 text-center text-slate-400">Aucun élément enregistré.</td></tr>`}</tbody></table></div>`;
 }
 function openSecretariatRegistryModal(type){
   const isDecision=type==="decision",prefix=isDecision?"DEC":"PV";
+  if(!secretariatCanAccess(isDecision?"decisions":"reunions","create")){toast("Création non autorisée par votre profil SG","error");return}
   openModal(`<h3 class="font-bold text-lg mb-3">${isDecision?"Nouvelle décision":"Nouvelle réunion"}</h3><form onsubmit="event.preventDefault();saveSecretariatRegistry(this,'${type}')"><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="label">Référence</label><input class="input" name="ref" value="${prefix}-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000+1000))}"/></div><div><label class="label">Date</label><input class="input" type="date" name="date" value="${today()}"/></div><div class="md:col-span-2"><label class="label">${isDecision?"Décision":"Objet de la réunion"}</label><input class="input" name="objet" required/></div><div><label class="label">${isDecision?"Responsable d’exécution":"Lieu"}</label><input class="input" name="responsable"/></div><div><label class="label">Échéance</label><input class="input" type="date" name="echeance"/></div><div class="md:col-span-2"><label class="label">${isDecision?"Instructions":"Ordre du jour / procès-verbal"}</label><textarea class="input" name="details" rows="4"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
 }
 async function saveSecretariatRegistry(form,type){
@@ -36092,6 +36117,7 @@ function renderSecretariatHistory(view){
 }
 window.secretariatPrintMission=secretariatPrintMission;window.secretariatValidateMission=secretariatValidateMission;window.openSecretariatRegistryModal=openSecretariatRegistryModal;window.saveSecretariatRegistry=saveSecretariatRegistry;
 function openSecretariatCourrierModal(){
+  if(!secretariatCanAccess("courriers","create")){toast("Création de courrier non autorisée par votre profil SG","error");return}
   openModal(`<h3 class="font-bold text-lg mb-3">Nouveau courrier</h3><form onsubmit="event.preventDefault();saveSecretariatCourrier(this)"><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="label">Référence</label><input class="input" name="ref" value="SEC-${new Date().toISOString().slice(0,10).replaceAll('-','')}-${Math.floor(Math.random()*9000+1000)}"/></div><div><label class="label">Date</label><input class="input" type="date" name="date" value="${today()}"/></div><div class="md:col-span-2"><label class="label">Objet</label><input class="input" name="objet" required/></div><div class="md:col-span-2"><label class="label">Origine / Destinataire</label><input class="input" name="tiers"/></div><div class="md:col-span-2"><label class="label">Observation</label><textarea class="input" name="note" rows="3"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
 }
 async function saveSecretariatCourrier(form){
