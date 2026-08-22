@@ -28968,52 +28968,31 @@ function techCalcTotalEffectif(si,pfx='ts'){
   if(pfx==='ts')techRecapUpdate();
   clientSiteFieldChanged(pfx);
 }
-function techPosteRowHTML(si,pfx,nom,nbr,salaire){
+function techPosteRowReadOnlyHTML(nom,nbr,salaire){
   const n=parseInt(nbr)||0;const s=parseFloat(salaire)||0;const tot=n*s;
-  const IS="border:1px solid #e2e8f0;border-radius:4px;padding:6px 8px;font-size:12px;background:#fff;width:100%;box-sizing:border-box;outline:none";
   return`<tr>`
     +`<td style="padding:7px 10px;border:1px solid #e2e8f0;font-size:13px;font-weight:600">${escapeHTML(nom)}</td>`
-    +`<td style="padding:4px 6px;border:1px solid #e2e8f0;width:160px"><input type="text" class="poste-sal input" value="${s>0?formatDZD(s):''}" style="${IS};text-align:right" placeholder="0,00 DZD" onfocus="const v=parseDZD(this.value);this.value=v>0?v:''" onblur="const v=parseDZD(this.value);this.value=v>0?formatDZD(v):'';techPosteCalcRow(this.closest('tr'),${si},'${pfx}')" oninput="techPosteCalcRow(this.closest('tr'),${si},'${pfx}')"/></td>`
-    +`<td style="padding:4px 6px;border:1px solid #e2e8f0;width:90px"><input type="number" min="0" step="1" class="poste-nbr input" value="${n||''}" style="${IS};text-align:center" placeholder="0" oninput="techPosteCalcRow(this.closest('tr'),${si},'${pfx}')"/></td>`
-    +`<td class="poste-row-total" style="padding:7px 10px;border:1px solid #e2e8f0;width:160px;text-align:right;font-weight:700;color:#043970">${tot>0?formatDZD(tot):'—'}</td>`
-    +`<td style="border:1px solid #e2e8f0;padding:4px;text-align:center;width:36px"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="techPosteRemove(this,${si},'${pfx}')">✕</button></td>`
+    +`<td style="padding:7px 10px;border:1px solid #e2e8f0;width:160px;text-align:right;color:#64748b">${s>0?formatDZD(s):'—'}</td>`
+    +`<td style="padding:7px 10px;border:1px solid #e2e8f0;width:90px;text-align:center;color:#64748b">${n||'—'}</td>`
+    +`<td style="padding:7px 10px;border:1px solid #e2e8f0;width:160px;text-align:right;font-weight:700;color:#043970">${tot>0?formatDZD(tot):'—'}</td>`
     +`</tr>`;
 }
-function techPosteAdd(si,pfx){
-  const sel=document.getElementById(pfx+'-'+si+'-poste-sel');
-  const nom=(sel?.value||'').trim();
-  if(!nom){toast('Saisissez un poste ou une fonction','error');return;}
-  const tbody=document.getElementById(pfx+'-'+si+'-postes-body');if(!tbody)return;
-  if(Array.from(tbody.querySelectorAll('td:first-child')).some(td=>td.textContent.trim()===nom.trim())){toast('Ce poste est déjà dans la liste','error');return;}
-  tbody.insertAdjacentHTML('beforeend',techPosteRowHTML(si,pfx,nom,0,0));
-  if(sel)sel.value='';
-  techPosteCalcTotals(si,pfx);techPostesSyncJSON(si,pfx);
-}
-function techPosteRemove(btn,si,pfx){
-  btn.closest('tr')?.remove();techPosteCalcTotals(si,pfx);techPostesSyncJSON(si,pfx);
-}
-function techPosteCalcRow(tr,si,pfx){
-  const sal=parseDZD(tr.querySelector('.poste-sal')?.value||'0');
-  const nbr=parseInt(tr.querySelector('.poste-nbr')?.value)||0;
-  const t=tr.querySelector('.poste-row-total');if(t)t.textContent=sal*nbr>0?formatDZD(sal*nbr):'—';
-  techPosteCalcTotals(si,pfx);techPostesSyncJSON(si,pfx);
-}
-function techPosteCalcTotals(si,pfx){
-  const tbody=document.getElementById(pfx+'-'+si+'-postes-body');if(!tbody)return;
-  let total=0,masse=0;
-  tbody.querySelectorAll('tr').forEach(tr=>{
-    const nbr=parseInt(tr.querySelector('.poste-nbr')?.value)||0;
-    const sal=parseDZD(tr.querySelector('.poste-sal')?.value||'0');
-    total+=nbr;masse+=nbr*sal;
-  });
+// Nomenclature des postes est un miroir en lecture seule d'Effectif par site : à chaque
+// changement de désignation/quantité (ou de prix dans le catalogue Effectif global), on
+// régénère la liste des postes et ses totaux à partir des lignes du site.
+function techPostesSyncFromLignes(si,pfx){
+  const lignesHidden=document.getElementById(pfx+'-'+si+'-lignes-json');
+  const hidden=document.getElementById(pfx+'-'+si+'-postes-json');
+  if(!lignesHidden||!hidden)return;
+  let lignes=[];try{lignes=JSON.parse(lignesHidden.value||'[]')}catch(e){}
+  const postes_list=lignes.filter(l=>l.designation).map(l=>({nom:l.designation,nbr:parseFloat(l.qte)||1,salaire:clientCatalogPrice(l.designation)}));
+  hidden.value=JSON.stringify(postes_list);
+  const tbody=document.getElementById(pfx+'-'+si+'-postes-body');
+  if(tbody)tbody.innerHTML=postes_list.map(p=>techPosteRowReadOnlyHTML(p.nom,p.nbr,p.salaire)).join('');
+  const total=postes_list.reduce((acc,p)=>acc+(parseInt(p.nbr)||0),0);
+  const masse=postes_list.reduce((acc,p)=>acc+(parseFloat(p.salaire)||0)*(parseInt(p.nbr)||0),0);
   const totEl=document.getElementById(pfx+'-'+si+'-total');if(totEl)totEl.textContent=total;
   const masEl=document.getElementById(pfx+'-'+si+'-masse-total');if(masEl)masEl.textContent=masse>0?formatDZD(masse):'—';
-}
-function techPostesSyncJSON(si,pfx){
-  const tbody=document.getElementById(pfx+'-'+si+'-postes-body');if(!tbody)return;
-  const list=[...tbody.querySelectorAll('tr')].map(tr=>({nom:tr.querySelector('td:first-child')?.textContent||'',nbr:parseInt(tr.querySelector('.poste-nbr')?.value)||0,salaire:parseDZD(tr.querySelector('.poste-sal')?.value||'0')}));
-  const h=document.getElementById(pfx+'-'+si+'-postes-json');if(h)h.value=JSON.stringify(list);
-  clientSiteFieldChanged(pfx);
 }
 function clientMaterielSync(si,pfx='ts'){
   const tbody=document.getElementById(pfx+"-"+si+"-materiel-body");
@@ -29066,6 +29045,7 @@ function clientSiteLigneSyncHidden(si,pfx='ts'){
   if(!tbody||!hidden)return;
   const lignes=[...tbody.rows].map(tr=>({designation:tr.querySelector("select")?.value||"",qte:parseFloat(tr.querySelector("input[type='number']")?.value)||1}));
   hidden.value=JSON.stringify(lignes);
+  techPostesSyncFromLignes(si,pfx);
   clientSiteFieldChanged(pfx);
 }
 function clientSiteLigneUpdateTotal(si,pfx='ts'){
@@ -29207,16 +29187,13 @@ function techSiteRemove(si,pfx){
 function techSitePanelHTML(si,s,pfx='ts',catalog){
   s=s||{};
   const lbl=(label,field)=>`<label><span>${label}</span>${field}</label>`;
-  const POSTES_SEC=["Security Manager","Superviseur","Chef de site","Chef de groupe","Chef de poste","Chef d'équipe","Agent de Prévention et de Sécurité (APS)","Maître Chien","Agent d'accueil/F","Contrôleur"];
   const materiel=s.materiel||[];
   const g=s.nbrGroupe||0,j=s.nbrJour||0,n=s.nbrNuit||0;
   const teff=clientSiteEffectif(s);
-  // Support ancien format (postes objet) + nouveau format (postes_list tableau)
-  let postes_list=s.postes_list||[];
-  if(!postes_list.length&&s.postes){
-    postes_list=POSTES_SEC.filter(p=>{const k=p.replace(/[^a-zA-Z0-9]/g,"_");return s.postes[k]?.actif&&(s.postes[k]?.nbr>0);}).map(p=>{const k=p.replace(/[^a-zA-Z0-9]/g,"_");return{nom:p,nbr:s.postes[k]?.nbr||0,salaire:s.postes[k]?.salaire||0};});
-  }
-  const posteInitRows=postes_list.map(p=>techPosteRowHTML(si,pfx,p.nom,p.nbr,p.salaire)).join("");
+  // Nomenclature des postes = miroir en lecture seule d'Effectif par site (désignation → poste,
+  // quantité → nombre, prix du catalogue → salaire net).
+  const postes_list=(s.lignesFacturation||[]).filter(l=>l.designation).map(l=>({nom:l.designation,nbr:parseFloat(l.qte)||1,salaire:clientCatalogPrice(l.designation,catalog)}));
+  const posteInitRows=postes_list.map(p=>techPosteRowReadOnlyHTML(p.nom,p.nbr,p.salaire)).join("");
   const posteInitTotal=postes_list.reduce((acc,p)=>acc+(parseInt(p.nbr)||0),0);
   const masseTotale=postes_list.reduce((acc,p)=>acc+(parseFloat(p.salaire)||0)*(parseInt(p.nbr)||0),0);
   const materielRows=materiel.map((m,i)=>`<tr data-idx="${i}"><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(m.designation||"")}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" min="1" step="1" style="width:100%;text-align:center" value="${m.qte||1}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><select class="select" style="width:100%" oninput="clientMaterielSync(${si},'${pfx}')"><option ${(m.etat||"Neuf")==="Neuf"?"selected":""}>Neuf</option><option ${m.etat==="Bon état"?"selected":""}>Bon état</option><option ${m.etat==="Usagé"?"selected":""}>Usagé</option><option ${m.etat==="À remplacer"?"selected":""}>À remplacer</option></select></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%" value="${escapeHTML(m.observations||"")}" placeholder="Observations" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientMaterielRemove(this,${si},'${pfx}')">✕</button></td></tr>`).join("");
@@ -29267,29 +29244,24 @@ function techSitePanelHTML(si,s,pfx='ts',catalog){
     </fieldset>
     <fieldset class="rh-op-box" style="margin-bottom:10px">
       <legend class="rh-op-legend">Nomenclature des postes</legend>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <input id="${pfx}-${si}-poste-sel" class="input" type="text" style="flex:1" placeholder="Saisir librement le poste ou la fonction..." autocomplete="off"/>
-        <button type="button" class="btn btn-primary" style="white-space:nowrap;font-size:12px;font-weight:700;padding:8px 16px" onclick="techPosteAdd(${si},'${pfx}')">+ Ajouter</button>
-      </div>
       <input type="hidden" id="${pfx}-${si}-postes-json" name="${pfx}_${si}_postes_json" value="${escapeHTML(JSON.stringify(postes_list))}"/>
       <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
         <span style="font-size:12px;font-weight:700;color:#043970">Total éléments : <strong id="${pfx}-${si}-total">${posteInitTotal}</strong></span>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:#f1f5f9">
-          <th style="padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;font-weight:700;color:#64748b">Poste</th>
-          <th style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;width:160px;text-align:right">Salaire net</th>
+          <th style="padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;font-weight:700;color:#64748b">Désignation</th>
+          <th style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;width:160px;text-align:right">Salaire net/coût</th>
           <th style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;width:90px;text-align:center">Nombre</th>
           <th style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;width:160px;text-align:right">Total</th>
-          <th style="border:1px solid #e2e8f0;width:36px"></th>
         </tr></thead>
         <tbody id="${pfx}-${si}-postes-body">${posteInitRows}</tbody>
         <tfoot><tr style="background:#eff6ff">
           <td colspan="3" style="padding:7px 10px;border:1px solid #bfdbfe;font-weight:800;color:#043970;text-align:right">Total masse salariale</td>
           <td id="${pfx}-${si}-masse-total" style="padding:7px 10px;border:1px solid #bfdbfe;font-weight:900;color:#043970;text-align:right;font-size:14px">${masseTotale>0?formatDZD(masseTotale):"—"}</td>
-          <td style="border:1px solid #bfdbfe"></td>
         </tr></tfoot>
       </table>
+      <p style="font-size:11px;color:#94a3b8;margin:6px 0 0">Alimenté automatiquement depuis Effectif par site.</p>
       <div style="margin-top:10px">
         <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Autres</label>
         <textarea class="input" name="${pfx}_${si}_postesAutres" rows="2" style="width:100%" placeholder="Postes ou fonctions non listés ci-dessus..." onchange="clientSiteFieldChanged('${pfx}')">${escapeHTML(s.postesAutres||"")}</textarea>
