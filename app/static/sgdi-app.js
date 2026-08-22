@@ -29140,7 +29140,7 @@ function clientSitesRender(pfx,sites){
   if(!container)return;
   const tabsEl=container.querySelector(isContract?".cts-tabs":".ts-tabs");
   const panelsEl=container.querySelector(isContract?".cts-panels":".ts-panels");
-  if(tabsEl)tabsEl.innerHTML=rows.map((_,si)=>techSiteTabBtnHTML(si,pfx,si===0)).join("");
+  if(tabsEl)tabsEl.innerHTML=rows.map((site,si)=>techSiteTabBtnHTML(si,pfx,si===0,site?.denomination)).join("");
   if(panelsEl)panelsEl.innerHTML=rows.length?rows.map((site,si)=>techSitePanelHTML(si,site,pfx)).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Ajoutez un site pour commencer.</p>";
   if(!isContract)techRecapUpdate();
   if(relockContract)clientLockContrat();
@@ -29174,11 +29174,22 @@ function clientSiteAdd(pfx){
   clientSitesResize(pfx,next);
   techSiteTab(next-1,pfx);
 }
-function techSiteTabBtnHTML(si,pfx,active){
+// Reflète en direct la dénomination saisie sur l'onglet du site, sans déclencher le
+// réaffichage complet (qui ferait perdre le focus pendant la frappe).
+function clientSiteTabLabelSync(si,pfx){
+  const tab=document.getElementById(pfx+"-tab-"+si);
+  const label=tab?.querySelector(".client-site-tab-label");
+  if(!label)return;
+  const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
+  const denomination=(form?.querySelector(`[name='${pfx}_${si}_denomination']`)?.value||"").trim();
+  label.textContent=denomination||`Site ${si+1}`;
+}
+function techSiteTabBtnHTML(si,pfx,active,denomination){
   const fn=pfx==='cts'?`ctsSiteTab(${si})`:`techSiteTab(${si})`;
   const bdr=active?'#1d4ed8':'transparent';
   const col=active?'#1d4ed8':'#64748b';
-  return `<button type="button" class="client-site-tab" id="${pfx}-tab-${si}" onclick="${fn}" style="padding:5px 14px;font-size:12px;font-weight:700;background:none;border:none;border-bottom:2px solid ${bdr};color:${col};cursor:pointer;display:inline-flex;align-items:center;gap:4px">Site ${si+1}<span class="client-site-remove" onclick="event.stopPropagation();techSiteRemove(${si},'${pfx}')" style="font-size:10px;color:#94a3b8;font-weight:900;cursor:pointer;margin-left:2px" title="Supprimer">×</span></button>`;
+  const label=(denomination||'').trim()||`Site ${si+1}`;
+  return `<button type="button" class="client-site-tab" id="${pfx}-tab-${si}" onclick="${fn}" style="padding:5px 14px;font-size:12px;font-weight:700;background:none;border:none;border-bottom:2px solid ${bdr};color:${col};cursor:pointer;display:inline-flex;align-items:center;gap:4px"><span class="client-site-tab-label">${escapeHTML(label)}</span><span class="client-site-remove" onclick="event.stopPropagation();techSiteRemove(${si},'${pfx}')" style="font-size:10px;color:#94a3b8;font-weight:900;cursor:pointer;margin-left:2px" title="Supprimer">×</span></button>`;
 }
 function techSiteRemove(si,pfx){
   pfx=pfx||'ts';
@@ -29225,7 +29236,7 @@ function techSitePanelHTML(si,s,pfx='ts',catalog){
   const typesSite=["Industriel","Bancaire / Financier","Commercial / Centre commercial","Résidentiel / Immeuble","Institutionnel / Administratif","Hôtelier","Hospitalier / Médical","Éducatif / Universitaire","Aéroportuaire / Portuaire","Pétrolier / Gazier","Logistique / Entrepôt","Chantier BTP","Site minier","Ambassade / Consulat","Autre"];
   const typeSiteOpts='<option value="">— Sélectionner —</option>'+typesSite.map(t=>'<option value="'+escapeHTML(t)+'"'+(s.typeSite===t?' selected':'')+'>'+escapeHTML(t)+'</option>').join('');
   const identSiteGrid='<div class="rh-op-grid">'
-    +lbl("Dénomination du site",'<input class="input" name="'+pfx+'_'+si+'_denomination" value="'+escapeHTML(s.denomination||'')+'" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
+    +lbl("Dénomination du site",'<input class="input" name="'+pfx+'_'+si+'_denomination" value="'+escapeHTML(s.denomination||'')+'" oninput="clientSiteTabLabelSync('+si+',\''+pfx+'\')" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
     +lbl("Type de site",'<select class="select" name="'+pfx+'_'+si+'_typeSite" onchange="clientSiteFieldChanged(\''+pfx+'\')">'+typeSiteOpts+'</select>')
     +lbl("Adresse",'<input class="input" name="'+pfx+'_'+si+'_adresse" value="'+escapeHTML(s.adresse||'')+'" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
     +lbl("Commune",'<input class="input" name="'+pfx+'_'+si+'_commune" value="'+escapeHTML(s.commune||'')+'" onchange="clientSiteFieldChanged(\''+pfx+'\')"/>')
@@ -29685,7 +29696,7 @@ function openClientModal(id,readOnly=false){
       const ctsSites=c?.tech_sites||[];
       const nbrOpts=Array.from({length:20},(_,i)=>i+1).map(n=>`<option value="${n}"${ctsNbr===n?' selected':''}>${String(n).padStart(2,'0')}</option>`).join('');
       const nbrSel=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;margin:0"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="ct_nbrSite" onchange="ctsSitesRerender(this.value)" style="width:100px"><option value="">—</option>${nbrOpts}</select></label><button type="button" class="btn btn-primary text-xs" onclick="clientSiteAdd('cts')">+ Ajouter un site</button></div>`;
-      const tabBtns=Array.from({length:ctsNbr},(_,si)=>techSiteTabBtnHTML(si,'cts',si===0)).join('');
+      const tabBtns=Array.from({length:ctsNbr},(_,si)=>techSiteTabBtnHTML(si,'cts',si===0,ctsSites[si]?.denomination)).join('');
       const panels=ctsNbr>0?Array.from({length:ctsNbr},(_,si)=>techSitePanelHTML(si,ctsSites[si]||{},'cts',c?.lignesFacturation||[])).join(''):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
       return `<div style="margin-top:12px"><span style="font-size:11px;color:#334155;font-weight:900;display:block;margin-bottom:6px">Sites</span><input type="hidden" id="cts-sites-json" name="cts_sites" value="${escapeHTML(JSON.stringify(ctsSites))}"/>${nbrSel}<div id="cts-sites-container"><div class="cts-tabs" style="display:flex;gap:2px;border-bottom:1px solid #e2e8f0;margin-bottom:2px">${tabBtns}</div><div class="cts-panels">${panels}</div></div></div>`;
     })()}
