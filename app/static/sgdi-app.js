@@ -29793,7 +29793,10 @@ function openClientModal(id,readOnly=false){
       ${isEdit?`<div style="display:flex;align-items:center;gap:8px">
         <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Client</label>
         <select onchange="if(this.value)openClientModal(this.value)" style="font-size:13px;font-weight:600;color:#0f2d5a;border:1px solid #cbd5e1;border-radius:8px;padding:6px 32px 6px 10px;background:#f8fafc;cursor:pointer;min-width:220px;max-width:340px">
-          ${(db.clients||[]).filter(x=>x.id).map(x=>'<option value="'+escapeHTML(x.id)+'"'+(x.id===(id||"")?' selected':'')+'>'+escapeHTML(x.nom||x.id)+'</option>').join("")}
+          ${(db.clients||[])
+            .filter(x=>x.id&&normalizeSocieteName(x.societe||x.society||"")===normalizeSocieteName(mySoc()||selectedSoc))
+            .sort((a,b)=>String(a.nom||a.raisonSociale||"").localeCompare(String(b.nom||b.raisonSociale||""),"fr"))
+            .map(x=>'<option value="'+escapeHTML(x.id)+'"'+(x.id===(id||"")?' selected':'')+'>'+escapeHTML(x.nom||x.raisonSociale||x.id)+'</option>').join("")}
         </select>
       </div>`:""}
     </div>
