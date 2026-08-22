@@ -28898,13 +28898,11 @@ function techSitesSyncHidden(){
       nbNiveaux:parseInt(form.querySelector(`[name='ts_${si}_nbNiveaux']`)?.value)||0,
       nbParkings:parseInt(form.querySelector(`[name='ts_${si}_nbParkings']`)?.value)||0,
       obs:form.querySelector(`[name='ts_${si}_obs']`)?.value||"",
-      nbrGroupe:parseInt(form.querySelector(`[name='ts_${si}_nbrGroupe']`)?.value)||0,
-      nbrJour:parseInt(form.querySelector(`[name='ts_${si}_nbrJour']`)?.value)||0,
-      nbrNuit:parseInt(form.querySelector(`[name='ts_${si}_nbrNuit']`)?.value)||0,
-      totalEffectif:parseInt(form.querySelector(`[name='ts_${si}_totalEffectif']`)?.value)||0,
+      nbrGroupe:4,nbrJour:3,nbrNuit:1,
+      totalEffectif:postes_list.reduce((sum,p)=>sum+(parseInt(p.nbr)||0),0),
       effectifJourWE:parseInt(form.querySelector(`[name='ts_${si}_effectifJourWE']`)?.value)||0,
       effectifNuitWE:parseInt(form.querySelector(`[name='ts_${si}_effectifNuitWE']`)?.value)||0,
-      postes_list,materiel,
+      postes_list,materiel,rotation:techRotationConfiguration(si,"ts"),
       postesAutres:form.querySelector(`[name='ts_${si}_postesAutres']`)?.value||""
     };
   });
@@ -29008,13 +29006,11 @@ function ctsSitesSyncHidden(){
       wilaya:form.querySelector(`[name='cts_${si}_wilaya']`)?.value||"",
       surface:parseFloat(form.querySelector(`[name='cts_${si}_surface']`)?.value)||0,
       obs:form.querySelector(`[name='cts_${si}_obs']`)?.value||"",
-      nbrGroupe:parseInt(form.querySelector(`[name='cts_${si}_nbrGroupe']`)?.value)||0,
-      nbrJour:parseInt(form.querySelector(`[name='cts_${si}_nbrJour']`)?.value)||0,
-      nbrNuit:parseInt(form.querySelector(`[name='cts_${si}_nbrNuit']`)?.value)||0,
-      totalEffectif:parseInt(form.querySelector(`[name='cts_${si}_totalEffectif']`)?.value)||0,
+      nbrGroupe:4,nbrJour:3,nbrNuit:1,
+      totalEffectif:postes_list.reduce((sum,p)=>sum+(parseInt(p.nbr)||0),0),
       effectifJourWE:parseInt(form.querySelector(`[name='cts_${si}_effectifJourWE']`)?.value)||0,
       effectifNuitWE:parseInt(form.querySelector(`[name='cts_${si}_effectifNuitWE']`)?.value)||0,
-      postes_list,materiel,
+      postes_list,materiel,rotation:techRotationConfiguration(si,"cts"),
       postesAutres:form.querySelector(`[name='cts_${si}_postesAutres']`)?.value||""
     };
   });
@@ -29054,6 +29050,7 @@ function clientSitesRender(pfx,sites){
   if(relockContract)clientLockContrat();
   if(relockTech)techLockDonneesTechniques();
   else if(!isContract&&form?.dataset.clientReadonly!=="1")techUnlockDonneesTechniques();
+  rows.forEach((_,si)=>renderTechRotationPreview(si,pfx,false));
 }
 function clientSitesMirror(sourcePfx){
   const isContract=sourcePfx==="cts";
@@ -29101,6 +29098,31 @@ function techSiteRemove(si,pfx){
   clientSitesRender(pfx==='cts'?'ts':'cts',sites);
   if(newN>0)techSiteTab(0,pfx);
 }
+function techRotationConfiguration(si,pfx='ts'){
+  const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
+  return{
+    system:form?.querySelector(`[name='${pfx}_${si}_rotationSystem']`)?.value||"3x8",
+    first_shift_time:form?.querySelector(`[name='${pfx}_${si}_rotationFirstTime']`)?.value||"06:00",
+    start_date:form?.querySelector(`[name='${pfx}_${si}_rotationStartDate']`)?.value||today(),
+    horizon_weeks:parseInt(form?.querySelector(`[name='${pfx}_${si}_rotationWeeks']`)?.value,10)||12
+  };
+}
+function renderTechRotationPreview(si,pfx='ts',sync=true){
+  const host=document.getElementById(`${pfx}-${si}-rotation-preview`),alertsHost=document.getElementById(`${pfx}-${si}-rotation-alerts`);if(!host||!alertsHost)return;
+  const config=techRotationConfiguration(si,pfx),start=new Date(`${config.start_date}T00:00:00`),[hour,minute]=config.first_shift_time.split(":").map(Number),base=hour*60+minute,groups=["A","B","C","D"];
+  const fmt=minutes=>`${String(Math.floor((minutes%1440)/60)).padStart(2,"0")}:${String(minutes%60).padStart(2,"0")}`;
+  const shifts=[0,1,2].map(index=>{const begin=(base+index*480)%1440;return`${fmt(begin)}–${fmt((begin+480)%1440)}`});
+  const rows=[],weekly={};
+  for(let dayIndex=0;dayIndex<config.horizon_weeks*7;dayIndex++){
+    const current=new Date(start);current.setDate(start.getDate()+dayIndex);const dayGroups=[];
+    groups.forEach((code,groupIndex)=>{const cycle=(dayIndex+groupIndex)%4,working=cycle<3;dayGroups.push({working,shift:working?shifts[cycle]:"Récupération"});if(working){const monday=new Date(current);monday.setDate(current.getDate()-((current.getDay()+6)%7));const key=`${monday.toISOString().slice(0,10)}|${code}`;weekly[key]=(weekly[key]||0)+8}});
+    if(dayIndex<8)rows.push({date:current,groups:dayGroups});
+  }
+  host.innerHTML=`<div class="rotation-day rotation-day-head"><div>Date</div>${groups.map(code=>`<div>Groupe ${code}</div>`).join("")}</div>${rows.map(row=>`<div class="rotation-day"><div><b>${row.date.toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit",month:"2-digit"})}</b></div>${row.groups.map(group=>`<div class="${group.working?"rotation-work":"rotation-rest"}">${group.shift}</div>`).join("")}</div>`).join("")}`;
+  const overtime=Object.values(weekly).filter(hours=>hours>40).length;
+  alertsHost.innerHTML=overtime?`<div class="rotation-alert">⚠ ${overtime} dépassement(s) prévisionnel(s) du seuil de 40 h/semaine détecté(s). Ils seront suivis dans les alertes et l’historique.</div>`:`<div class="site-distribution-status ok">Planning généré sans dépassement prévisionnel du seuil de 40 h/semaine.</div>`;
+  if(sync)clientSiteFieldChanged(pfx);
+}
 function techSitePanelHTML(si,s,pfx='ts'){
   s=s||{};
   const lbl=(label,field)=>`<label><span>${label}</span>${field}</label>`;
@@ -29116,6 +29138,7 @@ function techSitePanelHTML(si,s,pfx='ts'){
   const posteInitRows=postes_list.map(p=>techPosteRowHTML(si,pfx,p.nom,p.nbr,p.salaire)).join("");
   const posteInitTotal=postes_list.reduce((acc,p)=>acc+(parseInt(p.nbr)||0),0);
   const masseTotale=postes_list.reduce((acc,p)=>acc+(parseFloat(p.salaire)||0)*(parseInt(p.nbr)||0),0);
+  const rotation=s.rotation||{system:"3x8",first_shift_time:"06:00",start_date:today(),horizon_weeks:12};
   const materielRows=materiel.map((m,i)=>`<tr data-idx="${i}"><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(m.designation||"")}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" min="1" step="1" style="width:100%;text-align:center" value="${m.qte||1}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><select class="select" style="width:100%" oninput="clientMaterielSync(${si},'${pfx}')"><option ${(m.etat||"Neuf")==="Neuf"?"selected":""}>Neuf</option><option ${m.etat==="Bon état"?"selected":""}>Bon état</option><option ${m.etat==="Usagé"?"selected":""}>Usagé</option><option ${m.etat==="À remplacer"?"selected":""}>À remplacer</option></select></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%" value="${escapeHTML(m.observations||"")}" placeholder="Observations" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientMaterielRemove(this,${si},'${pfx}')">✕</button></td></tr>`).join("");
   const typesSite=["Industriel","Bancaire / Financier","Commercial / Centre commercial","Résidentiel / Immeuble","Institutionnel / Administratif","Hôtelier","Hospitalier / Médical","Éducatif / Universitaire","Aéroportuaire / Portuaire","Pétrolier / Gazier","Logistique / Entrepôt","Chantier BTP","Site minier","Ambassade / Consulat","Autre"];
   const typeSiteOpts='<option value="">— Sélectionner —</option>'+typesSite.map(t=>'<option value="'+escapeHTML(t)+'"'+(s.typeSite===t?' selected':'')+'>'+escapeHTML(t)+'</option>').join('');
@@ -29163,18 +29186,17 @@ function techSitePanelHTML(si,s,pfx='ts'){
         <textarea class="input" name="${pfx}_${si}_postesAutres" rows="2" style="width:100%" placeholder="Postes ou fonctions non listés ci-dessus..." onchange="clientSiteFieldChanged('${pfx}')">${escapeHTML(s.postesAutres||"")}</textarea>
       </div>
     </fieldset>
-    <fieldset class="rh-op-box rh-op-emergency" style="margin-bottom:10px">
-      <legend class="rh-op-legend">Vacation</legend>
-      <div class="rh-op-grid">
-        <label><span>Nbr de groupe</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_nbrGroupe" value="${g||""}" placeholder="0" oninput="techCalcTotalEffectif(${si},'${pfx}')"/></label>
-        <label><span>Total effectif</span><input class="input" type="number" id="${pfx}-total-effectif-${si}" name="${pfx}_${si}_totalEffectif" value="${teff||""}" placeholder="0" readonly style="border-color:#ef4444;background:#fff5f5;color:#dc2626;font-weight:700;cursor:not-allowed"/></label>
+    <fieldset class="rh-op-box rh-op-emergency" style="margin-bottom:10px" data-tech-rotation="${pfx}:${si}">
+      <legend class="rh-op-legend">Planning et rotation</legend>
+      <p style="font-size:12px;color:#64748b;margin:0 0 12px">Configurez le cycle 24h/7j : trois groupes en service et un groupe en récupération, avec une relève toutes les huit heures.</p>
+      <div class="rotation-config-grid">
+        <label>Système<select class="select" name="${pfx}_${si}_rotationSystem" onchange="renderTechRotationPreview(${si},'${pfx}')"><option value="3x8" selected>24h/7j — 3×8</option></select></label>
+        <label>Première prise<input class="input" name="${pfx}_${si}_rotationFirstTime" type="time" value="${escapeHTML(rotation.first_shift_time||"06:00")}" oninput="renderTechRotationPreview(${si},'${pfx}')"></label>
+        <label>Début du cycle<input class="input" name="${pfx}_${si}_rotationStartDate" type="date" value="${escapeHTML(rotation.start_date||today())}" onchange="renderTechRotationPreview(${si},'${pfx}')"></label>
+        <label>Horizon<select class="select" name="${pfx}_${si}_rotationWeeks" onchange="renderTechRotationPreview(${si},'${pfx}')">${[4,8,12].map(w=>`<option value="${w}" ${Number(rotation.horizon_weeks||12)===w?"selected":""}>${w} semaines</option>`).join("")}</select></label>
       </div>
-      <div class="rh-op-grid" style="margin-top:10px;padding-left:24px;border-left:3px solid #e2e8f0">
-        <label><span>Faction jour</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_nbrJour" value="${j||""}" placeholder="0" oninput="techCalcTotalEffectif(${si},'${pfx}')"/></label>
-        <label><span>Faction de nuit</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_nbrNuit" value="${n||""}" placeholder="0" oninput="techCalcTotalEffectif(${si},'${pfx}')"/></label>
-        <label><span>Effectif jour (Week-end)</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_effectifJourWE" value="${s.effectifJourWE||""}" placeholder="0" onchange="clientSiteFieldChanged('${pfx}')"/></label>
-        <label><span>Effectif nuit (Week-end)</span><input class="input" type="number" min="0" step="1" name="${pfx}_${si}_effectifNuitWE" value="${s.effectifNuitWE||""}" placeholder="0" onchange="clientSiteFieldChanged('${pfx}')"/></label>
-      </div>
+      <div id="${pfx}-${si}-rotation-preview" class="rotation-preview"></div>
+      <div id="${pfx}-${si}-rotation-alerts"></div>
     </fieldset>
     <fieldset class="rh-op-box">
       <legend class="rh-op-legend">Matériel et équipement</legend>
@@ -29648,6 +29670,7 @@ function openClientModal(id,readOnly=false){
   prospInitReunions("prosp",(c?.prosp_reunions)||[]);
   prospInitReunions("negos",(c?.negos_reunions)||[]);
   requestAnimationFrame(()=>updateClientContractEndDate(false));
+  requestAnimationFrame(()=>document.querySelectorAll("[data-tech-rotation]").forEach(el=>{const [pfx,si]=el.dataset.techRotation.split(":");renderTechRotationPreview(Number(si),pfx,false)}));
   if(!readOnly)requestAnimationFrame(()=>techUnlockDonneesTechniques());
   if(readOnly)requestAnimationFrame(()=>lockClientReadOnly());
 }
