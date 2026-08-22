@@ -4614,6 +4614,7 @@ function sgdiModuleHostDefaultRoute(){
 function sgdiModuleHostRequiresSociete(cfg){return !!cfg&&cfg.key!=="admin"}
 function facStandaloneNavItems(){return[
   ["⌂","Tableau de bord","facturation/dashboard"],["♙","Clients","facturation/clients"],
+  ["◇","Prestations à facturer","facturation/missions"],
   ["▧","Factures","facturation/factures"],
   ["✓","Paiements","facturation/paiements"],["↗","Avances","facturation/avances"],
   ["↩","Avoirs","facturation/avoirs"],["◫","Caisse","facturation/caisse"],
@@ -26733,6 +26734,12 @@ function renderFacturation(view,sub,arg){
   renderFactDashboard(view);
 }
 function renderFactMissionBillables(view){
+  _renderFactMissionBillablesHTML(view);
+  if(sgdiAuthToken())syncMissionWorkflowCollections(["missionBillables"]).then(()=>{
+    if(document.body.contains(view)&&/facturation\/missions/.test(location.hash))_renderFactMissionBillablesHTML(view);
+  }).catch(e=>{console.warn("Synchronisation des prestations à facturer indisponible",e);toast("Prestations à facturer non synchronisées : "+(e.message||e),"warning")});
+}
+function _renderFactMissionBillablesHTML(view){
   const soc=mySoc(),rows=(db.missionBillables||[]).filter(x=>!soc||normalizeSocieteName(x.societe||"")===normalizeSocieteName(soc)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   const ready=rows.filter(x=>x.status==="prete_a_facturer").length,waiting=rows.filter(x=>x.status==="en_attente_execution").length,total=rows.reduce((s,x)=>s+(Number(x.priceHT)||0),0);
   const statusLabel=s=>({en_attente_execution:"En attente d'exécution",prete_a_facturer:"Prête à facturer",facturee:"Facturée",suspendue:"Suspendue",annulee:"Annulée"})[s]||s||"En attente";
@@ -29664,6 +29671,27 @@ function dcMissionNextNumber(){
   const year=new Date().getFullYear(),re=new RegExp(`^MIS-${year}-(\\d+)$`);
   const nums=(db.missions||[]).map(m=>String(m.numero||"").match(re)).filter(Boolean).map(m=>parseInt(m[1],10)||0);
   return `MIS-${year}-${String((nums.length?Math.max(...nums):0)+1).padStart(4,"0")}`;
+}
+let missionWorkflowSyncInFlight=null;
+let missionWorkflowSyncedAt={};
+async function syncMissionWorkflowCollections(names){
+  const requested=[...new Set((names||[]).filter(Boolean))];
+  if(!requested.length||!sgdiAuthToken()||!db)return false;
+  const key=requested.slice().sort().join("|");
+  const now=Date.now();
+  if(missionWorkflowSyncedAt[key]&&now-missionWorkflowSyncedAt[key]<10000)return false;
+  if(missionWorkflowSyncInFlight)await missionWorkflowSyncInFlight.catch(()=>{});
+  missionWorkflowSyncInFlight=(async()=>{
+    const results=await Promise.all(requested.map(async name=>{
+      const rows=await sgdiApi(`/api/irongs/collections/${encodeURIComponent(name)}/items`,{method:"GET",legacy:false});
+      if(!Array.isArray(rows))throw new Error(`Collection ${name} invalide`);
+      db[name]=rows;
+      return rows.length;
+    }));
+    missionWorkflowSyncedAt[key]=Date.now();
+    return results.some(Boolean);
+  })().finally(()=>{missionWorkflowSyncInFlight=null});
+  return await missionWorkflowSyncInFlight;
 }
 function dcMissionMoneyValue(value){return Number(parseDZD(value)||0)}
 function dcMissionInternalCostRows(){
@@ -37650,10 +37678,16 @@ async function closeOpsMission(id,form){
   if(!(await saveDBAndWaitToast("Clôture non confirmée")))return;toast("Mission clôturée","success");openOpsMissionDetail(id);renderSidebar();
 }
 function renderOpsMissions(view,arg){
+  _renderOpsMissionsHTML(view,arg);
+  if(sgdiAuthToken())syncMissionWorkflowCollections(["missions"]).then(()=>{
+    if(document.body.contains(view)&&/ops\/missions/.test(location.hash))_renderOpsMissionsHTML(view,arg);
+  }).catch(e=>{console.warn("Synchronisation des missions OPS indisponible",e);toast("Missions OPS non synchronisées : "+(e.message||e),"warning")});
+}
+function _renderOpsMissionsHTML(view,arg){
   if(!db.missions)db.missions=[];
   const opsReadOnly=isOpsSupervisorReadOnlySession();
   const soc=currentStructureSocieteFilter();
-  const missions=(db.missions||[]).filter(m=>!soc||m.societe===soc).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  const missions=(db.missions||[]).filter(m=>!soc||normalizeSocieteName(m.societe||"")===normalizeSocieteName(soc)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   const activeMissions=missions.filter(x=>opsMissionStatus(x).key==="encours");
   const plannedMissions=missions.filter(x=>x.dateDebut&&x.dateDebut>today());
   const urgentMissions=missions.filter(x=>/urgent|intervention/i.test([x.motif,x.nature,x.objet,x.consignes].join(" ")));
