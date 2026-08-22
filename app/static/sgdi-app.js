@@ -29018,31 +29018,59 @@ function techCalcTotalEffectif(si,pfx='ts'){
   if(pfx==='ts')techRecapUpdate();
   clientSiteFieldChanged(pfx);
 }
-function techPosteRowReadOnlyHTML(nom,nbr,salaire){
+// Désignation et Nombre viennent d'Effectif par site (lecture seule) ; Salaire net/coût est
+// une saisie libre et indépendante, propre à Nomenclature des postes.
+function techPosteRowHTML(si,pfx,nom,nbr,salaire){
   const n=parseInt(nbr)||0;const s=parseFloat(salaire)||0;const tot=n*s;
-  return`<tr>`
+  return`<tr data-nbr="${n}">`
     +`<td style="padding:7px 10px;border:1px solid #e2e8f0;font-size:13px;font-weight:600">${escapeHTML(nom)}</td>`
-    +`<td style="padding:7px 10px;border:1px solid #e2e8f0;width:160px;text-align:right;color:#64748b">${s>0?formatDZD(s):'—'}</td>`
+    +`<td style="padding:4px 6px;border:1px solid #e2e8f0;width:160px"><input type="text" class="poste-sal input" value="${s>0?formatDZD(s):''}" style="width:100%;text-align:right" placeholder="0,00 DZD" onfocus="const v=parseDZD(this.value);this.value=v>0?v:''" onblur="const v=parseDZD(this.value);this.value=v>0?formatDZD(v):'';techPosteSalaireUpdate(this.closest('tr'),${si},'${pfx}')" oninput="techPosteSalaireUpdate(this.closest('tr'),${si},'${pfx}')"/></td>`
     +`<td style="padding:7px 10px;border:1px solid #e2e8f0;width:90px;text-align:center;color:#64748b">${n||'—'}</td>`
-    +`<td style="padding:7px 10px;border:1px solid #e2e8f0;width:160px;text-align:right;font-weight:700;color:#043970">${tot>0?formatDZD(tot):'—'}</td>`
+    +`<td class="poste-row-total" style="padding:7px 10px;border:1px solid #e2e8f0;width:160px;text-align:right;font-weight:700;color:#043970">${tot>0?formatDZD(tot):'—'}</td>`
     +`</tr>`;
 }
-// Nomenclature des postes est un miroir en lecture seule d'Effectif par site : à chaque
-// changement de désignation/quantité (ou de prix dans le catalogue Effectif global), on
-// régénère la liste des postes et ses totaux à partir des lignes du site.
+function techPosteSalaireUpdate(tr,si,pfx){
+  const sal=parseDZD(tr.querySelector('.poste-sal')?.value||'0');
+  const nbr=parseInt(tr.dataset.nbr)||0;
+  const t=tr.querySelector('.poste-row-total');if(t)t.textContent=sal*nbr>0?formatDZD(sal*nbr):'—';
+  techPostesSyncJSON(si,pfx);
+}
+function techPostesSyncJSON(si,pfx){
+  const tbody=document.getElementById(pfx+'-'+si+'-postes-body');if(!tbody)return;
+  const list=[...tbody.querySelectorAll('tr')].map(tr=>({nom:tr.cells[0]?.textContent||'',nbr:parseInt(tr.dataset.nbr)||0,salaire:parseDZD(tr.querySelector('.poste-sal')?.value||'0')}));
+  const h=document.getElementById(pfx+'-'+si+'-postes-json');if(h)h.value=JSON.stringify(list);
+  techPosteCalcTotals(si,pfx);
+  clientSiteFieldChanged(pfx);
+}
+function techPosteCalcTotals(si,pfx){
+  const tbody=document.getElementById(pfx+'-'+si+'-postes-body');if(!tbody)return;
+  let total=0,masse=0;
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    const nbr=parseInt(tr.dataset.nbr)||0;
+    const sal=parseDZD(tr.querySelector('.poste-sal')?.value||'0');
+    total+=nbr;masse+=nbr*sal;
+  });
+  const totEl=document.getElementById(pfx+'-'+si+'-total');if(totEl)totEl.textContent=total;
+  const masEl=document.getElementById(pfx+'-'+si+'-masse-total');if(masEl)masEl.textContent=masse>0?formatDZD(masse):'—';
+}
+// Nomenclature des postes régénère sa liste de Désignation/Nombre depuis Effectif par site à
+// chaque changement, mais préserve les salaires déjà saisis manuellement (par désignation).
 function techPostesSyncFromLignes(si,pfx){
   const lignesHidden=document.getElementById(pfx+'-'+si+'-lignes-json');
   const hidden=document.getElementById(pfx+'-'+si+'-postes-json');
-  if(!lignesHidden||!hidden)return;
-  let lignes=[];try{lignes=JSON.parse(lignesHidden.value||'[]')}catch(e){}
-  const postes_list=lignes.filter(l=>l.designation).map(l=>({nom:l.designation,nbr:parseFloat(l.qte)||1,salaire:clientCatalogPrice(l.designation)}));
-  hidden.value=JSON.stringify(postes_list);
   const tbody=document.getElementById(pfx+'-'+si+'-postes-body');
-  if(tbody)tbody.innerHTML=postes_list.map(p=>techPosteRowReadOnlyHTML(p.nom,p.nbr,p.salaire)).join('');
-  const total=postes_list.reduce((acc,p)=>acc+(parseInt(p.nbr)||0),0);
-  const masse=postes_list.reduce((acc,p)=>acc+(parseFloat(p.salaire)||0)*(parseInt(p.nbr)||0),0);
-  const totEl=document.getElementById(pfx+'-'+si+'-total');if(totEl)totEl.textContent=total;
-  const masEl=document.getElementById(pfx+'-'+si+'-masse-total');if(masEl)masEl.textContent=masse>0?formatDZD(masse):'—';
+  if(!lignesHidden||!hidden||!tbody)return;
+  let lignes=[];try{lignes=JSON.parse(lignesHidden.value||'[]')}catch(e){}
+  const existingSalaires={};
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    const nom=tr.cells[0]?.textContent||'';
+    const sal=parseDZD(tr.querySelector('.poste-sal')?.value||'0');
+    if(nom&&sal>0)existingSalaires[nom]=sal;
+  });
+  const postes_list=lignes.filter(l=>l.designation).map(l=>({nom:l.designation,nbr:parseFloat(l.qte)||1,salaire:existingSalaires[l.designation]||0}));
+  hidden.value=JSON.stringify(postes_list);
+  tbody.innerHTML=postes_list.map(p=>techPosteRowHTML(si,pfx,p.nom,p.nbr,p.salaire)).join('');
+  techPosteCalcTotals(si,pfx);
 }
 function clientMaterielSync(si,pfx='ts'){
   const tbody=document.getElementById(pfx+"-"+si+"-materiel-body");
@@ -29240,10 +29268,12 @@ function techSitePanelHTML(si,s,pfx='ts',catalog){
   const materiel=s.materiel||[];
   const g=s.nbrGroupe||0,j=s.nbrJour||0,n=s.nbrNuit||0;
   const teff=clientSiteEffectif(s);
-  // Nomenclature des postes = miroir en lecture seule d'Effectif par site (désignation → poste,
-  // quantité → nombre, prix du catalogue → salaire net).
-  const postes_list=(s.lignesFacturation||[]).filter(l=>l.designation).map(l=>({nom:l.designation,nbr:parseFloat(l.qte)||1,salaire:clientCatalogPrice(l.designation,catalog)}));
-  const posteInitRows=postes_list.map(p=>techPosteRowReadOnlyHTML(p.nom,p.nbr,p.salaire)).join("");
+  // Nomenclature des postes reprend Désignation/Nombre d'Effectif par site ; Salaire net/coût
+  // reste une saisie libre, restaurée depuis les postes déjà enregistrés pour ce site.
+  const savedSalaireByName={};
+  (s.postes_list||[]).forEach(p=>{if(p.nom)savedSalaireByName[p.nom]=parseFloat(p.salaire)||0;});
+  const postes_list=(s.lignesFacturation||[]).filter(l=>l.designation).map(l=>({nom:l.designation,nbr:parseFloat(l.qte)||1,salaire:savedSalaireByName[l.designation]||0}));
+  const posteInitRows=postes_list.map(p=>techPosteRowHTML(si,pfx,p.nom,p.nbr,p.salaire)).join("");
   const posteInitTotal=postes_list.reduce((acc,p)=>acc+(parseInt(p.nbr)||0),0);
   const masseTotale=postes_list.reduce((acc,p)=>acc+(parseFloat(p.salaire)||0)*(parseInt(p.nbr)||0),0);
   const materielRows=materiel.map((m,i)=>`<tr data-idx="${i}"><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(m.designation||"")}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" min="1" step="1" style="width:100%;text-align:center" value="${m.qte||1}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><select class="select" style="width:100%" oninput="clientMaterielSync(${si},'${pfx}')"><option ${(m.etat||"Neuf")==="Neuf"?"selected":""}>Neuf</option><option ${m.etat==="Bon état"?"selected":""}>Bon état</option><option ${m.etat==="Usagé"?"selected":""}>Usagé</option><option ${m.etat==="À remplacer"?"selected":""}>À remplacer</option></select></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%" value="${escapeHTML(m.observations||"")}" placeholder="Observations" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientMaterielRemove(this,${si},'${pfx}')">✕</button></td></tr>`).join("");
@@ -29311,7 +29341,7 @@ function techSitePanelHTML(si,s,pfx='ts',catalog){
           <td id="${pfx}-${si}-masse-total" style="padding:7px 10px;border:1px solid #bfdbfe;font-weight:900;color:#043970;text-align:right;font-size:14px">${masseTotale>0?formatDZD(masseTotale):"—"}</td>
         </tr></tfoot>
       </table>
-      <p style="font-size:11px;color:#94a3b8;margin:6px 0 0">Alimenté automatiquement depuis Effectif par site.</p>
+      <p style="font-size:11px;color:#94a3b8;margin:6px 0 0">Désignation et Nombre viennent d'Effectif par site ; saisissez le Salaire net/coût.</p>
       <div style="margin-top:10px">
         <label style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Autres</label>
         <textarea class="input" name="${pfx}_${si}_postesAutres" rows="2" style="width:100%" placeholder="Postes ou fonctions non listés ci-dessus..." onchange="clientSiteFieldChanged('${pfx}')">${escapeHTML(s.postesAutres||"")}</textarea>
