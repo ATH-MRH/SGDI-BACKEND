@@ -6972,6 +6972,11 @@ function sgdiNoteFormInput(e){
   // Marque la dernière interaction de saisie (protège l'utilisateur qui travaille, partout).
   sgdiLastFormInputAt=Date.now();
   if(!sgdiViewModeActive)sgdiFormHasUnsavedChanges=true;
+  // Verrou permanent (sans expiration, indépendant du mode vue) : dès la première frappe,
+  // le formulaire (ou toute la vue si pas de <form>) est marqué "modifié" et aucun
+  // rafraîchissement automatique ne pourra plus l'écraser, où qu'on soit dans le module.
+  const dirtyHost=t.closest("form")||document.getElementById("view");
+  if(dirtyHost)dirtyHost.dataset.dirty="1";
 }
 document.addEventListener("input",sgdiNoteFormInput,{passive:true});
 document.addEventListener("change",sgdiNoteFormInput,{passive:true});
