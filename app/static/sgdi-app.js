@@ -6,6 +6,20 @@ if (location.hostname === "portail-rh.irongs.com" && location.pathname !== "/por
   location.replace("/portail-rh");
 }
 
+function sgdiBrowserModuleLabel(){
+  const host=String(location.hostname||"").toLowerCase();
+  const first=host.split(".")[0];
+  if(!first||["localhost","127","0","www","atlas","sgdi"].includes(first))return "ATLAS";
+  if(["dfa","dhl"].includes(first))return "DHL FORWARDING";
+  return first.replace(/-/g," ").toUpperCase();
+}
+function sgdiApplyBrowserTitle(){
+  const label=sgdiBrowserModuleLabel();
+  if(label==="DHL FORWARDING")return;
+  try{document.title=label+" — Suite de gestion intégrée"}catch(_e){}
+}
+sgdiApplyBrowserTitle();
+
 const WILAYAS = [
  "01 - Adrar","02 - Chlef","03 - Laghouat","04 - Oum El Bouaghi","05 - Batna","06 - Béjaïa",
  "07 - Biskra","08 - Béchar","09 - Blida","10 - Bouira","11 - Tamanrasset","12 - Tébessa",
@@ -7993,7 +8007,7 @@ setInterval(()=>{if(session&&sgdiPostgresReady)refreshDemandesPersonnelFromPostg
 
 /* ---- LOGIN ---- */
 function renderPaieStandaloneLogin(){
-  try{document.title="PAIE — IRON GROUP"}catch(_e){}
+  sgdiApplyBrowserTitle();
   document.getElementById("app").innerHTML=`<div class="paie-login-page">
     <section class="paie-login-brand-panel" aria-label="Présentation du module PAIE">
       <div class="paie-login-brand-content">
@@ -8073,7 +8087,7 @@ function renderLogin(){
   if(hostCfg?.key==="paie"){renderPaieStandaloneLogin();return}
   const dedicatedTitle=hostCfg?.key==="facmod"?"FACTURATION":hostCfg?.key==="ops"?"OPS":hostCfg?.title||"ATLAS";
   const dedicatedKicker=hostCfg?.key==="facmod"?"Factures · devis · règlements · situation clients":hostCfg?.key==="ops"?"Direction des opérations":hostCfg?.key==="commercial"?"Clients, devis, commandes et suivi de la relation commerciale, réunis dans un seul espace.":"Suite de gestion intégrée";
-  try{document.title=hostCfg?.key==="facmod"?"FACTURATION — IRON GROUP":hostCfg?.key?hostCfg.key.toUpperCase()+" — ATLAS":"ATLAS — Suite de gestion intégrée"}catch(_e){}
+  sgdiApplyBrowserTitle();
   document.getElementById("app").innerHTML=`<div class="sgdi-login-page${hostCfg?.key?` sgdi-login-page-${escapeHTML(hostCfg.key)}`:""}">
     <main class="sgdi-login-main">
       <section class="sgdi-login-visual" aria-label="Présentation ${hostCfg?.key==="ops"?"ATLAS OPS":"ATLAS"}">
