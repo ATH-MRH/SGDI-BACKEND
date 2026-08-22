@@ -4129,7 +4129,12 @@ function bySoc(arr,key="societe"){const s=mySoc();return s?arr.filter(x=>x&&x[ke
 function clientNbrSites(client){return Math.max(parseInt(client?.tech_nbrSite)||0,Array.isArray(client?.tech_sites)?client.tech_sites.length:0)}
 function clientSiteEffectif(site){const saved=parseInt(site?.totalEffectif)||0;if(saved>0)return saved;const g=parseInt(site?.nbrGroupe)||0,j=parseInt(site?.nbrJour)||0,n=parseInt(site?.nbrNuit)||0;return g*n+Math.max(0,j-n)}
 function clientTotalEffectif(client){return (client?.tech_sites||[]).reduce((sum,site)=>sum+clientSiteEffectif(site),0)}
-function clientMontantTTC(client){return (client?.lignesFacturation||[]).reduce((sum,l)=>sum+(parseFloat(l?.prixUnitaire)||0)*(parseFloat(l?.qte)||1),0)*1.19}
+function lignesFacturationHT(lignes){return (lignes||[]).reduce((sum,l)=>sum+(parseFloat(l?.prixUnitaire)||0)*(parseFloat(l?.qte)||1),0)}
+function clientMontantTTC(client){
+  const globalHT=lignesFacturationHT(client?.lignesFacturation);
+  const sitesHT=(client?.tech_sites||[]).reduce((sum,site)=>sum+lignesFacturationHT(site?.lignesFacturation),0);
+  return (globalHT+sitesHT)*1.19;
+}
 function clientCommercialRecapHTML(clients,totalRows){
   const rows=Array.isArray(clients)?clients:[];
   const montant=rows.reduce((sum,c)=>sum+clientMontantTTC(c),0);
@@ -28994,6 +28999,47 @@ function clientMaterielAdd(si,pfx='ts'){
 function clientMaterielRemove(btn,si,pfx='ts'){
   btn.closest("tr").remove();clientMaterielSync(si,pfx);
 }
+function clientSiteLigneAdd(si,pfx='ts'){
+  const tbody=document.getElementById(pfx+"-"+si+"-lignes-body");if(!tbody)return;
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" oninput="clientSiteLigneUpdate(this,${si},'${pfx}')"/></td>
+    <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;text-align:right" value="${formatDZD(0)}" oninput="clientSiteLigneUpdate(this,${si},'${pfx}')" onfocus="this.value=parseDZD(this.value)||''" onblur="this.value=formatDZD(this.value)"/></td>
+    <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" step="1" min="0" style="width:100%" value="1" oninput="clientSiteLigneUpdate(this,${si},'${pfx}')"/></td>
+    <td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:right;font-weight:700;color:#043970">${formatDZD(0)}</td>
+    <td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientSiteLigneRemove(this,${si},'${pfx}')">✕</button></td>`;
+  tbody.appendChild(tr);clientSiteLigneSyncHidden(si,pfx);
+}
+function clientSiteLigneRemove(btn,si,pfx='ts'){
+  const tr=btn.closest("tr");if(tr)tr.remove();clientSiteLigneSyncHidden(si,pfx);clientSiteLigneUpdateTotal(si,pfx);
+}
+function clientSiteLigneUpdate(inp,si,pfx='ts'){
+  const tr=inp.closest("tr");if(!tr)return;
+  const cells=[...tr.querySelectorAll("input")];
+  const prix=parseDZD(cells[1]?.value);const qte=parseFloat(cells[2]?.value)||1;
+  const totalCell=tr.cells[3];
+  if(totalCell)totalCell.textContent=formatDZD(prix*qte);
+  clientSiteLigneSyncHidden(si,pfx);clientSiteLigneUpdateTotal(si,pfx);
+}
+function clientSiteLigneSyncHidden(si,pfx='ts'){
+  const tbody=document.getElementById(pfx+"-"+si+"-lignes-body");
+  const hidden=document.getElementById(pfx+"-"+si+"-lignes-json");
+  if(!tbody||!hidden)return;
+  const lignes=[...tbody.rows].map(tr=>{const inputs=[...tr.querySelectorAll("input")];return{designation:inputs[0]?.value||"",prixUnitaire:parseDZD(inputs[1]?.value),qte:parseFloat(inputs[2]?.value)||1}});
+  hidden.value=JSON.stringify(lignes);
+  clientSiteFieldChanged(pfx);
+}
+function clientSiteLigneUpdateTotal(si,pfx='ts'){
+  const hidden=document.getElementById(pfx+"-"+si+"-lignes-json");
+  const el=document.getElementById(pfx+"-"+si+"-lignes-total");
+  if(!el||!hidden)return;
+  let lignes=[];try{lignes=JSON.parse(hidden.value||"[]")}catch(e){}
+  if(!lignes.length){el.innerHTML="";return;}
+  const totalQte=lignes.reduce((s,l)=>s+(parseFloat(l.qte)||1),0);
+  const ht=lignes.reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);
+  const tva=ht*0.19;
+  const ttc=ht+tva;
+  el.innerHTML=clientLignesTotalHTML(totalQte,ht,tva,ttc);
+}
 function ctsSiteTab(si){techSiteTab(si,'cts');}
 function ctsSitesRerender(val){
   clientSitesResize("cts",val);
@@ -29005,6 +29051,7 @@ function ctsSitesSyncHidden(){
   const sites=Array.from({length:n},(_,si)=>{
     let postes_list=[];try{postes_list=JSON.parse(document.getElementById("cts-"+si+"-postes-json")?.value||"[]")}catch(e){}
     let materiel=[];try{materiel=JSON.parse(document.getElementById("cts-"+si+"-materiel-json")?.value||"[]")}catch(e){}
+    let lignesFacturation=[];try{lignesFacturation=JSON.parse(document.getElementById("cts-"+si+"-lignes-json")?.value||"[]")}catch(e){}
     return{
       denomination:form.querySelector(`[name='cts_${si}_denomination']`)?.value||"",
       typeSite:form.querySelector(`[name='cts_${si}_typeSite']`)?.value||"",
@@ -29019,7 +29066,7 @@ function ctsSitesSyncHidden(){
       totalEffectif:parseInt(form.querySelector(`[name='cts_${si}_totalEffectif']`)?.value)||0,
       effectifJourWE:parseInt(form.querySelector(`[name='cts_${si}_effectifJourWE']`)?.value)||0,
       effectifNuitWE:parseInt(form.querySelector(`[name='cts_${si}_effectifNuitWE']`)?.value)||0,
-      postes_list,materiel,
+      postes_list,materiel,lignesFacturation,
       postesAutres:form.querySelector(`[name='cts_${si}_postesAutres']`)?.value||""
     };
   });
@@ -29122,6 +29169,15 @@ function techSitePanelHTML(si,s,pfx='ts'){
   const posteInitTotal=postes_list.reduce((acc,p)=>acc+(parseInt(p.nbr)||0),0);
   const masseTotale=postes_list.reduce((acc,p)=>acc+(parseFloat(p.salaire)||0)*(parseInt(p.nbr)||0),0);
   const materielRows=materiel.map((m,i)=>`<tr data-idx="${i}"><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(m.designation||"")}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" min="1" step="1" style="width:100%;text-align:center" value="${m.qte||1}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><select class="select" style="width:100%" oninput="clientMaterielSync(${si},'${pfx}')"><option ${(m.etat||"Neuf")==="Neuf"?"selected":""}>Neuf</option><option ${m.etat==="Bon état"?"selected":""}>Bon état</option><option ${m.etat==="Usagé"?"selected":""}>Usagé</option><option ${m.etat==="À remplacer"?"selected":""}>À remplacer</option></select></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%" value="${escapeHTML(m.observations||"")}" placeholder="Observations" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientMaterielRemove(this,${si},'${pfx}')">✕</button></td></tr>`).join("");
+  const lignes=s.lignesFacturation||[];
+  const lignesRows=lignes.map(l=>`<tr><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(l.designation||"")}" oninput="clientSiteLigneUpdate(this,${si},'${pfx}')"/></td>
+    <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;text-align:right" value="${escapeHTML(formatDZD(l.prixUnitaire||0))}" oninput="clientSiteLigneUpdate(this,${si},'${pfx}')" onfocus="this.value=parseDZD(this.value)||''" onblur="this.value=formatDZD(this.value)"/></td>
+    <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" step="1" min="0" style="width:100%" value="${escapeHTML(String(l.qte||1))}" oninput="clientSiteLigneUpdate(this,${si},'${pfx}')"/></td>
+    <td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:right;font-weight:700;color:#043970">${escapeHTML(formatDZD((l.prixUnitaire||0)*(l.qte||1)))}</td>
+    <td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientSiteLigneRemove(this,${si},'${pfx}')">✕</button></td></tr>`).join("");
+  const lignesTotalQte=lignes.reduce((s2,l)=>s2+(parseFloat(l.qte)||1),0);
+  const lignesHT=lignes.reduce((s2,l)=>s2+(l.prixUnitaire||0)*(l.qte||1),0);
+  const lignesTotalHTML=lignes.length?clientLignesTotalHTML(lignesTotalQte,lignesHT,lignesHT*0.19,lignesHT*1.19):"";
   const typesSite=["Industriel","Bancaire / Financier","Commercial / Centre commercial","Résidentiel / Immeuble","Institutionnel / Administratif","Hôtelier","Hospitalier / Médical","Éducatif / Universitaire","Aéroportuaire / Portuaire","Pétrolier / Gazier","Logistique / Entrepôt","Chantier BTP","Site minier","Ambassade / Consulat","Autre"];
   const typeSiteOpts='<option value="">— Sélectionner —</option>'+typesSite.map(t=>'<option value="'+escapeHTML(t)+'"'+(s.typeSite===t?' selected':'')+'>'+escapeHTML(t)+'</option>').join('');
   const identSiteGrid='<div class="rh-op-grid">'
@@ -29195,6 +29251,22 @@ function techSitePanelHTML(si,s,pfx='ts'){
         <tbody id="${pfx}-${si}-materiel-body">${materielRows}</tbody>
       </table>
       <button type="button" class="btn btn-ghost" style="margin-top:6px;font-size:12px" onclick="clientMaterielAdd(${si},'${pfx}')">+ Ajouter un équipement</button>
+    </fieldset>
+    <fieldset class="rh-op-box">
+      <legend class="rh-op-legend">Effectif global</legend>
+      <input type="hidden" id="${pfx}-${si}-lignes-json" name="${pfx}_${si}_lignes" value="${escapeHTML(JSON.stringify(lignes))}"/>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f1f5f9">
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:120px">Prix unitaire</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:80px">Qté</th>
+          <th style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:200px">Total</th>
+          <th style="border:1px solid #e2e8f0;width:36px"></th>
+        </tr></thead>
+        <tbody id="${pfx}-${si}-lignes-body">${lignesRows}</tbody>
+      </table>
+      <button type="button" class="btn btn-ghost" style="margin-top:6px;font-size:12px" onclick="clientSiteLigneAdd(${si},'${pfx}')">+ Ajouter une ligne</button>
+      <div id="${pfx}-${si}-lignes-total" style="margin-top:10px;text-align:right">${lignesTotalHTML}</div>
     </fieldset>
   </div>`;
 }
@@ -29547,28 +29619,7 @@ function openClientModal(id,readOnly=false){
       <select class="select" style="width:100%;margin:5px 0 4px" onchange="clientContractPrestationAdd(this)">${commPrestationsOptionsHTML(selectedSoc)}</select>
       <textarea id="prest-contrat" class="input" name="prestationsServices" rows="3" style="width:100%" placeholder="Décrivez ou complétez..." required oninput="(function(v){var o=document.getElementById('prest-ident');if(o)o.value=v;})(this.value)">${escapeHTML(c?.prestationsServices||"")}</textarea>
     </div>
-    <div style="margin-top:12px">
-      <span style="font-size:11px;color:#334155;font-weight:900;display:block;margin-bottom:6px">Effectif global</span>
-      <input type="hidden" name="lignesFacturation" value="${escapeHTML(JSON.stringify(c?.lignesFacturation||[]))}"/>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="background:#f1f5f9">
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:120px">Prix unitaire</th>
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:80px">Qté</th>
-          <th style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:200px">Total</th>
-          <th style="border:1px solid #e2e8f0;width:36px"></th>
-        </tr></thead>
-        <tbody id="client-lignes-body">${(c?.lignesFacturation||[]).map((l,i)=>`<tr data-idx="${i}">
-          <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(l.designation||"")}" oninput="clientLigneUpdate(this)"/></td>
-          <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;text-align:right" value="${escapeHTML(formatDZD(l.prixUnitaire||0))}" oninput="clientLigneUpdate(this)" onfocus="this.value=parseDZD(this.value)||''" onblur="this.value=formatDZD(this.value)"/></td>
-          <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" step="1" min="0" style="width:100%" value="${escapeHTML(String(l.qte||1))}" oninput="clientLigneUpdate(this)"/></td>
-          <td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:right;font-weight:700;color:#043970">${escapeHTML(formatDZD((l.prixUnitaire||0)*(l.qte||1)))}</td>
-          <td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientLigneRemove(this)">✕</button></td>
-        </tr>`).join("")}</tbody>
-      </table>
-      <button type="button" class="btn btn-ghost" style="margin-top:6px;font-size:12px" onclick="clientLigneAdd()">+ Ajouter une ligne</button>
-      <div id="client-lignes-total" style="margin-top:10px;text-align:right">${(()=>{const lignes=c?.lignesFacturation||[];if(!lignes.length)return"";const totalQte=lignes.reduce((s,l)=>s+(parseFloat(l.qte)||1),0);const ht=lignes.reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);const tva=ht*0.19;const ttc=ht+tva;return clientLignesTotalHTML(totalQte,ht,tva,ttc)})()} </div>
-    </div>
+    <input type="hidden" name="lignesFacturation" value="${escapeHTML(JSON.stringify(c?.lignesFacturation||[]))}"/>
     ${(()=>{
       const ctsNbr=clientNbrSites(c);
       const ctsSites=c?.tech_sites||[];
