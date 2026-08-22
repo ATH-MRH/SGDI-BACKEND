@@ -4481,6 +4481,25 @@ function sgdiModuleHostConfigs(){
         {label:"STATISTIQUES",route:"commercial/stats"}
       ]
     },
+    secretariat:{
+      key:"secretariat",
+      title:"Secrétariat Général",
+      context:"Circulation, contrôle et archivage des documents officiels",
+      homeRoute:"secretariat/dashboard",
+      sections:[
+        {label:"TABLEAU DE BORD",route:"secretariat/dashboard"},
+        {label:"COURRIER",route:"secretariat/courriers"},
+        {label:"PARAPHEUR",route:"secretariat/parapheur"},
+        {label:"ORDRES DE MISSION",route:"secretariat/missions"},
+        {label:"AGENDA",route:"secretariat/agenda"},
+        {label:"RÉUNIONS ET PV",route:"secretariat/reunions"},
+        {label:"DÉCISIONS",route:"secretariat/decisions"},
+        {label:"DOCUMENTS OFFICIELS",route:"secretariat/documents"},
+        {label:"MESSAGERIE",route:"secretariat/messagerie"},
+        {label:"ARCHIVES",route:"secretariat/archives"},
+        {label:"HISTORIQUE",route:"secretariat/historique"}
+      ]
+    },
     facturation:{
       key:"facturation",
       title:"Portail Finances & Comptabilité",
@@ -4573,7 +4592,7 @@ function sgdiModuleHostConfig(){
   const host=String(location.hostname||"").toLowerCase();
   const configs=sgdiModuleHostConfigs();
   const first=host?host.split(".")[0]:"";
-  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",fac:"facmod",dc:"commercial",sup:"superviseur",supervisor:"superviseur"};
+  const hostAliases={finances:"facturation",finance:"facturation",comptabilite:"facturation",compta:"facturation",fac:"facmod",dc:"commercial",sg:"secretariat",sup:"superviseur",supervisor:"superviseur"};
   const configKey=hostAliases[first]||first;
   // Domaine dédié (ex: drh.sgdi.com, facturation.sgdi.com)
   if(host&&first!=="localhost"&&host!=="127.0.0.1"&&host!=="0.0.0.0"&&host!=="::1"&&first!=="sgdi"&&first!=="www"&&first!=="atlas"){
@@ -6392,7 +6411,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","commercial/dashboard"],["CLIENT","commercial/clients"],["PROSPECTS","commercial/prospects"],["OPPORTUNITÉS","commercial/opportunites"],["VISITES / SUIVI","commercial/visites"],["CATALOGUE PRESTATIONS","commercial/catalogue"],["TARIFICATION","commercial/tarifs"],["STATISTIQUES","commercial/stats"]
     ],
     secretariat:[
-      ["TABLEAU DE BORD","secretariat/dashboard"],["COURRIERS","secretariat/courriers"],["NOTES INTERNES","secretariat/notes"],["ARCHIVES","secretariat/archives"],["MAIN COURANTE","incidents/dashboard"]
+      ["TABLEAU DE BORD","secretariat/dashboard"],["COURRIER","secretariat/courriers"],["PARAPHEUR","secretariat/parapheur"],["ORDRES DE MISSION","secretariat/missions"],["AGENDA","secretariat/agenda"],["RÉUNIONS ET PV","secretariat/reunions"],["DÉCISIONS","secretariat/decisions"],["DOCUMENTS OFFICIELS","secretariat/documents"],["MESSAGERIE","secretariat/messagerie"],["ARCHIVES","secretariat/archives"],["HISTORIQUE","secretariat/historique"]
     ],
     agenda:[
       ["TABLEAU DE BORD","agenda/dashboard"],["LISTE","agenda/liste"],["SEMAINE","agenda/semaine"],["RAPPELS","agenda/rappels"]
@@ -6679,10 +6698,16 @@ function renderSidebar(){
       ],
       secretariat:[
         {label:"TABLEAU DE BORD",route:"secretariat/dashboard",group:"PILOTAGE"},
-        {label:"COURRIERS",route:"secretariat/courriers",group:"COURRIER"},
-        {label:"NOTES INTERNES",route:"secretariat/notes",group:"COURRIER"},
-        {label:"ARCHIVES",route:"secretariat/archives",group:"COURRIER"},
-        {label:"MAIN COURANTE",route:"incidents/dashboard",aliases:["incidents"],group:"SUIVI",count:opsIncidents.length}
+        {label:"COURRIER",route:"secretariat/courriers",group:"GESTION DOCUMENTAIRE"},
+        {label:"PARAPHEUR",route:"secretariat/parapheur",group:"GESTION DOCUMENTAIRE"},
+        {label:"ORDRES DE MISSION",route:"secretariat/missions",group:"GESTION DOCUMENTAIRE",count:(db.missions||[]).filter(m=>m.workflowStatus==="transmise_sg").length||null},
+        {label:"DOCUMENTS OFFICIELS",route:"secretariat/documents",group:"GESTION DOCUMENTAIRE"},
+        {label:"AGENDA",route:"secretariat/agenda",group:"COORDINATION"},
+        {label:"RÉUNIONS ET PV",route:"secretariat/reunions",group:"COORDINATION"},
+        {label:"DÉCISIONS",route:"secretariat/decisions",group:"COORDINATION"},
+        {label:"MESSAGERIE",route:"secretariat/messagerie",group:"SUIVI"},
+        {label:"ARCHIVES",route:"secretariat/archives",group:"SUIVI"},
+        {label:"HISTORIQUE",route:"secretariat/historique",group:"SUIVI"}
       ],
       agenda:[
         {label:"TABLEAU DE BORD",route:"agenda/dashboard",group:"PILOTAGE"},
@@ -35997,13 +36022,49 @@ function renderSecretariat(view,sub,arg){
   const notes=secretariatScopedItems(db.secretariatNotes);
   const archives=courriers.filter(c=>c.archive||c.statut==="archive");
   const ouverts=courriers.filter(c=>!c.archive&&c.statut!=="archive");
+  const missions=secretariatScopedItems(db.missions||[]).filter(m=>["transmise_sg","validee_sg","paiement_en_attente","cloturee"].includes(m.workflowStatus));
+  const missionsPending=missions.filter(m=>m.workflowStatus==="transmise_sg");
+  const reunions=secretariatScopedItems(db.secretariatReunions||[]);
+  const decisions=secretariatScopedItems(db.secretariatDecisions||[]);
   const card=(label,value,route,color)=>`<a href="#/${route}" class="card p-4 block kpi-clickable" style="text-decoration:none;color:inherit;border:1px solid ${color}44"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${value}</div></a>`;
   if(sub==="courriers")return renderSecretariatList(view,"Courriers",courriers);
   if(sub==="notes")return renderSecretariatList(view,"Notes internes",notes);
+  if(sub==="parapheur")return renderSecretariatParapheur(view,missionsPending,ouverts);
+  if(sub==="missions")return renderSecretariatMissions(view,missions);
+  if(sub==="agenda")return renderAgenda(view,"dashboard",arg);
+  if(sub==="reunions")return renderSecretariatRegistry(view,"Réunions et procès-verbaux",reunions,"reunion");
+  if(sub==="decisions")return renderSecretariatRegistry(view,"Registre des décisions",decisions,"decision");
+  if(sub==="documents")return renderDocumentsArchives(view,"archives",arg);
+  if(sub==="messagerie")return renderDemandesStructure(view,"dashboard",arg);
+  if(sub==="historique")return renderSecretariatHistory(view);
   if(sub==="archives")return renderSecretariatList(view,"Archives",archives);
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SECRETARIAT GÉNÉRAL</h1><p class="text-sm text-slate-500">Courriers, notes internes, archives et suivi administratif${soc?` · ${escapeHTML(soc)}`:""}.</p></div><button class="btn btn-secondary" onclick="openSecretariatCourrierModal()">＋ Nouveau courrier</button></div>
-  <div class="grid grid-4 gap-3 mb-5">${card("Courriers",courriers.length,"secretariat/courriers","#043970")}${card("En cours",ouverts.length,"secretariat/courriers","#f59e0b")}${card("Notes internes",notes.length,"secretariat/notes","#0f766e")}${card("Archives",archives.length,"secretariat/archives","#64748b")}</div>
-  <div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Derniers courriers</h3><span class="pill">${courriers.length} élément(s)</span></div>${secretariatTableHTML(courriers.slice(0,8))}</div>`;
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SECRÉTARIAT GÉNÉRAL</h1><p class="text-sm text-slate-500">Circulation, contrôle, validation et archivage des documents officiels${soc?` · ${escapeHTML(soc)}`:""}.</p></div><button class="btn btn-secondary" onclick="openSecretariatCourrierModal()">＋ Nouveau courrier</button></div>
+  <div class="grid grid-4 gap-3 mb-5">${card("À traiter",ouverts.length,"secretariat/courriers","#f59e0b")}${card("Parapheur",missionsPending.length+ouverts.length,"secretariat/parapheur","#7c3aed")}${card("Ordres de mission",missionsPending.length,"secretariat/missions","#043970")}${card("Décisions en cours",decisions.filter(d=>d.statut!=="cloturee").length,"secretariat/decisions","#0f766e")}</div>
+  <div class="grid grid-2 gap-4"><div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Derniers courriers</h3><span class="pill">${courriers.length} élément(s)</span></div>${secretariatTableHTML(courriers.slice(0,6))}</div><div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Échéances institutionnelles</h3><span class="pill pill-blue">${reunions.length} réunion(s)</span></div>${reunions.length?reunions.slice(0,6).map(r=>`<div style="padding:10px 0;border-bottom:1px solid #e2e8f0"><b>${escapeHTML(r.objet||"Réunion")}</b><div class="text-xs text-slate-500">${formatDate(r.date)} · ${escapeHTML(r.lieu||"Lieu à préciser")}</div></div>`).join(""):`<div class="text-sm text-slate-400 p-5 text-center">Aucune réunion programmée.</div>`}</div></div>`;
+}
+
+function secretariatPageHeader(title,subtitle,action=""){
+  return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">${escapeHTML(title)}</h1><p class="text-sm text-slate-500">${escapeHTML(subtitle)}</p></div>${action}</div>`;
+}
+function renderSecretariatParapheur(view,missions,courriers){
+  const rows=[...missions.map(m=>({type:"Ordre de mission",ref:m.numero,objet:m.objet||m.motif,date:m.opsOrderValidatedAt||m.updatedAt,status:"À valider SG",action:`<button class="btn btn-primary text-xs" onclick="navigate('secretariat/missions')">Examiner</button>`})),...courriers.map(c=>({type:"Courrier",ref:c.ref,objet:c.objet,date:c.date,status:c.statut||"En cours",action:`<button class="btn btn-ghost text-xs" onclick="navigate('secretariat/courriers')">Ouvrir</button>`}))];
+  view.innerHTML=secretariatPageHeader("Parapheur électronique","Documents à vérifier, valider, signer ou retourner.")+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Type</th><th>Référence</th><th>Objet</th><th>Reçu le</th><th>État</th><th></th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td class="font-bold">${escapeHTML(r.type)}</td><td class="font-mono text-xs">${escapeHTML(r.ref||"—")}</td><td>${escapeHTML(r.objet||"—")}</td><td class="text-xs">${formatDate(r.date)}</td><td><span class="pill pill-amber">${escapeHTML(r.status)}</span></td><td>${r.action}</td></tr>`).join(""):`<tr><td colspan="6" class="p-8 text-center text-slate-400">Parapheur à jour.</td></tr>`}</tbody></table></div>`;
+}
+function renderSecretariatMissions(view,missions){
+  view.innerHTML=secretariatPageHeader("Ordres de mission","Contrôle SG des ordres préparés et validés par OPS.")+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Référence</th><th>Missionnaire</th><th>Objet / lieu</th><th>Période</th><th>Statut</th><th>Actions</th></tr></thead><tbody>${missions.length?missions.map(m=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(m.numero||"—")}</td><td class="font-bold">${escapeHTML(m.agentName||"À désigner")}</td><td><b>${escapeHTML(m.objet||m.motif||"—")}</b><div class="text-xs text-slate-500">${escapeHTML(m.lieu||"—")}</div></td><td class="text-xs">${formatDate(m.dateDebut)} → ${formatDate(m.dateFin)}</td><td><span class="pill ${m.workflowStatus==="transmise_sg"?"pill-amber":"pill-green"}">${escapeHTML(dcMissionStatusLabel(m))}</span></td><td><div class="flex gap-2 flex-wrap"><button class="btn btn-ghost text-xs" onclick="secretariatPrintMission('${escapeHTML(m.id)}')">Aperçu</button>${m.workflowStatus==="transmise_sg"?`<button class="btn btn-primary text-xs" onclick="secretariatValidateMission('${escapeHTML(m.id)}')">Valider SG</button>`:""}</div></td></tr>`).join(""):`<tr><td colspan="6" class="p-8 text-center text-slate-400">Aucun ordre de mission transmis par OPS.</td></tr>`}</tbody></table></div>`;
+}
+function secretariatPrintMission(id){
+  const mission=(db.missions||[]).find(m=>String(m.id)===String(id));if(!mission)return;
+  const popup=window.open("","_blank","width=900,height=700");if(!popup){toast("Fenêtre d’aperçu bloquée","error");return}
+  popup.document.write(typeof opsMissionDocumentHTML==="function"?opsMissionDocumentHTML(mission):`<h1>${escapeHTML(mission.numero||"Ordre de mission")}</h1>`);popup.document.close();
+}
+async function secretariatValidateMission(id){
+  const mission=(db.missions||[]).find(m=>String(m.id)===String(id));if(!mission||mission.workflowStatus!=="transmise_sg")return;
+  if(!confirm("Valider cet ordre de mission et le transmettre à Finance / Caisse ?"))return;
+  const now=new Date().toISOString(),updated={...mission,workflowStatus:"validee_sg",sgValidatedAt:now,sgValidatedBy:session?.username||"SG",updatedAt:now,audit:[...(mission.audit||[]),{action:"Ordre de mission contrôlé et validé par SG",at:now,by:session?.username||"SG"}]};
+  const request={id:uid("mission_expense"),missionId:mission.id,missionNumber:mission.numero,societe:mission.societe,agentId:mission.agentId||"",agentName:mission.agentName||"",objet:mission.objet||mission.motif||"",dateDebut:mission.dateDebut,dateFin:mission.dateFin,status:"a_calculer",source:"secretariat",createdAt:now};
+  try{await sgdiApi("/api/irongs/collections/missions/items/"+encodeURIComponent(mission.id),{method:"PATCH",body:{data:updated},legacy:false});await sgdiApi("/api/irongs/collections/missionExpenseRequests/items",{method:"POST",body:{data:request},legacy:false})}catch(e){toast("Validation SG non transmise : "+(e.message||e),"error");return}
+  Object.assign(mission,updated);db.missionExpenseRequests=db.missionExpenseRequests||[];db.missionExpenseRequests.unshift(request);toast("Ordre validé et transmis à Finance / Caisse","success");renderView();
 }
 function secretariatTableHTML(items){
   return `<div class="overflow-x-auto"><table><thead><tr><th>Référence</th><th>Date</th><th>Objet</th><th>Origine / Destinataire</th><th>Statut</th></tr></thead><tbody>${items.length?items.map(c=>`<tr data-searchable><td class="font-mono text-xs font-bold">${escapeHTML(c.ref||"—")}</td><td class="text-xs">${formatDate(c.date||c.createdAt)}</td><td class="font-semibold">${escapeHTML(c.objet||"—")}</td><td class="text-xs">${escapeHTML(c.tiers||"—")}</td><td><span class="pill ${c.archive||c.statut==="archive"?"pill-gray":"pill-blue"}">${escapeHTML(c.statut||"en cours")}</span></td></tr>`).join(""):`<tr><td colspan="5" class="text-center text-slate-500 p-6">Aucun élément enregistré.</td></tr>`}</tbody></table></div>`;
@@ -36011,6 +36072,25 @@ function secretariatTableHTML(items){
 function renderSecretariatList(view,title,items){
   view.innerHTML=`<div class="flex items-center justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">${escapeHTML(title)}</h1><p class="text-sm text-slate-500">Module Secretariat Général.</p></div><button class="btn btn-secondary" onclick="navigate('secretariat/dashboard')">← Tableau de bord</button></div><div class="card p-5">${secretariatTableHTML(items)}</div>`;
 }
+function renderSecretariatRegistry(view,title,items,type){
+  const isDecision=type==="decision";
+  view.innerHTML=secretariatPageHeader(title,isDecision?"Suivi des décisions, responsables et échéances.":"Planification des réunions, ordres du jour et procès-verbaux.",`<button class="btn btn-primary" onclick="openSecretariatRegistryModal('${type}')">＋ ${isDecision?"Nouvelle décision":"Nouvelle réunion"}</button>`)+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Référence</th><th>${isDecision?"Décision":"Objet"}</th><th>${isDecision?"Responsable":"Date / lieu"}</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>${items.length?items.map(item=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(item.ref||"—")}</td><td class="font-bold">${escapeHTML(item.objet||"—")}</td><td>${escapeHTML(isDecision?(item.responsable||"—"):(`${formatDate(item.date)} · ${item.lieu||"—"}`))}</td><td class="text-xs">${formatDate(item.echeance||item.date)}</td><td><span class="pill pill-blue">${escapeHTML(item.statut||"planifiee")}</span></td></tr>`).join(""):`<tr><td colspan="5" class="p-8 text-center text-slate-400">Aucun élément enregistré.</td></tr>`}</tbody></table></div>`;
+}
+function openSecretariatRegistryModal(type){
+  const isDecision=type==="decision",prefix=isDecision?"DEC":"PV";
+  openModal(`<h3 class="font-bold text-lg mb-3">${isDecision?"Nouvelle décision":"Nouvelle réunion"}</h3><form onsubmit="event.preventDefault();saveSecretariatRegistry(this,'${type}')"><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="label">Référence</label><input class="input" name="ref" value="${prefix}-${new Date().getFullYear()}-${String(Math.floor(Math.random()*9000+1000))}"/></div><div><label class="label">Date</label><input class="input" type="date" name="date" value="${today()}"/></div><div class="md:col-span-2"><label class="label">${isDecision?"Décision":"Objet de la réunion"}</label><input class="input" name="objet" required/></div><div><label class="label">${isDecision?"Responsable d’exécution":"Lieu"}</label><input class="input" name="responsable"/></div><div><label class="label">Échéance</label><input class="input" type="date" name="echeance"/></div><div class="md:col-span-2"><label class="label">${isDecision?"Instructions":"Ordre du jour / procès-verbal"}</label><textarea class="input" name="details" rows="4"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
+}
+async function saveSecretariatRegistry(form,type){
+  const fd=new FormData(form),isDecision=type==="decision",key=isDecision?"secretariatDecisions":"secretariatReunions";db[key]=db[key]||[];
+  db[key].unshift({id:uid(isDecision?"decision":"reunion"),ref:String(fd.get("ref")||"").trim(),objet:String(fd.get("objet")||"").trim(),date:fd.get("date")||today(),lieu:isDecision?"":String(fd.get("responsable")||"").trim(),responsable:isDecision?String(fd.get("responsable")||"").trim():"",echeance:fd.get("echeance")||"",details:String(fd.get("details")||"").trim(),statut:isDecision?"a_executer":"planifiee",societe:currentStructureSocieteFilter()||session?.societe||"",createdAt:new Date().toISOString(),createdBy:session?.username||"SG"});
+  if(!(await saveDBAndWaitToast("Enregistrement SG non confirmé")))return;closeModal();toast(isDecision?"Décision enregistrée":"Réunion enregistrée","success");renderView();
+}
+function renderSecretariatHistory(view){
+  const rows=[];(db.missions||[]).forEach(m=>(m.audit||[]).forEach(a=>rows.push({...a,ref:m.numero||"Mission",type:"Ordre de mission"})));
+  (db.secretariatCourriers||[]).forEach(c=>rows.push({at:c.createdAt,by:c.createdBy,action:"Courrier enregistré",ref:c.ref,type:"Courrier"}));rows.sort((a,b)=>String(b.at||"").localeCompare(String(a.at||"")));
+  view.innerHTML=secretariatPageHeader("Historique","Traçabilité horodatée des opérations du Secrétariat Général.")+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Date</th><th>Type</th><th>Référence</th><th>Action</th><th>Utilisateur</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td class="text-xs">${r.at?new Date(r.at).toLocaleString("fr-DZ"):"—"}</td><td>${escapeHTML(r.type||"—")}</td><td class="font-mono text-xs">${escapeHTML(r.ref||"—")}</td><td>${escapeHTML(r.action||"—")}</td><td class="font-bold">${escapeHTML(r.by||"—")}</td></tr>`).join(""):`<tr><td colspan="5" class="p-8 text-center text-slate-400">Aucun historique.</td></tr>`}</tbody></table></div>`;
+}
+window.secretariatPrintMission=secretariatPrintMission;window.secretariatValidateMission=secretariatValidateMission;window.openSecretariatRegistryModal=openSecretariatRegistryModal;window.saveSecretariatRegistry=saveSecretariatRegistry;
 function openSecretariatCourrierModal(){
   openModal(`<h3 class="font-bold text-lg mb-3">Nouveau courrier</h3><form onsubmit="event.preventDefault();saveSecretariatCourrier(this)"><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="label">Référence</label><input class="input" name="ref" value="SEC-${new Date().toISOString().slice(0,10).replaceAll('-','')}-${Math.floor(Math.random()*9000+1000)}"/></div><div><label class="label">Date</label><input class="input" type="date" name="date" value="${today()}"/></div><div class="md:col-span-2"><label class="label">Objet</label><input class="input" name="objet" required/></div><div class="md:col-span-2"><label class="label">Origine / Destinataire</label><input class="input" name="tiers"/></div><div class="md:col-span-2"><label class="label">Observation</label><textarea class="input" name="note" rows="3"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer</button></div></form>`);
 }
