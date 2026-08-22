@@ -28876,6 +28876,8 @@ function techSitesRerender(val){
 function techSiteTab(si,pfx='ts'){
   document.querySelectorAll(`[id^='${pfx}-panel-']`).forEach((p,i)=>p.style.display=i===si?"block":"none");
   document.querySelectorAll(`[id^='${pfx}-tab-']`).forEach((b,i)=>{b.style.borderBottom=i===si?"2px solid #1d4ed8":"2px solid transparent";b.style.color=i===si?"#1d4ed8":"#64748b";});
+  const editor=document.querySelector("form[data-client-editor='1']");
+  if(pfx==='ts'&&editor?.dataset.clientReadonly!=="1")techUnlockDonneesTechniques();
 }
 function techSitesSyncHidden(){
   const form=document.querySelector("#view form")||document.querySelector(".modal-bg form");
@@ -29051,6 +29053,7 @@ function clientSitesRender(pfx,sites){
   if(!isContract)techRecapUpdate();
   if(relockContract)clientLockContrat();
   if(relockTech)techLockDonneesTechniques();
+  else if(!isContract&&form?.dataset.clientReadonly!=="1")techUnlockDonneesTechniques();
 }
 function clientSitesMirror(sourcePfx){
   const isContract=sourcePfx==="cts";
