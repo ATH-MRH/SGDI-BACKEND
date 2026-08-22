@@ -4129,7 +4129,15 @@ function globalSocieteBandPick(s){
 }
 function bySoc(arr,key="societe"){const s=mySoc();return s?arr.filter(x=>x&&x[key]===s):arr}
 function clientNbrSites(client){return Math.max(parseInt(client?.tech_nbrSite)||0,Array.isArray(client?.tech_sites)?client.tech_sites.length:0)}
-function clientSiteEffectif(site){const saved=parseInt(site?.totalEffectif)||0;if(saved>0)return saved;const g=parseInt(site?.nbrGroupe)||0,j=parseInt(site?.nbrJour)||0,n=parseInt(site?.nbrNuit)||0;return g*n+Math.max(0,j-n)}
+function clientSiteEffectif(site){
+  const saved=parseInt(site?.totalEffectif)||0;if(saved>0)return saved;
+  const g=parseInt(site?.nbrGroupe)||0,j=parseInt(site?.nbrJour)||0,n=parseInt(site?.nbrNuit)||0;
+  const vacation=g*n+Math.max(0,j-n);
+  if(vacation>0)return vacation;
+  // Repli : somme des quantités saisies dans Effectif par site, si aucun effectif n'a été
+  // renseigné via le calcul par vacation/groupe.
+  return (site?.lignesFacturation||[]).reduce((sum,l)=>sum+(parseFloat(l?.qte)||0),0);
+}
 function clientTotalEffectif(client){return (client?.tech_sites||[]).reduce((sum,site)=>sum+clientSiteEffectif(site),0)}
 function clientCatalogMap(client){
   const map={};
