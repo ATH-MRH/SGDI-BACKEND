@@ -29195,7 +29195,7 @@ function techSitePanelHTML(si,s,pfx='ts'){
       ${identSiteGrid}
     </fieldset>
     <fieldset class="rh-op-box" style="margin-bottom:10px">
-      <legend class="rh-op-legend">Effectif global</legend>
+      <legend class="rh-op-legend">Effectif par site</legend>
       <input type="hidden" id="${pfx}-${si}-lignes-json" name="${pfx}_${si}_lignes" value="${escapeHTML(JSON.stringify(lignes))}"/>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:#f1f5f9">
@@ -29619,7 +29619,28 @@ function openClientModal(id,readOnly=false){
       <select class="select" style="width:100%;margin:5px 0 4px" onchange="clientContractPrestationAdd(this)">${commPrestationsOptionsHTML(selectedSoc)}</select>
       <textarea id="prest-contrat" class="input" name="prestationsServices" rows="3" style="width:100%" placeholder="Décrivez ou complétez..." required oninput="(function(v){var o=document.getElementById('prest-ident');if(o)o.value=v;})(this.value)">${escapeHTML(c?.prestationsServices||"")}</textarea>
     </div>
-    <input type="hidden" name="lignesFacturation" value="${escapeHTML(JSON.stringify(c?.lignesFacturation||[]))}"/>
+    <div style="margin-top:12px">
+      <span style="font-size:11px;color:#334155;font-weight:900;display:block;margin-bottom:6px">Effectif global</span>
+      <input type="hidden" name="lignesFacturation" value="${escapeHTML(JSON.stringify(c?.lignesFacturation||[]))}"/>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f1f5f9">
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:120px">Prix unitaire</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:80px">Qté</th>
+          <th style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:200px">Total</th>
+          <th style="border:1px solid #e2e8f0;width:36px"></th>
+        </tr></thead>
+        <tbody id="client-lignes-body">${(c?.lignesFacturation||[]).map((l,i)=>`<tr data-idx="${i}">
+          <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(l.designation||"")}" oninput="clientLigneUpdate(this)"/></td>
+          <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;text-align:right" value="${escapeHTML(formatDZD(l.prixUnitaire||0))}" oninput="clientLigneUpdate(this)" onfocus="this.value=parseDZD(this.value)||''" onblur="this.value=formatDZD(this.value)"/></td>
+          <td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" step="1" min="0" style="width:100%" value="${escapeHTML(String(l.qte||1))}" oninput="clientLigneUpdate(this)"/></td>
+          <td style="border:1px solid #e2e8f0;padding:4px 8px;text-align:right;font-weight:700;color:#043970">${escapeHTML(formatDZD((l.prixUnitaire||0)*(l.qte||1)))}</td>
+          <td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientLigneRemove(this)">✕</button></td>
+        </tr>`).join("")}</tbody>
+      </table>
+      <button type="button" class="btn btn-ghost" style="margin-top:6px;font-size:12px" onclick="clientLigneAdd()">+ Ajouter une ligne</button>
+      <div id="client-lignes-total" style="margin-top:10px;text-align:right">${(()=>{const lignes=c?.lignesFacturation||[];if(!lignes.length)return"";const totalQte=lignes.reduce((s,l)=>s+(parseFloat(l.qte)||1),0);const ht=lignes.reduce((s,l)=>s+(l.prixUnitaire||0)*(l.qte||1),0);const tva=ht*0.19;const ttc=ht+tva;return clientLignesTotalHTML(totalQte,ht,tva,ttc)})()} </div>
+    </div>
     ${(()=>{
       const ctsNbr=clientNbrSites(c);
       const ctsSites=c?.tech_sites||[];
