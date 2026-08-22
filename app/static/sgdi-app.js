@@ -29641,12 +29641,48 @@ function dcMissionNextNumber(){
   return `MIS-${year}-${String((nums.length?Math.max(...nums):0)+1).padStart(4,"0")}`;
 }
 function dcMissionMoneyValue(value){return Number(parseDZD(value)||0)}
+function dcMissionInternalCostRows(){
+  return Array.from(document.querySelectorAll("#dc-mission-internal-costs tr[data-cost-row]")).map(row=>{
+    const designation=String(row.querySelector("[data-cost-designation]")?.value||"").trim();
+    const category=String(row.querySelector("[data-cost-category]")?.value||"Autre");
+    const quantity=Math.max(0,dcMissionMoneyValue(row.querySelector("[data-cost-quantity]")?.value));
+    const unitCost=Math.max(0,dcMissionMoneyValue(row.querySelector("[data-cost-unit]")?.value));
+    return {category,designation,quantity,unitCost,total:quantity*unitCost};
+  }).filter(item=>item.designation||item.total>0);
+}
+function dcMissionCostRowHTML(item={}){
+  const categories=["Personnel","Transport","Carburant","Hébergement","Restauration","Location","Matériel","Péage","Autre"];
+  return `<tr data-cost-row>
+    <td style="padding:4px;border:1px solid #e2e8f0"><select class="select" data-cost-category onchange="dcMissionRecalculate()" style="width:100%;min-width:120px">${categories.map(category=>`<option value="${category}" ${String(item.category||"Autre")===category?"selected":""}>${category}</option>`).join("")}</select></td>
+    <td style="padding:4px;border:1px solid #e2e8f0"><input class="input" data-cost-designation value="${escapeHTML(item.designation||"")}" placeholder="Ex. Chauffeur, carburant..." oninput="dcMissionRecalculate()" style="width:100%;min-width:180px"/></td>
+    <td style="padding:4px;border:1px solid #e2e8f0;width:90px"><input class="input" data-cost-quantity inputmode="decimal" value="${escapeHTML(String(item.quantity??1).replace(".",","))}" oninput="dcMissionRecalculate()" style="width:100%;text-align:center"/></td>
+    <td style="padding:4px;border:1px solid #e2e8f0;width:150px"><input class="input" data-cost-unit inputmode="decimal" value="${item.unitCost?escapeHTML(formatDZD(item.unitCost)):""}" placeholder="00 000,00 DZD" onfocus="this.value=dcMissionMoneyValue(this.value)||''" oninput="dcMissionRecalculate()" onblur="this.value=this.value?formatDZD(this.value):'';dcMissionRecalculate()" style="width:100%;text-align:right"/></td>
+    <td data-cost-total style="padding:8px;border:1px solid #e2e8f0;width:155px;text-align:right;font-weight:900;white-space:nowrap">${formatDZD((item.quantity??1)*(item.unitCost||0))}</td>
+    <td style="padding:4px;border:1px solid #e2e8f0;width:42px;text-align:center"><button type="button" aria-label="Supprimer ce coût" style="border:1px solid #fecaca;border-radius:7px;background:#fff1f2;color:#dc2626;font-weight:900;padding:6px 9px;cursor:pointer" onclick="dcMissionRemoveCostRow(this)">×</button></td>
+  </tr>`;
+}
+function dcMissionAddCostRow(item={}){
+  const body=document.getElementById("dc-mission-internal-costs");if(!body)return;
+  body.insertAdjacentHTML("beforeend",dcMissionCostRowHTML(item));
+  body.lastElementChild?.querySelector("[data-cost-designation]")?.focus();
+  dcMissionRecalculate();
+}
+function dcMissionRemoveCostRow(button){
+  button?.closest("tr[data-cost-row]")?.remove();
+  const body=document.getElementById("dc-mission-internal-costs");
+  if(body&&!body.children.length)body.insertAdjacentHTML("beforeend",dcMissionCostRowHTML());
+  dcMissionRecalculate();
+}
 function dcMissionRecalculate(){
   const form=document.querySelector("#view form[data-client-editor='1']");if(!form)return;
-  const internal=dcMissionMoneyValue(form.elements.missionCoutInterne?.value),subcontract=dcMissionMoneyValue(form.elements.missionCoutSousTraitance?.value),other=dcMissionMoneyValue(form.elements.missionAutresCouts?.value),sale=dcMissionMoneyValue(form.elements.missionPrixVenteHT?.value);
-  const cost=internal+subcontract+other,margin=sale-cost,rate=sale?margin*100/sale:0;
+  const items=dcMissionInternalCostRows(),internal=items.reduce((sum,item)=>sum+item.total,0),subcontract=dcMissionMoneyValue(form.elements.missionCoutSousTraitance?.value),other=dcMissionMoneyValue(form.elements.missionAutresCouts?.value);
+  const baseCost=internal+subcontract+other,contingencyRate=Math.max(0,dcMissionMoneyValue(form.elements.missionContingencyPercent?.value)),contingency=baseCost*contingencyRate/100,cost=baseCost+contingency;
+  const markupRate=Math.max(0,dcMissionMoneyValue(form.elements.missionMarginPercent?.value)),sale=cost*(1+markupRate/100),margin=sale-cost,brandRate=sale?margin*100/sale:0;
   const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value};
-  set("dc-mission-cost-total",formatDZD(cost));set("dc-mission-margin",formatDZD(margin));set("dc-mission-margin-rate",rate.toFixed(2).replace(".",",")+" %");
+  document.querySelectorAll("#dc-mission-internal-costs tr[data-cost-row]").forEach(row=>{const q=dcMissionMoneyValue(row.querySelector("[data-cost-quantity]")?.value),u=dcMissionMoneyValue(row.querySelector("[data-cost-unit]")?.value),cell=row.querySelector("[data-cost-total]");if(cell)cell.textContent=formatDZD(q*u)});
+  if(form.elements.missionCoutInterne)form.elements.missionCoutInterne.value=String(internal);
+  if(form.elements.missionPrixVenteHT)form.elements.missionPrixVenteHT.value=formatDZD(sale);
+  set("dc-mission-internal-total",formatDZD(internal));set("dc-mission-contingency",formatDZD(contingency));set("dc-mission-cost-total",formatDZD(cost));set("dc-mission-margin",formatDZD(margin));set("dc-mission-brand-rate",brandRate.toFixed(2).replace(".",",")+" %");
 }
 function dcMissionStatusLabel(m){
   return({transmise_ops:"Transmise à OPS",ordre_ops_valide:"Ordre OPS validé",transmise_sg:"Transmise à SG",validee_sg:"Validée SG",paiement_en_attente:"Paiement à valider",cloturee:"Clôturée",annulee:"Annulée"})[m?.workflowStatus||m?.statut]||"Brouillon";
@@ -29663,11 +29699,12 @@ async function validateDcMission(clientId){
   const fd=new FormData(form),objet=String(fd.get("missionObjet")||"").trim(),start=String(fd.get("missionDateDebut")||""),end=String(fd.get("missionDateFin")||""),place=String(fd.get("missionLieux")||"").trim();
   if(!objet||!start||!end||!place){toast("Objet, dates et lieu de mission sont obligatoires","error");return false}
   if(end<start){toast("La date de fin doit être postérieure à la date de début","error");return false}
-  const internal=dcMissionMoneyValue(fd.get("missionCoutInterne")),subcontract=dcMissionMoneyValue(fd.get("missionCoutSousTraitance")),other=dcMissionMoneyValue(fd.get("missionAutresCouts")),sale=dcMissionMoneyValue(fd.get("missionPrixVenteHT"));
+  const costItems=dcMissionInternalCostRows(),internal=costItems.reduce((sum,item)=>sum+item.total,0),subcontract=dcMissionMoneyValue(fd.get("missionCoutSousTraitance")),other=dcMissionMoneyValue(fd.get("missionAutresCouts")),contingencyRate=Math.max(0,dcMissionMoneyValue(fd.get("missionContingencyPercent"))),markupRate=Math.max(0,dcMissionMoneyValue(fd.get("missionMarginPercent")));
+  const baseCost=internal+subcontract+other,contingency=baseCost*contingencyRate/100,cost=baseCost+contingency,sale=cost*(1+markupRate/100);
   if(sale<=0){toast("Le prix de vente HT est obligatoire","error");return false}
-  const cost=internal+subcontract+other,margin=sale-cost,now=new Date().toISOString(),id=uid("mission");
+  const margin=sale-cost,now=new Date().toISOString(),id=uid("mission");
   if(margin<0&&!confirm("La marge prévisionnelle est négative. Confirmer malgré tout ?"))return false;
-  const mission={id,numero:dcMissionNextNumber(),source:"dc",societe:mySoc()||client.societe||"",clientId:client.id,clientBackendId:client.backendId||"",clientName:client.nom||client.raisonSociale||"",objet,motif:objet,lieu:place,dateDebut:start,dateFin:end,details:String(fd.get("missionDetail")||"").trim(),consignes:String(fd.get("missionConsigne")||"").trim(),executionMode:String(fd.get("missionExecutionMode")||"interne"),workflowStatus:"transmise_ops",statut:"planifiee",financial:{internalCost:internal,subcontractCost:subcontract,otherCost:other,totalCost:cost,salePriceHT:sale,vatRate:19,salePriceTTC:sale*1.19,margin,marginRate:sale?margin*100/sale:0,billingTerms:String(fd.get("missionConditionsFacturation")||"").trim(),customerOrderRef:String(fd.get("missionBonCommande")||"").trim()},audit:[{action:"Création et validation DC",at:now,by:session?.username||"DC"}],createdAt:now,validatedAt:now,validatedBy:session?.username||"DC",updatedAt:now};
+  const mission={id,numero:dcMissionNextNumber(),source:"dc",societe:mySoc()||client.societe||"",clientId:client.id,clientBackendId:client.backendId||"",clientName:client.nom||client.raisonSociale||"",objet,motif:objet,lieu:place,dateDebut:start,dateFin:end,details:String(fd.get("missionDetail")||"").trim(),consignes:String(fd.get("missionConsigne")||"").trim(),executionMode:String(fd.get("missionExecutionMode")||"interne"),workflowStatus:"transmise_ops",statut:"planifiee",financial:{internalCost:internal,internalCostItems:costItems,subcontractCost:subcontract,otherCost:other,baseCost,contingencyRate,contingency,totalCost:cost,salePriceHT:sale,vatRate:19,salePriceTTC:sale*1.19,margin,markupRate,marginRate:sale?margin*100/sale:0,billingTerms:String(fd.get("missionConditionsFacturation")||"").trim(),customerOrderRef:String(fd.get("missionBonCommande")||"").trim()},audit:[{action:"Création et validation DC",at:now,by:session?.username||"DC"}],createdAt:now,validatedAt:now,validatedBy:session?.username||"DC",updatedAt:now};
   const billable={id:uid("mission_billable"),missionId:id,missionNumber:mission.numero,societe:mission.societe,clientId:mission.clientId,clientName:mission.clientName,designation:objet,dateDebut:start,dateFin:end,quantity:1,unit:"Mission",priceHT:sale,vatRate:19,priceTTC:sale*1.19,status:"en_attente_execution",billingTerms:mission.financial.billingTerms,customerOrderRef:mission.financial.customerOrderRef,createdAt:now};
   try{
     await sgdiApi("/api/irongs/collections/missions/items",{method:"POST",body:{data:mission},legacy:false});
@@ -29676,7 +29713,7 @@ async function validateDcMission(clientId){
   db.missions=db.missions||[];db.missions.unshift(mission);db.missionBillables=db.missionBillables||[];db.missionBillables.unshift(billable);
   toast("Mission validée et transmise à OPS et Facturation","success");openClientModal(client.id);return true;
 }
-window.dcMissionRecalculate=dcMissionRecalculate;window.validateDcMission=validateDcMission;
+window.dcMissionRecalculate=dcMissionRecalculate;window.dcMissionAddCostRow=dcMissionAddCostRow;window.dcMissionRemoveCostRow=dcMissionRemoveCostRow;window.validateDcMission=validateDcMission;
 function previewClientPortalLogo(input){
   const file=input.files?.[0];
   if(!file)return;
@@ -29775,13 +29812,22 @@ function openClientModal(id,readOnly=false){
       <div class="rh-op-grid" style="margin-bottom:10px">
         <label><span>Mode d'exécution</span><select class="select" name="missionExecutionMode"><option value="interne">Moyens internes</option><option value="sous_traitance">Sous-traitance</option><option value="mixte">Mode mixte</option></select></label>
         <label><span>Bon de commande / référence client</span><input class="input" name="missionBonCommande" placeholder="Référence facultative"/></label>
-        <label><span>Coût interne prévisionnel</span><input class="input" name="missionCoutInterne" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
-        <label><span>Coût de sous-traitance</span><input class="input" name="missionCoutSousTraitance" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
-        <label><span>Autres coûts prévisionnels</span><input class="input" name="missionAutresCouts" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
-        <label><span>Prix de vente HT *</span><input class="input" name="missionPrixVenteHT" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
+      </div>
+      <input type="hidden" name="missionCoutInterne" value="0"/>
+      <div style="margin-bottom:12px;border:1px solid #fde68a;border-radius:10px;overflow:hidden;background:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:#fffbeb;border-bottom:1px solid #fde68a"><div><b style="font-size:12px;color:#92400e">Détail des coûts internes</b><div style="font-size:10px;color:#78716c;margin-top:2px">Personnel, chauffeur, carburant, hébergement, matériel et autres moyens internes.</div></div><button type="button" class="btn btn-ghost" style="font-size:11px;white-space:nowrap" onclick="dcMissionAddCostRow()">+ Ajouter un coût</button></div>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f8fafc"><th style="padding:7px;text-align:left">Catégorie</th><th style="padding:7px;text-align:left">Désignation</th><th style="padding:7px">Quantité</th><th style="padding:7px;text-align:right">Coût unitaire</th><th style="padding:7px;text-align:right">Total</th><th></th></tr></thead><tbody id="dc-mission-internal-costs">${dcMissionCostRowHTML({category:"Personnel",designation:"",quantity:1,unitCost:0})}</tbody><tfoot><tr style="background:#fffbeb"><td colspan="4" style="padding:9px;text-align:right;font-weight:900;color:#92400e">TOTAL COÛTS INTERNES</td><td colspan="2" style="padding:9px;text-align:right"><input id="dc-mission-internal-total" class="input" readonly value="0,00 DZD" style="font-weight:900;text-align:right;background:#fff;max-width:170px;margin-left:auto"/></td></tr></tfoot></table></div>
+      </div>
+      <div class="rh-op-grid" style="margin-bottom:10px">
+        <label><span>Coût de sous-traitance</span><input class="input" name="missionCoutSousTraitance" inputmode="decimal" placeholder="00 000,00 DZD" onfocus="this.value=dcMissionMoneyValue(this.value)||''" oninput="dcMissionRecalculate()" onblur="this.value=this.value?formatDZD(this.value):'';dcMissionRecalculate()"/></label>
+        <label><span>Autres coûts prévisionnels</span><input class="input" name="missionAutresCouts" inputmode="decimal" placeholder="00 000,00 DZD" onfocus="this.value=dcMissionMoneyValue(this.value)||''" oninput="dcMissionRecalculate()" onblur="this.value=this.value?formatDZD(this.value):'';dcMissionRecalculate()"/></label>
+        <label><span>Réserve pour imprévus (%)</span><input class="input" name="missionContingencyPercent" inputmode="decimal" value="0" placeholder="0,00 %" oninput="dcMissionRecalculate()"/></label>
+        <label><span>Montant des imprévus</span><input id="dc-mission-contingency" class="input" readonly value="0,00 DZD" style="font-weight:900;background:#f8fafc"/></label>
+        <label><span>Marge souhaitée sur coût (%)</span><input class="input" name="missionMarginPercent" inputmode="decimal" value="20" placeholder="20,00 %" oninput="dcMissionRecalculate()"/></label>
+        <label><span>Prix de vente HT calculé</span><input class="input" name="missionPrixVenteHT" readonly value="0,00 DZD" style="font-weight:900;background:#ecfdf5;color:#047857"/></label>
         <label><span>Coût de revient total</span><input id="dc-mission-cost-total" class="input" readonly value="0,00" style="font-weight:900;background:#f8fafc"/></label>
         <label><span>Marge prévisionnelle</span><input id="dc-mission-margin" class="input" readonly value="0,00" style="font-weight:900;background:#f8fafc"/></label>
-        <label><span>Taux de marge</span><input id="dc-mission-margin-rate" class="input" readonly value="0,00 %" style="font-weight:900;background:#f8fafc"/></label>
+        <label><span>Taux de marque sur vente</span><input id="dc-mission-brand-rate" class="input" readonly value="0,00 %" style="font-weight:900;background:#f8fafc"/></label>
       </div>
       <label style="display:block"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Conditions de facturation</span><textarea class="input" name="missionConditionsFacturation" rows="2" style="width:100%" placeholder="Acompte, facturation à l'achèvement, échéancier..."></textarea></label>
     </fieldset>
@@ -29932,6 +29978,7 @@ function openClientModal(id,readOnly=false){
   </form>`;
   prospInitReunions("prosp",(c?.prosp_reunions)||[]);
   prospInitReunions("negos",(c?.negos_reunions)||[]);
+  requestAnimationFrame(()=>dcMissionRecalculate());
   requestAnimationFrame(()=>updateClientContractEndDate(false));
   if(!readOnly)requestAnimationFrame(()=>{
     if(typeof sgdiExitViewMode==="function"&&sgdiViewModeActive)sgdiExitViewMode();
