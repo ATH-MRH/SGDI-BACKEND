@@ -29464,12 +29464,20 @@ async function clientValiderContrat(){
 function clientLockContrat(){
   const section=document.getElementById("client-contrat-fields");
   if(!section)return;
-  section.querySelectorAll("input:not([type=hidden]):not(#contrat-valide-chk),textarea").forEach(el=>{el.setAttribute("readonly","");el.style.background="#f1f5f9";el.style.color="#64748b";el.style.cursor="not-allowed";});
-  section.querySelectorAll("select").forEach(el=>{el.style.pointerEvents="none";el.style.background="#f1f5f9";el.style.color="#64748b";});
-  section.querySelectorAll("button:not(#btn-contrat-modifier):not(#btn-contrat-valider):not(.client-site-tab)").forEach(el=>{el.style.display="none";});
-  section.querySelectorAll(".client-site-remove").forEach(el=>{el.style.display="none";});
+  // La validation confirme les données sans figer les informations opérationnelles.
+  // Les sites, postes, vacations et équipements doivent rester modifiables afin de
+  // pouvoir faire vivre le contrat. Seuls les champs réellement calculés conservent
+  // leur attribut readonly défini dans leur propre modèle.
+  section.querySelectorAll("input:not([type=hidden]),textarea,select").forEach(el=>{
+    el.dataset.noLock="1";
+    if(!el.matches("[id^='ts-total-effectif-'],[id^='cts-total-effectif-'],[name='dateFinContratInitiale'],[name='dateFinContrat'],[name='nombreReconductions'],[name='dateLimiteDenonciation']")){
+      el.removeAttribute("readonly");el.removeAttribute("disabled");
+      el.style.background="";el.style.color="";el.style.cursor="";el.style.pointerEvents="";
+    }
+  });
+  section.querySelectorAll("button,.client-site-remove").forEach(el=>{el.style.display="";});
   const btnV=document.getElementById("btn-contrat-valider");const btnM=document.getElementById("btn-contrat-modifier");
-  if(btnV)btnV.style.display="none";if(btnM)btnM.style.display="";
+  if(btnV)btnV.style.display="";if(btnM)btnM.style.display="none";
 }
 function clientUnlockContrat(){
   const section=document.getElementById("client-contrat-fields");
@@ -29799,7 +29807,17 @@ function openClientModal(id,readOnly=false){
   prospInitReunions("prosp",(c?.prosp_reunions)||[]);
   prospInitReunions("negos",(c?.negos_reunions)||[]);
   requestAnimationFrame(()=>updateClientContractEndDate(false));
-  if(!readOnly)requestAnimationFrame(()=>techUnlockDonneesTechniques());
+  if(!readOnly)requestAnimationFrame(()=>{
+    if(typeof sgdiExitViewMode==="function"&&sgdiViewModeActive)sgdiExitViewMode();
+    const editor=view.querySelector("form[data-client-editor='1']");
+    editor?.querySelectorAll("input,select,textarea").forEach(el=>{el.dataset.noLock="1";});
+    techUnlockDonneesTechniques();
+    clientUnlockContrat();
+    // Ces valeurs sont issues de calculs automatiques et restent volontairement protégées.
+    editor?.querySelectorAll("[id^='ts-total-effectif-'],[id^='cts-total-effectif-'],[name='dateFinContratInitiale'],[name='dateFinContrat'],[name='nombreReconductions'],[name='dateLimiteDenonciation']").forEach(el=>{
+      el.setAttribute("readonly","");el.style.cursor="not-allowed";
+    });
+  });
   if(readOnly)requestAnimationFrame(()=>lockClientReadOnly());
 }
 function lockClientReadOnly(){
