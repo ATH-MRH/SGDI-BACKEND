@@ -28799,7 +28799,7 @@ function clientSiteDesignationOptionsHTML(selected,catalog){
   const opts=['<option value="">— Choisir —</option>'];
   catalog.forEach(l=>{
     if(!l.designation)return;
-    opts.push('<option value="'+escapeHTML(l.designation)+'"'+(l.designation===selected?' selected':'')+'>'+escapeHTML(l.designation)+(l.prixUnitaire?' ('+formatDZD(l.prixUnitaire)+')':'')+'</option>');
+    opts.push('<option value="'+escapeHTML(l.designation)+'"'+(l.designation===selected?' selected':'')+'>'+escapeHTML(l.designation)+'</option>');
   });
   if(selected&&!catalog.some(l=>l.designation===selected)){
     opts.push('<option value="'+escapeHTML(selected)+'" selected>'+escapeHTML(selected)+' (introuvable dans Effectif global)</option>');
