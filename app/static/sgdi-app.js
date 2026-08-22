@@ -3327,12 +3327,9 @@ function _sgdiVoiceScore(voice){
 function _sgdiSelectVoice(){
   const voices=(window.speechSynthesis?.getVoices?.()||[]).filter(Boolean);
   if(!voices.length)return null;
-  try{const chosen=localStorage.getItem("sgdiVoiceName");if(chosen){const m=voices.find(v=>v.name===chosen);if(m)return m;}}catch(e){}
-  const scored=voices
-    .filter(v=>!_sgdiIsClearlyMaleVoice(v)&&!_sgdiIsSilentVoice(v)&&_sgdiIsPreferredFemaleVoice(v)&&(/^fr/i.test(String(v.lang||""))||/fran[cç]ais|french|audrey|marie|julie|aurelie|aurélie|virginie|denise|vivienne|siri|flo|sandy|shelley/i.test(String(v.name||""))))
-    .map(v=>({voice:v,score:_sgdiVoiceScore(v)}))
-    .sort((a,b)=>b.score-a.score);
-  return (scored[0]&&scored[0].score>0?scored[0].voice:null)||null;
+  return voices.find(v=>/^google fran[cç]ais$/i.test(String(v.name||"").trim())&&/^fr/i.test(String(v.lang||"")))
+    ||voices.find(v=>/google/i.test(String(v.name||""))&&(/fran[cç]ais|french/i.test(String(v.name||""))||/^fr/i.test(String(v.lang||""))))
+    ||null;
 }
 function _sgdiVoiceDiagnostic(){
   if(!window.speechSynthesis)return "Synthèse vocale indisponible dans ce navigateur.";
@@ -3340,8 +3337,8 @@ function _sgdiVoiceDiagnostic(){
   const voice=_sgdiPreferredVoice||_sgdiSelectVoice();
   return "Voix: "+(_sgdiVoiceEnabled()?"activée":"désactivée")+
     " · voix détectées: "+voices.length+
-    " · mode: voix navigateur féminine uniquement"+
-    (voice?" · voix sélectionnée: "+voice.name+" ["+voice.lang+"]":" · aucune voix féminine compatible")+
+    " · mode: Google français uniquement"+
+    (voice?" · voix sélectionnée: "+voice.name+" ["+voice.lang+"]":" · voix Google français indisponible")+
     " · état: speaking="+window.speechSynthesis.speaking+
     ", pending="+window.speechSynthesis.pending+
     ", paused="+window.speechSynthesis.paused;
@@ -3357,7 +3354,7 @@ function _sgdiSpeakNow(text,attempt=0){
   _sgdiPreferredVoice=voice||_sgdiPreferredVoice;
   if(!voice){
     try{synth.cancel()}catch(e){}
-    if(typeof toast==="function")toast("Aucune voix féminine française disponible sur ce navigateur.","error");
+    if(typeof toast==="function")toast("La voix Google français n’est pas disponible sur ce navigateur.","error");
     return false;
   }
   const msg=new SpeechSynthesisUtterance(text);
@@ -40482,7 +40479,7 @@ try{
           <div class="ai-panel-head-status">● Assistant système en ligne</div>
         </div>
         <button class="ai-panel-voice ai-panel-voice-toggle" id="ai-voice-toggle" onclick="aiToggleVoice()" title="Activer/désactiver la voix" aria-pressed="true">Voix</button>
-        <select id="ai-voice-select" onchange="aiSetVoice(this.value)" title="Choisir la voix" style="max-width:120px;font-size:11px;border-radius:8px;border:1px solid #cbd5e1;padding:3px;background:#fff;color:#0f172a"></select>
+        <select id="ai-voice-select" title="Voix unique" disabled style="max-width:120px;font-size:11px;border-radius:8px;border:1px solid #cbd5e1;padding:3px;background:#fff;color:#0f172a;opacity:1"><option>Google français</option></select>
         <button class="ai-panel-close" onclick="aiClosePanel()" title="Fermer">✕</button>
       </div>
       <div class="ai-messages" id="ai-messages">
@@ -40538,20 +40535,9 @@ try{
 
   window.aiPopulateVoices=function(){
     const sel=document.getElementById("ai-voice-select");
-    if(!sel||!window.speechSynthesis)return;
-    const voices=(window.speechSynthesis.getVoices?.()||[]).filter(Boolean);
-    if(!voices.length){setTimeout(window.aiPopulateVoices,300);return;}
-    const fr=voices.filter(v=>/^fr/i.test(String(v.lang||"")));
-    const list=fr.length?fr:voices;
-    let chosen="";try{chosen=localStorage.getItem("sgdiVoiceName")||""}catch(e){}
-    sel.innerHTML=list.map(v=>'<option value="'+v.name.replace(/"/g,"")+'"'+(v.name===chosen?" selected":"")+'>'+v.name+'</option>').join("");
-  };
-
-  window.aiSetVoice=function(name){
-    try{localStorage.setItem("sgdiVoiceName",name)}catch(e){}
-    if(typeof _sgdiSetVoiceEnabled==="function")_sgdiSetVoiceEnabled(true);
-    if(typeof _sgdiUpdateVoiceToggle==="function")_sgdiUpdateVoiceToggle();
-    if(typeof _sgdiSpeakText==="function")_sgdiSpeakText("Voici ma nouvelle voix.");
+    if(!sel)return;
+    sel.innerHTML="<option>Google français</option>";
+    try{localStorage.removeItem("sgdiVoiceName")}catch(e){}
   };
 
   window.aiStartMic=function(){
