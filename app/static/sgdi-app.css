@@ -5598,6 +5598,24 @@ body:has(.company-portal) #app{
 .ws-quicklaunch-group,.ws-system-actions{display:flex;align-items:center;gap:6px}
 .ws-quicklaunch-group{padding:5px;margin-right:6px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12)}
 .ws-system-actions{position:relative;overflow:visible}
+.ws-global-save{
+  height:30px;
+  min-width:94px;
+  padding:0 13px;
+  border:0;
+  border-radius:8px;
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.02em;
+  cursor:pointer;
+  box-shadow:0 2px 7px rgba(4,20,40,.24);
+  transition:background .18s,transform .12s,box-shadow .18s;
+}
+.ws-global-save.is-clean{background:#16a34a}
+.ws-global-save.is-dirty{background:#f59e0b;box-shadow:0 2px 9px rgba(245,158,11,.42)}
+.ws-global-save.is-saving{background:#64748b;cursor:wait}
+.ws-global-save:not(:disabled):hover{transform:translateY(-1px);filter:brightness(1.06)}
 .ws-quicklaunch-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;background:transparent;padding:0;border-radius:8px;cursor:pointer;text-decoration:none;opacity:.92;transition:background .15s,opacity .15s,transform .1s}
 .ws-quicklaunch-btn:hover{background:rgba(255,255,255,.16);opacity:1;transform:translateY(-1px)}
 .ws-ql-icon{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:8px;font-size:11px;font-weight:900;color:#fff;line-height:1;font-family:system-ui,sans-serif;box-shadow:0 2px 6px rgba(4,20,40,.35),inset 0 1px 0 rgba(255,255,255,.25)}

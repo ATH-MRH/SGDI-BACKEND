@@ -753,6 +753,7 @@ function sgdiBackendSave(){
     // les bloque sur "Remplacement global réservé administrateur".
     sgdiDirty=false;
     sgdiFormHasUnsavedChanges=false;
+    sgdiUpdateSaveButton("clean");
     sgdiCaptureBaseline();
     sgdiLastSaveConfirmation={ok:true,mode:"scoped-postgres"};
     sgdiSaveQueue=Promise.resolve(sgdiLastSaveConfirmation);
@@ -782,6 +783,7 @@ function sgdiBackendSave(){
       sgdiPostgresReady=true;
       sgdiDirty=false;
       sgdiFormHasUnsavedChanges=false;
+      sgdiUpdateSaveButton("clean");
       window.__sgdiLastLocalSaveAt=Date.now();
       sgdiPublishDataChange("legacy-save");
     }while(sgdiSaveAgain);
@@ -5028,7 +5030,10 @@ function workspaceTabsBarHTML(){
     <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('agenda')" title="Agenda"><span class="ws-ql-icon" style="background:#0078d4;font-size:13px">📅</span></button>
     <button type="button" class="ws-quicklaunch-btn" data-no-critical-auth="1" onclick="sgdiOpenQuickApp('calculator')" title="Calculatrice SGDI"><span class="ws-ql-icon" style="background:#5c6bc0;font-size:13px">🧮</span></button>
   </div>`;
-  const sgdiActionsHTML=`<div class="ws-system-actions">${sgdiEditModeButtonHTML()}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab" onclick="openCurrentInNewTab()" title="Ouvrir cette page dans un nouvel onglet" aria-label="Ouvrir cette page dans un nouvel onglet">↗</button><button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
+  const saveState=(sgdiSaveInFlight||sgdiSaveAgain)?"saving":(sgdiFormHasUnsavedChanges?"dirty":"clean");
+  const saveLabel=saveState==="saving"?"Enregistrement…":"Enregistrer";
+  const saveTitle=saveState==="dirty"?"Des modifications doivent être enregistrées":"Aucune modification à enregistrer";
+  const sgdiActionsHTML=`<div class="ws-system-actions"><button type="button" id="sgdi-global-save" class="ws-global-save is-${saveState}" onclick="sgdiSaveCurrentChanges()" title="${saveTitle}" ${saveState==="saving"?"disabled":""}>${saveLabel}</button>${sgdiEditModeButtonHTML()}${notificationTopbarButtonHTML()}${dialogueTopbarButtonHTML()}${sgdiRefreshNoticeHTML()}<button type="button" class="ws-refresh-tab" onclick="openCurrentInNewTab()" title="Ouvrir cette page dans un nouvel onglet" aria-label="Ouvrir cette page dans un nouvel onglet">↗</button><button type="button" class="ws-refresh-tab ${sgdiRefreshNotice?"has-update":""}" onclick="window.refreshWorkspace()" title="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}" aria-label="${sgdiRefreshNotice?escapeHTML(sgdiRefreshNoticeLabel()+" — actualiser"):"Actualiser"}">↻</button></div>`;
   return `<div class="ws-browser-chrome ws-browser-chrome--actions-only no-print" data-no-lang="1">
     <div class="ws-tabs-bar" id="ws-tabs-bar"></div>
     <div class="ws-tab-actions">${quickLaunchHTML}${sgdiActionsHTML}</div>
@@ -6985,7 +6990,8 @@ function sgdiNoteFormInput(e){
   if(!isField)return;
   // Marque la dernière interaction de saisie (protège l'utilisateur qui travaille, partout).
   sgdiLastFormInputAt=Date.now();
-  if(!sgdiViewModeActive)sgdiFormHasUnsavedChanges=true;
+  sgdiFormHasUnsavedChanges=true;
+  sgdiUpdateSaveButton();
   // Verrou permanent (sans expiration, indépendant du mode vue) : dès la première frappe,
   // le formulaire (ou toute la vue si pas de <form>) est marqué "modifié" et aucun
   // rafraîchissement automatique ne pourra plus l'écraser, où qu'on soit dans le module.
@@ -6994,6 +7000,50 @@ function sgdiNoteFormInput(e){
 }
 document.addEventListener("input",sgdiNoteFormInput,{passive:true});
 document.addEventListener("change",sgdiNoteFormInput,{passive:true});
+function sgdiUpdateSaveButton(forcedState){
+  const btn=document.getElementById("sgdi-global-save");
+  if(!btn)return;
+  const state=forcedState||((sgdiSaveInFlight||sgdiSaveAgain)?"saving":(sgdiFormHasUnsavedChanges?"dirty":"clean"));
+  btn.classList.remove("is-clean","is-dirty","is-saving");
+  btn.classList.add("is-"+state);
+  btn.disabled=state==="saving";
+  btn.textContent=state==="saving"?"Enregistrement…":"Enregistrer";
+  btn.title=state==="dirty"?"Des modifications doivent être enregistrées":"Aucune modification à enregistrer";
+}
+async function sgdiSaveCurrentChanges(){
+  if(!sgdiFormHasUnsavedChanges){
+    sgdiUpdateSaveButton("clean");
+    if(typeof toast==="function")toast("Aucune modification à enregistrer","success");
+    return true;
+  }
+  sgdiUpdateSaveButton("saving");
+  try{
+    const view=document.getElementById("view");
+    const clientForm=view?.querySelector("form[data-client-editor='1']");
+    if(clientForm){
+      if(!clientForm.checkValidity()){clientForm.reportValidity();sgdiUpdateSaveButton("dirty");return false;}
+      if(!(await saveClientInPlace()))throw new Error("La fiche client n'a pas été enregistrée");
+    }else{
+      const form=Array.from(view?.querySelectorAll("form")||[]).find(el=>el.offsetParent!==null&&typeof el.requestSubmit==="function");
+      if(form){
+        if(!form.checkValidity()){form.reportValidity();sgdiUpdateSaveButton("dirty");return false;}
+        form.requestSubmit();
+        await new Promise(resolve=>setTimeout(resolve,700));
+      }else if(!(await saveDBAndWaitToast("Enregistrement impossible")))throw new Error("La sauvegarde n'a pas été confirmée");
+    }
+    sgdiFormHasUnsavedChanges=false;
+    view?.querySelectorAll("[data-dirty='1']").forEach(el=>delete el.dataset.dirty);
+    sgdiUpdateSaveButton("clean");
+    if(typeof toast==="function")toast("Modifications enregistrées","success");
+    return true;
+  }catch(e){
+    sgdiFormHasUnsavedChanges=true;
+    sgdiUpdateSaveButton("dirty");
+    if(typeof toast==="function")toast("Enregistrement impossible : "+(e.message||e),"error");
+    return false;
+  }
+}
+window.sgdiSaveCurrentChanges=sgdiSaveCurrentChanges;
 /* ─────────────────────────────────────────────────────────── */
 
 function navigate(r){
