@@ -29320,12 +29320,46 @@ function clientCreerAvenant(id){
   if(!c){toast("Client introuvable","error");return;}
   toast("Fonctionnalité Créer avenant à venir","info");
 }
-function updateClientContractEndDate(){
+function clientContractAddPeriod(date,duration){
+  if(!date||!duration)return "";
+  const value=String(duration);
+  if(value.endsWith("d"))return addDays(date,parseInt(value,10)||0);
+  const months=parseInt(value,10)||0;if(!months)return "";
+  const source=new Date(date+"T00:00:00");if(Number.isNaN(source.getTime()))return "";
+  const day=source.getDate();
+  source.setDate(1);source.setMonth(source.getMonth()+months);
+  const last=new Date(source.getFullYear(),source.getMonth()+1,0).getDate();
+  source.setDate(Math.min(day,last));
+  return source.toISOString().slice(0,10);
+}
+function clientContractRenewalInfo(initialEnd,duration,type,status="actif",preavis=90){
+  let current=initialEnd||"",count=0;
+  if(type==="tacite"&&current&&duration&&status!=="denonce"&&status!=="termine"){
+    while(current<today()&&count<200){const next=clientContractAddPeriod(current,duration);if(!next||next===current)break;current=next;count++}
+  }
+  const deadline=current?addDays(current,-(parseInt(preavis)||0)):"";
+  let computed=status||"actif";
+  if(status!=="denonce"&&status!=="termine"){
+    if(type==="ferme"&&current&&current<today())computed="termine";
+    else if(current&&daysBetween(today(),current)<=90)computed="a_renouveler";
+    else computed="actif";
+  }
+  return{current,count,deadline,status:computed};
+}
+function updateClientContractEndDate(resetInitial=false){
   const f=document.querySelector(".modal-bg form")||document.querySelector("#view form");if(!f)return;
   const start=f.querySelector('[name="dateDebutContrat"]')?.value||"";
   const duration=f.querySelector('[name="dureeContrat"]')?.value||"";
-  const out=f.querySelector('[name="dateFinContrat"]');
-  if(out)out.value=contractEndDate(start,duration);
+  const initial=f.querySelector('[name="dateFinContratInitiale"]');
+  if(initial&&(resetInitial||!initial.value))initial.value=contractEndDate(start,duration);
+  const type=f.querySelector('[name="typeReconduction"]:checked')?.value||"ferme";
+  let status=f.querySelector('[name="statutReconduction"]')?.value||"actif";
+  if(type==="tacite"&&status==="termine")status="actif";
+  const preavis=f.querySelector('[name="preavisResiliation"]')?.value||"90";
+  const info=clientContractRenewalInfo(initial?.value||contractEndDate(start,duration),duration,type,status,preavis);
+  const set=(name,value)=>{const el=f.querySelector(`[name="${name}"]`);if(el)el.value=value??""};
+  set("dateFinContrat",info.current);set("nombreReconductions",info.count);set("dateLimiteDenonciation",info.deadline);set("statutReconduction",info.status);
+  const box=document.getElementById("client-renewal-summary");if(box)box.style.display=type==="tacite"?"grid":"none";
 }
 function sgdiTabsHTML(tabs,activeIdx=0){
   const id="tabs-"+Math.random().toString(36).slice(2,7);
@@ -29443,6 +29477,9 @@ function openClientModal(id,readOnly=false){
     </div>
     <div style="display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" onclick="saveClientInPlace()">Enregistrer les paramètres de facturation</button></div>
   `;
+  const contractType=c?.typeReconduction||"ferme";
+  const contractInitialEnd=c?.dateFinContratInitiale||c?.dateFinContrat||contractEndDate(c?.dateDebutContrat||"",c?.dureeContrat||"");
+  const contractRenewal=clientContractRenewalInfo(contractInitialEnd,c?.dureeContrat||"",contractType,c?.statutReconduction||"actif",c?.preavisResiliation??90);
   const tabContrat=`<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px">
     <button type="button" class="btn btn-primary" style="padding:8px 18px;font-size:12px;font-weight:700;background:#0f2d5a;border-color:#0f2d5a" onclick="clientCreerContrat('${id||""}')">Créer contrat</button>
     <button type="button" class="btn btn-ghost" style="padding:8px 18px;font-size:12px;font-weight:700;border:1.5px solid #7c3aed;color:#7c3aed" onclick="clientCreerAvenant('${id||""}')">Créer avenant</button>
@@ -29475,9 +29512,23 @@ function openClientModal(id,readOnly=false){
       +'</table>');
   })()+`<div id="client-contrat-fields">`+fbox("Contrat & Prestations",`
     <div class="rh-op-grid">
-      ${lbl("Date début",inp("dateDebutContrat",c?.dateDebutContrat||"","date","onchange=\"updateClientContractEndDate()\""))}
-      ${lbl("Durée",sel("dureeContrat",contratDureeOptions(c?.dureeContrat||""),"onchange=\"updateClientContractEndDate()\""))}
-      ${lbl("Date fin",`<input class="input" type="date" name="dateFinContrat" value="${escapeHTML(c?.dateFinContrat||"")}" readonly style="background:#f8fafc"/>`)}
+      ${lbl("Date début",inp("dateDebutContrat",c?.dateDebutContrat||"","date","onchange=\"updateClientContractEndDate(true)\""))}
+      ${lbl("Durée initiale",sel("dureeContrat",contratDureeOptions(c?.dureeContrat||""),"onchange=\"updateClientContractEndDate(true)\""))}
+      ${lbl("Date de fin initiale",`<input class="input" type="date" name="dateFinContratInitiale" value="${escapeHTML(contractInitialEnd)}" readonly style="background:#f8fafc"/>`)}
+    </div>
+    <div style="margin-top:12px">
+      <span style="font-size:11px;color:#334155;font-weight:900;display:block;margin-bottom:7px">Type de contrat</span>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+        <label style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid #cbd5e1;border-radius:9px;cursor:pointer;background:#fff"><input type="radio" name="typeReconduction" value="ferme" ${contractType==="ferme"?"checked":""} onchange="updateClientContractEndDate()"/><span style="font-size:13px;font-weight:800;color:#0f2d5a">Contrat ferme</span></label>
+        <label style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid #cbd5e1;border-radius:9px;cursor:pointer;background:#fff"><input type="radio" name="typeReconduction" value="tacite" ${contractType==="tacite"?"checked":""} onchange="updateClientContractEndDate()"/><span style="font-size:13px;font-weight:800;color:#0f2d5a">Contrat par tacite reconduction</span></label>
+      </div>
+    </div>
+    <div id="client-renewal-summary" class="rh-op-grid" style="display:${contractType==="tacite"?"grid":"none"};margin-top:12px;padding:12px;border:1px solid #bfdbfe;border-radius:9px;background:#f8fbff">
+      ${lbl("Échéance actuelle",`<input class="input" type="date" name="dateFinContrat" value="${escapeHTML(contractRenewal.current)}" readonly style="background:#fff"/>`)}
+      ${lbl("Nombre de reconductions",`<input class="input" type="number" name="nombreReconductions" value="${contractRenewal.count}" readonly style="background:#fff"/>`)}
+      ${lbl("Préavis de dénonciation (jours)",`<input class="input" type="number" min="0" name="preavisResiliation" value="${escapeHTML(String(c?.preavisResiliation??90))}" oninput="updateClientContractEndDate()"/>`)}
+      ${lbl("Date limite de dénonciation",`<input class="input" type="date" name="dateLimiteDenonciation" value="${escapeHTML(contractRenewal.deadline)}" readonly style="background:#fff"/>`)}
+      ${lbl("Situation",sel("statutReconduction",[["actif","Actif"],["a_renouveler","À surveiller"],["denonce","Dénoncé"],["termine","Terminé"]].map(([v,l])=>`<option value="${v}" ${contractRenewal.status===v?"selected":""}>${l}</option>`).join(""),"onchange=\"updateClientContractEndDate()\""))}
     </div>
     <div style="margin-top:12px">
       <span style="font-size:11px;color:#334155;font-weight:900">Prestation et Services fournis</span>
@@ -29589,6 +29640,7 @@ function openClientModal(id,readOnly=false){
   </form>`;
   prospInitReunions("prosp",(c?.prosp_reunions)||[]);
   prospInitReunions("negos",(c?.negos_reunions)||[]);
+  requestAnimationFrame(()=>updateClientContractEndDate(false));
   if(!readOnly)requestAnimationFrame(()=>techUnlockDonneesTechniques());
   if(readOnly)requestAnimationFrame(()=>lockClientReadOnly());
 }
@@ -29625,7 +29677,8 @@ async function confirmClient(id,options={}){
   updateClientContractEndDate();
   const fd=new FormData(document.querySelector(".modal-bg form")||document.querySelector("#view form"));
   db.clients=db.clients||[];
-  const dateDebutContrat=fd.get("dateDebutContrat")||"",dureeContrat=fd.get("dureeContrat")||"",dateFinContrat=fd.get("dateFinContrat")||contractEndDate(dateDebutContrat,dureeContrat);
+  const dateDebutContrat=fd.get("dateDebutContrat")||"",dureeContrat=fd.get("dureeContrat")||"",dateFinContratInitiale=fd.get("dateFinContratInitiale")||contractEndDate(dateDebutContrat,dureeContrat),dateFinContrat=fd.get("dateFinContrat")||dateFinContratInitiale;
+  const typeReconduction=fd.get("typeReconduction")||"ferme",nombreReconductions=parseInt(fd.get("nombreReconductions")||"0")||0,preavisResiliation=parseInt(fd.get("preavisResiliation")||"90")||0,dateLimiteDenonciation=fd.get("dateLimiteDenonciation")||"",statutReconduction=fd.get("statutReconduction")||"actif";
   let prosp_reunions=[],negos_reunions=[],lignesFacturation=[],champsLibres=[];
   try{prosp_reunions=JSON.parse(fd.get("prosp_reunions")||"[]")}catch(e){}
   try{negos_reunions=JSON.parse(fd.get("negos_reunions")||"[]")}catch(e){}
@@ -29645,7 +29698,7 @@ async function confirmClient(id,options={}){
   const hasContractSites=fd.get("ct_nbrSite")!==null;
   if(hasContractSites)tech_sites=cts_sites;
   const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
-  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContrat,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
+  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContratInitiale,dateFinContrat,typeReconduction,nombreReconductions,preavisResiliation,dateLimiteDenonciation,statutReconduction,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
   try{if(options.requireExisting)await updateExistingClientToPostgres(c);else await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");
