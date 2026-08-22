@@ -29592,7 +29592,7 @@ function openClientModal(id,readOnly=false){
     </div>
   `)+`</div>`;
   const view=document.getElementById("view");
-  view.innerHTML=`<form data-client-editor="1" data-client-readonly="${readOnly?"1":"0"}" data-no-critical-auth="1" data-client-id="${escapeHTML(c?.id||id||"")}" data-client-backend-id="${escapeHTML(c?.backendId||"")}" onsubmit="event.preventDefault();confirmClient('${id||""}')">
+  view.innerHTML=`<form data-client-editor="1" data-client-readonly="${readOnly?"1":"0"}" data-no-critical-auth="1" data-client-id="${escapeHTML(c?.id||id||"")}" data-client-backend-id="${escapeHTML(c?.backendId||"")}" oninput="this.dataset.dirty='1'" onchange="this.dataset.dirty='1'" onsubmit="event.preventDefault();confirmClient('${id||""}')">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e2e8f0">
       <h2 style="font-size:18px;font-weight:800;color:#0f2d5a;margin:0">${isEdit?"CLIENT : "+escapeHTML((c?.nom||"").toUpperCase()):"Nouveau client"}</h2>
       ${isEdit?`<div style="display:flex;align-items:center;gap:8px">
