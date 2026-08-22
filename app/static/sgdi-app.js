@@ -29859,7 +29859,7 @@ function openClientModal(id,readOnly=false){
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:#f1f5f9">
           <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:160px">Prix unitaire</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:208px;min-width:208px">Prix unitaire</th>
           <th style="border:1px solid #e2e8f0;width:36px"></th>
         </tr></thead>
         <tbody id="client-lignes-body">${(c?.lignesFacturation||[]).map((l,i)=>`<tr data-idx="${i}">
