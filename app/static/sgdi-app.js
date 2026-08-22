@@ -162,7 +162,7 @@ const UNLOCK_SESSION_KEY = "irongs_unlocked_v1";
 const ADMIN_SYSTEM_UNLOCK_KEY = "sgdi_admin_system_unlocked_v1";
 const SGDI_API_TOKEN_KEY = "sgdi_api_token_v1";
 let db=null, session=null, unlockedAgents=new Set(), currentSearch="", effectifSort="nom_asc", contractSituationSort={index:1,dir:"asc"}, sgdiPostgresReady=false, sgdiDirty=false, candidatDraftTimer=null, sgdiLastRenderedPath="", sgdiResetViewScroll=false, sgdiNextScrollRestore=null, sgdiRecruitmentRequestSeq=0, sgdiAutoSaveTimer=null, sgdiViewRenderGeneration=0, sgdiViewRenderHash="";
-let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPendingRoute=null;
+let sgdiViewModeActive=false, sgdiFormHasUnsavedChanges=false, _sgdiNavGuardPendingRoute=null, sgdiLastKnownHref="";
 // Devient true UNIQUEMENT après un vrai chargement serveur réussi (sgdiPullState). Empêche
 // d'envoyer une base vide/non chargée qui effacerait les données (bug "tout à zéro" en multi-PC).
 let sgdiHydrated=false;
@@ -7073,17 +7073,19 @@ function navigate(r){
   pageTabTrack(r);
   const target="#/"+String(r||"").replace(/^#?\/?/,"");
   const finish=()=>requestAnimationFrame(()=>document.body.classList.remove("sgdi-navigation-stable"));
-  if(location.hash===target){syncSidebarActiveState();refreshModuleCountersRibbon();sgdiResetViewScroll=false;renderView();finish();return}
+  if(location.hash===target){syncSidebarActiveState();refreshModuleCountersRibbon();sgdiResetViewScroll=false;renderView();sgdiLastKnownHref=location.href;finish();return}
   if(document.getElementById("view")&&document.getElementById("sidebar-nav")){
     history.pushState(null,"",target);
     sgdiResetViewScroll=!sgdiNextScrollRestore;
     syncSidebarActiveState();
     refreshModuleCountersRibbon();
     renderView();
+    sgdiLastKnownHref=location.href;
     finish();
     return;
   }
   location.hash=target;
+  sgdiLastKnownHref=location.href;
   finish();
 }
 function setFicheContext(ctx){try{if(ctx)sessionStorage.setItem("ficheContext",ctx);else sessionStorage.removeItem("ficheContext")}catch(e){}}
@@ -7656,6 +7658,7 @@ function route(){
   if(!session||!sgdiAuthToken()){session=null;saveSession(null);sgdiPostgresReady=false;renderLogin();return}
   if(!sgdiPostgresReady){renderPostgresRequired("Chargement PostgreSQL requis. Aucune donnée locale ne sera utilisée.");return}
   render();
+  sgdiLastKnownHref=location.href;
 }
 function renderPostgresRequired(message){
   const app=document.getElementById("app");
@@ -7952,8 +7955,30 @@ function renderView(){
     setTimeout(()=>{applyLanguagePreference(view);sgdiScrubInvalidCandidateFunctionArtifacts(view)},0);
   });
 }
-window.addEventListener("hashchange",()=>{sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;if((window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod")||(window.__PAIE_AUTONOMOUS_APP__&&session?.transverse==="paie")){sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");}else sgdiEnterViewMode(true);render()});
-window.addEventListener("popstate",()=>{sgdiMarkUserNavigation();uiProgressStart();render()});
+// Un retour arrière/avant du navigateur (bouton, geste trackpad, raccourci clavier) ne passe
+// jamais par navigate() — il ne doit donc JAMAIS écraser une saisie en cours (une fiche ouverte
+// en édition, ex. client, n'est même pas empilée dans l'historique). On annule ce changement
+// d'URL et on avertit, exactement comme pour une navigation explicite.
+function sgdiGuardUncontrolledUrlChange(){
+  if(!sgdiHasUnsavedUserWork())return false;
+  if(sgdiLastKnownHref)history.pushState(null,"",sgdiLastKnownHref);
+  if(typeof toast==="function")toast("Modifications non enregistrées — enregistrez avant de quitter cette fiche.","error");
+  return true;
+}
+window.addEventListener("hashchange",()=>{
+  if(sgdiGuardUncontrolledUrlChange())return;
+  sgdiMarkUserNavigation();uiProgressStart();sgdiFormHasUnsavedChanges=false;
+  if((window.__FAC_AUTONOMOUS_APP__&&session?.transverse==="facmod")||(window.__PAIE_AUTONOMOUS_APP__&&session?.transverse==="paie")){
+    sgdiViewModeActive=false;document.body.classList.remove("sgdi-view-mode");
+  }else sgdiEnterViewMode(true);
+  render();
+  sgdiLastKnownHref=location.href;
+});
+window.addEventListener("popstate",()=>{
+  if(sgdiGuardUncontrolledUrlChange())return;
+  sgdiMarkUserNavigation();uiProgressStart();render();
+  sgdiLastKnownHref=location.href;
+});
 function fpqAutoRefreshRelieveAlert(){
   if(!session||!sgdiPostgresReady)return;
   if(!String(location.hash||"").startsWith("#/pointage/feuille"))return;
