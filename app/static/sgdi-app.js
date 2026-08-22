@@ -29605,42 +29605,6 @@ function openClientModal(id,readOnly=false){
     ${sgdiTabsHTML([
       {label:"Information",content:tabIdentification},
       {label:"Facturation",content:tabFacturation},
-      {label:"Données techniques",content:(()=>{
-        const nbrSite=clientNbrSites(c);
-        const sites=c?.tech_sites||[];
-        const sitePanels=nbrSite>0?Array.from({length:nbrSite},(_,si)=>techSitePanelHTML(si,sites[si]||{})).join(""):"<p style='font-size:12px;color:#94a3b8;padding:8px 0'>Sélectionnez le nombre de sites.</p>";
-        const siteTabBtns=Array.from({length:nbrSite},(_,si)=>techSiteTabBtnHTML(si,'ts',si===0)).join("");
-        const nbrSiteOpts=Array.from({length:20},(_,i)=>i+1).map(n=>'<option value="'+n+'"'+(nbrSite===n?' selected':'')+'>'+String(n).padStart(2,"0")+'</option>').join("");
-        const nbrSiteSelect='<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><label style="display:flex;align-items:center;gap:8px;margin:0"><span style="font-size:12px;font-weight:700;color:#334155">Nbr de site</span><select class="select" name="tech_nbrSite" onchange="techSitesRerender(this.value)" style="width:100px"><option value="">—</option>'+nbrSiteOpts+'</select></label><button type="button" class="btn btn-primary text-xs" onclick="clientSiteAdd(\'ts\')">+ Ajouter un site</button></div>';
-        const hiddenSites='<input type="hidden" id="tech-sites-json" name="tech_sites" value="'+escapeHTML(JSON.stringify(sites))+'"/>';
-        const sitesFbox=fbox("Sites",hiddenSites+nbrSiteSelect+'<div id="tech-sites-container"><div class="ts-tabs" style="display:flex;gap:2px;border-bottom:1px solid #e2e8f0;margin-bottom:2px">'+siteTabBtns+'</div><div class="ts-panels">'+sitePanels+'</div></div>');
-        const totalEffectifGlobal=sites.reduce((s,st)=>s+clientSiteEffectif(st),0);
-        const recapRows=nbrSite>0?sites.map((st,si)=>{
-          const teff=clientSiteEffectif(st);
-          const pct=totalEffectifGlobal>0?Math.round(teff/totalEffectifGlobal*100):0;
-          return '<tr>'
-            +'<td style="padding:6px 10px;border:1px solid #e2e8f0;font-weight:700;color:#1d4ed8;font-size:12px">Site '+(si+1)+(st.denomination?' — '+escapeHTML(st.denomination):'')+'</td>'
-            +'<td style="padding:6px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:800;font-size:13px;color:#043970">'+teff+'</td>'
-            +'<td style="padding:6px 10px;border:1px solid #e2e8f0;min-width:120px"><div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden"><div style="background:#1d4ed8;width:'+pct+'%;height:100%"></div></div><span style="font-size:10px;color:#64748b">'+pct+'%</span></td>'
-            +'</tr>';
-        }).join(''):'<tr><td colspan="3" style="padding:12px;text-align:center;color:#94a3b8;font-size:12px">Aucun site configuré</td></tr>';
-        const recapFbox=fbox("Récap effectif",'<table style="width:100%;border-collapse:collapse;font-size:12px">'
-          +'<thead><tr style="background:#f1f5f9">'
-          +'<th style="padding:6px 10px;border:1px solid #e2e8f0;text-align:left;font-size:11px;font-weight:700;color:#64748b">Site</th>'
-          +'<th style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;width:80px;text-align:center">Effectif</th>'
-          +'<th style="padding:6px 10px;border:1px solid #e2e8f0;font-size:11px;font-weight:700;color:#64748b;width:140px">Répartition</th>'
-          +'</tr></thead>'
-          +'<tbody id="tech-recap-tbody">'+recapRows+'</tbody>'
-          +'<tfoot><tr style="background:#eff6ff">'
-          +'<td style="padding:7px 10px;border:1px solid #bfdbfe;font-weight:800;color:#043970;text-align:right">Total général</td>'
-          +'<td id="tech-recap-total" style="padding:7px 10px;border:1px solid #bfdbfe;font-weight:900;color:#043970;text-align:center;font-size:14px">'+totalEffectifGlobal+'</td>'
-          +'<td style="border:1px solid #bfdbfe"></td>'
-          +'</tr></tfoot>'
-          +'</table>');
-        const btnModifier='<button type="button" id="btn-tech-modifier" class="btn btn-ghost" style="display:'+(c?.tech_valide?"":"none")+'" onclick="techUnlockDonneesTechniques()">Modifier</button>';
-        const btnEnregistrer='<button type="button" id="btn-tech-enregistrer" class="btn btn-primary" style="padding:10px 32px;font-size:14px;font-weight:800;letter-spacing:.04em" onclick="confirmClientTechOnly()">ENREGISTRER</button>';
-        return '<div id="tech-panel-content">'+recapFbox+sitesFbox+'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'+btnModifier+btnEnregistrer+'</div></div>';
-      })()},
       {label:"Contrat",content:tabContrat},
       {label:"Historique",content:tabHistorique},
     ])}
