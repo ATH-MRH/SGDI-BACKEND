@@ -34,6 +34,7 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
     "contrats", "contratsPersonnel", "avenants", "conges", "incidents", "materiel",
     "demandesPersonnel", "demandesStructure", "pointages", "pointageMensuel",
     "feuillePresence", "missions", "siteInspections", "agendaEvents", "clients", "prospects",
+    "missionBillables",
     "opportunites", "visites", "devis", "factures", "paiements", "avances", "avoirs",
     "caisse", "stockArticles", "stockMouvements", "magasins", "fournisseurs",
     "echanges",
@@ -52,6 +53,28 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
 # conserve les lignes globales : les jeter ferait perdre le plancher/plafond de
 # grille et rouvrirait un mois clôturé côté utilisateur restreint.
 GLOBAL_ROW_COLLECTIONS = {"paieClotures", "paieGrilles"}
+MISSION_FINANCIAL_HIDDEN_ROLES = {"ops", "dispatch", "superviseur", "supervisor"}
+
+
+def _protect_mission_financial_data(name: str, value: list[Any] | dict[str, Any], user: Any | None) -> list[Any] | dict[str, Any]:
+    """Ne transmet jamais les données commerciales aux comptes opérationnels."""
+    if _user_role(user) not in MISSION_FINANCIAL_HIDDEN_ROLES or not isinstance(value, list):
+        return value
+    if name == "missionBillables":
+        return []
+    if name != "missions":
+        return value
+    protected: list[Any] = []
+    for row in value:
+        if not isinstance(row, dict):
+            protected.append(row)
+            continue
+        clean = deepcopy(row)
+        clean.pop("financial", None)
+        for field in ("cost", "cout", "prixVente", "salePriceHT", "salePriceTTC", "margin", "marge", "marginRate", "tauxMarge"):
+            clean.pop(field, None)
+        protected.append(clean)
+    return protected
 
 
 def _keep_unscoped_rows(name: str) -> bool:
@@ -344,6 +367,9 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
         echanges = scoped_unrestricted.get("echanges")
         if isinstance(echanges, list):
             scoped_unrestricted["echanges"] = _filter_echanges_for_user(echanges, user)
+        for protected_name in ("missions", "missionBillables"):
+            if protected_name in scoped_unrestricted:
+                scoped_unrestricted[protected_name] = _protect_mission_financial_data(protected_name, scoped_unrestricted[protected_name], user)
         return scoped_unrestricted
     allowed_societies = _user_allowed_societies(user)
     scoped: dict[str, list[Any] | dict[str, Any]] = dict(snapshot)
@@ -392,6 +418,9 @@ def scope_database_for_user(snapshot: dict[str, list[Any] | dict[str, Any]], use
     users = scoped.get("users")
     if isinstance(users, list):
         scoped["users"] = [row for row in users if isinstance(row, dict) and row.get("username") == current_username]
+    for protected_name in ("missions", "missionBillables"):
+        if protected_name in scoped:
+            scoped[protected_name] = _protect_mission_financial_data(protected_name, scoped[protected_name], user)
     return scoped
 
 
@@ -404,7 +433,7 @@ def scope_collection_for_user(
     if _snapshot_unrestricted(user):
         if name == "echanges" and isinstance(value, list):
             return _filter_echanges_for_user(value, user)
-        return value
+        return _protect_mission_financial_data(name, value, user)
     if name == "users" and isinstance(value, list):
         current_username = str(getattr(user, "username", "") or "")
         return [row for row in value if isinstance(row, dict) and row.get("username") == current_username]
@@ -415,13 +444,14 @@ def scope_collection_for_user(
     if name not in SENSITIVE_SOCIETY_COLLECTIONS:
         return value
     allowed_societies = _user_allowed_societies(user)
-    return _filter_rows_for_scope(
+    filtered = _filter_rows_for_scope(
         value,
         allowed_societies,
         allowed_agent_refs=set(),
         allowed_site_refs=set(),
         keep_unscoped=name in GLOBAL_ROW_COLLECTIONS,
     )
+    return _protect_mission_financial_data(name, filtered, user)
 
 
 _COLLECTION_ROW_LIMITS: dict[str, int] = {

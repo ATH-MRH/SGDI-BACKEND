@@ -2481,7 +2481,7 @@ function ensureContratsPersonnel(){
 function emptyDB(){
   return{
     users:[],agents:[],sites:[],candidats:[],incidents:[],conges:[],contrats:[],materiel:[],
-    echanges:[],workflowTasks:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],opsMouvements:[],demandesPersonnel:[],demandesStructure:[],missions:[],siteInspections:[],
+    echanges:[],workflowTasks:[],avenants:[],contratsPersonnel:[],pointages:[],feuillePresence:[],opsMouvements:[],demandesPersonnel:[],demandesStructure:[],missions:[],missionBillables:[],siteInspections:[],
     agendaEvents:[],
     devis:[],factures:[],paiements:[],avances:[],avoirs:[],caisse:[],
     prospects:[],clients:[],opportunites:[],visites:[],catalogue:[],
@@ -2627,7 +2627,7 @@ function purgeRemovedSocieteData(d){
     if(d[key].length!==before)changed=true;
   };
   const stockIds=new Set((d.stockArticles||[]).filter(x=>isRemovedSociete(x&&x.societe)).map(x=>x.id));
-  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","opsMouvements","demandesPersonnel","demandesStructure","missions","siteInspections","agendaEvents"].forEach(filterSoc);
+  ["agents","candidats","sites","materiel","stockArticles","magasins","fournisseurs","clients","prospects","opportunites","visites","catalogue","devis","factures","paiements","avances","avoirs","caisse","incidents","pointages","feuillePresence","opsMouvements","demandesPersonnel","demandesStructure","missions","missionBillables","siteInspections","agendaEvents"].forEach(filterSoc);
   if(Array.isArray(d.stockMouvements)){
     const before=d.stockMouvements.length;
     d.stockMouvements=d.stockMouvements.filter(x=>!isRemovedSociete(x&&x.societe)&&!stockIds.has(x&&x.articleId));
@@ -4478,6 +4478,7 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
         {label:"CLIENTS",route:"facturation/clients"},
+        {label:"PRESTATIONS À FACTURER",route:"facturation/missions"},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES",route:"facturation/avances"},
         {label:"AVOIRS",route:"facturation/avoirs"},
@@ -4495,6 +4496,7 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard"},
         {label:"CLIENTS",route:"facturation/clients"},
+        {label:"PRESTATIONS À FACTURER",route:"facturation/missions"},
         {label:"FACTURES",route:"facturation/factures"},
         {label:"PAIEMENTS",route:"facturation/paiements"},
         {label:"AVANCES",route:"facturation/avances"},
@@ -6373,7 +6375,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD","materiel/dashboard"],["ARTICLES","materiel/articles"],["MAGASINS","materiel/magasins"],["FOURNISSEURS","materiel/fournisseurs"],["ALERTES","materiel/alertes"],["SITE EN ATTENTE DE DOTATION","materiel/sites-dotation"],["EMPLOYÉ EN ATTENTE DE DOTATION","materiel/dotation"],["REVERSEMENTS EN ATTENTE","materiel/reversement"],["FICHES DE POSITION","materiel/fiches"]
     ],
     facturation:[
-      ["TABLEAU DE BORD","facturation/dashboard"],["CLIENTS","facturation/clients"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
+      ["TABLEAU DE BORD","facturation/dashboard"],["CLIENTS","facturation/clients"],["PRESTATIONS À FACTURER","facturation/missions"],["FACTURES","facturation/factures"],["PAIEMENTS","facturation/paiements"],["AVANCES CLIENTS","facturation/avances"],["AVOIRS","facturation/avoirs"],["CAISSE","facturation/caisse"],["SITUATION PAIEMENTS","facturation/situation"]
     ],
     commercial:[
       ["TABLEAU DE BORD","commercial/dashboard"],["CLIENT","commercial/clients"],["PROSPECTS","commercial/prospects"],["OPPORTUNITÉS","commercial/opportunites"],["VISITES / SUIVI","commercial/visites"],["CATALOGUE PRESTATIONS","commercial/catalogue"],["TARIFICATION","commercial/tarifs"],["STATISTIQUES","commercial/stats"]
@@ -6646,6 +6648,7 @@ function renderSidebar(){
       facturation:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard",group:"PILOTAGE"},
         {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],group:"CLIENTS",count:comClients},
+        {label:"PRESTATIONS À FACTURER",route:"facturation/missions",aliases:["facturation/missions"],group:"CLIENTS",count:(db.missionBillables||[]).length},
         {label:"PAIEMENTS",route:"facturation/paiements",group:"TRÉSORERIE"},
         {label:"AVANCES CLIENTS",route:"facturation/avances",group:"TRÉSORERIE"},
         {label:"AVOIRS",route:"facturation/avoirs",group:"TRÉSORERIE"},
@@ -6656,6 +6659,7 @@ function renderSidebar(){
       facmod:[
         {label:"TABLEAU DE BORD",route:"facturation/dashboard",group:"PILOTAGE"},
         {label:"CLIENTS",route:"facturation/clients",aliases:["facturation/clients"],group:"CLIENTS",count:comClients},
+        {label:"PRESTATIONS À FACTURER",route:"facturation/missions",aliases:["facturation/missions"],group:"CLIENTS",count:(db.missionBillables||[]).length},
         {label:"FACTURES",route:"facturation/factures",group:"FACTURATION",count:factFactures},
         {label:"PAIEMENTS",route:"facturation/paiements",group:"FACTURATION"},
         {label:"AVANCES CLIENTS",route:"facturation/avances",group:"FACTURATION"},
@@ -26667,7 +26671,7 @@ const ETAPES_OPP=["nouveau","qualification","proposition","negociation","gagnee"
 const STATUTS_PROSPECT=["nouveau","contacte","interesse","rdv_planifie","rdv_realise","converti","perdu"];
 function factTabs(active){
   if(window.__FAC_AUTONOMOUS_APP__)return "";
-  const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
+  const tabs=[["dashboard","Tableau de bord","facturation/dashboard"],["clients","Clients","facturation/clients"],["missions","Prestations à facturer","facturation/missions"],["factures","Factures","facturation/factures"],["paiements","Paiements","facturation/paiements"],["avances","Avances","facturation/avances"],["avoirs","Avoirs","facturation/avoirs"],["caisse","Caisse","facturation/caisse"],["balance","Balance agée","facturation/balance"],["situation","Situation","facturation/situation"]];
   return '<nav style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e2e8f0;overflow-x:auto">'+tabs.map(([k,l,r])=>{const on=active===k;return'<a href="#/'+r+'" style="display:inline-block;padding:9px 14px;font-size:11px;font-weight:700;white-space:nowrap;text-decoration:none;border-bottom:2px solid '+(on?"#0f2d5a":"transparent")+';color:'+(on?"#0f2d5a":"#64748b")+';margin-bottom:-2px;'+(on?"background:#f8fafc;":"")+'">'+(l)+'</a>';}).join("")+"</nav>";
 }
 function factureStatutPaye(f){const cents=v=>Math.round((Number(v)||0)*100)/100;const pa=cents((db.paiements||[]).filter(p=>p.factureId===f.id).reduce((s,p)=>s+(Number(p.montant)||0),0));const av=cents((db.avoirs||[]).filter(a=>a.factureId===f.id).reduce((s,a)=>s+(Number(a.montant)||0),0));const reste=cents(Math.max(0,(Number(f.ttc)||0)-pa-av));let st="emise";if(reste<=0.01)st="payee";else if(pa>0)st="partielle";else{const due=f.dateEcheance||(f.date&&f.echeance?addDays(f.date,parseInt(f.echeance)||0):"");if(due&&due<today())st="echue";}return{paye:pa,avoir:av,reste,statut:f.statut==="annulee"?"annulee":st}}
@@ -26676,6 +26680,7 @@ function statutDevisPill(s){return{"brouillon":"pill-gray","envoye":"pill-blue",
 function renderFacturation(view,sub,arg){
   if(sub==="dashboard")return renderFactDashboard(view);
   if(sub==="clients")return renderFactClients(view);
+  if(sub==="missions")return renderFactMissionBillables(view);
   if(sub==="devis"){navigate("commercial/devis");return;}
   if(sub==="factures"){if(window.__factureEditId)return renderFactureEditor(view);return renderFactureListPage(view);}
   if(sub==="paiements")return renderFactPaiements(view);
@@ -26690,6 +26695,14 @@ function renderFacturation(view,sub,arg){
   if(sub==="themes")return renderFactThemes(view);
   if(sub==="structures")return renderFactStructures(view);
   renderFactDashboard(view);
+}
+function renderFactMissionBillables(view){
+  const soc=mySoc(),rows=(db.missionBillables||[]).filter(x=>!soc||normalizeSocieteName(x.societe||"")===normalizeSocieteName(soc)).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  const ready=rows.filter(x=>x.status==="prete_a_facturer").length,waiting=rows.filter(x=>x.status==="en_attente_execution").length,total=rows.reduce((s,x)=>s+(Number(x.priceHT)||0),0);
+  const statusLabel=s=>({en_attente_execution:"En attente d'exécution",prete_a_facturer:"Prête à facturer",facturee:"Facturée",suspendue:"Suspendue",annulee:"Annulée"})[s]||s||"En attente";
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4"><div><h1 class="text-2xl font-black">Prestations à facturer</h1><p class="text-sm text-slate-500">Missions validées par la Direction commerciale, suivies jusqu'à leur facturation.</p></div></div>${factTabs("missions")}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"><div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">En attente d'exécution</div><div class="text-2xl font-black text-amber-700">${waiting}</div></div><div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Prêtes à facturer</div><div class="text-2xl font-black text-emerald-700">${ready}</div></div><div class="card p-4"><div class="text-xs uppercase font-bold text-slate-500">Valeur HT transmise</div><div class="text-2xl font-black text-blue-900">${money(total)} DA</div></div></div>
+    <div class="card overflow-hidden"><table><thead><tr><th>Mission</th><th>Client</th><th>Prestation</th><th>Période</th><th>Prix HT</th><th>TVA</th><th>TTC</th><th>Statut</th></tr></thead><tbody>${rows.length?rows.map(x=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(x.missionNumber||"")}</td><td class="font-semibold">${escapeHTML(x.clientName||"")}</td><td>${escapeHTML(x.designation||"")}</td><td class="text-xs">${formatDate(x.dateDebut)} → ${formatDate(x.dateFin)}</td><td class="font-bold">${money(x.priceHT||0)} DA</td><td>${Number(x.vatRate||19)}%</td><td class="font-bold">${money(x.priceTTC||0)} DA</td><td><span class="pill pill-amber">${escapeHTML(statusLabel(x.status))}</span></td></tr>`).join(""):`<tr><td colspan="8" class="text-center text-slate-500 p-6">Aucune prestation de mission transmise.</td></tr>`}</tbody></table></div>`;
 }
 async function renderFactClients(view){
   const soc=mySoc();const page=sgdiServerCurrentPage("fact-clients",soc||"all");
@@ -29611,6 +29624,48 @@ function sgdiTabSwitch(id,idx){
     requestAnimationFrame(()=>techUnlockDonneesTechniques());
   }
 }
+function dcMissionNextNumber(){
+  const year=new Date().getFullYear(),re=new RegExp(`^MIS-${year}-(\\d+)$`);
+  const nums=(db.missions||[]).map(m=>String(m.numero||"").match(re)).filter(Boolean).map(m=>parseInt(m[1],10)||0);
+  return `MIS-${year}-${String((nums.length?Math.max(...nums):0)+1).padStart(4,"0")}`;
+}
+function dcMissionMoneyValue(value){return Number(parseDZD(value)||0)}
+function dcMissionRecalculate(){
+  const form=document.querySelector("#view form[data-client-editor='1']");if(!form)return;
+  const internal=dcMissionMoneyValue(form.elements.missionCoutInterne?.value),subcontract=dcMissionMoneyValue(form.elements.missionCoutSousTraitance?.value),other=dcMissionMoneyValue(form.elements.missionAutresCouts?.value),sale=dcMissionMoneyValue(form.elements.missionPrixVenteHT?.value);
+  const cost=internal+subcontract+other,margin=sale-cost,rate=sale?margin*100/sale:0;
+  const set=(id,value)=>{const el=document.getElementById(id);if(el)el.value=value};
+  set("dc-mission-cost-total",formatDZD(cost));set("dc-mission-margin",formatDZD(margin));set("dc-mission-margin-rate",rate.toFixed(2).replace(".",",")+" %");
+}
+function dcMissionStatusLabel(m){
+  return({transmise_ops:"Transmise à OPS",ordre_ops_valide:"Ordre OPS validé",transmise_sg:"Transmise à SG",validee_sg:"Validée SG",paiement_en_attente:"Paiement à valider",cloturee:"Clôturée",annulee:"Annulée"})[m?.workflowStatus||m?.statut]||"Brouillon";
+}
+function dcMissionHistoryHTML(clientId){
+  const rows=(db.missions||[]).filter(m=>m.source==="dc"&&String(m.clientId||"")===String(clientId||"")).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  if(!rows.length)return `<div style="padding:18px;text-align:center;color:#94a3b8;font-size:12px">Aucune mission créée pour ce client.</div>`;
+  return `<div style="overflow:auto"><table><thead><tr><th>N°</th><th>Objet</th><th>Période</th><th>Statut</th><th>Prix HT</th><th>Marge</th></tr></thead><tbody>${rows.map(m=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(m.numero||"")}</td><td>${escapeHTML(m.objet||"")}</td><td class="text-xs">${formatDate(m.dateDebut)} → ${formatDate(m.dateFin)}</td><td><span class="pill pill-blue">${escapeHTML(dcMissionStatusLabel(m))}</span></td><td class="font-bold">${money(m.financial?.salePriceHT||0)} DA</td><td class="font-bold" style="color:${Number(m.financial?.margin||0)>=0?"#047857":"#dc2626"}">${money(m.financial?.margin||0)} DA</td></tr>`).join("")}</tbody></table></div>`;
+}
+async function validateDcMission(clientId){
+  const form=document.querySelector("#view form[data-client-editor='1']");if(!form)return false;
+  const client=(db.clients||[]).find(c=>String(c.id)===String(clientId)||String(c.backendId||"")===String(clientId));
+  if(!client){toast("Enregistrez d'abord le client avant de créer une mission","error");return false}
+  const fd=new FormData(form),objet=String(fd.get("missionObjet")||"").trim(),start=String(fd.get("missionDateDebut")||""),end=String(fd.get("missionDateFin")||""),place=String(fd.get("missionLieux")||"").trim();
+  if(!objet||!start||!end||!place){toast("Objet, dates et lieu de mission sont obligatoires","error");return false}
+  if(end<start){toast("La date de fin doit être postérieure à la date de début","error");return false}
+  const internal=dcMissionMoneyValue(fd.get("missionCoutInterne")),subcontract=dcMissionMoneyValue(fd.get("missionCoutSousTraitance")),other=dcMissionMoneyValue(fd.get("missionAutresCouts")),sale=dcMissionMoneyValue(fd.get("missionPrixVenteHT"));
+  if(sale<=0){toast("Le prix de vente HT est obligatoire","error");return false}
+  const cost=internal+subcontract+other,margin=sale-cost,now=new Date().toISOString(),id=uid("mission");
+  if(margin<0&&!confirm("La marge prévisionnelle est négative. Confirmer malgré tout ?"))return false;
+  const mission={id,numero:dcMissionNextNumber(),source:"dc",societe:mySoc()||client.societe||"",clientId:client.id,clientBackendId:client.backendId||"",clientName:client.nom||client.raisonSociale||"",objet,motif:objet,lieu:place,dateDebut:start,dateFin:end,details:String(fd.get("missionDetail")||"").trim(),consignes:String(fd.get("missionConsigne")||"").trim(),executionMode:String(fd.get("missionExecutionMode")||"interne"),workflowStatus:"transmise_ops",statut:"planifiee",financial:{internalCost:internal,subcontractCost:subcontract,otherCost:other,totalCost:cost,salePriceHT:sale,vatRate:19,salePriceTTC:sale*1.19,margin,marginRate:sale?margin*100/sale:0,billingTerms:String(fd.get("missionConditionsFacturation")||"").trim(),customerOrderRef:String(fd.get("missionBonCommande")||"").trim()},audit:[{action:"Création et validation DC",at:now,by:session?.username||"DC"}],createdAt:now,validatedAt:now,validatedBy:session?.username||"DC",updatedAt:now};
+  const billable={id:uid("mission_billable"),missionId:id,missionNumber:mission.numero,societe:mission.societe,clientId:mission.clientId,clientName:mission.clientName,designation:objet,dateDebut:start,dateFin:end,quantity:1,unit:"Mission",priceHT:sale,vatRate:19,priceTTC:sale*1.19,status:"en_attente_execution",billingTerms:mission.financial.billingTerms,customerOrderRef:mission.financial.customerOrderRef,createdAt:now};
+  try{
+    await sgdiApi("/api/irongs/collections/missions/items",{method:"POST",body:{data:mission},legacy:false});
+    await sgdiApi("/api/irongs/collections/missionBillables/items",{method:"POST",body:{data:billable},legacy:false});
+  }catch(e){toast("Transmission de la mission impossible : "+(e.message||e),"error");return false}
+  db.missions=db.missions||[];db.missions.unshift(mission);db.missionBillables=db.missionBillables||[];db.missionBillables.unshift(billable);
+  toast("Mission validée et transmise à OPS et Facturation","success");openClientModal(client.id);return true;
+}
+window.dcMissionRecalculate=dcMissionRecalculate;window.validateDcMission=validateDcMission;
 function previewClientPortalLogo(input){
   const file=input.files?.[0];
   if(!file)return;
@@ -29692,8 +29747,9 @@ function openClientModal(id,readOnly=false){
     </fieldset>
   `;
   const tabMission=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div><h3 style="font-size:16px;font-weight:900;color:#0f2d5a;margin:0">Créer une mission</h3><p style="font-size:11px;color:#64748b;margin:3px 0 0">La validation transmet les données opérationnelles à OPS et les données financières à Facturation.</p></div><span class="pill pill-amber">Brouillon DC</span></div>
     <fieldset class="rh-op-box" style="margin-bottom:10px">
-      <legend class="rh-op-legend">Mission</legend>
+      <legend class="rh-op-legend">Informations opérationnelles</legend>
       <label style="display:block;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Objet de la mission</span><input class="input" type="text" name="missionObjet" style="width:100%" placeholder="Objet de la mission..." value="${escapeHTML(c?.missionObjet||"")}"/></label>
       <div class="rh-op-grid" style="margin-bottom:10px">
         <label><span>Date début de la mission</span><input class="input" type="date" name="missionDateDebut" value="${escapeHTML(c?.missionDateDebut||"")}"/></label>
@@ -29703,6 +29759,23 @@ function openClientModal(id,readOnly=false){
       <label style="display:block;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Détail de la mission</span><textarea class="input" name="missionDetail" rows="3" style="width:100%" placeholder="Détail de la mission...">${escapeHTML(c?.missionDetail||"")}</textarea></label>
       <label style="display:block"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Consigne particulière</span><textarea class="input" name="missionConsigne" rows="3" style="width:100%" placeholder="Consigne particulière...">${escapeHTML(c?.missionConsigne||"")}</textarea></label>
     </fieldset>
+    <fieldset class="rh-op-box" style="margin-bottom:10px;border-color:#fde68a;background:#fffdf5">
+      <legend class="rh-op-legend">Données commerciales confidentielles — DC / FAC / DG uniquement</legend>
+      <div class="rh-op-grid" style="margin-bottom:10px">
+        <label><span>Mode d'exécution</span><select class="select" name="missionExecutionMode"><option value="interne">Moyens internes</option><option value="sous_traitance">Sous-traitance</option><option value="mixte">Mode mixte</option></select></label>
+        <label><span>Bon de commande / référence client</span><input class="input" name="missionBonCommande" placeholder="Référence facultative"/></label>
+        <label><span>Coût interne prévisionnel</span><input class="input" name="missionCoutInterne" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
+        <label><span>Coût de sous-traitance</span><input class="input" name="missionCoutSousTraitance" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
+        <label><span>Autres coûts prévisionnels</span><input class="input" name="missionAutresCouts" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
+        <label><span>Prix de vente HT *</span><input class="input" name="missionPrixVenteHT" inputmode="decimal" placeholder="00 000,00" oninput="dcMissionRecalculate()"/></label>
+        <label><span>Coût de revient total</span><input id="dc-mission-cost-total" class="input" readonly value="0,00" style="font-weight:900;background:#f8fafc"/></label>
+        <label><span>Marge prévisionnelle</span><input id="dc-mission-margin" class="input" readonly value="0,00" style="font-weight:900;background:#f8fafc"/></label>
+        <label><span>Taux de marge</span><input id="dc-mission-margin-rate" class="input" readonly value="0,00 %" style="font-weight:900;background:#f8fafc"/></label>
+      </div>
+      <label style="display:block"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Conditions de facturation</span><textarea class="input" name="missionConditionsFacturation" rows="2" style="width:100%" placeholder="Acompte, facturation à l'achèvement, échéancier..."></textarea></label>
+    </fieldset>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px"><button type="button" class="btn btn-primary" style="background:#16a34a;border-color:#16a34a;padding:9px 18px" onclick="validateDcMission('${escapeHTML(c?.id||id||"")}')">✓ Valider et transmettre la mission</button></div>
+    <fieldset class="rh-op-box"><legend class="rh-op-legend">Historique des missions</legend>${dcMissionHistoryHTML(c?.id||id||"")}</fieldset>
   `;
   const tabFacturation=`
     <fieldset class="rh-op-box" style="margin-bottom:12px">
@@ -32911,7 +32984,7 @@ const ADMIN_MODULES=[
   "dashboard","dossiers","recrutement","reserve","candidats_archives","drh/social","demandes_personnel","demandes_structure",
   "contrats","a_contractualiser","effectif","agents","fiches","badge","sites","incidents","conges","paie","rapports",
   "materiel","materiel/articles","materiel/magasins","materiel/fournisseurs","materiel/alertes","materiel/dotation","materiel/sites-dotation","materiel/reversement",
-  "facturation","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
+  "facturation","facturation/missions","facturation/factures","facturation/paiements","facturation/avances","facturation/avoirs","facturation/caisse","facturation/situation",
   "commercial","commercial/prospects","commercial/clients","commercial/opportunites","commercial/visites","commercial/catalogue","commercial/tarifs","commercial/stats",
   "secretariat","secretariat/courriers","secretariat/notes","secretariat/archives","agenda","agenda/liste","agenda/semaine","agenda/rappels",
   "pointage","pointage/recap","pointage/societe","pointage/stats","pointage/legende",
@@ -37271,7 +37344,7 @@ function opsMissionDocumentHTML(m){
     <div class="om-section"><h2>Motif de la mission</h2><div class="om-box">${escapeHTML(m.motif||m.objet||"—")}</div></div>
     <div class="om-section"><h2>Consignes et instructions</h2><div class="om-box">${escapeHTML(m.consignes||"—")}</div></div>
     <div class="om-section" style="margin-top:12mm;font-size:8px;font-weight:400">${escapeHTML(omNotice)}<div style="margin-top:7mm;text-align:right">La Direction Générale</div></div>
-    <div class="om-footer">Document généré automatiquement depuis SGDI · Module OPS</div>
+    <div class="om-footer">Document confidentiel — toute divulgation est interdite.<br>Document généré automatiquement depuis SGDI · Module OPS</div>
   </main></body></html>`,archiveMeta,"Valider OM");
 }
 function openOpsMissionDocument(id){
@@ -37451,6 +37524,7 @@ async function saveOpsMission(id,form,openDoc){
   if(docWindow){docWindow.document.write(opsMissionLoadingHTML());docWindow.document.close()}
   const fd=new FormData(form);
   let m=id?db.missions.find(x=>String(x.id)===String(id)):null;
+  const creating=!m;
   if(!m){m={id:uid("mission"),createdAt:new Date().toISOString(),societe:currentStructureSocieteFilter()||session?.societe||""};db.missions.unshift(m)}
   const a=(db.agents||[]).find(x=>String(x.id)===String(fd.get("agentId")));
   m.numero=fd.get("numero")||m.numero||nextMissionNumero();
@@ -37476,9 +37550,16 @@ async function saveOpsMission(id,form,openDoc){
   m.consignes=(fd.get("consignes")||"").trim();
   m.duree=missionDureeLabel(m);
   m.societe=m.societe||currentStructureSocieteFilter()||session?.societe||a?.societe||"";
+  m.workflowStatus="transmise_sg";
+  m.opsOrderValidatedAt=new Date().toISOString();
+  m.opsOrderValidatedBy=session?.username||"OPS";
+  if(!Array.isArray(m.audit))m.audit=[];
+  m.audit.push({action:"Ordre de mission validé par OPS et transmis à SG",at:m.opsOrderValidatedAt,by:m.opsOrderValidatedBy});
   m.updatedAt=new Date().toISOString();
   if(docWindow){docWindow.document.open();docWindow.document.write(opsMissionDocumentHTML(m));docWindow.document.close();}
-  if(!(await saveDBAndWaitToast("Mission OPS non confirmée"))){if(editBtn){editBtn.disabled=false;editBtn.textContent="Editer OM"}return}
+  try{
+    await sgdiApi("/api/irongs/collections/missions/items"+(creating?"":"/"+encodeURIComponent(m.id)),{method:creating?"POST":"PATCH",body:{data:m},legacy:false});
+  }catch(e){if(editBtn){editBtn.disabled=false;editBtn.textContent="Editer OM"}toast("Mission OPS non confirmée : "+(e.message||e),"error");return}
   closeModal();toast("Mission OPS enregistrée","success");
   renderView();
 }
