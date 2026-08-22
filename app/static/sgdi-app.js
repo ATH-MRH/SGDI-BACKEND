@@ -29605,7 +29605,6 @@ function openClientModal(id,readOnly=false){
     ${sgdiTabsHTML([
       {label:"Information",content:tabIdentification},
       {label:"Facturation",content:tabFacturation},
-      {label:"Contrat",content:tabContrat},
       {label:"Données techniques",content:(()=>{
         const nbrSite=clientNbrSites(c);
         const sites=c?.tech_sites||[];
@@ -29642,6 +29641,7 @@ function openClientModal(id,readOnly=false){
         const btnEnregistrer='<button type="button" id="btn-tech-enregistrer" class="btn btn-primary" style="padding:10px 32px;font-size:14px;font-weight:800;letter-spacing:.04em" onclick="confirmClientTechOnly()">ENREGISTRER</button>';
         return '<div id="tech-panel-content">'+recapFbox+sitesFbox+'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">'+btnModifier+btnEnregistrer+'</div></div>';
       })()},
+      {label:"Contrat",content:tabContrat},
       {label:"Historique",content:tabHistorique},
     ])}
   </form>`;
