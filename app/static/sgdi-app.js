@@ -29195,6 +29195,22 @@ function techSitePanelHTML(si,s,pfx='ts'){
       ${identSiteGrid}
     </fieldset>
     <fieldset class="rh-op-box" style="margin-bottom:10px">
+      <legend class="rh-op-legend">Effectif global</legend>
+      <input type="hidden" id="${pfx}-${si}-lignes-json" name="${pfx}_${si}_lignes" value="${escapeHTML(JSON.stringify(lignes))}"/>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#f1f5f9">
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:120px">Prix unitaire</th>
+          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:80px">Qté</th>
+          <th style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:200px">Total</th>
+          <th style="border:1px solid #e2e8f0;width:36px"></th>
+        </tr></thead>
+        <tbody id="${pfx}-${si}-lignes-body">${lignesRows}</tbody>
+      </table>
+      <button type="button" class="btn btn-ghost" style="margin-top:6px;font-size:12px" onclick="clientSiteLigneAdd(${si},'${pfx}')">+ Ajouter une ligne</button>
+      <div id="${pfx}-${si}-lignes-total" style="margin-top:10px;text-align:right">${lignesTotalHTML}</div>
+    </fieldset>
+    <fieldset class="rh-op-box" style="margin-bottom:10px">
       <legend class="rh-op-legend">Nomenclature des postes</legend>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <input id="${pfx}-${si}-poste-sel" class="input" type="text" style="flex:1" placeholder="Saisir librement le poste ou la fonction..." autocomplete="off"/>
@@ -29251,22 +29267,6 @@ function techSitePanelHTML(si,s,pfx='ts'){
         <tbody id="${pfx}-${si}-materiel-body">${materielRows}</tbody>
       </table>
       <button type="button" class="btn btn-ghost" style="margin-top:6px;font-size:12px" onclick="clientMaterielAdd(${si},'${pfx}')">+ Ajouter un équipement</button>
-    </fieldset>
-    <fieldset class="rh-op-box">
-      <legend class="rh-op-legend">Effectif global</legend>
-      <input type="hidden" id="${pfx}-${si}-lignes-json" name="${pfx}_${si}_lignes" value="${escapeHTML(JSON.stringify(lignes))}"/>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="background:#f1f5f9">
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0">Désignation</th>
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:120px">Prix unitaire</th>
-          <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:80px">Qté</th>
-          <th style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;color:#64748b;border:1px solid #e2e8f0;width:200px">Total</th>
-          <th style="border:1px solid #e2e8f0;width:36px"></th>
-        </tr></thead>
-        <tbody id="${pfx}-${si}-lignes-body">${lignesRows}</tbody>
-      </table>
-      <button type="button" class="btn btn-ghost" style="margin-top:6px;font-size:12px" onclick="clientSiteLigneAdd(${si},'${pfx}')">+ Ajouter une ligne</button>
-      <div id="${pfx}-${si}-lignes-total" style="margin-top:10px;text-align:right">${lignesTotalHTML}</div>
     </fieldset>
   </div>`;
 }
