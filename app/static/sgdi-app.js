@@ -29666,6 +29666,15 @@ function openClientModal(id,readOnly=false){
       <button type="button" style="margin-top:6px;padding:6px 14px;border:1.5px dashed #bfdbfe;border-radius:6px;background:#f0f6ff;color:#1d4ed8;font-size:12px;font-weight:700;cursor:pointer" onclick="prospAddReunion(this,'negos')">+ Ajouter une réunion</button>
     </fieldset>
   `;
+  const tabMission=`
+    <fieldset class="rh-op-box" style="margin-bottom:10px">
+      <legend class="rh-op-legend">Mission</legend>
+      <label style="display:block;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Objet de la mission</span><textarea class="input" name="missionObjet" rows="2" style="width:100%" placeholder="Décrivez l'objet de la mission...">${escapeHTML(c?.missionObjet||"")}</textarea></label>
+      <label style="display:block;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Périmètre</span><textarea class="input" name="missionPerimetre" rows="2" style="width:100%" placeholder="Sites, zones, horaires concernés...">${escapeHTML(c?.missionPerimetre||"")}</textarea></label>
+      <label style="display:block;margin-bottom:10px"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Consignes</span><textarea class="input" name="missionConsignes" rows="3" style="width:100%" placeholder="Consignes particulières à respecter...">${escapeHTML(c?.missionConsignes||"")}</textarea></label>
+      <label style="display:block"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Objectifs</span><textarea class="input" name="missionObjectifs" rows="3" style="width:100%" placeholder="Objectifs attendus de la mission...">${escapeHTML(c?.missionObjectifs||"")}</textarea></label>
+    </fieldset>
+  `;
   const tabFacturation=`
     <fieldset class="rh-op-box" style="margin-bottom:12px">
       <legend>Paramètres repris automatiquement sur les factures</legend>
@@ -29804,6 +29813,7 @@ function openClientModal(id,readOnly=false){
       {label:"Information",content:tabIdentification},
       {label:"Facturation",content:tabFacturation},
       {label:"Contrat",content:tabContrat},
+      {label:"Mission",content:tabMission},
       {label:"Historique",content:tabHistorique},
     ])}
   </form>`;
@@ -29877,7 +29887,7 @@ async function confirmClient(id,options={}){
   const hasContractSites=fd.get("ct_nbrSite")!==null;
   if(hasContractSites)tech_sites=cts_sites;
   const techNbrSite=hasContractSites?(parseInt(fd.get("ct_nbrSite"))||tech_sites.length):(parseInt(fd.get("tech_nbrSite"))||tech_sites.length);
-  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContratInitiale,dateFinContrat,typeReconduction,nombreReconductions,preavisResiliation,dateLimiteDenonciation,statutReconduction,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,updatedAt:new Date().toISOString()});
+  Object.assign(c,{nom:fd.get("nom"),raisonSociale:fd.get("raisonSociale")||"",nif:fd.get("nif")||"",ai:fd.get("ai")||"",rc:fd.get("rc")||"",assujettiTva:!!fd.get("assujettiTva"),contact:fd.get("contact")||"",fonction:fd.get("fonction")||"",tel:fd.get("tel")||"",email:fd.get("email")||"",adresse:fd.get("adresse")||"",commune:fd.get("commune")||"",wilaya:fd.get("wilaya")||"",nbreEmployes:parseInt(fd.get("nbreEmployes")||"0")||0,societe:fd.get("societe"),structure:fd.get("structure")||"",statut:fd.get("statut")||"actif",prestationsServices:(document.getElementById("prest-contrat")||document.getElementById("prest-ident"))?.value||fd.get("prestationsServices")||"",modePaiement:fd.get("modePaiement")||"",delaiPaiement:fd.get("delaiPaiement")||"",delaiDepotFacture:fd.get("delaiDepotFacture")||"0",remarqueFacture:fd.get("remarqueFacture")||"",acompte:parseFloat(fd.get("acompte")||"0")||0,conditionsPaiement:fd.get("conditionsPaiement")||"",contratValide,contratValideLe,prosp_reunions,negos_reunions,lignesFacturation,dateDebutContrat,dureeContrat,dateFinContratInitiale,dateFinContrat,typeReconduction,nombreReconductions,preavisResiliation,dateLimiteDenonciation,statutReconduction,notes:fd.get("notes")||"",tech_denomination:fd.get("tech_denomination")||"",tech_adresse:fd.get("tech_adresse")||"",tech_commune:fd.get("tech_commune")||"",tech_wilaya:fd.get("tech_wilaya")||"",tech_nbrSite:techNbrSite,tech_sites,tech_typeSite:fd.get("tech_typeSite")||"",champsLibres,missionObjet:fd.get("missionObjet")||"",missionPerimetre:fd.get("missionPerimetre")||"",missionConsignes:fd.get("missionConsignes")||"",missionObjectifs:fd.get("missionObjectifs")||"",updatedAt:new Date().toISOString()});
   try{if(options.requireExisting)await updateExistingClientToPostgres(c);else await persistClientToPostgres(c)}catch(e){toast("Client non sauvegardé : "+(e.message||e),"error");return false}
   if(!window.__clientNoNavigate){
     toast(isEdit?"Client modifié":"Client créé","success");
