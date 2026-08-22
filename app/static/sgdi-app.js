@@ -28809,11 +28809,13 @@ function techUnlockDonneesTechniques(){
   const panel=document.getElementById("tech-panel-content");
   if(!panel)return;
   panel.querySelectorAll("input:not([type=hidden]):not([type=checkbox]),textarea").forEach(el=>{
-    el.removeAttribute("readonly");
+    el.dataset.noLock="1";
+    el.removeAttribute("readonly");el.removeAttribute("disabled");
     el.style.background="";el.style.color="";el.style.cursor="";
   });
   panel.querySelectorAll("select,input[type=checkbox]").forEach(el=>{
-    el.style.pointerEvents="";el.style.opacity="";
+    el.dataset.noLock="1";
+    el.removeAttribute("disabled");el.style.pointerEvents="";el.style.opacity="";
   });
   // Restaurer le style rouge du champ total effectif
   panel.querySelectorAll("[id^='ts-total-effectif-']").forEach(tot=>{tot.setAttribute("readonly","");tot.style.background="#fff5f5";tot.style.color="#dc2626";tot.style.cursor="not-allowed";});
@@ -29377,7 +29379,13 @@ function sgdiTabSwitch(id,idx){
     btn.style.borderBottom=a?"2px solid #1d4ed8":"2px solid transparent";
     btn.style.color=a?"#1d4ed8":"#64748b";
   });
-  document.querySelectorAll(`[id^="${id}-panel-"]`).forEach((p,i)=>p.style.display=i===idx?"block":"none");
+  let selectedPanel=null;
+  document.querySelectorAll(`[id^="${id}-panel-"]`).forEach((p,i)=>{p.style.display=i===idx?"block":"none";if(i===idx)selectedPanel=p;});
+  const editor=selectedPanel?.closest("form[data-client-editor='1']");
+  if(selectedPanel?.querySelector("#tech-panel-content")&&editor?.dataset.clientReadonly!=="1"){
+    if(typeof sgdiExitViewMode==="function"&&sgdiViewModeActive)sgdiExitViewMode();
+    requestAnimationFrame(()=>techUnlockDonneesTechniques());
+  }
 }
 function previewClientPortalLogo(input){
   const file=input.files?.[0];
@@ -29585,7 +29593,7 @@ function openClientModal(id,readOnly=false){
     </div>
   `)+`</div>`;
   const view=document.getElementById("view");
-  view.innerHTML=`<form data-client-editor="1" data-no-critical-auth="1" data-client-id="${escapeHTML(c?.id||id||"")}" data-client-backend-id="${escapeHTML(c?.backendId||"")}" onsubmit="event.preventDefault();confirmClient('${id||""}')">
+  view.innerHTML=`<form data-client-editor="1" data-client-readonly="${readOnly?"1":"0"}" data-no-critical-auth="1" data-client-id="${escapeHTML(c?.id||id||"")}" data-client-backend-id="${escapeHTML(c?.backendId||"")}" onsubmit="event.preventDefault();confirmClient('${id||""}')">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e2e8f0">
       <h2 style="font-size:18px;font-weight:800;color:#0f2d5a;margin:0">${isEdit?"CLIENT : "+escapeHTML((c?.nom||"").toUpperCase()):"Nouveau client"}</h2>
       ${isEdit?`<div style="display:flex;align-items:center;gap:8px">
