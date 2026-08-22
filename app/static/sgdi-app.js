@@ -28936,8 +28936,8 @@ function techPosteRowHTML(si,pfx,nom,nbr,salaire){
 }
 function techPosteAdd(si,pfx){
   const sel=document.getElementById(pfx+'-'+si+'-poste-sel');
-  const nom=sel?.value||'';
-  if(!nom){toast('Sélectionnez un poste dans la liste','error');return;}
+  const nom=(sel?.value||'').trim();
+  if(!nom){toast('Saisissez un poste ou une fonction','error');return;}
   const tbody=document.getElementById(pfx+'-'+si+'-postes-body');if(!tbody)return;
   if(Array.from(tbody.querySelectorAll('td:first-child')).some(td=>td.textContent.trim()===nom.trim())){toast('Ce poste est déjà dans la liste','error');return;}
   tbody.insertAdjacentHTML('beforeend',techPosteRowHTML(si,pfx,nom,0,0));
@@ -29116,7 +29116,6 @@ function techSitePanelHTML(si,s,pfx='ts'){
   const posteInitRows=postes_list.map(p=>techPosteRowHTML(si,pfx,p.nom,p.nbr,p.salaire)).join("");
   const posteInitTotal=postes_list.reduce((acc,p)=>acc+(parseInt(p.nbr)||0),0);
   const masseTotale=postes_list.reduce((acc,p)=>acc+(parseFloat(p.salaire)||0)*(parseInt(p.nbr)||0),0);
-  const posteOpts=POSTES_SEC.map(p=>`<option value="${escapeHTML(p)}">${escapeHTML(p)}</option>`).join("");
   const materielRows=materiel.map((m,i)=>`<tr data-idx="${i}"><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%;min-width:0" value="${escapeHTML(m.designation||"")}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" type="number" min="1" step="1" style="width:100%;text-align:center" value="${m.qte||1}" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px"><select class="select" style="width:100%" oninput="clientMaterielSync(${si},'${pfx}')"><option ${(m.etat||"Neuf")==="Neuf"?"selected":""}>Neuf</option><option ${m.etat==="Bon état"?"selected":""}>Bon état</option><option ${m.etat==="Usagé"?"selected":""}>Usagé</option><option ${m.etat==="À remplacer"?"selected":""}>À remplacer</option></select></td><td style="border:1px solid #e2e8f0;padding:4px"><input class="input" style="width:100%" value="${escapeHTML(m.observations||"")}" placeholder="Observations" oninput="clientMaterielSync(${si},'${pfx}')"/></td><td style="border:1px solid #e2e8f0;padding:4px;text-align:center"><button type="button" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:15px" onclick="clientMaterielRemove(this,${si},'${pfx}')">✕</button></td></tr>`).join("");
   const typesSite=["Industriel","Bancaire / Financier","Commercial / Centre commercial","Résidentiel / Immeuble","Institutionnel / Administratif","Hôtelier","Hospitalier / Médical","Éducatif / Universitaire","Aéroportuaire / Portuaire","Pétrolier / Gazier","Logistique / Entrepôt","Chantier BTP","Site minier","Ambassade / Consulat","Autre"];
   const typeSiteOpts='<option value="">— Sélectionner —</option>'+typesSite.map(t=>'<option value="'+escapeHTML(t)+'"'+(s.typeSite===t?' selected':'')+'>'+escapeHTML(t)+'</option>').join('');
@@ -29137,10 +29136,7 @@ function techSitePanelHTML(si,s,pfx='ts'){
     <fieldset class="rh-op-box" style="margin-bottom:10px">
       <legend class="rh-op-legend">Nomenclature des postes</legend>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <select id="${pfx}-${si}-poste-sel" class="select" style="flex:1">
-          <option value="">— Choisir un poste —</option>
-          ${posteOpts}
-        </select>
+        <input id="${pfx}-${si}-poste-sel" class="input" type="text" style="flex:1" placeholder="Saisir librement le poste ou la fonction..." autocomplete="off"/>
         <button type="button" class="btn btn-primary" style="white-space:nowrap;font-size:12px;font-weight:700;padding:8px 16px" onclick="techPosteAdd(${si},'${pfx}')">+ Ajouter</button>
       </div>
       <input type="hidden" id="${pfx}-${si}-postes-json" name="${pfx}_${si}_postes_json" value="${escapeHTML(JSON.stringify(postes_list))}"/>
