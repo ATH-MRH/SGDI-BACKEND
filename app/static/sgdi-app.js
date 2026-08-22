@@ -36034,7 +36034,7 @@ function secretariatScopedItems(list){
   return (list||[]).filter(x=>!soc||x.societe===soc);
 }
 function renderSecretariat(view,sub,arg){
-  if(!canAccess("secretariat")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
+  if(!canAccessStructureKey("secretariat")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
   const accessSection=sub||"dashboard";
   if(!secretariatCanAccess(accessSection,"read")){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700 mb-2">Accès SG non autorisé</h2><p class="text-slate-600">Cette rubrique n’est pas activée dans votre profil d’accès. Contactez l’Administration système.</p></div>`;return}
   if(!db.secretariatCourriers)db.secretariatCourriers=[];
