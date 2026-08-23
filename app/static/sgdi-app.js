@@ -37580,7 +37580,7 @@ function openOpsMissionModal(id){
         <div class="md:col-span-2"><label class="label">Autres moyens</label><input class="input" name="autresMoyens" value="${escapeHTML(m.autresMoyens||"")}"/></div>
         <div class="md:col-span-2"><label class="label">Consignes et Instructions</label><textarea class="input" name="consignes" rows="4">${escapeHTML(m.consignes||"")}</textarea></div>
       </div>
-      <div class="flex justify-end gap-2 mt-4 flex-wrap"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button id="ops-mission-edit-btn" type="submit" class="btn btn-primary">Editer OM</button></div>
+      <div class="flex justify-end gap-2 mt-4 flex-wrap"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button id="ops-mission-edit-btn" type="submit" class="btn btn-primary">Valider et transmettre à SG</button></div>
     </form>`);
   setTimeout(()=>{updateOpsMissionEmployeeInfo();updateOpsMissionDays()},30);
 }
@@ -37591,6 +37591,9 @@ function opsMissionEndDate(m){
 }
 function opsMissionStatus(m){
   if(m?.statut==="cloturee")return{key:"cloturee",label:"Clôturée",cls:"pill-gray"};
+  if(m?.workflowStatus==="transmise_ops")return{key:"a_preparer",label:"À préparer",cls:"pill-amber"};
+  if(m?.workflowStatus==="transmise_sg")return{key:"transmise_sg",label:"Transmise à SG",cls:"pill-blue"};
+  if(m?.workflowStatus==="validee_sg")return{key:"validee_sg",label:"Validée par SG",cls:"pill-green"};
   const now=new Date(),start=m?.dateDebut?new Date(`${m.dateDebut}T${m.heureDebut||"00:00"}:00`):null,end=opsMissionEndDate(m);
   if(start&&!isNaN(start)&&start>now)return{key:"planifiee",label:"Planifiée",cls:"pill-amber"};
   if(end&&end<now)return{key:"terminee",label:"À clôturer",cls:"pill-red"};
@@ -37706,7 +37709,7 @@ function _renderOpsMissionsHTML(view,arg){
   <div class="ops-dash-card">
     <div class="ops-dash-card-head"><div><h3>Liste des missions OPS</h3><p>${missions.length} mission${missions.length>1?"s":""} enregistrée${missions.length>1?"s":""}</p></div></div>
     <div class="ops-dash-card-body" style="overflow-x:auto"><table><thead><tr><th>N°</th><th>Employé</th><th>Lieu</th><th>Début</th><th>Fin</th><th>Motif</th><th class="text-right">Actions</th></tr></thead><tbody>
-      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—",status=opsMissionStatus(x);return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}<div class="mt-1"><span class="pill ${status.cls}">${status.label}</span></div></td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}<br><span class="text-slate-500">${escapeHTML(x.heureDebut||"00:00")}</span></td><td class="text-xs">${formatDate(x.dateFin)}<br><span class="text-slate-500">${escapeHTML(x.heureFin||"23:59")}</span></td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-primary text-xs" onclick="openOpsMissionDetail('${escapeHTML(x.id)}')">Détail</button><button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button></div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
+      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—",status=opsMissionStatus(x),needsPreparation=x.workflowStatus==="transmise_ops"||!x.agentId;return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}<div class="mt-1"><span class="pill ${status.cls}">${status.label}</span></div></td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}<br><span class="text-slate-500">${escapeHTML(x.heureDebut||"00:00")}</span></td><td class="text-xs">${formatDate(x.dateFin)}<br><span class="text-slate-500">${escapeHTML(x.heureFin||"23:59")}</span></td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-primary text-xs" onclick="openOpsMissionDetail('${escapeHTML(x.id)}')">Détail</button>${opsReadOnly?"":`<button class="btn btn-secondary text-xs" onclick="openOpsMissionModal('${escapeHTML(x.id)}')">${needsPreparation?"Préparer OM":"Modifier OM"}</button>`}${x.agentId?`<button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button>`:""}</div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
     </tbody></table></div>
   </div>`;
   if(endingMissions.length){
@@ -37761,8 +37764,8 @@ async function saveOpsMission(id,form,openDoc){
   if(docWindow){docWindow.document.open();docWindow.document.write(opsMissionDocumentHTML(m));docWindow.document.close();}
   try{
     await sgdiApi("/api/irongs/collections/missions/items"+(creating?"":"/"+encodeURIComponent(m.id)),{method:creating?"POST":"PATCH",body:{data:m},legacy:false});
-  }catch(e){if(editBtn){editBtn.disabled=false;editBtn.textContent="Editer OM"}toast("Mission OPS non confirmée : "+(e.message||e),"error");return}
-  closeModal();toast("Mission OPS enregistrée","success");
+  }catch(e){if(editBtn){editBtn.disabled=false;editBtn.textContent="Valider et transmettre à SG"}toast("Mission OPS non confirmée : "+(e.message||e),"error");return}
+  closeModal();toast("Ordre de mission validé et transmis à SG","success");
   renderView();
 }
 async function deleteOpsMission(id){
