@@ -8772,6 +8772,33 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
   toast("Document archivé dans le dossier employé","success");
   return true;
 }
+async function archiveSecretariatGeneratedDocument(meta,html){
+  const reference=String(meta.reference||meta.ref||today()).trim();
+  if(!String(html||"").trim()){toast("Archivage SG refusé : document vide","error");return false}
+  db.secretariatArchives=db.secretariatArchives||[];
+  const safeRef=(reference||uid("om")).replace(/[^a-zA-Z0-9_-]+/g,"_");
+  const id=String(meta.archiveId||`sg_archive_${safeRef}`);
+  const now=new Date().toISOString();
+  const existing=db.secretariatArchives.find(x=>String(x.id)===id||String(x.reference||"")===reference);
+  const entry={
+    ...(existing||{}),id,reference,title:meta.title||"ORDRE DE MISSION",type:meta.type||"ordre_mission",
+    category:meta.category||"Ordres de mission",missionId:meta.missionId||"",agentId:meta.agentId||"",
+    agentName:meta.agentName||"",societe:meta.societe||currentStructureSocieteFilter()||session?.societe||"",
+    date:meta.date||today(),html:String(html),archivedAt:existing?.archivedAt||now,updatedAt:now,
+    archivedBy:session?.username||"OPS",source:meta.source||"OPS"
+  };
+  try{
+    await sgdiApi(`/api/irongs/collections/secretariatArchives/items${existing?`/${encodeURIComponent(existing.id)}`:""}`,{method:existing?"PATCH":"POST",body:{data:entry},legacy:false});
+  }catch(e){
+    if(!existing){
+      try{await sgdiApi(`/api/irongs/collections/secretariatArchives/items/${encodeURIComponent(id)}`,{method:"PATCH",body:{data:entry},legacy:false})}
+      catch(updateError){toast("Document non archivé au SG : "+(updateError.message||e.message||e),"error");return false}
+    }else{toast("Document non archivé au SG : "+(e.message||e),"error");return false}
+  }
+  if(existing)Object.assign(existing,entry);else db.secretariatArchives.unshift(entry);
+  toast("Ordre de mission archivé dans la rubrique Archives SG","success");
+  return true;
+}
 async function archiveEmployeeDocumentFromWindow(docWindow,meta){
   if(meta&&meta.beforeArchiveAction==="savePendingDotation"&&typeof savePendingDotationBeforeArchive==="function"){
     const saved=await savePendingDotationBeforeArchive(meta.agentId);
@@ -8780,6 +8807,7 @@ async function archiveEmployeeDocumentFromWindow(docWindow,meta){
   const clone=docWindow.document.documentElement.cloneNode(true);
   clone.querySelectorAll(".no-print,script").forEach(el=>el.remove());
   const html="<!doctype html>\n"+clone.outerHTML;
+  if(meta&&meta.archiveTarget==="secretariat")return archiveSecretariatGeneratedDocument(meta,html);
   return archiveEmployeeGeneratedDocument(meta.agentId||meta.employeeBackendId||meta.matricule,{...meta,html});
 }
 window.archiveEmployeeDocumentFromWindow=archiveEmployeeDocumentFromWindow;
@@ -8906,7 +8934,7 @@ function employeeDocumentSignatureControls(meta,label="Valider document"){
     const printLabel=escapeHTML(meta.printButtonLabel||"🖨 Imprimer");
     return `<section class="no-print sgdi-doc-sign-controls" style="position:sticky;top:0;z-index:999;background:#fff;border-bottom:1px solid #dbe3ef;box-shadow:0 8px 24px rgba(15,23,42,.12);padding:12px 18px;font-family:Arial,Helvetica,sans-serif">
       <div style="max-width:980px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div><div style="font-weight:900;color:#043970">Validation du document</div><div id="sgdi-doc-state" style="font-size:12px;color:#64748b;margin-top:2px">Cliquez sur Valider doc pour archiver ce document dans le dossier de l'employé.</div></div>
+        <div><div style="font-weight:900;color:#043970">Validation du document</div><div id="sgdi-doc-state" style="font-size:12px;color:#64748b;margin-top:2px">${meta.archiveTarget==="secretariat"?"Cliquez sur Valider pour archiver ce document dans la rubrique Archives SG.":"Cliquez sur Valider doc pour archiver ce document dans le dossier de l'employé."}</div></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="sgdi-doc-validate" type="button" style="border:0;border-radius:8px;background:#047857;color:#fff;padding:9px 16px;font-weight:900;cursor:pointer">${escapeHTML(label||"Valider doc")}</button><button id="sgdi-doc-print" type="button" style="border:0;border-radius:8px;background:#111827;color:#fff;padding:9px 16px;font-weight:900;cursor:pointer">${printLabel}</button><button id="sgdi-doc-close" type="button" style="border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;padding:9px 16px;font-weight:900;cursor:pointer">Fermer</button></div>
       </div>
     </section><script>window.SGDI_ARCHIVE_META=${metaJson};
@@ -8917,7 +8945,7 @@ function employeeDocumentSignatureControls(meta,label="Valider document"){
         validate.disabled=true;validate.style.opacity=".55";if(state){state.textContent="Archivage en cours...";state.style.color="#64748b";}
         let ok=false;try{if(window.opener&&window.opener.archiveEmployeeDocumentFromWindow)ok=await window.opener.archiveEmployeeDocumentFromWindow(window,window.SGDI_ARCHIVE_META||{});}catch(e){console.error(e)}
         if(!ok){validate.disabled=false;validate.style.opacity="1";if(state){state.textContent="Archivage impossible. Vérifiez la session serveur puis réessayez.";state.style.color="#dc2626";}return;}
-        if(state){state.textContent="Document validé et archivé dans le dossier de l'employé.";state.style.color="#047857";}
+        if(state){state.textContent=window.SGDI_ARCHIVE_META.archiveTarget==="secretariat"?"Document validé et archivé dans la rubrique Archives SG.":"Document validé et archivé dans le dossier de l'employé.";state.style.color="#047857";}
       });
       if(printBtn)printBtn.addEventListener("click",()=>window.print());
       const closeBtn=document.getElementById("sgdi-doc-close");if(closeBtn)closeBtn.addEventListener("click",()=>window.close());
@@ -36149,7 +36177,14 @@ function renderSecretariat(view,sub,arg){
   if(sub==="documents")return renderDocumentsArchives(view,"archives",arg);
   if(sub==="messagerie")return renderDemandesStructure(view,"dashboard",arg);
   if(sub==="historique")return renderSecretariatHistory(view);
-  if(sub==="archives")return renderSecretariatList(view,"Archives",archives);
+  if(sub==="archives"){
+    renderSecretariatArchives(view,archives,secretariatScopedItems(db.secretariatArchives||[]));
+    if(sgdiAuthToken())syncMissionWorkflowCollections(["secretariatArchives"]).then(()=>{
+      if(!document.body.contains(view)||!/secretariat\/archives/.test(location.hash))return;
+      renderSecretariatArchives(view,archives,secretariatScopedItems(db.secretariatArchives||[]));
+    }).catch(e=>{console.warn("Synchronisation des archives SG indisponible",e);toast("Archives SG non synchronisées : "+(e.message||e),"warning")});
+    return;
+  }
   view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">SECRÉTARIAT GÉNÉRAL</h1><p class="text-sm text-slate-500">Circulation, contrôle, validation et archivage des documents officiels${soc?` · ${escapeHTML(soc)}`:""}.</p></div>${secretariatCanAccess("courriers","create")?`<button class="btn btn-secondary" onclick="openSecretariatCourrierModal()">＋ Nouveau courrier</button>`:""}</div>
   <div class="grid grid-4 gap-3 mb-5">${card("À traiter",ouverts.length,"secretariat/courriers","#f59e0b")}${card("Parapheur",missionsPending.length+ouverts.length,"secretariat/parapheur","#7c3aed")}${card("Ordres de mission",missionsPending.length,"secretariat/missions","#043970")}${card("Décisions en cours",decisions.filter(d=>d.statut!=="cloturee").length,"secretariat/decisions","#0f766e")}</div>
   <div class="grid grid-2 gap-4"><div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Derniers courriers</h3><span class="pill">${courriers.length} élément(s)</span></div>${secretariatTableHTML(courriers.slice(0,6))}</div><div class="card p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-black">Échéances institutionnelles</h3><span class="pill pill-blue">${reunions.length} réunion(s)</span></div>${reunions.length?reunions.slice(0,6).map(r=>`<div style="padding:10px 0;border-bottom:1px solid #e2e8f0"><b>${escapeHTML(r.objet||"Réunion")}</b><div class="text-xs text-slate-500">${formatDate(r.date)} · ${escapeHTML(r.lieu||"Lieu à préciser")}</div></div>`).join(""):`<div class="text-sm text-slate-400 p-5 text-center">Aucune réunion programmée.</div>`}</div></div>`;
@@ -36202,6 +36237,22 @@ function secretariatTableHTML(items){
 }
 function renderSecretariatList(view,title,items){
   view.innerHTML=`<div class="flex items-center justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">${escapeHTML(title)}</h1><p class="text-sm text-slate-500">Module Secretariat Général.</p></div><button class="btn btn-secondary" onclick="navigate('secretariat/dashboard')">← Tableau de bord</button></div><div class="card p-5">${secretariatTableHTML(items)}</div>`;
+}
+function renderSecretariatArchives(view,courriers,documents){
+  const rows=(documents||[]).slice().sort((a,b)=>String(b.archivedAt||b.updatedAt||"").localeCompare(String(a.archivedAt||a.updatedAt||"")));
+  view.innerHTML=secretariatPageHeader("Archives","Documents officiels validés et conservés par le Secrétariat général.")+`
+    <div class="card p-0 overflow-x-auto"><table><thead><tr><th>Référence</th><th>Document</th><th>Missionnaire</th><th>Date</th><th>Origine</th><th>Archivé par</th><th>Actions</th></tr></thead><tbody>
+      ${rows.map(item=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(item.reference||"—")}</td><td><b>${escapeHTML(item.title||"Document officiel")}</b><div class="text-xs text-slate-500">${escapeHTML(item.category||item.type||"Archive SG")}</div></td><td>${escapeHTML(item.agentName||"—")}</td><td class="text-xs">${formatDate(item.date||item.archivedAt)}</td><td>${escapeHTML(item.source||"—")}</td><td>${escapeHTML(item.archivedBy||"—")}</td><td><button type="button" class="btn btn-primary text-xs" onclick="openSecretariatArchivedDocument('${escapeHTML(item.id)}')">Ouvrir</button></td></tr>`).join("")}
+      ${(courriers||[]).map(c=>`<tr><td class="font-mono text-xs font-bold">${escapeHTML(c.ref||"—")}</td><td><b>${escapeHTML(c.objet||"Courrier")}</b><div class="text-xs text-slate-500">Courrier archivé</div></td><td>—</td><td class="text-xs">${formatDate(c.date||c.createdAt)}</td><td>${escapeHTML(c.tiers||"—")}</td><td>${escapeHTML(c.createdBy||"—")}</td><td>—</td></tr>`).join("")}
+      ${!rows.length&&!(courriers||[]).length?`<tr><td colspan="7" class="p-8 text-center text-slate-400">Aucune archive SG enregistrée.</td></tr>`:""}
+    </tbody></table></div>`;
+}
+function openSecretariatArchivedDocument(id){
+  const item=(db.secretariatArchives||[]).find(x=>String(x.id)===String(id));
+  if(!item||!item.html){toast("Document archivé introuvable","error");return}
+  const popup=window.open("","_blank","width=900,height=700");
+  if(!popup){toast("Fenêtre d’archive bloquée par le navigateur","error");return}
+  popup.document.write(String(item.html));popup.document.close();
 }
 function renderSecretariatRegistry(view,title,items,type){
   const isDecision=type==="decision";
@@ -37609,7 +37660,7 @@ function opsMissionDocumentHTML(m){
     ["Accompagnateur",escapeHTML(m.accompagnateur||"—")],
     ["Autres moyens",escapeHTML(m.autresMoyens||"—")]
   ];
-  const archiveMeta={agentId:a.id,title:"ORDRE DE MISSION",category:"OPS",type:"ordre_mission",reference:m.numero||"",date:m.dateDebut||m.date||today(),noSignature:true,printAfterArchive:false,showPrintButton:true,printButtonLabel:"Imprimer OM"};
+  const archiveMeta={archiveTarget:"secretariat",archiveId:`sg_archive_${String(m.numero||m.id||"").replace(/[^a-zA-Z0-9_-]+/g,"_")}`,missionId:m.id||"",agentId:a.id,agentName:((a.nom||"")+" "+(a.prenom||"")).trim()||m.agentName||"",societe:m.societe||a.societe||"",source:"OPS",title:"ORDRE DE MISSION",category:"Ordres de mission",type:"ordre_mission",reference:m.numero||"",date:m.dateDebut||m.date||today(),noSignature:true,printAfterArchive:false,showPrintButton:true,printButtonLabel:"Imprimer OM"};
   return prepareEmployeeDocumentForValidation(`<!doctype html><html><head><meta charset="utf-8"><title>${ref}</title><style>
     @page{size:A4 portrait;margin:10mm}*{box-sizing:border-box}html,body{width:210mm;min-height:297mm}body{margin:0;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.34}.om-doc{width:190mm;height:277mm;margin:0 auto;padding:6mm 9mm 12mm;position:relative;overflow:hidden}.om-logo{width:30mm;height:30mm;object-fit:contain;display:block;margin:0 auto 5mm}.om-head{display:flex;justify-content:space-between;gap:10mm;font-size:12.5px;margin-bottom:7mm}.om-head b{font-weight:900}.om-title{text-align:center;font-size:23px;font-weight:900;letter-spacing:.4px;margin:0 0 7mm;text-transform:uppercase}.om-rule{border-top:1.5px solid #f2b705;margin:0 0 6mm}.om-grid{display:grid;grid-template-columns:52mm 1fr;gap:2.4mm 5mm;border:1px solid #d7dde8;padding:5mm;margin-bottom:6mm}.om-k{font-size:10.5px;text-transform:uppercase;font-weight:900;color:#334155}.om-v{font-weight:800}.om-section{margin-top:5.5mm}.om-section h2{font-size:12.5px;margin:0 0 2mm;text-transform:uppercase;color:#043970}.om-box{min-height:21mm;border:1px solid #d7dde8;padding:3.5mm;white-space:pre-wrap;font-weight:700}.om-footer{position:absolute;left:9mm;right:9mm;bottom:4mm;text-align:center;border-top:1.5px solid #f2b705;padding-top:2mm;font-size:9.2px;color:#475569}@media print{html,body{width:auto;min-height:auto}.no-print{display:none!important}.om-doc{width:auto;height:277mm;margin:0;box-shadow:none;page-break-after:avoid}}
   </style></head><body><main class="om-doc">
