@@ -29819,7 +29819,7 @@ function dcMissionRecalculate(){
   set("dc-mission-internal-total",formatDZD(internal));set("dc-mission-contingency",formatDZD(contingency));set("dc-mission-cost-total",formatDZD(cost));set("dc-mission-margin",formatDZD(margin));set("dc-mission-brand-rate",brandRate.toFixed(2).replace(".",",")+" %");
 }
 function dcMissionStatusLabel(m){
-  return({transmise_ops:"Transmise à OPS",ordre_ops_valide:"Ordre OPS validé",transmise_sg:"Transmise à SG",validee_sg:"Validée SG",paiement_en_attente:"Paiement à valider",cloturee:"Clôturée",annulee:"Annulée"})[m?.workflowStatus||m?.statut]||"Brouillon";
+  return({transmise_ops:"Transmise à OPS",ordre_ops_valide:"Ordre OPS validé",transmise_sg:"Transmise à SG",validee_sg:"Validée SG",executee:"Exécutée",paiement_en_attente:"Paiement à valider",cloturee:"Clôturée",annulee:"Annulée"})[m?.workflowStatus||m?.statut]||"Brouillon";
 }
 function dcMissionHistoryHTML(clientId){
   const rows=(db.missions||[]).filter(m=>m.source==="dc"&&String(m.clientId||"")===String(clientId||"")).sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
@@ -36153,7 +36153,7 @@ function renderSecretariat(view,sub,arg){
   const notes=secretariatScopedItems(db.secretariatNotes);
   const archives=courriers.filter(c=>c.archive||c.statut==="archive");
   const ouverts=courriers.filter(c=>!c.archive&&c.statut!=="archive");
-  const missions=secretariatScopedItems(db.missions||[]).filter(m=>["transmise_sg","validee_sg","paiement_en_attente","cloturee"].includes(m.workflowStatus));
+  const missions=secretariatScopedItems(db.missions||[]).filter(m=>["transmise_sg","validee_sg","executee","paiement_en_attente","cloturee"].includes(m.workflowStatus));
   const missionsPending=missions.filter(m=>m.workflowStatus==="transmise_sg");
   const reunions=secretariatScopedItems(db.secretariatReunions||[]);
   const decisions=secretariatScopedItems(db.secretariatDecisions||[]);
@@ -36165,7 +36165,7 @@ function renderSecretariat(view,sub,arg){
     renderSecretariatMissions(view,missions);
     if(sgdiAuthToken())syncMissionWorkflowCollections(["missions"]).then(()=>{
       if(!document.body.contains(view)||!/secretariat\/missions/.test(location.hash))return;
-      const refreshed=secretariatScopedItems(db.missions||[]).filter(m=>["transmise_sg","validee_sg","paiement_en_attente","cloturee"].includes(m.workflowStatus));
+      const refreshed=secretariatScopedItems(db.missions||[]).filter(m=>["transmise_sg","validee_sg","executee","paiement_en_attente","cloturee"].includes(m.workflowStatus));
       renderSecretariatMissions(view,refreshed);
       renderSidebar();
     }).catch(e=>{console.warn("Synchronisation des ordres de mission SG indisponible",e);toast("Ordres de mission SG non synchronisés : "+(e.message||e),"warning")});
@@ -37725,6 +37725,7 @@ function opsMissionStatus(m){
   if(m?.workflowStatus==="transmise_ops")return{key:"a_preparer",label:"À préparer",cls:"pill-amber"};
   if(m?.workflowStatus==="transmise_sg")return{key:"transmise_sg",label:"Transmise à SG",cls:"pill-blue"};
   if(m?.workflowStatus==="validee_sg")return{key:"validee_sg",label:"Validée par SG",cls:"pill-green"};
+  if(m?.workflowStatus==="executee")return{key:"executee",label:"Exécutée",cls:"pill-green"};
   const now=new Date(),start=m?.dateDebut?new Date(`${m.dateDebut}T${m.heureDebut||"00:00"}:00`):null,end=opsMissionEndDate(m);
   if(start&&!isNaN(start)&&start>now)return{key:"planifiee",label:"Planifiée",cls:"pill-amber"};
   if(end&&end<now)return{key:"terminee",label:"À clôturer",cls:"pill-red"};
@@ -37841,7 +37842,7 @@ function _renderOpsMissionsHTML(view,arg){
   <div class="ops-dash-card">
     <div class="ops-dash-card-head"><div><h3>Liste des missions OPS</h3><p>${missions.length} mission${missions.length>1?"s":""} enregistrée${missions.length>1?"s":""}</p></div></div>
     <div class="ops-dash-card-body" style="overflow-x:auto"><table><thead><tr><th>N°</th><th>Employé</th><th>Lieu</th><th>Début</th><th>Fin</th><th>Motif</th><th class="text-right">Actions</th></tr></thead><tbody>
-      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—",status=opsMissionStatus(x),needsPreparation=x.workflowStatus==="transmise_ops"||!x.agentId;return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}<div class="mt-1"><span class="pill ${status.cls}">${status.label}</span></div></td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}<br><span class="text-slate-500">${escapeHTML(x.heureDebut||"00:00")}</span></td><td class="text-xs">${formatDate(x.dateFin)}<br><span class="text-slate-500">${escapeHTML(x.heureFin||"23:59")}</span></td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><div class="flex gap-1 justify-end flex-wrap"><button class="btn btn-primary text-xs" onclick="openOpsMissionDetail('${escapeHTML(x.id)}')">Détail</button>${opsReadOnly?"":`<button class="btn btn-secondary text-xs" onclick="openOpsMissionModal('${escapeHTML(x.id)}')">${needsPreparation?"Préparer OM":"Modifier OM"}</button>`}${x.agentId?`<button class="btn btn-secondary text-xs" onclick="openOpsMissionDocument('${escapeHTML(x.id)}')">Ordre</button>`:""}</div></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
+      ${missions.length?missions.map(x=>{const a=(db.agents||[]).find(g=>String(g.id)===String(x.agentId))||{};const full=((a.nom||"")+" "+(a.prenom||"")).trim()||x.agentName||"—",status=opsMissionStatus(x),needsPreparation=x.workflowStatus==="transmise_ops"||!x.agentId;return`<tr data-searchable><td class="font-mono font-bold text-xs">${escapeHTML(x.numero||"")}<div class="mt-1"><span class="pill ${status.cls}">${status.label}</span></div></td><td><div class="font-semibold">${escapeHTML(full)}</div><div class="text-[10px] text-slate-500">${escapeHTML(a.matricule||"")}</div></td><td class="text-xs">${escapeHTML(x.lieu||"—")}</td><td class="text-xs">${formatDate(x.dateDebut)}<br><span class="text-slate-500">${escapeHTML(x.heureDebut||"00:00")}</span></td><td class="text-xs">${formatDate(x.dateFin)}<br><span class="text-slate-500">${escapeHTML(x.heureFin||"23:59")}</span></td><td class="text-xs">${escapeHTML(x.motif||x.objet||"")}</td><td class="text-right"><button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();openOpsMissionActions(this,'${jsString(x.id)}')">⋯</button></td></tr>`}).join(""):`<tr><td colspan="7" class="text-center text-slate-500 p-4">Aucune mission enregistrée.</td></tr>`}
     </tbody></table></div>
   </div>`;
   if(endingMissions.length){
@@ -37849,6 +37850,41 @@ function _renderOpsMissionsHTML(view,arg){
     if(!sessionStorage.getItem(alertKey))setTimeout(()=>{sessionStorage.setItem(alertKey,"1");toast(`${endingMissions.length} mission${endingMissions.length>1?"s se terminent":" se termine"} dans moins de 24 heures`,"warning")},150);
   }
   if(arg&&!opsReadOnly)setTimeout(()=>openOpsMissionModal(arg),50);
+}
+function openOpsMissionActions(btn,id){
+  document.querySelectorAll(".ops-mission-row-menu").forEach(menu=>menu.remove());
+  const mission=(db.missions||[]).find(item=>String(item.id)===String(id));if(!mission)return;
+  const rect=btn.getBoundingClientRect(),readOnly=isOpsSupervisorReadOnlySession(),needsPreparation=mission.workflowStatus==="transmise_ops"||!mission.agentId;
+  const actionStyle="display:block;width:100%;text-align:left;padding:10px 15px;font-size:12px;font-weight:800;background:#fff;border:0;cursor:pointer;color:#0f172a";
+  const close="document.querySelectorAll('.ops-mission-row-menu').forEach(menu=>menu.remove());";
+  const menu=document.createElement("div");menu.className="ops-mission-row-menu";
+  menu.style.cssText=`position:fixed;left:${Math.max(8,rect.right-190)}px;top:${rect.bottom+4}px;z-index:9999;background:#fff;border:1px solid #dbe3ef;border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.18);min-width:190px;overflow:hidden`;
+  menu.innerHTML=`<button style="${actionStyle}" onclick="${close}openOpsMissionDetail('${jsString(id)}')">Détail</button>${readOnly?"":`<button style="${actionStyle}" onclick="${close}openOpsMissionModal('${jsString(id)}')">${needsPreparation?"Préparer OM":"Modifier OM"}</button>`}${mission.agentId?`<button style="${actionStyle}" onclick="${close}openOpsMissionDocument('${jsString(id)}')">Ordre de mission</button>`:""}${!readOnly&&mission.workflowStatus!=="executee"?`<button style="${actionStyle};color:#047857" onclick="${close}markOpsMissionExecuted('${jsString(id)}')">✓ Exécutée</button>`:""}`;
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener("click",()=>document.querySelectorAll(".ops-mission-row-menu").forEach(item=>item.remove()),{once:true}),0);
+}
+async function markOpsMissionExecuted(id){
+  if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : validation d’exécution non autorisée."))return;
+  const mission=(db.missions||[]).find(item=>String(item.id)===String(id));if(!mission)return;
+  if(!confirm(`Confirmer que la mission ${mission.numero||""} est exécutée et autoriser sa facturation ?`))return;
+  const now=new Date().toISOString();
+  const updated={...mission,workflowStatus:"executee",statut:"executee",executedAt:now,executedBy:session?.username||"OPS",updatedAt:now,audit:[...(mission.audit||[]),{action:"Mission déclarée exécutée par OPS — information transmise à SG, DG et Facturation",at:now,by:session?.username||"OPS"}]};
+  try{
+    await syncMissionWorkflowCollections(["missionBillables"]).catch(()=>{});
+    let billable=(db.missionBillables||[]).find(item=>String(item.missionId)===String(id));
+    if(billable){
+      const nextBillable={...billable,status:"prete_a_facturer",executedAt:now,executedBy:session?.username||"OPS",updatedAt:now};
+      await sgdiApi(`/api/irongs/collections/missionBillables/items/${encodeURIComponent(billable.id)}`,{method:"PATCH",body:{data:nextBillable},legacy:false});
+      Object.assign(billable,nextBillable);
+    }else{
+      billable={id:uid("mission_billable"),missionId:id,missionNumber:mission.numero||"",societe:mission.societe||"",clientId:mission.clientId||"",clientName:mission.clientName||"",designation:mission.objet||mission.motif||"Mission exécutée",dateDebut:mission.dateDebut||"",dateFin:mission.dateFin||"",quantity:1,unit:"Mission",priceHT:Number(mission.financial?.salePriceHT||0),vatRate:Number(mission.financial?.vatRate||19),priceTTC:Number(mission.financial?.salePriceTTC||0),status:"prete_a_facturer",executedAt:now,executedBy:session?.username||"OPS",createdAt:now,updatedAt:now};
+      await sgdiApi("/api/irongs/collections/missionBillables/items",{method:"POST",body:{data:billable},legacy:false});
+      db.missionBillables=db.missionBillables||[];db.missionBillables.unshift(billable);
+    }
+    await sgdiApi(`/api/irongs/collections/missions/items/${encodeURIComponent(id)}`,{method:"PATCH",body:{data:updated},legacy:false});
+  }catch(e){toast("Exécution non transmise : "+(e.message||e),"error");return}
+  Object.assign(mission,updated);
+  toast("Mission exécutée : SG, DG et Facturation ont été informés","success");renderView();renderSidebar();
 }
 async function saveOpsMission(id,form,openDoc){
   if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : création/modification mission non autorisée."))return;
