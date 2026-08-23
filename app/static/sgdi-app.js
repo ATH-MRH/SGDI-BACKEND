@@ -36063,7 +36063,7 @@ function adminClearLog(){if(!confirm("Vider tout le journal d'activité ?"))retu
 /* ---- SECRETARIAT GENERAL ---- */
 function secretariatScopedItems(list){
   const soc=currentStructureSocieteFilter();
-  return (list||[]).filter(x=>!soc||x.societe===soc);
+  return (list||[]).filter(x=>!soc||normalizeSocieteName(x.societe||"")===normalizeSocieteName(soc));
 }
 function renderSecretariat(view,sub,arg){
   if(!canAccessStructureKey("secretariat")){view.innerHTML=`<div class="card p-6">🔐 Accès refusé</div>`;return}
@@ -36084,7 +36084,16 @@ function renderSecretariat(view,sub,arg){
   if(sub==="courriers")return renderSecretariatList(view,"Courriers",courriers);
   if(sub==="notes")return renderSecretariatList(view,"Notes internes",notes);
   if(sub==="parapheur")return renderSecretariatParapheur(view,missionsPending,ouverts);
-  if(sub==="missions")return renderSecretariatMissions(view,missions);
+  if(sub==="missions"){
+    renderSecretariatMissions(view,missions);
+    if(sgdiAuthToken())syncMissionWorkflowCollections(["missions"]).then(()=>{
+      if(!document.body.contains(view)||!/secretariat\/missions/.test(location.hash))return;
+      const refreshed=secretariatScopedItems(db.missions||[]).filter(m=>["transmise_sg","validee_sg","paiement_en_attente","cloturee"].includes(m.workflowStatus));
+      renderSecretariatMissions(view,refreshed);
+      renderSidebar();
+    }).catch(e=>{console.warn("Synchronisation des ordres de mission SG indisponible",e);toast("Ordres de mission SG non synchronisés : "+(e.message||e),"warning")});
+    return;
+  }
   if(sub==="agenda")return renderAgenda(view,"dashboard",arg);
   if(sub==="reunions")return renderSecretariatRegistry(view,"Réunions et procès-verbaux",reunions,"reunion");
   if(sub==="decisions")return renderSecretariatRegistry(view,"Registre des décisions",decisions,"decision");
