@@ -6363,6 +6363,15 @@ function sidebarItemsWithAgendaShortcut(module,items){
   base.push({label:"AGENDA",route:"agenda/dashboard",aliases:["agenda"],group:"AUTRES"});
   return base;
 }
+function sidebarItemsWithStructureRequests(module,items){
+  const base=(items||[]).slice();
+  const supported=new Set(["drh","ops","superviseur","materiel","facturation","facmod","commercial","secretariat","agenda","pointage","paie"]);
+  if(!supported.has(String(module||"")))return base;
+  if(base.some(item=>String(item.route||"").startsWith("demandes_structure")))return base;
+  if(!canAccess("demandes_structure"))return base;
+  base.push({label:"DEMANDES STRUCTURE",route:"demandes_structure/dashboard",aliases:["demandes_structure"],group:"ÉCHANGES INTERNES",count:structureOpenCount()||null});
+  return base;
+}
 function applySidebarOrder(module,items){
   const pinned=sidebarPinnedDefaultOrder(module);
   const saved=sidebarOrderForModule(module);
@@ -6497,6 +6506,7 @@ function renderSidebar(){
     if(r.includes("missions"))return svg(`<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="4.2"></circle><circle cx="12" cy="12" r=".6" fill="currentColor"></circle>`);
     if(r.includes("mouvement"))return svg(`<path d="M4 8h13M13 4l4 4-4 4"></path><path d="M20 16H7M11 12l-4 4 4 4"></path>`);
     if(r.includes("signalements"))return svg(`<path d="M5 4v16"></path><path d="M5 5h11l-2.5 3.5L16 12H5"></path>`);
+    if(r.includes("demandes_structure"))return svg(`<rect x="3.5" y="6" width="17" height="13" rx="2"></rect><path d="M3.5 8l8.5 6 8.5-6"></path><path d="M17 3v5M14.5 5.5h5"></path>`);
     if(r.includes("demandes_personnel")||r.includes("portail"))return svg(`<rect x="3.5" y="6" width="17" height="13" rx="2"></rect><path d="M3.5 8l8.5 6 8.5-6"></path>`);
     if(r.includes("effectif")||r.includes("agent"))return svg(`<circle cx="9" cy="8" r="3"></circle><path d="M3.8 19c.9-3.7 9.5-3.7 10.4 0"></path><path d="M15.5 7.2a2.5 2.5 0 0 1 0 4.6"></path><path d="M16.5 15c2 .5 3.4 1.8 3.8 4"></path>`);
     if(r.includes("site")||r.includes("location"))return svg(`<path d="M12 21s6-5.4 6-11a6 6 0 1 0-12 0c0 5.6 6 11 6 11Z"></path><circle cx="12" cy="10" r="2"></circle>`);
@@ -6800,7 +6810,7 @@ function renderSidebar(){
     const baseItems=sidebarByModule[mod]||[];
     const docsItem={label:"DOCUMENTS / ARCHIVES",route:"documents/archives",aliases:["documents"],group:"AUTRES",count:documentsArchivesTotalCount()||null};
     const drhItemsWithDocs=baseItems.some(i=>String(i.route||"").startsWith("documents"))?baseItems:[...baseItems,docsItem];
-    const items=sidebarItemsWithAgendaShortcut(mod,mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems));
+    const items=sidebarItemsWithStructureRequests(mod,sidebarItemsWithAgendaShortcut(mod,mod==="drh"?drhItemsWithDocs:mergeSidebarCustomItems(mod,baseItems)));
     const orderedItems=applySidebarOrder(mod,items);
     // PORTAIL RH doit toujours rester immédiatement sous AGENDA, même si un ancien
     // ordre personnalisé du menu plaçait encore "Demandes personnel" ailleurs.
@@ -19381,7 +19391,10 @@ function migrateStructureDemandes(){
 }
 function portalDemandesPersonnel(){return (db.demandesPersonnel||[]).filter(d=>!isStructureDemand(d))}
 function incomingPortalDemandesPersonnel(){return portalDemandesPersonnel().filter(d=>!String(d?.source||"").startsWith("drh-"))}
-function currentStructureKey(){return session?.transverse||"drh"}
+function currentStructureKey(){
+  const key=String(session?.transverse||"drh").toLowerCase();
+  return ({facmod:"facturation",global:"dg"})[key]||key;
+}
 function structureDemandReceived(d){const m=currentStructureKey();const to=String(d.toStructure||"").toLowerCase();return to===m||to==="all"||(m==="admin")||(m==="drh"&&(!to||to==="drh"))}
 function structureDemandSent(d){return (String(d.fromStructure||"").toLowerCase())===currentStructureKey()||d.createdBy===session?.username}
 function structureOpenCount(){return ensureDemandesStructure().map(normalizeStructureDemand).filter(d=>structureDemandReceived(d)&&["nouveau","en_cours"].includes(d.statut||"nouveau")).length}
@@ -20062,6 +20075,30 @@ async function saveUploadDocumentDemande(id,index,form){
 
 
 function structureDemandStatusPill(st){return demandePersonnelStatusPill(st)}
+const STRUCTURE_DEMAND_RECIPIENTS=[
+  ["drh","DRH"],["ops","OPS"],["materiel","MATÉRIEL / ÉQUIPEMENTS"],
+  ["facturation","FACTURATION / FINANCES"],["commercial","DIRECTION COMMERCIALE"],
+  ["secretariat","SECRÉTARIAT GÉNÉRAL"],["paie","PAIE"],["pointage","POINTAGE"],
+  ["dg","DIRECTION GÉNÉRALE"],["all","TOUTES LES STRUCTURES"]
+];
+function openNewStructureDemand(){
+  const from=currentStructureKey();
+  const options=STRUCTURE_DEMAND_RECIPIENTS.filter(([key])=>key!==from).map(([key,label])=>`<option value="${key}">${escapeHTML(label)}</option>`).join("");
+  openModal(`<h3 class="font-black text-lg mb-1">Nouvelle demande structure</h3><p class="text-sm text-slate-500 mb-4">Transmission interne depuis ${escapeHTML(from.toUpperCase())}.</p><form onsubmit="event.preventDefault();saveNewStructureDemand(this)">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="label">Structure destinataire</label><select class="select" name="toStructure" required><option value="">— Sélectionner —</option>${options}</select></div><div><label class="label">Priorité</label><select class="select" name="urgence"><option value="normale">Normale</option><option value="haute">Haute</option><option value="critique">Critique</option></select></div><div class="md:col-span-2"><label class="label">Objet</label><input class="input" name="objet" required placeholder="Objet précis de la demande"/></div><div class="md:col-span-2"><label class="label">Demande / instruction</label><textarea class="textarea" name="message" rows="5" required placeholder="Décrivez la demande, le résultat attendu et le délai éventuel..."></textarea></div><div class="md:col-span-2"><label class="label">Pièce jointe facultative</label><input class="input" type="file" name="piece" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"/></div></div>
+    <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Envoyer la demande</button></div></form>`);
+}
+async function saveNewStructureDemand(form){
+  const to=String(form.toStructure.value||"").trim(),objet=String(form.objet.value||"").trim(),message=String(form.message.value||"").trim();
+  if(!to||!objet||!message){toast("Destinataire, objet et demande obligatoires","error");return}
+  let piece=null;
+  try{if(form.piece?.files?.[0])piece=await readSmallFile(form.piece.files[0])}catch(e){toast(e.message||String(e),"error");return}
+  const createdAt=new Date().toISOString(),from=currentStructureKey();
+  const d={id:uid("ds"),ref:`DS-${new Date().getFullYear()}-${String(ensureDemandesStructure().length+1).padStart(4,"0")}`,date:today(),createdAt,updatedAt:createdAt,createdBy:session?.username||from.toUpperCase(),societe:currentStructureSocieteFilter()||session?.societe||"",objet,message,urgence:form.urgence.value||"normale",statut:"nouveau",source:"structure-manual",fromStructure:from,toStructure:to,pieces:piece?[piece]:[],historique:[{date:createdAt,user:session?.username||from.toUpperCase(),action:"Demande créée",note:`${from.toUpperCase()} → ${to.toUpperCase()}`} ]};
+  ensureDemandesStructure().push(d);
+  if(!(await saveDBAndWaitToast("Demande structure non confirmée"))){db.demandesStructure=db.demandesStructure.filter(x=>x!==d);return}
+  closeModal();toast("Demande transmise à "+to.toUpperCase(),"success");renderSidebar();navigate("demandes_structure/envoi");
+}
 function structureDemandCardHTML(d){
   const alert=demandePersonnelIsAlert(d);
   return `<div class="card p-4 mb-3" style="border-left:4px solid ${alert?"#dc2626":d.statut==="traite"?"#16a34a":"#0360a8"}">
@@ -20087,7 +20124,7 @@ function renderDemandesStructureDashboard(view){
   const urgentes=received.filter(d=>["haute","urgent","critique"].includes(String(d.urgence||"").toLowerCase()));
   const recent=received.slice().sort((a,b)=>String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||""))).slice(0,6);
   const kpi=(label,n,route,color,sub)=>`<button type="button" class="card p-4 text-left kpi-clickable" onclick="navigate('${route}')" style="border:1px solid ${color}55;background:#fff"><div class="text-xs uppercase font-black text-slate-500">${label}</div><div class="text-3xl font-black mt-1" style="color:${color}">${n}</div><div class="text-xs text-slate-400 mt-1">${sub||"Cliquer pour ouvrir"}</div></button>`;
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">DEMANDE STRUCTURE</h1><p class="text-sm text-slate-500">Tableau de bord des demandes internes entre structures · ${escapeHTML((session?.transverse||currentStructureKey()||"").toUpperCase())}</p></div><div class="flex gap-2"><button class="btn btn-primary" onclick="navigate('demandes_structure/reception')">Réception</button><button class="btn btn-secondary" onclick="navigate('demandes_structure/envoi')">Envoi</button></div></div>
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">DEMANDE STRUCTURE</h1><p class="text-sm text-slate-500">Tableau de bord des demandes internes entre structures · ${escapeHTML((session?.transverse||currentStructureKey()||"").toUpperCase())}</p></div><div class="flex gap-2"><button class="btn btn-primary" onclick="openNewStructureDemand()">+ Nouvelle demande</button><button class="btn btn-primary" onclick="navigate('demandes_structure/reception')">Réception</button><button class="btn btn-secondary" onclick="navigate('demandes_structure/envoi')">Envoi</button></div></div>
     <div class="grid grid-5 gap-3 mb-5">
       ${kpi("Réception",received.length,"demandes_structure/reception","#043970","Demandes reçues")}
       ${kpi("Nouvelles",nouveau.length,"demandes_structure/reception","#dc2626","À traiter")}
@@ -20111,7 +20148,7 @@ function renderDemandesStructure(view,sub,arg){
   let list=(db.demandesStructure||[]).filter(mode==="envoi"?structureDemandSent:structureDemandReceived);
   if(q)list=list.filter(d=>[d.ref,d.agentName,d.matricule,d.objet,d.message,d.type,d.typeLabel,d.societe,d.site].join(" ").toLowerCase().includes(q));
   list.sort((a,b)=>String(b.createdAt||b.date||"").localeCompare(String(a.createdAt||a.date||"")));
-  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-bold">DEMANDE STRUCTURE</h1><p class="text-sm text-slate-500">Boîte interne entre structures SGDI · ${mode==="envoi"?"Envoi":"Réception"}</p></div><div class="flex gap-2"><button class="btn ${mode==='reception'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/reception')">Réception</button><button class="btn ${mode==='envoi'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/envoi')">Envoi</button></div></div><div class="card p-4 mb-4"><input class="input" placeholder="Recherche demande structure..." value="${escapeHTML(q)}" oninput="sessionStorage.setItem('ds_q',this.value);renderView()"/></div>${list.length?list.map(structureDemandCardHTML).join(""):`<div class="card p-10 text-center text-slate-500">Aucune demande structure.</div>`}`;
+  view.innerHTML=`<div class="flex items-start justify-between gap-3 mb-4 flex-wrap"><div><h1 class="text-2xl font-bold">DEMANDE STRUCTURE</h1><p class="text-sm text-slate-500">Boîte interne entre structures SGDI · ${mode==="envoi"?"Envoi":"Réception"}</p></div><div class="flex gap-2"><button class="btn btn-primary" onclick="openNewStructureDemand()">+ Nouvelle demande</button><button class="btn ${mode==='reception'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/reception')">Réception</button><button class="btn ${mode==='envoi'?'btn-primary':'btn-secondary'}" onclick="navigate('demandes_structure/envoi')">Envoi</button></div></div><div class="card p-4 mb-4"><input class="input" placeholder="Recherche demande structure..." value="${escapeHTML(q)}" oninput="sessionStorage.setItem('ds_q',this.value);renderView()"/></div>${list.length?list.map(structureDemandCardHTML).join(""):`<div class="card p-10 text-center text-slate-500">Aucune demande structure.</div>`}`;
 }
 function openTraiterStructureDemand(id){
   const d=(db.demandesStructure||[]).find(x=>x.id===id);if(!d)return;
@@ -36122,7 +36159,7 @@ function secretariatPageHeader(title,subtitle,action=""){
   return `<div class="flex items-start justify-between gap-3 mb-5 flex-wrap"><div><h1 class="text-2xl font-black uppercase">${escapeHTML(title)}</h1><p class="text-sm text-slate-500">${escapeHTML(subtitle)}</p></div>${action}</div>`;
 }
 function renderSecretariatParapheur(view,missions,courriers){
-  const rows=[...missions.map(m=>({type:"Ordre de mission",ref:m.numero,objet:m.objet||m.motif,date:m.opsOrderValidatedAt||m.updatedAt,status:"À valider SG",action:`<button class="btn btn-primary text-xs" onclick="navigate('secretariat/missions')">Examiner</button>`})),...courriers.map(c=>({type:"Courrier",ref:c.ref,objet:c.objet,date:c.date,status:c.statut||"En cours",action:`<button class="btn btn-ghost text-xs" onclick="navigate('secretariat/courriers')">Ouvrir</button>`}))];
+  const rows=[...missions.map(m=>({type:"Ordre de mission",ref:m.numero,objet:m.objet||m.motif,date:m.opsOrderValidatedAt||m.updatedAt,status:"À valider SG",action:`<button class="btn btn-primary text-xs" onclick="secretariatPrintMission('${escapeHTML(m.id)}')">Examiner</button>`})),...courriers.map(c=>({type:"Courrier",ref:c.ref,objet:c.objet,date:c.date,status:c.statut||"En cours",action:`<button class="btn btn-ghost text-xs" onclick="navigate('secretariat/courriers')">Ouvrir</button>`}))];
   view.innerHTML=secretariatPageHeader("Parapheur électronique","Documents à vérifier, valider, signer ou retourner.")+`<div class="card p-0 overflow-x-auto"><table><thead><tr><th>Type</th><th>Référence</th><th>Objet</th><th>Reçu le</th><th>État</th><th></th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td class="font-bold">${escapeHTML(r.type)}</td><td class="font-mono text-xs">${escapeHTML(r.ref||"—")}</td><td>${escapeHTML(r.objet||"—")}</td><td class="text-xs">${formatDate(r.date)}</td><td><span class="pill pill-amber">${escapeHTML(r.status)}</span></td><td>${r.action}</td></tr>`).join(""):`<tr><td colspan="6" class="p-8 text-center text-slate-400">Parapheur à jour.</td></tr>`}</tbody></table></div>`;
 }
 function renderSecretariatMissions(view,missions){
