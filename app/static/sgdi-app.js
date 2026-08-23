@@ -37539,7 +37539,7 @@ function opsMissionDocumentHTML(m){
     <div class="om-grid">${rows.map(([k,v])=>`<div class="om-k">${k}</div><div class="om-v">${v}</div>`).join("")}</div>
     <div class="om-section"><h2>Motif de la mission</h2><div class="om-box">${escapeHTML(m.motif||m.objet||"—")}</div></div>
     <div class="om-section"><h2>Consignes et instructions</h2><div class="om-box">${escapeHTML(m.consignes||"—")}</div></div>
-    <div class="om-section" style="margin-top:12mm;font-size:8px;font-weight:400">${escapeHTML(omNotice)}<div style="margin-top:7mm;text-align:right">La Direction Générale</div></div>
+    <div class="om-section" style="margin-top:12mm;font-size:8px;font-weight:400">${escapeHTML(omNotice)}<div style="margin-top:7mm;text-align:left;font-size:12px;font-weight:700">Le Directeur Général</div></div>
     <div class="om-footer">Document confidentiel — toute divulgation est interdite.<br>Document généré automatiquement depuis SGDI · Module OPS</div>
   </main></body></html>`,archiveMeta,"Valider OM");
 }
