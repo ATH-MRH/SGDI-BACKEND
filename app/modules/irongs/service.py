@@ -54,11 +54,24 @@ SENSITIVE_SOCIETY_COLLECTIONS = {
 # grille et rouvrirait un mois clôturé côté utilisateur restreint.
 GLOBAL_ROW_COLLECTIONS = {"paieClotures", "paieGrilles"}
 MISSION_FINANCIAL_HIDDEN_ROLES = {"ops", "dispatch", "superviseur", "supervisor"}
+MISSION_FINANCIAL_STRUCTURES = {"facturation", "facmod", "commercial", "admin", "dg"}
+
+
+def _user_structures(user: Any | None) -> set[str]:
+    values = getattr(user, "authorized_structures", None)
+    if not isinstance(values, (list, tuple, set)):
+        return set()
+    return {str(value or "").strip().lower() for value in values if str(value or "").strip()}
+
+
+def _mission_financial_access(user: Any | None) -> bool:
+    """Un profil FAC/DC/DG conserve les données financières même si son rôle générique est OPS."""
+    return bool(_user_structures(user) & MISSION_FINANCIAL_STRUCTURES)
 
 
 def _protect_mission_financial_data(name: str, value: list[Any] | dict[str, Any], user: Any | None) -> list[Any] | dict[str, Any]:
     """Ne transmet jamais les données commerciales aux comptes opérationnels."""
-    if _user_role(user) not in MISSION_FINANCIAL_HIDDEN_ROLES or not isinstance(value, list):
+    if _user_role(user) not in MISSION_FINANCIAL_HIDDEN_ROLES or _mission_financial_access(user) or not isinstance(value, list):
         return value
     if name == "missionBillables":
         return []

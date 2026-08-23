@@ -13,7 +13,9 @@ from app.modules.irongs.service import (
     GLOBAL_ROW_COLLECTIONS,
     SENSITIVE_SOCIETY_COLLECTIONS,
     _keep_unscoped_rows,
+    _protect_mission_financial_data,
 )
+from types import SimpleNamespace
 
 # Liste des collections sensibles telle qu'elle était AVANT l'ajout de la paie.
 # Toute collection hors de cette liste gardait ses lignes non rattachées.
@@ -33,6 +35,9 @@ _PAIE_COLLECTIONS = {"paieBulletins", "paieElements", "paieClotures", "paieGrill
 # conscient et distinct de la paie, à ne pas confondre avec une régression.
 _AGENDA_COLLECTIONS = {"agendaEvents"}
 
+# Données commerciales issues du workflow mission DC → FAC, cloisonnées par société.
+_MISSION_FINANCIAL_COLLECTIONS = {"missionBillables"}
+
 # Témoins non sensibles, représentatifs du reste de l'ERP
 _TEMOINS_LIBRES = {
     "notifications", "activityLog", "workflowTasks", "societesConfig",
@@ -42,7 +47,7 @@ _TEMOINS_LIBRES = {
 
 def test_sensitive_list_only_gained_the_paie_collections():
     """Aucune collection existante n'a été retirée ni ajoutée hors paie/agenda."""
-    assert SENSITIVE_SOCIETY_COLLECTIONS - _SENSITIVE_BEFORE_PAIE == _PAIE_COLLECTIONS | _AGENDA_COLLECTIONS
+    assert SENSITIVE_SOCIETY_COLLECTIONS - _SENSITIVE_BEFORE_PAIE == _PAIE_COLLECTIONS | _AGENDA_COLLECTIONS | _MISSION_FINANCIAL_COLLECTIONS
     assert _SENSITIVE_BEFORE_PAIE - SENSITIVE_SOCIETY_COLLECTIONS == set(), \
         "Une collection sensible a été retirée : régression de confidentialité"
 
@@ -76,6 +81,18 @@ def test_keep_unscoped_precise_values():
     assert _keep_unscoped_rows("factures") is False
     assert _keep_unscoped_rows("notifications") is True
     assert _keep_unscoped_rows("activityLog") is True
+
+
+def test_mission_financial_data_hidden_from_ops_but_visible_to_fac_structure():
+    billables = [{"id": "mb1", "priceHT": 75000}]
+    missions = [{"id": "m1", "financial": {"salePriceHT": 75000}, "objet": "Mission"}]
+    ops = SimpleNamespace(role="ops", authorized_structures=["ops"])
+    fac = SimpleNamespace(role="ops", authorized_structures=["facmod"])
+
+    assert _protect_mission_financial_data("missionBillables", billables, ops) == []
+    assert "financial" not in _protect_mission_financial_data("missions", missions, ops)[0]
+    assert _protect_mission_financial_data("missionBillables", billables, fac) == billables
+    assert _protect_mission_financial_data("missions", missions, fac) == missions
 
 
 def test_admin_snapshot_is_never_filtered(client, auth_headers):
