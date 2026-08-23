@@ -29889,7 +29889,7 @@ function openClientModal(id,readOnly=false){
       <label style="display:block"><span style="font-size:12px;font-weight:700;color:#334155;display:block;margin-bottom:4px">Conditions de facturation</span><textarea class="input" name="missionConditionsFacturation" rows="2" style="width:100%" placeholder="Acompte, facturation à l'achèvement, échéancier..."></textarea></label>
     </fieldset>
     <div style="display:flex;justify-content:flex-end;margin-bottom:16px"><button type="button" class="btn btn-primary" style="background:#16a34a;border-color:#16a34a;padding:9px 18px" onclick="validateDcMission('${escapeHTML(c?.id||id||"")}')">✓ Valider et transmettre la mission</button></div>
-    <fieldset class="rh-op-box"><legend class="rh-op-legend">Historique des missions</legend>${dcMissionHistoryHTML(c?.id||id||"")}</fieldset>
+    <fieldset class="rh-op-box"><legend class="rh-op-legend">Historique des missions</legend><div id="dc-mission-history" data-client-id="${escapeHTML(c?.id||id||"")}">${dcMissionHistoryHTML(c?.id||id||"")}</div></fieldset>
   `;
   const tabFacturation=`
     <fieldset class="rh-op-box" style="margin-bottom:12px">
@@ -30037,6 +30037,10 @@ function openClientModal(id,readOnly=false){
   prospInitReunions("negos",(c?.negos_reunions)||[]);
   requestAnimationFrame(()=>dcMissionRecalculate());
   requestAnimationFrame(()=>updateClientContractEndDate(false));
+  if(sgdiAuthToken())syncMissionWorkflowCollections(["missions"]).then(()=>{
+    const history=document.getElementById("dc-mission-history");
+    if(history)history.innerHTML=dcMissionHistoryHTML(history.dataset.clientId||"");
+  }).catch(e=>console.warn("Historique des missions DC non synchronisé",e));
   if(!readOnly)requestAnimationFrame(()=>{
     if(typeof sgdiExitViewMode==="function"&&sgdiViewModeActive)sgdiExitViewMode();
     const editor=view.querySelector("form[data-client-editor='1']");
@@ -37770,6 +37774,8 @@ async function saveOpsMission(id,form,openDoc){
 }
 async function deleteOpsMission(id){
   if(guardOpsSupervisorMutation("mission","Accès superviseur OPS : suppression mission non autorisée."))return;
+  const mission=(db.missions||[]).find(m=>String(m.id)===String(id));
+  if(mission?.source==="dc"){toast("Une mission créée par DC doit rester dans l’historique. Annulez-la ou clôturez-la sans la supprimer.","warning");return}
   if(!confirm("Supprimer cette mission OPS ?"))return;
   db.missions=(db.missions||[]).filter(m=>String(m.id)!==String(id));
   if(!(await saveDBAndWaitToast("Suppression mission OPS non confirmée")))return;
