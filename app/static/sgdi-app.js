@@ -8717,7 +8717,6 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
     return false;
   }
   const entry={
-    url:"data:text/html;charset=utf-8,"+encodeURIComponent(html),
     html,
     name:doc.name||employeeDocumentFileName(title,reference),
     title,
@@ -8734,9 +8733,22 @@ async function archiveEmployeeGeneratedDocument(agentId,doc){
   try{
     const payload=employeeApiPayload(a);
     const docsForSave={};
-    Object.entries(a.documents||{}).forEach(([k,d])=>{if(d)docsForSave[k]={...d}});
+    Object.entries(a.documents||{}).forEach(([k,d])=>{
+      if(!d)return;
+      const stored={...d};
+      // Un document généré était auparavant envoyé deux fois au serveur :
+      // une fois en HTML, puis une seconde fois comme data: URL encodée.
+      // Le visualiseur sait reconstruire cette URL depuis `html` à la demande.
+      if(stored.html&&String(stored.url||"").startsWith("data:text/html"))delete stored.url;
+      docsForSave[k]=stored;
+    });
     payload.extra={...(payload.extra||{}),documents:docsForSave};
-    if(payload.extra._legacy)payload.extra._legacy={...(payload.extra._legacy||{}),documents:docsForSave};
+    // `employeeApiPayload` recopie l'état dans `_legacy`. Ne dupliquons pas
+    // les archives volumineuses dans les deux branches du même JSON.
+    if(payload.extra._legacy){
+      payload.extra._legacy={...(payload.extra._legacy||{})};
+      delete payload.extra._legacy.documents;
+    }
     const saved=a.backendId?await SGDI.employees.update(a.backendId,payload):await SGDI.employees.create(payload);
     const mapped=employeeFromApi(saved);
     Object.assign(a,mapped,{...a,documents:{...(mapped.documents||{}),...(a.documents||{}),[key]:entry},backendId:saved?.id||a.backendId});
