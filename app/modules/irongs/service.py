@@ -553,17 +553,29 @@ def replace_database(db: Session, payload: dict[str, list[Any] | dict[str, Any]]
     # On remplace collection par collection et on IGNORE toute collection vide/absente :
     # une sauvegarde ne peut jamais écraser des données existantes avec du vide.
     logger.info("Remplacement base SGDI API-first: %s collection(s)", len(payload))
+    ignored_sql: list[str] = []
     for name, data in payload_to_store.items():
         if name in SERVER_ONLY_COLLECTIONS:
             continue
         if name in sql_bridge.SQL_COLLECTIONS:
+            # Contrat : le snapshot global n'écrit QUE des collections JSON legacy.
+            # Les collections adossées à des tables SQL (employees, sites, factures,
+            # assignments, …) ont chacune une API dédiée (typée, relationnelle) qui
+            # est la seule source de vérité. Les accepter ici dupliquait/faisait
+            # diverger cette source et exposait un écrasement en masse. Le PUT par
+            # collection (`PUT /api/irongs/collections/{name}`) reste, lui, disponible.
             if isinstance(data, list) and data:
-                sql_bridge.replace_collection(db, name, data)
+                ignored_sql.append(name)
             continue
         # Collections JSON : ne jamais écraser avec du vide.
         if data is None or (isinstance(data, list) and not data) or (isinstance(data, dict) and not data):
             continue
         _replace_collection_no_commit(db, name, data)
+    if ignored_sql:
+        logger.warning(
+            "PUT /api/irongs/db : %d collection(s) adossée(s) à SQL ignorée(s) (API dédiée requise) : %s",
+            len(ignored_sql), ", ".join(sorted(ignored_sql)),
+        )
     db.commit()
     _snapshot_cache_invalidate()
     logger.info("Base SGDI sauvegardée: tables SQL métier + sgdi_records résiduel")

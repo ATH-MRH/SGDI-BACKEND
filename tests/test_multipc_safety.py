@@ -111,3 +111,44 @@ def test_employee_without_assignment_has_no_site(client, auth_headers):
     aff = legacy.get("affectationCourante") or {}
     assert not (aff.get("siteName") or aff.get("siteId")), \
         f"Un employé sans affectation a un site : {aff}"
+
+
+def test_global_snapshot_cannot_write_sql_collections(client, auth_headers):
+    """PUT /api/irongs/db n'écrit plus AUCUNE collection adossée à une table SQL
+    (employees, sites, factures, …) : le snapshot global ne peut plus dupliquer ni
+    écraser la source de vérité relationnelle. Seuls les endpoints /api/… dédiés
+    (et PUT /api/irongs/collections/{name}) écrivent ces données."""
+    # État SQL de référence avant l'appel
+    sites_before = client.get("/api/irongs/collections/sites", headers=auth_headers).json().get("data", [])
+    emp_before = client.get("/api/drh/employees", headers=auth_headers).json()
+    n_sites_before, n_emp_before = len(sites_before), len(emp_before)
+
+    # Un client qui renvoie des collections SQL non vides dans le snapshot global.
+    # La requête réussit (contrat non destructif) mais ces collections sont ignorées.
+    res = client.put("/api/irongs/db", headers=auth_headers, json={"data": {
+        "sites": [{"id": "ghost_site", "nom": "Site fantôme", "indicatif": "GHOST",
+                   "societe": "Iron Global Securite"}],
+        "employees": [{"id": "ghost_emp", "nom": "Fantôme", "prenom": "Jean",
+                       "societe": "Iron Global Securite", "matricule": "GHOST01"}],
+        "factures": [{"id": "ghost_fac", "numero": "F-GHOST", "societe": "Iron Global Securite",
+                      "ttc": 999999}],
+        # Une collection JSON legitime dans le même payload doit, elle, bien passer.
+        "notifications": [{"id": "notif_ok_after_ghost"}],
+    }})
+    assert res.status_code == 200, res.text
+
+    sites_after = client.get("/api/irongs/collections/sites", headers=auth_headers).json().get("data", [])
+    emp_after = client.get("/api/drh/employees", headers=auth_headers).json()
+    assert len(sites_after) == n_sites_before, "Le snapshot global a créé un site via le bridge SQL"
+    assert not any(str(s.get("indicatif")) == "GHOST" for s in sites_after)
+    assert len(emp_after) == n_emp_before, "Le snapshot global a créé un employé via le bridge SQL"
+    assert not any(str((e.get("code") or "")) == "GHOST01" for e in emp_after)
+
+    factures = client.get("/api/irongs/collections/factures", headers=auth_headers).json().get("data", [])
+    assert not any(str(f.get("numero")) == "F-GHOST" for f in factures), \
+        "Le snapshot global a créé une facture via le bridge SQL"
+
+    # La collection JSON légitime du même payload a bien été enregistrée.
+    notifs = client.get("/api/irongs/collections/notifications", headers=auth_headers).json().get("data", [])
+    assert any(n.get("id") == "notif_ok_after_ghost" for n in notifs), \
+        "Une collection JSON legitime a été perdue à cause d'une collection SQL ignorée"

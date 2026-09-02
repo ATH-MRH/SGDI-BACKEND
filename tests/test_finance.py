@@ -8,13 +8,18 @@ SOC = "Iron Global Securite"
 
 
 def _seed_finance(client, h):
-    client.put("/api/irongs/db", headers=h, json={"data": {
-        "factures": [{"id": "f_fin1", "numero": "FAC-001", "ttc": 119000, "societe": SOC}],
-        "paiements": [{"id": "p_fin1", "montant": 50000, "societe": SOC}],
-        "caisse": [{"id": "c_fin1", "montant": 3000, "societe": SOC}],
-        "avances": [{"id": "a_fin1", "montant": 20000, "societe": SOC}],
-        "avoirs": [{"id": "av_fin1", "montant": 8000, "societe": SOC}],
-    }})
+    # Les collections adossées à SQL ne sont plus écrites par le snapshot global
+    # (PUT /api/irongs/db) : on sème via l'endpoint par collection, qui pilote le
+    # bridge SQL comme en production.
+    for name, item in (
+        ("factures", {"id": "f_fin1", "numero": "FAC-001", "ttc": 119000, "societe": SOC}),
+        ("paiements", {"id": "p_fin1", "montant": 50000, "societe": SOC}),
+        ("caisse", {"id": "c_fin1", "montant": 3000, "societe": SOC}),
+        ("avances", {"id": "a_fin1", "montant": 20000, "societe": SOC}),
+        ("avoirs", {"id": "av_fin1", "montant": 8000, "societe": SOC}),
+    ):
+        r = client.post(f"/api/irongs/collections/{name}/items", headers=h, json={"data": item})
+        assert r.status_code in (200, 201), r.text
 
 
 def test_finance_entries(client, auth_headers):
