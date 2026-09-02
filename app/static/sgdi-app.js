@@ -12823,12 +12823,16 @@ function renderContractualisation(view,id){
         <div class="nc-section">
           <div class="nc-section-head"><div class="nc-icon">②</div><div><h2>Type &amp; durée</h2><span>Nature du contrat et jalons de dates</span></div></div>
           <div class="nc-body">
-            <div class="nc-field"><label>Type de contrat</label><select class="select" name="typeContrat" onchange="updateNewContractSummary();loadNewContractContractModels()"><option selected>CDD</option></select></div>
-            <div class="nc-field"><label>Date contrat</label><input class="input" type="date" name="dateDecision" value="${escapeHTML(p.dateDecision)}" required/></div>
-            <div class="nc-field"><label>Date début</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(p.dateDebut)}" onchange="updateNewContractReference();updateNewContractSummary()" required/></div>
-            <div class="nc-field"><label>Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateNewContractReference();updateNewContractSummary()" required>${contratDureeOptions(p.dureeContrat)}</select></div>
-            <div class="nc-field"><label>Période d'essai</label><select class="select" name="periodeEssai" onchange="updateNewContractSummary()">${newContractPeriodeEssaiOptions(p.periodeEssai)}</select></div>
-            <div class="nc-field computed"><label>Date fin contrat</label><input class="input bg-slate-50" type="date" name="dateFin" value="${escapeHTML(p.dateFin)}" readonly/></div>
+            <div class="nc-contract-basics-row">
+              <div class="nc-field"><label>Type de contrat</label><select class="select" name="typeContrat" onchange="updateNewContractSummary();loadNewContractContractModels()"><option selected>CDD</option></select></div>
+              <div class="nc-field"><label>Date contrat</label><input class="input" type="date" name="dateDecision" value="${escapeHTML(p.dateDecision)}" required/></div>
+              <div class="nc-field"><label>Période d'essai</label><select class="select" name="periodeEssai" onchange="updateNewContractSummary()">${newContractPeriodeEssaiOptions(p.periodeEssai)}</select></div>
+            </div>
+            <div class="nc-contract-dates-row">
+              <div class="nc-field"><label>Date début du contrat</label><input class="input" type="date" name="dateDebut" value="${escapeHTML(p.dateDebut)}" onchange="updateNewContractReference();updateNewContractSummary()" required/></div>
+              <div class="nc-field"><label>Durée du contrat</label><select class="select" name="dureeContrat" onchange="updateNewContractReference();updateNewContractSummary()" required>${contratDureeOptions(p.dureeContrat)}</select></div>
+              <div class="nc-field computed"><label>Date fin du contrat</label><input class="input bg-slate-50" type="date" name="dateFin" value="${escapeHTML(p.dateFin)}" readonly/></div>
+            </div>
           </div>
         </div>
         <div class="nc-section">

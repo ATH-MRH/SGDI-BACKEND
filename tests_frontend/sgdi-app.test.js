@@ -190,6 +190,15 @@ test('le champ client du contrat charge les clients PostgreSQL et les sites', ()
   assert.match(src, /loadNewContractClients\(\);updateNewContractSalaryWords/);
 });
 
+test('les dates et la durée du contrat sont alignées sur une même ligne', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  assert.match(src, /class="nc-contract-dates-row"/);
+  assert.match(src, /Date début du contrat/);
+  assert.match(src, /Date fin du contrat/);
+  assert.match(src, /class="nc-contract-basics-row"/);
+  assert.match(css, /\.nc-contract-dates-row\{grid-column:1\/-1;display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);
