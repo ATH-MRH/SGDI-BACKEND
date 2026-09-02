@@ -26,3 +26,5 @@ def test_incomplete_contract_fields_are_highlighted_and_block_submission():
     assert "if(!refreshNewContractRequiredFields(form))" in JS
     assert ".nc-field .nc-required-missing" in css
     assert "border:2px solid #dc2626!important" in css
+    assert "background:#fff1f2!important" not in css
+    assert 'content:"Champ obligatoire"' not in css
