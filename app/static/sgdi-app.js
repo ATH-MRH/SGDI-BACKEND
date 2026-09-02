@@ -10265,8 +10265,10 @@ function renderCandidatEtape1(c){
 	          </div>
 	        </div>
 	      </div>
-      <div class="col-span-3"><label class="label">Nom du père *</label><input class="input" name="nomPere" value="${escapeHTML(c.nomPere||"")}" /></div>
-      <div class="col-span-3"><label class="label">Nom de la mère *</label><input class="input" name="nomMere" value="${escapeHTML(c.nomMere||"")}" /></div>
+      <div class="col-span-6 candidate-parent-names-row">
+        <div><label class="label">Nom du père *</label><input class="input" name="nomPere" value="${escapeHTML(c.nomPere||"")}" /></div>
+        <div><label class="label">Nom de la mère *</label><input class="input" name="nomMere" value="${escapeHTML(c.nomMere||"")}" /></div>
+      </div>
       <div class="col-span-3"><label class="label">Source *</label><input class="input" name="source" value="${escapeHTML(c.source||"")}" placeholder="ANEM, LinkedIn, recommandation…" /></div>
       <div class="col-span-3"><label class="label">NIN</label><input class="input" name="nin" value="${escapeHTML(c.nin||"")}" maxlength="20" /></div>
       <div class="col-span-3"><label class="label">N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(c.numeroCnas||c.cnas||"")}" maxlength="13" pattern="[0-9]{10} [0-9]{2}" inputmode="numeric" placeholder="xxxxxxxxxx xx" oninput="let d=this.value.replace(/[^0-9]/g,'').slice(0,12);this.value=d.length>10?d.slice(0,10)+' '+d.slice(10):d" /></div>
