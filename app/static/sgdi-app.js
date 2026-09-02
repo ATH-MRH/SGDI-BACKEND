@@ -9873,13 +9873,23 @@ async function recruterCandidat(id,btn){
 }
 function afficherCandidatReserve(id){closeModal();navigate(`reserve/${id}`)}
 function modifierCandidatReserve(id){sessionStorage.setItem("candidatAutoEdit:"+id,"1");closeModal();navigate(`reserve/${id}`)}
+function recruitAndOpenCandidateContract(id){
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  closeModal();
+  if(String(c.statut||c.status||"").toLowerCase()==="a_contractualiser")return navigate(`contrats/a_contractualiser/${c.id}`);
+  recruterCandidat(id);
+}
 function openReserveCandidateActions(id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
   const name=String((c.nom||"")+" "+(c.prenom||"")).trim()||"Candidat";
+  const canContract=candidateCanGoToContract(c);
+  const contractBlockedReason=candidateAvisValue(c.avisDecision)!=="Favorable"?"Décision favorable obligatoire":!c.fichePositionValidee?"Fiche candidat non validée":"Dossier non disponible pour contractualisation";
   openModal(`<h3 class="font-bold text-lg mb-1">Actions candidat</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML(name)} · ${escapeHTML(c.societe||"—")}</p>
     <div class="grid grid-cols-1 gap-2">
       <button type="button" class="btn btn-secondary justify-start" onclick="afficherCandidatReserve('${jsString(id)}')">👁 Afficher</button>
       <button type="button" class="btn btn-primary justify-start" onclick="modifierCandidatReserve('${jsString(id)}')">✎ Modifier</button>
+      <button type="button" class="btn btn-success justify-start" ${canContract?`onclick="recruitAndOpenCandidateContract('${jsString(id)}')"`:`disabled title="${escapeHTML(contractBlockedReason)}"`}>Recruter / Établir contrat</button>
+      ${canContract?"":`<div class="text-xs text-amber-700 px-2">${escapeHTML(contractBlockedReason)}</div>`}
       <button type="button" class="btn btn-ghost justify-start text-red-600" onclick="closeModal();openArchiveCandidatModal('${jsString(id)}')">🗄 Archiver</button>
       <button type="button" class="btn btn-danger justify-start" onclick="closeModal();deleteCandidat('${jsString(id)}')">🗑 Supprimer</button>
     </div>

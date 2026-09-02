@@ -115,6 +115,14 @@ test('la fiche utilisateur propose et transmet les droits par action', () => {
   assert.match(src, /Hérités du profil/);
 });
 
+test('les actions du candidat en réserve proposent la contractualisation contrôlée', () => {
+  assert.match(src, /Recruter \/ Établir contrat/);
+  assert.match(src, /function recruitAndOpenCandidateContract\(/);
+  assert.match(src, /candidateCanGoToContract\(c\)/);
+  assert.match(src, /Décision favorable obligatoire/);
+  assert.match(src, /marquerContractualisation\(backendId\)/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);
