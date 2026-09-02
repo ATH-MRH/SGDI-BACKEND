@@ -13237,16 +13237,39 @@ function rhEffectifActionTargets(){
   const soc=effectifSocieteFilter();
   return (db.agents||[]).filter(a=>!soc||a.societe===soc).sort((a,b)=>((a.nom||"")+" "+(a.prenom||"")).localeCompare((b.nom||"")+" "+(b.prenom||"")));
 }
+function rhEffectifEmployeeSearchText(a){
+  return normalizedSearchText([a.matricule,a.code,a.nom,a.prenom,a.societe,a.fonction,a.position,a.posteContrat,a.telephone,a.tel,a.email].filter(Boolean).join(" "));
+}
+function updateRhEffectifEmployeeSearch(value){
+  const box=document.getElementById("rh-effectif-employee-results");if(!box)return;
+  const terms=normalizedSearchText(value).split(/\s+/).filter(Boolean);
+  const matches=rhEffectifActionTargets().filter(a=>terms.length&&terms.every(term=>rhEffectifEmployeeSearchText(a).includes(term))).slice(0,12);
+  box.innerHTML=matches.length?matches.map(a=>`<button type="button" class="rh-employee-search-result" onclick="selectRhEffectifEmployee('${jsString(a.id)}')"><span><b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim()||"Employé")}</b><small>${escapeHTML([a.matricule,a.fonction||a.position||a.posteContrat].filter(Boolean).join(" · ")||"Informations non renseignées")}</small></span><em>${escapeHTML(a.societe||"")}</em></button>`).join(""):`<div class="rh-employee-search-empty">${terms.length?"Aucun employé ne correspond à cette recherche.":"Saisissez un ou plusieurs critères pour rechercher un employé."}</div>`;
+}
+function selectRhEffectifEmployee(id){
+  const a=findEmployeeByRef(id);if(!a)return;
+  const form=document.getElementById("rh-effectif-employee-search-form");if(!form)return;
+  form.elements.agentId.value=a.id;
+  const input=document.getElementById("rh-effectif-employee-search-input");if(input)input.value=[a.matricule,((a.nom||"")+" "+(a.prenom||"")).trim()].filter(Boolean).join(" — ");
+  const box=document.getElementById("rh-effectif-employee-results");if(box)box.innerHTML=`<div class="rh-employee-search-selected"><span><b>${escapeHTML(((a.nom||"")+" "+(a.prenom||"")).trim())}</b><small>${escapeHTML([a.matricule,a.fonction||a.position||a.posteContrat,a.societe].filter(Boolean).join(" · "))}</small></span><i>✓ Sélectionné</i></div>`;
+  const submit=document.getElementById("rh-effectif-employee-next");if(submit)submit.disabled=false;
+}
+function submitRhEffectifActionSelection(form,action){
+  const agentId=form?.elements?.agentId?.value||"";if(!agentId){toast("Sélectionnez un employé dans les résultats","error");return}
+  runRhEffectifAction(action,agentId);
+}
 function openRhEffectifActionModal(action){
   if(action!=="detail"&&guardOpsSupervisorMutation("employee-action","Accès superviseur OPS : action RH non autorisée."))return;
   const list=rhEffectifActionTargets();
   if(!list.length){toast("Aucun employé disponible pour cette action","error");return}
   const label=rhEffectifActionLabel(action);
   openModal(`<h3 class="font-bold text-lg mb-3">${escapeHTML(label)}</h3>
-    <form onsubmit="event.preventDefault();runRhEffectifAction('${action}',this.agentId.value)">
-      <label class="label">Employé concerné</label>
-      <select class="select" name="agentId" required>${list.map(a=>`<option value="${escapeHTML(a.id)}">${escapeHTML((a.matricule||"")+" - "+((a.nom||"")+" "+(a.prenom||"")).trim())}</option>`).join("")}</select>
-      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Suivant</button></div>
+    <form id="rh-effectif-employee-search-form" onsubmit="event.preventDefault();submitRhEffectifActionSelection(this,'${action}')">
+      <label class="label" for="rh-effectif-employee-search-input">Employé concerné</label>
+      <div class="rh-employee-multisearch"><span aria-hidden="true">⌕</span><input id="rh-effectif-employee-search-input" type="search" autocomplete="off" autofocus placeholder="Matricule, nom, prénom, société, fonction, téléphone…" oninput="this.form.elements.agentId.value='';document.getElementById('rh-effectif-employee-next').disabled=true;updateRhEffectifEmployeeSearch(this.value)"/></div>
+      <input type="hidden" name="agentId" value=""/>
+      <div id="rh-effectif-employee-results" class="rh-employee-search-results"><div class="rh-employee-search-hint">Saisissez un ou plusieurs critères pour rechercher un employé.</div></div>
+      <div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button id="rh-effectif-employee-next" class="btn btn-primary" disabled>Suivant</button></div>
     </form>`);
 }
 function runRhEffectifAction(action,agentId){

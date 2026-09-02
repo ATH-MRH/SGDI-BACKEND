@@ -149,7 +149,20 @@ test('les statistiques recrutement utilisent un tableau de bord compact et adapt
   assert.match(src, /class="recruitment-stats-bars"/);
   assert.match(src, /id="recruit-stats-field"/);
   assert.match(css, /\.recruitment-stats-analysis\{display:grid/);
+  assert.match(css, /#view \.recruitment-stats-page\{[\s\S]*?width:100%!important/);
+  assert.match(css, /grid-template-columns:repeat\(4,minmax\(0,1fr\)\)!important/);
   assert.match(css, /@media\(max-width:760px\)/);
+});
+
+test('la sélection employé des actions RH utilise une recherche multicritère', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  assert.match(src, /function updateRhEffectifEmployeeSearch\(/);
+  assert.match(src, /function selectRhEffectifEmployee\(/);
+  assert.match(src, /Matricule, nom, prénom, société, fonction, téléphone/);
+  assert.match(src, /id="rh-effectif-employee-search-input" type="search"/);
+  assert.match(src, /name="agentId" value=""/);
+  assert.match(css, /\.rh-employee-multisearch\{/);
+  assert.match(css, /\.rh-employee-search-result\{/);
 });
 
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {

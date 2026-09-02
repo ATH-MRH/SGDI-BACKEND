@@ -10195,3 +10195,53 @@ body:has(.dhl-login-page),html:has(.dhl-login-page),body:has(.dhl-login-page) #a
 @media(max-width:1050px){.recruitment-stats-kpis{grid-template-columns:repeat(2,1fr)}.recruitment-stats-bars{grid-template-columns:1fr}}
 @media(max-width:760px){.recruitment-stats-hero{padding:18px}.recruitment-stats-heading{flex-direction:column}.recruitment-stats-add{width:100%}.recruitment-stats-analysis{grid-template-columns:1fr}.recruitment-stats-kpis{grid-template-columns:1fr 1fr}.recruitment-stat-kpi{min-height:115px;padding:16px}.recruitment-stats-chart{padding:18px}}
 @media(max-width:480px){.recruitment-stats-kpis{grid-template-columns:1fr}.recruitment-stats-chart-head{align-items:flex-start;flex-direction:column}}
+
+/* Statistiques recrutement : utiliser toute la surface utile du module. */
+#view .recruitment-stats-page{
+  width:100%!important;
+  max-width:none!important;
+  margin:0!important;
+  padding:0 0 18px!important;
+  align-items:stretch!important;
+  gap:12px!important;
+}
+#view .recruitment-stats-page>.recruitment-stats-hero,
+#view .recruitment-stats-page>.recruitment-stats-kpis,
+#view .recruitment-stats-page>.recruitment-stats-analysis{
+  width:100%!important;
+  max-width:none!important;
+  margin-left:0!important;
+  margin-right:0!important;
+}
+#view .recruitment-stats-hero{padding:18px 20px 12px!important}
+#view .recruitment-stats-heading{
+  width:100%!important;
+  max-width:none!important;
+  margin:0 0 12px!important;
+  align-items:center!important;
+}
+#view .recruitment-stats-heading>div{margin:0!important;max-width:none!important}
+#view .recruitment-stats-hero .recruitment-candidates-tabs{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  width:100%!important;
+  max-width:none!important;
+  padding:7px 0 0!important;
+  gap:8px!important;
+  background:transparent!important;
+}
+#view .recruitment-stats-hero .recruitment-candidates-tabs button{width:100%!important;justify-content:center!important}
+#view .recruitment-stats-kpis{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important}
+#view .recruitment-stat-kpi{width:100%!important;min-width:0!important;min-height:112px!important;padding:15px 17px!important}
+#view .recruitment-stats-analysis{grid-template-columns:minmax(240px,25%) minmax(0,1fr)!important;gap:10px!important}
+#view .recruitment-stats-filter,#view .recruitment-stats-chart{width:100%!important;max-width:none!important}
+@media(max-width:1050px){#view .recruitment-stats-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}#view .recruitment-stats-analysis{grid-template-columns:1fr!important}}
+@media(max-width:760px){#view .recruitment-stats-hero .recruitment-candidates-tabs{display:flex!important}#view .recruitment-stats-hero .recruitment-candidates-tabs button{width:auto!important}#view .recruitment-stats-heading{align-items:stretch!important}#view .recruitment-stats-kpis{grid-template-columns:1fr 1fr!important}}
+@media(max-width:480px){#view .recruitment-stats-kpis{grid-template-columns:1fr!important}}
+
+.rh-employee-multisearch{height:46px;display:flex;align-items:center;gap:10px;padding:0 14px;border:1px solid #b9cbe0;border-radius:11px;background:#fff;box-shadow:0 0 0 3px rgba(13,110,204,.08)}
+.rh-employee-multisearch:focus-within{border-color:#0d6ecc;box-shadow:0 0 0 3px rgba(13,110,204,.14)}
+.rh-employee-multisearch>span{color:#0d6ecc;font-size:24px;line-height:1}.rh-employee-multisearch input{width:100%;height:100%;padding:0!important;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;font-size:14px}.rh-employee-multisearch input::-webkit-search-cancel-button{cursor:pointer}
+.rh-employee-search-results{margin-top:9px;max-height:310px;overflow:auto;border:1px solid #dbe5f1;border-radius:11px;background:#f8fafc}
+.rh-employee-search-hint,.rh-employee-search-empty{padding:20px;text-align:center;color:#718096;font-size:12px}.rh-employee-search-result{width:100%;min-height:58px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;border:0;border-bottom:1px solid #e5ebf2;background:#fff;color:#172b46;text-align:left;cursor:pointer}.rh-employee-search-result:last-child{border-bottom:0}.rh-employee-search-result:hover,.rh-employee-search-result:focus{background:#edf6ff;outline:0}.rh-employee-search-result span,.rh-employee-search-selected span{min-width:0}.rh-employee-search-result b,.rh-employee-search-result small,.rh-employee-search-selected b,.rh-employee-search-selected small{display:block}.rh-employee-search-result b,.rh-employee-search-selected b{font-size:13px}.rh-employee-search-result small,.rh-employee-search-selected small{margin-top:3px;color:#718096;font-size:10px}.rh-employee-search-result em{max-width:34%;color:#0d5fa8;font-size:10px;font-style:normal;font-weight:850;text-align:right}
+.rh-employee-search-selected{min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:11px 14px;background:#edf8f3;border-left:4px solid #159467}.rh-employee-search-selected i{color:#087a55;font-size:11px;font-style:normal;font-weight:900;white-space:nowrap}
