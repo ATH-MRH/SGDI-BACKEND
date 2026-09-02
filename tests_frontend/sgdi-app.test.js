@@ -71,6 +71,8 @@ test('le recrutement est placé immédiatement sous le tableau de bord DRH', () 
 
 test('les routes recrutement distribuent les listes et le formulaire candidat', () => {
   assert.match(src, /case"recrutement":[\s\S]*renderRecrutement\(view,"new"\)/);
+  assert.match(src, /sub==="nouveau"\?null:sub/);
+  assert.match(src, /function openAddCandidateForm\(\)\{\s*navigate\("recrutement\/nouveau"\)/);
   assert.match(src, /case"reserve":[\s\S]*renderCandidatForm\(view,sub==="nouveau"\?null:sub,\{reserveDirect:true\}\)/);
   assert.match(src, /case"candidats_archives":[\s\S]*renderRecrutement\(view,"archive"\)/);
   assert.match(src, /onclick="navigate\('\$\{route\}'\)"/);

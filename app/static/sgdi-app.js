@@ -7955,7 +7955,7 @@ function renderView(){
       case"dossiers":renderDossiers(view);break;
       case"recrutement":
         if(sub==="statistiques")renderRecruitmentStatistics(view);
-        else if(sub&&!["candidats","liste"].includes(sub))renderCandidatForm(view,sub);
+        else if(sub&&!["candidats","liste"].includes(sub))renderCandidatForm(view,sub==="nouveau"?null:sub);
         else renderRecrutement(view,"new");
         break;
       case"reserve":
@@ -9081,7 +9081,7 @@ function resetArchiveCandidateFilters(){
   renderView();
 }
 function openAddCandidateForm(){
-  navigate("reserve/nouveau");
+  navigate("recrutement/nouveau");
 }
 function candidatImportActionsHTML(mode="reserve"){
   if(mode==="new")return `<div class="recrutement-actions-row flex gap-2 flex-wrap justify-end items-center"><button class="btn btn-secondary recrutement-template-btn" onclick="downloadCandidateExcelTemplate()">Modèle Excel</button><button class="btn btn-secondary recrutement-import-btn" onclick="openCandidateExcelImportNew()">Importer Excel</button><button class="btn btn-secondary recrutement-import-free-btn" onclick="openCandidateFreeExcelImportNew()">Excel libre</button><button class="btn btn-primary recrutement-add-btn" onclick="openAddCandidateForm()">+ Ajouter candidat</button></div>`;
