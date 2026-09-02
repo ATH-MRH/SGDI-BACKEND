@@ -1538,6 +1538,7 @@ window.SGDI_API={
   rh:{
     candidates:()=>sgdiApi("/drh/candidates",{legacy:false}),
     candidatesPage:(params)=>sgdiApi("/drh/candidates/page"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
+    candidateContactDuplicates:(params)=>sgdiApi("/drh/candidates/contact-duplicates"+(params?"?"+new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString():""),{legacy:false}),
     createCandidate:(payload)=>sgdiActionApi("/drh/candidates",{method:"POST",body:payload,legacy:false}),
     updateCandidate:(id,payload)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),
     validateCandidateSection:(payload,section,id)=>sgdiActionApi("/drh/candidates/validate-section?"+new URLSearchParams(Object.entries({section,candidate_id:id||""}).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString(),{method:"POST",body:payload,legacy:false}),
@@ -9948,6 +9949,37 @@ function formatPhoneSGDI(value){
 function normalizePhoneSGDIInput(input){
   if(input)input.value=formatPhoneSGDI(input.value);
 }
+let candidateContactDuplicateTimer=0;
+let candidateContactDuplicateRequest=0;
+function scheduleCandidateContactDuplicateCheck(){
+  clearTimeout(candidateContactDuplicateTimer);
+  candidateContactDuplicateTimer=setTimeout(candidateContactDuplicateCheck,450);
+}
+function candidateDuplicateWarningText(matches,field){
+  const relevant=(matches||[]).filter(match=>(match.fields||[]).includes(field));
+  if(!relevant.length)return "";
+  const labels=relevant.slice(0,3).map(match=>`${match.type==="salarie"?"salarié":"candidat"} ${match.name||("n° "+match.id)}${match.society?" ("+match.society+")":""}`);
+  return `⚠ ${field==="telephone"?"Ce numéro de téléphone":"Cette adresse email"} est déjà utilisé${field==="email"?"e":""} par ${labels.join(", ")}${relevant.length>3?` et ${relevant.length-3} autre(s)`:""}.`;
+}
+function showCandidateDuplicateWarning(id,text){
+  const node=document.getElementById(id);if(!node)return;
+  node.textContent=text||"";
+  node.classList.toggle("hidden",!text);
+}
+async function candidateContactDuplicateCheck(){
+  const form=document.getElementById("candidat-form");if(!form)return;
+  const phone=form.querySelector('[name="telephone"]')?.value||"";
+  const email=form.querySelector('[name="email"]')?.value?.trim()||"";
+  if(String(phone).replace(/\D/g,"").length<9&&!email){showCandidateDuplicateWarning("candidate-phone-duplicate-warning","");showCandidateDuplicateWarning("candidate-email-duplicate-warning","");return}
+  const current=findCandidatById(form.querySelector('[name="id"]')?.value||"")||{};
+  const requestId=++candidateContactDuplicateRequest;
+  try{
+    const result=await SGDI.rh.candidateContactDuplicates({phone,email,exclude_candidate_id:sqlBackendId(current.backendId)});
+    if(requestId!==candidateContactDuplicateRequest)return;
+    showCandidateDuplicateWarning("candidate-phone-duplicate-warning",candidateDuplicateWarningText(result?.duplicates,"telephone"));
+    showCandidateDuplicateWarning("candidate-email-duplicate-warning",candidateDuplicateWarningText(result?.duplicates,"email"));
+  }catch(error){console.warn("Contrôle des coordonnées candidat indisponible",error)}
+}
 function candidatAliasStorageKey(){return "candidatIdAliases"}
 function loadCandidatAliases(){return {...sgdiRuntimeCandidateAliases}}
 function saveCandidatAliases(aliases){Object.keys(sgdiRuntimeCandidateAliases).forEach(k=>delete sgdiRuntimeCandidateAliases[k]);Object.assign(sgdiRuntimeCandidateAliases,aliases||{})}
@@ -10177,7 +10209,7 @@ function modifierCandidatForm(id){
   const c=findCandidatById(id);
   if(!c){toast("Candidat introuvable","error");return}
   form.dataset.editMode="1";
-  form.querySelectorAll("input,select,textarea").forEach(el=>{el.disabled=false;el.classList.remove("bg-slate-100","text-slate-400")});
+  form.querySelectorAll("input,select,textarea,button").forEach(el=>{if(el.dataset.sectionAction!=="1")el.disabled=false;el.classList.remove("bg-slate-100","text-slate-400")});
   form.querySelectorAll(".section-lock-note").forEach(el=>el.remove());
   form.querySelectorAll("[data-candidat-section]").forEach(sec=>{sec.dataset.locked="0";sec.classList.remove("opacity-80")});
   bindCandidatDraftAutosave(c.id);
@@ -10264,7 +10296,7 @@ function renderCandidatForm(view,id,options){
 	      </div>
 	    </form>
 	  </div>`;
-  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));updateCandidateContractEndDate();if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'));markCandidatFormIssues(c);if(sessionStorage.getItem("candidatAutoEdit:"+c.id)==="1"){sessionStorage.removeItem("candidatAutoEdit:"+c.id);modifierCandidatForm(c.id)}},0);
+	  setTimeout(()=>{applyCandidatSectionLocks();bindRequiredFieldCleanup(document.getElementById("candidat-form"));updateCandidateContractEndDate();if(!c.isNew)bindCandidatDraftAutosave(c.id);validateCandidatBirthField(document.querySelector('[name="dateNaissance"]'));markCandidatFormIssues(c);candidateContactDuplicateCheck();if(sessionStorage.getItem("candidatAutoEdit:"+c.id)==="1"){sessionStorage.removeItem("candidatAutoEdit:"+c.id);modifierCandidatForm(c.id)}},0);
 }
 
 function renderCandidatEtape1(c){
@@ -10328,8 +10360,8 @@ function renderCandidatEtape1(c){
       <div class="col-span-3"><label class="label">Durée du contrat</label><select class="select" name="dureeContrat">${contratDureeOptions(c.dureeContrat||"")}</select></div>
       <div class="col-span-3"><label class="label">Salaire prévu pour le poste (DA/mois)</label><input class="input" type="text" inputmode="decimal" name="salairePrevu" value="${formatMoneyInputValue(c.salairePrevu)}" placeholder="45 000,00" onblur="formatMoneyField(this)"/></div>
       <div class="col-span-3"><label class="label">&nbsp;</label><div class="text-xs text-slate-500 pt-2">${c.salairePrevu?`Fourchette estimée : <b>${money(c.salairePrevu)}</b>`:"Montant brut prévisionnel pour ce poste"}</div></div>
-      <div class="col-span-3"><label class="label">Téléphone *</label><input class="input" name="telephone" value="${escapeHTML(formatPhoneSGDI(c.telephone||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)" /></div>
-      <div class="col-span-3"><label class="label">Email</label><input class="input" type="email" name="email" value="${escapeHTML(c.email||"")}"/></div>
+      <div class="col-span-3"><label class="label">Téléphone *</label><input class="input" name="telephone" value="${escapeHTML(formatPhoneSGDI(c.telephone||""))}" inputmode="numeric" maxlength="13" placeholder="Numéro de téléphone" oninput="normalizePhoneSGDIInput(this);scheduleCandidateContactDuplicateCheck()" onblur="candidateContactDuplicateCheck()" /><div id="candidate-phone-duplicate-warning" class="hidden text-[11px] font-bold text-red-600 mt-1" role="alert"></div></div>
+      <div class="col-span-3"><label class="label">Email</label><input class="input" type="email" name="email" value="${escapeHTML(c.email||"")}" placeholder="Adresse email" oninput="scheduleCandidateContactDuplicateCheck()" onblur="candidateContactDuplicateCheck()"/><div id="candidate-email-duplicate-warning" class="hidden text-[11px] font-bold text-red-600 mt-1" role="alert"></div></div>
       <div class="col-span-6"><label class="label">CV</label>
         <input type="hidden" name="cv_url" value="${c.cvFile?c.cvFile.url:""}"/><input type="hidden" name="cv_name" value="${c.cvFile?escapeHTML(c.cvFile.name):""}"/>
         <div id="cv-holder">${c.cvFile?`<div class="text-xs text-emerald-600">✅ ${escapeHTML(c.cvFile.name)}</div><div class="flex gap-2 mt-1"><button type="button" class="btn btn-ghost text-xs" onclick="viewDoc('${c.cvFile.url}','${escapeHTML(c.cvFile.name)}')">👁 Voir</button><button type="button" class="btn btn-ghost text-xs text-red-600" onclick="removeCv()">✕ Retirer</button></div>`:`<input id="cv-input" type="file" accept=".pdf,.doc,.docx,image/*" class="hidden" onchange="handleCvUpload('cv-input')"/><button type="button" class="btn btn-secondary text-xs" onclick="document.getElementById('cv-input').click()">📤 Téléverser le CV</button>`}</div>
@@ -10348,7 +10380,6 @@ function renderCandidatEtape1(c){
 }
 
 function renderCandidatEtape2(c){
-  const hab=c.habilitations||{};
   return`${candidatSectionAvailable(c,"contact")?`${candidatSectionOpen(c,"contact","banner-blue","E. Coordonnées & contact d'urgence")}
     <div class="grid grid-6">
       <div class="col-span-3"><label class="label">Adresse *</label><input class="input" name="adresse" value="${escapeHTML(c.adresse||"")}" /></div>
@@ -10359,13 +10390,42 @@ function renderCandidatEtape2(c){
       <div class="col-span-2"><label class="label">Téléphone *</label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(c.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" placeholder="0000 00 00 00" oninput="normalizePhoneSGDIInput(this)" /></div>
     </div>
   ${candidatSectionClose(c,"contact")}`:""}
-  ${candidatSectionAvailable(c,"habilitations")?`${candidatSectionOpen(c,"habilitations","banner-amber","F. Habilitations")}
-    <div class="grid grid-2">${[["enqueteHabilitation","Enquête d'habilitation"],["serviceNational","Service national"],["diplomeSecourisme","Diplôme de secourisme"],["diplomeAntiIncendie","Diplôme lutte anti-incendie"]].map(([k,l])=>`<div class="flex items-center justify-between p-3 bg-slate-100 rounded-lg"><span class="text-sm">${l}</span><div class="flex gap-2"><label class="radio-pill"><input type="radio" name="hab_${k}" value="oui" ${hab[k]==="oui"?"checked":""}/> Oui</label><label class="radio-pill"><input type="radio" name="hab_${k}" value="non" ${hab[k]!=="oui"?"checked":""}/> Non</label></div></div>`).join("")}</div>
+  ${candidatSectionAvailable(c,"habilitations")?`${candidatSectionOpen(c,"habilitations","banner-amber","F. Documents & habilitations")}
+    <div class="candidate-document-picker flex gap-2 items-end flex-wrap mb-4">
+      <div style="min-width:280px;flex:1"><label class="label">Type de document</label><select id="candidate-document-type" class="select">${candidateDocumentTypeOptions().map(label=>`<option value="${escapeHTML(label)}">${escapeHTML(label)}</option>`).join("")}</select></div>
+      <button type="button" class="btn btn-primary" onclick="addCandidateHabilitationDocument()">＋ Ajouter le document</button>
+    </div>
+    <div id="candidate-habilitation-documents" class="space-y-2">${(c.habilitationDocuments||[]).map((document,index)=>candidateHabilitationDocumentRow(document,index)).join("")||'<div class="candidate-documents-empty text-sm text-slate-500 p-4 bg-slate-50 rounded-lg">Aucun document ajouté.</div>'}</div>
+    <div class="text-xs text-slate-500 mt-3">Vous pouvez ajouter autant de documents que nécessaire, y compris plusieurs documents du même type.</div>
   ${candidatSectionClose(c,"habilitations")}`:""}
   ${candidatSectionAvailable(c,"experience")?`${candidatSectionOpen(c,"experience","banner-green","G. Expérience professionnelle")}
     <div id="exp-rows">${(c.experience||[]).map((e,i)=>experienceRow(e,i)).join("")||experienceRow({},0)}</div>
     <button type="button" class="btn btn-ghost text-xs mt-2" onclick="addExpRow()">＋ Ajouter une expérience</button>
   ${candidatSectionClose(c,"experience")}`:""}`;
+}
+function candidateDocumentTypeOptions(){return ["Enquête d'habilitation","Service national","Diplôme de secourisme","Diplôme lutte anti-incendie","Carte professionnelle","Certificat de travail","Diplôme / attestation de formation","Autre document"]}
+function candidateHabilitationDocumentRow(document,index){
+  const item=document||{};const token=`${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2,7)}`;const hasFile=!!item.url;
+  return `<div class="candidate-habilitation-document-row grid grid-6 gap-2 items-end p-3 bg-slate-50 rounded-lg" data-document-row="1">
+    <div class="col-span-2"><label class="label">Document</label><input class="input" name="habdoc_type_${token}" value="${escapeHTML(item.type||"")}" placeholder="Nom du document"/></div>
+    <div class="col-span-3"><input type="hidden" name="habdoc_url_${token}" value="${escapeHTML(item.url||"")}"/><input type="hidden" name="habdoc_name_${token}" value="${escapeHTML(item.name||"")}"/><input id="habdoc-file-${token}" type="file" accept="image/*,.pdf,.doc,.docx" class="hidden" onchange="uploadCandidateHabilitationDocument(this)"/><div class="candidate-habilitation-file flex gap-2 items-center flex-wrap">${hasFile?`<span class="text-xs text-emerald-700 font-bold">✅ ${escapeHTML(item.name||"Fichier joint")}</span><button type="button" class="btn btn-ghost text-xs" onclick="viewDoc(this.closest('[data-document-row]').querySelector('[name^=habdoc_url_]').value,this.closest('[data-document-row]').querySelector('[name^=habdoc_name_]').value)">Voir</button>`:`<button type="button" class="btn btn-secondary text-xs" onclick="this.closest('[data-document-row]').querySelector('input[type=file]').click()">Téléverser un fichier</button>`}</div></div>
+    <div class="col-span-1"><button type="button" class="btn btn-ghost text-red-600 text-xs" onclick="removeCandidateHabilitationDocument(this)">Supprimer</button></div>
+  </div>`
+}
+function addCandidateHabilitationDocument(){
+  const holder=document.getElementById("candidate-habilitation-documents");const select=document.getElementById("candidate-document-type");if(!holder||!select)return;
+  holder.querySelector(".candidate-documents-empty")?.remove();
+  const wrapper=document.createElement("div");wrapper.innerHTML=candidateHabilitationDocumentRow({type:select.value},holder.querySelectorAll("[data-document-row]").length);holder.appendChild(wrapper.firstElementChild);
+  const id=document.querySelector('#candidat-form [name="id"]')?.value;if(id&&!isTempCandidateId(id))bindCandidatDraftAutosave(id);
+}
+function removeCandidateHabilitationDocument(button){
+  const holder=document.getElementById("candidate-habilitation-documents");button.closest("[data-document-row]")?.remove();
+  if(holder&&!holder.querySelector("[data-document-row]"))holder.innerHTML='<div class="candidate-documents-empty text-sm text-slate-500 p-4 bg-slate-50 rounded-lg">Aucun document ajouté.</div>';
+  const id=document.querySelector('#candidat-form [name="id"]')?.value;if(id)scheduleCandidatDraftSave(id);
+}
+function uploadCandidateHabilitationDocument(input){
+  const file=input.files?.[0];if(!file)return;if(file.size>5*1024*1024){toast("Fichier > 5 Mo","error");input.value="";return}
+  const row=input.closest("[data-document-row]");const reader=new FileReader();reader.onload=event=>{row.querySelector('[name^="habdoc_url_"]').value=event.target.result;row.querySelector('[name^="habdoc_name_"]').value=file.name;row.querySelector(".candidate-habilitation-file").innerHTML=`<span class="text-xs text-emerald-700 font-bold">✅ ${escapeHTML(file.name)}</span><button type="button" class="btn btn-ghost text-xs" onclick="viewDoc(this.closest('[data-document-row]').querySelector('[name^=habdoc_url_]').value,this.closest('[data-document-row]').querySelector('[name^=habdoc_name_]').value)">Voir</button><button type="button" class="btn btn-secondary text-xs" onclick="this.closest('[data-document-row]').querySelector('input[type=file]').click()">Remplacer</button>`;const id=document.querySelector('#candidat-form [name="id"]')?.value;if(id)scheduleCandidatDraftSave(id);};reader.readAsDataURL(file)
 }
 function experienceRow(e,idx){return`<div class="grid grid-6 mb-2 exp-row" data-idx="${idx}"><div class="col-span-2"><label class="label">Employeur</label><input class="input" name="exp_employeur" value="${escapeHTML(e.employeur||"")}"/></div><div class="col-span-2"><label class="label">Poste</label><input class="input" name="exp_poste" value="${escapeHTML(e.poste||"")}"/></div><div><label class="label">Du</label><input class="input" type="date" name="exp_du" value="${e.du||""}"/></div><div><label class="label">Au</label><input class="input" type="date" name="exp_au" value="${e.au||""}"/></div><div class="col-span-2"><label class="label">Salaire</label><input class="input" inputmode="decimal" name="exp_salaire" value="${formatMoneyInputValue(e.salaire||"")}" placeholder="45 000,00" onblur="formatMoneyField(this)"/></div><div class="col-span-3"><label class="label">Motif de départ</label><select class="select" name="exp_motif"><option value="">—</option>${MOTIFS_DEPART.map(m=>`<option ${e.motifDepart===m?"selected":""}>${m}</option>`).join("")}</select></div><div class="col-span-1 flex items-end"><button type="button" class="btn btn-ghost text-red-600 text-xs" onclick="this.closest('.exp-row').remove()">✕</button></div></div>`}
 function addExpRow(){const h=document.getElementById("exp-rows");const d=document.createElement("div");d.innerHTML=experienceRow({},h.children.length);h.appendChild(d.firstElementChild)}
@@ -10408,7 +10468,7 @@ function collectCandidatFormData(){
   const existingId=f.querySelector('[name="id"]')?.value||"";
   const existing=findCandidatById(existingId)||{};
   const fd=new FormData(f);const data={...existing};
-  fd.forEach((v,k)=>{if(k==="photo"){data.photo=v||null}else if(k.startsWith("hab_")||k.startsWith("lang_")||k.startsWith("doc_")||k.startsWith("exp_")||k.startsWith("verif")||k.startsWith("cv_")){}else{data[k]=typeof v==="string"?v.trim():v}});
+  fd.forEach((v,k)=>{if(k==="photo"){data.photo=v||null}else if(k.startsWith("hab_")||k.startsWith("habdoc_")||k.startsWith("lang_")||k.startsWith("doc_")||k.startsWith("exp_")||k.startsWith("verif")||k.startsWith("cv_")){}else{data[k]=typeof v==="string"?v.trim():v}});
   data.nom=String(fd.get("nom")||data.nom||"").trim();
   data.prenom=String(fd.get("prenom")||data.prenom||"").trim();
   if(data.numeroCnas){
@@ -10436,6 +10496,8 @@ function collectCandidatFormData(){
     const autre=f.querySelector('[name="langueAutre"]')?.value?.trim();if(autre)langues.push(autre);
     data.langues=langues;data.langueAutre=autre||"";
   }
+  const habilitationDocumentHolder=f.querySelector("#candidate-habilitation-documents");
+  if(habilitationDocumentHolder&&(f.dataset.editMode==="1"||habilitationDocumentHolder.closest("[data-candidat-section]")?.dataset.locked!=="1"))data.habilitationDocuments=[...f.querySelectorAll(".candidate-habilitation-document-row")].map(row=>({type:row.querySelector('[name^="habdoc_type_"]')?.value?.trim()||"Document",url:row.querySelector('[name^="habdoc_url_"]')?.value||"",name:row.querySelector('[name^="habdoc_name_"]')?.value||""})).filter(document=>document.type||document.url);
   const rows=[...f.querySelectorAll(".exp-row")].filter(r=>!r.querySelector("input,select,textarea")?.disabled);
   if(rows.length)data.experience=rows.map(r=>({employeur:r.querySelector('[name="exp_employeur"]').value,poste:r.querySelector('[name="exp_poste"]').value,du:r.querySelector('[name="exp_du"]').value,au:r.querySelector('[name="exp_au"]').value,salaire:parseMoneyInput(r.querySelector('[name="exp_salaire"]').value),motifDepart:r.querySelector('[name="exp_motif"]').value})).filter(e=>e.employeur||e.poste);
   const cvUrl=f.querySelector('[name="cv_url"]')?.value;const cvName=f.querySelector('[name="cv_name"]')?.value;

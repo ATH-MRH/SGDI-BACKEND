@@ -797,6 +797,68 @@ def _candidate_identity_key(first_name: Any, last_name: Any, birth_date: Any) ->
     return clean(first_name), clean(last_name), str(birth_date or "")[:10]
 
 
+def _normalized_contact_phone(value: Any) -> str:
+    digits = re.sub(r"\D", "", str(value or ""))
+    if digits.startswith("00213"):
+        digits = "0" + digits[5:]
+    elif digits.startswith("213"):
+        digits = "0" + digits[3:]
+    return digits
+
+
+def candidate_contact_duplicates(
+    db: Session,
+    *,
+    phone: str | None = None,
+    email: str | None = None,
+    exclude_candidate_id: int | None = None,
+    allowed_societies: list[str] | None = None,
+) -> dict[str, Any]:
+    """Recherche les coordonnées déjà utilisées dans le périmètre autorisé."""
+    normalized_phone = _normalized_contact_phone(phone)
+    normalized_email = _candidate_text(email).lower()
+    allowed_keys = {
+        " ".join(unicodedata.normalize("NFD", str(value)).encode("ascii", "ignore").decode().upper().split())
+        for value in (allowed_societies or [])
+        if str(value).strip()
+    }
+
+    def society_allowed(value: Any) -> bool:
+        if not allowed_keys:
+            return True
+        key = " ".join(unicodedata.normalize("NFD", str(value or "")).encode("ascii", "ignore").decode().upper().split())
+        return key in allowed_keys
+
+    matches: list[dict[str, Any]] = []
+    for row in db.execute(select(Candidate)).scalars().all():
+        if row.id == exclude_candidate_id or not society_allowed(row.society):
+            continue
+        fields = []
+        if normalized_phone and _normalized_contact_phone(row.phone) == normalized_phone:
+            fields.append("telephone")
+        if normalized_email and _candidate_text(row.email).lower() == normalized_email:
+            fields.append("email")
+        if fields:
+            matches.append({"type": "candidat", "id": row.id, "name": f"{row.last_name} {row.first_name}".strip(), "society": row.society, "fields": fields})
+
+    for row in db.execute(select(Employee)).scalars().all():
+        if not society_allowed(row.society):
+            continue
+        fields = []
+        if normalized_phone and _normalized_contact_phone(row.phone) == normalized_phone:
+            fields.append("telephone")
+        if normalized_email and _candidate_text(row.email).lower() == normalized_email:
+            fields.append("email")
+        if fields:
+            matches.append({"type": "salarie", "id": row.id, "name": f"{row.last_name} {row.first_name}".strip(), "society": row.society, "fields": fields})
+
+    return {
+        "phone_exists": any("telephone" in match["fields"] for match in matches),
+        "email_exists": any("email" in match["fields"] for match in matches),
+        "duplicates": matches[:20],
+    }
+
+
 def _ensure_candidate_not_duplicate(db: Session, values: dict[str, Any], existing: Candidate | None = None) -> None:
     data = _candidate_data(values, existing)
     if _candidate_bool(data.get("allowDuplicate")):

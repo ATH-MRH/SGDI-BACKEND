@@ -26,6 +26,49 @@ def _cand(client, h, first="Jamel", last="Cand", society="Iron Global Securite",
     return r.json()["data"]
 
 
+def test_candidate_contact_duplicate_warning(client, auth_headers):
+    candidate = client.post(
+        "/api/drh/candidates",
+        headers=auth_headers,
+        json={
+            "first_name": "Amine",
+            "last_name": "Doublon",
+            "society": "Iron Global Securite",
+            "desired_position": "Agent",
+            "phone": "+213 770 12 34 56",
+            "email": "Amine.Doublon@example.com",
+            "status": "nouvelle",
+            "data": {},
+        },
+    )
+    assert candidate.status_code in (200, 201), candidate.text
+    candidate_id = candidate.json()["data"]["id"]
+
+    duplicate = client.get(
+        "/api/drh/candidates/contact-duplicates",
+        headers=auth_headers,
+        params={"phone": "0770 12 34 56", "email": "amine.doublon@EXAMPLE.COM"},
+    )
+    assert duplicate.status_code == 200, duplicate.text
+    payload = duplicate.json()
+    assert payload["phone_exists"] is True
+    assert payload["email_exists"] is True
+    assert payload["duplicates"][0]["id"] == candidate_id
+    assert set(payload["duplicates"][0]["fields"]) == {"telephone", "email"}
+
+    excluded = client.get(
+        "/api/drh/candidates/contact-duplicates",
+        headers=auth_headers,
+        params={
+            "phone": "0770123456",
+            "email": "amine.doublon@example.com",
+            "exclude_candidate_id": candidate_id,
+        },
+    )
+    assert excluded.status_code == 200, excluded.text
+    assert excluded.json()["duplicates"] == []
+
+
 # 7 sections visibles de la fiche de position (ordre imposé par le service)
 _SECTIONS = ["identification", "militaire", "poste",
              "avis", "contact", "habilitations", "experience"]

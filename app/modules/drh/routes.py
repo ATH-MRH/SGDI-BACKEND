@@ -394,6 +394,24 @@ def candidates(
     return rows
 
 
+@router.get("/candidates/contact-duplicates")
+def candidate_contact_duplicates(
+    phone: str | None = None,
+    email: str | None = None,
+    exclude_candidate_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _ensure_recruitment_access(user)
+    return service.candidate_contact_duplicates(
+        db,
+        phone=phone,
+        email=email,
+        exclude_candidate_id=exclude_candidate_id,
+        allowed_societies=_allowed_societies(user),
+    )
+
+
 def _action_success(data):
     return {"status": "success", "data": jsonable_encoder(data)}
 
