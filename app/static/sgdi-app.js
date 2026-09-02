@@ -12927,7 +12927,7 @@ function renderContractualisation(view,id){
         </div>
       </div>
     </form>`;
-  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));loadNewContractClients();updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels()},0);
+  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));loadNewContractClients();updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels();bindNewContractRequiredFields(document.getElementById("employee-new-contract-form"))},0);
 }
 function updateNewContractSummary(){
   const f=document.getElementById("employee-new-contract-form");if(!f)return;
@@ -12939,6 +12939,26 @@ function updateNewContractSummary(){
   set("nc-sum-salaire",f.salaireNet?.value?f.salaireNet.value+" DA":"");
   const lettres=document.getElementById("nc-sum-lettres");
   if(lettres)lettres.textContent=f.salaireLettres?.value?`« ${f.salaireLettres.value} »`:"—";
+}
+function refreshNewContractRequiredFields(form){
+  const f=form||document.getElementById("employee-new-contract-form");if(!f)return true;
+  let complete=true;
+  f.querySelectorAll("input[required],select[required],textarea[required]").forEach(field=>{
+    const missing=!String(field.value||"").trim();
+    field.classList.toggle("nc-required-missing",missing);
+    field.setAttribute("aria-invalid",missing?"true":"false");
+    const wrapper=field.closest(".nc-field")||field.parentElement;
+    if(wrapper)wrapper.classList.toggle("nc-field-missing",missing);
+    if(missing)complete=false;
+  });
+  return complete;
+}
+function bindNewContractRequiredFields(form){
+  const f=form||document.getElementById("employee-new-contract-form");if(!f||f.dataset.requiredHighlightBound==="1")return;
+  f.dataset.requiredHighlightBound="1";
+  f.addEventListener("input",e=>{if(e.target?.matches?.("[required]"))refreshNewContractRequiredFields(f)});
+  f.addEventListener("change",e=>{if(e.target?.matches?.("[required]"))refreshNewContractRequiredFields(f)});
+  refreshNewContractRequiredFields(f);
 }
 function setContractualisationSociete(id,societe){
   const c=findCandidatById(id);if(!c)return;
@@ -13005,6 +13025,13 @@ function candidateNewContractFormData(form,draft){
 }
 async function confirmCandidateNewContract(form,id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  if(!refreshNewContractRequiredFields(form)){
+    const first=form.querySelector(".nc-required-missing");
+    first?.focus();
+    form.reportValidity?.();
+    toast("Les champs obligatoires incomplets sont signalés en rouge.","error");
+    return;
+  }
   if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Contrat impossible : la décision du recruteur doit être Favorable","error");return}
   const candidateDetails=new FormData(form);
   c.wilaya=String(candidateDetails.get("candidateWilaya")||c.wilaya||"").trim();

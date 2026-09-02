@@ -9962,6 +9962,10 @@ body:has(#view .site-card) #atlas-ai-widget .ai-panel{
 .nc-field label{font-size:10.5px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.03em;display:flex;align-items:center;gap:4px}
 .nc-field .req{color:#dc2626;font-weight:900}
 .nc-field .input,.nc-field .select,.nc-field .textarea{border-radius:10px}
+.nc-field .nc-required-missing{border:2px solid #dc2626!important;background:#fff1f2!important;color:#991b1b!important;box-shadow:0 0 0 3px rgba(220,38,38,.12)!important}
+.nc-field-missing label{color:#dc2626!important}
+.nc-field-missing label::after{content:"Champ obligatoire";margin-left:auto;padding:2px 7px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:8px;font-weight:900;letter-spacing:0;text-transform:none}
+.nc-field-missing.computed label::after{content:"Champ obligatoire"}
 .nc-field.computed label::after{content:"Calculé";margin-left:auto;font-size:9px;font-weight:800;color:#0d6ecc;background:rgba(13,110,204,.1);padding:2px 6px;border-radius:999px;text-transform:none;letter-spacing:0}
 .nc-link-row{display:flex}
 .nc-link-btn{border:1px dashed #dbe5f0;background:#f6f9fc;color:#043970;font-size:12px;font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer}
