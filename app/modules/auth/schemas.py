@@ -1,4 +1,9 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field, model_validator
+
+
+UserAction = Literal["read", "create", "update", "validate", "delete", "export", "unlock", "admin"]
 
 
 class UserCreate(BaseModel):
@@ -10,6 +15,7 @@ class UserCreate(BaseModel):
     authorized_societies: list[str] = Field(default_factory=list)
     authorized_structures: list[str] = Field(default_factory=list)
     authorized_sites: list[int] = Field(default_factory=list)
+    authorized_actions: list[UserAction] = Field(default_factory=list)
     supervisor_read_only: bool = True
     password: str = Field(min_length=4)
 
@@ -28,6 +34,7 @@ class UserUpdate(BaseModel):
     authorized_societies: list[str] | None = None
     authorized_structures: list[str] | None = None
     authorized_sites: list[int] | None = None
+    authorized_actions: list[UserAction] | None = None
     supervisor_read_only: bool | None = None
     password: str | None = Field(default=None, min_length=4)
     is_active: bool | None = None
@@ -57,6 +64,7 @@ class UserOut(BaseModel):
     authorized_societies: list[str] | None = Field(default_factory=list)
     authorized_structures: list[str] | None = Field(default_factory=list)
     authorized_sites: list[int] | None = Field(default_factory=list)
+    authorized_actions: list[UserAction] | None = Field(default_factory=list)
     supervisor_read_only: bool = True
     is_active: bool
 

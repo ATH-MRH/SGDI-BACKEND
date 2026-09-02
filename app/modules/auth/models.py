@@ -16,6 +16,9 @@ class User(Base, TimestampMixin):
     authorized_societies: Mapped[list | None] = mapped_column(JSON, nullable=True)
     authorized_structures: Mapped[list | None] = mapped_column(JSON, nullable=True)
     authorized_sites: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Liste vide = héritage du profil. Une liste renseignée devient la politique
+    # individuelle effective pour toutes les routes authentifiées.
+    authorized_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Superviseur terrain : par défaut lecture seule (comportement historique, non

@@ -69,11 +69,37 @@ test('le recrutement est placé immédiatement sous le tableau de bord DRH', () 
   );
 });
 
+test('les routes recrutement distribuent les listes et le formulaire candidat', () => {
+  assert.match(src, /case"recrutement":[\s\S]*renderRecrutement\(view,"new"\)/);
+  assert.match(src, /case"reserve":[\s\S]*renderCandidatForm\(view,sub==="nouveau"\?null:sub,\{reserveDirect:true\}\)/);
+  assert.match(src, /case"candidats_archives":[\s\S]*renderRecrutement\(view,"archive"\)/);
+});
+
+test('le recrutement couvre entretien, décision réversible, embauche et statistiques', () => {
+  for (const fn of ['openCandidateInterviewModal', 'saveCandidateInterview', 'validateCandidateApplication', 'renderRecruitmentStatistics']) {
+    assert.match(src, new RegExp(`function ${fn}\\(`));
+  }
+  assert.match(src, /Annuler candidature/);
+  assert.match(src, /Valider candidature/);
+  assert.match(src, /Recruter/);
+  for (const label of ['Âge', 'Sexe', 'Adresse', 'Nom', 'Prénom', 'Date de naissance', 'Lieu de naissance', 'Formation', 'Expérience professionnelle']) {
+    assert.ok(src.includes(label), `statistique manquante : ${label}`);
+  }
+});
+
 test('Administration système expose la configuration du recrutement', () => {
   const configs = T().sgdiModuleHostConfigs();
   assert.ok(configs.admin.sections.some(item => item.route === 'admin/sections_candidat'));
   const defaults = T().adminSidebarOrganizerDefaults();
   assert.ok(defaults.admin.some(item => item[1] === 'admin/sections_candidat'));
+});
+
+test('la fiche utilisateur propose et transmet les droits par action', () => {
+  for (const action of ['read', 'create', 'update', 'validate', 'delete', 'export', 'unlock', 'admin']) {
+    assert.match(src, new RegExp(`action_\\$\\{action\\.key\\}`));
+  }
+  assert.match(src, /authorized_actions:data\.actionsAutorisees/);
+  assert.match(src, /Hérités du profil/);
 });
 
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {

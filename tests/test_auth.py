@@ -300,3 +300,29 @@ def test_login_response_includes_supervisor_read_only(client, auth_headers):
     r = client.post("/api/auth/login", json={"username": "sup_login", "password": "testpass123"})
     assert r.status_code == 200, r.text
     assert r.json()["user"]["supervisor_read_only"] is False
+
+
+def test_individual_action_permissions_are_returned_and_enforced(client, db):
+    db.add(User(
+        username="READONLY01",
+        email=None,
+        full_name="Lecture seule",
+        role="ops",
+        access_level="H3",
+        authorized_societies=[],
+        authorized_structures=["ops"],
+        authorized_sites=[],
+        authorized_actions=["read"],
+        password_hash=hash_password("testpass123"),
+        is_active=True,
+    ))
+    db.commit()
+
+    login = client.post("/api/auth/login", json={"username": "READONLY01", "password": "testpass123"})
+    assert login.status_code == 200
+    assert login.json()["user"]["authorized_actions"] == ["read"]
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert client.get("/api/ops/sites", headers=headers).status_code == 200
+    denied = client.post("/api/ops/sites", headers=headers, json={})
+    assert denied.status_code == 403
+    assert "create" in denied.json()["detail"]

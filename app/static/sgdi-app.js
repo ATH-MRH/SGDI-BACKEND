@@ -1838,6 +1838,7 @@ async function sgdiLoadAuthState(){
         sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):[],
         societesAutorisees:socs,
         structuresAutorisees:structs,
+        actionsAutorisees:Array.isArray(u.authorized_actions)?u.authorized_actions:[],
         validationCodeEnabled,
         supervisorReadOnly:u.supervisor_read_only!==false
       };
@@ -3531,7 +3532,7 @@ async function startAdminSystemSession(password,username){
   const us=await window.SGDI_API.auth.adminSystemLogin(password,username);
   window.__SGDI_BACKEND_ENABLED__=true;
   const authUser=us?.user||us;
-  session={username:authUser.username||"ADG01",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),adminSystem:true};
+  session={username:authUser.username||"ADG01",role:authUser.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"H5",nom:authUser.full_name||authUser.nom||authUser.username||"Administrateur",agentId:authUser.agentId||null,societe:null,sitesAutorises:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),actionsAutorisees:Array.isArray(authUser.authorized_actions)?authUser.authorized_actions:[],adminSystem:true};
   saveSession(session);
   const loaded=await sgdiPullState({render:false,silent:true,force:true,deferSql:true}).catch(()=>null);
   if(!loaded){
@@ -3552,7 +3553,7 @@ async function login(u,p,opt={}){
       const us=await window.SGDI_API.auth.login(u,p);
       window.__SGDI_BACKEND_ENABLED__=true;
       const authUser=us?.user||us;
-      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),supervisorReadOnly:authUser.supervisor_read_only!==false};
+      session={username:authUser.username||u,role:authUser.role||"agent",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||"",nom:authUser.full_name||authUser.nom||authUser.username||u,agentId:authUser.agentId||null,societe:null,sitesAutorises:Array.isArray(authUser.authorized_sites)?authUser.authorized_sites.map(Number):[],societesAutorisees:Array.isArray(authUser.authorized_societies)?authUser.authorized_societies:[],structuresAutorisees:normalizeStructureList(authUser.authorized_structures),actionsAutorisees:Array.isArray(authUser.authorized_actions)?authUser.authorized_actions:[],supervisorReadOnly:authUser.supervisor_read_only!==false};
       if(!opt.adminSystem&&(isAdminSystemUsernameCandidate(session.username)||authUserCanOpenAdminSystem(authUser))&&isAdmin()){
         try{
           await startAdminSystemSession(p,session.username);
@@ -3692,7 +3693,7 @@ async function ensureAdminSystemApiToken(actionLabel){
   try{
     const us=await window.SGDI_API.auth.adminSystemLogin(password,session?.username);
     const authUser=us?.user||us;
-    session={...session,username:authUser.username||session.username||"admin",role:authUser.role||session.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||session.niveau||"H5",nom:authUser.full_name||authUser.nom||authUser.username||session.nom||"Administrateur",adminSystem:true,societe:null,transverse:"admin"};
+    session={...session,username:authUser.username||session.username||"admin",role:authUser.role||session.role||"admin",niveau:authUser.niveau||authUser.accessLevel||authUser.access_level||session.niveau||"H5",nom:authUser.full_name||authUser.nom||authUser.username||session.nom||"Administrateur",actionsAutorisees:Array.isArray(authUser.authorized_actions)?authUser.authorized_actions:[],adminSystem:true,societe:null,transverse:"admin"};
     sessionStorage.setItem(ADMIN_SYSTEM_UNLOCK_KEY,"1");
     saveSession(session);
     return sgdiTokenPayload().admin_system===true;
@@ -7952,6 +7953,19 @@ function renderView(){
     switch(root){
       case"dashboard":renderDashboard(view);break;
       case"dossiers":renderDossiers(view);break;
+      case"recrutement":
+        if(sub==="statistiques")renderRecruitmentStatistics(view);
+        else if(sub&&!["candidats","liste"].includes(sub))renderCandidatForm(view,sub);
+        else renderRecrutement(view,"new");
+        break;
+      case"reserve":
+        if(sub)renderCandidatForm(view,sub==="nouveau"?null:sub,{reserveDirect:true});
+        else renderRecrutement(view,"reserve");
+        break;
+      case"candidats_archives":
+        if(sub)renderCandidatForm(view,sub);
+        else renderRecrutement(view,"archive");
+        break;
       case"contrats":
         if(sub==="avenants")renderAvenants(view);
         else if(sub==="situation"||sub==="clients")renderContrats(view,"situation");
@@ -9630,7 +9644,8 @@ function recrutementUnifiedTabsHTML(mode,socFilter){
   const tabs=[
     ["new","Nouveaux dossiers","recrutement/candidats",countNew],
     ["reserve","Réserve","reserve",countReserve],
-    ["archive","Archives","candidats_archives",countArchive]
+    ["archive","Archives","candidats_archives",countArchive],
+    ["stats","Statistiques","recrutement/statistiques",rows.length]
   ];
   return `<nav class="mat-erp-tabs recruitment-candidates-tabs mb-4" aria-label="Recrutement et candidats">${tabs.map(([key,label,route,count])=>`<button type="button" onclick="switchRecruitmentTab(event,'${route}','${key}')" class="${mode===key?"active":""}">${escapeHTML(label)}<span>${count}</span></button>`).join("")}</nav>`;
 }
@@ -9640,6 +9655,36 @@ function recrutementModeMatchesCurrentRoute(mode){
   if(mode==="reserve")return root==="reserve"&&!sub;
   if(mode==="archive")return root==="candidats_archives"&&!sub;
   return false;
+}
+
+function candidateStatsValue(c,key){
+  const age=candidatAgeAtSave(c.dateNaissance);
+  const firstExperience=Array.isArray(c.experience)&&c.experience.length?c.experience[0]:null;
+  const values={
+    age:age===null?"Non renseigné":age<25?"20–24 ans":age<35?"25–34 ans":age<45?"35–44 ans":age<55?"45–54 ans":"55 ans et plus",
+    sexe:c.sexe||"Non renseigné",adresse:c.adresse||"Non renseignée",commune:c.commune||"Non renseignée",wilaya:c.wilaya||"Non renseignée",
+    nom:c.nom||"Non renseigné",prenom:c.prenom||"Non renseigné",dateNaissance:c.dateNaissance||"Non renseignée",lieuNaissance:c.lieuNaissance||"Non renseigné",
+    formation:c.formation||c.diplome||c.niveauEtude||"Non renseignée",
+    experience:firstExperience?(firstExperience.poste||firstExperience.fonction||firstExperience.entreprise||"Expérience renseignée"):(c.experienceProfessionnelle||c.exServicesPrecision||"Aucune expérience renseignée"),
+    poste:candidatePosteLabel(c),statut:candidatIsArchived(c)?"Annulée / archivée":candidatIsRecruited(c)?"Recrutée":candidatIsReserve(c)?"Validée":"Nouvelle"
+  };
+  return String(values[key]??"Non renseigné").trim()||"Non renseigné";
+}
+function renderRecruitmentStatistics(view){
+  const soc=(isDrhModuleContext()?drhActiveSocieteFilter():currentStructureSocieteFilter())||mySoc()||"";
+  const rows=(db.candidats||[]).filter(c=>!soc||c.societe===soc);
+  const fields=[["age","Âge"],["sexe","Sexe"],["wilaya","Wilaya"],["commune","Commune"],["adresse","Adresse"],["nom","Nom"],["prenom","Prénom"],["dateNaissance","Date de naissance"],["lieuNaissance","Lieu de naissance"],["formation","Formation"],["experience","Expérience professionnelle"],["poste","Poste recherché"],["statut","Statut"]];
+  const selected=fields.some(([key])=>key===sessionStorage.getItem("recruitStatsField"))?sessionStorage.getItem("recruitStatsField"):"age";
+  const counts={};rows.forEach(c=>{const value=candidateStatsValue(c,selected);counts[value]=(counts[value]||0)+1});
+  const grouped=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,100);
+  const max=Math.max(1,...grouped.map(([,count])=>count));
+  const accepted=rows.filter(c=>candidateAvisValue(c.avisDecision)==="Favorable"&&!candidatIsArchived(c)).length;
+  const cancelled=rows.filter(candidatIsArchived).length;
+  const interviewed=rows.filter(c=>Array.isArray(c.entretiens)&&c.entretiens.length).length;
+  view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">Statistiques recrutement</h1><p class="text-sm text-slate-500">Analyse multicritère des candidatures${soc?` · ${escapeHTML(soc)}`:""}.</p></div><button class="btn btn-primary" onclick="openAddCandidateForm()">+ Nouveau candidat</button></div>${recrutementUnifiedTabsHTML("stats",soc)}
+    <div class="grid grid-4 gap-3 mb-4"><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Candidatures</div><div class="text-3xl font-black">${rows.length}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Validées</div><div class="text-3xl font-black text-emerald-700">${accepted}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Entretiens réalisés/planifiés</div><div class="text-3xl font-black text-blue-700">${interviewed}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Annulées</div><div class="text-3xl font-black text-red-700">${cancelled}</div></div></div>
+    <div class="card p-4 mb-4"><label class="label">Catégorie statistique</label><select class="select" onchange="sessionStorage.setItem('recruitStatsField',this.value);renderView()">${fields.map(([key,label])=>`<option value="${key}" ${selected===key?"selected":""}>${escapeHTML(label)}</option>`).join("")}</select></div>
+    <div class="card p-5"><h2 class="font-black text-lg mb-4">Répartition par ${escapeHTML(fields.find(([key])=>key===selected)?.[1]||selected)}</h2>${grouped.length?grouped.map(([label,count])=>`<div class="mb-3"><div class="flex justify-between text-sm mb-1"><span>${escapeHTML(label)}</span><b>${count} · ${Math.round(count*100/Math.max(rows.length,1))}%</b></div><div class="h-2 rounded bg-slate-100"><div class="h-2 rounded bg-blue-700" style="width:${Math.round(count*100/max)}%"></div></div></div>`).join(""):`<div class="text-slate-500">Aucune candidature.</div>`}</div></div>`;
 }
 function scrollToRecruitmentList(){
   const view=document.getElementById("view");
@@ -9806,6 +9851,26 @@ function openReserveCandidateActions(id){
     <div class="flex justify-end mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Fermer</button></div>`);
 }
 
+function openCandidateInterviewModal(id){
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  openModal(`<h3 class="font-bold text-lg mb-1">Entretien candidat</h3><p class="text-sm text-slate-500 mb-4">${escapeHTML((c.nom||"")+" "+(c.prenom||""))}</p><form onsubmit="event.preventDefault();saveCandidateInterview('${jsString(id)}',this)"><div class="grid grid-2 gap-3"><div><label class="label">Date *</label><input class="input" type="date" name="date" value="${today()}" required></div><div><label class="label">Heure</label><input class="input" type="time" name="heure"></div><div><label class="label">Interviewer</label><input class="input" name="interviewer" value="${escapeHTML(session?.nom||session?.username||"")}"></div><div><label class="label">Résultat</label><select class="select" name="resultat"><option>Planifié</option><option>Favorable</option><option>Défavorable</option><option>À revoir</option></select></div><div class="col-span-2"><label class="label">Compte rendu</label><textarea class="textarea" name="compteRendu" rows="4"></textarea></div></div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer l'entretien</button></div></form>`);
+}
+async function saveCandidateInterview(id,form){
+  const c=findCandidatById(id);if(!c)return;
+  const fd=new FormData(form),resultat=String(fd.get("resultat")||"Planifié");
+  const interview={id:uid("ent"),date:String(fd.get("date")||today()),heure:String(fd.get("heure")||""),interviewer:String(fd.get("interviewer")||""),resultat,compteRendu:String(fd.get("compteRendu")||""),createdAt:new Date().toISOString(),createdBy:session?.username||""};
+  const draft={...c,entretiens:[...(Array.isArray(c.entretiens)?c.entretiens:[]),interview],dernierEntretien:interview};
+  if(resultat==="Favorable"){draft.avisDecision="Favorable";draft.avisDate=interview.date}
+  if(resultat==="Défavorable"){draft.avisDecision="Défavorable";draft.avisDate=interview.date}
+  try{await persistCandidateToPostgres(draft);Object.assign(c,draft);closeModal();toast("Entretien enregistré","success");renderView()}catch(e){toast("Entretien non enregistré : "+(e.message||e),"error")}
+}
+async function validateCandidateApplication(id){
+  const c=findCandidatById(id);if(!c)return;
+  const draft={...c,statut:"reserve",avisDecision:"Favorable",avisDate:today(),fichePositionValidee:true,validatedAt:new Date().toISOString(),validatedBy:session?.username||""};
+  delete draft.motifArchive;delete draft.commentaireArchive;delete draft.archivedAt;delete draft.archivedBy;delete draft.archiveSource;delete draft.isNew;
+  try{await persistCandidateToPostgres(draft);Object.assign(c,draft);await sgdiPullState({silent:true,render:false,force:true,light:true});toast("Candidature validée et placée en réserve","success");navigate("reserve")}catch(e){toast("Validation refusée : "+(e.message||e),"error")}
+}
+
 /* ---- CANDIDAT FORM ---- */
 const CANDIDAT_SECTIONS=[
   {key:"identification",label:"Identification du candidat"},
@@ -9817,6 +9882,7 @@ const CANDIDAT_SECTIONS=[
   {key:"experience",label:"Expérience professionnelle"}
 ];
 const CANDIDAT_ARCHIVE_MOTIFS=[
+  "Candidature annulée",
   "Dossier incomplet",
   "Profil non conforme",
   "Âge non conforme",
@@ -10119,7 +10185,13 @@ function renderCandidatForm(view,id,options){
           <span class="candidate-chip">Étape ${step}/2</span>
         </div>
       </div>
-      <button type="button" class="btn btn-ghost" onclick="navigate('${returnRoute}')">Retour</button>
+      <div class="flex gap-2 flex-wrap justify-end">
+        ${!c.isNew?`<button type="button" class="btn btn-secondary" onclick="openCandidateInterviewModal('${jsString(c.id)}')">Entretien</button>`:""}
+        ${!c.isNew?`<button type="button" class="btn btn-success" onclick="validateCandidateApplication('${jsString(c.id)}')">Valider candidature</button>`:""}
+        ${!c.isNew&&candidateAvisValue(c.avisDecision)==="Favorable"&&!candidatIsArchived(c)?`<button type="button" class="btn btn-primary" onclick="recruterCandidat('${jsString(c.id)}',this)">Recruter</button>`:""}
+        ${!c.isNew&&!candidatIsArchived(c)?`<button type="button" class="btn btn-danger" onclick="openArchiveCandidatModal('${jsString(c.id)}')">Annuler candidature</button>`:""}
+        <button type="button" class="btn btn-ghost" onclick="navigate('${returnRoute}')">Retour</button>
+      </div>
 	    </div>
 	    <form id="candidat-form" class="candidate-dossier-grid" onsubmit="event.preventDefault();saveCandidat('${c.id}')">
 	      <input type="hidden" name="id" value="${c.id}"/><input type="hidden" name="isNew" value="${c.isNew?"1":""}"/><input type="hidden" name="reserveDirect" value="${c.reserveDirect?"1":""}"/>
@@ -35235,7 +35307,7 @@ function renderAdminUsers(view){
     </div>
     <div class="card p-0 overflow-x-auto">
       <table class="w-full text-sm">
-        <thead class="bg-slate-50"><tr><th class="text-left p-3">Identifiant</th><th class="text-left p-3">Nom complet</th><th class="text-left p-3">Type</th><th class="text-left p-3">Profil</th><th class="text-left p-3">Sociétés</th><th class="text-left p-3">Structures</th><th class="text-left p-3">Statut</th><th class="p-3">Actions</th></tr></thead>
+        <thead class="bg-slate-50"><tr><th class="text-left p-3">Identifiant</th><th class="text-left p-3">Nom complet</th><th class="text-left p-3">Type</th><th class="text-left p-3">Profil</th><th class="text-left p-3">Sociétés</th><th class="text-left p-3">Structures</th><th class="text-left p-3">Droits actions</th><th class="text-left p-3">Statut</th><th class="p-3">Actions</th></tr></thead>
         <tbody>${u.map(x=>{const roleColor=adminRoleColor(x.role);const niv=(db.niveauxAcces||[]).find(n=>n.code===x.niveau);return`<tr class="border-t">
           <td class="p-3 font-mono">${escapeHTML(x.username)}</td>
           <td class="p-3 font-semibold">${escapeHTML(x.nom||"")}</td>
@@ -35243,9 +35315,10 @@ function renderAdminUsers(view){
           <td class="p-3">${niv?`<span class="pill" style="background:${niv.color}22;color:${niv.color};font-weight:600">${niv.label}</span>`:`<span class="text-slate-400">—</span>`}</td>
           <td class="p-3 text-xs">${x.societesAutorisees&&x.societesAutorisees.length?escapeHTML(x.societesAutorisees.join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
           <td class="p-3 text-xs">${x.structuresAutorisees&&x.structuresAutorisees.length?escapeHTML(x.structuresAutorisees.map(adminStructureLabel).join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
+          <td class="p-3 text-xs">${x.actionsAutorisees&&x.actionsAutorisees.length?escapeHTML(x.actionsAutorisees.map(key=>ADMIN_LEVEL_ACTIONS.find(action=>action.key===key)?.label||key).join(", ")):'<span class="text-slate-400">Hérités du profil</span>'}</td>
           <td class="p-3">${x.actif===false?'<span class="pill pill-red">Désactivé</span>':'<span class="pill pill-green">Actif</span>'}</td>
           <td class="p-3"><button class="btn btn-ghost text-xs" data-no-critical-auth="1" onclick="openAdminUserModalByKey('${encodeURIComponent(x.username)}')">Modifier</button> ${x.username!=="admin"?`<button class="btn btn-ghost text-xs text-red-600 inline-flex items-center justify-center" title="Supprimer" onclick="adminDeleteUserByKey('${encodeURIComponent(x.username)}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23dc2626%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M8 6V4h8v2%22/%3E%3Cpath d=%22M19 6l-1 14H6L5 6%22/%3E%3Cpath d=%22M10 11v6%22/%3E%3Cpath d=%22M14 11v6%22/%3E%3C/svg%3E" alt="Supprimer" style="width:18px;height:18px;display:inline-block"/></button>`:""}</td>
-        </tr>`}).join("")||`<tr><td class="p-6 text-center text-slate-400" colspan="8">Aucun utilisateur.</td></tr>`}</tbody>
+        </tr>`}).join("")||`<tr><td class="p-6 text-center text-slate-400" colspan="9">Aucun utilisateur.</td></tr>`}</tbody>
       </table>
     </div>`;
 }
@@ -35270,6 +35343,7 @@ function adminUserFromApi(u){
     sitesAutorises:Array.isArray(u.authorized_sites)?u.authorized_sites.map(Number):(Array.isArray(u.sitesAutorises)?u.sitesAutorises:[]),
     societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:(Array.isArray(u.societesAutorisees)?u.societesAutorisees:[]),
     structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees),
+    actionsAutorisees:Array.isArray(u.authorized_actions)?u.authorized_actions:(Array.isArray(u.actionsAutorisees)?u.actionsAutorisees:[]),
     validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled),
     supervisorReadOnly:u.supervisor_read_only!==false
   };
@@ -35319,7 +35393,7 @@ async function openAdminUserModal(username){
   finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar();}
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
-  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
+  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actionsAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
@@ -35346,6 +35420,10 @@ async function openAdminUserModal(username){
         <div>${ADMIN_FUNCTION_ACCESS.slice(0,6).map(st=>adminAccessCheckboxHTML(st,u)).join("")}</div>
         <div>${ADMIN_FUNCTION_ACCESS.slice(6).map(st=>adminAccessCheckboxHTML(st,u)).join("")}</div>
       </div>
+      <div class="admin-access-separator"></div>
+      <label class="label">Actions individuelles</label>
+      <p class="text-xs text-slate-500 mb-2">Aucune case cochée : héritage du profil. Dès qu'une action est cochée, cette sélection devient la règle effective de l'utilisateur.</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">${ADMIN_LEVEL_ACTIONS.map(action=>`<label class="flex items-center gap-2 p-2 rounded border border-slate-200 bg-white text-sm"><input type="checkbox" name="action_${action.key}" value="${action.key}" ${(u.actionsAutorisees||[]).includes(action.key)?"checked":""}/><span>${escapeHTML(action.label)}</span></label>`).join("")}</div>
       <label class="label mt-3">Périmètre sites (vide = tous)</label>
       <div style="max-height:320px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px">${(()=>{
         const seen=new Set();
@@ -35395,7 +35473,7 @@ async function confirmAdminUser(originalUsername){
   const rawUsername=String(fd.get("username")||"").trim();
   const username=originalUsername?rawUsername:rawUsername.toUpperCase();
   const password=String(fd.get("password")||"");
-  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
+  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
@@ -35407,7 +35485,7 @@ async function confirmAdminUser(originalUsername){
     if(!password){toast("Mot de passe requis","error");return}
     let savedUser=null;
     try{
-      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,password});
+      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password});
       if(!savedUser||!savedUser.username)throw new Error("Confirmation PostgreSQL invalide");
     }catch(e){
       const msg=String(e.message||e||"");
@@ -35423,7 +35501,7 @@ async function confirmAdminUser(originalUsername){
     const idx=existing?db.users.findIndex(x=>x.username===existing.username):-1;if(idx<0){toast("Utilisateur introuvable","error");return}
     originalUsername=existing.username;
     try{
-      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,is_active:data.actif};
+      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,is_active:data.actif};
       if(password)payload.password=password;
       await SGDI.auth.updateUser(originalUsername,payload);
     }catch(e){
@@ -35431,7 +35509,7 @@ async function confirmAdminUser(originalUsername){
       if(/not found|introuvable|404/i.test(msg)){
         try{
           if(!password){toast("Mot de passe obligatoire pour recréer l'utilisateur côté backend","error");return}
-          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,password});
+          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password});
           toast("Utilisateur recréé dans PostgreSQL","warning");
         }catch(createErr){
           const createMsg=String(createErr.message||createErr||"");
@@ -35458,7 +35536,7 @@ async function confirmAdminUser(originalUsername){
     if(scopeIdx>=0)db.supervisorScopes[scopeIdx]=item;else db.supervisorScopes.push(item);
   }
   rememberUserPermissions(username,data.societesAutorisees,data.niveau,data.structuresAutorisees,data.validationCodeEnabled);
-  if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees,societesAutorisees:data.societesAutorisees,sitesAutorises:data.sitesAutorises};saveSession(session)}
+  if(session&&session.username===username){session={...session,role:data.role,niveau:data.niveau,nom:data.nom,structuresAutorisees:data.structuresAutorisees,societesAutorisees:data.societesAutorisees,sitesAutorises:data.sitesAutorises,actionsAutorisees:data.actionsAutorisees};saveSession(session)}
   try{await sgdiLoadAuthState()}catch(e){toast("Utilisateur enregistré, rechargement liste impossible : "+(e.message||e),"warning")}
   saveDB();closeModal();toastCenter("Données enregistrées","success");render();
 }

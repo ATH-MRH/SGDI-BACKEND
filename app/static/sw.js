@@ -1,4 +1,4 @@
-const SGDI_CACHE = "sgdi-pwa-v20260819-dhl-forwarding";
+const SGDI_CACHE = "sgdi-pwa-v20260902-recruitment-workflow-v2";
 const SGDI_ASSETS = [
   "/",
   "/static/manifest.webmanifest",
