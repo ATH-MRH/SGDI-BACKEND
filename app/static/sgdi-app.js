@@ -10293,11 +10293,11 @@ function renderCandidatEtape1(c){
             <label class="radio-pill"><input type="radio" name="serviceMilitaire" value="Non" ${c.serviceMilitaire!=="Oui"?"checked":""} onchange="toggleServiceMilitaireFields(this.value)"/> Non</label>
         </div>
       </div>
-      <div class="grid grid-6">
-        <div class="col-span-2"><label class="label">Arme</label><input class="input ${c.serviceMilitaire==="Oui"?"":"bg-slate-100 text-slate-400"}" name="armeService" value="${escapeHTML(c.armeService||"")}" placeholder="Infanterie, marine, aviation…" data-service-militaire-field ${c.serviceMilitaire==="Oui"?"":"disabled"}/></div>
-        <div class="col-span-2"><label class="label">Nombre d'année</label><input class="input ${c.serviceMilitaire==="Oui"?"":"bg-slate-100 text-slate-400"}" type="number" min="0" step="0.5" name="nombreAnneesService" value="${c.nombreAnneesService||""}" data-service-militaire-field ${c.serviceMilitaire==="Oui"?"":"disabled"}/></div>
-        <div class="col-span-3"><label class="label">Date d'incorporation</label><input class="input ${c.serviceMilitaire==="Oui"?"":"bg-slate-100 text-slate-400"}" type="date" name="dateIncorporation" value="${c.dateIncorporation||""}" data-service-militaire-field ${c.serviceMilitaire==="Oui"?"":"disabled"}/></div>
-        <div class="col-span-3"><label class="label">Date de radiation</label><input class="input ${c.serviceMilitaire==="Oui"?"":"bg-slate-100 text-slate-400"}" type="date" name="dateRadiation" value="${c.dateRadiation||""}" data-service-militaire-field ${c.serviceMilitaire==="Oui"?"":"disabled"}/></div>
+      <div class="candidate-military-grid">
+        <div><label class="label">Arme</label><input class="input ${c.serviceMilitaire==="Oui"?"":"bg-slate-100 text-slate-400"}" name="armeService" value="${escapeHTML(c.armeService||"")}" placeholder="Infanterie, marine, aviation…" data-service-militaire-field ${c.serviceMilitaire==="Oui"?"":"disabled"}/></div>
+        <div><label class="label">Nombre d'années</label><input class="input bg-slate-100 ${c.serviceMilitaire==="Oui"?"":"text-slate-400"}" type="number" min="0" step="0.1" name="nombreAnneesService" value="${candidateMilitaryYears(c.dateIncorporation,c.dateRadiation)}" data-service-militaire-field data-service-militaire-output readonly data-no-lock ${c.serviceMilitaire==="Oui"?"":"disabled"}/></div>
+        <div><label class="label">Date d'incorporation</label><input class="input ${c.serviceMilitaire==="Oui"?"":"bg-slate-100 text-slate-400"}" type="date" name="dateIncorporation" value="${c.dateIncorporation||""}" data-service-militaire-field ${c.serviceMilitaire==="Oui"?"":"disabled"} oninput="updateCandidateMilitaryYears()" onchange="updateCandidateMilitaryYears()"/></div>
+        <div><label class="label">Date de radiation</label><input class="input ${c.serviceMilitaire==="Oui"?"":"bg-slate-100 text-slate-400"}" type="date" name="dateRadiation" value="${c.dateRadiation||""}" data-service-militaire-field ${c.serviceMilitaire==="Oui"?"":"disabled"} oninput="updateCandidateMilitaryYears()" onchange="updateCandidateMilitaryYears()"/></div>
       </div>
     </div>
   ${candidatSectionClose(c,"militaire")}`:""}
@@ -10356,6 +10356,23 @@ function toggleServiceMilitaireFields(value){
     el.classList.toggle("bg-slate-100",!enabled);
     el.classList.toggle("text-slate-400",!enabled);
   });
+  if(enabled)updateCandidateMilitaryYears();
+}
+function candidateMilitaryYears(startValue,endValue){
+  const start=new Date(String(startValue||"")+"T00:00:00");
+  const end=new Date(String(endValue||"")+"T00:00:00");
+  if(!startValue||!endValue||Number.isNaN(start.getTime())||Number.isNaN(end.getTime())||end<start)return "";
+  return String(Math.round(((end-start)/(365.2425*24*60*60*1000))*10)/10);
+}
+function updateCandidateMilitaryYears(){
+  const form=document.getElementById("candidat-form");if(!form)return;
+  const start=form.querySelector('[name="dateIncorporation"]');
+  const end=form.querySelector('[name="dateRadiation"]');
+  const output=form.querySelector('[name="nombreAnneesService"]');
+  if(!output)return;
+  output.value=candidateMilitaryYears(start?.value,end?.value);
+  if(end)end.setCustomValidity(start?.value&&end.value&&end.value<start.value?"La date de radiation doit être postérieure à la date d'incorporation.":"");
+  output.dispatchEvent(new Event("change",{bubbles:true}));
 }
 function updateCandidateContractEndDate(){
   const f=document.getElementById("candidat-form");if(!f)return;
