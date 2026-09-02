@@ -6596,7 +6596,7 @@ function renderSidebar(){
     const drhMatchesActiveSociete=item=>!drhSoc||dataMatchesSociete(item,drhSoc);
     const drhAgents=(db.agents||[]).filter(drhMatchesActiveSociete);
     const drhCandidates=(db.candidats||[]).filter(c=>candidatIsActive(c)&&drhMatchesActiveSociete(c));
-    const drhContractsToEstablish=drhCandidates.filter(c=>String(c.statut||c.status||"").toLowerCase()==="a_contractualiser");
+    const drhContractsToEstablish=drhCandidates.filter(c=>String(c.statut||c.status||"").toLowerCase()==="a_contractualiser"&&candidateAvisValue(c.avisDecision)==="Favorable");
     // Source de vérité : stats serveur uniquement si elles correspondent encore
     // à la société affichée (un changement de société peut laisser l'ancien objet
     // en mémoire pendant quelques millisecondes).
@@ -10917,7 +10917,7 @@ function printAvenant(id){const av=(db.avenants||[]).find(x=>x.id===id);if(!av)r
 
 function contractsToEstablishCandidates(){
   const soc=currentStructureSocieteFilter();
-  return (db.candidats||[]).filter(c=>String(c.statut||c.status||"").toLowerCase()==="a_contractualiser"&&(!soc||c.societe===soc));
+  return (db.candidats||[]).filter(c=>String(c.statut||c.status||"").toLowerCase()==="a_contractualiser"&&candidateAvisValue(c.avisDecision)==="Favorable"&&(!soc||c.societe===soc));
 }
 function renderContractsToEstablish(view){
   const candidates=contractsToEstablishCandidates();
@@ -12625,6 +12625,10 @@ function fillContratPersonnelText(tpl,agent){
 
 function renderContractualisation(view,id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return navigate("contrats/a_contractualiser")}
+  if(candidateAvisValue(c.avisDecision)!=="Favorable"){
+    view.innerHTML=`<div class="max-w-3xl mx-auto card p-8 text-center" style="border:2px solid #dc2626"><div style="font-size:42px">⛔</div><h1 class="text-2xl font-black mb-2">CONTRACTUALISATION IMPOSSIBLE</h1><p class="text-sm text-slate-600 mb-4">La décision actuelle est <b>${escapeHTML(candidateAvisValue(c.avisDecision)||"Non renseignée")}</b>. Un contrat peut être établi uniquement lorsque la décision du recruteur est <b>Favorable</b>.</p><button class="btn btn-ghost" onclick="navigate('recrutement/${jsString(c.id)}')">Retour à la candidature</button></div>`;
+    return;
+  }
   const blockedAgent=candidateBlackListMatch(c);
   if(blockedAgent){view.innerHTML=`<div class="max-w-3xl mx-auto card p-8 text-center" style="border:2px solid #111827"><div style="font-size:42px">⛔</div><h1 class="text-2xl font-black mb-2">CONTRACTUALISATION BLOQUÉE</h1><p class="text-sm text-slate-600 mb-4">Ce candidat correspond à une personne inscrite sur la BLACKLIST : <b>${escapeHTML((blockedAgent.nom||"")+" "+(blockedAgent.prenom||""))}</b> · ${escapeHTML(blockedAgent.matricule||"")}. Il ne peut plus signer de contrat.</p><div class="p-3 rounded bg-red-50 text-red-800 text-sm mb-4"><b>Motif :</b> ${escapeHTML(blockedAgent.blacklistMotif||"Non précisé")}</div><button class="btn btn-ghost" onclick="navigate('contrats/a_contractualiser')">← Retour</button></div>`;return}
   ensureContratsPersonnel();
@@ -12793,6 +12797,7 @@ function candidateNewContractFormData(form,draft){
 }
 async function confirmCandidateNewContract(form,id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Contrat impossible : la décision du recruteur doit être Favorable","error");return}
   const draft=employeeNewContractDraftFromForm(form);
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}

@@ -379,11 +379,23 @@ def test_candidate_api_rejects_non_recruitment_role(client, restricted_headers):
 def test_marquer_contractualisation_accepts_non_reserve_candidate(client, auth_headers):
     """marquer-contractualisation accepte un candidat qui n'est pas en réserve : c'est le
     chemin normal des candidats transmis depuis recrute.html, qui ne passent jamais par le
-    workflow interne "réserve" d'ATLAS avant d'être envoyés en contractualisation."""
-    c = _cand(client, auth_headers, first="PasEnReserve")
+    workflow interne "réserve" d'ATLAS avant d'être envoyés en contractualisation, à condition
+    que la décision du recruteur soit favorable."""
+    c = _cand(client, auth_headers, first="PasEnReserve", data={"avisDecision": "Favorable"})
     r = client.post(f"/api/drh/candidates/{c['id']}/marquer-contractualisation", headers=auth_headers)
     assert r.status_code == 200, r.text
     assert r.json()["data"]["status"] == "a_contractualiser"
+
+
+def test_marquer_contractualisation_rejects_non_favorable_decisions(client, auth_headers):
+    for index, decision in enumerate(("Instance", "Défavorable")):
+        candidate = _cand(client, auth_headers, first=f"Decision{index}", data={"avisDecision": decision})
+        response = client.post(
+            f"/api/drh/candidates/{candidate['id']}/marquer-contractualisation",
+            headers=auth_headers,
+        )
+        assert response.status_code == 422, response.text
+        assert "Favorable" in response.text
 
 
 def test_marquer_contractualisation_rejects_archived_or_embauche(client, auth_headers):

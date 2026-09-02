@@ -617,6 +617,9 @@ def _validate_candidate_transition(values: dict[str, Any], existing: Candidate |
     all_sections = CANDIDATE_SECTIONS
     etape1 = ["identification", "militaire", "poste", "avis"]
 
+    if status_norm in {"a_contractualiser", "embauche"} and not _candidate_decision_is_favorable(data):
+        raise HTTPException(status_code=422, detail="Contrat refusé : la décision du recruteur doit être Favorable")
+
     if _candidate_bool(data.get("fichePositionValidee")) or status_norm in {"reserve", "a_contractualiser", "embauche"}:
         missing = [key for key in all_sections if not sections.get(key)]
         if missing:
@@ -728,11 +731,20 @@ def validate_candidate_section(db: Session, payload: Any, section: str, existing
         db.refresh(existing)
     return {"status": "success", "data": {"section": section, "sectionValidations": sections, "next": order[idx + 1] if idx + 1 < len(order) else None}}
 
+def _candidate_decision_is_favorable(data: dict[str, Any] | None) -> bool:
+    raw = str((data or {}).get("avisDecision") or "").strip()
+    normalized = unicodedata.normalize("NFD", raw)
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return normalized.casefold() == "favorable"
+
+
 def marquer_a_contractualiser(db: Session, candidate_id: int, username: str | None = None):
     row = get_or_404(db, Candidate, candidate_id)
     data = row.data if isinstance(row.data, dict) else {}
     if row.status in ("archive", "embauche"):
         raise HTTPException(status_code=409, detail="Ce dossier ne peut pas être transmis à la contractualisation")
+    if not _candidate_decision_is_favorable(data):
+        raise HTTPException(status_code=422, detail="Contrat refusé : seuls les candidats avec une décision Favorable peuvent être contractualisés")
     row.status = "a_contractualiser"
     row.data = {
         **data,
