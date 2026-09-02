@@ -10282,7 +10282,7 @@ function renderCandidatEtape1(c){
         </div>
       </div>
     </div>
-    <div class="mt-4"><label class="label">Langues parlées</label><div class="flex flex-wrap gap-3">${["Arabe","Français","Anglais","Kabyle","Espagnol","Allemand"].map(l=>`<label class="radio-pill"><input type="checkbox" name="lang_${l}" ${(c.langues||[]).includes(l)?"checked":""}/> ${l}</label>`).join("")}<label class="radio-pill"><input type="checkbox" id="lang-autre-check" ${c.langueAutre?"checked":""} onchange="document.getElementById('lang-autre-input').disabled=!this.checked"/> Autre</label><input id="lang-autre-input" class="input" style="max-width:200px" name="langueAutre" value="${escapeHTML(c.langueAutre||"")}" placeholder="Précisez" ${c.langueAutre?"":"disabled"}/></div></div>
+    <div class="mt-4"><label class="label">Langues parlées</label><div class="flex flex-wrap gap-3">${["Arabe","Français","Anglais","Kabyle","Espagnol","Allemand"].map(l=>`<label class="radio-pill"><input type="checkbox" name="lang_${l}" ${(c.langues||[]).includes(l)?"checked":""}/> ${l}</label>`).join("")}<label class="radio-pill"><input type="checkbox" id="lang-autre-check" ${c.langueAutre?"checked":""}/> Autre</label><input id="lang-autre-input" class="input" style="max-width:200px" name="langueAutre" value="${escapeHTML(c.langueAutre||"")}" placeholder="Précisez"/></div></div>
   ${candidatSectionClose(c,"identification")}`:""}
   ${candidatSectionAvailable(c,"militaire")?`${candidatSectionOpen(c,"militaire","banner-amber","SERVICE MILITAIRE")}
     <div>
