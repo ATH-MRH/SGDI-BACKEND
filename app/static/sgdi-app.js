@@ -7954,19 +7954,17 @@ function renderView(){
       case"dashboard":renderDashboard(view);break;
       case"dossiers":renderDossiers(view);break;
       case"recrutement":
+        if(sub==="statistiques")renderRecruitmentStatistics(view);
+        else if(sub&&!["candidats","liste"].includes(sub))renderCandidatForm(view,sub==="nouveau"?null:sub);
+        else renderRecrutement(view,"new");
+        break;
       case"reserve":
+        if(sub)renderCandidatForm(view,sub==="nouveau"?null:sub,{reserveDirect:true});
+        else renderRecrutement(view,"reserve");
+        break;
       case"candidats_archives":
-        try{
-          const recruitmentToken=sgdiAuthToken();
-          if(recruitmentToken&&session){
-            sessionStorage.setItem("atlas_recrute_session",JSON.stringify({token:recruitmentToken,user:{
-              username:session.username||"",full_name:session.nom||session.username||"",role:session.role||"",
-              access_level:session.niveau||"",authorized_societies:session.societesAutorisees||[],
-              authorized_actions:session.actionsAutorisees||[]
-            }}));
-          }
-        }catch(_e){}
-        location.assign("/recrute");
+        if(sub)renderCandidatForm(view,sub);
+        else renderRecrutement(view,"archive");
         break;
       case"contrats":
         if(sub==="avenants")renderAvenants(view);
@@ -9721,11 +9719,6 @@ async function renderRecrutementServer(view,mode){
   const page=recrutementCurrentPage(mode);
   const pageSize=mode==="new"?500:mode==="reserve"?15:25;
   const addButton=mode==="reserve"?candidatImportActionsHTML("reserve"):(mode==="new"?candidatImportActionsHTML("new"):"");
-  const alreadyRendered=!!(view.querySelector('[data-recruitment-view]'));
-  if(!alreadyRendered){
-    const emptyListCard=`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`;
-    view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold recruitment-page-title">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>${recrutementUnifiedTabsHTML(mode,socFilter)}${reserveBulkDeleteBarHTML(mode,0)}${emptyListCard}</div>`;
-  }
   try{
     const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});
     if(requestSeq!==sgdiRecruitmentRequestSeq||!recrutementModeMatchesCurrentRoute(mode))return;

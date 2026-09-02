@@ -409,13 +409,13 @@ async function login(){
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.detail||"Connexion refusée");
     recruteSession={token:data.access_token,user:data.user};
-    sessionStorage.setItem(SESSION_KEY,JSON.stringify(recruteSession));
+    localStorage.setItem(SESSION_KEY,JSON.stringify(recruteSession));
     enterApp();
   }catch(error){showLoginError(error.message||"Connexion impossible")}
   finally{button.disabled=false;button.textContent="SE CONNECTER"}
 }
 function logout(){
-  sessionStorage.removeItem(SESSION_KEY);recruteSession=null;
+  localStorage.removeItem(SESSION_KEY);recruteSession=null;
   document.getElementById("appView").classList.add("hidden");
   document.getElementById("loginView").classList.remove("hidden");
   document.getElementById("password").value="";
@@ -1370,7 +1370,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     const field=event.target;
     if(field?.value){field.classList.remove("field-invalid");field.removeAttribute("aria-invalid");field.closest("div")?.querySelector("label")?.classList.remove("field-label-invalid")}
   });
-  try{recruteSession=JSON.parse(sessionStorage.getItem(SESSION_KEY)||"null")}catch(e){recruteSession=null}
+  try{recruteSession=JSON.parse(localStorage.getItem(SESSION_KEY)||"null")}catch(e){recruteSession=null}
   if(recruteSession?.token)enterApp();
 });
 </script>
