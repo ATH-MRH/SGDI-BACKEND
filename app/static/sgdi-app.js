@@ -12270,20 +12270,8 @@ async function printEmployeeNewContractFromForm(form){
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
   if(!draft.numeroPieceIdentite){toast("N° pièce d'identité obligatoire","error");return}
-  const modelValue=String(draft.contratPersonnelId||"").trim();
-  if(/^\d+$/.test(modelValue)){
-    // Modèle Word personnalisé (ex. COORDINATEUR) : l'aperçu HTML article par article
-    // ne s'applique qu'au modèle APS générique codé en dur. On demande ici au serveur
-    // un vrai aperçu fusionné (mêmes données que le contrat final) via un endpoint
-    // dédié qui ne crée ni ne persiste rien — contrairement à la génération finale.
-    const t=activeBackendContractTemplates().find(x=>String(x.id)===modelValue);
-    try{
-      const fileName=`apercu-${(t?.code||"contrat").toString().toLowerCase()}-${draft.a.matricule||"employe"}.docx`;
-      await sgdiDownloadPost("/drh/generated-contracts/preview-from-form",employeeNewContractPayload(draft),fileName);
-      toast("Contrat complété généré avec les données du futur employé.","success");
-    }catch(e){toast("Aperçu impossible : "+(e.message||e),"error")}
-    return;
-  }
+  // L'aperçu avant validation est toujours une fenêtre HTML. Le modèle Word
+  // sélectionné reste réservé à la génération et au téléchargement final.
   openEmployeeContractReviewWindow(draft.a,draft);
 }
 function employeeNewContractPayload(draft){

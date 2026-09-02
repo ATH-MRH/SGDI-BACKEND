@@ -28,3 +28,12 @@ def test_incomplete_contract_fields_are_highlighted_and_block_submission():
     assert "border:2px solid #dc2626!important" in css
     assert "background:#fff1f2!important" not in css
     assert 'content:"Champ obligatoire"' not in css
+
+
+def test_preview_before_validation_always_opens_html_window():
+    preview = JS.split("async function printEmployeeNewContractFromForm(form){", 1)[1].split(
+        "function employeeNewContractPayload", 1
+    )[0]
+    assert "openEmployeeContractReviewWindow(draft.a,draft)" in preview
+    assert "sgdiDownloadPost" not in preview
+    assert "preview-from-form" not in preview
