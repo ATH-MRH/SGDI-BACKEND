@@ -8,6 +8,7 @@ from app.db.base import Base
 
 from app.modules.auth import models as _auth_models  # noqa: F401
 from app.modules.drh import models as _drh_models  # noqa: F401
+from app.modules.drh import email_alerts as _drh_email_alerts  # noqa: F401  (table contract_email_alert_logs)
 from app.modules.irongs import models as _irongs_models  # noqa: F401
 from app.modules import finance_models as _finance_models  # noqa: F401
 from app.modules.materiel import models as _materiel_models  # noqa: F401

@@ -124,97 +124,27 @@ def _purge_oversized_collections() -> None:
                 db.rollback()
                 logger.warning("Purge %s échouée: %s", collection, e)
 
-def ensure_schema_upgrades() -> None:
-    inspector = inspect(engine)
-    tables = set(inspector.get_table_names())
-    with engine.begin() as connection:
-        if "users" in tables:
-            columns = {col["name"] for col in inspector.get_columns("users")}
-            if "access_level" not in columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN access_level VARCHAR(40)"))
-            if "authorized_societies" not in columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN authorized_societies JSON"))
-            if "authorized_structures" not in columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN authorized_structures JSON"))
-            connection.execute(text("UPDATE users SET authorized_societies = '[]' WHERE authorized_societies IS NULL"))
-            connection.execute(text("UPDATE users SET authorized_structures = '[]' WHERE authorized_structures IS NULL"))
-        if "suppliers" in tables:
-            columns = {col["name"] for col in inspector.get_columns("suppliers")}
-            if "society" not in columns:
-                connection.execute(text("ALTER TABLE suppliers ADD COLUMN society VARCHAR(150)"))
-        if "stores" in tables:
-            columns = {col["name"] for col in inspector.get_columns("stores")}
-            if "config" not in columns:
-                connection.execute(text("ALTER TABLE stores ADD COLUMN config JSON"))
-        if "positions" in tables:
-            columns = {col["name"] for col in inspector.get_columns("positions")}
-            if "society" not in columns:
-                connection.execute(text("ALTER TABLE positions ADD COLUMN society VARCHAR(150)"))
-        if "daily_presence" in tables:
-            columns = {col["name"] for col in inspector.get_columns("daily_presence")}
-            daily_presence_columns = {
-                "rotation_system": "VARCHAR(40)",
-                "rotation_group": "VARCHAR(20)",
-                "rotation_period": "VARCHAR(20)",
-                "faction": "VARCHAR(40)",
-                "recovery": "INTEGER DEFAULT 0",
-                "standby": "INTEGER DEFAULT 0",
-                "data": "JSON",
-            }
-            for name, sql_type in daily_presence_columns.items():
-                if name not in columns:
-                    connection.execute(text(f"ALTER TABLE daily_presence ADD COLUMN {name} {sql_type}"))
-        if "assignments" in tables:
-            columns = {col["name"] for col in inspector.get_columns("assignments")}
-            if "rotation_id" not in columns:
-                connection.execute(text("ALTER TABLE assignments ADD COLUMN rotation_id INTEGER REFERENCES rotation_templates(id)"))
-        if "irongs_collections" in tables and "sgdi_records" in tables:
-            existing = connection.execute(text("SELECT COUNT(*) FROM sgdi_records")).scalar() or 0
-            if existing == 0:
-                rows = connection.execute(text("SELECT name, data FROM irongs_collections")).mappings().all()
-                for pos, row in enumerate(rows):
-                    collection = row["name"]
-                    data = row["data"]
-                    if isinstance(data, list):
-                        used_ids: set[str] = set()
-                        for idx, item in enumerate(data):
-                            if isinstance(item, dict):
-                                item = dict(item)
-                                raw_id = item.get("id")
-                                if raw_id in (None, "", "None", "none", "null", "undefined"):
-                                    raw_id = f"idx-{idx:06d}"
-                                item_id = str(raw_id)
-                                if item_id in used_ids:
-                                    item_id = f"{item_id}-{idx:06d}"
-                                used_ids.add(item_id)
-                                item["id"] = item_id
-                            else:
-                                item_id = f"idx-{idx:06d}"
-                                if item_id in used_ids:
-                                    item_id = f"{item_id}-{idx:06d}"
-                                used_ids.add(item_id)
-                            connection.execute(
-                                SgdiRecord.__table__.insert().values(
-                                    collection=collection,
-                                    item_id=item_id,
-                                    position=idx,
-                                    kind="item",
-                                    data=item,
-                                    label=str(item.get("nom") or item.get("name") or item.get("code") or "") if isinstance(item, dict) else str(item),
-                                )
-                            )
-                    else:
-                        connection.execute(
-                            SgdiRecord.__table__.insert().values(
-                                collection=collection,
-                                item_id="__object__",
-                                position=pos,
-                                kind="object",
-                                data=data,
-                                label=collection,
-                            )
-                        )
-            connection.execute(text("DROP TABLE IF EXISTS irongs_collections"))
+def verify_schema() -> None:
+    """Contrôle LECTURE SEULE du schéma.
+
+    La création et la mise à jour du schéma sont gérées uniquement par Alembic
+    (`alembic upgrade head`, lancé par start.sh avant le serveur en production —
+    voir aussi la migration 20260902_0024 qui a repris les colonnes et index
+    autrefois créés ici au démarrage). On se contente de signaler bruyamment un
+    schéma incomplet ; on ne modifie JAMAIS la base.
+    """
+    try:
+        existing = set(inspect(engine).get_table_names())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Vérification du schéma impossible: %s", exc)
+        return
+    missing = sorted(set(Base.metadata.tables) - existing)
+    if missing:
+        logger.error(
+            "Schéma incomplet: %d table(s) manquante(s) (%s). "
+            "Lancez `alembic upgrade head`.",
+            len(missing), ", ".join(missing),
+        )
 
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
@@ -364,39 +294,14 @@ def on_startup() -> None:
     logger.info("Démarrage %s en mode %s", settings.app_name, settings.app_env)
     logger.info("Base de données: %s", safe_database_url())
     ensure_upload_dirs()
-    Base.metadata.create_all(bind=engine)
-    ensure_schema_upgrades()
-    # Index d'accélération : la table assignments accumule un gros historique inactif
-    # (dizaines de milliers de lignes). Sans index, chaque requête d'affectation la scanne
-    # entièrement -> lenteur. Un index partiel sur les lignes ACTIVES rend ces requêtes instantanées.
-    for ddl in (
-        "CREATE INDEX IF NOT EXISTS ix_assignments_active_emp ON assignments (employee_id) WHERE active = 1",
-        "CREATE INDEX IF NOT EXISTS ix_assignments_emp_active ON assignments (employee_id, active)",
-    ):
-        try:
-            with engine.begin() as conn:
-                conn.execute(text(ddl))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Index assignments non créé (%s): %s", ddl, exc)
-    # _events_signature() (polling temps réel + snapshot /api/irongs/db) fait un COUNT(*)/MAX(updated_at)/
-    # MAX(created_at) sur chacune de ces tables à chaque appel (cache 2s, donc très fréquent). Seules
-    # sgdi_records/employees/assignments/daily_presence avaient un index (migration 20260726_0018) ; le
-    # reste scannait la table entière en continu -> lenteur transverse à toute l'appli, DRH compris.
-    events_signature_tables = [
-        "candidates", "contracts", "generated_contracts", "sites", "events", "incidents",
-        "stock_articles", "stock_movements", "stores", "suppliers", "employee_equipment",
-        "material_assignments", "clients", "prospects", "invoices", "payments",
-        "cash_entries", "ops_movements", "advances", "credit_notes",
-    ]
-    for table in events_signature_tables:
-        for column in ("updated_at", "created_at"):
-            ddl = f"CREATE INDEX IF NOT EXISTS ix_{table}_{column} ON {table} ({column})"
-            try:
-                with engine.begin() as conn:
-                    conn.execute(text(ddl))
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Index %s non créé (%s): %s", table, ddl, exc)
-    logger.info("Tables PostgreSQL vérifiées/créées")
+    # Le schéma (tables, colonnes, index) est géré UNIQUEMENT par Alembic. En
+    # production, start.sh lance `alembic upgrade head` avant le serveur. En dehors
+    # de la production, on crée les tables manquantes par commodité pour le dev
+    # local (dev.sh ne lance pas Alembic) — jamais d'ALTER, jamais en prod.
+    if settings.app_env.strip().lower() not in {"production", "prod"}:
+        Base.metadata.create_all(bind=engine)
+    verify_schema()
+    logger.info("Schéma PostgreSQL vérifié (géré par Alembic)")
     with SessionLocal() as db:
         if settings.startup_maintenance_enabled:
             irongs_service.cleanup_base64_photos(db)

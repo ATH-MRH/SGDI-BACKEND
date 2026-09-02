@@ -4412,6 +4412,7 @@ function sgdiModuleHostConfigs(){
 	      homeRoute:"drh/dashboard",
 	      sections:[
 	        {label:"TABLEAU DE BORD",route:"drh/dashboard"},
+	        {label:"RECRUTEMENT",route:"recrutement/candidats"},
 	        {label:"CONTRATS",route:"contrats/dashboard"},
         {label:"FICHE DE POSITION",route:"fiches"},
         {label:"GRH",route:"effectif/recap"},
@@ -4573,6 +4574,7 @@ function sgdiModuleHostConfigs(){
       sections:[
         {label:"TABLEAU CONFIGURATION",route:"admin/dashboard"},
         {label:"RECRUTEMENT",route:"admin/recrutement"},
+        {label:"CONFIGURATION RECRUTEMENT",route:"admin/sections_candidat"},
         {label:"ROTATIONS",route:"admin/rotations"},
         {label:"GESTION DES EFFECTIFS",route:"admin/effectifs"},
         {label:"FICHE DE POSITION",route:"admin/fiches"},
@@ -6433,7 +6435,7 @@ function adminSidebarOrganizerDefaults(){
       ["TABLEAU DE BORD PAIE","paie/dashboard"],["EFFECTIF PAIE","effectif/recap"]
     ],
     admin:[
-      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PÉRIMÈTRES SUPERVISEURS","admin/supervisors"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
+      ["ORGANISER MENU LATÉRAL","admin/menu"],["ORGANISER LES COMPTEURS","admin/counters"],["CONFIGURATION RECRUTEMENT","admin/sections_candidat"],["GESTION DES EFFECTIFS","admin/effectifs"],["POSTES / FONCTIONS","admin/postes"],["SITES","sites/actifs"],["SÉCURITÉ DES ACCÈS","admin/access"],["ACCÈS SGDI","admin/access_sgdi"],["ACCÈS SOCIÉTÉS","admin/access_societes"],["ACCÈS STRUCTURES","admin/access_structures"],["UTILISATEURS","admin/users"],["PÉRIMÈTRES SUPERVISEURS","admin/supervisors"],["PROFILS D'ACCÈS","admin/niveaux"],["DROITS TECHNIQUES","admin/droits"],["FIL D'ACTUALITÉ","admin/feed"],["HISTORIQUE MESSAGES","admin/messages"],["FICHE DE POSITION","admin/fiches"],["CORRECTION POINTAGE","admin/pointages"],["CONTRAT","admin/contrats"],["MAGASINS","admin/magasins"],["ARTICLES","admin/articles"],["JOURNAL D'ACTIVITÉ","admin/log"],["STOCKAGE POSTGRESQL","admin/storage"]
     ]
   };
 }
@@ -6626,6 +6628,7 @@ function renderSidebar(){
     const sidebarByModule={
       drh:[
         {label:"TABLEAU DE BORD",route:"drh/dashboard",group:"PILOTAGE"},
+        {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"],group:"RECRUTEMENT & CONTRATS",count:drhCandidates.length||null},
         {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],group:"RECRUTEMENT & CONTRATS",count:contractsToEstablishCandidates().length||null},
         {label:"FICHE DE POSITION",route:"fiches",group:"PERSONNEL",count:drhAgents.filter(a=>!employeeIsFormer(a)&&agentCompleteness(a).pct<85).length||null},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL",count:drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length||null},
@@ -34700,6 +34703,7 @@ async function renderAdminSystemDashboard(view){
 	  </div>
 	  <div class="grid grid-2 gap-4">
 	    ${card("Recrutement groupé","Sélectionner librement les candidats et lancer leur création complète, même avec une fiche à compléter.","admin/recrutement","#16a34a",(db.candidats||[]).filter(c=>!candidatIsArchived(c)&&String(c.statut||c.status||"").toLowerCase()!=="embauche").length,"Recrutement")}
+	    ${card("Configuration recrutement","Contrôler l'ordre des sections du formulaire candidat et les règles de déverrouillage.","admin/sections_candidat","#059669",CANDIDAT_SECTIONS.length,"Recrutement")}
 	    ${card("Rotations","Créer les cycles, les associer aux sites et affecter les employés par groupe.","admin/rotations","#7c3aed","∞","Planification")}
 	    ${card("Utilisateurs","Créer, bloquer et rattacher chaque compte à un profil et un périmètre.","admin/users","#043970",users.length,"1. Comptes")}
 	    ${card("Profils d'accès","Définir les modules visibles et le référentiel d'actions par profil.","admin/niveaux","#7c3aed",profileCount,"2. Droits")}

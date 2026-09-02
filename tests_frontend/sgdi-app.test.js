@@ -38,6 +38,8 @@ const exposeSuffix = `
   sgdiLegacySnapshot: (typeof sgdiLegacySnapshot !== 'undefined') ? sgdiLegacySnapshot : null,
   sgdiCaptureBaseline: (typeof sgdiCaptureBaseline !== 'undefined') ? sgdiCaptureBaseline : null,
   sgdiEditingBlocksRender: (typeof sgdiEditingBlocksRender !== 'undefined') ? sgdiEditingBlocksRender : null,
+  sgdiModuleHostConfigs: (typeof sgdiModuleHostConfigs !== 'undefined') ? sgdiModuleHostConfigs : null,
+  adminSidebarOrganizerDefaults: (typeof adminSidebarOrganizerDefaults !== 'undefined') ? adminSidebarOrganizerDefaults : null,
   setDb: (v) => { db = v; },
   setSession: (v) => { session = v; },
   setViewMode: (v) => { sgdiViewModeActive = v; },
@@ -57,6 +59,21 @@ const T = () => window.__sgdiTest || {};
 test('sgdi-app.js se charge sans erreur dans jsdom', () => {
   assert.strictEqual(loadError, null, loadError && loadError.stack);
   assert.ok(window.__sgdiTest, 'le suffixe d\'exposition doit avoir tourné');
+});
+
+test('le recrutement est placé immédiatement sous le tableau de bord DRH', () => {
+  const configs = T().sgdiModuleHostConfigs();
+  assert.deepStrictEqual(
+    Array.from(configs.drh.sections.slice(0, 2), item => [item.label, item.route]),
+    [['TABLEAU DE BORD', 'drh/dashboard'], ['RECRUTEMENT', 'recrutement/candidats']]
+  );
+});
+
+test('Administration système expose la configuration du recrutement', () => {
+  const configs = T().sgdiModuleHostConfigs();
+  assert.ok(configs.admin.sections.some(item => item.route === 'admin/sections_candidat'));
+  const defaults = T().adminSidebarOrganizerDefaults();
+  assert.ok(defaults.admin.some(item => item[1] === 'admin/sections_candidat'));
 });
 
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
