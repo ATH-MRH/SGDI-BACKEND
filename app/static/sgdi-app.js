@@ -10677,6 +10677,12 @@ async function validateCandidatSectionAction(id,key){
   if(!candidatSectionAvailable(validationTarget,key)){toast("Cette section n'est pas encore ouverte","error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!validateCandidatSection(key,data)){candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
   if(!candidateHasMinimumData(data)){toast(candidateMinimumDataMessage(data),"error");candidatValidationLocks.delete(lockKey);setCandidatSectionButtonsDisabled(id,key,false);return}
+  const sectionLabel=CANDIDAT_SECTIONS.find(s=>s.key===key)?.label||"cette section";
+  if(!confirm(`Êtes-vous sûr de vouloir valider la section « ${sectionLabel} » ?`)){
+    candidatValidationLocks.delete(lockKey);
+    setCandidatSectionButtonsDisabled(id,key,false);
+    return;
+  }
   const draft={...validationTarget,...data,id:realId};
   delete draft.isNew;
   let validation;
@@ -10703,13 +10709,13 @@ async function validateCandidatSectionAction(id,key){
     delete draft.fichePositionValideeBy;
   }
   const next=CANDIDAT_SECTIONS[candidatSectionIndex(key)+1];
-  if(next)sessionStorage.setItem("candidatFocusSection",next.key);
   try{
     await persistCandidateToPostgres(draft,{allowCreate:creating});
     if(c)Object.assign(c,draft);else{c=draft;if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c)}
     stashCandidatForRoute(c,[id,realId,data.id]);
     sgdiDirty=false;
     toast(next?"Section validée. Passage à la section suivante.":"Toutes les sections sont validées.","success");
+    if(next)sessionStorage.setItem("candidatFocusSection",next.key);
     if((location.hash||"").endsWith("/nouveau"))navigate((c.reserveDirect?"reserve/":"recrutement/")+c.id);else renderView();
   }catch(e){toast("Validation refusée : "+(e.message||e),"error");setCandidatSectionButtonsDisabled(id,key,false)}
   finally{candidatValidationLocks.delete(lockKey)}
