@@ -9626,6 +9626,9 @@ async function updateCandidateAvis(id,value,el){
   try{
     await persistCandidateToPostgres(c,{allowCreate:false});
     if(!(await saveDBAndWaitToast("Avis candidat non confirmé")))throw new Error("Sauvegarde non confirmée");
+    sgdiFormHasUnsavedChanges=false;
+    document.getElementById("view")?.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);
+    sgdiUpdateSaveButton("clean");
     sgdiRefreshCountersNow({reason:"candidate_avis_saved"});
     toast("Avis mis à jour","success");
     renderView();
@@ -9847,6 +9850,7 @@ function renderRecrutement(view,mode){
 async function recruterCandidat(id,btn){
   const c=findCandidatById(id);if(!c)return;
   if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Avis favorable obligatoire pour envoyer au contrat","error");return}
+  if(document.getElementById("candidat-form")&&sgdiFormHasUnsavedChanges){toast("Enregistrez les modifications de la fiche avant d'établir le contrat","error");return}
   const originalText=btn?btn.textContent:"";
   if(btn){
     btn.disabled=true;
@@ -9859,6 +9863,10 @@ async function recruterCandidat(id,btn){
     if(!backendId)throw new Error("Candidature non enregistrée dans PostgreSQL");
     const saved=await SGDI.rh.marquerContractualisation(backendId);
     Object.assign(c,candidateFromApi(saved));
+    sgdiDirty=false;
+    sgdiFormHasUnsavedChanges=false;
+    document.getElementById("view")?.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);
+    sgdiUpdateSaveButton("clean");
     toast("Candidat envoyé vers contractualisation","success");
     navigate(`contrats/nouveau/${c.id}`);
     setTimeout(()=>sgdiPullState({silent:true,render:false,force:true,light:true}).catch(e=>console.warn("Synchronisation recrutement différée indisponible",e)),250);
@@ -9876,7 +9884,10 @@ function modifierCandidatReserve(id){sessionStorage.setItem("candidatAutoEdit:"+
 function recruitAndOpenCandidateContract(id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
   closeModal();
-  if(String(c.statut||c.status||"").toLowerCase()==="a_contractualiser")return navigate(`contrats/a_contractualiser/${c.id}`);
+  if(String(c.statut||c.status||"").toLowerCase()==="a_contractualiser"){
+    sgdiDirty=false;sgdiFormHasUnsavedChanges=false;document.getElementById("view")?.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);sgdiUpdateSaveButton("clean");
+    return navigate(`contrats/a_contractualiser/${c.id}`);
+  }
   recruterCandidat(id);
 }
 function openReserveCandidateActions(id){
