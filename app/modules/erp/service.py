@@ -160,7 +160,7 @@ def _active_candidate_count(rows: list[Candidate]) -> int:
             or data.get("employeeId")
             or data.get("agentId")
         )
-        if not archived and not recruited:
+        if not archived and not recruited and not data.get("removedFromRecruitmentAt"):
             total += 1
     return total
 

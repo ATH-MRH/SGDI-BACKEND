@@ -9083,7 +9083,7 @@ function candidatIsActive(c){
   return !!c&&!candidatIsArchived(c)&&!candidatIsRecruited(c);
 }
 function candidatIsNew(c){
-  return candidatIsActive(c)&&!candidatIsReserve(c);
+  return candidatIsActive(c)&&!candidatIsReserve(c)&&!c.removedFromRecruitmentAt;
 }
 function candidatArchiveSourceLabel(c){return c&&c.archiveSource==="reserve"?"Candidat en réserve":"Candidat"}
 function archiveCandidateFilters(){
@@ -9664,10 +9664,30 @@ function recruitmentContractStyleTableHTML(candidates,pagination=""){
   return `<div class="card overflow-hidden"><table class="table"><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Transmission</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(c=>{
     const transmitted=String(c.statut||c.status||"").toLowerCase()==="a_contractualiser";
     const primaryAction=transmitted
-      ?`<button class="btn btn-primary" onclick="navigate('contrats/a_contractualiser/${jsString(c.id)}')">Établir le contrat</button>`
+      ?`<button class="btn btn-primary" onclick="recruitCandidateToContracts('${jsString(c.id)}',this)">Recruter</button>`
       :`<button class="btn btn-primary" onclick="navigate('recrutement/${jsString(c.id)}')">Ouvrir la fiche</button>`;
-    return `<tr><td><b>${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim()||"Identité à compléter")}</b></td><td>${escapeHTML(candidatePosteLabel(c)||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(formatPhoneSGDI(c.telephone)||"—")}</td><td>${transmitted?escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today())):'<span class="text-slate-400">Non transmise</span>'}</td><td><div class="flex gap-2 flex-wrap">${primaryAction}<button class="btn btn-secondary" onclick="${transmitted?`openArchiveContractCandidateModal('${jsString(c.id)}')`:`openArchiveCandidatModal('${jsString(c.id)}')`}">Archiver</button></div></td></tr>`
+    return `<tr data-recruitment-candidate-row="${escapeHTML(c.id)}"><td><b>${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim()||"Identité à compléter")}</b></td><td>${escapeHTML(candidatePosteLabel(c)||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(formatPhoneSGDI(c.telephone)||"—")}</td><td>${transmitted?escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today())):'<span class="text-slate-400">Non transmise</span>'}</td><td><div class="flex gap-2 flex-wrap">${primaryAction}<button class="btn btn-secondary" onclick="${transmitted?`openArchiveContractCandidateModal('${jsString(c.id)}')`:`openArchiveCandidatModal('${jsString(c.id)}')`}">Archiver</button></div></td></tr>`
   }).join(""):`<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun candidat.</td></tr>`}</tbody></table>${pagination}</div>`;
+}
+async function recruitCandidateToContracts(id,button){
+  const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
+  if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Décision favorable obligatoire pour recruter ce candidat","error");return}
+  const original=button?.textContent||"Recruter";if(button){button.disabled=true;button.textContent="Transfert..."}
+  try{
+    let saved=c;const backendId=sqlBackendId(c.backendId);if(!backendId)throw new Error("Candidature non enregistrée dans PostgreSQL");
+    if(String(c.statut||c.status||"").toLowerCase()!=="a_contractualiser")saved=candidateFromApi(await SGDI.rh.marquerContractualisation(backendId));
+    const draft={...c,...saved,statut:"a_contractualiser",status:"a_contractualiser",removedFromRecruitmentAt:new Date().toISOString(),removedFromRecruitmentBy:session?.username||"system"};
+    await persistCandidateToPostgres(draft,{allowCreate:false});Object.assign(c,draft);
+    const row=document.querySelector(`[data-recruitment-candidate-row="${CSS.escape(String(id))}"]`);
+    if(row){row.style.transition="opacity .18s ease,transform .18s ease";row.style.opacity="0";row.style.transform="translateX(12px)";setTimeout(()=>{row.remove();const body=document.querySelector("[data-recruitment-view] tbody");if(body&&!body.querySelector("tr"))body.innerHTML='<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun candidat.</td></tr>';},190)}
+    const activeSociety=drhActiveSocieteFilter()||currentStructureSocieteFilter()||mySoc()||"";
+    const newCount=(db.candidats||[]).filter(candidatIsNew).filter(item=>!activeSociety||item.societe===activeSociety).length;
+    const activeTab=document.querySelector(".recruitment-candidates-tabs button.active span");if(activeTab)activeTab.textContent=String(newCount);
+    const paginationLabel=document.querySelector("[data-recruitment-view] .card.overflow-hidden > .border-t > div:first-child");if(paginationLabel)paginationLabel.textContent=`${newCount} candidat(s) · page 1/1`;
+    sgdiFormHasUnsavedChanges=false;sgdiDirty=false;sgdiUpdateSaveButton("clean");
+    toast("Candidat recruté et envoyé dans Contrats à établir","success");
+    sgdiRefreshCountersNow({reason:"candidate_recruited_to_contracts"});
+  }catch(error){if(button){button.disabled=false;button.textContent=original}toast("Recrutement refusé : "+(error.message||error),"error")}
 }
 function reserveFunctionPanelOpen(){return sessionStorage.getItem("reserveFunctionPanel")==="1"}
 function toggleReserveFunctionPanel(){sessionStorage.setItem("reserveFunctionPanel",reserveFunctionPanelOpen()?"0":"1");renderView()}

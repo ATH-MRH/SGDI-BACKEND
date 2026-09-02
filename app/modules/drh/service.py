@@ -327,8 +327,10 @@ def list_candidates_page(
         rows = [
             row for row in rows
             # Aligner la liste sur le compteur Recrutement : un dossier transmis reste
-            # visible parmi les candidatures tant que le recrutement n'est pas finalisé.
-            if _candidate_is_active(row) and not _candidate_is_reserve(row)
+            # visible jusqu'à ce que l'utilisateur confirme l'action « Recruter ».
+            if _candidate_is_active(row)
+            and not _candidate_is_reserve(row)
+            and not bool((row.data if isinstance(row.data, dict) else {}).get("removedFromRecruitmentAt"))
         ]
 
     query = str(q or "").strip()

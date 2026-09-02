@@ -87,6 +87,16 @@ def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_
     assert response.status_code == 200, response.text
     assert any(item["id"] == row.id and item["last_name"] == "VISIBLE" for item in response.json()["items"])
 
+    row.data = {**row.data, "removedFromRecruitmentAt": "2026-09-02T21:30:00"}
+    db.commit()
+    hidden = client.get(
+        "/api/drh/candidates/page",
+        headers=auth_headers,
+        params={"mode": "new", "society": "Iron Global Securite", "page": 1, "page_size": 100},
+    )
+    assert hidden.status_code == 200, hidden.text
+    assert all(item["id"] != row.id for item in hidden.json()["items"])
+
 
 # 7 sections visibles de la fiche de position (ordre imposé par le service)
 _SECTIONS = ["identification", "militaire", "poste",

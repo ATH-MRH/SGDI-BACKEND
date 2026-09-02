@@ -134,7 +134,12 @@ test('les nouveaux dossiers utilisent le tableau épuré de contractualisation',
   assert.match(src, /function recruitmentContractStyleTableHTML\(/);
   assert.match(src, /<th>Candidat<\/th><th>Poste<\/th><th>Société<\/th><th>Téléphone<\/th><th>Transmission<\/th><th>Action<\/th>/);
   assert.match(src, /mode==="new"\?recruitmentContractStyleTableHTML\(cs,pagination\)/);
-  assert.match(src, /Établir le contrat/);
+  assert.match(src, /function recruitCandidateToContracts\(/);
+  assert.match(src, />Recruter<\/button>/);
+  assert.match(src, /removedFromRecruitmentAt:new Date\(\)\.toISOString\(\)/);
+  assert.match(src, /row\.style\.transition="opacity \.18s ease,transform \.18s ease"/);
+  assert.match(src, /const activeSociety=drhActiveSocieteFilter\(\)/);
+  assert.match(src, /activeTab\.textContent=String\(newCount\)/);
 });
 
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
