@@ -9541,6 +9541,27 @@ function candidatePosteLabel(c){
   const valid=[c?.posteSouhaite,c?.posteContrat,c?.fonction,c?.poste,c?.desired_position].map(candidatePosteCleanValue).find(Boolean);
   return valid||"Non renseigné";
 }
+async function ensureCandidatePositionInCatalog(candidate){
+  const name=candidatePosteCleanValue(candidate?.posteSouhaite||candidate?.poste||"");
+  if(!name)return;
+  const same=value=>String(value||"").localeCompare(name,"fr",{sensitivity:"base"})===0;
+  if(POSTES.some(same))return;
+  const society=String(candidate?.societe||currentStructureSocieteFilter()||"").trim();
+  try{
+    const query=society?`?society=${encodeURIComponent(society)}`:"";
+    const positions=await sgdiApi(`/api/irongs/positions${query}`,{method:"GET",legacy:false});
+    if(Array.isArray(positions)){
+      POSTES=[...new Set([...POSTES,...positions.map(p=>p.name||p).filter(Boolean)])];
+      if(POSTES.some(same))return;
+    }
+    const created=await sgdiApi("/api/irongs/positions",{method:"POST",body:{name,society:society||null},legacy:false});
+    POSTES=[...new Set([...POSTES,created?.name||name])];
+    toast(`Nouveau poste « ${name} » ajouté au catalogue`,"success");
+  }catch(error){
+    if(/déjà existant|deja existant|\b409\b/i.test(String(error?.message||error))){POSTES=[...new Set([...POSTES,name])];return}
+    throw new Error("Création du poste impossible : "+(error?.message||error));
+  }
+}
 function sgdiInvalidCandidateFunctionSummaryText(value){
   const text=String(value||"").trim();
   if(!text)return false;
@@ -10303,7 +10324,7 @@ function renderCandidatEtape1(c){
   ${candidatSectionClose(c,"militaire")}`:""}
   ${candidatSectionAvailable(c,"poste")?`${candidatSectionOpen(c,"poste","banner-green","Poste & CV")}
     <div class="grid grid-6">
-      <div class="col-span-3"><label class="label">Poste souhaité *</label><select class="select" name="posteSouhaite" ><option value="">— Choisir —</option>${posteOptions.map(p=>`<option value="${escapeHTML(p)}" ${c.posteSouhaite===p?"selected":""}>${escapeHTML(p)}</option>`).join("")}</select></div>
+      <div class="col-span-3"><label class="label">Poste *</label><input class="input" name="posteSouhaite" list="candidate-position-options" value="${escapeHTML(c.posteSouhaite||"")}" placeholder="Choisir ou saisir un nouveau poste" autocomplete="off"/><datalist id="candidate-position-options">${posteOptions.map(p=>`<option value="${escapeHTML(p)}"></option>`).join("")}</datalist><div class="text-[10px] text-slate-500 mt-1">Vous pouvez sélectionner un poste existant ou saisir un nouveau poste.</div></div>
       <div class="col-span-3"><label class="label">Durée du contrat</label><select class="select" name="dureeContrat">${contratDureeOptions(c.dureeContrat||"")}</select></div>
       <div class="col-span-3"><label class="label">Salaire prévu pour le poste (DA/mois)</label><input class="input" type="text" inputmode="decimal" name="salairePrevu" value="${formatMoneyInputValue(c.salairePrevu)}" placeholder="45 000,00" onblur="formatMoneyField(this)"/></div>
       <div class="col-span-3"><label class="label">&nbsp;</label><div class="text-xs text-slate-500 pt-2">${c.salairePrevu?`Fourchette estimée : <b>${money(c.salairePrevu)}</b>`:"Montant brut prévisionnel pour ce poste"}</div></div>
@@ -10437,7 +10458,7 @@ function validateCandidatIdentification(data){
 function candidatRequiredFieldsForSection(key){
   return {
     identification:[["nom","Nom"],["prenom","Prénom"],["dateNaissance","Date de naissance"],["lieuNaissance","Lieu de naissance"],["sexe","Sexe"],["nomPere","Nom du père"],["nomMere","Nom de la mère"],["nin","NIN"],["situation","Situation familiale"],["source","Source"]],
-    poste:[["posteSouhaite","Poste souhaité"],["telephone","Téléphone"]],
+    poste:[["posteSouhaite","Poste"],["telephone","Téléphone"]],
     avis:[["avisDecision","Décision"],["avisDate","Date de l'avis"],["avisRecruteur","Recruteur"],["avisCommentaire","Commentaire"]],
     contact:[["adresse","Adresse"],["commune","Commune"],["wilaya","Wilaya"],["contactUrgenceLien","Lien contact urgence"],["contactUrgenceNom","Nom contact urgence"],["contactUrgenceTel","Téléphone urgence"]]
   }[key]||[];
@@ -10489,6 +10510,7 @@ async function saveCandidat(id,showToast,options){
     delete draft.fichePositionValideeBy;
   }
   try{
+    await ensureCandidatePositionInCatalog(draft);
     await persistCandidateToPostgres(draft,{allowCreate:creating||!sqlBackendId(draft.backendId)});
     if(c)Object.assign(c,draft);else{c=draft;if(!db.candidats.some(x=>x===c||String(x.id)===String(c.id)||String(x.backendId||"")===String(c.backendId||"")))db.candidats.push(c)}
     stashCandidatForRoute(c,[id,realId,data.id]);
@@ -10704,6 +10726,7 @@ async function validateCandidatSectionAction(id,key){
   delete draft.isNew;
   let validation;
   try{
+    if(key==="poste")await ensureCandidatePositionInCatalog(draft);
     validation=await SGDI.rh.validateCandidateSection(candidateApiPayload(draft),key,sqlBackendId(draft.backendId));
     draft.sectionValidations={...(draft.sectionValidations||{}),...(validation.data?.sectionValidations||{})};
     draft.sectionValidations[key]=draft.sectionValidations[key]||{by:session?.username||"system",at:new Date().toISOString(),source:"frontend-confirmed"};

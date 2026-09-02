@@ -71,10 +71,15 @@ def list_positions(society: str | None = None, db: Session = Depends(get_db)) ->
 
 @router.post("/positions", status_code=201)
 def create_position(payload: PositionCreate, db: Session = Depends(get_db), user=Depends(current_user)) -> dict:
-    if not is_admin_role(user.role):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé administrateur")
+    role = str(user.role or "").strip().lower()
+    structures = {str(value or "").strip().lower() for value in (user.authorized_structures or [])}
+    if not (is_admin_role(user.role) or role in {"rh", "drh", "recruteur"} or structures & {"drh", "recrutement", "recruteur", "gestionnaire_rh"}):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Réservé administrateur ou recrutement / DRH")
     name = payload.name.strip()
     society = payload.society.strip() if payload.society else None
+    allowed_societies = [str(value).strip() for value in (user.authorized_societies or []) if str(value).strip()]
+    if society and allowed_societies and society.casefold() not in {value.casefold() for value in allowed_societies}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
     if not name:
         raise HTTPException(status_code=400, detail="Nom requis")
     if db.query(Position).filter(Position.name == name, Position.society == society).first():
