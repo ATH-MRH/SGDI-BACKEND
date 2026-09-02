@@ -18,6 +18,7 @@ class UserCreate(BaseModel):
     authorized_actions: list[UserAction] = Field(default_factory=list)
     supervisor_read_only: bool = True
     password: str = Field(min_length=4)
+    validation_password: str | None = Field(default=None, min_length=4)
 
     @model_validator(mode="after")
     def normalize_full_name(self):
@@ -37,6 +38,7 @@ class UserUpdate(BaseModel):
     authorized_actions: list[UserAction] | None = None
     supervisor_read_only: bool | None = None
     password: str | None = Field(default=None, min_length=4)
+    validation_password: str | None = Field(default=None, min_length=4)
     is_active: bool | None = None
 
 
@@ -66,6 +68,9 @@ class UserOut(BaseModel):
     authorized_sites: list[int] | None = Field(default_factory=list)
     authorized_actions: list[UserAction] | None = Field(default_factory=list)
     supervisor_read_only: bool = True
+    has_validation_password: bool = False
+    credentials_email_sent: bool = False
+    credentials_email_error: str | None = None
     is_active: bool
 
     model_config = {"from_attributes": True}

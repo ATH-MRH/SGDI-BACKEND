@@ -52,11 +52,13 @@ def create_user(db: Session, payload: UserCreate) -> User:
         authorized_actions=payload.authorized_actions or [],
         supervisor_read_only=payload.supervisor_read_only,
         password_hash=hash_password(payload.password),
+        validation_password_hash=hash_password(payload.validation_password) if payload.validation_password else None,
         is_active=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    user.has_validation_password = bool(user.validation_password_hash)
     return user
 
 
@@ -73,7 +75,12 @@ def authenticate(db: Session, username: str, password: str) -> tuple[str, User]:
 
 def update_user(db: Session, user: User, payload: UserUpdate) -> User:
     if payload.email is not None:
-        user.email = str(payload.email) if payload.email else None
+        email = normalize_login(str(payload.email)) if payload.email else None
+        if email:
+            conflict = db.execute(select(User).where(func.lower(User.email) == email.lower(), User.id != user.id)).scalar_one_or_none()
+            if conflict:
+                raise HTTPException(status_code=409, detail="Cette adresse email est déjà attribuée à un autre utilisateur")
+        user.email = email
     if payload.full_name is not None:
         user.full_name = payload.full_name or user.username
     if payload.role is not None:
@@ -92,8 +99,11 @@ def update_user(db: Session, user: User, payload: UserUpdate) -> User:
         user.supervisor_read_only = payload.supervisor_read_only
     if payload.password:
         user.password_hash = hash_password(payload.password)
+    if payload.validation_password:
+        user.validation_password_hash = hash_password(payload.validation_password)
     if payload.is_active is not None:
         user.is_active = payload.is_active
     db.commit()
     db.refresh(user)
+    user.has_validation_password = bool(user.validation_password_hash)
     return user

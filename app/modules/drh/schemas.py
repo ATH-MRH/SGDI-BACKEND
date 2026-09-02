@@ -120,6 +120,10 @@ class CandidateCreate(CandidateBase):
     pass
 
 
+class CandidateFinalValidationIn(BaseModel):
+    validation_password: str = Field(min_length=4, max_length=200)
+
+
 class CandidateUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None

@@ -108,7 +108,9 @@ def _make_reserve_candidate(client, h, nom="RECRUE", prenom="Karim"):
         )
         assert checked.status_code == 200, checked.text
         body["data"]["sectionValidations"] = checked.json()["data"]["sectionValidations"]
-    fin = client.post(f"/api/drh/candidates/{cid}/validate-final", headers=h)
+    refused = client.post(f"/api/drh/candidates/{cid}/validate-final", headers=h, json={"validation_password": "incorrect-password"})
+    assert refused.status_code == 401, refused.text
+    fin = client.post(f"/api/drh/candidates/{cid}/validate-final", headers=h, json={"validation_password": "test-validation-password"})
     assert fin.status_code == 200, fin.text
     assert fin.json()["data"]["status"] == "reserve"
     return cid
@@ -396,7 +398,7 @@ def test_candidate_rejects_forged_section_validations(client, auth_headers):
     data["sectionValidations"] = {section: {"by": "browser", "at": "2026-08-11T00:00:00"} for section in _SECTIONS}
     data["fichePositionValidee"] = True
     candidate = _cand(client, auth_headers, first="Tampon", last="FORGE", data=data)
-    result = client.post(f"/api/drh/candidates/{candidate['id']}/validate-final", headers=auth_headers)
+    result = client.post(f"/api/drh/candidates/{candidate['id']}/validate-final", headers=auth_headers, json={"validation_password": "test-validation-password"})
     assert result.status_code == 422, result.text
     assert "sections non validées" in result.text
 

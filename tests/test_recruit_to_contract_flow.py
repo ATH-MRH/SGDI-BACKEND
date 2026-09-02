@@ -38,7 +38,7 @@ def test_full_contract_flow(client, auth_headers):
         assert checked.status_code == 200, checked.text
         validation_body["data"]["sectionValidations"] = checked.json()["data"]["sectionValidations"]
 
-    reserve = client.post(f"/api/drh/candidates/{cid}/validate-final", headers=auth_headers)
+    reserve = client.post(f"/api/drh/candidates/{cid}/validate-final", headers=auth_headers, json={"validation_password": "test-validation-password"})
     assert reserve.status_code == 200, reserve.text
     mark = client.post(f"/api/drh/candidates/{cid}/marquer-contractualisation", headers=auth_headers)
     assert mark.status_code == 200, mark.text
@@ -85,7 +85,7 @@ def test_future_contract_start_is_preserved(client, auth_headers):
         checked = client.post(f"/api/drh/candidates/validate-section?section={section}&candidate_id={candidate_id}", headers=auth_headers, json=payload)
         assert checked.status_code == 200, checked.text
         payload["data"]["sectionValidations"] = checked.json()["data"]["sectionValidations"]
-    assert client.post(f"/api/drh/candidates/{candidate_id}/validate-final", headers=auth_headers).status_code == 200
+    assert client.post(f"/api/drh/candidates/{candidate_id}/validate-final", headers=auth_headers, json={"validation_password": "test-validation-password"}).status_code == 200
     assert client.post(f"/api/drh/candidates/{candidate_id}/marquer-contractualisation", headers=auth_headers).status_code == 200
     recruited = client.post(f"/api/drh/candidates/{candidate_id}/recruit", headers=auth_headers)
     assert recruited.status_code == 200, recruited.text

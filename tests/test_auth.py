@@ -259,15 +259,48 @@ def test_new_user_defaults_to_supervisor_read_only(client, auth_headers):
     r = client.post("/api/auth/users", headers=auth_headers, json={
         "username": "sup_default", "role": "ops", "access_level": "H3",
         "authorized_structures": ["superviseur"], "password": "testpass123",
+        "email": "sup_default@test.com", "validation_password": "validation123",
     })
     assert r.status_code in (200, 201), r.text
     assert r.json()["supervisor_read_only"] is True
+
+
+def test_admin_user_requires_unique_email_and_sends_both_passwords(client, auth_headers, monkeypatch):
+    sent = {}
+
+    def fake_send(recipient, username, password, validation_password):
+        sent.update(recipient=recipient, username=username, password=password, validation_password=validation_password)
+
+    monkeypatch.setattr("app.modules.auth.routes.send_user_credentials_email", fake_send)
+    missing_email = client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "mail_missing", "password": "connection123", "validation_password": "validation123",
+    })
+    assert missing_email.status_code == 422
+
+    created = client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "mail_user", "email": "mail_user@test.com", "password": "connection123",
+        "validation_password": "validation123", "role": "drh", "authorized_structures": ["drh"],
+    })
+    assert created.status_code in (200, 201), created.text
+    assert created.json()["credentials_email_sent"] is True
+    assert created.json()["has_validation_password"] is True
+    assert sent == {
+        "recipient": "mail_user@test.com", "username": "MAIL_USER",
+        "password": "connection123", "validation_password": "validation123",
+    }
+
+    duplicate = client.post("/api/auth/users", headers=auth_headers, json={
+        "username": "mail_user_2", "email": "mail_user@test.com", "password": "connection123",
+        "validation_password": "validation123",
+    })
+    assert duplicate.status_code == 409
 
 
 def test_create_user_can_disable_supervisor_read_only(client, auth_headers):
     r = client.post("/api/auth/users", headers=auth_headers, json={
         "username": "sup_editor", "role": "ops", "access_level": "H3",
         "authorized_structures": ["superviseur"], "password": "testpass123",
+        "email": "sup_editor@test.com", "validation_password": "validation123",
         "supervisor_read_only": False,
     })
     assert r.status_code in (200, 201), r.text
@@ -278,6 +311,7 @@ def test_update_user_toggles_supervisor_read_only(client, auth_headers):
     r = client.post("/api/auth/users", headers=auth_headers, json={
         "username": "sup_toggle", "role": "ops", "access_level": "H3",
         "authorized_structures": ["superviseur"], "password": "testpass123",
+        "email": "sup_toggle@test.com", "validation_password": "validation123",
     })
     assert r.status_code in (200, 201), r.text
     assert r.json()["supervisor_read_only"] is True
@@ -295,6 +329,7 @@ def test_login_response_includes_supervisor_read_only(client, auth_headers):
     client.post("/api/auth/users", headers=auth_headers, json={
         "username": "sup_login", "role": "ops", "access_level": "H3",
         "authorized_structures": ["superviseur"], "password": "testpass123",
+        "email": "sup_login@test.com", "validation_password": "validation123",
         "supervisor_read_only": False,
     })
     r = client.post("/api/auth/login", json={"username": "sup_login", "password": "testpass123"})

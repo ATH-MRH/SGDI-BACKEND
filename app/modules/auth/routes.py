@@ -1,5 +1,8 @@
 import hmac
+import smtplib
 import re
+from email.message import EmailMessage
+from email.utils import formataddr
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from urllib.parse import unquote
@@ -121,6 +124,36 @@ def is_admin_system_username(username: str | None) -> bool:
 def require_admin(user: User) -> None:
     if not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès administrateur requis")
+
+
+def send_user_credentials_email(recipient: str, username: str, password: str, validation_password: str) -> None:
+    if not settings.smtp_host or not (settings.smtp_from_email or settings.smtp_username):
+        raise RuntimeError("Serveur SMTP non configuré")
+    from_email = settings.smtp_from_email or settings.smtp_username
+    message = EmailMessage()
+    message["From"] = formataddr((settings.smtp_from_name, from_email))
+    message["To"] = recipient
+    message["Subject"] = "ATLAS - Création de votre compte utilisateur"
+    message.set_content(
+        "Votre compte ATLAS a été créé.\n\n"
+        f"Identifiant : {username}\n"
+        f"Mot de passe de connexion initial : {password}\n"
+        f"Mot de passe de validation : {validation_password}\n\n"
+        "Le mot de passe de validation est demandé pour confirmer les actions sensibles, notamment la validation finale d'une fiche candidat.\n"
+        "Conservez ces informations de manière confidentielle."
+    )
+    if settings.smtp_use_ssl:
+        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+            if settings.smtp_username and settings.smtp_password:
+                smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+        return
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+        if settings.smtp_use_tls:
+            smtp.starttls()
+        if settings.smtp_username and settings.smtp_password:
+            smtp.login(settings.smtp_username, settings.smtp_password)
+        smtp.send_message(message)
 
 
 def admin_system_username_candidates() -> list[str]:
@@ -259,7 +292,21 @@ def create_user_as_admin(
     user: User = Depends(current_user),
 ):
     require_admin(user)
-    return create_user(db, payload)
+    if not payload.email:
+        raise HTTPException(status_code=422, detail="Une adresse email personnelle est obligatoire pour chaque utilisateur")
+    if not payload.validation_password:
+        raise HTTPException(status_code=422, detail="Le mot de passe de validation est obligatoire")
+    created = create_user(db, payload)
+    created.has_validation_password = bool(created.validation_password_hash)
+    created.credentials_email_sent = False
+    created.credentials_email_error = None
+    if payload.email and payload.validation_password:
+        try:
+            send_user_credentials_email(str(payload.email), created.username, payload.password, payload.validation_password)
+            created.credentials_email_sent = True
+        except Exception as exc:
+            created.credentials_email_error = str(exc)[:180]
+    return created
 
 
 @router.get("/users", response_model=list[UserOut])

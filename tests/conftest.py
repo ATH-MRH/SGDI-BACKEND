@@ -84,6 +84,7 @@ def _seed_admin():
                 # ADMIN_SYSTEM_PASSWORD est défini — un mot de passe différent ici serait
                 # systématiquement écrasé.
                 password_hash=hash_password("test-admin-password"),
+                validation_password_hash=hash_password("test-validation-password"),
                 is_active=True,
             ))
         # Utilisateur RESTREINT à une seule société : role != admin ET access_level != H5,
@@ -98,6 +99,7 @@ def _seed_admin():
                 authorized_societies=["Iron Global Securite"],
                 authorized_structures=[],
                 password_hash=hash_password("testpass123"),
+                validation_password_hash=hash_password("test-validation-password"),
                 is_active=True,
             ))
         session.commit()

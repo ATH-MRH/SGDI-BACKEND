@@ -1542,7 +1542,7 @@ window.SGDI_API={
     createCandidate:(payload)=>sgdiActionApi("/drh/candidates",{method:"POST",body:payload,legacy:false}),
     updateCandidate:(id,payload)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"PUT",body:payload,legacy:false}),
     validateCandidateSection:(payload,section,id)=>sgdiActionApi("/drh/candidates/validate-section?"+new URLSearchParams(Object.entries({section,candidate_id:id||""}).filter(([,v])=>v!==undefined&&v!==null&&v!=="")).toString(),{method:"POST",body:payload,legacy:false}),
-    validateCandidateFinal:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/validate-final",{method:"POST",legacy:false}),
+    validateCandidateFinal:(id,validationPassword)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/validate-final",{method:"POST",body:{validation_password:validationPassword},legacy:false}),
     deleteCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id),{method:"DELETE",legacy:false}),
     recruitCandidate:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/recruit",{method:"POST",legacy:false}),
     marquerContractualisation:(id)=>sgdiActionApi("/drh/candidates/"+encodeURIComponent(id)+"/marquer-contractualisation",{method:"POST",legacy:false}),
@@ -10844,25 +10844,36 @@ function setCandidatFinalValidationButtonsDisabled(id,disabled){
     }
   });
 }
-async function validerFichePosition(id){
+function validerFichePosition(id){
+  openModal(`<div class="text-center p-2"><h3 class="font-black text-lg mb-3">Valider la fiche candidat</h3><p class="text-sm text-slate-700 mb-5">Êtes-vous sûr de vouloir valider définitivement cette fiche candidat ?</p><div class="flex justify-center gap-3"><button type="button" class="btn btn-ghost" onclick="closeModal()">Non</button><button type="button" class="btn btn-primary" onclick="openCandidateValidationPassword('${jsString(id)}')">Oui</button></div></div>`);
+}
+function openCandidateValidationPassword(id){
+  openModal(`<h3 class="font-black text-lg mb-2">Mot de passe de validation</h3><p class="text-sm text-slate-600 mb-4">Saisissez le mot de passe de validation personnel reçu par email lors de la création de votre compte.</p><form onsubmit="event.preventDefault();executeCandidateFinalValidation('${jsString(id)}',this)"><label class="label">Mot de passe de validation *</label><input class="input" type="password" name="validationPassword" autocomplete="current-password" required autofocus/><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Confirmer la validation</button></div></form>`);
+  setTimeout(()=>document.querySelector('.modal-bg [name="validationPassword"]')?.focus(),0);
+}
+async function executeCandidateFinalValidation(id,form){
+  const validationPassword=String(new FormData(form).get("validationPassword")||"");
+  if(!validationPassword){toast("Mot de passe de validation obligatoire","error");return}
   const lockKey=String(id||"");
   if(candidatFinalValidationLocks.has(lockKey)){toast("Validation déjà en cours, veuillez patienter","warning");return}
   candidatFinalValidationLocks.add(lockKey);
   setCandidatFinalValidationButtonsDisabled(id,true);
+  const submitButton=form?.querySelector('button[type="submit"],button:not([type])');if(submitButton)submitButton.disabled=true;
   try{
     const c=await saveCandidat(id,false,{requireIdentification:true,skipPull:true});if(!c)return;
     if(!candidatAllSectionsValid(c)){toast("Impossible de valider la fiche : toutes les sections doivent être validées","error");renderView();return}
     if(!sqlBackendId(c.backendId))await persistCandidateToPostgres(c,{allowCreate:true});
     const backendId=sqlBackendId(c.backendId);
     if(!backendId)throw new Error("Identifiant backend candidat introuvable");
-    const finalAction=await SGDI.rh.validateCandidateFinal(backendId);
+    const finalAction=await SGDI.rh.validateCandidateFinal(backendId,validationPassword);
     const saved=finalAction&&finalAction.status==="success"?finalAction.data:finalAction;
     if(!saved||!saved.id)throw new Error("Confirmation backend finale invalide");
     Object.assign(c,candidateFromApi(saved));
     stashCandidatForRoute(c,[id,c.id,c.backendId]);
+    closeModal();
     toast("✓ Fiche de position validée — candidat en réserve","success");navigate("reserve");
   }catch(e){toast("Validation fiche refusée : "+(e.message||e),"error")}
-  finally{candidatFinalValidationLocks.delete(lockKey);setCandidatFinalValidationButtonsDisabled(id,false)}
+  finally{candidatFinalValidationLocks.delete(lockKey);setCandidatFinalValidationButtonsDisabled(id,false);if(submitButton)submitButton.disabled=false}
 }
 function presselectionner(id){validateCandidatSectionAction(id,candidatCurrentSectionKey(findCandidatById(id)||{sectionValidations:{}})||"identification")}
 function validerVersContrat(id){validerFichePosition(id)}
@@ -35469,6 +35480,7 @@ function adminUserFromApi(u){
   const cached=userPermissionCache()[u.username]||{};
   return {
     username:u.username,
+    email:u.email||"",
     nom:u.full_name||u.nom||u.username,
     role:u.role||"agent",
     niveau:u.access_level||u.niveau||"",
@@ -35478,6 +35490,7 @@ function adminUserFromApi(u){
     structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees),
     actionsAutorisees:Array.isArray(u.authorized_actions)?u.authorized_actions:(Array.isArray(u.actionsAutorisees)?u.actionsAutorisees:[]),
     validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled),
+    hasValidationPassword:!!u.has_validation_password,
     supervisorReadOnly:u.supervisor_read_only!==false
   };
 }
@@ -35526,7 +35539,7 @@ async function openAdminUserModal(username){
   finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar();}
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
-  const u=isNew?{username:"",password:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actionsAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
+  const u=isNew?{username:"",email:"",password:"",validationPassword:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actionsAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
@@ -35535,7 +35548,9 @@ async function openAdminUserModal(username){
     <form data-no-critical-auth="1" onsubmit="event.preventDefault();confirmAdminUserByKey('${encodeURIComponent(u.username||"")}')">
       <div class="grid grid-2 gap-3">
         <div><label class="label">Identifiant *</label><div class="flex gap-2"><input class="input" name="username" value="${escapeHTML(u.username)}" ${isNew?"":"readonly"}/>${isNew?`<button type="button" class="btn btn-secondary text-xs" onclick="adminSuggestUsernameForForm(true)">Générer</button>`:""}</div><div class="text-[11px] text-slate-500 mt-1">Convention : DRH01, OPS01, SUP01, ATL01, ADM01, ADG01.</div></div>
-        <div><label class="label">Mot de passe ${isNew?"*":"(laisser vide pour ne pas changer)"}</label><input class="input" name="password" /></div>
+        <div><label class="label">Email personnel de l'utilisateur *</label><input class="input" type="email" name="email" value="${escapeHTML(u.email||"")}" placeholder="utilisateur@exemple.com" required/></div>
+        <div><label class="label">Mot de passe de connexion ${isNew?"*":"(vide = inchangé)"}</label><input class="input" type="password" name="password" autocomplete="new-password" /></div>
+        <div><label class="label">Mot de passe de validation ${isNew?"*":"(vide = inchangé)"}</label><input class="input" type="password" name="validationPassword" autocomplete="new-password" placeholder="Secret distinct pour les validations"/></div>
         <div><label class="label">Nom complet *</label><input class="input" name="nom"  value="${escapeHTML(u.nom||"")}"/></div>
         <div><label class="label">Type de compte *</label><select class="input" name="role" onchange="syncUserAccessLevelWithRole(this.value);document.getElementById('user-role-preview').textContent=adminRoleDescription(this.value);adminSuggestUsernameForForm(false)">${ADMIN_USER_ROLES.map(r=>`<option value="${r}" ${selectedRole===r?"selected":""}>${escapeHTML(adminRoleDisplayLabel(r))} · ${escapeHTML(adminRoleGuide().find(x=>x[0]===r)?.[1]||'Profil')}</option>`).join("")}</select><div id="user-role-preview" class="text-[11px] text-slate-500 mt-1">${escapeHTML(adminRoleDescription(selectedRole))}</div></div>
         <div><label class="label">Profil d'accès *</label><select class="input" name="niveau" onchange="previewUserAccessLevel(this.value);adminSuggestUsernameForForm(false)">${niv.map(n=>`<option value="${n.code}" ${selectedNiveau===n.code?"selected":""}>${escapeHTML(n.label)}</option>`).join("")}</select><div id="user-level-preview" class="text-[11px] text-slate-500 mt-1"></div></div>
@@ -35606,43 +35621,50 @@ async function confirmAdminUser(originalUsername){
   const rawUsername=String(fd.get("username")||"").trim();
   const username=originalUsername?rawUsername:rawUsername.toUpperCase();
   const password=String(fd.get("password")||"");
-  const data={username,nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
+  const validationPassword=String(fd.get("validationPassword")||"");
+  const data={username,email:String(fd.get("email")||"").trim().toLowerCase(),nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
   if(username.length<3){if(usernameInput)usernameInput.style.background="#fee2e2";toast("Identifiant obligatoire : minimum 3 caractères","error");return}
   if(!data.nom){if(nomInput)nomInput.style.background="#fee2e2";toast("Nom complet obligatoire","error");return}
+  if(!data.email||!f.querySelector('[name="email"]')?.checkValidity()){toast("Une adresse email valide et propre à cet utilisateur est obligatoire","error");return}
+  if((db.users||[]).some(user=>String(user.email||"").toLowerCase()===data.email&&String(user.username||"").toLowerCase()!==String(originalUsername||"").toLowerCase())){toast("Cette adresse email est déjà attribuée à un autre utilisateur","error");return}
   if(!ensureNiveauxAcces().some(n=>n.code===data.niveau)){toast("Niveau d'accès obligatoire","error");return}
   if(!originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
     if(!password){toast("Mot de passe requis","error");return}
+    if(!validationPassword){toast("Mot de passe de validation requis","error");return}
     let savedUser=null;
     try{
-      savedUser=await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password});
+      savedUser=await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password,validation_password:validationPassword});
       if(!savedUser||!savedUser.username)throw new Error("Confirmation PostgreSQL invalide");
     }catch(e){
       const msg=String(e.message||e||"");
       toast("Création PostgreSQL refusée : "+(/at least 3 characters/i.test(msg)?"l'identifiant doit contenir au moins 3 caractères":msg),"error");
       return;
     }
-    const backendUser={...adminUserFromApi(savedUser),validationCodeEnabled:data.validationCodeEnabled};
+    const backendUser={...adminUserFromApi(savedUser),email:data.email,validationCodeEnabled:data.validationCodeEnabled};
     db.users=(db.users||[]).filter(x=>String(x.username||"").toLowerCase()!==backendUser.username.toLowerCase());
     db.users.push(backendUser);
+    if(savedUser.credentials_email_sent)toast("Identifiants envoyés à "+data.email,"success");else toast("Compte créé, mais l'email n'a pas pu être envoyé : "+(savedUser.credentials_email_error||"SMTP indisponible"),"warning");
     logActivity("Création utilisateur",username);
   }else{
     const existing=adminUserByUsername(originalUsername);
     const idx=existing?db.users.findIndex(x=>x.username===existing.username):-1;if(idx<0){toast("Utilisateur introuvable","error");return}
     originalUsername=existing.username;
     try{
-      const payload={full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,is_active:data.actif};
+      const payload={email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,is_active:data.actif};
       if(password)payload.password=password;
+      if(validationPassword)payload.validation_password=validationPassword;
       await SGDI.auth.updateUser(originalUsername,payload);
     }catch(e){
       const msg=String(e.message||e||"");
       if(/not found|introuvable|404/i.test(msg)){
         try{
           if(!password){toast("Mot de passe obligatoire pour recréer l'utilisateur côté backend","error");return}
-          await SGDI.auth.createUser({username,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password});
+          if(!validationPassword){toast("Mot de passe de validation obligatoire pour recréer l'utilisateur côté backend","error");return}
+          await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password,validation_password:validationPassword});
           toast("Utilisateur recréé dans PostgreSQL","warning");
         }catch(createErr){
           const createMsg=String(createErr.message||createErr||"");

@@ -12,10 +12,12 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_token_payload, current_user
 from app.modules.auth.models import User
+from app.core.security import verify_password
 from app.modules.drh import service
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.drh.schemas import (
     CandidateCreate,
+    CandidateFinalValidationIn,
     CandidateOut,
     CandidatePage,
     CandidateUpdate,
@@ -449,10 +451,19 @@ def validate_candidate_section(
 
 
 @router.post("/candidates/{candidate_id}/validate-final")
-def validate_candidate_final(candidate_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def validate_candidate_final(
+    candidate_id: int,
+    payload: CandidateFinalValidationIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
     _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
     _ensure_society_allowed(user, existing.society)
+    if not user.validation_password_hash:
+        raise HTTPException(status_code=403, detail="Aucun mot de passe de validation n'est configuré pour votre compte")
+    if not verify_password(payload.validation_password, user.validation_password_hash):
+        raise HTTPException(status_code=401, detail="Mot de passe de validation incorrect")
     return _action_success(service.validate_candidate_final(db, candidate_id, username=user.username))
 
 

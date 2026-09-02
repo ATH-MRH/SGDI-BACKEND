@@ -20,6 +20,7 @@ class User(Base, TimestampMixin):
     # individuelle effective pour toutes les routes authentifiées.
     authorized_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    validation_password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Superviseur terrain : par défaut lecture seule (comportement historique, non
     # configurable jusqu'ici — voir isOpsSupervisorReadOnlySession côté frontend). Un admin
