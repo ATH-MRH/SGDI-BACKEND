@@ -1106,12 +1106,20 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .candidate-chip{display:inline-flex;align-items:center;min-height:26px;border:1px solid var(--border);background:#f8fafc;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;color:#334155;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .candidate-photo-preview{width:180px;height:225px;background:#fff;border:1px solid #043970!important;box-shadow:0 4px 12px rgba(15,23,42,.10)}
   .photo-field-wrap{position:relative;display:flex;flex-direction:column;align-items:center;gap:6px}
-  .photo-clickzone{position:relative;width:240px;height:300px;border-radius:12px;overflow:hidden;cursor:pointer;border:2px dashed #cbd5e1;background:#f8fafc;display:flex;align-items:center;justify-content:center;transition:border-color .15s,box-shadow .15s}
+  .photo-clickzone{position:relative;width:168px;height:210px;border-radius:12px;overflow:hidden;cursor:pointer;border:2px dashed #cbd5e1;background:#f8fafc;display:flex;align-items:center;justify-content:center;transition:border-color .15s,box-shadow .15s,opacity .15s}
   .photo-clickzone:hover{border-color:#2563eb;border-style:solid;box-shadow:0 0 0 4px rgba(37,99,235,.08)}
   .photo-preview-inner{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
   .photo-preview-inner img{width:100%;height:100%;object-fit:cover;display:block}
   .photo-cam-overlay{position:absolute;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
   .photo-clickzone:hover .photo-cam-overlay{opacity:1}
+  body.sgdi-view-mode .photo-clickzone,
+  [data-candidat-section][data-locked="1"] .photo-clickzone{cursor:not-allowed;opacity:.62}
+  body.sgdi-view-mode .photo-clickzone:hover,
+  [data-candidat-section][data-locked="1"] .photo-clickzone:hover{border-color:#cbd5e1;border-style:dashed;box-shadow:none}
+  body.sgdi-view-mode .photo-clickzone .photo-cam-overlay,
+  [data-candidat-section][data-locked="1"] .photo-clickzone .photo-cam-overlay{display:none}
+  body.sgdi-view-mode .photo-remove-badge,
+  [data-candidat-section][data-locked="1"] .photo-remove-badge{display:none}
   .photo-remove-badge{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:#dc2626;color:#fff;border:none;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3)}
   .photo-remove-badge:hover{background:#b91c1c}
   .photo-hint{font-size:10px;color:#94a3b8;letter-spacing:.02em}
