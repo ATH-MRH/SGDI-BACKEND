@@ -7954,17 +7954,9 @@ function renderView(){
       case"dashboard":renderDashboard(view);break;
       case"dossiers":renderDossiers(view);break;
       case"recrutement":
-        if(sub==="statistiques")renderRecruitmentStatistics(view);
-        else if(sub&&!["candidats","liste"].includes(sub))renderCandidatForm(view,sub==="nouveau"?null:sub);
-        else renderRecrutement(view,"new");
-        break;
       case"reserve":
-        if(sub)renderCandidatForm(view,sub==="nouveau"?null:sub,{reserveDirect:true});
-        else renderRecrutement(view,"reserve");
-        break;
       case"candidats_archives":
-        if(sub)renderCandidatForm(view,sub);
-        else renderRecrutement(view,"archive");
+        location.assign("/recrute");
         break;
       case"contrats":
         if(sub==="avenants")renderAvenants(view);
