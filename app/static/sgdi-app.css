@@ -1137,7 +1137,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .candidate-progress-track{height:5px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:6px}
   .candidate-progress-bar{height:100%;background:#047857;border-radius:999px;transition:width .2s ease}
   .candidate-section-list{display:flex;flex-direction:column;gap:6px}
-  .candidate-section-list-horizontal{display:grid;grid-template-columns:repeat(8,minmax(96px,1fr));gap:5px;margin-top:7px;overflow-x:auto;padding-bottom:1px}
+  .candidate-section-list-horizontal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;margin-top:7px;width:100%;min-width:0;overflow:visible;padding-bottom:1px}
   .candidate-section-link{width:100%;min-height:32px;display:grid;grid-template-columns:21px minmax(0,1fr);align-items:center;gap:6px;text-align:left;border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px 7px;color:#475569;cursor:pointer}
   .candidate-section-link span{width:21px;height:21px;border-radius:999px;background:#e2e8f0;color:#475569;display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:900}
   .candidate-section-link strong{font-size:10.5px;line-height:1.15;font-weight:800;white-space:normal}
@@ -1212,18 +1212,18 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .candidate-global-footer-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
   .candidate-section-actions{display:flex;flex-wrap:wrap;gap:8px}
   .candidate-section-note{font-size:12px;line-height:1.35;color:var(--text-soft);text-align:right}
-  @media (max-width:980px){
+  @media (max-width:1400px){
     .candidate-hero{grid-template-columns:auto minmax(0,1fr);align-items:start}
     .candidate-hero>.btn{grid-column:1/-1;width:100%;justify-content:center}
-    .candidate-section-list-horizontal{grid-template-columns:repeat(4,minmax(132px,1fr))}
+    .candidate-section-list-horizontal{grid-template-columns:repeat(4,minmax(0,1fr))}
   }
-  @media (max-width:640px){
+  @media (max-width:760px){
     .candidate-hero{grid-template-columns:1fr}
     .candidate-id-photo-row,.candidate-id-name-fields{grid-template-columns:1fr}
     .candidate-id-name-fields{padding-top:0}
-    .candidate-progress-strip{position:static}
+    .candidate-progress-strip{position:static;padding:8px}
     .candidate-progress-top{flex-direction:column}
-    .candidate-section-list-horizontal{grid-template-columns:repeat(2,minmax(132px,1fr))}
+    .candidate-section-list-horizontal{grid-template-columns:repeat(2,minmax(0,1fr))}
     .candidate-actions-row{justify-content:stretch}
     .candidate-actions-row .btn{width:100%}
     .candidate-global-section-footer{position:static;flex-direction:column;align-items:stretch}
@@ -1232,6 +1232,9 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
     .candidate-title{font-size:21px}
     .candidate-section-head,.candidate-section-footer{flex-direction:column;align-items:flex-start}
     .candidate-section-note{text-align:left}
+  }
+  @media (max-width:420px){
+    .candidate-section-list-horizontal{grid-template-columns:minmax(0,1fr)}
   }
 
   /* ----- BREADCRUMB / TOPBAR HEADER ----- */

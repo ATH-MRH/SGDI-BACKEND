@@ -94,6 +94,15 @@ test('le recrutement couvre entretien, décision réversible, embauche et statis
   }
 });
 
+test('le bandeau des étapes candidat est adaptatif sans huitième colonne vide', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  assert.match(css, /candidate-section-list-horizontal\{[^}]*grid-template-columns:repeat\(7,minmax\(0,1fr\)\)/);
+  assert.match(css, /@media \(max-width:1400px\)[\s\S]*candidate-section-list-horizontal\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(css, /@media \(max-width:760px\)[\s\S]*candidate-section-list-horizontal\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /@media \(max-width:420px\)[\s\S]*candidate-section-list-horizontal\{grid-template-columns:minmax\(0,1fr\)/);
+  assert.doesNotMatch(css, /candidate-section-list-horizontal\{[^}]*repeat\(8,/);
+});
+
 test('Administration système expose la configuration du recrutement', () => {
   const configs = T().sgdiModuleHostConfigs();
   assert.ok(configs.admin.sections.some(item => item.route === 'admin/sections_candidat'));
