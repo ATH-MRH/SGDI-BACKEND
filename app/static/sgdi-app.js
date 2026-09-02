@@ -9721,8 +9721,8 @@ async function renderRecrutementServer(view,mode){
   const addButton=mode==="reserve"?candidatImportActionsHTML("reserve"):(mode==="new"?candidatImportActionsHTML("new"):"");
   const alreadyRendered=!!(view.querySelector('[data-recruitment-view]'));
   if(!alreadyRendered){
-    const loadingCard=`<div class="card p-10 text-center text-slate-500" aria-busy="true">Chargement des candidatures…</div>`;
-    view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold recruitment-page-title">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>${recrutementUnifiedTabsHTML(mode,socFilter)}${reserveBulkDeleteBarHTML(mode,0)}${loadingCard}</div>`;
+    const emptyListCard=`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`;
+    view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold recruitment-page-title">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>${recrutementUnifiedTabsHTML(mode,socFilter)}${reserveBulkDeleteBarHTML(mode,0)}${emptyListCard}</div>`;
   }
   try{
     const result=await SGDI.rh.candidatesPage({mode:recrutementModeToApi(mode),society:socFilter,page,page_size:pageSize});

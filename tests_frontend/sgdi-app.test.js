@@ -78,7 +78,8 @@ test('les routes recrutement distribuent les listes et le formulaire candidat', 
   assert.match(src, /onclick="navigate\('\$\{route\}'\)"/);
   assert.doesNotMatch(src, /switchRecruitmentTab/);
   assert.match(src, /reserveBulkDeleteBarHTML\(mode,0\)/);
-  assert.match(src, /aria-busy="true">Chargement des candidatures…/);
+  assert.doesNotMatch(src, /Chargement des candidatures…/);
+  assert.match(src, /const emptyListCard=.*Aucun candidat\./);
 });
 
 test('le recrutement couvre entretien, décision réversible, embauche et statistiques', () => {
