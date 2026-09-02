@@ -1739,12 +1739,12 @@ function sgdiActiveStatsSociety(){
 async function sgdiRefreshSidebarStats(society){
   if(!window.SGDI_API?.ui?.sidebarStats)return null;
   try{
-    // Compteurs de vue d'ensemble : TOUJOURS le total autorisé (global). Le backend borne déjà
-    // le résultat aux sociétés permises (tout pour un super-admin). On n'applique plus le filtre
-    // société de navigation ici -> plus d'oscillation 2/5 entre deux rafraîchissements.
-    const stats=await window.SGDI_API.ui.sidebarStats({});
+    // La barre latérale décrit exclusivement la société active. Sans ce paramètre,
+    // le backend additionne les données de toutes les sociétés autorisées.
+    const activeSociety=String(society||sgdiActiveStatsSociety()||"").trim();
+    const stats=await window.SGDI_API.ui.sidebarStats(activeSociety?{society:activeSociety}:{});
     window.SGDI_SIDEBAR_STATS=stats;
-    sgdiEnsureEmployeesForDisplay({society:""});
+    sgdiEnsureEmployeesForDisplay({society:activeSociety});
     window.dispatchEvent(new CustomEvent("sgdi:sidebar-stats",{detail:stats}));
     return stats;
   }catch(error){
@@ -6592,11 +6592,17 @@ function renderSidebar(){
     const dotationCount=typeof materialPendingDotationCountForSoc==="function"?materialPendingDotationCountForSoc(soc):(typeof agentsEnInstanceDotationForSoc==="function"?agentsEnInstanceDotationForSoc(soc).length:0);
     const siteDotationCount=typeof sitesEnAttenteDotation==="function"?sitesEnAttenteDotation().length:0;
     const reversementCount=typeof agentsEnInstanceReversement==="function"?agentsEnInstanceReversement().length:0;
-    const drhSoc=session?.societe||currentStructureSocieteFilter()||"";
-    const drhAgents=(db.agents||[]).filter(a=>!drhSoc||a.societe===drhSoc);
-    const drhCandidates=(db.candidats||[]).filter(c=>candidatIsActive(c)&&(!drhSoc||c.societe===drhSoc));
-    // Source de vérité : stats serveur si disponibles, sinon données locales
-    const srv=window.SGDI_SIDEBAR_STATS;
+    const drhSoc=drhActiveSocieteFilter()||soc||"";
+    const drhMatchesActiveSociete=item=>!drhSoc||dataMatchesSociete(item,drhSoc);
+    const drhAgents=(db.agents||[]).filter(drhMatchesActiveSociete);
+    const drhCandidates=(db.candidats||[]).filter(c=>candidatIsActive(c)&&drhMatchesActiveSociete(c));
+    const drhContractsToEstablish=drhCandidates.filter(c=>String(c.statut||c.status||"").toLowerCase()==="a_contractualiser");
+    // Source de vérité : stats serveur uniquement si elles correspondent encore
+    // à la société affichée (un changement de société peut laisser l'ancien objet
+    // en mémoire pendant quelques millisecondes).
+    const rawSrv=window.SGDI_SIDEBAR_STATS;
+    const srvSoc=String(rawSrv?.scope?.active_society||"").trim();
+    const srv=rawSrv&&normalizeSocieteName(srvSoc)===normalizeSocieteName(drhSoc)?rawSrv:null;
     const srvEmp=srv?.erp?.employees;
     const srvOps=srv?.erp?.ops;
     const srvMat=srv?.erp?.materiel;
@@ -6629,11 +6635,11 @@ function renderSidebar(){
     const sidebarByModule={
       drh:[
         {label:"TABLEAU DE BORD",route:"drh/dashboard",group:"PILOTAGE"},
-        {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"],group:"RECRUTEMENT & CONTRATS",count:drhCandidates.length||null},
-        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],group:"RECRUTEMENT & CONTRATS",count:contractsToEstablishCandidates().length||null},
+        {label:"RECRUTEMENT",route:"recrutement/candidats",aliases:["recrutement","reserve","candidats_archives"],group:"RECRUTEMENT & CONTRATS",count:(srvDrh?.recrutement?.total??drhCandidates.length)||null},
+        {label:"CONTRATS",route:"contrats/dashboard",aliases:["contrats"],group:"RECRUTEMENT & CONTRATS",count:drhContractsToEstablish.length||null},
         {label:"FICHE DE POSITION",route:"fiches",group:"PERSONNEL",count:drhAgents.filter(a=>!employeeIsFormer(a)&&agentCompleteness(a).pct<85).length||null},
         {label:"GRH",route:"effectif/recap",aliases:["effectif","agents"],group:"PERSONNEL",count:drhAgents.filter(a=>a.statut==="actif"&&(!socialCnasOk(a)||!socialChifaOk(a))).length||null},
-        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],group:"PERSONNEL",count:(()=>{const soc=drhActiveSocieteFilter();const agIds=new Set((db.agents||[]).filter(a=>!employeeIsFormer(a)&&(!soc||a.societe===soc)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
+        {label:"CONGÉS",route:"drh/conges",aliases:["drh/conges"],group:"PERSONNEL",count:(()=>{const agIds=new Set(drhAgents.filter(a=>!employeeIsFormer(a)).map(a=>a.id));return(db.conges||[]).filter(c=>agIds.has(c.agentId)&&c.statut==="approuve"&&c.type!=="Maladie"&&inRange(c)).length||null})()},
         {label:"SUSPENSION",route:"effectif/suspension",aliases:["effectif/suspension"],group:"PERSONNEL",count:drhAgents.filter(a=>normalizeEmployeeStatusValue(a.statut||a.status)==="suspendu").length||null},
         {label:"POINTAGE",route:"pointage/dashboard",aliases:["pointage"],group:"SUIVI TERRAIN",count:(()=>{
           const now=new Date();
@@ -6649,9 +6655,9 @@ function renderSidebar(){
           return eligible.filter(a=>![a.id,a.backendId,a.matricule].some(ref=>ref!==undefined&&ref!==null&&ref!==""&&pointes.has(String(ref)))).length||null;
         })()},
         {label:"PORTAIL RH",route:"demandes_personnel/dashboard",aliases:["demandes_personnel"],group:"SUIVI TERRAIN",count:drhDemandesPersonnelList().filter(d=>["nouveau","en_cours"].includes(d.statut||"nouveau")).length},
-        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const soc=drhActiveSocieteFilter();const ag=(db.agents||[]).filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt&&(!soc||a.societe===soc));return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
-        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month&&(!soc||a.societe===soc)).length||null})()},
-        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const soc=drhActiveSocieteFilter(),month=today().slice(0,7);return (db.agents||[]).filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month&&(!soc||a.societe===soc)}).length||null})()}
+        {label:"MISE EN DEMEURE",route:"drh/mise_en_demeure",aliases:["drh/mise_en_demeure"],group:"SORTIES",count:(()=>{const ag=drhAgents.filter(a=>a.statut==="sortant"&&!a.finRelationDotationReversee&&a.finRelationAt);return ag.reduce((n,a)=>n+drhMedPendingCount(a),0)||null})()},
+        {label:"ÉLÉMENTS SORTANTS",route:"effectif/sortants",aliases:["effectif/sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>a.statut==="sortant"&&String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7)===month).length||null})()},
+        {label:"ARCHIVES",route:"effectif/archives_sortants",aliases:["effectif/archives_sortants"],group:"SORTIES",count:(()=>{const month=today().slice(0,7);return drhAgents.filter(a=>{const exitMonth=String(a.dateSortie||a.departAt||a.finRelationAt||"").slice(0,7);return a.statut==="sortant"&&exitMonth!==month}).length||null})()}
       ],
       ops:[
         {label:"TABLEAU DE BORD",route:"ops/dashboard",group:"PILOTAGE"},

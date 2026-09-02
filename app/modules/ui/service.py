@@ -356,7 +356,9 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
             "recrutement": {
                 "total": erp["drh"]["candidates_total"],
                 "reserve": erp["drh"].get("candidates_reserve", 0),
-                "nouveaux": legacy.get("candidats", 0),
+                # `legacy` contient les totaux globaux. Pour une société active,
+                # le total DRH déjà filtré est la seule valeur sûre à exposer ici.
+                "nouveaux": erp["drh"]["candidates_total"] if society else legacy.get("candidats", 0),
                 "archives": 0,
             },
             "effectifs": {
