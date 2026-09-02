@@ -123,6 +123,13 @@ test('les actions du candidat en réserve proposent la contractualisation contr�
   assert.match(src, /marquerContractualisation\(backendId\)/);
 });
 
+test('le compteur des contrats à établir clignote en rouge uniquement au-dessus de zéro', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  assert.match(src, /pendingCandidates\.length>0\?"contract-modern-stat-alert"/);
+  assert.match(css, /\.contract-modern-stat-alert strong\{[^}]*#dc2626[^}]*contractPendingBlink/);
+  assert.match(css, /@keyframes contractPendingBlink/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);
