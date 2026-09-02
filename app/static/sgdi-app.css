@@ -873,7 +873,10 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   .col-span-2{grid-column:span 2}.col-span-3{grid-column:span 3}.col-span-4{grid-column:span 4}.col-span-6{grid-column:span 6}
   .candidate-inline-fields{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
-  .candidate-id-inline-row{grid-column:1/-1;display:flex;align-items:flex-start;justify-content:flex-end;gap:12px;flex-wrap:wrap;width:100%}
+  .candidate-id-inline-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:start;gap:12px;width:100%}
+  .candidate-id-inline-row>.candidate-field-4cm,
+  .candidate-id-inline-row>.candidate-field-5cm,
+  .candidate-id-inline-row>.candidate-field-7cm{width:auto;max-width:none;min-width:0}
   .candidate-field-4cm{width:4cm;max-width:100%}
   .candidate-field-5cm{width:5cm;max-width:100%}
   .candidate-field-7cm{width:7cm;max-width:100%}
@@ -1232,6 +1235,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   @media (max-width:760px){
     .candidate-hero{grid-template-columns:1fr}
     .candidate-id-photo-row,.candidate-id-name-fields{grid-template-columns:1fr}
+    .candidate-id-inline-row{grid-template-columns:repeat(2,minmax(0,1fr))}
     .candidate-parent-names-row{grid-template-columns:1fr}
     .candidate-measurements-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .candidate-id-name-fields{padding-top:0}
