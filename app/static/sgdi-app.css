@@ -1126,6 +1126,9 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .candidate-id-photo-row{display:grid;grid-template-columns:auto minmax(260px,1fr);gap:18px;align-items:start}
   .candidate-id-name-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;padding-top:20px}
   .candidate-parent-names-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .candidate-measurements-block{margin-top:4px;padding-top:12px;border-top:1px solid var(--border)}
+  .candidate-subsection-title{margin-bottom:10px;color:#256dad;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.055em}
+  .candidate-measurements-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
   .candidate-dossier-grid{display:flex;flex-direction:column;gap:12px;max-width:100%}
   .candidate-main{min-width:0}
   .candidate-stepper{margin-bottom:14px}
@@ -1230,6 +1233,7 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
     .candidate-hero{grid-template-columns:1fr}
     .candidate-id-photo-row,.candidate-id-name-fields{grid-template-columns:1fr}
     .candidate-parent-names-row{grid-template-columns:1fr}
+    .candidate-measurements-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .candidate-id-name-fields{padding-top:0}
     .candidate-progress-strip{position:static;padding:8px}
     .candidate-progress-top{flex-direction:column}

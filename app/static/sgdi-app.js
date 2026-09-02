@@ -10272,10 +10272,15 @@ function renderCandidatEtape1(c){
       <div class="col-span-3"><label class="label">Source *</label><input class="input" name="source" value="${escapeHTML(c.source||"")}" placeholder="ANEM, LinkedIn, recommandation…" /></div>
       <div class="col-span-3"><label class="label">NIN</label><input class="input" name="nin" value="${escapeHTML(c.nin||"")}" maxlength="20" /></div>
       <div class="col-span-3"><label class="label">N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(c.numeroCnas||c.cnas||"")}" maxlength="13" pattern="[0-9]{10} [0-9]{2}" inputmode="numeric" placeholder="xxxxxxxxxx xx" oninput="let d=this.value.replace(/[^0-9]/g,'').slice(0,12);this.value=d.length>10?d.slice(0,10)+' '+d.slice(10):d" /></div>
-      <div><label class="label">Taille (cm)</label><input class="input" type="number" name="taille" value="${c.taille||""}"/></div>
-      <div><label class="label">Pointure</label><input class="input" type="number" name="pointure" value="${c.pointure||""}"/></div>
-      <div><label class="label">Taille chemise</label><select class="select" name="tailleChemise">${["XS","S","M","L","XL","XXL","XXXL"].map(s=>`<option ${c.tailleChemise===s?"selected":""}>${s}</option>`).join("")}</select></div>
-      <div><label class="label">Taille pantalon</label><select class="select" name="taillePantalon"><option value="">—</option>${["36","38","40","42","44","46","48","50","52","54","56","58","60"].map(s=>`<option ${String(c.taillePantalon||"")===s?"selected":""}>${s}</option>`).join("")}</select></div>
+      <div class="col-span-6 candidate-measurements-block">
+        <div class="candidate-subsection-title">Mensurations</div>
+        <div class="candidate-measurements-grid">
+          <div><label class="label">Taille (cm)</label><input class="input" type="number" name="taille" value="${c.taille||""}"/></div>
+          <div><label class="label">Pointure</label><input class="input" type="number" name="pointure" value="${c.pointure||""}"/></div>
+          <div><label class="label">Taille chemise</label><select class="select" name="tailleChemise">${["XS","S","M","L","XL","XXL","XXXL"].map(s=>`<option ${c.tailleChemise===s?"selected":""}>${s}</option>`).join("")}</select></div>
+          <div><label class="label">Taille pantalon</label><select class="select" name="taillePantalon"><option value="">—</option>${["36","38","40","42","44","46","48","50","52","54","56","58","60"].map(s=>`<option ${String(c.taillePantalon||"")===s?"selected":""}>${s}</option>`).join("")}</select></div>
+        </div>
+      </div>
     </div>
     <div class="mt-4"><label class="label">Langues parlées</label><div class="flex flex-wrap gap-3">${["Arabe","Français","Anglais","Kabyle","Espagnol","Allemand"].map(l=>`<label class="radio-pill"><input type="checkbox" name="lang_${l}" ${(c.langues||[]).includes(l)?"checked":""}/> ${l}</label>`).join("")}<label class="radio-pill"><input type="checkbox" id="lang-autre-check" ${c.langueAutre?"checked":""} onchange="document.getElementById('lang-autre-input').disabled=!this.checked"/> Autre</label><input id="lang-autre-input" class="input" style="max-width:200px" name="langueAutre" value="${escapeHTML(c.langueAutre||"")}" placeholder="Précisez" ${c.langueAutre?"":"disabled"}/></div></div>
   ${candidatSectionClose(c,"identification")}`:""}
