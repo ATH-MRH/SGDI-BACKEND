@@ -11852,6 +11852,14 @@ function newContractClientOptions(selectedClient,forcedSociete){
   // réelle du dossier en cours, alors que des sites existent bel et bien pour elle.
   const soc=forcedSociete||(typeof effectifSocieteFilter==="function"?effectifSocieteFilter():(typeof mySoc==="function"?mySoc():""));
   const seen=new Set();
+  const activeClients=(db.clients||[]).filter(c=>c&&String(c.statut||c.status||"actif").toLowerCase()!=="inactif");
+  const scopedClients=soc?activeClients.filter(c=>!c.societe||normalizeSocieteName(c.societe)===normalizeSocieteName(soc)):activeClients;
+  const clients=(scopedClients.length?scopedClients:activeClients).sort((a,b)=>String(a.nom||a.raisonSociale||"").localeCompare(String(b.nom||b.raisonSociale||""),"fr"));
+  const clientOptions=clients.map(c=>{
+    const name=String(c.nom||c.raisonSociale||"").trim();if(!name)return "";
+    const key=name.toLowerCase();if(seen.has("client:"+key))return "";seen.add("client:"+key);
+    return `<option value="${escapeHTML(name)}" data-adresse="${escapeHTML(c.adresse||"")}" data-wilaya="${escapeHTML(c.wilaya||"")}" data-commune="${escapeHTML(c.commune||"")}" ${selected===key?"selected":""}>${escapeHTML(name)}</option>`;
+  }).filter(Boolean).join("");
   const activeSites=(db.sites||[]).filter(s=>s&&s.actif!==false);
   // Si le filtrage par société ne renvoie aucun résultat (site non tagué, données
   // incohérentes...), mieux vaut proposer tous les sites actifs qu'un menu vide qui
@@ -11869,8 +11877,21 @@ function newContractClientOptions(selectedClient,forcedSociete){
     const isSelected=selected&&(selected===client.toLowerCase()||selected===siteName.toLowerCase());
     return `<option value="${escapeHTML(client)}" data-site="${escapeHTML(siteName)}" data-adresse="${escapeHTML(s.adresse||"")}" data-wilaya="${escapeHTML(s.wilaya||"")}" data-commune="${escapeHTML(s.commune||"")}" ${isSelected?"selected":""}>${escapeHTML(label)}</option>`;
   }).filter(Boolean).join("");
-  const custom=selected&&!options.includes("selected")?`<option value="__autre__" selected>Autre</option>`:"";
-  return `<option value="">— Choisir site / client —</option>${custom}${options}<option value="__autre__">Autre</option>`;
+  const hasSelected=clientOptions.includes("selected")||options.includes("selected");
+  const custom=selected&&!hasSelected?`<option value="__autre__" selected>Autre</option>`:"";
+  return `<option value="">— Choisir un client / site —</option>${custom}${clientOptions?`<optgroup label="Clients">${clientOptions}</optgroup>`:""}${options?`<optgroup label="Sites opérationnels">${options}</optgroup>`:""}<option value="__autre__">Autre</option>`;
+}
+async function loadNewContractClients(){
+  const form=document.getElementById("employee-new-contract-form");if(!form)return;
+  const select=form.querySelector('[name="client"]');if(!select)return;
+  try{
+    const rows=await SGDI.commercial.clients();
+    if(Array.isArray(rows))db.clients=rows.map(clientFromApi);
+  }catch(e){console.warn("Chargement clients du contrat indisponible",e)}
+  const current=select.value==="__autre__"?(form.clientAutre?.value||""):select.value;
+  const employee=findEmployeeByRef(form.agentId?.value);
+  select.innerHTML=newContractClientOptions(current,employee?.societe||currentStructureSocieteFilter()||mySoc()||"");
+  updateNewContractClientFromSelect(select);
 }
 function newContractClientCustomField(selectedClient){
   const selected=String(selectedClient||"").trim();
@@ -12344,6 +12365,7 @@ function openEmployeeNewContractModal(agentId,options){
     </form></div>`);
   updateNewContractReference();
   updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));
+  loadNewContractClients();
   updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));
 }
 async function confirmEmployeeNewContract(form){
@@ -12862,7 +12884,7 @@ function renderContractualisation(view,id){
         </div>
       </div>
     </form>`;
-  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels()},0);
+  setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));loadNewContractClients();updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels()},0);
 }
 function updateNewContractSummary(){
   const f=document.getElementById("employee-new-contract-form");if(!f)return;

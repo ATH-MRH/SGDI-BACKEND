@@ -181,6 +181,15 @@ test('l’aperçu du contrat fusionne le modèle avec les données du futur empl
   assert.match(src, /Contrat complété généré avec les données du futur employé/);
 });
 
+test('le champ client du contrat charge les clients PostgreSQL et les sites', () => {
+  assert.match(src, /function loadNewContractClients\(\)/);
+  assert.match(src, /await SGDI\.commercial\.clients\(\)/);
+  assert.match(src, /db\.clients=rows\.map\(clientFromApi\)/);
+  assert.match(src, /<optgroup label="Clients">/);
+  assert.match(src, /<optgroup label="Sites opérationnels">/);
+  assert.match(src, /loadNewContractClients\(\);updateNewContractSalaryWords/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);
