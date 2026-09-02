@@ -9754,10 +9754,24 @@ function renderRecruitmentStatistics(view){
   const accepted=rows.filter(c=>candidateAvisValue(c.avisDecision)==="Favorable"&&!candidatIsArchived(c)).length;
   const cancelled=rows.filter(candidatIsArchived).length;
   const interviewed=rows.filter(c=>Array.isArray(c.entretiens)&&c.entretiens.length).length;
-  view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold">Statistiques recrutement</h1><p class="text-sm text-slate-500">Analyse multicritère des candidatures${soc?` · ${escapeHTML(soc)}`:""}.</p></div><button class="btn btn-primary" onclick="openAddCandidateForm()">+ Nouveau candidat</button></div>${recrutementUnifiedTabsHTML("stats",soc)}
-    <div class="grid grid-4 gap-3 mb-4"><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Candidatures</div><div class="text-3xl font-black">${rows.length}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Validées</div><div class="text-3xl font-black text-emerald-700">${accepted}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Entretiens réalisés/planifiés</div><div class="text-3xl font-black text-blue-700">${interviewed}</div></div><div class="card p-4"><div class="text-xs text-slate-500 uppercase">Annulées</div><div class="text-3xl font-black text-red-700">${cancelled}</div></div></div>
-    <div class="card p-4 mb-4"><label class="label">Catégorie statistique</label><select class="select" onchange="sessionStorage.setItem('recruitStatsField',this.value);renderView()">${fields.map(([key,label])=>`<option value="${key}" ${selected===key?"selected":""}>${escapeHTML(label)}</option>`).join("")}</select></div>
-    <div class="card p-5"><h2 class="font-black text-lg mb-4">Répartition par ${escapeHTML(fields.find(([key])=>key===selected)?.[1]||selected)}</h2>${grouped.length?grouped.map(([label,count])=>`<div class="mb-3"><div class="flex justify-between text-sm mb-1"><span>${escapeHTML(label)}</span><b>${count} · ${Math.round(count*100/Math.max(rows.length,1))}%</b></div><div class="h-2 rounded bg-slate-100"><div class="h-2 rounded bg-blue-700" style="width:${Math.round(count*100/max)}%"></div></div></div>`).join(""):`<div class="text-slate-500">Aucune candidature.</div>`}</div></div>`;
+  const selectedLabel=fields.find(([key])=>key===selected)?.[1]||selected;
+  const kpis=[
+    ["Candidatures",rows.length,"Tous les dossiers","total"],
+    ["Validées",accepted,`${Math.round(accepted*100/Math.max(rows.length,1))}% du total`,"valid"],
+    ["Entretiens",interviewed,"Réalisés ou planifiés","interview"],
+    ["Annulées",cancelled,`${Math.round(cancelled*100/Math.max(rows.length,1))}% du total`,"cancelled"]
+  ];
+  view.innerHTML=`<div data-recruitment-view="1" class="recruitment-stats-page">
+    <section class="recruitment-stats-hero">
+      <div class="recruitment-stats-heading"><div><span class="recruitment-stats-eyebrow">Pilotage des candidatures</span><h1>Statistiques recrutement</h1><p>Analyse multicritère${soc?` pour <strong>${escapeHTML(soc)}</strong>`:" de toutes les candidatures"}.</p></div><button class="btn btn-primary recruitment-stats-add" onclick="openAddCandidateForm()">+ Nouveau candidat</button></div>
+      ${recrutementUnifiedTabsHTML("stats",soc)}
+    </section>
+    <section class="recruitment-stats-kpis">${kpis.map(([label,value,note,tone])=>`<article class="recruitment-stat-kpi recruitment-stat-kpi--${tone}"><div class="recruitment-stat-kpi-top"><span>${escapeHTML(label)}</span><i aria-hidden="true"></i></div><strong>${value}</strong><small>${escapeHTML(note)}</small></article>`).join("")}</section>
+    <section class="recruitment-stats-analysis">
+      <aside class="recruitment-stats-filter"><span class="recruitment-stats-eyebrow">Analyse détaillée</span><h2>Choisir un critère</h2><p>Affichez la répartition des candidats selon la catégorie souhaitée.</p><label for="recruit-stats-field">Catégorie statistique</label><select id="recruit-stats-field" class="select" onchange="sessionStorage.setItem('recruitStatsField',this.value);renderView()">${fields.map(([key,label])=>`<option value="${key}" ${selected===key?"selected":""}>${escapeHTML(label)}</option>`).join("")}</select><div class="recruitment-stats-summary"><span>Catégories trouvées</span><b>${grouped.length}</b></div></aside>
+      <div class="recruitment-stats-chart"><div class="recruitment-stats-chart-head"><div><span class="recruitment-stats-eyebrow">Répartition</span><h2>Par ${escapeHTML(selectedLabel)}</h2></div><span class="recruitment-stats-total">${rows.length} candidat${rows.length>1?"s":""}</span></div><div class="recruitment-stats-bars">${grouped.length?grouped.map(([label,count])=>`<div class="recruitment-stats-bar"><div class="recruitment-stats-bar-label"><span title="${escapeHTML(label)}">${escapeHTML(label)}</span><b>${count} <em>${Math.round(count*100/Math.max(rows.length,1))}%</em></b></div><div class="recruitment-stats-track"><i style="width:${Math.round(count*100/max)}%"></i></div></div>`).join(""):`<div class="recruitment-stats-empty">Aucune candidature à analyser.</div>`}</div></div>
+    </section>
+  </div>`;
 }
 function scrollToRecruitmentList(){
   const view=document.getElementById("view");

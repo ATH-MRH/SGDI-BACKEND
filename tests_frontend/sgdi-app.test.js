@@ -142,6 +142,16 @@ test('les nouveaux dossiers utilisent le tableau épuré de contractualisation',
   assert.match(src, /activeTab\.textContent=String\(newCount\)/);
 });
 
+test('les statistiques recrutement utilisent un tableau de bord compact et adaptatif', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  assert.match(src, /class="recruitment-stats-page"/);
+  assert.match(src, /class="recruitment-stats-analysis"/);
+  assert.match(src, /class="recruitment-stats-bars"/);
+  assert.match(src, /id="recruit-stats-field"/);
+  assert.match(css, /\.recruitment-stats-analysis\{display:grid/);
+  assert.match(css, /@media\(max-width:760px\)/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);
