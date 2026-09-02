@@ -7956,6 +7956,16 @@ function renderView(){
       case"recrutement":
       case"reserve":
       case"candidats_archives":
+        try{
+          const recruitmentToken=sgdiAuthToken();
+          if(recruitmentToken&&session){
+            sessionStorage.setItem("atlas_recrute_session",JSON.stringify({token:recruitmentToken,user:{
+              username:session.username||"",full_name:session.nom||session.username||"",role:session.role||"",
+              access_level:session.niveau||"",authorized_societies:session.societesAutorisees||[],
+              authorized_actions:session.actionsAutorisees||[]
+            }}));
+          }
+        }catch(_e){}
         location.assign("/recrute");
         break;
       case"contrats":

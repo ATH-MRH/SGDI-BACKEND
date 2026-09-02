@@ -70,7 +70,10 @@ test('le recrutement est placé immédiatement sous le tableau de bord DRH', () 
 });
 
 test('les anciennes routes recrutement ouvrent une seule application', () => {
-  assert.match(src, /case"recrutement":\s*case"reserve":\s*case"candidats_archives":\s*location\.assign\("\/recrute"\)/);
+  assert.match(src, /case"recrutement":\s*case"reserve":\s*case"candidats_archives":/);
+  assert.match(src, /sessionStorage\.setItem\("atlas_recrute_session"/);
+  assert.doesNotMatch(src, /localStorage\.setItem\("atlas_recrute_session"/);
+  assert.match(src, /location\.assign\("\/recrute"\)/);
   assert.doesNotMatch(src, /case"recrutement":[\s\S]{0,300}renderRecrutement/);
 });
 
