@@ -165,6 +165,14 @@ test('la sélection employé des actions RH utilise une recherche multicritère'
   assert.match(css, /\.rh-employee-search-result\{/);
 });
 
+test('le contrat propose la liste centralisée des banques algériennes', () => {
+  assert.match(src, /function banquesAlgerieOptionsHTML\(/);
+  assert.match(src, /<select class="select" name="banque">\$\{banquesAlgerieOptionsHTML\(p\.banque\)\}<\/select>/);
+  assert.match(src, /Banque Extérieure d'Algérie \(BEA\)/);
+  assert.match(src, /Banque Nationale d'Algérie \(BNA\)/);
+  assert.match(src, /Crédit Populaire d'Algérie \(CPA\)/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);

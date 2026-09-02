@@ -94,6 +94,11 @@ const BANQUES_ALGERIE = [
   "HSBC Algeria",
   "Bank of Africa Algeria"
 ];
+function banquesAlgerieOptionsHTML(selected=""){
+  const current=String(selected||"").trim();
+  const values=current&&!BANQUES_ALGERIE.includes(current)?[current,...BANQUES_ALGERIE]:BANQUES_ALGERIE;
+  return `<option value="">— Choisir la banque —</option>${values.map(bank=>`<option value="${escapeHTML(bank)}" ${current===bank?"selected":""}>${escapeHTML(bank)}</option>`).join("")}`;
+}
 function cleanContractType(v){
   const raw=String(v||"").trim();
   if(!raw)return "";
@@ -12819,7 +12824,7 @@ function renderContractualisation(view,id){
             <div class="nc-field"><label>N° CNAS</label><input class="input" name="numeroCnas" value="${escapeHTML(p.numeroCnas||"")}"/></div>
             <div class="nc-field computed full"><label>Salaire en lettres</label><input class="input bg-slate-50" name="salaireLettres" value="${escapeHTML(moneyToFrenchWords(p.salaireNet))}" readonly/></div>
             <div class="nc-field"><label>Mode de paiement</label><select class="select" name="modePaiement">${["Virement bancaire","Espèces","Chèque"].map(m=>`<option value="${m}" ${(p.modePaiement||"Virement bancaire")===m?"selected":""}>${m}</option>`).join("")}</select></div>
-            <div class="nc-field"><label>Banque</label><input class="input" name="banque" value="${escapeHTML(p.banque||"")}"/></div>
+            <div class="nc-field"><label>Banque</label><select class="select" name="banque">${banquesAlgerieOptionsHTML(p.banque)}</select></div>
             <div class="nc-field full"><label>RIB / IBAN</label><input class="input" name="iban" value="${escapeHTML(p.iban||"")}"/></div>
           </div>
         </div>
@@ -14952,7 +14957,7 @@ function renderAgentForm(view,id){
               <label class="rh-phone-field"><span>Numéro de téléphone</span><input class="input" name="telephone" value="${escapeHTML(a.telephone||"")}" inputmode="tel" ${identiteEditable?"":"disabled"}/></label>
               <label><span>N° PP/CIN</span><input class="input" name="numeroPasseport" value="${escapeHTML(a.numeroPasseport||"")}" ${identiteEditable?"":"disabled"}/></label>
               <label><span>Email</span><input class="input" type="text" inputmode="email" name="email" value="${escapeHTML(a.email||"")}" ${identiteEditable?"":"disabled"}/></label>
-              <label><span>Compte bancaire</span><select class="select" name="banque" ${identiteEditable?"":"disabled"}><option value="">— Choisir la banque —</option>${BANQUES_ALGERIE.map(b=>`<option ${a.banque===b?"selected":""}>${escapeHTML(b)}</option>`).join("")}</select></label>
+              <label><span>Compte bancaire</span><select class="select" name="banque" ${identiteEditable?"":"disabled"}>${banquesAlgerieOptionsHTML(a.banque)}</select></label>
               <label><span>Date de naissance</span><input class="input" type="date" name="dateNaissance" value="${a.dateNaissance||""}" oninput="updateAgentBirthAge(this)" ${identiteEditable?"":"disabled"}/></label>
               <label><span>N° Compte</span><input class="input" name="numeroCompte" value="${escapeHTML(a.numeroCompte||a.iban||"")}" ${identiteEditable?"":"disabled"}/></label>
               <label><span>Âge</span><input class="input bg-slate-50 rh-agent-age" value="${agentAge!==null?agentAge:""}" readonly/></label>
