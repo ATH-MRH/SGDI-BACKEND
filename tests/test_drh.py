@@ -69,6 +69,25 @@ def test_candidate_contact_duplicate_warning(client, auth_headers):
     assert excluded.json()["duplicates"] == []
 
 
+def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_headers, db):
+    from app.modules.drh.models import Candidate
+
+    row = Candidate(
+        first_name="Nadia", last_name="VISIBLE", phone="0666112233",
+        society="Iron Global Securite", status="a_contractualiser",
+        data={"statut": "a_contractualiser", "avisDecision": "Favorable"},
+    )
+    db.add(row)
+    db.commit()
+    response = client.get(
+        "/api/drh/candidates/page",
+        headers=auth_headers,
+        params={"mode": "new", "society": "Iron Global Securite", "page": 1, "page_size": 100},
+    )
+    assert response.status_code == 200, response.text
+    assert any(item["id"] == row.id and item["last_name"] == "VISIBLE" for item in response.json()["items"])
+
+
 # 7 sections visibles de la fiche de position (ordre imposé par le service)
 _SECTIONS = ["identification", "militaire", "poste",
              "avis", "contact", "habilitations", "experience"]

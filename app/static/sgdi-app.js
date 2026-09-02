@@ -9655,7 +9655,7 @@ function candidateListRowHTML(c,mode){
     <td>${safe(formatPhoneSGDI(c.telephone))}</td>
     <td>${candidateAvisSelectHTML(c)}</td>
     <td class="text-xs">${archived?`${formatDate(c.archivedAt||c.updatedAt||c.createdAt)}<div class="text-[11px] text-slate-500">${escapeHTML(c.motifArchive||"—")}</div>`:formatDate(c.createdAt)}</td>
-    <td>${archived?'<span class="pill pill-gray">Archivé</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
+    <td>${archived?'<span class="pill pill-gray">Archivé</span>':String(c.statut||c.status||"").toLowerCase()==="a_contractualiser"?'<span class="pill pill-amber">Contrat à établir</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
     <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<div class="flex items-center justify-end gap-1"><a class="btn btn-ghost text-xs" href="#/${route}/${escapeHTML(c.id)}">Ouvrir →</a>${mode==="new"?`<button type="button" class="btn btn-danger text-xs" onclick="deleteCandidat('${jsString(c.id)}')" title="Supprimer ce candidat">Supprimer</button>`:""}</div>`}</td>
   </tr>`;
 }
@@ -9838,7 +9838,7 @@ function renderRecrutement(view,mode){
         <td>${safe(formatPhoneSGDI(c.telephone))}</td>
         <td>${candidateAvisSelectHTML(c)}</td>
         <td class="text-xs">${mode==="archive"?`${formatDate(c.archivedAt||c.updatedAt||c.createdAt)}<div class="text-[11px] text-slate-500">${escapeHTML(c.motifArchive||"—")}</div>`:formatDate(c.createdAt)}</td>
-        <td>${mode==="archive"?'<span class="pill pill-gray">Archivé</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
+        <td>${mode==="archive"?'<span class="pill pill-gray">Archivé</span>':String(c.statut||c.status||"").toLowerCase()==="a_contractualiser"?'<span class="pill pill-amber">Contrat à établir</span>':candidatIsReserve(c)?'<span class="pill pill-amber">Réserve</span>':'<span class="pill pill-blue">Nouvelle</span>'}</td>
         <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<a class="btn btn-ghost text-xs" href="#/${mode==="archive"?"candidats_archives":mode==="reserve"?"reserve":"recrutement"}/${c.id}">Ouvrir →</a>`}</td>
       </tr>`).join("")}</tbody></table></div>`);
   view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold recruitment-page-title">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
