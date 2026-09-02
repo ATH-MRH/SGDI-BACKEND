@@ -11989,7 +11989,39 @@ function contractTextToHTML(text){
 function contractBoldValue(v){
   return `**${String(v||"—")}**`;
 }
+function contractEmployeeData(employee){
+  const a=employee&&typeof employee==="object"?employee:{};
+  const api=a.data&&typeof a.data==="object"?a.data:{};
+  const extra=a.extra&&typeof a.extra==="object"?a.extra:{};
+  const legacy=extra._legacy&&typeof extra._legacy==="object"?extra._legacy:{};
+  const value=(...keys)=>{
+    for(const key of keys){
+      const candidates=[a[key],api[key],extra[key],legacy[key]];
+      const found=candidates.find(v=>v!==undefined&&v!==null&&String(v).trim()!=="");
+      if(found!==undefined)return found;
+    }
+    return "";
+  };
+  return {
+    ...a,
+    nom:value("nom","last_name","lastName"),
+    prenom:value("prenom","first_name","firstName"),
+    dateNaissance:value("dateNaissance","birth_date","birthDate"),
+    lieuNaissance:value("lieuNaissance","birth_place","birthPlace"),
+    nomPere:value("nomPere","father_name","fatherName"),
+    nomMere:value("nomMere","mother_name","motherName"),
+    numeroPieceIdentite:value("numeroPieceIdentite","identity_document_number","pieceIdentiteNumero"),
+    numeroCnas:value("numeroCnas","numero_cnas","cnas"),
+    telephone:value("telephone","phone"),
+    adresse:value("adresse","address"),
+    societe:value("societe","society"),
+    wilaya:value("wilaya"),
+    commune:value("commune"),
+    nin:value("nin")
+  };
+}
 function newContractArticleDefinitions(a,d){
+  a=contractEmployeeData(a);
   const full=contractBoldValue(((a?.nom||"")+" "+(a?.prenom||"")).trim().toUpperCase()||"____________________________");
   const fonction=contractBoldValue(d.poste||"AGENT DE PREVENTION ET DE SECURITE");
   const duree=contractBoldValue(contratDureeLabel(d.dureeContrat)||"—");
@@ -12048,6 +12080,7 @@ function newContractArticlesHTML(a,d){
   }).join("");
 }
 function apsContractDocumentHTML(a,d){
+  a=contractEmployeeData(a);
   const nom=escapeHTML(String(a?.nom||"").toUpperCase());
   const prenom=escapeHTML(String(a?.prenom||"").toUpperCase());
   const full=escapeHTML(((a?.nom||"")+" "+(a?.prenom||"")).trim().toUpperCase()||"____________________________");
@@ -12254,7 +12287,7 @@ async function printEmployeeNewContractFromForm(form){
   openEmployeeContractReviewWindow(draft.a,draft);
 }
 function employeeNewContractPayload(draft){
-  const a=draft.a||{};
+  const a=contractEmployeeData(draft.a);
   const modelValue=String(draft.contratPersonnelId||"").trim();
   const useBackendTemplate=/^\d+$/.test(modelValue);
   return {
@@ -13118,7 +13151,7 @@ async function recruitContractCandidateToEmployee(c,fd,overrideMatricule){
     }
     await SGDI.rh.validateCandidateFinal(backendId);
     const revalidated=await SGDI.rh.marquerContractualisation(backendId);
-    Object.assign(c,candidateFromApi(revalidated));
+    Object.assign(c,candidateFromApi(revalidated?.data||revalidated));
   }
   // Le serveur est l'unique autorité pour créer l'employé et son contrat. Cette
   // opération est transactionnelle et idempotente : aucun doublon n'est possible.
@@ -13128,7 +13161,8 @@ async function recruitContractCandidateToEmployee(c,fd,overrideMatricule){
     dateFinContrat:agent.dateFinContrat,dateFinEssai:agent.dateFinEssai,dureeEssai:agent.dureeEssai
   });
   await SGDI.rh.updateCandidate(backendId,candidateApiPayload(c));
-  const savedEmployee=await SGDI.rh.recruitCandidate(backendId);
+  const savedAction=await SGDI.rh.recruitCandidate(backendId);
+  const savedEmployee=savedAction?.data||savedAction;
   const fromApi=employeeFromApi(savedEmployee);
   Object.assign(agent,agent,fromApi,{backendId:savedEmployee?.id||fromApi.backendId,matricule:fromApi.matricule||agent.matricule});
   if(!Array.isArray(db.agents))db.agents=[];
