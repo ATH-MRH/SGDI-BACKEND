@@ -130,6 +130,13 @@ test('le compteur des contrats à établir clignote en rouge uniquement au-dessu
   assert.match(css, /@keyframes contractPendingBlink/);
 });
 
+test('les nouveaux dossiers utilisent le tableau épuré de contractualisation', () => {
+  assert.match(src, /function recruitmentContractStyleTableHTML\(/);
+  assert.match(src, /<th>Candidat<\/th><th>Poste<\/th><th>Société<\/th><th>Téléphone<\/th><th>Transmission<\/th><th>Action<\/th>/);
+  assert.match(src, /mode==="new"\?recruitmentContractStyleTableHTML\(cs,pagination\)/);
+  assert.match(src, /Établir le contrat/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);

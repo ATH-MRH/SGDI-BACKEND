@@ -9659,6 +9659,16 @@ function candidateListRowHTML(c,mode){
     <td class="text-right">${mode==="reserve"?`<button type="button" class="btn btn-ghost text-lg leading-none px-3" title="Actions" onclick="event.stopPropagation();openReserveCandidateActions('${jsString(c.id)}')">⋯</button>`:`<div class="flex items-center justify-end gap-1"><a class="btn btn-ghost text-xs" href="#/${route}/${escapeHTML(c.id)}">Ouvrir →</a>${mode==="new"?`<button type="button" class="btn btn-danger text-xs" onclick="deleteCandidat('${jsString(c.id)}')" title="Supprimer ce candidat">Supprimer</button>`:""}</div>`}</td>
   </tr>`;
 }
+function recruitmentContractStyleTableHTML(candidates,pagination=""){
+  const rows=Array.isArray(candidates)?candidates:[];
+  return `<div class="card overflow-hidden"><table class="table"><thead><tr><th>Candidat</th><th>Poste</th><th>Société</th><th>Téléphone</th><th>Transmission</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(c=>{
+    const transmitted=String(c.statut||c.status||"").toLowerCase()==="a_contractualiser";
+    const primaryAction=transmitted
+      ?`<button class="btn btn-primary" onclick="navigate('contrats/a_contractualiser/${jsString(c.id)}')">Établir le contrat</button>`
+      :`<button class="btn btn-primary" onclick="navigate('recrutement/${jsString(c.id)}')">Ouvrir la fiche</button>`;
+    return `<tr><td><b>${escapeHTML(((c.nom||"")+" "+(c.prenom||"")).trim()||"Identité à compléter")}</b></td><td>${escapeHTML(candidatePosteLabel(c)||"À compléter")}</td><td>${escapeHTML(c.societe||"À compléter")}</td><td>${escapeHTML(formatPhoneSGDI(c.telephone)||"—")}</td><td>${transmitted?escapeHTML(formatDate(c.contractualisationAt||c.updatedAt||c.createdAt||today())):'<span class="text-slate-400">Non transmise</span>'}</td><td><div class="flex gap-2 flex-wrap">${primaryAction}<button class="btn btn-secondary" onclick="${transmitted?`openArchiveContractCandidateModal('${jsString(c.id)}')`:`openArchiveCandidatModal('${jsString(c.id)}')`}">Archiver</button></div></td></tr>`
+  }).join(""):`<tr><td colspan="6" class="p-10 text-center text-slate-400">Aucun candidat.</td></tr>`}</tbody></table>${pagination}</div>`;
+}
 function reserveFunctionPanelOpen(){return sessionStorage.getItem("reserveFunctionPanel")==="1"}
 function toggleReserveFunctionPanel(){sessionStorage.setItem("reserveFunctionPanel",reserveFunctionPanelOpen()?"0":"1");renderView()}
 function reserveFunctionStatsHTML(items,compact){
@@ -9768,10 +9778,10 @@ async function renderRecrutementServer(view,mode){
     const cs=(result.items||[]).map(upsertServerCandidate);
     const pages=result.pages||1;
     const pagination=`<div class="flex items-center justify-between gap-2 p-3 border-t border-slate-100 text-sm"><div class="text-slate-500">${result.total||0} candidat(s) · page ${result.page||1}/${pages}</div><div class="flex gap-2"><button class="btn btn-ghost text-xs" ${result.page<=1?"disabled":""} onclick="setRecrutementPage('${mode}',${(result.page||1)-1})">Précédent</button><button class="btn btn-ghost text-xs" ${result.page>=pages?"disabled":""} onclick="setRecrutementPage('${mode}',${(result.page||1)+1})">Suivant</button></div></div>`;
-    const listHTML=cs.length===0?`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`:`<div class="card overflow-hidden"><table><thead><tr>${reserveBulkSelectionHeaderHTML(mode)}<th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead><tbody>${cs.map(c=>candidateListRowHTML(c,mode)).join("")}</tbody></table>${pagination}</div>`;
+    const listHTML=mode==="new"?recruitmentContractStyleTableHTML(cs,pagination):(cs.length===0?`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`:`<div class="card overflow-hidden"><table><thead><tr>${reserveBulkSelectionHeaderHTML(mode)}<th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead><tbody>${cs.map(c=>candidateListRowHTML(c,mode)).join("")}</tbody></table>${pagination}</div>`);
     view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold recruitment-page-title">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
       ${recrutementUnifiedTabsHTML(mode,socFilter)}
-      ${reserveBulkDeleteBarHTML(mode,cs.length)}
+      ${mode==="new"?"":reserveBulkDeleteBarHTML(mode,cs.length)}
       ${listHTML}</div>`;
     setTimeout(()=>applyLanguagePreference(view),0);
   }catch(e){
@@ -9826,7 +9836,7 @@ function renderRecrutement(view,mode){
     }
   }
   const addButton=mode==="reserve"?candidatImportActionsHTML("reserve"):(mode==="new"?candidatImportActionsHTML("new"):"");
-  const listHTML=mode==="new"?"":(cs.length===0?(archiveEmptyHTML||`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`):`<div class="card overflow-hidden"><table>
+  const listHTML=mode==="new"?recruitmentContractStyleTableHTML(cs):(cs.length===0?(archiveEmptyHTML||`<div class="card p-10 text-center text-slate-500">Aucun candidat.</div>`):`<div class="card overflow-hidden"><table>
       <thead><tr>${reserveBulkSelectionHeaderHTML(mode)}<th>Candidat</th><th>Poste</th><th>Société</th>${mode==="archive"?"<th>Origine</th><th>Wilaya</th>":""}<th>Téléphone</th><th>Avis</th><th>${mode==="archive"?"Archivage":"Date"}</th><th>Statut</th><th></th></tr></thead>
       <tbody>${cs.map(c=>`<tr data-searchable>
         ${reserveBulkSelectionCellHTML(c,mode)}
@@ -9844,7 +9854,7 @@ function renderRecrutement(view,mode){
   view.innerHTML=`<div data-recruitment-view="1"><div class="flex items-center justify-between mb-4"><div><h1 class="text-2xl font-bold recruitment-page-title">${title}</h1><p class="text-slate-500 text-sm">${st}</p></div>${addButton}</div>
     ${recrutementUnifiedTabsHTML(mode,socFilter)}
     ${archiveToolsHTML}
-    ${reserveBulkDeleteBarHTML(mode,cs.length)}
+    ${mode==="new"?"":reserveBulkDeleteBarHTML(mode,cs.length)}
     ${listHTML}</div>`;
 }
 async function recruterCandidat(id,btn){
