@@ -199,6 +199,17 @@ test('les dates et la durée du contrat sont alignées sur une même ligne', () 
   assert.match(css, /\.nc-contract-dates-row\{grid-column:1\/-1;display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
 });
 
+test('la contractualisation permet de compléter le contact d’urgence obligatoire', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'app', 'static', 'sgdi-app.css'), 'utf8');
+  assert.match(src, /class="nc-candidate-contact-row"/);
+  assert.match(src, /name="candidateWilaya" required/);
+  assert.match(src, /name="contactUrgenceLien"[^>]*required/);
+  assert.match(src, /name="contactUrgenceNom"[^>]*required/);
+  assert.match(src, /name="contactUrgenceTel"[^>]*required/);
+  assert.match(src, /c\.wilaya=String\(candidateDetails\.get\("candidateWilaya"\)/);
+  assert.match(css, /\.nc-candidate-contact-row\{grid-column:1\/-1;display:grid;grid-template-columns:repeat\(4/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);

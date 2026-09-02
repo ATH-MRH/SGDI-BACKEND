@@ -12817,6 +12817,12 @@ function renderContractualisation(view,id){
             <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client,selectedSociete)}</select></div>
             <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
             <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
+            <div class="nc-candidate-contact-row">
+              <div class="nc-field"><label>Wilaya du candidat <span class="req">*</span></label><select class="select" name="candidateWilaya" required><option value="">— Choisir —</option>${WILAYAS.map(w=>`<option value="${escapeHTML(w)}" ${c.wilaya===w?"selected":""}>${escapeHTML(w)}</option>`).join("")}</select></div>
+              <div class="nc-field"><label>Lien contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceLien" value="${escapeHTML(c.contactUrgenceLien||"")}" required/></div>
+              <div class="nc-field"><label>Nom contact d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceNom" value="${escapeHTML(c.contactUrgenceNom||"")}" required/></div>
+              <div class="nc-field"><label>Téléphone d'urgence <span class="req">*</span></label><input class="input" name="contactUrgenceTel" value="${escapeHTML(formatPhoneSGDI(c.contactUrgenceTel||""))}" inputmode="numeric" maxlength="13" oninput="normalizePhoneSGDIInput(this)" required/></div>
+            </div>
           </div>
         </div>
         ${newContractClientCustomField(p.client)}
@@ -12967,6 +12973,13 @@ function candidateNewContractFormData(form,draft){
 async function confirmCandidateNewContract(form,id){
   const c=findCandidatById(id);if(!c){toast("Candidat introuvable","error");return}
   if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Contrat impossible : la décision du recruteur doit être Favorable","error");return}
+  const candidateDetails=new FormData(form);
+  c.wilaya=String(candidateDetails.get("candidateWilaya")||c.wilaya||"").trim();
+  c.contactUrgenceLien=String(candidateDetails.get("contactUrgenceLien")||c.contactUrgenceLien||"").trim();
+  c.contactUrgenceNom=String(candidateDetails.get("contactUrgenceNom")||c.contactUrgenceNom||"").trim();
+  c.contactUrgenceTel=String(candidateDetails.get("contactUrgenceTel")||c.contactUrgenceTel||"").trim();
+  const missingContact=[[c.wilaya,"Wilaya"],[c.contactUrgenceLien,"Lien contact urgence"],[c.contactUrgenceNom,"Nom contact urgence"],[c.contactUrgenceTel,"Téléphone urgence"]].filter(([value])=>!value).map(([,label])=>label);
+  if(missingContact.length){toast("Complétez les informations obligatoires : "+missingContact.join(", "),"error");return}
   const draft=employeeNewContractDraftFromForm(form);
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
