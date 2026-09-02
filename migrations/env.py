@@ -15,6 +15,13 @@ from app.modules.ops import models as _ops_models  # noqa: F401
 from app.modules.accounting import models as _accounting_models  # noqa: F401
 from app.modules.achats import models as _achats_models  # noqa: F401
 from app.modules.ventes import models as _ventes_models  # noqa: F401
+# Ces modules définissent des tables référencées par des clés étrangères d'autres
+# modules (ex. sites.client_id -> clients.id). Sans ces imports, migration 0001
+# (Base.metadata.create_all) ne peut pas résoudre les FK et `alembic upgrade head`
+# échoue sur une base vierge.
+from app.modules.commercial import models as _commercial_models  # noqa: F401
+from app.modules.client_portal import models as _client_portal_models  # noqa: F401
+from app.modules.ronde import models as _ronde_models  # noqa: F401
 
 
 config = context.config
