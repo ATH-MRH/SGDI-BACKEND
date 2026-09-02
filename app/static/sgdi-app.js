@@ -9647,7 +9647,7 @@ function recrutementUnifiedTabsHTML(mode,socFilter){
     ["archive","Archives","candidats_archives",countArchive],
     ["stats","Statistiques","recrutement/statistiques",rows.length]
   ];
-  return `<nav class="mat-erp-tabs recruitment-candidates-tabs mb-4" aria-label="Recrutement et candidats">${tabs.map(([key,label,route,count])=>`<button type="button" onclick="switchRecruitmentTab(event,'${route}','${key}')" class="${mode===key?"active":""}">${escapeHTML(label)}<span>${count}</span></button>`).join("")}</nav>`;
+  return `<nav class="mat-erp-tabs recruitment-candidates-tabs mb-4" aria-label="Recrutement et candidats">${tabs.map(([key,label,route,count])=>`<button type="button" onclick="navigate('${route}')" class="${mode===key?"active":""}">${escapeHTML(label)}<span>${count}</span></button>`).join("")}</nav>`;
 }
 function recrutementModeMatchesCurrentRoute(mode){
   const [root,sub]=(location.hash||"#/dashboard").slice(2).split("/");
