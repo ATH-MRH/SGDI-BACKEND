@@ -10261,7 +10261,7 @@ function renderCandidatEtape1(c){
 	            <div class="candidate-field-5cm"><label class="label">Sexe *</label><select class="select" name="sexe" ><option ${c.sexe==="M"?"selected":""}>M</option><option ${c.sexe==="F"?"selected":""}>F</option></select></div>
 	            <div class="candidate-field-4cm"><label class="label">Groupe sanguin</label><select class="select" name="groupeSanguin"><option value="">—</option>${["A+","A-","B+","B-","AB+","AB-","O+","O-"].map(g=>`<option value="${g}" ${String(c.groupeSanguin||"")===g?"selected":""}>${g}</option>`).join("")}</select></div>
 	            <div class="candidate-field-7cm"><label class="label">Situation familiale *</label><select class="select" name="situation" >${["Célibataire","Marié(e)","Divorcé(e)","Veuf(ve)"].map(s=>`<option ${c.situation===s?"selected":""}>${s}</option>`).join("")}</select></div>
-	            <div class="candidate-field-4cm"><label class="label">Nombre d'enfant *</label><input class="input" type="number" min="0" name="nombreEnfants" value="${c.nombreEnfants??""}" placeholder="0" /></div>
+	            <div class="candidate-field-4cm"><label class="label">Nombre d'enfant *</label><select class="select" name="nombreEnfants"><option value="">—</option>${Array.from({length:20},(_,i)=>i+1).map(n=>{const value=String(n).padStart(2,"0");return`<option value="${value}" ${Number(c.nombreEnfants)===n?"selected":""}>${value}</option>`}).join("")}</select></div>
 	          </div>
 	        </div>
 	      </div>
