@@ -173,6 +173,14 @@ test('le contrat propose la liste centralisée des banques algériennes', () => 
   assert.match(src, /Crédit Populaire d'Algérie \(CPA\)/);
 });
 
+test('l’aperçu du contrat fusionne le modèle avec les données du futur employé', () => {
+  assert.match(src, /Aperçu du contrat complété/);
+  assert.match(src, /printEmployeeNewContractFromForm\(document\.getElementById\('employee-new-contract-form'\)\)/);
+  assert.doesNotMatch(src, /Télécharger l'aperçu du modèle/);
+  assert.match(src, /generated-contracts\/preview-from-form/);
+  assert.match(src, /Contrat complété généré avec les données du futur employé/);
+});
+
 test('employeeIsFormer: un sortant est "former", un actif ne l\'est pas', () => {
   const f = T().employeeIsFormer;
   assert.ok(f);

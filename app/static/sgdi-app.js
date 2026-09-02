@@ -12226,7 +12226,7 @@ async function printEmployeeNewContractFromForm(form){
     try{
       const fileName=`apercu-${(t?.code||"contrat").toString().toLowerCase()}-${draft.a.matricule||"employe"}.docx`;
       await sgdiDownloadPost("/drh/generated-contracts/preview-from-form",employeeNewContractPayload(draft),fileName);
-      toast("Aperçu du modèle "+(t?.title||"")+" généré avec les données du formulaire.","success");
+      toast("Contrat complété généré avec les données du futur employé.","success");
     }catch(e){toast("Aperçu impossible : "+(e.message||e),"error")}
     return;
   }
@@ -12713,7 +12713,7 @@ function updateNewContractModelPreview(){
   if(isAps){host.innerHTML=`<div class="nc-model-note">Modèle Word générique APS, commun à tous les postes de prévention et sécurité.</div>`;return}
   const t=activeBackendContractTemplates().find(x=>String(x.id)===String(value));
   if(!t){host.innerHTML="";return}
-  host.innerHTML=`<div class="nc-model-note"><b>${escapeHTML(t.title)}</b> — ${escapeHTML(t.position||"Tous postes")}${t.function?" / "+escapeHTML(t.function):""}<br><button type="button" class="nc-link-btn" onclick="downloadContractTemplate(${t.id},'${escapeHTML(t.file_name||"modele.docx")}')">Télécharger l'aperçu du modèle</button></div>`;
+  host.innerHTML=`<div class="nc-model-note"><b>${escapeHTML(t.title)}</b> — ${escapeHTML(t.position||"Tous postes")}${t.function?" / "+escapeHTML(t.function):""}<br><button type="button" class="nc-link-btn" onclick="printEmployeeNewContractFromForm(document.getElementById('employee-new-contract-form'))">Aperçu du contrat complété</button><div class="text-[10px] text-slate-500 mt-2">Le modèle Word sera automatiquement rempli avec toutes les informations saisies du futur employé.</div></div>`;
 }
 function contratDureeOptions(selected){
   return `<option value="">— Choisir —</option>`+DUREES_CONTRAT.map(d=>`<option value="${d.value}" ${selected===d.value?"selected":""}>${d.label}</option>`).join("");

@@ -663,6 +663,13 @@ def test_preview_contract_from_form_merges_without_side_effects(client, auth_hea
     assert preview.status_code == 200, preview.text
     assert preview.headers["content-type"].startswith("application/vnd.openxmlformats")
     assert len(preview.content) > 0
+    from io import BytesIO
+    from docx import Document
+    merged_text = "\n".join(paragraph.text for paragraph in Document(BytesIO(preview.content)).paragraphs)
+    assert "Rouabeh" in merged_text
+    assert "Slimane" in merged_text
+    assert "COORDINATEUR" in merged_text
+    assert "{{NOM}}" not in merged_text and "{{PRENOM}}" not in merged_text and "{{POSTE}}" not in merged_text
 
     employees_after = client.get("/api/drh/employees", headers=auth_headers).json()
     assert len(employees_after) == len(employees_before), "L'aperçu ne doit jamais créer d'employé"
