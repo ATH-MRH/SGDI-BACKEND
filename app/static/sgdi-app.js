@@ -35644,31 +35644,42 @@ function renderAdminUsers(view){
   ensureAdminUsersFresh();
   const adminSoc=adminActiveSociete();
   const u=(db.users||[]).filter(adminMatchesSociete);
-  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Utilisateurs</h1><p class="text-sm text-slate-500 mt-1">Un compte se règle simplement : identité, profil d'accès, périmètre sociétés/sites/structures, puis statut actif ou désactivé.</p></div>
-    ${adminSocieteSelectorHTML(adminSoc?"La liste affiche les utilisateurs autorisés sur cette société ou sur toutes les sociétés.":"Vue globale des utilisateurs. Sélectionnez une société pour créer/configurer un périmètre précis.")}
-    <div class="card p-4 mb-4" style="background:#f8fafc;border-left:4px solid #043970">
-      <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <div><div class="font-bold">Méthode simple d'attribution</div><div class="text-xs text-slate-500">1. Choisir le profil · 2. Définir le périmètre · 3. Activer ou désactiver · 4. Enregistrer.</div></div>
-        <div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="navigate('admin/niveaux')">Configurer les profils</button><button class="btn btn-primary" onclick="openAdminUserModal('')">Nouvel utilisateur</button></div>
-      </div>
-      <div class="grid grid-4 gap-2">${adminRoleGuide().map(([code,title,desc])=>`<div class="p-2 rounded-lg" style="background:#fff;border:1px solid #e2e8f0"><div class="font-black text-xs" style="color:${adminRoleColor(code)}">${adminRoleDisplayLabel(code)} · ${title}</div><div class="text-[11px] text-slate-500">${desc}</div></div>`).join("")}</div>
-    </div>
-    <div class="card p-0 overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-50"><tr><th class="text-left p-3">Identifiant</th><th class="text-left p-3">Nom complet</th><th class="text-left p-3">Type</th><th class="text-left p-3">Profil</th><th class="text-left p-3">Sociétés</th><th class="text-left p-3">Structures</th><th class="text-left p-3">Droits actions</th><th class="text-left p-3">Statut</th><th class="p-3">Actions</th></tr></thead>
-        <tbody>${u.map(x=>{const roleColor=adminRoleColor(x.role);const niv=(db.niveauxAcces||[]).find(n=>n.code===x.niveau);return`<tr class="border-t">
-          <td class="p-3 font-mono">${escapeHTML(x.username)}</td>
-          <td class="p-3 font-semibold">${escapeHTML(x.nom||"")}</td>
-          <td class="p-3"><span class="pill" style="background:${roleColor}22;color:${roleColor};font-weight:700">${escapeHTML(x.role||"")}</span></td>
-          <td class="p-3">${niv?`<span class="pill" style="background:${niv.color}22;color:${niv.color};font-weight:600">${niv.label}</span>`:`<span class="text-slate-400">—</span>`}</td>
-          <td class="p-3 text-xs">${x.societesAutorisees&&x.societesAutorisees.length?escapeHTML(x.societesAutorisees.join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
-          <td class="p-3 text-xs">${x.structuresAutorisees&&x.structuresAutorisees.length?escapeHTML(x.structuresAutorisees.map(adminStructureLabel).join(", ")):'<span class="text-slate-400">Toutes</span>'}</td>
-          <td class="p-3 text-xs">${x.actionsAutorisees&&x.actionsAutorisees.length?escapeHTML(x.actionsAutorisees.map(key=>ADMIN_LEVEL_ACTIONS.find(action=>action.key===key)?.label||key).join(", ")):'<span class="text-slate-400">Hérités du profil</span>'}</td>
-          <td class="p-3">${x.actif===false?'<span class="pill pill-red">Désactivé</span>':'<span class="pill pill-green">Actif</span>'}</td>
-          <td class="p-3"><button class="btn btn-ghost text-xs" data-no-critical-auth="1" onclick="openAdminUserModalByKey('${encodeURIComponent(x.username)}')">Modifier</button> ${x.username!=="admin"?`<button class="btn btn-ghost text-xs text-red-600 inline-flex items-center justify-center" title="Supprimer" onclick="adminDeleteUserByKey('${encodeURIComponent(x.username)}')"><img src="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2220%22 height=%2220%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23dc2626%22 stroke-width=%222.4%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 6h18%22/%3E%3Cpath d=%22M8 6V4h8v2%22/%3E%3Cpath d=%22M19 6l-1 14H6L5 6%22/%3E%3Cpath d=%22M10 11v6%22/%3E%3Cpath d=%22M14 11v6%22/%3E%3C/svg%3E" alt="Supprimer" style="width:18px;height:18px;display:inline-block"/></button>`:""}</td>
-        </tr>`}).join("")||`<tr><td class="p-6 text-center text-slate-400" colspan="9">Aucun utilisateur.</td></tr>`}</tbody>
-      </table>
-    </div>`;
+  const active=u.filter(x=>x.actif!==false).length;
+  const blocked=u.length-active;
+  const admins=u.filter(x=>normalizeAdminUserRole(x.role)==="ADM").length;
+  const alerts=u.filter(x=>!x.email||(!x.niveau&&normalizeAdminUserRole(x.role)!=="ADM")).length;
+  const scopeLabel=(items,formatter)=>items&&items.length?items.slice(0,2).map(formatter||String).join(", ")+(items.length>2?` +${items.length-2}`:""):"Accès global";
+  view.innerHTML=`<div class="admin-users-page">
+    <header class="admin-users-head"><div><div class="admin-users-eyebrow">Administration système · Identités et accès</div><h1>Gestion des utilisateurs</h1><p>Gérez les comptes, profils, périmètres et blocages depuis un seul centre de contrôle.</p></div><div class="admin-users-head-actions"><button class="btn btn-secondary" onclick="navigate('admin/niveaux')">Profils d'accès</button><button class="btn btn-secondary" onclick="navigate('admin/droits')">Matrice des droits</button><button class="btn btn-primary" onclick="openAdminUserModal('')">+ Nouvel utilisateur</button></div></header>
+    ${adminSocieteSelectorHTML(adminSoc?"Utilisateurs autorisés sur la société active ou disposant d'un accès global.":"Vue consolidée de tous les comptes et périmètres.")}
+    <section class="admin-users-kpis">
+      <button onclick="adminSetUserStatusFilter('all')"><span>Comptes</span><strong>${u.length}</strong><small>Périmètre affiché</small></button>
+      <button onclick="adminSetUserStatusFilter('active')"><span>Actifs</span><strong class="ok">${active}</strong><small>Connexion autorisée</small></button>
+      <button onclick="adminSetUserStatusFilter('blocked')"><span>Bloqués</span><strong class="danger">${blocked}</strong><small>Connexion refusée</small></button>
+      <button onclick="adminSetUserStatusFilter('admin')"><span>Administrateurs</span><strong class="admin">${admins}</strong><small>Droits élevés</small></button>
+      <button onclick="adminSetUserStatusFilter('alert')"><span>À contrôler</span><strong class="warn">${alerts}</strong><small>Configuration incomplète</small></button>
+    </section>
+    <section class="card admin-users-toolbar"><div class="admin-users-search"><span>⌕</span><input id="admin-user-search" data-no-lock class="input" placeholder="Rechercher par nom, identifiant, email, profil ou structure…" oninput="adminFilterUsers()"/></div><select id="admin-user-role-filter" data-no-lock class="select" onchange="adminFilterUsers()"><option value="">Tous les types</option>${ADMIN_USER_ROLES.map(r=>`<option value="${r}">${escapeHTML(adminRoleDisplayLabel(r))}</option>`).join("")}</select><select id="admin-user-status-filter" data-no-lock class="select" onchange="adminFilterUsers()"><option value="all">Tous les statuts</option><option value="active">Actifs</option><option value="blocked">Bloqués</option><option value="admin">Administrateurs</option><option value="alert">À contrôler</option></select><span id="admin-user-visible-count">${u.length} utilisateur(s)</span></section>
+    <section class="card admin-users-table-wrap"><table class="admin-users-table"><thead><tr><th>Utilisateur</th><th>Profil</th><th>Périmètre société</th><th>Structures / sites</th><th>Droits effectifs</th><th>État</th><th></th></tr></thead><tbody>${u.map(x=>{const role=normalizeAdminUserRole(x.role),roleColor=adminRoleColor(x.role),niv=(db.niveauxAcces||[]).find(n=>n.code===x.niveau),isAlert=!x.email||(!x.niveau&&role!=="ADM"),search=normalizedSearchText([x.username,x.nom,x.email,x.role,niv?.label,...(x.societesAutorisees||[]),...(x.structuresAutorisees||[])].join(" "));return`<tr data-admin-user-row data-search="${escapeHTML(search)}" data-role="${escapeHTML(role)}" data-active="${x.actif===false?"0":"1"}" data-alert="${isAlert?"1":"0"}"><td><div class="admin-user-identity"><i style="background:${roleColor}">${escapeHTML((x.nom||x.username||"U").trim().charAt(0).toUpperCase())}</i><div><b>${escapeHTML(x.nom||x.username)}</b><span>${escapeHTML(x.username)} · ${escapeHTML(x.email||"Email non renseigné")}</span></div></div></td><td><span class="admin-user-role" style="--role:${roleColor}">${escapeHTML(adminRoleDisplayLabel(role))}</span><small>${escapeHTML(niv?.label||x.niveau||"Profil non défini")}</small></td><td><b>${escapeHTML(scopeLabel(x.societesAutorisees))}</b><small>${x.societesAutorisees?.length?`${x.societesAutorisees.length} société(s) sélectionnée(s)`:"Toutes les sociétés"}</small></td><td><b>${escapeHTML(scopeLabel(x.structuresAutorisees,adminStructureLabel))}</b><small>${x.sitesAutorises?.length?`${x.sitesAutorises.length} site(s) autorisé(s)`:"Tous les sites du périmètre"}</small></td><td><div class="admin-user-rights">${(x.actionsAutorisees?.length?x.actionsAutorisees:["Profil"]).slice(0,4).map(key=>`<span>${escapeHTML(ADMIN_LEVEL_ACTIONS.find(a=>a.key===key)?.label||key)}</span>`).join("")}${x.actionsAutorisees?.length>4?`<span>+${x.actionsAutorisees.length-4}</span>`:""}</div></td><td>${x.actif===false?'<span class="admin-user-state blocked">Bloqué</span>':'<span class="admin-user-state active">Actif</span>'}${isAlert?'<small class="admin-user-alert">À contrôler</small>':""}</td><td><div class="admin-user-actions"><button data-no-critical-auth="1" onclick="openAdminUserModalByKey('${encodeURIComponent(x.username)}')">Configurer</button>${String(x.username).toLowerCase()!==String(session?.username||"").toLowerCase()?`<button class="${x.actif===false?"allow":"deny"}" onclick="adminToggleUserActiveByKey('${encodeURIComponent(x.username)}',${x.actif===false?"true":"false"})">${x.actif===false?"Réactiver":"Suspendre"}</button>`:""}</div></td></tr>`}).join("")||`<tr><td colspan="7" class="admin-users-empty">Aucun utilisateur dans ce périmètre.</td></tr>`}</tbody></table></section>
+    <footer class="admin-users-foot"><span><b>Règle de sécurité :</b> suspendez un compte plutôt que de le supprimer afin de préserver sa traçabilité.</span><button class="btn btn-ghost" onclick="navigate('admin/log')">Consulter le journal d'activité →</button></footer>
+  </div>`;
+}
+function adminSetUserStatusFilter(value){const el=document.getElementById("admin-user-status-filter");if(el){el.value=value;adminFilterUsers()}}
+function adminFilterUsers(){
+  const q=normalizedSearchText(document.getElementById("admin-user-search")?.value||"");
+  const role=document.getElementById("admin-user-role-filter")?.value||"";
+  const status=document.getElementById("admin-user-status-filter")?.value||"all";
+  let shown=0;
+  document.querySelectorAll("[data-admin-user-row]").forEach(row=>{const okSearch=!q||String(row.dataset.search||"").includes(q),okRole=!role||row.dataset.role===role,okStatus=status==="all"||(status==="active"&&row.dataset.active==="1")||(status==="blocked"&&row.dataset.active==="0")||(status==="admin"&&row.dataset.role==="ADM")||(status==="alert"&&row.dataset.alert==="1");const show=okSearch&&okRole&&okStatus;row.hidden=!show;if(show)shown++});
+  const count=document.getElementById("admin-user-visible-count");if(count)count.textContent=shown+" utilisateur(s)";
+}
+async function adminToggleUserActiveByKey(encodedUsername,active){
+  const username=decodeURIComponent(String(encodedUsername||""));
+  const target=adminUserByUsername(username);if(!target)return toast("Utilisateur introuvable","error");
+  if(String(username).toLowerCase()===String(session?.username||"").toLowerCase())return toast("Vous ne pouvez pas suspendre votre propre compte.","error");
+  const action=active?"réactiver":"suspendre";
+  if(!confirm(`Voulez-vous ${action} le compte ${username} ?`))return;
+  try{await SGDI.auth.updateUser(username,{is_active:!!active});target.actif=!!active;logActivity(active?"Réactivation utilisateur":"Suspension utilisateur",username);saveDB();toast(active?"Compte réactivé":"Compte suspendu","success");renderView()}catch(e){toast("Modification du compte refusée : "+(e.message||e),"error")}
 }
 function adminUserByUsername(username){
   const key=String(username||"").trim();

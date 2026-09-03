@@ -114,3 +114,17 @@ def test_view_mode_locks_photo_and_every_form_field():
     assert 'if(sgdiViewModeActive){toast("Fiche verrouillée : déverrouillez la page pour modifier la photo."' in JS
     css = (Path(__file__).parents[1] / "app/static/sgdi-app.css").read_text(encoding="utf-8")
     assert "body.sgdi-view-mode #view .rh-erp-photo" in css
+
+
+def test_admin_users_is_a_unified_access_control_panel():
+    users = JS.split("function renderAdminUsers(view){", 1)[1].split(
+        "function adminUserByUsername", 1
+    )[0]
+    assert "Gestion des utilisateurs" in users
+    assert "Matrice des droits" in users
+    assert 'id="admin-user-search" data-no-lock' in users
+    assert 'id="admin-user-role-filter" data-no-lock' in users
+    assert 'id="admin-user-status-filter" data-no-lock' in users
+    assert "function adminFilterUsers()" in users
+    assert "function adminToggleUserActiveByKey" in users
+    assert "Vous ne pouvez pas suspendre votre propre compte" in users
