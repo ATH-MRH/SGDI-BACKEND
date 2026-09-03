@@ -96,3 +96,11 @@ def test_successful_contract_save_clears_false_unsaved_state():
         "function updateNewContractSummary", 1
     )[0]
     assert "saveDB()" not in identity
+
+
+def test_employee_status_overrides_stale_candidate_contract_status():
+    resolver = JS.split("function employeeResolvedStatus(emp,data){", 1)[1].split(
+        "function employeeFromApi", 1
+    )[0]
+    assert 'return canonical||legacy||"actif"' in resolver
+    assert 'return legacy||canonical||"actif"' not in resolver

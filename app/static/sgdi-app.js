@@ -1179,7 +1179,10 @@ function employeeResolvedStatus(emp,data){
   if(EMPLOYEE_FORMER_STATUS_KEYS.has(legacyKey))return legacy;
   const exitDate=String(data?.dateSortie||data?.departAt||"").slice(0,10);
   if(data?.finRelationAt&&(!exitDate||exitDate<=today()))return "sortant";
-  return legacy||canonical||"actif";
+  // Une fois la personne convertie en employé, le statut canonique PostgreSQL
+  // (actif / a_venir) prime sur l'ancien statut du dossier candidat conservé
+  // dans extra._legacy (ex. a_contractualiser).
+  return canonical||legacy||"actif";
 }
 function employeeFromApi(emp){
   const extra=emp&&emp.extra&&typeof emp.extra==="object"?emp.extra:{};
