@@ -37,3 +37,12 @@ def test_preview_before_validation_always_opens_html_window():
     assert "openEmployeeContractReviewWindow(draft.a,draft)" in preview
     assert "sgdiDownloadPost" not in preview
     assert "preview-from-form" not in preview
+
+
+def test_contract_form_does_not_repeat_candidate_emergency_banner():
+    contractualisation = JS.split("function renderContractualisation(view,id){", 1)[1].split(
+        "function updateNewContractSummary", 1
+    )[0]
+    assert "nc-candidate-contact-row" not in contractualisation
+    assert 'name="candidateWilaya"' not in contractualisation
+    assert 'name="contactUrgenceLien"' not in contractualisation

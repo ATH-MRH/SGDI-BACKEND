@@ -10251,7 +10251,3 @@ body:has(.dhl-login-page),html:has(.dhl-login-page),body:has(.dhl-login-page) #a
 #view .nc-contract-basics-row>.nc-field,#view .nc-contract-dates-row>.nc-field{min-width:0}
 @media(max-width:900px){#view .nc-contract-basics-row,#view .nc-contract-dates-row{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){#view .nc-contract-basics-row,#view .nc-contract-dates-row{grid-template-columns:1fr}}
-#view .nc-candidate-contact-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding-top:13px;margin-top:2px;border-top:1px solid #e5ebf2}
-#view .nc-candidate-contact-row>.nc-field{min-width:0}
-@media(max-width:1100px){#view .nc-candidate-contact-row{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){#view .nc-candidate-contact-row{grid-template-columns:1fr}}
