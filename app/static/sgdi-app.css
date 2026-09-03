@@ -2014,6 +2014,8 @@ body.sgdi-overlay-open #site-position-inline-map{display:none!important;visibili
   .rh-erp-photo{position:relative;width:120px;height:150px;border:2px dashed #cbd5e1;border-radius:10px;background:#f8fafc;color:#94a3b8;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;transition:border-color .15s,box-shadow .15s}
   .rh-erp-photo:hover{border-color:#2563eb;border-style:solid;box-shadow:0 0 0 4px rgba(37,99,235,.08)}
   .rh-erp-photo:hover .photo-cam-overlay{opacity:1}
+  .rh-erp-photo.is-locked{cursor:default}
+  .rh-erp-photo.is-locked:hover{border-color:#cbd5e1;border-style:dashed;box-shadow:none}
   .rh-erp-photo img{width:100%;height:100%;object-fit:cover;display:block}
   .rh-erp-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;align-content:start}
   .rh-erp-field{display:grid;grid-template-columns:104px minmax(0,1fr);gap:8px;align-items:center;min-height:26px}

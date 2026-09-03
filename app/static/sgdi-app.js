@@ -8424,6 +8424,9 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
 }
 function openAgentPhotoUpload(agentId){
   if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : modification photo non autorisée.","error");return}
+  // Même verrou que les autres champs de la fiche (identiteEditable) : seul le
+  // contexte Administration système ou DRH peut modifier la photo.
+  if(!isAdminFichePositionContext()&&!isDrhFicheContext()){toast("Fiche verrouillée : déverrouillez la fiche pour modifier la photo.","error");return}
   const inp=document.createElement("input");
   inp.type="file";inp.accept="image/*";inp.style.display="none";
   inp.onchange=()=>{
@@ -14930,6 +14933,9 @@ function renderAgentForm(view,id){
   const locked=!adminFicheContext;
   const opsFicheReadOnly=isOpsFicheReadOnlyContext();
   const identiteEditable=!locked||isDrhFicheContext();
+  // La photo suit exactement le verrouillage des autres champs de la fiche :
+  // modifiable seulement si l'identité l'est et hors lecture seule OPS.
+  const photoEditable=identiteEditable&&!opsFicheReadOnly;
   const essaiLeft=a.dateFinEssai?daysBetween(today(),a.dateFinEssai):null;
   let essaiBadge="";
   if(a.dateFinEssai){
@@ -15002,11 +15008,11 @@ function renderAgentForm(view,id){
     </div>
     <div class="rh-erp-status-tabs">${lifecycleTabs}</div>
     <div class="rh-erp-profile-card">
-      <div class="rh-erp-photo" id="rh-erp-photo-${escapeHTML(a.id)}" ${opsFicheReadOnly?"":`onclick="openAgentPhotoUpload('${escapeHTML(a.id)}')"`} title="${opsFicheReadOnly?"Photo en lecture seule":`Cliquer pour ${a.photo?"modifier":"ajouter"} la photo`}">
+      <div class="rh-erp-photo${photoEditable?"":" is-locked"}" id="rh-erp-photo-${escapeHTML(a.id)}" ${photoEditable?`onclick="openAgentPhotoUpload('${escapeHTML(a.id)}')"`:""} title="${photoEditable?`Cliquer pour ${a.photo?"modifier":"ajouter"} la photo`:"Photo verrouillée — déverrouillez la fiche pour la modifier"}">
         ${a.photo
           ?`<img src="${a.photo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">`
           :`<div style="display:flex;flex-direction:column;align-items:center;gap:6px;color:#94a3b8"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" width="34" height="34"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg><span style="font-size:10px;font-weight:700;letter-spacing:.04em">PHOTO</span></div>`}
-        ${opsFicheReadOnly?"":`<div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`}
+        ${photoEditable?`<div class="photo-cam-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="22" height="22"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`:""}
       </div>
       <div class="rh-erp-fields">
         <div class="rh-erp-field"><b>Code</b><span style="color:${codeColor};font-weight:950">${safe(a.matricule)||"—"}</span></div>
