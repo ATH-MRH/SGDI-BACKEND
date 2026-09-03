@@ -59,3 +59,11 @@ def test_identity_document_and_nin_are_persisted_separately():
         "function updateNewContractSummary", 1
     )[0]
     assert "persistCandidateContractIdentity" in contractualisation
+
+
+def test_missing_emergency_contact_does_not_block_employee_creation():
+    confirmation = JS.split("async function confirmCandidateNewContract(form,id){", 1)[1].split(
+        "async function recruitContractCandidateToEmployee", 1
+    )[0]
+    assert "missingContact" not in confirmation
+    assert "Complétez les informations obligatoires" not in confirmation

@@ -13027,8 +13027,6 @@ async function confirmCandidateNewContract(form,id){
     return;
   }
   if(candidateAvisValue(c.avisDecision)!=="Favorable"){toast("Contrat impossible : la décision du recruteur doit être Favorable","error");return}
-  const missingContact=[[c.wilaya,"Wilaya"],[c.contactUrgenceLien,"Lien contact urgence"],[c.contactUrgenceNom,"Nom contact urgence"],[c.contactUrgenceTel,"Téléphone urgence"]].filter(([value])=>!value).map(([,label])=>label);
-  if(missingContact.length){toast("Complétez les informations obligatoires : "+missingContact.join(", "),"error");return}
   const draft=employeeNewContractDraftFromForm(form);
   if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Date début, durée et date fin obligatoires","error");return}
   if(!draft.poste){toast("Poste / fonction obligatoire","error");return}
