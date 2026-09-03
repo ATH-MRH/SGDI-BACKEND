@@ -7199,6 +7199,12 @@ body.sgdi-view-mode #view textarea:not([data-no-lock]){
   box-shadow:none!important;
   user-select:none!important;
 }
+body.sgdi-view-mode #view .rh-erp-photo{
+  pointer-events:none!important;
+  cursor:not-allowed!important;
+  opacity:.68;
+}
+body.sgdi-view-mode #view .rh-erp-photo .photo-cam-overlay{display:none!important}
 
 /* ── Edit FAB ───────────────────────────────────────────── */
 #sgdi-edit-fab{

@@ -104,3 +104,13 @@ def test_employee_status_overrides_stale_candidate_contract_status():
     )[0]
     assert 'return canonical||legacy||"actif"' in resolver
     assert 'return legacy||canonical||"actif"' not in resolver
+
+
+def test_view_mode_locks_photo_and_every_form_field():
+    assert "function sgdiApplyViewModeLocks(root)" in JS
+    assert 'input:not([data-no-lock]),select:not([data-no-lock]),textarea:not([data-no-lock])' in JS
+    assert 'el.dataset.sgdiLockedByView="1"' in JS
+    assert "[data-sgdi-locked-by-view='1']" in JS
+    assert 'if(sgdiViewModeActive){toast("Fiche verrouillée : déverrouillez la page pour modifier la photo."' in JS
+    css = (Path(__file__).parents[1] / "app/static/sgdi-app.css").read_text(encoding="utf-8")
+    assert "body.sgdi-view-mode #view .rh-erp-photo" in css

@@ -6942,6 +6942,16 @@ function _sgdiCurrentPageLabel(){
   const hash=(location.hash||"").replace(/^#\/?/,"").split("/").slice(0,2).join("/");
   return title||(hash||"page inconnue");
 }
+function sgdiApplyViewModeLocks(root){
+  if(!sgdiViewModeActive)return;
+  const scope=root||document.getElementById("view");
+  if(!scope)return;
+  scope.querySelectorAll("input:not([data-no-lock]),select:not([data-no-lock]),textarea:not([data-no-lock])").forEach(el=>{
+    if((el.type||"").toLowerCase()==="hidden"||el.disabled)return;
+    el.dataset.sgdiLockedByView="1";
+    el.disabled=true;
+  });
+}
 function sgdiEnterViewMode(silent){
   if(!sgdiViewModeActive&&!silent&&session){
     const page=_sgdiCurrentPageLabel();
@@ -6951,22 +6961,17 @@ function sgdiEnterViewMode(silent){
   sgdiLastFormInputAt=0;
   document.body.classList.add("sgdi-view-mode");
   const view=document.getElementById("view");
-  if(view){
-    view.querySelectorAll("[data-sgdi-was-disabled]").forEach(el=>{el.setAttribute("disabled","");delete el.dataset.sgdiWasDisabled});
-    view.querySelectorAll("[data-sgdi-was-readonly]").forEach(el=>{el.setAttribute("readonly","");delete el.dataset.sgdiWasReadonly});
-  }
+  sgdiApplyViewModeLocks(view);
   _sgdiUpdateEditFab();
 }
 function sgdiExitViewMode(){
   const view=document.getElementById("view");
   sgdiViewModeActive=false;
   document.body.classList.remove("sgdi-view-mode");
-  if(view){
-    view.querySelectorAll("input:not([data-no-lock]):not([type='button']):not([type='submit']):not([type='checkbox']):not([type='radio']),select:not([data-no-lock]),textarea:not([data-no-lock])").forEach(el=>{
-      if(el.disabled){el.dataset.sgdiWasDisabled="1";el.removeAttribute("disabled")}
-      if(el.readOnly){el.dataset.sgdiWasReadonly="1";el.removeAttribute("readonly")}
-    });
-  }
+  if(view)view.querySelectorAll("[data-sgdi-locked-by-view='1']").forEach(el=>{
+    el.disabled=false;
+    delete el.dataset.sgdiLockedByView;
+  });
   _sgdiUpdateEditFab();
   if(session&&typeof logActivity==="function"){
     const page=_sgdiCurrentPageLabel();
@@ -8024,6 +8029,7 @@ function renderView(){
     }
   }catch(e){console.error(e);view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold mb-2 text-red-700">Erreur</h2><pre class="text-xs text-red-700">${escapeHTML(e.message)}\n${escapeHTML(e.stack||"")}</pre></div>`}
   normalizeCentralPage(view);
+  sgdiApplyViewModeLocks(view);
   uiProgressDone();
   sgdiLastRenderedPath=path;
   if(sgdiNextScrollRestore){const next=sgdiNextScrollRestore;sgdiNextScrollRestore=null;sgdiRestoreScrollPosition(next)}
@@ -8423,6 +8429,7 @@ function handlePhotoUpload(inputId,targetHidden,previewId){
   r.readAsDataURL(f);
 }
 function openAgentPhotoUpload(agentId){
+  if(sgdiViewModeActive){toast("Fiche verrouillée : déverrouillez la page pour modifier la photo.","error");return}
   if(isOpsFicheReadOnlyContext()){toast("Fiche OPS en lecture simple : modification photo non autorisée.","error");return}
   // Même verrou que les autres champs de la fiche (identiteEditable) : seul le
   // contexte Administration système ou DRH peut modifier la photo.
