@@ -64,6 +64,41 @@ def test_full_contract_flow(client, auth_headers):
     print("OK full flow", contract)
 
 
+def test_contractualisation_accepts_incomplete_administrative_profile(client, auth_headers):
+    created = client.post("/api/drh/candidates", headers=auth_headers, json={
+        "first_name": "Profil",
+        "last_name": "Incomplet",
+        "desired_position": "APS",
+        "society": "Iron Global Securite",
+        "status": "nouvelle",
+        "data": {
+            "nom": "Incomplet",
+            "prenom": "Profil",
+            "avisDecision": "Favorable",
+            "posteSouhaite": "APS",
+            "typeContrat": "CDD",
+            "contractStartDate": "2026-09-03",
+        },
+    })
+    assert created.status_code == 200, created.text
+    candidate_id = created.json()["data"]["id"]
+
+    marked = client.post(
+        f"/api/drh/candidates/{candidate_id}/marquer-contractualisation",
+        headers=auth_headers,
+    )
+    assert marked.status_code == 200, marked.text
+
+    recruited = client.post(
+        f"/api/drh/candidates/{candidate_id}/recruit",
+        headers=auth_headers,
+    )
+    assert recruited.status_code == 200, recruited.text
+    employee = recruited.json()["data"]
+    assert employee["first_name"].casefold() == "profil"
+    assert employee["last_name"].casefold() == "incomplet"
+
+
 def test_future_contract_start_is_preserved(client, auth_headers):
     data = {
         "nom": "Futur", "prenom": "Contrat", "dateNaissance": "1992-01-02", "lieuNaissance": "Oran",

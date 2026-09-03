@@ -6,7 +6,6 @@ JS = (Path(__file__).parents[1] / "app/static/sgdi-app.js").read_text(encoding="
 
 def test_recruitment_unwraps_action_response_before_mapping_employee():
     assert "const savedEmployee=savedAction?.data||savedAction" in JS
-    assert "candidateFromApi(revalidated?.data||revalidated)" in JS
 
 
 def test_contract_preview_normalizes_employee_identity_for_html_and_word():
@@ -67,3 +66,11 @@ def test_missing_emergency_contact_does_not_block_employee_creation():
     )[0]
     assert "missingContact" not in confirmation
     assert "Complétez les informations obligatoires" not in confirmation
+
+
+def test_recruitment_does_not_revalidate_all_candidate_sections():
+    recruitment = JS.split("async function recruitContractCandidateToEmployee", 1)[1].split(
+        "async function embaucherCandidat", 1
+    )[0]
+    assert "validateCandidateSection" not in recruitment
+    assert "validateCandidateFinal" not in recruitment

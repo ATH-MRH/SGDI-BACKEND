@@ -1047,7 +1047,12 @@ def recruit_candidate(db: Session, candidate_id: int, username: str | None = Non
             return employee
     if candidate.status != "a_contractualiser":
         raise HTTPException(status_code=422, detail="Le candidat doit être à contractualiser avant son recrutement")
-    _validate_candidate_transition({"status": "embauche", "data": candidate.data or {}}, candidate)
+    # La contractualisation ne rejoue pas la validation administrative des sept
+    # sections. Les dossiers transmis par le module recrutement peuvent être
+    # incomplets (source, filiation, contact d'urgence, etc.) sans bloquer la
+    # création de l'employé. La décision favorable reste la seule règle métier.
+    if not _candidate_decision_is_favorable(data):
+        raise HTTPException(status_code=422, detail="Contrat refusé : la décision du recruteur doit être Favorable")
     next_code = next_employee_code(db, candidate.society)
     recruit_date = _candidate_date(data.get("contractStartDate")) or date.today()
 
