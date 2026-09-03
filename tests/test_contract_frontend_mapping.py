@@ -46,3 +46,16 @@ def test_contract_form_does_not_repeat_candidate_emergency_banner():
     assert "nc-candidate-contact-row" not in contractualisation
     assert 'name="candidateWilaya"' not in contractualisation
     assert 'name="contactUrgenceLien"' not in contractualisation
+
+
+def test_identity_document_and_nin_are_persisted_separately():
+    proxy = JS.split("function candidateContractAgentProxy(c){", 1)[1].split(
+        "function upsertServerEmployee", 1
+    )[0]
+    assert "numeroPieceIdentite:c.numeroPieceIdentite||c.pieceIdentiteNumero||\"\"" in proxy
+    assert "async function persistCandidateContractIdentity(id,field,value)" in JS
+    assert '["numeroPieceIdentite","nin"].includes(field)' in JS
+    contractualisation = JS.split("function renderContractualisation(view,id){", 1)[1].split(
+        "function updateNewContractSummary", 1
+    )[0]
+    assert "persistCandidateContractIdentity" in contractualisation

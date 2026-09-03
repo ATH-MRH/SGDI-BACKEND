@@ -1319,6 +1319,7 @@ function candidateContractAgentProxy(c){
     nomPere:c.nomPere||"",
     nomMere:c.nomMere||"",
     nin:c.nin||"",
+    numeroPieceIdentite:c.numeroPieceIdentite||c.pieceIdentiteNumero||"",
     numeroCnas:c.numeroCnas||"",
     modePaiement:c.modePaiement||"",
     banque:c.banque||"",
@@ -12836,8 +12837,8 @@ function renderContractualisation(view,id){
             <div class="nc-field full"><label>Candidat</label><input class="input bg-slate-50 font-bold" value="${escapeHTML(candidateFullName)}" readonly/></div>
             <div class="nc-field full"><label>Poste / fonction <span class="req">*</span></label><select class="select" name="poste" required onchange="updateNewContractSummary();loadNewContractContractModels()">${newContractPosteOptions(p.poste)}</select></div>
             <div class="nc-field"><label>Client</label><select class="select" name="client" onchange="updateNewContractClientFromSelect(this)">${newContractClientOptions(p.client,selectedSociete)}</select></div>
-            <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required/></div>
-            <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}"/></div>
+            <div class="nc-field"><label>N° pièce d'identité <span class="req">*</span></label><input class="input" name="numeroPieceIdentite" value="${escapeHTML(p.numeroPieceIdentite||"")}" required onchange="persistCandidateContractIdentity('${jsString(c.id)}','numeroPieceIdentite',this.value)"/></div>
+            <div class="nc-field"><label>N° identité National</label><input class="input" name="nin" value="${escapeHTML(p.nin||"")}" onchange="persistCandidateContractIdentity('${jsString(c.id)}','nin',this.value)"/></div>
           </div>
         </div>
         ${newContractClientCustomField(p.client)}
@@ -12910,6 +12911,17 @@ function renderContractualisation(view,id){
       </div>
     </form>`;
   setTimeout(()=>{updateNewContractReference();updateNewContractClientFromSelect(document.querySelector('#employee-new-contract-form [name="client"]'));loadNewContractClients();updateNewContractSalaryWords(document.querySelector('#employee-new-contract-form [name="salaireNet"]'));updateNewContractSummary();loadNewContractContractModels();bindNewContractRequiredFields(document.getElementById("employee-new-contract-form"))},0);
+}
+async function persistCandidateContractIdentity(id,field,value){
+  if(!["numeroPieceIdentite","nin"].includes(field))return;
+  const c=findCandidatById(id);if(!c)return;
+  c[field]=String(value||"").trim();
+  saveDB();
+  try{
+    await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});
+  }catch(e){
+    toast("Enregistrement du numéro impossible : "+(e.message||e),"error");
+  }
 }
 function updateNewContractSummary(){
   const f=document.getElementById("employee-new-contract-form");if(!f)return;
