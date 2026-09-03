@@ -81,6 +81,18 @@ def test_contract_window_reports_real_error_and_secondary_saves_do_not_block():
         "function employeeDocumentSignatureControls", 1
     )[0]
     assert "SGDI_CONTRACT_SAVE_ERROR" in saving
-    assert 'saveDBAndWaitToast("Synchronisation secondaire du contrat non confirmée").catch' in saving
+    assert "Synchronisation secondaire du contrat" not in saving
     assert 'if(!(await saveDBAndWaitToast("Contrat non confirmé")))return false' not in saving
     assert 'state.textContent=window.SGDI_CONTRACT_SAVE_ERROR||' in JS
+
+
+def test_successful_contract_save_clears_false_unsaved_state():
+    saving = JS.split("async function saveAndArchiveEmployeeContractFromWindow", 1)[1].split(
+        "function employeeDocumentSignatureControls", 1
+    )[0]
+    assert "sgdiFormHasUnsavedChanges=false" in saving
+    assert 'sgdiUpdateSaveButton("clean")' in saving
+    identity = JS.split("async function persistCandidateContractIdentity", 1)[1].split(
+        "function updateNewContractSummary", 1
+    )[0]
+    assert "saveDB()" not in identity

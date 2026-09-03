@@ -8972,10 +8972,15 @@ async function saveAndArchiveEmployeeContractFromWindow(docWindow,meta){
   try{
     await persistEmployeeRhDecision(a,{type:"Nouveau contrat",du:draft.dateDebut,au:draft.dateFin,motif:`${a.typeContrat} ${contratDureeLabel(draft.dureeContrat)}`,details:[`Fonction : ${draft.poste}`,`Période d'essai : ${contratDureeLabel(draft.periodeEssai)||"—"}`,`N° pièce d'identité : ${draft.numeroPieceIdentite||"—"}`,`N° identité National : ${draft.nin||"—"}`,`Client : ${draft.client||"—"}`,`Adresse : ${draft.adresseSite||"—"}`,`Wilaya : ${draft.wilaya||"—"}`,`Commune : ${draft.commune||"—"}`,draft.missions?`Missions : ${draft.missions}`:"",`Salaire : ${money(draft.salaireNet||0)}`,draft.observation?`Observation : ${draft.observation}`:""].filter(Boolean).join("\n"),reference:draft.reference||meta?.reference||"",statut:"termine"});
   }catch(e){console.warn("Historique RH du contrat non enregistré",e)}
-  saveDBAndWaitToast("Synchronisation secondaire du contrat non confirmée").catch(e=>console.warn(e));
   const archived=await archiveEmployeeDocumentFromWindow(docWindow,{...meta,agentId:a.id||meta?.agentId,employeeBackendId:a.backendId||meta?.employeeBackendId,matricule:a.matricule||meta?.matricule});
   if(!archived&&!docWindow?.SGDI_CONTRACT_SAVE_ERROR)fail("Contrat enregistré, mais archivage HTML impossible");
   if(archived){
+    sgdiDirty=false;
+    sgdiFormHasUnsavedChanges=false;
+    sgdiLastFormInputAt=0;
+    document.getElementById("view")?.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);
+    sgdiUpdateSaveButton("clean");
+    if(typeof sgdiCaptureBaseline==="function")sgdiCaptureBaseline();
     toast("Contrat enregistré et archivé","success");
     renderSidebar();
     renderView();
@@ -12928,7 +12933,6 @@ async function persistCandidateContractIdentity(id,field,value){
   if(!["numeroPieceIdentite","nin"].includes(field))return;
   const c=findCandidatById(id);if(!c)return;
   c[field]=String(value||"").trim();
-  saveDB();
   try{
     await persistCandidateToPostgres(c,{allowCreate:!sqlBackendId(c.backendId)});
   }catch(e){
@@ -13085,6 +13089,12 @@ async function confirmCandidateNewContract(form,id){
       toast("Employé créé, mais l'archivage Word du contrat doit être relancé depuis son dossier.","error");
     }
     await sgdiBackendSaveAndWait();
+    sgdiDirty=false;
+    sgdiFormHasUnsavedChanges=false;
+    sgdiLastFormInputAt=0;
+    form.querySelectorAll("[data-dirty='1']").forEach(node=>delete node.dataset.dirty);
+    delete form.dataset.dirty;
+    sgdiUpdateSaveButton("clean");
     openEmployeeContractReviewWindow(agent,{...draft,a:agent});
     toastCenter("CONTRAT VALIDÉ ET EMPLOYÉ CRÉÉ","success");
     navigate(`agents/${agent.id}`);
