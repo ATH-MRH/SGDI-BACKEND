@@ -74,3 +74,13 @@ def test_recruitment_does_not_revalidate_all_candidate_sections():
     )[0]
     assert "validateCandidateSection" not in recruitment
     assert "validateCandidateFinal" not in recruitment
+
+
+def test_contract_window_reports_real_error_and_secondary_saves_do_not_block():
+    saving = JS.split("async function saveAndArchiveEmployeeContractFromWindow", 1)[1].split(
+        "function employeeDocumentSignatureControls", 1
+    )[0]
+    assert "SGDI_CONTRACT_SAVE_ERROR" in saving
+    assert 'saveDBAndWaitToast("Synchronisation secondaire du contrat non confirmée").catch' in saving
+    assert 'if(!(await saveDBAndWaitToast("Contrat non confirmé")))return false' not in saving
+    assert 'state.textContent=window.SGDI_CONTRACT_SAVE_ERROR||' in JS

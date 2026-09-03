@@ -8929,15 +8929,22 @@ async function ensureContractEmployeeRecord(a,draft){
   return await recruitContractCandidateToEmployee(c,candidateContractFormDataFromDraft(draft));
 }
 async function saveAndArchiveEmployeeContractFromWindow(docWindow,meta){
+  if(docWindow)docWindow.SGDI_CONTRACT_SAVE_ERROR="";
+  const fail=(message)=>{
+    const text=String(message||"Enregistrement du contrat impossible");
+    if(docWindow)docWindow.SGDI_CONTRACT_SAVE_ERROR=text;
+    toast(text,"error");
+    return false;
+  };
   const draft=meta?.contractDraft||{};
   let a=findEmployeeByRef(draft.agentId||meta?.agentId||meta?.employeeBackendId||meta?.matricule);
-  if(!a){toast("Employé introuvable pour enregistrement du contrat","error");return false}
-  if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin){toast("Contrat incomplet : date début, durée et date fin obligatoires","error");return false}
-  if(!draft.poste){toast("Contrat incomplet : poste / fonction obligatoire","error");return false}
-  if(!draft.numeroPieceIdentite){toast("Contrat incomplet : N° pièce d'identité obligatoire","error");return false}
+  if(!a)return fail("Employé introuvable pour enregistrement du contrat");
+  if(!draft.dateDebut||!draft.dureeContrat||!draft.dateFin)return fail("Contrat incomplet : date début, durée et date fin obligatoires");
+  if(!draft.poste)return fail("Contrat incomplet : poste / fonction obligatoire");
+  if(!draft.numeroPieceIdentite)return fail("Contrat incomplet : N° pièce d'identité obligatoire");
   try{
     a=await ensureContractEmployeeRecord(a,draft);
-  }catch(e){toast("Contrat non enregistré : "+(e.message||e),"error");return false}
+  }catch(e){return fail("Contrat non enregistré : "+(e.message||e))}
   a.typeContrat=draft.typeContrat||"CDD";
   a.dateRecrutement=draft.dateDebut;
   a.dureeContrat=draft.dureeContrat;
@@ -8959,10 +8966,15 @@ async function saveAndArchiveEmployeeContractFromWindow(docWindow,meta){
   try{
     await persistEmployeeMasterContractFields(a);
     await persistEmployeeContractRecord(a,draft);
+  }catch(e){return fail("Contrat non enregistré : "+(e.message||e))}
+  // L'historique RH et la sauvegarde globale sont des copies secondaires : leur
+  // indisponibilité ne doit jamais annuler un contrat déjà persisté en PostgreSQL.
+  try{
     await persistEmployeeRhDecision(a,{type:"Nouveau contrat",du:draft.dateDebut,au:draft.dateFin,motif:`${a.typeContrat} ${contratDureeLabel(draft.dureeContrat)}`,details:[`Fonction : ${draft.poste}`,`Période d'essai : ${contratDureeLabel(draft.periodeEssai)||"—"}`,`N° pièce d'identité : ${draft.numeroPieceIdentite||"—"}`,`N° identité National : ${draft.nin||"—"}`,`Client : ${draft.client||"—"}`,`Adresse : ${draft.adresseSite||"—"}`,`Wilaya : ${draft.wilaya||"—"}`,`Commune : ${draft.commune||"—"}`,draft.missions?`Missions : ${draft.missions}`:"",`Salaire : ${money(draft.salaireNet||0)}`,draft.observation?`Observation : ${draft.observation}`:""].filter(Boolean).join("\n"),reference:draft.reference||meta?.reference||"",statut:"termine"});
-  }catch(e){toast("Contrat non enregistré : "+(e.message||e),"error");return false}
-  if(!(await saveDBAndWaitToast("Contrat non confirmé")))return false;
+  }catch(e){console.warn("Historique RH du contrat non enregistré",e)}
+  saveDBAndWaitToast("Synchronisation secondaire du contrat non confirmée").catch(e=>console.warn(e));
   const archived=await archiveEmployeeDocumentFromWindow(docWindow,{...meta,agentId:a.id||meta?.agentId,employeeBackendId:a.backendId||meta?.employeeBackendId,matricule:a.matricule||meta?.matricule});
+  if(!archived&&!docWindow?.SGDI_CONTRACT_SAVE_ERROR)fail("Contrat enregistré, mais archivage HTML impossible");
   if(archived){
     toast("Contrat enregistré et archivé","success");
     renderSidebar();
@@ -12193,7 +12205,7 @@ function employeeContractReviewScript(){
       if(!signatureValidated){state.textContent="Validez d'abord la signature.";state.style.color="#dc2626";return;}
       setBtn(validate,false);state.textContent="Contrat en cours d'enregistrement...";state.style.color="#64748b";statusBox("Contrat en cours d'enregistrement");
       let ok=false;try{if(window.opener&&window.opener.saveAndArchiveEmployeeContractFromWindow)ok=await window.opener.saveAndArchiveEmployeeContractFromWindow(window,window.SGDI_ARCHIVE_META||{});}catch(e){console.error(e)}
-      if(!ok){setBtn(validate,true);state.textContent="Enregistrement impossible. Vérifiez la session serveur puis réessayez.";state.style.color="#dc2626";const box=document.getElementById("aps-contract-status-box");if(box)box.style.display="none";return;}
+      if(!ok){setBtn(validate,true);state.textContent=window.SGDI_CONTRACT_SAVE_ERROR||"Enregistrement impossible. Vérifiez la session serveur puis réessayez.";state.style.color="#dc2626";const box=document.getElementById("aps-contract-status-box");if(box)box.style.display="none";return;}
       archived=true;setBtn(printBtn,true);state.textContent="Contrat enregistré. Vous pouvez imprimer.";state.style.color="#047857";statusBox("Contrat enregistré",true);
     });
     canvas.addEventListener("pointerdown",e=>{drawing=true;last=point(e);canvas.setPointerCapture(e.pointerId);});
