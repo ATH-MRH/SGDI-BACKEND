@@ -33,6 +33,8 @@ class PublicCandidateIn(BaseModel):
     first_name: Annotated[str, Field(min_length=2, max_length=100)]
     last_name: Annotated[str, Field(min_length=2, max_length=100)]
     phone: Annotated[str | None, Field(default=None, max_length=40)]
+    additional_phones: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=10)
+    emergency_phone: Annotated[str | None, Field(default=None, max_length=40)]
     email: EmailStr | None = None
     birth_date: Annotated[str | None, Field(default=None, max_length=10)]
     birth_place: Annotated[str | None, Field(default=None, max_length=120)]
@@ -86,6 +88,8 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
             "sourceExterne": "portail_candidat",
             "ficheCandidatTransmise": True,
             "submittedAt": now,
+            "telephonesSecondaires": payload.additional_phones,
+            "contactUrgenceTel": payload.emergency_phone or "",
             "dateNaissance": payload.birth_date or "",
             "lieuNaissance": payload.birth_place or "",
             "sexe": payload.sex or "",

@@ -6,6 +6,8 @@ def _payload(**updates):
         "first_name": "Nadia",
         "last_name": "Portail",
         "phone": "0550001122",
+        "additional_phones": ["0661002233", "0772003344"],
+        "emergency_phone": "0555007788",
         "email": "nadia.portal@example.com",
         "desired_position": "Agent de sécurité",
         "society": "IRON GLOBAL SÉCURITÉ",
@@ -55,6 +57,8 @@ def test_public_submission_creates_candidate_not_employee(client, auth_headers):
     assert created["status"] == "nouvelle"
     assert created["data"]["moduleOrigine"] == "fr.irongs.com"
     assert created["data"]["ficheCandidatTransmise"] is True
+    assert created["data"]["telephonesSecondaires"] == ["0661002233", "0772003344"]
+    assert created["data"]["contactUrgenceTel"] == "0555007788"
     assert created["data"]["experience"] == [
         {
             "societe": "Société Exemple",
@@ -118,4 +122,8 @@ def test_candidate_portal_assets_are_repository_native():
     assert "CANDIDATE_WILAYAS" in html
     assert "ALGERIA_COMMUNES_BY_WILAYA_CODE" in html
     assert "/static/algeria-communes.js" in html
+    assert "Téléphone principal" in html
+    assert "Numéro d’urgence" in html
+    assert "additionalPhoneRows" in html
+    assert "collectAdditionalPhones" in html
     assert 'textarea name="experience"' not in html
