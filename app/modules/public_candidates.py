@@ -21,6 +21,14 @@ class PublicExperienceIn(BaseModel):
     departure_reason: Annotated[str | None, Field(default=None, max_length=300)]
 
 
+class PublicEducationIn(BaseModel):
+    institution: Annotated[str | None, Field(default=None, max_length=180)]
+    degree: Annotated[str | None, Field(default=None, max_length=150)]
+    specialty: Annotated[str | None, Field(default=None, max_length=150)]
+    start_date: Annotated[str | None, Field(default=None, max_length=10)]
+    end_date: Annotated[str | None, Field(default=None, max_length=10)]
+
+
 class PublicCandidateIn(BaseModel):
     first_name: Annotated[str, Field(min_length=2, max_length=100)]
     last_name: Annotated[str, Field(min_length=2, max_length=100)]
@@ -45,6 +53,7 @@ class PublicCandidateIn(BaseModel):
     military_service: Annotated[str | None, Field(default=None, max_length=80)]
     languages: list[Annotated[str, Field(max_length=60)]] = Field(default_factory=list, max_length=12)
     experience: list[PublicExperienceIn] = Field(default_factory=list, max_length=20)
+    education: list[PublicEducationIn] = Field(default_factory=list, max_length=20)
     consent: bool
     company: Annotated[str | None, Field(default=None, max_length=120)] = None
 
@@ -102,6 +111,16 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
                     "motif": row.departure_reason or "",
                 }
                 for row in payload.experience
+            ],
+            "formations": [
+                {
+                    "etablissement": row.institution or "",
+                    "diplome": row.degree or "",
+                    "specialite": row.specialty or "",
+                    "du": row.start_date or "",
+                    "au": row.end_date or "",
+                }
+                for row in payload.education
             ],
             "consentementCandidatAt": now,
             "remoteAddress": request.client.host if request.client else "",

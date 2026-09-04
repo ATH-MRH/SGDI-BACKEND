@@ -20,6 +20,15 @@ def _payload(**updates):
                 "departure_reason": "Fin de contrat",
             }
         ],
+        "education": [
+            {
+                "institution": "Université d'Alger",
+                "degree": "Licence",
+                "specialty": "Droit",
+                "start_date": "2018-09-01",
+                "end_date": "2021-06-30",
+            }
+        ],
         "consent": True,
     }
     data.update(updates)
@@ -53,6 +62,15 @@ def test_public_submission_creates_candidate_not_employee(client, auth_headers):
             "au": "2024-06-30",
             "poste": "Agent",
             "motif": "Fin de contrat",
+        }
+    ]
+    assert created["data"]["formations"] == [
+        {
+            "etablissement": "Université d'Alger",
+            "diplome": "Licence",
+            "specialite": "Droit",
+            "du": "2018-09-01",
+            "au": "2021-06-30",
         }
     ]
     after_employees = client.get("/api/drh/employees", headers=auth_headers).json()
@@ -92,4 +110,12 @@ def test_candidate_portal_assets_are_repository_native():
     assert "toggleOtherLanguage" in html
     assert "experienceRows" in html
     assert "collectExperiences" in html
+    assert "Formation / Études" in html
+    assert "educationRows" in html
+    assert "collectEducation" in html
+    assert "Coordonnées de contact" in html
+    assert "candidateWilaya" in html
+    assert "CANDIDATE_WILAYAS" in html
+    assert "ALGERIA_COMMUNES_BY_WILAYA_CODE" in html
+    assert "/static/algeria-communes.js" in html
     assert 'textarea name="experience"' not in html
