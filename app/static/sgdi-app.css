@@ -7070,6 +7070,7 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
 .pt-auto-kpi.alert .val{color:#dc2626}
 .pt-auto-kpi-clickable{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease}
 .pt-auto-kpi-clickable:hover{transform:translateY(-2px);border-color:var(--pt-kpi-c,#0d6ecc);box-shadow:0 8px 18px rgba(4,57,112,.13)}
+.pt-auto-kpi-clickable.is-active{border-color:var(--pt-kpi-c,#0d6ecc);box-shadow:0 0 0 2px color-mix(in srgb,var(--pt-kpi-c,#0d6ecc) 18%,transparent),0 7px 16px rgba(4,57,112,.12)}
 .pt-auto-kpi-clickable:focus-visible{outline:3px solid color-mix(in srgb,var(--pt-kpi-c,#0d6ecc) 28%,transparent);outline-offset:2px}
 .pt-kpi-open{display:block;margin-top:7px;color:var(--pt-kpi-c,#0d6ecc);font-size:9px;font-weight:900;opacity:0;transform:translateY(2px);transition:.14s ease}
 .pt-auto-kpi-clickable:hover .pt-kpi-open,.pt-auto-kpi-clickable:focus-visible .pt-kpi-open{opacity:1;transform:none}

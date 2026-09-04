@@ -38635,7 +38635,7 @@ function setPtAutoChip(v){sessionStorage.setItem("ptAutoChip",v||"all");renderVi
 function ptCurrentAutoDensity(){return sessionStorage.getItem("ptAutoDensity")||"comfort"}
 function setPtAutoDensity(v){sessionStorage.setItem("ptAutoDensity",v||"comfort");renderView()}
 function ptCurrentManuelChip(){return sessionStorage.getItem("ptManuelChip")||"all"}
-function setPtManuelChip(v){sessionStorage.setItem("ptManuelChip",v||"all");renderView()}
+function setPtManuelChip(v){const next=ptCurrentManuelChip()===(v||"all")&&v!=="all"?"all":v||"all";sessionStorage.setItem("ptManuelChip",next);renderView()}
 function setPtSociete(v){sessionStorage.setItem("ptSociete",v||"");renderView()}
 function setPtSearch(v){sessionStorage.setItem("ptSearch",v||"");renderView();requestAnimationFrame(()=>{const el=document.getElementById("pt-search-input");if(el){const len=el.value.length;el.focus();try{el.setSelectionRange(len,len)}catch(_){}}})}
 function setPtSort(v){sessionStorage.setItem("ptSort",v||"nom");renderView()}
@@ -40645,16 +40645,17 @@ function renderPointageSaisie(){
   const tauxMois=effectif?Math.round(ag.reduce((s,a)=>s+(statsById.get(a.id)?.taux||0),0)/effectif):0;
   const absencesPaie=ag.reduce((s,a)=>s+(statsById.get(a.id)?.absPaie||0),0);
   const alertes=ag.filter(a=>(statsById.get(a.id)?.taux??100)<100).length;
-  const kpiCard=(lbl,val,sub,color,alertCls,barPct)=>`<div class="pt-auto-kpi ${alertCls||""}" style="--pt-kpi-c:${color}"><div class="lbl">${escapeHTML(lbl)}</div><div class="val">${val}</div><div class="sub">${escapeHTML(sub)}</div>${barPct!==undefined?`<div class="pt-kpi-bar"><i style="width:${barPct}%;background:${color}"></i></div>`:""}</div>`;
+  const activeKpi=ptCurrentManuelChip();
+  const kpiCard=(lbl,val,sub,color,filter,alertCls,barPct)=>`<button type="button" class="pt-auto-kpi pt-auto-kpi-clickable ${activeKpi===filter?"is-active":""} ${alertCls||""}" style="--pt-kpi-c:${color}" onclick="setPtManuelChip('${filter}')" aria-pressed="${activeKpi===filter}" aria-label="${escapeHTML(lbl)} — filtrer le tableau"><div class="lbl">${escapeHTML(lbl)}</div><div class="val">${val}</div><div class="sub">${escapeHTML(sub)}</div>${barPct!==undefined?`<div class="pt-kpi-bar"><i style="width:${barPct}%;background:${color}"></i></div>`:""}<span class="pt-kpi-open">${activeKpi===filter&&filter!=="all"?"Afficher tout":"Voir le détail"} →</span></button>`;
   const kpisHTML=`<div class="pt-auto-kpis">
-    ${kpiCard("Effectif",effectif,soc?soc:"Toutes sociétés autorisées","#043970")}
-    ${kpiCard("Pointages validés",`${validated}/${effectif}`,`${effectif?Math.round(validated*100/effectif):0}% verrouillés`,"#16a34a",validated===0?"alert":"",effectif?Math.round(validated*100/effectif):0)}
-    ${kpiCard("Complétude — mois",`${tauxMois}%`,"Jours ouvrés renseignés","#0d6ecc",undefined,tauxMois)}
-    ${kpiCard("Absences paie",absencesPaie,"Cumul du mois affiché","#d97706")}
-    ${kpiCard("Cases à compléter",alertes,"Agents avec des trous de saisie","#dc2626",alertes>0?"alert":"")}
+    ${kpiCard("Effectif",effectif,soc?soc:"Toutes sociétés autorisées","#043970","all")}
+    ${kpiCard("Pointages validés",`${validated}/${effectif}`,`${effectif?Math.round(validated*100/effectif):0}% verrouillés`,"#16a34a","validated",validated===0?"alert":"",effectif?Math.round(validated*100/effectif):0)}
+    ${kpiCard("Complétude — mois",`${tauxMois}%`,"Jours ouvrés renseignés","#0d6ecc","gaps","",tauxMois)}
+    ${kpiCard("Absences paie",absencesPaie,"Cumul du mois affiché","#d97706","absences")}
+    ${kpiCard("Cases à compléter",alertes,"Agents avec des trous de saisie","#dc2626","incomplete",alertes>0?"alert":"")}
   </div>`;
   const chip=ptCurrentManuelChip();
-  const chipDefs=[["all","Tous",()=>true],["unlocked","🔓 Non validés",a=>!statsById.get(a.id)?.valide],["gaps","Renseignement < 90%",a=>(statsById.get(a.id)?.taux??100)<90]];
+  const chipDefs=[["all","Tous",()=>true],["validated","✓ Validés",a=>!!statsById.get(a.id)?.valide],["unlocked","🔓 Non validés",a=>!statsById.get(a.id)?.valide],["absences","Absences paie",a=>(statsById.get(a.id)?.absPaie||0)>0],["incomplete","Cases à compléter",a=>(statsById.get(a.id)?.taux??100)<100],["gaps","Renseignement < 90%",a=>(statsById.get(a.id)?.taux??100)<90]];
   const chipsHTML=chipDefs.map(([k,l,fn])=>{const n=ag.filter(fn).length;return`<button type="button" class="pt-auto-chip ${k==="unlocked"?"warn":""} ${chip===k?"active":""}" onclick="setPtManuelChip('${k}')">${l} <span class="n">${n}</span></button>`}).join("");
   const legendBaseKeys=["P","A","M","S","C","R","AB"];
   const legendExtraGroups=[["Récup. travaillée · présent",["F1","F2","F3"]],["Maintenu en poste · présent",["P/F1","P/F2","P/F3"]],["Absent partiel",["A1","A2","A3"]]];

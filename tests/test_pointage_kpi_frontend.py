@@ -24,3 +24,20 @@ def test_pointage_counter_filters_and_interaction_styles_exist():
     assert '["absences","Absences paie"' in JS
     assert ".pt-auto-kpi-clickable:hover" in CSS
     assert ".pt-auto-kpi-clickable:focus-visible" in CSS
+
+
+def test_manual_attendance_counters_filter_the_table_and_toggle_off():
+    section = JS.split("function renderPointageSaisie(){", 1)[1].split(
+        "function ptAutoSaisieRefresh", 1
+    )[0]
+    assert 'onclick="setPtManuelChip(\'${filter}\')"' in section
+    assert 'aria-pressed="${activeKpi===filter}"' in section
+    assert '"Effectif",effectif' in section and '"all"' in section
+    assert '"Pointages validés"' in section and '"validated"' in section
+    assert '"Complétude — mois"' in section and '"gaps"' in section
+    assert '"Absences paie"' in section and '"absences"' in section
+    assert '"Cases à compléter"' in section and '"incomplete"' in section
+    assert '["validated","✓ Validés"' in section
+    assert '["incomplete","Cases à compléter"' in section
+    assert 'ptCurrentManuelChip()===(v||"all")' in JS
+    assert ".pt-auto-kpi-clickable.is-active" in CSS
