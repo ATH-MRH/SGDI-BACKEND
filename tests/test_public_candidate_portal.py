@@ -11,6 +11,15 @@ def _payload(**updates):
         "society": "IRON GLOBAL SÉCURITÉ",
         "children_count": 0,
         "languages": ["Arabe", "Français"],
+        "experience": [
+            {
+                "society": "Société Exemple",
+                "start_date": "2022-01-01",
+                "end_date": "2024-06-30",
+                "position": "Agent",
+                "departure_reason": "Fin de contrat",
+            }
+        ],
         "consent": True,
     }
     data.update(updates)
@@ -37,6 +46,15 @@ def test_public_submission_creates_candidate_not_employee(client, auth_headers):
     assert created["status"] == "nouvelle"
     assert created["data"]["moduleOrigine"] == "fr.irongs.com"
     assert created["data"]["ficheCandidatTransmise"] is True
+    assert created["data"]["experience"] == [
+        {
+            "societe": "Société Exemple",
+            "du": "2022-01-01",
+            "au": "2024-06-30",
+            "poste": "Agent",
+            "motif": "Fin de contrat",
+        }
+    ]
     after_employees = client.get("/api/drh/employees", headers=auth_headers).json()
     assert len(after_employees) == len(before_employees)
 
@@ -67,3 +85,11 @@ def test_candidate_portal_assets_are_repository_native():
     html = (Path(__file__).parents[1] / "app/static/candidat.html").read_text(encoding="utf-8")
     assert "iframe" not in html.lower()
     assert "'/api/public/candidates'" in html
+    assert "Société souhaitée" not in html
+    assert 'placeholder="00 000,00 DZD"' in html
+    assert 'name="language" value="Arabe"' in html
+    assert 'name="language" value="Espagnol"' in html
+    assert "toggleOtherLanguage" in html
+    assert "experienceRows" in html
+    assert "collectExperiences" in html
+    assert 'textarea name="experience"' not in html
