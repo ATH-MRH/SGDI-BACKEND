@@ -7068,6 +7068,11 @@ input.select-sm{padding:5px 8px!important;font-size:13px!important}
 .pt-auto-kpi .val{font-size:22px;font-weight:800;margin-top:6px;color:var(--pt-kpi-c,#043970);font-variant-numeric:tabular-nums}
 .pt-auto-kpi .sub{font-size:10.5px;color:#5b7089;margin-top:3px}
 .pt-auto-kpi.alert .val{color:#dc2626}
+.pt-auto-kpi-clickable{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:transform .14s ease,border-color .14s ease,box-shadow .14s ease}
+.pt-auto-kpi-clickable:hover{transform:translateY(-2px);border-color:var(--pt-kpi-c,#0d6ecc);box-shadow:0 8px 18px rgba(4,57,112,.13)}
+.pt-auto-kpi-clickable:focus-visible{outline:3px solid color-mix(in srgb,var(--pt-kpi-c,#0d6ecc) 28%,transparent);outline-offset:2px}
+.pt-kpi-open{display:block;margin-top:7px;color:var(--pt-kpi-c,#0d6ecc);font-size:9px;font-weight:900;opacity:0;transform:translateY(2px);transition:.14s ease}
+.pt-auto-kpi-clickable:hover .pt-kpi-open,.pt-auto-kpi-clickable:focus-visible .pt-kpi-open{opacity:1;transform:none}
 @media(max-width:860px){.pt-auto-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 .pt-auto-toolbar{background:#fff;border:1px solid #dbe5f0;border-radius:16px;padding:12px 14px;box-shadow:0 2px 8px rgba(4,57,112,.06);margin-bottom:12px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}

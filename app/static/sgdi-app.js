@@ -40802,18 +40802,18 @@ function renderPointageSaisieAuto(){
   const tauxMois=effectif?Math.round(ag.reduce((s,a)=>s+(statsById.get(a.id)?.taux||0),0)/effectif):0;
   const absencesPaie=ag.reduce((s,a)=>s+(statsById.get(a.id)?.nA||0),0);
   const alertesJour=isCurrentMonth?ag.filter(a=>statsById.get(a.id)?.alertToday).length:null;
-  const kpiCard=(lbl,val,sub,color,alertCls)=>`<div class="pt-auto-kpi ${alertCls||""}" style="--pt-kpi-c:${color}"><div class="lbl">${escapeHTML(lbl)}</div><div class="val">${val}</div><div class="sub">${escapeHTML(sub)}</div></div>`;
+  const kpiCard=(lbl,val,sub,color,filter,alertCls)=>`<button type="button" class="pt-auto-kpi pt-auto-kpi-clickable ${alertCls||""}" style="--pt-kpi-c:${color}" onclick="setPtAutoChip('${filter}')" aria-label="${escapeHTML(lbl)} — afficher le détail"><div class="lbl">${escapeHTML(lbl)}</div><div class="val">${val}</div><div class="sub">${escapeHTML(sub)}</div><span class="pt-kpi-open">Voir le détail →</span></button>`;
   const kpisHTML=`<div class="pt-auto-kpis">
-    ${kpiCard("Effectif",effectif,soc?soc:"Toutes sociétés autorisées","#043970")}
-    ${kpiCard("Présents aujourd’hui",presentsAuj===null?"—":`${presentsAuj}/${effectif}`,presentsAuj===null?"Mois affiché différent d’aujourd’hui":`${effectif?Math.round(presentsAuj*100/effectif):0}% de l’effectif`,"#16a34a")}
-    ${kpiCard("Taux de présence — mois",`${tauxMois}%`,"Jours ouvrés renseignés","#0d6ecc")}
-    ${kpiCard("Absences paie",absencesPaie,"Cumul du mois affiché","#d97706")}
-    ${kpiCard("Alertes du jour",alertesJour===null?"—":alertesJour,alertesJour===null?"Mois affiché différent d’aujourd’hui":"Agents non pointés aujourd’hui","#dc2626",alertesJour?"alert":"")}
+    ${kpiCard("Effectif",effectif,soc?soc:"Toutes sociétés autorisées","#043970","all")}
+    ${kpiCard("Présents aujourd’hui",presentsAuj===null?"—":`${presentsAuj}/${effectif}`,presentsAuj===null?"Mois affiché différent d’aujourd’hui":`${effectif?Math.round(presentsAuj*100/effectif):0}% de l’effectif`,"#16a34a","present")}
+    ${kpiCard("Taux de présence — mois",`${tauxMois}%`,"Jours ouvrés renseignés","#0d6ecc","gaps")}
+    ${kpiCard("Absences paie",absencesPaie,"Cumul du mois affiché","#d97706","absences")}
+    ${kpiCard("Alertes du jour",alertesJour===null?"—":alertesJour,alertesJour===null?"Mois affiché différent d’aujourd’hui":"Agents non pointés aujourd’hui","#dc2626","alert",alertesJour?"alert":"")}
   </div>`;
   const legendCodes=["P","A","M","S","C","R"];
   const legendHTML=`<div class="pt-auto-legend"><span class="lbl">Légende</span>${legendCodes.map(k=>`<span class="pt-auto-legend-item"><span class="pt-auto-legend-dot" style="background:${POINTAGE_CODES[k].color}"></span>${k} — ${escapeHTML(POINTAGE_CODES[k].label)}</span>`).join("")}<span style="margin-left:auto;font-size:11px;color:#5b7089">Case vide = jour à venir ou repos hebdomadaire (Ven/Sam)</span></div>`;
   const chip=ptCurrentAutoChip();
-  const chipDefs=[["all","Tous",()=>true],["alert","⚠ Alertes",a=>!!statsById.get(a.id)?.alertToday],["gaps","Renseignement < 90%",a=>(statsById.get(a.id)?.taux??100)<90]];
+  const chipDefs=[["all","Tous",()=>true],["present","Présents aujourd’hui",a=>!!statsById.get(a.id)?.presentToday],["absences","Absences paie",a=>(statsById.get(a.id)?.nA||0)>0],["alert","⚠ Alertes",a=>!!statsById.get(a.id)?.alertToday],["gaps","Renseignement < 90%",a=>(statsById.get(a.id)?.taux??100)<90]];
   const chipsHTML=chipDefs.map(([k,l,fn])=>{
     const n=ag.filter(fn).length;
     return `<button type="button" class="pt-auto-chip ${k==="alert"?"warn":""} ${chip===k?"active":""}" onclick="setPtAutoChip('${k}')">${l} <span class="n">${n}</span></button>`;
