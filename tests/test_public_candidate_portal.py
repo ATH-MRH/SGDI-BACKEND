@@ -8,6 +8,7 @@ def _payload(**updates):
         "phone": "0550001122",
         "additional_phones": ["0661002233", "0772003344"],
         "emergency_phone": "0555007788",
+        "photo_data": "data:image/jpeg;base64,dGVzdA==",
         "email": "nadia.portal@example.com",
         "desired_position": "Agent de sécurité",
         "society": "IRON GLOBAL SÉCURITÉ",
@@ -59,6 +60,8 @@ def test_public_submission_creates_candidate_not_employee(client, auth_headers):
     assert created["data"]["ficheCandidatTransmise"] is True
     assert created["data"]["telephonesSecondaires"] == ["0661002233", "0772003344"]
     assert created["data"]["contactUrgenceTel"] == "0555007788"
+    assert created["data"]["photo"].startswith("/uploads/photos/")
+    assert created["data"]["photo"].endswith(".jpg")
     assert created["data"]["experience"] == [
         {
             "societe": "Société Exemple",
@@ -126,4 +129,8 @@ def test_candidate_portal_assets_are_repository_native():
     assert "Numéro d’urgence" in html
     assert "additionalPhoneRows" in html
     assert "collectAdditionalPhones" in html
+    assert "AJOUTER UNE PHOTO" in html
+    assert "navigator.mediaDevices.getUserMedia" in html
+    assert "VALIDER LA PHOTO" in html
+    assert "capturePhoto" in html
     assert 'textarea name="experience"' not in html

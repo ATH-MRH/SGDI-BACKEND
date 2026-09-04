@@ -35,6 +35,7 @@ class PublicCandidateIn(BaseModel):
     phone: Annotated[str | None, Field(default=None, max_length=40)]
     additional_phones: list[Annotated[str, Field(max_length=40)]] = Field(default_factory=list, max_length=10)
     emergency_phone: Annotated[str | None, Field(default=None, max_length=40)]
+    photo_data: Annotated[str | None, Field(default=None, max_length=2_000_000)]
     email: EmailStr | None = None
     birth_date: Annotated[str | None, Field(default=None, max_length=10)]
     birth_place: Annotated[str | None, Field(default=None, max_length=120)]
@@ -65,6 +66,8 @@ class PublicCandidateIn(BaseModel):
             raise ValueError("Un téléphone ou un email est obligatoire")
         if not self.consent:
             raise ValueError("Le consentement est obligatoire")
+        if self.photo_data and not self.photo_data.startswith("data:image/jpeg;base64,"):
+            raise ValueError("Le format de la photo est invalide")
         return self
 
 
@@ -88,6 +91,7 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
             "sourceExterne": "portail_candidat",
             "ficheCandidatTransmise": True,
             "submittedAt": now,
+            "photo": payload.photo_data or "",
             "telephonesSecondaires": payload.additional_phones,
             "contactUrgenceTel": payload.emergency_phone or "",
             "dateNaissance": payload.birth_date or "",
