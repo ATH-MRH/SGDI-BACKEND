@@ -17,6 +17,7 @@ from app.modules.ventes.routes import router as ventes_router
 from app.modules.reporting.routes import router as reporting_router
 from app.modules.assistant.routes import router as assistant_router
 from app.modules.ronde.routes import router as ronde_router
+from app.modules.public_candidates import router as public_candidates_router
 
 
 api_router = APIRouter()
@@ -37,3 +38,4 @@ api_router.include_router(ventes_router, prefix="/ventes", tags=["Ventes & Clien
 api_router.include_router(reporting_router, prefix="/reporting", tags=["Reporting & Dashboard"])
 api_router.include_router(assistant_router, prefix="/assistant", tags=["Assistant IA"])
 api_router.include_router(ronde_router, prefix="/ronde", tags=["Contrôleur de Ronde"])
+api_router.include_router(public_candidates_router, prefix="/public", tags=["Candidatures publiques"])

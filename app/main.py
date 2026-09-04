@@ -414,6 +414,10 @@ def _is_recrute_host(host: str) -> bool:
     return host.split(":")[0].lower() == "recrute.irongs.com"
 
 
+def _is_candidate_host(host: str) -> bool:
+    return host.split(":")[0].lower() == "fr.irongs.com"
+
+
 def _is_fac_host(host: str) -> bool:
     return host.split(":")[0].lower() == "fac.irongs.com"
 
@@ -1133,6 +1137,12 @@ def frontend(request: Request) -> HTMLResponse:
     if _is_recrute_host(host):
         return FileResponse(
             STATIC_DIR / "recrute.html",
+            media_type="text/html; charset=utf-8",
+            headers={"Cache-Control": "no-cache, max-age=0"},
+        )
+    if _is_candidate_host(host):
+        return FileResponse(
+            STATIC_DIR / "candidat.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )
