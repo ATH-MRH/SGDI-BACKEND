@@ -27,6 +27,11 @@ services:
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
       ADMIN_SYSTEM_USERNAME: ${ADMIN_SYSTEM_USERNAME:-}
       ADMIN_SYSTEM_PASSWORD: ${ADMIN_SYSTEM_PASSWORD:-}
+      CONVOCATION_SMTP_HOST: ${CONVOCATION_SMTP_HOST:-king.o2switch.net}
+      CONVOCATION_SMTP_PORT: ${CONVOCATION_SMTP_PORT:-465}
+      CONVOCATION_SMTP_USERNAME: ${CONVOCATION_SMTP_USERNAME:-adm.conv@irongs.com}
+      CONVOCATION_SMTP_PASSWORD: ${CONVOCATION_SMTP_PASSWORD:-}
+      CONVOCATION_SMTP_USE_SSL: ${CONVOCATION_SMTP_USE_SSL:-true}
     volumes:
       # Photos et fichiers uploadés : DOIT être persistant, sinon perte au redéploiement.
       - sgdi_uploads:/app/uploads

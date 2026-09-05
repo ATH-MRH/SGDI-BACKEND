@@ -34,9 +34,18 @@ Configurer au minimum :
 DATABASE_URL=postgresql+psycopg2://utilisateur:mot_de_passe@serveur:5432/base
 JWT_SECRET=...
 ADMIN_SYSTEM_PASSWORD=...
+CONVOCATION_SMTP_HOST=king.o2switch.net
+CONVOCATION_SMTP_PORT=465
+CONVOCATION_SMTP_USERNAME=adm.conv@irongs.com
+CONVOCATION_SMTP_PASSWORD=...
+CONVOCATION_SMTP_USE_SSL=true
 ```
 
 Les secrets doivent être configurés dans le panneau de l'hébergeur, pas dans le Dockerfile.
+
+Les variables `CONVOCATION_SMTP_*` configurent l'envoi des convocations depuis
+`adm.conv@irongs.com`. Après leur modification, recréer le conteneur applicatif
+afin que Docker lui transmette les nouvelles valeurs.
 
 `DATABASE_URL` doit toujours viser la base PostgreSQL persistante du serveur.
 Ne jamais utiliser SQLite ni une base temporaire en production. Les
