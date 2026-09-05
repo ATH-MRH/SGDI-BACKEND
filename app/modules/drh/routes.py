@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from io import BytesIO
+from datetime import datetime
 import unicodedata
 from typing import Annotated
 
@@ -10,13 +11,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.core.config import settings
 from app.modules.auth.dependencies import current_token_payload, current_user
 from app.modules.auth.models import User
 from app.core.security import verify_password
 from app.modules.drh import service
+from app.modules.drh.convocation_email import send_candidate_convocation_email
 from app.modules.drh.models import Candidate, Contract, ContractConditionalClause, ContractTemplate, Document, Employee, GeneratedContract, Leave, Sanction
 from app.modules.drh.schemas import (
     CandidateCreate,
+    CandidateConvocationEmailIn,
     CandidateFinalValidationIn,
     CandidateOut,
     CandidatePage,
@@ -465,6 +469,50 @@ def validate_candidate_final(
     if not verify_password(payload.validation_password, user.validation_password_hash):
         raise HTTPException(status_code=401, detail="Mot de passe de validation incorrect")
     return _action_success(service.validate_candidate_final(db, candidate_id, username=user.username))
+
+
+@router.post("/candidates/{candidate_id}/convocation-email")
+def send_candidate_convocation(
+    candidate_id: int,
+    payload: CandidateConvocationEmailIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _ensure_recruitment_access(user)
+    candidate = service.get_or_404(db, Candidate, candidate_id)
+    _ensure_society_allowed(user, candidate.society)
+    data = dict(candidate.data) if isinstance(candidate.data, dict) else {}
+    delivery = {
+        "channel": "email",
+        "recipient": candidate.email or "",
+        "sender": settings.convocation_from_email,
+        "sentAt": None,
+        "status": "echec",
+        "error": "",
+    }
+    try:
+        if not candidate.email:
+            raise RuntimeError("Le candidat ne possède aucune adresse email")
+        send_candidate_convocation_email(
+            recipient=candidate.email,
+            candidate_name=f"{candidate.first_name} {candidate.last_name}".strip(),
+            date=payload.date,
+            time=payload.heure,
+            location=payload.lieu,
+            purpose=payload.motif,
+        )
+        delivery["status"] = "envoye"
+        delivery["sentAt"] = datetime.utcnow().isoformat()
+    except Exception as exc:
+        delivery["error"] = str(exc)[:300]
+    data["dernierEnvoiConvocation"] = delivery
+    history = list(data.get("envoisConvocation") or [])
+    history.append(delivery)
+    data["envoisConvocation"] = history[-20:]
+    candidate.data = data
+    db.commit()
+    db.refresh(candidate)
+    return _action_success({"email_sent": delivery["status"] == "envoye", "delivery": delivery})
 
 
 @router.post("/candidates/{candidate_id}/marquer-contractualisation")

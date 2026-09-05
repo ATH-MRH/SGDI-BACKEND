@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from_email: str | None = None
     smtp_from_name: str = "SGDI"
+    convocation_from_email: str = "adm.conv@irongs.com"
+    convocation_from_name: str = "Service recrutement IRONGS"
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
 

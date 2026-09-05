@@ -124,6 +124,13 @@ class CandidateFinalValidationIn(BaseModel):
     validation_password: str = Field(min_length=4, max_length=200)
 
 
+class CandidateConvocationEmailIn(BaseModel):
+    date: str = Field(min_length=10, max_length=10)
+    heure: str = Field(min_length=5, max_length=5)
+    lieu: str = Field(min_length=2, max_length=300)
+    motif: str = Field(min_length=2, max_length=1000)
+
+
 class CandidateUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None

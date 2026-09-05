@@ -69,6 +69,39 @@ def test_candidate_contact_duplicate_warning(client, auth_headers):
     assert excluded.json()["duplicates"] == []
 
 
+def test_candidate_convocation_email_is_sent_and_traced(client, auth_headers, monkeypatch):
+    candidate = _cand(
+        client,
+        auth_headers,
+        first="Nadia",
+        last="Convoquee",
+        data={},
+    )
+    client.put(
+        f"/api/drh/candidates/{candidate['id']}",
+        headers=auth_headers,
+        json={"email": "nadia.convocation@example.com"},
+    )
+    sent = {}
+
+    def fake_send(**kwargs):
+        sent.update(kwargs)
+
+    monkeypatch.setattr("app.modules.drh.routes.send_candidate_convocation_email", fake_send)
+    response = client.post(
+        f"/api/drh/candidates/{candidate['id']}/convocation-email",
+        headers=auth_headers,
+        json={"date": "2026-09-10", "heure": "09:30", "lieu": "Siège", "motif": "Entretien"},
+    )
+    assert response.status_code == 200, response.text
+    result = response.json()["data"]
+    assert result["email_sent"] is True
+    assert result["delivery"]["sender"] == "adm.conv@irongs.com"
+    assert result["delivery"]["recipient"] == "nadia.convocation@example.com"
+    assert sent["recipient"] == "nadia.convocation@example.com"
+    assert sent["location"] == "Siège"
+
+
 def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_headers, db):
     from app.modules.drh.models import Candidate
 
