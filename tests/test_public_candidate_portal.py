@@ -168,3 +168,6 @@ def test_recruitment_candidate_list_has_professional_layout():
     assert "candidate-clickable-row" in html
     assert "handleCandidateRowClick" in html
     assert "handleCandidateRowKeydown" in html
+    assert "convocation-contact" in html
+    assert "Adresse email" in html
+    assert "Numéro de téléphone" in html
