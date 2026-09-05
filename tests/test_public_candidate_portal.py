@@ -12,7 +12,6 @@ def _payload(**updates):
         "photo_data": "data:image/jpeg;base64,dGVzdA==",
         "email": "nadia.portal@example.com",
         "desired_position": "Agent de sécurité",
-        "society": "IRON GLOBAL SÉCURITÉ",
         "children_count": 0,
         "languages": ["Arabe", "Français"],
         "experience": [
@@ -57,6 +56,7 @@ def test_public_submission_creates_candidate_not_employee(client, auth_headers):
     candidates = client.get("/api/drh/candidates", headers=auth_headers).json()
     created = next(row for row in candidates if row["email"] == "nadia.portal@example.com")
     assert created["status"] == "nouvelle"
+    assert created["society"] == "IRON GLOBAL SÉCURITÉ"
     assert created["data"]["moduleOrigine"] == "fr.irongs.com"
     assert created["data"]["ficheCandidatTransmise"] is True
     assert created["data"]["telephonesSecondaires"] == ["0661002233", "0772003344"]

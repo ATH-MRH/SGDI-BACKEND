@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.core.config import settings
 from app.modules.drh import service
 from app.modules.drh.schemas import CandidateCreate
 
@@ -86,18 +87,20 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
     if payload.company:
         raise HTTPException(status_code=400, detail="Candidature invalide")
     now = datetime.utcnow().isoformat()
+    effective_society = (payload.society or "").strip() or settings.public_candidate_default_society
     candidate = CandidateCreate(
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
         phone=(payload.phone or "").strip() or None,
         email=str(payload.email) if payload.email else None,
         desired_position=payload.desired_position.strip(),
-        society=(payload.society or "").strip() or None,
+        society=effective_society,
         expected_salary=payload.expected_salary,
         status="nouvelle",
         data={
             "moduleOrigine": "fr.irongs.com",
             "sourceExterne": "portail_candidat",
+            "societeAffectationAutomatique": effective_society,
             "ficheCandidatTransmise": True,
             "submittedAt": now,
             "photo": payload.photo_data or "",

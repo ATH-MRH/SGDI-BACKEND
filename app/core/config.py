@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     startup_maintenance_enabled: bool = False
     public_employee_pages_require_token: bool = True
     max_photo_upload_bytes: int = 5_000_000
+    # Les candidatures du portail public arrivent dans cette file de recrutement.
+    public_candidate_default_society: str = "IRON GLOBAL SÉCURITÉ"
     admin_system_password: str | None = None
     admin_system_username: str | None = None
     admin_initial_username: str | None = None
