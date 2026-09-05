@@ -165,3 +165,6 @@ def test_recruitment_candidate_list_has_professional_layout():
     assert "candidate-avatar" in html
     assert ">Ouvrir</button>" in html
     assert ">Convoquer</button>" in html
+    assert "candidate-clickable-row" in html
+    assert "handleCandidateRowClick" in html
+    assert "handleCandidateRowKeydown" in html

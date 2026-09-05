@@ -87,6 +87,7 @@ label.field-label-invalid{color:#b91c1c!important}
 .search-box{flex:1;min-width:220px;position:relative}
 .search-box input{height:44px}
 .candidate-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.candidate-page-head h2{font-size:26px;margin:0}.candidate-page-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.candidate-total{padding:9px 13px;border-radius:999px;background:#e4eef9;color:var(--navy);font-size:12px;font-weight:900}.candidate-filterbar{display:grid;grid-template-columns:minmax(280px,1fr) 220px 180px auto auto;gap:10px;align-items:center;margin-bottom:14px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:15px}.candidate-filterbar input,.candidate-filterbar select{height:42px}.filter-reset{height:42px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;color:var(--navy);padding:0 14px;font-weight:850;cursor:pointer}.candidate-avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#dceafb,#edf4fb);color:var(--navy);display:grid;place-items:center;font-size:12px;font-weight:950;overflow:hidden;flex:none}.candidate-avatar img{width:100%;height:100%;object-fit:cover}.candidate-identity{display:flex;align-items:center;gap:10px;min-width:190px}.row-open,.row-convoke{border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--navy);padding:7px 10px;font-size:10px;font-weight:900;cursor:pointer}.row-open{background:var(--navy);border-color:var(--navy);color:#fff}.candidate-table-wrap{overflow-x:auto}.candidate-table-wrap table{min-width:1080px}
+.candidate-clickable-row{cursor:pointer;transition:background .15s ease}.candidate-clickable-row:hover{background:#f3f8fd}.candidate-clickable-row:hover .cand-name{color:var(--blue)}.candidate-clickable-row:focus-visible{outline:3px solid #93c5fd;outline-offset:-3px;background:#eff6ff}
 .table-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:850;padding:12px 14px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
@@ -899,6 +900,8 @@ function rowActions(item){
   const editable=activeTab!=="archive"&&activeTab!=="recruited";
   return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>`:""}<button type="button" class="kebab-btn" title="Autres actions" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
 }
+function handleCandidateRowClick(event,id){if(event.target.closest("button,select,input,a,textarea"))return;openCandidateForm(id)}
+function handleCandidateRowKeydown(event,id){if((event.key==="Enter"||event.key===" ")&&!event.target.closest("button,select,input,a,textarea")){event.preventDefault();openCandidateForm(id)}}
 function closeRowMenu(){
   document.getElementById("rowActionMenu")?.remove();
   document.removeEventListener("click",handleRowMenuOutsideClick,true);
@@ -1004,7 +1007,7 @@ function renderList(){
   document.getElementById("listWrap").innerHTML=`<table><thead><tr>
     <th>${sortableHeader("candidate","Candidat")}</th><th>${sortableHeader("position","Poste")}</th><th>${sortableHeader("society","Société")}</th><th>${sortableHeader("phone","Téléphone")}</th><th>${sortableHeader("status","Statut")}</th><th>${sortableHeader("date","Date")}</th><th>Actions</th><th>${sortableHeader("avis","Avis")}</th>
   </tr></thead><tbody>
-  ${pageItems.map(item=>`<tr data-id="${item.id}">
+  ${pageItems.map(item=>`<tr class="candidate-clickable-row" data-id="${item.id}" tabindex="0" aria-label="Ouvrir la fiche de ${esc(item.last_name||"")} ${esc(item.first_name||"")}" onclick="handleCandidateRowClick(event,${item.id})" onkeydown="handleCandidateRowKeydown(event,${item.id})">
     <td><div class="candidate-identity"><div class="candidate-avatar">${item.data?.photo?`<img src="${esc(item.data.photo)}" alt="">`:esc(((item.last_name||"")[0]||"")+((item.first_name||"")[0]||""))}</div><div><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${item.email?esc(item.email):"Coordonnées non renseignées"}</div></div></div></td>
     <td>${esc(item.desired_position||"—")}</td>
     <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
