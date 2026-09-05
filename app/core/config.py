@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     convocation_from_email: str = "adm.conv@irongs.com"
     convocation_from_name: str = "Service recrutement IRONGS"
     convocation_copy_email: str = "adm.conv@irongs.com"
+    convocation_smtp_host: str = "king.o2switch.net"
+    convocation_smtp_port: int = 465
+    convocation_smtp_username: str = "adm.conv@irongs.com"
+    convocation_smtp_password: str | None = None
+    convocation_smtp_use_ssl: bool = True
     smtp_use_tls: bool = True
     smtp_use_ssl: bool = False
 

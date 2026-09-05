@@ -123,10 +123,10 @@ def test_convocation_email_copies_administration(monkeypatch):
         def send_message(self, message):
             captured["message"] = message
 
-    monkeypatch.setattr(convocation_email.settings, "smtp_host", "smtp.example.com")
-    monkeypatch.setattr(convocation_email.settings, "smtp_use_ssl", True)
-    monkeypatch.setattr(convocation_email.settings, "smtp_username", None)
-    monkeypatch.setattr(convocation_email.settings, "smtp_password", None)
+    monkeypatch.setattr(convocation_email.settings, "convocation_smtp_host", "king.o2switch.net")
+    monkeypatch.setattr(convocation_email.settings, "convocation_smtp_use_ssl", True)
+    monkeypatch.setattr(convocation_email.settings, "convocation_smtp_username", "adm.conv@irongs.com")
+    monkeypatch.setattr(convocation_email.settings, "convocation_smtp_password", "secret-test")
     monkeypatch.setattr(convocation_email.smtplib, "SMTP_SSL", FakeSmtp)
     convocation_email.send_candidate_convocation_email(
         recipient="candidat@example.com",
@@ -140,6 +140,7 @@ def test_convocation_email_copies_administration(monkeypatch):
     assert message["To"] == "candidat@example.com"
     assert message["Bcc"] == "adm.conv@irongs.com"
     assert "adm.conv@irongs.com" in message["From"]
+    assert captured["message"] is message
 
 
 def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_headers, db):

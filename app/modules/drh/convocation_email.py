@@ -8,8 +8,14 @@ from app.core.config import settings
 def send_candidate_convocation_email(
     *, recipient: str, candidate_name: str, date: str, time: str, location: str, purpose: str
 ) -> None:
-    if not settings.smtp_host:
-        raise RuntimeError("Serveur SMTP non configuré")
+    smtp_host = settings.convocation_smtp_host or settings.smtp_host
+    smtp_port = settings.convocation_smtp_port or settings.smtp_port
+    smtp_username = settings.convocation_smtp_username or settings.smtp_username
+    smtp_password = settings.convocation_smtp_password or settings.smtp_password
+    if not smtp_host:
+        raise RuntimeError("Serveur SMTP des convocations non configuré")
+    if not smtp_username or not smtp_password:
+        raise RuntimeError("Identifiants SMTP de adm.conv@irongs.com non configurés")
     message = EmailMessage()
     message["From"] = formataddr((settings.convocation_from_name, settings.convocation_from_email))
     message["To"] = recipient
@@ -28,17 +34,18 @@ def send_candidate_convocation_email(
         "Service recrutement IRONGS\n"
         f"{settings.convocation_from_email}"
     )
-    if settings.smtp_use_ssl:
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
-            _authenticate_and_send(smtp, message)
+    if settings.convocation_smtp_use_ssl:
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as smtp:
+            _authenticate_and_send(smtp, message, smtp_username, smtp_password)
         return
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
         if settings.smtp_use_tls:
             smtp.starttls()
-        _authenticate_and_send(smtp, message)
+        _authenticate_and_send(smtp, message, smtp_username, smtp_password)
 
 
-def _authenticate_and_send(smtp: smtplib.SMTP, message: EmailMessage) -> None:
-    if settings.smtp_username and settings.smtp_password:
-        smtp.login(settings.smtp_username, settings.smtp_password)
+def _authenticate_and_send(
+    smtp: smtplib.SMTP, message: EmailMessage, smtp_username: str, smtp_password: str
+) -> None:
+    smtp.login(smtp_username, smtp_password)
     smtp.send_message(message)
