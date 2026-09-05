@@ -102,6 +102,46 @@ def test_candidate_convocation_email_is_sent_and_traced(client, auth_headers, mo
     assert sent["location"] == "Siège"
 
 
+def test_convocation_email_copies_administration(monkeypatch):
+    from app.modules.drh import convocation_email
+
+    captured = {}
+
+    class FakeSmtp:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def login(self, *args):
+            pass
+
+        def send_message(self, message):
+            captured["message"] = message
+
+    monkeypatch.setattr(convocation_email.settings, "smtp_host", "smtp.example.com")
+    monkeypatch.setattr(convocation_email.settings, "smtp_use_ssl", True)
+    monkeypatch.setattr(convocation_email.settings, "smtp_username", None)
+    monkeypatch.setattr(convocation_email.settings, "smtp_password", None)
+    monkeypatch.setattr(convocation_email.smtplib, "SMTP_SSL", FakeSmtp)
+    convocation_email.send_candidate_convocation_email(
+        recipient="candidat@example.com",
+        candidate_name="Nadia Test",
+        date="2026-09-10",
+        time="09:30",
+        location="Siège",
+        purpose="Entretien",
+    )
+    message = captured["message"]
+    assert message["To"] == "candidat@example.com"
+    assert message["Bcc"] == "adm.conv@irongs.com"
+    assert "adm.conv@irongs.com" in message["From"]
+
+
 def test_transmitted_candidates_remain_visible_in_recruitment_list(client, auth_headers, db):
     from app.modules.drh.models import Candidate
 

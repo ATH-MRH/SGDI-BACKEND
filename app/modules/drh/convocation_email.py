@@ -13,6 +13,8 @@ def send_candidate_convocation_email(
     message = EmailMessage()
     message["From"] = formataddr((settings.convocation_from_name, settings.convocation_from_email))
     message["To"] = recipient
+    if settings.convocation_copy_email:
+        message["Bcc"] = settings.convocation_copy_email
     message["Reply-To"] = settings.convocation_from_email
     message["Subject"] = "Convocation à un entretien de recrutement — IRONGS"
     message.set_content(
