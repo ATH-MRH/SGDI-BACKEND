@@ -148,4 +148,6 @@ def test_candidate_portal_assets_are_repository_native():
     assert 'id="birthDate"' in html
     assert "Âge minimum : 19 ans" in html
     assert "setFullYear(minimumBirthDate.getFullYear()-19)" in html
+    assert "apiErrorMessage" in html
+    assert "Value error" in html
     assert 'textarea name="experience"' not in html
