@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import date
 
 
 def _payload(**updates):
@@ -106,6 +107,17 @@ def test_public_submission_requires_consent_and_rejects_honeypot(client):
     assert bot.status_code == 400
 
 
+def test_public_submission_rejects_candidate_under_19(client):
+    today = date.today()
+    underage_birth_date = today.replace(year=today.year - 18).isoformat()
+    response = client.post(
+        "/api/public/candidates",
+        json=_payload(email="mineur@example.com", birth_date=underage_birth_date),
+    )
+    assert response.status_code == 422
+    assert "minimum 19 ans" in response.text
+
+
 def test_candidate_portal_assets_are_repository_native():
     html = (Path(__file__).parents[1] / "app/static/candidat.html").read_text(encoding="utf-8")
     assert "iframe" not in html.lower()
@@ -133,4 +145,7 @@ def test_candidate_portal_assets_are_repository_native():
     assert "navigator.mediaDevices.getUserMedia" in html
     assert "VALIDER LA PHOTO" in html
     assert "capturePhoto" in html
+    assert 'id="birthDate"' in html
+    assert "Âge minimum : 19 ans" in html
+    assert "setFullYear(minimumBirthDate.getFullYear()-19)" in html
     assert 'textarea name="experience"' not in html

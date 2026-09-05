@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -66,6 +66,15 @@ class PublicCandidateIn(BaseModel):
             raise ValueError("Un téléphone ou un email est obligatoire")
         if not self.consent:
             raise ValueError("Le consentement est obligatoire")
+        if self.birth_date:
+            try:
+                born = date.fromisoformat(self.birth_date)
+            except ValueError as exc:
+                raise ValueError("La date de naissance est invalide") from exc
+            today = date.today()
+            age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+            if age < 19:
+                raise ValueError("Le candidat doit avoir au minimum 19 ans")
         if self.photo_data and not self.photo_data.startswith("data:image/jpeg;base64,"):
             raise ValueError("Le format de la photo est invalide")
         return self
