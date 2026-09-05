@@ -43,7 +43,7 @@ label.field-label-invalid{color:#b91c1c!important}
 .society-badge{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:800}
 .society-select{height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.92);color:var(--ink);font-size:12px;font-weight:800;padding:0 10px}
 .logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 12px;font-weight:750;cursor:pointer}
-.app-shell{max-width:1680px;margin:0 auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;padding:16px 28px}
+.app-shell{width:100%;max-width:none;margin:0 auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:22px;padding:20px 32px}
 .recruit-sidebar{background:#fff;border:1px solid var(--line);border-radius:18px;padding:12px;height:fit-content;position:sticky;top:16px;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 .recruit-sidebar-title{padding:8px 10px 12px;font-size:10px;font-weight:900;color:var(--muted);letter-spacing:.11em;text-transform:uppercase}
 .recruit-nav{display:flex;flex-direction:column;gap:6px}
@@ -86,6 +86,7 @@ label.field-label-invalid{color:#b91c1c!important}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .search-box{flex:1;min-width:220px;position:relative}
 .search-box input{height:44px}
+.candidate-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.candidate-page-head h2{font-size:26px;margin:0}.candidate-page-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.candidate-total{padding:9px 13px;border-radius:999px;background:#e4eef9;color:var(--navy);font-size:12px;font-weight:900}.candidate-filterbar{display:grid;grid-template-columns:minmax(280px,1fr) 220px 180px auto auto;gap:10px;align-items:center;margin-bottom:14px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:15px}.candidate-filterbar input,.candidate-filterbar select{height:42px}.filter-reset{height:42px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;color:var(--navy);padding:0 14px;font-weight:850;cursor:pointer}.candidate-avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#dceafb,#edf4fb);color:var(--navy);display:grid;place-items:center;font-size:12px;font-weight:950;overflow:hidden;flex:none}.candidate-avatar img{width:100%;height:100%;object-fit:cover}.candidate-identity{display:flex;align-items:center;gap:10px;min-width:190px}.row-open,.row-convoke{border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--navy);padding:7px 10px;font-size:10px;font-weight:900;cursor:pointer}.row-open{background:var(--navy);border-color:var(--navy);color:#fff}.candidate-table-wrap{overflow-x:auto}.candidate-table-wrap table{min-width:1080px}
 .table-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);font-weight:850;padding:12px 14px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
@@ -160,6 +161,7 @@ tr:last-child td{border-bottom:0}
 .interview-score strong{font-size:22px}
 @media(max-width:1100px){.dashboard-kpis{grid-template-columns:repeat(3,1fr)}.dashboard-grid,.dashboard-bottom{grid-template-columns:1fr}}
 @media(max-width:1000px){.app-shell{grid-template-columns:1fr;padding:14px}.recruit-sidebar{position:static}.recruit-nav{flex-direction:row;overflow-x:auto}.recruit-nav-btn{min-width:max-content}}
+@media(max-width:1100px){.candidate-filterbar{grid-template-columns:1fr 1fr}.candidate-filterbar .search-box{grid-column:1/-1}.candidate-page-head{align-items:flex-start}}
 @media(max-width:900px){.row-actions{flex-wrap:wrap;justify-content:flex-start}.dashboard-grid{grid-template-columns:1fr}}
 @media(max-width:640px){.dashboard-kpis{grid-template-columns:1fr 1fr}.announcement-card{grid-template-columns:1fr}.announcement-actions{justify-content:flex-start}}
 @media(max-width:640px){.field-grid{grid-template-columns:1fr}.top-row{justify-content:flex-start}.brand-title{font-size:14px}.brand-user{font-size:10px}.brand-logo{width:36px;height:36px;font-size:12px}.top-actions{gap:6px}.society-select{font-size:11px;padding:0 6px;height:32px}.logout{font-size:11px;padding:6px 9px}.society-badge{font-size:10px;padding:5px 9px}}
@@ -209,15 +211,19 @@ tr:last-child td{border-bottom:0}
       <section id="dashboardSection" class="hidden"></section>
       <section id="interviewsSection" class="hidden"></section>
       <section id="candidatesSection">
+       <div class="candidate-page-head"><div><h2>Gestion des candidatures</h2><p>Recherchez, analysez et faites progresser chaque dossier dans le parcours de recrutement.</p></div><div id="candidateTotal" class="candidate-total">0 dossier</div></div>
        <div id="countersRow" class="counters-row"></div>
        <div class="tabs" id="tabs"></div>
        <div id="candidatesView">
-      <div class="toolbar">
+      <div class="candidate-filterbar">
         <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
+        <select id="positionFilter" aria-label="Filtrer par poste" onchange="applyCandidateFilters()"><option value="">Tous les postes</option></select>
+        <select id="opinionFilter" aria-label="Filtrer par avis" onchange="applyCandidateFilters()"><option value="">Tous les avis</option><option>Favorable</option><option>Défavorable</option><option>Instance</option><option>Non évalué</option></select>
+        <button type="button" class="filter-reset" onclick="resetCandidateFilters()">Réinitialiser</button>
         <button class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
       </div>
       <div class="table-card">
-        <div id="listWrap"><div class="empty">Chargement…</div></div>
+        <div id="listWrap" class="candidate-table-wrap"><div class="empty">Chargement…</div></div>
         <div class="pagination" id="pagination"></div>
       </div>
        </div>
@@ -722,6 +728,8 @@ function onSearchInput(){
     loadTab(activeTab);
   },250);
 }
+function applyCandidateFilters(){const state=tabState[activeTab];state.posteFilter=document.getElementById("positionFilter").value;state.avisFilter=document.getElementById("opinionFilter").value;state.page=1;loadTab(activeTab)}
+function resetCandidateFilters(){const state=tabState[activeTab];state.q="";state.posteFilter="";state.avisFilter="";state.page=1;document.getElementById("searchInput").value="";document.getElementById("positionFilter").value="";document.getElementById("opinionFilter").value="";loadTab(activeTab)}
 async function loadTab(tab){
   const state=tabState[tab];
   if(tab===activeTab)document.getElementById("listWrap").innerHTML='<div class="empty">Chargement…</div>';
@@ -832,6 +840,9 @@ function renderCounters(){
     return `<button type="button" class="counter-chip ${cls}${state.avisFilter===label?" active":""}" onclick="setAvisFilter('${jsStr(label)}')">${esc(label)} <span class="n">${count}</span></button>`;
   }).join("");
   const note=state.total>state.items.length?`<div class="full" style="font-size:11px;color:var(--muted);margin-top:2px">Compteurs basés sur les ${state.items.length} candidats les plus récents (${state.total} au total) — affinez la recherche pour réduire la liste.</div>`:"";
+  const positionFilter=document.getElementById("positionFilter");if(positionFilter){positionFilter.innerHTML='<option value="">Tous les postes</option>'+[...posteCounts.keys()].sort((a,b)=>a.localeCompare(b,"fr")).map(label=>`<option value="${esc(label)}"${state.posteFilter===label?" selected":""}>${esc(label)}</option>`).join("")}
+  const opinionFilter=document.getElementById("opinionFilter");if(opinionFilter)opinionFilter.value=state.avisFilter||"";
+  const total=document.getElementById("candidateTotal");if(total)total.textContent=`${state.total} dossier${state.total>1?"s":""}`;
   document.getElementById("countersRow").innerHTML=`
     <div class="counter-group"><div class="counter-group-title">Par poste</div><div class="counter-chips">${posteChips}</div></div>
     <div class="counter-group"><div class="counter-group-title">Par avis</div><div class="counter-chips">${avisChips}</div></div>
@@ -885,7 +896,8 @@ function rowActionItems(item){
   return actions;
 }
 function rowActions(item){
-  return `<div class="row-actions"><button type="button" class="kebab-btn" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
+  const editable=activeTab!=="archive"&&activeTab!=="recruited";
+  return `<div class="row-actions"><button type="button" class="row-open" onclick="openCandidateForm(${item.id})">Ouvrir</button>${editable?`<button type="button" class="row-convoke" onclick="openCandidateConvocation(${item.id})">Convoquer</button>`:""}<button type="button" class="kebab-btn" title="Autres actions" onclick="event.stopPropagation();toggleRowMenu(${item.id},this)">⋮</button></div>`;
 }
 function closeRowMenu(){
   document.getElementById("rowActionMenu")?.remove();
@@ -993,7 +1005,7 @@ function renderList(){
     <th>${sortableHeader("candidate","Candidat")}</th><th>${sortableHeader("position","Poste")}</th><th>${sortableHeader("society","Société")}</th><th>${sortableHeader("phone","Téléphone")}</th><th>${sortableHeader("status","Statut")}</th><th>${sortableHeader("date","Date")}</th><th>Actions</th><th>${sortableHeader("avis","Avis")}</th>
   </tr></thead><tbody>
   ${pageItems.map(item=>`<tr data-id="${item.id}">
-    <td><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${esc(item.desired_position||"Poste non renseigné")}${item.email?" · "+esc(item.email):""}</div></td>
+    <td><div class="candidate-identity"><div class="candidate-avatar">${item.data?.photo?`<img src="${esc(item.data.photo)}" alt="">`:esc(((item.last_name||"")[0]||"")+((item.first_name||"")[0]||""))}</div><div><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${item.email?esc(item.email):"Coordonnées non renseignées"}</div></div></div></td>
     <td>${esc(item.desired_position||"—")}</td>
     <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
     <td>${esc(item.phone||"—")}</td>

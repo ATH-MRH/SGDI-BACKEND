@@ -154,3 +154,14 @@ def test_candidate_portal_assets_are_repository_native():
     assert "Dossier transmis ✓" in html
     assert "Value error" in html
     assert 'textarea name="experience"' not in html
+
+
+def test_recruitment_candidate_list_has_professional_layout():
+    html = (Path(__file__).parents[1] / "app/static/recrute.html").read_text(encoding="utf-8")
+    assert "Gestion des candidatures" in html
+    assert 'id="positionFilter"' in html
+    assert 'id="opinionFilter"' in html
+    assert "resetCandidateFilters" in html
+    assert "candidate-avatar" in html
+    assert ">Ouvrir</button>" in html
+    assert ">Convoquer</button>" in html
