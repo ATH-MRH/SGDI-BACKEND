@@ -155,6 +155,11 @@ def test_candidate_portal_assets_are_repository_native():
     assert "Dossier transmis ✓" in html
     assert "Value error" in html
     assert 'textarea name="experience"' not in html
+    assert '@media(max-width:700px)' in html
+    assert '@media(max-width:520px)' in html
+    assert 'env(safe-area-inset-bottom)' in html
+    assert '.repeat-table{grid-column:1/-1;overflow:visible}' in html
+    assert 'font-size:16px' in html
 
 
 def test_recruitment_candidate_list_has_professional_layout():
