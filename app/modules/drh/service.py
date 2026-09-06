@@ -310,7 +310,9 @@ def list_candidates_page(
     page_size: int = 25,
 ) -> dict[str, Any]:
     stmt = select(Candidate)
-    if society:
+    if society == "__unassigned__":
+        stmt = stmt.where(or_(Candidate.society.is_(None), Candidate.society == ""))
+    elif society:
         stmt = stmt.where(Candidate.society == society)
     elif allowed_societies:
         stmt = stmt.where(Candidate.society.in_(allowed_societies))

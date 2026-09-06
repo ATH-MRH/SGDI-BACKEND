@@ -86,7 +86,7 @@ label.field-label-invalid{color:#b91c1c!important}
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
 .search-box{flex:1;min-width:220px;position:relative}
 .search-box input{height:44px}
-.candidate-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.candidate-page-head h2{font-size:26px;margin:0}.candidate-page-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.candidate-total{padding:9px 13px;border-radius:999px;background:#e4eef9;color:var(--navy);font-size:12px;font-weight:900}.candidate-filterbar{display:grid;grid-template-columns:minmax(280px,1fr) 220px 180px auto auto;gap:10px;align-items:center;margin-bottom:14px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:15px}.candidate-filterbar input,.candidate-filterbar select{height:42px}.filter-reset{height:42px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;color:var(--navy);padding:0 14px;font-weight:850;cursor:pointer}.candidate-avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#dceafb,#edf4fb);color:var(--navy);display:grid;place-items:center;font-size:12px;font-weight:950;overflow:hidden;flex:none}.candidate-avatar img{width:100%;height:100%;object-fit:cover}.candidate-identity{display:flex;align-items:center;gap:10px;min-width:190px}.row-open,.row-convoke,.row-recruit{border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--navy);padding:7px 10px;font-size:10px;font-weight:900;cursor:pointer}.row-open{background:var(--navy);border-color:var(--navy);color:#fff}.row-recruit{background:#15803d;border-color:#15803d;color:#fff}.row-recruit:hover{background:#166534;border-color:#166534}.candidate-table-wrap{overflow-x:auto}.candidate-table-wrap table{min-width:1080px}
+.candidate-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}.candidate-page-head h2{font-size:26px;margin:0}.candidate-page-head p{margin:5px 0 0;color:var(--muted);font-size:13px}.candidate-total{padding:9px 13px;border-radius:999px;background:#e4eef9;color:var(--navy);font-size:12px;font-weight:900}.candidate-filterbar{display:grid;grid-template-columns:minmax(260px,1fr) 190px 190px 170px auto auto;gap:10px;align-items:center;margin-bottom:14px;padding:12px;background:#fff;border:1px solid var(--line);border-radius:15px}.candidate-filterbar input,.candidate-filterbar select{height:42px}.filter-reset{height:42px;border:1px solid var(--line);border-radius:10px;background:#f8fafc;color:var(--navy);padding:0 14px;font-weight:850;cursor:pointer}.candidate-avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(145deg,#dceafb,#edf4fb);color:var(--navy);display:grid;place-items:center;font-size:12px;font-weight:950;overflow:hidden;flex:none}.candidate-avatar img{width:100%;height:100%;object-fit:cover}.candidate-identity{display:flex;align-items:center;gap:10px;min-width:190px}.row-open,.row-convoke,.row-recruit{border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--navy);padding:7px 10px;font-size:10px;font-weight:900;cursor:pointer}.row-open{background:var(--navy);border-color:var(--navy);color:#fff}.row-recruit{background:#15803d;border-color:#15803d;color:#fff}.row-recruit:hover{background:#166534;border-color:#166534}.candidate-table-wrap{overflow-x:auto}.candidate-table-wrap table{min-width:1080px}
 .candidate-clickable-row{cursor:pointer;transition:background .15s ease}.candidate-clickable-row:hover{background:#f3f8fd}.candidate-clickable-row:hover .cand-name{color:var(--blue)}.candidate-clickable-row:focus-visible{outline:3px solid #93c5fd;outline-offset:-3px;background:#eff6ff}
 .table-card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 12px 34px rgba(4,57,112,.07)}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -220,6 +220,7 @@ tr:last-child td{border-bottom:0}
       <div class="candidate-filterbar">
         <div class="search-box"><input id="searchInput" placeholder="Rechercher un candidat (nom, téléphone, poste...)" oninput="onSearchInput()"></div>
         <select id="positionFilter" aria-label="Filtrer par poste" onchange="applyCandidateFilters()"><option value="">Tous les postes</option></select>
+        <select id="candidateSocietyFilter" aria-label="Filtrer par société" onchange="applyCandidateFilters()"><option value="">Toutes les sociétés</option><option value="__unassigned__">Non affectés</option></select>
         <select id="opinionFilter" aria-label="Filtrer par avis" onchange="applyCandidateFilters()"><option value="">Tous les avis</option><option>Favorable</option><option>Défavorable</option><option>Instance</option><option>Non évalué</option></select>
         <button type="button" class="filter-reset" onclick="resetCandidateFilters()">Réinitialiser</button>
         <button class="primary" id="addCandidateBtn" onclick="openCandidateForm(null)">+ Ajouter un candidat</button>
@@ -288,7 +289,7 @@ tr:last-child td{border-bottom:0}
           <div><label for="fEmergencyName">Contact d’urgence</label><input id="fEmergencyName"></div><div><label for="fEmergencyRelation">Lien avec le candidat</label><input id="fEmergencyRelation"></div><div><label for="fEmergencyPhone">Téléphone d’urgence</label><input id="fEmergencyPhone" inputmode="tel"></div>
         </div></section>
         <section class="form-section"><div class="form-section-title">3. Candidature et profil</div><div class="form-section-sub">Poste souhaité, expérience et informations opérationnelles</div><div class="field-grid">
-          <div><label for="fPosition">Poste souhaité</label><select id="fPosition"><option value="">— Choisir —</option></select></div><div><label for="fSociety">Société</label><select id="fSociety"></select></div>
+          <div><label for="fPosition">Poste souhaité</label><select id="fPosition"><option value="">— Choisir —</option></select></div><select id="fSociety" class="hidden" aria-hidden="true"><option value="">Non affecté</option></select>
           <div><label for="fSalary">Salaire demandé (DA/mois)</label><input id="fSalary" type="text" inputmode="decimal" placeholder="00 000,00" onfocus="editSalaryDzd(this)" onblur="formatSalaryPlainField(this)"></div><div><label for="fAvailability">Disponibilité</label><select id="fAvailability"><option value="">— Choisir —</option><option>Immédiatement</option><option>01 mois</option><option>02 mois</option></select></div>
           <div><label for="fSource">Source de candidature</label><input id="fSource" placeholder="ANEM, recommandation…"></div><div><label for="fMilitary">Service militaire</label><select id="fMilitary"><option value="">—</option><option>Oui</option><option>Non</option><option>Exempté</option><option>Sursitaire</option></select></div>
           <div><label for="fHeight">Taille (cm)</label><input id="fHeight" type="number" min="0"></div><div><label for="fShoeSize">Pointure</label><input id="fShoeSize" type="number" min="0"></div>
@@ -369,10 +370,10 @@ function updateCandidateCommuneOptions(selectedValue=""){
 }
 const PAGE_SIZE=25;
 const tabState={
-  new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
-  reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
-  recruited:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"},
-  archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",sortKey:"",sortDirection:"asc"}
+  new:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"},
+  reserve:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"},
+  recruited:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"},
+  archive:{page:1,total:0,q:"",items:[],posteFilter:"",avisFilter:"",societyFilter:"",sortKey:"",sortDirection:"asc"}
 };
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
@@ -552,7 +553,6 @@ async function renderRecruitDashboard(refresh=false){
     await Promise.all(["new","reserve","recruited","archive"].map(async mode=>{
       try{
         const params=new URLSearchParams({mode,page:"1",page_size:"100"});
-        if(activeSociety)params.set("society",activeSociety);
         const result=await apiFetch("/api/drh/candidates/page?"+params.toString());
         tabState[mode].items=result.items||[];tabState[mode].total=result.total||0;tabState[mode].pages=result.pages||1;
       }catch(error){console.warn("Indicateur recrutement indisponible",mode,error)}
@@ -597,7 +597,7 @@ async function renderRecruitInterviews(refresh=false){
   const host=document.getElementById("interviewsSection");
   host.innerHTML='<div class="empty">Chargement des entretiens…</div>';
   if(refresh){
-    try{const params=new URLSearchParams({mode:"new",page:"1",page_size:"100"});if(activeSociety)params.set("society",activeSociety);const result=await apiFetch("/api/drh/candidates/page?"+params.toString());tabState.new.items=result.items||[];tabState.new.total=result.total||0}catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+    try{const params=new URLSearchParams({mode:"new",page:"1",page_size:"100"});const result=await apiFetch("/api/drh/candidates/page?"+params.toString());tabState.new.items=result.items||[];tabState.new.total=result.total||0}catch(error){host.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
   }
   const rows=tabState.new.items.filter(item=>candidateConvocation(item)||candidateInterview(item)).sort((a,b)=>String(candidateConvocation(a)?.date||candidateInterview(a)?.date||"").localeCompare(String(candidateConvocation(b)?.date||candidateInterview(b)?.date||"")));
   host.innerHTML=`<div class="section-head"><div><h2>Entretiens</h2><p>Convocations planifiées et comptes rendus enregistrés.</p></div><button class="secondary" onclick="renderRecruitInterviews(true)">↻ Actualiser</button></div><div class="table-card"><table><thead><tr><th>Candidat</th><th>Poste</th><th>Date</th><th>Heure</th><th>État</th><th>Note</th><th>Action</th><th>Recruteur</th></tr></thead><tbody>${rows.length?rows.map(item=>{const c=candidateConvocation(item)||{};const e=candidateInterview(item);return `<tr><td><div class="cand-name">${esc(candidateFullName(item))}</div><div class="cand-email">${esc(item.phone||"")}</div></td><td>${esc(item.desired_position||"—")}</td><td>${formatDateFr(e?.date||c.date)}</td><td>${esc(c.heure||"—")}</td><td>${e?.valide?'<span class="pill pill-green">Validé</span>':e?'<span class="pill pill-amber">Brouillon</span>':'<span class="pill pill-indigo">Planifié</span>'}</td><td>${e?`${String(e.moyenne??"—").replace(".",",")} / ${e.bareme||5}`:"—"}</td><td><button class="link-btn" onclick="dashboardOpenCandidate(${item.id},'interview')">${e?.valide?"Consulter":e?"Continuer":"Démarrer"}</button></td><td>${esc(e?.recruteur||"—")}</td></tr>`}).join(""):`<tr><td colspan="8" class="empty">Aucun entretien enregistré.</td></tr>`}</tbody></table></div>`;
@@ -622,7 +622,8 @@ async function importRecruitmentExcel(input){
       const fullName=excelCell(row,["nom prenom","nom et prenom","candidat"]);
       if(fullName&&(!lastName||!firstName)){const parts=fullName.split(/\s+/);lastName=lastName||parts.shift()||"NON RENSEIGNE";firstName=firstName||parts.join(" ")||"NON RENSEIGNE"}
       lastName=lastName||"NON RENSEIGNE";firstName=firstName||"NON RENSEIGNE";
-      const payload={last_name:lastName,first_name:firstName,phone:excelCell(row,["telephone","téléphone","tel","mobile"])||null,email:excelCell(row,["email","e mail","courriel"])||null,desired_position:excelCell(row,["poste","poste souhaite","fonction"])||null,society:excelCell(row,["societe","société"])||activeSociety||null,status:"nouvelle",data:{importSource:file.name,importRow:index+2}};
+      const proposedSociety=excelCell(row,["societe","société"])||"";
+      const payload={last_name:lastName,first_name:firstName,phone:excelCell(row,["telephone","téléphone","tel","mobile"])||null,email:excelCell(row,["email","e mail","courriel"])||null,desired_position:excelCell(row,["poste","poste souhaite","fonction"])||null,society:null,status:"nouvelle",data:{importSource:file.name,importRow:index+2,societeProposee:proposedSociety}};
       try{await apiFetch("/api/drh/candidates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});created++}catch(error){errors.push(`ligne ${index+2}: ${error.message}`)}
     }
     showBanner(`${created} candidat(s) importé(s)${errors.length?` · ${errors.length} ligne(s) non importée(s)`:""}.`,errors.length&&created===0?"error":"success");
@@ -737,14 +738,14 @@ function onSearchInput(){
     loadTab(activeTab);
   },250);
 }
-function applyCandidateFilters(){const state=tabState[activeTab];state.posteFilter=document.getElementById("positionFilter").value;state.avisFilter=document.getElementById("opinionFilter").value;state.page=1;loadTab(activeTab)}
-function resetCandidateFilters(){const state=tabState[activeTab];state.q="";state.posteFilter="";state.avisFilter="";state.page=1;document.getElementById("searchInput").value="";document.getElementById("positionFilter").value="";document.getElementById("opinionFilter").value="";loadTab(activeTab)}
+function applyCandidateFilters(){const state=tabState[activeTab];state.posteFilter=document.getElementById("positionFilter").value;state.avisFilter=document.getElementById("opinionFilter").value;state.societyFilter=document.getElementById("candidateSocietyFilter").value;state.page=1;loadTab(activeTab)}
+function resetCandidateFilters(){const state=tabState[activeTab];state.q="";state.posteFilter="";state.avisFilter="";state.societyFilter="";state.page=1;document.getElementById("searchInput").value="";document.getElementById("positionFilter").value="";document.getElementById("opinionFilter").value="";document.getElementById("candidateSocietyFilter").value="";loadTab(activeTab)}
 async function loadTab(tab){
   const state=tabState[tab];
   if(tab===activeTab)document.getElementById("listWrap").innerHTML='<div class="empty">Chargement…</div>';
   try{
     const params=new URLSearchParams({mode:tab,page:String(state.page),page_size:String(PAGE_SIZE)});
-    if(activeSociety)params.set("society",activeSociety);
+    if(state.societyFilter)params.set("society",state.societyFilter);
     if(state.q)params.set("q",state.q);
     if(state.posteFilter)params.set("desired_position",state.posteFilter);
     if(state.avisFilter)params.set("recruiter_opinion",state.avisFilter);
@@ -851,6 +852,7 @@ function renderCounters(){
   const note=state.total>state.items.length?`<div class="full" style="font-size:11px;color:var(--muted);margin-top:2px">Compteurs basés sur les ${state.items.length} candidats les plus récents (${state.total} au total) — affinez la recherche pour réduire la liste.</div>`:"";
   const positionFilter=document.getElementById("positionFilter");if(positionFilter){positionFilter.innerHTML='<option value="">Tous les postes</option>'+[...posteCounts.keys()].sort((a,b)=>a.localeCompare(b,"fr")).map(label=>`<option value="${esc(label)}"${state.posteFilter===label?" selected":""}>${esc(label)}</option>`).join("")}
   const opinionFilter=document.getElementById("opinionFilter");if(opinionFilter)opinionFilter.value=state.avisFilter||"";
+  const societyFilter=document.getElementById("candidateSocietyFilter");if(societyFilter){societyFilter.innerHTML='<option value="">Toutes les sociétés</option><option value="__unassigned__">Non affectés</option>'+recruitmentSocieties().map(value=>`<option value="${esc(value)}">${esc(value)}</option>`).join("");societyFilter.value=state.societyFilter||""}
   const total=document.getElementById("candidateTotal");if(total)total.textContent=`${state.total} dossier${state.total>1?"s":""}`;
   document.getElementById("countersRow").innerHTML=`
     <div class="counter-group"><div class="counter-group-title">Par poste</div><div class="counter-chips">${posteChips}</div></div>
@@ -999,7 +1001,7 @@ async function saveCandidateInterview(form,valide){
   const previous=item.data?.dernierEntretien||{};const entretien={id:previous.id||"ent_"+Date.now(),date:form.date.value,recruteur:form.recruteur.value.trim(),presence:form.presence.value,dateSuivi:form.dateSuivi.value,societeRecrutement:form.societeRecrutement.value,notes,moyenne:Number(moyenne.toFixed(2)),bareme:10,recommandation:form.recommandation.value,prochaineEtape:form.prochaineEtape.value,salaireSouhaite:form.salaireSouhaite.value.trim(),salairePropose:form.salairePropose.value.trim(),pointsForts:form.pointsForts.value.trim(),pointsVigilance:form.pointsVigilance.value.trim(),appreciation:form.appreciation.value.trim(),valide:!!valide,createdAt:previous.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),createdBy:previous.createdBy||recruteSession?.user?.username||""};
   const data={...(item.data||{})};const history=Array.isArray(data.entretiens)?data.entretiens.slice():[];const existingIndex=history.findIndex(row=>row.id===entretien.id);if(existingIndex>=0)history[existingIndex]=entretien;else history.push(entretien);data.entretiens=history;data.dernierEntretien=entretien;
   if(valide){if(entretien.recommandation==="Favorable")data.avisDecision="Favorable";else if(entretien.recommandation==="Défavorable")data.avisDecision="Défavorable";else data.avisDecision="Instance";data.avisDate=entretien.date;data.avisRecruteur=entretien.recruteur;data.avisCommentaire=entretien.appreciation;}
-  data.societeRecrutement=entretien.societeRecrutement;const payload={data,society:entretien.societeRecrutement||item.society};
+  data.societeRecrutement=entretien.societeRecrutement;const payload={data};if(valide&&entretien.recommandation==="Favorable")payload.society=entretien.societeRecrutement;
   if(valide&&entretien.prochaineEtape==="Mettre en réserve"){
     data.fichePositionValidee=true;data.fichePositionValideeAt=new Date().toISOString();data.fichePositionValideeBy=recruteSession?.user?.username||"system";
     payload.status="reserve";
@@ -1022,7 +1024,7 @@ function renderList(){
   ${pageItems.map(item=>`<tr class="candidate-clickable-row" data-id="${item.id}" tabindex="0" aria-label="Ouvrir la fiche de ${esc(item.last_name||"")} ${esc(item.first_name||"")}" onclick="handleCandidateRowClick(event,${item.id})" onkeydown="handleCandidateRowKeydown(event,${item.id})">
     <td><div class="candidate-identity"><div class="candidate-avatar">${item.data?.photo?`<img src="${esc(item.data.photo)}" alt="">`:esc(((item.last_name||"")[0]||"")+((item.first_name||"")[0]||""))}</div><div><div class="cand-name">${esc(item.last_name||"")} ${esc(item.first_name||"")}</div><div class="cand-email">${item.email?esc(item.email):"Coordonnées non renseignées"}</div></div></div></td>
     <td>${esc(item.desired_position||"—")}</td>
-    <td><span class="pill pill-indigo">${esc(item.society||"—")}</span></td>
+    <td><span class="pill ${item.society?"pill-indigo":"pill-gray"}">${esc(item.society||"Non affecté")}</span></td>
     <td>${esc(item.phone||"—")}</td>
     <td>${statusPill(item)}</td>
     <td style="font-size:11px;color:var(--muted);white-space:nowrap">${esc(formatDateFr(item.created_at))}</td>
@@ -1332,7 +1334,7 @@ function openCandidateForm(id){
     }
   }else{
     document.getElementById("modalTitle").textContent="Fiche de renseignement candidat";
-    if(activeSociety)document.getElementById("fSociety").value=activeSociety;
+    document.getElementById("fSociety").value="";
     candidateField("fAvisDate",today());
     candidateField("fRecruteur",recruteSession?.user?.full_name||recruteSession?.user?.username||"");
     renderCandidatePhoto("");
@@ -1366,7 +1368,7 @@ async function submitCandidateForm(){
     phone:document.getElementById("fPhone").value.trim(),
     email:document.getElementById("fEmail").value.trim(),
     desired_position:document.getElementById("fPosition").value.trim(),
-    society:document.getElementById("fSociety").value||activeSociety||"",
+    society:existing?.society||null,
     expected_salary:parseSalaryDzd(document.getElementById("fSalary").value)||null,
     data:{
       ...(existing?.data||{}),

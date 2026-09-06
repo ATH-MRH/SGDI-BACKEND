@@ -87,20 +87,19 @@ def submit_public_candidate(payload: PublicCandidateIn, request: Request, db: Se
     if payload.company:
         raise HTTPException(status_code=400, detail="Candidature invalide")
     now = datetime.utcnow().isoformat()
-    effective_society = (payload.society or "").strip() or settings.public_candidate_default_society
     candidate = CandidateCreate(
         first_name=payload.first_name.strip(),
         last_name=payload.last_name.strip(),
         phone=(payload.phone or "").strip() or None,
         email=str(payload.email) if payload.email else None,
         desired_position=payload.desired_position.strip(),
-        society=effective_society,
+        society=None,
         expected_salary=payload.expected_salary,
         status="nouvelle",
         data={
             "moduleOrigine": "fr.irongs.com",
             "sourceExterne": "portail_candidat",
-            "societeAffectationAutomatique": effective_society,
+            "societeAffectationAutomatique": "",
             "ficheCandidatTransmise": True,
             "submittedAt": now,
             "photo": payload.photo_data or "",

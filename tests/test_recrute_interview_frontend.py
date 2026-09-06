@@ -42,3 +42,10 @@ def test_recruitment_society_is_selected_and_transmitted():
     assert 'name="society" required' in HTML
     assert 'societeRecrutement:society' in HTML
     assert 'body:JSON.stringify({society,data:' in HTML
+
+
+def test_candidate_pool_is_shared_until_favorable_interview():
+    assert '<option value="__unassigned__">Non affectés</option>' in HTML
+    assert 'society:existing?.society||null' in HTML
+    assert 'society:null,status:"nouvelle"' in HTML
+    assert 'if(valide&&entretien.recommandation==="Favorable")payload.society=' in HTML

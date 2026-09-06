@@ -96,6 +96,8 @@ def _canonical_allowed_society(user: User, society: str | None) -> str | None:
 
 
 def _ensure_society_allowed(user: User, society: str | None) -> None:
+    if not _society_key(society):
+        return
     allowed = _allowed_societies(user)
     if allowed and not _canonical_allowed_society(user, society):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Société non autorisée")
@@ -367,12 +369,13 @@ def candidates_page(
     user: User = Depends(current_user),
 ):
     _ensure_recruitment_access(user)
-    effective_society = _effective_society_filter(user, society)
-    allowed = _allowed_societies(user)
+    # Le vivier de candidatures est commun à toutes les sociétés. La société
+    # devient une affectation de recrutement, décidée pendant l'entretien.
+    effective_society = society.strip() if society else None
     return service.list_candidates_page(
         db,
         society=effective_society,
-        allowed_societies=allowed if allowed and not effective_society else None,
+        allowed_societies=None,
         mode=mode,
         q=q,
         desired_position=desired_position,
@@ -414,7 +417,7 @@ def candidate_contact_duplicates(
         phone=phone,
         email=email,
         exclude_candidate_id=exclude_candidate_id,
-        allowed_societies=_allowed_societies(user),
+        allowed_societies=None,
     )
 
 
@@ -433,8 +436,8 @@ def create_candidate(payload: CandidateCreate, db: Session = Depends(get_db), us
 def update_candidate(candidate_id: int, payload: CandidateUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     _ensure_recruitment_access(user)
     existing = service.get_or_404(db, Candidate, candidate_id)
-    _ensure_society_allowed(user, existing.society)
-    _ensure_society_allowed(user, payload.society or existing.society)
+    if payload.society is not None:
+        _ensure_society_allowed(user, payload.society)
     return _action_success(service.update_candidate(db, candidate_id, payload, username=user.username))
 
 
