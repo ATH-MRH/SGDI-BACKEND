@@ -219,6 +219,43 @@ def test_attendance_feed_requires_auth(client):
     assert r.status_code == 401
 
 
+def test_attendance_staffing_returns_current_shift_requirements_for_authorized_site(client, auth_headers, db):
+    from app.core.security import hash_password
+    from app.modules.auth.models import User
+
+    created = client.post("/api/ops/sites", headers=auth_headers, json={
+        "name": "Site Quotas Shift", "active": 1, "contractual_staff": 12,
+        "equipment_plan": {
+            "societe": SOCIETY,
+            "positionQuotas": {"CARISTE": 8, "AGENT POLYVALENT": 4},
+            "groupPositionQuotas": {
+                code: {"CARISTE": 2, "AGENT POLYVALENT": 1} for code in "ABCD"
+            },
+            "clientPortalRotation": {
+                "system": "3x8", "first_shift_time": "06:00",
+                "start_date": "2026-01-01", "horizon_weeks": 12,
+            },
+        },
+    })
+    assert created.status_code in (200, 201), created.text
+    site_id = created.json()["id"]
+    pointer = User(
+        username="pointer-staffing", full_name="Pointeur staffing", role="ops", access_level="H2",
+        authorized_societies=[], authorized_sites=[site_id], authorized_structures=["pointage"],
+        password_hash=hash_password("pointerpass"), is_active=True,
+    )
+    db.add(pointer); db.commit()
+    login = client.post("/api/auth/login", json={"username": "pointer-staffing", "password": "pointerpass"})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    response = client.get("/api/portal/attendance-staffing", headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["requirements"] == {"CARISTE": 2, "AGENT POLYVALENT": 1}
+    assert body["sites"][0]["site_id"] == site_id
+    assert body["sites"][0]["group"] in "ABCD"
+    assert "–" in body["sites"][0]["shift"]
+
+
 def _scan_event(db, *, event_id, emp_id, matricule, name, action, hours_ago, site="", site_id=None):
     irongs_service.create_item(db, "attendanceQrScans", {
         "id": event_id, "nonce": event_id, "employeeId": emp_id,

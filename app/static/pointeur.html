@@ -53,7 +53,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .seg-colon i{width:4px;height:4px;border-radius:50%;background:#2bff6e;box-shadow:0 0 4px #2bff6e,0 0 8px rgba(43,255,110,.6);display:block;font-style:normal}
 .top-actions{display:flex;align-items:center;gap:8px}.header-menu,.logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 11px;font-weight:750;cursor:pointer}.header-menu:hover,.logout:hover{background:rgba(255,255,255,.22)}
 .main{width:100%;margin:0 auto;padding:12px 52px 28px}.work-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
-.status-row{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:14px}.status{display:flex;align-items:center;justify-content:center;gap:7px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:900;width:max-content}
+.status-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.status{display:flex;align-items:center;justify-content:center;gap:7px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:900;width:max-content;white-space:nowrap}.shift-staffing{display:flex;align-items:center;gap:8px;min-width:0;flex:1;border-left:2px solid #1683d8;padding-left:14px;overflow:auto;scrollbar-width:thin}.shift-staffing-label{font-size:10px;font-weight:950;color:#52677f;white-space:nowrap;text-transform:uppercase}.shift-staffing-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid #bfd8ef;background:#eef6fd;color:#06467c;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:850;white-space:nowrap}.shift-staffing-chip b{font-size:12px}.shift-staffing-empty{font-size:10px;color:#7b8ba0;white-space:nowrap}
 .presence-summary{display:flex;align-items:center;justify-content:flex-end;gap:0;flex:1;color:#063d5d;font-size:24px;font-weight:950;text-transform:uppercase}.presence-summary button{min-width:210px;text-align:center;padding:5px 22px;border:0;border-left:1px solid #dce5ee;background:transparent;color:inherit;cursor:pointer;border-radius:10px;transition:.18s ease}.presence-summary button:first-child{border-left:0}.presence-summary button:hover,.presence-summary button.active{background:#e6f1fc;box-shadow:inset 0 0 0 2px #79aede}.presence-summary small,.presence-summary b{display:block}.presence-summary small{font-size:11px;font-weight:800;letter-spacing:.04em}.presence-summary button:nth-child(1) b{color:#078449}.presence-summary button:nth-child(2) b{color:#d36b00}.presence-summary button:nth-child(3) b{color:#086fb5}.presence-summary button:nth-child(4) b{color:#dc2626}
 .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.3}}
 .scanner-card{background:#fff;border:1px solid var(--line);border-radius:21px;padding:21px;box-shadow:0 12px 34px rgba(4,57,112,.09)}
@@ -147,7 +147,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
   .history{grid-column:1/-1;min-height:400px}
 }
 @media(min-width:760px) and (max-width:1199px){.work-grid{grid-template-columns:1fr}.live-feed-groups{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}}
-@media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.header-clock{position:static;transform:none;margin-top:9px;justify-content:center}.seg-date{font-size:11px}.seg-clock{padding:4px 7px;gap:2px}.seg-digit{width:11px;height:19px}.seg-a,.seg-d,.seg-g{width:8px;height:2px}.seg-g{top:8.5px}.seg-d{top:17px}.seg-b,.seg-c,.seg-e,.seg-f{width:2px;height:7px}.seg-b,.seg-f{top:1.5px}.seg-e,.seg-c{top:10.5px}.seg-colon{height:19px;gap:3px}.seg-colon i{width:3px;height:3px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:center}.presence-summary{width:100%;font-size:13px;display:grid;grid-template-columns:repeat(2,1fr)}.presence-summary button{min-width:0;width:100%;padding:7px 6px;border-left:0}.presence-summary button b{font-size:24px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
+@media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.header-clock{position:static;transform:none;margin-top:9px;justify-content:center}.seg-date{font-size:11px}.seg-clock{padding:4px 7px;gap:2px}.seg-digit{width:11px;height:19px}.seg-a,.seg-d,.seg-g{width:8px;height:2px}.seg-g{top:8.5px}.seg-d{top:17px}.seg-b,.seg-c,.seg-e,.seg-f{width:2px;height:7px}.seg-b,.seg-f{top:1.5px}.seg-e,.seg-c{top:10.5px}.seg-colon{height:19px;gap:3px}.seg-colon i{width:3px;height:3px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:stretch}.status{align-self:center}.shift-staffing{width:100%;border-left:0;border-top:2px solid #1683d8;padding:9px 0 0}.presence-summary{width:100%;font-size:13px;display:grid;grid-template-columns:repeat(2,1fr)}.presence-summary button{min-width:0;width:100%;padding:7px 6px;border-left:0}.presence-summary button b{font-size:24px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
 @media(max-width:759px){.live-feed-groups{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px}.live-feed-group{min-width:82vw;scroll-snap-align:start}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 
@@ -202,6 +202,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
   <main class="main">
     <div class="status-row">
       <div class="status"><span class="dot"></span> SCANNER ACTIF</div>
+      <div id="shiftStaffing" class="shift-staffing"><span class="shift-staffing-empty">Chargement de l’effectif contractuel…</span></div>
       <div class="presence-summary">
         <button type="button" data-live-filter="entrees" onclick="setLiveFilter('entrees')"><small>Entrées aujourd’hui</small><b id="entrantCount">00</b></button>
         <button type="button" data-live-filter="sorties" onclick="setLiveFilter('sorties')"><small>Sorties aujourd’hui</small><b id="sortantCount">00</b></button>
@@ -335,7 +336,19 @@ function enterApp(){
   historyRefreshTimer=setInterval(refreshPointeurData,15000);
   requestAnimationFrame(setupScanMode);
 }
-function refreshPointeurData(){loadHistory();loadAttendanceAlerts()}
+function refreshPointeurData(){loadHistory();loadAttendanceAlerts();loadShiftStaffing()}
+async function loadShiftStaffing(){
+  const host=document.getElementById("shiftStaffing");if(!host||!pointerSession?.token)return;
+  try{
+    const response=await fetch("/api/portal/attendance-staffing",{headers:{Authorization:"Bearer "+pointerSession.token}});
+    if(response.status===401){logout();return}
+    if(!response.ok)throw new Error("Effectif contractuel indisponible");
+    const data=await response.json(),sites=Array.isArray(data.sites)?data.sites:[],requirements=data.requirements||{};
+    const context=sites.length===1?[sites[0].group?"GROUPE "+sites[0].group:"",sites[0].shift].filter(Boolean).join(" · "):"TOUS SITES AUTORISÉS";
+    const chips=Object.entries(requirements).filter(([,value])=>Number(value)>0).sort(([a],[b])=>a.localeCompare(b,"fr")).map(([name,value])=>`<span class="shift-staffing-chip">${esc(name.toUpperCase())} <b>${Number(value)}</b></span>`).join("");
+    host.innerHTML=chips?`<span class="shift-staffing-label">EFFECTIF CONTRACTUEL / SHIFT${context?" · "+esc(context):""}</span>${chips}`:`<span class="shift-staffing-empty">Effectif contractuel par fonction non configuré pour ce site.</span>`;
+  }catch(error){host.innerHTML=`<span class="shift-staffing-empty">${esc(error.message||"Effectif contractuel indisponible")}</span>`}
+}
 function localDate(offset=0){const d=new Date();d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)}
 function shiftDate(value,days){const d=new Date(value+"T12:00:00");d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
 function eventTime(value){return String(value||"").slice(11,16)}

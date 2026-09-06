@@ -1058,6 +1058,61 @@ def attendance_feed(
     return feed[:limit]
 
 
+@router.get("/attendance-staffing")
+def attendance_staffing(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, Any]:
+    """Effectif contractuel requis pour le shift actuellement en service, par fonction.
+
+    La source est la ventilation contractuelle OPS du site
+    (equipment_plan.groupPositionQuotas), limitée au périmètre du compte Pointeur.
+    """
+    allowed_site_ids = _allowed_assignment_site_ids(db, user)
+    query = select(Site).where(Site.active == 1).order_by(Site.name)
+    if allowed_site_ids is not None:
+        query = query.where(Site.id.in_(allowed_site_ids))
+    sites = db.execute(query).scalars().all()
+    now = datetime.now(ZoneInfo("Africa/Algiers"))
+    payload_sites: list[dict[str, Any]] = []
+    totals: dict[str, int] = {}
+    for site in sites:
+        plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
+        group_positions = plan.get("groupPositionQuotas") if isinstance(plan.get("groupPositionQuotas"), dict) else {}
+        rotation = plan.get("clientPortalRotation") if isinstance(plan.get("clientPortalRotation"), dict) else {}
+        requirements: dict[str, int] = {}
+        group = ""
+        shift = ""
+        if rotation.get("system") == "3x8" and group_positions:
+            try:
+                start_date = datetime.fromisoformat(str(rotation.get("start_date"))).date()
+                first_hour, first_minute = [int(part) for part in str(rotation.get("first_shift_time") or "06:00").split(":")]
+                base_minutes = first_hour * 60 + first_minute
+                now_minutes = now.hour * 60 + now.minute
+                operational_date = now.date() if now_minutes >= base_minutes else now.date() - timedelta(days=1)
+                shift_index = ((now_minutes - base_minutes) % 1440) // 480
+                day_index = (operational_date - start_date).days
+                group_index = next(index for index in range(4) if (day_index + index) % 4 == shift_index)
+                group = "ABCD"[group_index]
+                shift_start = (base_minutes + shift_index * 480) % 1440
+                shift_end = (shift_start + 480) % 1440
+                shift = f"{shift_start // 60:02d}:{shift_start % 60:02d}–{shift_end // 60:02d}:{shift_end % 60:02d}"
+                configured = group_positions.get(group) if isinstance(group_positions.get(group), dict) else {}
+                requirements = {str(name): max(0, int(value or 0)) for name, value in configured.items() if int(value or 0) > 0}
+            except (TypeError, ValueError, StopIteration):
+                requirements = {}
+        if not requirements:
+            configured = plan.get("positionQuotas") if isinstance(plan.get("positionQuotas"), dict) else {}
+            requirements = {str(name): max(0, int(value or 0)) for name, value in configured.items() if int(value or 0) > 0}
+            shift = shift or "Configuration générale"
+        if not requirements:
+            continue
+        for name, required in requirements.items():
+            totals[name] = totals.get(name, 0) + required
+        payload_sites.append({"site_id": site.id, "site": site.name, "group": group, "shift": shift, "requirements": requirements})
+    return {"generated_at": now.isoformat(), "sites": payload_sites, "requirements": totals}
+
+
 @router.get("/attendance-statistics")
 def attendance_statistics(
     year: int | None = None,
