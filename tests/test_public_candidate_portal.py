@@ -183,12 +183,15 @@ def test_candidate_portal_assets_are_repository_native():
     assert 'env(safe-area-inset-bottom)' in html
     assert '.repeat-table{grid-column:1/-1;overflow:visible}' in html
     assert 'font-size:16px' in html
-    assert "DÉPOSER UNE DEMANDE DE RECRUTEMENT" in html
+    assert "DÉPOSER UNE CANDIDATURE" in html
     assert "إيداع طلب توظيف" in html
-    assert "ÉTAT DE MA DEMANDE" in html
+    assert "SUIVRE MA DEMANDE" in html
     assert "متابعة حالة طلبي" in html
     assert "/api/public/candidates/status" in html
     assert 'class="welcome-screen"' in html
+    assert "Portail officiel de recrutement" in html
+    assert "Données sécurisées" in html
+    assert "Dossier confidentiel" in html
 
 
 def test_recruitment_candidate_list_has_professional_layout():
