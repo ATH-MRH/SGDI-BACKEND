@@ -741,7 +741,11 @@ document.addEventListener("paste",event=>{
   const value=event.clipboardData?.getData("text")||"";
   if(value){event.preventDefault();acceptUsbQr(value)}
 });
-document.addEventListener("click",()=>{if(pointerSession&&!cameraMode&&!isManualPanelOpen())document.getElementById("wedgeInput")?.focus({preventScroll:true})});
+document.addEventListener("click",event=>{
+  if(!pointerSession||cameraMode||isManualPanelOpen())return;
+  if(event.target?.closest?.("button,input,select,textarea,a,label,.site-control"))return;
+  document.getElementById("wedgeInput")?.focus({preventScroll:true});
+});
 document.addEventListener("visibilitychange",()=>{if(document.hidden)stopScanner();else if(pointerSession)setupScanMode()});
 window.addEventListener("beforeunload",stopScanner);
 document.addEventListener("DOMContentLoaded",()=>{
