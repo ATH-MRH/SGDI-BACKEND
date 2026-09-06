@@ -59,6 +59,33 @@ def test_pret_subdomain_serves_autonomous_responsive_module(client):
     assert "ORDRES DE PAIEMENT" in cash.text
 
 
+def test_admin_can_configure_loan_policy_and_it_changes_eligibility(client, db, auth_headers):
+    initial = client.get("/api/loans/settings", headers=auth_headers)
+    assert initial.status_code == 200, initial.text
+    payload = initial.json()
+    payload.update({
+        "loan_min_seniority_months": 60,
+        "debt_ratio_limit": 20,
+        "loan_salary_multiple": 2,
+        "decision_prefix": "DG-PRT-",
+        "contract_prefix": "SG-CONV-",
+        "manager_roles": ["drh"],
+        "secretariat_roles": ["secretariat"],
+        "cash_roles": ["caisse"],
+    })
+    saved = client.put("/api/loans/settings", headers=auth_headers, json=payload)
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["debt_ratio_limit"] == 20
+    employee = _employee(db)
+    simulation = client.post("/api/loans/employee/simulate", headers=_portal_headers(employee), json={"request_type": "loan", "amount": 20_000, "installments": 2})
+    assert simulation.status_code == 200
+    assert simulation.json()["eligible"] is False
+    assert simulation.json()["debt_ratio_limit"] == 20
+    assert any("Ancienneté" in reason for reason in simulation.json()["reasons"])
+    restored = client.put("/api/loans/settings", headers=auth_headers, json=initial.json())
+    assert restored.status_code == 200, restored.text
+
+
 def test_complete_loan_workflow_requires_dg_and_beneficiary_signatures(client, db, auth_headers):
     employee = _employee(db); employee_headers = _portal_headers(employee); dg_headers = _dg_headers(db)
     secretariat_headers = _staff_headers(db, "secretariat", "secretariat general", "SEC")

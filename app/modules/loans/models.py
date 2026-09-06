@@ -77,3 +77,36 @@ class LoanWorkflowNotification(Base, TimestampMixin):
     read_at: Mapped[datetime | None] = mapped_column(DateTime)
     processed_by: Mapped[str | None] = mapped_column(String(120))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class LoanModuleSettings(Base, TimestampMixin):
+    """Paramétrage central du module pret.irongs.com (ligne unique id=1)."""
+
+    __tablename__ = "loan_module_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    module_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    advance_min_seniority_months: Mapped[int] = mapped_column(Integer, default=3)
+    loan_min_seniority_months: Mapped[int] = mapped_column(Integer, default=6)
+    debt_ratio_limit: Mapped[float] = mapped_column(Float, default=30)
+    advance_salary_multiple: Mapped[float] = mapped_column(Float, default=0.5)
+    loan_salary_multiple: Mapped[float] = mapped_column(Float, default=3)
+    advance_max_installments: Mapped[int] = mapped_column(Integer, default=3)
+    loan_max_installments: Mapped[int] = mapped_column(Integer, default=24)
+    merit_threshold: Mapped[float] = mapped_column(Float, default=50)
+    default_interest_rate: Mapped[float] = mapped_column(Float, default=0)
+    maximum_interest_rate: Mapped[float] = mapped_column(Float, default=10)
+    require_active_employee: Mapped[bool] = mapped_column(Boolean, default=True)
+    enforce_contract_end: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_eligibility_override: Mapped[bool] = mapped_column(Boolean, default=True)
+    require_dg_signature: Mapped[bool] = mapped_column(Boolean, default=True)
+    require_secretariat_validation: Mapped[bool] = mapped_column(Boolean, default=True)
+    require_beneficiary_signature: Mapped[bool] = mapped_column(Boolean, default=True)
+    require_cash_validation: Mapped[bool] = mapped_column(Boolean, default=True)
+    manager_roles: Mapped[list | None] = mapped_column(JSON)
+    secretariat_roles: Mapped[list | None] = mapped_column(JSON)
+    cash_roles: Mapped[list | None] = mapped_column(JSON)
+    secretariat_notification_email: Mapped[str | None] = mapped_column(String(180))
+    cash_notification_email: Mapped[str | None] = mapped_column(String(180))
+    decision_prefix: Mapped[str] = mapped_column(String(20), default="DEC-")
+    contract_prefix: Mapped[str] = mapped_column(String(20), default="CONV-")

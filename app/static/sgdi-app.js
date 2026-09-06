@@ -6808,6 +6808,7 @@ function renderSidebar(){
         {label:"PÉRIMÈTRES SUPERVISEURS",route:"admin/supervisors",group:"ACCÈS & SÉCURITÉ",count:(db.supervisorScopes||[]).length||null},
         {label:"DROITS D'ACCÈS",route:"admin/droits",group:"ACCÈS & SÉCURITÉ",count:Object.keys(db.droitsAcces||{}).length||null},
         {label:"COMMERCIAL (DC.IRONGS.COM)",route:"admin/commercial-dc",group:"ACCÈS & SÉCURITÉ"},
+        {label:"PRÊTS & AVANCES",route:"admin/loans",group:"ACCÈS & SÉCURITÉ"},
         {label:"PROFILS D'ACCÈS",route:"admin/niveaux",group:"ACCÈS & SÉCURITÉ",count:(db.niveauxAcces||[]).length},
         {label:"SÉCURITÉ DES ACCÈS",route:"admin/access",group:"ACCÈS & SÉCURITÉ"},
         {label:"ORGANISER MENU LATÉRAL",route:"admin/menu",group:"SYSTÈME"},
@@ -34263,6 +34264,7 @@ function renderAdmin(view,sub,arg){
   if(sub==="supervisors")return renderAdminSupervisors(view);
   if(sub==="droits")return renderAdminDroits(view);
   if(sub==="commercial-dc")return renderAdminCommercialDc(view);
+  if(sub==="loans")return renderAdminLoans(view);
   if(sub==="document-models")return renderAdminDocumentModels(view);
   if(sub==="sections_candidat")return renderAdminCandidatSections(view);
   if(sub==="niveaux")return renderAdminNiveaux(view);
@@ -35130,6 +35132,7 @@ async function renderAdminSystemDashboard(view){
 	    ${card("Périmètres & sécurité","Sociétés, structures, code journalier et règles de sécurité.","admin/access","#0891b2","", "3. Périmètres")}
 	    ${card("Données métier","Effectifs, fiches, postes, sites, matériel et modèles documents.","admin/effectifs","#0f766e",agents.length,"4. Métier")}
 	    ${card("Droits techniques","Exceptions rôle × module pour cas avancés. À utiliser rarement.","admin/droits","#64748b",rightsCount,"Avancé")}
+	    ${card("Prêts & avances","Configurer l’éligibilité, les plafonds, les rôles et le circuit DG → Secrétariat → Caisse.","admin/loans","#075985","","Finance RH")}
 	  </div>
 	  <div class="grid grid-3 gap-3 mt-4">
 	    ${card("Fiches de position","Maintenance contrôlée des fiches employés.","admin/fiches","#0f766e",agents.length,"Métier")}
@@ -36007,6 +36010,34 @@ async function adminToggleDroit(m,r,enabled){
   render();
 }
 async function adminResetDroits(){if(!isAdminSystemSession()){toast("Accès réservé au compte Administration système","error");return}const count=Object.keys(db.droitsAcces||{}).length;if(!count){toast("Aucune exception à réinitialiser","info");return}if(!confirm("Supprimer les "+count+" exception(s) techniques et revenir aux droits par défaut ?"))return;try{await SGDI.auth.saveAccessRules([])}catch(e){toast("Reset droits PostgreSQL refusé : "+(e.message||e),"error");return}db.droitsAcces={};logActivity("Reset droits d'accès","");toast("Exceptions supprimées, droits par défaut restaurés","success");render()}
+
+let adminLoanSettingsCache=null;
+function renderAdminLoans(view){
+  if(!isAdminSystemSession()){view.innerHTML=`<div class="card p-6"><h2 class="text-xl font-bold text-red-700">Accès refusé</h2><p>Cette section est réservée à l’Administration système.</p></div>`;return}
+  view.innerHTML=`<div class="card p-6 text-center text-slate-500">Chargement des paramètres…</div>`;
+  SGDI_API.request("/api/loans/settings",{method:"GET"}).then(data=>{adminLoanSettingsCache=data;renderAdminLoansContent(view)}).catch(e=>{view.innerHTML=`<div class="card p-6 text-red-700">${escapeHTML(e.message||"Chargement impossible")}</div>`});
+}
+function renderAdminLoansContent(view){
+  const s=adminLoanSettingsCache||{};
+  const number=(id,label,value,min,max,step="1")=>`<div><label class="label">${label}</label><input id="${id}" class="input" type="number" min="${min}" max="${max}" step="${step}" value="${escapeHTML(value)}"></div>`;
+  const toggle=(id,label,help)=>`<label class="admin-access-toggle" style="justify-content:flex-start;gap:10px"><input id="${id}" type="checkbox" ${s[id]?"checked":""}><span><b>${label}</b><small class="block text-slate-500">${help}</small></span></label>`;
+  view.innerHTML=`<div class="mb-4"><div class="text-xs font-black uppercase tracking-widest text-slate-500">Administration système</div><h1 class="text-2xl font-black mt-1">Prêts & avances</h1><p class="text-sm text-slate-500 mt-1">Configuration centrale de pret.irongs.com et du circuit vers caisse.irongs.com.</p></div>
+  <div class="card p-5 mb-4"><h2 class="font-black text-lg mb-3">Activation et règles d’éligibilité</h2><div class="mb-3">${toggle("module_enabled","Demandes ouvertes","Désactivez pour suspendre toute nouvelle demande sans perdre les dossiers existants.")}</div><div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+  ${number("advance_min_seniority_months","Ancienneté minimale — avance (mois)",s.advance_min_seniority_months,0,120)}${number("loan_min_seniority_months","Ancienneté minimale — prêt (mois)",s.loan_min_seniority_months,0,120)}${number("debt_ratio_limit","Taux d’endettement maximal (%)",s.debt_ratio_limit,1,100,"0.1")}
+  ${number("advance_salary_multiple","Plafond avance (multiple du salaire)",s.advance_salary_multiple,0.1,20,"0.1")}${number("loan_salary_multiple","Plafond prêt (multiple du salaire)",s.loan_salary_multiple,0.1,50,"0.1")}${number("merit_threshold","Seuil de mérite (%)",s.merit_threshold,0,100,"0.1")}
+  ${number("advance_max_installments","Durée maximale avance (mois)",s.advance_max_installments,1,36)}${number("loan_max_installments","Durée maximale prêt (mois)",s.loan_max_installments,1,120)}${number("default_interest_rate","Taux proposé par défaut (%)",s.default_interest_rate,0,100,"0.01")}${number("maximum_interest_rate","Taux maximal autorisé (%)",s.maximum_interest_rate,0,100,"0.01")}</div></div>
+  <div class="card p-5 mb-4"><h2 class="font-black text-lg mb-3">Contrôles et circuit d’approbation</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-3">${toggle("require_active_employee","Employé actif obligatoire","Refuse l’éligibilité des fiches non actives.")}${toggle("enforce_contract_end","Respecter la fin du contrat","La dernière mensualité doit précéder la fin du contrat.")}${toggle("allow_eligibility_override","Dérogation DG autorisée","Le DG peut motiver une exception aux critères indicatifs.")}${toggle("require_dg_signature","Signature DG obligatoire","La décision doit être signée avant transmission.")}${toggle("require_secretariat_validation","Contrôle du Secrétariat","Le Secrétariat imprime et suit le dossier.")}${toggle("require_beneficiary_signature","Signature du bénéficiaire","La convention doit être signée avant décaissement.")}${toggle("require_cash_validation","Validation Caisse","La Caisse confirme le décaissement.")}</div></div>
+  <div class="card p-5 mb-4"><h2 class="font-black text-lg mb-3">Autorisations, notifications et documents</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-3"><div><label class="label">Rôles gestionnaires (séparés par virgule)</label><input id="manager_roles" class="input" value="${escapeHTML((s.manager_roles||[]).join(", "))}"></div><div><label class="label">Rôles Secrétariat</label><input id="secretariat_roles" class="input" value="${escapeHTML((s.secretariat_roles||[]).join(", "))}"></div><div><label class="label">Rôles Caisse</label><input id="cash_roles" class="input" value="${escapeHTML((s.cash_roles||[]).join(", "))}"></div><div><label class="label">Email Secrétariat</label><input id="secretariat_notification_email" class="input" type="email" value="${escapeHTML(s.secretariat_notification_email||"")}"></div><div><label class="label">Email Caisse</label><input id="cash_notification_email" class="input" type="email" value="${escapeHTML(s.cash_notification_email||"")}"></div><div><label class="label">Préfixe décision</label><input id="decision_prefix" class="input" value="${escapeHTML(s.decision_prefix||"DEC-")}"></div><div><label class="label">Préfixe convention</label><input id="contract_prefix" class="input" value="${escapeHTML(s.contract_prefix||"CONV-")}"></div></div></div>
+  <div class="flex justify-end"><button class="btn btn-primary" onclick="saveAdminLoanSettings()">Enregistrer la configuration</button></div>`;
+}
+async function saveAdminLoanSettings(){
+  const s=adminLoanSettingsCache||{},payload={};
+  ["module_enabled","require_active_employee","enforce_contract_end","allow_eligibility_override","require_dg_signature","require_secretariat_validation","require_beneficiary_signature","require_cash_validation"].forEach(k=>payload[k]=document.getElementById(k).checked);
+  ["advance_min_seniority_months","loan_min_seniority_months","debt_ratio_limit","advance_salary_multiple","loan_salary_multiple","advance_max_installments","loan_max_installments","merit_threshold","default_interest_rate","maximum_interest_rate"].forEach(k=>payload[k]=Number(document.getElementById(k).value));
+  ["manager_roles","secretariat_roles","cash_roles"].forEach(k=>payload[k]=document.getElementById(k).value.split(",").map(x=>x.trim()).filter(Boolean));
+  ["secretariat_notification_email","cash_notification_email"].forEach(k=>payload[k]=document.getElementById(k).value.trim()||null);payload.decision_prefix=document.getElementById("decision_prefix").value.trim()||"DEC-";payload.contract_prefix=document.getElementById("contract_prefix").value.trim()||"CONV-";
+  try{adminLoanSettingsCache=await SGDI_API.request("/api/loans/settings",{method:"PUT",body:payload});logActivity("Configuration prêts & avances","mise à jour");toast("Configuration enregistrée","success");renderAdminLoansContent(document.getElementById("view"))}catch(e){toast("Enregistrement refusé : "+(e.message||e),"error")}
+}
 
 let adminCommercialDcSettingsCache=null;
 let adminCommercialDcRulesCache=null;

@@ -11,11 +11,12 @@ from app.core.security import decode_token
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
+from app.modules.auth.routes import require_admin
 from app.modules.drh.models import Employee
 from app.modules.irongs.sql_bridge import employee_by_ref
 from app.modules.loans.models import EmployeeLoanRepayment, EmployeeLoanRequest, LoanWorkflowNotification
-from app.modules.loans.schemas import LoanDecisionIn, LoanRepaymentCreate, LoanRequestCreate, LoanReviewIn, LoanSimulationIn, SignatureConfirmationIn
-from app.modules.loans.service import due_schedule, employee_eligibility, next_month_start, serialize_request
+from app.modules.loans.schemas import LoanDecisionIn, LoanRepaymentCreate, LoanRequestCreate, LoanReviewIn, LoanSettingsUpdate, LoanSimulationIn, SignatureConfirmationIn
+from app.modules.loans.service import due_schedule, employee_eligibility, get_or_create_settings, next_month_start, serialize_request, settings_dict
 
 
 router = APIRouter()
@@ -41,10 +42,17 @@ def _portal_employee(db: Session, authorization: str | None) -> Employee:
     return employee
 
 
-def _ensure_manager(user: User) -> None:
+def _configured_role(db: Session, user: User, field: str, defaults: set[str]) -> bool:
+    role, structures = _normalized_user_scope(user)
+    configured = {str(value).strip().lower().replace("_", " ") for value in (getattr(get_or_create_settings(db), field) or [])}
+    allowed = configured or defaults
+    return role in allowed or bool(structures & allowed)
+
+
+def _ensure_manager(db: Session, user: User) -> None:
     role = str(user.role or "").strip().lower()
-    structures = {str(value or "").strip().lower() for value in (user.authorized_structures or [])}
-    if role not in MANAGER_ROLES and not structures.intersection(MANAGER_STRUCTURES):
+    specialized = _configured_role(db, user, "secretariat_roles", {"secretariat"}) or _configured_role(db, user, "cash_roles", {"caisse"})
+    if role not in {"admin", "adm", "adm1", "adm2", "dg", "directeur_general"} and not specialized and not _configured_role(db, user, "manager_roles", MANAGER_ROLES):
         raise HTTPException(status_code=403, detail="Accès réservé aux gestionnaires RH, paie ou finance")
 
 
@@ -68,22 +76,20 @@ def _normalized_user_scope(user: User) -> tuple[str, set[str]]:
     return role, structures
 
 
-def _is_secretariat(user: User) -> bool:
-    role, structures = _normalized_user_scope(user)
-    return role in {"secretariat", "secrétariat", "secretariat general", "secrétariat général"} or bool(structures & {"secretariat general", "secrétariat général"})
+def _is_secretariat(db: Session, user: User) -> bool:
+    return _configured_role(db, user, "secretariat_roles", {"secretariat", "secrétariat", "secretariat general", "secrétariat général"})
 
 
-def _ensure_secretariat(user: User) -> None:
-    if not _is_secretariat(user): raise HTTPException(status_code=403, detail="Action réservée au Secrétariat Général")
+def _ensure_secretariat(db: Session, user: User) -> None:
+    if not _is_secretariat(db, user): raise HTTPException(status_code=403, detail="Action réservée au Secrétariat Général")
 
 
-def _is_cash(user: User) -> bool:
-    role, structures = _normalized_user_scope(user)
-    return role in {"caisse", "caissier", "tresorerie", "trésorerie"} or bool(structures & {"caisse", "tresorerie", "trésorerie"})
+def _is_cash(db: Session, user: User) -> bool:
+    return _configured_role(db, user, "cash_roles", {"caisse", "caissier", "tresorerie", "trésorerie"})
 
 
-def _ensure_cash(user: User) -> None:
-    if not _is_cash(user): raise HTTPException(status_code=403, detail="Action réservée à la caisse")
+def _ensure_cash(db: Session, user: User) -> None:
+    if not _is_cash(db, user): raise HTTPException(status_code=403, detail="Action réservée à la caisse")
 
 
 def _notify(db: Session, row: EmployeeLoanRequest, recipient_role: str, host: str, event_type: str, title: str, message: str) -> None:
@@ -154,6 +160,8 @@ def employee_sign_contract(request_id: int, payload: SignatureConfirmationIn, db
 @router.post("/employee/requests", status_code=status.HTTP_201_CREATED)
 def create_request(payload: LoanRequestCreate, db: Session = Depends(get_db), authorization: str | None = Header(default=None)):
     employee = _portal_employee(db, authorization)
+    if not get_or_create_settings(db).module_enabled:
+        raise HTTPException(status_code=503, detail="Les demandes de prêt et d’avance sont temporairement suspendues")
     duplicate = db.execute(select(EmployeeLoanRequest.id).where(EmployeeLoanRequest.employee_id == employee.id, EmployeeLoanRequest.status.in_({"submitted", "under_review", "decision_pending_signature", "contract_pending_signature", "approved", "disbursed"}))).scalars().first()
     if duplicate:
         raise HTTPException(status_code=409, detail="Une demande est déjà en cours d’étude")
@@ -184,7 +192,7 @@ def cancel_request(request_id: int, db: Session = Depends(get_db), authorization
 
 @router.get("/management/dashboard")
 def management_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_manager(user)
+    _ensure_manager(db, user)
     rows = db.execute(select(EmployeeLoanRequest)).scalars().all()
     allowed = {str(value).strip().casefold() for value in (user.authorized_societies or []) if str(value).strip()}
     if allowed:
@@ -197,8 +205,8 @@ def management_dashboard(db: Session = Depends(get_db), user: User = Depends(cur
         "outstanding": round(sum(float(row.balance_due or 0) for row in rows if row.status in {"approved", "disbursed"}), 2),
         "repaid": round(sum(float(row.amount) for row in db.execute(select(EmployeeLoanRepayment)).scalars().all() if any(request.id == row.loan_request_id for request in rows)), 2),
         "can_decide": _is_general_director(user),
-        "can_secretariat": _is_secretariat(user),
-        "can_cash": _is_cash(user),
+        "can_secretariat": _is_secretariat(db, user),
+        "can_cash": _is_cash(db, user),
     }
 
 
@@ -207,7 +215,7 @@ def management_requests(
     request_status: str | None = Query(default=None, alias="status"), society: str | None = None,
     db: Session = Depends(get_db), user: User = Depends(current_user),
 ):
-    _ensure_manager(user)
+    _ensure_manager(db, user)
     stmt = select(EmployeeLoanRequest).order_by(EmployeeLoanRequest.id.desc())
     if request_status: stmt = stmt.where(EmployeeLoanRequest.status == request_status)
     if society: stmt = stmt.where(EmployeeLoanRequest.society == society)
@@ -217,13 +225,13 @@ def management_requests(
     output = []
     for row in rows:
         repayments = db.execute(select(EmployeeLoanRepayment).where(EmployeeLoanRepayment.loan_request_id == row.id).order_by(EmployeeLoanRepayment.payment_date)).scalars().all()
-        item = serialize_request(row, repayments); item["schedule"] = due_schedule(row); item["can_decide"] = _is_general_director(user); item["can_secretariat"] = _is_secretariat(user); item["can_cash"] = _is_cash(user); output.append(item)
+        item = serialize_request(row, repayments); item["schedule"] = due_schedule(row); item["can_decide"] = _is_general_director(user); item["can_secretariat"] = _is_secretariat(db, user); item["can_cash"] = _is_cash(db, user); output.append(item)
     return output
 
 
 @router.post("/management/requests/{request_id}/review")
 def review_request(request_id: int, payload: LoanReviewIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_manager(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
+    _ensure_manager(db, user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
     if row.status not in {"submitted", "under_review"}: raise HTTPException(status_code=409, detail="Cette demande n’est plus en cours d’étude")
     row.status = "under_review"; row.recommendation = payload.recommendation; row.decision_note = payload.note.strip()
     row.reviewed_by = user.username; row.reviewed_at = datetime.utcnow(); db.commit(); db.refresh(row)
@@ -232,19 +240,22 @@ def review_request(request_id: int, payload: LoanReviewIn, db: Session = Depends
 
 @router.post("/management/requests/{request_id}/decision")
 def decide_request(request_id: int, payload: LoanDecisionIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_manager(user); _ensure_general_director(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
+    _ensure_manager(db, user); _ensure_general_director(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
     if row.status not in {"submitted", "under_review"}:
         raise HTTPException(status_code=409, detail="Cette demande a déjà fait l’objet d’une décision")
     if payload.decision == "reject":
         if not payload.note.strip(): raise HTTPException(status_code=422, detail="Le motif du refus est obligatoire")
         row.status = "rejected"; row.decision_note = payload.note.strip()
     else:
+        config = get_or_create_settings(db)
+        if payload.interest_rate > config.maximum_interest_rate:
+            raise HTTPException(status_code=422, detail=f"Le taux dépasse le maximum autorisé de {config.maximum_interest_rate:g} %")
         amount = round(payload.amount_approved or row.amount_requested, 2)
         installments = payload.installments_approved or row.installments_requested
         employee = db.get(Employee, row.employee_id)
         if not employee: raise HTTPException(status_code=404, detail="Employé introuvable")
         eligibility = employee_eligibility(db, employee, row.request_type, amount, installments)
-        if not eligibility["eligible"] and not payload.override_eligibility:
+        if not eligibility["eligible"] and (not payload.override_eligibility or not config.allow_eligibility_override):
             raise HTTPException(status_code=409, detail={"message": "Dérogation requise", "reasons": eligibility["reasons"]})
         if not eligibility["eligible"] and not payload.note.strip():
             raise HTTPException(status_code=422, detail="Une dérogation doit être motivée")
@@ -256,32 +267,55 @@ def decide_request(request_id: int, payload: LoanDecisionIn, db: Session = Depen
         row.interest_rate = payload.interest_rate; row.total_due = total; row.balance_due = total
         row.monthly_installment = final_monthly; row.first_due_date = payload.first_due_date or next_month_start()
         row.eligibility_snapshot = eligibility; row.decision_note = payload.note.strip() or row.decision_note
-        row.decision_reference = f"DEC-{date.today().year}-{row.id:06d}"
+        row.decision_reference = f"{config.decision_prefix}{date.today().year}-{row.id:06d}"
     row.decided_by = user.username; row.decided_at = datetime.utcnow(); db.commit(); db.refresh(row)
     return serialize_request(row)
 
 
 @router.get("/management/requests/{request_id}/decision-document", response_class=HTMLResponse)
 def decision_document(request_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_manager(user); row = _request_or_404(db, request_id); _ensure_society(user, row.society)
+    _ensure_manager(db, user); row = _request_or_404(db, request_id); _ensure_society(user, row.society)
     if not row.decision_reference: raise HTTPException(status_code=409, detail="Aucune décision d’accord générée")
     return HTMLResponse(_decision_html(row))
 
 
 @router.post("/management/requests/{request_id}/sign-decision")
 def sign_decision(request_id: int, payload: SignatureConfirmationIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_manager(user); _ensure_general_director(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
+    _ensure_manager(db, user); _ensure_general_director(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
     if row.status != "decision_pending_signature" or not row.decision_reference:
         raise HTTPException(status_code=409, detail="Aucune décision en attente de signature")
     row.decision_signed_by = user.username; row.decision_signed_at = datetime.utcnow()
-    row.contract_reference = f"CONV-{date.today().year}-{row.id:06d}"; row.status = "secretariat_pending"
+    config = get_or_create_settings(db)
+    row.contract_reference = f"{config.contract_prefix}{date.today().year}-{row.id:06d}"; row.status = "secretariat_pending"
     _notify(db, row, "secretariat", "pret.irongs.com", "dg_decision_signed", "Décision DG signée", f"Préparer la convention {row.contract_reference}, l’imprimer et recueillir la signature de {row.employee_name}.")
     db.commit(); db.refresh(row); return serialize_request(row)
 
 
+@router.get("/settings")
+def loan_settings(db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    return settings_dict(get_or_create_settings(db))
+
+
+@router.put("/settings")
+def update_loan_settings(payload: LoanSettingsUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    require_admin(user)
+    row = get_or_create_settings(db)
+    for key, value in payload.model_dump().items():
+        if key.endswith("_roles"):
+            value = list(dict.fromkeys(str(item).strip().lower() for item in value if str(item).strip()))
+        elif key.endswith("_prefix"):
+            value = value.strip().upper()
+        elif isinstance(value, str):
+            value = value.strip() or None
+        setattr(row, key, value)
+    db.commit(); db.refresh(row)
+    return settings_dict(row)
+
+
 @router.get("/secretariat/inbox")
 def secretariat_inbox(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_secretariat(user)
+    _ensure_secretariat(db, user)
     notifications = db.execute(select(LoanWorkflowNotification).where(LoanWorkflowNotification.recipient_role == "secretariat").order_by(LoanWorkflowNotification.id.desc())).scalars().all()
     output = []
     for item in notifications:
@@ -293,14 +327,14 @@ def secretariat_inbox(db: Session = Depends(get_db), user: User = Depends(curren
 
 @router.get("/secretariat/requests/{request_id}/contract", response_class=HTMLResponse)
 def secretariat_contract_document(request_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_secretariat(user); row = _request_or_404(db, request_id); _ensure_society(user, row.society)
+    _ensure_secretariat(db, user); row = _request_or_404(db, request_id); _ensure_society(user, row.society)
     if not row.contract_reference: raise HTTPException(status_code=409, detail="La convention n’est pas encore disponible")
     return HTMLResponse(_contract_html(row))
 
 
 @router.post("/secretariat/requests/{request_id}/confirm-beneficiary-signature")
 def secretariat_confirm_signature(request_id: int, payload: SignatureConfirmationIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_secretariat(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
+    _ensure_secretariat(db, user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
     if row.status != "secretariat_pending" or not row.decision_signed_at or not row.contract_reference:
         raise HTTPException(status_code=409, detail="Ce dossier n’est pas en attente au Secrétariat Général")
     now = datetime.utcnow(); row.secretariat_received_at = row.secretariat_received_at or now
@@ -313,7 +347,7 @@ def secretariat_confirm_signature(request_id: int, payload: SignatureConfirmatio
 
 @router.get("/cash/inbox")
 def cash_inbox(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_cash(user)
+    _ensure_cash(db, user)
     notifications = db.execute(select(LoanWorkflowNotification).where(LoanWorkflowNotification.recipient_role == "cash").order_by(LoanWorkflowNotification.id.desc())).scalars().all()
     output = []
     for item in notifications:
@@ -325,7 +359,7 @@ def cash_inbox(db: Session = Depends(get_db), user: User = Depends(current_user)
 
 @router.post("/management/requests/{request_id}/disburse")
 def disburse_request(request_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_manager(user); _ensure_cash(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
+    _ensure_manager(db, user); _ensure_cash(db, user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
     if row.status != "cash_pending" or not row.decision_signed_at or not row.beneficiary_signed_at:
         raise HTTPException(status_code=409, detail="Les signatures du Directeur Général et du bénéficiaire sont obligatoires avant décaissement")
     now = datetime.utcnow(); row.status = "disbursed"; row.disbursed_at = now; row.disbursed_by = user.username
@@ -337,7 +371,7 @@ def disburse_request(request_id: int, db: Session = Depends(get_db), user: User 
 
 @router.post("/management/requests/{request_id}/repayments", status_code=status.HTTP_201_CREATED)
 def record_repayment(request_id: int, payload: LoanRepaymentCreate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_manager(user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
+    _ensure_manager(db, user); row = _request_or_404(db, request_id, for_update=True); _ensure_society(user, row.society)
     if row.status != "disbursed" or not row.balance_due: raise HTTPException(status_code=409, detail="Aucun remboursement ne peut être enregistré")
     if payload.amount > row.balance_due + .01: raise HTTPException(status_code=422, detail="Le montant dépasse le solde restant")
     payment = EmployeeLoanRepayment(loan_request_id=row.id, payment_date=payload.payment_date, amount=round(payload.amount, 2), method=payload.method, payroll_period=payload.payroll_period, reference=payload.reference, note=payload.note, recorded_by=user.username)

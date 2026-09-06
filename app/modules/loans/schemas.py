@@ -53,3 +53,37 @@ class LoanRepaymentCreate(BaseModel):
     payroll_period: str | None = Field(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
     reference: str | None = Field(default=None, max_length=100)
     note: str | None = Field(default=None, max_length=1000)
+
+
+class LoanSettingsUpdate(BaseModel):
+    module_enabled: bool = True
+    advance_min_seniority_months: int = Field(ge=0, le=120)
+    loan_min_seniority_months: int = Field(ge=0, le=120)
+    debt_ratio_limit: float = Field(gt=0, le=100)
+    advance_salary_multiple: float = Field(gt=0, le=20)
+    loan_salary_multiple: float = Field(gt=0, le=50)
+    advance_max_installments: int = Field(ge=1, le=36)
+    loan_max_installments: int = Field(ge=1, le=120)
+    merit_threshold: float = Field(ge=0, le=100)
+    default_interest_rate: float = Field(ge=0, le=100)
+    maximum_interest_rate: float = Field(ge=0, le=100)
+    require_active_employee: bool = True
+    enforce_contract_end: bool = True
+    allow_eligibility_override: bool = True
+    require_dg_signature: bool = True
+    require_secretariat_validation: bool = True
+    require_beneficiary_signature: bool = True
+    require_cash_validation: bool = True
+    manager_roles: list[str] = []
+    secretariat_roles: list[str] = []
+    cash_roles: list[str] = []
+    secretariat_notification_email: str | None = Field(default=None, max_length=180)
+    cash_notification_email: str | None = Field(default=None, max_length=180)
+    decision_prefix: str = Field(min_length=1, max_length=20)
+    contract_prefix: str = Field(min_length=1, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_rates(self):
+        if self.default_interest_rate > self.maximum_interest_rate:
+            raise ValueError("Le taux par défaut ne peut pas dépasser le taux maximal")
+        return self
