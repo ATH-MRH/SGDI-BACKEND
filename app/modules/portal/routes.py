@@ -16,6 +16,7 @@ from app.core.security import create_access_token, decode_token, hash_password, 
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
+from app.modules.commercial.models import Client
 from app.modules.drh.models import Employee
 from app.modules.irongs import service
 from app.modules.irongs.sql_bridge import employee_by_ref, upsert_presence
@@ -1078,8 +1079,23 @@ def attendance_staffing(
     totals: dict[str, int] = {}
     for site in sites:
         plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
-        group_positions = plan.get("groupPositionQuotas") if isinstance(plan.get("groupPositionQuotas"), dict) else {}
-        rotation = plan.get("clientPortalRotation") if isinstance(plan.get("clientPortalRotation"), dict) else {}
+        dc_site: dict[str, Any] | None = None
+        dc_client = db.get(Client, site.client_id) if site.client_id else None
+        dc_data = dc_client.data if dc_client and isinstance(dc_client.data, dict) else {}
+        dc_key = plan.get("dcContractSiteKey")
+        if dc_data.get("dc_contract_status") == "valide" and dc_key:
+            dc_site = next((item for item in dc_data.get("dc_contract_sites", []) if isinstance(item, dict) and item.get("key") == dc_key), None)
+        if dc_site:
+            per_shift = dc_site.get("requirements") if isinstance(dc_site.get("requirements"), dict) else {}
+            group_positions = {code: per_shift for code in "ABCD"}
+            rotation = {
+                "system": "3x8",
+                "first_shift_time": dc_site.get("first_shift_time") or "06:00",
+                "start_date": dc_site.get("rotation_start_date"),
+            }
+        else:
+            group_positions = plan.get("groupPositionQuotas") if isinstance(plan.get("groupPositionQuotas"), dict) else {}
+            rotation = plan.get("clientPortalRotation") if isinstance(plan.get("clientPortalRotation"), dict) else {}
         requirements: dict[str, int] = {}
         group = ""
         shift = ""
@@ -1109,8 +1125,10 @@ def attendance_staffing(
             continue
         for name, required in requirements.items():
             totals[name] = totals.get(name, 0) + required
-        payload_sites.append({"site_id": site.id, "site": site.name, "group": group, "shift": shift, "requirements": requirements})
-    return {"generated_at": now.isoformat(), "sites": payload_sites, "requirements": totals}
+        payload_sites.append({"site_id": site.id, "site": site.name, "group": group, "shift": shift, "requirements": requirements, "source": "dc.irongs.com" if dc_site else "ops-transition"})
+    sources = {item["source"] for item in payload_sites}
+    source = "dc.irongs.com" if sources == {"dc.irongs.com"} else ("ops-transition" if sources == {"ops-transition"} else "mixed-transition")
+    return {"generated_at": now.isoformat(), "sites": payload_sites, "requirements": totals, "source": source}
 
 
 @router.get("/attendance-statistics")

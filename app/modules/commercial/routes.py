@@ -9,6 +9,7 @@ from app.modules.auth.models import User
 from app.modules.auth.routes import require_admin
 from app.modules.commercial import service
 from app.modules.commercial.models import Client
+from app.modules.ops.models import Site
 from app.modules.commercial.schemas import (
     ClientCreate,
     ClientOut,
@@ -17,6 +18,7 @@ from app.modules.commercial.schemas import (
     CommercialDcAccessRuleOut,
     CommercialDcSettingsOut,
     CommercialDcSettingsUpdate,
+    DcContractUpdate,
 )
 
 
@@ -152,3 +154,78 @@ def dc_access_rules(db: Session = Depends(get_db), user: User = Depends(current_
 def set_dc_access_rule(payload: CommercialDcAccessRuleIn, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_admin(user)
     return service.set_dc_access_rule(db, payload)
+
+
+@router.put("/dc/clients/{client_id}/contract")
+def update_dc_client_contract(
+    client_id: int,
+    payload: DcContractUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Enregistre le référentiel contractuel DC et publie sa projection vers OPS.
+
+    DC reste propriétaire de ces valeurs. OPS reçoit une copie marquée en lecture seule,
+    utilisée par le pointage, la DRH, la facturation, la DG et le SG.
+    """
+    if not service.dc_access_allowed(db, user):
+        raise HTTPException(status_code=403, detail="Accès au référentiel contractuel DC refusé")
+    client = _ensure_client_allowed(db, user, client_id)
+    contract = payload.model_dump(mode="json")
+    previous = client.data if isinstance(client.data, dict) else {}
+    version = int(previous.get("dc_contract_version") or 0) + 1
+    client.data = {
+        **previous,
+        "dc_contract_status": payload.status,
+        "dc_contract_version": version,
+        "dc_contract_sites": contract["sites"],
+        "dc_contract_source": "dc.irongs.com",
+        "dc_contract_updated_by": user.username,
+    }
+    published_sites: list[int] = []
+    if payload.status == "valide":
+        for item in payload.sites:
+            client_sites = db.execute(select(Site).where(Site.client_id == client.id)).scalars().all()
+            row = next((site for site in client_sites if isinstance(site.equipment_plan, dict) and site.equipment_plan.get("dcContractSiteKey") == item.key), None)
+            if not row:
+                row = Site(name=item.name, client_id=client.id, active=1)
+                db.add(row)
+            per_shift = sum(item.requirements.values())
+            group_positions = {code: dict(item.requirements) for code in "ABCD"}
+            existing_plan = row.equipment_plan if isinstance(row.equipment_plan, dict) else {}
+            row.name = item.name
+            row.client_id = client.id
+            row.client_name = client.name
+            row.address = item.address
+            row.rotation_system = "3x8"
+            row.contractual_staff = per_shift * 4
+            row.groups_count = 4
+            row.active = 1
+            row.equipment_plan = {
+                **existing_plan,
+                "societe": client.society,
+                "positionQuotas": {name: count * 4 for name, count in item.requirements.items()},
+                "groupQuotas": {code: per_shift for code in "ABCD"},
+                "groupPositionQuotas": group_positions,
+                "clientPortalRotation": {
+                    "system": "3x8", "first_shift_time": item.first_shift_time,
+                    "start_date": item.rotation_start_date.isoformat(), "horizon_weeks": 52,
+                },
+                "contractualSource": "dc.irongs.com",
+                "contractualReadOnly": True,
+                "dcContractClientId": client.id,
+                "dcContractSiteKey": item.key,
+                "dcContractVersion": version,
+            }
+            db.flush()
+            published_sites.append(row.id)
+    db.commit()
+    db.refresh(client)
+    return {
+        "client_id": client.id,
+        "status": payload.status,
+        "version": version,
+        "sites_count": len(payload.sites),
+        "published_site_ids": published_sites,
+        "source": "dc.irongs.com",
+    }

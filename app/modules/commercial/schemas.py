@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class ClientBase(BaseModel):
@@ -64,6 +64,35 @@ class ClientOut(ClientBase):
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class DcContractSiteIn(BaseModel):
+    key: str
+    name: str
+    address: str | None = None
+    first_shift_time: str = "06:00"
+    rotation_start_date: date
+    requirements: dict[str, int] = Field(default_factory=dict)
+
+    @field_validator("requirements")
+    @classmethod
+    def validate_requirements(cls, value: dict[str, int]) -> dict[str, int]:
+        cleaned = {str(name).strip().upper(): int(count) for name, count in value.items() if str(name).strip() and int(count) > 0}
+        if not cleaned:
+            raise ValueError("Au moins une fonction avec un effectif positif est obligatoire")
+        return cleaned
+
+
+class DcContractUpdate(BaseModel):
+    status: str = "brouillon"
+    sites: list[DcContractSiteIn] = Field(default_factory=list)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in {"brouillon", "valide"}:
+            raise ValueError("Statut contractuel invalide")
+        return value
 
 
 # Rôles de base utilisés pour les droits d'accès au module (mêmes 4 catégories que le

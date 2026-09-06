@@ -346,7 +346,8 @@ async function loadShiftStaffing(){
     const data=await response.json(),sites=Array.isArray(data.sites)?data.sites:[],requirements=data.requirements||{};
     const context=sites.length===1?[sites[0].group?"GROUPE "+sites[0].group:"",sites[0].shift].filter(Boolean).join(" · "):"TOUS SITES AUTORISÉS";
     const counters=Object.entries(requirements).filter(([,value])=>Number(value)>0).sort(([a],[b])=>a.localeCompare(b,"fr")).map(([name,value])=>`<span class="shift-staffing-counter"><small>${esc(name.toUpperCase())}</small><b>${Number(value)}</b></span>`).join("");
-    host.innerHTML=counters?`<span class="shift-staffing-counter context"><small>EFFECTIF CONTRACTUEL / SHIFT</small><b>${esc(context||"SHIFT ACTIF")}</b></span>${counters}`:`<span class="shift-staffing-empty">Effectif contractuel par fonction non configuré pour ce site.</span>`;
+    const source=data.source==="dc.irongs.com"?"SOURCE DC":data.source==="mixed-transition"?"DC + DONNÉES TRANSITOIRES":"SOURCE OPS TRANSITOIRE";
+    host.innerHTML=counters?`<span class="shift-staffing-counter context"><small>EFFECTIF CONTRACTUEL / SHIFT · ${esc(source)}</small><b>${esc(context||"SHIFT ACTIF")}</b></span>${counters}`:`<span class="shift-staffing-empty">Effectif contractuel par fonction non configuré pour ce site.</span>`;
   }catch(error){host.innerHTML=`<span class="shift-staffing-empty">${esc(error.message||"Effectif contractuel indisponible")}</span>`}
 }
 function localDate(offset=0){const d=new Date();d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)}

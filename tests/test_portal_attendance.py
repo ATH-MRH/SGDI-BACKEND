@@ -256,6 +256,37 @@ def test_attendance_staffing_returns_current_shift_requirements_for_authorized_s
     assert "–" in body["sites"][0]["shift"]
 
 
+def test_dc_contract_is_source_of_truth_for_ops_and_pointage(client, auth_headers):
+    customer = client.post("/api/commercial/clients", headers=auth_headers, json={
+        "name": "Client Contrat Central", "society": SOCIETY, "status": "actif",
+    })
+    assert customer.status_code == 200, customer.text
+    client_id = customer.json()["id"]
+    contract = client.put(f"/api/commercial/dc/clients/{client_id}/contract", headers=auth_headers, json={
+        "status": "valide",
+        "sites": [{
+            "key": "central-site-1", "name": "Site Central DC", "address": "Alger",
+            "first_shift_time": "06:00", "rotation_start_date": "2026-01-01",
+            "requirements": {"CARISTE": 3, "AGENT POLYVALENT": 2},
+        }],
+    })
+    assert contract.status_code == 200, contract.text
+    body = contract.json()
+    assert body["source"] == "dc.irongs.com"
+    assert body["sites_count"] == 1
+    site_id = body["published_site_ids"][0]
+
+    staffing = client.get("/api/portal/attendance-staffing", headers=auth_headers)
+    assert staffing.status_code == 200, staffing.text
+    dc_site = next(row for row in staffing.json()["sites"] if row["site_id"] == site_id)
+    assert dc_site["source"] == "dc.irongs.com"
+    assert dc_site["requirements"] == {"CARISTE": 3, "AGENT POLYVALENT": 2}
+
+    forbidden = client.put(f"/api/ops/sites/{site_id}", headers=auth_headers, json={"contractual_staff": 999})
+    assert forbidden.status_code == 409
+    assert "dc.irongs.com" in forbidden.json()["detail"]
+
+
 def _scan_event(db, *, event_id, emp_id, matricule, name, action, hours_ago, site="", site_id=None):
     irongs_service.create_item(db, "attendanceQrScans", {
         "id": event_id, "nonce": event_id, "employeeId": emp_id,

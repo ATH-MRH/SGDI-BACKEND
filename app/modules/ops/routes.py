@@ -270,8 +270,23 @@ def get_site(site_id: int, db: Session = Depends(get_db), user: User = Depends(c
 
 @router.put("/sites/{site_id}", response_model=SiteOut)
 def update_site(site_id: int, payload: SiteUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    _ensure_site_allowed(db, user, site_id)
+    existing = _ensure_site_allowed(db, user, site_id)
     plan = payload.equipment_plan if isinstance(payload.equipment_plan, dict) else None
+    current_plan = existing.equipment_plan if existing and isinstance(existing.equipment_plan, dict) else {}
+    if current_plan.get("contractualReadOnly"):
+        contract_fields_changed = any(
+            value is not None and value != getattr(existing, field)
+            for field, value in {
+                "contractual_staff": payload.contractual_staff,
+                "day_staff": payload.day_staff,
+                "night_staff": payload.night_staff,
+                "groups_count": payload.groups_count,
+            }.items()
+        )
+        protected_keys = {"positionQuotas", "groupQuotas", "groupPositionQuotas", "clientPortalRotation"}
+        plan_changed = bool(plan and any(key in plan and plan.get(key) != current_plan.get(key) for key in protected_keys))
+        if contract_fields_changed or plan_changed:
+            raise HTTPException(status_code=409, detail="Données contractuelles verrouillées : modifiez le contrat depuis dc.irongs.com")
     if plan is not None:
         _ensure_society_allowed(user, plan.get("societe") or plan.get("society"))
     return service.update_row(db, Site, site_id, payload)
