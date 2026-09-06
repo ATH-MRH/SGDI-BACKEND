@@ -946,6 +946,7 @@ def scan_employee_attendance_qr(
 def attendance_feed(
     since: str | None = None,
     limit: int = 50,
+    days: int = 2,
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[dict[str, Any]]:
@@ -953,9 +954,10 @@ def attendance_feed(
     (interrogé par polling toutes les quelques secondes). Filtré selon le même périmètre
     sites/société qu'un superviseur OPS (_allowed_assignment_site_ids) : un compte restreint
     à certains sites ne voit que leurs pointages, pas ceux de toute l'entreprise."""
-    limit = max(1, min(limit, 200))
+    days = max(2, min(days, 8))
+    limit = max(1, min(limit, 2000 if days > 2 else 200))
     allowed_site_ids = _allowed_assignment_site_ids(db, user)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     def within_retention(row: dict[str, Any]) -> bool:
         raw = _clean_text(row.get("scannedAt"))

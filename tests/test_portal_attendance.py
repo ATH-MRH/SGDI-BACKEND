@@ -155,6 +155,19 @@ def test_attendance_feed_keeps_only_last_48_hours(client, auth_headers, db):
     assert not any(row["id"] == old_id for row in rows)
 
 
+def test_attendance_feed_can_supply_eight_days_to_planning_engine(client, auth_headers, db):
+    event_id = "attendance-learned-seven-days"
+    irongs_service.create_item(db, "attendanceQrScans", {
+        "id": event_id, "nonce": event_id, "employeeId": 999998,
+        "matricule": "LEARN7", "agentName": "Planning Appris",
+        "action": "arrivee", "cycle": 1,
+        "scannedAt": (datetime.now(timezone.utc) - timedelta(days=7) + timedelta(minutes=5)).isoformat(),
+        "site": "Site apprentissage", "siteId": None, "scannedBy": "test",
+    })
+    rows = client.get("/api/portal/attendance-feed?days=8&limit=2000", headers=auth_headers).json()
+    assert any(row["id"] == event_id for row in rows)
+
+
 def test_attendance_feed_restores_missing_employee_identity(client, auth_headers, db):
     emp_id = _emp(client, auth_headers, "PTF-ID", fn="Nora", ln="Identite")
     event_id = "attendance-missing-identity"

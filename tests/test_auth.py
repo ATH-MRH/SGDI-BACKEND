@@ -231,6 +231,13 @@ def test_paie_subdomain_serves_autonomous_module_and_accepts_paie_user(client, d
     assert "paie-manifest.webmanifest" in root.text
 
 
+def test_pointage_subdomain_contains_seven_day_planning_engine(client):
+    root = client.get("/", headers={"host": "pointage.irongs.com"}, follow_redirects=True)
+    assert root.status_code == 200
+    assert "Planning intelligent" in root.text
+    assert "attendance-feed?days=8" in root.text
+
+
 def test_protected_endpoint_without_token(client):
     resp = client.get("/api/accounting/comptes")
     assert resp.status_code == 401

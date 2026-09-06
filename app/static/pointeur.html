@@ -62,6 +62,9 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 #reader video{object-fit:cover!important;border-radius:16px}
 .camera-msg{color:#fff;font-size:13px;text-align:center;padding:30px}
 .secondary{width:100%;border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:12px;font-weight:850;margin-top:11px}
+.module-nav{display:flex;gap:8px}.module-nav button{border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:9px 13px;font-weight:850;cursor:pointer}.module-nav button.active{background:#fff;color:var(--navy)}
+.planning{padding:18px 52px 40px;max-width:1600px;margin:auto}.planning-hero,.planning-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 8px 24px rgba(4,57,112,.07)}.planning-hero{display:flex;justify-content:space-between;gap:18px;align-items:center}.planning-hero h2{margin:3px 0;font-size:24px}.planning-progress{min-width:150px;text-align:center;font-weight:900;font-size:27px}.planning-progress small{display:block;font-size:11px}.progress{height:7px;background:#dbe5f0;border-radius:9px;overflow:hidden;margin-top:13px}.progress i{display:block;height:100%;background:#22c55e}.planning-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}.planning-kpi{text-align:center}.planning-kpi b{display:block;font-size:27px;margin-top:5px}.planning-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:14px}.planning-toolbar label{margin-top:0}.planning-toolbar input,.planning-toolbar select{height:42px;min-width:180px;border:1px solid var(--line);border-radius:10px;padding:0 11px;background:#fff}.planning-table{width:100%;border-collapse:collapse}.planning-table th{background:#e9eef3;text-align:left;font-size:11px;letter-spacing:.05em;padding:12px}.planning-table td{padding:12px;border-top:1px solid var(--line);font-size:12px}.state-pill{display:inline-block;border-radius:999px;padding:5px 9px;font-weight:850}.state-present{background:#dcfce7;color:#166534}.state-absent,.state-permutation{background:#fee2e2;color:#991b1b}.state-anomalie{background:#fef3c7;color:#92400e}.state-attendu{background:#dbeafe;color:#1e40af}
+@media(max-width:759px){.module-nav{order:3;width:100%}.module-nav button{flex:1}.planning{padding:12px}.planning-hero{align-items:flex-start}.planning-kpis{grid-template-columns:repeat(2,1fr)}.planning-toolbar>*{width:100%}.planning-toolbar input,.planning-toolbar select{width:100%}.planning-table{min-width:850px}.planning-table-wrap{overflow:auto}}
 .action-row{display:flex;gap:10px}.action-row .secondary{margin-top:0}
 .idle-society{font-size:11px;font-weight:900;letter-spacing:.06em;opacity:.85;position:relative;margin-bottom:10px}
 .usb-reader{min-height:310px;border-radius:18px;background:linear-gradient(145deg,#031f3e,#07549a);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;position:relative;overflow:hidden}
@@ -181,6 +184,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     <div class="top-row">
       <div class="brand"><div class="brand-logo">QR</div><div><div class="brand-title">POINTAGE</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div class="top-actions">
+        <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button></nav>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
         <button class="logout" onclick="logout()" title="Déconnexion"><span class="mobile-icon">⏻</span> Déconnexion</button>
       </div>
@@ -240,6 +244,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
       </aside>
     </div>
   </main>
+  <section id="planningView" class="planning hidden"><div id="planningContent"></div></section>
 </section>
 
 <script>
@@ -253,6 +258,8 @@ let qrLastKeyAt=0;
 let cameraMode=false;
 let headerClockTimer=null;
 let historyRefreshTimer=null;
+let planningEvents=[];
+let planningRefreshTimer=null;
 
 function esc(value){const d=document.createElement("div");d.textContent=String(value??"");return d.innerHTML}
 function isMobileDevice(){return matchMedia("(max-width:759px)").matches||/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)}
@@ -318,10 +325,36 @@ function enterApp(){
   requestAnimationFrame(setupScanMode);
 }
 function refreshPointeurData(){loadHistory();loadAttendanceAlerts()}
+function localDate(offset=0){const d=new Date();d.setDate(d.getDate()+offset);return d.toISOString().slice(0,10)}
+function shiftDate(value,days){const d=new Date(value+"T12:00:00");d.setDate(d.getDate()+days);return d.toISOString().slice(0,10)}
+function eventTime(value){return String(value||"").slice(11,16)}
+function eventMinutes(value){const m=String(value||"").match(/(\d{2}):(\d{2})/);return m?+m[1]*60 + +m[2]:null}
+function showPointerSection(section){
+  const planning=section==="planning";document.querySelector("main.main").classList.toggle("hidden",planning);document.getElementById("planningView").classList.toggle("hidden",!planning);
+  document.getElementById("scanNav").classList.toggle("active",!planning);document.getElementById("planningNav").classList.toggle("active",planning);
+  if(planning){stopScanner();loadPlanning();clearInterval(planningRefreshTimer);planningRefreshTimer=setInterval(loadPlanning,30000)}else{clearInterval(planningRefreshTimer);planningRefreshTimer=null;setupScanMode()}
+}
+async function loadPlanning(){
+  if(!pointerSession?.token)return;const target=document.getElementById("planningDate")?.value||localDate();
+  try{const response=await fetch("/api/portal/attendance-feed?days=8&limit=2000",{headers:{Authorization:"Bearer "+pointerSession.token}});if(response.status===401){logout();return}if(!response.ok)throw new Error("Planning indisponible");planningEvents=await response.json();renderPlanning(target)}catch(e){document.getElementById("planningContent").innerHTML='<div class="planning-card error show">'+esc(e.message)+'</div>'}
+}
+function groupPlanningEvents(date){
+  const grouped=new Map();planningEvents.filter(e=>String(e.scanned_at||"").slice(0,10)===date).forEach(e=>{const key=String(e.employee_id||e.matricule||"")+"|"+String(e.cycle||1);let row=grouped.get(key);if(!row){row={key,name:e.nom||"Employé",code:e.matricule||"",site:e.site||"—",siteId:e.site_id,arrival:"",departure:""};grouped.set(key,row)}if(e.action==="depart")row.departure=eventTime(e.scanned_at);else row.arrival=eventTime(e.scanned_at)});return [...grouped.values()]
+}
+function renderPlanning(date){
+  const sourceDate=shiftDate(date,-7),expected=groupPlanningEvents(sourceDate),actual=groupPlanningEvents(date),used=new Set(),now=new Date();
+  const rows=expected.map(exp=>{const real=actual.find(a=>a.key===exp.key);if(real)used.add(real.key);let state="attendu",note=`Prévu à ${exp.arrival||"—"}`,severity="attendu";if(real?.arrival){state="present";severity="present";note="Conforme au planning appris.";const delta=Math.abs((eventMinutes(real.arrival)||0)-(eventMinutes(exp.arrival)||0));if(exp.arrival&&delta>30){state="anomalie";severity="anomalie";note=`Horaire prévu ${exp.arrival}, constaté ${real.arrival}.`}if(String(real.siteId||real.site)!==String(exp.siteId||exp.site)){state="permutation";severity="permutation";note=`Site prévu ${exp.site}, constaté ${real.site}.`}}else if(now>new Date(date+"T"+(exp.arrival||"23:59")+":00")){state="absent";severity="absent";note="Aucune arrivée enregistrée après l'heure prévue."}return{exp,real,state,severity,note}});
+  actual.filter(a=>!used.has(a.key)).forEach(real=>rows.push({exp:null,real,state:"anomalie",severity:"anomalie",note:"Présence non prévue par le planning appris."}));
+  const sites=[...new Set(rows.map(r=>(r.real||r.exp)?.site).filter(Boolean))].sort(),site=document.getElementById("planningSite")?.value||"",status=document.getElementById("planningStatus")?.value||"";const visible=rows.filter(r=>(!site||(r.real||r.exp).site===site)&&(!status||r.state===status));
+  const counts={present:rows.filter(r=>r.real?.arrival).length,absent:rows.filter(r=>r.state==="absent").length,anomalie:rows.filter(r=>r.state==="anomalie").length,permutation:rows.filter(r=>r.state==="permutation").length};
+  const learnedDates=new Set(planningEvents.map(e=>String(e.scanned_at||"").slice(0,10)).filter(Boolean));const learning=Math.min(7,learnedDates.size);
+  document.getElementById("planningContent").innerHTML=`<div class="planning-hero"><div><small><b>MOTEUR DE PRÉSENCE</b></small><h2>Planning intelligent — apprentissage 7 jours</h2><span>Référence du ${sourceDate.split("-").reverse().join("/")} · Actualisation automatique toutes les 30 secondes</span><div class="progress"><i style="width:${learning/7*100}%"></i></div></div><div class="planning-progress">${learning}/7<small>${learning>=7?"PLANNING OPÉRATIONNEL":"APPRENTISSAGE"}</small></div></div><div class="planning-kpis"><div class="planning-card planning-kpi">Présents<b style="color:var(--green)">${counts.present}</b></div><div class="planning-card planning-kpi">Absents<b style="color:var(--red)">${counts.absent}</b></div><div class="planning-card planning-kpi">Anomalies<b style="color:var(--amber)">${counts.anomalie}</b></div><div class="planning-card planning-kpi">Permutations<b style="color:#7c3aed">${counts.permutation}</b></div></div><div class="planning-card"><div class="planning-toolbar"><div><label>Date analysée</label><input id="planningDate" type="date" value="${date}" onchange="renderPlanning(this.value)"></div><div><label>Site</label><select id="planningSite" onchange="renderPlanning(document.getElementById('planningDate').value)"><option value="">Tous les sites</option>${sites.map(v=>`<option ${v===site?"selected":""}>${esc(v)}</option>`).join("")}</select></div><div><label>Statut</label><select id="planningStatus" onchange="renderPlanning(document.getElementById('planningDate').value)"><option value="">Tous les statuts</option>${["present","absent","anomalie","permutation","attendu"].map(v=>`<option value="${v}" ${v===status?"selected":""}>${v[0].toUpperCase()+v.slice(1)}</option>`).join("")}</select></div><button class="secondary" style="width:auto;margin:0" onclick="loadPlanning()">↻ ACTUALISER</button></div><div class="planning-table-wrap"><table class="planning-table"><thead><tr><th>Nom prénom</th><th>Code</th><th>Site</th><th>Date</th><th>H arrivée</th><th>H départ</th><th>État</th><th>Observation / alerte</th></tr></thead><tbody>${visible.length?visible.map(r=>{const x=r.real||r.exp;return`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.code||"—")}</td><td>${esc(x.site)}</td><td>${date.split("-").reverse().join("/")}</td><td>${esc(r.real?.arrival||"—")}</td><td>${esc(r.real?.departure||"—")}</td><td><span class="state-pill state-${r.severity}">${esc(r.state)}</span></td><td>${esc(r.note)}</td></tr>`}).join(""):'<tr><td colspan="8" style="text-align:center;padding:34px;color:var(--muted)">Aucun planning appris pour cette date. Le système utilise la journée correspondante sept jours auparavant.</td></tr>'}</tbody></table></div></div>`;
+}
 async function logout(){
   await stopScanner();
   clearInterval(headerClockTimer);headerClockTimer=null;
   clearInterval(historyRefreshTimer);historyRefreshTimer=null;
+  clearInterval(planningRefreshTimer);planningRefreshTimer=null;
   localStorage.removeItem(SESSION_KEY);pointerSession=null;sessionScans=[];
   closeManualPanel();resetManualPanel();
   document.getElementById("appView").classList.add("hidden");
