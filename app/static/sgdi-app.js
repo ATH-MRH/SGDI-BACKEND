@@ -33697,6 +33697,13 @@ function adminAccessModuleGroup(module){
 const ADMIN_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_ACCESS_ROLES=["agent","dispatch","ops","ADM"];
 const ADMIN_USER_ROLES=ADMIN_ACCESS_ROLES;
+const ADMIN_LOGIN_MODULES=[
+  {key:"drh",label:"DRH",host:"drh.irongs.com"},{key:"ops",label:"Opérations",host:"ops.irongs.com"},{key:"materiel",label:"Matériel",host:"materiel.irongs.com"},
+  {key:"finances",label:"Finances / comptabilité",host:"finances.irongs.com"},{key:"fac",label:"Facturation",host:"fac.irongs.com"},{key:"dc",label:"Commercial",host:"dc.irongs.com"},
+  {key:"secretariat",label:"Secrétariat général",host:"secretariat.irongs.com"},{key:"agenda",label:"Agenda",host:"agenda.irongs.com"},{key:"pointage",label:"Pointage",host:"pointage.irongs.com"},
+  {key:"pointeur",label:"Pointeur terrain",host:"pointeur.irongs.com"},{key:"recrute",label:"Recrutement",host:"recrute.irongs.com"},{key:"pret",label:"Prêts & avances",host:"pret.irongs.com"},
+  {key:"caisse",label:"Caisse",host:"caisse.irongs.com"},{key:"conges",label:"Congés",host:"conges.irongs.com"},{key:"portail",label:"Portail RH",host:"portail-rh.irongs.com"}
+];
 // Libellés affichés uniquement : les valeurs internes agent/dispatch/ops/ADM restent
 // inchangées partout (logique de rôles) — seul le texte montré à l'écran change.
 const ADMIN_ROLE_DISPLAY_LABELS={agent:"Agent",dispatch:"Maîtrise",ops:"Cadre",ADM:"Directeur"};
@@ -35707,6 +35714,7 @@ function adminUserFromApi(u){
     societesAutorisees:Array.isArray(u.authorized_societies)?u.authorized_societies:(Array.isArray(u.societesAutorisees)?u.societesAutorisees:[]),
     structuresAutorisees:normalizeStructureList(Array.isArray(u.authorized_structures)?u.authorized_structures:u.structuresAutorisees),
     actionsAutorisees:Array.isArray(u.authorized_actions)?u.authorized_actions:(Array.isArray(u.actionsAutorisees)?u.actionsAutorisees:[]),
+    modulesAutorises:Array.isArray(u.authorized_modules)?u.authorized_modules:(Array.isArray(u.modulesAutorises)?u.modulesAutorises:null),
     validationCodeEnabled:!!(cached.validationCodeEnabled??u.validationCodeEnabled),
     hasValidationPassword:!!u.has_validation_password,
     supervisorReadOnly:u.supervisor_read_only!==false
@@ -35757,7 +35765,7 @@ async function openAdminUserModal(username){
   finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar();}
   const isNew=!username;
   const selectedSoc=adminActiveSociete();
-  const u=isNew?{username:"",email:"",password:"",validationPassword:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actionsAutorisees:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
+  const u=isNew?{username:"",email:"",password:"",validationPassword:"",nom:"",role:"agent",niveau:"H1",sitesAutorises:[],societesAutorisees:selectedSoc?[selectedSoc]:[],structuresAutorisees:[],actionsAutorisees:[],modulesAutorises:[],actif:true,validationCodeEnabled:false}:adminUserByUsername(username);
   if(!u){toast("Utilisateur introuvable","error");return}
   const niv=ensureNiveauxAcces();
   const selectedRole=normalizeAdminUserRole(u.role);
@@ -35776,6 +35784,10 @@ async function openAdminUserModal(username){
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #dbeafe;background:#eff6ff"><input type="checkbox" name="validationCodeEnabled" ${u.validationCodeEnabled?"checked":""}/> Habilité au code de validation journalier</label>
         <label class="flex items-center gap-2 p-3 rounded-lg text-sm font-bold" style="border:1px solid #fecaca;background:#fef2f2"><input type="checkbox" name="peutReactiverSortant" ${u.peutReactiverSortant?"checked":""}/> Peut réactiver un employé SORTANT</label>
       </div>
+      <div class="admin-access-separator"></div>
+      <label class="label">Modules accessibles avec cet identifiant et ce mot de passe *</label>
+      <p class="text-xs text-slate-500 mb-2">Cochez chaque application autorisée. L'utilisateur conservera la même identité de connexion sur tous ces sous-domaines.</p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2">${ADMIN_LOGIN_MODULES.map(m=>`<label class="flex items-start gap-2 p-3 rounded-lg border border-slate-200 bg-white"><input type="checkbox" name="module_${m.key}" value="${m.key}" ${(u.modulesAutorises||[]).includes(m.key)?"checked":""}/><span><b class="block text-sm">${escapeHTML(m.label)}</b><small class="text-slate-500">${escapeHTML(m.host)}</small></span></label>`).join("")}</div>
       <label class="label mt-3">Périmètre sociétés (vide = toutes)</label>
       <div class="admin-access-societies">${SOCIETES.map(s=>`<label><input type="checkbox" name="soc_${s.replace(/[^a-z]/gi,"")}" value="${escapeHTML(s)}" ${u.societesAutorisees&&u.societesAutorisees.includes(s)?"checked":""}/><span>${escapeHTML(s)}</span></label>`).join("")}</div>
       <div class="admin-access-separator"></div>
@@ -35840,7 +35852,7 @@ async function confirmAdminUser(originalUsername){
   const username=originalUsername?rawUsername:rawUsername.toUpperCase();
   const password=String(fd.get("password")||"");
   const validationPassword=String(fd.get("validationPassword")||"");
-  const data={username,email:String(fd.get("email")||"").trim().toLowerCase(),nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
+  const data={username,email:String(fd.get("email")||"").trim().toLowerCase(),nom:String(fd.get("nom")||"").trim(),role:fd.get("role"),niveau:fd.get("niveau"),actif:fd.get("actif")==="true",validationCodeEnabled:fd.get("validationCodeEnabled")==="on",peutReactiverSortant:fd.get("peutReactiverSortant")==="on",societesAutorisees:SOCIETES.filter(s=>fd.get("soc_"+s.replace(/[^a-z]/gi,""))===s),structuresAutorisees:ADMIN_STRUCTURES.filter(st=>fd.get("struct_"+st.key)===st.key).map(st=>st.key),actionsAutorisees:ADMIN_LEVEL_ACTIONS.filter(action=>fd.get("action_"+action.key)===action.key).map(action=>action.key),modulesAutorises:ADMIN_LOGIN_MODULES.filter(m=>fd.get("module_"+m.key)===m.key).map(m=>m.key),sitesAutorises:(db.sites||[]).filter(s=>{const sid=String(s.backendId||s.id||"");return s.actif!==false&&fd.get("site_"+sid)===sid}).map(s=>String(s.backendId||s.id||"")).filter(Boolean)};
   const usernameInput=f.querySelector('[name="username"]');
   const nomInput=f.querySelector('[name="nom"]');
   [usernameInput,nomInput].forEach(el=>{if(el)el.style.background=""});
@@ -35849,13 +35861,14 @@ async function confirmAdminUser(originalUsername){
   if(!data.email||!f.querySelector('[name="email"]')?.checkValidity()){toast("Une adresse email valide et propre à cet utilisateur est obligatoire","error");return}
   if((db.users||[]).some(user=>String(user.email||"").toLowerCase()===data.email&&String(user.username||"").toLowerCase()!==String(originalUsername||"").toLowerCase())){toast("Cette adresse email est déjà attribuée à un autre utilisateur","error");return}
   if(!ensureNiveauxAcces().some(n=>n.code===data.niveau)){toast("Niveau d'accès obligatoire","error");return}
+  if(normalizeAdminUserRole(data.role)!=="ADM"&&!data.modulesAutorises.length){toast("Sélectionnez au moins un module accessible","error");return}
   if(!originalUsername){
     if(db.users.find(x=>x.username===username)){toast("Identifiant déjà utilisé","error");return}
     if(!password){toast("Mot de passe requis","error");return}
     if(!validationPassword){toast("Mot de passe de validation requis","error");return}
     let savedUser=null;
     try{
-      savedUser=await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password,validation_password:validationPassword});
+      savedUser=await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,authorized_modules:data.modulesAutorises,password,validation_password:validationPassword});
       if(!savedUser||!savedUser.username)throw new Error("Confirmation PostgreSQL invalide");
     }catch(e){
       const msg=String(e.message||e||"");
@@ -35872,7 +35885,7 @@ async function confirmAdminUser(originalUsername){
     const idx=existing?db.users.findIndex(x=>x.username===existing.username):-1;if(idx<0){toast("Utilisateur introuvable","error");return}
     originalUsername=existing.username;
     try{
-      const payload={email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,is_active:data.actif};
+      const payload={email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,authorized_modules:data.modulesAutorises,is_active:data.actif};
       if(password)payload.password=password;
       if(validationPassword)payload.validation_password=validationPassword;
       await SGDI.auth.updateUser(originalUsername,payload);
@@ -35882,7 +35895,7 @@ async function confirmAdminUser(originalUsername){
         try{
           if(!password){toast("Mot de passe obligatoire pour recréer l'utilisateur côté backend","error");return}
           if(!validationPassword){toast("Mot de passe de validation obligatoire pour recréer l'utilisateur côté backend","error");return}
-          await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,password,validation_password:validationPassword});
+          await SGDI.auth.createUser({username,email:data.email,full_name:data.nom||username,role:data.role,access_level:data.niveau,authorized_societies:data.societesAutorisees,authorized_structures:data.structuresAutorisees,authorized_sites:data.sitesAutorises,authorized_actions:data.actionsAutorisees,authorized_modules:data.modulesAutorises,password,validation_password:validationPassword});
           toast("Utilisateur recréé dans PostgreSQL","warning");
         }catch(createErr){
           const createMsg=String(createErr.message||createErr||"");

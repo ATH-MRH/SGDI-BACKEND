@@ -16,6 +16,7 @@ class UserCreate(BaseModel):
     authorized_structures: list[str] = Field(default_factory=list)
     authorized_sites: list[int] = Field(default_factory=list)
     authorized_actions: list[UserAction] = Field(default_factory=list)
+    authorized_modules: list[str] = Field(default_factory=list)
     supervisor_read_only: bool = True
     password: str = Field(min_length=4)
     validation_password: str | None = Field(default=None, min_length=4)
@@ -36,6 +37,7 @@ class UserUpdate(BaseModel):
     authorized_structures: list[str] | None = None
     authorized_sites: list[int] | None = None
     authorized_actions: list[UserAction] | None = None
+    authorized_modules: list[str] | None = None
     supervisor_read_only: bool | None = None
     password: str | None = Field(default=None, min_length=4)
     validation_password: str | None = Field(default=None, min_length=4)
@@ -67,6 +69,7 @@ class UserOut(BaseModel):
     authorized_structures: list[str] | None = Field(default_factory=list)
     authorized_sites: list[int] | None = Field(default_factory=list)
     authorized_actions: list[UserAction] | None = Field(default_factory=list)
+    authorized_modules: list[str] | None = None
     supervisor_read_only: bool = True
     has_validation_password: bool = False
     credentials_email_sent: bool = False

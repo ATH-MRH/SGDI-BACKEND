@@ -19,6 +19,9 @@ class User(Base, TimestampMixin):
     # Liste vide = héritage du profil. Une liste renseignée devient la politique
     # individuelle effective pour toutes les routes authentifiées.
     authorized_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Sous-domaines/modules utilisables avec cette identité centrale. NULL conserve
+    # la politique historique des comptes existants; [] signifie aucun module dédié.
+    authorized_modules: Mapped[list | None] = mapped_column(JSON, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     validation_password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

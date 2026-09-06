@@ -72,6 +72,19 @@ def enforce_subdomain_login_scope(request: Request, user: User) -> None:
     subdomain = _host_subdomain(request)
     if not subdomain or subdomain in {"atlas", "sgdi", "www"}:
         return
+    # Politique centrale nouvelle : un même compte et un même mot de passe ouvrent
+    # tous les modules explicitement cochés par l'administrateur. Les comptes créés
+    # avant cette fonctionnalité (NULL) conservent le contrôle historique ci-dessous.
+    if user.authorized_modules is not None:
+        allowed = {str(value or "").strip().lower() for value in user.authorized_modules}
+        aliases = {"finance": "finances", "commercial": "dc", "portail-rh": "portail"}
+        module_key = aliases.get(subdomain, subdomain)
+        if is_admin_role(user.role) or subdomain in allowed or module_key in allowed:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Ce module n'est pas autorisé pour votre compte. Contactez l'Administration système.",
+        )
     if subdomain == "dc":
         # dc.irongs.com reprend le module Commercial d'ATLAS : l'autorisation dépend du
         # périmètre Commercial configuré sur le compte, pas de son préfixe historique.

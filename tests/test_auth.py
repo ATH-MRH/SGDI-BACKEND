@@ -5,7 +5,7 @@ from app.core.security import decode_token, hash_password, verify_password
 from app.modules.auth.models import User
 
 
-def _add_test_user(db, username, password, role="ops", access_level="H3", structures=None):
+def _add_test_user(db, username, password, role="ops", access_level="H3", structures=None, modules=None):
     existing = db.query(User).filter(User.username == username).one_or_none()
     if existing:
         db.delete(existing)
@@ -19,6 +19,7 @@ def _add_test_user(db, username, password, role="ops", access_level="H3", struct
         authorized_societies=[],
         authorized_structures=structures or [],
         authorized_sites=[],
+        authorized_modules=modules,
         password_hash=hash_password(password),
         is_active=True,
     ))
@@ -95,6 +96,20 @@ def test_ops_subdomain_rejects_drh_prefix(client, db):
     )
 
     assert resp.status_code == 403
+
+
+def test_one_identity_can_open_every_explicitly_authorized_module(client, db):
+    _add_test_user(db, "CENTRAL01", "UniquePass123", structures=["drh"], modules=["drh", "ops", "pret"])
+    for host in ("drh.irongs.com", "ops.irongs.com", "pret.irongs.com"):
+        response = client.post("/api/auth/login", json={"username": "CENTRAL01", "password": "UniquePass123"}, headers={"host": host})
+        assert response.status_code == 200, (host, response.text)
+
+
+def test_central_identity_is_rejected_from_unselected_module(client, db):
+    _add_test_user(db, "CENTRAL02", "UniquePass123", structures=["drh"], modules=["drh"])
+    response = client.post("/api/auth/login", json={"username": "CENTRAL02", "password": "UniquePass123"}, headers={"host": "ops.irongs.com"})
+    assert response.status_code == 403
+    assert "n'est pas autorisé" in response.json()["detail"]
 
 
 def test_dc_subdomain_serves_full_atlas_commercial_module(client, db):
