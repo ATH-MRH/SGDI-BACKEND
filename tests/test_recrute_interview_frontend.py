@@ -29,3 +29,9 @@ def test_interview_contains_operational_decision_fields():
         'name="prochaineEtape"',
     ):
         assert field in HTML
+
+
+def test_favorable_candidate_gets_direct_green_recruit_action():
+    assert 'const favorable=item.data?.avisDecision==="Favorable"' in HTML
+    assert 'class="row-recruit" onclick="transmitCandidateToDrh(${item.id})">Recruter</button>' in HTML
+    assert ".row-recruit{background:#15803d" in HTML
