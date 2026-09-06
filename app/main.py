@@ -44,6 +44,7 @@ from app.modules.accounting import models as _accounting_models  # noqa: F401
 from app.modules.achats import models as _achats_models  # noqa: F401
 from app.modules.ventes import models as _ventes_models  # noqa: F401
 from app.modules.ronde import models as _ronde_models  # noqa: F401
+from app.modules.loans import models as _loans_models  # noqa: F401
 
 
 logging.basicConfig(
@@ -434,6 +435,14 @@ def _is_conges_host(host: str) -> bool:
     return host.split(":")[0].lower() == "conges.irongs.com"
 
 
+def _is_loans_host(host: str) -> bool:
+    return host.split(":")[0].lower() == "pret.irongs.com"
+
+
+def _is_cash_host(host: str) -> bool:
+    return host.split(":")[0].lower() == "caisse.irongs.com"
+
+
 def _is_dc_host(host: str) -> bool:
     return host.split(":")[0].lower() == "dc.irongs.com"
 
@@ -577,6 +586,15 @@ def paie_standalone() -> FileResponse:
 def conges_standalone() -> FileResponse:
     return FileResponse(
         STATIC_DIR / "conges.html",
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
+
+
+@app.get("/prets", include_in_schema=False, name="loans_standalone")
+def loans_standalone() -> FileResponse:
+    return FileResponse(
+        STATIC_DIR / "prets.html",
         media_type="text/html; charset=utf-8",
         headers={"Cache-Control": "no-cache, max-age=0"},
     )
@@ -1155,6 +1173,12 @@ def frontend(request: Request) -> HTMLResponse:
     if _is_conges_host(host):
         return FileResponse(
             STATIC_DIR / "conges.html",
+            media_type="text/html; charset=utf-8",
+            headers={"Cache-Control": "no-cache, max-age=0"},
+        )
+    if _is_loans_host(host) or _is_cash_host(host):
+        return FileResponse(
+            STATIC_DIR / "prets.html",
             media_type="text/html; charset=utf-8",
             headers={"Cache-Control": "no-cache, max-age=0"},
         )

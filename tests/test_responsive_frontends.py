@@ -13,6 +13,7 @@ RESPONSIVE_ENTRYPOINTS = (
     "paie.html",
     "pointage-mockup.html",
     "pointeur.html",
+    "prets.html",
     "portail-rh-bilingue.html",
     "recrute.html",
     "rh.html",
