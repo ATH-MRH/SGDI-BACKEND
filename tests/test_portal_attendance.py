@@ -183,6 +183,7 @@ def test_attendance_feed_restores_missing_employee_identity(client, auth_headers
     assert "IDENTITE" in row["nom"].upper()
     assert "NORA" in row["nom"].upper()
     assert row["poste"]
+    assert "photo" in row
 
 
 def test_attendance_feed_requires_auth(client):

@@ -100,6 +100,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .live-feed-row.live-in{border-color:#bbf7d0;background:#f0fdf4}
 .live-feed-row.live-out{border-color:#fed7aa;background:#fff7ed}
 .live-feed-name{font-size:12px;font-weight:850}
+.live-feed-person{display:flex;align-items:center;gap:9px;min-width:0}.live-feed-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:0 0 34px;border:2px solid #fff;box-shadow:0 1px 5px rgba(15,23,42,.16);background:#dbeafe}.live-feed-avatar.initials{display:grid;place-items:center;color:var(--navy);font-size:10px;font-weight:950}
 .live-feed-meta{font-size:10px;color:var(--muted);margin-top:1px}
 .live-feed-badge{font-size:10px;font-weight:950;padding:4px 9px;border-radius:999px;white-space:nowrap}
 .live-feed-badge.in{background:#16a34a;color:#fff}
@@ -488,7 +489,7 @@ async function loadHistory(){
       const key=String(event.employee_id||event.matricule||"")+"|"+String(event.cycle||1);
       const at=String(event.scanned_at||"");
       let row=grouped.get(key);
-      if(!row){row={matricule:event.matricule||"",name:event.nom||"Employé",poste:event.poste||"Fonction non renseignée",societe:event.societe||"",site:event.site||"",cycle:event.cycle||1,date:at.slice(0,10),arrivee:"",depart:"",duration:"",sortAt:at};grouped.set(key,row)}
+      if(!row){row={matricule:event.matricule||"",name:event.nom||"Employé",photo:event.photo||"",poste:event.poste||"Fonction non renseignée",societe:event.societe||"",site:event.site||"",cycle:event.cycle||1,date:at.slice(0,10),arrivee:"",depart:"",duration:"",sortAt:at};grouped.set(key,row)}
       row.sortAt=String(row.sortAt||"")>at?row.sortAt:at;
       row.site=event.site||row.site;
       const time=at.slice(11,19);
@@ -543,7 +544,7 @@ function renderLiveFeed(){
   const list=document.getElementById("liveFeedList");
   if(!list)return;
   const groups=new Map();sessionScans.forEach(row=>{const poste=String(row.poste||"Fonction non renseignée").trim().toUpperCase();if(!groups.has(poste))groups.set(poste,[]);groups.get(poste).push(row)});
-  const rowHTML=row=>{const isIn=row.arrivee&&!row.depart,time=row.depart||row.arrivee||"",lamp=isIn?lampHTMLForMatricule(row.matricule):"";return `<div class="live-feed-row ${isIn?"live-in":"live-out"}"><div><div class="live-feed-name">${lamp}${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div><div style="text-align:right"><span class="live-feed-badge ${isIn?"in":"out"}">${isIn?"ENTRÉE":"SORTIE"}</span><div class="live-feed-meta" style="margin-top:4px">${esc(time)}</div></div></div>`};
+  const rowHTML=row=>{const isIn=row.arrivee&&!row.depart,time=row.depart||row.arrivee||"",lamp=isIn?lampHTMLForMatricule(row.matricule):"",initials=String(row.name||"E").split(/\s+/).filter(Boolean).slice(0,2).map(v=>v[0]).join("").toUpperCase(),avatar=row.photo?`<img class="live-feed-avatar" src="${esc(row.photo)}" alt="Photo de ${esc(row.name)}">`:`<span class="live-feed-avatar initials">${esc(initials)}</span>`;return `<div class="live-feed-row ${isIn?"live-in":"live-out"}"><div class="live-feed-person">${avatar}<div><div class="live-feed-name">${lamp}${esc(row.name)}</div><div class="live-feed-meta">${esc(row.matricule)} · ${esc(row.site||"—")}</div></div></div><div style="text-align:right"><span class="live-feed-badge ${isIn?"in":"out"}">${isIn?"ENTRÉE":"SORTIE"}</span><div class="live-feed-meta" style="margin-top:4px">${esc(time)}</div></div></div>`};
   list.innerHTML=groups.size?`<div class="live-feed-groups">${[...groups.entries()].sort(([a],[b])=>a.localeCompare(b,"fr")).map(([poste,rows])=>`<section class="live-feed-group"><header class="live-feed-group-head"><b>${esc(poste)}</b><span>${rows.length}</span></header><div class="live-feed-group-body">${rows.slice(0,12).map(rowHTML).join("")}</div></section>`).join("")}</div>`:'<div class="live-feed-empty">Aucun pointage récent.</div>';
 }
 let manualResults=[];

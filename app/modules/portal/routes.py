@@ -991,6 +991,17 @@ def attendance_feed(
             select(Employee).where(Employee.id.in_(employee_ids))
         ).scalars().all()
     } if employee_ids else {}
+
+    def employee_photo(employee: Employee | None) -> str:
+        if employee is None:
+            return ""
+        extra = employee.extra if isinstance(employee.extra, dict) else {}
+        legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+        return next(
+            (_clean_text(extra.get(key) or legacy.get(key)) for key in ("photo", "photoUrl", "photoData", "photo_url") if extra.get(key) or legacy.get(key)),
+            "",
+        )
+
     return [
         {
             "id": row.get("id"),
@@ -999,6 +1010,7 @@ def attendance_feed(
             "nom": row.get("agentName") or (" ".join(filter(None, [employees_by_id.get(int(row.get("employeeId"))).last_name, employees_by_id.get(int(row.get("employeeId"))).first_name])).strip() if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else "Employé inconnu"),
             "poste": (employees_by_id.get(int(row.get("employeeId"))).position if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else _clean_text(row.get("poste"))),
             "societe": row.get("societe") or (employees_by_id.get(int(row.get("employeeId"))).society if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else ""),
+            "photo": employee_photo(employees_by_id.get(int(row.get("employeeId")))) if str(row.get("employeeId") or "").isdigit() else "",
             "action": row.get("action") or "arrivee",
             "cycle": row.get("cycle") or 1,
             "site": row.get("site") or "",
