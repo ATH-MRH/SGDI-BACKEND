@@ -51,7 +51,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
 .seg-c{top:14px;right:0}
 .seg-colon{display:inline-flex;flex-direction:column;justify-content:center;gap:5px;height:26px;width:4px;flex-shrink:0}
 .seg-colon i{width:4px;height:4px;border-radius:50%;background:#2bff6e;box-shadow:0 0 4px #2bff6e,0 0 8px rgba(43,255,110,.6);display:block;font-style:normal}
-.top-actions{display:flex;align-items:center;gap:8px}.header-scanner-status{display:flex;align-items:center;gap:6px;border:1px solid rgba(134,239,172,.6);background:rgba(22,163,74,.2);color:#fff;border-radius:999px;padding:7px 10px;font-size:10px;font-weight:900;white-space:nowrap}.header-scanner-status .dot{width:7px;height:7px}.header-menu,.logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 11px;font-weight:750;cursor:pointer}.header-menu:hover,.logout:hover{background:rgba(255,255,255,.22)}
+.top-actions{display:flex;align-items:center;gap:8px}.site-selector{height:36px;max-width:220px;border:1px solid rgba(255,255,255,.55);border-radius:10px;background:#fff;color:var(--navy);padding:0 30px 0 10px;font-size:11px;font-weight:850}.header-scanner-status{display:flex;align-items:center;gap:6px;border:1px solid rgba(134,239,172,.6);background:rgba(22,163,74,.2);color:#fff;border-radius:999px;padding:7px 10px;font-size:10px;font-weight:900;white-space:nowrap}.header-scanner-status .dot{width:7px;height:7px}.header-menu,.logout{border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:8px 11px;font-weight:750;cursor:pointer}.header-menu:hover,.logout:hover{background:rgba(255,255,255,.22)}
 .main{width:100%;margin:0 auto;padding:12px 52px 28px}.work-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
 .status-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}.status{display:flex;align-items:center;justify-content:center;gap:7px;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:8px 14px;font-size:12px;font-weight:900;width:max-content;white-space:nowrap}.shift-staffing{display:flex;align-items:stretch;gap:0;min-width:0;flex:1;border-left:2px solid #1683d8;padding-left:8px;overflow:auto;scrollbar-width:thin}.shift-staffing-counter{min-width:120px;padding:3px 12px;border-left:1px solid #dce5ee;text-align:center;white-space:nowrap}.shift-staffing-counter:first-child{border-left:0}.shift-staffing-counter small,.shift-staffing-counter b{display:block}.shift-staffing-counter small{font-size:9px;font-weight:850;letter-spacing:.04em;color:#52677f;text-transform:uppercase}.shift-staffing-counter b{font-size:23px;line-height:1.1;color:#086fb5;font-weight:950}.shift-staffing-counter.context{min-width:165px;text-align:left}.shift-staffing-counter.context b{font-size:12px;margin-top:4px;color:#06467c}.shift-staffing-empty{font-size:10px;color:#7b8ba0;white-space:nowrap;padding:10px}
 .presence-summary{display:flex;align-items:center;justify-content:flex-end;gap:0;flex:1;color:#063d5d;font-size:24px;font-weight:950;text-transform:uppercase}.presence-summary button{min-width:210px;text-align:center;padding:5px 22px;border:0;border-left:1px solid #dce5ee;background:transparent;color:inherit;cursor:pointer;border-radius:10px;transition:.18s ease}.presence-summary button:first-child{border-left:0}.presence-summary button:hover,.presence-summary button.active{background:#e6f1fc;box-shadow:inset 0 0 0 2px #79aede}.presence-summary small,.presence-summary b{display:block}.presence-summary small{font-size:11px;font-weight:800;letter-spacing:.04em}.presence-summary button:nth-child(1) b{color:#078449}.presence-summary button:nth-child(2) b{color:#d36b00}.presence-summary button:nth-child(3) b{color:#086fb5}.presence-summary button:nth-child(4) b{color:#dc2626}
@@ -147,7 +147,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
   .history{grid-column:1/-1;min-height:400px}
 }
 @media(min-width:760px) and (max-width:1199px){.work-grid{grid-template-columns:1fr}.live-feed-groups{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}}
-@media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto}.header-clock{position:static;transform:none;margin-top:9px;justify-content:center}.seg-date{font-size:11px}.seg-clock{padding:4px 7px;gap:2px}.seg-digit{width:11px;height:19px}.seg-a,.seg-d,.seg-g{width:8px;height:2px}.seg-g{top:8.5px}.seg-d{top:17px}.seg-b,.seg-c,.seg-e,.seg-f{width:2px;height:7px}.seg-b,.seg-f{top:1.5px}.seg-e,.seg-c{top:10.5px}.seg-colon{height:19px;gap:3px}.seg-colon i{width:3px;height:3px}.header-scanner-status{padding:6px 8px;font-size:9px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:stretch}.shift-staffing{width:100%;border-left:0;border-top:2px solid #1683d8;padding:9px 0 0}.presence-summary{width:100%;font-size:13px;display:grid;grid-template-columns:repeat(2,1fr)}.presence-summary button{min-width:0;width:100%;padding:7px 6px;border-left:0}.presence-summary button b{font-size:24px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
+@media(max-width:759px){.top{padding:max(18px,env(safe-area-inset-top)) 18px 19px;border-radius:0 0 24px 24px}.top-row{max-width:1080px;margin:auto;flex-wrap:wrap}.top-actions{flex-wrap:wrap;justify-content:flex-end}.site-selector{order:2;max-width:none;flex:1;min-width:150px}.header-clock{position:static;transform:none;margin-top:9px;justify-content:center}.seg-date{font-size:11px}.seg-clock{padding:4px 7px;gap:2px}.seg-digit{width:11px;height:19px}.seg-a,.seg-d,.seg-g{width:8px;height:2px}.seg-g{top:8.5px}.seg-d{top:17px}.seg-b,.seg-c,.seg-e,.seg-f{width:2px;height:7px}.seg-b,.seg-f{top:1.5px}.seg-e,.seg-c{top:10.5px}.seg-colon{height:19px;gap:3px}.seg-colon i{width:3px;height:3px}.header-scanner-status{padding:6px 8px;font-size:9px}.header-menu,.logout{padding:8px 9px;font-size:0}.header-menu .mobile-icon,.logout .mobile-icon{font-size:17px}.main{padding:16px}.status-row{flex-direction:column;align-items:stretch}.shift-staffing{width:100%;border-left:0;border-top:2px solid #1683d8;padding:9px 0 0}.presence-summary{width:100%;font-size:13px;display:grid;grid-template-columns:repeat(2,1fr)}.presence-summary button{min-width:0;width:100%;padding:7px 6px;border-left:0}.presence-summary button b{font-size:24px}.scanner-card{padding:15px}.employee-photo,.employee-photo-fallback{width:128px;height:128px;border-radius:20px;font-size:38px}.pointer-btn{width:130px;height:130px}.generate-qr-btn{width:100%;min-width:0}}
 @media(max-width:759px){.live-feed-groups{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px}.live-feed-group{min-width:82vw;scroll-snap-align:start}}
 @media(max-width:380px){.main{padding:11px}.scanner-card{padding:11px}#reader,.usb-reader{min-height:270px}.brand-title{font-size:17px}}
 
@@ -192,6 +192,7 @@ input:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px #dbeafe}
     <div class="top-row">
       <div class="brand"><div class="brand-logo">QR</div><div><div class="brand-title">POINTAGE</div><div class="brand-user" id="userLabel">—</div></div></div>
       <div class="top-actions">
+        <select id="siteSelector" class="site-selector" aria-label="Sélectionner le site" onchange="changeAttendanceSite(this.value)"><option value="">Chargement des sites…</option></select>
         <nav class="module-nav"><button id="scanNav" class="active" onclick="showPointerSection('scan')">Scanner</button><button id="planningNav" onclick="showPointerSection('planning')">Planning intelligent</button></nav>
         <span class="header-scanner-status"><span class="dot"></span> SCANNER ACTIF</span>
         <span id="connPill" class="conn-pill" title="État de la connexion"><span class="conn-dot"></span><span id="connLabel" class="conn-label">En ligne</span></span>
@@ -265,6 +266,7 @@ let scanner=null;
 let scanBusy=false;
 let sessionScans=[];
 let liveFeedFilter="";
+let selectedSiteId="";
 let qrKeyBuffer="";
 let qrLastKeyAt=0;
 let cameraMode=false;
@@ -316,21 +318,48 @@ async function login(){
     if(!response.ok)throw new Error(data.detail||"Connexion refusée");
     pointerSession={token:data.access_token,user:data.user};
     localStorage.setItem(SESSION_KEY,JSON.stringify(pointerSession));
-    enterApp();
+    await enterApp();
   }catch(error){showLoginError(error.message||"Connexion impossible")}
   finally{button.disabled=false;button.textContent="SE CONNECTER"}
 }
-function enterApp(){
+function siteQuery(prefix="?"){
+  return selectedSiteId?prefix+"site_id="+encodeURIComponent(selectedSiteId):"";
+}
+async function loadAttendanceSites(){
+  const response=await fetch("/api/portal/attendance-sites",{headers:{Authorization:"Bearer "+pointerSession.token}});
+  if(response.status===401){logout();throw new Error("Session expirée")}
+  const sites=await response.json().catch(()=>[]);
+  if(!response.ok)throw new Error(sites.detail||"Sites indisponibles");
+  const select=document.getElementById("siteSelector"),stored=localStorage.getItem("atlas_pointer_site")||"";
+  selectedSiteId=(sites.some(site=>String(site.id)===stored)?stored:String(sites[0]?.id||""));
+  select.innerHTML=sites.length?sites.map(site=>`<option value="${site.id}">${esc(site.name||site.indicatif||("Site "+site.id))}</option>`).join(""):'<option value="">Aucun site autorisé</option>';
+  select.value=selectedSiteId;
+  select.disabled=sites.length===0;
+  select.dataset.sites=JSON.stringify(sites);
+  updateSelectedSiteLabel();
+}
+function updateSelectedSiteLabel(){
+  const select=document.getElementById("siteSelector"),societyEl=document.getElementById("usbReaderSociety");
+  if(!select||!societyEl)return;
+  const siteName=select.selectedOptions[0]?.textContent||"";
+  societyEl.textContent=siteName?"SITE DE POINTAGE : "+siteName.toUpperCase():"";
+  societyEl.classList.toggle("hidden",!siteName);
+}
+async function changeAttendanceSite(value){
+  selectedSiteId=String(value||"");localStorage.setItem("atlas_pointer_site",selectedSiteId);
+  liveFeedFilter="";updateSelectedSiteLabel();resetManualPanel();
+  await Promise.all([loadHistory(),loadAttendanceAlerts(),loadShiftStaffing()]);
+  if(!document.getElementById("planningView").classList.contains("hidden"))await loadPlanning();
+  requestAnimationFrame(setupScanMode);
+}
+async function enterApp(){
   document.getElementById("loginView").classList.add("hidden");
   document.getElementById("appView").classList.remove("hidden");
   const user=pointerSession?.user||{};
   document.getElementById("userLabel").textContent=(user.full_name||user.username||"Pointeur")+" · "+(user.username||"");
-  const societies=Array.isArray(user.authorized_societies)?user.authorized_societies.filter(Boolean):[];
-  const societyEl=document.getElementById("usbReaderSociety");
-  societyEl.textContent=societies.length?"SOCIÉTÉ : "+societies.join(" / ").toUpperCase():"";
-  societyEl.classList.toggle("hidden",!societies.length);
   startHeaderClock();
   updateConnPill();
+  try{await loadAttendanceSites()}catch(error){showResult({message:error.message||"Sites indisponibles"},"error")}
   refreshPointeurData();
   clearInterval(historyRefreshTimer);
   historyRefreshTimer=setInterval(refreshPointeurData,15000);
@@ -340,7 +369,7 @@ function refreshPointeurData(){loadHistory();loadAttendanceAlerts();loadShiftSta
 async function loadShiftStaffing(){
   const host=document.getElementById("shiftStaffing");if(!host||!pointerSession?.token)return;
   try{
-    const response=await fetch("/api/portal/attendance-staffing",{headers:{Authorization:"Bearer "+pointerSession.token}});
+    const response=await fetch("/api/portal/attendance-staffing"+siteQuery(),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     if(!response.ok)throw new Error("Effectif contractuel indisponible");
     const data=await response.json(),sites=Array.isArray(data.sites)?data.sites:[],requirements=data.requirements||{};
@@ -361,7 +390,7 @@ function showPointerSection(section){
 }
 async function loadPlanning(){
   if(!pointerSession?.token)return;const target=document.getElementById("planningDate")?.value||localDate();
-  try{const response=await fetch("/api/portal/attendance-feed?days=8&limit=2000",{headers:{Authorization:"Bearer "+pointerSession.token}});if(response.status===401){logout();return}if(!response.ok)throw new Error("Planning indisponible");planningEvents=await response.json();renderPlanning(target)}catch(e){document.getElementById("planningContent").innerHTML='<div class="planning-card error show">'+esc(e.message)+'</div>'}
+  try{const response=await fetch("/api/portal/attendance-feed?days=8&limit=2000"+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});if(response.status===401){logout();return}if(!response.ok)throw new Error("Planning indisponible");planningEvents=await response.json();renderPlanning(target)}catch(e){document.getElementById("planningContent").innerHTML='<div class="planning-card error show">'+esc(e.message)+'</div>'}
 }
 function groupPlanningEvents(date){
   const grouped=new Map();planningEvents.filter(e=>String(e.scanned_at||"").slice(0,10)===date).forEach(e=>{const key=String(e.employee_id||e.matricule||"")+"|"+String(e.cycle||1);let row=grouped.get(key);if(!row){row={key,name:e.nom||"Employé",code:e.matricule||"",site:e.site||"—",siteId:e.site_id,arrival:"",departure:"",absent:false,observation:"",scannedBy:""};grouped.set(key,row)}if(e.action==="absent"){row.absent=true;row.observation=e.observation||"";row.scannedBy=e.scanned_by||""}else if(e.action==="depart")row.departure=eventTime(e.scanned_at);else row.arrival=eventTime(e.scanned_at)});return [...grouped.values()]
@@ -472,7 +501,7 @@ let presenceAlertsData=[];
 async function loadAttendanceAlerts(){
   if(!pointerSession?.token)return;
   try{
-    const response=await fetch("/api/portal/attendance-alerts",{headers:{Authorization:"Bearer "+pointerSession.token}});
+    const response=await fetch("/api/portal/attendance-alerts"+siteQuery(),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     if(!response.ok)throw new Error("Alertes indisponibles");
     const data=await response.json();
@@ -501,7 +530,7 @@ function lampHTMLForMatricule(matricule){
 async function loadHistory(){
   if(!pointerSession?.token)return;
   try{
-    const response=await fetch("/api/portal/attendance-feed?limit=200",{headers:{Authorization:"Bearer "+pointerSession.token}});
+    const response=await fetch("/api/portal/attendance-feed?limit=200"+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     if(!response.ok)throw new Error("Historique indisponible");
     const events=await response.json();
@@ -526,7 +555,7 @@ async function onQr(token){
   if(scanBusy)return;
   scanBusy=true;
   try{
-    const response=await fetch("/api/portal/attendance-qr/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({token:String(token||"").trim()})});
+    const response=await fetch("/api/portal/attendance-qr/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({token:String(token||"").trim(),site_id:selectedSiteId||null})});
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");
@@ -615,7 +644,7 @@ function onManualQueryInput(){
 }
 async function runManualSearch(query){
   try{
-    const response=await fetch("/api/portal/attendance-manual/search?q="+encodeURIComponent(query),{headers:{Authorization:"Bearer "+pointerSession.token}});
+    const response=await fetch("/api/portal/attendance-manual/search?q="+encodeURIComponent(query)+siteQuery("&"),{headers:{Authorization:"Bearer "+pointerSession.token}});
     if(response.status===401){logout();return}
     const rows=await response.json().catch(()=>[]);
     manualResults=Array.isArray(rows)?rows:[];
@@ -647,7 +676,7 @@ async function confirmManualPointage(action="present"){
   try{
     const employeeRef=manualSelected.id||manualSelected.matricule;
     const observation=document.getElementById("manualObservation").value.trim();
-    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:employeeRef,observation,action})});
+    const response=await fetch("/api/portal/attendance-manual/scan",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+pointerSession.token},body:JSON.stringify({employee_id:employeeRef,observation,action,site_id:selectedSiteId||null})});
     const data=await response.json().catch(()=>({}));
     if(response.status===401){logout();throw new Error("Session expirée")}
     if(!response.ok)throw new Error(data.detail||"Pointage refusé");

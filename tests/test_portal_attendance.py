@@ -471,9 +471,25 @@ def test_manual_search_and_scan_respect_pointer_site_scope(client, auth_headers,
     login = client.post("/api/auth/login", json={"username": "pointer-site-scope", "password": "pointerpass"})
     pointer_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
 
-    allowed = client.get("/api/portal/attendance-manual/search?q=PTS01", headers=pointer_headers)
+    sites = client.get("/api/portal/attendance-sites", headers=pointer_headers)
+    assert sites.status_code == 200, sites.text
+    assert [row["id"] for row in sites.json()] == [mine]
+
+    allowed = client.get(f"/api/portal/attendance-manual/search?q=PTS01&site_id={mine}", headers=pointer_headers)
     forbidden = client.get("/api/portal/attendance-manual/search?q=PTS02", headers=pointer_headers)
     assert any(row["id"] == emp_mine for row in allowed.json())
     assert forbidden.json() == []
+    forbidden_site = client.get(f"/api/portal/attendance-feed?site_id={other}", headers=pointer_headers)
+    assert forbidden_site.status_code == 403
     direct_scan = client.post("/api/portal/attendance-manual/scan", headers=pointer_headers, json={"employee_id": emp_other})
     assert direct_scan.status_code == 403
+    wrong_selected_site = client.post(
+        "/api/portal/attendance-manual/scan", headers=pointer_headers,
+        json={"employee_id": emp_mine, "site_id": other},
+    )
+    assert wrong_selected_site.status_code == 409
+    selected_scan = client.post(
+        "/api/portal/attendance-manual/scan", headers=pointer_headers,
+        json={"employee_id": emp_mine, "site_id": mine},
+    )
+    assert selected_scan.status_code == 201, selected_scan.text
