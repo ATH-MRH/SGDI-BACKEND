@@ -101,6 +101,29 @@ def test_public_submission_creates_candidate_not_employee(client, auth_headers):
     assert len(final_employees) == len(before_employees)
 
 
+def test_candidate_can_follow_application_with_reference_and_last_name(client):
+    created = client.post("/api/public/candidates", json=_payload(email="tracking@example.com"))
+    assert created.status_code == 201
+    reference = created.json()["reference"]
+
+    tracked = client.post(
+        "/api/public/candidates/status",
+        json={"reference": reference.lower(), "last_name": "portail"},
+    )
+    assert tracked.status_code == 200, tracked.text
+    assert tracked.json()["reference"] == reference
+    assert tracked.json()["status"] == "review"
+    assert tracked.json()["label"] == "En cours d’étude"
+    assert "avis" not in tracked.json()
+    assert "data" not in tracked.json()
+
+    unknown = client.post(
+        "/api/public/candidates/status",
+        json={"reference": reference, "last_name": "AUTRE NOM"},
+    )
+    assert unknown.status_code == 404
+
+
 def test_public_submission_requires_consent_and_rejects_honeypot(client):
     no_consent = client.post("/api/public/candidates", json=_payload(email="other@example.com", consent=False))
     assert no_consent.status_code == 422
@@ -160,6 +183,12 @@ def test_candidate_portal_assets_are_repository_native():
     assert 'env(safe-area-inset-bottom)' in html
     assert '.repeat-table{grid-column:1/-1;overflow:visible}' in html
     assert 'font-size:16px' in html
+    assert "DÉPOSER UNE DEMANDE DE RECRUTEMENT" in html
+    assert "إيداع طلب توظيف" in html
+    assert "ÉTAT DE MA DEMANDE" in html
+    assert "متابعة حالة طلبي" in html
+    assert "/api/public/candidates/status" in html
+    assert 'class="welcome-screen"' in html
 
 
 def test_recruitment_candidate_list_has_professional_layout():

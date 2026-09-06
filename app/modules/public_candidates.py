@@ -1,14 +1,18 @@
 from datetime import date, datetime
+import re
 from typing import Annotated
+import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.db.session import get_db
 from app.core.config import settings
 from app.modules.drh import service
 from app.modules.drh.schemas import CandidateCreate
+from app.modules.drh.models import Candidate
 
 
 router = APIRouter()
@@ -79,6 +83,65 @@ class PublicCandidateIn(BaseModel):
         if self.photo_data and not self.photo_data.startswith("data:image/jpeg;base64,"):
             raise ValueError("Le format de la photo est invalide")
         return self
+
+
+class PublicCandidateStatusIn(BaseModel):
+    reference: Annotated[str, Field(min_length=8, max_length=40)]
+    last_name: Annotated[str, Field(min_length=2, max_length=100)]
+
+
+def _identity_key(value: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    return " ".join("".join(char for char in normalized if not unicodedata.combining(char)).upper().split())
+
+
+def _public_candidate_state(row: Candidate) -> dict:
+    data = row.data if isinstance(row.data, dict) else {}
+    status_key = _identity_key(row.status).lower()
+    opinion = _identity_key(data.get("avisDecision")).lower()
+    convocation = data.get("derniereConvocation") if isinstance(data.get("derniereConvocation"), dict) else None
+    interview = data.get("dernierEntretien") if isinstance(data.get("dernierEntretien"), dict) else None
+    if status_key in {"embauche", "recrute", "recrutee"}:
+        code, label, message = "recruited", "Recrutement confirmé", "Votre recrutement a été confirmé. Le service RH prendra contact avec vous."
+    elif status_key == "a_contractualiser":
+        code, label, message = "transmitted_drh", "Transmise à la DRH", "Votre candidature a été retenue et transmise à la DRH pour contractualisation."
+    elif opinion == "defavorable":
+        code, label, message = "declined", "Candidature non retenue", "Votre candidature n’a pas été retenue pour cette étape."
+    elif opinion == "favorable":
+        code, label, message = "accepted", "Candidature acceptée", "Votre entretien est favorable. Votre dossier poursuit le processus de recrutement."
+    elif interview:
+        code, label, message = "interviewed", "Entretien réalisé", "Votre entretien a été enregistré et votre dossier est en cours de décision."
+    elif convocation:
+        code, label, message = "invited", "Convocation programmée", "Une convocation a été programmée pour votre candidature."
+    elif status_key in {"reserve", "reservee"}:
+        code, label, message = "reserve", "Mise en réserve", "Votre profil est conservé dans notre vivier de candidatures."
+    else:
+        code, label, message = "review", "En cours d’étude", "Votre dossier a bien été reçu et est en cours d’étude par le service recrutement."
+    result = {
+        "reference": f"CAND-{row.created_at.year if row.created_at else datetime.utcnow().year}-{row.id:06d}",
+        "status": code,
+        "label": label,
+        "message": message,
+        "position": row.desired_position or "",
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+    if code == "invited" and convocation:
+        result["convocation"] = {key: convocation.get(key) for key in ("date", "heure", "lieu") if convocation.get(key)}
+    return result
+
+
+@router.post("/candidates/status")
+def public_candidate_status(payload: PublicCandidateStatusIn, db: Session = Depends(get_db)):
+    match = re.fullmatch(r"CAND-(\d{4})-(\d{6})", payload.reference.strip().upper())
+    if not match:
+        raise HTTPException(status_code=404, detail="Aucune demande ne correspond aux informations saisies")
+    row = db.execute(select(Candidate).where(Candidate.id == int(match.group(2)))).scalar_one_or_none()
+    if row is None or _identity_key(row.last_name) != _identity_key(payload.last_name):
+        raise HTTPException(status_code=404, detail="Aucune demande ne correspond aux informations saisies")
+    result = _public_candidate_state(row)
+    if result["reference"] != payload.reference.strip().upper():
+        raise HTTPException(status_code=404, detail="Aucune demande ne correspond aux informations saisies")
+    return result
 
 
 @router.post("/candidates", status_code=status.HTTP_201_CREATED)
