@@ -33,5 +33,12 @@ def test_interview_contains_operational_decision_fields():
 
 def test_favorable_candidate_gets_direct_green_recruit_action():
     assert 'const favorable=item.data?.avisDecision==="Favorable"' in HTML
-    assert 'class="row-recruit" onclick="transmitCandidateToDrh(${item.id})">Recruter</button>' in HTML
+    assert 'class="row-recruit" onclick="openCandidateRecruitment(${item.id})">Recruter</button>' in HTML
     assert ".row-recruit{background:#15803d" in HTML
+
+
+def test_recruitment_society_is_selected_and_transmitted():
+    assert 'name="societeRecrutement" required' in HTML
+    assert 'name="society" required' in HTML
+    assert 'societeRecrutement:society' in HTML
+    assert 'body:JSON.stringify({society,data:' in HTML
