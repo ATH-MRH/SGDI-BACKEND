@@ -1,0 +1,40 @@
+/* Socle responsive commun ATLAS — ne modifie pas la logique métier. */
+html{width:100%!important;max-width:100%!important;overflow-x:hidden!important;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{width:100%!important;max-width:100%!important;min-width:0;overflow-x:hidden!important}
+*,*::before,*::after{box-sizing:border-box}
+img,video,canvas,svg,iframe{max-width:100%!important}
+img,video{height:auto}
+main,section,article,aside,header,footer,nav,form,fieldset{min-width:0}
+input,select,textarea,button{max-width:100%;font-family:inherit}
+:where(.table-wrap,.table-wrapper,.table-card,.table-container,.overflow-x-auto,.clients-table-wrap){max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain}
+:where(.modal-backdrop,.dialog-backdrop){padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+:where(.modal,.dialog,[role="dialog"]){max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px);overflow:auto;overscroll-behavior:contain}
+
+@media(max-width:1024px){
+  :where(.toolbar,.actions,.header-actions,.page-actions,.modal-actions,.filters,.filter-bar){flex-wrap:wrap}
+  :where(.dashboard-grid,.stats-grid,.cards-grid,.kpi-grid){grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:767px){
+  input:not([type="checkbox"]):not([type="radio"]),select,textarea{font-size:16px!important}
+  button,[role="button"],a.button,a.btn{touch-action:manipulation}
+  button:not(.icon-button):not(.modal-close):not(.kebab-btn),a.button,a.btn{min-height:44px}
+  :where(.field-grid,.form-grid,.fields-grid,.dashboard-grid,.stats-grid,.cards-grid,.kpi-grid){grid-template-columns:minmax(0,1fr)!important}
+  :where(.field-grid,.form-grid,.fields-grid)>*{grid-column:1/-1!important;min-width:0}
+  :where(.modal,.dialog,[role="dialog"]){width:calc(100vw - 16px)!important;max-width:calc(100vw - 16px)!important;max-height:calc(100dvh - 16px)!important;border-radius:14px!important}
+  :where(.modal-actions,.dialog-actions){display:flex;align-items:stretch;flex-direction:column-reverse;gap:8px}
+  :where(.modal-actions,.dialog-actions)>button{width:100%!important}
+  :where(.table-wrap,.table-wrapper,.table-card,.table-container,.overflow-x-auto,.clients-table-wrap){margin-inline:0;scrollbar-width:thin}
+  :where(.table-wrap,.table-wrapper,.table-card,.table-container,.overflow-x-auto,.clients-table-wrap)::after{content:"Faites glisser horizontalement pour voir la suite";display:block;position:sticky;left:0;padding:6px 10px;color:#64748b;font-size:10px;text-align:left}
+}
+
+@media(max-width:480px){
+  :where(.toolbar,.actions,.header-actions,.page-actions,.filters,.filter-bar){align-items:stretch;flex-direction:column}
+  :where(.toolbar,.actions,.header-actions,.page-actions,.filters,.filter-bar)>:not([hidden]){width:100%;min-width:0}
+  h1{overflow-wrap:anywhere}
+}
+
+@media(hover:none) and (pointer:coarse){
+  input[type="checkbox"],input[type="radio"]{min-width:20px;min-height:20px}
+  :where(button,a,select,input[type="checkbox"],input[type="radio"]){touch-action:manipulation}
+}
