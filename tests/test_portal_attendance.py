@@ -40,6 +40,22 @@ def test_manual_search_finds_by_name(client, auth_headers):
     assert row["nom"] == "RACHEDI" and row["prenom"] == "SOFIANE"
 
 
+def test_manual_absence_is_persisted_and_blocks_conflicting_presence(client, auth_headers):
+    employee_id = _emp(client, auth_headers, "PT-ABS-01", fn="Amel", ln="Absente")
+    absent = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={
+        "employee_id": employee_id, "action": "absent", "observation": "Absence constatée à la prise de service",
+    })
+    assert absent.status_code == 201, absent.text
+    assert absent.json()["action"] == "absent"
+    record = absent.json()["record"]
+    assert record["statut"] == "absent"
+    assert "Absence constatée" in record["observations"]
+    conflicting = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={
+        "employee_id": employee_id, "action": "present",
+    })
+    assert conflicting.status_code == 409
+
+
 def test_light_attendance_employees_returns_active_employee_and_assignment(client, auth_headers, db):
     site_id = _site(client, auth_headers, "Site Referentiel Leger")
     emp_id = _emp(client, auth_headers, "PTL01", fn="Lina", ln="Legere")

@@ -1354,6 +1354,52 @@ def manual_employee_attendance_scan(
     if not employee:
         raise HTTPException(status_code=404, detail="Employé introuvable")
     _ensure_attendance_employee_scope(db, scanner, employee)
+    requested_action = _clean_text(payload.get("action") or "present").lower()
+    if requested_action not in {"present", "absent"}:
+        raise HTTPException(status_code=422, detail="Action de pointage manuel invalide")
+    if requested_action == "absent":
+        tz = ZoneInfo("Africa/Algiers")
+        now = datetime.now(tz)
+        existing = db.execute(
+            select(DailyPresence).where(
+                DailyPresence.presence_date == now.date(),
+                DailyPresence.employee_id == employee.id,
+            ).order_by(DailyPresence.id.desc())
+        ).scalars().first()
+        if existing and (existing.arrival_time or str(existing.status or "").lower() == "present"):
+            raise HTTPException(status_code=409, detail="Impossible de marquer absent : une présence est déjà enregistrée aujourd’hui")
+        assignment = db.execute(
+            select(Assignment).where(Assignment.employee_id == employee.id, Assignment.active == 1).order_by(Assignment.id.desc())
+        ).scalars().first()
+        site = db.get(Site, assignment.site_id) if assignment and assignment.site_id else None
+        observation = _clean_text(payload.get("observation"))
+        result = upsert_presence(db, {
+            "backendId": existing.id if existing else None,
+            "date": now.date().isoformat(), "employee_id": employee.id,
+            "matricule": employee.code, "agentName": " ".join(filter(None, [employee.last_name, employee.first_name])),
+            "statut": "absent", "status": "absent", "code": "A", "valide": True,
+            "valideAt": now.isoformat(), "validePar": scanner.username,
+            "observations": observation or "Absence constatée par le pointeur",
+            "source": "pointage-manuel-absence",
+            "siteBackendId": assignment.site_id if assignment else None,
+            "siteName": (site.name or site.indicatif or "") if site else "",
+            "groupe": assignment.group_code if assignment else "",
+        }, "feuillePresence")
+        db.commit()
+        return {
+            "success": True, "action": "absent", "message": "ABSENCE ENREGISTRÉE",
+            "date": now.date().isoformat(), "heure": now.strftime("%H:%M:%S"),
+            "employee": {"id": employee.id, "matricule": employee.code, "nom": employee.last_name, "prenom": employee.first_name},
+            "record": result,
+        }
+    today_presence = db.execute(
+        select(DailyPresence).where(
+            DailyPresence.presence_date == datetime.now(ZoneInfo("Africa/Algiers")).date(),
+            DailyPresence.employee_id == employee.id,
+        ).order_by(DailyPresence.id.desc())
+    ).scalars().first()
+    if today_presence and str(today_presence.status or "").lower() == "absent":
+        raise HTTPException(status_code=409, detail="Impossible de marquer présent : une absence est déjà enregistrée aujourd’hui")
     nonce = f"manual-{secrets.token_urlsafe(12)}"
     return _register_attendance(
         db,
