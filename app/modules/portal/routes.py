@@ -982,10 +982,20 @@ def attendance_feed(
     if since_value:
         rows = [row for row in rows if _clean_text(row.get("scannedAt")) > since_value]
     rows.sort(key=lambda row: _clean_text(row.get("scannedAt")), reverse=True)
+    absence_rows = db.execute(
+        select(DailyPresence).where(
+            DailyPresence.presence_date >= cutoff.astimezone(ZoneInfo("Africa/Algiers")).date(),
+            DailyPresence.status == "absent",
+        ).order_by(DailyPresence.presence_date.desc(), DailyPresence.id.desc())
+    ).scalars().all()
+    if allowed_site_ids is not None:
+        allowed = set(allowed_site_ids)
+        absence_rows = [row for row in absence_rows if row.site_id in allowed]
+    absence_employee_ids = {row.employee_id for row in absence_rows}
     employee_ids = {
         int(row.get("employeeId")) for row in rows
         if str(row.get("employeeId") or "").strip().isdigit()
-    }
+    } | absence_employee_ids
     employees_by_id = {
         employee.id: employee for employee in db.execute(
             select(Employee).where(Employee.id.in_(employee_ids))
@@ -1002,7 +1012,7 @@ def attendance_feed(
             "",
         )
 
-    return [
+    feed = [
         {
             "id": row.get("id"),
             "employee_id": row.get("employeeId"),
@@ -1019,8 +1029,33 @@ def attendance_feed(
             "scanned_by": row.get("scannedBy") or "",
             "observation": row.get("observation") or "",
         }
-        for row in rows[:limit]
+        for row in rows
     ]
+    for row in absence_rows:
+        employee = employees_by_id.get(row.employee_id)
+        legacy = ((row.data or {}).get("_legacy") if isinstance(row.data, dict) else {}) or {}
+        validated_at = _clean_text(legacy.get("valideAt") or legacy.get("createdAt"))
+        scanned_at = validated_at or f"{row.presence_date.isoformat()}T00:00:00+01:00"
+        if since_value and scanned_at <= since_value:
+            continue
+        feed.append({
+            "id": f"absence-{row.id}",
+            "employee_id": row.employee_id,
+            "matricule": legacy.get("matricule") or (employee.code if employee else ""),
+            "nom": legacy.get("agentName") or (" ".join(filter(None, [employee.last_name, employee.first_name])).strip() if employee else "Employé inconnu"),
+            "poste": employee.position if employee else _clean_text(legacy.get("poste")),
+            "societe": legacy.get("societe") or (employee.society if employee else ""),
+            "photo": employee_photo(employee),
+            "action": "absent",
+            "cycle": 1,
+            "site": legacy.get("siteName") or "",
+            "site_id": row.site_id,
+            "scanned_at": scanned_at,
+            "scanned_by": legacy.get("validePar") or "",
+            "observation": row.notes or legacy.get("observations") or "",
+        })
+    feed.sort(key=lambda row: _clean_text(row.get("scanned_at")), reverse=True)
+    return feed[:limit]
 
 
 @router.get("/attendance-statistics")
@@ -1385,6 +1420,25 @@ def manual_employee_attendance_scan(
             "siteName": (site.name or site.indicatif or "") if site else "",
             "groupe": assignment.group_code if assignment else "",
         }, "feuillePresence")
+        extra = employee.extra if isinstance(employee.extra, dict) else {}
+        legacy = extra.get("_legacy") if isinstance(extra.get("_legacy"), dict) else {}
+        events = list(legacy.get("gestionEvents") or [])
+        source_id = f"pointage-absence-{result.get('backendId') or now.date().isoformat()}"
+        if not any(event.get("sourceId") == source_id for event in events if isinstance(event, dict)):
+            events.append({
+                "id": source_id,
+                "type": "Absence",
+                "du": now.date().isoformat(),
+                "au": now.date().isoformat(),
+                "motif": observation or "Absence constatée par le pointeur",
+                "statut": "en_cours",
+                "createdAt": now.isoformat(),
+                "createdBy": scanner.username,
+                "source": "Pointage",
+                "sourceId": source_id,
+                "details": {"presenceBackendId": result.get("backendId"), "site": (site.name or site.indicatif or "") if site else ""},
+            })
+            employee.extra = {**extra, "_legacy": {**legacy, "gestionEvents": events}}
         db.commit()
         return {
             "success": True, "action": "absent", "message": "ABSENCE ENREGISTRÉE",

@@ -40,7 +40,7 @@ def test_manual_search_finds_by_name(client, auth_headers):
     assert row["nom"] == "RACHEDI" and row["prenom"] == "SOFIANE"
 
 
-def test_manual_absence_is_persisted_and_blocks_conflicting_presence(client, auth_headers):
+def test_manual_absence_is_persisted_everywhere_and_blocks_conflicting_presence(client, auth_headers, db):
     employee_id = _emp(client, auth_headers, "PT-ABS-01", fn="Amel", ln="Absente")
     absent = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={
         "employee_id": employee_id, "action": "absent", "observation": "Absence constatée à la prise de service",
@@ -50,6 +50,18 @@ def test_manual_absence_is_persisted_and_blocks_conflicting_presence(client, aut
     record = absent.json()["record"]
     assert record["statut"] == "absent"
     assert "Absence constatée" in record["observations"]
+    presence_rows = irongs_service.list_items(db, "feuillePresence")
+    stored_presence = next(row for row in presence_rows if row.get("backendId") == record["backendId"])
+    assert stored_presence["statut"] == "absent"
+    assert stored_presence["code"] == "A"
+    feed = client.get("/api/portal/attendance-feed", headers=auth_headers)
+    assert feed.status_code == 200, feed.text
+    absence_event = next(row for row in feed.json() if row["employee_id"] == employee_id and row["action"] == "absent")
+    assert absence_event["observation"] == "Absence constatée à la prise de service"
+    employee = next(row for row in irongs_service.list_items(db, "agents") if row.get("backendId") == employee_id)
+    career_event = next(event for event in employee["gestionEvents"] if event.get("type") == "Absence")
+    assert career_event["source"] == "Pointage"
+    assert career_event["details"]["presenceBackendId"] == record["backendId"]
     conflicting = client.post("/api/portal/attendance-manual/scan", headers=auth_headers, json={
         "employee_id": employee_id, "action": "present",
     })
