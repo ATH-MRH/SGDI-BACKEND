@@ -15,7 +15,7 @@ SOCIETY = "Iron Global Securite"
 def _emp(client, h, code, fn="Karim", ln="Belmiloud", society=SOCIETY):
     r = client.post("/api/drh/employees", headers=h, json={
         "code": code, "first_name": fn, "last_name": ln,
-        "society": society, "status": "actif", "contract_type": "CDD",
+        "society": society, "status": "actif", "contract_type": "CDD", "position": "CARISTE",
     })
     assert r.status_code in (200, 201), r.text
     return r.json()["id"]
@@ -182,6 +182,7 @@ def test_attendance_feed_restores_missing_employee_identity(client, auth_headers
     assert row["matricule"] == "PTF-ID"
     assert "IDENTITE" in row["nom"].upper()
     assert "NORA" in row["nom"].upper()
+    assert row["poste"]
 
 
 def test_attendance_feed_requires_auth(client):

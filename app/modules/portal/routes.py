@@ -997,6 +997,8 @@ def attendance_feed(
             "employee_id": row.get("employeeId"),
             "matricule": row.get("matricule") or (employees_by_id.get(int(row.get("employeeId"))).code if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else ""),
             "nom": row.get("agentName") or (" ".join(filter(None, [employees_by_id.get(int(row.get("employeeId"))).last_name, employees_by_id.get(int(row.get("employeeId"))).first_name])).strip() if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else "Employé inconnu"),
+            "poste": (employees_by_id.get(int(row.get("employeeId"))).position if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else _clean_text(row.get("poste"))),
+            "societe": row.get("societe") or (employees_by_id.get(int(row.get("employeeId"))).society if str(row.get("employeeId") or "").isdigit() and employees_by_id.get(int(row.get("employeeId"))) else ""),
             "action": row.get("action") or "arrivee",
             "cycle": row.get("cycle") or 1,
             "site": row.get("site") or "",
