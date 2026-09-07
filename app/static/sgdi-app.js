@@ -1537,6 +1537,9 @@ window.SGDI_API={
     listUsers:()=>sgdiApi("/auth/users",{method:"GET",legacy:false}),
     updateUser:(username,payload)=>sgdiApi("/auth/users/"+encodeURIComponent(username),{method:"PATCH",body:payload,legacy:false}),
     deleteUser:(username)=>sgdiApi("/auth/users/"+encodeURIComponent(username),{method:"DELETE",legacy:false}),
+    granularPermissionCatalog:()=>sgdiApi("/auth/granular-permissions/catalog",{method:"GET",legacy:false}),
+    userModulePermissions:(userId)=>sgdiApi("/auth/users/"+encodeURIComponent(userId)+"/module-permissions",{method:"GET",legacy:false}),
+    replaceUserModulePermissions:(userId,permissions)=>sgdiApi("/auth/users/"+encodeURIComponent(userId)+"/module-permissions",{method:"PUT",body:{permissions},legacy:false}),
     accessRules:()=>sgdiApi("/auth/access-rules",{method:"GET",legacy:false}),
     saveAccessRules:(rules)=>sgdiApi("/auth/access-rules",{method:"PUT",body:rules,legacy:false}),
     sendOtp:(email,purpose)=>sgdiApi("/auth/otp/send",{method:"POST",body:{email,purpose},legacy:false}),
@@ -35729,7 +35732,10 @@ function renderAdminUsers(view){
   document.querySelectorAll(".admin-user-actions").forEach(actions=>{
     const configure=actions.querySelector('button[onclick^="openAdminUserModalByKey"]');
     const encoded=configure?.getAttribute("onclick")?.match(/openAdminUserModalByKey\('([^']+)'\)/)?.[1];
-    if(!encoded||decodeURIComponent(encoded).toLowerCase()===String(session?.username||"").toLowerCase())return;
+    if(!encoded)return;
+    const target=adminUserByUsername(decodeURIComponent(encoded));
+    if(target?.backendId){const permissions=document.createElement("button");permissions.textContent="Permissions";permissions.onclick=()=>openGranularPermissionsByKey(encoded);actions.appendChild(permissions)}
+    if(decodeURIComponent(encoded).toLowerCase()===String(session?.username||"").toLowerCase())return;
     const remove=document.createElement("button");remove.className="deny";remove.textContent="Supprimer";
     remove.onclick=()=>adminDeleteUserByKey(encoded);actions.appendChild(remove);
   });
@@ -35758,12 +35764,33 @@ function adminUserByUsername(username){
 function openAdminUserModalByKey(encodedUsername){
   openAdminUserModal(decodeURIComponent(String(encodedUsername||"")));
 }
+async function openGranularPermissionsByKey(encodedUsername){
+  const username=decodeURIComponent(String(encodedUsername||""));
+  const target=adminUserByUsername(username);
+  if(!target||!target.backendId){toast("Utilisateur backend introuvable","error");return}
+  try{
+    sgdiShowDataLoadingBar("Chargement des permissions granulaires...");
+    const [catalog,state]=await Promise.all([SGDI.auth.granularPermissionCatalog(),SGDI.auth.userModulePermissions(target.backendId)]);
+    const selected=new Set((state.permissions||[]).map(p=>p.module_key+":"+p.action_key));
+    const labels={read:"Lire",create:"Créer",update:"Modifier",validate:"Valider",delete:"Supprimer",export:"Exporter",unlock:"Déverrouiller",admin:"Administrer",sign:"Signer",pay:"Payer",recruit:"Recruter",execute:"Exécuter"};
+    const rows=(catalog.modules||[]).map(moduleKey=>`<div style="display:grid;grid-template-columns:minmax(150px,1fr) repeat(12,minmax(52px,auto));gap:6px;align-items:center;padding:8px;border-bottom:1px solid #e2e8f0"><b>${escapeHTML(moduleKey)}</b>${(catalog.actions||[]).map(actionKey=>`<label title="${escapeHTML(labels[actionKey]||actionKey)}" style="text-align:center"><input type="checkbox" data-granular-permission data-module="${escapeHTML(moduleKey)}" data-action="${escapeHTML(actionKey)}" ${selected.has(moduleKey+":"+actionKey)?"checked":""}/><small style="display:block;font-size:9px">${escapeHTML(labels[actionKey]||actionKey)}</small></label>`).join("")}</div>`).join("");
+    openModal(`<div style="max-width:min(96vw,1500px)"><h3 class="font-bold text-lg mb-2">Permissions granulaires · ${escapeHTML(state.username)}</h3><div class="p-3 mb-3 rounded-lg" style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412"><b>Permissions préparées — non actives.</b><br><small>Les autorisations legacy restent applicables. Sociétés : ${escapeHTML((state.authorized_societies||[]).join(", ")||"configuration legacy")} · Sites : ${escapeHTML((state.authorized_sites||[]).join(", ")||"configuration legacy")}</small></div><form onsubmit="event.preventDefault();saveGranularPermissions(${Number(target.backendId)})"><div style="overflow:auto;max-height:62vh;min-width:900px">${rows}</div><div class="flex justify-end gap-2 mt-4"><button type="button" class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary">Enregistrer les permissions préparées</button></div></form></div>`);
+  }catch(e){toast("Permissions granulaires indisponibles : "+(e.message||e),"error")}
+  finally{if(typeof sgdiHideDataLoadingBar==="function")sgdiHideDataLoadingBar()}
+}
+async function saveGranularPermissions(userId){
+  const permissions=[...document.querySelectorAll("[data-granular-permission]:checked")].map(input=>({module_key:input.dataset.module,action_key:input.dataset.action}));
+  if(!confirm("Remplacer les permissions granulaires préparées par cette sélection ?"))return;
+  try{const result=await SGDI.auth.replaceUserModulePermissions(userId,permissions);closeModal();toast("Permissions préparées enregistrées : "+result.permission_count,"success")}
+  catch(e){toast("Enregistrement refusé : "+(e.message||e),"error")}
+}
 function adminDeleteUserByKey(encodedUsername){
   adminDeleteUser(decodeURIComponent(String(encodedUsername||"")));
 }
 function adminUserFromApi(u){
   const cached=userPermissionCache()[u.username]||{};
   return {
+    backendId:u.id||u.backendId||null,
     username:u.username,
     email:u.email||"",
     nom:u.full_name||u.nom||u.username,

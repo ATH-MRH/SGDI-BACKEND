@@ -60,6 +60,36 @@ class AccessRuleOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ModulePermissionIn(BaseModel):
+    module_key: str = Field(min_length=1, max_length=80)
+    action_key: str = Field(min_length=1, max_length=40)
+
+
+class ModulePermissionsReplaceIn(BaseModel):
+    permissions: list[ModulePermissionIn] = Field(default_factory=list)
+
+
+class ModulePermissionOut(BaseModel):
+    module_key: str
+    action_key: str
+
+
+class ModulePermissionCatalogOut(BaseModel):
+    modules: list[str]
+    actions: list[str]
+
+
+class UserModulePermissionsOut(BaseModel):
+    user_id: int
+    username: str
+    permissions: list[ModulePermissionOut]
+    permission_count: int
+    granular_permissions_active: bool = False
+    legacy_permissions_active: bool = True
+    authorized_societies: list[str] | None = None
+    authorized_sites: list[int] | None = None
+
+
 class UserOut(BaseModel):
     id: int
     username: str

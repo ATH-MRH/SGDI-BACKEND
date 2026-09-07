@@ -6,7 +6,7 @@ from email.utils import formataddr
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from urllib.parse import unquote
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core import rate_limit
@@ -15,16 +15,27 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import AccessRule, User
 from app.core.audit import append_audit
+from app.core.granular_permissions import (
+    is_global_administrator,
+    load_explicit_permissions,
+    replace_explicit_permissions,
+    validate_permission_pairs,
+)
+from app.core.permission_catalog import CANONICAL_ACTIONS, CANONICAL_MODULES
 from app.modules.auth.schemas import (
     AccessRuleIn,
     AccessRuleOut,
     AdminSystemLoginIn,
     AdminRecoveryIn,
     LoginIn,
+    ModulePermissionCatalogOut,
+    ModulePermissionOut,
+    ModulePermissionsReplaceIn,
     TokenOut,
     UserCreate,
     UserOut,
     UserUpdate,
+    UserModulePermissionsOut,
 )
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.service import authenticate, create_user, update_user
@@ -144,6 +155,15 @@ def is_admin_system_username(username: str | None) -> bool:
 def require_admin(user: User) -> None:
     if not is_admin_role(user.role):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès administrateur requis")
+
+
+def require_explicit_global_admin(user: User) -> None:
+    """Contrôle additionnel, exécuté après current_user et ses gardes legacy."""
+    if not is_global_administrator(user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administration globale explicite requise",
+        )
 
 
 def send_user_credentials_email(recipient: str, username: str, password: str, validation_password: str) -> None:
@@ -382,6 +402,124 @@ def patch_access_rule(
     db.commit()
     db.refresh(rule)
     return rule
+
+
+@router.get("/granular-permissions/catalog", response_model=ModulePermissionCatalogOut)
+def granular_permission_catalog(user: User = Depends(current_user)):
+    require_explicit_global_admin(user)
+    return {"modules": list(CANONICAL_MODULES), "actions": list(CANONICAL_ACTIONS)}
+
+
+def _module_permissions_response(target: User, db: Session) -> dict:
+    permissions = load_explicit_permissions(db, target.id)
+    return {
+        "user_id": target.id,
+        "username": target.username,
+        "permissions": [
+            ModulePermissionOut(module_key=row.module_key, action_key=row.action_key)
+            for row in permissions
+        ],
+        "permission_count": len(permissions),
+        "granular_permissions_active": False,
+        "legacy_permissions_active": True,
+        "authorized_societies": target.authorized_societies,
+        "authorized_sites": target.authorized_sites,
+    }
+
+
+@router.get(
+    "/users/{user_id}/module-permissions",
+    response_model=UserModulePermissionsOut,
+)
+def get_user_module_permissions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_explicit_global_admin(user)
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    return _module_permissions_response(target, db)
+
+
+@router.put(
+    "/users/{user_id}/module-permissions",
+    response_model=UserModulePermissionsOut,
+)
+def put_user_module_permissions(
+    user_id: int,
+    payload: ModulePermissionsReplaceIn,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_explicit_global_admin(user)
+    target = db.execute(select(User).where(User.id == user_id).with_for_update()).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    try:
+        validate_permission_pairs(payload.permissions)
+    except ValueError as exc:
+        append_audit(
+            db,
+            action="granular_permission.replace",
+            resource="user_module_permission",
+            resource_id=target.id,
+            result="refused",
+            user=user,
+            request=request,
+            new_state={"target_user_id": target.id, "reason": str(exc)},
+        )
+        db.commit()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    try:
+        additions, removals = replace_explicit_permissions(
+            db,
+            user_id=target.id,
+            created_by_user_id=user.id,
+            permissions=payload.permissions,
+        )
+        for module_key, action_key in additions:
+            append_audit(
+                db,
+                action="granular_permission.add",
+                resource="user_module_permission",
+                resource_id=target.id,
+                result="success",
+                user=user,
+                request=request,
+                new_state={
+                    "target_user_id": target.id,
+                    "target_username": target.username,
+                    "module": module_key,
+                    "action": action_key,
+                    "change": "add",
+                },
+            )
+        for module_key, action_key in removals:
+            append_audit(
+                db,
+                action="granular_permission.remove",
+                resource="user_module_permission",
+                resource_id=target.id,
+                result="success",
+                user=user,
+                request=request,
+                old_state={
+                    "target_user_id": target.id,
+                    "target_username": target.username,
+                    "module": module_key,
+                    "action": action_key,
+                    "change": "remove",
+                },
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return _module_permissions_response(target, db)
 
 
 @router.post("/admin-system-login", response_model=TokenOut)
