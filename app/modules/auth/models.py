@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Index, JSON, String, Text, UniqueConstraint, event
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, JSON, String, Text, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
+from app.core.permission_catalog import CANONICAL_ACTIONS, CANONICAL_MODULES
 
 
 class User(Base, TimestampMixin):
@@ -44,6 +45,38 @@ class AccessRule(Base, TimestampMixin):
     module_key: Mapped[str] = mapped_column(String(80), index=True)
     role: Mapped[str] = mapped_column(String(40), index=True)
     allowed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+
+class UserModulePermission(Base):
+    """Autorisation explicite utilisateur × module × action.
+
+    L'absence de ligne signifie absence de permission. Le modèle reste inerte
+    tant que le futur moteur n'est pas branché sur les routes.
+    """
+
+    __tablename__ = "user_module_permissions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "module_key", "action_key", name="uq_user_module_permission"),
+        CheckConstraint(
+            "module_key IN (" + ", ".join(repr(value) for value in CANONICAL_MODULES) + ")",
+            name="ck_user_module_permission_module",
+        ),
+        CheckConstraint(
+            "action_key IN (" + ", ".join(repr(value) for value in CANONICAL_ACTIONS) + ")",
+            name="ck_user_module_permission_action",
+        ),
+        Index("ix_user_module_permissions_user_module", "user_id", "module_key"),
+        Index("ix_user_module_permissions_module_action", "module_key", "action_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    module_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    action_key: Mapped[str] = mapped_column(String(40), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class AuditEvent(Base):
