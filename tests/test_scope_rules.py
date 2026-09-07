@@ -258,6 +258,7 @@ def test_erp_counters_match_society_ignoring_accents_and_case(client, auth_heade
     accentuée / autre casse doit quand même compter ces employés (avant : filtre SQL
     brut .in_ -> 0 employé, d'où le compteur suspendus à 0)."""
     from app.modules.erp.service import build_erp_counters, _resolve_societies
+    from app.modules.auth.models import User
 
     # Employé créé via DRH -> société stockée en MAJUSCULES accentuées
     r = client.post("/api/drh/employees", headers=auth_headers, json={
@@ -276,7 +277,8 @@ def test_erp_counters_match_society_ignoring_accents_and_case(client, auth_heade
 
     # Les compteurs comptent l'employé quelle que soit l'écriture demandée
     for variante in ("IRON GLOBAL SÉCURITÉ", "Iron Global Securite", "iron global securite"):
-        emp_counters = build_erp_counters(db, None, variante)["employees"]
+        admin = db.query(User).filter(User.username == "testadmin").one()
+        emp_counters = build_erp_counters(db, admin, variante)["employees"]
         assert emp_counters["active"] >= 1, f"aucun employé matché pour {variante!r} (filtre accents/casse cassé)"
 
 

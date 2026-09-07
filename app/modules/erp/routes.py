@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.erp.service import operational_preparation_rows
+from app.core.scope_policy import SocietyScopeError
 
 
 router = APIRouter()
@@ -16,4 +17,7 @@ def operational_preparation(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    return operational_preparation_rows(db, user, society)
+    try:
+        return operational_preparation_rows(db, user, society)
+    except SocietyScopeError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc

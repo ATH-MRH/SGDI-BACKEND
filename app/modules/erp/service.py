@@ -12,6 +12,7 @@ from app.modules.auth.models import User
 from app.modules.drh.models import Candidate, Contract, Employee, Leave
 from app.modules.materiel.models import EmployeeEquipment, StockArticle, StockMovement, Store, Supplier
 from app.modules.ops.models import Assignment, DailyPresence, Event, Site
+from app.core.scope_policy import ScopeKind, authorized_society_values, effective_society_values, society_scope
 
 EXIT_STATUSES = {"sortant", "demissionne", "licencie", "archive", "blackliste", "blacklist", "blacklisted"}
 BLOCKING_STATUSES = {"suspendu", "suspended", "maladie", "conge", "absent", "absence", "blackliste", "blacklist", "blacklisted"}
@@ -52,26 +53,16 @@ class EmployeeOperationalState:
 
 
 def authorized_societies(user: User | None) -> list[str]:
-    if not user:
-        return []
-    values = user.authorized_societies or []
-    if not isinstance(values, list):
-        return []
-    return [str(value).strip() for value in values if str(value).strip()]
+    return authorized_society_values(user)
 
 
 def unrestricted_scope(user: User | None) -> bool:
-    if not user:
-        return False
-    return user.role == "admin" or user.access_level == "H5"
+    """Compatibility helper: global access is explicit, never inferred from role."""
+    return society_scope(user).kind is ScopeKind.GLOBAL
 
 
-def effective_societies(user: User | None, society: str | None = None) -> list[str]:
-    requested = (society or "").strip()
-    allowed = authorized_societies(user)
-    if requested and (unrestricted_scope(user) or not allowed or requested in allowed):
-        return [requested]
-    return allowed
+def effective_societies(user: User | None, society: str | None = None) -> list[str] | None:
+    return effective_society_values(user, society)
 
 
 def _resolve_societies(db: Session, requested: list[str]) -> list[str]:
@@ -98,7 +89,7 @@ def _resolve_societies(db: Session, requested: list[str]) -> list[str]:
 
 def employee_scope_condition(db: Session, user: User | None, society: str | None = None):
     societies = effective_societies(user, society)
-    if not societies:
+    if societies is None:
         return None
     societies = _resolve_societies(db, societies)
     assigned_employee_ids = (
@@ -112,18 +103,19 @@ def employee_scope_condition(db: Session, user: User | None, society: str | None
     return or_(Employee.society.in_(societies), Employee.id.in_(assigned_employee_ids))
 
 
-def site_scope_condition(user: User | None, society: str | None = None):
+def site_scope_condition(db: Session, user: User | None, society: str | None = None):
     societies = effective_societies(user, society)
-    if not societies:
+    if societies is None:
         return None
+    societies = _resolve_societies(db, societies)
     return or_(Site.equipment_plan["societe"].as_string().in_(societies), Site.equipment_plan["society"].as_string().in_(societies))
 
 
 def store_scope_condition(user: User | None, society: str | None = None):
     societies = effective_societies(user, society)
-    if not societies:
+    if societies is None:
         return None
-    return or_(Store.society.in_(societies), Store.society.is_(None), Store.society == "")
+    return Store.society.in_(societies)
 
 
 def _employee_base_stmt(db: Session, user: User | None, society: str | None = None):
@@ -391,7 +383,7 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
                 missing_steps[step] += 1
 
     site_stmt = select(Site)
-    site_condition = site_scope_condition(user, society)
+    site_condition = site_scope_condition(db, user, society)
     if site_condition is not None:
         site_stmt = site_stmt.where(site_condition)
     scoped_sites = db.execute(site_stmt).scalars().all()
@@ -404,11 +396,11 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
 
     supplier_stmt = select(Supplier)
     societies = effective_societies(user, society)
-    if societies:
-        supplier_stmt = supplier_stmt.where(or_(Supplier.society.in_(societies), Supplier.society.is_(None), Supplier.society == ""))
+    if societies is not None:
+        supplier_stmt = supplier_stmt.where(Supplier.society.in_(societies))
 
     article_stmt = select(StockArticle).where(StockArticle.active == 1)
-    if societies:
+    if societies is not None:
         article_stmt = article_stmt.where(StockArticle.society.in_(societies))
     articles = db.execute(article_stmt).scalars().all()
     article_ids = {article.id for article in articles}
@@ -428,7 +420,7 @@ def build_erp_counters(db: Session, user: User | None = None, society: str | Non
             stock_low += 1
 
     candidate_stmt = select(Candidate)
-    if societies:
+    if societies is not None:
         candidate_stmt = candidate_stmt.where(Candidate.society.in_(societies))
     candidate_rows = db.execute(candidate_stmt).scalars().all()
 

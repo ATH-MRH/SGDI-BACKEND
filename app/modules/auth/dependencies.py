@@ -17,7 +17,7 @@ SOCIETY_SCOPED_PREFIXES = (
     "/api/drh", "/api/ops", "/api/materiel", "/api/commercial",
     "/api/finance", "/api/accounting", "/api/achats", "/api/ventes", "/api/reporting",
     "/api/ronde", "/api/loans",
-    "/api/irongs",
+    "/api/irongs", "/api/assistant", "/api/erp",
 )
 
 

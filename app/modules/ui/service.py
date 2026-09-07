@@ -14,6 +14,7 @@ from app.modules.commercial.models import Client
 from app.modules.erp.service import authorized_societies, build_erp_counters
 from app.modules.finance_models import Advance, CashEntry, CreditNote, Invoice, Payment
 from app.modules.irongs.models import SgdiRecord
+from app.core.scope_policy import effective_society_values, society_key
 
 
 def _legacy_counts(db: Session) -> dict[str, int]:
@@ -42,12 +43,22 @@ def _norm(value: Any) -> str:
     return str(value or "").strip().casefold()
 
 
-def _matches_society(row: dict[str, Any], society: str | None) -> bool:
-    wanted = _norm(society)
-    if not wanted:
+def _scope_values(scope: str | list[str] | None) -> list[str] | None:
+    if scope is None:
+        return None
+    if isinstance(scope, list):
+        return [str(value).strip() for value in scope if str(value or "").strip()]
+    value = str(scope or "").strip()
+    return [value] if value else []
+
+
+def _matches_society(row: dict[str, Any], scope: str | list[str] | None) -> bool:
+    values = _scope_values(scope)
+    if values is None:
         return True
+    wanted = {society_key(value) for value in values}
     for key in ("societe", "society", "societeRattachement", "company"):
-        if _norm(row.get(key)) == wanted:
+        if society_key(row.get(key)) in wanted:
             return True
     return False
 
@@ -59,21 +70,19 @@ def _status(row: dict[str, Any]) -> str:
 _SOCIETY_JSON_KEYS = ("societe", "society", "societeRattachement", "company")
 
 
-def _count_legacy_items(db: Session, name: str, society: str | None = None) -> int:
+def _count_legacy_items(db: Session, name: str, society: str | list[str] | None = None) -> int:
     # Compte en SQL plutôt que de récupérer toutes les lignes en Python pour les
     # jeter après comptage — appelée ~10 fois par sidebar-stats, c'était l'un des
     # postes de coût les plus lourds de l'endpoint. Reproduit exactement la logique
     # de _matches_society (mêmes 4 clés, comparaison insensible à la casse, trim).
-    wanted = _norm(society)
+    values = _scope_values(society)
     stmt = db.query(func.count(SgdiRecord.id)).filter(
         SgdiRecord.collection == name,
         SgdiRecord.kind == "item",
     )
-    if wanted:
-        stmt = stmt.filter(or_(*(
-            func.lower(func.trim(SgdiRecord.data[key].as_string())) == wanted
-            for key in _SOCIETY_JSON_KEYS
-        )))
+    if values is not None:
+        rows = [row for row in _legacy_rows(db, name) if _matches_society(row, values)]
+        return len(rows)
     return int(stmt.scalar() or 0)
 
 
@@ -112,11 +121,11 @@ def _client_effectif_count(data: dict[str, Any]) -> int:
     return total
 
 
-def _commercial_stats(db: Session, society: str | None = None) -> dict[str, int]:
+def _commercial_stats(db: Session, society: str | list[str] | None = None) -> dict[str, int]:
     stmt = db.query(Client)
-    wanted = _norm(society)
-    if wanted:
-        stmt = stmt.filter(Client.society == society)
+    values = _scope_values(society)
+    if values is not None:
+        stmt = stmt.filter(Client.society.in_(values))
     clients = stmt.all()
     today = date.today()
     active_clients = [client for client in clients if _norm(client.status) not in {"inactif", "inactive", "archive", "archivé"}]
@@ -140,11 +149,12 @@ def _commercial_stats(db: Session, society: str | None = None) -> dict[str, int]
     }
 
 
-def _finance_stats(db: Session, society: str | None = None) -> dict[str, int]:
+def _finance_stats(db: Session, society: str | list[str] | None = None) -> dict[str, int]:
     def scoped(model):
         query = db.query(model)
-        if society:
-            query = query.filter(model.society == society)
+        values = _scope_values(society)
+        if values is not None:
+            query = query.filter(model.society.in_(values))
         return query
 
     invoices = scoped(Invoice).all()
@@ -160,7 +170,7 @@ def _finance_stats(db: Session, society: str | None = None) -> dict[str, int]:
     }
 
 
-def _secretariat_stats(db: Session, society: str | None = None) -> dict[str, int]:
+def _secretariat_stats(db: Session, society: str | list[str] | None = None) -> dict[str, int]:
     courriers = [row for row in _legacy_rows(db, "secretariatCourriers") if _matches_society(row, society)]
     notes = [row for row in _legacy_rows(db, "secretariatNotes") if _matches_society(row, society)]
     archives = [row for row in courriers if bool(row.get("archive")) or _status(row) in {"archive", "archivé"}]
@@ -211,7 +221,7 @@ def _legacy_current_leave_counts(rows: list[dict[str, Any]], employee_ids: set[s
     return conge, maladie
 
 
-def _apply_legacy_fallbacks(db: Session, erp: dict[str, Any], society: str | None) -> dict[str, Any]:
+def _apply_legacy_fallbacks(db: Session, erp: dict[str, Any], society: str | list[str] | None) -> dict[str, Any]:
     """Fill counters from the residual SGDI JSON store when SQL tables are empty.
 
     During the progressive migration, some installations still have their
@@ -229,7 +239,7 @@ def _apply_legacy_fallbacks(db: Session, erp: dict[str, Any], society: str | Non
             active_rows = [row for row in agents if _is_employee_active(row)]
             operational_rows = [row for row in active_rows if _employee_has_assignment(row)]
             agent_ids = {str(row.get("id") or row.get("backendId") or "").strip() for row in agents if row.get("id") or row.get("backendId")}
-            conge_rows = [row for row in _legacy_rows(db, "conges") if _matches_society(row, society) or not society]
+            conge_rows = [row for row in _legacy_rows(db, "conges") if _matches_society(row, society)]
             leave_count, sick_leave_count = _legacy_current_leave_counts(conge_rows, agent_ids)
             employees = erp.setdefault("employees", {})
             employees.update({
@@ -315,7 +325,9 @@ def _sidebar_stats_signature() -> str:
 
 
 def build_sidebar_stats(db: Session, user: User, society: str | None = None) -> dict[str, Any]:
-    cache_key = f"{user.username}|{(society or '').strip()}"
+    scope = effective_society_values(user, society)
+    scope_key = "*" if scope is None else "|".join(sorted(society_key(value) for value in scope))
+    cache_key = f"{user.username}|{scope_key}"
     signature = _sidebar_stats_signature()
     now = time.monotonic()
     with _SIDEBAR_STATS_CACHE_LOCK:
@@ -336,12 +348,18 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
     """
 
     societies = authorized_societies(user)
-    legacy = _legacy_counts(db)
-    erp = _apply_legacy_fallbacks(db, build_erp_counters(db, user, society), society)
-    erp.setdefault("ops", {})["missions_current"] = _count_legacy_items(db, "missions", society)
-    commercial = _commercial_stats(db, society)
-    finance = _finance_stats(db, society)
-    secretariat = _secretariat_stats(db, society)
+    effective_scope = effective_society_values(user, society)
+    global_legacy = _legacy_counts(db)
+    legacy = (
+        global_legacy
+        if effective_scope is None
+        else {name: _count_legacy_items(db, name, effective_scope) for name in global_legacy}
+    )
+    erp = _apply_legacy_fallbacks(db, build_erp_counters(db, user, society), effective_scope)
+    erp.setdefault("ops", {})["missions_current"] = _count_legacy_items(db, "missions", effective_scope)
+    commercial = _commercial_stats(db, effective_scope)
+    finance = _finance_stats(db, effective_scope)
+    secretariat = _secretariat_stats(db, effective_scope)
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -358,7 +376,7 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
                 "reserve": erp["drh"].get("candidates_reserve", 0),
                 # `legacy` contient les totaux globaux. Pour une société active,
                 # le total DRH déjà filtré est la seule valeur sûre à exposer ici.
-                "nouveaux": erp["drh"]["candidates_total"] if society else legacy.get("candidats", 0),
+                "nouveaux": erp["drh"]["candidates_total"] if effective_scope is not None else legacy.get("candidats", 0),
                 "archives": 0,
             },
             "effectifs": {
@@ -403,12 +421,12 @@ def _build_sidebar_stats_uncached(db: Session, user: User, society: str | None =
             "validated_month": erp["ops"].get("presence_validated_month", 0),
         },
         "admin": {
-            "utilisateurs": _user_count(db),
-            "societies_total": _distinct_society_count(db),
-            "access_rules": _count_legacy_items(db, "accessRules", society),
-            "alerts": _count_legacy_items(db, "workflowTasks", society),
-            "messages": _count_legacy_items(db, "messages", society),
-            "journal": _count_legacy_items(db, "unlockLog", society),
+            "utilisateurs": _user_count(db) if effective_scope is None else 0,
+            "societies_total": _distinct_society_count(db) if effective_scope is None else len(effective_scope),
+            "access_rules": _count_legacy_items(db, "accessRules", effective_scope),
+            "alerts": _count_legacy_items(db, "workflowTasks", effective_scope),
+            "messages": _count_legacy_items(db, "messages", effective_scope),
+            "journal": _count_legacy_items(db, "unlockLog", effective_scope),
         },
         "legacy": legacy,
     }

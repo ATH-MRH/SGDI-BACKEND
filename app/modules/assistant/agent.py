@@ -20,6 +20,14 @@ from app.modules.drh.models import Candidate, Employee, Leave
 from app.modules.finance_models import Invoice, Payment
 from app.modules.materiel.models import EmployeeEquipment, StockArticle
 from app.modules.ops.models import Assignment, DailyPresence, Event, Site
+from app.core.scope_policy import (
+    ScopeKind,
+    SocietyScopeError,
+    authorized_society_values,
+    effective_society_values,
+    society_key,
+    society_scope,
+)
 
 logger = logging.getLogger("sgdi.assistant.agent")
 
@@ -94,28 +102,21 @@ RÈGLES :
 # Périmètre société
 # --------------------------------------------------------------------------- #
 def _allowed_societies(user: User) -> list[str]:
-    socs = getattr(user, "authorized_societies", None)
-    return [s for s in socs if s] if isinstance(socs, list) else []
+    return authorized_society_values(user)
 
 
 def _resolve_scope(user: User, society: str | None) -> list[str] | None:
-    """Retourne la liste des sociétés à filtrer, ou None = aucune restriction.
-
-    - societe demandée mais non autorisée -> ["__none__"] (ne matche rien).
-    - societe demandée et autorisée (ou accès total) -> [societe].
-    - pas de societe demandée -> sociétés autorisées (None si accès total)."""
-    allowed = _allowed_societies(user)
-    if society:
-        society = society.strip()
-        if allowed and society not in allowed:
-            return ["__none__"]
-        return [society]
-    return allowed or None
+    return effective_society_values(user, society)
 
 
-def _apply_society(stmt, column, scope: list[str] | None):
+def _apply_society(db: Session, stmt, column, scope: list[str] | None):
     if scope is not None:
-        stmt = stmt.where(column.in_(scope))
+        wanted = {society_key(value) for value in scope}
+        actual = {
+            value for value in db.execute(select(column).distinct()).scalars().all()
+            if value and society_key(value) in wanted
+        }
+        stmt = stmt.where(column.in_(actual or {"__none__"}))
     return stmt
 
 
@@ -123,11 +124,12 @@ def _scoped_sites(db: Session, scope: list[str] | None) -> list[Site]:
     sites = db.execute(select(Site)).scalars().all()
     if scope is None:
         return sites
+    allowed_keys = {society_key(value) for value in scope}
     kept = []
     for site in sites:
         plan = site.equipment_plan if isinstance(site.equipment_plan, dict) else {}
         soc = plan.get("societe") or plan.get("society")
-        if not soc or soc in scope:
+        if soc and society_key(soc) in allowed_keys:
             kept.append(site)
     return kept
 
@@ -143,9 +145,9 @@ def _fmt_date(value: Any) -> str | None:
 # --------------------------------------------------------------------------- #
 def _tool_dashboard_counts(db: Session, user: User, society: str | None = None) -> dict:
     scope = _resolve_scope(user, society)
-    employees = db.execute(_apply_society(select(func.count(Employee.id)), Employee.society, scope)).scalar() or 0
-    candidates = db.execute(_apply_society(select(func.count(Candidate.id)), Candidate.society, scope)).scalar() or 0
-    articles = db.execute(_apply_society(select(func.count(StockArticle.id)), StockArticle.society, scope)).scalar() or 0
+    employees = db.execute(_apply_society(db, select(func.count(Employee.id)), Employee.society, scope)).scalar() or 0
+    candidates = db.execute(_apply_society(db, select(func.count(Candidate.id)), Candidate.society, scope)).scalar() or 0
+    articles = db.execute(_apply_society(db, select(func.count(StockArticle.id)), StockArticle.society, scope)).scalar() or 0
     sites = len(_scoped_sites(db, scope))
     return {
         "employes_total": int(employees),
@@ -161,7 +163,7 @@ def _tool_search_employees(
     society: str | None = None, limit: int = _LIST_LIMIT,
 ) -> dict:
     scope = _resolve_scope(user, society)
-    stmt = _apply_society(select(Employee), Employee.society, scope)
+    stmt = _apply_society(db, select(Employee), Employee.society, scope)
     if query:
         like = f"%{query.strip()}%"
         stmt = stmt.where(or_(Employee.first_name.ilike(like), Employee.last_name.ilike(like), Employee.code.ilike(like)))
@@ -191,7 +193,7 @@ def _tool_employee_detail(db: Session, user: User, reference: str) -> dict:
         emp = db.get(Employee, int(ref))
     if emp is None:
         return {"trouve": False, "message": f"Aucun employé pour la référence '{ref}'."}
-    if scope is not None and emp.society not in scope:
+    if scope is not None and society_key(emp.society) not in {society_key(value) for value in scope}:
         return {"trouve": False, "message": "Employé hors de vos sociétés autorisées."}
     return {
         "trouve": True,
@@ -209,7 +211,7 @@ def _tool_contracts_ending(db: Session, user: User, days: int = 30, society: str
     scope = _resolve_scope(user, society)
     today = date.today()
     horizon = today + timedelta(days=max(1, min(int(days or 30), 365)))
-    stmt = _apply_society(
+    stmt = _apply_society(db,
         select(Employee).where(
             Employee.contract_end_date.isnot(None),
             Employee.contract_end_date >= today,
@@ -252,7 +254,7 @@ def _tool_list_sites(db: Session, user: User, society: str | None = None) -> dic
 
 def _tool_stock_summary(db: Session, user: User, society: str | None = None, only_low: bool = False) -> dict:
     scope = _resolve_scope(user, society)
-    stmt = _apply_society(select(StockArticle), StockArticle.society, scope)
+    stmt = _apply_society(db, select(StockArticle), StockArticle.society, scope)
     articles = db.execute(stmt).scalars().all()
     low = [a for a in articles if (a.min_quantity or 0) > 0 and (a.quantity or 0) <= (a.min_quantity or 0)]
     selected = low if only_low else articles
@@ -273,9 +275,9 @@ def _tool_stock_summary(db: Session, user: User, society: str | None = None, onl
 
 def _tool_finance_summary(db: Session, user: User, society: str | None = None) -> dict:
     scope = _resolve_scope(user, society)
-    inv_count = db.execute(_apply_society(select(func.count(Invoice.id)), Invoice.society, scope)).scalar() or 0
-    inv_ttc = db.execute(_apply_society(select(func.coalesce(func.sum(Invoice.total_ttc), 0.0)), Invoice.society, scope)).scalar() or 0.0
-    paid = db.execute(_apply_society(select(func.coalesce(func.sum(Payment.amount), 0.0)), Payment.society, scope)).scalar() or 0.0
+    inv_count = db.execute(_apply_society(db, select(func.count(Invoice.id)), Invoice.society, scope)).scalar() or 0
+    inv_ttc = db.execute(_apply_society(db, select(func.coalesce(func.sum(Invoice.total_ttc), 0.0)), Invoice.society, scope)).scalar() or 0.0
+    paid = db.execute(_apply_society(db, select(func.coalesce(func.sum(Payment.amount), 0.0)), Payment.society, scope)).scalar() or 0.0
     return {
         "factures_count": int(inv_count),
         "total_facture_ttc": round(float(inv_ttc), 2),
@@ -287,7 +289,7 @@ def _tool_finance_summary(db: Session, user: User, society: str | None = None) -
 
 def _tool_list_candidates(db: Session, user: User, status: str | None = None, society: str | None = None) -> dict:
     scope = _resolve_scope(user, society)
-    stmt = _apply_society(select(Candidate), Candidate.society, scope)
+    stmt = _apply_society(db, select(Candidate), Candidate.society, scope)
     if status:
         stmt = stmt.where(Candidate.status == status.strip())
     rows = db.execute(stmt.limit(50)).scalars().all()
@@ -329,7 +331,7 @@ def _tool_presence_today(db: Session, user: User, society: str | None = None) ->
     rows = db.execute(select(DailyPresence).where(DailyPresence.presence_date == today)).scalars().all()
     if scope is not None:
         allowed_ids = {
-            e.id for e in db.execute(_apply_society(select(Employee), Employee.society, scope)).scalars().all()
+            e.id for e in db.execute(_apply_society(db, select(Employee), Employee.society, scope)).scalars().all()
         }
         rows = [r for r in rows if r.employee_id in allowed_ids]
     by_status: dict[str, int] = {}
@@ -339,7 +341,15 @@ def _tool_presence_today(db: Session, user: User, society: str | None = None) ->
 
 
 def _tool_recent_events(db: Session, user: User, limit: int = 15) -> dict:
-    rows = db.execute(select(Event).order_by(Event.event_date.desc()).limit(min(int(limit or 15), 40))).scalars().all()
+    scope = _resolve_scope(user, None)
+    stmt = select(Event)
+    if scope is not None:
+        employee_ids = {
+            row.id for row in db.execute(_apply_society(db, select(Employee), Employee.society, scope)).scalars().all()
+        }
+        site_ids = {site.id for site in _scoped_sites(db, scope)}
+        stmt = stmt.where(or_(Event.employee_id.in_(employee_ids or {-1}), Event.site_id.in_(site_ids or {-1})))
+    rows = db.execute(stmt.order_by(Event.event_date.desc()).limit(min(int(limit or 15), 40))).scalars().all()
     return {
         "count": len(rows),
         "evenements": [
@@ -380,15 +390,16 @@ def _audit(user: User, action: str, detail: Any) -> None:
 
 
 def _writable_society(user: User, society: str | None) -> tuple[str | None, str | None]:
-    society = (society or "").strip()
-    allowed = _allowed_societies(user)
-    if not society:
-        if len(allowed) == 1:
-            return allowed[0], None
+    try:
+        resolved = _resolve_scope(user, society)
+    except SocietyScopeError as exc:
+        return None, str(exc)
+    if resolved is None:
+        requested = str(society or "").strip()
+        return (requested, None) if requested else (None, "Précisez la société concernée pour cette action.")
+    if len(resolved) != 1:
         return None, "Précisez la société concernée pour cette action."
-    if allowed and society not in allowed:
-        return None, "Société non autorisée pour cette action."
-    return society, None
+    return resolved[0], None
 
 
 def _tool_create_candidate(
@@ -420,13 +431,17 @@ def _tool_create_event(
 ) -> dict:
     if not (titre or "").strip() or not (message or "").strip():
         return {"ok": False, "message": "Titre et message obligatoires."}
+    scope = _resolve_scope(user, None)
     site_id = None
     if site:
-        scope = _resolve_scope(user, None)
         for s in _scoped_sites(db, scope):
             if site.strip().lower() in ((s.name or "").lower(), (s.indicatif or "").lower()):
                 site_id = s.id
                 break
+        if site_id is None:
+            return {"ok": False, "message": "Site introuvable ou hors de votre périmètre société."}
+    elif scope is not None:
+        return {"ok": False, "message": "Précisez un site de votre périmètre pour cet événement."}
     try:
         ev = Event(
             title=titre.strip()[:180], message=message.strip(),
@@ -456,7 +471,7 @@ def _tool_update_employee_status(db: Session, user: User, reference: str, statut
     if emp is None:
         return {"ok": False, "message": f"Aucun employé pour '{ref}'."}
     scope = _resolve_scope(user, None)
-    if scope is not None and emp.society not in scope:
+    if scope is not None and society_key(emp.society) not in {society_key(value) for value in scope}:
         return {"ok": False, "message": "Employé hors de vos sociétés autorisées."}
     ancien = emp.status
     try:
@@ -576,7 +591,7 @@ def _find_employee_scoped(db: Session, user: User, reference: str) -> Employee |
     if emp is None:
         return None
     scope = _resolve_scope(user, None)
-    if scope is not None and emp.society not in scope:
+    if scope is not None and society_key(emp.society) not in {society_key(value) for value in scope}:
         return None
     return emp
 
@@ -1005,7 +1020,11 @@ def _dispatch(name: str, tool_input: dict[str, Any], db: Session, user: User) ->
     if handler is None:
         return json.dumps({"error": f"Outil inconnu: {name}"}, ensure_ascii=False)
     try:
+        if society_scope(user).kind is ScopeKind.NONE:
+            raise SocietyScopeError("Aucun périmètre société explicite")
         result = handler(db, user, **(tool_input or {}))
+    except SocietyScopeError as exc:
+        return json.dumps({"error": str(exc), "refused": True}, ensure_ascii=False)
     except TypeError as exc:
         return json.dumps({"error": f"Paramètres invalides pour {name}: {exc}"}, ensure_ascii=False)
     except Exception as exc:  # pragma: no cover - garde-fou

@@ -355,11 +355,8 @@ def test_assignments_page_filters(client, auth_headers):
 
 
 def test_site_restricted_user_only_sees_assignments_of_his_sites(client, db, auth_headers):
-    """Un superviseur terrain restreint par SITE (authorized_sites), sans restriction de
-    société (authorized_societies vide), ne doit recevoir que les affectations de ses sites
-    autorisés — pas celles de toute l'entreprise. Sans ce filtre côté serveur, le module
-    superviseur devait paginer sur l'intégralité des affectations de la société, d'où la
-    lenteur de chargement signalée sur la feuille quotidienne / le pointage mensuel."""
+    """Un superviseur avec société explicite et restriction par site ne reçoit que
+    les affectations de ses sites autorisés, pas celles de toute la société."""
     from app.core.security import hash_password
     from app.modules.auth.models import User
 
@@ -376,7 +373,7 @@ def test_site_restricted_user_only_sees_assignments_of_his_sites(client, db, aut
         full_name="Site Supervisor",
         role="ops",
         access_level="H2",
-        authorized_societies=[],
+        authorized_societies=[SOCIETY],
         authorized_sites=[mine],
         authorized_structures=[],
         password_hash=hash_password("supervisorpass"),

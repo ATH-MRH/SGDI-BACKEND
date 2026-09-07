@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import current_user
 from app.modules.auth.models import User
 from app.modules.ui.service import build_sidebar_stats
+from app.core.scope_policy import SocietyScopeError
 
 
 router = APIRouter()
@@ -50,7 +51,10 @@ def sidebar_stats(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    return build_sidebar_stats(db, user, society)
+    try:
+        return build_sidebar_stats(db, user, society)
+    except SocietyScopeError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
 @router.post("/open-app/{app_key}")
