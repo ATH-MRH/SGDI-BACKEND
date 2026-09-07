@@ -1846,6 +1846,7 @@ async function sgdiLoadAuthState(){
       const validationCodeEnabled=!!(cached.validationCodeEnabled??prev.validationCodeEnabled);
       rememberUserPermissions(u.username,socs,niveau,structs,validationCodeEnabled);
       return {
+        backendId:u.id||u.backendId||null,
         username:u.username,
         nom:u.full_name||u.username,
         role:u.role||"agent",
