@@ -28,7 +28,8 @@ def _dg_headers(db):
     user = User(
         username=f"DG{key}", email=f"dg-{key}@example.com", full_name="DIRECTEUR GENERAL",
         role="dg", access_level="H5", authorized_societies=[], authorized_structures=["direction_generale"],
-        authorized_actions=[], global_society_access=True, password_hash=hash_password("Secret123!"), is_active=True,
+        authorized_actions=[], authorized_modules=["pret"], global_society_access=True,
+        password_hash=hash_password("Secret123!"), is_active=True,
     )
     db.add(user); db.commit(); db.refresh(user)
     token = create_access_token(subject=str(user.id), claims={"role": user.role, "username": user.username})
@@ -40,7 +41,8 @@ def _staff_headers(db, role, structure, prefix):
     user = User(
         username=f"{prefix}{key}", email=f"{role}-{key}@example.com", full_name=role.upper(),
         role=role, access_level="H3", authorized_societies=[], authorized_structures=[structure],
-        authorized_actions=[], global_society_access=True, password_hash=hash_password("Secret123!"), is_active=True,
+        authorized_actions=[], authorized_modules=[role], global_society_access=True,
+        password_hash=hash_password("Secret123!"), is_active=True,
     )
     db.add(user); db.commit(); db.refresh(user)
     token = create_access_token(subject=str(user.id), claims={"role": user.role, "username": user.username})

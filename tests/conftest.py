@@ -94,6 +94,9 @@ def _seed_admin():
                 access_level="H3",
                 authorized_societies=["Iron Global Securite"],
                 authorized_structures=[],
+                # Fixture transverse utilisée par les tests de cloisonnement OPS
+                # et Commercial : ses modules doivent désormais être explicites.
+                authorized_modules=["ops", "dc"],
                 password_hash=hash_password("testpass123"),
                 validation_password_hash=hash_password("test-validation-password"),
                 is_active=True,

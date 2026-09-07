@@ -376,6 +376,7 @@ def test_site_restricted_user_only_sees_assignments_of_his_sites(client, db, aut
         authorized_societies=[SOCIETY],
         authorized_sites=[mine],
         authorized_structures=[],
+        authorized_modules=["ops"],
         password_hash=hash_password("supervisorpass"),
         is_active=True,
     )

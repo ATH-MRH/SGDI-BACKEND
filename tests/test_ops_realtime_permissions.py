@@ -26,6 +26,7 @@ def test_limited_user_can_update_legacy_site_with_allowed_society(client, db, au
         access_level="H2",
         authorized_societies=["TEST_SOC"],
         authorized_structures=[],
+        authorized_modules=["ops"],
         password_hash=hash_password("limitedpass"),
         is_active=True,
     )
